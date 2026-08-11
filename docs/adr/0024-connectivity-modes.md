@@ -91,14 +91,30 @@ see sources.
 | Layer | L3, IP-level | L2, Ethernet-level |
 | Next tier | Per user, per month | Flat monthly, and it still includes only 10 devices |
 
-**Recommended: ZeroTier**, because of which limit binds first for this group. Tailscale runs out of *people* at six —
-the owner plus five friends, with no headroom — and a seventh person is a per-user monthly charge several times the
-whole AWS bill. ZeroTier runs out of *devices* at ten, which covers eight or nine players on one PC each. A
-Minecraft group is far more likely to gain a person than to double everyone's device count, so the device pool is
-the more forgiving shape here.
+**Recommended: ZeroTier**, for two reasons, of which the second is the stronger.
+
+**Which limit binds first.** Tailscale runs out of *people* at six — the owner plus five friends, with no headroom —
+and a seventh person is a per-user monthly charge several times the whole AWS bill. ZeroTier runs out of *devices* at
+ten, which covers eight or nine players on one PC each. A Minecraft group is far more likely to gain a person than to
+double everyone's device count, so the device pool is the more forgiving shape here.
+
+**LAN discovery, which only an L2 overlay can carry.** Because ZeroTier is an Ethernet-level network, it transports
+the multicast that Minecraft's LAN discovery uses, so the server can appear in players' "LAN" list with **no address
+typed at all**. The owner has observed this working with the `itzg` image, so it is an observation rather than a
+hypothesis. That is the nicest possible answer to "how do players connect": the connection string stops mattering to
+players entirely.
+
+Tailscale operates at L3 and therefore **cannot** do this, whatever else it offers. If LAN discovery is wanted, the
+choice is settled independently of pricing.
 
 Tailscale wins if people have several machines each, and it gives host names on the free tier, which mode C would
 otherwise lack. Neither choice is locked in: it is one implementation of the connectivity contract.
+
+One thing still to pin down: **which component does the announcing.** A vanilla Java dedicated server does not
+broadcast its presence — that broadcast comes from a client that opens a single-player world to LAN. So something in
+the observed setup is doing it: an option in the image, a mod in the pack, or the different native behaviour of the
+Bedrock dedicated server. Identify it and pin it in `server/`, because an accidental dependency on an
+unidentified component is not a feature that can be relied on. See the open questions.
 
 Note also the correction to a common recollection: ZeroTier's free tier **does** limit devices. It is 10, alongside
 1 network. Older versions of that plan were far more generous on device count, which is where the "networks are
@@ -151,7 +167,11 @@ not for a world with months of building in it.
   that cliff — is unresolved. See the open questions.
 - On ZeroTier's free tier there are no host names, so players connect by overlay IP. Stable, and less pleasant;
   it also means the per-world names in [ADR-0023](0023-multiple-worlds.md) fall back to the surfaces stating which
-  world is running.
+  world is running. LAN discovery makes this largely moot for players, and not for the automation, which still needs
+  an address to health-check.
+- The LAN-discovery advantage depends on a component that has not yet been identified, so it is a strong reason to
+  prefer ZeroTier and not yet a guarantee. Treat the typed address as the supported path until the broadcaster is
+  pinned down.
 - The node identity now depends on the data volume. Losing that volume means re-admitting the node, which is a minor
   extra step during a restore.
 - Tailscale states it is not currently enforcing hard limits or overages on these allowances, and intends to
@@ -205,11 +225,14 @@ Still open:
   person access.
 - Whether overlay access rules should restrict the game port to player devices specifically, or whether network
   membership is a sufficient boundary for a group of friends.
-- **Whether ZeroTier's L2 behaviour makes the server appear in the client's LAN list**, removing the need to type any
-  address. It is plausible, since an Ethernet-level overlay carries the multicast that LAN discovery relies on, but a
-  *dedicated* server does not announce itself the way a client-hosted world does, so it would likely need something
-  to broadcast on its behalf. Worth ten minutes of testing, because it would be the nicest possible answer to "how
-  do players connect".
+- **Which component broadcasts the server's LAN presence.** That it works is settled — the owner has seen it with the
+  `itzg` image. What is not settled is what does the announcing, since a vanilla Java dedicated server does not. The
+  candidates are an option in the image, a mod in the pack, or Bedrock's different native behaviour. Pin it down and
+  declare it explicitly in `server/`, so the behaviour survives a pack change.
+- Whether ZeroTier's per-network multicast limit needs raising for this, and whether the discovery still works when
+  the overlay spans several physical networks rather than one.
+- Whether the connectivity contract's "publish" step can be a no-op for players in this mode, with the connection
+  string kept only as a fallback for anybody whose client does not see the broadcast.
 - Whether mode C should also cover administration, letting SSM be replaced by direct access over the overlay.
   Probably not: SSM's audit trail is worth keeping. See [ADR-0007](0007-ssm-instead-of-ssh.md).
 - Whether a world may declare its own required mode — for example a public test world in mode A while the main

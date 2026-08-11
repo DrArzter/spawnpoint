@@ -19,6 +19,12 @@ is inside the image or on the root volume. See [ADR-0010](../docs/adr/0010-world
 
 Every script here must be safe to run twice. The automation retries.
 
+**LAN presence must be declared, not inherited.** In the overlay connectivity mode the server can appear in players'
+"LAN" list with no address typed, which is the nicest thing about that mode. A vanilla Java dedicated server does not
+broadcast that, so whatever does it — an image option, or a mod in the pack — is pinned here explicitly and noted in
+the Compose file. Otherwise it disappears the first time the pack changes and nobody knows why. See
+[ADR-0024](../docs/adr/0024-connectivity-modes.md).
+
 The same Compose file should run locally, so a mod set can be smoke-tested before it reaches the server.
 
 **Status:** empty. Populated in M0, then rebuilt properly in M1.

@@ -110,11 +110,24 @@ choice is settled independently of pricing.
 Tailscale wins if people have several machines each, and it gives host names on the free tier, which mode C would
 otherwise lack. Neither choice is locked in: it is one implementation of the connectivity contract.
 
-One thing still to pin down: **which component does the announcing.** A vanilla Java dedicated server does not
-broadcast its presence — that broadcast comes from a client that opens a single-player world to LAN. So something in
-the observed setup is doing it: an option in the image, a mod in the pack, or the different native behaviour of the
-Bedrock dedicated server. Identify it and pin it in `server/`, because an accidental dependency on an
-unidentified component is not a feature that can be relied on. See the open questions.
+One thing still to pin down: **which component does the announcing.** The owner's test was Java Edition over
+ZeroTier, so the multicast path across the overlay is confirmed. What is not confirmed is the source of the
+broadcast:
+
+- A vanilla Java dedicated server does not announce itself. That multicast comes from a *client* opening a
+  single-player world to LAN.
+- The `itzg` image is **not** the source either. Its repository contains no reference to the LAN discovery protocol —
+  no port `4445`, no `224.0.2.60`, no multicast handling. Its only "broadcast" options are the unrelated
+  `broadcast-console-to-ops` and `broadcast-rcon-to-ops` server properties. Checked 2026-08-11.
+
+So the announcement came from the pack or from the wider setup — most plausibly a mod that advertises a dedicated
+server to the LAN. That is good news rather than bad: a mod is something this project already controls, because every
+mod is declared in a release manifest. See [ADR-0008](0008-versioned-mod-releases.md).
+
+**Therefore: identify it, then make it a required entry in every release definition** rather than a happy accident of
+one pack. If no such mod turns out to be present, the remaining explanation is that the entry was in the players'
+server list rather than in the LAN section, and the feature has to be built by adding a broadcaster deliberately —
+still cheap, and still worth it.
 
 Note also the correction to a common recollection: ZeroTier's free tier **does** limit devices. It is 10, alongside
 1 network. Older versions of that plan were far more generous on device count, which is where the "networks are
@@ -225,10 +238,11 @@ Still open:
   person access.
 - Whether overlay access rules should restrict the game port to player devices specifically, or whether network
   membership is a sufficient boundary for a group of friends.
-- **Which component broadcasts the server's LAN presence.** That it works is settled — the owner has seen it with the
-  `itzg` image. What is not settled is what does the announcing, since a vanilla Java dedicated server does not. The
-  candidates are an option in the image, a mod in the pack, or Bedrock's different native behaviour. Pin it down and
-  declare it explicitly in `server/`, so the behaviour survives a pack change.
+- **Which component broadcasts the server's LAN presence.** Narrowed, not answered: Java over ZeroTier is confirmed
+  working by the owner, and the `itzg` image is confirmed not to be the source. The likely answer is a mod in the
+  pack, in which case it becomes a declared entry in every release manifest. The distinguishing test costs a few
+  minutes: on a client with an empty server list, over the overlay, does the server appear under the local-network
+  scan without anything being added by hand?
 - Whether ZeroTier's per-network multicast limit needs raising for this, and whether the discovery still works when
   the overlay spans several physical networks rather than one.
 - Whether the connectivity contract's "publish" step can be a no-op for players in this mode, with the connection

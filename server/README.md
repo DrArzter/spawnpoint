@@ -20,10 +20,11 @@ is inside the image or on the root volume. See [ADR-0010](../docs/adr/0010-world
 Every script here must be safe to run twice. The automation retries.
 
 **LAN presence must be declared, not inherited.** In the overlay connectivity mode the server can appear in players'
-"LAN" list with no address typed, which is the nicest thing about that mode. A vanilla Java dedicated server does not
-broadcast that, so whatever does it — an image option, or a mod in the pack — is pinned here explicitly and noted in
-the Compose file. Otherwise it disappears the first time the pack changes and nobody knows why. See
-[ADR-0024](../docs/adr/0024-connectivity-modes.md).
+"LAN" list with no address typed, which is the nicest thing about that mode. Neither a vanilla Java dedicated server
+nor the `itzg` image broadcasts that — the image contains no LAN discovery code at all — so it comes from a mod. That
+mod belongs in the release manifest as a required entry, not in a pack by luck, or it disappears the first time the
+pack changes and nobody knows why. See [ADR-0024](../docs/adr/0024-connectivity-modes.md) and
+[ADR-0008](../docs/adr/0008-versioned-mod-releases.md).
 
 The same Compose file should run locally, so a mod set can be smoke-tested before it reaches the server.
 

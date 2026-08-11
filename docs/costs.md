@@ -44,7 +44,7 @@ Two decisions do almost all of the work on the variable term, and they multiply:
 | S3 Standard, backups, 20 GB | Fixed | $0.023 per GB-month | Lifecycle to a colder class reduces this. See [ADR-0010](adr/0010-world-persistence-and-backups.md) |
 | S3, release store, 10 GB | Fixed | $0.023 per GB-month | Grows with retained releases |
 | Route 53 hosted zone | Fixed | $0.50 per zone-month | **Only in DNS mode.** Plus a negligible per-query charge. See [ADR-0024](adr/0024-connectivity-modes.md) |
-| Overlay network (Tailscale) | Fixed | $0 up to 6 users | **Only in overlay mode.** Personal tier: 6 users, unlimited devices, 50 tagged resources. Above 6 people it becomes per-user per-month, which would exceed this whole table. See [ADR-0024](adr/0024-connectivity-modes.md) |
+| Overlay network | Fixed | $0 within the free tier | **Only in overlay mode.** Free tiers bind on different axes: ZeroTier 10 devices and 1 network; Tailscale 6 users with unlimited devices. Either cliff costs more than this whole table. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | Lambda, API Gateway, DynamoDB | Variable | Effectively nil | A few thousand invocations a month sits inside the perpetual free tier |
 | CloudFront and S3 egress | Variable | Effectively nil | A handful of pack downloads a month |
 | Game traffic egress | Variable | Small | Tens of MB per player-hour; verify the free allowance and the per-GB rate |
@@ -99,7 +99,7 @@ Each of these is larger than the entire example above.
 | Orphaned volumes and snapshots | Silent and cumulative | Terraform owns everything; tag and review monthly |
 | Verbose logs with indefinite retention | Grows without limit | Short retention, filtered log shipping |
 | An always-on component of any kind | Whatever it costs, forever | Everything is event-driven. This is why there is no hosted bot or proxy |
-| A seventh player on the overlay | Per-user monthly pricing, several times this whole table | Stay within the 6-user Personal tier, or move to self-hosted WireGuard. See [ADR-0024](adr/0024-connectivity-modes.md) |
+| Outgrowing the overlay's free tier | Tens of US dollars monthly, several times this whole table | Count what the chosen vendor limits — people or devices — and decide at the cliff, not after. Self-hosted WireGuard is the escape. See [ADR-0024](adr/0024-connectivity-modes.md) |
 
 ## Guardrails
 
@@ -131,6 +131,8 @@ interviewer would spot it immediately.
 - [ ] Free-tier allowances currently applying to this account for Lambda, CloudFront and data transfer.
 - [ ] Colder storage class for backups older than a month, and its retrieval cost.
 - [ ] The monthly figure to set the Budgets alarm at.
-- [ ] Whether a player given access as a *shared device* counts towards Tailscale's 6-user limit. This decides
-      whether the overlay mode stays free past six people. See [ADR-0024](adr/0024-connectivity-modes.md).
+- [ ] Head count and device count for the actual group, which decides which overlay vendor's free tier fits. See
+      [ADR-0024](adr/0024-connectivity-modes.md).
+- [ ] Whether a player given access as a *shared device* counts towards Tailscale's 6-user limit, if that vendor is
+      chosen after all.
 - [ ] Real world size per pack, once one exists. It sets the volume size, which is the dominant fixed cost.

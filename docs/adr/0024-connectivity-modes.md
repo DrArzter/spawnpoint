@@ -63,10 +63,21 @@ The instance joins a tailnet on boot and is reachable only from member devices. 
 inbound port. Players install the client once, are invited once, and then use a stable overlay name that never
 changes — so this mode solves address stability as a side effect rather than as a mechanism.
 
-- Cost: expected to fall inside Tailscale's free personal tier at this scale. **Verify current device and user
-  limits and terms before relying on it.**
+**The node is persistent, not ephemeral.** Tailscale's node state directory lives on the persistent EBS data volume
+that already holds the worlds, so the same node identity returns on every start. The instance goes offline and
+online like a laptop being closed, rather than registering as a new device each time.
+
+This is a correction to an earlier draft of this ADR, which specified an ephemeral node. Ephemeral nodes are meant
+for CI runners and Kubernetes pods, and both paid tiers meter them: **1,000 ephemeral minutes per month**, which is
+about 16 running hours — well under the roughly 40 hours a month this project plans for. Persistent on-disk state
+takes the node out of that meter entirely, and it is the better design anyway: one stable device instead of a
+console filling with dead entries, and an auth key needed once at first registration rather than on every boot.
+
+- Cost: $0 on the Personal tier, which allows **up to 6 users**, unlimited user devices, 3 ACL groups and 50 tagged
+  resources. The server is one tagged resource.
 - Setup: every player installs a client and accepts an invitation.
 - Port: **not exposed at all.**
+- **Ceiling: 6 users.** See the risks below — this, not the ephemeral meter, is the real limit of this mode.
 
 ### Which mode to use
 
@@ -101,15 +112,26 @@ not for a world with months of building in it.
   conversation.
 - The instance still needs a public address for its own outbound traffic — Tailscale coordination, S3, SSM — so the
   public IPv4 charge applies while running in every mode. Mode C removes exposure, not that line of the bill.
-- A disposable instance must re-authenticate to the tailnet on every start, which means a credential on the host.
+- **Mode C stops being free above 6 people.** The Personal tier allows 6 users, which is the owner plus five
+  friends — exactly the current group, with no headroom. The next tier is charged per user per month, which at six
+  users would cost several times the entire AWS bill in [docs/costs.md](../costs.md). A seventh player is therefore
+  a pricing decision, not a configuration change.
+- Whether a player can use the server as a *shared device* rather than as a user of the tailnet — which would move
+  the ceiling — is unresolved. See the open questions.
+- The node identity now depends on the data volume. Losing that volume means re-registering the node, which is a
+  minor extra step during a restore.
+- Tailscale states it is not currently enforcing hard limits or overages on these allowances, and intends to
+  introduce enforcement with notice. Building on non-enforcement would be building on sand.
 
 **Mitigations**
 
 - Keep modes A and B genuinely thin: read an address, write a record. Almost all the logic lives in the shared
   contract, so there is little to rot.
-- Mode C uses an ephemeral, pre-authorised auth key from SSM Parameter Store, so a fresh instance registers itself
-  and its node disappears when it goes. Restrict the key's scope, and tag the node so overlay access rules can
-  limit which devices may reach the game port.
+- Mode C keeps its node state on the data volume, so the node is persistent, outside the ephemeral meter, and needs
+  its auth key only once. Tag the node so overlay access rules can limit which devices may reach the game port, and
+  disable key expiry so a stopped server does not need re-authorising after a quiet fortnight.
+- Track the user count against the 6-user ceiling deliberately. If the group grows, decide between paying per user,
+  device sharing if it turns out not to count, and self-hosted WireGuard — before somebody is promised access.
 - Document the fallback: if the overlay is unavailable, the owner can switch modes and restart. It is a
   configuration change, which is the point of the contract.
 - The runbook records which mode each world uses, beside the `online-mode` setting, because the two only make sense
@@ -121,15 +143,27 @@ not for a world with months of building in it.
 | --- | --- |
 | Elastic IP | Never changes and nothing to update, but billed hourly all month for an address idle most of it. The analysis inherited from [ADR-0017](0017-stable-server-address.md) |
 | Security-group allow-list of players' home IP addresses | No client to install and no domain needed, and it does gate the port. Residential addresses change, so it becomes a support task every few weeks, and it fails for anybody on mobile tethering |
-| Self-hosted WireGuard instead of Tailscale | Removes the vendor and is not hard to run. It needs a stable endpoint to connect to, which is the problem being solved, plus manual key distribution — so it reintroduces the work Tailscale's coordination service is doing |
+| Self-hosted WireGuard instead of Tailscale | Removes the vendor, has no per-user pricing, and is not hard to run. It needs a stable endpoint to connect to, which is the problem being solved, plus manual key distribution — so it reintroduces the work Tailscale's coordination service does. **Becomes the serious alternative if the group passes 6 people**, because that is where mode C stops being free |
 | A dynamic DNS provider | Free tiers exist, works, and needs no purchased domain. Adds a third party to do what Route 53 already does inside the account, and it leaves the port exposed. A reasonable substitute for mode B if a domain is never bought |
 | A public tunnel service, such as a TCP relay or `playit.gg`-style proxy | No domain, no client for players, stable address. Puts an unaccountable third party in the traffic path of a server with no authentication, and arbitrary TCP through the general-purpose CDN tunnels is usually a paid feature. Verify before considering |
 | One mode only, as [ADR-0017](0017-stable-server-address.md) had it | Less code. Forces a domain purchase before first play, and leaves the security posture implicit at exactly the moment `online-mode=false` made it load-bearing |
 
 ## Open questions
 
-- Tailscale's current free-tier device and user limits, and whether its terms cover this use. This decides whether
-  mode C is free or has a monthly cost.
+Answered on 2026-08-11, see sources below:
+
+- ~~Tailscale's free-tier limits.~~ Personal: $0, up to 6 users, unlimited user devices, 3 ACL groups, 50 tagged
+  resources, 1,000 ephemeral minutes per month.
+- ~~Whether the ephemeral-minute allowance constrains this design.~~ Not any more: the node is persistent, and
+  persistent on-disk state is not ephemeral. It would have been tight otherwise — and note that an ephemeral node
+  running four hours or more is reclassified as a standard tagged device and stops consuming minutes, so long
+  evenings would have escaped the meter while short ones burned it.
+
+Still open:
+
+- **Whether a player who is given access as a shared device counts towards the 6-user limit.** This decides whether
+  mode C scales past six people for free. Tailscale's pricing page does not say; ask them before promising a seventh
+  person access.
 - Whether overlay access rules should restrict the game port to player devices specifically, or whether tailnet
   membership is a sufficient boundary for a group of friends.
 - Whether mode C should also cover administration, letting SSM be replaced by direct access over the overlay.
@@ -137,3 +171,11 @@ not for a world with months of building in it.
 - Whether a world may declare its own required mode — for example a public test world in mode A while the main
   world is in mode C. The per-world model in [ADR-0023](0023-multiple-worlds.md) allows it; running two modes at
   once on one instance does not.
+
+## Sources
+
+Verified 2026-08-11. Tailscale states enforcement of these allowances is not yet active and will arrive with notice,
+so re-check before relying on any of it.
+
+- Ephemeral nodes, what they are for, and the four-hour reclassification: <https://tailscale.com/kb/1111/ephemeral-nodes>
+- Personal tier allowances: <https://tailscale.com/pricing>

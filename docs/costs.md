@@ -39,11 +39,12 @@ Two decisions do almost all of the work on the variable term, and they multiply:
 | Driver | Type | Placeholder rate | Notes |
 | --- | --- | --- | --- |
 | EC2 Spot, ~4 vCPU / 16 GB | Variable | $0.06 per hour | Assume roughly a third of the on-demand rate; verify per type and zone, and expect movement |
-| Public IPv4 address | Variable here | $0.005 per hour | Charged for any public address; verify. Only billed while running, because no Elastic IP is held. See [ADR-0017](adr/0017-stable-server-address.md) |
-| EBS gp3, world volume, 50 GB | Fixed | $0.09 per GB-month | Billed while the instance is stopped. The largest fixed item |
+| Public IPv4 address | Variable here | $0.005 per hour | Charged for any public address; verify. Only billed while running, because no Elastic IP is held. Applies in **every** connectivity mode, because the instance needs outbound access regardless. See [ADR-0024](adr/0024-connectivity-modes.md) |
+| EBS gp3, world volume, 50 GB | Fixed | $0.09 per GB-month | Billed while the instance is stopped. The largest fixed item. One volume holds every world, as a directory each. See [ADR-0023](adr/0023-multiple-worlds.md) |
 | S3 Standard, backups, 20 GB | Fixed | $0.023 per GB-month | Lifecycle to a colder class reduces this. See [ADR-0010](adr/0010-world-persistence-and-backups.md) |
 | S3, release store, 10 GB | Fixed | $0.023 per GB-month | Grows with retained releases |
-| Route 53 hosted zone | Fixed | $0.50 per zone-month | Plus a negligible per-query charge |
+| Route 53 hosted zone | Fixed | $0.50 per zone-month | **Only in DNS mode.** Plus a negligible per-query charge. See [ADR-0024](adr/0024-connectivity-modes.md) |
+| Overlay network (Tailscale) | Fixed | Expected nil | **Only in overlay mode.** Expected to fall inside the free personal tier at this scale — verify current limits and terms |
 | Lambda, API Gateway, DynamoDB | Variable | Effectively nil | A few thousand invocations a month sits inside the perpetual free tier |
 | CloudFront and S3 egress | Variable | Effectively nil | A handful of pack downloads a month |
 | Game traffic egress | Variable | Small | Tens of MB per player-hour; verify the free allowance and the per-GB rate |
@@ -67,9 +68,22 @@ substituted directly.
 | **Total** | | **~$8.80** |
 | **of which fixed** | volume, storage, zone | **~$5.70** |
 
+The hosted-zone line applies in DNS mode only; in the other two connectivity modes it is nil or the overlay's free
+tier. See [ADR-0024](adr/0024-connectivity-modes.md).
+
 The instance is not the main cost. The **storage is**, because it is billed continuously while everything
 else is billed only during a session. That is the counter-intuitive result of an on-demand design, and it
 is where optimisation effort belongs: size the volume tightly, prune old worlds, lifecycle the backups.
+
+### With several worlds
+
+The same conclusion, sharpened. Only one world runs at a time, so **compute does not change at all** — four worlds
+cost the same to play as one. What grows is storage: save data plus a backup lineage per world, adding single-digit
+US dollars per month for four worlds at the rates above. Mod storage grows sub-linearly, because binaries are
+content-addressed and shared between packs.
+
+So the on-demand design is exactly what makes several packs affordable: their cost is storage, not compute. See
+[ADR-0023](adr/0023-multiple-worlds.md).
 
 ## What makes it much worse
 
@@ -116,3 +130,6 @@ interviewer would spot it immediately.
 - [ ] Free-tier allowances currently applying to this account for Lambda, CloudFront and data transfer.
 - [ ] Colder storage class for backups older than a month, and its retrieval cost.
 - [ ] The monthly figure to set the Budgets alarm at.
+- [ ] Tailscale's current free-tier device and user limits, and whether its terms cover this use. This decides
+      whether the chosen connectivity mode is free. See [ADR-0024](adr/0024-connectivity-modes.md).
+- [ ] Real world size per pack, once one exists. It sets the volume size, which is the dominant fixed cost.

@@ -19,7 +19,7 @@ yet. Where a decision is still open, the ADR that owns it is linked.
 | Identity | Cognito user pool | Google sign-in, and a custom flow for bot-issued sign-in links. Chat commands are authenticated by the platform itself |
 | Link table | DynamoDB | Maps chat and Minecraft accounts to an internal identity. Doubles as the allow-list, the chat sign-in route, and the source the whitelist is generated from. See [ADR-0019](adr/0019-account-linking.md), [ADR-0021](adr/0021-sign-in-from-linked-chat-account.md), [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md) |
 | Web panel and pack site | S3 + CloudFront | Static. Panel is a client of the API; packs are files |
-| DNS | Route 53 | One short-TTL record, rewritten on every start |
+| Connectivity | Route 53, or an overlay agent on the instance, or neither | Publishes the connection string on start and retracts it on stop. One contract, three implementations. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | Observability | CloudWatch + Budgets | Metrics, logs, alarms; alarms deliver to the event bus |
 
 Boundaries that matter:
@@ -56,12 +56,14 @@ sequenceDiagram
 
 Notes
 
-- The operation is not *ready* until the server answers a status ping **and** DNS resolves to the new
-  address. Either one alone gives a player a broken connection and no explanation.
+- The operation is not *ready* until the server answers a status ping **and** the connection string published by
+  the active connectivity mode actually works. Either one alone gives a player a broken connection and no
+  explanation. See [ADR-0024](adr/0024-connectivity-modes.md).
 - A second start request while one is in flight joins the existing operation. It must never start a second
   instance. See [ADR-0016](adr/0016-chat-integrations.md).
-- Whether the DNS write is made by the Lambda or by the instance is still open. The Lambda is safer, since
-  the permission then does not sit on an internet-facing host. See [ADR-0017](adr/0017-stable-server-address.md).
+- Whether the DNS write is made by the Lambda or by the instance is still open. The Lambda is safer, since the
+  permission then does not sit on an internet-facing host. In overlay mode the instance registers itself, so the
+  credential is on the host by necessity. See [ADR-0024](adr/0024-connectivity-modes.md).
 
 ## Flow 2 — Idle stop
 
@@ -122,7 +124,9 @@ degrade in that order.
 | Concern | Position |
 | --- | --- |
 | Inbound network | Security group opens the game port only. No SSH port exists. See [ADR-0007](adr/0007-ssm-instead-of-ssh.md) |
-| Who may join the game | `online-mode=true` prevents impersonation; a UUID-keyed whitelist, generated from the link table, decides who may join at all; `enforce-whitelist=true` kicks anybody removed. Offline mode is never used. See [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md) |
+| Who may join the game | **`online-mode=false`**, so Minecraft itself verifies nothing: the whitelist keeps out unknown names, not unknown people. The **network is the access boundary** — see the connectivity mode below. `enforce-whitelist=true` kicks anybody removed from the derived whitelist. See [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md) |
+| Connectivity mode | Pluggable: raw address, DNS on an owned domain, or an overlay network with no inbound port. Only the overlay mode supplies the gate that `online-mode=false` depends on, so it is the mode for any world worth keeping. See [ADR-0024](adr/0024-connectivity-modes.md) |
+| Operator privileges | `ops.json` is kept empty or near-empty. In offline mode an op entry is a name anybody reaching the port can claim, so administration goes through RCON from the control plane instead |
 | Host access | SSM Session Manager and Run Command only. No key pair on the instance |
 | Instance permissions | Instance profile scoped to the two buckets it needs, and nothing else |
 | Lambda permissions | Per-function roles. SSM send limited to instances carrying the project tag |
@@ -144,7 +148,9 @@ degrade in that order.
 | Spot capacity unavailable | Start operation fails | Cannot play | Try other instance types, then fall back to on-demand |
 | Instance boots, container does not | Health check timeout | Server unreachable | Announce failure; if caused by a promotion, roll back automatically |
 | Bad mod promoted | Health check, or crash loop alarm | Server unusable | Automatic rollback to the previous release |
-| DNS not updated | Start operation never reaches ready | Up but unreachable by name | Operation reports failure with the raw address as a fallback |
+| Connection string not published | Start operation never reaches ready | Up but unreachable | Operation reports failure; in DNS mode the raw address is the fallback |
+| Overlay coordination service unavailable | New device cannot join | Newcomers blocked, existing devices unaffected | Owner can switch connectivity mode and restart. See [ADR-0024](adr/0024-connectivity-modes.md) |
+| Wrong world's release applied to a world's save | Reconciliation refuses on mismatch | Would corrupt a world | Required world parameter, never defaulted, plus a pre-flight check. See [ADR-0023](adr/0023-multiple-worlds.md) |
 | Idle check misreads player count | — | Players disconnected mid-session | N consecutive readings required; failed read counts as not empty |
 | Stop path fails silently | Running-hours alarm | Money burned | Alarm to chat; Budgets alarm as backstop |
 | Backup fails silently | Archive verification | No recovery point | Alarm to chat. Treated as the most serious failure here |

@@ -16,8 +16,10 @@ individually and seeing what each one needs.
 - Separate data volume, attached and mounted.
 - `itzg/docker-minecraft-server` running the intended pack, via Compose.
 - Security group opens the game port only. No SSH port, no key pair. SSM access works.
-- `online-mode=true`, `white-list=true`, `enforce-whitelist=true`, with the four names added by hand. Cheap now,
-  and the whitelist becomes generated in M4. See [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
+- `online-mode=false`, `white-list=true`, `enforce-whitelist=true`, with the names added by hand. The whitelist
+  becomes generated in M4. See [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
+- Connectivity mode A: the address is announced by hand. Treat this world as throwaway — offline mode with an
+  exposed port is not a combination to build anything in. See [ADR-0024](adr/0024-connectivity-modes.md).
 - Address posted in chat by hand. Started and stopped by hand.
 - Backups: a manual copy to S3 before anything risky.
 
@@ -50,7 +52,8 @@ milestone where that is cheap to discover.
 **Goal:** nobody pays for idle time, and nobody needs AWS access to start the server.
 
 - Start operation: Lambda starts the instance, waits for health, reports state.
-- Stable hostname, updated on every start. See [ADR-0017](adr/0017-stable-server-address.md).
+- The connectivity contract, plus mode A. Then mode C, before anybody starts building in a world they care about:
+  offline mode needs the network gate. See [ADR-0024](adr/0024-connectivity-modes.md).
 - Idle watchdog: player count read on a schedule, save and stop after N empty readings.
 - Spot interruption handler: save, clean stop, and an announcement.
 - A minimal trigger — a single authenticated endpoint or a script — is enough. The panel comes in M4.
@@ -93,7 +96,7 @@ The health check is the hard part of this milestone, not the file syncing. See
 - `/panel` in either bot: a one-minute sign-in link for an already linked identity, in a direct message only.
   Build after linking works, and never before. See [ADR-0021](adr/0021-sign-in-from-linked-chat-account.md).
 - Minecraft account binding, and `whitelist.json` generated from the link table on start and on every change.
-  `online-mode=true` and `enforce-whitelist=true` from M0 onwards, not from here. See
+  `online-mode=false` and `enforce-whitelist=true` are set from M0 onwards, not from here. See
   [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
 - Chat notifications first — the cheap half of [ADR-0016](adr/0016-chat-integrations.md), and immediately
   useful: start requested, ready, stopped, release promoted, backup failed.
@@ -122,6 +125,26 @@ panel. Each step is useful alone.
 
 **Done when:** every alarm has fired at least once in a test, and one month of real cost data has been
 compared against the model.
+
+## M6 — Several worlds
+
+**Goal:** vanilla-plus, techno, magic and techno-magic all exist, and the group starts whichever it wants.
+
+- The world becomes a first-class entity: release line, save directory and backup lineage per world. See
+  [ADR-0023](adr/0023-multiple-worlds.md).
+- Every path and operation gains a required world parameter. Never defaulted — an operation with no world fails.
+- Mod binaries become content-addressed, so four packs share their common libraries once.
+- Reconciliation refuses to apply a release to the wrong world's directory. Cheap check, prevents the worst
+  outcome in the whole system.
+- `start <world>` on every surface; the panel lists worlds with status, live version and last played.
+- A client pack published per world per version.
+
+**Done when:** two worlds exist, the group switches between them without the owner touching anything, and each has
+its own independent release history and backups.
+
+This is deliberately last. Every mechanism it needs — immutable releases, pointers, reconciliation, per-lineage
+backups — is built by M3, so M6 adds a dimension rather than new machinery. Doing it earlier would mean building
+that dimension into machinery that does not exist yet.
 
 ## Afterwards, if the project earns it
 

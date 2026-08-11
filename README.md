@@ -22,7 +22,9 @@ The name is a working title. Check it is free on GitHub before claiming it; rena
 | Sign in with an account you have | Cognito with Google. No passwords stored, anywhere |
 | Connect your chat accounts | "Connect Telegram" and "Connect Discord" on the account page, by a one-time code sent to the bot |
 | Then sign in from chat too | Once linked, `/panel` in the bot returns a one-minute sign-in link. A chat account never creates an identity, only signs into one it is linked to |
-| Whitelist that maintains itself | The Minecraft account is a third linked identity, and `whitelist.json` is generated from the link table. Remove someone once, and they lose the panel, the bots and the game |
+| Whitelist that maintains itself | The Minecraft identity is a third link, and `whitelist.json` is generated from the link table. Remove someone once, and they lose the panel, the bots and the game |
+| Several worlds, one at a time | Each pack is a world with its own release line, save data and backups. Start the one you want; the others cost only storage |
+| Connectivity you can choose | Raw address, DNS on your own domain, or an overlay network with no public port. One contract, three modes |
 | Chat notifications | "X requested the server", "server ready", "release 1.4 promoted", "backup failed" |
 | Backups you can restore | World archived after every session and before every release, with a tested restore procedure |
 
@@ -131,8 +133,9 @@ scripts/           Local helpers: cut a release, restore a backup, check cost
 
 ## Decisions
 
-The decision records are the most useful part of this repository today. Twenty-two of them, each with the
-alternatives that were rejected and why.
+The decision records are the most useful part of this repository today. Twenty-four of them, each with the
+alternatives that were rejected and why — including one already superseded, which is the process working rather
+than failing.
 
 | ADR | Decision | Status |
 | --- | --- | --- |
@@ -152,12 +155,14 @@ alternatives that were rejected and why.
 | [0014](docs/adr/0014-no-kubernetes.md) | Do not use Kubernetes | Accepted |
 | [0015](docs/adr/0015-observability-and-alerting.md) | CloudWatch signals, chat alerts, Budgets backstop | Proposed |
 | [0016](docs/adr/0016-chat-integrations.md) | Discord and Telegram as control surfaces | Proposed |
-| [0017](docs/adr/0017-stable-server-address.md) | Stable hostname in Route 53 | Proposed |
+| [0017](docs/adr/0017-stable-server-address.md) | Stable hostname in Route 53 | Superseded by 0024 |
 | [0018](docs/adr/0018-identity-and-sign-in.md) | Cognito broker; panel sign-in with Google | Proposed |
 | [0019](docs/adr/0019-account-linking.md) | Link chat accounts with a one-time code | Proposed |
 | [0020](docs/adr/0020-email-channel.md) | SNS email for alerts; SES deferred | Accepted |
 | [0021](docs/adr/0021-sign-in-from-linked-chat-account.md) | Chat sign-in, but only into a linked account | Proposed |
-| [0022](docs/adr/0022-minecraft-account-as-linked-identity.md) | Minecraft account is a linked identity; whitelist is derived | Proposed |
+| [0022](docs/adr/0022-minecraft-account-as-linked-identity.md) | Minecraft identity is a link; whitelist derived; `online-mode=false` | Proposed |
+| [0023](docs/adr/0023-multiple-worlds.md) | Several worlds, one active at a time | Proposed |
+| [0024](docs/adr/0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Proposed |
 
 Index, template and the decisions still to make: [docs/adr/README.md](docs/adr/README.md).
 
@@ -180,6 +185,7 @@ pricing pages for the chosen region.
 | M3 | Versioned mod releases and the deployment pipeline |
 | M4 | Control panel, Discord and Telegram bots, client pack distribution |
 | M5 | Observability, alerting and cost guardrails |
+| M6 | Several worlds — vanilla-plus, techno, magic, techno-magic — one active at a time |
 
 Definition of done per milestone: [docs/roadmap.md](docs/roadmap.md).
 
@@ -191,7 +197,9 @@ Definition of done per milestone: [docs/roadmap.md](docs/roadmap.md).
 | Live pointer | The one record naming which release the server should run |
 | Client pack | The launcher-importable artefact generated from a release |
 | Operation | A long-running action with observable state: start, promote, restore |
-| Link | The record joining a chat account to one internal identity. Being linked is being authorised, and it is also the sign-in route |
+| Link | The record joining a chat or Minecraft identity to one internal identity. Being linked is being authorised, and it is also the sign-in route |
+| World | A named playable thing: its release line, its save data and its backup lineage together |
+| Connectivity mode | How players reach the server: raw address, DNS, or overlay network |
 | Cold start | Time from a start request to the server accepting connections |
 | Idle watchdog | The check that stops the instance when nobody is online |
 | Spot interruption | AWS reclaiming the instance, with a two-minute warning |

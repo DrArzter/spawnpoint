@@ -35,12 +35,14 @@ Template: [0000-template.md](0000-template.md).
 | [0014](0014-no-kubernetes.md) | Do not use Kubernetes | Accepted | — |
 | [0015](0015-observability-and-alerting.md) | CloudWatch signals, chat alerts, Budgets backstop | Proposed | M5 |
 | [0016](0016-chat-integrations.md) | Discord and Telegram as control and notification surfaces | Proposed | M4 |
-| [0017](0017-stable-server-address.md) | Stable hostname in Route 53, not an Elastic IP | Proposed | M2 |
+| [0017](0017-stable-server-address.md) | Stable hostname in Route 53, not an Elastic IP | Superseded by [0024](0024-connectivity-modes.md) | M2 |
 | [0018](0018-identity-and-sign-in.md) | Cognito broker; panel sign-in with Google | Proposed | M4 |
 | [0019](0019-account-linking.md) | Link chat accounts with a one-time code | Proposed | M4 |
 | [0020](0020-email-channel.md) | SNS email for alerts; SES deferred | Accepted | M5 |
 | [0021](0021-sign-in-from-linked-chat-account.md) | Chat sign-in, but only into an already linked account | Proposed | M4 |
-| [0022](0022-minecraft-account-as-linked-identity.md) | Minecraft account is a linked identity; whitelist is derived | Proposed | M4 |
+| [0022](0022-minecraft-account-as-linked-identity.md) | Minecraft account is a linked identity; whitelist derived; `online-mode=false` | Proposed | M4 |
+| [0023](0023-multiple-worlds.md) | Several worlds, one active at a time | Proposed | M6 |
+| [0024](0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Proposed | M2 |
 
 ## Decisions still to record
 
@@ -52,5 +54,6 @@ written, so the numbering stays chronological and nothing has to be renumbered w
 - **In-game verification of a Minecraft binding.** Only if a real conflict occurs, or when in-game events start
   naming people. Deferred deliberately in [ADR-0022](0022-minecraft-account-as-linked-identity.md).
 - **Cost guardrail response.** What a Budgets breach actually does: notify only, or stop the instance.
-- **Multiple worlds or server versions.** Only if the group ever wants a second world.
+- **Retiring a world.** Archived to cold storage and removed, or kept indefinitely. Needed before the first
+  abandoned pack, not after. See [ADR-0023](0023-multiple-worlds.md).
 - **Licence for this repository.** Public repository, so it needs one.

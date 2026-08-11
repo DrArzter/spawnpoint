@@ -1,8 +1,15 @@
 # ADR-0017 — Give the server a stable hostname in Route 53, not an Elastic IP
 
-- Status: Proposed
+- Status: **Superseded by [ADR-0024](0024-connectivity-modes.md)**
 - Date: 2026-08-11
 - Milestone: M2
+
+> **Superseded.** This ADR assumed a purchased domain and picked one approach. Connectivity later became a
+> security decision as well as a convenience one, because
+> [ADR-0022](0022-minecraft-account-as-linked-identity.md) chose `online-mode=false`, which moves the access
+> boundary to the network. [ADR-0024](0024-connectivity-modes.md) makes connectivity a pluggable choice of three
+> modes. The cost analysis below — a short-TTL record beats an Elastic IP held all month — is unchanged and is
+> inherited by mode B there. Kept for that reasoning and for the record.
 
 ## Context
 

@@ -2,124 +2,142 @@
 
 - Status: Proposed
 - Date: 2026-08-11
+- Revised: 2026-08-11 — the owner has decided on `online-mode=false`. The first draft of this ADR asserted that
+  offline mode was "a decision never to make". That assertion is withdrawn; the decision is the owner's, and this
+  revision records what it actually costs and what has to change because of it
 - Milestone: M4
 - Extends: [ADR-0019](0019-account-linking.md)
 
 ## Context
 
-A correction first, because the design depends on it. The whitelist is **not** name-based.
+Start with how Minecraft identity actually works, because the two modes behave differently and the difference
+decides the whole design.
 
-`whitelist.json` stores `{uuid, name}` pairs, and the UUID is the key. A player who renames stays whitelisted,
-because the UUID does not change; the `name` field is a cached label for humans. On an **online-mode** server the
-UUID is the Microsoft/Mojang account UUID, and the server verifies each join against the session servers. So the
-whitelist is already anchored to an account, not to a nickname.
+`whitelist.json` stores `{uuid, name}` pairs, and the **UUID is the key**. The `name` field is a cached label. So
+the whitelist is UUID-keyed in both modes. What differs is where the UUID comes from:
 
-That changes the shape of the problem. Two controls already stop a stranger:
+| | `online-mode=true` | `online-mode=false` (chosen) |
+| --- | --- | --- |
+| UUID source | The Microsoft/Mojang account, verified against the session servers on every join | Derived from the username by a fixed algorithm, locally |
+| Can somebody join as a name they do not own? | No. Session verification prevents it cryptographically | **Yes.** There is nothing to verify against |
+| What the whitelist means | "These accounts may join" | "These *names* may join" |
 
-| Control | What it actually prevents |
-| --- | --- |
-| `online-mode=true` | Impersonation. Nobody can join as a UUID they do not own, whatever name they type |
-| Whitelist by UUID | Anybody not on the list joining at all |
+Under the chosen configuration, the original intuition — that the whitelist is name-based — is therefore correct.
+The offline UUID is a pure function of the username, so whitelisting a UUID is exactly equivalent to whitelisting
+a name.
 
-The important corollary: with `online-mode=false` both collapse at once. UUIDs are then derived from the
-username by a fixed algorithm, so anybody can claim any name and the whitelist becomes decoration. Offline mode
-is therefore not a configuration option in this project; it is a decision never to make.
+The consequence has to be stated plainly: **with offline mode, the whitelist is not an authentication boundary.**
+Anybody who can reach the port and knows a whitelisted username can join as that player, with their inventory,
+their builds and their permissions. The whitelist keeps out unknown *names*, not unknown *people*.
 
-What is genuinely missing is not access control but a **binding**. Nothing connects a Minecraft account to the
-internal identity from [ADR-0019](0019-account-linking.md), so the whitelist is a second list, maintained by
-hand, that drifts from the first. Somebody removed from the group in Discord stays in `whitelist.json` until a
-human remembers.
+That does not make the configuration wrong. It relocates the security boundary. If the server is not reachable
+from the open internet, network membership becomes the authentication, and the whitelist goes back to being what
+it is good at: bookkeeping about who is expected. That relocation is the subject of
+[ADR-0024](0024-connectivity-modes.md), and it is a hard dependency of this one.
+
+What is still missing, and is the original point of this ADR: nothing connects a Minecraft identity to the
+internal identity from [ADR-0019](0019-account-linking.md), so the whitelist is a second list, maintained by hand,
+that drifts. Somebody removed from the group in chat stays in `whitelist.json` until a human remembers.
 
 ## Decision
 
-The Minecraft account becomes a **third linked identity**, alongside Discord and Telegram, and the whitelist is a
+**`online-mode=false`**, as decided by the owner. Therefore:
+
+- **The network is the access control**, not the whitelist. This ADR is only safe in a connectivity mode that
+  restricts who can reach the port. See [ADR-0024](0024-connectivity-modes.md).
+- **The whitelist remains, and stays derived.** It is bookkeeping and a guard against accidents, not a security
+  control, and it is described as such wherever it appears so nobody mistakes it for one.
+
+**The Minecraft identity becomes a third linked identity**, alongside Discord and Telegram, and the whitelist is a
 **projection of the link table** rather than a list anybody edits.
 
-Binding, on the account page: the player enters their Minecraft username, it is resolved to a UUID, and the UUID
-is stored against their internal identity. Constraints do the work:
+Binding, on the account page: the player enters the username they play under, and its offline UUID is computed
+locally and stored against their internal identity. No external API is involved, because in offline mode the UUID
+is a function of the name — one of the few simplifications this configuration buys.
 
-- One Minecraft account per identity. A second one needs owner approval.
-- A UUID may belong to exactly one identity. Conflicts are refused, not merged.
-- Only a signed-in, linked identity can create a binding at all.
+Constraints, which are now doing more work than before:
 
-Reconciliation: on server start, and on every bind, unbind or unlink, the whitelist is regenerated from the link
-table and reloaded. Unlinking someone in the panel removes them from the game.
+- One Minecraft name per identity. A second needs owner approval.
+- A name may belong to exactly one identity. Conflicts are refused, not merged.
+- Only a signed-in, linked identity can create a binding.
 
-Server settings that make this real, and that are part of the decision:
+Reconciliation: on server start, and on every bind, unbind or unlink, `whitelist.json` is regenerated from the
+link table and reloaded. Unlinking someone in the panel removes them from the game.
 
-- `online-mode=true`, permanently.
-- `enforce-whitelist=true`, so a player removed from the list is kicked rather than left in the world until they
-  disconnect.
-- Operator privileges are **not** derived. `op` is a much larger privilege than joining, and it stays manual.
+Server settings that are part of this decision:
 
-## What this does and does not buy
+- `white-list=true` and `enforce-whitelist=true`, so a player removed from the list is kicked rather than left in
+  the world until they disconnect.
+- Operator privileges are **not** derived, and are kept to the minimum. In offline mode an op entry is a name that
+  anybody able to reach the port can claim, so `ops.json` is the most dangerous file on the server.
 
-Worth stating precisely, because the intuitive reading is wrong.
+## The one-way door
 
-**The access control is the pair "only authorised identities may add entries" plus `online-mode=true`.** A
-stranger cannot get in, because they cannot create a whitelist entry and cannot impersonate one that exists.
+Worth its own section, because it is the part that is expensive to discover later.
 
-**The binding is not proof of ownership.** A player could enter a username they do not own. The consequence is
-mild and worth walking through: the entry is useless to them, because they still cannot pass session
-verification as that UUID; and the uniqueness constraint means the real owner cannot then be bound by somebody
-else, which surfaces as a visible conflict rather than a silent compromise. So an unproven claim costs a wasted
-slot and a confusing error, not access.
+Player save data is keyed by UUID. Offline and online UUIDs for the same person are different values. So switching
+`online-mode` later does not just invalidate `whitelist.json` and `ops.json` — it orphans every player's inventory,
+position and advancements, because the server looks for a UUID that no longer matches.
 
-**A linked player can still vouch for somebody.** Nothing here stops a group member binding an account that is
-not theirs and handing it over. That is a policy question about who is trusted, not a hole in the mechanism, and
-the one-account cap plus owner approval for extras is the proportionate answer at five players.
+Changing this setting after people have played therefore needs a deliberate UUID remapping of the save data, not a
+configuration edit. Decide it at M0, write it down, and treat it as fixed for the life of a world. If a switch is
+ever wanted, the honest path is a new world. See [ADR-0023](0023-multiple-worlds.md).
 
 ## Consequences
 
 **Good**
 
-- One source of truth for who may play. Remove someone once, and they lose the panel, the bots and the game.
-- The whitelist stops being a file anybody edits, which is what makes drift possible.
-- In-game presence becomes attributable to a person: the idle watchdog's player count, and any future in-game
-  event in chat, can name the Discord or Telegram user rather than a nickname.
-- Renames are free. UUID-anchored entries survive them, and the cached name is refreshed on reconciliation.
-- Onboarding is self-service. A new player signs in, binds three accounts, and is playing.
+- Players without a paid account can join, which is presumably the reason for the choice, and it is a real one.
+- No dependency on Mojang session servers at join time. The server comes up and works even when they do not.
+- The binding is a local computation rather than an API call, so it cannot fail because a third party is down.
+- One source of truth for who is expected: remove someone once and they lose the panel, the bots and the game.
+- Renames are cheap to handle, because the binding is the name and the UUID follows from it.
 
 **Bad, or risky**
 
-- Another projection to keep correct. A reconciliation bug locks the whole group out of their own server.
-- Resolving a username to a UUID depends on an external API. If it is unavailable, new bindings fail — though
-  existing play is unaffected, which is the right way round.
-- The binding is claimed rather than proven, as set out above.
-- `enforce-whitelist=true` means a mistaken unlink kicks somebody mid-session.
+- **Impersonation is possible for anybody who can reach the port.** This is the whole cost, and it is not
+  reducible at the Minecraft layer.
+- An op entry is a name anybody reaching the port can claim.
+- Within the group, one member can trivially join as another. That is a social problem rather than a technical
+  one, but it is worth knowing before somebody discovers it as a prank.
+- Switching `online-mode` later is a save-data migration, not a setting change.
+- Skins and capes do not resolve from Mojang by default, and a few mods behave differently in offline mode.
 
 **Mitigations**
 
-- Reconciliation is additive-then-subtractive and logged, and it refuses to write an empty whitelist — an empty
-  result is treated as a bug, not as an instruction.
-- The owner keeps a documented manual path in the runbook, because a bug in the projection must not be
-  unrecoverable.
-- Bindings are cached, so an outage of the name-resolution API cannot affect anybody already bound.
-- Unlink asks for confirmation and announces itself to the person concerned, as [ADR-0019](0019-account-linking.md)
-  already requires.
+- The network gate is not optional. A connectivity mode that exposes the port to the internet must not be combined
+  with this setting for a world anybody cares about. See [ADR-0024](0024-connectivity-modes.md).
+- Keep `ops.json` empty or near-empty, and use RCON through the control plane for administration instead of
+  in-game operator commands. RCON is already how the automation talks to the server.
+- Backups are the answer to griefing as well as to corruption, and they already exist with graded retention. See
+  [ADR-0010](0010-world-persistence-and-backups.md).
+- Reconciliation is additive-then-subtractive, logged, and refuses to write an empty whitelist — an empty result
+  is a bug, not an instruction.
+- Document the mode and the one-way door in the runbook, next to the world it applies to.
 
 ## Alternatives considered
 
 | Option | Why not chosen |
 | --- | --- |
-| Prove ownership with an in-game code: the panel shows a code, the player types it in chat on first join, and the UUID that actually joined is bound | The rigorous version, and symmetric with the `/link` code in [ADR-0019](0019-account-linking.md). Deferred, not rejected: it buys verified binding, and the analysis above shows an unproven claim costs a slot rather than access. Build it if a real conflict occurs, or when in-game events start being attributed to people by name |
-| Microsoft sign-in on the panel, then read the Minecraft profile for the UUID | Cryptographic proof with no in-game step, and the "proper" answer. Requires a chain of token exchanges through Xbox Live to reach the Minecraft services profile, which is not a cleanly supported third-party integration and carries terms-of-use questions. Verify current feasibility before considering it seriously |
-| Keep the whitelist manual, as most servers do | Zero work, and correct today at five players. Two lists that drift, and removal depends on somebody remembering |
-| Derive the whitelist from the Discord server's member list directly | No binding step at all. Needs a Minecraft UUID from somewhere regardless, which is the problem this ADR exists to solve |
-| `online-mode=false` with a whitelist | Occasionally suggested for convenience. It makes the whitelist meaningless, because UUIDs become a function of the username. Never |
-| A proxy or authentication plugin in front of the server | Extra always-on component, and it duplicates what `online-mode` already does correctly |
+| `online-mode=true` with a UUID-keyed whitelist | Cryptographic protection against impersonation, and no network gate strictly required. Excludes players without a paid account, which is the constraint that decided this. The stronger option on security alone, and available by starting a *new* world if that ever becomes the priority |
+| Offline mode with the port open to the internet | The configuration that gets small servers griefed. Explicitly rejected: offline mode is only adopted here *together with* a network gate |
+| Offline mode plus an in-game password mod or authentication plugin | The usual answer on offline servers, and it does add a real check. Needs a mod in the pack, per-loader compatibility, and a password store — reinventing authentication badly, when the network gate solves it properly |
+| Prove ownership with an in-game code before binding | Meaningful only in online mode. In offline mode there is no ownership to prove: the name is the identity |
+| Keep the whitelist manual | Zero work, and correct today at five players. Two lists that drift, and removal depends on somebody remembering |
 
 ## Open questions
 
-- Which API resolves a username to a UUID, and its current rate limits and terms. Verify before implementation.
-- Whether the panel shows the player's in-game presence — "you are online now" — which needs the binding to be
-  read on the hot path of the idle check.
-- Whether a player may unbind their own Minecraft account, or only the owner may. Leaning towards the owner
-  only, because self-unbinding is a way to escape an in-game consequence.
-- Whether `ops.json` should be derived from the owner role after all. Deliberately left manual for now.
+- Whether one world should run in online mode after all — for example a long-lived build world where impersonation
+  matters most — while others stay offline. The per-world model in [ADR-0023](0023-multiple-worlds.md) makes this
+  possible, and the one-way door makes it a per-world decision taken at creation.
+- Whether the panel should show in-game presence, which needs the binding on the hot path of the idle check.
+- Whether a player may unbind their own name, or only the owner. Leaning owner-only, because self-unbinding is a
+  way to escape an in-game consequence.
+- Whether to record, per session, which linked identity was seen in game — useful, and in offline mode it is a
+  claim rather than a fact, which the UI should not obscure.
 
 ## Sources
 
 Verified 2026-08-11.
 
-- `whitelist.json` format, and UUID as the key: <https://minecraft.wiki/w/Whitelist.json>
+- `whitelist.json` format, UUID as the key, and offline-mode UUID derivation: <https://minecraft.wiki/w/Whitelist.json>

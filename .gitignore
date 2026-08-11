@@ -1,0 +1,58 @@
+# --- Secrets and local configuration ---
+# Nothing secret belongs in this repository. Secrets live in SSM Parameter Store.
+.env
+.env.*
+*.tfvars
+!example.tfvars
+*.pem
+*.key
+credentials
+
+# --- Terraform ---
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+tfplan
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# --- Minecraft data: never in git ---
+# The world is state, and mod binaries are large. See ADR-0008 and ADR-0010.
+world/
+world_*/
+mods/
+*.jar
+*.mrpack
+server/data/
+logs/
+crash-reports/
+banned-*.json
+ops.json
+whitelist.json
+usercache.json
+server.properties
+eula.txt
+
+# --- Build output ---
+dist/
+build/
+out/
+*.zip
+node_modules/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# --- Editors and OS ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~

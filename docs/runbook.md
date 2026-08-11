@@ -1,0 +1,163 @@
+# Runbook
+
+**Skeleton.** Nothing here is deployed yet, so every command is a placeholder marked `TODO`. The headings
+are the useful part: they are the list of procedures that must exist, written before the system does, so
+none is discovered as missing during an incident.
+
+Fill each section in the milestone that builds it, and record the date each procedure was last actually
+performed. A procedure nobody has run is a guess.
+
+| Procedure | Owner | Last performed |
+| --- | --- | --- |
+| Start the server | Any player | — |
+| Stop the server | Automatic | — |
+| Promote a release | Owner | — |
+| Roll back a release | Owner | — |
+| Restore the world | Owner | — |
+| Recover from a lost instance | Owner | — |
+| Bootstrap Terraform state | Owner | — |
+| Tear down and rebuild | Owner | — |
+| Monthly cost check | Owner | — |
+
+## Reference
+
+Fill in at M1 and keep current. This block is what somebody needs when something is broken.
+
+| Item | Value |
+| --- | --- |
+| AWS account | TODO |
+| Region | TODO — see [ADR-0002](adr/0002-host-on-aws.md) |
+| Server hostname | TODO |
+| Instance ID / tag | TODO |
+| Data volume ID | TODO |
+| Release bucket | TODO |
+| Backup bucket | TODO |
+| Panel URL | TODO |
+| Container image tag | TODO — pinned, never `latest` |
+| Minecraft and loader version | TODO |
+
+## Start the server
+
+Normal path: press **Start** in the panel, or send `start` to either bot.
+
+Owner path, when the surfaces are unavailable:
+
+```bash
+# TODO: aws ec2 start-instances --instance-ids <id> --region <region>
+```
+
+Then confirm the hostname resolves to the new address, because the server being up and the server being
+reachable by name are different things.
+
+```bash
+# TODO: dig +short <hostname>
+```
+
+**If the start operation never reaches ready:** check, in this order — Spot capacity (did the instance
+actually start), the DNS record, the container. See [failure modes](architecture.md#failure-modes).
+
+## Stop the server
+
+Normally automatic, after N empty player-count readings. To stop it early:
+
+```bash
+# TODO: control-plane call, or aws ec2 stop-instances
+```
+
+Never stop the instance without a confirmed world save first. The stop path in the automation does this;
+a manual stop must do it too.
+
+## Promote a release
+
+1. Cut the release: `# TODO: scripts/cut-release.sh <version>`
+2. Verify the manifest: `# TODO`
+3. Promote: `# TODO`
+4. Watch the operation to *ready*, or to *failed* and an automatic rollback.
+
+Do not promote during an active session unless it is urgent. Announce first.
+
+## Roll back a release
+
+Automatic on a failed start. To roll back manually:
+
+```bash
+# TODO: promote the previous version — the pointer move is the rollback
+```
+
+Rollback is the same mechanism as a deploy, which is why it can be trusted. See
+[ADR-0008](adr/0008-versioned-mod-releases.md).
+
+## Restore the world
+
+Practise this before it is needed. M1 includes a drill.
+
+1. Stop the server, and confirm it is stopped.
+2. List available archives: `# TODO`
+3. Choose one, and check its date against when the damage was noticed — the most recent archive may already
+   contain the corruption.
+4. Restore into a new volume or path, never over the live world: `# TODO`
+5. Start the server and verify in game.
+6. Record in the table above what was restored, from when, and how long it took.
+
+## Recover from a lost instance
+
+Ordinary case: the volume survived. Start a new instance from Terraform and reattach.
+
+```bash
+# TODO: terraform apply
+```
+
+Volume lost as well: create a volume, restore from the newest verified archive, then apply.
+
+Availability zone unavailable: the volume is zonal, so a zone change means restore rather than reattach.
+See [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
+
+## Break glass: SSM is not working
+
+There is no SSH port and no key pair, by design. See [ADR-0007](adr/0007-ssm-instead-of-ssh.md). If the
+instance is unreachable through SSM:
+
+1. Do not add an SSH port to the security group. That is a permanent change made under pressure.
+2. Check the agent status and the instance profile first — a missing permission is the usual cause.
+3. If the agent is genuinely broken, replace the instance. The world is on a separate volume, so
+   replacement is the cheaper path than getting a shell.
+
+## Bootstrap Terraform state
+
+The chicken-and-egg step, done once by hand and therefore easy to forget.
+
+1. Create the state bucket, with versioning on: `# TODO`
+2. Enable locking: `# TODO`
+3. `terraform init` with the backend configuration: `# TODO`
+
+Record here exactly what was created by hand, because Terraform does not know about it.
+
+## Tear down and rebuild
+
+For a season when nobody plays. Keeps the backups, drops the running cost to almost nothing.
+
+1. Final archive, and verify it: `# TODO`
+2. Confirm the archive is listable and the right size.
+3. `terraform destroy`
+4. Confirm in the console that volumes and snapshots are gone — orphans are the usual leftover.
+5. To come back: `terraform apply`, then restore the world.
+
+## Monthly cost check
+
+Five minutes, and it is how orphaned resources are found.
+
+1. Cost Explorer, grouped by service, this month against last.
+2. Compare against [docs/costs.md](costs.md), and update the model if reality disagrees.
+3. Look for anything billed while nobody played — that is either a fixed cost that was not planned, or an
+   orphan.
+4. Confirm the Budgets alarm threshold is still sensible.
+
+## When an alarm fires
+
+| Alarm | First check |
+| --- | --- |
+| Running hours exceeded | Did the idle watchdog run at all? Is a player genuinely online? |
+| Container restart loop | Which release is live? Was it just promoted? Roll back |
+| Backup failed | Was the world saved? Is the bucket policy intact? Re-run before the next session |
+| Volume nearly full | World growth, or log growth? Prune logs first |
+| Budgets threshold | Cost Explorer by service. Look for an always-on resource that should not exist |

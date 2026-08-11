@@ -16,6 +16,8 @@ individually and seeing what each one needs.
 - Separate data volume, attached and mounted.
 - `itzg/docker-minecraft-server` running the intended pack, via Compose.
 - Security group opens the game port only. No SSH port, no key pair. SSM access works.
+- `online-mode=true`, `white-list=true`, `enforce-whitelist=true`, with the four names added by hand. Cheap now,
+  and the whitelist becomes generated in M4. See [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
 - Address posted in chat by hand. Started and stopped by hand.
 - Backups: a manual copy to S3 before anything risky.
 
@@ -90,6 +92,9 @@ The health check is the hard part of this milestone, not the file syncing. See
   [ADR-0019](adr/0019-account-linking.md).
 - `/panel` in either bot: a one-minute sign-in link for an already linked identity, in a direct message only.
   Build after linking works, and never before. See [ADR-0021](adr/0021-sign-in-from-linked-chat-account.md).
+- Minecraft account binding, and `whitelist.json` generated from the link table on start and on every change.
+  `online-mode=true` and `enforce-whitelist=true` from M0 onwards, not from here. See
+  [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
 - Chat notifications first — the cheap half of [ADR-0016](adr/0016-chat-integrations.md), and immediately
   useful: start requested, ready, stopped, release promoted, backup failed.
 - Discord bot commands, then Telegram.

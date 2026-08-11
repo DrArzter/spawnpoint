@@ -22,6 +22,7 @@ The name is a working title. Check it is free on GitHub before claiming it; rena
 | Sign in with an account you have | Cognito with Google. No passwords stored, anywhere |
 | Connect your chat accounts | "Connect Telegram" and "Connect Discord" on the account page, by a one-time code sent to the bot |
 | Then sign in from chat too | Once linked, `/panel` in the bot returns a one-minute sign-in link. A chat account never creates an identity, only signs into one it is linked to |
+| Whitelist that maintains itself | The Minecraft account is a third linked identity, and `whitelist.json` is generated from the link table. Remove someone once, and they lose the panel, the bots and the game |
 | Chat notifications | "X requested the server", "server ready", "release 1.4 promoted", "backup failed" |
 | Backups you can restore | World archived after every session and before every release, with a tested restore procedure |
 
@@ -130,7 +131,7 @@ scripts/           Local helpers: cut a release, restore a backup, check cost
 
 ## Decisions
 
-The decision records are the most useful part of this repository today. Twenty-one of them, each with the
+The decision records are the most useful part of this repository today. Twenty-two of them, each with the
 alternatives that were rejected and why.
 
 | ADR | Decision | Status |
@@ -156,6 +157,7 @@ alternatives that were rejected and why.
 | [0019](docs/adr/0019-account-linking.md) | Link chat accounts with a one-time code | Proposed |
 | [0020](docs/adr/0020-email-channel.md) | SNS email for alerts; SES deferred | Accepted |
 | [0021](docs/adr/0021-sign-in-from-linked-chat-account.md) | Chat sign-in, but only into a linked account | Proposed |
+| [0022](docs/adr/0022-minecraft-account-as-linked-identity.md) | Minecraft account is a linked identity; whitelist is derived | Proposed |
 
 Index, template and the decisions still to make: [docs/adr/README.md](docs/adr/README.md).
 

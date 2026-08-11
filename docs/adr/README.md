@@ -40,6 +40,7 @@ Template: [0000-template.md](0000-template.md).
 | [0019](0019-account-linking.md) | Link chat accounts with a one-time code | Proposed | M4 |
 | [0020](0020-email-channel.md) | SNS email for alerts; SES deferred | Accepted | M5 |
 | [0021](0021-sign-in-from-linked-chat-account.md) | Chat sign-in, but only into an already linked account | Proposed | M4 |
+| [0022](0022-minecraft-account-as-linked-identity.md) | Minecraft account is a linked identity; whitelist is derived | Proposed | M4 |
 
 ## Decisions still to record
 
@@ -48,8 +49,8 @@ written, so the numbering stays chronological and nothing has to be renumbered w
 
 - **CI for infrastructure.** Whether `terraform plan` runs in GitHub Actions, and which AWS identity it uses.
   OIDC, with no long-lived access keys, is the assumption.
-- **Player allow-list management.** Where the Minecraft whitelist lives, who edits it, and whether it is
-  derived from the link table rather than maintained twice. See [ADR-0019](0019-account-linking.md).
+- **In-game verification of a Minecraft binding.** Only if a real conflict occurs, or when in-game events start
+  naming people. Deferred deliberately in [ADR-0022](0022-minecraft-account-as-linked-identity.md).
 - **Cost guardrail response.** What a Budgets breach actually does: notify only, or stop the instance.
 - **Multiple worlds or server versions.** Only if the group ever wants a second world.
 - **Licence for this repository.** Public repository, so it needs one.

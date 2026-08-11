@@ -17,7 +17,7 @@ yet. Where a decision is still open, the ADR that owns it is linked.
 | Event bus | SNS | One topic. Every notable event is published to it |
 | Chat adapters | Lambda per platform | Format events for Discord and Telegram; receive commands |
 | Identity | Cognito user pool | Google sign-in, and a custom flow for bot-issued sign-in links. Chat commands are authenticated by the platform itself |
-| Link table | DynamoDB | Maps a chat account to an internal identity. Doubles as the allow-list and as the chat sign-in route. See [ADR-0019](adr/0019-account-linking.md), [ADR-0021](adr/0021-sign-in-from-linked-chat-account.md) |
+| Link table | DynamoDB | Maps chat and Minecraft accounts to an internal identity. Doubles as the allow-list, the chat sign-in route, and the source the whitelist is generated from. See [ADR-0019](adr/0019-account-linking.md), [ADR-0021](adr/0021-sign-in-from-linked-chat-account.md), [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md) |
 | Web panel and pack site | S3 + CloudFront | Static. Panel is a client of the API; packs are files |
 | DNS | Route 53 | One short-TTL record, rewritten on every start |
 | Observability | CloudWatch + Budgets | Metrics, logs, alarms; alarms deliver to the event bus |
@@ -122,6 +122,7 @@ degrade in that order.
 | Concern | Position |
 | --- | --- |
 | Inbound network | Security group opens the game port only. No SSH port exists. See [ADR-0007](adr/0007-ssm-instead-of-ssh.md) |
+| Who may join the game | `online-mode=true` prevents impersonation; a UUID-keyed whitelist, generated from the link table, decides who may join at all; `enforce-whitelist=true` kicks anybody removed. Offline mode is never used. See [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md) |
 | Host access | SSM Session Manager and Run Command only. No key pair on the instance |
 | Instance permissions | Instance profile scoped to the two buckets it needs, and nothing else |
 | Lambda permissions | Per-function roles. SSM send limited to instances carrying the project tag |
@@ -152,6 +153,8 @@ degrade in that order.
 | Chat platform outage | Commands time out | No chat control | Panel and owner CLI remain available |
 | Google sign-in outage | Panel login fails | No panel for new sessions | `/panel` from a linked chat account still signs in; owner CLI remains available |
 | Chat account not linked | Command refused | That person cannot use chat commands | Refusal names the link flow. See [ADR-0019](adr/0019-account-linking.md) |
+| Whitelist projection writes an empty list | Reconciliation refuses to write it | Would lock the whole group out | Empty result treated as a bug; manual path in the runbook. See [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md) |
+| Username-to-UUID API unavailable | Binding fails | No new players can be added | Existing bindings are cached, so play is unaffected |
 
 ## Open architectural questions
 

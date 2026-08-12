@@ -143,15 +143,32 @@ This is the section to read before defending the project to anybody, including y
 
 | Option | Monthly | What you get |
 | --- | --- | --- |
-| **This design**, 2–3 h most nights | ~$8 | 75 hours of a 4 vCPU / 16 GB server, and a system to build |
-| **This design**, always on | ~$50 | The same server, 730 hours |
-| **A Hetzner VPS or dedicated box** | ~$15 | A whole machine, 24/7, no cold start, no hour counting |
+| **This design**, 2–3 h most nights | ~$8 | 75 hours of 4 vCPU / 16 GB, and a system to build |
+| **This design**, always on | ~$50 | The same machine, 730 hours |
+| **An hourly-billed VPS**, 4 cores / 8 GB, powered off when idle | ~€10 at 75 h | The closest competitor. Same on-demand saving, none of the Spot machinery |
+| **The same VPS left running** | ~€24 | A whole machine, 24/7, no cold start, no capacity risk |
+| **A flat-rate VPS at 4 vCPU / 16 GB** | ~$15–25 | As above, with the memory this design assumes |
+| **A cheaper flat-rate box** — fewer cores, 8 GB | ~$8–15 | Enough for many packs and five players, 24/7 |
 | **A managed Minecraft host** | ~$5–15 | A working modded server, a panel, and a support channel |
 
-**A dedicated box at €15 flat beats this on every axis that matters for playing.** It is available all the time, it never
-makes anybody wait three minutes, and it is never reclaimed mid-session. For roughly double the on-demand bill it sells
-730 hours a month instead of 75 — ten times the *hours*, which is a statement about what you are buying and not about
-reliability. If the goal were a good server for a fair price, that is the answer, and it is not a close call.
+**Correction to an earlier version of this section**, which said a flat-rate box "beats this on every axis that matters"
+and that it was "not a close call". That compared this design against the cheap end of flat-rate hosting rather than
+like for like. At the same specification — 4 vCPU and 16 GB — a flat-rate machine is roughly $15–25 a month, so at 75
+hours this design is about **half the price**, not double it. On money it is close, and slightly favourable.
+
+What a flat-rate box still wins on is everything except money: available instantly, no cold start every night, no
+capacity risk at ten o'clock, and no engineering to keep it alive. Those are real, and for somebody who only wants to
+play they decide it.
+
+So the honest verdict is narrower than before. **Money is not the argument in either direction** — the gap either way is
+a few dollars a month, which is noise. The argument is time: this design costs weeks of evenings that a rented box does
+not, and buys learning that a rented box does not. If the learning is not wanted, rent the box. That is the whole trade,
+and it was never really about the bill. See [ADR-0003](adr/0003-build-not-reuse.md).
+
+Worth knowing where the fork actually is: most of this project is **not** AWS-specific. The release model, the client
+packs, the control-plane API, the bots and the linking design would all work against a rented box. What a flat-rate box
+removes is exactly the on-demand lifecycle — start, idle stop, interruption handling, connectivity that changes on every
+boot — which is the part with the most transferable engineering in it.
 
 ### How often Spot actually interrupts, and why it matters to the bill
 
@@ -177,11 +194,6 @@ EBS volume limits us to types within one zone, which is a trade already recorded
 So the on-demand design only pays for itself in the other currency. Stopping when idle, surviving Spot interruptions,
 separating state from compute, a release pipeline with rollback, orchestration, cost guardrails — those are the deliverable.
 See [ADR-0003](adr/0003-build-not-reuse.md).
-
-Worth knowing where the fork actually is: most of this project is **not** AWS-specific. The release model, the client
-packs, the control-plane API, the bots and the linking design would all work against a rented box. What a flat-rate box
-removes is exactly the on-demand lifecycle — start, idle stop, interruption handling, connectivity that changes on every
-boot — which is the part with the most transferable engineering in it. That is the trade, stated plainly.
 
 ### One assumption behind every figure here
 

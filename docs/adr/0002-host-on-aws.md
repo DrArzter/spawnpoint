@@ -50,7 +50,8 @@ SSM, CloudWatch, Route 53, CloudFront.
 
 | Option | Why not chosen |
 | --- | --- |
-| Hetzner or OVH VPS / dedicated | Far better price per GB of RAM, but billed monthly, so stopping the server saves nothing, and the event-driven tooling is weaker |
+| A VPS provider billing **by the hour** — for example ~€0.14/h for 4 cores and 8 GB | **Correction:** this ADR originally said VPS providers bill monthly "so stopping the server saves nothing". That is wrong — several bill hourly, so the on-demand model works there too, at roughly €10 a month for 75 hours. It would also be far simpler: power off through one API call, with no Spot, no fleet, no capacity risk and no interruption handling. What it does not give is the surrounding services this project is built on — object-storage events, functions, orchestration, managed identity, agent-based access — or their market share. AWS is chosen for those and for the learning, **not** because it uniquely enables hourly billing |
+| Hetzner or OVH, monthly plans | Better price per GB of RAM at a flat rate, and no hour counting. Stopping saves nothing on those particular plans, and the event-driven tooling is weaker |
 | Oracle Cloud always-free ARM | Genuinely free with enough RAM, but capacity is frequently unavailable, and the ecosystem teaches little |
 | Managed Minecraft host | Cheapest and simplest for playing, but no infrastructure to learn from and no control over the mod pipeline |
 | GCP or Azure | Comparable capability. AWS chosen for market share and existing familiarity |

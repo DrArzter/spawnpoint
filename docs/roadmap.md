@@ -99,32 +99,27 @@ release rolls itself back without help.
 The health check is the hard part of this milestone, not the file syncing. See
 [ADR-0009](adr/0009-s3-as-mod-source-of-truth.md).
 
-## M4 — Surfaces: panel, bots, packs
+## M4 — One bot, one allow-list
 
-**Goal:** the people who play can use it, not only the person who built it.
+**Goal:** the people who play can start the server and get the pack, without the owner.
 
-- Control-plane API with identity, roles and operation state. See [ADR-0012](adr/0012-web-control-panel.md).
-- Sign-in for the panel: Cognito with Google, which is configuration rather than code. See
-  [ADR-0018](adr/0018-identity-and-sign-in.md).
-- Account page with "Connect Telegram" and "Connect Discord", using a one-time code sent to the bot. The link
-  table doubles as the allow-list, so this is what authorises chat commands at all. See
-  [ADR-0019](adr/0019-account-linking.md).
-- `/panel` in either bot: a one-minute sign-in link for an already linked identity, in a direct message only.
-  Build after linking works, and never before. See [ADR-0021](adr/0021-sign-in-from-linked-chat-account.md).
-- Minecraft account binding, and `whitelist.json` generated from the link table on start and on every change.
-  `online-mode=false` and `enforce-whitelist=true` are set from M0 onwards, not from here. See
-  [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
-- Chat notifications first — the cheap half of [ADR-0016](adr/0016-chat-integrations.md), and immediately
-  useful: start requested, ready, stopped, release promoted, backup failed.
-- Discord bot commands, then Telegram.
-- Web panel: status, start, release history, backup list, pack download.
-- Client pack generated per release and published, with previous versions kept.
+**Deliberately cut down.** An earlier version of this milestone had a web panel, a Cognito identity broker, three-way
+account linking, magic-link sign-in from chat, and two bot platforms. That was more build effort than everything else in
+this roadmap combined, and most of it is web authentication plumbing — the least differentiated thing in the design and
+the easiest to learn anywhere else. It is deferred below, not deleted.
 
-**Done when:** a player who has never seen the AWS console can start the server from Discord and install the
-current pack from the site without asking anybody for help.
+- **One** bot. Telegram, unless the group prefers Discord — not both.
+- `start`, `status`, `pack`. Nothing else.
+- Authorisation is a list of platform user IDs in Parameter Store. The owner edits it by hand. Five names.
+- Notifications on the same bot: start requested, ready, stopped, release promoted, backup failed.
+- The client pack published at a stable public URL. A file, not a site.
 
-Order within the milestone matters: notifications before commands, one platform before two, download before
-panel. Each step is useful alone.
+**Done when:** a player who has never seen the AWS console can start the server from their phone and install the current
+pack.
+
+That is an afternoon or two, against several weeks for the version that was designed. The ADRs for the larger version
+stay in the repository as proposals, because the reasoning in them is sound and the analysis was the point — they are
+just not on the critical path.
 
 ## M5 — Observability and guardrails
 
@@ -164,7 +159,14 @@ that dimension into machinery that does not exist yet.
 
 ## Afterwards, if the project earns it
 
-Not committed to. Recorded so they are not confused with the plan.
+Not committed to. Recorded so they are not confused with the plan. The first four are the M4 material that was cut, in
+the order they would be worth adding.
+
+- Web control panel, with Cognito and Google sign-in. See [ADR-0012](adr/0012-web-control-panel.md), [ADR-0018](adr/0018-identity-and-sign-in.md).
+- Account linking by one-time code, once there is a panel identity to link to. See [ADR-0019](adr/0019-account-linking.md).
+- Sign-in to the panel from a linked chat account. See [ADR-0021](adr/0021-sign-in-from-linked-chat-account.md).
+- The second chat platform, and a whitelist derived from the link table. See [ADR-0016](adr/0016-chat-integrations.md), [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
+- A proper pack site with changelogs and version history. See [ADR-0013](adr/0013-modpack-distribution.md).
 
 - `terraform plan` in CI, with OIDC and no long-lived keys.
 - Minecraft whitelist derived from the link table, rather than maintained twice. See

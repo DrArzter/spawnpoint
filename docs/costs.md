@@ -189,6 +189,68 @@ account being deleted.
 Moving to Paid also means the guardrails below stop being good practice and start being the thing standing between a
 failed stop and a real bill. They were already required before any long-running resource exists; this is why.
 
+## How bad can the bill get
+
+The useful answer splits in two, and the split is sharper than expected.
+
+### Bounded: everything this design already alarms on
+
+| Failure | A month of it |
+| --- | --- |
+| Instance never stops | 730 h x $0.03, plus fixed — about **$25** |
+| A preview environment left running | Same again, about **$25** |
+| The fleet not deleted, so EC2 restarts the instance | Same again |
+| A crash loop writing 5 GB of logs a day | 150 GB x ~$0.50 — about **$75**, and retention caps it |
+
+All of it is tens of dollars, all of it is caught by the running-hours alarm within hours rather than at the end of the
+month, and none of it is frightening. **The obvious failures in this design are not the expensive ones.**
+
+### Unbounded: the ones that make headlines
+
+Three vectors have no ceiling, and only one of them is really about this project.
+
+**Egress, and it is the design's own doing.** [ADR-0013](adr/0013-modpack-distribution.md) publishes the client pack at
+a public URL, on the reasoning that nothing about it is secret. At roughly $0.09 per GB, a 500 MB pack fetched ten
+thousand times is five terabytes and **about $450**. Nobody needs to be malicious — a hotlink from a forum, a scraper,
+or one person's broken download loop does it. This is the largest genuine exposure in the whole design, and it was
+introduced by a convenience decision rather than by a mistake.
+
+**A recursive trigger.** The promotion pipeline writes the live pointer, and writing the live pointer is what triggers
+the promotion pipeline. That shape is one careless prefix away from a loop, and Step Functions bills per state
+transition while Lambda bills per invocation. A loop left running over a weekend is a four-figure bill built out of
+fractions of a cent.
+
+**Compromised credentials.** Somebody obtains a key and mines cryptocurrency across every region. This is where the
+$50,000 stories come from, and it is not specific to this project — but it is why "no long-lived access keys anywhere,
+OIDC for CI" in [ADR-0028](adr/0028-update-proposals.md) matters beyond tidiness.
+
+### What actually caps it, as opposed to noticing it
+
+**An AWS Budgets alarm notifies. It does not stop anything.** As specified so far, the guardrail is a smoke alarm, not a
+sprinkler — and against the three unbounded vectors, notification arrives after the money is spent. Budgets also
+supports *actions*, which can apply a restrictive policy or stop instances at a threshold; verify the current
+capabilities before relying on them. That answers the "cost guardrail response" placeholder in the
+[ADR index](adr/README.md): the answer is act, not merely notify.
+
+Concretely, in rough order of how much exposure each removes:
+
+1. **A Budgets action that stops instances and denies expensive APIs** at a threshold well above the expected bill.
+2. **Reserved concurrency on every Lambda.** A cap on parallel executions turns a runaway loop from unbounded into a
+   known rate.
+3. **A pipeline never writes into the prefix that triggers it.** Structural, free, and it removes the loop entirely
+   rather than limiting it.
+4. **Reconsider the public pack URL.** A short-lived signed link handed out by the bot costs a little friction and turns
+   the one unbounded vector this design created back into a bounded one. Weigh against
+   [ADR-0013](adr/0013-modpack-distribution.md), which chose public deliberately.
+5. **MFA on the root account, and no long-lived keys anywhere.**
+6. **Log retention set from the start**, which caps the only bounded-but-annoying case.
+
+### The honest summary
+
+Absent stolen credentials or a scraped public file, the realistic worst case for this design is **tens of dollars, not
+thousands** — and the design already alarms on every route to it. The two exposures worth actually engineering against
+are the public pack and the self-triggering pipeline, and both are cheap to close.
+
 ## Guardrails
 
 In order of when they go in.

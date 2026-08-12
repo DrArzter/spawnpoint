@@ -76,7 +76,9 @@ written, so the numbering stays chronological and nothing has to be renumbered w
   is a separate decision.
 - **In-game verification of a Minecraft binding.** Only if a real conflict occurs, or when in-game events start
   naming people. Deferred deliberately in [ADR-0022](0022-minecraft-account-as-linked-identity.md).
-- **Cost guardrail response.** What a Budgets breach actually does: notify only, or stop the instance.
+- **Cost guardrail response.** Leaning answered by [docs/costs.md](../costs.md): **act, not merely notify.** A Budgets
+  action that stops instances and denies expensive APIs, because against an egress or loop runaway a notification
+  arrives after the money is spent. Needs the current Budgets action capabilities verified before it becomes an ADR.
 - **Retiring a world.** Archived to cold storage and removed, or kept indefinitely. Needed before the first
   abandoned pack, not after. See [ADR-0023](0023-multiple-worlds.md).
 - **Licence for this repository.** Public repository, so it needs one.

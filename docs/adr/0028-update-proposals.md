@@ -70,6 +70,34 @@ rather than the mechanism because a delta is only valid from the immediately pre
 behind who applies it ends up in a state that matches nothing. The delta names the release it applies from, and the
 instructions say to take the full pack if in doubt.
 
+### Where the state lives, and where it does not
+
+**Not in a table: which mods are installed.** That is the release manifest in S3, and it is already the source of truth
+under [ADR-0008](0008-versioned-mod-releases.md). A second copy in DynamoDB would be two records of the same fact, with
+no answer to "which is right when they disagree" — and the manifest wins on every count that matters here: bucket
+versioning gives its history for free, it is the artefact the client pack is generated from, and the running server
+reconciles against it directly. Drift is detected by hashing what is on disk against it, and that result is transient,
+so it does not need storing either.
+
+**In a table: what upstream last looked like.** This is different state with a different shape, and it is genuinely
+awkward without one:
+
+| Key | Value |
+| --- | --- |
+| Mod project | Newest file identifier and hash seen upstream, when it was last checked, and which proposal it went into |
+
+That is keyed lookup, written on every check, read on every check, and small — DynamoDB's shape rather than S3's. It
+lets a check skip projects that have not moved, keeps a proposal from re-offering something already rejected, and gives
+"nothing has changed since Tuesday" as a cheap answer instead of 111 requests.
+
+Crucially it is a **cache, not a record**: rebuildable at any time by re-resolving from upstream, and losing it costs one
+slow check rather than any history. Marking it as such in the table's own documentation is what stops it drifting into
+being treated as the truth later.
+
+This is the same split DynamoDB already earns elsewhere in the design — the link table in
+[ADR-0019](0019-account-linking.md) and the tokens in [ADR-0021](0021-sign-in-from-linked-chat-account.md) are keyed
+lookups too, while every artefact lives in S3.
+
 ## Consequences
 
 **Good**

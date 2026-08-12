@@ -24,6 +24,22 @@ Constraints:
 - Slow actions are operations with state. The UI polls and shows progress; it never blocks on a request.
 - Published pack URLs are immutable. A new pack is a new version, never an overwrite.
 
-Framework not yet chosen. Whatever it is, it must build to plain static files.
+**Nothing here is on the critical path.** M4 was cut to one bot and a pack file at a stable URL, and the panel moved to
+"afterwards, if the project earns it". See [docs/roadmap.md](../docs/roadmap.md).
+
+Framework not yet chosen, and worth correcting one assumption in advance: **React is not excluded by anything in this
+design.** A React app builds to plain static files and needs no server, so it works behind CloudFront exactly like any
+other. What is excluded is server-side rendering and anything wanting a Node process — that is a framework *mode*, not
+React itself.
+
+When the panel is actually built, the shortlist, in order:
+
+| Option | Why |
+| --- | --- |
+| No framework | Four screens — status, a start button, a release list, a backup list. Plain HTML with a little JavaScript genuinely covers it, and it is the honest starting point |
+| Preact | React's API in a few kilobytes, near drop-in. The closest thing to React that is not React |
+| Solid | JSX and React-like ergonomics with signals instead of a virtual DOM. A different mental model, and a better one for a page that mostly polls an operation |
+
+Decide when a screen actually hurts, not before.
 
 **Status:** empty. Populated in M4, download page before panel.

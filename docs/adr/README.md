@@ -8,7 +8,7 @@ Template: [0000-template.md](0000-template.md).
 
 ## Start here — most of this is not blocking
 
-Twenty-seven records is a wall, and a wall is not a plan. Almost none of it blocks anything you can do this week.
+Thirty-one records is a wall, and a wall is not a plan. Almost none of it blocks anything you can do this week.
 
 | To do this | You need |
 | --- | --- |
@@ -43,13 +43,13 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0006](0006-on-demand-start-and-idle-shutdown.md) | Start on demand, stop when idle | Accepted | M2 |
 | [0007](0007-ssm-instead-of-ssh.md) | Manage the instance with SSM, not SSH | Accepted | M1 |
 | [0008](0008-versioned-mod-releases.md) | A mod set is an immutable, versioned release | Accepted | M3 |
-| [0009](0009-s3-as-mod-source-of-truth.md) | S3 holds releases; promotion drives the deployment | Accepted | M3 |
+| [0009](0009-s3-as-mod-source-of-truth.md) | S3 holds releases; promotion drives the deployment | Superseded by [0030](0030-desired-and-active-release.md) | M3 |
 | [0010](0010-world-persistence-and-backups.md) | World on persistent EBS, backups to S3 | Accepted | M1 |
 | [0011](0011-terraform-for-infrastructure.md) | Manage the infrastructure with Terraform | Accepted | M1 |
 | [0012](0012-web-control-panel.md) | One control-plane API; the panel is one client | Proposed | M4 |
 | [0013](0013-modpack-distribution.md) | Distribute the client pack from S3 and CloudFront | Proposed | M4 |
 | [0014](0014-no-kubernetes.md) | Do not use Kubernetes | Accepted | — |
-| [0015](0015-observability-and-alerting.md) | CloudWatch signals, chat alerts, Budgets backstop | Proposed | M5 |
+| [0015](0015-observability-and-alerting.md) | Session Grafana/Prometheus; CloudWatch signals and durable alarms | Accepted | M5 |
 | [0016](0016-chat-integrations.md) | Discord and Telegram as control and notification surfaces | Proposed | M4 |
 | [0017](0017-stable-server-address.md) | Stable hostname in Route 53, not an Elastic IP | Superseded by [0024](0024-connectivity-modes.md) | M2 |
 | [0018](0018-identity-and-sign-in.md) | Cognito broker; panel sign-in with Google | Proposed | M4 |
@@ -64,6 +64,8 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0027](0027-spot-request-shape.md) | Diversified Spot fleet per session; stop-on-interruption | Proposed | M2 |
 | [0028](0028-update-proposals.md) | Mod updates as proposals: resolve, diff, approve, promote | Proposed | M3 |
 | [0029](0029-preview-environments.md) | Every proposal is tested in a throwaway preview environment | Proposed | M3 |
+| [0030](0030-desired-and-active-release.md) | Separate desired release from confirmed active release | Accepted | M3 |
+| [0031](0031-first-class-local-control-plane.md) | First-class local control plane with shared ASL, Lambda and host contracts | Accepted | M1–M5 |
 
 ## Decisions still to record
 

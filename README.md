@@ -19,7 +19,7 @@ The name is a working title. Check it is free on GitHub before claiming it; rena
 | Capability | Detail |
 | --- | --- |
 | On-demand server | Started by an explicit request from the web panel, Discord or Telegram. Stops itself when idle |
-| Versioned mod releases | A mod set is an immutable, named release. Deploy is a pointer move; rollback is moving it back |
+| Versioned mod releases | A mod set is immutable. Desired is the requested version; active is the last version that passed health checks |
 | Automatic mod deployment | Promoting a release saves the world, syncs mods, restarts the server, and rolls back if it fails to start |
 | Updates you approve, not updates that happen | A scheduled check resolves every mod, diffs by hash, and proposes a release. Five changed mods with changelogs is a decision; a server that updated itself is an incident |
 | Preview environments per proposal | A pull request boots a throwaway server on a copy of the real world. Join it and look at your base before approving. Under a cent a run |
@@ -80,12 +80,12 @@ flowchart LR
 
     subgraph ControlPlane["Control plane"]
         API[API Gateway + Lambda<br/>start, status, releases, backups]
-        SFN[Step Functions<br/>long operations]
+        SFN[Step Functions Standard<br/>durable operations]
         BUS[SNS: events]
     end
 
     subgraph Data
-        REL[(S3: releases<br/>+ live pointer)]
+        REL[(S3: immutable releases<br/>desired + active state)]
         BAK[(S3: world backups)]
         SITE[(S3 + CloudFront<br/>panel and packs)]
     end
@@ -122,9 +122,9 @@ Four flows carry the whole design:
 
 | Flow | Trigger | What happens |
 | --- | --- | --- |
-| Start | Explicit request from a surface, with an identity | Operation created → instance started → connection string published → mods reconciled against the live release → container up → "ready" announced |
+| Start | Explicit request from a surface, with an identity | Operation created → instance started → connection string published → mods reconciled against the desired release → health check → active committed → "ready" announced |
 | Stop | No players for N consecutive checks | World saved → archived to S3 → instance stopped → session length announced |
-| Release | The live pointer is written | Announce → save and stop container → sync mods → start → health check → build client pack, or roll back |
+| Release | A deployment operation writes the desired release | Announce → save and stop container → sync mods → start → health check → commit active, or roll back |
 | Interruption | Spot two-minute notice | Save world → stop container cleanly → announce → next start reattaches the volume |
 
 Full description, including failure modes: [docs/architecture.md](docs/architecture.md).
@@ -143,7 +143,7 @@ scripts/           Local helpers: cut a release, restore a backup, check cost
 
 ## Decisions
 
-The decision records are the most useful part of this repository today. Twenty-nine of them, each with the
+The decision records are the most useful part of this repository today. Thirty-one of them, each with the
 alternatives that were rejected and why — including one superseded and one rejected the same day it was written, which
 is the process working rather than failing.
 
@@ -157,13 +157,13 @@ is the process working rather than failing.
 | [0006](docs/adr/0006-on-demand-start-and-idle-shutdown.md) | Start on demand, stop when idle | Accepted |
 | [0007](docs/adr/0007-ssm-instead-of-ssh.md) | Manage the instance with SSM, not SSH | Accepted |
 | [0008](docs/adr/0008-versioned-mod-releases.md) | A mod set is an immutable, versioned release | Accepted |
-| [0009](docs/adr/0009-s3-as-mod-source-of-truth.md) | S3 holds releases; promotion deploys | Accepted |
+| [0009](docs/adr/0009-s3-as-mod-source-of-truth.md) | S3 holds releases; promotion deploys | Superseded by 0030 |
 | [0010](docs/adr/0010-world-persistence-and-backups.md) | World on persistent EBS, backups to S3 | Accepted |
 | [0011](docs/adr/0011-terraform-for-infrastructure.md) | Terraform for infrastructure | Accepted |
 | [0012](docs/adr/0012-web-control-panel.md) | One control-plane API; the panel is one client | Proposed |
 | [0013](docs/adr/0013-modpack-distribution.md) | Client pack from S3 and CloudFront | Proposed |
 | [0014](docs/adr/0014-no-kubernetes.md) | Do not use Kubernetes | Accepted |
-| [0015](docs/adr/0015-observability-and-alerting.md) | CloudWatch signals, chat alerts, Budgets backstop | Proposed |
+| [0015](docs/adr/0015-observability-and-alerting.md) | Session Grafana/Prometheus; CloudWatch signals and durable alarms | Accepted |
 | [0016](docs/adr/0016-chat-integrations.md) | Discord and Telegram as control surfaces | Proposed |
 | [0017](docs/adr/0017-stable-server-address.md) | Stable hostname in Route 53 | Superseded by 0024 |
 | [0018](docs/adr/0018-identity-and-sign-in.md) | Cognito broker; panel sign-in with Google | Proposed |
@@ -178,6 +178,8 @@ is the process working rather than failing.
 | [0027](docs/adr/0027-spot-request-shape.md) | Diversified Spot fleet per session; stop-on-interruption | Proposed |
 | [0028](docs/adr/0028-update-proposals.md) | Mod updates as proposals: resolve, diff, approve, promote | Proposed |
 | [0029](docs/adr/0029-preview-environments.md) | Every proposal is tested in a throwaway preview environment | Proposed |
+| [0030](docs/adr/0030-desired-and-active-release.md) | Desired release is separate from confirmed active release | Accepted |
+| [0031](docs/adr/0031-first-class-local-control-plane.md) | First-class local control plane with shared ASL, Lambda and host contracts | Accepted |
 
 Index, template and the decisions still to make: [docs/adr/README.md](docs/adr/README.md).
 
@@ -209,7 +211,8 @@ Definition of done per milestone: [docs/roadmap.md](docs/roadmap.md).
 | Term | Meaning here |
 | --- | --- |
 | Release | An immutable, versioned mod set plus configs and loader versions |
-| Live pointer | The one record naming which release the server should run |
+| Desired release | The release the control plane is trying to make true for a world |
+| Active release | The last release that started and passed the full health check for a world |
 | Client pack | The launcher-importable artefact generated from a release |
 | Operation | A long-running action with observable state: start, promote, restore |
 | Link | The record joining a chat or Minecraft identity to one internal identity. Being linked is being authorised, and it is also the sign-in route |

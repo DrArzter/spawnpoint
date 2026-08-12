@@ -1,5 +1,10 @@
 # Roadmap
 
+From M1 onward, each control-plane slice gets three levels of evidence: fast unit tests, an opt-in complete local
+operation, and a small real-AWS acceptance test for semantics an emulator cannot prove. The local operation uses the
+same ASL, Lambda code, Terraform modules and host scripts through the adapters defined in
+[ADR-0031](adr/0031-first-class-local-control-plane.md).
+
 Six milestones. Each one ends with something that works, and each one has a definition of done that can be
 answered yes or no. No milestone is "refactor" or "improve".
 
@@ -91,9 +96,10 @@ to three minutes is tolerable. If it is not, revisit before building the surface
 **Goal:** a mod change is a deployment, not an errand.
 
 - Release format defined and documented. See [ADR-0008](adr/0008-versioned-mod-releases.md).
-- Release store laid out in S3, with versioning on, and the live pointer.
+- Release store laid out in S3, with versioning on, plus separate desired and active release state.
 - `scripts/` command that cuts a release from a working set of mods.
-- Promotion pipeline: validate, announce, save, stop, reconcile, start, health check.
+- Promotion pipeline in Step Functions Standard: validate, write desired, announce, save, stop, reconcile, start,
+  health check, commit active.
 - Automatic rollback on a failed start.
 - Boot-time reconciliation, so a promotion while stopped lands at the next start.
 - Drift detection: hashes verified after every sync, and a mismatch reported.

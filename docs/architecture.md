@@ -7,12 +7,12 @@ yet. Where a decision is still open, the ADR that owns it is linked.
 
 | Component | Runs on | Responsibility |
 | --- | --- | --- |
-| Game server | Docker on one EC2 Spot instance | Runs the world. Nothing else |
+| Game session stack | Docker Compose on one EC2 Spot instance | Minecraft plus session-local Prometheus, Grafana and exporters; all stop together |
 | Data volume | EBS, survives the instance | The world, the mod directory, configs |
 | Control-plane API | API Gateway + Lambda | The only thing allowed to change state. Owns every rule |
 | Operation orchestration | Step Functions, Standard workflows | Runs the long operations. The execution **is** the operation state, so there is no table for it. See [ADR-0025](adr/0025-step-functions-for-long-operations.md) |
-| Lifecycle automation | Lambda + EventBridge | Idle check, interruption handler, post-session backup |
-| Release store | S3, versioned | Immutable releases and the live pointer |
+| Lifecycle automation | Step Functions + Lambda + EventBridge | Idle check, interruption handler, post-session backup |
+| Release store | S3, versioned | Immutable release artefacts; desired and active release state are separate |
 | Backup store | S3, versioned, lifecycle rules | World archives |
 | Event bus | SNS | One topic. Every notable event is published to it |
 | Chat adapters | Lambda per platform | Format events for Discord and Telegram; receive commands |
@@ -20,7 +20,7 @@ yet. Where a decision is still open, the ADR that owns it is linked.
 | Link table | DynamoDB | Maps chat and Minecraft accounts to an internal identity. Doubles as the allow-list, the chat sign-in route, and the source the whitelist is generated from. See [ADR-0019](adr/0019-account-linking.md), [ADR-0021](adr/0021-sign-in-from-linked-chat-account.md), [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md) |
 | Web panel and pack site | S3 + CloudFront | Static. Panel is a client of the API; packs are files |
 | Connectivity | Route 53, or an overlay agent on the instance, or neither | Publishes the connection string on start and retracts it on stop. One contract, three implementations. See [ADR-0024](adr/0024-connectivity-modes.md) |
-| Observability | CloudWatch + Budgets | Metrics, logs, alarms; alarms deliver to the event bus |
+| Observability | Session Prometheus/Grafana + CloudWatch + Budgets | Detailed live game/host dashboard during play; durable AWS signals and alarms after the instance is gone |
 
 Boundaries that matter:
 
@@ -28,6 +28,19 @@ Boundaries that matter:
 - **Terraform owns resources, the pipeline owns data.** Mods and world are never Terraform's business. See
   [ADR-0011](adr/0011-terraform-for-infrastructure.md).
 - **The instance is disposable.** Everything that cannot be regenerated lives on the data volume or in S3.
+
+## Local development topology
+
+The control plane has a first-class local execution mode; it is not limited to running the Minecraft container by
+hand. The same ASL state machines and TypeScript Lambda handlers run against LocalStack, while a Docker host adapter
+maps the EC2/SSM boundary to the local Compose session. S3, DynamoDB, SNS and EventBridge retain their AWS-shaped APIs.
+Notifications terminate in a local event sink, and infrastructure-only failures such as unavailable Spot capacity are
+injected explicitly rather than pretended to be faithfully emulated.
+
+This environment is for behavioural development and failure testing. Real AWS acceptance tests still own IAM, Spot,
+EBS/AZ, networking, quotas and timing. LocalStack is opt-in because its current distribution requires a licence and
+auth token; unit tests remain independent of it. See
+[ADR-0031](adr/0031-first-class-local-control-plane.md).
 
 ## Flow 1 — Start
 
@@ -46,7 +59,7 @@ sequenceDiagram
     S-->>U: "starting, I will tell you when it is up"
     API->>BUS: start requested by <identity>
     API->>EC2: StartInstances
-    EC2->>EC2: boot, attach volume, reconcile mods vs live release
+    EC2->>EC2: boot, attach volume, reconcile mods vs desired release
     API->>DNS: upsert A record to new public address
     EC2->>EC2: start container, wait for healthy
     API->>BUS: server ready, address, cold-start duration
@@ -89,17 +102,19 @@ sequenceDiagram
 
     O->>API: promote release 1.4
     API->>S3: validate manifest, hashes, versions
+    API->>API: create deployment operation; write desired=1.4
     API->>BUS: release 1.4 promoting
     API->>EC2: save world, stop container
     API->>EC2: reconcile mod directory against 1.4 (SSM)
     API->>EC2: start container
     EC2-->>API: healthy, or timeout
     alt healthy
-        API->>S3: write live pointer = 1.4
+        API->>API: commit active=1.4
         API->>SITE: build and publish client pack 1.4
         API->>BUS: release 1.4 live
     else failed
-        API->>EC2: reconcile against previous release, restart
+        API->>EC2: reconcile against previous active release, restart
+        API->>API: reset desired to previous active release
         API->>BUS: release 1.4 failed, rolled back
     end
 ```

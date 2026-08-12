@@ -2,22 +2,103 @@
 
 What runs on the game instance: the container definition, and the scripts the automation invokes there.
 
-Contents, once populated:
+Contents:
 
 - `compose.yaml` — the game server, using [`itzg/docker-minecraft-server`](https://github.com/itzg/docker-minecraft-server),
   with an exact image tag. Never `latest`. See [ADR-0005](../docs/adr/0005-containerised-game-server.md).
 - `user-data.sh` — first-boot setup: mount the data volume, install Docker, start the stack.
 - `scripts/` — invoked by SSM Run Command, not by a human:
-  - reconcile the mod directory against the live release, and verify hashes,
-  - save the world and confirm the save completed,
-  - archive the world to S3 and verify the archive,
-  - report player count and health,
-  - handle the Spot interruption notice: save, stop cleanly, announce.
+  - `start.sh` — idempotently start the Compose service and wait for Docker health or RCON readiness,
+  - `status.sh` — report container health and verify the Minecraft control path through RCON,
+  - `players.sh` — report a machine-readable player count; an unparseable response fails closed,
+  - `save-world.sh` — disable autosave, run `save-all flush`, and re-enable autosave even on failure,
+  - `stop.sh` — save first, then let Compose perform the graceful container stop,
+  - `archive-world.sh` — archive a stopped live world with Zstandard, write SHA-256 and verify the result,
+  - `verify-archive.sh` — verify checksum, safe paths, archive readability and the presence of `level.dat`,
+  - `restore-world.sh` — restore only into a new or empty non-live data directory,
+  - `build-release-manifest.sh` — create an immutable SHA-256 manifest for an exact mod payload,
+  - `reconcile-release.sh` — verify and atomically replace the mod directory with that exact payload.
+- `observability/` — provisioned Prometheus configuration and Grafana session dashboard. `mc-monitor`, cAdvisor and
+  node_exporter are declared beside Minecraft in Compose and share its lifetime.
+
+Planned later: fetch the desired release from S3, upload and verify world archives in S3, and handle the Spot
+interruption notice.
 
 The world, the mod directory and the configs are mounted from the persistent EBS volume. Nothing that matters
 is inside the image or on the root volume. See [ADR-0010](../docs/adr/0010-world-persistence-and-backups.md).
 
 Every script here must be safe to run twice. The automation retries.
+
+## Local operator slice
+
+Copy `.env.example` to `.env`, supply both secrets, and make sure `extras/cf-mods.txt` exists. The scripts resolve the
+Compose project relative to their own location, so they can be called from any working directory:
+
+```bash
+server/scripts/start.sh
+server/scripts/status.sh
+server/scripts/players.sh
+server/scripts/save-world.sh
+server/scripts/stop.sh
+```
+
+`start.sh` starts the whole Compose project, including session observability. `stop.sh` saves Minecraft first and then
+stops the whole project, so Grafana cannot accidentally become always-on compute. Prometheus and Grafana keep local
+Docker volumes across an ordinary Compose stop; losing that history with a disposable instance is intentional.
+
+Grafana is available at `http://127.0.0.1:3000` and Prometheus at `http://127.0.0.1:9090`. They bind only to loopback.
+On EC2, forward Grafana through the existing SSM channel rather than opening port 3000:
+
+```bash
+aws ssm start-session \
+  --target <instance-id> \
+  --document-name AWS-StartPortForwardingSession \
+  --parameters '{"portNumber":["3000"],"localPortNumber":["3000"]}'
+```
+
+The initial dashboard shows Minecraft health, players and response time, Minecraft-container CPU/RAM, and host
+memory/disk. It does not yet show MSPT or JVM heap/GC; those need a JVM or game-aware exporter.
+
+Outputs use `key=value` lines. Human-readable diagnostics go to stderr, and a non-zero exit means the requested state
+was not reached. This is intentionally also the future SSM contract: Step Functions sends one script, examines the
+exit code, and routes failure through `Retry` or `Catch` without duplicating the host logic.
+
+By default the scripts manage `server/compose.yaml`, not any Minecraft Compose project that happens to be running on
+the same Docker daemon. During migration from an existing setup, point them at that project explicitly:
+
+```bash
+SERVER_PROJECT_DIRECTORY=/path/to/existing/project \
+SERVER_COMPOSE_FILE=/path/to/existing/project/docker-compose.yml \
+server/scripts/status.sh
+```
+
+Run `status.sh` first and check its `compose_file`, `compose_service` and container state before invoking `stop.sh`.
+The scripts fail if Compose cannot resolve required environment variables; that failure must never be reported as
+`already_stopped`.
+
+`start.sh` defaults to a ten-minute timeout and a five-second poll. They can be changed for a measured pack:
+
+```bash
+START_TIMEOUT_SECONDS=300 START_POLL_SECONDS=5 server/scripts/start.sh
+```
+
+After stopping, exercise the complete local backup and restore path:
+
+```bash
+server/scripts/archive-world.sh
+server/scripts/verify-archive.sh server/backups/world-<timestamp>.tar.zst
+server/scripts/restore-world.sh server/backups/world-<timestamp>.tar.zst /tmp/spawnpoint-restore-test
+```
+
+The checksum sits beside the archive as `.sha256` and is mandatory during verification. `restore-world.sh` refuses
+the live `server/data` path and any non-empty target. To test the mechanism without the real world, set
+`SERVER_DATA_DIR` and `SERVER_BACKUP_DIR` to disposable fixture directories.
+
+A boot test also needs the exact release that belongs to the world. `REMOVE_OLD_MODS=true` means reconcile the mod
+directory to the configured desired list; if that list is absent, all copied JARs are removed. This happened during
+the first real restore drill and correctly made Forge reject the modded dimensions. The retry with the matching 111
+mods reached Docker `healthy`, answered over RCON and shut down cleanly. Until release reconciliation exists, use a
+copy of the known-good mod directory for an isolated smoke test and set `REMOVE_OLD_MODS=false` there.
 
 **LAN presence must be declared, not inherited.** In the overlay connectivity mode the server can appear in players'
 "LAN" list with no address typed, which is the nicest thing about that mode. Neither a vanilla Java dedicated server
@@ -28,4 +109,5 @@ pack changes and nobody knows why. See [ADR-0024](../docs/adr/0024-connectivity-
 
 The same Compose file should run locally, so a mod set can be smoke-tested before it reaches the server.
 
-**Status:** empty. Populated in M0, then rebuilt properly in M1.
+**Status:** local lifecycle, backup/restore and release-reconciliation slices exist. S3 transfer and instance bootstrap
+remain.

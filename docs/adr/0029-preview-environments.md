@@ -107,7 +107,7 @@ be widened, because the claim behind it is now tested rather than assumed.
   watchdog as the real server rather than trusted to a timeout.
 - In overlay connectivity mode a preview consumes a device slot, and the free tier has ten. See
   [ADR-0024](0024-connectivity-modes.md).
-- Restoring a world copy per proposal costs time and transfer, though both are small at a few hundred megabytes.
+- Restoring a world copy per proposal costs time and transfer, though both remain small at the current 597.7 MiB.
 - It tests loading and idling. It does not test an hour of five people playing, so subtle gameplay breakage still gets
   through.
 

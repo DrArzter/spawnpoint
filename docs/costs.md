@@ -38,10 +38,10 @@ Two decisions do almost all of the work on the variable term, and they multiply:
 
 | Driver | Type | Placeholder rate | Notes |
 | --- | --- | --- | --- |
-| EC2 Spot, ~2 vCPU / 8 GB | Variable | $0.03 per hour | Sized from operator experience: 2 cores and 4 GB is often enough, 4 cores and 16 GB is comfortable for anything. Starting in the middle. Assume roughly a third of the on-demand rate; verify per type and zone |
+| EC2 Spot, 8–16 GiB candidate range | Variable | $0.03 per hour at the 8 GiB placeholder | One exploring player already produced 5.863 GiB of container-accounted memory, so 16 GiB is the safer first-run size and 8 GiB is now a downsize candidate. The worked example still prices 8 GiB and therefore represents the lower bound until the full-group measurement and real Spot prices replace it |
 | Public IPv4 address | Variable here | $0.005 per hour | Charged for any public address; verify. Only billed while running, because no Elastic IP is held. Applies in **every** connectivity mode, because the instance needs outbound access regardless. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | EBS gp3, data volume, 20 GB | Fixed | $0.09 per GB-month | Billed while the instance is stopped. Sized for mod releases and several worlds, not for save data — the worlds themselves are a few hundred MB each. See [ADR-0023](adr/0023-multiple-worlds.md) |
-| S3, world backups | Fixed | $0.023 per GB-month | Full archive after every session. Retention 5 daily, 2 weekly, 2 monthly — nine copies, well under a gigabyte. See [ADR-0010](adr/0010-world-persistence-and-backups.md) |
+| S3, world backups | Fixed | $0.023 per GB-month | Full archive after every session. The first real archive compressed the 598 MiB world to about 398 MiB, so retention of 5 daily, 2 weekly and 2 monthly is about 3.5 GiB at the observed ratio. See [ADR-0010](adr/0010-world-persistence-and-backups.md) |
 | S3, release store, 10 GB | Fixed | $0.023 per GB-month | Grows with retained releases |
 | Route 53 hosted zone | Fixed | $0.50 per zone-month | **Only in DNS mode.** Plus a negligible per-query charge. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | Overlay network | Fixed | $0 within the free tier | **Only in overlay mode.** Free tiers bind on different axes: ZeroTier 10 devices and 1 network; Tailscale 6 users with unlimited devices. Either cliff costs more than this whole table. See [ADR-0024](adr/0024-connectivity-modes.md) |
@@ -62,12 +62,12 @@ directly.
 | Instance | 75 h x $0.03 | $2.25 |
 | Public IPv4 | 75 h x $0.005 | $0.38 |
 | Data volume | 20 GB x $0.09 | $1.80 |
-| Backups | 9 archives x ~0.3 GB x $0.023 | ~$0.06 |
+| Backups | 9 archives x ~0.389 GiB x $0.023 | ~$0.08 |
 | Release store | 10 GB x $0.023 | $0.23 |
 | Hosted zone | | $0.50 |
 | Serverless, egress, logs | inside free tier, plus a margin | ~$0.50 |
-| **Total** | | **~$5.70** |
-| **of which fixed** | volume, storage, zone | **~$2.60** |
+| **Total** | | **~$5.75** |
+| **of which fixed** | volume, storage, zone | **~$2.65** |
 
 ### Sensitivity to running hours
 

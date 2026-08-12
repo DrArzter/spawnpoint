@@ -31,17 +31,36 @@ Powah, Create — plus Sinytra Connector running Fabric mods on Forge. Two conse
 | | |
 | --- | --- |
 | Allocated today | **4096M**, in the working config, which has been running fine |
-| Peak actually used | |
+| Highest observed, 2026-08-12 | With **one player running through and exploring the world**, `docker stats` reported **5.863 GiB / 62.6 GiB (9.37%)** for the Minecraft container, with **18.74% CPU** at the instant sampled |
+| Earlier snapshot | **5.439 GiB (8.69%)**, with **2.80% CPU** |
+| Larger-world comparison | Starting and playing in a substantially larger, developed world with many mechanisms and mobs produced no material change in the observed CPU load. This is a meaningful steady-state observation on the i9-14900KF, though it does not predict the single-core performance of the eventual EC2 type |
+| Remaining context | Session age was not recorded. Exploration can generate and load chunks, so this is a meaningful one-player workload, but not a confirmed peak for the full group |
 | How | Play with everybody on. Watch container memory, and the JVM heap the server reports |
 | Unblocks | Instance size in [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md). This is the number that decides the hourly rate |
 
-4 GB for 111 tech mods is already the lower end of the bracket, and it works. So **the starting instance is 2 vCPU
-and 4 GB, not 8 GB** — the cheapest row in [docs/costs.md](costs.md), which brings the modelled compute line down
-again. Confirm the headroom before committing: 4 GB allocated with no headroom left is a different situation from
-4 GB allocated and 2.5 GB used.
+4 GB for 111 tech mods is already the lower end of the JVM heap bracket, and it works. The container snapshot confirms
+that a 4 GiB EC2 instance is insufficient: total container-accounted memory reached 5.863 GiB, about **1.86 GiB above
+the configured maximum Java heap**. The starting instance therefore needs at least 8 GiB. That leaves only about
+2.14 GiB before the physical 8 GiB ceiling for load growth, the operating system, Docker and the overlay agent. Since
+this was already reached with one exploring player, **16 GiB is the safer starting point for the first AWS run**. A
+full-group measurement decides whether downsizing to 8 GiB is safe rather than making 8 GiB the optimistic starting
+assumption.
 
 Record the peak, not the average, and note how many players produced it. Watch CPU as well: the useful figure is how
 many cores' worth the server actually uses under load.
+
+Docker's CPU percentage is measured in CPU equivalents and may exceed 100% on a multicore host; 18.74% is roughly
+0.19 of one logical CPU at that instant, not 18.74% of the entire i9-14900KF. It also misses short tick spikes. Use
+milliseconds per tick under load for game-server sizing rather than this snapshot alone.
+
+Capture the unambiguous numerator and denominator together:
+
+```bash
+docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}\t{{.CPUPerc}}'
+```
+
+For the JVM view, use RCON or Java tooling to record used heap alongside the container figure. Container memory and
+heap answer different questions; EC2 sizing follows the former.
 
 **The bracket is already known from experience** — 2 cores and 4 GB is often enough, 4 cores and 16 GB runs anything
 comfortably. So this measurement is not open-ended; it decides *where in that range* this pack sits.
@@ -61,38 +80,71 @@ A free answer to half a question, purely because the laptop is the same architec
 Graviton is cheaper per hour and slower per core, and for a single-threaded tick the cheaper core may need a larger
 instance to keep up, which cancels the saving. Compatibility says *can*; the tick measurement says *should*.
 
-### 4. World size — approximately known, worth confirming
+### 4. World and mod-set size — **answered for the current save**
 
 | | |
 | --- | --- |
-| Estimate | **~200–300 MB** for the existing world |
-| Confirmed value | |
+| World, 2026-08-12 | **597.7 MiB (626,724,748 bytes), 579 files in 161 directories** |
+| Mod set, 2026-08-12 | **594 MiB** |
+| First real backup, 2026-08-12 | **417,306,157 bytes (~398 MiB)** as `tar.zst`, SHA-256 verified; approximately **66.6%** of the source size. Forge stored the dimensions under one top-level world directory |
+| First local restore drill, 2026-08-12 | Restored into `/tmp/spawnpoint-restore-test`; apparent restored size was **635,598,718 bytes**. `diff -qr` against the stopped source world returned no differences. `du` showed 608M source versus 607M restored because allocated filesystem blocks can differ after extraction; file contents matched. The copy then booted successfully with the matching 111-mod set in an isolated container, reached Docker `healthy`, answered over RCON and exited cleanly after saving every dimension |
 | How | `du -sh` on the world directory |
 | Unblocks | Volume size, and it already settled the backup question |
 
-Two conclusions already follow from the estimate:
+This is a comparatively developed world, and it can still grow substantially as more chunks and modded dimensions are
+explored. Record the figure again after a representative month rather than treating 598 MiB as a ceiling.
+
+Two conclusions already follow from the measurement:
 
 - **The world is not the cost driver.** [ADR-0026](adr/0026-tiered-backups.md) proposed incremental snapshots to avoid
-  seventeen full archives dominating the bill; at this size those copies are under half a gigabyte and it was rejected.
+  seventeen full archives dominating the bill; at this size each copy is about 0.6 GiB and it was rejected.
   Full archives after every session, per [ADR-0010](adr/0010-world-persistence-and-backups.md), are correct and simpler.
 - **The volume can be much smaller than the 50 GB placeholder.** Since the volume was the largest fixed line in
   [docs/costs.md](costs.md), this is a real reduction rather than a rounding difference. Size it for the mod releases and
   several worlds, not for the save data.
 
-Confirm the number anyway, because the whole revised cost model now rests on it.
+Nine retained full archives occupy about **5.3 GiB before compression**, still a small storage line. The 20 GB EBS
+starting size remains plausible for one world and its working mod set, but free-space monitoring is required before
+adding several worlds or retaining release binaries locally.
 
-### 5. Cold start: how long from container start to joinable
+### 5. Cold start: how long from container start to joinable — **locally answered**
 
 **Now the highest-frequency number in the system**, because the expected pattern is 2–3 hours most nights, so this is
 paid every single evening rather than a few times a week.
 
 | | |
 | --- | --- |
-| Value | |
+| End-to-end local observation, 2026-08-12 | **Approximately 1 minute 30 seconds**, including loading the full mod set |
+| Minecraft/Forge internal load time, 2026-08-12 | **38.264 seconds** on a restart, reported by ModernFix as `Dedicated server took 38.264 seconds to load` |
+| Restored-copy smoke test, 2026-08-12 | **17.564 seconds** of Minecraft/Forge internal load time; Docker reported `healthy`, RCON answered, idle memory was **4.734 GiB**, and the container shut down with exit code 0 after saving all dimensions |
+| Hardware | **Intel Core i9-14900KF**; this is a strong desktop CPU and therefore a lower bound, not an EC2 forecast |
 | How | Time it. Locally it is a lower bound; EC2 adds instance boot and a mod sync on top |
 | Unblocks | The whole premise of [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md), which assumes 1–3 minutes is tolerable |
 
-If a big pack takes six minutes locally, the on-demand model needs rethinking before it is built, not after.
+The two values measure different boundaries. ModernFix's 38.264 seconds covers the application loading Forge and the
+mods after the JVM is already running. The roughly 90-second observation includes more of the local container path.
+Neither includes Spot capacity, EC2 boot or release reconciliation. The local results support the on-demand premise —
+the pack itself is not taking six minutes to load — but M0 still has to measure the end-to-end interval on the chosen
+EC2 type: request accepted, capacity acquired, operating system booted, mods reconciled, server healthy and a player
+able to join. The 14900KF result must not be used directly as that SLA.
+
+The first restored-copy boot also exposed a useful failure mode. The copied environment had
+`REMOVE_OLD_MODS=true`, but the disposable container did not receive `CURSEFORGE_FILES`; image initialisation therefore
+removed all 111 copied JARs and Forge could not decode the world's modded dimensions. Restoring the exact mod set and
+setting `REMOVE_OLD_MODS=false` made the same world boot successfully. A world archive is necessary but not sufficient:
+restore must select an exact immutable release before starting Minecraft.
+
+### 5a. Session observability — **locally exercised**
+
+The first Compose smoke test on 2026-08-12 started Prometheus 3.5.3, Grafana 13.1.0, `mc-monitor`, node_exporter
+and cAdvisor alongside an isolated restored copy of the real world. All four Prometheus targets were up, Grafana
+provisioned the eight-panel `Session overview` dashboard from the repository, Minecraft reported `healthy=1`, and
+RCON answered. Stopping the Compose project stopped the dashboard and collectors as well as Minecraft.
+
+cAdvisor 0.53 could not discover containers on the local Docker 29 `overlayfs` image store. Version 0.60.5 did, so
+that compatibility is now pinned rather than assumed. A second trap appeared after recreating `mc`: Prometheus keeps
+the removed container's last series briefly, and a plain `sum` double-counted old and new memory. Dashboard container
+queries therefore join against `container_last_seen < 30 seconds` before aggregating.
 
 ### 6. LAN discovery on a clean client, over the overlay
 

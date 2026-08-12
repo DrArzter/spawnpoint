@@ -158,14 +158,36 @@ That is an existential risk to the one thing in this system that cannot be regen
 protect a world with hundreds of hours in it, with backups kept two months deep — and all of it would sit inside an
 account with an automatic expiry date, whose deletion is a policy action rather than a failure anyone gets alerted about.
 
-Two things follow, and neither costs anything:
+### When to switch, and why not immediately
 
-1. **Move to the Paid Plan early — ideally immediately.** It does not spend more: you still pay only for usage, and the
-   credits still apply. It removes the automatic closure. The Free Plan is actively the wrong choice for a project whose
-   premise is durable state; it is built for experiments that are meant to be thrown away.
-2. **Keep one copy of the world outside AWS.** The monthly archive from [ADR-0010](adr/0010-world-persistence-and-backups.md)
-   downloaded to a machine at home costs nothing and is the only backup that survives losing the account itself. A backup
-   inside the account being deleted is not a backup against the account being deleted.
+An earlier version of this section said to move to the Paid Plan straight away. That was too blunt, because the Free
+Plan carries one genuinely useful property in the other direction: **it is a hard spend cap.** When the credits are
+gone the plan closes, so a runaway — an instance that never stopped, the failure this document keeps returning to —
+cannot produce a bill. It just ends the plan. On the Paid Plan the same mistake costs real money.
+
+That property is worth most exactly when it is most likely to be needed: at the start, while the automation is being
+built and something is most likely to be left running by accident.
+
+So the trigger is not a date, it is a state:
+
+| Phase | Plan | Why |
+| --- | --- | --- |
+| **M0** — the manual spike, explicitly throwaway | Free | A hard cap while learning, and nothing in the account is irreplaceable yet. See [docs/roadmap.md](roadmap.md) |
+| **M1 onwards** — the real world moves in, backups start mattering | **Paid** | From here, losing the account is losing the world. The cap stops being protection and starts being a deletion timer |
+
+That lands weeks in, not months, so the six-month cliff never becomes something to remember. Set a calendar reminder
+anyway as a backstop, because the failure is silent and total.
+
+Switching does not spend more — you still pay only for usage, and the credits still apply. Confirm that last point in
+the console when upgrading, since it is your money and this document is not the authority on it.
+
+**And keep one copy of the world outside AWS**, whichever plan you are on. The monthly archive from
+[ADR-0010](adr/0010-world-persistence-and-backups.md) downloaded to a machine at home costs nothing, and it is the only
+backup that survives losing the account itself. A backup inside the account being deleted is not a backup against the
+account being deleted.
+
+Moving to Paid also means the guardrails below stop being good practice and start being the thing standing between a
+failed stop and a real bill. They were already required before any long-running resource exists; this is why.
 
 ## Guardrails
 

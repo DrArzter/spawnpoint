@@ -59,6 +59,8 @@ measured cold start and the memory headroom, because those become inputs to ever
 - Backup automation: world archived to S3, archive verified after upload.
 - **A restore drill.** Destroy the volume deliberately, restore from an archive, and record how long it took.
 - Budgets alarm in place.
+- **Switch the account to the Paid Plan.** From this milestone the real world lives in AWS, so the Free Plan's automatic
+  closure becomes a deletion timer rather than a spend cap. See [docs/costs.md](costs.md).
 
 **Done when:** `terraform destroy` followed by `terraform apply` produces a working server, and a world has
 been restored from an S3 archive at least once.

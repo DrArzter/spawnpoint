@@ -9,21 +9,36 @@ Record the date and the pack version beside each answer, because they all change
 
 ## The blanks
 
-### 1. Pack, Minecraft version, loader version
+### 1. Pack, Minecraft version, loader version — **answered**
 
 | | |
 | --- | --- |
-| Value | |
-| How | Choose the first pack — vanilla-plus is the sensible one to start with |
+| Value | **Forge, Minecraft 1.20.1. 111 mods**, hand-assembled from CurseForge rather than a published pack |
+| Source | The owner's working config: <https://github.com/DrArzter/my-docker-minecraft-server-config> |
 | Unblocks | The release definition in [ADR-0008](adr/0008-versioned-mod-releases.md), the image tag in [ADR-0005](adr/0005-containerised-game-server.md) |
 
-### 2. Peak memory with the real group online
+Heavy tech: Mekanism suite, Applied Energistics 2, Refined Storage, Immersive Engineering, Industrial Foregoing,
+Powah, Create — plus Sinytra Connector running Fabric mods on Forge. Two consequences worth writing down:
+
+- **Tick load will be high.** Those are the mods that make milliseconds-per-tick climb. It does not change the
+  decision — see the accepted risk in [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md) — but it makes the
+  measurement in item 2 more likely to matter rather than less.
+- **ARM cannot be assumed.** Connector, mixins and Fabric-on-Forge raise the chance of an architecture-specific
+  problem, so item 3 has to be an actual test rather than an inference.
+
+### 2. Peak memory with the real group online — **partly answered**
 
 | | |
 | --- | --- |
-| Value | |
+| Allocated today | **4096M**, in the working config, which has been running fine |
+| Peak actually used | |
 | How | Play with everybody on. Watch container memory, and the JVM heap the server reports |
 | Unblocks | Instance size in [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md). This is the number that decides the hourly rate |
+
+4 GB for 111 tech mods is already the lower end of the bracket, and it works. So **the starting instance is 2 vCPU
+and 4 GB, not 8 GB** — the cheapest row in [docs/costs.md](costs.md), which brings the modelled compute line down
+again. Confirm the headroom before committing: 4 GB allocated with no headroom left is a different situation from
+4 GB allocated and 2.5 GB used.
 
 Record the peak, not the average, and note how many players produced it. Watch CPU as well: the useful figure is how
 many cores' worth the server actually uses under load.
@@ -104,14 +119,18 @@ Count devices honestly, including anybody's second machine. This is the number t
 
 | Region | Best | Worst |
 | --- | --- | --- |
-| `eu-west-2` (London) | | |
 | `eu-central-1` (Frankfurt) | | |
 | `eu-north-1` (Stockholm) | | |
+| `eu-west-2` (London) | | |
 
 | | |
 | --- | --- |
 | How | Each player runs a regional latency check — a public AWS latency test site will do — and reports their figure |
 | Unblocks | The region choice in [ADR-0002](adr/0002-host-on-aws.md) |
+
+The config sets `TZ: Europe/Warsaw`, and the VPS plans priced above are Warsaw ones, so assume a Central European
+player base. That reorders the candidates: Frankfurt first, then Stockholm, with London a distant third. AWS has no
+Warsaw region, so Frankfurt is the closest.
 
 Optimise for the **worst** player, not the average. One person on 200 ms ruins the evening for everybody. Stockholm is
 often the cheapest European region, so if the numbers are close, price decides.

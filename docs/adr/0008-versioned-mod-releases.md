@@ -76,6 +76,27 @@ migration may be needed, MINOR for any other mod set change.
 | Container image per mod set | Truly immutable and versioned, but an image build and push per mod change, and the world cannot live in the image |
 | CurseForge or Modrinth pack format as the internal source of truth | Standard, and the right thing to *export*. Too constraining as the internal model, since server-side and client-side sets differ. See [ADR-0013](0013-modpack-distribution.md) |
 
+## What the current setup already does, and where it falls short
+
+The owner's working config resolves mods at container start from a list of 111 CurseForge project URLs
+(<https://github.com/DrArzter/my-docker-minecraft-server-config>). That is worth recognising: **it is already a
+manifest rather than a folder of binaries**, which is the shape this ADR argues for. The habit exists; what is missing
+is the immutability.
+
+Two gaps, both concrete:
+
+1. **Nothing is pinned.** All 111 entries are bare project URLs with no file identifier, so each boot resolves to
+   whatever the latest compatible file is at that moment. The image tag is `stable`, which also moves. So two boots of
+   the same configuration can produce two different servers, and a break cannot be attributed to either source. This is
+   not a hypothetical risk — it is the current behaviour, and it is precisely what a release version fixes.
+2. **Booting depends on CurseForge being reachable.** This ADR requires the opposite: a server that comes up in three
+   minutes without a third party in the path. A release store that caches the resolved binaries by hash removes the
+   dependency and makes the pin real at the same time.
+
+So the migration is smaller than it looks. Resolve the 111 URLs once, record the file identifiers and hashes, cache the
+binaries, and that is release 1.0. The existing list becomes the input to the first release rather than something to be
+replaced.
+
 ## Open questions
 
 - Whether mod binaries are stored per release or content-addressed by hash and shared. Content-addressed

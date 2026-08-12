@@ -9,6 +9,10 @@ The name is a working title. Check it is free on GitHub before claiming it; rena
 
 > **Status: design stage.** Nothing is deployed. This repository currently holds the architecture, the
 > decision records, the cost model and the roadmap. Code starts at milestone M0.
+>
+> **Starting from here?** Not with AWS. Run the pack locally, play one evening, and fill in
+> [docs/measurements.md](docs/measurements.md) — eight numbers that turn most of the open questions below into
+> arithmetic, for no money and no infrastructure.
 
 ## What it does
 
@@ -122,7 +126,7 @@ Full description, including failure modes: [docs/architecture.md](docs/architect
 ## Repository layout
 
 ```
-docs/              Architecture, roadmap, cost model, runbook, prior art
+docs/              Architecture, roadmap, cost model, runbook, prior art, measurements
 docs/adr/          Architecture decision records — start here
 infra/terraform/   Terraform for all AWS resources
 lambdas/           Control-plane handlers, lifecycle automation, chat adapters

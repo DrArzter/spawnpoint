@@ -7,6 +7,22 @@ The order puts a playable server first, on purpose. Motivation is the scarce res
 evenings, and a server the group is already using survives a slow week far better than a half-finished
 Terraform configuration.
 
+## Session zero — one evening, locally, before any of this
+
+**Do not start with AWS.** Almost every number the later milestones need is unknown, and every one of them can be
+measured on a laptop for nothing. Starting in the console means guessing an instance size, a volume size and a
+region, then discovering all three were wrong.
+
+So: run the intended pack locally with the `itzg` image, put the group on the overlay, and play one evening.
+
+That single evening closes open questions in five ADRs — instance size, volume size, ARM compatibility, the
+connectivity mode, and whether the cold-start assumption is anywhere near right. It also costs nothing, and it gives
+the group something to play this week, which matters more for finishing this project than any architecture decision
+in here.
+
+What to capture: [docs/measurements.md](measurements.md). Fill the blanks, then M0 becomes arithmetic instead of
+guesswork.
+
 ## M0 — A playable server, built by hand
 
 **Goal:** friends can play tonight. Also: learn what the AWS resources actually are, by creating them

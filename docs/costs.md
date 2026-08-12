@@ -139,13 +139,50 @@ In order of when they go in.
 
 ## Comparison, for honesty
 
-A managed Minecraft host would cost roughly $5–15 per month for a comparable modded server, with no
-engineering effort, no cold start and a support channel.
+This is the section to read before defending the project to anybody, including yourself.
 
-This project is not cheaper in money, and it is far more expensive in time. It buys control over the mod
-pipeline, and it buys the learning, which is the declared reason it exists. See
-[ADR-0003](adr/0003-build-not-reuse.md). Pretending otherwise in a README would be dishonest, and an
-interviewer would spot it immediately.
+| Option | Monthly | What you get |
+| --- | --- | --- |
+| **This design**, 2–3 h most nights | ~$8 | 75 hours of a 4 vCPU / 16 GB server, and a system to build |
+| **This design**, always on | ~$50 | The same server, 730 hours |
+| **A Hetzner VPS or dedicated box** | ~$15 | A whole machine, 24/7, no cold start, no hour counting |
+| **A managed Minecraft host** | ~$5–15 | A working modded server, a panel, and a support channel |
+
+**A dedicated box at €15 flat beats this on every axis that matters for playing.** It is available all the time, it never
+makes anybody wait three minutes, it is never reclaimed mid-session, and it costs roughly double the on-demand bill for
+about ten times the availability. If the goal were a good server for a fair price, that is the answer, and it is not a
+close call.
+
+So the on-demand design only pays for itself in the other currency. Stopping when idle, surviving Spot interruptions,
+separating state from compute, a release pipeline with rollback, orchestration, cost guardrails — those are the deliverable.
+See [ADR-0003](adr/0003-build-not-reuse.md).
+
+Worth knowing where the fork actually is: most of this project is **not** AWS-specific. The release model, the client
+packs, the control-plane API, the bots and the linking design would all work against a rented box. What a flat-rate box
+removes is exactly the on-demand lifecycle — start, idle stop, interruption handling, connectivity that changes on every
+boot — which is the part with the most transferable engineering in it. That is the trade, stated plainly.
+
+### One assumption behind every figure here
+
+**A single, long-lived AWS account.** Not a rotation of new accounts for their introductory allowances.
+
+That matters for three reasons, in ascending order of how much they should weigh:
+
+1. **It would not help.** The introductory compute allowance covers a 1 GB micro instance, which cannot run a modded
+   server at all. The volume, at roughly $1.80, is the only line it meaningfully touches. So it would save a couple of
+   dollars on the ~$8 that this document is about, while the real expense — a 16 GB instance by the hour — is not covered
+   by any free tier. Verify the current terms before assuming otherwise; AWS restructured its free tier recently and the
+   details have moved.
+2. **It breaks the system.** This project's whole point is durable state: a world with hundreds of hours in it, a release
+   history, backups with two months of reach. An account with an expiry date cannot hold any of that, and migrating a
+   world plus its backups plus its infrastructure annually is not a plan.
+3. **It contradicts the goal.** Creating accounts to circumvent free-tier limits is against the AWS Customer Agreement,
+   and enforcement is real — accounts get linked by payment instrument and closed. More to the point, this project exists
+   partly to be described to an employer. "I rotate free accounts" is a poor answer in a conversation about billing
+   hygiene, IAM discipline and audit trails, which are precisely the topics this repository is designed to show off.
+
+The honest version of the cost argument is simpler and stronger: **$8 a month is cheap for a training environment that
+also happens to be the server your friends play on.** It does not need a discount to be worth it.
 
 ## To verify
 

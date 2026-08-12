@@ -11,21 +11,26 @@ zip posted in a chat channel, with instructions to find the right folder and rep
 wrong constantly: an old file left behind, a partially applied update, a mismatch that shows up as an
 unreadable login error.
 
-Modern launchers already solve installation. Given a pack in a format they understand — the Modrinth `.mrpack`
-format, or the CurseForge pack format — a launcher installs the right loader, downloads the mods from their
-upstream sources, and creates an isolated profile. Nothing is copied by hand.
+Launchers solve installation, given a pack in a format they understand — the Modrinth `.mrpack` format, or the
+CurseForge one. The launcher installs the loader, fetches the mods from upstream and creates an isolated profile, and
+nothing is copied by hand.
 
-Redistribution licences differ per mod. A manifest that references upstream files avoids the question
-entirely for most mods; a zip of binaries does not.
+**This group does not use one.** Mods are placed into the folder by hand, and the clients are not running the official
+launcher — which is also the constraint behind `online-mode=false` in
+[ADR-0022](0022-minecraft-account-as-linked-identity.md). So launcher-import is not the supported path here, however
+much it would simplify things, and the archive is not a fallback but the primary artefact.
+
+Redistribution licences differ per mod. A manifest that references upstream files avoids the question entirely for most
+mods; a zip of binaries does not.
 
 ## Decision
 
 Every release generates a client pack in a launcher-importable format, built from the same release definition
 the server runs. See [ADR-0008](0008-versioned-mod-releases.md).
 
-The pack references mods by upstream project, version and hash wherever possible, and embeds only the files
-that cannot be referenced — configs, and any mod whose licence permits redistribution and which has no stable
-upstream.
+**The archive is the supported artefact**: a zip of the client-side mods and configs, applied by hand into the mods
+folder. A manifest pack in a launcher format is published alongside it, at effectively no cost, for anybody who does
+adopt a launcher later — but nothing depends on that happening.
 
 Distribution is a static site on S3 behind CloudFront, sharing the distribution with the control panel:
 
@@ -34,7 +39,8 @@ Distribution is a static site on S3 behind CloudFront, sharing the distribution 
 - the changelog, from the release definitions,
 - the server address and current status.
 
-The site is public. Nothing on it is secret, and requiring a login to download a pack is friction for no gain.
+Access is by **short-lived signed link**, issued by the bot. Not for secrecy — nothing in a pack is secret — but for
+cost, for the reasons in the next section.
 
 ## Egress exposure, and what to do about the public URL
 
@@ -49,39 +55,36 @@ must not be taken. Old packs staying available is what lets a player pin to the 
 for them, and it is what the delta archive in [ADR-0028](0028-update-proposals.md) applies *from*. Versions are
 immutable and permanent. If anything expires, it is the **link**, not the pack.
 
-Options, in the order they should be applied:
+And the important arithmetic: **the exposure is not the archive's size, it is the URL being open.**
 
-### 1. Publish a manifest, not binaries — which nearly removes the problem
-
-This ADR already prefers referencing upstream files over re-hosting them, for licence reasons. Doing it for cost reasons
-as well changes the numbers by three orders of magnitude:
-
-| What is published | Size | Ten thousand downloads |
+| Who fetches it | Volume | Cost |
 | --- | --- | --- |
-| A zip of 111 mod binaries | ~500 MB | ~5 TB, around $450 |
-| A `.mrpack` referencing upstream | tens of KB | ~1 GB, under $0.10 |
+| Five players, 500 MB archive, two releases a month | ~5 GB | **under $0.50** |
+| The same at ten releases a month | ~25 GB | ~$2.25 |
+| A public URL, scraped or hotlinked ten thousand times | ~5 TB | ~$450 |
 
-The launcher fetches the mods from Modrinth and CurseForge, as it is designed to. **The exposure is not created by the
-URL being public; it is created by serving binaries.** Publish the manifest and the URL can stay public and frictionless,
-which keeps everything this ADR wanted.
+Serving binaries to this group costs pennies. Serving them to the internet does not. So the fix is access, not format.
 
-The binary cache from [ADR-0028](0028-update-proposals.md) still exists — it is what the *server* installs from, and what
-survives an author withdrawing a file. It is simply private, and not what players fetch.
+### 1. Signed links, issued by the bot
 
-### 2. Signed links for anything that must be self-hosted
+A short-lived signed URL — valid for minutes, tied to whoever asked — caps any scrape at the length of one link rather
+than the life of a release. That turns the only unbounded vector in the design back into a bounded one, and it costs
+nothing to run.
 
-Some files have no upstream to reference: configs, and any mod whose licence permits redistribution but which has no
-stable source. For those, a short-lived signed URL issued by the bot or the panel — valid for minutes, tied to whoever
-asked — caps a scrape at the length of one link rather than the life of a release.
+The friction is genuinely small: a player asking the bot for the pack is already in the bot to start the server. See
+[ADR-0016](0016-chat-integrations.md). This replaces the "the site is public" position taken earlier in this ADR, which
+was decided on secrecy grounds without considering cost.
 
-The friction is small, because a player asking the bot for the pack is already in the bot to start the server. See
-[ADR-0016](0016-chat-integrations.md).
+### 2. A manifest pack alongside, for whoever wants it
+
+Published anyway, because it costs tens of kilobytes and it is generated from the same release. If anybody in the group
+ever adopts a launcher that imports it, their downloads stop touching our egress entirely — the launcher fetches from
+upstream instead. Worth having ready; not worth depending on.
 
 ### 3. Rate limiting, only if the first two prove insufficient
 
-A rate limit in front of the distribution keeps the URL public and open while capping the realistic case of one broken
-client. It carries a monthly charge of its own, which against a bill of roughly six dollars is not a small addition, so
-it is the last resort rather than the first.
+Keeps a URL open while capping the realistic case of one broken client. It carries a monthly charge of its own, which
+against a bill of roughly six dollars is not a small addition, so it is the last resort rather than the first.
 
 ### Regardless: alarm on egress volume
 
@@ -123,7 +126,8 @@ An unusual amount of transfer is worth knowing about within hours, whichever of 
 | Zip download from the site, applied by hand | Better than chat, but still relies on the player replacing the right folder correctly |
 | Custom launcher or updater program | Best possible experience, and a genuinely interesting build. Far more work, needs signing and per-platform packaging, and duplicates what launchers already do well |
 | Publish the pack on Modrinth or CurseForge | Free hosting and automatic updates in launchers, and worth doing eventually. Rejected as the primary route: it is public, it invites moderation and metadata work, and the pack is for one small group |
-| A local sync script the players run | Cheap to write, but asks players to run a script from a friend, which is a bad habit to teach |
+| A local sync tool the players run | Reads the release manifest, downloads what changed, removes what went. It is the delta archive done properly, and it would make updates painless. Costs a real tool to write, package for Windows and support for five people — and it asks them to run a program from a friend. Worth revisiting only if archives become genuinely painful |
+| A third-party launcher that imports the manifest — Prism, MultiMC, ATLauncher | Free, and they work with offline accounts, so "no official launcher" does not rule them out. Not chosen because it is a change to how five people already play, which is their call rather than this document's. The manifest is published so the option stays open at any time |
 
 ## Open questions
 

@@ -42,4 +42,24 @@ When the panel is actually built, the shortlist, in order:
 
 Decide when a screen actually hurts, not before.
 
+## What the panel is actually for
+
+Noted so it is not re-derived later. The admin jobs are not equally suited to a web page, and sorting them changes both
+what gets built and when.
+
+| Job | Panel? | Why |
+| --- | --- | --- |
+| **Review and approve a release** | **Yes, strongly** | The diff is the whole point: which mods, from which version to which, with changelog links. Five entries read fine in chat; forty do not, and with 111 mods the first real proposal will be closer to forty. This is the job that justifies a panel existing |
+| **List backups and restore one** | Yes | A list with dangerous buttons, where picking the wrong row matters. Reads badly in chat |
+| **Status and session history** | Optional | Useful, but the bots already answer it and that is where people ask |
+| **Add or remove users** | Weak | Five people, changing maybe twice a year. A bot command or an edit to the parameter is proportionate; a form is not |
+| **Add mods** | **No** | The mod list is a file, and it should stay one. Git gives review, history and a diff for free, and no form built here will beat editing a text file. See [ADR-0028](../docs/adr/0028-update-proposals.md) |
+
+**The useful part can come much earlier than the rest.** A read-only diff page is a static file generated when a
+proposal is written — no login, no API, no identity machinery. That is the 80% of the panel's value with none of the
+work that made M4 too big, and it can land with M3 rather than waiting. The approve button itself can stay in the bot,
+where the owner already is.
+
+So the order, when it comes: read-only diff page → backup list → anything else.
+
 **Status:** empty. Populated in M4, download page before panel.

@@ -70,6 +70,19 @@ rather than the mechanism because a delta is only valid from the immediately pre
 behind who applies it ends up in a state that matches nothing. The delta names the release it applies from, and the
 instructions say to take the full pack if in doubt.
 
+### Where the mod list itself lives
+
+Not in the panel, and not in a form. **The mod list is a declaration and stays a file** — the 111 CurseForge URLs, in
+git, edited the way they are edited today.
+
+This is not a second source of truth beside the release store, which is what [ADR-0009](0009-s3-as-mod-source-of-truth.md)
+was right to warn against. It is the ordinary relationship between a declaration and a resolved artefact: the list says
+*which mods*, and the release says *which exact files, with which hashes* — the same relationship as a dependency
+manifest and its lockfile. Editing the list proposes; only a promoted release deploys.
+
+Keeping it a file buys review, history and a diff at no cost, and a push to it is a perfectly good second signal for a
+proposal alongside the schedule.
+
 ### Where the state lives, and where it does not
 
 **Not in a table: which mods are installed.** That is the release manifest in S3, and it is already the source of truth

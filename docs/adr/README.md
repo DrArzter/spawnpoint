@@ -28,7 +28,7 @@ Template: [0000-template.md](0000-template.md).
 | [0007](0007-ssm-instead-of-ssh.md) | Manage the instance with SSM, not SSH | Accepted | M1 |
 | [0008](0008-versioned-mod-releases.md) | A mod set is an immutable, versioned release | Accepted | M3 |
 | [0009](0009-s3-as-mod-source-of-truth.md) | S3 holds releases; promotion drives the deployment | Accepted | M3 |
-| [0010](0010-world-persistence-and-backups.md) | World on persistent EBS, backups to S3 | Accepted, amended by [0026](0026-tiered-backups.md) | M1 |
+| [0010](0010-world-persistence-and-backups.md) | World on persistent EBS, backups to S3 | Accepted | M1 |
 | [0011](0011-terraform-for-infrastructure.md) | Manage the infrastructure with Terraform | Accepted | M1 |
 | [0012](0012-web-control-panel.md) | One control-plane API; the panel is one client | Proposed | M4 |
 | [0013](0013-modpack-distribution.md) | Distribute the client pack from S3 and CloudFront | Proposed | M4 |
@@ -44,7 +44,7 @@ Template: [0000-template.md](0000-template.md).
 | [0023](0023-multiple-worlds.md) | Several worlds, one active at a time | Proposed | M6 |
 | [0024](0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Proposed | M2 |
 | [0025](0025-step-functions-for-long-operations.md) | Step Functions for long operations; Lambda for the rest | Proposed | M2 |
-| [0026](0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | Proposed | M1 |
+| [0026](0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | **Rejected** on measurement; kept for its threshold | M1 |
 
 ## Decisions still to record
 

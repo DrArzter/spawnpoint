@@ -30,7 +30,7 @@ The name is a working title. Check it is free on GitHub before claiming it; rena
 | Several worlds, one at a time | Each pack is a world with its own release line, save data and backups. Start the one you want; the others cost only storage |
 | Connectivity you can choose | Raw address, DNS on your own domain, or an overlay network with no public port. One contract, three modes |
 | Chat notifications | "X requested the server", "server ready", "release 1.4 promoted", "backup failed" |
-| Backups you can restore | Incremental snapshot after every session, full archive monthly, and a restore drill that was actually run |
+| Backups you can restore | World archived after every session and before every release, with a restore drill that was actually run |
 
 ## Why it exists
 
@@ -121,7 +121,7 @@ Four flows carry the whole design:
 | Flow | Trigger | What happens |
 | --- | --- | --- |
 | Start | Explicit request from a surface, with an identity | Operation created → instance started → connection string published → mods reconciled against the live release → container up → "ready" announced |
-| Stop | No players for N consecutive checks | World saved and quiesced → instance stopped → snapshot completes on its own → session length announced |
+| Stop | No players for N consecutive checks | World saved → archived to S3 → instance stopped → session length announced |
 | Release | The live pointer is written | Announce → save and stop container → sync mods → start → health check → build client pack, or roll back |
 | Interruption | Spot two-minute notice | Save world → stop container cleanly → announce → next start reattaches the volume |
 
@@ -142,8 +142,8 @@ scripts/           Local helpers: cut a release, restore a backup, check cost
 ## Decisions
 
 The decision records are the most useful part of this repository today. Twenty-six of them, each with the
-alternatives that were rejected and why — including one already superseded, which is the process working rather
-than failing.
+alternatives that were rejected and why — including one superseded and one rejected the same day it was written, which
+is the process working rather than failing.
 
 | ADR | Decision | Status |
 | --- | --- | --- |
@@ -156,7 +156,7 @@ than failing.
 | [0007](docs/adr/0007-ssm-instead-of-ssh.md) | Manage the instance with SSM, not SSH | Accepted |
 | [0008](docs/adr/0008-versioned-mod-releases.md) | A mod set is an immutable, versioned release | Accepted |
 | [0009](docs/adr/0009-s3-as-mod-source-of-truth.md) | S3 holds releases; promotion deploys | Accepted |
-| [0010](docs/adr/0010-world-persistence-and-backups.md) | World on persistent EBS, backups to S3 | Amended by 0026 |
+| [0010](docs/adr/0010-world-persistence-and-backups.md) | World on persistent EBS, backups to S3 | Accepted |
 | [0011](docs/adr/0011-terraform-for-infrastructure.md) | Terraform for infrastructure | Accepted |
 | [0012](docs/adr/0012-web-control-panel.md) | One control-plane API; the panel is one client | Proposed |
 | [0013](docs/adr/0013-modpack-distribution.md) | Client pack from S3 and CloudFront | Proposed |
@@ -172,7 +172,7 @@ than failing.
 | [0023](docs/adr/0023-multiple-worlds.md) | Several worlds, one active at a time | Proposed |
 | [0024](docs/adr/0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Proposed |
 | [0025](docs/adr/0025-step-functions-for-long-operations.md) | Step Functions for long operations; Lambda for the rest | Proposed |
-| [0026](docs/adr/0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | Proposed |
+| [0026](docs/adr/0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | Rejected |
 
 Index, template and the decisions still to make: [docs/adr/README.md](docs/adr/README.md).
 

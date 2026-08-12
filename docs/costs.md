@@ -12,8 +12,8 @@ even when the rates are not.
 
 | | Target |
 | --- | --- |
-| Fixed cost — billed whether anybody plays or not | A few USD per month |
-| Total, for a few evenings of play a week | Low double-digit USD per month |
+| Fixed cost — billed whether anybody plays or not | Under $3 per month |
+| Total, for a few evenings of play a week | Mid single-digit USD per month |
 
 The fixed part is the number that matters. A variable cost that only appears when the server is in use is
 easy to accept; a fixed cost is paid during the months when nobody plays at all.
@@ -40,9 +40,8 @@ Two decisions do almost all of the work on the variable term, and they multiply:
 | --- | --- | --- | --- |
 | EC2 Spot, ~4 vCPU / 16 GB | Variable | $0.06 per hour | Assume roughly a third of the on-demand rate; verify per type and zone, and expect movement |
 | Public IPv4 address | Variable here | $0.005 per hour | Charged for any public address; verify. Only billed while running, because no Elastic IP is held. Applies in **every** connectivity mode, because the instance needs outbound access regardless. See [ADR-0024](adr/0024-connectivity-modes.md) |
-| EBS gp3, world volume, 50 GB | Fixed | $0.09 per GB-month | Billed while the instance is stopped. The largest fixed item. One volume holds every world, as a directory each. See [ADR-0023](adr/0023-multiple-worlds.md) |
-| Backups: EBS snapshots, incremental | Fixed | Verify snapshot rate | The per-session tier. Only changed blocks after the first, so cost tracks the change rate rather than the world size. See [ADR-0026](adr/0026-tiered-backups.md) |
-| Backups: full archives in S3, infrequent | Fixed | $0.023 per GB-month | The durable tier, monthly. A handful of copies, not seventeen — see the trap below |
+| EBS gp3, data volume, 20 GB | Fixed | $0.09 per GB-month | Billed while the instance is stopped. Sized for mod releases and several worlds, not for save data — the worlds themselves are a few hundred MB each. See [ADR-0023](adr/0023-multiple-worlds.md) |
+| S3, world backups | Fixed | $0.023 per GB-month | Full archive after every session. Retention 5 daily, 2 weekly, 2 monthly — nine copies, well under a gigabyte. See [ADR-0010](adr/0010-world-persistence-and-backups.md) |
 | S3, release store, 10 GB | Fixed | $0.023 per GB-month | Grows with retained releases |
 | Route 53 hosted zone | Fixed | $0.50 per zone-month | **Only in DNS mode.** Plus a negligible per-query charge. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | Overlay network | Fixed | $0 within the free tier | **Only in overlay mode.** Free tiers bind on different axes: ZeroTier 10 devices and 1 network; Tailscale 6 users with unlimited devices. Either cliff costs more than this whole table. See [ADR-0024](adr/0024-connectivity-modes.md) |
@@ -61,34 +60,38 @@ substituted directly.
 | --- | --- | --- |
 | Instance | 40 h x $0.06 | $2.40 |
 | Public IPv4 | 40 h x $0.005 | $0.20 |
-| World volume | 50 GB x $0.09 | $4.50 |
-| Backups | snapshots plus a few full archives — **recompute once the world is measured** | ~$1.00 |
+| Data volume | 20 GB x $0.09 | $1.80 |
+| Backups | 9 archives x ~0.3 GB x $0.023 | ~$0.06 |
 | Release store | 10 GB x $0.023 | $0.23 |
 | Hosted zone | | $0.50 |
 | Serverless, egress, logs | inside free tier, plus a margin | ~$0.50 |
-| **Total** | | **~$9.30** |
-| **of which fixed** | volume, storage, zone | **~$6.20** |
-
-The volume line assumes 50 GB. The world this project will host already exists and is large, so **that line is the one
-most likely to be wrong**, and it is the dominant fixed cost. Measure it before believing this table — see
-[docs/measurements.md](measurements.md).
+| **Total** | | **~$5.35** |
+| **of which fixed** | volume, storage, zone | **~$2.65** |
 
 The hosted-zone line applies in DNS mode only; in the other two connectivity modes it is nil or the overlay's free
 tier. See [ADR-0024](adr/0024-connectivity-modes.md).
 
-The instance is not the main cost. The **storage is**, because it is billed continuously while everything
-else is billed only during a session. That is the counter-intuitive result of an on-demand design, and it
-is where optimisation effort belongs: size the volume tightly, prune old worlds, lifecycle the backups.
+**Correction to an earlier version of this document.** It concluded that storage dominated, and that optimisation effort
+belonged in sizing the volume. That followed from a 50 GB volume placeholder, chosen before the world was measured. The
+world is a few hundred megabytes, the volume is sized for mod releases rather than save data, and the picture is now:
+
+| | Monthly | Note |
+| --- | --- | --- |
+| Variable — running hours | ~$2.60 | Instance and its public address |
+| Fixed — storage and DNS | ~$2.65 | Volume, backups, release store, hosted zone |
+
+Comparable, in other words, with no single dominant line. Which means the largest remaining lever is **running hours**,
+not gigabytes: the idle watchdog earns more than any storage tuning, and a failed stop is still the one mistake that
+would multiply the bill. Save data is simply not a cost factor at this scale.
 
 ### With several worlds
 
-The same conclusion, sharpened. Only one world runs at a time, so **compute does not change at all** — four worlds
-cost the same to play as one. What grows is storage: save data plus a backup lineage per world, adding single-digit
-US dollars per month for four worlds at the rates above. Mod storage grows sub-linearly, because binaries are
-content-addressed and shared between packs.
+Only one world runs at a time, so **compute does not change at all** — four worlds cost the same to play as one. And at
+a few hundred megabytes each, their save data and backups add cents, not dollars. Mod storage grows sub-linearly
+because binaries are content-addressed and shared between packs.
 
-So the on-demand design is exactly what makes several packs affordable: their cost is storage, not compute. See
-[ADR-0023](adr/0023-multiple-worlds.md).
+So several packs are, to a first approximation, free. The on-demand design is what makes that true: their cost would
+have been compute, and compute is only billed while playing. See [ADR-0023](adr/0023-multiple-worlds.md).
 
 ## What makes it much worse
 
@@ -103,7 +106,7 @@ Each of these is larger than the entire example above.
 | An Elastic IP held all month | ~$3.60 per month | DNS record updated on start. See [ADR-0017](adr/0017-stable-server-address.md) |
 | Orphaned volumes and snapshots | Silent and cumulative | Terraform owns everything; tag and review monthly |
 | Verbose logs with indefinite retention | Grows without limit | Short retention, filtered log shipping |
-| Full world archives × graded retention | World size × 17. A 40 GB world would cost ~$16 a month in backups alone, more than everything else combined | Incremental snapshots for the frequent tier, full archives only monthly. See [ADR-0026](adr/0026-tiered-backups.md) |
+| Full world archives × retention, **if a world ever grows large** | World size × 9. Harmless at a few hundred MB; a 40 GB world would cost ~$8 a month in backups alone | Watch for a world approaching ~30 GB, then reopen [ADR-0026](adr/0026-tiered-backups.md) |
 | An always-on component of any kind | Whatever it costs, forever | Everything is event-driven. This is why there is no hosted bot or proxy |
 | Outgrowing the overlay's free tier | Tens of US dollars monthly, several times this whole table | Count what the chosen vendor limits — people or devices — and decide at the cliff, not after. Self-hosted WireGuard is the escape. See [ADR-0024](adr/0024-connectivity-modes.md) |
 

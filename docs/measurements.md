@@ -37,30 +37,25 @@ Record the peak, not the average, and note how many players produced it.
 
 A free answer to a real question, purely because the laptop is the same architecture.
 
-### 4. World size, and how much an evening changes
+### 4. World size — approximately known, worth confirming
 
 | | |
 | --- | --- |
-| Size now | |
-| Size after one evening | |
-| Compressed size | |
-| How | `du -sh` on the existing world directory — **this one is answerable right now.** Then again after a session, and once compressed |
-| Unblocks | Volume size, the dominant fixed cost in [docs/costs.md](costs.md), and the backup tiering in [ADR-0026](adr/0026-tiered-backups.md) |
+| Estimate | **~200–300 MB** for the existing world |
+| Confirmed value | |
+| How | `du -sh` on the world directory |
+| Unblocks | Volume size, and it already settled the backup question |
 
-The world already exists and is large, which makes this the highest-value single number in this document.
+Two conclusions already follow from the estimate:
 
-Three things follow from it:
+- **The world is not the cost driver.** [ADR-0026](adr/0026-tiered-backups.md) proposed incremental snapshots to avoid
+  seventeen full archives dominating the bill; at this size those copies are under half a gigabyte and it was rejected.
+  Full archives after every session, per [ADR-0010](adr/0010-world-persistence-and-backups.md), are correct and simpler.
+- **The volume can be much smaller than the 50 GB placeholder.** Since the volume was the largest fixed line in
+  [docs/costs.md](costs.md), this is a real reduction rather than a rounding difference. Size it for the mod releases and
+  several worlds, not for the save data.
 
-- **Volume size**, with headroom for mods, logs and the other worlds that M6 will add.
-- **Whether the backup tiering in [ADR-0026](adr/0026-tiered-backups.md) was the right call.** Above roughly 20 GB,
-  seventeen full archives would be the largest line in the bill. Below about 5 GB, full archives every session would
-  have been fine and simpler.
-- **Whether pruning is worth it** — unused dimensions, stale player data, over-explored regions — as a one-off on a
-  copy, before the world is ever uploaded.
-
-The *change* per session matters more than the absolute size for the frequent backup tier, because incremental
-snapshots only store what changed. A mature world changes far less per evening than a fresh one, which works in our
-favour.
+Confirm the number anyway, because the whole revised cost model now rests on it.
 
 ### 5. Cold start: how long from container start to joinable
 

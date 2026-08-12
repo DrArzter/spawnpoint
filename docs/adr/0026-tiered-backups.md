@@ -1,9 +1,25 @@
 # ADR-0026 — Tiered backups: frequent incremental snapshots, infrequent full archives
 
-- Status: Proposed
+- Status: **Rejected**
 - Date: 2026-08-11
+- Rejected: 2026-08-11, the same day, on measurement
 - Milestone: M1
-- Amends: [ADR-0010](0010-world-persistence-and-backups.md), which made a full S3 archive the per-session backup
+- Would have amended: [ADR-0010](0010-world-persistence-and-backups.md), whose original design stands unchanged
+
+> **Rejected, because the problem does not exist at this scale.** This ADR was written on the assumption that the
+> existing world was tens of gigabytes. It is roughly 200–300 MB. Seventeen full archives of that is under half a
+> gigabyte, costing pennies a month, and a 300 MB upload finishes in seconds — so it neither dominates the bill nor
+> meaningfully extends billed instance time, and it fits comfortably inside the two minutes a Spot interruption gives.
+> [ADR-0010](0010-world-persistence-and-backups.md)'s full archive after every session is simply correct here.
+>
+> **Kept, because the analysis defines the trigger.** Everything below is right *if* a world ever grows large. The
+> threshold is around **30 GB** — retention was since cut from seventeen copies to nine, which raises it — where full
+> copies start to exceed every other line in
+> [docs/costs.md](../costs.md) combined. If any world approaches that — a heavily explored world, or several worlds
+> sharing one lineage — reopen this as a new ADR rather than re-deriving it.
+>
+> The parts below that are worth doing anyway, independent of size: pruning the world once before upload, and
+> compressing the archive.
 
 ## Context
 

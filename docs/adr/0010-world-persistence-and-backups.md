@@ -3,14 +3,14 @@
 - Status: Accepted
 - Date: 2026-08-11
 - Milestone: M1
-- Amended by: [ADR-0026](0026-tiered-backups.md) — the per-session backup is an incremental EBS snapshot, not a full
-  archive. Everything else here stands, including the save-and-quiesce rule and the graded retention
+- Unchanged: [ADR-0026](0026-tiered-backups.md) proposed replacing the per-session archive with an incremental snapshot
+  and was **rejected on measurement**. This ADR stands exactly as written
 
-> **Amended.** This ADR assumed a modest world and made a full S3 archive the per-session backup. The world this project
-> will host is an existing, long-played one, which makes seventeen full copies the largest line in the bill and adds
-> billed upload time to every session. [ADR-0026](0026-tiered-backups.md) splits the mechanism into tiers. The reasoning
-> below — why the world is separate from the instance, why retention is graded, why an untested restore is not a backup —
-> is unchanged and is why that ADR exists.
+> **A challenge was raised and did not survive.** [ADR-0026](0026-tiered-backups.md) argued that a full archive after
+> every session would dominate the bill and add billed upload time. That holds for a world of tens of gigabytes; the
+> world this project will host is roughly 200–300 MB, so a full set of copies costs pennies and uploads in seconds. The
+> design below is correct at this scale. ADR-0026 is kept as a Rejected record because it establishes the threshold —
+> around 30 GB — at which it would become right.
 
 ## Context
 
@@ -37,9 +37,14 @@ Backups go to S3 as archives of a saved, quiesced world, taken
 - after every session, when the idle watchdog stops the server, and
 - before every mod release promotion.
 
-Retention keeps daily archives for a short window, then weekly, then monthly, so a corruption noticed two
-weeks late is still recoverable. The bucket has versioning on and lifecycle rules that move older archives
-to a colder storage class.
+Retention: **5 daily, 2 weekly, 2 monthly — nine archives**, giving roughly two months of reach. Five recent copies
+cover the ordinary case; the four older ones exist because the failure that actually destroys a world is corruption
+noticed late, and by then every recent copy contains it. The bucket has versioning on and lifecycle rules that move
+older archives to a colder storage class.
+
+Retention is about **how far back you can reach**, not how many files you like having. Five copies is five days. At a
+few hundred megabytes per archive the four extra copies cost around three cents a month, which is why the graded shape
+survives even after the counts were cut.
 
 A restore is a documented procedure in the runbook, and it is tested at least once, deliberately, before
 it is ever needed.
@@ -84,6 +89,8 @@ it is ever needed.
 
 ## Open questions
 
-- Retention numbers. Start at 7 daily, 4 weekly, 6 monthly and revise once the world size is known.
+- ~~Retention numbers.~~ Resolved once the world was measured at a few hundred megabytes: **5 daily, 2 weekly, 2
+  monthly**, down from an initial 7/4/6. The counts were cut because seventeen copies is more than a five-player server
+  needs to think about; the graded shape was kept because at this size the long reach is nearly free.
 - Whether a second copy in another region is worth the cost. Probably yes for the monthly archives only.
 - Whether the world should also be exportable in a form a player can open locally, for map rendering.

@@ -32,7 +32,7 @@ Command set, deliberately small:
 | Command | Effect |
 | --- | --- |
 | `start` | Requests a server start, attributed to the caller |
-| `status` | Server state, player count, live release version |
+| `status` | Server state, player count, desired and active release versions |
 | `pack` | Link to the current client pack and its version |
 | `release list` / `release promote <version>` | Owner only |
 | `backup list` / `backup restore <id>` | Owner only, and confirmed twice |

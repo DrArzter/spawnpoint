@@ -8,7 +8,7 @@ Planned:
 | Script | Purpose |
 | --- | --- |
 | `cut-release.sh` | Build a release from a working mod set: hashes, manifest, upload. See [ADR-0008](../docs/adr/0008-versioned-mod-releases.md) |
-| `promote.sh` | Move the live pointer, and follow the resulting operation |
+| `promote.sh` | Request a desired release, and follow the resulting deployment operation |
 | `restore-world.sh` | Restore a world archive into a new volume or path, never over the live world |
 | `cost.sh` | Month-to-date cost by service, for the monthly check in the [runbook](../docs/runbook.md#monthly-cost-check) |
 | `logs.sh` | Tail the game server log through SSM |

@@ -3,6 +3,8 @@
 - Status: Accepted
 - Date: 2026-08-11
 - Milestone: M3
+- Amended by: [ADR-0030](0030-desired-and-active-release.md), which replaces the single live pointer with desired
+  and active release state
 
 ## Context
 
@@ -27,10 +29,35 @@ configuration. A release contains
 - server and client config files,
 - a changelog entry, and the identity of whoever cut the release.
 
+### Artifact identity and descriptive metadata
+
+The **SHA-256 digest and byte length identify a mod file**. Deployment verifies those values against the staged
+payload; neither a filename, an embedded version nor a platform lookup may substitute for them. Two files with the
+same display version but different SHA-256 digests are different artefacts and require a new release.
+
+Best-effort metadata may be attached to an artefact for the UI, client/server reports and changelogs:
+
+- one or more embedded mod IDs, names and declared versions from Forge, NeoForge, Fabric or Quilt metadata;
+- homepage and source links;
+- a CurseForge or Modrinth project ID and exact file ID;
+- the method used to discover each field and any extraction warning.
+
+This metadata is **descriptive, not authoritative**. A JAR may contain several mods, use
+`${file.jarVersion}`, carry a non-SemVer version, put its version only in `MANIFEST.MF`, or have a filename that does
+not match any embedded component. Therefore a generic `semver.coerce` comparison must not decide whether a release is
+newer or whether client and server match. The release proposal explicitly chooses files; the lock manifest and hashes
+say what those choices resolved to.
+
+A platform fingerprint is useful only for enriching an unknown local JAR with its upstream identity. CurseForge's
+fingerprint is its whitespace-normalised MurmurHash2 variant, not a cryptographic content hash and not an FNV hash of
+ZIP entry names. Fingerprint lookup is optional and batched; an API outage or an unmatched private mod produces
+missing metadata, not a failed otherwise reproducible release. API credentials come from the environment or a secret
+store and are never written into the tool or manifest.
+
 Releases are immutable once published. A mistake produces a new release, never an edit.
 
 Exactly one release is **live** at a time, named by a mutable pointer. Deploying is moving the pointer;
-rolling back is moving it back. The server reconciles itself against the live release on boot and on
+rolling back is restoring the previous confirmed active release. The server reconciles itself against the desired release on boot and on
 change. The client pack is generated from the same release, so server and client cannot drift apart.
 
 Versioning: `MAJOR.MINOR` where MAJOR changes when the Minecraft or loader version changes and a world

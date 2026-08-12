@@ -1,8 +1,12 @@
 # ADR-0009 — S3 holds releases, and promotion drives the deployment
 
-- Status: Accepted
+- Status: Superseded by [ADR-0030](0030-desired-and-active-release.md)
 - Date: 2026-08-11
 - Milestone: M3
+
+> **Superseded in part.** The immutable S3 release layout and explicit promotion decision remain. The single
+> `live.json` pointer no longer both triggers a deployment and represents its verified result. ADR-0030 separates
+> desired and active release state and gives each deployment its own Step Functions execution.
 
 ## Context
 

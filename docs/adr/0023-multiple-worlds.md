@@ -3,6 +3,7 @@
 - Status: Proposed
 - Date: 2026-08-11
 - Milestone: M6
+- Amended by: [ADR-0030](0030-desired-and-active-release.md)
 - Extends: [ADR-0008](0008-versioned-mod-releases.md), [ADR-0009](0009-s3-as-mod-source-of-truth.md), [ADR-0010](0010-world-persistence-and-backups.md)
 
 ## Context
@@ -10,7 +11,7 @@
 The intention is several packs, not one: vanilla-plus, techno, magic, techno-magic. Each is a different mod set,
 each wants its own save data, and the group wants to start whichever one they feel like.
 
-Everything so far assumes exactly one of everything: one live release pointer, one world directory, one backup
+Everything so far assumes exactly one of everything: one pair of desired and active release pointers, one world directory, one backup
 lineage, one hostname. The question is whether that assumption is load-bearing.
 
 Mostly it is not, and that is the payoff of [ADR-0008](0008-versioned-mod-releases.md). Immutable artefact plus a
@@ -20,7 +21,7 @@ mutable pointer plus reconcile-on-boot generalises by adding a dimension. These 
 | --- | --- |
 | Immutable releases and versioning | Each world gets its own release line. `techno 1.4` and `magic 2.0` are independent |
 | Promotion, health check, automatic rollback | Already parameterised by "which release"; becomes "which release of which world" |
-| Boot-time reconciliation | Reconciles against the live release *of the world being started* |
+| Boot-time reconciliation | Reconciles against the desired release *of the world being started*; commits active only after health checks |
 | Backup, verification, graded retention | One lineage per world instead of one lineage |
 | Link table, whitelist projection | Unchanged. Authorisation is about people, not worlds |
 | Idle watchdog, Spot interruption handling | Unchanged. They act on the running server, whichever world it is |
@@ -45,7 +46,8 @@ be swapped under a save without a migration.
 
 ```
 releases/<world>/<version>/manifest.json     immutable, per world
-worlds/<world>/live.json                     the live pointer, per world
+worlds/<world>/desired.json                  requested release, per world
+worlds/<world>/active.json                   last health-checked release, per world
 mods/<sha256>                                content-addressed, shared across all worlds
 backups/<world>/...                          one lineage per world
 ```

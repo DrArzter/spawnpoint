@@ -6,7 +6,7 @@
 
 ## Context
 
-A player cannot join without the exact client mod set that matches the live release. The usual process is a
+A player cannot join without the exact client mod set that matches the active release. The usual process is a
 zip posted in a chat channel, with instructions to find the right folder and replace its contents. It goes
 wrong constantly: an old file left behind, a partially applied update, a mismatch that shows up as an
 unreadable login error.

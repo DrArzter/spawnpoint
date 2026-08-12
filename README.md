@@ -49,7 +49,10 @@ See [ADR-0003](docs/adr/0003-build-not-reuse.md) and [docs/prior-art.md](docs/pr
 
 - **Build it, do not import it.** Prior art is read for ideas, not copied. The one deliberate exception is
   the game container image, which is not where the learning is. See [ADR-0005](docs/adr/0005-containerised-game-server.md).
-- **Nothing runs when nobody plays.** Every fixed monthly cost has to justify itself.
+- **Nothing runs when nobody plays.** Not the bots, not the panel, not the API — no process in this system stays up.
+  The fixed cost is storage and nothing else. Defended component by component in
+  [docs/architecture.md](docs/architecture.md#what-runs-when-nobody-plays), including the seven more capable options
+  declined to keep it true.
 - **State is separate from compute.** The instance is disposable. The world and the mod releases are not.
 - **One API, thin clients.** Rules live in one place, so the panel and the bots cannot disagree.
 - **Immutable artefacts, mutable pointers.** The same idea as a real deployment pipeline.

@@ -119,6 +119,75 @@ must be an explicit "still starting" state. See [ADR-0009](adr/0009-s3-as-mod-so
 Two minutes is enough for a save and a clean stop, and may not be enough for an upload. The design must
 degrade in that order.
 
+## What runs when nobody plays
+
+**Nothing.** There is no process anywhere in this system that has to stay up. That is the central claim of the
+design, and it is worth being able to defend component by component, because the obvious implementation of almost
+every component here would have needed a permanent one.
+
+### Zero fixed compute
+
+| Component | Why nothing runs |
+| --- | --- |
+| Web panel and pack site | Static files on S3 behind CloudFront. No server, no rendering, no process |
+| Discord bot | Registered slash commands delivered to an **interactions endpoint**. Discord POSTs a signed request when somebody uses a command. Between commands there is nothing |
+| Telegram bot | **Webhook**, not long polling. Telegram POSTs to the endpoint |
+| Control-plane API | API Gateway in front of Lambda. One handler per operation |
+| Release pipeline | Triggered by a write to the live pointer. Idle otherwise |
+| Idle watchdog | An EventBridge schedule, not a daemon — and the rule is enabled only while the instance is running |
+| Interruption handler | An EventBridge rule on the Spot notice. Nothing polls for it |
+| Identity | Cognito is managed and billed per monthly active user |
+| Operation and link state | DynamoDB in **on-demand** capacity mode |
+| The game server itself | Started on request, stopped when idle. See [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md) |
+
+Two of those rows are also traps, and are decisions rather than details:
+
+- **DynamoDB must stay in on-demand mode.** Provisioned capacity is billed continuously, which would quietly
+  reintroduce exactly what this section exists to prevent.
+- **The idle-check schedule is enabled and disabled with the instance.** A rule firing every few minutes forever is
+  cheap, but it is a process-shaped thing pretending not to be one, and switching it off with the server is free.
+
+### Billed continuously anyway — and it is all storage
+
+Distinct question from "what runs", and the one that actually shapes the bill:
+
+| Item | Note |
+| --- | --- |
+| EBS data volume | The dominant fixed cost. Billed whether the instance runs or not |
+| S3: releases, backups, site | Cheap, and grows with retained releases and worlds |
+| Route 53 hosted zone | DNS connectivity mode only |
+| CloudWatch stored logs | Which is why retention is finite and short |
+| Overlay network account | Free tier, but the membership exists continuously |
+
+So the honest summary: **no fixed compute, and a few US dollars a month of fixed storage.** See [docs/costs.md](costs.md).
+
+### What was given up to keep it that way
+
+This property was not free. Each of these is the more capable option, and each was declined because it needs
+something permanently up:
+
+| Declined | Would have cost | Recorded in |
+| --- | --- | --- |
+| A gateway-connected Discord bot, able to react to ordinary messages | A process holding a WebSocket, always | [ADR-0016](adr/0016-chat-integrations.md) |
+| Telegram long polling, which needs no public endpoint or certificate | A process, always | [ADR-0016](adr/0016-chat-integrations.md) |
+| A proxy holding the player's connection while the server boots — the nicest possible wake | A process, always | [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md) |
+| Self-hosted Prometheus and Grafana, with far better dashboards | A host, always | [ADR-0015](adr/0015-observability-and-alerting.md) |
+| A ready-made hosting panel such as Pterodactyl | A host, always | [ADR-0003](adr/0003-build-not-reuse.md) |
+| Kubernetes | A control plane, roughly $70 a month before any node | [ADR-0014](adr/0014-no-kubernetes.md) |
+| A private subnet, which is the conventional posture | A NAT Gateway, roughly $32 a month | [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md) |
+
+Seven temptations, one rule, applied consistently. That consistency is why the fixed cost is storage and nothing else.
+
+### The one thing that could break the rule
+
+Discord requires an interaction to be acknowledged within a few seconds. A Lambda that has been idle for days has to
+cold-start, verify an Ed25519 signature, and reply inside that window. It should fit, and it is the tightest deadline
+in the system.
+
+If it turns out not to fit, the usual remedy is provisioned concurrency — which **is** an always-on cost, and would be
+the first crack in this rule. Cheaper answers to try first: a faster runtime, a smaller deployment package, and doing
+nothing before the acknowledgement except verifying the signature. See [ADR-0016](adr/0016-chat-integrations.md).
+
 ## Security posture
 
 | Concern | Position |

@@ -3,6 +3,8 @@
 - Status: Accepted
 - Date: 2026-08-11
 - Milestone: M0
+- Amended by: [ADR-0027](0027-spot-request-shape.md) — the decision to use Spot stands; the request mechanism is
+  replaced, and the on-demand fallback below is **retracted** as contrary to AWS guidance
 
 ## Context
 
@@ -51,17 +53,20 @@ Prefer ARM (Graviton) if the mod set runs on it, otherwise x86.
 **Mitigations**
 
 - Frequent autosave, plus an explicit save on the interruption notice.
-- Allow several instance types within one zone first; if capacity fails, fall back to on-demand for the
-  same type rather than switching zone. A zone change means restoring from an S3 backup instead of
-  reattaching. See [ADR-0010](0010-world-persistence-and-backups.md).
+- Allow several instance types within one zone — around ten, per AWS guidance. A zone change means restoring from an
+  S3 backup instead of reattaching, so the zone stays fixed. See [ADR-0010](0010-world-persistence-and-backups.md)
+  and [ADR-0027](0027-spot-request-shape.md).
+- ~~If capacity fails, fall back to on-demand for the same type.~~ **Retracted.** AWS discourages failing over to
+  on-demand, and decisively so here: if Spot capacity for a type and zone is exhausted, on-demand for the same
+  combination may be too. Type diversification is the real mitigation. See [ADR-0027](0027-spot-request-shape.md).
 - The security group opens the game port only, with no SSH port at all. See [ADR-0007](0007-ssm-instead-of-ssh.md).
-- Switching to on-demand is a one-line change, which is the payoff for keeping state off the instance.
+- Switching to on-demand remains possible as a deliberate, costed choice — but with a *different* instance type, and it is not the answer to a capacity shortfall. See [ADR-0027](0027-spot-request-shape.md).
 
 ## Alternatives considered
 
 | Option | Why not chosen |
 | --- | --- |
-| On-demand EC2 | Simpler and never interrupted, but several times the hourly rate for identical hardware. Kept as the documented fallback |
+| On-demand EC2 | Simpler and never interrupted, but several times the hourly rate for identical hardware. Available as a deliberate, costed choice — no longer described as the fallback for a capacity shortfall, per [ADR-0027](0027-spot-request-shape.md) |
 | Reserved Instance or Savings Plan | Needs a one or three year commitment for a workload that runs about 5% of the time. Wrong instrument |
 | ECS Fargate, as in the prior art | Fits intermittent work and removes host management, but costs more per GB of memory, pushes the world onto EFS, and hides the capacity and lifecycle problems this project wants to learn. See [ADR-0003](0003-build-not-reuse.md) |
 | Lightsail | Predictable flat price, but billed monthly, so stopping the server saves nothing |
@@ -72,5 +77,6 @@ Prefer ARM (Graviton) if the mod set runs on it, otherwise x86.
 - Instance family and size. Depends on the pack and player count. Start at roughly 4 vCPU and 16 GB,
   then measure tick time and memory headroom.
 - Whether the mod set runs on ARM. Most Java mods do; some native libraries do not.
-- Whether to use a Spot request with a capacity-optimised strategy, or simply start and stop one
-  persistent Spot instance. The second is simpler and is the starting point.
+- ~~Whether to use a Spot request with a capacity-optimised strategy, or simply start and stop one
+  persistent Spot instance.~~ Answered in [ADR-0027](0027-spot-request-shape.md): an EC2 Fleet created per session,
+  diversified across about ten instance types, with `price-capacity-optimized` and stop-on-interruption.

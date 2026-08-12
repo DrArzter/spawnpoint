@@ -22,7 +22,7 @@ Template: [0000-template.md](0000-template.md).
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted | — |
 | [0002](0002-host-on-aws.md) | Host on AWS | Accepted | M0 |
 | [0003](0003-build-not-reuse.md) | Build from scratch, rather than reuse an on-demand template | Accepted | — |
-| [0004](0004-ec2-spot-for-the-game-server.md) | Run the game server on EC2 Spot | Accepted | M0 |
+| [0004](0004-ec2-spot-for-the-game-server.md) | Run the game server on EC2 Spot | Accepted, amended by [0027](0027-spot-request-shape.md) | M0 |
 | [0005](0005-containerised-game-server.md) | Run the game server in a container | Accepted | M0 |
 | [0006](0006-on-demand-start-and-idle-shutdown.md) | Start on demand, stop when idle | Accepted | M2 |
 | [0007](0007-ssm-instead-of-ssh.md) | Manage the instance with SSM, not SSH | Accepted | M1 |
@@ -45,6 +45,7 @@ Template: [0000-template.md](0000-template.md).
 | [0024](0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Proposed | M2 |
 | [0025](0025-step-functions-for-long-operations.md) | Step Functions for long operations; Lambda for the rest | Proposed | M2 |
 | [0026](0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | **Rejected** on measurement; kept for its threshold | M1 |
+| [0027](0027-spot-request-shape.md) | Diversified Spot fleet per session; stop-on-interruption | Proposed | M2 |
 
 ## Decisions still to record
 

@@ -1,6 +1,6 @@
 # Measurements
 
-Eight blanks. Filling them turns most of the open questions in the ADRs from opinion into arithmetic.
+Nine blanks. Filling them turns most of the open questions in the ADRs from opinion into arithmetic.
 
 All of them can be answered by running the intended pack locally with the `itzg` image and playing one evening with
 the group. No AWS account, no Terraform, no spending. Do this before M0.
@@ -106,6 +106,38 @@ Count devices honestly, including anybody's second machine. This is the number t
 
 Optimise for the **worst** player, not the average. One person on 200 ms ruins the evening for everybody. Stockholm is
 often the cheapest European region, so if the numbers are close, price decides.
+
+### 9. Spot price and capacity for the candidate types, per region
+
+| Region | Spot $/h | On-demand $/h | Interruption band | Placement score |
+| --- | --- | --- | --- | --- |
+| `eu-west-2` (London) | | | | |
+| `eu-central-1` (Frankfurt) | | | | |
+| `eu-north-1` (Stockholm) | | | | |
+
+| | |
+| --- | --- |
+| Unblocks | The region in [ADR-0002](adr/0002-host-on-aws.md) — **together with latency above** — and the instance-type list in [ADR-0027](adr/0027-spot-request-shape.md) |
+
+This decides the region jointly with latency, and it decides whether the cost model survives: the Spot discount is
+load-bearing, not an optimisation. See [docs/costs.md](costs.md).
+
+Real prices come from the API, not from the pricing page, which renders in a browser. With credentials configured:
+
+```bash
+aws ec2 describe-spot-price-history --region eu-north-1 --instance-types m7g.xlarge --product-descriptions Linux/UNIX --start-time "$(date -u -v-7d +%Y-%m-%dT%H:%M:%S)" --query 'SpotPriceHistory[].[AvailabilityZone,SpotPrice,Timestamp]' --output table
+```
+
+Repeat per region and per candidate type. Then ask AWS where the capacity actually is:
+
+```bash
+aws ec2 get-spot-placement-scores --region eu-north-1 --target-capacity 1 --target-capacity-unit-type units --single-availability-zone --instance-requirements-with-metadata '{"ArchitectureTypes":["arm64"],"VirtualizationTypes":["hvm"],"InstanceRequirements":{"VCpuCount":{"Min":2,"Max":8},"MemoryMiB":{"Min":15000}}}' --region-names eu-west-2 eu-central-1 eu-north-1
+```
+
+A placement score runs 1 to 10 and is a point-in-time reading, not a guarantee. Interruption bands — under 5%, 5–10%, and
+so on — come from the Spot Instance Advisor in the console, which has no public API.
+
+Note that credentials are **not** configured on this machine yet, so none of this has been run.
 
 ## One decision that is already made
 

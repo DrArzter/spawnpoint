@@ -92,6 +92,12 @@ Prefer ARM (Graviton) if the mod set runs on it, otherwise x86.
 - The only honest resolution is to measure **milliseconds per tick under real load on a candidate instance** — not
   locally, where a desktop or Apple Silicon core flatters the result the same way the 14900KF does. Under about 50 ms
   per tick is healthy; above it, players feel it. This belongs in M0.
+
+**Accepted risk, not a gate.** The tick figure is recorded, not blocked on. If it turns out poor, the escalation is
+ordinary and cheap: step up one size, then change to a higher-clocked family, then decide whether it is good enough
+anyway. A five-player server that occasionally stutters is a nuisance, not a failure — and the deliverable here is the
+pipeline and the lifecycle, not a competitive tick rate. If somebody genuinely needs guaranteed smoothness, the answer
+is to pay for hardware that provides it, and that is a purchase rather than a redesign.
 - Whether the mod set runs on ARM. Most Java mods do; some native libraries do not.
 - ~~Whether to use a Spot request with a capacity-optimised strategy, or simply start and stop one
   persistent Spot instance.~~ Answered in [ADR-0027](0027-spot-request-shape.md): an EC2 Fleet created per session,

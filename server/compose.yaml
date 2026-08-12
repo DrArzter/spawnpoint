@@ -1,0 +1,43 @@
+services:
+  mc:
+    image: itzg/minecraft-server:java21
+    # Pin a dated tag before M0. `java21` moves; a moving tag makes a broken
+    # start impossible to attribute. See ADR-0005.
+    tty: true
+    stdin_open: true
+    ports:
+      - "25565:25565"
+    environment:
+      EULA: "TRUE"
+
+      # Set these three from the pack before first run.
+      TYPE: "VANILLA"      # VANILLA | FORGE | NEOFORGE | FABRIC
+      VERSION: "LATEST"
+      # NEOFORGE_VERSION: ""
+
+      # Start of the bracket, not the ceiling: 4 GB is often enough, 16 GB is
+      # comfortable. Raise only if the measurement says so. See ADR-0004.
+      MEMORY: "8G"
+
+      # Decided, and a one-way door: player data is keyed by UUID, and offline
+      # and online UUIDs differ. The existing world is already offline-keyed.
+      # See ADR-0022.
+      ONLINE_MODE: "FALSE"
+      ENFORCE_WHITELIST: "TRUE"
+      WHITELIST: ""        # comma-separated names for session zero
+
+      # The automation talks to the server over RCON rather than in-game op.
+      # In offline mode an op entry is a name anyone reaching the port can
+      # claim, so ops stay empty. See ADR-0022.
+      ENABLE_RCON: "TRUE"
+      RCON_PASSWORD: ${RCON_PASSWORD:?set RCON_PASSWORD in .env}
+
+    volumes:
+      # Put the existing world here as ./data/world before the first start.
+      - ./data:/data
+
+    # The image saves and stops cleanly on SIGTERM. Too short a grace period
+    # turns every stop into an unclean shutdown, which is the one thing the
+    # backup design cannot compensate for. See ADR-0010.
+    stop_grace_period: 120s
+    restart: "no"

@@ -3,6 +3,14 @@
 - Status: Accepted
 - Date: 2026-08-11
 - Milestone: M1
+- Amended by: [ADR-0026](0026-tiered-backups.md) — the per-session backup is an incremental EBS snapshot, not a full
+  archive. Everything else here stands, including the save-and-quiesce rule and the graded retention
+
+> **Amended.** This ADR assumed a modest world and made a full S3 archive the per-session backup. The world this project
+> will host is an existing, long-played one, which makes seventeen full copies the largest line in the bill and adds
+> billed upload time to every session. [ADR-0026](0026-tiered-backups.md) splits the mechanism into tiers. The reasoning
+> below — why the world is separate from the instance, why retention is graded, why an untested restore is not a backup —
+> is unchanged and is why that ADR exists.
 
 ## Context
 

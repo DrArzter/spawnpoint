@@ -37,15 +37,30 @@ Record the peak, not the average, and note how many players produced it.
 
 A free answer to a real question, purely because the laptop is the same architecture.
 
-### 4. World size after one evening, and after a week
+### 4. World size, and how much an evening changes
 
 | | |
 | --- | --- |
-| Value | |
-| How | `du -sh` on the world directory, twice, a week apart |
-| Unblocks | Volume size — the **dominant fixed cost** in [docs/costs.md](costs.md). Everything else is billed only while playing |
+| Size now | |
+| Size after one evening | |
+| Compressed size | |
+| How | `du -sh` on the existing world directory — **this one is answerable right now.** Then again after a session, and once compressed |
+| Unblocks | Volume size, the dominant fixed cost in [docs/costs.md](costs.md), and the backup tiering in [ADR-0026](adr/0026-tiered-backups.md) |
 
-The growth rate matters more than the absolute number, because it sets how soon the volume needs resizing.
+The world already exists and is large, which makes this the highest-value single number in this document.
+
+Three things follow from it:
+
+- **Volume size**, with headroom for mods, logs and the other worlds that M6 will add.
+- **Whether the backup tiering in [ADR-0026](adr/0026-tiered-backups.md) was the right call.** Above roughly 20 GB,
+  seventeen full archives would be the largest line in the bill. Below about 5 GB, full archives every session would
+  have been fine and simpler.
+- **Whether pruning is worth it** — unused dimensions, stale player data, over-explored regions — as a one-off on a
+  copy, before the world is ever uploaded.
+
+The *change* per session matters more than the absolute size for the frequent backup tier, because incremental
+snapshots only store what changed. A mature world changes far less per evening than a fresh one, which works in our
+favour.
 
 ### 5. Cold start: how long from container start to joinable
 
@@ -94,13 +109,14 @@ Count devices honestly, including anybody's second machine. This is the number t
 Optimise for the **worst** player, not the average. One person on 200 ms ruins the evening for everybody. Stockholm is
 often the cheapest European region, so if the numbers are close, price decides.
 
-## One more decision, which needs no measurement
+## One decision that is already made
 
-**Confirm `online-mode=false` is genuinely required** — that is, somebody in the group cannot use a paid account. If
-everybody can, online mode is the stronger choice and this whole question disappears.
+`online-mode=false` is **not** an open question for the first world. That world already exists and has been played, so
+its player data is keyed by offline UUIDs; switching to online mode would orphan everybody's inventories and positions.
+The one-way door has already been walked through, and the only way to run a world in online mode is to start a new one.
 
-It matters now rather than later because it is a one-way door: player save data is keyed by UUID, and offline and
-online UUIDs differ, so switching after people have played orphans everybody's inventory. See
+Worth knowing rather than deciding, because it means the network gate in
+[ADR-0024](adr/0024-connectivity-modes.md) is mandatory rather than advisable. See
 [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
 
 ## Then what

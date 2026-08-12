@@ -83,6 +83,11 @@ Changing this setting after people have played therefore needs a deliberate UUID
 configuration edit. Decide it at M0, write it down, and treat it as fixed for the life of a world. If a switch is
 ever wanted, the honest path is a new world. See [ADR-0023](0023-multiple-worlds.md).
 
+**For the first world, the door has already been walked through.** This project will host an existing, long-played
+world whose player data is keyed by offline UUIDs. Switching it to online mode would orphan everybody's inventories,
+positions and advancements. So `online-mode=false` is not a preference to confirm for that world — it is a constraint
+inherited from its history, and the only way to run a world in online mode is to start a new one.
+
 ## Consequences
 
 **Good**

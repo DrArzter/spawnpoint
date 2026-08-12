@@ -129,6 +129,44 @@ Each of these is larger than the entire example above.
 | An always-on component of any kind | Whatever it costs, forever | Everything is event-driven. This is why there is no hosted bot or proxy |
 | Outgrowing the overlay's free tier | Tens of US dollars monthly, several times this whole table | Count what the chosen vendor limits — people or devices — and decide at the cliff, not after. Self-hosted WireGuard is the escape. See [ADR-0024](adr/0024-connectivity-modes.md) |
 
+## The free tier, and a risk it carries
+
+Verified 2026-08-12; AWS restructured this recently, so re-check the terms before relying on it.
+
+| | |
+| --- | --- |
+| Credits | $100 on opening an account, up to $200 total by completing onboarding activities |
+| Credit expiry | Twelve months from opening the account |
+| **Free Plan expiry** | **Six months from opening, or when credits run out — whichever is first** |
+| Always-free tiers | Still exist, 30+ services with monthly allowances that do not consume credits and never expire |
+| Restricted on the Free Plan | Services that burn credits fast — Marketplace, Reserved Instances, Savings Plans, hardware. Confirm the full list against the terms |
+
+**Everything this project needs is available.** The restricted list is things this design already rejected: Reserved
+Instances and Savings Plans are the wrong instrument for a workload running 10% of the month, per
+[ADR-0004](adr/0004-ec2-spot-for-the-game-server.md), and nothing here touches Marketplace. EC2, Spot, EBS, S3, Lambda,
+Step Functions, SSM, EventBridge, SNS, CloudWatch and Route 53 are all ordinary services.
+
+**Money is not the constraint.** At roughly $6 a month, $200 is over thirty months of runway against credits that expire
+in twelve. The design is far too cheap for the credits to be the limiting factor.
+
+### The constraint is the clock, and it threatens the world
+
+The Free Plan **closes at six months**, and after it closes there are 90 days to upgrade to a Paid Plan. After that AWS
+**permanently closes the account and deletes its content and resources**.
+
+That is an existential risk to the one thing in this system that cannot be regenerated. This whole design exists to
+protect a world with hundreds of hours in it, with backups kept two months deep — and all of it would sit inside an
+account with an automatic expiry date, whose deletion is a policy action rather than a failure anyone gets alerted about.
+
+Two things follow, and neither costs anything:
+
+1. **Move to the Paid Plan early — ideally immediately.** It does not spend more: you still pay only for usage, and the
+   credits still apply. It removes the automatic closure. The Free Plan is actively the wrong choice for a project whose
+   premise is durable state; it is built for experiments that are meant to be thrown away.
+2. **Keep one copy of the world outside AWS.** The monthly archive from [ADR-0010](adr/0010-world-persistence-and-backups.md)
+   downloaded to a machine at home costs nothing and is the only backup that survives losing the account itself. A backup
+   inside the account being deleted is not a backup against the account being deleted.
+
 ## Guardrails
 
 In order of when they go in.

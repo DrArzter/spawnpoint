@@ -226,6 +226,7 @@ nothing before the acknowledgement except verifying the signature. See [ADR-0016
 | Backup fails silently | Archive verification | No recovery point | Alarm to chat. Treated as the most serious failure here |
 | World corruption noticed late | Players report | Data loss | Graded backup retention: daily, weekly, monthly |
 | Volume or region loss | — | Total loss of the volume | Restore from S3 archive into a new volume |
+| **Account closure** | Billing notice, or silence | Total loss of everything, including the backups | Paid Plan rather than Free Plan, and one copy of the world held outside AWS. See [docs/costs.md](costs.md) |
 | Chat platform outage | Commands time out | No chat control | Panel and owner CLI remain available |
 | Google sign-in outage | Panel login fails | No panel for new sessions | `/panel` from a linked chat account still signs in; owner CLI remains available |
 | Chat account not linked | Command refused | That person cannot use chat commands | Refusal names the link flow. See [ADR-0019](adr/0019-account-linking.md) |

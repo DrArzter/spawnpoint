@@ -53,20 +53,35 @@ Two decisions do almost all of the work on the variable term, and they multiply:
 
 ## Worked example
 
-Placeholder rates from the table, 40 running hours in the month. Arithmetic shown so real rates can be
-substituted directly.
+Placeholder rates from the table. The expected pattern is **2–3 hours most nights**, so roughly **75 running hours a
+month** — not the 40 an earlier version of this document assumed. Arithmetic shown so real rates can be substituted
+directly.
 
 | Item | Calculation | Monthly |
 | --- | --- | --- |
-| Instance | 40 h x $0.06 | $2.40 |
-| Public IPv4 | 40 h x $0.005 | $0.20 |
+| Instance | 75 h x $0.06 | $4.50 |
+| Public IPv4 | 75 h x $0.005 | $0.38 |
 | Data volume | 20 GB x $0.09 | $1.80 |
 | Backups | 9 archives x ~0.3 GB x $0.023 | ~$0.06 |
 | Release store | 10 GB x $0.023 | $0.23 |
 | Hosted zone | | $0.50 |
 | Serverless, egress, logs | inside free tier, plus a margin | ~$0.50 |
-| **Total** | | **~$5.35** |
+| **Total** | | **~$8.00** |
 | **of which fixed** | volume, storage, zone | **~$2.65** |
+
+### Sensitivity to running hours
+
+The single number matters less than the slope, because hours are the one input most likely to change:
+
+| Pattern | Hours/month | Total |
+| --- | --- | --- |
+| A few evenings a week | 40 | ~$5.35 |
+| 2–3 h most nights | 75 | ~$8.00 |
+| 3 h every night | 90 | ~$9.10 |
+| Always on | 730 | ~$50 |
+
+Every extra hour costs about 6.5 cents at these placeholder rates. Which is the real argument for the whole design:
+the always-on row is six times the expected one, and it is what this project exists to avoid.
 
 The hosted-zone line applies in DNS mode only; in the other two connectivity modes it is nil or the overlay's free
 tier. See [ADR-0024](adr/0024-connectivity-modes.md).
@@ -77,12 +92,12 @@ world is a few hundred megabytes, the volume is sized for mod releases rather th
 
 | | Monthly | Note |
 | --- | --- | --- |
-| Variable — running hours | ~$2.60 | Instance and its public address |
+| Variable — running hours | ~$4.90 | Instance and its public address, at 75 h |
 | Fixed — storage and DNS | ~$2.65 | Volume, backups, release store, hosted zone |
 
-Comparable, in other words, with no single dominant line. Which means the largest remaining lever is **running hours**,
-not gigabytes: the idle watchdog earns more than any storage tuning, and a failed stop is still the one mistake that
-would multiply the bill. Save data is simply not a cost factor at this scale.
+So **running hours are now the dominant term**, at roughly two thirds of the bill — and with nightly play they will stay
+that way. The idle watchdog earns more than any storage tuning, a failed stop is the one mistake that would multiply the
+bill, and save data is not a cost factor at all at this scale.
 
 ### With several worlds
 

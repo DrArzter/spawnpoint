@@ -59,6 +59,9 @@ Confirm the number anyway, because the whole revised cost model now rests on it.
 
 ### 5. Cold start: how long from container start to joinable
 
+**Now the highest-frequency number in the system**, because the expected pattern is 2–3 hours most nights, so this is
+paid every single evening rather than a few times a week.
+
 | | |
 | --- | --- |
 | Value | |

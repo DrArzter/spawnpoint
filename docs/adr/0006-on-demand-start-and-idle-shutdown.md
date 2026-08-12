@@ -65,10 +65,38 @@ add the implicit DNS wake as a second trigger, keeping the explicit one for attr
 | Fixed schedule, up 18:00–24:00 | Trivial, but pays for empty evenings and fails on the unplanned ones |
 | Manual start from the console or CLI | Zero build cost, and this is the M0 behaviour, but it makes one person a dependency |
 
+## The pattern turned out to be regular
+
+Recorded here because it changes the weight of three things above, without changing the decision.
+
+The expected pattern is **2–3 hours most nights**, roughly 75 hours a month. That is still only about 10% of the month,
+so the case for stopping when idle is undamaged — the always-on alternative is around six times the cost. But a regular
+nightly pattern has three consequences:
+
+1. **The cold start is paid every single night**, not a few times a week. Whatever it measures at, it is now the most
+   frequently felt piece of friction in the system. This raises the value of a low-friction trigger — a `start` from the
+   phone via Telegram — and of the pre-warm option below.
+2. **Spot interruptions stop being an edge case.** More hours means more exposure, and at this usage an interruption
+   becomes something to expect periodically rather than to handle theoretically. The announcement to chat matters
+   correspondingly more: players should learn *why* they were dropped rather than guess.
+3. **The idle threshold needs care.** A 15-minute threshold and a nightly session with breaks will eventually stop the
+   server while somebody is making tea. Annoying once a month is tolerable; annoying weekly is not, which promotes the
+   keep-alive question below from a nicety to something worth building.
+
+Nights are also, in a European region, the region's own low-demand hours, so Spot prices and interruption rates are
+plausibly better then. Expected rather than established — check against Spot price history for the candidate instance
+types before relying on it.
+
 ## Open questions
 
-- Measured cold start time for the real pack. Everything above depends on it.
+- **A scheduled pre-warm.** If play reliably starts around the same time, starting the instance a few minutes before
+  removes the cold start entirely. The cost of a pre-warm nobody uses is a few minutes of instance time — under two
+  cents — and the idle watchdog stops it by itself if nobody arrives. It does slightly compromise the purity of "started
+  by an explicit request", and it must not race the watchdog. Worth doing once the pattern is confirmed over a few weeks;
+  not worth building on an assumed schedule.
+- Measured cold start time for the real pack. Everything above depends on it, and with nightly play it is felt daily.
 - Source of the player count: RCON, the server list ping protocol, or a log tail. RCON is the most
   direct and is the starting assumption.
-- Idle threshold. Start at 15 minutes and adjust after observing real sessions.
-- Whether a player can be given a "keep alive for another hour" command, for a break mid-session.
+- Idle threshold. Start at 15 minutes and adjust after observing real sessions; with nightly play, expect to raise it.
+- A "keep alive for another hour" command for a break mid-session. Promoted from a nicety by the nightly pattern: a
+  threshold that misfires occasionally will misfire often enough to matter when sessions are daily.

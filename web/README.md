@@ -49,7 +49,7 @@ what gets built and when.
 
 | Job | Panel? | Why |
 | --- | --- | --- |
-| **Review and approve a release** | **Yes, strongly** | The diff is the whole point: which mods, from which version to which, with changelog links. Five entries read fine in chat; forty do not, and with 111 mods the first real proposal will be closer to forty. This is the job that justifies a panel existing |
+| **Review and approve a release** | **No longer** | This was the job that justified a panel. [ADR-0029](../docs/adr/0029-preview-environments.md) moved it into a pull request: GitHub renders the diff, a comment carries the resolved versions and a link to a preview server you can actually join, and merging is the approval. Nothing left to build here |
 | **List backups and restore one** | Yes | A list with dangerous buttons, where picking the wrong row matters. Reads badly in chat |
 | **Status and session history** | Optional | Useful, but the bots already answer it and that is where people ask |
 | **Add or remove users** | Weak | Five people, changing maybe twice a year. A bot command or an edit to the parameter is proportionate; a form is not |

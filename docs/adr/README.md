@@ -63,6 +63,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0026](0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | **Rejected** on measurement; kept for its threshold | M1 |
 | [0027](0027-spot-request-shape.md) | Diversified Spot fleet per session; stop-on-interruption | Proposed | M2 |
 | [0028](0028-update-proposals.md) | Mod updates as proposals: resolve, diff, approve, promote | Proposed | M3 |
+| [0029](0029-preview-environments.md) | Every proposal is tested in a throwaway preview environment | Proposed | M3 |
 
 ## Decisions still to record
 

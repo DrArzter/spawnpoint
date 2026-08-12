@@ -229,5 +229,6 @@ lookups too, while every artefact lives in S3.
 - Whether an approval can be scoped to "everything except this one", or only to whole groups.
 - How a proposal expires. A month-old candidate has probably been superseded upstream and should be re-resolved rather
   than promoted.
-- Whether to check the resolved set against a test start on a throwaway instance before offering it. Correct, and
-  probably beyond a hobby budget — the same open question as in [ADR-0009](0009-s3-as-mod-source-of-truth.md).
+- ~~Whether to check the resolved set against a test start on a throwaway instance before offering it.~~ Answered by
+  [ADR-0029](0029-preview-environments.md): every proposal opens a pull request that builds one, against a copy of the
+  real world. That also widens what the policy above can safely call boring.

@@ -86,5 +86,6 @@ the change lands at the next start.
 
 - Whether a promotion is allowed while players are online, and whether a forced one is permitted.
 - Whether validation is strict enough to catch a mod that is present but corrupt, beyond a hash check.
-- Whether the pipeline should test a release on a throwaway instance before promoting it. Correct, and
-  probably beyond the scope of a hobby budget. Revisit after M3.
+- ~~Whether the pipeline should test a release on a throwaway instance before promoting it.~~ Answered by
+  [ADR-0029](0029-preview-environments.md): yes. The "beyond the scope of a hobby budget" reasoning was wrong — a
+  preview costs under a cent per proposal. The obstacle was build effort, not money.

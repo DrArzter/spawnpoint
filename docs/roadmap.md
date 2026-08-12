@@ -101,6 +101,10 @@ to three minutes is tolerable. If it is not, revisit before building the surface
 **Done when:** a mod is added and deployed without touching the server directly, and a deliberately broken
 release rolls itself back without help.
 
+- Preview environment per proposal: throwaway instance, copy of the newest world backup, health plus log scan, result
+  and a connection link in the pull request, torn down on merge or timeout. See
+  [ADR-0029](adr/0029-preview-environments.md).
+
 The health check is the hard part of this milestone, not the file syncing. See
 [ADR-0009](adr/0009-s3-as-mod-source-of-truth.md).
 

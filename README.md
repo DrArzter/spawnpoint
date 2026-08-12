@@ -22,6 +22,7 @@ The name is a working title. Check it is free on GitHub before claiming it; rena
 | Versioned mod releases | A mod set is an immutable, named release. Deploy is a pointer move; rollback is moving it back |
 | Automatic mod deployment | Promoting a release saves the world, syncs mods, restarts the server, and rolls back if it fails to start |
 | Updates you approve, not updates that happen | A scheduled check resolves every mod, diffs by hash, and proposes a release. Five changed mods with changelogs is a decision; a server that updated itself is an incident |
+| Preview environments per proposal | A pull request boots a throwaway server on a copy of the real world. Join it and look at your base before approving. Under a cent a run |
 | Matching client pack | Every release generates a launcher-importable pack, published at a stable URL |
 | One API, several surfaces | Web panel, Discord bot, Telegram bot and CLI are all clients of the same control-plane API |
 | Sign in with an account you have | Cognito with Google. No passwords stored, anywhere |
@@ -142,7 +143,7 @@ scripts/           Local helpers: cut a release, restore a backup, check cost
 
 ## Decisions
 
-The decision records are the most useful part of this repository today. Twenty-eight of them, each with the
+The decision records are the most useful part of this repository today. Twenty-nine of them, each with the
 alternatives that were rejected and why — including one superseded and one rejected the same day it was written, which
 is the process working rather than failing.
 
@@ -176,6 +177,7 @@ is the process working rather than failing.
 | [0026](docs/adr/0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | Rejected |
 | [0027](docs/adr/0027-spot-request-shape.md) | Diversified Spot fleet per session; stop-on-interruption | Proposed |
 | [0028](docs/adr/0028-update-proposals.md) | Mod updates as proposals: resolve, diff, approve, promote | Proposed |
+| [0029](docs/adr/0029-preview-environments.md) | Every proposal is tested in a throwaway preview environment | Proposed |
 
 Index, template and the decisions still to make: [docs/adr/README.md](docs/adr/README.md).
 

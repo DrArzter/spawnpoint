@@ -7,8 +7,9 @@
 - Would have amended: [ADR-0010](0010-world-persistence-and-backups.md), whose original design stands unchanged
 
 > **Rejected, because the problem does not exist at this scale.** This ADR was written on the assumption that the
-> existing world was tens of gigabytes. It is roughly 200–300 MB. Seventeen full archives of that is under half a
-> gigabyte, costing pennies a month, and a 300 MB upload finishes in seconds — so it neither dominates the bill nor
+> existing world was tens of gigabytes. It was measured at **597.7 MiB on 2026-08-12**. Seventeen full archives are
+> about 9.9 GiB before compression, costing roughly $0.23 a month at the placeholder S3 rate, and an archive of this
+> size uploads quickly — so it neither dominates the bill nor
 > meaningfully extends billed instance time, and it fits comfortably inside the two minutes a Spot interruption gives.
 > [ADR-0010](0010-world-persistence-and-backups.md)'s full archive after every session is simply correct here.
 >

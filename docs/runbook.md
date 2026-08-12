@@ -13,7 +13,7 @@ performed. A procedure nobody has run is a guess.
 | Stop the server | Automatic | — |
 | Promote a release | Owner | — |
 | Roll back a release | Owner | — |
-| Restore the world | Owner | — |
+| Restore the world | Owner | 2026-08-12 — local archive drill; content-identical restore into `/tmp`, then successful isolated boot with 111 mods, health check and RCON; not yet restored from S3 |
 | Recover from a lost instance | Owner | — |
 | Bootstrap Terraform state | Owner | — |
 | Tear down and rebuild | Owner | — |
@@ -92,12 +92,23 @@ Rollback is the same mechanism as a deploy, which is why it can be trusted. See
 Practise this before it is needed. M1 includes a drill.
 
 1. Stop the server, and confirm it is stopped.
-2. List available archives: `# TODO`
+2. List available archives: `ls -lh server/backups/*.tar.zst`
 3. Choose one, and check its date against when the damage was noticed — the most recent archive may already
    contain the corruption.
-4. Restore into a new volume or path, never over the live world: `# TODO`
+4. Restore into a new volume or path, never over the live world:
+
+   ```bash
+   server/scripts/verify-archive.sh <archive.tar.zst>
+   server/scripts/restore-world.sh <archive.tar.zst> <new-empty-data-directory>
+   ```
 5. Start the server and verify in game.
 6. Record in the table above what was restored, from when, and how long it took.
+
+The restored world must be paired with the exact release that created it before Minecraft starts. In particular, do
+not combine `REMOVE_OLD_MODS=true` with an absent or empty desired-mod list: the image will correctly reconcile the
+directory to an empty set, and Forge will then reject dimensions belonging to the missing mods. The 2026-08-12 drill
+reproduced this failure and succeeded after restoring all 111 JARs and disabling reconciliation for the smoke test.
+Production restore must use the immutable release artefact rather than copying a mutable mod directory.
 
 ## Recover from a lost instance
 

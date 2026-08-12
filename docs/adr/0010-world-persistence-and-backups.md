@@ -8,7 +8,8 @@
 
 > **A challenge was raised and did not survive.** [ADR-0026](0026-tiered-backups.md) argued that a full archive after
 > every session would dominate the bill and add billed upload time. That holds for a world of tens of gigabytes; the
-> world this project will host is roughly 200–300 MB, so a full set of copies costs pennies and uploads in seconds. The
+> world this project will host was measured at **597.7 MiB on 2026-08-12**, so a full set of copies still costs pennies
+> and uploads quickly. The
 > design below is correct at this scale. ADR-0026 is kept as a Rejected record because it establishes the threshold —
 > around 30 GB — at which it would become right.
 
@@ -43,7 +44,7 @@ noticed late, and by then every recent copy contains it. The bucket has versioni
 older archives to a colder storage class.
 
 Retention is about **how far back you can reach**, not how many files you like having. Five copies is five days. At a
-few hundred megabytes per archive the four extra copies cost around three cents a month, which is why the graded shape
+about 0.6 GiB per archive the four extra copies cost around six cents a month before compression, which is why the graded shape
 survives even after the counts were cut.
 
 A restore is a documented procedure in the runbook, and it is tested at least once, deliberately, before
@@ -89,7 +90,7 @@ it is ever needed.
 
 ## Open questions
 
-- ~~Retention numbers.~~ Resolved once the world was measured at a few hundred megabytes: **5 daily, 2 weekly, 2
+- ~~Retention numbers.~~ Resolved once the world was measured at 597.7 MiB: **5 daily, 2 weekly, 2
   monthly**, down from an initial 7/4/6. The counts were cut because seventeen copies is more than a five-player server
   needs to think about; the graded shape was kept because at this size the long reach is nearly free.
 - Whether a second copy in another region is worth the cost. Probably yes for the monthly archives only.

@@ -2,6 +2,7 @@
 # Nothing secret belongs in this repository. Secrets live in SSM Parameter Store.
 .env
 .env.*
+!.env.example
 *.tfvars
 !example.tfvars
 *.pem

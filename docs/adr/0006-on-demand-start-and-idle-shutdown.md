@@ -76,9 +76,12 @@ nightly pattern has three consequences:
 1. **The cold start is paid every single night**, not a few times a week. Whatever it measures at, it is now the most
    frequently felt piece of friction in the system. This raises the value of a low-friction trigger — a `start` from the
    phone via Telegram — and of the pre-warm option below.
-2. **Spot interruptions stop being an edge case.** More hours means more exposure, and at this usage an interruption
-   becomes something to expect periodically rather than to handle theoretically. The announcement to chat matters
-   correspondingly more: players should learn *why* they were dropped rather than guess.
+2. **Spot interruption exposure rises, though from a low base.** An earlier version of this section said interruptions
+   "stop being an edge case", which overstated it. The published historical average is under 5% per month *for an instance
+   running the whole month*; running about a tenth of the month, the realistic expectation for a well-chosen type is a few
+   times a year. Still worth handling properly, and worth announcing to chat so players learn *why* they were dropped
+   rather than guess — but not a weekly event. Verify the band for the actual instance types before relying on it. See
+   [docs/costs.md](../costs.md).
 3. **The idle threshold needs care.** A 15-minute threshold and a nightly session with breaks will eventually stop the
    server while somebody is making tea. Annoying once a month is tolerable; annoying weekly is not, which promotes the
    keep-alive question below from a nicety to something worth building.

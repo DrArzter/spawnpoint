@@ -13,7 +13,7 @@ even when the rates are not.
 | | Target |
 | --- | --- |
 | Fixed cost — billed whether anybody plays or not | Under $3 per month |
-| Total, for a few evenings of play a week | Mid single-digit USD per month |
+| Total, at 2–3 hours most nights | Mid single-digit USD per month |
 
 The fixed part is the number that matters. A variable cost that only appears when the server is in use is
 easy to accept; a fixed cost is paid during the months when nobody plays at all.
@@ -31,7 +31,7 @@ monthly cost =
 
 Two decisions do almost all of the work on the variable term, and they multiply:
 
-- **Stop when idle.** Roughly 40 running hours a month instead of 730. See [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md).
+- **Stop when idle.** Roughly 75 running hours a month instead of 730. See [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md).
 - **Spot instead of on-demand.** Typically a large discount on the same hardware. See [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
 
 ## Drivers
@@ -116,7 +116,7 @@ Each of these is larger than the entire example above.
 | --- | --- | --- |
 | NAT Gateway | ~$32 per month, plus data processing | Instance in a public subnet, no private subnet. See [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md) |
 | EKS control plane | ~$73 per month per cluster, before any node; more on extended support | Not using Kubernetes. See [ADR-0014](adr/0014-no-kubernetes.md) |
-| An instance that never stopped | 730 h instead of 40, roughly 18x the compute | Idle watchdog, plus a running-hours alarm |
+| An instance that never stopped | 730 h instead of 75, roughly 10x the compute | Idle watchdog, plus a running-hours alarm |
 | On-demand instead of Spot | Several times the hourly rate | [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md) |
 | An Elastic IP held all month | ~$3.60 per month | DNS record updated on start. See [ADR-0017](adr/0017-stable-server-address.md) |
 | Orphaned volumes and snapshots | Silent and cumulative | Terraform owns everything; tag and review monthly |
@@ -149,9 +149,30 @@ This is the section to read before defending the project to anybody, including y
 | **A managed Minecraft host** | ~$5–15 | A working modded server, a panel, and a support channel |
 
 **A dedicated box at €15 flat beats this on every axis that matters for playing.** It is available all the time, it never
-makes anybody wait three minutes, it is never reclaimed mid-session, and it costs roughly double the on-demand bill for
-about ten times the availability. If the goal were a good server for a fair price, that is the answer, and it is not a
-close call.
+makes anybody wait three minutes, and it is never reclaimed mid-session. For roughly double the on-demand bill it sells
+730 hours a month instead of 75 — ten times the *hours*, which is a statement about what you are buying and not about
+reliability. If the goal were a good server for a fair price, that is the answer, and it is not a close call.
+
+### How often Spot actually interrupts, and why it matters to the bill
+
+AWS's Spot Instance Advisor reports interruption frequency in bands — under 5%, 5–10%, 10–15%, 15–20%, over 20% — measured
+as the rate at which capacity was reclaimed over the trailing month. The historical average across regions and instance
+types is **below 5%**, and that figure is for an instance running the whole month. This design runs about a tenth of the
+month, so the realistic expectation for a well-chosen type is a handful of interruptions a year, not a weekly event.
+
+When one happens it costs an interruption to the evening, not data: two minutes of warning, a confirmed world save, a
+clean stop, and everybody reconnects after the next start having lost seconds. See
+[ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
+
+The part that matters here is that **the Spot discount is load-bearing for the whole cost argument, not an optimisation on
+top of it.** If the chosen instance type turns out to sit in a bad band and the fallback to on-demand is taken, the compute
+line roughly triples — about $13.50 instead of $4.50 at 75 hours — taking the total to roughly $17 a month. At that point
+the Hetzner comparison above is not close either, and it goes the other way.
+
+So: check the Advisor for the specific candidate types in the chosen region **before** committing to the region, and allow
+several instance types rather than one. AWS's own advice is to diversify across types and availability zones; the zonal
+EBS volume limits us to types within one zone, which is a trade already recorded in
+[ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
 
 So the on-demand design only pays for itself in the other currency. Stopping when idle, surviving Spot interruptions,
 separating state from compute, a release pipeline with rollback, orchestration, cost guardrails — those are the deliverable.

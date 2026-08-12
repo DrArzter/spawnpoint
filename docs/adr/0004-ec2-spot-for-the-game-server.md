@@ -74,14 +74,24 @@ Prefer ARM (Graviton) if the mod set runs on it, otherwise x86.
 
 ## Open questions
 
-- Instance family and size. Bracketed by operator experience rather than guesswork: **2 cores and 4 GB is often
-  enough; 4 cores and 16 GB runs anything comfortably.** So start at **2 vCPU and 8 GB** and step up only if the
-  measurement says so — not at 4 vCPU and 16 GB, as this ADR originally assumed, which is the comfortable ceiling
-  rather than the starting point.
-- **Prefer single-thread performance over core count.** The main tick is effectively single-threaded, and if two
-  cores are usually enough then a third and fourth buy little, while a faster core buys tick headroom directly. That
-  points at the newest generation available and at compute-optimised families, rather than at wider instances. It also
-  shapes the ten-type list in [ADR-0027](0027-spot-request-shape.md).
+- Instance size. Operator experience gives a bracket — 2 cores and 4 GB often enough, 4 cores and 16 GB runs anything
+  comfortably — but **that was measured on an i9-14900KF**, and only half of it transfers.
+  - **Memory transfers.** A gigabyte is a gigabyte. So 8 GB is a sensible starting point and 16 GB the ceiling.
+  - **The CPU figure does not.** A 14900KF P-core is among the fastest single threads available anywhere; a cloud
+    server core is materially slower per clock and clocked lower. "Two cores' worth" on that machine is more than two
+    cloud vCPUs of the same work.
+- **This is the risk that could make the whole thing feel bad**, and it is not fixable with a bigger instance. The main
+  tick is effectively single-threaded, so it cannot be spread across cores. If the tick needed most of one 14900KF core,
+  no number of slower cores will hold 20 ticks per second — the server will lag while showing plenty of idle CPU. Cores
+  beyond the second buy chunk generation and I/O headroom, not tick headroom.
+- Therefore: **single-thread performance is the primary selection criterion, not a refinement.** Newest generation
+  available, and the families with the highest clocks rather than the widest instances. This shapes the ten-type list in
+  [ADR-0027](0027-spot-request-shape.md), and it narrows it, because the fast families are a smaller set.
+- **It also reopens the ARM question below, as a genuine trade rather than a free discount.** Graviton is cheaper per
+  hour and slower per core; for a single-threaded tick the cheaper core is not automatically the cheaper answer.
+- The only honest resolution is to measure **milliseconds per tick under real load on a candidate instance** — not
+  locally, where a desktop or Apple Silicon core flatters the result the same way the 14900KF does. Under about 50 ms
+  per tick is healthy; above it, players feel it. This belongs in M0.
 - Whether the mod set runs on ARM. Most Java mods do; some native libraries do not.
 - ~~Whether to use a Spot request with a capacity-optimised strategy, or simply start and stop one
   persistent Spot instance.~~ Answered in [ADR-0027](0027-spot-request-shape.md): an EC2 Fleet created per session,

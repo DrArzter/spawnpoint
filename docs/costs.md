@@ -156,6 +156,11 @@ in a **shared** CPU tier and a **dedicated** one.
 | VPS, **dedicated** CPU | ~€14.25 | €33.94 | 4 core / 8 GB |
 | VPS, **dedicated** CPU | ~€28.50 | €67.86 | 8 core / 16 GB — "runs anything" |
 
+**A rented box may well have the faster core.** Budget providers often run desktop-class CPUs at high clocks, where
+cloud general-purpose families run server parts clocked lower. For a workload whose main tick is single-threaded and
+cannot be spread across cores, that is a stronger argument for a rented box than any of the pricing above — and it is
+the one argument in this document that money cannot answer. See [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
+
 **Shared CPU is the wrong comparison for a game server.** The main game tick is effectively single-threaded and
 latency-sensitive, so contention on an oversubscribed host shows up directly as tick lag — the thing players feel. EC2's
 general-purpose families give real vCPUs rather than burstable credits, so the honest comparison is against the

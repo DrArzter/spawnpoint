@@ -39,8 +39,13 @@ individually and seeing what each one needs.
 - Address posted in chat by hand. Started and stopped by hand.
 - Backups: a manual copy to S3 before anything risky.
 
-**Done when:** four people have played a full evening, and the server has been stopped and restarted with
-the world intact.
+- **Measure milliseconds per tick under real load**, with everybody on. This is the number that decides the instance
+  family, and it cannot be measured anywhere else: a desktop or laptop core is far faster per thread than a cloud one,
+  and the main tick cannot be spread across cores. Under about 50 ms is healthy. See
+  [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
+
+**Done when:** four people have played a full evening at a healthy tick rate, and the server has been stopped and
+restarted with the world intact.
 
 **Explicitly throwaway.** Nothing from M0 survives M1. Record the region decision, the instance type, the
 measured cold start and the memory headroom, because those become inputs to every later milestone.

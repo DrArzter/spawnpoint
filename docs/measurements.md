@@ -39,10 +39,12 @@ is the difference between about €7.50, €14 and €28 a month. See [docs/cost
 | | |
 | --- | --- |
 | Value | |
-| How | **Already answered by running it on an Apple Silicon Mac.** If it runs there, it runs on Graviton |
-| Unblocks | The open ARM question in [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md), worth roughly 20% of the compute bill |
+| How | **Compatibility is already answered by running it on an Apple Silicon Mac.** If it runs there, it runs on Graviton |
+| Unblocks | The ARM question in [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md) — *compatibility only* |
 
-A free answer to a real question, purely because the laptop is the same architecture.
+A free answer to half a question, purely because the laptop is the same architecture. The other half is not free:
+Graviton is cheaper per hour and slower per core, and for a single-threaded tick the cheaper core may need a larger
+instance to keep up, which cancels the saving. Compatibility says *can*; the tick measurement says *should*.
 
 ### 4. World size — approximately known, worth confirming
 

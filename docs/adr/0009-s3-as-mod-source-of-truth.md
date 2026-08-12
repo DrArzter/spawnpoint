@@ -78,7 +78,7 @@ the change lands at the next start.
 | --- | --- |
 | Any S3 write triggers the deployment | Simplest possible pipeline, and the first thing considered. Deploys partial uploads, and fires once per file. Rejected on safety |
 | Debounce a quiet period after the last write | Removes the multi-file problem, but the trigger stays implicit, so there is no moment that means "I meant this" |
-| GitHub Actions on a push to a manifest repository | A stronger pipeline with review and CI, and the natural next step. Rejected for now because it puts a second source of truth beside S3, and needs the CI identity decided first |
+| GitHub Actions on a push to a manifest repository | **Adopted after all**, in [ADR-0028](0028-update-proposals.md). The objection here — that it puts a second source of truth beside S3 — was wrong: the mod list is a declaration and the release is the resolved artefact, which is a manifest and a lockfile rather than two truths. The CI identity question it raised is answered by OIDC with no stored keys |
 | Copy files by hand over SSM | Zero build cost, and the M0 behaviour. It is the manual process this ADR exists to remove |
 | EFS shared between instances | Solves nothing here — there is one instance — and adds fixed cost |
 

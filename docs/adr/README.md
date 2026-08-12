@@ -6,6 +6,22 @@ the old one **Superseded by ADR-XXXX**. Never rewrite history in place.
 Format and rationale: [ADR-0001](0001-record-architecture-decisions.md).
 Template: [0000-template.md](0000-template.md).
 
+## Start here — most of this is not blocking
+
+Twenty-seven records is a wall, and a wall is not a plan. Almost none of it blocks anything you can do this week.
+
+| To do this | You need |
+| --- | --- |
+| **Session zero** — run the pack locally, play an evening, fill in [measurements](../measurements.md) | **Nothing here** |
+| **M0** — a playable server, by hand | [0005](0005-containerised-game-server.md) container, [0022](0022-minecraft-account-as-linked-identity.md) `online-mode=false` and whitelist, [0024](0024-connectivity-modes.md) mode A |
+| Everything else | Later. Read when the milestone arrives |
+
+So: three records for the first real step, and none at all for the step before it.
+
+**Freeze.** No new ADRs until there is code in this repository. Decisions taken in the meantime are answered in
+conversation and written down when they are about to be implemented — which is what [ADR-0001](0001-record-architecture-decisions.md)
+asked for in the first place: write the decision *before or during* the change, not instead of it.
+
 ## Status values
 
 | Status | Meaning |

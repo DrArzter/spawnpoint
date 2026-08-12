@@ -78,7 +78,7 @@ flowchart LR
 
     subgraph ControlPlane["Control plane"]
         API[API Gateway + Lambda<br/>start, status, releases, backups]
-        OPS[(Operation state)]
+        SFN[Step Functions<br/>long operations]
         BUS[SNS: events]
     end
 
@@ -90,8 +90,8 @@ flowchart LR
 
     subgraph Runtime
         EC2[EC2 Spot instance<br/>Docker: game server]
-        EBS[(EBS: world)]
-        DNS[Route 53<br/>stable hostname]
+        EBS[(EBS: worlds)]
+        NET[Connectivity<br/>address, DNS, or overlay]
         CW[CloudWatch<br/>metrics, logs, alarms]
     end
 
@@ -99,16 +99,17 @@ flowchart LR
     DIS --> API
     TG --> API
     CLI --> API
-    API --> OPS
-    API -->|SSM Run Command| EC2
-    API -->|start / stop| EC2
-    REL -->|promote| API
+    API --> SFN
+    SFN -->|SSM Run Command| EC2
+    SFN -->|start / stop| EC2
+    REL -->|promote| SFN
     EC2 --- EBS
-    EC2 -->|archive| BAK
-    API --> DNS
+    SFN -->|archive| BAK
+    SFN --> NET
+    EC2 --- NET
     EC2 --> CW
     CW --> BUS
-    API --> BUS
+    SFN --> BUS
     BUS --> DIS
     BUS --> TG
     WEB --- SITE
@@ -119,7 +120,7 @@ Four flows carry the whole design:
 
 | Flow | Trigger | What happens |
 | --- | --- | --- |
-| Start | Explicit request from a surface, with an identity | Operation created → instance started → DNS updated → mods reconciled against the live release → container up → "ready" announced |
+| Start | Explicit request from a surface, with an identity | Operation created → instance started → connection string published → mods reconciled against the live release → container up → "ready" announced |
 | Stop | No players for N consecutive checks | World saved → archived to S3 → instance stopped → session length announced |
 | Release | The live pointer is written | Announce → save and stop container → sync mods → start → health check → build client pack, or roll back |
 | Interruption | Spot two-minute notice | Save world → stop container cleanly → announce → next start reattaches the volume |
@@ -140,7 +141,7 @@ scripts/           Local helpers: cut a release, restore a backup, check cost
 
 ## Decisions
 
-The decision records are the most useful part of this repository today. Twenty-four of them, each with the
+The decision records are the most useful part of this repository today. Twenty-five of them, each with the
 alternatives that were rejected and why — including one already superseded, which is the process working rather
 than failing.
 
@@ -170,6 +171,7 @@ than failing.
 | [0022](docs/adr/0022-minecraft-account-as-linked-identity.md) | Minecraft identity is a link; whitelist derived; `online-mode=false` | Proposed |
 | [0023](docs/adr/0023-multiple-worlds.md) | Several worlds, one active at a time | Proposed |
 | [0024](docs/adr/0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Proposed |
+| [0025](docs/adr/0025-step-functions-for-long-operations.md) | Step Functions for long operations; Lambda for the rest | Proposed |
 
 Index, template and the decisions still to make: [docs/adr/README.md](docs/adr/README.md).
 

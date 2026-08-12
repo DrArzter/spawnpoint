@@ -52,7 +52,8 @@ The web panel is a static single-page site on S3 and CloudFront, alongside the m
 
 - More structure than a hobby project strictly needs. A single Lambda with a shared secret would work
   sooner.
-- Operation state needs somewhere to live, which means another store, probably DynamoDB.
+- Operation state needs somewhere to live. Resolved by [ADR-0025](0025-step-functions-for-long-operations.md) at no
+  extra cost in stores.
 - Discord OAuth is a dependency for logging in. If Discord is down, so is the panel.
 - A public API that spends money is a public API that needs its authorisation to be right the first time.
 
@@ -78,7 +79,7 @@ The web panel is a static single-page site on S3 and CloudFront, alongside the m
 
 ## Open questions
 
-- Where operation state lives. DynamoDB on-demand is the assumption; Step Functions may fit better for the
-  promotion sequence.
+- ~~Where operation state lives.~~ Answered by [ADR-0025](0025-step-functions-for-long-operations.md): a Step Functions
+  execution runs the operation and *is* its state, so no table is needed for it.
 - Whether the panel shows live logs, and if so how they are streamed without an always-on component.
 - Whether a player who is not in the Discord server can be given a limited download-only view.

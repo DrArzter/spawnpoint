@@ -3,6 +3,13 @@
 Every piece of code that is not the game server and not the panel. Four groups, kept separate because they
 fail for different reasons and have different permissions.
 
+**Lambda is not the orchestrator.** The long operations — start, idle stop, release promotion, world switch — are Step
+Functions state machines, and the functions here are their steps. The rule: **if it must answer now, it is a Lambda; if
+it takes minutes and can fail halfway, it is a state machine.** Steps hold the real logic — validating a manifest,
+verifying an archive, judging a health check — while sequencing, waiting, retrying and rollback live in the machine, and
+anything a Lambda would only wrap is a direct service integration instead. See
+[ADR-0025](../docs/adr/0025-step-functions-for-long-operations.md).
+
 | Group | Functions | Notes |
 | --- | --- | --- |
 | Control plane | start, status, releases, promote, backups, restore, logs, link, unlink | The only code allowed to change state. Owns every authorisation rule. See [ADR-0012](../docs/adr/0012-web-control-panel.md) and [ADR-0019](../docs/adr/0019-account-linking.md) |

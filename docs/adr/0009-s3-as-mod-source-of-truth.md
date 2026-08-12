@@ -27,7 +27,9 @@ staging/                             uploads land here; inert
 Uploads to `staging/` trigger nothing. Writing `channels/live.json` is the deployment trigger. Bucket
 versioning is on for the whole bucket, so the pointer's own history is the deployment history.
 
-A promotion runs this sequence, orchestrated by Lambda:
+A promotion runs this sequence as a Step Functions state machine, with Lambda for the steps that carry real logic. The
+retries and the rollback branch below are declared in the state machine rather than hand-written. See
+[ADR-0025](0025-step-functions-for-long-operations.md).
 
 1. Validate the manifest: hashes present, files exist, loader and Minecraft versions consistent.
 2. Announce the pending change to the chat channels, with a delay if players are online.

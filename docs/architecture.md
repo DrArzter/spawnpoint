@@ -10,7 +10,7 @@ yet. Where a decision is still open, the ADR that owns it is linked.
 | Game server | Docker on one EC2 Spot instance | Runs the world. Nothing else |
 | Data volume | EBS, survives the instance | The world, the mod directory, configs |
 | Control-plane API | API Gateway + Lambda | The only thing allowed to change state. Owns every rule |
-| Operation store | DynamoDB (assumed) | State of long-running actions: start, promote, restore |
+| Operation orchestration | Step Functions, Standard workflows | Runs the long operations. The execution **is** the operation state, so there is no table for it. See [ADR-0025](adr/0025-step-functions-for-long-operations.md) |
 | Lifecycle automation | Lambda + EventBridge | Idle check, interruption handler, post-session backup |
 | Release store | S3, versioned | Immutable releases and the live pointer |
 | Backup store | S3, versioned, lifecycle rules | World archives |
@@ -133,11 +133,12 @@ every component here would have needed a permanent one.
 | Discord bot | Registered slash commands delivered to an **interactions endpoint**. Discord POSTs a signed request when somebody uses a command. Between commands there is nothing |
 | Telegram bot | **Webhook**, not long polling. Telegram POSTs to the endpoint |
 | Control-plane API | API Gateway in front of Lambda. One handler per operation |
-| Release pipeline | Triggered by a write to the live pointer. Idle otherwise |
+| Long operations | Step Functions state machines. A `Wait` state costs nothing while waiting, unlike a Lambda polling in a loop — which is why this row belongs here rather than in the table below. See [ADR-0025](adr/0025-step-functions-for-long-operations.md) |
+| Release pipeline | A state machine triggered by a write to the live pointer. Idle otherwise |
 | Idle watchdog | An EventBridge schedule, not a daemon — and the rule is enabled only while the instance is running |
 | Interruption handler | An EventBridge rule on the Spot notice. Nothing polls for it |
 | Identity | Cognito is managed and billed per monthly active user |
-| Operation and link state | DynamoDB in **on-demand** capacity mode |
+| Link and token state | DynamoDB in **on-demand** capacity mode |
 | The game server itself | Started on request, stopped when idle. See [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md) |
 
 Two of those rows are also traps, and are decisions rather than details:
@@ -238,8 +239,8 @@ Collected from the ADRs, in rough order of how much they would change the design
 1. **Region.** Still unchosen, and it fixes latency and price. [ADR-0002](adr/0002-host-on-aws.md)
 2. **Cold start duration.** The whole on-demand model rests on it being tolerable. [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md)
 3. **Health check for a modded start.** The weakest part of the release pipeline. [ADR-0009](adr/0009-s3-as-mod-source-of-truth.md)
-4. **Where operation state lives**, and whether Step Functions fits the promotion sequence better than a
-   Lambda plus a table. [ADR-0012](adr/0012-web-control-panel.md)
+4. **Whether the surfaces read execution state directly or through a flattened API view**, so they do not depend on
+   Step Functions' own vocabulary. [ADR-0025](adr/0025-step-functions-for-long-operations.md)
 5. **Content-addressed mod storage** versus per-release copies. [ADR-0008](adr/0008-versioned-mod-releases.md)
 6. **Pack format**, and whether to reuse `packwiz` for the export. [ADR-0013](adr/0013-modpack-distribution.md)
 7. **Whether anybody refuses a Google account for first contact.** It is the only route that *creates* an

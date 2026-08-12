@@ -27,6 +27,9 @@ Record the date and the pack version beside each answer, because they all change
 
 Record the peak, not the average, and note how many players produced it.
 
+**This one decides real money.** 8 GB versus 16 GB is the difference between roughly €14 and €28 a month on a rented
+dedicated box, and a comparable step between EC2 instance sizes. See [docs/costs.md](costs.md).
+
 ### 3. Does the pack run on ARM
 
 | | |

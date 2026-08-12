@@ -141,29 +141,35 @@ In order of when they go in.
 
 This is the section to read before defending the project to anybody, including yourself.
 
-| Option | Monthly | What you get |
-| --- | --- | --- |
-| **This design**, 2–3 h most nights | ~$8 | 75 hours of 4 vCPU / 16 GB, and a system to build |
-| **This design**, always on | ~$50 | The same machine, 730 hours |
-| **An hourly-billed VPS**, 4 cores / 8 GB, powered off when idle | ~€10 at 75 h | The closest competitor. Same on-demand saving, none of the Spot machinery |
-| **The same VPS left running** | ~€24 | A whole machine, 24/7, no cold start, no capacity risk |
-| **A flat-rate VPS at 4 vCPU / 16 GB** | ~$15–25 | As above, with the memory this design assumes |
-| **A cheaper flat-rate box** — fewer cores, 8 GB | ~$8–15 | Enough for many packs and five players, 24/7 |
-| **A managed Minecraft host** | ~$5–15 | A working modded server, a panel, and a support channel |
+Real quoted prices from one hourly-billed provider, rather than invented ones, at **75 hours a month**. Its plans come
+in a **shared** CPU tier and a **dedicated** one.
 
-**Correction to an earlier version of this section**, which said a flat-rate box "beats this on every axis that matters"
-and that it was "not a close call". That compared this design against the cheap end of flat-rate hosting rather than
-like for like. At the same specification — 4 vCPU and 16 GB — a flat-rate machine is roughly $15–25 a month, so at 75
-hours this design is about **half the price**, not double it. On money it is close, and slightly favourable.
+| Option | At 75 h | Flat, 24/7 | Spec |
+| --- | --- | --- | --- |
+| **This design**, EC2 **Spot** | ~$8 | — | 4 vCPU / 16 GB |
+| VPS, **shared** CPU | ~€10.50 | €23.73 | 4 core / 8 GB |
+| **This design**, EC2 **on-demand** | ~$13 | — | 4 vCPU / 16 GB |
+| VPS, **dedicated** CPU | ~€14.25 | €33.94 | 4 core / 8 GB |
+| VPS, **dedicated** CPU | ~€28.50 | €67.86 | 8 core / 16 GB |
 
-What a flat-rate box still wins on is everything except money: available instantly, no cold start every night, no
-capacity risk at ten o'clock, and no engineering to keep it alive. Those are real, and for somebody who only wants to
-play they decide it.
+**Shared CPU is the wrong comparison for a game server.** The main game tick is effectively single-threaded and
+latency-sensitive, so contention on an oversubscribed host shows up directly as tick lag — the thing players feel. EC2's
+general-purpose families give real vCPUs rather than burstable credits, so the honest comparison is against the
+*dedicated* rows.
 
-So the honest verdict is narrower than before. **Money is not the argument in either direction** — the gap either way is
-a few dollars a month, which is noise. The argument is time: this design costs weeks of evenings that a rented box does
-not, and buys learning that a rented box does not. If the learning is not wanted, rent the box. That is the whole trade,
-and it was never really about the bill. See [ADR-0003](adr/0003-build-not-reuse.md).
+Read that way the ordering is clear, and it settles an argument this document has now had three times:
+
+**EC2 Spot is the cheapest option on the table for like-for-like dedicated CPU** — roughly half the dedicated VPS at 8 GB,
+and a third of it at 16 GB. EC2 on-demand lands about level with the dedicated 8 GB tier. The Spot discount is doing all
+of that work, which is exactly why [ADR-0027](adr/0027-spot-request-shape.md) treats it as load-bearing rather than as an
+optimisation.
+
+So the trade is now precise. Moving the game server to a rented box costs roughly **€6–20 a month more**, and buys: no
+capacity risk, no interruptions, no fleet, no AMI, a static address, and a shorter cold start. That is a real thing to
+buy. It is simply not a discount, and this document previously implied it was.
+
+**One measurement now has money attached.** Whether the pack needs 8 GB or 16 GB decides between the €14 and €28 tiers,
+and between EC2 sizes. See item 2 in [docs/measurements.md](measurements.md).
 
 Worth knowing where the fork actually is: most of this project is **not** AWS-specific. The release model, the client
 packs, the control-plane API, the bots and the linking design would all work against a rented box. What a flat-rate box

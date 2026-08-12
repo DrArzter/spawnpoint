@@ -25,10 +25,14 @@ Record the date and the pack version beside each answer, because they all change
 | How | Play with everybody on. Watch container memory, and the JVM heap the server reports |
 | Unblocks | Instance size in [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md). This is the number that decides the hourly rate |
 
-Record the peak, not the average, and note how many players produced it.
+Record the peak, not the average, and note how many players produced it. Watch CPU as well: the useful figure is how
+many cores' worth the server actually uses under load.
 
-**This one decides real money.** 8 GB versus 16 GB is the difference between roughly €14 and €28 a month on a rented
-dedicated box, and a comparable step between EC2 instance sizes. See [docs/costs.md](costs.md).
+**The bracket is already known from experience** — 2 cores and 4 GB is often enough, 4 cores and 16 GB runs anything
+comfortably. So this measurement is not open-ended; it decides *where in that range* this pack sits.
+
+**And it decides real money.** Each step up the range roughly doubles the compute line, and on a rented dedicated box it
+is the difference between about €7.50, €14 and €28 a month. See [docs/costs.md](costs.md).
 
 ### 3. Does the pack run on ARM
 

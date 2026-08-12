@@ -74,8 +74,14 @@ Prefer ARM (Graviton) if the mod set runs on it, otherwise x86.
 
 ## Open questions
 
-- Instance family and size. Depends on the pack and player count. Start at roughly 4 vCPU and 16 GB,
-  then measure tick time and memory headroom.
+- Instance family and size. Bracketed by operator experience rather than guesswork: **2 cores and 4 GB is often
+  enough; 4 cores and 16 GB runs anything comfortably.** So start at **2 vCPU and 8 GB** and step up only if the
+  measurement says so — not at 4 vCPU and 16 GB, as this ADR originally assumed, which is the comfortable ceiling
+  rather than the starting point.
+- **Prefer single-thread performance over core count.** The main tick is effectively single-threaded, and if two
+  cores are usually enough then a third and fourth buy little, while a faster core buys tick headroom directly. That
+  points at the newest generation available and at compute-optimised families, rather than at wider instances. It also
+  shapes the ten-type list in [ADR-0027](0027-spot-request-shape.md).
 - Whether the mod set runs on ARM. Most Java mods do; some native libraries do not.
 - ~~Whether to use a Spot request with a capacity-optimised strategy, or simply start and stop one
   persistent Spot instance.~~ Answered in [ADR-0027](0027-spot-request-shape.md): an EC2 Fleet created per session,

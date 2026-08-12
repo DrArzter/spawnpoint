@@ -38,7 +38,7 @@ Two decisions do almost all of the work on the variable term, and they multiply:
 
 | Driver | Type | Placeholder rate | Notes |
 | --- | --- | --- | --- |
-| EC2 Spot, ~4 vCPU / 16 GB | Variable | $0.06 per hour | Assume roughly a third of the on-demand rate; verify per type and zone, and expect movement |
+| EC2 Spot, ~2 vCPU / 8 GB | Variable | $0.03 per hour | Sized from operator experience: 2 cores and 4 GB is often enough, 4 cores and 16 GB is comfortable for anything. Starting in the middle. Assume roughly a third of the on-demand rate; verify per type and zone |
 | Public IPv4 address | Variable here | $0.005 per hour | Charged for any public address; verify. Only billed while running, because no Elastic IP is held. Applies in **every** connectivity mode, because the instance needs outbound access regardless. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | EBS gp3, data volume, 20 GB | Fixed | $0.09 per GB-month | Billed while the instance is stopped. Sized for mod releases and several worlds, not for save data — the worlds themselves are a few hundred MB each. See [ADR-0023](adr/0023-multiple-worlds.md) |
 | S3, world backups | Fixed | $0.023 per GB-month | Full archive after every session. Retention 5 daily, 2 weekly, 2 monthly — nine copies, well under a gigabyte. See [ADR-0010](adr/0010-world-persistence-and-backups.md) |
@@ -59,15 +59,15 @@ directly.
 
 | Item | Calculation | Monthly |
 | --- | --- | --- |
-| Instance | 75 h x $0.06 | $4.50 |
+| Instance | 75 h x $0.03 | $2.25 |
 | Public IPv4 | 75 h x $0.005 | $0.38 |
 | Data volume | 20 GB x $0.09 | $1.80 |
 | Backups | 9 archives x ~0.3 GB x $0.023 | ~$0.06 |
 | Release store | 10 GB x $0.023 | $0.23 |
 | Hosted zone | | $0.50 |
 | Serverless, egress, logs | inside free tier, plus a margin | ~$0.50 |
-| **Total** | | **~$8.00** |
-| **of which fixed** | volume, storage, zone | **~$2.65** |
+| **Total** | | **~$5.70** |
+| **of which fixed** | volume, storage, zone | **~$2.60** |
 
 ### Sensitivity to running hours
 
@@ -75,29 +75,33 @@ The single number matters less than the slope, because hours are the one input m
 
 | Pattern | Hours/month | Total |
 | --- | --- | --- |
-| A few evenings a week | 40 | ~$5.35 |
-| 2–3 h most nights | 75 | ~$8.00 |
-| 3 h every night | 90 | ~$9.10 |
-| Always on | 730 | ~$50 |
+| A few evenings a week | 40 | ~$4.50 |
+| 2–3 h most nights | 75 | ~$5.70 |
+| 3 h every night | 90 | ~$6.20 |
+| Always on | 730 | ~$29 |
 
-Every extra hour costs about 6.5 cents at these placeholder rates. Which is the real argument for the whole design:
-the always-on row is six times the expected one, and it is what this project exists to avoid.
+Every extra hour costs about 3.5 cents at these placeholder rates. The always-on row is still five times the expected
+one, which is the argument for the whole design.
 
 The hosted-zone line applies in DNS mode only; in the other two connectivity modes it is nil or the overlay's free
 tier. See [ADR-0024](adr/0024-connectivity-modes.md).
 
-**Correction to an earlier version of this document.** It concluded that storage dominated, and that optimisation effort
-belonged in sizing the volume. That followed from a 50 GB volume placeholder, chosen before the world was measured. The
-world is a few hundred megabytes, the volume is sized for mod releases rather than save data, and the picture is now:
+### Which line dominates
+
+This document has answered that question three times and got a different answer each time, because the inputs kept
+arriving. With the world measured and the instance sized from experience rather than guesswork, it settles:
 
 | | Monthly | Note |
 | --- | --- | --- |
-| Variable — running hours | ~$4.90 | Instance and its public address, at 75 h |
-| Fixed — storage and DNS | ~$2.65 | Volume, backups, release store, hosted zone |
+| Variable — running hours | ~$2.60 | Instance and its public address, at 75 h |
+| Fixed — storage and DNS | ~$2.60 | Volume, backups, release store, hosted zone |
 
-So **running hours are now the dominant term**, at roughly two thirds of the bill — and with nightly play they will stay
-that way. The idle watchdog earns more than any storage tuning, a failed stop is the one mistake that would multiply the
-bill, and save data is not a cost factor at all at this scale.
+**Neither dominates.** Roughly half and half, on a bill of about six dollars. So there is no single lever worth
+optimising, and two worth not getting wrong: **hours** — a failed stop is still the one mistake that multiplies the
+bill — and **instance size**, which moved this total by 30% in one step. Save data is not a cost factor at all.
+
+Earlier versions of this section declared first storage and then running hours the dominant term. Both followed from
+placeholders that have since been replaced with real figures.
 
 ### With several worlds
 
@@ -146,11 +150,11 @@ in a **shared** CPU tier and a **dedicated** one.
 
 | Option | At 75 h | Flat, 24/7 | Spec |
 | --- | --- | --- | --- |
-| **This design**, EC2 **Spot** | ~$8 | — | 4 vCPU / 16 GB |
+| **This design**, EC2 **Spot** | ~$5.70 | — | 2 vCPU / 8 GB |
+| VPS, **dedicated** CPU | ~€7.50 | €16.98 | 2 core / 4 GB — "often enough" |
 | VPS, **shared** CPU | ~€10.50 | €23.73 | 4 core / 8 GB |
-| **This design**, EC2 **on-demand** | ~$13 | — | 4 vCPU / 16 GB |
 | VPS, **dedicated** CPU | ~€14.25 | €33.94 | 4 core / 8 GB |
-| VPS, **dedicated** CPU | ~€28.50 | €67.86 | 8 core / 16 GB |
+| VPS, **dedicated** CPU | ~€28.50 | €67.86 | 8 core / 16 GB — "runs anything" |
 
 **Shared CPU is the wrong comparison for a game server.** The main game tick is effectively single-threaded and
 latency-sensitive, so contention on an oversubscribed host shows up directly as tick lag — the thing players feel. EC2's

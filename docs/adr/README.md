@@ -18,9 +18,9 @@ Twenty-seven records is a wall, and a wall is not a plan. Almost none of it bloc
 
 So: three records for the first real step, and none at all for the step before it.
 
-**Freeze.** No new ADRs until there is code in this repository. Decisions taken in the meantime are answered in
-conversation and written down when they are about to be implemented — which is what [ADR-0001](0001-record-architecture-decisions.md)
-asked for in the first place: write the decision *before or during* the change, not instead of it.
+**Freeze lifted** on 2026-08-12, when `server/compose.yaml` landed. The rule it leaves behind stands: a decision is
+written down when it is about to be implemented, not instead of implementing it. See
+[ADR-0001](0001-record-architecture-decisions.md).
 
 ## Status values
 
@@ -62,6 +62,7 @@ asked for in the first place: write the decision *before or during* the change, 
 | [0025](0025-step-functions-for-long-operations.md) | Step Functions for long operations; Lambda for the rest | Proposed | M2 |
 | [0026](0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | **Rejected** on measurement; kept for its threshold | M1 |
 | [0027](0027-spot-request-shape.md) | Diversified Spot fleet per session; stop-on-interruption | Proposed | M2 |
+| [0028](0028-update-proposals.md) | Mod updates as proposals: resolve, diff, approve, promote | Proposed | M3 |
 
 ## Decisions still to record
 

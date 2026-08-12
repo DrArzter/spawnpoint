@@ -95,6 +95,8 @@ to three minutes is tolerable. If it is not, revisit before building the surface
 - Automatic rollback on a failed start.
 - Boot-time reconciliation, so a promotion while stopped lands at the next start.
 - Drift detection: hashes verified after every sync, and a mismatch reported.
+- **Release 1.0 by hand first**: resolve the 111 CurseForge URLs once, record file identifiers and hashes, cache the
+  binaries. Only then automate the recurring check as proposals. See [ADR-0028](adr/0028-update-proposals.md).
 
 **Done when:** a mod is added and deployed without touching the server directly, and a deliberately broken
 release rolls itself back without help.

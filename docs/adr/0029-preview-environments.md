@@ -105,8 +105,8 @@ be widened, because the claim behind it is now tested rather than assumed.
 
 ## Open questions
 
-- Whether the preview is worth exposing to players by default, or only when the proposal is flagged as risky. Default
-  probably yes, since the cost is a link in a comment.
+- Whether the relaunch command is open to everybody or only the owner. It spends money, so it belongs behind the same
+  allow-list as starting the real server.
 - How to detect content loss automatically rather than by somebody looking. Comparing the registry before and after is
   the obvious idea and may be more work than it is worth.
 - Whether a preview should also run the client pack build, so the pack is proven before players are told about it.

@@ -36,6 +36,58 @@ Distribution is a static site on S3 behind CloudFront, sharing the distribution 
 
 The site is public. Nothing on it is secret, and requiring a login to download a pack is friction for no gain.
 
+## Egress exposure, and what to do about the public URL
+
+Publishing at a public URL was decided here on the reasoning that nothing about a pack is secret and a login is friction
+for no gain. That reasoning still holds for *secrecy*. It missed *cost*: at roughly $0.09 per GB, a 500 MB pack fetched
+ten thousand times is five terabytes and around $450, and a forum hotlink or one person's broken download loop produces
+that without anybody being malicious. See [docs/costs.md](../costs.md), where it is the largest unbounded exposure in the
+design.
+
+**Immutable content, ephemeral access.** The tempting fix — invalidate the old URL when a new release is published —
+must not be taken. Old packs staying available is what lets a player pin to the previous release when a new one breaks
+for them, and it is what the delta archive in [ADR-0028](0028-update-proposals.md) applies *from*. Versions are
+immutable and permanent. If anything expires, it is the **link**, not the pack.
+
+Options, in the order they should be applied:
+
+### 1. Publish a manifest, not binaries — which nearly removes the problem
+
+This ADR already prefers referencing upstream files over re-hosting them, for licence reasons. Doing it for cost reasons
+as well changes the numbers by three orders of magnitude:
+
+| What is published | Size | Ten thousand downloads |
+| --- | --- | --- |
+| A zip of 111 mod binaries | ~500 MB | ~5 TB, around $450 |
+| A `.mrpack` referencing upstream | tens of KB | ~1 GB, under $0.10 |
+
+The launcher fetches the mods from Modrinth and CurseForge, as it is designed to. **The exposure is not created by the
+URL being public; it is created by serving binaries.** Publish the manifest and the URL can stay public and frictionless,
+which keeps everything this ADR wanted.
+
+The binary cache from [ADR-0028](0028-update-proposals.md) still exists — it is what the *server* installs from, and what
+survives an author withdrawing a file. It is simply private, and not what players fetch.
+
+### 2. Signed links for anything that must be self-hosted
+
+Some files have no upstream to reference: configs, and any mod whose licence permits redistribution but which has no
+stable source. For those, a short-lived signed URL issued by the bot or the panel — valid for minutes, tied to whoever
+asked — caps a scrape at the length of one link rather than the life of a release.
+
+The friction is small, because a player asking the bot for the pack is already in the bot to start the server. See
+[ADR-0016](0016-chat-integrations.md).
+
+### 3. Rate limiting, only if the first two prove insufficient
+
+A rate limit in front of the distribution keeps the URL public and open while capping the realistic case of one broken
+client. It carries a monthly charge of its own, which against a bill of roughly six dollars is not a small addition, so
+it is the last resort rather than the first.
+
+### Regardless: alarm on egress volume
+
+An unusual amount of transfer is worth knowing about within hours, whichever of the above is in place. See
+[ADR-0015](0015-observability-and-alerting.md).
+
 ## Consequences
 
 **Good**

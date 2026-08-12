@@ -212,8 +212,9 @@ Three vectors have no ceiling, and only one of them is really about this project
 **Egress, and it is the design's own doing.** [ADR-0013](adr/0013-modpack-distribution.md) publishes the client pack at
 a public URL, on the reasoning that nothing about it is secret. At roughly $0.09 per GB, a 500 MB pack fetched ten
 thousand times is five terabytes and **about $450**. Nobody needs to be malicious — a hotlink from a forum, a scraper,
-or one person's broken download loop does it. This is the largest genuine exposure in the whole design, and it was
-introduced by a convenience decision rather than by a mistake.
+or one person's broken download loop does it. This was the largest genuine exposure in the design, and it was introduced
+by a convenience decision rather than by a mistake. [ADR-0013](adr/0013-modpack-distribution.md) now closes it by
+publishing a manifest instead of binaries, which is three orders of magnitude smaller.
 
 **A recursive trigger.** The promotion pipeline writes the live pointer, and writing the live pointer is what triggers
 the promotion pipeline. That shape is one careless prefix away from a loop, and Step Functions bills per state

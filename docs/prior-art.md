@@ -93,6 +93,50 @@ assume an always-on host, which contradicts the design.
 
 Mentioned only for completeness. Rejected with the platform in [ADR-0014](adr/0014-no-kubernetes.md).
 
+## Prior art that is not about Minecraft at all
+
+The release pipeline was arrived at from the problem rather than copied, and it landed on a shape that already has
+names. Worth recording, because borrowed vocabulary is clearer than invented vocabulary, and because these tools have
+solved the parts still open here.
+
+### Spacelift, Atlantis, Terraform Cloud — plan, approve, apply
+
+<https://spacelift.io> · <https://runatlantis.io>
+
+Infrastructure orchestration platforms. A push to version control triggers a run; the run produces a **plan** — a diff
+of desired against actual; a human **approves** it; the platform **applies** it atomically and records the outcome; and
+it periodically checks for **drift** between the real world and the declared state.
+
+That is [ADR-0028](adr/0028-update-proposals.md) exactly, with a mod set in place of infrastructure. The same four
+words are the right ones to use for it: plan, approve, apply, drift.
+
+**Worth borrowing:** their **policy-as-code** idea, adopted below. Also their run history as an audit surface, and
+their stack dependencies, which are what this design calls groups of mods that must move together.
+
+**Not reused:** the platforms themselves. They orchestrate IaC tools against IaC state, and mods are neither. See the
+"Not Terraform" section of [ADR-0028](adr/0028-update-proposals.md).
+
+### Renovate and Dependabot — where the proposal comes from
+
+<https://docs.renovatebot.com> · <https://docs.github.com/code-security/dependabot>
+
+Dependency updaters. They watch upstream for newer versions, group related packages, open a proposal with a changelog,
+and let the maintainer decide. The grouping and the "one pull request per family" behaviour are the same problem as
+111 CurseForge projects with interdependent families.
+
+So this design is really **Renovate's proposal, Spacelift's gate, and a deployment on the end** — which is a more
+honest description than anything invented for it, and a better one to say out loud.
+
+**Worth borrowing:** grouping rules, and the idea that some updates are boring enough to merge without review.
+
+**Not reused:** neither understands mod-loader compatibility or CurseForge metadata, which is the whole resolution step.
+
+### npm and its lockfile — declaration against artefact
+
+The relationship between the mod list and a release is a manifest and a lockfile: the list says *which*, the release
+says *which exact files with which hashes*. That framing is why the list stays a file in git rather than moving into
+the panel. See [ADR-0028](adr/0028-update-proposals.md).
+
 ## Still to read
 
 - Existing Minecraft Discord bots, for the command vocabulary players already expect.

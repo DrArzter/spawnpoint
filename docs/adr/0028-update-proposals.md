@@ -61,6 +61,29 @@ So a proposal:
 The health check and automatic rollback in [ADR-0009](0009-s3-as-mod-source-of-truth.md) catch a release that fails to
 start. They do not catch one that starts and is subtly wrong, which is the real reason to keep batches small.
 
+### Policy, so that review does not become a chore
+
+The risk below is that a proposal nobody reviews becomes a backlog, and then a frozen set — which is where this started.
+Infrastructure orchestration platforms solve it with policy as code: rules that decide which plans need a human and
+which can apply themselves. See [docs/prior-art.md](../prior-art.md).
+
+The same applies here, and the rules are simple enough to state now:
+
+| Change | Needs approval? |
+| --- | --- |
+| Patch or minor version bump, no dependency change, no entry added or removed | No — apply, announce afterwards |
+| Any mod added or removed by the commit | Yes |
+| A major version, or a changed declared dependency | Yes |
+| Anything touching the loader, the Minecraft version, or Sinytra Connector | Yes, always |
+| More than a handful of groups moving at once | Yes |
+
+Auto-applying the boring majority is what keeps the interesting minority actually read. The health check and rollback
+in [ADR-0009](0009-s3-as-mod-source-of-truth.md) are what make auto-apply defensible at all — and the honest limit is
+that they catch a failed start, not a subtly wrong one, so the boring category has to stay genuinely boring.
+
+Start with everything requiring approval, and relax it only once the pipeline has promoted a few releases without
+incident. A policy that auto-applies before the rollback is trusted is a way to break the server unattended.
+
 ### What players get
 
 Every approved release publishes a **full client pack**, which is the supported path.

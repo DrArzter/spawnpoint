@@ -34,17 +34,43 @@ A proposal opens a **pull request**, and the pull request builds a **preview env
 | Propose | The candidate release opens a PR against the mod list, with the resolved version diff as a comment |
 | Build | A throwaway instance starts with the candidate release and **a copy of the newest world backup** |
 | Verify | Wait for healthy — server list ping plus an RCON command — then scan the log for mod load errors, and record milliseconds per tick after a few minutes of idle |
-| Offer | The PR comment gets the result and, where the connectivity mode allows it, **a connection string for the preview**, so anybody can join and look before approving |
+| Report | The result goes into the PR comment, and **the environment is torn down immediately** |
+| Inspect | On request only. `/preview` in the PR brings one back in a few minutes |
 | Approve | Merging the PR is the approval. That writes the live pointer and runs the promotion pipeline |
-| Tear down | On merge, on close, or on a timeout — whichever comes first |
 
 **Always a copy of the world, never the volume.** Restore the newest archive into a fresh volume for the preview. The
 live world is not attached to a preview instance under any circumstance, which makes "test the new mod set against the
 actual save data" safe to do rather than reckless.
 
-**Time-boxed.** A preview has a TTL, and an alarm fires if one outlives it. A forgotten preview environment is the same
-class of failure as a forgotten fleet in [ADR-0027](0027-spot-request-shape.md) — an instance running unattended — and
-gets the same treatment.
+### The preview does not live as long as the pull request
+
+A pull request can sit open for days — somebody adds a mod, gets distracted, and comes back on Thursday. Holding a
+server up for that is precisely the always-on cost this whole project exists to avoid, and an earlier draft of this ADR
+answered it only with a TTL, which is a blunt instrument for a problem with a sharp shape.
+
+The shape: **the environment is needed for the verification, not for the pull request.** Those have very different
+lifetimes.
+
+| | Lifetime | Cost while it exists |
+| --- | --- | --- |
+| Verification | Ten to twenty minutes, automatic, on every proposal | Under a cent |
+| Inspection by a human | Only when somebody asks, and only while they are looking | Under a cent |
+| **The result** | Forever, in the PR comment | Nothing — it is text |
+
+So a preview obeys **exactly the same rule as the real server**: start on request, stop when idle. That needs no new
+mechanism — it is the idle watchdog from [ADR-0006](0006-on-demand-start-and-idle-shutdown.md) pointed at a different
+instance. Nobody on for N minutes, it stops.
+
+**Teardown deletes the volume too.** A stopped instance costs nothing, but its volumes are billed continuously, and a
+week of accumulated preview volumes is exactly the kind of quiet cost this design keeps catching. Re-restoring a few
+hundred megabytes on relaunch takes seconds, which is cheaper than holding the disk.
+
+A hard TTL stays as a backstop, with an alarm, for the case where the watchdog itself fails — the same treatment as a
+forgotten fleet in [ADR-0027](0027-spot-request-shape.md). It is the second line of defence now rather than the first.
+
+**A stale pull request is not a correctness problem.** The verification was against pinned versions and the release
+records exactly those, so merging a week-old proposal deploys what was actually tested. It just deploys versions that
+are a week old — worth a nudge in the comment, not a block.
 
 ## What this removes
 
@@ -77,7 +103,8 @@ be widened, because the claim behind it is now tested rather than assumed.
 - A whole extra lifecycle to build and keep working: create, restore, verify, report, tear down.
 - Feedback takes minutes, not seconds. 111 mods do not boot quickly, and a PR that sits amber for ten minutes trains
   people to ignore it.
-- A forgotten preview runs unattended, which is the expensive failure mode in this whole design.
+- A preview left running is the expensive failure mode in this whole design, which is why it is stopped by the same
+  watchdog as the real server rather than trusted to a timeout.
 - In overlay connectivity mode a preview consumes a device slot, and the free tier has ten. See
   [ADR-0024](0024-connectivity-modes.md).
 - Restoring a world copy per proposal costs time and transfer, though both are small at a few hundred megabytes.
@@ -87,7 +114,8 @@ be widened, because the claim behind it is now tested rather than assumed.
 **Mitigations**
 
 - Build it after the promotion pipeline works by hand. A preview that cannot be promoted from is a toy.
-- TTL plus an alarm on any preview instance older than it, and teardown wired to PR close as well as merge.
+- Idle watchdog first, hard TTL and an alarm second, and teardown wired to PR close as well as merge. Three
+  independent ways for a preview to die, because the failure they prevent is the costly one.
 - Report progress into the PR comment as it goes — restoring, booting, healthy — so ten minutes reads as progress
   rather than as a hang.
 - Cap concurrent previews at one. Two proposals at once is already excluded by the single-flight rule in

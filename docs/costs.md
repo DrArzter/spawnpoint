@@ -213,8 +213,11 @@ Three vectors have no ceiling, and only one of them is really about this project
 a public URL, on the reasoning that nothing about it is secret. At roughly $0.09 per GB, a 500 MB pack fetched ten
 thousand times is five terabytes and **about $450**. Nobody needs to be malicious — a hotlink from a forum, a scraper,
 or one person's broken download loop does it. This was the largest genuine exposure in the design, and it was introduced
-by a convenience decision rather than by a mistake. [ADR-0013](adr/0013-modpack-distribution.md) now closes it by
-publishing a manifest instead of binaries, which is three orders of magnitude smaller.
+by a convenience decision rather than by a mistake.
+
+The group's own usage is nothing: five players fetching a 500 MB archive twice a month is under $0.50. **The size was
+never the problem; the open URL was.** [ADR-0013](adr/0013-modpack-distribution.md) now closes it with short-lived
+signed links issued by the bot.
 
 **A recursive trigger.** The promotion pipeline writes the live pointer, and writing the live pointer is what triggers
 the promotion pipeline. That shape is one careless prefix away from a loop, and Step Functions bills per state
@@ -240,9 +243,10 @@ Concretely, in rough order of how much exposure each removes:
    known rate.
 3. **A pipeline never writes into the prefix that triggers it.** Structural, free, and it removes the loop entirely
    rather than limiting it.
-4. **Reconsider the public pack URL.** A short-lived signed link handed out by the bot costs a little friction and turns
-   the one unbounded vector this design created back into a bounded one. Weigh against
-   [ADR-0013](adr/0013-modpack-distribution.md), which chose public deliberately.
+4. **Short-lived signed links for the pack, instead of a public URL.** The group installs mods by hand, so the artefact
+   is a 500 MB archive rather than a manifest — and that is fine: five players fetching it twice a month is under $0.50.
+   The exposure was never the size, it was the URL being open. A signed link from the bot caps any scrape at the length
+   of one link. See [ADR-0013](adr/0013-modpack-distribution.md).
 5. **MFA on the root account, and no long-lived keys anywhere.**
 6. **Log retention set from the start**, which caps the only bounded-but-annoying case.
 

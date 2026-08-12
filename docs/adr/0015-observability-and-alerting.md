@@ -1,6 +1,6 @@
-# ADR-0015 — Observability: CloudWatch for signals, chat for alerts, Budgets as the backstop
+# ADR-0015 — Session Grafana and Prometheus, CloudWatch for durable signals
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-11
 - Milestone: M5
 
@@ -17,12 +17,24 @@ Three classes of problem need to be noticed:
 3. **Health.** Tick time degrading, memory pressure, disk filling with world data or logs. These predict the
    first class of problem.
 
-The system has no always-on component, so there is nothing to host an agent or a scraper on.
+The system has no always-on compute component. That prevents a permanently self-hosted monitoring server, but it does
+not prevent dashboards that exist for exactly the same lifetime as a game session. Players need detailed performance
+graphs while diagnosing lag; AWS lifecycle and cost alarms need to survive after the game instance disappears.
 
 ## Decision
 
-Use CloudWatch as the store for metrics, logs and alarms, and the chat channels as the delivery mechanism for
-anything that needs a human. See [ADR-0016](0016-chat-integrations.md).
+Use two deliberately different lifetimes:
+
+- **Prometheus and Grafana run in the game server's Compose project.** They start and stop with Minecraft. Prometheus
+  scrapes the Minecraft status exporter, cAdvisor and node_exporter. Grafana is provisioned from files and provides the
+  session dashboard. Neither service creates always-on compute cost.
+- **CloudWatch remains the durable AWS store** for lifecycle state, bounded logs and alarms that must exist while the
+  game instance is absent. Chat channels deliver anything that needs a human. See
+  [ADR-0016](0016-chat-integrations.md).
+
+Grafana and Prometheus listen on loopback only. Operators reach Grafana through SSM port forwarding; there is no
+public dashboard port. Their local Docker volumes may disappear with the disposable instance. That is acceptable:
+Prometheus history is a session debugging tool, not a backup or control-plane source of truth.
 
 Signals to collect:
 
@@ -30,8 +42,10 @@ Signals to collect:
 | --- | --- | --- |
 | Container state and restarts | Docker via a small reporter on the instance | Detects a crash loop after a release |
 | Server reachable, player count | The idle check that already runs | Availability, and it is free — the check exists anyway |
-| Tick time, heap use | Server logs or an RCON query | Predicts the pack becoming unplayable |
-| Disk used on the data volume | CloudWatch agent | World and logs fill volumes quietly |
+| Minecraft status, response time, players | `mc-monitor` → Prometheus | Session availability and demand |
+| Container CPU and memory | cAdvisor → Prometheus | Shows the actual Minecraft cgroup rather than guessing from host percentages |
+| Host CPU, memory and disk | node_exporter → Prometheus; selected durable alarms in CloudWatch | Diagnoses a session and warns before the data volume fills |
+| Tick time, heap use | Future JVM/game exporter or bounded log-derived metric | Predicts the pack becoming unplayable; not present in the first dashboard |
 | Instance running hours | EC2 metrics | The cost signal that matters most |
 | Spot interruption notice | Instance metadata, EventBridge | Triggers the save-and-stop path, and explains a disconnect afterwards |
 | Game server logs | Log agent, filtered | Diagnosis after the fact |
@@ -42,7 +56,7 @@ Alarms, and what each does:
 - **AWS Budgets threshold at a defined monthly figure** → chat alert, and email through an SNS subscription as
   the out-of-band path. Independent of everything above, because it must still arrive when the rest of the
   system is broken. See [ADR-0020](0020-email-channel.md).
-- **Container restart loop** → chat alert, and it names the live release so the cause is obvious.
+- **Container restart loop** → chat alert, and it names both desired and active release so the cause is obvious.
 - **Data volume above a use threshold** → chat alert, non-urgent.
 - **A backup did not complete after a session** → chat alert. A silent backup failure is the worst outcome
   in this system.
@@ -58,6 +72,8 @@ cost.
 - The cost alarm is independent of the application, so it survives the application being broken.
 - Most signals come from checks that already exist for other reasons, so the marginal cost is small.
 - The backup alarm closes the gap between "we have backups" and "we have backups that work".
+- The same dashboard works locally and on EC2, and teaches the standard Prometheus/Grafana model without a managed
+  Grafana workspace that costs more than the game server.
 
 **Bad, or risky**
 
@@ -65,6 +81,10 @@ cost.
   is muted with it.
 - CloudWatch custom metrics, dashboards and log ingestion are billed per unit, and are easy to overuse.
 - Alarms that are never tested may not fire when needed.
+- cAdvisor needs broad read access to host and Docker state. It is not published on a host port and must not be treated
+  as an application security boundary.
+- Session metrics disappear when the disposable instance is replaced. Cross-session trends require selected
+  CloudWatch metrics, not a promise that the local Prometheus volume is durable.
 
 **Mitigations**
 
@@ -78,8 +98,9 @@ cost.
 | Option | Why not chosen |
 | --- | --- |
 | Nothing; rely on players reporting problems | Free, and the default. Discovers cost problems a month late |
-| Prometheus and Grafana, self-hosted | Much better dashboards and the industry-standard skill, but needs an always-on host, which contradicts the whole design |
+| Prometheus and Grafana on an always-on host | Better long-term dashboards, but creates fixed compute for data that is useful mainly during play |
 | Grafana Cloud or a hosted free tier | Removes the always-on host and keeps the good dashboards. A reasonable later addition; rejected for now to avoid a second system before the basics work |
+| Amazon Managed Grafana | Operationally easy, but its minimum editor licence costs more than the modelled hobby server; no need for it while session-local dashboards are sufficient |
 | Email alerts only | Works, and an SNS email subscription is the out-of-band fallback for Budgets, but email is not where this group looks. See [ADR-0020](0020-email-channel.md) |
 | A status page | Nice, and partly covered by the control panel already showing status. Not an alerting mechanism |
 
@@ -88,5 +109,4 @@ cost.
 - The monthly figure for the Budgets alarm. Set it once the cost model has real numbers. See [docs/costs.md](../costs.md).
 - Whether the running-hours alarm should act rather than notify — stopping the instance itself. Listed as a
   decision still to record in the [ADR index](README.md).
-- Whether tick time is worth the effort to extract, or whether "players complain about lag" is honestly good
-  enough at this scale.
+- How to export MSPT, JVM heap and GC without making an unmaintained gameplay mod part of the monitoring contract.

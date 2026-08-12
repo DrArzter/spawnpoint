@@ -70,6 +70,55 @@ rather than the mechanism because a delta is only valid from the immediately pre
 behind who applies it ends up in a state that matches nothing. The delta names the release it applies from, and the
 instructions say to take the full pack if in doubt.
 
+### How a push becomes a deployment
+
+```mermaid
+sequenceDiagram
+    participant O as Owner
+    participant G as Repository
+    participant A as GitHub Actions
+    participant SM as Proposal state machine
+    participant U as Upstream (CurseForge)
+    participant S3 as Release store
+    participant B as Bot
+
+    O->>G: edit the mod list, push
+    G->>A: workflow, on push to that path only
+    A->>A: assume an AWS role via OIDC
+    A->>SM: StartExecution(commit sha)
+    Note over A: that is all the Action does
+
+    SM->>U: resolve newest file per entry
+    SM->>SM: diff hashes against the live release
+    alt nothing changed
+        SM->>B: "no change"
+    else something changed
+        SM->>U: download the changed binaries
+        SM->>S3: candidate release + generated diff page
+        SM->>B: "release 1.5 proposed — 6 mods, 2 groups, diff link"
+        O->>B: approve
+        B->>S3: write the live pointer
+        S3->>SM: promotion pipeline, per ADR-0009
+    end
+```
+
+**The Action is a thin client, and that is the decision worth making deliberately.** It would be easy to have the
+workflow resolve the mods, hash them and write the release itself — it has a runner and network access. But the same
+proposal has to be produced by the schedule as well, and two implementations of "resolve and propose" will drift. So the
+Action only signals, exactly as the panel and the bots only call the control-plane API in
+[ADR-0012](0012-web-control-panel.md). One mechanism, several triggers.
+
+That also keeps the credentials clean. The workflow assumes a role through GitHub's OIDC provider — a short-lived
+token, no access keys stored in the repository — and that role can do exactly one thing: start this state machine. The
+CurseForge key never leaves Parameter Store, because GitHub never resolves anything.
+
+The commit SHA travels into the candidate release's metadata, so every release traces back to the exact list that
+produced it.
+
+**Single-flight.** Two pushes in a minute must not race two proposals against the same live release. One proposal is
+open at a time; a newer push supersedes a pending one rather than queueing behind it, because the newer list is by
+definition the one wanted.
+
 ### Where the mod list itself lives
 
 Not in the panel, and not in a form. **The mod list is a declaration and stays a file** — the 111 CurseForge URLs, in

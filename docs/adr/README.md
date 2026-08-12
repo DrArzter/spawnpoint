@@ -69,8 +69,10 @@ written down when it is about to be implemented, not instead of implementing it.
 Placeholders, so they are not forgotten. Deliberately unnumbered: a number is assigned when the ADR is
 written, so the numbering stays chronological and nothing has to be renumbered when plans change.
 
-- **CI for infrastructure.** Whether `terraform plan` runs in GitHub Actions, and which AWS identity it uses.
-  OIDC, with no long-lived access keys, is the assumption.
+- **CI for infrastructure.** Whether `terraform plan` runs in GitHub Actions. The identity question is already
+  answered by [ADR-0028](0028-update-proposals.md), which needs GitHub to assume an AWS role through OIDC with no
+  stored access keys; a Terraform role would be the same mechanism with wider permissions, which is precisely why it
+  is a separate decision.
 - **In-game verification of a Minecraft binding.** Only if a real conflict occurs, or when in-game events start
   naming people. Deferred deliberately in [ADR-0022](0022-minecraft-account-as-linked-identity.md).
 - **Cost guardrail response.** What a Budgets breach actually does: notify only, or stop the instance.

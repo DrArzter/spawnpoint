@@ -5,9 +5,10 @@
 
 services:
   mc:
-    # PROJECT: `stable` moves. With unpinned CurseForge mods below, that is two
-    # sources of drift, and a start that breaks cannot be attributed to either.
-    # Pin a dated tag before M0. See ADR-0008.
+    # PROJECT: `stable` moves, so a start that breaks cannot be attributed.
+    # Pin a dated tag before M0. Mods themselves persist in the volume —
+    # REMOVE_OLD_MODS is false by default — so they do not re-resolve per boot;
+    # the exposure is on a rebuild, not on a restart. See ADR-0008.
     image: itzg/minecraft-server:stable
     tty: true
     stdin_open: true

@@ -78,24 +78,33 @@ migration may be needed, MINOR for any other mod set change.
 
 ## What the current setup already does, and where it falls short
 
-The owner's working config resolves mods at container start from a list of 111 CurseForge project URLs
-(<https://github.com/DrArzter/my-docker-minecraft-server-config>). That is worth recognising: **it is already a
-manifest rather than a folder of binaries**, which is the shape this ADR argues for. The habit exists; what is missing
-is the immutability.
+The owner's working config resolves mods from a list of 111 CurseForge project URLs
+(<https://github.com/DrArzter/my-docker-minecraft-server-config>). Worth recognising: **it is already a manifest rather
+than a folder of binaries**, which is the shape this ADR argues for. The habit exists; what is missing is a record of
+what the manifest resolved to.
 
-Two gaps, both concrete:
+**A correction to an earlier version of this section**, which claimed two boots of the same config could produce two
+different servers. That is wrong. The image keeps downloaded mods in the data volume and does not wipe them unless told
+to — `REMOVE_OLD_MODS` defaults to false — so once resolved, the set stays put. Boot does not re-resolve from scratch,
+and the availability of CurseForge is not a per-boot dependency. It is also a large service with good uptime, so
+availability was the weakest argument available and should not have been the one made.
 
-1. **Nothing is pinned.** All 111 entries are bare project URLs with no file identifier, so each boot resolves to
-   whatever the latest compatible file is at that moment. The image tag is `stable`, which also moves. So two boots of
-   the same configuration can produce two different servers, and a break cannot be attributed to either source. This is
-   not a hypothetical risk — it is the current behaviour, and it is precisely what a release version fixes.
-2. **Booting depends on CurseForge being reachable.** This ADR requires the opposite: a server that comes up in three
-   minutes without a third party in the path. A release store that caches the resolved binaries by hash removes the
-   dependency and makes the pin real at the same time.
+The real gap is narrower, and this design is what creates it:
 
-So the migration is smaller than it looks. Resolve the 111 URLs once, record the file identifiers and hashes, cache the
-binaries, and that is release 1.0. The existing list becomes the input to the first release rather than something to be
-replaced.
+1. **The mod set exists only on that disk, and nothing records which versions it is.** Today that is harmless, because
+   the disk persists. This project deliberately makes the instance disposable and rebuilds it — see
+   [ADR-0027](0027-spot-request-shape.md) — which converts "resolved once, years ago" into "resolved fresh on every
+   rebuild". Unpinned URLs then resolve to whatever is newest at that moment, which may be a different and broken
+   configuration, and there is no way back to the one that worked. **The current setup is safe precisely because it does
+   the thing this design gives up.**
+2. **A withdrawn upstream file is unrecoverable.** Authors do delete versions from CurseForge. This argument does not
+   depend on uptime at all, and it is the one that justifies caching binaries by hash rather than referencing them.
+3. **Players still need a matching client set**, and that cannot come off the server's disk. With the server frozen and
+   undocumented, there is nothing to generate a client pack *from*. This is now the strongest argument for the release
+   model, rather than server reproducibility.
+
+The migration is small. Resolve the 111 URLs once, record the file identifiers and hashes, cache the binaries: that is
+release 1.0. The existing list becomes the input to the first release rather than something to be replaced.
 
 ## Open questions
 

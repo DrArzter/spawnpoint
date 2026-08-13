@@ -33,7 +33,8 @@ guesswork.
 **Goal:** friends can play tonight. Also: learn what the AWS resources actually are, by creating them
 individually and seeing what each one needs.
 
-- Instance launched by hand in the console, Spot, in the chosen region.
+- Instance launched by hand in the console: **on-demand `r8i.large`** in `eu-central-1`. See
+  [ADR-0032](adr/0032-on-demand-single-instance.md).
 - Separate data volume, attached and mounted.
 - `itzg/docker-minecraft-server` running the intended pack, via Compose.
 - Security group opens the game port only. No SSH port, no key pair. SSM access works.

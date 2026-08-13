@@ -100,6 +100,11 @@ types before relying on it.
 - Measured cold start time for the real pack. Everything above depends on it, and with nightly play it is felt daily.
 - Source of the player count: RCON, the server list ping protocol, or a log tail. RCON is the most
   direct and is the starting assumption.
+- **A hard session cap**, independent of the player count. The idle watchdog asks "is anybody online"; a cap asks
+  "has this run longer than a session ever should". The second is the only one that survives somebody the group did not
+  invite being online — see [docs/costs.md](../costs.md) — and at two-to-three-hour sessions a cap of six or eight hours
+  costs the real group nothing, given the keep-alive command below. Cheap, and it converts an alarm-bounded risk into a
+  design-bounded one.
 - Idle threshold. Start at 15 minutes and adjust after observing real sessions; with nightly play, expect to raise it.
 - A "keep alive for another hour" command for a break mid-session. Promoted from a nicety by the nightly pattern: a
   threshold that misfires occasionally will misfire often enough to matter when sessions are daily.

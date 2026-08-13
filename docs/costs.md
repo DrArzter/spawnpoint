@@ -241,10 +241,19 @@ Worth separating from the security question, because the money answer is differe
 megabytes, under a cent. An uninvited player who joins and explores for an hour pulls perhaps a hundred megabytes of
 chunk data — about a cent. Being in every Minecraft scanner's index is not, by itself, a cost problem.
 
-**Indirectly: one vector, and it is a six-fold bill.** The idle watchdog stops the instance when the player count
-reaches zero. **Anybody who can join keeps that count above zero.** With `online-mode=false` and the player sample
-leaking valid usernames from the status ping, a stranger who joins does not merely grief the world — they hold the
-server open. See [ADR-0024](adr/0024-connectivity-modes.md).
+**Indirectly: one vector, narrower than it first appears.** The idle watchdog stops the instance when the player count
+reaches zero, and **anybody who can join keeps that count above zero** — so a stranger who joins does not merely grief
+the world, they hold the server open.
+
+But reaching that state requires more than being scanned, because **only an authorised person can start the server at
+all**. See [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md). The full chain is: a real player starts a session,
+a scanner finds the address *inside* that two-to-three-hour window, the stranger reads a name from the status ping,
+joins, and then outstays the real players.
+
+An earlier version of this section said a changing address buys nothing because scanners re-find a server in hours.
+That was written for a server that is up continuously. **It is wrong for this one.** Exposure comes in short,
+non-contiguous windows on a different address each time, so every session is an independent lottery rather than
+cumulative exposure — which makes the rotation worth considerably more than it was credited with.
 
 | | Hours | Monthly |
 | --- | --- | --- |
@@ -258,6 +267,12 @@ route. That is the answer to "what does being indexed cost": not egress, but a w
 precisely for an instance that will not stop, and it fires in hours rather than at the end of the month. A three-hour
 session that runs twelve costs about **fifty cents extra**, not thirty dollars. The Budgets action discussed below caps
 it harder still.
+
+**Better: bound it by design rather than by alarm.** Sessions are two to three hours. A **hard session cap** — stop
+unconditionally after some multiple of that, regardless of who appears to be online — removes the vector rather than
+detecting it, and costs the real group nothing because a keep-alive command already needs to exist for mid-session
+breaks. See [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md). An alarm tells you a stranger is holding the
+server; a cap means they cannot hold it for more than a few hours whatever they do.
 
 **Which leads to an honest conclusion.** If the only concern is the bill, a public address is defensible: the direct
 cost is negligible and the one real vector is already alarmed and bounded to small change per incident. What a public

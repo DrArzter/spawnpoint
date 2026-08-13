@@ -95,7 +95,9 @@ services:
       - --storage.tsdb.retention.time=30d
       - --storage.tsdb.retention.size=2GB
     ports:
-      - "${OBSERVABILITY_BIND_ADDRESS:-127.0.0.1}:9090:9090"
+      # Prometheus has no authentication. Keep it host-local even when Grafana
+      # is reachable through the private ZeroTier network.
+      - "${PROMETHEUS_BIND_ADDRESS:-127.0.0.1}:9090:9090"
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus

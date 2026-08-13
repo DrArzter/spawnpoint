@@ -37,12 +37,13 @@ individually and seeing what each one needs.
   [ADR-0032](adr/0032-on-demand-single-instance.md).
 - Separate data volume, attached and mounted.
 - `itzg/docker-minecraft-server` running the intended pack, via Compose.
-- Security group opens the game port only. No SSH port, no key pair. SSM access works.
+- Security group has no inbound rules. No game port, SSH port or key pair; SSM access works through the instance's
+  outbound connection.
 - `online-mode=false`, `white-list=true`, `enforce-whitelist=true`, with the names added by hand. The whitelist
   becomes generated in M4. See [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
-- Connectivity mode A: the address is announced by hand. Treat this world as throwaway — offline mode with an
-  exposed port is not a combination to build anything in. See [ADR-0024](adr/0024-connectivity-modes.md).
-- Address posted in chat by hand. Started and stopped by hand.
+- Connectivity mode C: the persistent ZeroTier identity lives on the data volume, and the node is admitted by hand.
+  The game is reachable only over the overlay. See [ADR-0024](adr/0024-connectivity-modes.md).
+- Stable ZeroTier address posted in chat by hand. Started and stopped by hand.
 - Backups: a manual copy to S3 before anything risky.
 
 - **Record milliseconds per tick under real load**, with everybody on. Under about 50 ms is healthy. Record it — do
@@ -79,8 +80,8 @@ milestone where that is cheap to discover.
 **Goal:** nobody pays for idle time, and nobody needs AWS access to start the server.
 
 - Start operation: Lambda starts the instance, waits for health, reports state.
-- The connectivity contract, plus mode A. Then mode C, before anybody starts building in a world they care about:
-  offline mode needs the network gate. See [ADR-0024](adr/0024-connectivity-modes.md).
+- Automate the existing mode C connectivity contract: wait for ZeroTier membership and verify the overlay address
+  before reporting ready. Offline mode needs that network gate. See [ADR-0024](adr/0024-connectivity-modes.md).
 - Idle watchdog: player count read on a schedule, save and stop after N empty readings.
 - Spot interruption handler: save, clean stop, and an announcement.
 - A minimal trigger — a single authenticated endpoint or a script — is enough. The panel comes in M4.

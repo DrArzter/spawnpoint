@@ -36,8 +36,9 @@ Four things carry over from [ADR-0004](0004-ec2-spot-for-the-game-server.md) unc
 read alone:
 
 - **Public subnet, no NAT Gateway.** A NAT Gateway is about $32 a month, which would exceed the compute line. The
-  security group is therefore the only network boundary, and it opens the game port alone — no SSH port at all. See
-  [ADR-0007](0007-ssm-instead-of-ssh.md).
+  instance uses a public address for outbound SSM, registry and ZeroTier traffic, but its security group has no
+  inbound rules: neither the game nor SSH is public. See [ADR-0007](0007-ssm-instead-of-ssh.md) and
+  [ADR-0024](0024-connectivity-modes.md).
 - **x86, not Graviton.** The saving is under a dollar a month against a slower core, and Sinytra Connector makes an
   architecture problem likely to surface as a subtle failure under load rather than a clean refusal to start.
 - **Single-thread performance is the selection criterion**, not a refinement. The main tick cannot be spread across

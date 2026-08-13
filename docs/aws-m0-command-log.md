@@ -218,8 +218,8 @@ aws ec2 describe-security-groups \
   --filters Name=group-name,Values=spawnpoint-m0-minecraft Name=vpc-id,Values="$SP_VPC_ID"
 ```
 
-Port `25565/tcp` is deliberately not open yet. It will be added immediately before the M0 join test. Port `22` is
-never added.
+Neither `25565/tcp` nor `22/tcp` will be added. M0 uses ZeroTier mode C, so the game security group stays without
+inbound rules. ZeroTier initiates outbound traffic through the existing allow-all egress rule.
 
 **Rollback:** resolve the generated ID and delete only this group:
 
@@ -266,8 +266,69 @@ aws ec2 describe-addresses \
 IAM roles, instance profiles and security groups have no standalone hourly charge. They can authorize or protect
 billable resources, which is why the empty-resource checks still matter.
 
-## DNS registration and Route 53
+## Host bootstrap artifacts
 
-Pending selection and registration of the real DigitalPlat FreeDomain name. Record only the exact chosen name,
-hosted-zone command, delegated name servers, verification and rollback; do not use a placeholder in an executed
-command log.
+These local checks do not change AWS. They validate the exact files that will later be supplied to EC2 and invoked
+through SSM:
+
+```bash
+bash -n server/user-data.sh \
+  server/scripts/prepare-data-volume.sh \
+  server/scripts/configure-zerotier.sh
+
+docker run --rm \
+  -v "$PWD:/mnt:ro" \
+  koalaman/shellcheck@sha256:bb596a0d169b85ddd81d8b6d3a2ff6d5baf5fca10b97f575ebc647c3dff62b3d \
+  /mnt/server/user-data.sh \
+  /mnt/server/scripts/prepare-data-volume.sh \
+  /mnt/server/scripts/configure-zerotier.sh
+
+docker run --rm \
+  amazonlinux@sha256:694092ae18877ed4e3cb9b643759ba95df1f12af12528fefa18f60f79d4c1568 \
+  bash -c \
+  'for package_name in docker git jq rsync tar zstd xfsprogs; do
+     dnf repoquery --available --quiet "${package_name}" >/dev/null || exit 1
+   done'
+```
+
+- `bash -n` parses each script without running it.
+- The digest-pinned ShellCheck container catches unsafe quoting, surprising expansions and common shell mistakes
+  without installing another host tool. This check completed with no findings on 2026-08-13.
+- The Amazon Linux 2023 container asks that distribution's own repository whether every user-data package exists. It
+  downloads no packages into the host and completed successfully on 2026-08-13.
+
+`server/user-data.sh` is intentionally limited to the disposable root volume: it installs Docker and utility
+packages, enables SSM, and creates empty mount points. It cannot safely identify the later EBS device or know which
+Git commit and secrets to deploy.
+
+The following commands are **prepared, not yet executed**. They belong to the first SSM session after the instance
+and EBS volume exist:
+
+```bash
+# Read: map the attached EBS volume ID to its actual NVMe device name.
+sudo /sbin/ebsnvme-id /dev/nvme1n1
+lsblk --fs
+
+# Write, destructive only for a genuinely empty device: create XFS and persist
+# its UUID in /etc/fstab. Omit --format-empty when reattaching an existing world.
+sudo server/scripts/prepare-data-volume.sh /dev/nvme1n1 --format-empty
+
+# Read: verify the expected filesystem is mounted before putting state on it.
+findmnt /srv/spawnpoint
+
+# Write: install ZeroTier only after its state path is bound to EBS, then ask
+# the chosen network controller to admit this node. A Network ID is not a token.
+sudo server/scripts/configure-zerotier.sh <16-hex-network-id>
+```
+
+The device name above is an example, not a value to copy blindly. Nitro instances rename requested EBS device names
+to NVMe names; `ebsnvme-id` is the evidence connecting that device to the exact volume created for Spawnpoint.
+
+`prepare-data-volume.sh` refuses the root device, devices with child partitions, already-mounted devices and blank
+devices unless `--format-empty` is explicit. `configure-zerotier.sh` refuses to run unless `/srv/spawnpoint` is a real
+mount, so `identity.secret` cannot silently land on the disposable root disk.
+
+## DNS and Route 53
+
+Deferred. M0 uses ZeroTier and owns no domain or Route 53 hosted zone. If DNS is chosen later, its exact create,
+verification and rollback commands get a new section rather than being mixed into the executed M0 log.

@@ -200,10 +200,10 @@ owner does not have to leave switched on.
 
 ### Which mode to use
 
-**Mode A first, mode C for real play.** Mode A is free and immediate, and it is the right thing during M2 while the
-lifecycle is being built. Once people are actually playing a world they care about, mode C is the default, because
-it is the only one of the three that supplies the network gate that `online-mode=false` depends on. Mode B is for
-when a domain is wanted for its own sake, and it does not remove the need for the gate.
+**Mode C from M0 onward.** It is the only one of the three that supplies the network gate that `online-mode=false`
+depends on, and the group has chosen its one-time client setup over exposing a throwaway server. Mode A remains a
+short diagnostic escape hatch for a disposable world; it is not a stage on the delivery path. Mode B is for when a
+domain is wanted for its own sake, and it does not remove the need for the gate.
 
 Stated as a rule, because it is the thing to get right: **mode A or B combined with `online-mode=false` means
 anybody who learns a whitelisted username can join as that player — unless an in-game login mod is fitted.** That mod is

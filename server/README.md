@@ -6,8 +6,13 @@ Contents:
 
 - `compose.yaml` — the game server, using [`itzg/docker-minecraft-server`](https://github.com/itzg/docker-minecraft-server),
   with an exact image tag. Never `latest`. See [ADR-0005](../docs/adr/0005-containerised-game-server.md).
-- `user-data.sh` — first-boot setup: mount the data volume, install Docker, start the stack.
+- `user-data.sh` — idempotent first-boot setup for the disposable host: install Docker and verify SSM. It deliberately
+  does not guess a disk, clone a moving Git branch, handle secrets or start the stack.
 - `scripts/` — invoked by SSM Run Command, not by a human:
+  - `prepare-data-volume.sh` — verify an explicitly named block device, optionally format only an empty one, and mount
+    it by filesystem UUID,
+  - `configure-zerotier.sh` — bind ZeroTier state to the mounted data volume before its first start, then join one
+    validated network ID,
   - `start.sh` — idempotently start the Compose service and wait for Docker health or RCON readiness,
   - `status.sh` — report container health and verify the Minecraft control path through RCON,
   - `players.sh` — report a machine-readable player count; an unparseable response fails closed,
@@ -109,5 +114,5 @@ pack changes and nobody knows why. See [ADR-0024](../docs/adr/0024-connectivity-
 
 The same Compose file should run locally, so a mod set can be smoke-tested before it reaches the server.
 
-**Status:** local lifecycle, backup/restore and release-reconciliation slices exist. S3 transfer and instance bootstrap
-remain.
+**Status:** local lifecycle, backup/restore, release reconciliation and the base instance bootstrap exist. The first
+real-EC2 acceptance test, S3 transfer and automated orchestration remain.

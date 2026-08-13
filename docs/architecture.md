@@ -208,7 +208,7 @@ nothing before the acknowledgement except verifying the signature. See [ADR-0016
 
 | Concern | Position |
 | --- | --- |
-| Inbound network | Security group opens the game port only. No SSH port exists. See [ADR-0007](adr/0007-ssm-instead-of-ssh.md) |
+| Inbound network | Security group has no inbound rules in the chosen ZeroTier mode. Neither the game nor SSH is public. See [ADR-0007](adr/0007-ssm-instead-of-ssh.md) and [ADR-0024](adr/0024-connectivity-modes.md) |
 | Who may join the game | **`online-mode=false`**, so Minecraft itself verifies nothing: the whitelist keeps out unknown names, not unknown people. The **network is the access boundary** — see the connectivity mode below. `enforce-whitelist=true` kicks anybody removed from the derived whitelist. See [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md) |
 | Connectivity mode | Pluggable: raw address, DNS on an owned domain, or an overlay network with no inbound port. Only the overlay mode supplies the gate that `online-mode=false` depends on, so it is the mode for any world worth keeping. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | Operator privileges | `ops.json` is kept empty or near-empty. In offline mode an op entry is a name anybody reaching the port can claim, so administration goes through RCON from the control plane instead |

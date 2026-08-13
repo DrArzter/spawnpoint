@@ -30,7 +30,7 @@ the project tag, and nothing wider.
 
 **Good**
 
-- The security group opens the game port only. No SSH surface at all.
+- In the chosen ZeroTier mode the security group has no inbound rules. No game or SSH surface is public.
 - No private key to distribute, rotate or lose.
 - Every command is attributable in CloudTrail. That audit trail is what a production system requires,
   and here it costs nothing extra.

@@ -24,7 +24,30 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_s3_bucket.backups
+    values = {
+      id  = "spawnpoint-backups-123456789012"
+      arn = "arn:aws:s3:::spawnpoint-backups-123456789012"
+    }
+  }
+
+  override_data {
+    target = data.aws_s3_bucket.releases
+    values = {
+      id  = "spawnpoint-releases-123456789012"
+      arn = "arn:aws:s3:::spawnpoint-releases-123456789012"
+    }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.ec2_assume_role
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.game_host_storage
     values = {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
     }
@@ -70,38 +93,8 @@ run "free_plan_host_preserves_m0_invariants" {
   }
 
   assert {
-    condition     = aws_s3_bucket.backups.bucket == "spawnpoint-backups-123456789012" && aws_s3_bucket.releases.bucket == "spawnpoint-releases-123456789012"
-    error_message = "Storage bucket names must be deterministic and globally unique to the AWS account."
-  }
-
-  assert {
-    condition     = aws_s3_bucket_versioning.backups.versioning_configuration[0].status == "Enabled" && aws_s3_bucket_versioning.releases.versioning_configuration[0].status == "Enabled"
-    error_message = "Backups and releases must retain S3 object versions."
-  }
-
-  assert {
-    condition = (
-      aws_s3_bucket_public_access_block.backups.block_public_acls &&
-      aws_s3_bucket_public_access_block.backups.block_public_policy &&
-      aws_s3_bucket_public_access_block.backups.ignore_public_acls &&
-      aws_s3_bucket_public_access_block.backups.restrict_public_buckets
-    )
-    error_message = "The backup bucket must block every form of public access."
-  }
-
-  assert {
-    condition = (
-      aws_s3_bucket_public_access_block.releases.block_public_acls &&
-      aws_s3_bucket_public_access_block.releases.block_public_policy &&
-      aws_s3_bucket_public_access_block.releases.ignore_public_acls &&
-      aws_s3_bucket_public_access_block.releases.restrict_public_buckets
-    )
-    error_message = "The release bucket must block every form of public access."
-  }
-
-  assert {
-    condition     = one(one(aws_s3_bucket_server_side_encryption_configuration.backups.rule).apply_server_side_encryption_by_default).sse_algorithm == "AES256"
-    error_message = "Backups must use no-extra-cost S3-managed encryption at rest."
+    condition     = data.aws_s3_bucket.backups.id == "spawnpoint-backups-123456789012" && data.aws_s3_bucket.releases.id == "spawnpoint-releases-123456789012"
+    error_message = "The compute stack must consume the separately managed persistent storage buckets."
   }
 }
 

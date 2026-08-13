@@ -30,8 +30,8 @@ data "aws_iam_policy_document" "game_host_storage" {
 
     actions = ["s3:ListBucket"]
     resources = [
-      aws_s3_bucket.backups.arn,
-      aws_s3_bucket.releases.arn,
+      data.aws_s3_bucket.backups.arn,
+      data.aws_s3_bucket.releases.arn,
     ]
   }
 
@@ -43,13 +43,13 @@ data "aws_iam_policy_document" "game_host_storage" {
       "s3:GetObject",
       "s3:PutObject",
     ]
-    resources = ["${aws_s3_bucket.backups.arn}/*"]
+    resources = ["${data.aws_s3_bucket.backups.arn}/*"]
   }
 
   statement {
     sid       = "ReadReleases"
     actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.releases.arn}/releases/*"]
+    resources = ["${data.aws_s3_bucket.releases.arn}/releases/*"]
   }
 }
 

@@ -1,10 +1,12 @@
 # infra/terraform
 
-All AWS resources live here. Nothing is created by hand after M0, except the state backend itself.
+Disposable game-host AWS resources live here. Persistent object storage has its own lifecycle in
+[`../terraform-storage`](../terraform-storage/), and the state backend in
+[`../terraform-bootstrap`](../terraform-bootstrap/).
 
-Owns: VPC, subnet, internet gateway, route table, security group, EC2 instance and data volume, S3 buckets,
-IAM roles and policies, Lambda functions, Step Functions state machines, API Gateway, EventBridge rules, SNS topic, DynamoDB table, Route 53
-records, CloudFront distribution, CloudWatch alarms, AWS Budgets.
+Owns now: VPC, subnet, internet gateway, route table, security group, EC2 instance and data volume, and the game-host
+IAM role/policies. Later roots may own Lambda functions, Step Functions, API Gateway, EventBridge, SNS, DynamoDB,
+Route 53, CloudFront, CloudWatch alarms and AWS Budgets as their lifecycle boundaries become clear.
 
 Does not own: mod releases, the world, or anything else that is data rather than infrastructure. Those belong
 to the release pipeline. See [ADR-0011](../../docs/adr/0011-terraform-for-infrastructure.md) and
@@ -27,11 +29,10 @@ State backend bootstrap is a one-time, separately stateful Terraform step in
 
 ## Current slice
 
-The current M1 slice defines 27 resources without applying them: one VPC, one public subnet and route, a zero-ingress
-security group, an SSM-only EC2 role/profile, one on-demand EC2 host, one separately attached encrypted data EBS, and
-private versioned buckets for world backups and mod releases. Both buckets block public access, require TLS, use
-S3-managed encryption and discard abandoned multipart uploads. The physical AZ ID is asserted because the volume is
-zonal. The instance has no SSH key and requires IMDSv2.
+The current compute M1 slice defines 13 resources without applying them: one VPC, one public subnet and route, a
+zero-ingress security group, an SSM-only EC2 role/profile with scoped storage access, one on-demand EC2 host, and one
+separately attached encrypted data EBS. The physical AZ ID is asserted because the volume is zonal. The instance has
+no SSH key and requires IMDSv2.
 
 The game-host role can write and verify backup objects and read immutable release objects. It cannot change bucket
 configuration or delete objects. Exact `5 daily / 2 weekly / 2 monthly` pruning belongs to the later backup operation:
@@ -71,8 +72,8 @@ docker run --rm --user "$(id -u):$(id -g)" \
 ```
 
 The tests use Terraform's mock AWS provider: they require no credentials and cannot create resources. They assert the
-Free Plan instance choice, zero ingress, IMDSv2, termination protection, root/data EBS semantics, private versioned
-encrypted buckets, the reviewed paid upgrade and rejection of unreviewed instance types.
+Free Plan instance choice, zero ingress, IMDSv2, termination protection, root/data EBS semantics, consumption of the
+separately managed buckets, the reviewed paid upgrade and rejection of unreviewed instance types.
 
 The committed S3 backend intentionally has no bucket name. The real ignored `backend.hcl` now points to the bootstrapped
 production bucket; `backend.hcl.example` documents the shape without publishing account-specific configuration. Never
@@ -80,11 +81,9 @@ pass credentials through that file: Terraform can persist backend arguments in `
 non-secret profile name belongs in it because the S3 backend is initialised before, and independently from, the AWS
 provider configuration.
 
-The complete `terraform plan` was exercised against real read-only AWS data sources on 2026-08-13: the current AL2023
-AMI, account identity and `eu-central-1a` / `euc1-az2` resolved, and the result was **27 to add, 0 to change, 0 to
-destroy**. It was not saved and cannot be applied. The same plan succeeded again through the real S3 backend and
-exercised its native lockfile. The bootstrap was applied separately: its seven resources are live, their S3 controls
-were verified through AWS APIs, and its final drift check returned `No changes`.
+The earlier combined plan was split before apply so destroying compute can never include backup/release buckets. The
+persistent storage root was applied separately and is drift-free. This compute root was replanned against those live
+buckets on 2026-08-13: **13 to add, 0 to change, 0 to destroy**, with no S3 resource actions and no saved plan.
 
-**Status:** the state backend is live. M1 compute, network and storage validate, pass mock tests and pass a real
-read-only plan; the 27-resource production apply remains deliberately pending while the account stays on the Free Plan.
+**Status:** state and persistent storage are live. M1 compute/network validate, pass mock tests and pass a real
+read-only plan; the 13-resource disposable compute apply remains deliberately pending while the M0 host stays stopped.

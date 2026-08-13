@@ -10,6 +10,10 @@ resource "aws_s3_bucket" "backups" {
     Name    = local.backup_bucket_name
     Purpose = "world-backups"
   }
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_s3_bucket" "releases" {
@@ -18,6 +22,10 @@ resource "aws_s3_bucket" "releases" {
   tags = {
     Name    = local.release_bucket_name
     Purpose = "immutable-mod-releases"
+  }
+
+  lifecycle {
+    prevent_destroy = true
   }
 }
 
@@ -102,6 +110,24 @@ resource "aws_s3_bucket_lifecycle_configuration" "backups" {
 
     abort_incomplete_multipart_upload {
       days_after_initiation = 1
+    }
+  }
+
+  rule {
+    id     = "expire-deleted-backup-versions"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+
+    # Retention selects the live 5/2/2 recovery points. Versioning then gives a
+    # month to recover from a buggy or accidental deletion without retaining
+    # every deleted archive forever.
+    noncurrent_version_expiration {
+      noncurrent_days = 30
     }
   }
 

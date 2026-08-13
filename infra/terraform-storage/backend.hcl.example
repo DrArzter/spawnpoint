@@ -1,0 +1,6 @@
+bucket       = "replace-with-account-unique-state-bucket"
+key          = "spawnpoint/storage.tfstate"
+region       = "eu-central-1"
+profile      = "spawnpoint"
+encrypt      = true
+use_lockfile = true

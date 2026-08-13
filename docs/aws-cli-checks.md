@@ -4,6 +4,9 @@ Read-only commands used to verify the account bootstrap. They complement
 [the console checklist](aws-account-checklist.md): the console teaches where a setting lives, while the API shows the
 state AWS actually saved.
 
+Commands that create the manual M0 infrastructure, along with their effect and rollback, are recorded separately in
+[the AWS M0 command log](aws-m0-command-log.md).
+
 Nothing on this page creates, updates, publishes to or deletes an AWS resource. Run the complete audit with:
 
 ```bash

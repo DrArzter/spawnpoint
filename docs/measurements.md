@@ -175,9 +175,18 @@ Count devices honestly, including anybody's second machine. This is the number t
 
 ### 8. Latency from each player to each candidate region
 
-Players are in **Poland, Ukraine and western Russia**, confirmed 2026-08-12. That eliminates London: it is materially
-further from all three, and there is no candidate it wins. Two remain, and they are close enough that the Spot price in
-item 9 may well decide it.
+### 8. Region — **settled: `eu-central-1` (Frankfurt)**
+
+Players are in **Poland, Ukraine and western Russia**, confirmed 2026-08-12. That eliminates London immediately, and it
+makes Frankfurt the closest major region to all three.
+
+**Stockholm is no longer worth comparing, and the reason is that Spot was deferred.** The case for eu-north-1 was that
+it is often the cheapest European region and might have better Spot capacity. With on-demand
+([ADR-0027](adr/0027-spot-request-shape.md)), capacity is not a variable, and the on-demand price difference is on the
+order of a dollar a month against a latency penalty for the eastern end of the group. Not a trade worth measuring.
+
+The latency test below is therefore **not needed to choose**. Whether Frankfurt is good enough is answered by playing on
+it, which M0 does anyway. Left here in case it ever needs revisiting.
 
 | Region | Best | Worst |
 | --- | --- | --- |
@@ -203,11 +212,23 @@ group. Expect both to land in a similar range and London to be clearly worse; co
 
 ### 9. Spot price and capacity for the candidate types, per region
 
-| Region | Spot $/h | On-demand $/h | Interruption band | Placement score |
-| --- | --- | --- | --- | --- |
-| `eu-west-2` (London) | | | | |
-| `eu-central-1` (Frankfurt) | | | | |
-| `eu-north-1` (Stockholm) | | | | |
+**Collected 2026-08-12, `eu-central-1`.** On-demand Linux, current generation, x86_64, 2 vCPU / 16 GiB:
+
+| Type | On-demand $/h | Note |
+| --- | --- | --- |
+| `r5a.large` | 0.137 | Cheapest comparable. AMD, older generation, slower per thread |
+| `r5ad.large` | 0.158 | `d` = local NVMe, wiped on stop — not useful here |
+| **`r8i.large`** | **0.16758** | **Chosen.** Newest Intel generation, best single thread |
+| `r5d.large` | 0.173 | |
+| `r5b.large` | 0.178 | |
+| `r7a.large` | 0.18354 | |
+| `r8a.large` | 0.19272 | |
+
+The whole current-generation spread is about $4 a month, which is why the criterion is the fastest thread rather than
+the cheapest hour. See [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
+
+**Spot price, interruption band and placement score are not collected**, because
+[ADR-0027](adr/0027-spot-request-shape.md) is deferred. They become relevant again only if Spot is adopted.
 
 | | |
 | --- | --- |
@@ -275,6 +296,20 @@ The one-way door has already been walked through, and the only way to run a worl
 Worth knowing rather than deciding, because it means the network gate in
 [ADR-0024](adr/0024-connectivity-modes.md) is mandatory rather than advisable. See
 [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
+
+## What is left, and it is not measurement
+
+Nothing above still blocks M0. What remains in the AWS console is **setup**, not research:
+
+1. **MFA on root, then stop using it.** Create a normal administrative identity.
+2. **A Budgets alarm at about $20.** Above the ~$15.55 model, well below a surprise. This matters more since
+   [ADR-0027](adr/0027-spot-request-shape.md) was deferred: a failed stop now costs ~$129 a month rather than ~$40.
+3. **Pick one Availability Zone in `eu-central-1` and write it down.** The data volume is zonal, so this choice binds
+   every later launch. See [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
+4. **Confirm the account is on the Free plan** — correct for the throwaway M0. Move to Paid before M1. See
+   [docs/costs.md](costs.md).
+
+Then M0 is building rather than deciding.
 
 ## Then what
 

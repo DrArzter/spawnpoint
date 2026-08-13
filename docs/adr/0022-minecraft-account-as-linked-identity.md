@@ -159,6 +159,39 @@ Honest costs, since the original dismissal was not entirely wrong:
 - Historically this class of plugin has had bypass bugs, which is why it is a substitute for a network gate rather than
   an addition to one.
 
+### Writing the mod, rather than finding one
+
+Worth taking seriously, and it qualifies an earlier objection in this ADR. "Reinventing authentication badly" was fair
+against a password plugin. It is much weaker here, because **the mod would not be doing the authentication.**
+
+The split is the point:
+
+| Lives in the mod | Lives in the control plane |
+| --- | --- |
+| Hold a connecting player. Release them on command. Kick them on timeout | The link table lookup, which chat account to ask, the approval, remembering a familiar address, the audit trail |
+
+So the mod is a **gate actuator**, not an authentication system. No password store, no registration, no reset, no
+sessions — all of that already exists elsewhere in this design. What remains is small: an event handler, a server
+command RCON can call, and a timer. Existing auth mods are the wrong shape anyway, because they are built around a
+password typed in chat, which is exactly the part being replaced.
+
+**The tempting no-mod version has a specific hole.** It looks like this: leave the player un-whitelisted, watch the
+rejected join in the log, ask the linked account, add the name to the whitelist on approval, and have them reconnect.
+Zero mod code, using only the vanilla whitelist and RCON, both already present. The hole is that **the whitelist is
+keyed by name, so the approval window is name-scoped**: once the name is added, whoever reconnects with it first gets
+in — including the impostor whose attempt triggered the approval in the first place. A mod can bind the release to the
+*connection* rather than to the name, and that is precisely why it is worth the code.
+
+**The risk that matters is fail-open.** If the hold has a gap — an unhandled interaction, a command that still works, a
+movement path not cancelled — the gate is decoration and nobody notices, because it fails silently in the permissive
+direction. That is what to test adversarially rather than assume: try to break a block, drop an item, use a command and
+send a chat message while held.
+
+**Sequencing, given everything else in this repository.** A Forge mod means Java, Gradle and a toolchain that appears
+nowhere else here, and it sits on the critical path of playing — a bug means nobody gets in. It is also **only needed if
+the public-address mode is chosen**; with the overlay there is nothing to build. So: not before the AWS side exists, and
+not at all if connectivity settles on the overlay.
+
 **To verify before relying on any of this:** what exists for **Forge 1.20.1** specifically, and whether any of it
 exposes a force-login command over RCON. Most of the well-known implementations target the Bukkit family. Sinytra
 Connector is already bridging Fabric mods here, which may widen the options — that is a search, not an assumption. If

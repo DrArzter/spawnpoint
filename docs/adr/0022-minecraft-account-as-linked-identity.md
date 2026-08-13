@@ -130,6 +130,17 @@ inherited from its history, and the only way to run a world in online mode is to
 | Prove ownership with an in-game code before binding | Meaningful only in online mode. In offline mode there is no ownership to prove: the name is the identity |
 | Keep the whitelist manual | Zero work, and correct today at five players. Two lists that drift, and removal depends on somebody remembering |
 
+## Dormant: the in-game login branch
+
+> **Nothing below is work.** [ADR-0024](0024-connectivity-modes.md) chose ZeroTier, and an overlay makes this entire
+> branch unnecessary — the port is not reachable, so there is nothing to authenticate at the Minecraft layer. It is
+> kept because it is the fallback if connectivity ever moves to a public address, and because the reasoning is sound
+> and would otherwise be re-derived.
+>
+> **The trigger is a change to [ADR-0024](0024-connectivity-modes.md), not a spare evening.** Until then the correct
+> amount of effort here is zero: no mod, no search for one, no password store. The whitelist stays what this ADR
+> already says it is — bookkeeping, not a security control.
+
 ## If there is no network gate, an in-game login mod is the substitute
 
 [ADR-0024](0024-connectivity-modes.md) makes connectivity pluggable, and the public-address mode is genuinely on the

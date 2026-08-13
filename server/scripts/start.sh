@@ -14,7 +14,16 @@ poll_seconds="${START_POLL_SECONDS:-5}"
 
 started_at="${SECONDS}"
 
-if [[ "$(container_state)" == "running" ]] && rcon list >/dev/null 2>&1; then
+ready_now() {
+  local health="$1"
+  # The pinned image has a Docker health check. For an existing project without
+  # one, RCON remains the readiness signal; when health exists, require both.
+  [[ "${health}" == "healthy" || "${health}" == "none" ]] && rcon list >/dev/null 2>&1
+}
+
+initial_state="$(container_state)"
+initial_health="$(container_health)"
+if [[ "${initial_state}" == "running" ]] && ready_now "${initial_health}"; then
   # The game may already be ready while one of the session-scoped supporting
   # services is absent. Start missing services without recreating Minecraft.
   compose up -d --no-recreate >/dev/null
@@ -30,7 +39,7 @@ while (( SECONDS - started_at < timeout_seconds )); do
   health="$(container_health)"
 
   if [[ "${state}" == "running" ]]; then
-    if [[ "${health}" == "healthy" ]] || rcon list >/dev/null 2>&1; then
+    if ready_now "${health}"; then
       printf 'result=ready\n'
       printf 'elapsed_seconds=%s\n' "$((SECONDS - started_at))"
       printf 'container_health=%s\n' "${health}"

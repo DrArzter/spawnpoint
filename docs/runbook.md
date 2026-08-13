@@ -172,8 +172,41 @@ Record here what was actually created:
 | Account plan | **Free**, as of 2026-08-12. Move to Paid before M1 — see [docs/costs.md](costs.md) |
 | Budget | **$20/month, fixed, all services, unblended.** Created 2026-08-12 |
 | Budget alerts | 80% **forecasted** ($16) and 95% **actual** ($19), both to a `+aws` alias |
-| Cost anomaly monitor | TODO — free, and it catches "strange" where the budget catches "expensive" |
+| Cost anomaly monitor | **Default-Services-Monitor**, created by AWS, all services |
+| Cost anomaly subscription | **Retuned** from the AWS default of `$100 AND 40%`, which could never fire on a ~$15 account. Now **$5 AND 40%**, individual alerts, delivered via SNS |
+| SNS alert topic | `arn:aws:sns:eu-central-1:<account-id>:spawnpoint-alert` — Standard. The account ID is deliberately not written here; read it from the console |
 | Chosen Availability Zone | TODO — binds every later launch, because the data volume is zonal |
+
+**The SNS topic is the convergence point** that [ADR-0020](adr/0020-email-channel.md) and
+[ADR-0015](adr/0015-observability-and-alerting.md) describe: anomaly alerts publish to it now, budget alerts should be
+pointed at it too, and the chat adapters subscribe to it later without either console page being touched again.
+
+Each publisher needs its own statement on the topic policy, because each is a different service principal:
+`costalerts.amazonaws.com` for anomaly detection, `budgets.amazonaws.com` for Budgets. Both with an
+`aws:SourceAccount` condition, which restricts the grant to operations performed on behalf of this account.
+
+**To tighten at M1**, when Terraform owns the topic: the default statement AWS generates allows `AWS: "*"` — scoped by
+source account, but including `SNS:DeleteTopic`, `SNS:AddPermission` and `SNS:RemovePermission`. Acceptable on a
+personal account, not least privilege. Narrow it to publish for the two services and subscribe for the owner.
+
+**Budget actions are deferred to M1.** AWS Budgets can *act* rather than notify — stop EC2 instances at a threshold —
+which is what the cost-guardrail placeholder in the [ADR index](adr/README.md) leans towards. Not done now for three
+reasons: there is nothing to stop yet; it needs a purpose-built IAM role trusting `budgets.amazonaws.com` with
+`ec2:StopInstances`, which Terraform should create scoped to the project tag; and it must be attached to an **actual**
+threshold rather than a forecasted one. An action on a forecast would stop the server mid-session because the month was
+busy.
+
+### Which guardrails are actually live
+
+As of 2026-08-12, one of five. The rest switch on by themselves as history accumulates, or arrive with later milestones.
+
+| Guardrail | Live? |
+| --- | --- |
+| Budget, 95% actual ($19) | **Yes** |
+| Budget, 80% forecasted ($16) | No — AWS cannot forecast a new account |
+| Cost anomaly detection | No — needs about ten days to build a baseline |
+| Running-hours alarm, [ADR-0015](adr/0015-observability-and-alerting.md) | Not built |
+| Budget action that stops instances | Deferred to M1 |
 
 **Two things the budget does not yet cover, both temporary.**
 

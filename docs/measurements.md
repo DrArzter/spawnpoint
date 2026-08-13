@@ -301,7 +301,8 @@ Worth knowing rather than deciding, because it means the network gate in
 
 Nothing above still blocks M0. What remains in the AWS console is **setup**, not research:
 
-1. **MFA on root, then stop using it.** Create a normal administrative identity.
+1. **MFA on root, then stop using it.** Create a normal administrative identity — the sequence, including the billing
+   toggle that only root can flip, is in [the runbook](runbook.md#account-bootstrap).
 2. **A Budgets alarm at about $20.** Above the ~$15.55 model, well below a surprise. This matters more since
    [ADR-0027](adr/0027-spot-request-shape.md) was deferred: a failed stop now costs ~$129 a month rather than ~$40.
 3. **Pick one Availability Zone in `eu-central-1` and write it down.** The data volume is zonal, so this choice binds

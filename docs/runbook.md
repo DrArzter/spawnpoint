@@ -133,6 +133,45 @@ instance is unreachable through SSM:
 3. If the agent is genuinely broken, replace the instance. The world is on a separate volume, so
    replacement is the cheaper path than getting a shell.
 
+## Account bootstrap
+
+One-time, manual, and done before anything else exists. Recorded here because Terraform does not know about any of it.
+
+**Order matters.** Steps 1–3 are done as root, and step 2 is the one that is easy to miss.
+
+1. **MFA on the root user.** Account menu → Security credentials → assign an MFA device. Then check there are no root
+   access keys; a new account should have none, and if any exist, delete them.
+2. **Activate IAM access to billing.** Account settings → *IAM user and role access to billing information* → Activate.
+   **Only root can do this**, and without it the administrative identity created below cannot see Cost Explorer or
+   create the Budgets alarm — which is the next thing it needs to do.
+3. **Enable IAM Identity Center**, and create the identity there rather than an IAM user with an access key. Short-lived
+   credentials are the whole point, and they match the posture the rest of this design takes — see
+   [ADR-0028](adr/0028-update-proposals.md), where GitHub gets a role through OIDC rather than a stored key.
+
+   - Console → IAM Identity Center → Enable. Pick `eu-central-1` as its home region to match everything else.
+   - **It will create an AWS Organization** if the account is standalone. That is normal and harmless; it is worth
+     knowing rather than being surprised by.
+   - Users → add yourself. Permission sets → create one from the predefined `AdministratorAccess`. AWS accounts →
+     assign your user with that permission set.
+   - Note the access portal URL it gives you — something like `https://d-xxxxxxxxxx.awsapps.com/start`.
+
+4. **Sign in through the portal, and set MFA on that identity too.**
+5. **Create the Budgets alarm**, around $20. See [docs/costs.md](costs.md).
+6. **For the CLI:** `aws configure sso`, pointing at the portal URL. No access key is created, and the session expires
+   on its own.
+7. **Stop using root.** Keep its credentials somewhere safe: a few things still require it — closing the account,
+   changing the support plan, and some billing settings — but nothing in day-to-day work does.
+
+Record here what was actually created:
+
+| Item | Value |
+| --- | --- |
+| Identity Center portal URL | TODO |
+| Home region | TODO |
+| Administrative identity | TODO |
+| Budgets alarm threshold | TODO |
+| Chosen Availability Zone | TODO — binds every later launch, because the data volume is zonal |
+
 ## Bootstrap Terraform state
 
 The chicken-and-egg step, done once by hand and therefore easy to forget.

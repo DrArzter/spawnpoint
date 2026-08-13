@@ -56,6 +56,25 @@ backups/<world>/...                          one lineage per world
 that share a large overlap of common library mods settles it: store by hash once, reference from every release
 that uses it.
 
+**Content-addressed, not a "common" directory.** The tempting version is a `common/` folder for mods several packs
+share, with per-pack folders for the rest. It is the weaker form of the same idea: it needs somebody to decide what
+counts as common, that judgement drifts as packs change, and it creates two places to look. Addressing by hash removes
+the decision entirely — two releases referencing the same file share it automatically and exactly, while two versions of
+the same mod are different hashes and cannot collide.
+
+**The same cache on the instance, materialised by hardlink.** Forge reads real files from `mods/`, so reconciliation has
+to turn hashes into named JARs. Keep a content-addressed cache on the data volume and **hardlink** from each world's mod
+directory into it rather than copying. Four worlds sharing eighty mods then use one copy on disk instead of four.
+
+That second part is where the idea actually pays, and not in money. **Switching worlds becomes relinking rather than
+re-downloading** — at 111 mods and several hundred megabytes, that is the difference between a switch that fetches and
+one that does not. See the reconciliation step in [ADR-0009](0009-s3-as-mod-source-of-truth.md).
+
+**Worth being honest about the storage saving itself: it is pennies.** Four packs at roughly 500 MB with heavy overlap
+is perhaps 2 GB naive against 800 MB deduplicated — about **three cents a month**. Content-addressing is not adopted to
+save that. It is adopted because it is *simpler* than classifying mods as common or not, and because of the hardlink
+consequence above.
+
 **One EBS volume, a directory per world.** Not a volume per world. The volume is the dominant fixed cost in
 [docs/costs.md](../costs.md), and four volumes would multiply it while three of them sit unused. A directory per
 world costs only the bytes it holds.

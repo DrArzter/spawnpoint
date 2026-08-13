@@ -46,6 +46,12 @@ retries and the rollback branch below are declared in the state machine rather t
 If the server is not running, steps 3–6 are skipped. Boot always reconciles against the live release, so
 the change lands at the next start.
 
+**Reconciling is a check, not a fetch.** The mods live in a content-addressed cache on the persistent data volume,
+which outlives the instance — see [ADR-0023](0023-multiple-worlds.md). On boot the reconciler hashes what is on disk
+against the manifest: **matching means nothing is downloaded**, and only changed entries are fetched. A mismatch
+happens in exactly one situation, a release promoted while the server was stopped. A full download happens once, when
+the cache is empty — first start, or a volume restored from nothing.
+
 ## Consequences
 
 **Good**

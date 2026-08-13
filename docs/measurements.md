@@ -216,22 +216,55 @@ group. Expect both to land in a similar range and London to be clearly worse; co
 This decides the region jointly with latency, and it decides whether the cost model survives: the Spot discount is
 load-bearing, not an optimisation. See [docs/costs.md](costs.md).
 
-Real prices come from the API, not from the pricing page, which renders in a browser. With credentials configured:
+### Before measuring anything: three one-time things
+
+Do these first. They take five minutes and two of them cannot be done retroactively.
+
+1. **MFA on the root account**, then stop using root. Create a normal administrative identity for daily work. Root with
+   no MFA is the single largest cost exposure in [docs/costs.md](costs.md), because it is the route to the
+   four-figure stories.
+2. **A Budgets alarm**, before any long-running resource exists. Set it well above the ~$7 model — $20 is a sensible
+   line that means "something is wrong" rather than "we played a lot".
+3. **Confirm which plan the account is on.** Free is correct for M0, which is throwaway; move to Paid before M1, when
+   the real world arrives. See [docs/costs.md](costs.md).
+
+### Which instance types to price
+
+Settled: **x86, memory-optimised, 16 GiB.** Cores are not the constraint — 0.19 of one was in use at the sampled
+instant — so a `.large` with 16 GiB is the shape, not an `.xlarge` with four vCPUs. Start with:
+
+`r7i.large`, `r7a.large`, `r6i.large`, `r6a.large`, `r5.large`, `r5a.large`
+
+The fleet in [ADR-0027](adr/0027-spot-request-shape.md) wants around ten types, so older generations are useful rather
+than embarrassing: they are less in demand, which is exactly what makes their Spot capacity better.
+
+**Gotcha worth checking first:** newer families are not present in every region. Stockholm carries fewer instance
+families than Frankfurt, so confirm the `r7` generations exist in `eu-north-1` before pricing them — if they do not,
+that alone may decide the region.
+
+### In the console
+
+| What | Where |
+| --- | --- |
+| Spot price history | EC2 → **Spot Requests** → *Pricing history*. Pick the type, Linux/UNIX, and read the per-AZ graph |
+| Spot placement score | EC2 → **Spot Requests** → *Spot placement score*. Ask for 1 instance with the requirements above, across both regions |
+| Interruption frequency | Not in the console. The **Spot Instance Advisor** is a separate public page |
+
+### Or from the command line
+
+Faster, and it fills this table directly. Credentials were not configured on this machine as of 2026-08-12.
 
 ```bash
-aws ec2 describe-spot-price-history --region eu-north-1 --instance-types m7g.xlarge --product-descriptions Linux/UNIX --start-time "$(date -u -v-7d +%Y-%m-%dT%H:%M:%S)" --query 'SpotPriceHistory[].[AvailabilityZone,SpotPrice,Timestamp]' --output table
+aws ec2 describe-spot-price-history --region eu-central-1 --instance-types r7i.large r7a.large r6i.large r5.large --product-descriptions Linux/UNIX --start-time "$(date -u -v-7d +%Y-%m-%dT%H:%M:%S)" --query 'SpotPriceHistory[].[InstanceType,AvailabilityZone,SpotPrice]' --output table
 ```
 
-Repeat per region and per candidate type. Then ask AWS where the capacity actually is:
+Repeat with `--region eu-north-1`. Then ask AWS where the capacity actually is:
 
 ```bash
-aws ec2 get-spot-placement-scores --region eu-north-1 --target-capacity 1 --target-capacity-unit-type units --single-availability-zone --instance-requirements-with-metadata '{"ArchitectureTypes":["arm64"],"VirtualizationTypes":["hvm"],"InstanceRequirements":{"VCpuCount":{"Min":2,"Max":8},"MemoryMiB":{"Min":15000}}}' --region-names eu-west-2 eu-central-1 eu-north-1
+aws ec2 get-spot-placement-scores --region eu-central-1 --target-capacity 1 --target-capacity-unit-type units --single-availability-zone --instance-requirements-with-metadata '{"ArchitectureTypes":["x86_64"],"VirtualizationTypes":["hvm"],"InstanceRequirements":{"VCpuCount":{"Min":2,"Max":4},"MemoryMiB":{"Min":15000}}}' --region-names eu-central-1 eu-north-1
 ```
 
-A placement score runs 1 to 10 and is a point-in-time reading, not a guarantee. Interruption bands — under 5%, 5–10%, and
-so on — come from the Spot Instance Advisor in the console, which has no public API.
-
-Note that credentials are **not** configured on this machine yet, so none of this has been run.
+A placement score runs 1 to 10 and is a point-in-time reading, not a guarantee.
 
 ## One decision that is already made
 

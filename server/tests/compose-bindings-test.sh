@@ -34,6 +34,8 @@ jq -e '
   }]
   and (.services.mc.environment | has("CURSEFORGE_FILES") | not)
   and .services.mc.environment.REMOVE_OLD_MODS == "false"
+  and .services.mc.environment.ENABLE_WHITELIST == "TRUE"
+  and .services.mc.environment.ENFORCE_WHITELIST == "TRUE"
 ' >/dev/null <<<"${rendered}"
 
 printf 'result=passed\n'

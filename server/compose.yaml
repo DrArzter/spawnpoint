@@ -36,6 +36,7 @@ services:
       RCON_PASSWORD: ${RCON_PASSWORD:?set RCON_PASSWORD in .env}
 
       # PROJECT: generated from the link table from M4. Hand-maintained until then.
+      ENABLE_WHITELIST: "TRUE"
       ENFORCE_WHITELIST: "TRUE"
 
     volumes:

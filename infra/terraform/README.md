@@ -74,15 +74,17 @@ The tests use Terraform's mock AWS provider: they require no credentials and can
 Free Plan instance choice, zero ingress, IMDSv2, termination protection, root/data EBS semantics, private versioned
 encrypted buckets, the reviewed paid upgrade and rejection of unreviewed instance types.
 
-The committed S3 backend intentionally has no bucket name. Copy `backend.hcl.example` to ignored `backend.hcl` only
-after the state bucket exists, then initialise with `-backend-config=backend.hcl`. Never pass credentials through that
-file: Terraform can persist backend arguments in `.terraform/` and plan files.
+The committed S3 backend intentionally has no bucket name. The real ignored `backend.hcl` now points to the bootstrapped
+production bucket; `backend.hcl.example` documents the shape without publishing account-specific configuration. Never
+pass credentials through that file: Terraform can persist backend arguments in `.terraform/` and plan files. The
+non-secret profile name belongs in it because the S3 backend is initialised before, and independently from, the AWS
+provider configuration.
 
 The complete `terraform plan` was exercised against real read-only AWS data sources on 2026-08-13: the current AL2023
 AMI, account identity and `eu-central-1a` / `euc1-az2` resolved, and the result was **27 to add, 0 to change, 0 to
-destroy**. It was not saved and cannot be applied. Before backend bootstrap, repeat that diagnostic plan on a temporary
-copy excluding `backend.tf`; never remove the production backend declaration in place. The separate bootstrap plan was
-also exercised and returned **6 to add, 0 to change, 0 to destroy**. No M1 resource or backend exists yet.
+destroy**. It was not saved and cannot be applied. The same plan succeeded again through the real S3 backend and
+exercised its native lockfile. The bootstrap was applied separately: its seven resources are live, their S3 controls
+were verified through AWS APIs, and its final drift check returned `No changes`.
 
-**Status:** M1 compute, network and storage validate, pass mock tests and pass real read-only plans; backend bootstrap
-and both applies remain deliberately pending while the account stays on the Free Plan.
+**Status:** the state backend is live. M1 compute, network and storage validate, pass mock tests and pass a real
+read-only plan; the 27-resource production apply remains deliberately pending while the account stays on the Free Plan.

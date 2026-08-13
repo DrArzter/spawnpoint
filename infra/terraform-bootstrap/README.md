@@ -8,8 +8,9 @@ production root with `terraform init -backend-config=backend.hcl`. The S3 backen
 table is required.
 
 The bucket has `prevent_destroy`, all public access blocked, bucket-owner-enforced ownership, SSE-S3 encryption and a
-policy denying non-TLS requests. The ignored local `terraform.tfstate` remains sensitive operational data: keep a
-private copy until the bucket has been imported into a replacement bootstrap state and verified.
+policy denying non-TLS requests. A lifecycle rule expires only obsolete `.tflock` object versions; production state
+versions have no expiration. The ignored local `terraform.tfstate` remains sensitive operational data: keep a private
+copy until the bucket has been imported into a replacement bootstrap state and verified.
 
 Do not run `terraform destroy` as ordinary cleanup. Removing the state bucket requires first emptying every object
 version and deliberately removing `prevent_destroy`; that should never happen while a production state object exists.

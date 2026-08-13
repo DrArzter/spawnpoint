@@ -43,4 +43,12 @@ run "state_bucket_is_private_versioned_and_encrypted" {
     condition     = one(one(aws_s3_bucket_server_side_encryption_configuration.terraform_state.rule).apply_server_side_encryption_by_default).sse_algorithm == "AES256"
     error_message = "Terraform state must be encrypted without a separately billed KMS key."
   }
+
+  assert {
+    condition = (
+      one(one(aws_s3_bucket_lifecycle_configuration.terraform_state_locks.rule).filter).prefix == "spawnpoint/production.tfstate.tflock" &&
+      one(one(aws_s3_bucket_lifecycle_configuration.terraform_state_locks.rule).noncurrent_version_expiration).noncurrent_days == 1
+    )
+    error_message = "Versioning must not retain obsolete native lock objects indefinitely."
+  }
 }

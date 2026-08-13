@@ -1,6 +1,6 @@
 bucket       = "replace-with-account-unique-state-bucket"
 key          = "spawnpoint/production.tfstate"
 region       = "eu-central-1"
+profile      = "spawnpoint"
 encrypt      = true
 use_lockfile = true
-

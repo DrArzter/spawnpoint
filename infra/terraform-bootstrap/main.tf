@@ -55,6 +55,29 @@ resource "aws_s3_bucket_versioning" "terraform_state" {
   }
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "terraform_state_locks" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  rule {
+    id     = "expire-obsolete-native-locks"
+    status = "Enabled"
+
+    filter {
+      prefix = "spawnpoint/production.tfstate.tflock"
+    }
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.terraform_state]
+}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" {
   bucket = aws_s3_bucket.terraform_state.id
 

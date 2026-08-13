@@ -15,7 +15,7 @@ performed. A procedure nobody has run is a guess.
 | Roll back a release | Owner | — |
 | Restore the world | Owner | 2026-08-12 — local archive drill; content-identical restore into `/tmp`, then successful isolated boot with 111 mods, health check and RCON; not yet restored from S3 |
 | Recover from a lost instance | Owner | — |
-| Bootstrap Terraform state | Owner | — |
+| Bootstrap Terraform state | Owner | 2026-08-13 — bucket created by saved plan, controls verified through S3 API, native lock exercised, final drift check clean |
 | Tear down and rebuild | Owner | — |
 | Monthly cost check | Owner | — |
 
@@ -27,6 +27,7 @@ Fill in at M1 and keep current. This block is what somebody needs when something
 | --- | --- |
 | AWS account | Resolve with `aws sts get-caller-identity`; do not hard-code it |
 | Region | `eu-central-1` — see [ADR-0002](adr/0002-host-on-aws.md) |
+| Terraform state bucket | `spawnpoint-tfstate-614934752397` |
 | Server hostname | TODO |
 | Instance ID / tag | TODO |
 | Data volume ID | TODO |
@@ -214,7 +215,7 @@ are.
 The chicken-and-egg step, performed once from a separate Terraform root. It has local state because the S3 bucket
 cannot contain the state that creates that same bucket before it exists. Run every command from the repository root.
 
-First authenticate and run the checks. `plan` is read-only; inspect its proposed bucket name and six resources before
+First authenticate and run the checks. `plan` is read-only; inspect its proposed bucket name and seven resources before
 allowing the apply:
 
 ```bash
@@ -278,6 +279,12 @@ aws s3api get-bucket-policy-status --bucket <bucket> --profile spawnpoint
 
 Record the created bucket name in the reference table. Keep a private copy of the ignored bootstrap state until a
 restore/import of that state has been tested. The bucket has `prevent_destroy`; never weaken it during ordinary cleanup.
+
+**Performed 2026-08-13.** Terraform created `spawnpoint-tfstate-614934752397`; versioning, SSE-S3, owner enforcement,
+all four public-access blocks, non-public policy status and the TLS-only policy were verified through `s3api`. A real
+production-root plan exercised S3-native locking. Because bucket versioning also versions short-lived `.tflock`
+objects, a narrow lifecycle rule now expires obsolete lock versions after one day without expiring any state version.
+The final bootstrap plan reported `No changes`.
 
 ## Tear down and rebuild
 

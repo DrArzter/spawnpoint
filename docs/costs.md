@@ -1,8 +1,9 @@
 # Cost model
 
-Three rates are now verified for `eu-central-1`: `r8i.large` on-demand Linux at **$0.16758 per hour** and gp3 at
-**$0.0952 per GB-month**, read from the AWS Price List API on 2026-08-13; public IPv4 at **$0.005 per hour**, verified
-against [Amazon VPC pricing](https://aws.amazon.com/vpc/pricing/). S3 and serverless figures below remain estimates.
+Current rates verified for `eu-central-1`: Free-Plan-eligible `m7i-flex.large` at **$0.11471 per hour**,
+`r8i-flex.large` at **$0.15920 per hour**, and gp3 at **$0.0952 per GB-month**, read from AWS APIs on 2026-08-13;
+public IPv4 is **$0.005 per hour**, verified against [Amazon VPC pricing](https://aws.amazon.com/vpc/pricing/). S3 and
+serverless figures below remain estimates.
 Rates change, so query them again before relying on this model later.
 
 The purpose of this document is the shape of the cost, and which decisions move it. That shape is stable
@@ -31,8 +32,9 @@ monthly cost =
 
 **One decision does almost all of the work** on the variable term:
 
-- **Stop when idle.** Roughly 75 running hours a month instead of 730 — the whole difference between about $16.42 and
-  about $129. See [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md).
+- **Stop when idle.** Roughly 75 running hours a month instead of 730 — the whole difference between about $12.45 and
+  about $90.86 at the current list rate, before Free Plan credits. See
+  [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md).
 
 There used to be a second, and it multiplied with the first: Spot instead of on-demand. It is deferred, and worth about
 $8 a month against a large amount of machinery. See [ADR-0032](adr/0032-on-demand-single-instance.md) and
@@ -42,7 +44,7 @@ $8 a month against a large amount of machinery. See [ADR-0032](adr/0032-on-deman
 
 | Driver | Type | Rate | Notes |
 | --- | --- | --- | --- |
-| **EC2 on-demand, `r8i.large`** — 2 vCPU / 16 GiB | Variable | **$0.16758 per hour**, quoted | Sized from measurement rather than the bracket: one exploring player produced 5.863 GiB of container-accounted memory, so 8 GiB leaves no headroom for the OS, Docker and the overlay agent. **Memory binds and cores do not** — 0.19 of a logical CPU at the sampled instant — so an `r`-family `.large`, not an `m`-family `.xlarge`. Newest Intel generation chosen over the cheapest option because single-thread performance is the criterion. See [ADR-0032](adr/0032-on-demand-single-instance.md) |
+| **EC2 on-demand, `m7i-flex.large`** — 2 vCPU / 8 GiB | Variable | **$0.11471 per hour list; currently covered by Free Plan credits** | One-player AWS load peaked at 78.46% host memory with no OOM. Accepted while free, not proven for the full group. `r8i-flex.large` is the reviewed 2 vCPU / 16 GiB upgrade at $0.15920/hour and requires Paid Plan. See [ADR-0032](adr/0032-on-demand-single-instance.md) |
 | Public IPv4 address | Variable here | **$0.005 per hour**, verified | Only billed while running, because no Elastic IP is held. Applies in **every** connectivity mode, because the instance needs outbound access regardless. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | EBS gp3, 8 GB root volume | Fixed | **$0.0952 per GB-month**, verified | The current official AL2023 AMI has an 8 GB root disk. A stopped instance retains and bills this volume; it was missing from the first model. It is disposable, unlike the data volume. |
 | EBS gp3, 20 GB data volume | Fixed | **$0.0952 per GB-month**, verified | Billed while the instance is stopped. Sized for mod releases and several worlds, not for save data — the worlds themselves are a few hundred MB each. See [ADR-0023](adr/0023-multiple-worlds.md) |
@@ -64,7 +66,7 @@ directly.
 
 | Item | Calculation | Monthly |
 | --- | --- | --- |
-| Instance | 75 h x $0.16758 | $12.57 |
+| Instance | 75 h x $0.11471 | $8.60 before credits |
 | Public IPv4 | 75 h x $0.005 | $0.38 |
 | Root volume | 8 GB x $0.0952 | $0.76 |
 | Data volume | 20 GB x $0.0952 | $1.90 |
@@ -72,12 +74,12 @@ directly.
 | Release store | 10 GB x $0.023 | $0.23 |
 | Hosted zone | overlay mode — none | $0.00 |
 | Serverless, egress, logs | inside free tier, plus a margin | ~$0.50 |
-| **Total** | | **~$16.42** |
+| **Total** | | **~$12.45 list; lower while credits apply** |
 | **of which fixed storage** | both volumes, backups and releases | **~$2.98** |
 
-Two changes from the earlier ~$6.85, and both are the model meeting reality. The instance rate is now quoted rather than
-assumed, and it is **on-demand** rather than Spot — see the deferral in [ADR-0027](adr/0027-spot-request-shape.md). The
-hosted zone disappeared because [ADR-0024](adr/0024-connectivity-modes.md) chose the overlay.
+The active instance is deliberately smaller than the paid target while the account remains on the Free Plan. At the
+same 75 hours, the reviewed `r8i-flex.large` upgrade would put the total near **$15.79** before credits. The hosted zone
+is absent because [ADR-0024](adr/0024-connectivity-modes.md) chose the overlay.
 
 ### Sensitivity to running hours
 
@@ -85,17 +87,16 @@ The single number matters less than the slope, because hours are the one input m
 
 | Pattern | Hours/month | Total |
 | --- | --- | --- |
-| A few evenings a week | 40 | ~$10.38 |
-| 2–3 h most nights | 75 | ~$16.42 |
-| 3 h every night | 90 | ~$19.01 |
-| **Always on** | 730 | **~$129.46** |
+| A few evenings a week | 40 | ~$8.26 list |
+| 2–3 h most nights | 75 | ~$12.45 list |
+| 3 h every night | 90 | ~$14.25 list |
+| **Always on** | 730 | **~$90.86 list** |
 
-Every extra hour costs about **17 cents** now, against 5 on Spot.
+Every extra hour costs about **12 cents** at list rates now, and consumes Free Plan credits while they remain.
 
-**That last row is the consequence of choosing on-demand, and it is the one to take seriously.** An instance that never
-stops used to cost about $40 a month; it now costs about **$129**, eight times the expected bill. The idle watchdog, the
-running-hours alarm and the hard session cap in [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md) have not
-changed, but what they are worth has roughly tripled. A failed stop is no longer an annoyance.
+**That last row is the consequence of choosing on-demand, and it is the one to take seriously.** Credits hide cost;
+they do not make a failed stop harmless, because they can be exhausted. The idle watchdog, running-hours alarm and hard
+session cap in [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md) remain mandatory.
 
 The hosted-zone line applies in DNS mode only; in the other two connectivity modes it is nil or the overlay's free
 tier. See [ADR-0024](adr/0024-connectivity-modes.md).
@@ -342,14 +343,15 @@ in a **shared** CPU tier and a **dedicated** one.
 
 | Option | At 75 h | Flat, 24/7 | Spec |
 | --- | --- | --- | --- |
-| **This design**, EC2 **on-demand `r8i.large`** | **~$16.42** | — | 2 vCPU / 16 GiB, quoted price |
+| **Current Free Plan shape**, EC2 **on-demand `m7i-flex.large`** | **~$12.45 list, credits apply** | — | 2 vCPU / 8 GiB, one-player tested |
+| Reviewed paid upgrade, EC2 **on-demand `r8i-flex.large`** | **~$15.79** | — | 2 vCPU / 16 GiB, quoted price |
 | The same on Spot, once deferred work is done | ~$7.70 | — | roughly a third of the hourly rate |
 | VPS, **dedicated** CPU | ~€7.50 | €16.98 | 2 core / 4 GB — "often enough" |
 | VPS, **shared** CPU | ~€10.50 | €23.73 | 4 core / 8 GB |
 | VPS, **dedicated** CPU | ~€14.25 | €33.94 | 4 core / 8 GB |
 | VPS, **dedicated** CPU | ~€28.50 | €67.86 | 8 core / **16 GB** — the like-for-like row |
 
-**Doubling the memory widened the gap rather than closing it.** Like for like is now about $16.42 against €28.50, and
+**Doubling the memory widens the gap rather than closing it.** Like for like is about $15.79 against €28.50, and
 the reason is structural: **the VPS ladder couples cores to memory.** 16 GB is only available on the 8-core
 rung, and this workload uses about a fifth of one core. Cloud instance families let you buy the axis that actually
 binds — a memory-optimised `.large` is 2 vCPU and 16 GiB — which is the first advantage in this document that is about
@@ -398,9 +400,9 @@ An interruption would cost the evening, not data: two minutes of warning, a conf
 everybody reconnects after the next start having lost seconds.
 
 **Retracted: "the Spot discount is load-bearing for the whole cost argument."** This document said exactly that while the
-model assumed Spot and a compute line of about $4.50. The model was then rebuilt on real on-demand prices — $12.57 at 75
-hours, about $16.42 all in — and that is the figure the rest of this document uses. The discount is worth about $8 a
-month. Worth having eventually; not what the argument stands on.
+model assumed Spot and a compute line of about $4.50. The paid 16 GiB comparison is now about $15.79 all in at 75
+hours; the current 8 GiB Free Plan shape is about $12.45 at list rates before credits. The discount is worth having
+eventually; it is not what the argument stands on.
 
 If Spot is ever adopted, two things from that earlier reasoning survive and are worth keeping: check the Advisor for the
 specific candidate types **before** committing to a region, and allow several instance types rather than one. The zonal

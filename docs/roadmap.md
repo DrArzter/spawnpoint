@@ -33,7 +33,8 @@ guesswork.
 **Goal:** friends can play tonight. Also: learn what the AWS resources actually are, by creating them
 individually and seeing what each one needs.
 
-- Instance launched by hand in the console: **on-demand `r8i.large`** in `eu-central-1`. See
+- Instance launched by hand: **on-demand `m7i-flex.large`** in `eu-central-1`, the largest suitable shape allowed by
+  the account's Free Plan. See
   [ADR-0032](adr/0032-on-demand-single-instance.md).
 - Separate data volume, attached and mounted.
 - `itzg/docker-minecraft-server` running the intended pack, via Compose.
@@ -66,8 +67,9 @@ measured cold start and the memory headroom, because those become inputs to ever
 - Backup automation: world archived to S3, archive verified after upload.
 - **A restore drill.** Destroy the volume deliberately, restore from an archive, and record how long it took.
 - Budgets alarm in place.
-- **Switch the account to the Paid Plan.** From this milestone the real world lives in AWS, so the Free Plan's automatic
-  closure becomes a deletion timer rather than a spend cap. See [docs/costs.md](costs.md).
+- Keep the eligible `m7i-flex.large` while Free Plan credits last. Maintain an independent local world copy because
+  the plan's automatic account closure is a deletion timer. Switch to Paid before expiry, before retiring that external
+  copy, or before selecting the reviewed 16 GiB `r8i-flex.large`. See [docs/costs.md](costs.md).
 
 **Done when:** `terraform destroy` followed by `terraform apply` produces a working server, and a world has
 been restored from an S3 archive at least once.

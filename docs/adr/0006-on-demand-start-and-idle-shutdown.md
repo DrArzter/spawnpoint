@@ -11,10 +11,10 @@
 > that keeps it in reserve, are unavailable while the overlay is the connectivity mode. The explicit, attributed
 > trigger is not a preference now — it is the only one. Idle weeks cost storage, not storage and DNS.
 >
-> **The watchdog is worth about three times more.** [ADR-0027](0027-spot-request-shape.md) is deferred, so the server
-> runs on-demand. A stop that silently fails now costs roughly **$129 a month instead of about $40**, which makes the
-> mitigations below — the running-hours alarm and the hard session cap — the cheapest insurance in the design rather
-> than a nicety. See [docs/costs.md](../costs.md).
+> **The watchdog protects both credits and money.** [ADR-0027](0027-spot-request-shape.md) is deferred, so the server
+> runs on-demand. A stop that silently fails can consume the finite Free Plan credits and then costs roughly **$91 a
+> month** at the current list rate. The mitigations below — running-hours alarm and hard session cap — remain the
+> cheapest insurance in the design. See [docs/costs.md](../costs.md).
 
 ## Context
 

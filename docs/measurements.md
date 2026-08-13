@@ -236,14 +236,17 @@ group. Expect both to land in a similar range and London to be clearly worse; co
 | --- | --- | --- |
 | `r5a.large` | 0.137 | Cheapest comparable. AMD, older generation, slower per thread |
 | `r5ad.large` | 0.158 | `d` = local NVMe, wiped on stop — not useful here |
-| **`r8i.large`** | **0.16758** | **Chosen.** Newest Intel generation, best single thread |
+| **`r8i-flex.large`** | **0.15920** | **Reviewed 16 GiB upgrade.** Intel Xeon 6, 3.9 GHz; requires Paid Plan |
+| `r8i.large` | 0.16758 | More expensive non-Flex sibling; no benefit measured for this intermittent load |
 | `r5d.large` | 0.173 | |
 | `r5b.large` | 0.178 | |
 | `r7a.large` | 0.18354 | |
 | `r8a.large` | 0.19272 | |
 
-The whole current-generation spread is about $4 a month, which is why the criterion is the fastest thread rather than
-the cheapest hour. See [ADR-0032](adr/0032-on-demand-single-instance.md).
+The current Free Plan permits `m7i-flex.large`, not any 16 GiB `r` candidate. It remains the active 8 GiB shape after a
+successful one-player AWS session. The table decides the upgrade only after Paid Plan activation; `r8i-flex.large`
+beats the originally selected non-Flex sibling on price for a workload that does not sustain full CPU. See
+[ADR-0032](adr/0032-on-demand-single-instance.md).
 
 **Spot price, interruption band and placement score are not collected**, because
 [ADR-0027](adr/0027-spot-request-shape.md) is deferred. They become relevant again only if Spot is adopted.
@@ -264,13 +267,14 @@ Do these first. They take five minutes and two of them cannot be done retroactiv
    four-figure stories.
 2. **A Budgets alarm**, before any long-running resource exists. Set it well above the ~$7 model — $20 is a sensible
    line that means "something is wrong" rather than "we played a lot".
-3. **Confirm which plan the account is on.** Free is correct for M0, which is throwaway; move to Paid before M1, when
-   the real world arrives. See [docs/costs.md](costs.md).
+3. **Confirm which plan the account is on.** Stay on Free while the measured `m7i-flex.large` is sufficient, but keep
+   an independent world copy outside the account and move to Paid before plan expiry or a 16 GiB upgrade. See
+   [docs/costs.md](costs.md).
 
 ### Which instance types to price
 
-Settled: **x86, memory-optimised, 16 GiB.** Cores are not the constraint — 0.19 of one was in use at the sampled
-instant — so a `.large` with 16 GiB is the shape, not an `.xlarge` with four vCPUs. Start with:
+Paid target: **x86, memory-optimised, 16 GiB**. Current Free Plan exception: measured `m7i-flex.large`, 8 GiB. Cores
+are not the constraint, so any paid upgrade is a `.large` with 16 GiB, not an `.xlarge` with four vCPUs. Start with:
 
 `r7i.large`, `r7a.large`, `r6i.large`, `r6a.large`, `r5.large`, `r5a.large`
 
@@ -321,12 +325,12 @@ Nothing above still blocks M0. What remains in the AWS console is **setup**, not
 
 1. **MFA on root, then stop using it.** Create a normal administrative identity — the sequence, including the billing
    toggle that only root can flip, is in [the runbook](runbook.md#account-bootstrap).
-2. **A Budgets alarm at about $20.** Above the ~$15.55 model, well below a surprise. This matters more since
-   [ADR-0027](adr/0027-spot-request-shape.md) was deferred: a failed stop now costs ~$129 a month rather than ~$40.
+2. **A Budgets alarm at about $20.** Above the expected Free Plan-backed session pattern, well below a surprise. A
+   failed stop can consume the finite credits and then cost about $91/month at the current list rate.
 3. **Pick one Availability Zone in `eu-central-1` and write it down.** The data volume is zonal, so this choice binds
    every later launch. See [ADR-0032](adr/0032-on-demand-single-instance.md).
-4. **Confirm the account is on the Free plan** — correct for the throwaway M0. Move to Paid before M1. See
-   [docs/costs.md](costs.md).
+4. **Confirm the account is on the Free plan** — correct while `m7i-flex.large` remains sufficient. Preserve an
+   independent world copy and move to Paid before expiry or the reviewed 16 GiB upgrade. See [docs/costs.md](costs.md).
 
 Then M0 is building rather than deciding.
 

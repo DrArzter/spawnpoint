@@ -152,14 +152,14 @@ Record here what was actually created:
 | --- | --- |
 | Administrative identity | IAM user `drarzter`, in group `admin`, with `AdministratorAccess`, virtual MFA and no access key; verified through the IAM API on 2026-08-13 |
 | IAM Identity Center | **Deliberately not enabled.** Deferred to M1 — enabling it expires the free tier credits immediately |
-| Account plan | **Free**, as of 2026-08-12. Move to Paid before M1 — see [docs/costs.md](costs.md) |
+| Account plan | **Free**, as of 2026-08-12. Keep the eligible `m7i-flex.large` while credits last; preserve an external world copy and move to Paid before expiry or a 16 GiB upgrade — see [docs/costs.md](costs.md) |
 | Budget | **$20/month, fixed, all services, unblended.** Created 2026-08-12 |
 | Budget alerts | 80% **forecasted** ($16) and 95% **actual** ($19), both publishing to `spawnpoint-alert`; verified through the Budgets API on 2026-08-13 |
 | Cost anomaly monitor | **Default-Services-Monitor**, created by AWS, all services |
 | Cost anomaly subscription | **Retuned** from the AWS default of `$100 AND 40%`, which could never fire on a ~$15 account. Now **$5 AND 40%**, individual alerts, delivered via SNS |
 | SNS alert topic | `arn:aws:sns:eu-central-1:<account-id>:spawnpoint-alert` — Standard, with one confirmed email subscription. The account ID and email are deliberately not written here; query them through the CLI |
 | Project tag | `Project=spawnpoint`; M0 also uses `Environment=m0` and `ManagedBy=manual` |
-| Chosen Availability Zone | `eu-central-1a`, physical Zone ID `euc1-az2`; `r8i.large` and a default public subnet were verified there on 2026-08-13 |
+| Chosen Availability Zone | `eu-central-1a`, physical Zone ID `euc1-az2`; `m7i-flex.large`, `r8i-flex.large` and a public subnet were verified there on 2026-08-13 |
 | M0 EC2 identity | IAM role and instance profile `spawnpoint-m0-ec2`; role trusts EC2 and has only `AmazonSSMManagedInstanceCore` attached |
 | M0 security group | `spawnpoint-m0-minecraft` in the default VPC; no inbound rules yet, therefore neither Minecraft nor SSH is exposed |
 | Cost allocation tag activated | TODO — **activate as soon as the first tagged resource exists.** [ADR-0002](adr/0002-host-on-aws.md) commits to a project tag; a cost allocation tag has to be activated in the billing console before it appears in cost data, and activation is **not retroactive**. Leave it and the early months have no per-project breakdown, permanently |

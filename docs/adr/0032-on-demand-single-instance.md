@@ -26,7 +26,8 @@ That is the failure mode the ADR format exists to prevent. This record replaces 
 
 | | |
 | --- | --- |
-| Instance type | `r8i.large` — 2 vCPU, 16 GiB, x86_64 |
+| Instance type now | `m7i-flex.large` — 2 vCPU, 8 GiB, x86_64; allowed by the current Free Plan |
+| Reviewed memory upgrade | `r8i-flex.large` — 2 vCPU, 16 GiB, x86_64; requires an explicit Paid Plan decision |
 | Region | `eu-central-1` |
 | Purchase model | On-demand |
 | Network | Public subnet, no NAT Gateway |
@@ -43,7 +44,9 @@ read alone:
   architecture problem likely to surface as a subtle failure under load rather than a clean refusal to start.
 - **Single-thread performance is the selection criterion**, not a refinement. The main tick cannot be spread across
   cores, so no number of slower cores buys tick headroom.
-- **Memory binds, cores do not.** Hence a memory-optimised `.large` rather than a general-purpose `.xlarge`.
+- **Memory binds, cores do not.** The paid shape is therefore a memory-optimised `.large`, not a general-purpose
+  `.xlarge`. The current 8 GiB general-purpose host is a measured Free Plan exception, not a claim that memory stopped
+  mattering.
 
 **Compute and state stay separate**, which was ADR-0004's interruption discipline. On-demand instances are not
 interrupted, so the reason changes — but the requirement does not, because it is what makes nightly stop and start,
@@ -69,12 +72,15 @@ decided and why*. The arithmetic lives where arithmetic is allowed to change.
 - A stopped instance resumes with a warm disk, which is the fastest cold start available — and cold start is paid every
   night.
 - Moving to Spot later is a launch-configuration change, not a redesign, because state already lives off the instance.
+- The current host consumes eligible Free Plan credits, and Terraform makes the 16 GiB upgrade an explicit variable
+  change rather than silently changing the account's billing posture.
 
 **Bad, or risky**
 
-- Roughly twice the compute line. About $8 a month, paid for simplicity.
-- **A stop that silently fails now costs about $129 a month instead of about $40.** This is the single most expensive
-  way for the design to fail, and it became three times more expensive when Spot was deferred.
+- Eight GiB has only been accepted for a one-player M0 session. Host memory reached 78.46%; a full group may require
+  the reviewed 16 GiB upgrade.
+- The Free Plan expires and can close the account. Until Paid Plan activation, an independent copy of the world must
+  remain outside this AWS account.
 - No architectural pressure to handle instance loss, so the recovery path gets less exercise than it would have.
 
 **Mitigations**
@@ -85,6 +91,8 @@ decided and why*. The arithmetic lives where arithmetic is allowed to change.
 - The AWS Budgets alarm is the backstop behind both. See [docs/aws-account-checklist.md](../aws-account-checklist.md).
 - Keep the restore path exercised deliberately, since interruption will not exercise it for us. Every preview
   environment restores a world copy, which does exactly this.
+- Keep `m7i-flex.large` while it remains eligible and measured load fits. Change to `r8i-flex.large` only together with
+  Paid Plan activation and an updated cost check.
 
 ## Alternatives considered
 
@@ -100,7 +108,7 @@ decided and why*. The arithmetic lives where arithmetic is allowed to change.
 - **Milliseconds per tick on the real instance under real load.** The accepted risk carried over from ADR-0004: the
   tick is single-threaded and a cloud core is slower than the desktop the pack was measured on. Recorded in M0, not
   gated on — the escalation is to step up a size, then a faster family, then decide whether it is good enough anyway.
-- **The Availability Zone.** The data volume is zonal, so this choice binds every later launch and has to be made
-  before the first resource exists. See [docs/aws-account-checklist.md](../aws-account-checklist.md).
+- **Full-group memory on the 8 GiB host.** One player passed; several players and a longer session decide whether the
+  reviewed `r8i-flex.large` upgrade is necessary.
 - When to revisit Spot. Probably when the promotion pipeline and the watchdog have both run unattended for a while, at
   which point $8 a month buys less risk than it does today.

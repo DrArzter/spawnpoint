@@ -33,6 +33,7 @@ Powah, Create — plus Sinytra Connector running Fabric mods on Forge. Two conse
 | Allocated today | **4096M**, in the working config, which has been running fine |
 | Highest observed, 2026-08-12 | With **one player running through and exploring the world**, `docker stats` reported **5.863 GiB / 62.6 GiB (9.37%)** for the Minecraft container, with **18.74% CPU** at the instant sampled |
 | Earlier snapshot | **5.439 GiB (8.69%)**, with **2.80% CPU** |
+| First AWS live session, 2026-08-13 | With **one player moving through the real world**, Prometheus recorded Minecraft peaks of **5,336,694,784 bytes (4.97 GiB)** and **59.94% of one CPU core**. Host memory use peaked at **78.46%** on the 8 GiB `m7i-flex.large`; Minecraft stayed healthy with zero restarts and no OOM kill |
 | Larger-world comparison | Starting and playing in a substantially larger, developed world with many mechanisms and mobs produced no material change in the observed CPU load. This is a meaningful steady-state observation on the i9-14900KF, though it does not predict the single-core performance of the eventual EC2 type |
 | Remaining context | Session age was not recorded. Exploration can generate and load chunks, so this is a meaningful one-player workload, but not a confirmed peak for the full group |
 | How | Play with everybody on. Watch container memory, and the JVM heap the server reports |
@@ -159,6 +160,10 @@ The first AWS session on 2026-08-13 then exercised the same pinned stack on the 
 was reachable on the host's private ZeroTier address; Prometheus remained loopback-only. The first screenshot exposed
 that the disk panel watched the 8 GiB root volume rather than the persistent game-data EBS, so its query was corrected
 from mountpoint `/` to `/srv/spawnpoint` and verified through the Grafana API.
+
+During the first one-player AWS session, the maximum status response time was **30.98 ms**, Minecraft CPU reached
+**59.94% of one core**, and the persistent EBS never fell below **19,636,432,896 bytes (18.29 GiB) available**. These
+are Prometheus maxima/minima over the observed session rather than hand-picked `docker stats` snapshots.
 
 ### 6. LAN discovery on a clean client, over the overlay
 

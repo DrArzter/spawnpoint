@@ -801,6 +801,12 @@ The first live dashboard also revealed that the disk panel selected the disposab
 the persistent EBS as `/dev/nvme1n1`, mountpoint `/srv/spawnpoint`; the provisioned panel now selects that mountpoint.
 The corrected dashboard was loaded by Grafana and verified through its API.
 
+The first one-player movement test queried one-hour Prometheus extrema after the player had moved through the real
+world. Minecraft peaked at **5,336,694,784 bytes (4.97 GiB)** and **59.94% of one CPU core**; host memory use peaked at
+**78.46%**, status response at **30.98 ms**, and persistent EBS availability bottomed at **19,636,432,896 bytes
+(18.29 GiB)**. Docker still reported `healthy`, zero restarts and `OOMKilled=false`. This accepts the 8 GiB host for
+M0 smoke work, not for the full group: memory, rather than CPU, remains the production sizing constraint.
+
 ## DNS and Route 53
 
 Deferred. M0 uses ZeroTier and owns no domain or Route 53 hosted zone. If DNS is chosen later, its exact create,

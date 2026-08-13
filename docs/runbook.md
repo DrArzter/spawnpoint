@@ -167,10 +167,27 @@ Record here what was actually created:
 | Item | Value |
 | --- | --- |
 | Identity Center portal URL | TODO |
-| Home region | TODO |
+| Home region | TODO — `eu-central-1` intended |
 | Administrative identity | TODO |
-| Budgets alarm threshold | TODO |
+| Account plan | **Free**, as of 2026-08-12. Move to Paid before M1 — see [docs/costs.md](costs.md) |
+| Budget | **$20/month, fixed, all services, unblended.** Created 2026-08-12 |
+| Budget alerts | 80% **forecasted** ($16) and 95% **actual** ($19), both to a `+aws` alias |
+| Cost anomaly monitor | TODO — free, and it catches "strange" where the budget catches "expensive" |
 | Chosen Availability Zone | TODO — binds every later launch, because the data volume is zonal |
+
+**Two things the budget does not yet cover, both temporary.**
+
+**The forecast alert is inert until there is history.** AWS cannot forecast a new account, so for the first weeks only
+the 95% actual alert works. That is the period when something is most likely to be left running by accident.
+
+**So the practical exposure during M0 is about $19 and four to five days.** At $0.16758 an hour, $19 is roughly 110
+running hours, which is how long a forgotten instance would run before an email arrives. Until the running-hours alarm
+from [ADR-0015](adr/0015-observability-and-alerting.md) exists, the real guardrail is the habit of checking the console
+after a session.
+
+**Retune the budget once the bill is real.** $16 is 80% of $20 and the modelled spend is $15.55, so once the design is
+actually running the forecast alert becomes noise. Move the budget to about $30 then, and keep the alerts where they
+are.
 
 ## Bootstrap Terraform state
 

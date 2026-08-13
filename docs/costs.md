@@ -318,7 +318,10 @@ are the public pack and the self-triggering pipeline, and both are cheap to clos
 In order of when they go in.
 
 1. **AWS Budgets alarm before the first long-running resource exists.** Not after the first surprising bill.
-   Notify by chat and email.
+   Notify by chat and email. **Done 2026-08-12:** $20 monthly, alerts at 80% forecasted and 95% actual. Two caveats
+   recorded in [the runbook](runbook.md#account-bootstrap): the forecast alert cannot fire until AWS has history for the
+   account, and while credits cover the bill on the Free plan the budget may read zero — verify it reports real usage
+   once something has run, and filter the charge type if it does not.
 2. **Tag every resource** with a project tag, so Cost Explorer can attribute and orphans can be found.
 3. **CloudWatch alarm on continuous running hours**, which catches a failed stop long before the bill does.
 4. **A monthly look at Cost Explorer**, grouped by service. Five minutes, and it is how orphans are found.

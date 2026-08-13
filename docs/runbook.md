@@ -8,7 +8,7 @@ performed. A procedure nobody has run is a guess.
 | Procedure | Owner | Last performed |
 | --- | --- | --- |
 | Start the server | Any player | 2026-08-14 — M2 Standard Workflow started stopped EC2, waited for SSM, invoked the host session contract and returned the private address |
-| Stop the server | Owner; M2 automation pending | 2026-08-14 — 0 players confirmed, world flushed, all session containers stopped, post-session archive verified in S3, EC2 reached `stopped` |
+| Stop the server | Owner | 2026-08-14 — M2 Standard Workflow rechecked 0 players, flushed the world, stopped all session containers, verified an immutable S3 backup and only then stopped EC2 |
 | Promote a release | Owner | — |
 | Roll back a release | Owner | — |
 | Restore the world | Owner | 2026-08-13 — the Terraform M1 host downloaded the verified S3 archive with its instance role, restored it onto a new EBS, reconciled release 1.0 and accepted a player in the recovered world |
@@ -70,14 +70,19 @@ SSM registration and the host command, so the failed boundary is visible. See [f
 
 ## Stop the server
 
-Normally automatic, after N empty player-count readings. To stop it early:
+Current M2 owner path:
 
 ```bash
-# TODO: control-plane call, or aws ec2 stop-instances
+scripts/stop-server.sh
 ```
 
-Never stop the instance without a confirmed world save first. The stop path in the automation does this;
-a manual stop must do it too.
+The command asks for confirmation and follows the durable operation. Use `--no-follow` to return after receiving its
+execution ARN; automation must additionally pass `--yes`. The host refuses to stop while a player is online. With zero
+players it performs `save-all flush`, stops every session container, creates a full archive, uploads it under an
+immutable checksum-addressed S3 key and verifies the stored metadata before Step Functions may stop EC2.
+
+Never replace this with a direct `aws ec2 stop-instances` during normal operation: that bypasses the save and backup
+contract. Automatic shutdown after N empty readings is still pending; it will invoke this same state machine.
 
 ## Promote a release
 

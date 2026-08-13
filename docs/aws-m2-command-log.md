@@ -87,3 +87,88 @@ operation and follows its terminal result. `--no-follow` returns immediately. A 
 completed `SUCCEEDED` with `result=already_ready` and elapsed 0, proving the host step is idempotent. The list-then-start
 check is not an atomic single-flight lock; that lease is still required before exposing the trigger to concurrent
 players.
+
+## Verified stop workflow
+
+The second M2 slice adds another Standard Workflow rather than making start responsible for every lifecycle
+transition. Terraform first produced a saved **3 add / 0 change / 0 destroy** plan containing only
+`spawnpoint-stop-server`, its dedicated IAM role and its inline policy. Mutation permissions allow
+`ec2:StopInstances` only for the Terraform game host and `ssm:SendCommand` only for that host with
+`AWS-RunShellScript`.
+
+The host contract was deployed from immutable Git commit `2fdc2c1`:
+
+```text
+S3 key: releases/1.0/server/spawnpoint-server-2fdc2c1.tar.zst
+SHA-256: ace7dd9229dcdb82391bbf4f4c9549537f0f654323715d4628e1890ad269dddf
+S3 version: hAOaLUEU5oGMJxifacIsGg6PcWOw559D
+SSM command: c60c6406-85a0-40d8-839c-3de9d2b0aafa
+```
+
+The deployment did not restart Minecraft: Docker remained `healthy`, restart count remained zero, the root-owned
+runtime environment remained mode `0600`, and only the existing backup bucket and region were added. The workflow
+sends one constant command:
+
+```text
+set -euo pipefail
+/srv/spawnpoint/app/server/scripts/stop-session.sh
+```
+
+That script rechecks zero players and refuses the operation if anyone is online. Only after `save-all flush`, clean
+Compose stop, full archive creation, immutable S3 upload and post-upload verification does SSM return success. In the
+ASL graph, only that success branch reaches the direct `ec2:stopInstances` integration. Any earlier failure leaves EC2
+running for diagnosis.
+
+### Apply recovery
+
+The first apply created the role and policy, then failed before creating the state machine because the Docker command
+mounted only `infra/terraform`; Terraform evaluates `file("../../workflows/stop-server.asl.json")` again during apply,
+and the repository-level file was outside that mount. Existing compute, EBS and S3 were untouched. The recovery was
+to mount the repository root, inspect a new saved plan containing exactly **1 add / 0 change / 0 destroy**, and apply
+only the missing state machine:
+
+```bash
+docker run --rm \
+  -v "$PWD:/workspace" \
+  -v "$HOME/.aws:/root/.aws:ro" \
+  -w /workspace \
+  hashicorp/terraform:1.15.8 \
+  -chdir=infra/terraform plan -out=tfplan
+
+docker run --rm \
+  -v "$PWD:/workspace" \
+  -v "$HOME/.aws:/root/.aws:ro" \
+  -w /workspace \
+  hashicorp/terraform:1.15.8 \
+  -chdir=infra/terraform apply tfplan
+```
+
+A fresh plan then reported `No changes`. This was a tooling-path failure with a clean, state-aware continuation—not a
+reason to delete the already-created IAM resources or retry an unreviewed plan.
+
+### First execution
+
+Execution `m2-first-stop-20260814` ran from `00:38:52` to `00:40:35` local time: **102.845 seconds** end to end. SSM
+command `a2720128-c4bf-47c2-843c-26ce80a02769` took **24.79 seconds** and returned:
+
+```text
+result=session_stopped_and_backed_up
+object_key=worlds/world/archives/world-20260813T223915Z-0cb470aa7db0c2b4f060ef238a9d4bac54202c81653c3e05240734060941c777.tar.zst
+checksum=0cb470aa7db0c2b4f060ef238a9d4bac54202c81653c3e05240734060941c777
+archive_bytes=419603323
+```
+
+Independent S3 HEAD matched the byte length and checksum metadata, reported AES256 and version
+`jfmfgqcfNcMclpoFxvui6MZpBnq8c5Xd`. EC2 then reached `stopped` with no public IP; the encrypted EBS remained attached
+in `eu-central-1a` with `DeleteOnTermination=false`.
+
+The owner command is now:
+
+```bash
+scripts/stop-server.sh
+```
+
+It asks for confirmation, starts the durable operation and follows it. `--no-follow` returns the ARN; non-interactive
+automation must opt in with `--yes`. A second execution against the stopped host returned `already_stopped`, proving
+the top-level operation is idempotent. Like the start trigger, its list-then-start check is convenience rather than an
+atomic lease; shared start/stop single-flight remains the next control-plane slice.

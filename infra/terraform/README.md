@@ -29,10 +29,11 @@ State backend bootstrap is a one-time, separately stateful Terraform step in
 
 ## Current slice
 
-The current compute/M2-start slice owns 16 resources: one VPC, one public subnet and route, a
+The current compute/M2 lifecycle slice owns 19 resources: one VPC, one public subnet and route, a
 zero-ingress security group, an SSM-only EC2 role/profile with scoped storage access, one on-demand EC2 host, and one
-separately attached encrypted data EBS, plus a Standard start state machine and its dedicated IAM role/policy. The
-physical AZ ID is asserted because the volume is zonal. The instance has no SSH key and requires IMDSv2.
+separately attached encrypted data EBS, plus Standard start and verified-stop state machines with separate dedicated
+IAM roles/policies. The physical AZ ID is asserted because the volume is zonal. The instance has no SSH key and
+requires IMDSv2.
 
 The game-host role can write and verify backup objects and read immutable release objects. It cannot change bucket
 configuration or delete objects. Exact `5 daily / 2 weekly / 2 monthly` pruning belongs to the later backup operation:
@@ -96,3 +97,8 @@ The first M2 plan initially proposed replacing the stopped EC2 because AWS reads
 instance now ignores only that stopped-state readback; `aws_subnet.public.map_public_ip_on_launch=true` remains the
 source of truth for the next start. The rebuilt plan was **3 add, 0 change, 0 destroy** and created only the Step
 Functions role, scoped inline policy and Standard state machine. A post-apply plan reported no changes.
+
+The stop slice likewise planned **3 add, 0 change, 0 destroy**. Its first apply created the role and policy, then
+failed locally because the Docker invocation mounted only `infra/terraform` while `file()` reads the ASL definition
+from the repository-level `workflows/` directory. No existing AWS resource changed. A new plan with the repository
+root mounted contained only the remaining state machine; it was applied and a fresh plan reported no changes.

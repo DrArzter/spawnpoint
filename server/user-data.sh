@@ -22,11 +22,35 @@ export DNF_YUM_AUTO_YES=1
 
 log "installing host packages"
 dnf update -y
+# AL2023 includes curl-minimal, which provides the curl binary and conflicts
+# with the full `curl` package. Do not request the latter here.
 dnf install -y docker git jq rsync tar zstd xfsprogs
 
 log "enabling Docker"
 systemctl enable --now docker
 usermod -aG docker ec2-user
+
+# Amazon Linux's Docker package does not include the Compose CLI plugin.
+# Install one exact upstream binary and verify its published digest.
+readonly COMPOSE_VERSION="v5.1.4"
+readonly COMPOSE_SHA256="33b208d7e76639db742fae84b966cc01dacae58ca3fc4dabbc907045aefdf0c4"
+readonly COMPOSE_TARGET="/usr/local/lib/docker/cli-plugins/docker-compose"
+
+if [[ ! -x ${COMPOSE_TARGET} ]]; then
+  log "installing Docker Compose ${COMPOSE_VERSION}"
+  install -d -m 0755 "$(dirname "${COMPOSE_TARGET}")"
+  compose_download="$(mktemp /tmp/docker-compose.XXXXXX)"
+  trap 'rm -f -- "${compose_download:-}"' EXIT
+  curl --fail --silent --show-error --location \
+    "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-x86_64" \
+    -o "${compose_download}"
+  printf '%s  %s\n' "${COMPOSE_SHA256}" "${compose_download}" | sha256sum --check
+  install -m 0755 "${compose_download}" "${COMPOSE_TARGET}"
+  rm -f -- "${compose_download}"
+  trap - EXIT
+fi
+
+docker compose version
 
 if ! rpm -q amazon-ssm-agent >/dev/null 2>&1; then
   log "SSM Agent is absent; installing the AWS package"
@@ -56,4 +80,3 @@ Minecraft are configured explicitly through SSM; user-data does not guess them.
 EOF
 
 log "base host is ready"
-

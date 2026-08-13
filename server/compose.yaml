@@ -6,10 +6,11 @@
 services:
   mc:
     # PROJECT: `stable` moves, so a start that breaks cannot be attributed.
-    # Pin a dated tag before M0. Mods themselves persist in the volume —
+    # This digest is the amd64 image that passed the owner's local lifecycle and
+    # restored-world smoke tests. Mods themselves persist in the volume —
     # REMOVE_OLD_MODS is false by default — so they do not re-resolve per boot;
     # the exposure is on a rebuild, not on a restart. See ADR-0008.
-    image: itzg/minecraft-server:stable
+    image: itzg/minecraft-server@sha256:7423a4cf59ec510a58294f853fc7b07cdf0a50c5bc4618ee172327d7913941eb
     tty: true
     stdin_open: true
     ports:
@@ -117,7 +118,7 @@ services:
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
     ports:
-      - "${OBSERVABILITY_BIND_ADDRESS:-127.0.0.1}:3000:3000"
+      - "${GRAFANA_BIND_ADDRESS:-127.0.0.1}:3000:3000"
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro

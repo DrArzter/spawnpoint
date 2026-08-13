@@ -1,0 +1,9 @@
+# M0 restores an already verified, immutable mod directory. Do not ask
+# CurseForge to resolve or mutate it again during the first AWS smoke boot.
+services:
+  mc:
+    environment:
+      # Empty lists are still processed by the image and remove every JAR.
+      # `!reset` removes the inherited key from the merged Compose model.
+      CURSEFORGE_FILES: !reset null
+      REMOVE_OLD_MODS: "false"

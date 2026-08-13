@@ -1,0 +1,311 @@
+{
+  "Comment": "Back up a quiet Spawnpoint session and stop its EC2 host.",
+  "QueryLanguage": "JSONPath",
+  "StartAt": "Initialize",
+  "States": {
+    "Initialize": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$",
+        "polls": {
+          "ssm": 0,
+          "command": 0,
+          "instance": 0
+        },
+        "observed": {}
+      },
+      "Next": "Describe Initial Instance"
+    },
+    "Describe Initial Instance": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.instanceId)"
+      },
+      "ResultPath": "$.observed.instance",
+      "Next": "Route Initial Instance State"
+    },
+    "Route Initial Instance State": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name",
+          "StringEquals": "stopped",
+          "Next": "Already Stopped"
+        },
+        {
+          "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name",
+          "StringEquals": "running",
+          "Next": "Wait Before SSM Poll"
+        }
+      ],
+      "Default": "Instance Cannot Stop"
+    },
+    "Wait Before SSM Poll": {
+      "Type": "Wait",
+      "SecondsPath": "$.request.timing.ssmPollSeconds",
+      "Next": "Describe SSM Agent"
+    },
+    "Describe SSM Agent": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:describeInstanceInformation",
+      "Parameters": {
+        "Filters": [
+          {
+            "Key": "InstanceIds",
+            "Values.$": "States.Array($.request.instanceId)"
+          }
+        ]
+      },
+      "ResultPath": "$.observed.ssm",
+      "Next": "SSM Record Present"
+    },
+    "SSM Record Present": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.ssm.InstanceInformationList[0]",
+          "IsPresent": true,
+          "Next": "SSM Agent Online"
+        }
+      ],
+      "Default": "Increment SSM Poll"
+    },
+    "SSM Agent Online": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.ssm.InstanceInformationList[0].PingStatus",
+          "StringEquals": "Online",
+          "Next": "Stop Session Command"
+        }
+      ],
+      "Default": "Increment SSM Poll"
+    },
+    "Increment SSM Poll": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "polls": {
+          "ssm.$": "States.MathAdd($.polls.ssm, 1)",
+          "command.$": "$.polls.command",
+          "instance.$": "$.polls.instance"
+        },
+        "observed": {}
+      },
+      "Next": "SSM Poll Limit Reached"
+    },
+    "SSM Poll Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.polls.ssm",
+          "NumericGreaterThanEqualsPath": "$.request.timing.maxSsmPolls",
+          "Next": "SSM Timed Out"
+        }
+      ],
+      "Default": "Wait Before SSM Poll"
+    },
+    "Stop Session Command": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:sendCommand",
+      "Parameters": {
+        "DocumentName": "AWS-RunShellScript",
+        "InstanceIds.$": "States.Array($.request.instanceId)",
+        "Parameters": {
+          "commands": [
+            "set -euo pipefail",
+            "/srv/spawnpoint/app/server/scripts/stop-session.sh"
+          ]
+        },
+        "TimeoutSeconds": 900
+      },
+      "ResultPath": "$.observed.command",
+      "Next": "Wait Before Command Poll"
+    },
+    "Wait Before Command Poll": {
+      "Type": "Wait",
+      "SecondsPath": "$.request.timing.commandPollSeconds",
+      "Next": "Get Stop Command"
+    },
+    "Get Stop Command": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:getCommandInvocation",
+      "Parameters": {
+        "CommandId.$": "$.observed.command.Command.CommandId",
+        "InstanceId.$": "$.request.instanceId"
+      },
+      "ResultPath": "$.observed.invocation",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "Ssm.InvocationDoesNotExistException"
+          ],
+          "ResultPath": "$.observed.commandLookupError",
+          "Next": "Increment Command Poll"
+        }
+      ],
+      "Next": "Stop Command Complete"
+    },
+    "Stop Command Complete": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.invocation.Status",
+          "StringEquals": "Success",
+          "Next": "Stop Instance"
+        },
+        {
+          "Or": [
+            {
+              "Variable": "$.observed.invocation.Status",
+              "StringEquals": "Pending"
+            },
+            {
+              "Variable": "$.observed.invocation.Status",
+              "StringEquals": "InProgress"
+            },
+            {
+              "Variable": "$.observed.invocation.Status",
+              "StringEquals": "Delayed"
+            }
+          ],
+          "Next": "Increment Command Poll"
+        }
+      ],
+      "Default": "Session Stop Failed"
+    },
+    "Increment Command Poll": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "polls": {
+          "ssm.$": "$.polls.ssm",
+          "command.$": "States.MathAdd($.polls.command, 1)",
+          "instance.$": "$.polls.instance"
+        },
+        "observed": {
+          "command.$": "$.observed.command"
+        }
+      },
+      "Next": "Command Poll Limit Reached"
+    },
+    "Command Poll Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.polls.command",
+          "NumericGreaterThanEqualsPath": "$.request.timing.maxCommandPolls",
+          "Next": "Session Stop Timed Out"
+        }
+      ],
+      "Default": "Wait Before Command Poll"
+    },
+    "Stop Instance": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:stopInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.instanceId)"
+      },
+      "ResultPath": null,
+      "Next": "Wait Before Instance Poll"
+    },
+    "Wait Before Instance Poll": {
+      "Type": "Wait",
+      "SecondsPath": "$.request.timing.instancePollSeconds",
+      "Next": "Describe Instance"
+    },
+    "Describe Instance": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.instanceId)"
+      },
+      "ResultPath": "$.observed.instance",
+      "Next": "Instance Stopped"
+    },
+    "Instance Stopped": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name",
+          "StringEquals": "stopped",
+          "Next": "Stopped"
+        }
+      ],
+      "Default": "Increment Instance Poll"
+    },
+    "Increment Instance Poll": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "polls": {
+          "ssm.$": "$.polls.ssm",
+          "command.$": "$.polls.command",
+          "instance.$": "States.MathAdd($.polls.instance, 1)"
+        },
+        "observed": {
+          "command.$": "$.observed.command",
+          "invocation.$": "$.observed.invocation"
+        }
+      },
+      "Next": "Instance Poll Limit Reached"
+    },
+    "Instance Poll Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.polls.instance",
+          "NumericGreaterThanEqualsPath": "$.request.timing.maxInstancePolls",
+          "Next": "Instance Stop Timed Out"
+        }
+      ],
+      "Default": "Wait Before Instance Poll"
+    },
+    "Already Stopped": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "status": "already_stopped",
+        "instanceId.$": "$.request.instanceId"
+      },
+      "End": true
+    },
+    "Stopped": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "status": "stopped",
+        "instanceId.$": "$.request.instanceId",
+        "commandId.$": "$.observed.command.Command.CommandId",
+        "commandOutput.$": "$.observed.invocation.StandardOutputContent"
+      },
+      "End": true
+    },
+    "Instance Cannot Stop": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.InstanceCannotStop",
+      "Cause": "The configured EC2 instance is not running or stopped."
+    },
+    "SSM Timed Out": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.SsmTimedOut",
+      "Cause": "The SSM agent did not become online before the configured poll limit."
+    },
+    "Session Stop Failed": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.SessionStopFailed",
+      "Cause": "The host refused or failed save, shutdown or backup; EC2 remains running."
+    },
+    "Session Stop Timed Out": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.SessionStopTimedOut",
+      "Cause": "The host stop-session command did not finish; EC2 remains running."
+    },
+    "Instance Stop Timed Out": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.InstanceStopTimedOut",
+      "Cause": "The backed-up EC2 instance did not become stopped before the configured poll limit."
+    }
+  }
+}

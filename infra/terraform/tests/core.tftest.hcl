@@ -66,6 +66,13 @@ mock_provider "aws" {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
     }
   }
+
+  override_data {
+    target = data.aws_iam_policy_document.stop_workflow
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
 }
 
 run "free_plan_host_preserves_m0_invariants" {
@@ -141,6 +148,25 @@ run "start_workflow_is_standard_and_uses_direct_integrations" {
   assert {
     condition     = jsondecode(aws_sfn_state_machine.start_server.definition).States["Start Session Command"].Resource == "arn:aws:states:::aws-sdk:ssm:sendCommand"
     error_message = "The workflow must invoke the host through SSM directly."
+  }
+}
+
+run "stop_workflow_is_standard_and_stops_only_after_backup_step" {
+  command = plan
+
+  assert {
+    condition     = aws_sfn_state_machine.stop_server.type == "STANDARD"
+    error_message = "Verified session stop must use a Standard workflow."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.stop_server.definition).States["Stop Command Complete"].Choices[0].Next == "Stop Instance"
+    error_message = "EC2 stop must be reachable only after the host save/backup command succeeds."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.stop_server.definition).States["Stop Instance"].Resource == "arn:aws:states:::aws-sdk:ec2:stopInstances"
+    error_message = "The workflow must stop EC2 directly rather than through a Lambda wrapper."
   }
 }
 

@@ -32,3 +32,8 @@ output "start_state_machine_arn" {
   description = "Standard workflow used by the minimal M2 trigger and later control-plane surfaces."
   value       = aws_sfn_state_machine.start_server.arn
 }
+
+output "stop_state_machine_arn" {
+  description = "Standard workflow that backs up a quiet session before stopping EC2."
+  value       = aws_sfn_state_machine.stop_server.arn
+}

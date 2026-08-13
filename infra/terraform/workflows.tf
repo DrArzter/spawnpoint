@@ -76,3 +76,58 @@ resource "aws_sfn_state_machine" "start_server" {
     Purpose = "on-demand-session-start"
   }
 }
+
+resource "aws_iam_role" "stop_workflow" {
+  name               = "spawnpoint-stop-workflow"
+  assume_role_policy = data.aws_iam_policy_document.step_functions_assume_role.json
+
+  tags = {
+    Name = "spawnpoint-stop-workflow"
+  }
+}
+
+data "aws_iam_policy_document" "stop_workflow" {
+  statement {
+    sid = "ReadHostState"
+
+    actions = [
+      "ec2:DescribeInstances",
+      "ssm:DescribeInstanceInformation",
+      "ssm:GetCommandInvocation",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "StopOnlySpawnpointHost"
+    actions   = ["ec2:StopInstances"]
+    resources = [aws_instance.game_host.arn]
+  }
+
+  statement {
+    sid     = "RunOnlyApprovedDocumentOnSpawnpointHost"
+    actions = ["ssm:SendCommand"]
+    resources = [
+      aws_instance.game_host.arn,
+      "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "stop_workflow" {
+  name   = "spawnpoint-stop-workflow"
+  role   = aws_iam_role.stop_workflow.id
+  policy = data.aws_iam_policy_document.stop_workflow.json
+}
+
+resource "aws_sfn_state_machine" "stop_server" {
+  name       = "spawnpoint-stop-server"
+  role_arn   = aws_iam_role.stop_workflow.arn
+  type       = "STANDARD"
+  definition = file("${path.module}/../../workflows/stop-server.asl.json")
+
+  tags = {
+    Name    = "spawnpoint-stop-server"
+    Purpose = "verified-session-stop"
+  }
+}

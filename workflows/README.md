@@ -25,3 +25,10 @@ come from the root-owned, mode-`0600` host `.env`; this prevents a crafted opera
 The definition currently stops visibly on failure. Automatic EC2 compensation after a failed start is the next slice:
 it must first distinguish an instance that this execution started from one that was already running, otherwise a
 failed health check could stop somebody else's active session.
+
+## Stop server
+
+`stop-server.asl.json` invokes the host's indivisible session-close contract, then stops EC2 only after that command
+succeeds. The host rechecks zero players, flushes the world, stops all session containers, creates a full archive and
+verifies its immutable S3 upload. Any refusal, archive failure or upload mismatch ends the workflow visibly while EC2
+remains running for diagnosis. An already-stopped instance is an idempotent successful result.

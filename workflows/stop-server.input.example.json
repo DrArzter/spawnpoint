@@ -1,0 +1,12 @@
+{
+  "operationId": "manual-stop-example-001",
+  "instanceId": "i-0123456789abcdef0",
+  "timing": {
+    "ssmPollSeconds": 10,
+    "commandPollSeconds": 15,
+    "instancePollSeconds": 10,
+    "maxSsmPolls": 30,
+    "maxCommandPolls": 60,
+    "maxInstancePolls": 30
+  }
+}

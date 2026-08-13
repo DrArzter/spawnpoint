@@ -3,6 +3,12 @@
 Local helpers for the owner, run from a laptop with AWS credentials. Deliberately separate from
 [`lambdas/`](../lambdas/README.md): these are for the person who maintains the system, not for the automation.
 
+Available:
+
+| Script | Purpose |
+| --- | --- |
+| `audit-aws-bootstrap.sh` | Read-only verification of browser credentials, IAM MFA and keys, budget alerts, recipients and SNS subscriptions. See [the command reference](../docs/aws-cli-checks.md) |
+
 Planned:
 
 | Script | Purpose |
@@ -23,4 +29,4 @@ Rules:
 This directory is also the fallback path when the panel or the bots are unavailable. It must keep working
 without them.
 
-**Status:** empty. `cut-release.sh` arrives in M3, the rest as needed.
+**Status:** the account-bootstrap audit exists. `cut-release.sh` arrives in M3, the rest as needed.

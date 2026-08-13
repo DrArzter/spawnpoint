@@ -3,6 +3,9 @@
 Everything to do on a new AWS account before building anything, in order, with the traps that are only obvious once you
 have hit them. Written while doing it on 2026-08-12.
 
+The matching read-only API verification is documented in [AWS CLI checks](aws-cli-checks.md) and automated by
+`scripts/audit-aws-bootstrap.sh`.
+
 **Order matters in three places**, and they are marked. The rest can be reordered freely.
 
 Recorded values for *this* account live in [the runbook](runbook.md#account-bootstrap). This file is the procedure.
@@ -25,9 +28,9 @@ Recorded values for *this* account live in [the runbook](runbook.md#account-boot
       review harder.
 - [x] **Create an IAM user**, named after the person rather than the role, with console access and a password.
 - [x] **Put the user in the group.** Not policies attached directly — the habit transfers.
-- [ ] **No access key.** Console work needs none, and by the time a CLI is needed there is a better option.
-- [ ] **Sign in as that user and enable MFA on it.**
-- [ ] **Verify Billing is visible** under the new identity. If not, step 1's toggle was missed.
+- [x] **No access key.** Console work needs none, and by the time a CLI is needed there is a better option.
+- [x] **Sign in as that user and enable MFA on it.**
+- [x] **Verify Billing is visible** under the new identity. If not, step 1's toggle was missed.
 
 > ⚠️ **Do not enable IAM Identity Center on a fresh account.** It is the better long-term answer, but enabling it
 > creates an AWS Organization, and that **upgrades the account off the free plan and expires the free tier credits
@@ -58,8 +61,8 @@ Organizations later.
 - [x] **Two alert thresholds**: one **forecasted**, one **actual**. Forecast catches a runaway days early; actual is
       the backstop.
 - [x] **An SNS topic** for alerts, so every future alarm and the chat adapters converge on one place.
-- [ ] **Email subscription on the topic, confirmed via the link.** Unconfirmed means silently undelivered.
-- [ ] **Point the budget at the SNS topic too**, not only at email.
+- [x] **Email subscription on the topic, confirmed via the link.** Unconfirmed means silently undelivered.
+- [x] **Point the budget at the SNS topic too**, not only at email.
 - [x] **Retune the cost anomaly subscription.** AWS pre-creates a monitor and a subscription, and the default threshold
       is `$100 AND 40%`.
 - [ ] **A cost anomaly monitor** — already created by AWS as `Default-Services-Monitor`. Nothing to configure: the

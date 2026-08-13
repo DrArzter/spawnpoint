@@ -140,22 +140,22 @@ One-time, manual, and done before anything else exists. Recorded here because Te
 **The procedure, with its traps, is [docs/aws-account-checklist.md](aws-account-checklist.md).** This section records
 what was actually done in *this* account.
 
-Progress as of 2026-08-12: root MFA, billing access, IAM user and group, budget, SNS topic and anomaly retune are done.
-Outstanding: MFA on the IAM user, confirming the topic's email subscription, pointing the budget at the topic, choosing
-an Availability Zone.
+Progress as of 2026-08-13: root and IAM-user MFA, billing access, IAM user and group, budget, SNS topic, confirmed email
+subscription, budget-to-SNS delivery configuration and anomaly retune are done. Outstanding: choosing an Availability
+Zone. The read-only commands used to verify this state live in [docs/aws-cli-checks.md](aws-cli-checks.md).
 
 Record here what was actually created:
 
 | Item | Value |
 | --- | --- |
-| Administrative identity | TODO — plain IAM user with `AdministratorAccess` and MFA, no access key |
+| Administrative identity | IAM user `drarzter`, in group `admin`, with `AdministratorAccess`, virtual MFA and no access key; verified through the IAM API on 2026-08-13 |
 | IAM Identity Center | **Deliberately not enabled.** Deferred to M1 — enabling it expires the free tier credits immediately |
 | Account plan | **Free**, as of 2026-08-12. Move to Paid before M1 — see [docs/costs.md](costs.md) |
 | Budget | **$20/month, fixed, all services, unblended.** Created 2026-08-12 |
-| Budget alerts | 80% **forecasted** ($16) and 95% **actual** ($19), both to a `+aws` alias |
+| Budget alerts | 80% **forecasted** ($16) and 95% **actual** ($19), both publishing to `spawnpoint-alert`; verified through the Budgets API on 2026-08-13 |
 | Cost anomaly monitor | **Default-Services-Monitor**, created by AWS, all services |
 | Cost anomaly subscription | **Retuned** from the AWS default of `$100 AND 40%`, which could never fire on a ~$15 account. Now **$5 AND 40%**, individual alerts, delivered via SNS |
-| SNS alert topic | `arn:aws:sns:eu-central-1:<account-id>:spawnpoint-alert` — Standard. The account ID is deliberately not written here; read it from the console |
+| SNS alert topic | `arn:aws:sns:eu-central-1:<account-id>:spawnpoint-alert` — Standard, with one confirmed email subscription. The account ID and email are deliberately not written here; query them through the CLI |
 | Chosen Availability Zone | TODO — binds every later launch, because the data volume is zonal |
 | Cost allocation tag activated | TODO — **activate as soon as the first tagged resource exists.** [ADR-0002](adr/0002-host-on-aws.md) commits to a project tag; a cost allocation tag has to be activated in the billing console before it appears in cost data, and activation is **not retroactive**. Leave it and the early months have no per-project breakdown, permanently |
 

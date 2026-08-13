@@ -514,6 +514,13 @@ This was observed during the first format attempt: XFS rejected the original 15-
 in stderr. The volume remained blank. The script now uses the label `spawnpoint`; both the wrapper exit discipline and
 stderr must be checked before accepting an invocation.
 
+The first ZeroTier install exposed a similar ordering detail: the official installer starts `zerotier-one` as part of
+package installation, before `configure-zerotier.sh` creates the network's auto-join file. `systemctl enable --now`
+does not restart an already active service, so the node had a persistent identity but had not requested network
+membership. The script now enables and explicitly restarts the service after writing the file; this is also safe on
+idempotent retries. The service can report `active` before its local CLI control socket accepts connections, so the
+script also waits for that socket for up to 30 seconds instead of treating the startup race as a failed install.
+
 ## Executed smoke-host lifecycle
 
 The accepted 16 GiB `r8i.large` cannot be launched while the account remains on the Free Plan. M0 therefore used the
@@ -625,6 +632,28 @@ aws ec2 wait instance-stopped \
 Final state on 2026-08-13: smoke host `stopped`, no public IPv4, root volume attached with
 `DeleteOnTermination=true`, data volume attached with `DeleteOnTermination=false`. Stopped instances do not consume
 compute hours; both EBS volumes continue to exist.
+
+## Executed ZeroTier first join
+
+The selected Network ID is `b6079f73c6698651`. A Network ID identifies the virtual network; it is not the Central API
+token and does not authorize a node by itself.
+
+The smoke host was started, its data-volume UUID checked, and `configure-zerotier.sh` delivered through SSM. The
+official installer installed ZeroTier `1.16.2`. Before installation, `/var/lib/zerotier-one` was bind-mounted from
+`/srv/spawnpoint/system/zerotier-one`, so the generated `identity.secret`, local API tokens and network membership all
+landed on EBS rather than the disposable root volume.
+
+The first join reached:
+
+```text
+ZeroTier service: ONLINE
+Network: b6079f73c6698651
+Membership: ACCESS_DENIED
+```
+
+`ACCESS_DENIED` is the expected pre-authorization state for a private network. The generated node ID is intentionally
+not committed; it is visible in ZeroTier Central and through `zerotier-cli info`. The host was stopped while waiting
+for manual authorization, so it does not consume compute credits.
 
 ## DNS and Route 53
 

@@ -50,10 +50,26 @@ fi
 install -d -m 0700 "${STATE_TARGET}/networks.d"
 touch "${STATE_TARGET}/networks.d/${NETWORK_ID}.conf"
 chmod 0600 "${STATE_TARGET}/networks.d/${NETWORK_ID}.conf"
-systemctl enable --now zerotier-one
+systemctl enable zerotier-one
+# The official installer starts the service before the auto-join file exists.
+# A restart is therefore required on first install and harmless on retries.
+systemctl restart zerotier-one
+
+zerotier_ready=false
+for _ in {1..30}; do
+  if zerotier-cli info >/dev/null 2>&1; then
+    zerotier_ready=true
+    break
+  fi
+  sleep 1
+done
+
+if [[ ${zerotier_ready} != true ]]; then
+  printf 'error: ZeroTier control socket did not become ready within 30 seconds\n' >&2
+  exit 1
+fi
 
 printf 'result=configured\n'
 printf 'network_id=%s\n' "${NETWORK_ID}"
 zerotier-cli info
 zerotier-cli listnetworks
-

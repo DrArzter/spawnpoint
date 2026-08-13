@@ -159,9 +159,11 @@ Honest costs, since the original dismissal was not entirely wrong:
 - Historically this class of plugin has had bypass bugs, which is why it is a substitute for a network gate rather than
   an addition to one.
 
-**To verify before relying on it:** what exists for **Forge 1.20.1** specifically. Most of the well-known
-implementations target the Bukkit family. Sinytra Connector is already bridging Fabric mods here, which may widen the
-options — that is a search, not an assumption.
+**To verify before relying on any of this:** what exists for **Forge 1.20.1** specifically, and whether any of it
+exposes a force-login command over RCON. Most of the well-known implementations target the Bukkit family. Sinytra
+Connector is already bridging Fabric mods here, which may widen the options — that is a search, not an assumption. If
+nothing exposes an external release command, the chat-approval design collapses back to a password, and the network
+gate becomes the better answer again.
 
 ## Open questions
 

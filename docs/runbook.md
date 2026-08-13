@@ -1,8 +1,6 @@
 # Runbook
 
-**Skeleton.** Nothing here is deployed yet, so every command is a placeholder marked `TODO`. The headings
-are the useful part: they are the list of procedures that must exist, written before the system does, so
-none is discovered as missing during an incident.
+**Work in progress.** M1 infrastructure is live; procedures still marked `TODO` belong to later automation milestones.
 
 Fill each section in the milestone that builds it, and record the date each procedure was last actually
 performed. A procedure nobody has run is a guess.
@@ -29,13 +27,13 @@ Fill in at M1 and keep current. This block is what somebody needs when something
 | Region | `eu-central-1` — see [ADR-0002](adr/0002-host-on-aws.md) |
 | Terraform state bucket | `spawnpoint-tfstate-614934752397` |
 | Server hostname | TODO |
-| Instance ID / tag | TODO |
-| Data volume ID | TODO |
+| Instance ID / tag | `i-09c9b5069308ac372` / `spawnpoint-game` (Terraform M1) |
+| Data volume ID | `vol-01bcd86ae27b55682`, encrypted 20 GiB gp3, `DeleteOnTermination=false`, `eu-central-1a` |
 | Release bucket | `spawnpoint-releases-614934752397` |
 | Backup bucket | `spawnpoint-backups-614934752397` |
-| Panel URL | TODO |
-| Container image tag | TODO — pinned, never `latest` |
-| Minecraft and loader version | TODO |
+| Panel URL | Grafana at `http://<ZeroTier-IP>:3000`; address is assigned only after the node is authorised |
+| Container image | `itzg/minecraft-server` pinned by digest in `server/compose.yaml`, never `latest` |
+| Minecraft and loader version | Minecraft 1.20.1, Forge, immutable release `1.0` with 111 JARs |
 
 ## Start the server
 
@@ -123,10 +121,15 @@ directory to an empty set, and Forge will then reject dimensions belonging to th
 reproduced this failure and succeeded after restoring all 111 JARs and disabling reconciliation for the smoke test.
 Production restore must use the immutable release artefact rather than copying a mutable mod directory.
 
-The 2026-08-13 S3 drill downloaded
+The first 2026-08-13 S3 drill downloaded
 `worlds/world/archives/world-20260812T201024Z-e3909da890fa9a79364617bd4feb1f4c095cc519c1778918cfa6a85403252e87.tar.zst`,
 verified all three stored facts (metadata digest, S3 checksum and byte length), extracted it and found no content
 differences from the stopped source world. The first off-volume backup is therefore tested, not merely listable.
+
+The Terraform M1 host then performed the production-shaped half of the drill: its EC2 instance role downloaded that
+same object, verified the stored checksum and restored **635,666,233 bytes** onto the new EBS volume. It independently
+downloaded immutable release `1.0`, reconciled all **111 JARs / 623,534,143 bytes**, and only then moved the restored
+world into the live data directory. See [the M1 command log](aws-m1-command-log.md).
 
 ## Recover from a lost instance
 
@@ -161,8 +164,8 @@ what was actually done in *this* account.
 Progress as of 2026-08-13: root and IAM-user MFA, billing access, IAM user and group, budget, SNS topic, confirmed email
 subscription, budget-to-SNS delivery configuration, anomaly retune and the Availability Zone decision are done. The
 cost allocation tag still has to be activated once a tagged billable resource makes it appear in Billing. The
-read-only account checks live in [docs/aws-cli-checks.md](aws-cli-checks.md); each M0 infrastructure command, its effect
-and rollback live in [docs/aws-m0-command-log.md](aws-m0-command-log.md).
+read-only account checks live in [docs/aws-cli-checks.md](aws-cli-checks.md); the infrastructure execution logs are
+[M0](aws-m0-command-log.md) and [M1](aws-m1-command-log.md).
 
 Record here what was actually created:
 

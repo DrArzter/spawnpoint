@@ -29,7 +29,7 @@ State backend bootstrap is a one-time, separately stateful Terraform step in
 
 ## Current slice
 
-The current compute M1 slice defines 13 resources without applying them: one VPC, one public subnet and route, a
+The current compute M1 slice owns 13 resources: one VPC, one public subnet and route, a
 zero-ingress security group, an SSM-only EC2 role/profile with scoped storage access, one on-demand EC2 host, and one
 separately attached encrypted data EBS. The physical AZ ID is asserted because the volume is zonal. The instance has
 no SSH key and requires IMDSv2.
@@ -82,8 +82,10 @@ non-secret profile name belongs in it because the S3 backend is initialised befo
 provider configuration.
 
 The earlier combined plan was split before apply so destroying compute can never include backup/release buckets. The
-persistent storage root was applied separately and is drift-free. This compute root was replanned against those live
-buckets on 2026-08-13: **13 to add, 0 to change, 0 to destroy**, with no S3 resource actions and no saved plan.
+persistent storage root was applied separately and is drift-free. The compute root was applied from a saved plan on
+2026-08-13: **13 added, 0 changed, 0 destroyed**, with no S3 resource actions. A fresh plan after apply reported no
+changes.
 
-**Status:** state and persistent storage are live. M1 compute/network validate, pass mock tests and pass a real
-read-only plan; the 13-resource disposable compute apply remains deliberately pending while the M0 host stays stopped.
+**Status:** state, persistent storage and M1 compute/network are live and drift-free. The Terraform host is running
+while its first restored-world acceptance test is completed. The manual M0 host remains stopped as a rollback point;
+its removal is deliberately deferred until the M1 server has been accepted in game.

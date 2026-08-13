@@ -1,6 +1,6 @@
 # ADR-0025 — Long operations are Step Functions state machines; Lambda handles the synchronous work and the steps
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-11
 - Milestone: M2
 - Amends: [ADR-0012](0012-web-control-panel.md), whose open question about where operation state lives this answers

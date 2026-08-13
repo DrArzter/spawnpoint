@@ -42,5 +42,6 @@ no deletion permission.
 Run its dependency-free tests with `npm test` from this directory. The repository currently exercises them with Node
 26; the exact supported Lambda Node runtime remains to be pinned when the first deployable handler is added.
 
-**Status:** backup-retention domain logic exists and is tested. Deployable lifecycle functions arrive with M2,
-pipeline in M3, control plane and adapters in M4.
+**Status:** backup-retention domain logic exists and is tested. The first M2 start workflow uses direct EC2/SSM
+integrations and therefore needs no task Lambda yet. Deployable lifecycle functions arrive when a step contains real
+domain logic; pipeline follows in M3, control-plane surfaces and adapters in M4.

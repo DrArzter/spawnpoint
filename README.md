@@ -136,6 +136,7 @@ docs/              Architecture, roadmap, cost model, runbook, prior art, measur
 docs/adr/          Architecture decision records — start here
 infra/terraform/   Terraform for all AWS resources
 lambdas/           Control-plane handlers, lifecycle automation, chat adapters
+workflows/         Step Functions ASL definitions for long-running operations
 server/            Container definition and on-instance scripts
 web/               Static control panel and pack download site
 scripts/           Local helpers: cut a release, restore a backup, check cost

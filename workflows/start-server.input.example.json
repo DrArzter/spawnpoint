@@ -1,0 +1,13 @@
+{
+  "operationId": "manual-example-001",
+  "instanceId": "i-0123456789abcdef0",
+  "connectionAddress": "172.29.23.24:25565",
+  "timing": {
+    "instancePollSeconds": 10,
+    "ssmPollSeconds": 10,
+    "commandPollSeconds": 5,
+    "maxInstancePolls": 30,
+    "maxSsmPolls": 30,
+    "maxCommandPolls": 180
+  }
+}

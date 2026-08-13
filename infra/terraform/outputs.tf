@@ -27,3 +27,8 @@ output "release_bucket_name" {
   description = "Private versioned source of immutable mod releases."
   value       = data.aws_s3_bucket.releases.id
 }
+
+output "start_state_machine_arn" {
+  description = "Standard workflow used by the minimal M2 trigger and later control-plane surfaces."
+  value       = aws_sfn_state_machine.start_server.arn
+}

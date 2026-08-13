@@ -1,0 +1,318 @@
+{
+  "Comment": "Start the Spawnpoint EC2 host and wait until its private Minecraft session is ready.",
+  "QueryLanguage": "JSONPath",
+  "StartAt": "Initialize",
+  "States": {
+    "Initialize": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$",
+        "polls": {
+          "instance": 0,
+          "ssm": 0,
+          "command": 0
+        },
+        "observed": {}
+      },
+      "Next": "Describe Initial Instance"
+    },
+    "Describe Initial Instance": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.instanceId)"
+      },
+      "ResultPath": "$.observed.instance",
+      "Next": "Route Initial Instance State"
+    },
+    "Route Initial Instance State": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name",
+          "StringEquals": "running",
+          "Next": "Wait Before SSM Poll"
+        },
+        {
+          "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name",
+          "StringEquals": "stopped",
+          "Next": "Start Instance"
+        },
+        {
+          "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name",
+          "StringEquals": "pending",
+          "Next": "Wait Before Instance Poll"
+        }
+      ],
+      "Default": "Instance Cannot Start"
+    },
+    "Start Instance": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:startInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.instanceId)"
+      },
+      "ResultPath": null,
+      "Next": "Wait Before Instance Poll"
+    },
+    "Wait Before Instance Poll": {
+      "Type": "Wait",
+      "SecondsPath": "$.request.timing.instancePollSeconds",
+      "Next": "Describe Instance"
+    },
+    "Describe Instance": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.instanceId)"
+      },
+      "ResultPath": "$.observed.instance",
+      "Next": "Instance Running"
+    },
+    "Instance Running": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name",
+          "StringEquals": "running",
+          "Next": "Wait Before SSM Poll"
+        },
+        {
+          "Or": [
+            {
+              "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name",
+              "StringEquals": "shutting-down"
+            },
+            {
+              "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name",
+              "StringEquals": "terminated"
+            }
+          ],
+          "Next": "Instance Cannot Start"
+        }
+      ],
+      "Default": "Increment Instance Poll"
+    },
+    "Increment Instance Poll": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "polls": {
+          "instance.$": "States.MathAdd($.polls.instance, 1)",
+          "ssm.$": "$.polls.ssm",
+          "command.$": "$.polls.command"
+        },
+        "observed": {}
+      },
+      "Next": "Instance Poll Limit Reached"
+    },
+    "Instance Poll Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.polls.instance",
+          "NumericGreaterThanEqualsPath": "$.request.timing.maxInstancePolls",
+          "Next": "Instance Start Timed Out"
+        }
+      ],
+      "Default": "Wait Before Instance Poll"
+    },
+    "Wait Before SSM Poll": {
+      "Type": "Wait",
+      "SecondsPath": "$.request.timing.ssmPollSeconds",
+      "Next": "Describe SSM Agent"
+    },
+    "Describe SSM Agent": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:describeInstanceInformation",
+      "Parameters": {
+        "Filters": [
+          {
+            "Key": "InstanceIds",
+            "Values.$": "States.Array($.request.instanceId)"
+          }
+        ]
+      },
+      "ResultPath": "$.observed.ssm",
+      "Next": "SSM Record Present"
+    },
+    "SSM Record Present": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.ssm.InstanceInformationList[0]",
+          "IsPresent": true,
+          "Next": "SSM Agent Online"
+        }
+      ],
+      "Default": "Increment SSM Poll"
+    },
+    "SSM Agent Online": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.ssm.InstanceInformationList[0].PingStatus",
+          "StringEquals": "Online",
+          "Next": "Start Session Command"
+        }
+      ],
+      "Default": "Increment SSM Poll"
+    },
+    "Increment SSM Poll": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "polls": {
+          "instance.$": "$.polls.instance",
+          "ssm.$": "States.MathAdd($.polls.ssm, 1)",
+          "command.$": "$.polls.command"
+        },
+        "observed": {}
+      },
+      "Next": "SSM Poll Limit Reached"
+    },
+    "SSM Poll Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.polls.ssm",
+          "NumericGreaterThanEqualsPath": "$.request.timing.maxSsmPolls",
+          "Next": "SSM Timed Out"
+        }
+      ],
+      "Default": "Wait Before SSM Poll"
+    },
+    "Start Session Command": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:sendCommand",
+      "Parameters": {
+        "DocumentName": "AWS-RunShellScript",
+        "InstanceIds.$": "States.Array($.request.instanceId)",
+        "Parameters": {
+          "commands": [
+            "set -euo pipefail",
+            "/srv/spawnpoint/app/server/scripts/start-session.sh"
+          ]
+        },
+        "TimeoutSeconds": 900
+      },
+      "ResultPath": "$.observed.command",
+      "Next": "Wait Before Command Poll"
+    },
+    "Wait Before Command Poll": {
+      "Type": "Wait",
+      "SecondsPath": "$.request.timing.commandPollSeconds",
+      "Next": "Get Session Command"
+    },
+    "Get Session Command": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:getCommandInvocation",
+      "Parameters": {
+        "CommandId.$": "$.observed.command.Command.CommandId",
+        "InstanceId.$": "$.request.instanceId"
+      },
+      "ResultPath": "$.observed.invocation",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "Ssm.InvocationDoesNotExistException"
+          ],
+          "ResultPath": "$.observed.commandLookupError",
+          "Next": "Increment Command Poll"
+        }
+      ],
+      "Next": "Session Command Complete"
+    },
+    "Session Command Complete": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.invocation.Status",
+          "StringEquals": "Success",
+          "Next": "Ready"
+        },
+        {
+          "Or": [
+            {
+              "Variable": "$.observed.invocation.Status",
+              "StringEquals": "Pending"
+            },
+            {
+              "Variable": "$.observed.invocation.Status",
+              "StringEquals": "InProgress"
+            },
+            {
+              "Variable": "$.observed.invocation.Status",
+              "StringEquals": "Delayed"
+            }
+          ],
+          "Next": "Increment Command Poll"
+        }
+      ],
+      "Default": "Session Start Failed"
+    },
+    "Increment Command Poll": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "polls": {
+          "instance.$": "$.polls.instance",
+          "ssm.$": "$.polls.ssm",
+          "command.$": "States.MathAdd($.polls.command, 1)"
+        },
+        "observed": {
+          "command.$": "$.observed.command"
+        }
+      },
+      "Next": "Command Poll Limit Reached"
+    },
+    "Command Poll Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.polls.command",
+          "NumericGreaterThanEqualsPath": "$.request.timing.maxCommandPolls",
+          "Next": "Session Start Timed Out"
+        }
+      ],
+      "Default": "Wait Before Command Poll"
+    },
+    "Ready": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "status": "ready",
+        "instanceId.$": "$.request.instanceId",
+        "connectionAddress.$": "$.request.connectionAddress",
+        "commandId.$": "$.observed.command.Command.CommandId",
+        "commandOutput.$": "$.observed.invocation.StandardOutputContent"
+      },
+      "End": true
+    },
+    "Instance Cannot Start": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.InstanceCannotStart",
+      "Cause": "The configured EC2 instance is not in a startable state."
+    },
+    "Instance Start Timed Out": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.InstanceStartTimedOut",
+      "Cause": "The EC2 instance did not become running before the configured poll limit."
+    },
+    "SSM Timed Out": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.SsmTimedOut",
+      "Cause": "The SSM agent did not become online before the configured poll limit."
+    },
+    "Session Start Failed": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.SessionStartFailed",
+      "Cause": "The host start-session command returned a terminal non-success status."
+    },
+    "Session Start Timed Out": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.SessionStartTimedOut",
+      "Cause": "The host start-session command did not finish before the configured poll limit."
+    }
+  }
+}

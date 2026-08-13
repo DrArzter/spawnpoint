@@ -61,6 +61,12 @@ resource "aws_instance" "game_host" {
   ]
 
   lifecycle {
+    # AWS reports this instance attribute as false while the instance is stopped
+    # because no ephemeral public IPv4 is currently associated. Treating that
+    # readback as configuration drift would replace the host on every idle stop.
+    # The public subnet remains the source of truth for assigning one on start.
+    ignore_changes = [associate_public_ip_address]
+
     precondition {
       condition     = data.aws_availability_zone.selected.zone_id == var.availability_zone_id
       error_message = "The instance and persistent EBS must use the same reviewed physical Availability Zone."
@@ -74,4 +80,3 @@ resource "aws_volume_attachment" "data" {
   volume_id                      = aws_ebs_volume.data.id
   stop_instance_before_detaching = true
 }
-

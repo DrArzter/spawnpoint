@@ -52,6 +52,20 @@ mock_provider "aws" {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
     }
   }
+
+  override_data {
+    target = data.aws_iam_policy_document.step_functions_assume_role
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.start_workflow
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
 }
 
 run "free_plan_host_preserves_m0_invariants" {
@@ -108,6 +122,25 @@ run "reviewed_paid_upgrade_is_explicit" {
   assert {
     condition     = aws_instance.game_host.instance_type == "r8i-flex.large"
     error_message = "The reviewed 16 GiB upgrade must remain selectable without changing the topology."
+  }
+}
+
+run "start_workflow_is_standard_and_uses_direct_integrations" {
+  command = plan
+
+  assert {
+    condition     = aws_sfn_state_machine.start_server.type == "STANDARD"
+    error_message = "Long-running session start must use a Standard workflow."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.start_server.definition).States["Start Instance"].Resource == "arn:aws:states:::aws-sdk:ec2:startInstances"
+    error_message = "The workflow must start EC2 directly rather than paying for a Lambda wrapper."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.start_server.definition).States["Start Session Command"].Resource == "arn:aws:states:::aws-sdk:ssm:sendCommand"
+    error_message = "The workflow must invoke the host through SSM directly."
   }
 }
 

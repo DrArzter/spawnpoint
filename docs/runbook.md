@@ -176,6 +176,7 @@ Record here what was actually created:
 | Cost anomaly subscription | **Retuned** from the AWS default of `$100 AND 40%`, which could never fire on a ~$15 account. Now **$5 AND 40%**, individual alerts, delivered via SNS |
 | SNS alert topic | `arn:aws:sns:eu-central-1:<account-id>:spawnpoint-alert` — Standard. The account ID is deliberately not written here; read it from the console |
 | Chosen Availability Zone | TODO — binds every later launch, because the data volume is zonal |
+| Cost allocation tag activated | TODO — **activate as soon as the first tagged resource exists.** [ADR-0002](adr/0002-host-on-aws.md) commits to a project tag; a cost allocation tag has to be activated in the billing console before it appears in cost data, and activation is **not retroactive**. Leave it and the early months have no per-project breakdown, permanently |
 
 **The SNS topic is the convergence point** that [ADR-0020](adr/0020-email-channel.md) and
 [ADR-0015](adr/0015-observability-and-alerting.md) describe: anomaly alerts publish to it now, budget alerts should be

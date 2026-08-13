@@ -43,7 +43,7 @@ SSM, CloudWatch, Route 53, CloudFront.
 **Mitigations**
 
 - An AWS Budgets alarm exists before any long-running resource does. See [ADR-0015](0015-observability-and-alerting.md).
-- No NAT Gateway in the design: the instance sits in a public subnet. See [ADR-0004](0004-ec2-spot-for-the-game-server.md).
+- No NAT Gateway in the design: the instance sits in a public subnet. See [ADR-0032](0032-on-demand-single-instance.md).
 - Tag every resource with a project tag, so cost can be attributed and orphans can be found.
 
 ## Alternatives considered

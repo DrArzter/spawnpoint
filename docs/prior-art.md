@@ -28,8 +28,8 @@ after a period with no connections.
 
 **Not reused**
 
-- Fargate, and therefore EFS for the world. This project uses EC2 Spot with a local EBS volume. See
-  [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
+- Fargate, and therefore EFS for the world. This project uses one EC2 instance with a local EBS volume. See
+  [ADR-0032](adr/0032-on-demand-single-instance.md).
 - CDK. See [ADR-0011](adr/0011-terraform-for-infrastructure.md).
 - The anonymous wake as the *only* trigger. An explicit request carries an identity, which the chat
   notifications and rate limiting both need. See [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md).

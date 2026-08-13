@@ -30,16 +30,20 @@ monthly cost =
     + requests and egress (Lambda, API, CloudFront, S3)       usually inside the free tier
 ```
 
-Two decisions do almost all of the work on the variable term, and they multiply:
+**One decision does almost all of the work** on the variable term:
 
-- **Stop when idle.** Roughly 75 running hours a month instead of 730. See [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md).
-- **Spot instead of on-demand.** Typically a large discount on the same hardware. See [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
+- **Stop when idle.** Roughly 75 running hours a month instead of 730 — the whole difference between about $15.55 and
+  about $129. See [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md).
+
+There used to be a second, and it multiplied with the first: Spot instead of on-demand. It is deferred, and worth about
+$8 a month against a large amount of machinery. See [ADR-0032](adr/0032-on-demand-single-instance.md) and
+[ADR-0027](adr/0027-spot-request-shape.md).
 
 ## Drivers
 
 | Driver | Type | Placeholder rate | Notes |
 | --- | --- | --- | --- |
-| **EC2 on-demand, `r8i.large`** — 2 vCPU / 16 GiB | Variable | **$0.16758 per hour**, quoted | Sized from measurement rather than the bracket: one exploring player produced 5.863 GiB of container-accounted memory, so 8 GiB leaves no headroom for the OS, Docker and the overlay agent. **Memory binds and cores do not** — 0.19 of a logical CPU at the sampled instant — so an `r`-family `.large`, not an `m`-family `.xlarge`. Newest Intel generation chosen over the cheapest option because single-thread performance is the criterion. See [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md) |
+| **EC2 on-demand, `r8i.large`** — 2 vCPU / 16 GiB | Variable | **$0.16758 per hour**, quoted | Sized from measurement rather than the bracket: one exploring player produced 5.863 GiB of container-accounted memory, so 8 GiB leaves no headroom for the OS, Docker and the overlay agent. **Memory binds and cores do not** — 0.19 of a logical CPU at the sampled instant — so an `r`-family `.large`, not an `m`-family `.xlarge`. Newest Intel generation chosen over the cheapest option because single-thread performance is the criterion. See [ADR-0032](adr/0032-on-demand-single-instance.md) |
 | Public IPv4 address | Variable here | $0.005 per hour | Charged for any public address; verify. Only billed while running, because no Elastic IP is held. Applies in **every** connectivity mode, because the instance needs outbound access regardless. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | EBS gp3, data volume, 20 GB | Fixed | $0.09 per GB-month | Billed while the instance is stopped. Sized for mod releases and several worlds, not for save data — the worlds themselves are a few hundred MB each. See [ADR-0023](adr/0023-multiple-worlds.md) |
 | S3, world backups | Fixed | $0.023 per GB-month | Full archive after every session. The first real archive compressed the 598 MiB world to about 398 MiB, so retention of 5 daily, 2 weekly and 2 monthly is about 3.5 GiB at the observed ratio. See [ADR-0010](adr/0010-world-persistence-and-backups.md) |
@@ -129,10 +133,10 @@ Each of these is larger than the entire example above.
 
 | Trap | Approximate cost | Avoided by |
 | --- | --- | --- |
-| NAT Gateway | ~$32 per month, plus data processing | Instance in a public subnet, no private subnet. See [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md) |
+| NAT Gateway | ~$32 per month, plus data processing | Instance in a public subnet, no private subnet. See [ADR-0032](adr/0032-on-demand-single-instance.md) |
 | EKS control plane | ~$73 per month per cluster, before any node; more on extended support | Not using Kubernetes. See [ADR-0014](adr/0014-no-kubernetes.md) |
 | An instance that never stopped | 730 h instead of 75, roughly 10x the compute | Idle watchdog, plus a running-hours alarm |
-| On-demand instead of Spot | Several times the hourly rate | [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md) |
+| ~~On-demand instead of Spot~~ | About $8 per month | **Not a trap, a decision.** [ADR-0032](adr/0032-on-demand-single-instance.md) chose on-demand deliberately; [ADR-0027](adr/0027-spot-request-shape.md) records what Spot would cost in machinery |
 | An Elastic IP held all month | ~$3.60 per month | DNS record updated on start. See [ADR-0017](adr/0017-stable-server-address.md) |
 | Orphaned volumes and snapshots | Silent and cumulative | Terraform owns everything; tag and review monthly |
 | Verbose logs with indefinite retention | Grows without limit | Short retention, filtered log shipping |
@@ -154,7 +158,7 @@ Verified 2026-08-12; AWS restructured this recently, so re-check the terms befor
 
 **Everything this project needs is available.** The restricted list is things this design already rejected: Reserved
 Instances and Savings Plans are the wrong instrument for a workload running 10% of the month, per
-[ADR-0004](adr/0004-ec2-spot-for-the-game-server.md), and nothing here touches Marketplace. EC2, Spot, EBS, S3, Lambda,
+[ADR-0032](adr/0032-on-demand-single-instance.md), and nothing here touches Marketplace. EC2, Spot, EBS, S3, Lambda,
 Step Functions, SSM, EventBridge, SNS, CloudWatch and Route 53 are all ordinary services.
 
 **Money is not the constraint.** At roughly $6 a month, $200 is over thirty months of runway against credits that expire
@@ -353,7 +357,7 @@ shape rather than price.
 **A rented box may well have the faster core.** Budget providers often run desktop-class CPUs at high clocks, where
 cloud general-purpose families run server parts clocked lower. For a workload whose main tick is single-threaded and
 cannot be spread across cores, that is a stronger argument for a rented box than any of the pricing above — and it is
-the one argument in this document that money cannot answer. See [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
+the one argument in this document that money cannot answer. See [ADR-0032](adr/0032-on-demand-single-instance.md).
 
 **Shared CPU is the wrong comparison for a game server.** The main game tick is effectively single-threaded and
 latency-sensitive, so contention on an oversubscribed host shows up directly as tick lag — the thing players feel. EC2's
@@ -378,29 +382,32 @@ packs, the control-plane API, the bots and the linking design would all work aga
 removes is exactly the on-demand lifecycle — start, idle stop, interruption handling, connectivity that changes on every
 boot — which is the part with the most transferable engineering in it.
 
-### How often Spot actually interrupts, and why it matters to the bill
+### How often Spot actually interrupts
+
+**Retained for the day Spot is reconsidered, not live.**
+[ADR-0032](adr/0032-on-demand-single-instance.md) runs on-demand, so nothing in this section is currently in force.
+It is kept because re-finding the data costs more than keeping it.
 
 AWS's Spot Instance Advisor reports interruption frequency in bands — under 5%, 5–10%, 10–15%, 15–20%, over 20% — measured
 as the rate at which capacity was reclaimed over the trailing month. The historical average across regions and instance
 types is **below 5%**, and that figure is for an instance running the whole month. This design runs about a tenth of the
 month, so the realistic expectation for a well-chosen type is a handful of interruptions a year, not a weekly event.
 
-When one happens it costs an interruption to the evening, not data: two minutes of warning, a confirmed world save, a
-clean stop, and everybody reconnects after the next start having lost seconds. See
-[ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
+An interruption would cost the evening, not data: two minutes of warning, a confirmed world save, a clean stop, and
+everybody reconnects after the next start having lost seconds.
 
-The part that matters here is that **the Spot discount is load-bearing for the whole cost argument, not an optimisation on
-top of it.** If the chosen instance type turns out to sit in a bad band and the fallback to on-demand is taken, the compute
-line roughly triples — about $13.50 instead of $4.50 at 75 hours — taking the total to roughly $17 a month. At that point
-the Hetzner comparison above is not close either, and it goes the other way.
+**Retracted: "the Spot discount is load-bearing for the whole cost argument."** This document said exactly that while the
+model assumed Spot and a compute line of about $4.50. The model was then rebuilt on real on-demand prices — $12.57 at 75
+hours, about $15.55 all in — and that is the figure the rest of this document uses. The discount is worth about $8 a
+month. Worth having eventually; not what the argument stands on.
 
-So: check the Advisor for the specific candidate types in the chosen region **before** committing to the region, and allow
-several instance types rather than one. AWS's own advice is to diversify across types and availability zones; the zonal
-EBS volume limits us to types within one zone, which is a trade already recorded in
-[ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
+If Spot is ever adopted, two things from that earlier reasoning survive and are worth keeping: check the Advisor for the
+specific candidate types **before** committing to a region, and allow several instance types rather than one. The zonal
+EBS volume limits the choice to types within a single zone, which is the residual risk recorded in
+[ADR-0027](adr/0027-spot-request-shape.md).
 
-So the on-demand design only pays for itself in the other currency. Stopping when idle, surviving Spot interruptions,
-separating state from compute, a release pipeline with rollback, orchestration, cost guardrails — those are the deliverable.
+So the design pays for itself in the other currency. Stopping when idle, separating state from compute, a release
+pipeline with rollback, orchestration, cost guardrails — those are the deliverable.
 See [ADR-0003](adr/0003-build-not-reuse.md).
 
 ### One assumption behind every figure here

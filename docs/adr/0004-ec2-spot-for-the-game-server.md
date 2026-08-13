@@ -1,10 +1,21 @@
 # ADR-0004 — Run the game server on EC2 Spot
 
-- Status: Accepted
+- Status: **Superseded by [ADR-0032](0032-on-demand-single-instance.md)**
 - Date: 2026-08-11
+- Superseded: 2026-08-13
 - Milestone: M0
-- Amended by: [ADR-0027](0027-spot-request-shape.md) — the decision to use Spot stands; the request mechanism is
-  replaced, and the on-demand fallback below is **retracted** as contrary to AWS guidance
+- Amended by: [ADR-0027](0027-spot-request-shape.md) — the request mechanism below was replaced, and the on-demand
+  fallback **retracted** as contrary to AWS guidance. That ADR is itself deferred
+
+> **Everything below is history.** The project runs **on-demand** on `r8i.large` — see
+> [ADR-0032](0032-on-demand-single-instance.md), which carries forward the parts still in force: public subnet with no
+> NAT Gateway, x86 over Graviton, single-thread performance as the selection criterion, and compute separated from
+> state.
+>
+> Kept unedited because the reasoning is worth reading — why a game server tolerates interruption unusually well, and
+> why serverless containers do not fit a process holding a large heap on a fast local disk. Both survive the change of
+> purchase model. The measurements that accumulated in the open questions below now live in
+> [docs/measurements.md](../measurements.md).
 
 ## Context
 

@@ -55,11 +55,11 @@ what gets built and when.
 | **Add or remove users** | Weak | Five people, changing maybe twice a year. A bot command or an edit to the parameter is proportionate; a form is not |
 | **Add mods** | **No** | The mod list is a file, and it should stay one. Git gives review, history and a diff for free, and no form built here will beat editing a text file. See [ADR-0028](../docs/adr/0028-update-proposals.md) |
 
-**The useful part can come much earlier than the rest.** A read-only diff page is a static file generated when a
-proposal is written — no login, no API, no identity machinery. That is the 80% of the panel's value with none of the
-work that made M4 too big, and it can land with M3 rather than waiting. The approve button itself can stay in the bot,
-where the owner already is.
+**What is left is smaller than it was.** This section used to argue for a read-only diff page as the panel's cheap
+first 80%. [ADR-0029](../docs/adr/0029-preview-environments.md) took that job as well — the diff, the resolved versions
+and the approval are all in the pull request — so the earliest useful screen is now the backup list, which is the only
+row above that a page genuinely beats chat at.
 
-So the order, when it comes: read-only diff page → backup list → anything else.
+So the order, when it comes: backup list → status → anything else.
 
 **Status:** empty. Populated in M4, download page before panel.

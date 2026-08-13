@@ -21,7 +21,7 @@ of building cannot.
 
 Three failure modes have to be survived:
 
-1. **Instance loss.** Spot interruption or a stop. Frequent by design. See [ADR-0004](0004-ec2-spot-for-the-game-server.md).
+1. **Instance loss.** A stop, which is frequent by design; a Spot interruption only if [ADR-0027](0027-spot-request-shape.md) is ever adopted. See [ADR-0032](0032-on-demand-single-instance.md).
 2. **Volume or region-level loss.** Rare, but total.
 3. **Logical corruption.** A bad mod update eats chunks, or somebody uses a world edit tool badly. The
    damage is often noticed days later, which means the most recent backup may already contain it.

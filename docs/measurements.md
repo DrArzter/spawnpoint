@@ -21,7 +21,7 @@ Heavy tech: Mekanism suite, Applied Energistics 2, Refined Storage, Immersive En
 Powah, Create — plus Sinytra Connector running Fabric mods on Forge. Two consequences worth writing down:
 
 - **Tick load will be high.** Those are the mods that make milliseconds-per-tick climb. It does not change the
-  decision — see the accepted risk in [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md) — but it makes the
+  decision — see the accepted risk in [ADR-0032](adr/0032-on-demand-single-instance.md) — but it makes the
   measurement in item 2 more likely to matter rather than less.
 - **ARM cannot be assumed.** Connector, mixins and Fabric-on-Forge raise the chance of an architecture-specific
   problem, so item 3 has to be an actual test rather than an inference.
@@ -36,7 +36,7 @@ Powah, Create — plus Sinytra Connector running Fabric mods on Forge. Two conse
 | Larger-world comparison | Starting and playing in a substantially larger, developed world with many mechanisms and mobs produced no material change in the observed CPU load. This is a meaningful steady-state observation on the i9-14900KF, though it does not predict the single-core performance of the eventual EC2 type |
 | Remaining context | Session age was not recorded. Exploration can generate and load chunks, so this is a meaningful one-player workload, but not a confirmed peak for the full group |
 | How | Play with everybody on. Watch container memory, and the JVM heap the server reports |
-| Unblocks | Instance size in [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md). This is the number that decides the hourly rate |
+| Unblocks | Instance size in [ADR-0032](adr/0032-on-demand-single-instance.md). This is the number that decides the hourly rate |
 
 4 GB for 111 tech mods is already the lower end of the JVM heap bracket, and it works. The container snapshot confirms
 that a 4 GiB EC2 instance is insufficient: total container-accounted memory reached 5.863 GiB, about **1.86 GiB above
@@ -77,7 +77,7 @@ is the difference between about €7.50, €14 and €28 a month. See [docs/cost
 
 **Dropped, and the reason is that the prize is too small.** Graviton is perhaps 15–20% cheaper per hour, which on a
 compute line of about $3.40 is **under a dollar a month**. Against that: Graviton is slower per core, and
-[ADR-0004](adr/0004-ec2-spot-for-the-game-server.md) already establishes that single-thread performance matters more
+[ADR-0032](adr/0032-on-demand-single-instance.md) already establishes that single-thread performance matters more
 here than the hourly rate, because the main tick cannot be spread across cores. And with Sinytra Connector bridging
 Fabric mods on Forge, an architecture problem would most likely surface as a subtle failure under load rather than a
 clean refusal to start — which is the worst way to find out, at ten o'clock on a live server.
@@ -225,7 +225,7 @@ group. Expect both to land in a similar range and London to be clearly worse; co
 | `r8a.large` | 0.19272 | |
 
 The whole current-generation spread is about $4 a month, which is why the criterion is the fastest thread rather than
-the cheapest hour. See [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
+the cheapest hour. See [ADR-0032](adr/0032-on-demand-single-instance.md).
 
 **Spot price, interruption band and placement score are not collected**, because
 [ADR-0027](adr/0027-spot-request-shape.md) is deferred. They become relevant again only if Spot is adopted.
@@ -306,7 +306,7 @@ Nothing above still blocks M0. What remains in the AWS console is **setup**, not
 2. **A Budgets alarm at about $20.** Above the ~$15.55 model, well below a surprise. This matters more since
    [ADR-0027](adr/0027-spot-request-shape.md) was deferred: a failed stop now costs ~$129 a month rather than ~$40.
 3. **Pick one Availability Zone in `eu-central-1` and write it down.** The data volume is zonal, so this choice binds
-   every later launch. See [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
+   every later launch. See [ADR-0032](adr/0032-on-demand-single-instance.md).
 4. **Confirm the account is on the Free plan** — correct for the throwaway M0. Move to Paid before M1. See
    [docs/costs.md](costs.md).
 

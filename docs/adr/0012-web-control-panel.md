@@ -4,6 +4,9 @@
 - Date: 2026-08-11
 - Milestone: M4
 - Amended by: [ADR-0018](0018-identity-and-sign-in.md) — the authentication paragraph below is superseded
+- Amended by: [ADR-0029](0029-preview-environments.md) — **the panel no longer reviews or approves releases.** That
+  moved into a pull request, which was the job that justified building a panel at all. The API and the several-clients
+  shape below are untouched; what shrank is the panel's share of them. See [web/README.md](../../web/README.md)
 
 ## Context
 

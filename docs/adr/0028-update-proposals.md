@@ -23,12 +23,13 @@ Updates are **proposals**, not deployments. The sequence:
 
 | Step | What happens |
 | --- | --- |
-| Signal | A schedule, or a command from a surface. **Never on boot** — boot must stay fast and deterministic |
+| Signal | A schedule, or a push to the mod list. **Never on boot** — boot must stay fast and deterministic |
 | Resolve | For each entry in the mod list, ask upstream for the newest file matching the Minecraft and loader version |
 | Diff | Compare each resolved file's hash against the live release. Unchanged entries are ignored |
-| Propose | If anything differs, write a **candidate release** to the release store and present the diff: which mods, from which version to which, with their changelog links |
-| Approve | The owner approves or rejects. The candidate is durable, so approval can come a day later |
-| Promote | Approval moves the live pointer, which runs the existing pipeline in [ADR-0009](0009-s3-as-mod-source-of-truth.md) — announce, save, stop, reconcile, start, health check, roll back on failure |
+| Propose | If anything differs, write a **candidate release** to the release store and open a **pull request** carrying the diff: which mods, from which version to which, with their changelog links |
+| Verify | The pull request builds a preview server on a copy of the real world, and reports the result into its own comment. See [ADR-0029](0029-preview-environments.md) |
+| Approve | **Merging the pull request.** The candidate is durable, so the merge can come a day later |
+| Promote | The merge moves the live pointer, which runs the existing pipeline in [ADR-0009](0009-s3-as-mod-source-of-truth.md) — announce, save, stop, reconcile, start, health check, roll back on failure |
 
 **Binaries are cached in the release store at proposal time**, not referenced. That is what makes the pin real, and it is
 the only defence against an author withdrawing a version later. See [ADR-0008](0008-versioned-mod-releases.md).
@@ -93,7 +94,9 @@ rather than the mechanism because a delta is only valid from the immediately pre
 behind who applies it ends up in a state that matches nothing. The delta names the release it applies from, and the
 instructions say to take the full pack if in doubt.
 
-### How a push becomes a deployment
+### How a change becomes a deployment
+
+Two triggers, one path. What differs is only who opens the pull request.
 
 ```mermaid
 sequenceDiagram
@@ -103,27 +106,39 @@ sequenceDiagram
     participant SM as Proposal state machine
     participant U as Upstream (CurseForge)
     participant S3 as Release store
-    participant B as Bot
+    participant P as Preview server
 
-    O->>G: edit the mod list, push
-    G->>A: workflow, on push to that path only
-    A->>A: assume an AWS role via OIDC
-    A->>SM: StartExecution(commit sha)
-    Note over A: that is all the Action does
-
-    SM->>U: resolve newest file per entry
-    SM->>SM: diff hashes against the live release
-    alt nothing changed
-        SM->>B: "no change"
-    else something changed
-        SM->>U: download the changed binaries
-        SM->>S3: candidate release + generated diff page
-        SM->>B: "release 1.5 proposed — 6 mods, 2 groups, diff link"
-        O->>B: approve
-        B->>S3: write the live pointer
-        S3->>SM: promotion pipeline, per ADR-0009
+    alt scheduled check
+        SM->>U: resolve newest file per entry
+        SM->>SM: diff against the pinned list
+        Note over SM: nothing changed — no pull request, no notification
+        SM->>G: open a pull request pinning what moved
+    else owner edits the list
+        O->>G: push a branch, open a pull request
+        G->>A: workflow, on pull request, that path only
+        A->>A: assume an AWS role via OIDC
+        A->>SM: StartExecution(pull request, head sha)
+        Note over A: that is all the Action does
+        SM->>U: resolve newest file per entry
     end
+
+    SM->>U: download the changed binaries
+    SM->>S3: candidate release, pinned by hash
+    SM->>P: start — candidate release, copy of the newest world backup
+    P-->>SM: healthy, no load errors, MSPT after a few idle minutes
+    SM->>P: tear down, delete the volume
+    SM->>G: comment — resolved versions, preview result, changelog links
+
+    O->>G: merge
+    G->>A: workflow, on merge to the default branch
+    A->>SM: StartExecution(promote, candidate)
+    SM->>S3: write the live pointer
+    Note over SM,S3: promotion pipeline per ADR-0009 — announce, save, stop,<br/>reconcile, start, health check, roll back on failure
 ```
+
+**The machine's own pull request must not re-trigger the workflow**, or the scheduled path resolves twice and races
+itself. The state machine already holds the candidate when it opens the pull request, so the on-pull-request workflow
+ignores branches it authored.
 
 **The Action is a thin client, and that is the decision worth making deliberately.** It would be easy to have the
 workflow resolve the mods, hash them and write the release itself — it has a runner and network access. But the same
@@ -154,6 +169,19 @@ manifest and its lockfile. Editing the list proposes; only a promoted release de
 
 Keeping it a file buys review, history and a diff at no cost, and a push to it is a perfectly good second signal for a
 proposal alongside the schedule.
+
+**And the file carries the pins.** An earlier version of this ADR put versions only in the release manifest in S3, which
+reads tidily and breaks the diagram above: if the list in git says only *which mods*, a scheduled update has nothing to
+change in git, and the pull request it opens is empty. The pull request is the review surface now — see
+[ADR-0029](0029-preview-environments.md) — so it has to have a diff in it.
+
+So each entry is pinned, in the form the image already accepts: `slug:fileId`. That is a real pin, because a CurseForge
+file identifier refers to one immutable upload. The manifest-and-lockfile split that a package manager needs does not
+apply here, because there are no version ranges to resolve — an entry is either pinned or being moved by a proposal, and
+"newest" is the schedule's job rather than something the file can express.
+
+The release manifest in S3 keeps the hashes and stays what the server reconciles against. The relationship is one-way and
+stays one-way: git is the input, the manifest is the artefact built from it. Nothing writes back.
 
 ### Where the state lives, and where it does not
 

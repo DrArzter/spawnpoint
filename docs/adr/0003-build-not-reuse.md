@@ -21,8 +21,8 @@ cost. A template hides exactly those problems.
 
 Two substantive differences also exist, independent of learning:
 
-1. **Compute model.** This project uses EC2 Spot with a persistent EBS volume, not Fargate. See
-   [ADR-0004](0004-ec2-spot-for-the-game-server.md).
+1. **Compute model.** This project uses one EC2 instance with a persistent EBS volume, not Fargate. See
+   [ADR-0032](0032-on-demand-single-instance.md), which supersedes the Spot decision this originally cited.
 2. **Scope.** The existing template does not manage mod releases, does not version them, and does not
    distribute a matching client pack. That pipeline and its control panel are the point of this
    project, not the on-demand start. See [ADR-0008](0008-versioned-mod-releases.md),

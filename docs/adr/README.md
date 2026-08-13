@@ -6,9 +6,27 @@ the old one **Superseded by ADR-XXXX**. Never rewrite history in place.
 Format and rationale: [ADR-0001](0001-record-architecture-decisions.md).
 Template: [0000-template.md](0000-template.md).
 
+## Measurements do not live in ADRs
+
+Learned the expensive way from [ADR-0004](0004-ec2-spot-for-the-game-server.md), which took eight rounds of edits
+before it had to be superseded. The rule above protected its *decision* and said nothing about everything else, so
+every new number — the instance price, the memory reading, the settled architecture — landed in its open questions
+until the file could no longer be read as a decision at all.
+
+So: **an ADR records what was decided and why. It cites the numbers, it does not carry them.** The numbers belong in
+[docs/measurements.md](../measurements.md), [docs/costs.md](../costs.md) and [docs/runbook.md](../runbook.md), which
+are allowed to change without anybody's permission.
+
+Two signs an ADR is going stale rather than being maintained: an *Open questions* section longer than the decision,
+and a warning banner explaining that the title is no longer true. Both mean it is time to supersede it.
+
+**Close a record when the decision is made.** A `Proposed` ADR is legitimately editable, which is why a decision left
+at `Proposed` after it is already being built on keeps attracting revisions — [ADR-0024](0024-connectivity-modes.md)
+collected eleven before it was accepted.
+
 ## Start here — most of this is not blocking
 
-Thirty-one records is a wall, and a wall is not a plan. Almost none of it blocks anything you can do this week.
+Thirty-two records is a wall, and a wall is not a plan. Almost none of it blocks anything you can do this week.
 
 | To do this | You need |
 | --- | --- |
@@ -38,7 +56,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted | — |
 | [0002](0002-host-on-aws.md) | Host on AWS | Accepted | M0 |
 | [0003](0003-build-not-reuse.md) | Build from scratch, rather than reuse an on-demand template | Accepted | — |
-| [0004](0004-ec2-spot-for-the-game-server.md) | Run the game server on EC2 Spot | Accepted, amended by [0027](0027-spot-request-shape.md) | M0 |
+| [0004](0004-ec2-spot-for-the-game-server.md) | Run the game server on EC2 Spot | **Superseded** by [0032](0032-on-demand-single-instance.md) | M0 |
 | [0005](0005-containerised-game-server.md) | Run the game server in a container | Accepted | M0 |
 | [0006](0006-on-demand-start-and-idle-shutdown.md) | Start on demand, stop when idle | Accepted | M2 |
 | [0007](0007-ssm-instead-of-ssh.md) | Manage the instance with SSM, not SSH | Accepted | M1 |
@@ -58,7 +76,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0021](0021-sign-in-from-linked-chat-account.md) | Chat sign-in, but only into an already linked account | Proposed | M4 |
 | [0022](0022-minecraft-account-as-linked-identity.md) | Minecraft account is a linked identity; whitelist derived; `online-mode=false` | Proposed | M4 |
 | [0023](0023-multiple-worlds.md) | Several worlds, one active at a time | Proposed | M6 |
-| [0024](0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Proposed | M2 |
+| [0024](0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Accepted — **ZeroTier** | M2 |
 | [0025](0025-step-functions-for-long-operations.md) | Step Functions for long operations; Lambda for the rest | Proposed | M2 |
 | [0026](0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | **Rejected** on measurement; kept for its threshold | M1 |
 | [0027](0027-spot-request-shape.md) | Diversified Spot fleet per session; stop-on-interruption | **Deferred** — on-demand first | later |
@@ -66,6 +84,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0029](0029-preview-environments.md) | Every proposal is tested in a throwaway preview environment | Proposed | M3 |
 | [0030](0030-desired-and-active-release.md) | Separate desired release from confirmed active release | Accepted | M3 |
 | [0031](0031-first-class-local-control-plane.md) | First-class local control plane with shared ASL, Lambda and host contracts | Accepted | M1–M5 |
+| [0032](0032-on-demand-single-instance.md) | Run the game server on one on-demand EC2 instance | Accepted, supersedes [0004](0004-ec2-spot-for-the-game-server.md) | M0 |
 
 ## Decisions still to record
 

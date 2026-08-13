@@ -190,7 +190,7 @@ something permanently up:
 | Self-hosted Prometheus and Grafana, with far better dashboards | A host, always | [ADR-0015](adr/0015-observability-and-alerting.md) |
 | A ready-made hosting panel such as Pterodactyl | A host, always | [ADR-0003](adr/0003-build-not-reuse.md) |
 | Kubernetes | A control plane, roughly $70 a month before any node | [ADR-0014](adr/0014-no-kubernetes.md) |
-| A private subnet, which is the conventional posture | A NAT Gateway, roughly $32 a month | [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md) |
+| A private subnet, which is the conventional posture | A NAT Gateway, roughly $32 a month | [ADR-0032](adr/0032-on-demand-single-instance.md) |
 
 Seven temptations, one rule, applied consistently. That consistency is why the fixed cost is storage and nothing else.
 

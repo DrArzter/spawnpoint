@@ -121,7 +121,7 @@ Ordinary case: the volume survived. Start a new instance from Terraform and reat
 Volume lost as well: create a volume, restore from the newest verified archive, then apply.
 
 Availability zone unavailable: the volume is zonal, so a zone change means restore rather than reattach.
-See [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
+See [ADR-0032](adr/0032-on-demand-single-instance.md).
 
 ## Break glass: SSM is not working
 

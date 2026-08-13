@@ -143,7 +143,7 @@ scripts/           Local helpers: cut a release, restore a backup, check cost
 
 ## Decisions
 
-The decision records are the most useful part of this repository today. Thirty-one of them, each with the
+The decision records are the most useful part of this repository today. Thirty-two of them, each with the
 alternatives that were rejected and why — including one superseded and one rejected the same day it was written, which
 is the process working rather than failing.
 
@@ -152,7 +152,7 @@ is the process working rather than failing.
 | [0001](docs/adr/0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
 | [0002](docs/adr/0002-host-on-aws.md) | Host on AWS | Accepted |
 | [0003](docs/adr/0003-build-not-reuse.md) | Build from scratch, rather than reuse a template | Accepted |
-| [0004](docs/adr/0004-ec2-spot-for-the-game-server.md) | Run the game server on EC2 Spot | Amended by 0027 |
+| [0004](docs/adr/0004-ec2-spot-for-the-game-server.md) | Run the game server on EC2 Spot | Superseded by 0032 |
 | [0005](docs/adr/0005-containerised-game-server.md) | Run the game server in a container | Accepted |
 | [0006](docs/adr/0006-on-demand-start-and-idle-shutdown.md) | Start on demand, stop when idle | Accepted |
 | [0007](docs/adr/0007-ssm-instead-of-ssh.md) | Manage the instance with SSM, not SSH | Accepted |
@@ -172,7 +172,7 @@ is the process working rather than failing.
 | [0021](docs/adr/0021-sign-in-from-linked-chat-account.md) | Chat sign-in, but only into a linked account | Proposed |
 | [0022](docs/adr/0022-minecraft-account-as-linked-identity.md) | Minecraft identity is a link; whitelist derived; `online-mode=false` | Proposed |
 | [0023](docs/adr/0023-multiple-worlds.md) | Several worlds, one active at a time | Proposed |
-| [0024](docs/adr/0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Proposed |
+| [0024](docs/adr/0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Accepted |
 | [0025](docs/adr/0025-step-functions-for-long-operations.md) | Step Functions for long operations; Lambda for the rest | Proposed |
 | [0026](docs/adr/0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | Rejected |
 | [0027](docs/adr/0027-spot-request-shape.md) | Diversified Spot fleet per session; stop-on-interruption | Deferred |
@@ -180,6 +180,7 @@ is the process working rather than failing.
 | [0029](docs/adr/0029-preview-environments.md) | Every proposal is tested in a throwaway preview environment | Proposed |
 | [0030](docs/adr/0030-desired-and-active-release.md) | Desired release is separate from confirmed active release | Accepted |
 | [0031](docs/adr/0031-first-class-local-control-plane.md) | First-class local control plane with shared ASL, Lambda and host contracts | Accepted |
+| [0032](docs/adr/0032-on-demand-single-instance.md) | Run the game server on one on-demand EC2 instance | Accepted |
 
 Index, template and the decisions still to make: [docs/adr/README.md](docs/adr/README.md).
 

@@ -45,7 +45,7 @@ individually and seeing what each one needs.
 - Backups: a manual copy to S3 before anything risky.
 
 - **Record milliseconds per tick under real load**, with everybody on. Under about 50 ms is healthy. Record it — do
-  not gate on it. See [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md).
+  not gate on it. See [ADR-0032](adr/0032-on-demand-single-instance.md).
 
 **Done when:** four people have played a full evening, and the server has been stopped and restarted with the world
 intact.

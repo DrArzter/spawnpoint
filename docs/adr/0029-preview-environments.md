@@ -12,9 +12,13 @@ Both of those ADRs asked whether a candidate release should be started somewhere
 server, and both deferred it the same way: "correct, and probably beyond a hobby budget."
 
 **That cost assumption was wrong.** A test needs one instance for as long as a modded server takes to boot and answer —
-call it ten minutes for 111 mods, generously twenty. At the Spot rate in [docs/costs.md](../costs.md) that is **under a
-cent per proposal**. Even at a much larger instance and an hour of it, it is small change. The reason to defer was the
-build effort, not the bill, and saying "budget" obscured that.
+call it ten minutes for 111 mods, generously twenty. At the on-demand rate now in [docs/costs.md](../costs.md),
+$0.16758 an hour, that is **about three to six cents per proposal**. Even at a much larger instance and an hour of it, it
+is small change. The reason to defer was the build effort, not the bill, and saying "budget" obscured that.
+
+An earlier version of this paragraph said "under a cent, at the Spot rate", which was true when
+[ADR-0027](0027-spot-request-shape.md) still planned Spot. It is deferred, so the figure is a few times higher and the
+argument is unchanged.
 
 Meanwhile the gap it leaves is the sharpest one in the design. The health check in
 [ADR-0009](0009-s3-as-mod-source-of-truth.md) runs *after* the live server has already been stopped and reconciled: it

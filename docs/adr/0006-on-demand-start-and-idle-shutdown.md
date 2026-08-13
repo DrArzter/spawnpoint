@@ -4,6 +4,18 @@
 - Date: 2026-08-11
 - Milestone: M2
 
+> **Two later decisions change the weight of this one, not the decision itself.**
+>
+> **There is no DNS wake any more.** [ADR-0024](0024-connectivity-modes.md) chose an overlay network, so there is no
+> public hosted zone and no failed lookup to catch. The implicit-wake fallback offered below, and the alternative row
+> that keeps it in reserve, are unavailable while the overlay is the connectivity mode. The explicit, attributed
+> trigger is not a preference now — it is the only one. Idle weeks cost storage, not storage and DNS.
+>
+> **The watchdog is worth about three times more.** [ADR-0027](0027-spot-request-shape.md) is deferred, so the server
+> runs on-demand. A stop that silently fails now costs roughly **$129 a month instead of about $40**, which makes the
+> mitigations below — the running-hours alarm and the hard session cap — the cheapest insurance in the design rather
+> than a nicety. See [docs/costs.md](../costs.md).
+
 ## Context
 
 Compute cost is proportional to running hours. The group plays a few evenings a week, so an always-on

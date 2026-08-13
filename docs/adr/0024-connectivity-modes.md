@@ -1,7 +1,10 @@
 # ADR-0024 — How players reach the server is a pluggable choice, with three supported modes
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-11
+- Accepted: 2026-08-13 — **ZeroTier, mode C.** Chosen on 2026-08-12, and M0 builds on it, so the record is closed
+  rather than left open to a twelfth revision. Modes A and B stay documented as the escape routes they are: changing
+  mode is a later ADR, not an edit to this one
 - Milestone: M2
 - Supersedes: [ADR-0017](0017-stable-server-address.md), which picked one approach. Its cost reasoning is
   inherited by mode B below

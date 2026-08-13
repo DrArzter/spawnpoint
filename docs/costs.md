@@ -233,6 +233,37 @@ fractions of a cent.
 $50,000 stories come from, and it is not specific to this project — but it is why "no long-lived access keys anywhere,
 OIDC for CI" in [ADR-0028](adr/0028-update-proposals.md) matters beyond tidiness.
 
+### What being publicly scanned actually costs
+
+Worth separating from the security question, because the money answer is different and much less alarming.
+
+**Directly: pennies.** A status ping response is a couple of kilobytes. Even twenty thousand of them a month is tens of
+megabytes, under a cent. An uninvited player who joins and explores for an hour pulls perhaps a hundred megabytes of
+chunk data — about a cent. Being in every Minecraft scanner's index is not, by itself, a cost problem.
+
+**Indirectly: one vector, and it is a six-fold bill.** The idle watchdog stops the instance when the player count
+reaches zero. **Anybody who can join keeps that count above zero.** With `online-mode=false` and the player sample
+leaking valid usernames from the status ping, a stranger who joins does not merely grief the world — they hold the
+server open. See [ADR-0024](adr/0024-connectivity-modes.md).
+
+| | Hours | Monthly |
+| --- | --- | --- |
+| Intended | 75 | ~$6.85 |
+| Watchdog defeated all month | 730 | ~$40 |
+
+So on the money question, the security failure and the cost failure are **the same failure**, reached by a different
+route. That is the answer to "what does being indexed cost": not egress, but a watchdog that never fires.
+
+**And it is already bounded.** The running-hours alarm in [ADR-0015](adr/0015-observability-and-alerting.md) exists
+precisely for an instance that will not stop, and it fires in hours rather than at the end of the month. A three-hour
+session that runs twelve costs about **fifty cents extra**, not thirty dollars. The Budgets action discussed below caps
+it harder still.
+
+**Which leads to an honest conclusion.** If the only concern is the bill, a public address is defensible: the direct
+cost is negligible and the one real vector is already alarmed and bounded to small change per incident. What a public
+address does not protect is the **world** — months of building, against somebody who can log in as any name they read
+off the status ping. That is the exposure being accepted, and it is not a financial one.
+
 ### What actually caps it, as opposed to noticing it
 
 **An AWS Budgets alarm notifies. It does not stop anything.** As specified so far, the guardrail is a smoke alarm, not a

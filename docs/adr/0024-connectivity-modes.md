@@ -66,6 +66,11 @@ apply here.
 
 So the honest statement: an ephemeral address is **obscurity with a short half-life**, not a control.
 
+**The cost consequence is sharper than the security one, and it is the same event.** The idle watchdog stops the
+instance when the player count reaches zero, so anybody who joins holds the server open — 730 hours instead of 75. The
+running-hours alarm bounds that to small change per incident rather than a month of it. Worked through in
+[docs/costs.md](../costs.md).
+
 **One cheap thing does help materially: do not listen on 25565.** Scanners concentrate on the default port, so a random
 high port removes the project from the sweep that finds servers by default. It costs players nothing when the
 connection string carries the port, and in DNS mode an SRV record hides it entirely. It is still obscurity — but it is

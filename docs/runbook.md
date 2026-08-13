@@ -13,7 +13,7 @@ performed. A procedure nobody has run is a guess.
 | Stop the server | Automatic | — |
 | Promote a release | Owner | — |
 | Roll back a release | Owner | — |
-| Restore the world | Owner | 2026-08-12 — local archive drill; content-identical restore into `/tmp`, then successful isolated boot with 111 mods, health check and RCON; not yet restored from S3 |
+| Restore the world | Owner | 2026-08-13 — real S3 download, checksum/full-stream verification and content-identical restore into `/tmp`; isolated Minecraft boot with matching 111 mods was proven on the same archive locally on 2026-08-12 |
 | Recover from a lost instance | Owner | — |
 | Bootstrap Terraform state | Owner | 2026-08-13 — bucket created by saved plan, controls verified through S3 API, native lock exercised, final drift check clean |
 | Tear down and rebuild | Owner | — |
@@ -31,8 +31,8 @@ Fill in at M1 and keep current. This block is what somebody needs when something
 | Server hostname | TODO |
 | Instance ID / tag | TODO |
 | Data volume ID | TODO |
-| Release bucket | TODO |
-| Backup bucket | TODO |
+| Release bucket | `spawnpoint-releases-614934752397` |
+| Backup bucket | `spawnpoint-backups-614934752397` |
 | Panel URL | TODO |
 | Container image tag | TODO — pinned, never `latest` |
 | Minecraft and loader version | TODO |
@@ -93,14 +93,26 @@ Rollback is the same mechanism as a deploy, which is why it can be trusted. See
 Practise this before it is needed. M1 includes a drill.
 
 1. Stop the server, and confirm it is stopped.
-2. List available archives: `ls -lh server/backups/*.tar.zst`
+2. List available S3 archives:
+
+   ```bash
+   aws s3api list-objects-v2 \
+     --bucket spawnpoint-backups-614934752397 \
+     --prefix worlds/world/archives/ \
+     --profile spawnpoint \
+     --region eu-central-1
+   ```
 3. Choose one, and check its date against when the damage was noticed — the most recent archive may already
    contain the corruption.
 4. Restore into a new volume or path, never over the live world:
 
    ```bash
-   server/scripts/verify-archive.sh <archive.tar.zst>
-   server/scripts/restore-world.sh <archive.tar.zst> <new-empty-data-directory>
+   AWS_PROFILE=spawnpoint AWS_REGION=eu-central-1 \
+   BACKUP_BUCKET=spawnpoint-backups-614934752397 \
+     server/scripts/download-world-backup.sh <object-key> /tmp/world-from-s3.tar.zst
+
+   server/scripts/verify-archive.sh /tmp/world-from-s3.tar.zst
+   server/scripts/restore-world.sh /tmp/world-from-s3.tar.zst <new-empty-data-directory>
    ```
 5. Start the server and verify in game.
 6. Record in the table above what was restored, from when, and how long it took.
@@ -110,6 +122,11 @@ not combine `REMOVE_OLD_MODS=true` with an absent or empty desired-mod list: the
 directory to an empty set, and Forge will then reject dimensions belonging to the missing mods. The 2026-08-12 drill
 reproduced this failure and succeeded after restoring all 111 JARs and disabling reconciliation for the smoke test.
 Production restore must use the immutable release artefact rather than copying a mutable mod directory.
+
+The 2026-08-13 S3 drill downloaded
+`worlds/world/archives/world-20260812T201024Z-e3909da890fa9a79364617bd4feb1f4c095cc519c1778918cfa6a85403252e87.tar.zst`,
+verified all three stored facts (metadata digest, S3 checksum and byte length), extracted it and found no content
+differences from the stopped source world. The first off-volume backup is therefore tested, not merely listable.
 
 ## Recover from a lost instance
 

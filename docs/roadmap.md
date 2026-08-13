@@ -61,6 +61,8 @@ measured cold start and the memory headroom, because those become inputs to ever
 **Goal:** the environment is reproducible, and the world is safe.
 
 - S3 backend for Terraform state, with versioning and locking. Bootstrap steps written in the runbook.
+- Persistent backup/release buckets have a separate state from disposable compute, so an ordinary host teardown cannot
+  include the backups it is meant to preserve.
 - Everything from M0 recreated in Terraform: VPC, subnet, gateway, route table, security group, instance,
   volume, IAM roles, buckets.
 - M0's manual resources deleted, and the deletion verified in the console.

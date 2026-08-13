@@ -144,31 +144,36 @@ One-time, manual, and done before anything else exists. Recorded here because Te
 2. **Activate IAM access to billing.** Account settings → *IAM user and role access to billing information* → Activate.
    **Only root can do this**, and without it the administrative identity created below cannot see Cost Explorer or
    create the Budgets alarm — which is the next thing it needs to do.
-3. **Enable IAM Identity Center**, and create the identity there rather than an IAM user with an access key. Short-lived
-   credentials are the whole point, and they match the posture the rest of this design takes — see
-   [ADR-0028](adr/0028-update-proposals.md), where GitHub gets a role through OIDC rather than a stored key.
+3. **Create a plain IAM user with `AdministratorAccess` and MFA.** Not IAM Identity Center — see the warning below.
 
-   - Console → IAM Identity Center → Enable. Pick `eu-central-1` as its home region to match everything else.
-   - **It will create an AWS Organization** if the account is standalone. That is normal and harmless; it is worth
-     knowing rather than being surprised by.
-   - Users → add yourself. Permission sets → create one from the predefined `AdministratorAccess`. AWS accounts →
-     assign your user with that permission set.
-   - Note the access portal URL it gives you — something like `https://d-xxxxxxxxxx.awsapps.com/start`.
+   IAM → Users → Create user → tick *Provide user access to the AWS Management Console* → set a password → attach the
+   `AdministratorAccess` policy → create. Sign in as that user and enable MFA on it.
 
-4. **Sign in through the portal, and set MFA on that identity too.**
-5. **Create the Budgets alarm**, around $20. See [docs/costs.md](costs.md).
-6. **For the CLI:** `aws configure sso`, pointing at the portal URL. No access key is created, and the session expires
-   on its own.
-7. **Stop using root.** Keep its credentials somewhere safe: a few things still require it — closing the account,
+   **Do not create an access key.** M0 is console work, so none is needed, and by M1 there will be a better option.
+
+> **Do not enable IAM Identity Center yet.** It is the better long-term answer — short-lived credentials, no access
+> keys, and it matches the posture in [ADR-0028](adr/0028-update-proposals.md). But enabling it creates an AWS
+> Organization, and the console warns that this **upgrades the account from the free plan to pay-as-you-go and expires
+> the free tier credits immediately**. That is $100–200 of credits, roughly a year of running at the modelled ~$15 a
+> month, traded for a nicer sign-in.
+>
+> An *account instance* of Identity Center avoids the Organization but cannot grant console access to AWS accounts —
+> checked against the documentation, it is limited to AWS managed applications. So it does not help.
+>
+> **Do it at M1**, where [docs/costs.md](costs.md) already plans the move to the Paid plan. The upgrade then rides
+> along with a transition that is happening anyway, and Terraform can use `aws configure sso` — meaning no long-lived
+> access key is ever created.
+
+4. **Create the Budgets alarm**, around $20. See [docs/costs.md](costs.md).
+5. **Stop using root.** Keep its credentials somewhere safe: a few things still require it — closing the account,
    changing the support plan, and some billing settings — but nothing in day-to-day work does.
 
 Record here what was actually created:
 
 | Item | Value |
 | --- | --- |
-| Identity Center portal URL | TODO |
-| Home region | TODO — `eu-central-1` intended |
-| Administrative identity | TODO |
+| Administrative identity | TODO — plain IAM user with `AdministratorAccess` and MFA, no access key |
+| IAM Identity Center | **Deliberately not enabled.** Deferred to M1 — enabling it expires the free tier credits immediately |
 | Account plan | **Free**, as of 2026-08-12. Move to Paid before M1 — see [docs/costs.md](costs.md) |
 | Budget | **$20/month, fixed, all services, unblended.** Created 2026-08-12 |
 | Budget alerts | 80% **forecasted** ($16) and 95% **actual** ($19), both to a `+aws` alias |

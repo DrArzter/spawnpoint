@@ -137,36 +137,12 @@ instance is unreachable through SSM:
 
 One-time, manual, and done before anything else exists. Recorded here because Terraform does not know about any of it.
 
-**Order matters.** Steps 1–3 are done as root, and step 2 is the one that is easy to miss.
+**The procedure, with its traps, is [docs/aws-account-checklist.md](aws-account-checklist.md).** This section records
+what was actually done in *this* account.
 
-1. **MFA on the root user.** Account menu → Security credentials → assign an MFA device. Then check there are no root
-   access keys; a new account should have none, and if any exist, delete them.
-2. **Activate IAM access to billing.** Account settings → *IAM user and role access to billing information* → Activate.
-   **Only root can do this**, and without it the administrative identity created below cannot see Cost Explorer or
-   create the Budgets alarm — which is the next thing it needs to do.
-3. **Create a plain IAM user with `AdministratorAccess` and MFA.** Not IAM Identity Center — see the warning below.
-
-   IAM → Users → Create user → tick *Provide user access to the AWS Management Console* → set a password → attach the
-   `AdministratorAccess` policy → create. Sign in as that user and enable MFA on it.
-
-   **Do not create an access key.** M0 is console work, so none is needed, and by M1 there will be a better option.
-
-> **Do not enable IAM Identity Center yet.** It is the better long-term answer — short-lived credentials, no access
-> keys, and it matches the posture in [ADR-0028](adr/0028-update-proposals.md). But enabling it creates an AWS
-> Organization, and the console warns that this **upgrades the account from the free plan to pay-as-you-go and expires
-> the free tier credits immediately**. That is $100–200 of credits, roughly a year of running at the modelled ~$15 a
-> month, traded for a nicer sign-in.
->
-> An *account instance* of Identity Center avoids the Organization but cannot grant console access to AWS accounts —
-> checked against the documentation, it is limited to AWS managed applications. So it does not help.
->
-> **Do it at M1**, where [docs/costs.md](costs.md) already plans the move to the Paid plan. The upgrade then rides
-> along with a transition that is happening anyway, and Terraform can use `aws configure sso` — meaning no long-lived
-> access key is ever created.
-
-4. **Create the Budgets alarm**, around $20. See [docs/costs.md](costs.md).
-5. **Stop using root.** Keep its credentials somewhere safe: a few things still require it — closing the account,
-   changing the support plan, and some billing settings — but nothing in day-to-day work does.
+Progress as of 2026-08-12: root MFA, billing access, IAM user and group, budget, SNS topic and anomaly retune are done.
+Outstanding: MFA on the IAM user, confirming the topic's email subscription, pointing the budget at the topic, choosing
+an Availability Zone.
 
 Record here what was actually created:
 

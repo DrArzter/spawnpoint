@@ -132,7 +132,7 @@ Full description, including failure modes: [docs/architecture.md](docs/architect
 ## Repository layout
 
 ```
-docs/              Architecture, roadmap, cost model, runbook, prior art, measurements
+docs/              Architecture, roadmap, cost model, runbook, prior art, measurements, AWS account checklist
 docs/adr/          Architecture decision records — start here
 infra/terraform/   Terraform for all AWS resources
 lambdas/           Control-plane handlers, lifecycle automation, chat adapters

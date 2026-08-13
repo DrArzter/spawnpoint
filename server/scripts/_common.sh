@@ -5,9 +5,24 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_SERVER_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 SERVER_DIR="$(realpath -m -- "${SERVER_PROJECT_DIRECTORY:-${DEFAULT_SERVER_DIR}}")"
-COMPOSE_FILE="$(realpath -m -- "${SERVER_COMPOSE_FILE:-${SERVER_DIR}/compose.yaml}")"
 ENV_FILE="$(realpath -m -- "${SERVER_ENV_FILE:-${SERVER_DIR}/.env}")"
 SERVICE="${SERVER_COMPOSE_SERVICE:-mc}"
+
+declare -a COMPOSE_FILES=()
+if [[ -n "${SERVER_COMPOSE_FILES:-}" ]]; then
+  IFS=':' read -r -a configured_compose_files <<<"${SERVER_COMPOSE_FILES}"
+  for compose_file in "${configured_compose_files[@]}"; do
+    [[ -n "${compose_file}" ]] || continue
+    COMPOSE_FILES+=("$(realpath -m -- "${compose_file}")")
+  done
+else
+  COMPOSE_FILES+=("$(realpath -m -- "${SERVER_COMPOSE_FILE:-${SERVER_DIR}/compose.yaml}")")
+fi
+
+(( ${#COMPOSE_FILES[@]} > 0 )) || {
+  printf 'error: SERVER_COMPOSE_FILES did not contain a Compose file\n' >&2
+  exit 1
+}
 
 log() {
   printf '%s\n' "$*" >&2
@@ -23,7 +38,11 @@ require_command() {
 }
 
 compose() {
-  local args=(--project-directory "${SERVER_DIR}" -f "${COMPOSE_FILE}")
+  local args=(--project-directory "${SERVER_DIR}")
+
+  for compose_file in "${COMPOSE_FILES[@]}"; do
+    args+=(-f "${compose_file}")
+  done
 
   if [[ -f "${ENV_FILE}" ]]; then
     args+=(--env-file "${ENV_FILE}")
@@ -34,10 +53,13 @@ compose() {
 
 validate_compose() {
   require_command docker
-  [[ -f "${COMPOSE_FILE}" ]] || die "Compose file does not exist: ${COMPOSE_FILE}"
+  local compose_file
+  for compose_file in "${COMPOSE_FILES[@]}"; do
+    [[ -f "${compose_file}" ]] || die "Compose file does not exist: ${compose_file}"
+  done
 
   if ! compose config --quiet; then
-    die "Compose configuration is invalid; check ${COMPOSE_FILE} and ${ENV_FILE}"
+    die "Compose configuration is invalid; check the configured Compose files and ${ENV_FILE}"
   fi
 }
 
@@ -51,7 +73,7 @@ container_id() {
 container_state() {
   local id
   if ! id="$(container_id)"; then
-    die "could not inspect Compose service ${SERVICE} in ${COMPOSE_FILE}"
+    die "could not inspect Compose service ${SERVICE}"
   fi
 
   if [[ -z "${id}" ]]; then
@@ -65,7 +87,7 @@ container_state() {
 container_health() {
   local id
   if ! id="$(container_id)"; then
-    die "could not inspect Compose service ${SERVICE} in ${COMPOSE_FILE}"
+    die "could not inspect Compose service ${SERVICE}"
   fi
 
   if [[ -z "${id}" ]]; then

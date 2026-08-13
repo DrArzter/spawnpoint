@@ -1,0 +1,8 @@
+# The mod directory has already been reconciled against an immutable release
+# manifest. Starting a session must not resolve CurseForge again or delete JARs
+# that are absent from a mutable upstream list.
+services:
+  mc:
+    environment:
+      CURSEFORGE_FILES: !reset null
+      REMOVE_OLD_MODS: "false"

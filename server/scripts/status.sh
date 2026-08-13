@@ -11,7 +11,7 @@ health="$(container_health)"
 
 printf 'container_state=%s\n' "${state}"
 printf 'container_health=%s\n' "${health}"
-printf 'compose_file=%s\n' "${COMPOSE_FILE}"
+printf 'compose_files=%s\n' "$(IFS=:; printf '%s' "${COMPOSE_FILES[*]}")"
 printf 'compose_service=%s\n' "${SERVICE}"
 
 if [[ "${state}" != "running" ]]; then

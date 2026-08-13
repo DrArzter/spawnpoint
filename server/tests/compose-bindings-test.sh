@@ -13,7 +13,7 @@ rendered="$({
     docker compose \
       --project-directory "${server_directory}" \
       -f "${server_directory}/compose.yaml" \
-      -f "${server_directory}/compose.m0.yaml" \
+      -f "${server_directory}/compose.release.yaml" \
       config --format json
 } 2>/dev/null)"
 

@@ -151,6 +151,17 @@ The first AWS boot additionally used `FORGE_FORCE_REINSTALL=true` because the se
 excluded the locally cached Forge runtime libraries. It was removed from the override immediately after that boot
 reached `healthy`; leaving it enabled would turn a repair into work repeated on every session.
 
+M1 and later use the equivalent, deliberately named `compose.release.yaml` after release reconciliation. The M2
+workflow invokes `scripts/start-session.sh`, which first requires the configured ZeroTier network and address to be
+present, then delegates to the ordinary lifecycle script with both Compose files:
+
+```bash
+SERVER_COMPOSE_FILES="$PWD/compose.yaml:$PWD/compose.release.yaml" scripts/start.sh
+```
+
+`SERVER_COMPOSE_FILE` remains supported for an existing single-file project. Multiple files use a colon-separated
+`SERVER_COMPOSE_FILES`; the wrapper normalises every path before calling Docker Compose.
+
 **Status:** local lifecycle, S3 backup/restore, release reconciliation, the base instance bootstrap and the first
 real-EC2 acceptance test exist. S3 transfer has passed a real upload/download/byte-identical restore drill; automated
 orchestration remains.

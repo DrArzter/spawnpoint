@@ -91,7 +91,7 @@ see sources.
 | Layer | L3, IP-level | L2, Ethernet-level |
 | Next tier | Per user, per month | Flat monthly, and it still includes only 10 devices |
 
-**Recommended: ZeroTier**, for two reasons, of which the second is the stronger.
+**Chosen: ZeroTier**, decided 2026-08-12. Two reasons, of which the second is the stronger.
 
 **Which limit binds first.** Tailscale runs out of *people* at six — the owner plus five friends, with no headroom —
 and a seventh person is a per-user monthly charge several times the whole AWS bill. ZeroTier runs out of *devices* at
@@ -138,6 +138,19 @@ limited, devices are not" impression comes from.
   their node in ZeroTier.
 - Port: **not exposed at all.**
 - Ceiling: six *people* on Tailscale, ten *devices* on ZeroTier. See the risks below.
+
+### While the server still runs on the owner's machine
+
+Worth separating, because the answer differs from the cloud answer and the project is in this phase today.
+
+With the server on a desktop, **Porthole is the better tool than an overlay**: nothing to install and configure beyond
+one Steam app, a guest joins with a share code, and only the game port is shared rather than putting five machines on a
+common network. It also satisfies what `online-mode=false` needs — there is no public port, and only somebody holding
+the code can reach it. See [ADR-0022](0022-minecraft-account-as-linked-identity.md).
+
+It does not survive the move to EC2, for the reason in the alternatives table. That is not a problem: connectivity is a
+pluggable contract precisely so that the local phase and the cloud phase can differ. Using it now costs nothing later,
+provided nothing else is built to assume it.
 
 ### Which mode to use
 
@@ -214,6 +227,7 @@ not for a world with months of building in it.
 | Elastic IP | Never changes and nothing to update, but billed hourly all month for an address idle most of it. The analysis inherited from [ADR-0017](0017-stable-server-address.md) |
 | Security-group allow-list of players' home IP addresses | No client to install and no domain needed, and it does gate the port. Residential addresses change, so it becomes a support task every few weeks, and it fails for anybody on mobile tethering |
 | Self-hosted WireGuard instead of a managed overlay | Removes the vendor, has no per-user or per-device pricing, and is not hard to run. It needs a stable endpoint to connect to, which is the problem being solved, plus manual key distribution — so it reintroduces the work a coordination service does. **Becomes the serious alternative at whichever free-tier cliff arrives first**, and it is what a self-hosted overlay controller is a gentler version of |
+| **Porthole**, sharing the game port over Steam's relay | Free, and the lowest friction of anything considered: a guest joins with a share code, approves one port, and needs no client configuration or admin approval. It shares only the chosen port rather than putting whole machines on a network, which is a better security shape than an overlay. **Disqualified for the cloud phase by its host requirement** — it is a Steam desktop application running over Valve's networking, so the host needs a logged-in Steam client. Our host is a headless, disposable EC2 instance created and destroyed per session by [ADR-0027](0027-spot-request-shape.md), and a desktop client has no place in that lifecycle. Verify before dismissing entirely, but the expectation is firm. It is also days old, which is thin ice for infrastructure. **Genuinely good for the phase the project is in right now**, where the server runs on the owner's own machine — see below |
 | A dynamic DNS provider | Free tiers exist, works, and needs no purchased domain. Adds a third party to do what Route 53 already does inside the account, and it leaves the port exposed. A reasonable substitute for mode B if a domain is never bought |
 | A public tunnel service, such as a TCP relay or `playit.gg`-style proxy | No domain, no client for players, stable address. Puts an unaccountable third party in the traffic path of a server with no authentication, and arbitrary TCP through the general-purpose CDN tunnels is usually a paid feature. Verify before considering |
 | One mode only, as [ADR-0017](0017-stable-server-address.md) had it | Less code. Forces a domain purchase before first play, and leaves the security posture implicit at exactly the moment `online-mode=false` made it load-bearing |

@@ -163,7 +163,7 @@ every release. If no: the earlier observation was a server-list entry, and a bro
 | --- | --- |
 | People | |
 | Devices they will actually connect from | |
-| Unblocks | The overlay vendor in [ADR-0024](adr/0024-connectivity-modes.md): ZeroTier's free tier limits devices, Tailscale's limits people |
+| Unblocks | Now a yes/no rather than a choice. **ZeroTier is chosen** in [ADR-0024](adr/0024-connectivity-modes.md), so the only question is whether the group fits its free tier: **10 devices, 1 network**. Count second machines |
 
 Count devices honestly, including anybody's second machine. This is the number that decides which free tier fits.
 

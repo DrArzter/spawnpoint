@@ -76,7 +76,12 @@ Prefer ARM (Graviton) if the mod set runs on it, otherwise x86.
 
 - Instance size. Operator experience gives a bracket — 2 cores and 4 GB often enough, 4 cores and 16 GB runs anything
   comfortably — but **that was measured on an i9-14900KF**, and only half of it transfers.
-  - **Memory transfers.** A gigabyte is a gigabyte. So 8 GB is a sensible starting point and 16 GB the ceiling.
+  - **Memory transfers.** A gigabyte is a gigabyte — but the bracket was about the *JVM heap*, and the instance has to
+    hold more than the heap. Measured 2026-08-12: with one exploring player, container-accounted memory reached
+    **5.863 GiB against a 4 GiB heap**, so roughly 1.9 GiB above it. On an 8 GiB instance that leaves about 2 GiB for
+    the OS, Docker, the overlay agent and any growth — with a single player online. **So the starting size is 16 GiB**,
+    and 8 GiB becomes a downsize candidate once the full group has been measured, rather than an optimistic default.
+    See [docs/measurements.md](../measurements.md).
   - **The CPU figure does not.** A 14900KF P-core is among the fastest single threads available anywhere; a cloud
     server core is materially slower per clock and clocked lower. "Two cores' worth" on that machine is more than two
     cloud vCPUs of the same work.
@@ -87,6 +92,10 @@ Prefer ARM (Graviton) if the mod set runs on it, otherwise x86.
 - Therefore: **single-thread performance is the primary selection criterion, not a refinement.** Newest generation
   available, and the families with the highest clocks rather than the widest instances. This shapes the ten-type list in
   [ADR-0027](0027-spot-request-shape.md), and it narrows it, because the fast families are a smaller set.
+- **And the family shape follows from the same measurement: memory binds, cores do not.** The sampled CPU figure was
+  0.19 of one logical CPU. Wanting 16 GiB from a general-purpose family means an `.xlarge` and four vCPUs, three of
+  which go unused; a **memory-optimised `.large` gives 2 vCPU and 16 GiB** for less. So the ten types should be
+  `r`-family `.large` sizes across the fastest available generations, not `m`-family `.xlarge`.
 - **It also reopens the ARM question below, as a genuine trade rather than a free discount.** Graviton is cheaper per
   hour and slower per core; for a single-threaded tick the cheaper core is not automatically the cheaper answer.
 - The only honest resolution is to measure **milliseconds per tick under real load on a candidate instance** — not

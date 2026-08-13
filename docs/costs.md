@@ -38,7 +38,7 @@ Two decisions do almost all of the work on the variable term, and they multiply:
 
 | Driver | Type | Placeholder rate | Notes |
 | --- | --- | --- | --- |
-| EC2 Spot, 8–16 GiB candidate range | Variable | $0.03 per hour at the 8 GiB placeholder | One exploring player already produced 5.863 GiB of container-accounted memory, so 16 GiB is the safer first-run size and 8 GiB is now a downsize candidate. The worked example still prices 8 GiB and therefore represents the lower bound until the full-group measurement and real Spot prices replace it |
+| EC2 Spot, **2 vCPU / 16 GiB**, memory-optimised | Variable | $0.045 per hour | Sized from measurement rather than the bracket: one exploring player produced 5.863 GiB of container-accounted memory, so 8 GiB leaves no headroom for the OS, Docker and the overlay agent. **Memory binds and cores do not** — 0.19 of a logical CPU at the sampled instant — so an `r`-family `.large` is the right shape rather than an `m`-family `.xlarge`. 8 GiB stays a downsize candidate pending a full-group measurement. Assume roughly a third of on-demand; verify per type and zone |
 | Public IPv4 address | Variable here | $0.005 per hour | Charged for any public address; verify. Only billed while running, because no Elastic IP is held. Applies in **every** connectivity mode, because the instance needs outbound access regardless. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | EBS gp3, data volume, 20 GB | Fixed | $0.09 per GB-month | Billed while the instance is stopped. Sized for mod releases and several worlds, not for save data — the worlds themselves are a few hundred MB each. See [ADR-0023](adr/0023-multiple-worlds.md) |
 | S3, world backups | Fixed | $0.023 per GB-month | Full archive after every session. The first real archive compressed the 598 MiB world to about 398 MiB, so retention of 5 daily, 2 weekly and 2 monthly is about 3.5 GiB at the observed ratio. See [ADR-0010](adr/0010-world-persistence-and-backups.md) |
@@ -59,15 +59,18 @@ directly.
 
 | Item | Calculation | Monthly |
 | --- | --- | --- |
-| Instance | 75 h x $0.03 | $2.25 |
+| Instance | 75 h x $0.045 | $3.38 |
 | Public IPv4 | 75 h x $0.005 | $0.38 |
 | Data volume | 20 GB x $0.09 | $1.80 |
 | Backups | 9 archives x ~0.389 GiB x $0.023 | ~$0.08 |
 | Release store | 10 GB x $0.023 | $0.23 |
 | Hosted zone | | $0.50 |
 | Serverless, egress, logs | inside free tier, plus a margin | ~$0.50 |
-| **Total** | | **~$5.75** |
-| **of which fixed** | volume, storage, zone | **~$2.65** |
+| **Total** | | **~$6.85** |
+| **of which fixed** | volume, storage, zone | **~$2.60** |
+
+Revised from ~$5.75 after the 2026-08-12 measurement. The earlier figure priced 8 GiB, which `docker stats` disproved
+with a single player online. See [docs/measurements.md](measurements.md).
 
 ### Sensitivity to running hours
 
@@ -75,29 +78,31 @@ The single number matters less than the slope, because hours are the one input m
 
 | Pattern | Hours/month | Total |
 | --- | --- | --- |
-| A few evenings a week | 40 | ~$4.50 |
-| 2–3 h most nights | 75 | ~$5.70 |
-| 3 h every night | 90 | ~$6.20 |
-| Always on | 730 | ~$29 |
+| A few evenings a week | 40 | ~$5.10 |
+| 2–3 h most nights | 75 | ~$6.85 |
+| 3 h every night | 90 | ~$7.60 |
+| Always on | 730 | ~$40 |
 
-Every extra hour costs about 3.5 cents at these placeholder rates. The always-on row is still five times the expected
-one, which is the argument for the whole design.
+Every extra hour costs about 5 cents at these placeholder rates. The always-on row is now nearly six times the expected
+one, so doubling the memory made the case for stopping when idle stronger rather than weaker.
 
 The hosted-zone line applies in DNS mode only; in the other two connectivity modes it is nil or the overlay's free
 tier. See [ADR-0024](adr/0024-connectivity-modes.md).
 
 ### Which line dominates
 
-This document has answered that question three times and got a different answer each time, because the inputs kept
-arriving. With the world measured and the instance sized from experience rather than guesswork, it settles:
+This document has answered that question four times now and got a different answer each time, because the inputs kept
+arriving. So the useful thing is no longer the answer but the pattern:
 
 | | Monthly | Note |
 | --- | --- | --- |
-| Variable — running hours | ~$2.60 | Instance and its public address, at 75 h |
+| Variable — running hours | ~$3.76 | Instance and its public address, at 75 h |
 | Fixed — storage and DNS | ~$2.60 | Volume, backups, release store, hosted zone |
 
-**Neither dominates.** Roughly half and half, on a bill of about six dollars. So there is no single lever worth
-optimising, and two worth not getting wrong: **hours** — a failed stop is still the one mistake that multiplies the
+Variable is now the larger share, at about three fifths. But **the split moves with instance size**, and sizing has now
+moved this total twice — 30% down on operator experience, then 20% back up on measurement. That is the stable
+observation: sizing is the lever, and it is the one input still resting on a single-player sample. Two things are worth
+not getting wrong: **hours** — a failed stop is still the one mistake that multiplies the
 bill — and **instance size**, which moved this total by 30% in one step. Save data is not a cost factor at all.
 
 Earlier versions of this section declared first storage and then running hours the dominant term. Both followed from
@@ -277,11 +282,17 @@ in a **shared** CPU tier and a **dedicated** one.
 
 | Option | At 75 h | Flat, 24/7 | Spec |
 | --- | --- | --- | --- |
-| **This design**, EC2 **Spot** | ~$5.70 | — | 2 vCPU / 8 GB |
+| **This design**, EC2 **Spot** | **~$6.85** | — | 2 vCPU / **16 GiB**, memory-optimised |
 | VPS, **dedicated** CPU | ~€7.50 | €16.98 | 2 core / 4 GB — "often enough" |
 | VPS, **shared** CPU | ~€10.50 | €23.73 | 4 core / 8 GB |
 | VPS, **dedicated** CPU | ~€14.25 | €33.94 | 4 core / 8 GB |
-| VPS, **dedicated** CPU | ~€28.50 | €67.86 | 8 core / 16 GB — "runs anything" |
+| VPS, **dedicated** CPU | ~€28.50 | €67.86 | 8 core / **16 GB** — the like-for-like row |
+
+**Doubling the memory widened the gap rather than closing it.** Like for like is now $6.85 against €28.50, roughly four
+times, and the reason is structural: **the VPS ladder couples cores to memory.** 16 GB is only available on the 8-core
+rung, and this workload uses about a fifth of one core. Cloud instance families let you buy the axis that actually
+binds — a memory-optimised `.large` is 2 vCPU and 16 GiB — which is the first advantage in this document that is about
+shape rather than price.
 
 **A rented box may well have the faster core.** Budget providers often run desktop-class CPUs at high clocks, where
 cloud general-purpose families run server parts clocked lower. For a workload whose main tick is single-threaded and
@@ -295,10 +306,9 @@ general-purpose families give real vCPUs rather than burstable credits, so the h
 
 Read that way the ordering is clear, and it settles an argument this document has now had three times:
 
-**EC2 Spot is the cheapest option on the table for like-for-like dedicated CPU** — roughly half the dedicated VPS at 8 GB,
-and a third of it at 16 GB. EC2 on-demand lands about level with the dedicated 8 GB tier. The Spot discount is doing all
-of that work, which is exactly why [ADR-0027](adr/0027-spot-request-shape.md) treats it as load-bearing rather than as an
-optimisation.
+**EC2 Spot is the cheapest option on the table for like-for-like memory** — about a quarter of the dedicated VPS row
+that carries 16 GB. Part of that is the Spot discount, which is why [ADR-0027](adr/0027-spot-request-shape.md) treats it
+as load-bearing rather than as an optimisation, and part is being able to buy memory without buying cores.
 
 So the trade is now precise. Moving the game server to a rented box costs roughly **€6–20 a month more**, and buys: no
 capacity risk, no interruptions, no fleet, no AMI, a static address, and a shorter cold start. That is a real thing to

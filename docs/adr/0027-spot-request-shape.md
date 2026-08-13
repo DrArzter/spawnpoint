@@ -127,8 +127,10 @@ now, try again shortly, or ask the owner to switch types" — and not as a gener
 
 ## Open questions
 
-- The ten instance types, which depend on the architecture choice and on the memory figure from
-  [docs/measurements.md](../measurements.md).
+- The ten instance types. The memory figure is now measured, so the shape is settled: **memory-optimised `.large`
+  sizes carrying 16 GiB**, across the fastest available generations, within one architecture. What remains open is the
+  architecture itself and which specific generations have Spot capacity in the chosen zone. See
+  [ADR-0004](0004-ec2-spot-for-the-game-server.md) and [docs/measurements.md](../measurements.md).
 - Whether the fresh-instance cold start, with a baked AMI, is close enough to a stopped-instance resume. If it is much
   worse, the simpler mechanism may win despite the capacity risk — measure both before deciding.
 - Whether stop-on-interruption's automatic restart can race the idle watchdog mid-session, and how the watchdog should

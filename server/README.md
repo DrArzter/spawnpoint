@@ -6,8 +6,9 @@ Contents:
 
 - `compose.yaml` — the game server, using [`itzg/docker-minecraft-server`](https://github.com/itzg/docker-minecraft-server),
   with an exact image tag. Never `latest`. See [ADR-0005](../docs/adr/0005-containerised-game-server.md).
-- `user-data.sh` — idempotent first-boot setup for the disposable host: install Docker and verify SSM. It deliberately
-  does not guess a disk, clone a moving Git branch, handle secrets or start the stack.
+- `user-data.sh` — idempotent first-boot setup for the disposable host: install Docker, a digest-verified pinned
+  Compose plugin, and verify SSM. It deliberately does not guess a disk, clone a moving Git branch, handle secrets or
+  start the stack.
 - `scripts/` — invoked by SSM Run Command, not by a human:
   - `prepare-data-volume.sh` — verify an explicitly named block device, optionally format only an empty one, and mount
     it by filesystem UUID,
@@ -51,15 +52,16 @@ server/scripts/stop.sh
 stops the whole project, so Grafana cannot accidentally become always-on compute. Prometheus and Grafana keep local
 Docker volumes across an ordinary Compose stop; losing that history with a disposable instance is intentional.
 
-Grafana is available at `http://127.0.0.1:3000` and Prometheus at `http://127.0.0.1:9090`. They bind only to loopback.
-On EC2, forward Grafana through the existing SSM channel rather than opening port 3000:
+Prometheus remains host-local at `http://127.0.0.1:9090`. Grafana also defaults to loopback, but has its own bind
+setting so an overlay deployment can expose only the dashboard without exposing Prometheus:
 
 ```bash
-aws ssm start-session \
-  --target <instance-id> \
-  --document-name AWS-StartPortForwardingSession \
-  --parameters '{"portNumber":["3000"],"localPortNumber":["3000"]}'
+GRAFANA_BIND_ADDRESS=0.0.0.0
 ```
+
+M0 uses this form, so Grafana follows the host's persistent ZeroTier identity even if its managed overlay address is
+changed and needs no local SSM tunnel. This is safe only while the EC2 security group keeps its zero-inbound-rule
+invariant: port 3000 must not be added there. Anyone admitted to the ZeroTier network can reach the login page.
 
 The initial dashboard shows Minecraft health, players and response time, Minecraft-container CPU/RAM, and host
 memory/disk. It does not yet show MSPT or JVM heap/GC; those need a JVM or game-aware exporter.
@@ -114,5 +116,17 @@ pack changes and nobody knows why. See [ADR-0024](../docs/adr/0024-connectivity-
 
 The same Compose file should run locally, so a mod set can be smoke-tested before it reaches the server.
 
-**Status:** local lifecycle, backup/restore, release reconciliation and the base instance bootstrap exist. The first
-real-EC2 acceptance test, S3 transfer and automated orchestration remain.
+The manual M0 migration additionally uses `compose.m0.yaml`. Its restored mod directory has already been counted and
+hashed, so the override disables CurseForge resolution during the first AWS boot. This avoids needing to copy the
+owner's API key and prevents a moving upstream list from mutating the exact 111-JAR payload being tested:
+
+```bash
+docker compose -f compose.yaml -f compose.m0.yaml up -d mc
+```
+
+The first AWS boot additionally used `FORGE_FORCE_REINSTALL=true` because the secret-free migration intentionally
+excluded the locally cached Forge runtime libraries. It was removed from the override immediately after that boot
+reached `healthy`; leaving it enabled would turn a repair into work repeated on every session.
+
+**Status:** local lifecycle, backup/restore, release reconciliation, the base instance bootstrap and the first
+real-EC2 acceptance test exist. S3 transfer and automated orchestration remain.

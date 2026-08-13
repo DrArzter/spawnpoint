@@ -32,9 +32,15 @@ Use two deliberately different lifetimes:
   game instance is absent. Chat channels deliver anything that needs a human. See
   [ADR-0016](0016-chat-integrations.md).
 
-Grafana and Prometheus listen on loopback only. Operators reach Grafana through SSM port forwarding; there is no
-public dashboard port. Their local Docker volumes may disappear with the disposable instance. That is acceptable:
-Prometheus history is a session debugging tool, not a backup or control-plane source of truth.
+Prometheus listens on loopback only. Grafana is published on the host's port 3000 so members of the selected private
+overlay can use one remote address without occupying a local port or maintaining an SSM tunnel. In mode C it may bind
+to `0.0.0.0`, but **port 3000 must remain absent from the EC2 security group**: the zero-inbound security group is the
+public/VPC boundary, and ZeroTier is the only supported path. SSM port forwarding remains a diagnostic fallback.
+
+Anyone admitted to the ZeroTier network can reach the Grafana login page, so Grafana authentication still matters.
+Prometheus, cAdvisor and node_exporter are not published to the overlay. Their local Docker volumes may disappear with
+the disposable instance. That is acceptable: Prometheus history is a session debugging tool, not a backup or
+control-plane source of truth.
 
 Signals to collect:
 
@@ -83,6 +89,8 @@ cost.
 - Alarms that are never tested may not fire when needed.
 - cAdvisor needs broad read access to host and Docker state. It is not published on a host port and must not be treated
   as an application security boundary.
+- Binding Grafana on all host interfaces is safe only while the security group has zero inbound rules. A future public
+  connectivity mode must force Grafana back to loopback before adding game ingress.
 - Session metrics disappear when the disposable instance is replaced. Cross-session trends require selected
   CloudWatch metrics, not a promise that the local Prometheus volume is durable.
 
@@ -92,6 +100,7 @@ cost.
 - Keep custom metrics to the short list above, and use metric filters on logs sparingly.
 - Test each alarm once, deliberately, by forcing the condition. Record in the runbook that it fired.
 - Set the Budgets alarm before the first long-running resource exists, not after the first surprising bill.
+- Assert zero security-group ingress whenever mode C publishes Grafana on `0.0.0.0`; do not rely on operator memory.
 
 ## Alternatives considered
 

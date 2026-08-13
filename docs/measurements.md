@@ -113,7 +113,7 @@ Nine retained full archives occupy about **5.3 GiB before compression**, still a
 starting size remains plausible for one world and its working mod set, but free-space monitoring is required before
 adding several worlds or retaining release binaries locally.
 
-### 5. Cold start: how long from container start to joinable — **locally answered**
+### 5. Cold start: how long from container start to joinable — **AWS container path answered**
 
 **Now the highest-frequency number in the system**, because the expected pattern is 2–3 hours most nights, so this is
 paid every single evening rather than a few times a week.
@@ -123,16 +123,18 @@ paid every single evening rather than a few times a week.
 | End-to-end local observation, 2026-08-12 | **Approximately 1 minute 30 seconds**, including loading the full mod set |
 | Minecraft/Forge internal load time, 2026-08-12 | **38.264 seconds** on a restart, reported by ModernFix as `Dedicated server took 38.264 seconds to load` |
 | Restored-copy smoke test, 2026-08-12 | **17.564 seconds** of Minecraft/Forge internal load time; Docker reported `healthy`, RCON answered, idle memory was **4.734 GiB**, and the container shut down with exit code 0 after saving all dimensions |
+| First AWS boot, `m7i-flex.large`, 2026-08-13 | **127 seconds** from `docker compose up` to Docker `healthy`; ModernFix reported **70.513 seconds** for the Minecraft/Forge load. RCON answered, the real world and all 111 JARs loaded, and the process was not OOM-killed |
+| First AWS memory snapshot | Minecraft used **4.898 GiB / 7.601 GiB (64.44%)** with no players. The 8 GiB host had **2.4 GiB available** and no swap immediately after startup |
 | Hardware | **Intel Core i9-14900KF**; this is a strong desktop CPU and therefore a lower bound, not an EC2 forecast |
 | How | Time it. Locally it is a lower bound; EC2 adds instance boot and a mod sync on top |
 | Unblocks | The whole premise of [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md), which assumes 1–3 minutes is tolerable |
 
 The two values measure different boundaries. ModernFix's 38.264 seconds covers the application loading Forge and the
 mods after the JVM is already running. The roughly 90-second observation includes more of the local container path.
-Neither includes Spot capacity, EC2 boot or release reconciliation. The local results support the on-demand premise —
-the pack itself is not taking six minutes to load — but M0 still has to measure the end-to-end interval on the chosen
-EC2 type: request accepted, capacity acquired, operating system booted, mods reconciled, server healthy and a player
-able to join. The 14900KF result must not be used directly as that SLA.
+Neither local value includes Spot capacity, EC2 boot or release reconciliation. The first AWS value closes only the
+container-to-healthy segment on an on-demand smoke host; it does not yet measure request-to-ready or Spot capacity.
+The result supports the on-demand premise, but Step Functions must measure the full boundary: request accepted,
+capacity acquired, operating system and SSM ready, release reconciled, server healthy and a player able to join.
 
 The first restored-copy boot also exposed a useful failure mode. The copied environment had
 `REMOVE_OLD_MODS=true`, but the disposable container did not receive `CURSEFORGE_FILES`; image initialisation therefore
@@ -151,6 +153,12 @@ cAdvisor 0.53 could not discover containers on the local Docker 29 `overlayfs` i
 that compatibility is now pinned rather than assumed. A second trap appeared after recreating `mc`: Prometheus keeps
 the removed container's last series briefly, and a plain `sum` double-counted old and new memory. Dashboard container
 queries therefore join against `container_last_seen < 30 seconds` before aggregating.
+
+The first AWS session on 2026-08-13 then exercised the same pinned stack on the real M0 host. Prometheus, Grafana,
+`mc-monitor`, cAdvisor and node_exporter started without recreating the already healthy Minecraft container. Grafana
+was reachable on the host's private ZeroTier address; Prometheus remained loopback-only. The first screenshot exposed
+that the disk panel watched the 8 GiB root volume rather than the persistent game-data EBS, so its query was corrected
+from mountpoint `/` to `/srv/spawnpoint` and verified through the Grafana API.
 
 ### 6. LAN discovery on a clean client, over the overlay
 

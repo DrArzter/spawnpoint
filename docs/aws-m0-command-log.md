@@ -521,6 +521,11 @@ membership. The script now enables and explicitly restarts the service after wri
 idempotent retries. The service can report `active` before its local CLI control socket accepts connections, so the
 script also waits for that socket for up to 30 seconds instead of treating the startup race as a failed install.
 
+AL2023's base image includes `curl-minimal`, which supplies the `curl` command but conflicts at the RPM level with the
+full package named `curl`. The first Compose-bootstrap retry explicitly requested `curl` and DNF correctly refused the
+replacement. `user-data.sh` now relies on the preinstalled minimal package instead of using `--allowerasing` and
+silently changing a base-OS choice.
+
 ## Executed smoke-host lifecycle
 
 The accepted 16 GiB `r8i.large` cannot be launched while the account remains on the Free Plan. M0 therefore used the
@@ -654,6 +659,147 @@ Membership: ACCESS_DENIED
 `ACCESS_DENIED` is the expected pre-authorization state for a private network. The generated node ID is intentionally
 not committed; it is visible in ZeroTier Central and through `zerotier-cli info`. The host was stopped while waiting
 for manual authorization, so it does not consume compute credits.
+
+## Executed secret-free migration and first Minecraft boot
+
+The owner authorised one migration of the real world, configuration and immutable mod payload over the already
+working ZeroTier network. Secrets were not included: `.env`, RCON credentials, logs, caches and files that could carry
+upstream tokens were excluded. New RCON and Grafana passwords were generated on the EC2 host with mode `0600` and
+were never returned through SSM.
+
+The transfer used a temporary HTTP server bound to the workstation's **ZeroTier address only**. HTTP supplied no
+additional encryption, but the transport remained inside ZeroTier's encrypted overlay. The server exposed an isolated
+directory containing only the approved archive and was stopped immediately after checksum verification:
+
+```bash
+# Local workstation: serve only the isolated transfer directory on ZeroTier.
+python3 -m http.server 8765 \
+  --bind <workstation-zerotier-address> \
+  --directory .codex-transfer
+
+# EC2, invoked with AWS-RunShellScript after resolving the instance by Name tag.
+curl --fail --silent --show-error --connect-timeout 10 --max-time 600 \
+  http://<workstation-zerotier-address>:8765/spawnpoint-m0-mods.tar.zst \
+  -o /srv/spawnpoint/staging/spawnpoint-m0-mods.tar.zst
+
+printf '%s  %s\n' \
+  '6be7d2dd3c03a14808571b8b5b849b3e288ec1a9eb6dc5c0a7eccfd6d2f61e52' \
+  /srv/spawnpoint/staging/spawnpoint-m0-mods.tar.zst |
+  sha256sum --check --strict
+
+# Reject absolute/traversal/unexpected paths, then require the exact payload count.
+tar --zstd -tf /srv/spawnpoint/staging/spawnpoint-m0-mods.tar.zst
+test "$(tar --zstd -tf /srv/spawnpoint/staging/spawnpoint-m0-mods.tar.zst |
+  awk '/^mods\/[^/]+\.jar$/{n++} END{print n+0}')" = 111
+
+tar --zstd -xf /srv/spawnpoint/staging/spawnpoint-m0-mods.tar.zst \
+  -C /srv/spawnpoint/app/server
+test "$(find /srv/spawnpoint/app/server/mods -maxdepth 1 -type f -name '*.jar' |
+  wc -l)" = 111
+rm -f /srv/spawnpoint/staging/spawnpoint-m0-mods.tar.zst
+```
+
+The original first attempt taught two image-specific lessons before the world opened:
+
+- an inherited empty `CURSEFORGE_FILES` is still processed by the image and removed all copied JARs;
+- the migration deliberately excluded cached `libraries/`, but the existing Forge launcher referred to them.
+
+The local source remained intact. The 111-JAR archive was restored, `compose.m0.yaml` used Compose's `!reset null` to
+remove `CURSEFORGE_FILES` from the merged model, and `FORGE_FORCE_REINSTALL=true` repaired the Forge runtime once.
+The model was checked before every retry:
+
+```bash
+cd /srv/spawnpoint/app/server
+docker compose -f compose.yaml -f compose.m0.yaml config --format json |
+  jq -e '.services.mc.environment |
+    (has("CURSEFORGE_FILES") | not) and
+    .REMOVE_OLD_MODS == "false" and
+    .FORGE_FORCE_REINSTALL == "true"'
+
+date +%s > /tmp/spawnpoint-mc-start-epoch
+docker compose -f compose.yaml -f compose.m0.yaml \
+  up -d --force-recreate mc
+```
+
+SSM then polled `docker inspect` until health became terminal and collected RCON, OOM and memory evidence:
+
+```bash
+docker inspect -f \
+  'running={{.State.Running}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} health={{.State.Health.Status}}' \
+  server-mc-1
+docker exec server-mc-1 rcon-cli list
+docker stats --no-stream --format \
+  '{{.Name}} mem={{.MemUsage}} mem_percent={{.MemPerc}} cpu={{.CPUPerc}}' \
+  server-mc-1
+free -h
+```
+
+Result on 2026-08-13: Docker became `healthy` after **127 seconds**, ModernFix reported **70.513 seconds**, RCON
+reported 0/20 players, OOM was false, and Minecraft used **4.898 GiB / 7.601 GiB**. The host still had **2.4 GiB
+available**. This validates the container-to-ready segment on `m7i-flex.large`; it does not yet validate the safer
+16-GiB production size or the full request-to-ready Step Functions boundary.
+
+After the healthy boot, `FORGE_FORCE_REINSTALL` was removed from both repository and EBS without recreating the
+running container. A first malformed override transfer was rejected by the merged-model assertion; the corrected
+file passed all three invariants:
+
+```bash
+docker compose -f compose.yaml -f compose.m0.yaml config --format json |
+  jq -e '.services.mc.environment |
+    (has("CURSEFORGE_FILES") | not) and
+    (has("FORGE_FORCE_REINSTALL") | not) and
+    .REMOVE_OLD_MODS == "false"'
+```
+
+That failure was safe: the live container was never restarted, and its health remained `healthy`.
+
+## Executed session observability on EC2
+
+The five session-only observability services were pulled and started explicitly with `--no-deps`, so Compose could not
+recreate the already healthy Minecraft container while its one-time M0 override was changing:
+
+```bash
+cd /srv/spawnpoint/app/server
+docker compose -f compose.yaml -f compose.m0.yaml pull \
+  minecraft-exporter node-exporter cadvisor prometheus grafana
+docker compose -f compose.yaml -f compose.m0.yaml up -d --no-deps \
+  minecraft-exporter node-exporter cadvisor prometheus grafana
+```
+
+An SSM port-forwarding test proved that Grafana could remain loopback-only, but the operator rejected occupying a
+local port for every session. The final M0 contract is a stable remote service inside ZeroTier: Prometheus remains on
+`127.0.0.1:9090`, while only Grafana publishes port 3000 on all host interfaces:
+
+```bash
+# Stored in the host-only .env; never add port 3000 to the security group.
+GRAFANA_BIND_ADDRESS=0.0.0.0
+
+docker compose -f compose.yaml -f compose.m0.yaml config --format json |
+  jq -e '.services.grafana.ports[0].host_ip == "0.0.0.0" and
+         .services.prometheus.ports[0].host_ip == "127.0.0.1"'
+
+docker compose -f compose.yaml -f compose.m0.yaml \
+  up -d --no-deps --force-recreate grafana
+docker port server-grafana-1 3000
+```
+
+The binding reported `0.0.0.0:3000`, login succeeded through the ZeroTier address, and Minecraft was not restarted.
+The dependency that makes this safe was re-audited by resource name rather than a copied ID:
+
+```bash
+aws ec2 describe-security-groups \
+  --profile spawnpoint \
+  --region eu-central-1 \
+  --filters Name=group-name,Values=spawnpoint-m0-minecraft \
+  --query 'SecurityGroups[0].{InboundCount:length(IpPermissions),Inbound:IpPermissions}'
+```
+
+Result: `InboundCount=0`. Mode C must continue to assert this before start. Opening public game ingress in a later mode
+requires moving Grafana back to loopback first.
+
+The first live dashboard also revealed that the disk panel selected the disposable root filesystem. Prometheus showed
+the persistent EBS as `/dev/nvme1n1`, mountpoint `/srv/spawnpoint`; the provisioned panel now selects that mountpoint.
+The corrected dashboard was loaded by Grafana and verified through its API.
 
 ## DNS and Route 53
 

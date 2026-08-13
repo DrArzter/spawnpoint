@@ -34,4 +34,13 @@ States Language definitions, created by Terraform; TypeScript implements API han
 hidden inside application code. Use one runtime across all Lambda groups and pin the exact Node.js version when the
 first function lands, because supported Lambda runtimes change over time.
 
-**Status:** empty. Lifecycle functions arrive in M2, pipeline in M3, control plane and adapters in M4.
+The first domain rule now exists without an AWS adapter: `planBackupRetention` chooses distinct recovery points as
+five recent UTC days, two older ISO weeks and two still older UTC months. Malformed inventory fails closed. A later
+least-privilege Lambda will list objects, call this pure function, and delete only the returned keys; the game host has
+no deletion permission.
+
+Run its dependency-free tests with `npm test` from this directory. The repository currently exercises them with Node
+26; the exact supported Lambda Node runtime remains to be pinned when the first deployable handler is added.
+
+**Status:** backup-retention domain logic exists and is tested. Deployable lifecycle functions arrive with M2,
+pipeline in M3, control plane and adapters in M4.

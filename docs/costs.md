@@ -1,10 +1,9 @@
 # Cost model
 
-**The instance rate is now a real quoted price**, read from the EC2 console on 2026-08-12: `r8i.large`, on-demand
-Linux, **$0.16758 per hour**. Everything else in this file is still a placeholder for illustration. Rates differ by
-region, change over time, and Spot prices move continuously. Replace each one from the AWS pricing pages
-and the AWS Pricing Calculator for the chosen region before relying on any of it. Region is still an open
-question. See [ADR-0002](adr/0002-host-on-aws.md).
+Three rates are now verified for `eu-central-1`: `r8i.large` on-demand Linux at **$0.16758 per hour** and gp3 at
+**$0.0952 per GB-month**, read from the AWS Price List API on 2026-08-13; public IPv4 at **$0.005 per hour**, verified
+against [Amazon VPC pricing](https://aws.amazon.com/vpc/pricing/). S3 and serverless figures below remain estimates.
+Rates change, so query them again before relying on this model later.
 
 The purpose of this document is the shape of the cost, and which decisions move it. That shape is stable
 even when the rates are not.
@@ -14,7 +13,7 @@ even when the rates are not.
 | | Target |
 | --- | --- |
 | Fixed cost — billed whether anybody plays or not | Under $3 per month |
-| Total, at 2–3 hours most nights | Mid single-digit USD per month |
+| Total, at 2–3 hours most nights | Under the $20 monthly budget |
 
 The fixed part is the number that matters. A variable cost that only appears when the server is in use is
 easy to accept; a fixed cost is paid during the months when nobody plays at all.
@@ -24,7 +23,7 @@ easy to accept; a fixed cost is paid during the months when nobody plays at all.
 ```
 monthly cost =
       running_hours x (instance_rate + public_ipv4_rate)     variable
-    + volume_gb x ebs_rate                                   fixed
+    + (root_volume_gb + data_volume_gb) x ebs_rate            fixed
     + backup_gb x storage_rate                               fixed, grows slowly
     + hosted_zone_rate                                       fixed
     + requests and egress (Lambda, API, CloudFront, S3)       usually inside the free tier
@@ -32,7 +31,7 @@ monthly cost =
 
 **One decision does almost all of the work** on the variable term:
 
-- **Stop when idle.** Roughly 75 running hours a month instead of 730 — the whole difference between about $15.55 and
+- **Stop when idle.** Roughly 75 running hours a month instead of 730 — the whole difference between about $16.42 and
   about $129. See [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md).
 
 There used to be a second, and it multiplied with the first: Spot instead of on-demand. It is deferred, and worth about
@@ -41,11 +40,12 @@ $8 a month against a large amount of machinery. See [ADR-0032](adr/0032-on-deman
 
 ## Drivers
 
-| Driver | Type | Placeholder rate | Notes |
+| Driver | Type | Rate | Notes |
 | --- | --- | --- | --- |
 | **EC2 on-demand, `r8i.large`** — 2 vCPU / 16 GiB | Variable | **$0.16758 per hour**, quoted | Sized from measurement rather than the bracket: one exploring player produced 5.863 GiB of container-accounted memory, so 8 GiB leaves no headroom for the OS, Docker and the overlay agent. **Memory binds and cores do not** — 0.19 of a logical CPU at the sampled instant — so an `r`-family `.large`, not an `m`-family `.xlarge`. Newest Intel generation chosen over the cheapest option because single-thread performance is the criterion. See [ADR-0032](adr/0032-on-demand-single-instance.md) |
-| Public IPv4 address | Variable here | $0.005 per hour | Charged for any public address; verify. Only billed while running, because no Elastic IP is held. Applies in **every** connectivity mode, because the instance needs outbound access regardless. See [ADR-0024](adr/0024-connectivity-modes.md) |
-| EBS gp3, data volume, 20 GB | Fixed | $0.09 per GB-month | Billed while the instance is stopped. Sized for mod releases and several worlds, not for save data — the worlds themselves are a few hundred MB each. See [ADR-0023](adr/0023-multiple-worlds.md) |
+| Public IPv4 address | Variable here | **$0.005 per hour**, verified | Only billed while running, because no Elastic IP is held. Applies in **every** connectivity mode, because the instance needs outbound access regardless. See [ADR-0024](adr/0024-connectivity-modes.md) |
+| EBS gp3, 8 GB root volume | Fixed | **$0.0952 per GB-month**, verified | The current official AL2023 AMI has an 8 GB root disk. A stopped instance retains and bills this volume; it was missing from the first model. It is disposable, unlike the data volume. |
+| EBS gp3, 20 GB data volume | Fixed | **$0.0952 per GB-month**, verified | Billed while the instance is stopped. Sized for mod releases and several worlds, not for save data — the worlds themselves are a few hundred MB each. See [ADR-0023](adr/0023-multiple-worlds.md) |
 | S3, world backups | Fixed | $0.023 per GB-month | Full archive after every session. The first real archive compressed the 598 MiB world to about 398 MiB, so retention of 5 daily, 2 weekly and 2 monthly is about 3.5 GiB at the observed ratio. See [ADR-0010](adr/0010-world-persistence-and-backups.md) |
 | S3, release store, 10 GB | Fixed | $0.023 per GB-month | Grows with retained releases |
 | Route 53 hosted zone | Fixed | ~~$0.50 per zone-month~~ **nil** | DNS mode only, and **ZeroTier was chosen** — so there is no hosted zone. See [ADR-0024](adr/0024-connectivity-modes.md) |
@@ -58,7 +58,7 @@ $8 a month against a large amount of machinery. See [ADR-0032](adr/0032-on-deman
 
 ## Worked example
 
-Placeholder rates from the table. The expected pattern is **2–3 hours most nights**, so roughly **75 running hours a
+Current rates plus the remaining estimates from the table. The expected pattern is **2–3 hours most nights**, so roughly **75 running hours a
 month** — not the 40 an earlier version of this document assumed. Arithmetic shown so real rates can be substituted
 directly.
 
@@ -66,13 +66,14 @@ directly.
 | --- | --- | --- |
 | Instance | 75 h x $0.16758 | $12.57 |
 | Public IPv4 | 75 h x $0.005 | $0.38 |
-| Data volume | 20 GB x $0.09 | $1.80 |
+| Root volume | 8 GB x $0.0952 | $0.76 |
+| Data volume | 20 GB x $0.0952 | $1.90 |
 | Backups | 9 archives x ~0.389 GiB x $0.023 | ~$0.08 |
 | Release store | 10 GB x $0.023 | $0.23 |
 | Hosted zone | overlay mode — none | $0.00 |
 | Serverless, egress, logs | inside free tier, plus a margin | ~$0.50 |
-| **Total** | | **~$15.55** |
-| **of which fixed** | volume and storage | **~$2.11** |
+| **Total** | | **~$16.42** |
+| **of which fixed storage** | both volumes, backups and releases | **~$2.98** |
 
 Two changes from the earlier ~$6.85, and both are the model meeting reality. The instance rate is now quoted rather than
 assumed, and it is **on-demand** rather than Spot — see the deferral in [ADR-0027](adr/0027-spot-request-shape.md). The
@@ -84,10 +85,10 @@ The single number matters less than the slope, because hours are the one input m
 
 | Pattern | Hours/month | Total |
 | --- | --- | --- |
-| A few evenings a week | 40 | ~$9.50 |
-| 2–3 h most nights | 75 | ~$15.55 |
-| 3 h every night | 90 | ~$18.15 |
-| **Always on** | 730 | **~$129** |
+| A few evenings a week | 40 | ~$10.38 |
+| 2–3 h most nights | 75 | ~$16.42 |
+| 3 h every night | 90 | ~$19.01 |
+| **Always on** | 730 | **~$129.46** |
 
 Every extra hour costs about **17 cents** now, against 5 on Spot.
 
@@ -341,15 +342,15 @@ in a **shared** CPU tier and a **dedicated** one.
 
 | Option | At 75 h | Flat, 24/7 | Spec |
 | --- | --- | --- | --- |
-| **This design**, EC2 **on-demand `r8i.large`** | **~$15.55** | — | 2 vCPU / 16 GiB, quoted price |
+| **This design**, EC2 **on-demand `r8i.large`** | **~$16.42** | — | 2 vCPU / 16 GiB, quoted price |
 | The same on Spot, once deferred work is done | ~$7.70 | — | roughly a third of the hourly rate |
 | VPS, **dedicated** CPU | ~€7.50 | €16.98 | 2 core / 4 GB — "often enough" |
 | VPS, **shared** CPU | ~€10.50 | €23.73 | 4 core / 8 GB |
 | VPS, **dedicated** CPU | ~€14.25 | €33.94 | 4 core / 8 GB |
 | VPS, **dedicated** CPU | ~€28.50 | €67.86 | 8 core / **16 GB** — the like-for-like row |
 
-**Doubling the memory widened the gap rather than closing it.** Like for like is now $6.85 against €28.50, roughly four
-times, and the reason is structural: **the VPS ladder couples cores to memory.** 16 GB is only available on the 8-core
+**Doubling the memory widened the gap rather than closing it.** Like for like is now about $16.42 against €28.50, and
+the reason is structural: **the VPS ladder couples cores to memory.** 16 GB is only available on the 8-core
 rung, and this workload uses about a fifth of one core. Cloud instance families let you buy the axis that actually
 binds — a memory-optimised `.large` is 2 vCPU and 16 GiB — which is the first advantage in this document that is about
 shape rather than price.
@@ -398,7 +399,7 @@ everybody reconnects after the next start having lost seconds.
 
 **Retracted: "the Spot discount is load-bearing for the whole cost argument."** This document said exactly that while the
 model assumed Spot and a compute line of about $4.50. The model was then rebuilt on real on-demand prices — $12.57 at 75
-hours, about $15.55 all in — and that is the figure the rest of this document uses. The discount is worth about $8 a
+hours, about $16.42 all in — and that is the figure the rest of this document uses. The discount is worth about $8 a
 month. Worth having eventually; not what the argument stands on.
 
 If Spot is ever adopted, two things from that earlier reasoning survive and are worth keeping: check the Advisor for the
@@ -434,14 +435,14 @@ also happens to be the server your friends play on.** It does not need a discoun
 
 ## To verify
 
-- [ ] Region choice, and the Spot price history for the candidate instance types in it.
-- [ ] Current public IPv4 hourly rate.
-- [ ] gp3 rate in the chosen region, and whether the world fits in less than 50 GB.
+- [x] Region choice: `eu-central-1`; Spot is deferred, so its price history is not an M0 input.
+- [x] Current public IPv4 hourly rate: $0.005, verified 2026-08-13.
+- [x] gp3 rate in the chosen region: $0.0952/GB-month; measured data fits the chosen 20 GB volume.
 - [ ] Free-tier allowances currently applying to this account for Lambda, CloudFront and data transfer.
 - [ ] Colder storage class for backups older than a month, and its retrieval cost.
-- [ ] The monthly figure to set the Budgets alarm at.
+- [x] The monthly Budgets figure: $20, configured and delivery-tested through SNS on 2026-08-13.
 - [ ] Head count and device count for the actual group, which decides which overlay vendor's free tier fits. See
       [ADR-0024](adr/0024-connectivity-modes.md).
 - [ ] Whether a player given access as a *shared device* counts towards Tailscale's 6-user limit, if that vendor is
       chosen after all.
-- [ ] Real world size per pack, once one exists. It sets the volume size, which is the dominant fixed cost.
+- [x] Real initial world and pack sizes are recorded in [measurements](measurements.md); 20 GB is the M0 data volume.

@@ -68,6 +68,63 @@ aws service-quotas get-service-quota \
 Result on 2026-08-13: quota `5`, so one `r8i.large` fits. M0 uses `eu-central-1a` / `euc1-az2`; all three offerings
 were otherwise equivalent.
 
+## AMI and price gate
+
+**Read:** resolve AWS's current x86_64 Amazon Linux 2023 image rather than committing an AMI ID that silently ages:
+
+```bash
+SP_AMI_ID="$(aws ssm get-parameter \
+  --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE" \
+  --query Parameter.Value \
+  --output text)"
+
+aws ec2 describe-images \
+  --image-ids "$SP_AMI_ID" \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE" \
+  --query 'Images[0].{ImageId:ImageId,Name:Name,Architecture:Architecture,RootDevice:RootDeviceName,RootGiB:BlockDeviceMappings[0].Ebs.VolumeSize}' \
+  --output table
+```
+
+Result on 2026-08-13: `ami-070cc8ab883065d64`, AL2023 release `2023.12.20260803.3`, x86_64, with an 8 GB root
+volume. The launch command will resolve the parameter again immediately before use.
+
+**Read:** query the global Price List endpoint for the two Frankfurt rates that AWS exposes there:
+
+```bash
+aws pricing get-products \
+  --service-code AmazonEC2 \
+  --region us-east-1 \
+  --profile "$SP_PROFILE" \
+  --filters \
+    Type=TERM_MATCH,Field=location,Value='EU (Frankfurt)' \
+    Type=TERM_MATCH,Field=instanceType,Value=r8i.large \
+    Type=TERM_MATCH,Field=operatingSystem,Value=Linux \
+    Type=TERM_MATCH,Field=tenancy,Value=Shared \
+    Type=TERM_MATCH,Field=preInstalledSw,Value=NA \
+    Type=TERM_MATCH,Field=capacitystatus,Value=Used
+
+aws pricing get-products \
+  --service-code AmazonEC2 \
+  --region us-east-1 \
+  --profile "$SP_PROFILE" \
+  --filters \
+    Type=TERM_MATCH,Field=location,Value='EU (Frankfurt)' \
+    Type=TERM_MATCH,Field=volumeApiName,Value=gp3
+```
+
+Results on 2026-08-13:
+
+- `r8i.large`: `$0.16758` per running hour;
+- gp3 baseline storage: `$0.0952` per GB-month;
+- public IPv4: `$0.005` per running hour from Amazon VPC pricing.
+
+The first M0 run therefore creates two billable resources: one 20 GB gp3 data volume at about `$1.90/month` while
+it exists, plus the instance whose 8 GB root volume costs about `$0.76/month` while it exists. Running compute plus
+public IPv4 costs about `$0.17258/hour`. No launch command belongs in this log until that cost gate is accepted.
+
 ## Existing network inventory
 
 **Read:** inspect VPCs and public-IP behavior of their subnets:

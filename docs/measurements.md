@@ -95,6 +95,7 @@ large enough for 20% of it to matter.
 | Mod set, 2026-08-12 | **594 MiB** |
 | First real backup, 2026-08-12 | **417,306,157 bytes (~398 MiB)** as `tar.zst`, SHA-256 verified; approximately **66.6%** of the source size. Forge stored the dimensions under one top-level world directory |
 | First local restore drill, 2026-08-12 | Restored into `/tmp/spawnpoint-restore-test`; apparent restored size was **635,598,718 bytes**. `diff -qr` against the stopped source world returned no differences. `du` showed 608M source versus 607M restored because allocated filesystem blocks can differ after extraction; file contents matched. The copy then booted successfully with the matching 111-mod set in an isolated container, reached Docker `healthy`, answered over RCON and exited cleanly after saving every dimension |
+| First post-session AWS archive, 2026-08-13 | After confirming 0 players and completing `save-all flush`, all session containers stopped cleanly. The archive was **418,783,052 bytes**, contained **777 entries** including `world/level.dat`, and passed SHA-256 plus full-stream verification. It currently lives on the same persistent EBS and is therefore a verified recovery artifact, not yet an off-volume backup |
 | How | `du -sh` on the world directory |
 | Unblocks | Volume size, and it already settled the backup question |
 
@@ -164,6 +165,10 @@ from mountpoint `/` to `/srv/spawnpoint` and verified through the Grafana API.
 During the first one-player AWS session, the maximum status response time was **30.98 ms**, Minecraft CPU reached
 **59.94% of one core**, and the persistent EBS never fell below **19,636,432,896 bytes (18.29 GiB) available**. These
 are Prometheus maxima/minima over the observed session rather than hand-picked `docker stats` snapshots.
+
+The session ended with a complete lifecycle acceptance test: RCON confirmed zero players, the server flushed and
+stopped, all observability containers stopped with it, the world archive verified, and EC2 reached `stopped` with no
+public address. The persistent 20 GiB EBS remained encrypted, attached and `DeleteOnTermination=false`.
 
 ### 6. LAN discovery on a clean client, over the overlay
 

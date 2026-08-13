@@ -807,6 +807,59 @@ world. Minecraft peaked at **5,336,694,784 bytes (4.97 GiB)** and **59.94% of on
 (18.29 GiB)**. Docker still reported `healthy`, zero restarts and `OOMKilled=false`. This accepts the 8 GiB host for
 M0 smoke work, not for the full group: memory, rather than CPU, remains the production sizing constraint.
 
+## Executed first session shutdown and archive
+
+Shutdown was gated on RCON reporting zero players. The existing scripts then flushed the world, stopped Minecraft and
+all session observability, created the archive and read every compressed member during verification:
+
+```bash
+cd /srv/spawnpoint/app/server
+
+players="$(docker exec server-mc-1 rcon-cli list)"
+printf '%s\n' "$players" |
+  grep -Eq 'There are 0 of a max of [0-9]+ players online'
+
+./scripts/stop.sh
+test "$(docker inspect -f '{{.State.Status}}' server-mc-1)" = exited
+test "$(docker ps \
+  --filter label=com.docker.compose.project=server \
+  --format '{{.Names}}' | wc -l)" = 0
+
+./scripts/archive-world.sh
+./scripts/verify-archive.sh backups/world-<timestamp>.tar.zst
+findmnt --noheadings --output SOURCE,TARGET,FSTYPE /srv/spawnpoint
+df -h /srv/spawnpoint
+```
+
+The post-session archive was **418,783,052 bytes**, contained **777 entries** including `world/level.dat`, and passed
+its SHA-256 and full-stream checks. The data volume was 11% used. Because this archive is still on the same EBS as the
+live world, it proves the archive path but is not independent protection against volume loss; M1 must upload and verify
+it in S3 before treating backup completion as successful.
+
+Only after those checks succeeded was the instance stopped:
+
+```bash
+aws ec2 stop-instances \
+  --profile spawnpoint \
+  --region eu-central-1 \
+  --instance-ids "$SP_INSTANCE_ID"
+
+aws ec2 wait instance-stopped \
+  --profile spawnpoint \
+  --region eu-central-1 \
+  --instance-ids "$SP_INSTANCE_ID"
+
+aws ec2 describe-instance-attribute \
+  --profile spawnpoint \
+  --region eu-central-1 \
+  --instance-id "$SP_INSTANCE_ID" \
+  --attribute disableApiTermination
+```
+
+Final state: instance `stopped`, no public IPv4, termination protection enabled. The encrypted 20 GiB data EBS
+remained attached with `DeleteOnTermination=false`; the disposable root volume remained
+`DeleteOnTermination=true`. Compute and public IPv4 charging stopped, while EBS storage remains allocated.
+
 ## DNS and Route 53
 
 Deferred. M0 uses ZeroTier and owns no domain or Route 53 hosted zone. If DNS is chosen later, its exact create,

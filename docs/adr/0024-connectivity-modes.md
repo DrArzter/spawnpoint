@@ -197,7 +197,9 @@ it is the only one of the three that supplies the network gate that `online-mode
 when a domain is wanted for its own sake, and it does not remove the need for the gate.
 
 Stated as a rule, because it is the thing to get right: **mode A or B combined with `online-mode=false` means
-anybody who learns a whitelisted username can join as that player.** Acceptable for a throwaway test world;
+anybody who learns a whitelisted username can join as that player — unless an in-game login mod is fitted.** That mod is
+the substitute for the network gate when the port is public, and it is set out in
+[ADR-0022](0022-minecraft-account-as-linked-identity.md). Acceptable for a throwaway test world;
 not for a world with months of building in it.
 
 ## Consequences

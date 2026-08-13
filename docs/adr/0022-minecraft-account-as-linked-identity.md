@@ -126,9 +126,42 @@ inherited from its history, and the only way to run a world in online mode is to
 | --- | --- |
 | `online-mode=true` with a UUID-keyed whitelist | Cryptographic protection against impersonation, and no network gate strictly required. Excludes players without a paid account, which is the constraint that decided this. The stronger option on security alone, and available by starting a *new* world if that ever becomes the priority |
 | Offline mode with the port open to the internet | The configuration that gets small servers griefed. Explicitly rejected: offline mode is only adopted here *together with* a network gate |
-| Offline mode plus an in-game password mod or authentication plugin | The usual answer on offline servers, and it does add a real check. Needs a mod in the pack, per-loader compatibility, and a password store — reinventing authentication badly, when the network gate solves it properly |
+| Offline mode plus an in-game password mod | **Reconsidered — see below.** This row originally dismissed it on the grounds that the network gate solves the problem properly. That reasoning holds only while there *is* a network gate, and [ADR-0024](0024-connectivity-modes.md) now treats the public-address mode as a real option |
 | Prove ownership with an in-game code before binding | Meaningful only in online mode. In offline mode there is no ownership to prove: the name is the identity |
 | Keep the whitelist manual | Zero work, and correct today at five players. Two lists that drift, and removal depends on somebody remembering |
+
+## If there is no network gate, an in-game login mod is the substitute
+
+[ADR-0024](0024-connectivity-modes.md) makes connectivity pluggable, and the public-address mode is genuinely on the
+table. Without an overlay, the chain that reaches a world is: a scanner finds the address during a session, reads a
+valid username from the status ping's player sample, and connects as that player. **An in-game login mod breaks the
+last step** — the name gets you a login prompt rather than the world.
+
+So the two are alternatives for the same job, and exactly one is needed:
+
+| Posture | What protects the world |
+| --- | --- |
+| Overlay connectivity | Network membership. Nobody unknown reaches the port at all |
+| Public address | An in-game login mod. The port is reachable; the world is not |
+
+**It does not protect the bill, and that is a separate mitigation.** A player waiting at a login prompt is still
+*connected*, so the idle watchdog still counts them and the server is still held open — unless the count is taken from
+authenticated players specifically, which is mod-dependent. The hard session cap in
+[ADR-0006](0006-on-demand-start-and-idle-shutdown.md) is what closes that, and it closes it either way. **Login mod for
+the world, session cap for the bill; neither substitutes for the other.**
+
+Honest costs, since the original dismissal was not entirely wrong:
+
+- A password store and a reset path, for five people, owned by the owner.
+- `/login` every session. Small, and the kind of friction people mention every time.
+- It is a mod, so it lives in the release manifest and a bad update breaks logins for everybody at once. Server-side
+  only, though, so it does not need to reach the client pack.
+- Historically this class of plugin has had bypass bugs, which is why it is a substitute for a network gate rather than
+  an addition to one.
+
+**To verify before relying on it:** what exists for **Forge 1.20.1** specifically. Most of the well-known
+implementations target the Bukkit family. Sinytra Connector is already bridging Fabric mods here, which may widen the
+options — that is a search, not an assumption.
 
 ## Open questions
 

@@ -7,8 +7,8 @@ performed. A procedure nobody has run is a guess.
 
 | Procedure | Owner | Last performed |
 | --- | --- | --- |
-| Start the server | Any player | 2026-08-13 — restored Terraform M1 host reached Docker healthy and accepted a player through ZeroTier |
-| Stop the server | Automatic from M2; owner during M1 | 2026-08-14 — 0 players confirmed, world flushed, all session containers stopped, post-session archive verified in S3, EC2 reached `stopped` |
+| Start the server | Any player | 2026-08-14 — M2 Standard Workflow started stopped EC2, waited for SSM, invoked the host session contract and returned the private address |
+| Stop the server | Owner; M2 automation pending | 2026-08-14 — 0 players confirmed, world flushed, all session containers stopped, post-session archive verified in S3, EC2 reached `stopped` |
 | Promote a release | Owner | — |
 | Roll back a release | Owner | — |
 | Restore the world | Owner | 2026-08-13 — the Terraform M1 host downloaded the verified S3 archive with its instance role, restored it onto a new EBS, reconciled release 1.0 and accepted a player in the recovered world |
@@ -37,23 +37,36 @@ Fill in at M1 and keep current. This block is what somebody needs when something
 
 ## Start the server
 
-Normal path: press **Start** in the panel, or send `start` to either bot.
-
-Owner path, when the surfaces are unavailable:
+Current M2 path from an authenticated owner workstation:
 
 ```bash
-# TODO: aws ec2 start-instances --instance-ids <id> --region <region>
+scripts/start-server.sh
 ```
 
-Then confirm the hostname resolves to the new address, because the server being up and the server being
-reachable by name are different things.
+It starts the durable workflow and follows it until terminal state. Add `--no-follow` to return immediately with the
+execution ARN. A second call while an execution is still running joins it rather than starting another one.
+
+Future normal path: press **Start** in the panel, or send `start` to the bot. Those surfaces will call the same state
+machine rather than reproduce its EC2/SSM sequence.
+
+Break-glass owner path, only when the workflow itself is unavailable:
+
+```bash
+aws ec2 start-instances \
+  --instance-ids i-09c9b5069308ac372 \
+  --profile spawnpoint \
+  --region eu-central-1
+```
+
+Do not treat EC2 `running` as game readiness. The workflow checks SSM, the authorised ZeroTier identity and the host
+Minecraft health contract before returning `172.29.23.24:25565`.
 
 ```bash
 # TODO: dig +short <hostname>
 ```
 
-**If the start operation never reaches ready:** check, in this order — Spot capacity (did the instance
-actually start), the DNS record, the container. See [failure modes](architecture.md#failure-modes).
+**If the start operation never reaches ready:** inspect its Step Functions execution history. It separates EC2 start,
+SSM registration and the host command, so the failed boundary is visible. See [failure modes](architecture.md#failure-modes).
 
 ## Stop the server
 
@@ -165,7 +178,7 @@ Progress as of 2026-08-13: root and IAM-user MFA, billing access, IAM user and g
 subscription, budget-to-SNS delivery configuration, anomaly retune and the Availability Zone decision are done. The
 cost allocation tag still has to be activated once a tagged billable resource makes it appear in Billing. The
 read-only account checks live in [docs/aws-cli-checks.md](aws-cli-checks.md); the infrastructure execution logs are
-[M0](aws-m0-command-log.md) and [M1](aws-m1-command-log.md).
+[M0](aws-m0-command-log.md), [M1](aws-m1-command-log.md) and [M2](aws-m2-command-log.md).
 
 Record here what was actually created:
 

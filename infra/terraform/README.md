@@ -29,10 +29,10 @@ State backend bootstrap is a one-time, separately stateful Terraform step in
 
 ## Current slice
 
-The current compute M1 slice owns 13 resources: one VPC, one public subnet and route, a
+The current compute/M2-start slice owns 16 resources: one VPC, one public subnet and route, a
 zero-ingress security group, an SSM-only EC2 role/profile with scoped storage access, one on-demand EC2 host, and one
-separately attached encrypted data EBS. The physical AZ ID is asserted because the volume is zonal. The instance has
-no SSH key and requires IMDSv2.
+separately attached encrypted data EBS, plus a Standard start state machine and its dedicated IAM role/policy. The
+physical AZ ID is asserted because the volume is zonal. The instance has no SSH key and requires IMDSv2.
 
 The game-host role can write and verify backup objects and read immutable release objects. It cannot change bucket
 configuration or delete objects. Exact `5 daily / 2 weekly / 2 monthly` pruning belongs to the later backup operation:
@@ -90,3 +90,9 @@ changes.
 in-game acceptance test, was saved, archived to verified S3 and the Terraform host was stopped on 2026-08-14. Its
 encrypted 20 GiB data EBS remains attached with `DeleteOnTermination=false`. The manual M0 host also remains stopped;
 deleting those superseded manual resources is a separate, explicit cleanup decision.
+
+The first M2 plan initially proposed replacing the stopped EC2 because AWS reads its ephemeral
+`associate_public_ip_address` attribute as false while no address is attached. That saved plan was rejected. The
+instance now ignores only that stopped-state readback; `aws_subnet.public.map_public_ip_on_launch=true` remains the
+source of truth for the next start. The rebuilt plan was **3 add, 0 change, 0 destroy** and created only the Step
+Functions role, scoped inline policy and Standard state machine. A post-apply plan reported no changes.

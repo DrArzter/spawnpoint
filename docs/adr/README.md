@@ -77,7 +77,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0022](0022-minecraft-account-as-linked-identity.md) | Minecraft account is a linked identity; whitelist derived; `online-mode=false` | Proposed | M4 |
 | [0023](0023-multiple-worlds.md) | Several worlds, one active at a time | Proposed | M6 |
 | [0024](0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Accepted — **ZeroTier** | M2 |
-| [0025](0025-step-functions-for-long-operations.md) | Step Functions for long operations; Lambda for the rest | Proposed | M2 |
+| [0025](0025-step-functions-for-long-operations.md) | Step Functions for long operations; Lambda for the rest | Accepted | M2 |
 | [0026](0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | **Rejected** on measurement; kept for its threshold | M1 |
 | [0027](0027-spot-request-shape.md) | Diversified Spot fleet per session; stop-on-interruption | **Deferred** — on-demand first | later |
 | [0028](0028-update-proposals.md) | Mod updates as proposals: resolve, diff, approve, promote | Proposed | M3 |

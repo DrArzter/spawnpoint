@@ -131,6 +131,7 @@ paid every single evening rather than a few times a week.
 | First AWS memory snapshot | Minecraft used **4.898 GiB / 7.601 GiB (64.44%)** with no players. The 8 GiB host had **2.4 GiB available** and no swap immediately after startup |
 | Terraform M1 restored-world boot, 2026-08-13 | **122 seconds** from Compose start to Docker `healthy`; ModernFix reported **72.614 seconds**. The exact S3-restored world and immutable 111-JAR release loaded, RCON answered, and a player joined through ZeroTier |
 | Terraform M1 memory snapshot | Minecraft used **4.81 GiB / 7.601 GiB (63.28%)** immediately after startup. The host had **2.0 GiB available**, no swap, no OOM kill and zero container restarts |
+| First M2 Step Functions start, 2026-08-14 | **120 seconds** from Standard Workflow execution accepted to `SUCCEEDED`; EC2 began stopped, the host SSM command took **95 seconds**, and the workflow returned `172.29.23.24:25565`. The first version returned once RCON answered while Docker health was still `starting`; immediate acceptance found health `healthy`, all session services up, no OOM and zero restarts. The host contract was then tightened to require Docker health plus RCON, so the next stopped-host start is the exact full-health measurement |
 | Hardware | **Intel Core i9-14900KF**; this is a strong desktop CPU and therefore a lower bound, not an EC2 forecast |
 | How | Time it. Locally it is a lower bound; EC2 adds instance boot and a mod sync on top |
 | Unblocks | The whole premise of [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md), which assumes 1–3 minutes is tolerable |
@@ -139,8 +140,10 @@ The two values measure different boundaries. ModernFix's 38.264 seconds covers t
 mods after the JVM is already running. The roughly 90-second observation includes more of the local container path.
 Neither local value includes Spot capacity, EC2 boot or release reconciliation. The first AWS value closes only the
 container-to-healthy segment on an on-demand smoke host; it does not yet measure request-to-ready or Spot capacity.
-The result supports the on-demand premise, but Step Functions must measure the full boundary: request accepted,
-capacity acquired, operating system and SSM ready, release reconciled, server healthy and a player able to join.
+The result supports the on-demand premise. The first M2 Standard Workflow now measures the full orchestration boundary:
+execution accepted, on-demand capacity started, SSM Online, ZeroTier authorised and the host session command complete.
+Its first acceptance exposed a few-second difference between RCON readiness and Docker health; the host contract now
+requires both. Release reconciliation is still pre-staged on EBS in M2 and becomes an explicit start step in M3.
 
 The first restored-copy boot also exposed a useful failure mode. The copied environment had
 `REMOVE_OLD_MODS=true`, but the disposable container did not receive `CURSEFORGE_FILES`; image initialisation therefore

@@ -47,6 +47,33 @@ Players paste it in each time it changes.
 - Setup: none. Available from M2.
 - Port: **open to the internet.**
 
+#### Does an address that only exists during a session help?
+
+A fair question, since mode A holds no Elastic IP and the address genuinely disappears when the instance stops. It
+helps less than it looks.
+
+**Exposure window, yes.** Roughly 75 hours a month instead of 730, so about a tenth of the time to be found in.
+
+**Findability, no.** Port 25565 is continuously swept across the whole IPv4 space by Minecraft-specific scanners and
+general services. A fresh server on the default port is typically found in hours, not weeks, so a changing address is
+re-found every session rather than lost.
+
+**And the specific mechanism matters more than either.** The server list ping response includes a *sample of currently
+online player names*. In offline mode that turns the one thing standing between a stranger and a whitelisted account —
+knowing a valid username — from a barrier into a free lookup. Scan, read the sample, connect as one of them. Verify
+whether the server software allows suppressing that sample; vanilla and Forge may not, and Paper-family options do not
+apply here.
+
+So the honest statement: an ephemeral address is **obscurity with a short half-life**, not a control.
+
+**One cheap thing does help materially: do not listen on 25565.** Scanners concentrate on the default port, so a random
+high port removes the project from the sweep that finds servers by default. It costs players nothing when the
+connection string carries the port, and in DNS mode an SRV record hides it entirely. It is still obscurity — but it is
+the obscurity that actually reduces contact, where a rotating address is the obscurity that does not.
+
+That makes mode A on a non-default port a reasonable posture for the throwaway M0 world, and still not a substitute for
+the overlay once a world has months of building in it.
+
 ### Mode B — Public DNS on an owned domain
 
 The design from [ADR-0017](0017-stable-server-address.md), including its reasoning: a short-TTL record rewritten on

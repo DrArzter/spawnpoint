@@ -1,6 +1,7 @@
 # Cost model
 
-**Every number in this file is a placeholder for illustration, not a quoted AWS price.** Rates differ by
+**The instance rate is now a real quoted price**, read from the EC2 console on 2026-08-12: `r8i.large`, on-demand
+Linux, **$0.16758 per hour**. Everything else in this file is still a placeholder for illustration. Rates differ by
 region, change over time, and Spot prices move continuously. Replace each one from the AWS pricing pages
 and the AWS Pricing Calculator for the chosen region before relying on any of it. Region is still an open
 question. See [ADR-0002](adr/0002-host-on-aws.md).
@@ -38,12 +39,12 @@ Two decisions do almost all of the work on the variable term, and they multiply:
 
 | Driver | Type | Placeholder rate | Notes |
 | --- | --- | --- | --- |
-| EC2 Spot, **2 vCPU / 16 GiB**, memory-optimised | Variable | $0.045 per hour | Sized from measurement rather than the bracket: one exploring player produced 5.863 GiB of container-accounted memory, so 8 GiB leaves no headroom for the OS, Docker and the overlay agent. **Memory binds and cores do not** — 0.19 of a logical CPU at the sampled instant — so an `r`-family `.large` is the right shape rather than an `m`-family `.xlarge`. 8 GiB stays a downsize candidate pending a full-group measurement. Assume roughly a third of on-demand; verify per type and zone |
+| **EC2 on-demand, `r8i.large`** — 2 vCPU / 16 GiB | Variable | **$0.16758 per hour**, quoted | Sized from measurement rather than the bracket: one exploring player produced 5.863 GiB of container-accounted memory, so 8 GiB leaves no headroom for the OS, Docker and the overlay agent. **Memory binds and cores do not** — 0.19 of a logical CPU at the sampled instant — so an `r`-family `.large`, not an `m`-family `.xlarge`. Newest Intel generation chosen over the cheapest option because single-thread performance is the criterion. See [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md) |
 | Public IPv4 address | Variable here | $0.005 per hour | Charged for any public address; verify. Only billed while running, because no Elastic IP is held. Applies in **every** connectivity mode, because the instance needs outbound access regardless. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | EBS gp3, data volume, 20 GB | Fixed | $0.09 per GB-month | Billed while the instance is stopped. Sized for mod releases and several worlds, not for save data — the worlds themselves are a few hundred MB each. See [ADR-0023](adr/0023-multiple-worlds.md) |
 | S3, world backups | Fixed | $0.023 per GB-month | Full archive after every session. The first real archive compressed the 598 MiB world to about 398 MiB, so retention of 5 daily, 2 weekly and 2 monthly is about 3.5 GiB at the observed ratio. See [ADR-0010](adr/0010-world-persistence-and-backups.md) |
 | S3, release store, 10 GB | Fixed | $0.023 per GB-month | Grows with retained releases |
-| Route 53 hosted zone | Fixed | $0.50 per zone-month | **Only in DNS mode.** Plus a negligible per-query charge. See [ADR-0024](adr/0024-connectivity-modes.md) |
+| Route 53 hosted zone | Fixed | ~~$0.50 per zone-month~~ **nil** | DNS mode only, and **ZeroTier was chosen** — so there is no hosted zone. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | Overlay network | Fixed | $0 within the free tier | **Only in overlay mode.** Free tiers bind on different axes: ZeroTier 10 devices and 1 network; Tailscale 6 users with unlimited devices. Either cliff costs more than this whole table. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | Lambda, API Gateway, DynamoDB | Variable | Effectively nil | A few thousand invocations a month sits inside the perpetual free tier |
 | CloudFront and S3 egress | Variable | Effectively nil | A handful of pack downloads a month |
@@ -59,18 +60,19 @@ directly.
 
 | Item | Calculation | Monthly |
 | --- | --- | --- |
-| Instance | 75 h x $0.045 | $3.38 |
+| Instance | 75 h x $0.16758 | $12.57 |
 | Public IPv4 | 75 h x $0.005 | $0.38 |
 | Data volume | 20 GB x $0.09 | $1.80 |
 | Backups | 9 archives x ~0.389 GiB x $0.023 | ~$0.08 |
 | Release store | 10 GB x $0.023 | $0.23 |
-| Hosted zone | | $0.50 |
+| Hosted zone | overlay mode — none | $0.00 |
 | Serverless, egress, logs | inside free tier, plus a margin | ~$0.50 |
-| **Total** | | **~$6.85** |
-| **of which fixed** | volume, storage, zone | **~$2.60** |
+| **Total** | | **~$15.55** |
+| **of which fixed** | volume and storage | **~$2.11** |
 
-Revised from ~$5.75 after the 2026-08-12 measurement. The earlier figure priced 8 GiB, which `docker stats` disproved
-with a single player online. See [docs/measurements.md](measurements.md).
+Two changes from the earlier ~$6.85, and both are the model meeting reality. The instance rate is now quoted rather than
+assumed, and it is **on-demand** rather than Spot — see the deferral in [ADR-0027](adr/0027-spot-request-shape.md). The
+hosted zone disappeared because [ADR-0024](adr/0024-connectivity-modes.md) chose the overlay.
 
 ### Sensitivity to running hours
 
@@ -78,13 +80,17 @@ The single number matters less than the slope, because hours are the one input m
 
 | Pattern | Hours/month | Total |
 | --- | --- | --- |
-| A few evenings a week | 40 | ~$5.10 |
-| 2–3 h most nights | 75 | ~$6.85 |
-| 3 h every night | 90 | ~$7.60 |
-| Always on | 730 | ~$40 |
+| A few evenings a week | 40 | ~$9.50 |
+| 2–3 h most nights | 75 | ~$15.55 |
+| 3 h every night | 90 | ~$18.15 |
+| **Always on** | 730 | **~$129** |
 
-Every extra hour costs about 5 cents at these placeholder rates. The always-on row is now nearly six times the expected
-one, so doubling the memory made the case for stopping when idle stronger rather than weaker.
+Every extra hour costs about **17 cents** now, against 5 on Spot.
+
+**That last row is the consequence of choosing on-demand, and it is the one to take seriously.** An instance that never
+stops used to cost about $40 a month; it now costs about **$129**, eight times the expected bill. The idle watchdog, the
+running-hours alarm and the hard session cap in [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md) have not
+changed, but what they are worth has roughly tripled. A failed stop is no longer an annoyance.
 
 The hosted-zone line applies in DNS mode only; in the other two connectivity modes it is nil or the overlay's free
 tier. See [ADR-0024](adr/0024-connectivity-modes.md).
@@ -328,7 +334,8 @@ in a **shared** CPU tier and a **dedicated** one.
 
 | Option | At 75 h | Flat, 24/7 | Spec |
 | --- | --- | --- | --- |
-| **This design**, EC2 **Spot** | **~$6.85** | — | 2 vCPU / **16 GiB**, memory-optimised |
+| **This design**, EC2 **on-demand `r8i.large`** | **~$15.55** | — | 2 vCPU / 16 GiB, quoted price |
+| The same on Spot, once deferred work is done | ~$7.70 | — | roughly a third of the hourly rate |
 | VPS, **dedicated** CPU | ~€7.50 | €16.98 | 2 core / 4 GB — "often enough" |
 | VPS, **shared** CPU | ~€10.50 | €23.73 | 4 core / 8 GB |
 | VPS, **dedicated** CPU | ~€14.25 | €33.94 | 4 core / 8 GB |

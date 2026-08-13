@@ -74,6 +74,17 @@ Prefer ARM (Graviton) if the mod set runs on it, otherwise x86.
 
 ## Open questions
 
+- ~~Instance type.~~ **Settled 2026-08-12: `r8i.large`** — 2 vCPU, 16 GiB, x86_64, on-demand at a quoted
+  **$0.16758 per hour**. Chosen over the cheapest comparable option, `r5a.large` at $0.137, because the whole
+  current-generation spread is only $0.137 to $0.193 — about $4 a month — so instance choice is not where the money is,
+  and the criterion below says take the fastest thread rather than the cheapest hour. `r8i` is the newest Intel
+  generation available. Older generations such as `r5a`, `r5b` and `r5d` stay useful as fleet members if Spot is ever
+  adopted, because lower demand means better capacity.
+- **A note on the naming, since it is opaque.** `r8i.large` reads as family `r` (memory optimised, 8 GiB per vCPU),
+  AWS generation `8` — AWS's own numbering, unrelated to Intel's — processor `i` for Intel, `a` for AMD, `g` for
+  Graviton, and size `.large`. Suffixes `d`, `n` and `b` add local NVMe, network and EBS bandwidth respectively; **all
+  three are a waste here.** In particular `d` pays for an instance store that is wiped on stop, and this design stops
+  the instance nightly while the world lives on EBS.
 - Instance size. Operator experience gives a bracket — 2 cores and 4 GB often enough, 4 cores and 16 GB runs anything
   comfortably — but **that was measured on an i9-14900KF**, and only half of it transfers.
   - **Memory transfers.** A gigabyte is a gigabyte — but the bracket was about the *JVM heap*, and the instance has to

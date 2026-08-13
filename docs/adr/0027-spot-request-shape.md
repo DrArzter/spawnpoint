@@ -1,8 +1,25 @@
 # ADR-0027 — A diversified Spot fleet created per session, and stop-on-interruption within it
 
-- Status: Proposed
+- Status: **Proposed, deferred** — on-demand first, this ADR when the basics work
 - Date: 2026-08-11
-- Milestone: M2
+- Deferred: 2026-08-12
+- Milestone: M2, then later
+
+> **Deferred, not rejected.** Real prices settled it: on-demand `r8i.large` is $0.16758 an hour, so 75 hours a month is
+> about **$15.55 all in** against roughly **$7.70** on Spot. The gap is about **$8 a month**, and what that $8 buys is
+> deleting everything below — a fleet created and destroyed per session, ten instance types, stop-on-interruption, the
+> orphaned-fleet alarm, interruption handling, and the risk that the server will not start at ten o'clock because a pool
+> is exhausted.
+>
+> Given that state already lives off the instance, moving to Spot later is a launch-configuration change rather than a
+> redesign, so the $8 is paid only for the months before somebody wants this topic. Start with `StartInstances` and
+> `StopInstances` on one instance, which is what [ADR-0004](0004-ec2-spot-for-the-game-server.md) proposed before this
+> ADR complicated it.
+>
+> **One thing that does not defer:** on-demand makes a failed stop cost about $129 a month instead of $40, so the
+> guardrails in [ADR-0006](0006-on-demand-start-and-idle-shutdown.md) and
+> [ADR-0015](0015-observability-and-alerting.md) are worth roughly three times more than they were. See
+> [docs/costs.md](../costs.md).
 - Amends: [ADR-0004](0004-ec2-spot-for-the-game-server.md) — keeps its decision to use Spot, replaces its request mechanism,
   and **retracts its on-demand fallback**, which AWS explicitly discourages
 

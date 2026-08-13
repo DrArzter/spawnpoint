@@ -61,7 +61,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0024](0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Proposed | M2 |
 | [0025](0025-step-functions-for-long-operations.md) | Step Functions for long operations; Lambda for the rest | Proposed | M2 |
 | [0026](0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | **Rejected** on measurement; kept for its threshold | M1 |
-| [0027](0027-spot-request-shape.md) | Diversified Spot fleet per session; stop-on-interruption | Proposed | M2 |
+| [0027](0027-spot-request-shape.md) | Diversified Spot fleet per session; stop-on-interruption | **Deferred** — on-demand first | later |
 | [0028](0028-update-proposals.md) | Mod updates as proposals: resolve, diff, approve, promote | Proposed | M3 |
 | [0029](0029-preview-environments.md) | Every proposal is tested in a throwaway preview environment | Proposed | M3 |
 | [0030](0030-desired-and-active-release.md) | Separate desired release from confirmed active release | Accepted | M3 |

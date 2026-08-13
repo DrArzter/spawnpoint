@@ -211,3 +211,36 @@ the list on. Its own `/image/scripts/start-setupServerProperties` confirmed `ENA
 Once `DrArzter` had joined through ZeroTier, command `88fa1909-3845-4548-903d-9653de826f91` first added that exact name
 and only then enabled the whitelist. The player stayed online, `white-list=true`, `enforce-whitelist=true`, health
 remained healthy and the container still had zero restarts.
+
+## Accepted session backup and stop
+
+After the owner played in the restored world and reported it normal, SSM command
+`5ee6a5bb-ffd1-40b3-88e1-d7b04181b478` confirmed 0 players, healthy Minecraft, zero restarts and no OOM kill. The
+container was using **4.868 GiB / 7.601 GiB** at the end of the session.
+
+Command `a2dd7659-b5bf-4fb4-a8c0-4b321af7b545` then enforced the shutdown ordering:
+
+1. confirm zero players again;
+2. run `save-all flush` through RCON;
+3. stop Minecraft and all session observability containers;
+4. require Minecraft exit code 0 and no running Compose services;
+5. archive the stopped world;
+6. upload with the EC2 role and verify the immutable S3 object.
+
+The resulting recovery point is:
+
+```text
+S3 key: worlds/world/archives/world-20260813T220159Z-6a1f67097007b1025820e531f8b700f26b3b482f3139930d70451f5c33c2851a.tar.zst
+SHA-256: 6a1f67097007b1025820e531f8b700f26b3b482f3139930d70451f5c33c2851a
+Bytes: 419078723
+S3 VersionId: l_NSPPA9ycZVggingwACZC0IaXXTFcFY
+```
+
+An independent `head-object --checksum-mode ENABLED` returned the same byte length, metadata SHA-256 and native S3
+SHA-256 (`ah9nCXAHsQJYIOUx+LcA8ms7SC8xOZMNcEUfXDPChRo=`). The local archive and checksum remain on EBS as an additional
+copy. Minecraft, Grafana, Prometheus and cAdvisor exited cleanly; exporters received their normal stop signals only
+after the world save and Minecraft shutdown.
+
+The EC2 instance then reached `stopped` and lost its public IPv4. Termination protection remains enabled. The encrypted
+20 GiB data volume remains attached in `eu-central-1a`, with `DeleteOnTermination=false`; S3 and EBS persist while
+compute and public-IPv4 runtime charges stop.

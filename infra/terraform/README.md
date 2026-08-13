@@ -86,6 +86,7 @@ persistent storage root was applied separately and is drift-free. The compute ro
 2026-08-13: **13 added, 0 changed, 0 destroyed**, with no S3 resource actions. A fresh plan after apply reported no
 changes.
 
-**Status:** state, persistent storage and M1 compute/network are live and drift-free. The Terraform host is running
-while its first restored-world acceptance test is completed. The manual M0 host remains stopped as a rollback point;
-its removal is deliberately deferred until the M1 server has been accepted in game.
+**Status:** state, persistent storage and M1 compute/network are live and drift-free. The restored M1 world passed its
+in-game acceptance test, was saved, archived to verified S3 and the Terraform host was stopped on 2026-08-14. Its
+encrypted 20 GiB data EBS remains attached with `DeleteOnTermination=false`. The manual M0 host also remains stopped;
+deleting those superseded manual resources is a separate, explicit cleanup decision.

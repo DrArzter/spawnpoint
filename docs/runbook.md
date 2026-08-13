@@ -8,7 +8,7 @@ performed. A procedure nobody has run is a guess.
 | Procedure | Owner | Last performed |
 | --- | --- | --- |
 | Start the server | Any player | 2026-08-13 — restored Terraform M1 host reached Docker healthy and accepted a player through ZeroTier |
-| Stop the server | Automatic | — |
+| Stop the server | Automatic from M2; owner during M1 | 2026-08-14 — 0 players confirmed, world flushed, all session containers stopped, post-session archive verified in S3, EC2 reached `stopped` |
 | Promote a release | Owner | — |
 | Roll back a release | Owner | — |
 | Restore the world | Owner | 2026-08-13 — the Terraform M1 host downloaded the verified S3 archive with its instance role, restored it onto a new EBS, reconciled release 1.0 and accepted a player in the recovered world |

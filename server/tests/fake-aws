@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+: "${FAKE_S3_ROOT:?FAKE_S3_ROOT is required}"
+
+while (( $# > 0 )); do
+  case "$1" in
+    --region | --endpoint-url | --profile)
+      shift 2
+      ;;
+    --no-cli-pager)
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+[[ "${1:-}" == "s3api" ]] || exit 64
+operation="${2:-}"
+shift 2
+
+bucket=""
+key=""
+body=""
+metadata=""
+checksum=""
+destination=""
+
+while (( $# > 0 )); do
+  case "$1" in
+    --bucket)
+      bucket="$2"
+      shift 2
+      ;;
+    --key)
+      key="$2"
+      shift 2
+      ;;
+    --body)
+      body="$2"
+      shift 2
+      ;;
+    --metadata)
+      metadata="$2"
+      shift 2
+      ;;
+    --checksum-sha256)
+      checksum="$2"
+      shift 2
+      ;;
+    --checksum-mode | --checksum-algorithm | --query | --output)
+      shift 2
+      ;;
+    --*)
+      exit 64
+      ;;
+    *)
+      destination="$1"
+      shift
+      ;;
+  esac
+done
+
+object="${FAKE_S3_ROOT}/${bucket}/${key}"
+metadata_file="${object}.fake-metadata"
+
+case "${operation}" in
+  put-object)
+    mkdir -p -- "$(dirname -- "${object}")"
+    cp -- "${body}" "${object}"
+    printf '%s\n' "${metadata}" >"${metadata_file}"
+    printf '%s\n' "${checksum}" >>"${metadata_file}"
+    ;;
+  head-object)
+    [[ -f "${object}" && -f "${metadata_file}" ]] || exit 254
+    IFS=',' read -r sha_field _ <"${metadata_file}"
+    stored_checksum="$(sed -n '2p' "${metadata_file}")"
+    printf '%s\t%s\t%s\n' "${sha_field#sha256=}" "${stored_checksum}" "$(stat --format '%s' -- "${object}")"
+    ;;
+  get-object)
+    [[ -f "${object}" && -f "${metadata_file}" && -n "${destination}" ]] || exit 254
+    cp -- "${object}" "${destination}"
+    stored_checksum="$(sed -n '2p' "${metadata_file}")"
+    jq -n --arg checksum "${stored_checksum}" '{ChecksumSHA256: $checksum}'
+    ;;
+  *)
+    exit 64
+    ;;
+esac

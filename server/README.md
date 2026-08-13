@@ -21,13 +21,17 @@ Contents:
   - `stop.sh` — save first, then let Compose perform the graceful container stop,
   - `archive-world.sh` — archive a stopped live world with Zstandard, write SHA-256 and verify the result,
   - `verify-archive.sh` — verify checksum, safe paths, archive readability and the presence of `level.dat`,
+  - `upload-world-backup.sh` — idempotently upload a content-addressed archive and verify its S3 checksum, metadata
+    digest and size,
+  - `download-world-backup.sh` — download only into a new temporary file, verify both S3 and local SHA-256, then make
+    the archive visible for restore,
   - `restore-world.sh` — restore only into a new or empty non-live data directory,
   - `build-release-manifest.sh` — create an immutable SHA-256 manifest for an exact mod payload,
   - `reconcile-release.sh` — verify and atomically replace the mod directory with that exact payload.
 - `observability/` — provisioned Prometheus configuration and Grafana session dashboard. `mc-monitor`, cAdvisor and
   node_exporter are declared beside Minecraft in Compose and share its lifetime.
 
-Planned later: fetch the desired release from S3, upload and verify world archives in S3, and handle the Spot
+Planned later: fetch the desired release from S3, invoke backup/retention from orchestration, and handle the Spot
 interruption notice.
 
 The world, the mod directory and the configs are mounted from the persistent EBS volume. Nothing that matters
@@ -101,6 +105,25 @@ The checksum sits beside the archive as `.sha256` and is mandatory during verifi
 the live `server/data` path and any non-empty target. To test the mechanism without the real world, set
 `SERVER_DATA_DIR` and `SERVER_BACKUP_DIR` to disposable fixture directories.
 
+Upload only a previously verified archive. The key includes its SHA-256, so an automation retry verifies the existing
+object instead of writing another copy. The host role deliberately has no `s3:DeleteObject`: exact `5/2/2` pruning is
+control-plane responsibility, not a permission given to the game server.
+
+```bash
+BACKUP_BUCKET=<bucket> AWS_REGION=eu-central-1 \
+  server/scripts/upload-world-backup.sh server/backups/world-<timestamp>.tar.zst
+
+BACKUP_BUCKET=<bucket> AWS_REGION=eu-central-1 \
+  server/scripts/download-world-backup.sh \
+    worlds/world/archives/world-<timestamp>-<sha256>.tar.zst \
+    /tmp/world-from-s3.tar.zst
+```
+
+Set `AWS_PROFILE=spawnpoint` for a human local run. On EC2 omit it and use the instance role. `S3_ENDPOINT_URL` is the
+only adapter switch needed for a LocalStack-compatible endpoint; production code does not branch on environment.
+`server/tests/backup-s3-test.sh` exercises upload, retry, download and a deliberately corrupt metadata failure without
+network or AWS credentials.
+
 A boot test also needs the exact release that belongs to the world. `REMOVE_OLD_MODS=true` means reconcile the mod
 directory to the configured desired list; if that list is absent, all copied JARs are removed. This happened during
 the first real restore drill and correctly made Forge reject the modded dimensions. The retry with the matching 111
@@ -128,5 +151,6 @@ The first AWS boot additionally used `FORGE_FORCE_REINSTALL=true` because the se
 excluded the locally cached Forge runtime libraries. It was removed from the override immediately after that boot
 reached `healthy`; leaving it enabled would turn a repair into work repeated on every session.
 
-**Status:** local lifecycle, backup/restore, release reconciliation, the base instance bootstrap and the first
-real-EC2 acceptance test exist. S3 transfer and automated orchestration remain.
+**Status:** local lifecycle, S3 backup/restore, release reconciliation, the base instance bootstrap and the first
+real-EC2 acceptance test exist. S3 transfer has passed a real upload/download/byte-identical restore drill; automated
+orchestration remains.

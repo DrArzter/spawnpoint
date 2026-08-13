@@ -152,6 +152,11 @@ It does not survive the move to EC2, for the reason in the alternatives table. T
 pluggable contract precisely so that the local phase and the cloud phase can differ. Using it now costs nothing later,
 provided nothing else is built to assume it.
 
+And if it turns out to be so much better than the alternatives that the group does not want to give it up, that is an
+argument about **where the server lives**, not about making Porthole headless. Keeping the server on a machine that
+already runs Steam is a coherent position — it simply is not this project, which exists to put the server somewhere the
+owner does not have to leave switched on.
+
 ### Which mode to use
 
 **Mode A first, mode C for real play.** Mode A is free and immediate, and it is the right thing during M2 while the

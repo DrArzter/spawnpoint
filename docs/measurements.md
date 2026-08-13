@@ -72,13 +72,19 @@ is the difference between about €7.50, €14 and €28 a month. See [docs/cost
 
 | | |
 | --- | --- |
-| Value | |
-| How | **Compatibility is already answered by running it on an Apple Silicon Mac.** If it runs there, it runs on Graviton |
-| Unblocks | The ARM question in [ADR-0004](adr/0004-ec2-spot-for-the-game-server.md) — *compatibility only* |
+| Value | **Not measuring. x86 chosen** — see below |
+| Unblocks | Closed by decision rather than by measurement |
 
-A free answer to half a question, purely because the laptop is the same architecture. The other half is not free:
-Graviton is cheaper per hour and slower per core, and for a single-threaded tick the cheaper core may need a larger
-instance to keep up, which cancels the saving. Compatibility says *can*; the tick measurement says *should*.
+**Dropped, and the reason is that the prize is too small.** Graviton is perhaps 15–20% cheaper per hour, which on a
+compute line of about $3.40 is **under a dollar a month**. Against that: Graviton is slower per core, and
+[ADR-0004](adr/0004-ec2-spot-for-the-game-server.md) already establishes that single-thread performance matters more
+here than the hourly rate, because the main tick cannot be spread across cores. And with Sinytra Connector bridging
+Fabric mods on Forge, an architecture problem would most likely surface as a subtle failure under load rather than a
+clean refusal to start — which is the worst way to find out, at ten o'clock on a live server.
+
+**So: x86.** It is faster where it matters, it has the larger instance-type pool for the fleet in
+[ADR-0027](adr/0027-spot-request-shape.md), and it removes a decision. Revisit only if the compute line ever becomes
+large enough for 20% of it to matter.
 
 ### 4. World and mod-set size — **answered for the current save**
 
@@ -161,19 +167,23 @@ every release. If no: the earlier observation was a server-list entry, and a bro
 
 | | |
 | --- | --- |
-| People | |
-| Devices they will actually connect from | |
+| People | ~6, and confirmed to fit |
+| Devices they will actually connect from | **Within ZeroTier's 10**, confirmed 2026-08-12 |
 | Unblocks | Now a yes/no rather than a choice. **ZeroTier is chosen** in [ADR-0024](adr/0024-connectivity-modes.md), so the only question is whether the group fits its free tier: **10 devices, 1 network**. Count second machines |
 
 Count devices honestly, including anybody's second machine. This is the number that decides which free tier fits.
 
 ### 8. Latency from each player to each candidate region
 
+Players are in **Poland, Ukraine and western Russia**, confirmed 2026-08-12. That eliminates London: it is materially
+further from all three, and there is no candidate it wins. Two remain, and they are close enough that the Spot price in
+item 9 may well decide it.
+
 | Region | Best | Worst |
 | --- | --- | --- |
 | `eu-central-1` (Frankfurt) | | |
 | `eu-north-1` (Stockholm) | | |
-| `eu-west-2` (London) | | |
+| ~~`eu-west-2` (London)~~ | dropped | dropped |
 
 | | |
 | --- | --- |
@@ -186,6 +196,10 @@ Warsaw region, so Frankfurt is the closest.
 
 Optimise for the **worst** player, not the average. One person on 200 ms ruins the evening for everybody. Stockholm is
 often the cheapest European region, so if the numbers are close, price decides.
+
+Still worth measuring rather than assuming, because routing from that part of Europe varies a great deal by provider —
+Frankfurt is the larger hub with more peering eastward, Stockholm is physically closer to the north-eastern end of the
+group. Expect both to land in a similar range and London to be clearly worse; confirm rather than trust that.
 
 ### 9. Spot price and capacity for the candidate types, per region
 

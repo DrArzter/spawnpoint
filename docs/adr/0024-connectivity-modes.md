@@ -156,6 +156,12 @@ So the announcement came from the pack or from the wider setup — most plausibl
 server to the LAN. That is good news rather than bad: a mod is something this project already controls, because every
 mod is declared in a release manifest. See [ADR-0008](0008-versioned-mod-releases.md).
 
+**If it turns out not to work, nothing is lost but the convenience.** The overlay address is *already* stable: ZeroTier
+assigns a managed address per member from the network's range and keeps it, and the node identity lives on the data
+volume, so the same node rejoins with the same address every session. Players add it once and never touch it again.
+There is no address to hold, republish or announce — that problem is solved by the overlay itself rather than by LAN
+discovery. What LAN discovery would add is not having to type it the first time.
+
 **Therefore: identify it, then make it a required entry in every release definition** rather than a happy accident of
 one pack. If no such mod turns out to be present, the remaining explanation is that the entry was in the players'
 server list rather than in the LAN section, and the feature has to be built by adding a broadcaster deliberately —

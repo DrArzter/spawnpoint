@@ -107,7 +107,10 @@ ordinary and cheap: step up one size, then change to a higher-clocked family, th
 anyway. A five-player server that occasionally stutters is a nuisance, not a failure — and the deliverable here is the
 pipeline and the lifecycle, not a competitive tick rate. If somebody genuinely needs guaranteed smoothness, the answer
 is to pay for hardware that provides it, and that is a purchase rather than a redesign.
-- Whether the mod set runs on ARM. Most Java mods do; some native libraries do not.
+- ~~Whether the mod set runs on ARM.~~ **Settled as x86, without testing.** The Graviton saving is 15–20% of a compute
+  line of about $3.40, so under a dollar a month, against a core that is slower where this workload is most sensitive.
+  With Sinytra Connector bridging Fabric mods, an architecture problem would most likely appear as a subtle failure
+  under load rather than a clean refusal to start. Not worth the risk for the prize.
 - ~~Whether to use a Spot request with a capacity-optimised strategy, or simply start and stop one
   persistent Spot instance.~~ Answered in [ADR-0027](0027-spot-request-shape.md): an EC2 Fleet created per session,
   diversified across about ten instance types, with `price-capacity-optimized` and stop-on-interruption.

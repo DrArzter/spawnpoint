@@ -23,4 +23,56 @@ copy of the state-machine definition. See
 
 State backend bootstrap is a manual, one-time step — see [the runbook](../../docs/runbook.md#bootstrap-terraform-state).
 
-**Status:** empty. Populated in M1.
+## Current slice
+
+The first M1 slice defines 12 resources without applying them: one VPC, one public subnet and route, a zero-ingress
+security group, an SSM-only EC2 role/profile, one on-demand EC2 host, and one separately attached encrypted data EBS.
+The physical AZ ID is asserted because the volume is zonal. The instance has no SSH key and requires IMDSv2.
+
+`m7i-flex.large` is the default while the account remains on the Free Plan. `r8i-flex.large` is the reviewed 16 GiB
+upgrade, but selecting it requires an explicit Paid Plan decision. The full-group memory measurement decides whether
+that upgrade is needed; Terraform does not quietly make a billing-plan decision.
+
+Terraform is run from its pinned official container, so no system installation is needed:
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp/terraform-home \
+  -v "$PWD:/workspace" \
+  -w /workspace/infra/terraform \
+  hashicorp/terraform:1.15.8 fmt -check -diff
+
+docker run --rm --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp/terraform-home \
+  -v "$PWD:/workspace" \
+  -w /workspace/infra/terraform \
+  hashicorp/terraform:1.15.8 init -backend=false
+
+docker run --rm --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp/terraform-home \
+  -v "$PWD:/workspace" \
+  -w /workspace/infra/terraform \
+  hashicorp/terraform:1.15.8 validate
+
+docker run --rm --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp/terraform-home \
+  -v "$PWD:/workspace" \
+  -w /workspace/infra/terraform \
+  hashicorp/terraform:1.15.8 test
+```
+
+The tests use Terraform's mock AWS provider: they require no credentials and cannot create resources. They assert the
+Free Plan instance choice, zero ingress, IMDSv2, termination protection, root/data EBS semantics, the reviewed paid
+upgrade and rejection of unreviewed instance types.
+
+The committed S3 backend intentionally has no bucket name. Copy `backend.hcl.example` to ignored `backend.hcl` only
+after the state bucket exists, then initialise with `-backend-config=backend.hcl`. Never pass credentials through that
+file: Terraform can persist backend arguments in `.terraform/` and plan files.
+
+`terraform plan` was exercised against the real read-only AWS data sources on 2026-08-13: the current AL2023 AMI and
+`eu-central-1a` / `euc1-az2` resolved, and the result was **12 to add, 0 to change, 0 to destroy**. It was not saved and
+cannot be applied. Before backend bootstrap, repeat that diagnostic plan on a temporary copy excluding `backend.tf`;
+never remove the production backend declaration in place. No M1 resource or backend exists yet.
+
+**Status:** first M1 compute/network slice validates and plans; backend, S3 data stores and apply remain deliberately
+pending while the account stays on the Free Plan.

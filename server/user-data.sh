@@ -73,7 +73,7 @@ EOF
 chmod 0644 /etc/spawnpoint-host.env
 
 cat >/etc/motd.d/spawnpoint <<'EOF'
-Spawnpoint M0 host
+Spawnpoint game host
 
 The base host is ready. The data volume, repository, secrets, ZeroTier and
 Minecraft are configured explicitly through SSM; user-data does not guess them.

@@ -11,7 +11,6 @@ credentials
 
 # --- Terraform ---
 .terraform/
-.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
 crash.log

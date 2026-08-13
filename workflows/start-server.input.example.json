@@ -5,9 +5,9 @@
   "timing": {
     "instancePollSeconds": 10,
     "ssmPollSeconds": 10,
-    "commandPollSeconds": 5,
+    "commandPollSeconds": 15,
     "maxInstancePolls": 30,
     "maxSsmPolls": 30,
-    "maxCommandPolls": 180
+    "maxCommandPolls": 60
   }
 }

@@ -8,6 +8,7 @@ Available:
 | Script | Purpose |
 | --- | --- |
 | `audit-aws-bootstrap.sh` | Read-only verification of browser credentials, IAM MFA and keys, budget alerts, recipients and SNS subscriptions. See [the command reference](../docs/aws-cli-checks.md) |
+| `start-server.sh` | Start or join the M2 Standard Workflow and optionally follow it until Minecraft is ready |
 
 Planned:
 
@@ -29,4 +30,9 @@ Rules:
 This directory is also the fallback path when the panel or the bots are unavailable. It must keep working
 without them.
 
-**Status:** the account-bootstrap audit exists. `cut-release.sh` arrives in M3, the rest as needed.
+`start-server.sh` uses the authenticated local AWS profile only to call the control plane. It does not reproduce the
+EC2/SSM sequence: that remains in Step Functions. Use `--no-follow` to return immediately after receiving the execution
+ARN; without it, the script follows the durable AWS execution until its terminal result.
+
+**Status:** the account-bootstrap audit and minimal M2 start trigger exist. `cut-release.sh` arrives in M3, the rest as
+needed.

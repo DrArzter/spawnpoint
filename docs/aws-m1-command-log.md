@@ -151,15 +151,17 @@ password-like settings were excluded, as were `.env`, logs, caches, user lists a
 Server code is archived from an exact Git commit and uploaded under a new key, never overwritten. Current bundle:
 
 ```text
-S3 key: releases/1.0/server/spawnpoint-server-117c1cf.tar.zst
-SHA-256: f813aff9cc3256feeab1a59f10d48abd5fac58f86f049e5e2863200dd4d085b0
-Git commit: 117c1cf
+S3 key: releases/1.0/server/spawnpoint-server-f4cbab7.tar.zst
+SHA-256: dd08ed850f483ba6a95c9c2f3a3101cd2a394f2f61f159f88f4688930bb87e1d
+Git commit: f4cbab7
 ```
 
 The host verified the digest and archive paths before extraction. Its Compose render test proves Prometheus binds only
 to `127.0.0.1:9090`, while Grafana may bind to `0.0.0.0:3000` inside the zero-ingress EC2 security group and private
-ZeroTier overlay. The `.env` is mode `0600`; RCON received a random password that was never printed. Deployment SSM
-command: `2f5af3e6-bca9-4828-b3d9-c7cbd450ac67`.
+ZeroTier overlay. The `.env` is mode `0600`; RCON received a random password that was never printed. The first-boot
+bundle was deployed by SSM command `2f5af3e6-bca9-4828-b3d9-c7cbd450ac67`. After the image itself showed that
+`ENFORCE_WHITELIST` does not enable the list, commit `f4cbab7` added `ENABLE_WHITELIST=TRUE`; command
+`5b81f060-b682-4430-9463-1b344a0ef86c` deployed that immutable bundle without restarting healthy Minecraft.
 
 All six pinned session images were then pulled without creating containers. This separates registry transfer from the
 Minecraft cold-start measurement and leaves the restored world untouched. The images occupy **2.428 GB** on the
@@ -176,6 +178,36 @@ zerotier-cli info
 zerotier-cli listnetworks
 ```
 
-At the last check, the daemon was `ONLINE`, but network membership was `ACCESS_DENIED`. Minecraft is deliberately not
-started until node `b9bc15e2cf` is authorised in ZeroTier Central and receives a managed address. That is a security
-gate, not a server-health failure.
+The first check returned `ACCESS_DENIED` because this Terraform host has a different identity from the earlier manual
+M0 host. After node `b9bc15e2cf` was explicitly authorised, membership became `OK` and ZeroTier assigned
+`172.29.23.24/16`. Minecraft was not started before this gate passed.
+
+## First restored-world start
+
+All images were already present, so the measurement excludes registry transfer. The migration intentionally omitted
+the cached Forge runtime; a temporary Compose override set `FORGE_FORCE_REINSTALL=true` for this boot only. The merged
+model was asserted before creating the container: no `CURSEFORGE_FILES`, `REMOVE_OLD_MODS=false`, and force reinstall
+present. After health passed, the override was removed and its absence asserted before starting observability without
+recreating Minecraft.
+
+Result from SSM command `907e7bae-b05f-49c5-b648-218d995126d1`:
+
+```text
+Compose to Docker healthy: 122 seconds
+ModernFix Forge/mod load: 72.614 seconds
+RCON: 0 / 20 players immediately after boot
+Minecraft memory: 4.81 GiB / 7.601 GiB
+Host available memory: 2.0 GiB, no swap
+OOM killed: false
+Container restarts: 0
+```
+
+Acceptance command `02c44088-10b5-4abf-b6ed-4febde6a4ebd` verified Grafana's database, all four Prometheus targets,
+the listener bindings and ZeroTier membership. Prometheus listened on `127.0.0.1:9090`; Minecraft and Grafana were
+reachable through the overlay at `172.29.23.24` while the EC2 security group still had no ingress.
+
+The pinned image initially wrote `white-list=false`: `ENFORCE_WHITELIST` controls removal behaviour but does not turn
+the list on. Its own `/image/scripts/start-setupServerProperties` confirmed `ENABLE_WHITELIST` as the missing switch.
+Once `DrArzter` had joined through ZeroTier, command `88fa1909-3845-4548-903d-9653de826f91` first added that exact name
+and only then enabled the whitelist. The player stayed online, `white-list=true`, `enforce-whitelist=true`, health
+remained healthy and the container still had zero restarts.

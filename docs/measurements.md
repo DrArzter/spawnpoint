@@ -128,6 +128,8 @@ paid every single evening rather than a few times a week.
 | Restored-copy smoke test, 2026-08-12 | **17.564 seconds** of Minecraft/Forge internal load time; Docker reported `healthy`, RCON answered, idle memory was **4.734 GiB**, and the container shut down with exit code 0 after saving all dimensions |
 | First AWS boot, `m7i-flex.large`, 2026-08-13 | **127 seconds** from `docker compose up` to Docker `healthy`; ModernFix reported **70.513 seconds** for the Minecraft/Forge load. RCON answered, the real world and all 111 JARs loaded, and the process was not OOM-killed |
 | First AWS memory snapshot | Minecraft used **4.898 GiB / 7.601 GiB (64.44%)** with no players. The 8 GiB host had **2.4 GiB available** and no swap immediately after startup |
+| Terraform M1 restored-world boot, 2026-08-13 | **122 seconds** from Compose start to Docker `healthy`; ModernFix reported **72.614 seconds**. The exact S3-restored world and immutable 111-JAR release loaded, RCON answered, and a player joined through ZeroTier |
+| Terraform M1 memory snapshot | Minecraft used **4.81 GiB / 7.601 GiB (63.28%)** immediately after startup. The host had **2.0 GiB available**, no swap, no OOM kill and zero container restarts |
 | Hardware | **Intel Core i9-14900KF**; this is a strong desktop CPU and therefore a lower bound, not an EC2 forecast |
 | How | Time it. Locally it is a lower bound; EC2 adds instance boot and a mod sync on top |
 | Unblocks | The whole premise of [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md), which assumes 1–3 minutes is tolerable |
@@ -170,6 +172,12 @@ are Prometheus maxima/minima over the observed session rather than hand-picked `
 The session ended with a complete lifecycle acceptance test: RCON confirmed zero players, the server flushed and
 stopped, all observability containers stopped with it, the world archive verified, and EC2 reached `stopped` with no
 public address. The persistent 20 GiB EBS remained encrypted, attached and `DeleteOnTermination=false`.
+
+The Terraform M1 rebuild repeated the acceptance against a new VPC, instance and EBS. Grafana 13.1.0 reported its
+database healthy at `http://172.29.23.24:3000`; Prometheus stayed on `127.0.0.1:9090`, and all four targets
+(`minecraft`, `containers`, `node`, `prometheus`) were up. Minecraft and Grafana listened through the private
+ZeroTier interface, while the EC2 security group retained zero ingress. The player `DrArzter` joined the restored
+world; the whitelist was populated before being enabled, so nobody was kicked during the correction.
 
 ### 6. LAN discovery on a clean client, over the overlay
 

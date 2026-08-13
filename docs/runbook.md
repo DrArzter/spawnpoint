@@ -7,11 +7,11 @@ performed. A procedure nobody has run is a guess.
 
 | Procedure | Owner | Last performed |
 | --- | --- | --- |
-| Start the server | Any player | — |
+| Start the server | Any player | 2026-08-13 — restored Terraform M1 host reached Docker healthy and accepted a player through ZeroTier |
 | Stop the server | Automatic | — |
 | Promote a release | Owner | — |
 | Roll back a release | Owner | — |
-| Restore the world | Owner | 2026-08-13 — real S3 download, checksum/full-stream verification and content-identical restore into `/tmp`; isolated Minecraft boot with matching 111 mods was proven on the same archive locally on 2026-08-12 |
+| Restore the world | Owner | 2026-08-13 — the Terraform M1 host downloaded the verified S3 archive with its instance role, restored it onto a new EBS, reconciled release 1.0 and accepted a player in the recovered world |
 | Recover from a lost instance | Owner | — |
 | Bootstrap Terraform state | Owner | 2026-08-13 — bucket created by saved plan, controls verified through S3 API, native lock exercised, final drift check clean |
 | Tear down and rebuild | Owner | — |
@@ -27,11 +27,11 @@ Fill in at M1 and keep current. This block is what somebody needs when something
 | Region | `eu-central-1` — see [ADR-0002](adr/0002-host-on-aws.md) |
 | Terraform state bucket | `spawnpoint-tfstate-614934752397` |
 | Server hostname | TODO |
-| Instance ID / tag | `i-09c9b5069308ac372` / `spawnpoint-game` (Terraform M1) |
+| Instance ID / tag | `i-09c9b5069308ac372` / `spawnpoint-game-host` (Terraform M1) |
 | Data volume ID | `vol-01bcd86ae27b55682`, encrypted 20 GiB gp3, `DeleteOnTermination=false`, `eu-central-1a` |
 | Release bucket | `spawnpoint-releases-614934752397` |
 | Backup bucket | `spawnpoint-backups-614934752397` |
-| Panel URL | Grafana at `http://<ZeroTier-IP>:3000`; address is assigned only after the node is authorised |
+| Panel URL | Grafana at `http://172.29.23.24:3000` inside ZeroTier |
 | Container image | `itzg/minecraft-server` pinned by digest in `server/compose.yaml`, never `latest` |
 | Minecraft and loader version | Minecraft 1.20.1, Forge, immutable release `1.0` with 111 JARs |
 

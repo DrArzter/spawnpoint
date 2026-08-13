@@ -4,7 +4,8 @@
 set -Eeuo pipefail
 
 readonly DATA_MOUNT="${SPAWNPOINT_DATA_MOUNT:-/srv/spawnpoint}"
-readonly EXPECTED_LABEL="spawnpoint-data"
+# XFS labels are limited to 12 characters.
+readonly EXPECTED_LABEL="spawnpoint"
 
 usage() {
   cat >&2 <<'EOF'

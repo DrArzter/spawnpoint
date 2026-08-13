@@ -18,7 +18,55 @@ SP_REGION=eu-central-1
 - **Read** commands are safe observations and do not change AWS.
 - **Write** commands create or modify the resource named in the command.
 - **Rollback** commands remove only that explicitly named resource.
-- Every billable write gets a separate cost warning. Nothing in this document so far is billable by itself.
+- Every billable write gets a separate cost warning; the current inventory records what continues to exist.
+
+## Current manual inventory
+
+Last reconciled against AWS on 2026-08-13. Generated IDs stay out of the public repository; the read commands below
+resolve them by unique names and project tags.
+
+| Resource | Name | Location | Current state | Cost shape |
+| --- | --- | --- | --- | --- |
+| IAM role and instance profile | `spawnpoint-m0-ec2` | Global | Created; SSM core policy only | No standalone charge |
+| Security group | `spawnpoint-m0-minecraft` | `eu-central-1`, default VPC | Created; no inbound rules | No standalone charge |
+| EBS data volume | `spawnpoint-m0-data` | `eu-central-1a` / `euc1-az2` | Encrypted gp3, 20 GB; attached with `DeleteOnTermination=false`; XFS label `spawnpoint` | About $1.90/month list-price equivalent before credits |
+| EC2 smoke host | `spawnpoint-m0-smoke` | `eu-central-1a` / `euc1-az2` | `m7i-flex.large`, stopped; termination-protected; no key pair; 8 GB encrypted gp3 root | No compute while stopped; root is about $0.76/month list-price equivalent before credits |
+
+Resolve the current generated IDs and verify that names remain unique:
+
+```bash
+aws ec2 describe-volumes \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE" \
+  --filters Name=tag:Name,Values=spawnpoint-m0-data Name=tag:Project,Values=spawnpoint \
+  --query 'Volumes[].[VolumeId,State,Size,VolumeType,Encrypted,AvailabilityZone,Attachments]'
+
+aws ec2 describe-instances \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE" \
+  --filters Name=tag:Project,Values=spawnpoint Name=instance-state-name,Values=pending,running,stopping,stopped \
+  --query 'Reservations[].Instances[].[InstanceId,State.Name,InstanceType,Placement.AvailabilityZone]'
+```
+
+Historical rollback for a still-empty and unattached data volume. It is intentionally not applicable to the current
+attached state:
+
+```bash
+SP_DATA_VOLUME_ID="$(aws ec2 describe-volumes \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE" \
+  --filters Name=tag:Name,Values=spawnpoint-m0-data Name=status,Values=available \
+  --query 'Volumes[0].VolumeId' \
+  --output text)"
+
+aws ec2 delete-volume \
+  --volume-id "$SP_DATA_VOLUME_ID" \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE"
+```
+
+Do not use that rollback while the volume is attached, or after it contains a world. At that point the runbook must
+stop the instance, detach it, and snapshot or archive it first.
 
 ## Region and Availability Zone inventory
 
@@ -124,6 +172,51 @@ Results on 2026-08-13:
 The first M0 run therefore creates two billable resources: one 20 GB gp3 data volume at about `$1.90/month` while
 it exists, plus the instance whose 8 GB root volume costs about `$0.76/month` while it exists. Running compute plus
 public IPv4 costs about `$0.17258/hour`. No launch command belongs in this log until that cost gate is accepted.
+
+The cost gate was accepted on 2026-08-13.
+
+**Write:** create the persistent data volume explicitly encrypted, in the selected AZ, with no attachment implied:
+
+```bash
+aws ec2 create-volume \
+  --availability-zone eu-central-1a \
+  --size 20 \
+  --volume-type gp3 \
+  --encrypted \
+  --tag-specifications \
+    'ResourceType=volume,Tags=[{Key=Name,Value=spawnpoint-m0-data},{Key=Project,Value=spawnpoint},{Key=Environment,Value=m0},{Key=ManagedBy,Value=manual},{Key=Purpose,Value=minecraft-data}]' \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE"
+```
+
+AWS returned one encrypted 20 GB gp3 volume in `eu-central-1a`; `volume-available` completed and a describe confirmed
+that it had no attachments. Launching `r8i.large` was then rejected before an instance was created:
+
+```text
+InvalidParameterCombination: The specified instance type is not eligible for Free Tier.
+```
+
+This is an account-plan restriction, not a quota or capacity failure. A read immediately afterwards confirmed zero
+Spawnpoint instances and the one unattached data volume above.
+
+**Read:** inspect the Free Plan without upgrading it:
+
+```bash
+aws freetier get-account-plan-state \
+  --region us-east-1 \
+  --profile "$SP_PROFILE"
+
+aws ec2 describe-instance-types \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE" \
+  --filters Name=free-tier-eligible,Values=true \
+  --query 'InstanceTypes[].[InstanceType,VCpuInfo.DefaultVCpus,MemoryInfo.SizeInMiB,FreeTierEligible]' \
+  --output table
+```
+
+Result: plan `FREE`, status `ACTIVE`, `$120` credits remaining, expiry `2027-02-11`. The available x86 smoke-test
+shape closest to the intended host is `m7i-flex.large` with 2 vCPU and 8 GiB. It can validate user-data, SSM, EBS,
+ZeroTier and Docker under the Free Plan, but it does not supersede the 16 GiB production sizing decision.
 
 ## Existing network inventory
 
@@ -358,8 +451,37 @@ docker run --rm \
 packages, enables SSM, and creates empty mount points. It cannot safely identify the later EBS device or know which
 Git commit and secrets to deploy.
 
-The following commands are **prepared, not yet executed**. They belong to the first SSM session after the instance
-and EBS volume exist:
+The base bootstrap was verified without SSH by sending a strict shell through SSM, waiting for the invocation, and
+reading both output streams and the response code:
+
+```bash
+SP_COMMAND_ID="$(aws ssm send-command \
+  --instance-ids "$SP_INSTANCE_ID" \
+  --document-name AWS-RunShellScript \
+  --comment 'Spawnpoint M0 verify base bootstrap' \
+  --parameters \
+    'commands=["set -euo pipefail","cloud-init status --wait","systemctl is-active docker","systemctl is-active amazon-ssm-agent","rpm -q docker git jq rsync tar zstd xfsprogs","if findmnt /srv/spawnpoint; then exit 1; else echo data_mount=not_mounted; fi"]' \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE" \
+  --query Command.CommandId \
+  --output text)"
+
+aws ssm wait command-executed \
+  --command-id "$SP_COMMAND_ID" \
+  --instance-id "$SP_INSTANCE_ID" \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE"
+
+aws ssm get-command-invocation \
+  --command-id "$SP_COMMAND_ID" \
+  --instance-id "$SP_INSTANCE_ID" \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE" \
+  --query '{Status:Status,ResponseCode:ResponseCode,Stdout:StandardOutputContent,Stderr:StandardErrorContent}'
+```
+
+These were the first-session commands. Device identification, formatting and mount verification have now executed;
+ZeroTier remains pending its real Network ID:
 
 ```bash
 # Read: map the attached EBS volume ID to its actual NVMe device name.
@@ -384,6 +506,125 @@ to NVMe names; `ebsnvme-id` is the evidence connecting that device to the exact 
 `prepare-data-volume.sh` refuses the root device, devices with child partitions, already-mounted devices and blank
 devices unless `--format-empty` is explicit. `configure-zerotier.sh` refuses to run unless `/srv/spawnpoint` is a real
 mount, so `identity.secret` cannot silently land on the disposable root disk.
+
+Every `AWS-RunShellScript` command list starts with `set -euo pipefail`. Without it, Run Command concatenates the list
+into one shell script and can report the final successful diagnostic as `Success` even when an earlier command failed.
+This was observed during the first format attempt: XFS rejected the original 15-character label
+`spawnpoint-data` (XFS permits at most 12), a later `lsblk` succeeded, and SSM returned success with the real error only
+in stderr. The volume remained blank. The script now uses the label `spawnpoint`; both the wrapper exit discipline and
+stderr must be checked before accepting an invocation.
+
+## Executed smoke-host lifecycle
+
+The accepted 16 GiB `r8i.large` cannot be launched while the account remains on the Free Plan. M0 therefore used the
+closest eligible x86 shape, `m7i-flex.large` with 8 GiB, to validate the host mechanisms only. This does not change the
+real-server sizing decision.
+
+**Write:** launch exactly one smoke host with no SSH key, no inbound security-group rule, mandatory IMDSv2, API
+termination protection and an 8 GB encrypted disposable root volume:
+
+```bash
+SP_AMI_ID="$(aws ssm get-parameter \
+  --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE" \
+  --query Parameter.Value \
+  --output text)"
+
+SP_SUBNET_ID="$(aws ec2 describe-subnets \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE" \
+  --filters Name=availability-zone,Values=eu-central-1a Name=default-for-az,Values=true \
+  --query 'Subnets[0].SubnetId' \
+  --output text)"
+
+SP_SECURITY_GROUP_ID="$(aws ec2 describe-security-groups \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE" \
+  --filters Name=group-name,Values=spawnpoint-m0-minecraft \
+  --query 'SecurityGroups[0].GroupId' \
+  --output text)"
+
+aws ec2 run-instances \
+  --image-id "$SP_AMI_ID" \
+  --instance-type m7i-flex.large \
+  --count 1 \
+  --network-interfaces \
+    "DeviceIndex=0,SubnetId=${SP_SUBNET_ID},Groups=${SP_SECURITY_GROUP_ID},AssociatePublicIpAddress=true,DeleteOnTermination=true" \
+  --iam-instance-profile Name=spawnpoint-m0-ec2 \
+  --user-data file://server/user-data.sh \
+  --block-device-mappings \
+    'DeviceName=/dev/xvda,Ebs={VolumeSize=8,VolumeType=gp3,Encrypted=true,DeleteOnTermination=true}' \
+  --metadata-options \
+    'HttpTokens=required,HttpEndpoint=enabled,HttpPutResponseHopLimit=1,InstanceMetadataTags=enabled' \
+  --instance-initiated-shutdown-behavior stop \
+  --disable-api-termination \
+  --tag-specifications \
+    'ResourceType=instance,Tags=[{Key=Name,Value=spawnpoint-m0-smoke},{Key=Project,Value=spawnpoint},{Key=Environment,Value=m0},{Key=ManagedBy,Value=manual},{Key=Purpose,Value=bootstrap-smoke}]' \
+    'ResourceType=volume,Tags=[{Key=Name,Value=spawnpoint-m0-smoke-root},{Key=Project,Value=spawnpoint},{Key=Environment,Value=m0},{Key=ManagedBy,Value=manual},{Key=Purpose,Value=disposable-root}]' \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE"
+```
+
+The instance reached EC2 status `ok`, registered in SSM as Amazon Linux 2023 with Agent `3.3.4624.0`, and completed
+cloud-init in 49 seconds. Docker and SSM were active, all expected packages were installed, and `/srv/spawnpoint` was
+correctly still unmounted.
+
+**Write:** resolve both resources by tag and attach the data volume. Requested `/dev/sdf` is only an API name; Nitro
+presented it inside Linux as `/dev/nvme1n1`:
+
+```bash
+SP_INSTANCE_ID="$(aws ec2 describe-instances \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE" \
+  --filters Name=tag:Name,Values=spawnpoint-m0-smoke Name=instance-state-name,Values=running \
+  --query 'Reservations[0].Instances[0].InstanceId' \
+  --output text)"
+
+SP_DATA_VOLUME_ID="$(aws ec2 describe-volumes \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE" \
+  --filters Name=tag:Name,Values=spawnpoint-m0-data Name=status,Values=available \
+  --query 'Volumes[0].VolumeId' \
+  --output text)"
+
+aws ec2 attach-volume \
+  --volume-id "$SP_DATA_VOLUME_ID" \
+  --instance-id "$SP_INSTANCE_ID" \
+  --device /dev/sdf \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE"
+```
+
+Before formatting, `ebsnvme-id /dev/nvme1n1` was checked against `SP_DATA_VOLUME_ID`, while `lsblk --fs` and `blkid`
+confirmed no partitions and no filesystem. The corrected `prepare-data-volume.sh /dev/nvme1n1 --format-empty` then
+created XFS and mounted it at `/srv/spawnpoint`. A reboot produced a new boot ID, automatically restored the same
+filesystem UUID through `/etc/fstab`, and returned both Docker and SSM to `active`.
+
+**Write:** stop the smoke host immediately after validation so compute and public IPv4 stop consuming credits:
+
+```bash
+SP_INSTANCE_ID="$(aws ec2 describe-instances \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE" \
+  --filters Name=tag:Name,Values=spawnpoint-m0-smoke Name=instance-state-name,Values=pending,running,stopping,stopped \
+  --query 'Reservations[0].Instances[0].InstanceId' \
+  --output text)"
+
+aws ec2 stop-instances \
+  --instance-ids "$SP_INSTANCE_ID" \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE"
+
+aws ec2 wait instance-stopped \
+  --instance-ids "$SP_INSTANCE_ID" \
+  --region "$SP_REGION" \
+  --profile "$SP_PROFILE"
+```
+
+Final state on 2026-08-13: smoke host `stopped`, no public IPv4, root volume attached with
+`DeleteOnTermination=true`, data volume attached with `DeleteOnTermination=false`. Stopped instances do not consume
+compute hours; both EBS volumes continue to exist.
 
 ## DNS and Route 53
 

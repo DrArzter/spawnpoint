@@ -21,13 +21,22 @@ unsupported edge resources live in the local root. They must not leak into produ
 copy of the state-machine definition. See
 [ADR-0031](../../docs/adr/0031-first-class-local-control-plane.md).
 
-State backend bootstrap is a manual, one-time step — see [the runbook](../../docs/runbook.md#bootstrap-terraform-state).
+State backend bootstrap is a one-time, separately stateful Terraform step in
+[`../terraform-bootstrap`](../terraform-bootstrap/) — see
+[the runbook](../../docs/runbook.md#bootstrap-terraform-state).
 
 ## Current slice
 
-The first M1 slice defines 12 resources without applying them: one VPC, one public subnet and route, a zero-ingress
-security group, an SSM-only EC2 role/profile, one on-demand EC2 host, and one separately attached encrypted data EBS.
-The physical AZ ID is asserted because the volume is zonal. The instance has no SSH key and requires IMDSv2.
+The current M1 slice defines 27 resources without applying them: one VPC, one public subnet and route, a zero-ingress
+security group, an SSM-only EC2 role/profile, one on-demand EC2 host, one separately attached encrypted data EBS, and
+private versioned buckets for world backups and mod releases. Both buckets block public access, require TLS, use
+S3-managed encryption and discard abandoned multipart uploads. The physical AZ ID is asserted because the volume is
+zonal. The instance has no SSH key and requires IMDSv2.
+
+The game-host role can write and verify backup objects and read immutable release objects. It cannot change bucket
+configuration or delete objects. Exact `5 daily / 2 weekly / 2 monthly` pruning belongs to the later backup operation:
+S3 lifecycle deletes by object age, not by "keep the newest N" semantics, so pretending it implements that policy
+would silently weaken the ADR.
 
 `m7i-flex.large` is the default while the account remains on the Free Plan. `r8i-flex.large` is the reviewed 16 GiB
 upgrade, but selecting it requires an explicit Paid Plan decision. The full-group memory measurement decides whether
@@ -62,17 +71,18 @@ docker run --rm --user "$(id -u):$(id -g)" \
 ```
 
 The tests use Terraform's mock AWS provider: they require no credentials and cannot create resources. They assert the
-Free Plan instance choice, zero ingress, IMDSv2, termination protection, root/data EBS semantics, the reviewed paid
-upgrade and rejection of unreviewed instance types.
+Free Plan instance choice, zero ingress, IMDSv2, termination protection, root/data EBS semantics, private versioned
+encrypted buckets, the reviewed paid upgrade and rejection of unreviewed instance types.
 
 The committed S3 backend intentionally has no bucket name. Copy `backend.hcl.example` to ignored `backend.hcl` only
 after the state bucket exists, then initialise with `-backend-config=backend.hcl`. Never pass credentials through that
 file: Terraform can persist backend arguments in `.terraform/` and plan files.
 
-`terraform plan` was exercised against the real read-only AWS data sources on 2026-08-13: the current AL2023 AMI and
-`eu-central-1a` / `euc1-az2` resolved, and the result was **12 to add, 0 to change, 0 to destroy**. It was not saved and
-cannot be applied. Before backend bootstrap, repeat that diagnostic plan on a temporary copy excluding `backend.tf`;
-never remove the production backend declaration in place. No M1 resource or backend exists yet.
+The complete `terraform plan` was exercised against real read-only AWS data sources on 2026-08-13: the current AL2023
+AMI, account identity and `eu-central-1a` / `euc1-az2` resolved, and the result was **27 to add, 0 to change, 0 to
+destroy**. It was not saved and cannot be applied. Before backend bootstrap, repeat that diagnostic plan on a temporary
+copy excluding `backend.tf`; never remove the production backend declaration in place. The separate bootstrap plan was
+also exercised and returned **6 to add, 0 to change, 0 to destroy**. No M1 resource or backend exists yet.
 
-**Status:** first M1 compute/network slice validates and plans; backend, S3 data stores and apply remain deliberately
-pending while the account stays on the Free Plan.
+**Status:** M1 compute, network and storage validate, pass mock tests and pass real read-only plans; backend bootstrap
+and both applies remain deliberately pending while the account stays on the Free Plan.

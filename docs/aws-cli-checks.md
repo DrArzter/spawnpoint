@@ -30,8 +30,8 @@ The profile uses browser login and temporary credentials, not a long-lived IAM a
 
 ```bash
 aws login --profile spawnpoint --region eu-central-1
-aws sts get-caller-identity --profile spawnpoint
-aws configure list --profile spawnpoint
+aws sts get-caller-identity --profile spawnpoint --region eu-central-1
+aws configure list --profile spawnpoint --region eu-central-1
 ```
 
 `aws configure list` should report `login` as the credential type. `aws login` requires AWS CLI 2.32.0 or newer and
@@ -48,6 +48,7 @@ First obtain the user name from `get-caller-identity`; do not hard-code an accou
 ```bash
 SP_CALLER_ARN="$(aws sts get-caller-identity \
   --profile spawnpoint \
+  --region eu-central-1 \
   --query Arn \
   --output text)"
 SP_USER_NAME="${SP_CALLER_ARN##*/}"
@@ -78,6 +79,7 @@ The Budgets API needs the account ID even when the caller is already authenticat
 ```bash
 SP_ACCOUNT_ID="$(aws sts get-caller-identity \
   --profile spawnpoint \
+  --region eu-central-1 \
   --query Account \
   --output text)"
 ```

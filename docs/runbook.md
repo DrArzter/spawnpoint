@@ -25,8 +25,8 @@ Fill in at M1 and keep current. This block is what somebody needs when something
 
 | Item | Value |
 | --- | --- |
-| AWS account | TODO |
-| Region | TODO — see [ADR-0002](adr/0002-host-on-aws.md) |
+| AWS account | Resolve with `aws sts get-caller-identity`; do not hard-code it |
+| Region | `eu-central-1` — see [ADR-0002](adr/0002-host-on-aws.md) |
 | Server hostname | TODO |
 | Instance ID / tag | TODO |
 | Data volume ID | TODO |
@@ -211,13 +211,73 @@ are.
 
 ## Bootstrap Terraform state
 
-The chicken-and-egg step, done once by hand and therefore easy to forget.
+The chicken-and-egg step, performed once from a separate Terraform root. It has local state because the S3 bucket
+cannot contain the state that creates that same bucket before it exists. Run every command from the repository root.
 
-1. Create the state bucket, with versioning on: `# TODO`
-2. Enable locking: `# TODO`
-3. `terraform init` with the backend configuration: `# TODO`
+First authenticate and run the checks. `plan` is read-only; inspect its proposed bucket name and six resources before
+allowing the apply:
 
-Record here exactly what was created by hand, because Terraform does not know about it.
+```bash
+aws sso login --profile spawnpoint
+
+docker run --rm --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp/terraform-home \
+  -v "$PWD:/workspace" \
+  -w /workspace/infra/terraform-bootstrap \
+  hashicorp/terraform:1.15.8 init -backend=false
+
+docker run --rm --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp/terraform-home \
+  -v "$PWD:/workspace" \
+  -w /workspace/infra/terraform-bootstrap \
+  hashicorp/terraform:1.15.8 plan -out=tfplan
+```
+
+Only after the plan has been reviewed, create exactly what it contains:
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp/terraform-home \
+  -v "$PWD:/workspace" \
+  -w /workspace/infra/terraform-bootstrap \
+  hashicorp/terraform:1.15.8 apply tfplan
+
+docker run --rm --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp/terraform-home \
+  -v "$PWD:/workspace" \
+  -w /workspace/infra/terraform-bootstrap \
+  hashicorp/terraform:1.15.8 output -raw state_bucket_name
+```
+
+Copy `infra/terraform/backend.hcl.example` to the ignored `infra/terraform/backend.hcl`, replace the placeholder with
+that output, then initialise the production root:
+
+```bash
+cp infra/terraform/backend.hcl.example infra/terraform/backend.hcl
+${EDITOR:-vi} infra/terraform/backend.hcl
+
+docker run --rm --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp/terraform-home \
+  -v "$PWD:/workspace" \
+  -w /workspace/infra/terraform \
+  hashicorp/terraform:1.15.8 init -backend-config=backend.hcl
+```
+
+`use_lockfile = true` in `backend.hcl` enables S3-native state locking. It is not a permanent AWS resource and needs
+no DynamoDB table: Terraform creates a temporary `.tflock` object while an operation owns the lock.
+
+Verify the actual controls, replacing `<bucket>` with the output above. These reads confirm versioning, all four public
+access blocks, default encryption and the bucket-level public status:
+
+```bash
+aws s3api get-bucket-versioning --bucket <bucket> --profile spawnpoint
+aws s3api get-public-access-block --bucket <bucket> --profile spawnpoint
+aws s3api get-bucket-encryption --bucket <bucket> --profile spawnpoint
+aws s3api get-bucket-policy-status --bucket <bucket> --profile spawnpoint
+```
+
+Record the created bucket name in the reference table. Keep a private copy of the ignored bootstrap state until a
+restore/import of that state has been tested. The bucket has `prevent_destroy`; never weaken it during ordinary cleanup.
 
 ## Tear down and rebuild
 

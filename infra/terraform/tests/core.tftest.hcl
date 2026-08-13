@@ -17,6 +17,13 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_caller_identity.current
+    values = {
+      account_id = "123456789012"
+    }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.ec2_assume_role
     values = {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
@@ -61,6 +68,41 @@ run "free_plan_host_preserves_m0_invariants" {
     condition     = aws_volume_attachment.data.device_name == "/dev/sdf" && aws_volume_attachment.data.stop_instance_before_detaching
     error_message = "The data volume must use the reviewed attachment contract and stop before detach."
   }
+
+  assert {
+    condition     = aws_s3_bucket.backups.bucket == "spawnpoint-backups-123456789012" && aws_s3_bucket.releases.bucket == "spawnpoint-releases-123456789012"
+    error_message = "Storage bucket names must be deterministic and globally unique to the AWS account."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_versioning.backups.versioning_configuration[0].status == "Enabled" && aws_s3_bucket_versioning.releases.versioning_configuration[0].status == "Enabled"
+    error_message = "Backups and releases must retain S3 object versions."
+  }
+
+  assert {
+    condition = (
+      aws_s3_bucket_public_access_block.backups.block_public_acls &&
+      aws_s3_bucket_public_access_block.backups.block_public_policy &&
+      aws_s3_bucket_public_access_block.backups.ignore_public_acls &&
+      aws_s3_bucket_public_access_block.backups.restrict_public_buckets
+    )
+    error_message = "The backup bucket must block every form of public access."
+  }
+
+  assert {
+    condition = (
+      aws_s3_bucket_public_access_block.releases.block_public_acls &&
+      aws_s3_bucket_public_access_block.releases.block_public_policy &&
+      aws_s3_bucket_public_access_block.releases.ignore_public_acls &&
+      aws_s3_bucket_public_access_block.releases.restrict_public_buckets
+    )
+    error_message = "The release bucket must block every form of public access."
+  }
+
+  assert {
+    condition     = one(one(aws_s3_bucket_server_side_encryption_configuration.backups.rule).apply_server_side_encryption_by_default).sse_algorithm == "AES256"
+    error_message = "Backups must use no-extra-cost S3-managed encryption at rest."
+  }
 }
 
 run "reviewed_paid_upgrade_is_explicit" {
@@ -85,4 +127,3 @@ run "unreviewed_instance_type_is_rejected" {
 
   expect_failures = [var.instance_type]
 }
-

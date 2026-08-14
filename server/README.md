@@ -17,6 +17,7 @@ Contents:
   - `start.sh` — idempotently start the Compose service and wait for Docker health or RCON readiness,
   - `status.sh` — report container health and verify the Minecraft control path through RCON,
   - `players.sh` — report a machine-readable player count; an unparseable response fails closed,
+  - `check-session-activity.sh` — expose the fail-closed player activity contract used by the future idle watchdog,
   - `save-world.sh` — disable autosave, run `save-all flush`, and re-enable autosave even on failure,
   - `stop.sh` — save first, then let Compose perform the graceful container stop,
   - `archive-world.sh` — archive a stopped live world with Zstandard, write SHA-256 and verify the result,
@@ -75,6 +76,12 @@ Outputs use `key=value` lines. Human-readable diagnostics go to stderr, and a no
 was not reached. This is intentionally also the future SSM contract: Step Functions sends one script, examines the
 exit code, and routes failure through `Retry` or `Catch` without duplicating the host logic.
 
+`check-session-activity.sh` is narrower than the human-facing status commands. Exit `0` means RCON returned a valid
+player count and reports `activity=idle|active` plus `players_online`. Exit `2` reports `activity=unknown` when the
+container is not running, RCON is unavailable, or its response cannot be parsed. It never prints the raw RCON response
+or player names. Therefore only `exit=0` together with `activity=idle` is evidence an idle watchdog may count; an
+unknown reading must not become an empty reading by accident.
+
 By default the scripts manage `server/compose.yaml`, not any Minecraft Compose project that happens to be running on
 the same Docker daemon. During migration from an existing setup, point them at that project explicitly:
 
@@ -125,7 +132,9 @@ only adapter switch needed for a LocalStack-compatible endpoint; production code
 `server/tests/backup-s3-test.sh` exercises upload, retry, download and a deliberately corrupt metadata failure without
 network or AWS credentials.
 
-Two more tests guard the paths that protect the world. `release-reconcile-test.sh` covers the release pipeline:
+Additional tests guard the paths that protect the world and session. `session-activity-test.sh` covers zero players,
+active players without leaking names, malformed RCON output, RCON failure and a stopped container. An error is always
+unknown, never idle. `release-reconcile-test.sh` covers the release pipeline:
 manifest immutability and schema, and that reconciliation refuses a tampered payload, duplicate entries, a wrong
 loader, a mis-named target and a concurrent run — leaving the live mod directory untouched and no stage or backup
 litter behind. `world-restore-test.sh` covers the backup contract: a byte-identical restore, refusal of the live data
@@ -139,7 +148,7 @@ they run in a container:
 ```bash
 docker run --rm -v "$PWD:/repo:ro" alpine:3.20 sh -c '
   apk add -q bash coreutils findutils diffutils tar zstd jq util-linux openssl >/dev/null
-  for t in backup-s3-test compose-files-test release-reconcile-test world-restore-test; do
+  for t in backup-s3-test compose-files-test release-reconcile-test session-activity-test world-restore-test; do
     bash /repo/server/tests/$t.sh || exit 1
   done'
 ```

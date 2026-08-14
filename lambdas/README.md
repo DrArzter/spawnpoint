@@ -39,9 +39,14 @@ five recent UTC days, two older ISO weeks and two still older UTC months. Malfor
 least-privilege Lambda will list objects, call this pure function, and delete only the returned keys; the game host has
 no deletion permission.
 
+The Lifecycle V2 coordination model is likewise pure domain code. It defines session identity, desired versus observed
+server state, an expiring lease with a monotonically increasing fencing token, single-watchdog ownership and
+conservative idle observations. It is not connected to AWS or the working V1 workflows yet; the additive rollout and
+cutover boundary are documented in [`docs/lifecycle-v2-rollout.md`](../docs/lifecycle-v2-rollout.md).
+
 Run its dependency-free tests with `npm test` from this directory. The repository currently exercises them with Node
 26; the exact supported Lambda Node runtime remains to be pinned when the first deployable handler is added.
 
-**Status:** backup-retention domain logic exists and is tested. The first M2 start workflow uses direct EC2/SSM
-integrations and therefore needs no task Lambda yet. Deployable lifecycle functions arrive when a step contains real
-domain logic; pipeline follows in M3, control-plane surfaces and adapters in M4.
+**Status:** backup-retention and Lifecycle V2 coordination domain logic exist and are tested. The first M2 start
+workflow uses direct EC2/SSM integrations and therefore needs no task Lambda yet. Deployable lifecycle functions
+arrive when a step contains real domain logic; pipeline follows in M3, control-plane surfaces and adapters in M4.

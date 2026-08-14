@@ -73,6 +73,20 @@ mock_provider "aws" {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
     }
   }
+
+  override_data {
+    target = data.aws_iam_policy_document.lambda_assume_role
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.lifecycle_coordinator
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
 }
 
 run "free_plan_host_preserves_m0_invariants" {
@@ -196,6 +210,35 @@ run "lifecycle_v2_state_is_inert_protected_on_demand_storage" {
   assert {
     condition     = length(aws_dynamodb_table.lifecycle_v2.ttl) == 0
     error_message = "Lease expiry is a conditional-write fact; DynamoDB TTL must not delete the lifecycle record."
+  }
+}
+
+run "lifecycle_v2_coordinator_is_small_scoped_and_not_wired_to_v1" {
+  command = plan
+
+  assert {
+    condition     = aws_lambda_function.lifecycle_coordinator.runtime == "nodejs24.x" && aws_lambda_function.lifecycle_coordinator.handler == "index.handler"
+    error_message = "Lifecycle coordinator must use the reviewed Node.js 24 bundle contract."
+  }
+
+  assert {
+    condition     = aws_lambda_function.lifecycle_coordinator.timeout == 10 && aws_lambda_function.lifecycle_coordinator.memory_size == 128
+    error_message = "Coordinator is a short atomic step, not a long-running orchestrator."
+  }
+
+  assert {
+    condition     = aws_lambda_function.lifecycle_coordinator.environment[0].variables.LIFECYCLE_TABLE_NAME == aws_dynamodb_table.lifecycle_v2.name
+    error_message = "Coordinator must target only the Lifecycle V2 table selected by Terraform."
+  }
+
+  assert {
+    condition     = toset(local.lifecycle_coordinator_table_actions) == toset(["dynamodb:GetItem", "dynamodb:PutItem"])
+    error_message = "Coordinator table permissions must remain limited to optimistic-CAS reads and writes."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_group.lifecycle_coordinator.retention_in_days == 14
+    error_message = "Coordinator logs must have bounded retention."
   }
 }
 

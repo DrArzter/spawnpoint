@@ -240,3 +240,61 @@ aws dynamodb scan \
 The writable `~/.aws` mount is intentional for this profile: credentials acquired by the newer `aws login` flow use
 an automatically refreshed cache. A read-only mount failed before planning with `failed to refresh cached credentials`;
 it changed no infrastructure. Static credentials should never be added to Terraform files as a workaround.
+
+## Lifecycle V2 Phase 3: inert coordinator Lambda
+
+The coordinator is a short TypeScript Lambda, not an orchestrator. It strongly reads the one lifecycle item, applies
+the pure domain transition and conditionally replaces the item only when its numeric `revision` still matches. A lost
+compare-and-set race causes a bounded reread and retry. Step Functions will still own waits, host commands and the
+minutes-long lifecycle.
+
+The reproducible build uses the pinned dependencies in `lambdas/package-lock.json`:
+
+```bash
+cd lambdas
+npm ci --include=dev
+npm run typecheck
+npm test
+npm run build
+```
+
+`--include=dev` is explicit because the workstation exports `NODE_ENV=production`; an ordinary install correctly
+omitted esbuild. The build fixes the bundled file timestamp to 1980 and strips ZIP metadata. Two consecutive builds of
+the final dependency tree produced identical SHA-256
+`e49b5c89e3d7aa2c98bb4e9ad3f5e7169abe4137d381e078230fcc609cd87839`.
+
+AWS currently supports `nodejs24.x`, so the first deployable handler pins that runtime rather than the already
+deprecated Node.js 20 runtime. The initial production plan was **4 add / 0 change / 0 destroy**:
+
+```text
+aws_lambda_function.lifecycle_coordinator
+aws_iam_role.lifecycle_coordinator
+aws_iam_role_policy.lifecycle_coordinator
+aws_cloudwatch_log_group.lifecycle_coordinator
+```
+
+No V1 role received invoke permission. The coordinator role has exactly `dynamodb:GetItem` and `dynamodb:PutItem` on
+`spawnpoint-lifecycle-v2`, plus `logs:CreateLogStream` and `logs:PutLogEvents` on its own 14-day log group.
+
+### Runtime packaging correction
+
+The first non-writing smoke invocation exposed a real packaging error before any lifecycle item existed:
+
+```text
+Dynamic require of "node:https" is not supported
+```
+
+Bundling AWS SDK v3 as ESM left a dynamic Node built-in `require` path. The handler was rebuilt as CommonJS
+`index.cjs`; the reviewed correction plan contained only one in-place Lambda code update. Adding strict TypeScript
+tooling later changed the installed dependency layout once, so the deterministic final bundle produced one further
+Lambda-only code update. Neither plan changed IAM, DynamoDB, EC2, EBS, S3 or V1 workflows.
+
+The final smoke invoked `get` for a deliberately absent `deployment-smoke` server. It returned the expected typed
+failure:
+
+```text
+LifecycleConflict: lifecycle deployment-smoke is not initialized
+```
+
+That proves the Node 24 bundle loaded and its role completed a consistent `GetItem`, without writing state. A DynamoDB
+`Scan --select COUNT` still returned zero. A fresh Terraform plan after deployment reported `No changes`.

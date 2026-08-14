@@ -44,7 +44,7 @@ calls.
 | --- | --- | --- |
 | 1 — domain model | Pure TypeScript state transitions and invariant tests | V1 remains unchanged and operational |
 | 2 — state store | Add an empty DynamoDB table in a saved add-only Terraform plan | V1 ignores the table |
-| 3 — coordinator | Deploy a short synchronous TypeScript Lambda implementing conditional DynamoDB transitions | Function is inert; no caller references it |
+| 3 — coordinator | Deploy a short synchronous TypeScript Lambda implementing conditional DynamoDB transitions | Function is inert; no V1 caller can invoke it |
 | 4 — host probe | Add and deploy a read-only structured player-count contract | Existing host lifecycle does not call it |
 | 5 — V2 workflows | Create `*-v2` start, stop and watchdog state machines with separate IAM | V1 names remain the owner-script defaults |
 | 6 — acceptance | Invoke V2 explicitly with short timings; exercise conflicts, stale sessions and backup ordering | Failures do not redirect V1 traffic |
@@ -57,6 +57,6 @@ working control plane.
 
 ## Current phase
 
-Phase 2. The pure model is tested and Terraform owns an empty `spawnpoint-lifecycle-v2` DynamoDB table with
-pay-per-request billing, encryption, deletion protection and only the `server_id` partition key. No IAM principal can
-write it through a V2 role yet; no host script or V1 workflow references it.
+Phase 3. The pure model is tested; Terraform owns the empty protected table and a short TypeScript coordinator Lambda
+with consistent reads plus revision-guarded writes. Its role can only `GetItem`/`PutItem` that table and write its own
+bounded logs. No V1 workflow has invoke permission, so production lifecycle behaviour remains unchanged.

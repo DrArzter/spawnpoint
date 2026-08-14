@@ -47,3 +47,13 @@ output "lifecycle_v2_table_arn" {
   description = "Scoped target for the later lifecycle coordinator role."
   value       = aws_dynamodb_table.lifecycle_v2.arn
 }
+
+output "lifecycle_v2_coordinator_function_name" {
+  description = "Inert coordinator Lambda; no V1 workflow has invoke permission."
+  value       = aws_lambda_function.lifecycle_coordinator.function_name
+}
+
+output "lifecycle_v2_coordinator_function_arn" {
+  description = "Scoped target for the later V2 workflow roles."
+  value       = aws_lambda_function.lifecycle_coordinator.arn
+}

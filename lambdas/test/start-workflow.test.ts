@@ -60,6 +60,7 @@ test("start workflow is a closed, reachable graph", async () => {
     if (reachable.has(name)) continue;
     reachable.add(name);
     const state = states[name];
+    assert.ok(state, `reachable state is missing: ${name}`);
     const outgoing = [state.Next, state.Default].filter((value): value is string => Boolean(value));
     for (const choice of state.Choices ?? []) outgoing.push(...choiceTargets(choice));
     queue.push(...outgoing);
@@ -93,7 +94,10 @@ test("every polling loop is bounded and ready follows SSM success", async () => 
   }
 
   const commandChoice = definition.States["Session Command Complete"];
+  assert.ok(commandChoice);
   const success = commandChoice.Choices?.find((choice) => choice.StringEquals === "Success");
   assert.equal(success?.Next, "Ready");
-  assert.equal(definition.States.Ready.End, true);
+  const ready = definition.States.Ready;
+  assert.ok(ready);
+  assert.equal(ready.End, true);
 });

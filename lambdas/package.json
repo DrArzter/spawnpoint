@@ -3,6 +3,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/*.test.ts"
+    "build": "bash scripts/build.sh",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1110.0",
+    "@aws-sdk/lib-dynamodb": "^3.1110.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
   }
 }

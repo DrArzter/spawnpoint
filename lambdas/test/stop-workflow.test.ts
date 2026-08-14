@@ -24,12 +24,15 @@ async function loadDefinition(): Promise<Definition> {
 test("stop workflow stops EC2 only after the host command succeeds", async () => {
   const definition = await loadDefinition();
   const choice = definition.States["Stop Command Complete"];
+  assert.ok(choice);
   const success = choice.Choices?.find((candidate) => candidate.StringEquals === "Success");
 
   assert.equal(success?.Next, "Stop Instance");
   assert.equal(choice.Default, "Session Stop Failed");
+  const stopInstance = definition.States["Stop Instance"];
+  assert.ok(stopInstance);
   assert.equal(
-    definition.States["Stop Instance"].Resource,
+    stopInstance.Resource,
     "arn:aws:states:::aws-sdk:ec2:stopInstances",
   );
   assert.match(
@@ -48,8 +51,11 @@ test("stop workflow has bounded SSM, command and EC2 polling", async () => {
 test("already stopped is a successful idempotent result", async () => {
   const definition = await loadDefinition();
   const initialChoice = definition.States["Route Initial Instance State"];
+  assert.ok(initialChoice);
   const stopped = initialChoice.Choices?.find((candidate) => candidate.StringEquals === "stopped");
 
   assert.equal(stopped?.Next, "Already Stopped");
-  assert.equal(definition.States["Already Stopped"].End, true);
+  const alreadyStopped = definition.States["Already Stopped"];
+  assert.ok(alreadyStopped);
+  assert.equal(alreadyStopped.End, true);
 });

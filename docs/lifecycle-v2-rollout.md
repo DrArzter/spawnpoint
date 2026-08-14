@@ -57,6 +57,8 @@ working control plane.
 
 ## Current phase
 
-Phase 3. The pure model is tested; Terraform owns the empty protected table and a short TypeScript coordinator Lambda
-with consistent reads plus revision-guarded writes. Its role can only `GetItem`/`PutItem` that table and write its own
-bounded logs. No V1 workflow has invoke permission, so production lifecycle behaviour remains unchanged.
+Phase 4 complete; Phase 5 is next. The pure model is tested; Terraform owns the empty protected table and a short
+TypeScript coordinator Lambda with consistent reads plus revision-guarded writes. The host now also has the separate
+`check-session-activity.sh` contract: only a successfully parsed zero-player RCON response is `idle`; stopped compute,
+RCON failure and an unparseable response are `unknown`. No workflow calls the probe yet, no V1 workflow has coordinator
+invoke permission, and production lifecycle behaviour remains unchanged.

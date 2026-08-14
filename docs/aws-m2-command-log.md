@@ -298,3 +298,49 @@ LifecycleConflict: lifecycle deployment-smoke is not initialized
 
 That proves the Node 24 bundle loaded and its role completed a consistent `GetItem`, without writing state. A DynamoDB
 `Scan --select COUNT` still returned zero. A fresh Terraform plan after deployment reported `No changes`.
+
+## Lifecycle V2 Phase 4: inert host activity probe
+
+The host now exposes one narrow, read-only contract for the later idle watchdog:
+
+```bash
+/srv/spawnpoint/app/server/scripts/check-session-activity.sh
+```
+
+Exit `0` is a successful observation and includes `activity=idle|active` and `players_online=<count>`. Exit `2` is an
+unavailable observation and includes `activity=unknown` plus a bounded reason. Raw RCON output and player names are
+never returned. Consequently a transport, container, RCON or parsing failure cannot accidentally become evidence of
+an empty server. `server/tests/session-activity-test.sh` exercises all of those branches with a fake Docker boundary.
+
+The exact committed host payload was built and checked locally before upload:
+
+```bash
+git archive --format=tar b8e441f server |
+  zstd -q -T0 -19 -o /tmp/spawnpoint-server-b8e441f.tar.zst
+sha256sum /tmp/spawnpoint-server-b8e441f.tar.zst
+tar --zstd -tf /tmp/spawnpoint-server-b8e441f.tar.zst
+```
+
+```text
+Git commit: b8e441f
+S3 key: releases/1.0/server/spawnpoint-server-b8e441f.tar.zst
+SHA-256: 2129b06cbbcc1261a1ac17d677759d4949d8696e04b35273caf2d49286c8b071
+S3 version: iCrl9wD._XKDs4c4rxVGMHUphbp96VpM
+SSM command: 18b2b6fb-6faa-483b-abe2-12d43fa5ff9b
+```
+
+EC2 was manually started only for this deployment. The SSM command checked that no Docker container was running,
+downloaded the immutable object with the instance role, verified SHA-256 and safe archive paths, ran the test from
+staging, installed only the new script/test and updated README, then ran the installed test again. The real probe saw
+the deliberately stopped Minecraft container and returned:
+
+```text
+result=unavailable
+activity=unknown
+container_state=exited
+reason=container_not_running
+```
+
+The command finished with response code `0` and empty stderr. A final Docker check was empty. EC2 was then returned to
+`stopped`, and the inert lifecycle table still contained zero items. Neither V1 workflow invokes this probe; Phase 4
+therefore changes no owner-facing start/stop behaviour.

@@ -151,6 +151,7 @@ docs/                       Architecture, roadmap, costs, runbook, measurements,
                             and a command log per milestone
 docs/adr/                   Architecture decision records — start here
 infra/terraform-bootstrap/  The state bucket, created before a state backend can exist
+infra/terraform-guardrails/ Budget, alert topic and anomaly detection — applied before anything that can spend
 infra/terraform-storage/    Buckets that outlive the host, kept in their own state on purpose
 infra/terraform/            The host and everything disposable
 lambdas/                    Control-plane handlers and the shared domain code

@@ -56,6 +56,12 @@ Organizations later.
 
 ## 4. Cost guardrails
 
+> **This whole section is now code.** [`infra/terraform-guardrails`](../infra/terraform-guardrails/) creates the
+> budget, the topic with its per-service policy, and the anomaly monitoring from one `alert_email` variable — the only
+> manual remainder is clicking the confirmation link in the email. The list below stays as the explanation of *what*
+> the code creates and *why*; on this account the resources were first made by hand, and adopting them into Terraform
+> is described in that root's README.
+
 - [x] **A budget**: fixed, monthly, all services, unblended costs. Set it **above the modelled spend and well below a
       surprise** — a threshold that trips in a normal month gets muted, and takes the useful alert with it.
 - [x] **Two alert thresholds**: one **forecasted**, one **actual**. Forecast catches a runaway days early; actual is

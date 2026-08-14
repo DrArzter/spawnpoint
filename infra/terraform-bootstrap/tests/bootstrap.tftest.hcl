@@ -54,6 +54,7 @@ run "state_bucket_is_private_versioned_and_encrypted" {
     ]) == toset([
       "spawnpoint/production.tfstate.tflock",
       "spawnpoint/storage.tfstate.tflock",
+      "spawnpoint/guardrails.tfstate.tflock",
     ])
     error_message = "Versioning must not retain obsolete native lock objects indefinitely."
   }

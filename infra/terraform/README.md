@@ -1,8 +1,10 @@
 # infra/terraform
 
 Disposable game-host AWS resources live here. Persistent object storage has its own lifecycle in
-[`../terraform-storage`](../terraform-storage/), and the state backend in
-[`../terraform-bootstrap`](../terraform-bootstrap/).
+[`../terraform-storage`](../terraform-storage/), cost guardrails in
+[`../terraform-guardrails`](../terraform-guardrails/), and the state backend in
+[`../terraform-bootstrap`](../terraform-bootstrap/). Apply order: bootstrap → guardrails → storage → this root — the
+budget exists before anything that can spend.
 
 Owns now: VPC, subnet, internet gateway, route table, security group, EC2 instance and data volume, and the game-host
 IAM role/policies. Later roots may own Lambda functions, Step Functions, API Gateway, EventBridge, SNS, DynamoDB,

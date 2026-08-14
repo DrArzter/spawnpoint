@@ -57,5 +57,6 @@ working control plane.
 
 ## Current phase
 
-Phase 1 only. No AWS resource, Terraform configuration, host script or V1 workflow references this model yet.
-
+Phase 2. The pure model is tested and Terraform owns an empty `spawnpoint-lifecycle-v2` DynamoDB table with
+pay-per-request billing, encryption, deletion protection and only the `server_id` partition key. No IAM principal can
+write it through a V2 role yet; no host script or V1 workflow references it.

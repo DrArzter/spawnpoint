@@ -170,6 +170,35 @@ run "stop_workflow_is_standard_and_stops_only_after_backup_step" {
   }
 }
 
+run "lifecycle_v2_state_is_inert_protected_on_demand_storage" {
+  command = plan
+
+  assert {
+    condition     = aws_dynamodb_table.lifecycle_v2.billing_mode == "PAY_PER_REQUEST"
+    error_message = "The one-item lifecycle table must not reserve read or write capacity."
+  }
+
+  assert {
+    condition     = aws_dynamodb_table.lifecycle_v2.hash_key == "server_id" && length(aws_dynamodb_table.lifecycle_v2.attribute) == 1
+    error_message = "Lifecycle V2 starts with exactly one item per logical server and no speculative indexes."
+  }
+
+  assert {
+    condition     = aws_dynamodb_table.lifecycle_v2.deletion_protection_enabled
+    error_message = "Shared lifecycle state must not disappear during ordinary compute cleanup."
+  }
+
+  assert {
+    condition     = aws_dynamodb_table.lifecycle_v2.server_side_encryption[0].enabled
+    error_message = "Lifecycle coordination state must be encrypted at rest."
+  }
+
+  assert {
+    condition     = length(aws_dynamodb_table.lifecycle_v2.ttl) == 0
+    error_message = "Lease expiry is a conditional-write fact; DynamoDB TTL must not delete the lifecycle record."
+  }
+}
+
 run "unreviewed_instance_type_is_rejected" {
   command = plan
 

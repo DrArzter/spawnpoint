@@ -172,3 +172,71 @@ It asks for confirmation, starts the durable operation and follows it. `--no-fol
 automation must opt in with `--yes`. A second execution against the stopped host returned `already_stopped`, proving
 the top-level operation is idempotent. Like the start trigger, its list-then-start check is convenience rather than an
 atomic lease; shared start/stop single-flight remains the next control-plane slice.
+
+## Lifecycle V2 Phase 2: inert coordination table
+
+Lifecycle V2 is being built beside the working V1 workflows, following
+[`docs/lifecycle-v2-rollout.md`](lifecycle-v2-rollout.md). Phase 1 added only pure TypeScript transitions and tests.
+Phase 2 added one empty DynamoDB table; V1 has no reference or IAM access to it.
+
+The saved production plan was inspected both as text and JSON. Its complete non-no-op action set was:
+
+```json
+[{"address":"aws_dynamodb_table.lifecycle_v2","actions":["create"]}]
+```
+
+It was **1 add / 0 change / 0 destroy**. The exact saved plan created `spawnpoint-lifecycle-v2`, after which a fresh
+plan reported `No changes`. Independent DynamoDB API checks reported:
+
+```text
+status=ACTIVE
+billing=PAY_PER_REQUEST
+partition_key=server_id (String)
+encryption=ENABLED
+deletion_protection=true
+item_count=0
+```
+
+The table deliberately has no TTL, stream, secondary index, provisioned capacity or writer. Lease expiry will be a
+conditional-write predicate; DynamoDB TTL is asynchronous and must not delete the single current lifecycle record.
+Terraform also has `prevent_destroy`, so ordinary compute cleanup cannot silently remove coordination state after V2
+cutover.
+
+Commands used for the production boundary:
+
+```bash
+docker run --rm \
+  -v "$PWD:/workspace" \
+  -v "$HOME/.aws:/root/.aws" \
+  -w /workspace \
+  hashicorp/terraform:1.15.8 \
+  -chdir=infra/terraform plan -out=tfplan -no-color
+
+docker run --rm \
+  -v "$PWD:/workspace" \
+  -w /workspace \
+  hashicorp/terraform:1.15.8 \
+  -chdir=infra/terraform show -json tfplan
+
+docker run --rm \
+  -v "$PWD:/workspace" \
+  -v "$HOME/.aws:/root/.aws" \
+  -w /workspace \
+  hashicorp/terraform:1.15.8 \
+  -chdir=infra/terraform apply tfplan
+
+aws dynamodb describe-table \
+  --table-name spawnpoint-lifecycle-v2 \
+  --profile spawnpoint \
+  --region eu-central-1
+
+aws dynamodb scan \
+  --table-name spawnpoint-lifecycle-v2 \
+  --select COUNT \
+  --profile spawnpoint \
+  --region eu-central-1
+```
+
+The writable `~/.aws` mount is intentional for this profile: credentials acquired by the newer `aws login` flow use
+an automatically refreshed cache. A read-only mount failed before planning with `failed to refresh cached credentials`;
+it changed no infrastructure. Static credentials should never be added to Terraform files as a workaround.

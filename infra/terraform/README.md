@@ -31,11 +31,17 @@ State backend bootstrap is a one-time, separately stateful Terraform step in
 
 ## Current slice
 
-The current compute/M2 lifecycle slice owns 19 resources: one VPC, one public subnet and route, a
+The current compute/M2 lifecycle slice owns 20 resources: one VPC, one public subnet and route, a
 zero-ingress security group, an SSM-only EC2 role/profile with scoped storage access, one on-demand EC2 host, and one
 separately attached encrypted data EBS, plus Standard start and verified-stop state machines with separate dedicated
-IAM roles/policies. The physical AZ ID is asserted because the volume is zonal. The instance has no SSH key and
-requires IMDSv2.
+IAM roles/policies, and the currently inert Lifecycle V2 coordination table. The physical AZ ID is asserted because
+the volume is zonal. The instance has no SSH key and requires IMDSv2.
+
+`spawnpoint-lifecycle-v2` is an encrypted, deletion-protected, on-demand DynamoDB table keyed only by `server_id`.
+It has no IAM writer, stream, secondary index or provisioned capacity yet, and V1 does not reference it. DynamoDB TTL
+is deliberately disabled: lease expiry is checked atomically by a conditional write, while TTL cleanup is asynchronous
+and must never delete the current lifecycle record. See the additive rollout in
+[`docs/lifecycle-v2-rollout.md`](../../docs/lifecycle-v2-rollout.md).
 
 The game-host role can write and verify backup objects and read immutable release objects. It cannot change bucket
 configuration or delete objects. Exact `5 daily / 2 weekly / 2 monthly` pruning belongs to the later backup operation:

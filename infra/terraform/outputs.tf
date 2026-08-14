@@ -37,3 +37,13 @@ output "stop_state_machine_arn" {
   description = "Standard workflow that backs up a quiet session before stopping EC2."
   value       = aws_sfn_state_machine.stop_server.arn
 }
+
+output "lifecycle_v2_table_name" {
+  description = "Inert until V2 cutover; stores only shared lifecycle coordination state, not operation history."
+  value       = aws_dynamodb_table.lifecycle_v2.name
+}
+
+output "lifecycle_v2_table_arn" {
+  description = "Scoped target for the later lifecycle coordinator role."
+  value       = aws_dynamodb_table.lifecycle_v2.arn
+}

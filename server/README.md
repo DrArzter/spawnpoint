@@ -125,6 +125,25 @@ only adapter switch needed for a LocalStack-compatible endpoint; production code
 `server/tests/backup-s3-test.sh` exercises upload, retry, download and a deliberately corrupt metadata failure without
 network or AWS credentials.
 
+Two more tests guard the paths that protect the world. `release-reconcile-test.sh` covers the release pipeline:
+manifest immutability and schema, and that reconciliation refuses a tampered payload, duplicate entries, a wrong
+loader, a mis-named target and a concurrent run — leaving the live mod directory untouched and no stage or backup
+litter behind. `world-restore-test.sh` covers the backup contract: a byte-identical restore, refusal of the live data
+directory and of a non-empty destination, and verify-archive rejecting a missing or wrong checksum, a truncated
+archive with a fresh checksum, an archive without `level.dat`, and a path-traversal entry.
+
+The tests split by environment. `compose-bindings-test.sh` renders configuration with the real `docker compose`, so it
+runs on the host. The other four need a GNU userland (`realpath -m`, `stat --format`, `mapfile`, `flock`), so on macOS
+they run in a container:
+
+```bash
+docker run --rm -v "$PWD:/repo:ro" alpine:3.20 sh -c '
+  apk add -q bash coreutils findutils diffutils tar zstd jq util-linux openssl >/dev/null
+  for t in backup-s3-test compose-files-test release-reconcile-test world-restore-test; do
+    bash /repo/server/tests/$t.sh || exit 1
+  done'
+```
+
 A boot test also needs the exact release that belongs to the world. `REMOVE_OLD_MODS=true` means reconcile the mod
 directory to the configured desired list; if that list is absent, all copied JARs are removed. This happened during
 the first real restore drill and correctly made Forge reject the modded dimensions. The retry with the matching 111

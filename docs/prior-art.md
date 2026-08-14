@@ -164,6 +164,51 @@ mod manager, a scheduler, backups and a Discord bot — the same job list as thi
 always-on process on the host. Read it as the control experiment: what the same requirements produce without the
 nothing-runs-when-nobody-plays invariant in [docs/architecture.md](architecture.md#what-runs-when-nobody-plays).
 
+### Which games could actually move in
+
+Scored 2026-08-14 against this host's real constraints: a headless Linux dedicated server with a docker image, a
+player-count probe for the idle watchdog, the auth model (does the game need the overlay gate), memory against the
+8/16 GiB instance shapes, and cold start — paid nightly under this lifecycle. Memory figures are community consensus,
+to be measured before any move, the way [docs/measurements.md](measurements.md) measured Minecraft.
+
+| Tier | Game | Why |
+| --- | --- | --- |
+| Moves in almost free | **Factorio** | Official headless server, RCON built in, `factoriotools/factorio-docker` is its itzg. Hundreds of MB, instant start. The mod portal has a real API, so the M3 pipeline maps almost 1:1, and graftorio2 lands in the existing Grafana |
+| Moves in almost free | **Terraria (TShock)** | Tiny, TCP, REST for health and players, whitelist and password. Cheapest tenant of all |
+| Moves in almost free | **Project Zomboid** | Official dedicated server, RCON, and the Workshop distributes mods to clients by itself. 4–8 GiB with mods — the group favourite; see the mod-model note below |
+| Moves in almost free | **7 Days to Die** | Official Linux dedicated, telnet admin, Alloc's map as the companion. 8–12 GiB asks for the 16 GiB shape |
+| With friction | **Valheim** | Dedicated and docker exist, but no RCON — the player probe becomes A2S query or a log tail, the first genuinely per-game `players.sh` |
+| With friction | **Satisfactory** | Official dedicated with an HTTPS API for health; 8–16 GiB |
+| With friction | **Rust** | Dedicated and RCON exist, but 12+ GiB, world generation makes cold start minutes long, and wipe culture wants the several-worlds model of [ADR-0023](adr/0023-multiple-worlds.md) |
+| With friction | **Palworld** | Dedicated and REST exist; notorious memory growth makes 16 GiB a floor, not a ceiling |
+| Does not move in | **Ark** | 16+ GiB and multi-minute starts — the nightly cold start would kill the motivation the roadmap protects |
+| Does not move in | **Kenshi coop, Lethal Company, Raft and most co-op indies** | No dedicated server: the "server" is a rendering, licensed, Steam-logged-in game client — the Porthole disqualification class from [ADR-0024](adr/0024-connectivity-modes.md) |
+
+### Project Zomboid's mod model — the inverse of Minecraft's
+
+Worth its own note because it bends the adapter's mod axis. Checked 2026-08-14; B42 multiplayer reached stable on
+2026-07-29 (42.20), so the near-term risk is B42 mod-ecosystem maturity after the B41/B42 split, not hosting.
+
+- **Minecraft**: distribution is the hard part — every client needs the exact matching JARs, which is why M3/M4
+  exist. Pinning is trivial: a CurseForge file ID is immutable.
+- **Zomboid**: distribution is free — a joining client auto-downloads the server's Workshop items. **Pinning is
+  impossible**: the Workshop has no versions, everything tracks latest. When a mod author pushes an update
+  mid-evening, auto-updated clients mismatch the still-running server and some players cannot join; every guide's fix
+  is "restart the server so it re-pulls".
+
+Two consequences for this project:
+
+1. **The on-demand lifecycle is accidentally an anti-drift mechanism.** An always-on Zomboid server drifts from the
+   Workshop for days; this one restarts every session by design and re-pulls on each boot, shrinking the mismatch
+   window to updates that land mid-session. The remaining sliver is the coordination skeleton of
+   [ADR-0028](adr/0028-update-proposals.md) with the pin step removed: detect the upstream update, announce to chat,
+   restart at the next pause.
+2. **The adapter's mod axis has two legitimate strategies, not a boolean**: *pinned-release* (CurseForge, this
+   project's M3) and *coordinated-latest* (Workshop). Forcing Workshop games into pinned releases means hand-copying
+   mod versions onto the server, which kills the free client distribution — a bad trade for a six-person group. A
+   removed map mod still corrupts a save, so the preview-on-a-copy idea in
+   [ADR-0029](adr/0029-preview-environments.md) and the backup discipline transfer unchanged.
+
 ## Prior art that is not about Minecraft at all
 
 The release pipeline was arrived at from the problem rather than copied, and it landed on a shape that already has

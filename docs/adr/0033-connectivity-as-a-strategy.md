@@ -88,9 +88,16 @@ doing double duty:
 | Running a known-vulnerable version for months | Patch currency is [ADR-0028](0028-update-proposals.md)'s job: updates arrive as proposals instead of never |
 
 **A reverse proxy is deliberately not on that list.** nginx in front of a game port authenticates nobody and games do
-not speak HTTP — it would only relocate the open port and add a process to maintain. The one place a reverse proxy
-would fit, the panel, is already static files behind CloudFront with a managed API — nothing to proxy. Protection for
-a public game port is the game's auth plus blast-radius work, not middleware.
+not speak HTTP — it would only relocate the open port and add a process to maintain. Name-based routing needs a
+protocol that carries a name: HTTP does, TLS does via SNI, the Minecraft handshake does but only game-aware proxies
+(Velocity, BungeeCord) read it, and the UDP games carry none — so consolidating *game* traffic is ports or a game
+proxy, never nginx. Protection for a public game port is the game's auth plus blast-radius work, not middleware.
+
+There is one honest consolidation case, and it is not security: the host serves Grafana over HTTP inside the overlay,
+and the panel is static behind CloudFront — so today there is exactly one thing a proxy could front, for a handful of
+people, on a transport the overlay already encrypts. Not worth a component. If a **second** host-side HTTP service
+appears — a live map is the likely one — a session-scoped proxy joining the Compose session becomes reasonable
+quality-of-life, living and dying with the session like everything else.
 
 **Secrets stay in the operator's own account.** A Tailscale auth key or a ZeroTier API token lives in that operator's
 SSM Parameter Store, referenced by name — never in the repository or in Terraform state. The automation reads it from

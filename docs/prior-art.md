@@ -184,8 +184,14 @@ words are the right ones to use for it: plan, approve, apply, drift.
 **Worth borrowing:** their **policy-as-code** idea, adopted below. Also their run history as an audit surface, and
 their stack dependencies, which are what this design calls groups of mods that must move together.
 
-**Not reused:** the platforms themselves. They orchestrate IaC tools against IaC state, and mods are neither. See the
-"Not Terraform" section of [ADR-0028](adr/0028-update-proposals.md).
+**Not reused:** the platforms themselves — twice over. For mods, they orchestrate IaC tools against IaC state, and
+mods are neither; see the "Not Terraform" section of [ADR-0028](adr/0028-update-proposals.md). And for their native
+job, this project's own Terraform: one operator applying four small roots a few times a month has none of the problems
+they sell answers to (multi-user RBAC, policy gates, drift dashboards) — and any such SaaS holds apply-rights
+credentials to the AWS account, a third party with write access that this project keeps declining. The real remaining
+need, plan-on-pull-request and a scheduled drift check, is the "CI for infrastructure" placeholder in
+[the ADR index](adr/README.md#decisions-still-to-record): GitHub Actions assuming a role through OIDC, the same
+thin-client mechanism as ADR-0028. Reconsider only if this ever becomes a multi-operator service.
 
 ### Renovate and Dependabot — where the proposal comes from
 

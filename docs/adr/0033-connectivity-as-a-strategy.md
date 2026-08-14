@@ -50,10 +50,19 @@ Concrete strategies:
 | Route 53 | No | A hosted zone plus a registered domain — a real annual cost | Upsert an A record to the current public IP through the AWS API, in-account and keyless. Uniquely **re-enables the implicit DNS-wake trigger** the overlay removed. See [ADR-0006](0006-on-demand-start-and-idle-shutdown.md) |
 | Overlay | **Yes** | Free tier, plus per-device onboarding | The host joins a user-provided overlay network. Identity persisted on the data volume so the address is stable across sessions — already done for ZeroTier |
 
-**Valid overlays are only those with a headless client and a non-interactive join.** Tailscale (a pre-authorised auth
-key) and ZeroTier (a network id, plus either a manual authorise or the Central API token) qualify. Desktop-GUI VPNs —
-Radmin, Hamachi — do not, for exactly the reason Porthole was disqualified in [ADR-0024](0024-connectivity-modes.md):
-they need a logged-in desktop client and have no place on a headless, disposable host.
+**A valid overlay needs a headless client and a credential-based, non-interactive join** — ideally an API or an auth
+key, so a fresh host joins unattended and membership is managed without a human clicking in a console. Tailscale (a
+pre-authorised auth key) and ZeroTier (a network id plus the Central API token, or a one-time manual authorise) meet
+this cleanly.
+
+The two often named alongside them do not, and for different reasons:
+
+- **Hamachi** *does* ship a headless Linux daemon (`logmein-hamachi`, driven by the `hamachi` CLI), so it can join a
+  network from a script — an earlier draft of this ADR was wrong to say it could not. It is still not the pick:
+  membership is managed through the LogMeIn web account with no clean API, the free network caps at five members, and
+  the Linux client has been neglected for years. Possible, not recommended.
+- **Radmin VPN** is genuinely out: Windows-only, no Linux or headless client at all — the same reason Porthole was
+  disqualified in [ADR-0024](0024-connectivity-modes.md), with no place on a headless, disposable host.
 
 **The invariant, enforced at the seam rather than in prose:**
 

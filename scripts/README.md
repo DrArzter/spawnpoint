@@ -9,6 +9,7 @@ Available:
 | --- | --- |
 | `audit-aws-bootstrap.sh` | Read-only verification of browser credentials, IAM MFA and keys, budget alerts, recipients and SNS subscriptions. See [the command reference](../docs/aws-cli-checks.md) |
 | `start-server.sh` | Start or join the M2 Standard Workflow and optionally follow it until Minecraft is ready |
+| `status-server.sh` | Read-only EC2, workflow, storage, latest-backup and live private-endpoint status |
 | `stop-server.sh` | Save, back up and stop through the M2 Standard Workflow; refuses while players are online |
 
 Planned:
@@ -35,6 +36,9 @@ without them.
 not reproduce the EC2/SSM sequence: that remains in Step Functions. Use `--no-follow` to return immediately after
 receiving the execution ARN; without it, the script follows the durable AWS execution until its terminal result.
 Stopping asks for confirmation; automation must opt in explicitly with `--yes`.
+
+`status-server.sh` makes no state-changing calls. When EC2 is running it also probes Minecraft and Grafana through
+their private ZeroTier addresses; an unreachable probe does not change or restart anything.
 
 **Status:** the account-bootstrap audit and minimal M2 start/stop triggers exist. `cut-release.sh` arrives in M3, the
 rest as needed.

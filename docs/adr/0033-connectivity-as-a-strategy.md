@@ -74,6 +74,24 @@ if not game.auth_provides_identity and not strategy.is_gate:
 So offline-mode Minecraft may run only behind a gating strategy; a self-authenticating game may use any. This is the
 prose of [ADR-0022](0022-minecraft-account-as-linked-identity.md) turned into a rule that cannot be forgotten.
 
+### What a non-gating strategy exposes, and what already answers it
+
+A public game port is found by mass scanners within hours — that is background radiation, not a targeted attack. Worth
+recording what that traffic can and cannot do, because the mitigations are not new work; they are existing decisions
+doing double duty:
+
+| Threat at a public port | What answers it |
+| --- | --- |
+| Join attempts by strangers | The game's own authentication — which is exactly what the invariant above requires before a non-gating strategy is allowed at all |
+| Automated exploitation of a known server vulnerability, typically ending in a crypto miner | The real risk, and Minecraft has lived it (Log4Shell). Blast radius, not prevention: the security group opens the game port and nothing else; the server runs in a container; **IMDSv2 with `hop_limit=1` means a compromised container cannot reach the instance role's credentials**; and the role could not launch instances anyway, so the account cannot be turned into a mining fleet |
+| A miner squatting on the host itself | The idle stop is keyed to **player count**, not CPU — `stop-session.sh` refuses to stop only while players are online, so a busy-but-empty host is stopped at the next idle check. The running-hours alarm and the budget are the backstops behind that |
+| Running a known-vulnerable version for months | Patch currency is [ADR-0028](0028-update-proposals.md)'s job: updates arrive as proposals instead of never |
+
+**A reverse proxy is deliberately not on that list.** nginx in front of a game port authenticates nobody and games do
+not speak HTTP — it would only relocate the open port and add a process to maintain. The one place a reverse proxy
+would fit, the panel, is already static files behind CloudFront with a managed API — nothing to proxy. Protection for
+a public game port is the game's auth plus blast-radius work, not middleware.
+
 **Secrets stay in the operator's own account.** A Tailscale auth key or a ZeroTier API token lives in that operator's
 SSM Parameter Store, referenced by name — never in the repository or in Terraform state. The automation reads it from
 the operator's account; nobody else holds it. Consistent with [ADR-0031](0031-first-class-local-control-plane.md) and

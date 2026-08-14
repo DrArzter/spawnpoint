@@ -4,25 +4,39 @@ A self-built control plane for one modded Minecraft server on AWS. It starts the
 asks for it, stops it when the last player leaves, treats the mod set as a versioned artefact, and hands
 every player the matching client pack.
 
-The name is a working title. Check it is free on GitHub before claiming it; renaming costs one
-`git mv` and a find-and-replace, and is cheap now, awkward later.
+The name is a working title.
 
-> **Status: design stage.** Nothing is deployed. This repository currently holds the architecture, the
-> decision records, the cost model and the roadmap. Code starts at milestone M0.
+> **Status: running on AWS.** M0 and M1 are done. The server is live on EC2, reachable only inside the overlay, rebuilt
+> from Terraform, and its world has been restored from an S3 archive in a real drill rather than a thought experiment.
+> M2 is in progress: start and stop are durable Step Functions workflows, and the idle watchdog is not built yet, so the
+> server is still stopped deliberately rather than automatically.
 >
-> **Starting from here?** Not with AWS. Run the pack locally, play one evening, and fill in
-> [docs/measurements.md](docs/measurements.md) — eight numbers that turn most of the open questions below into
-> arithmetic, for no money and no infrastructure.
+> The two tables below separate what runs from what is only designed. Command-by-command records of what was actually
+> executed, with verification and rollback beside each change: [M0](docs/aws-m0-command-log.md),
+> [M1](docs/aws-m1-command-log.md), [M2](docs/aws-m2-command-log.md).
 
-## What it does
+## What runs today
 
 | Capability | Detail |
 | --- | --- |
-| On-demand server | Started by an explicit request from the web panel, Discord or Telegram. Stops itself when idle |
+| A server with no inbound ports | The security group has no inbound rules at all. The game is reachable only inside the ZeroTier overlay, and SSM reaches the host over its outbound connection. See [ADR-0024](docs/adr/0024-connectivity-modes.md) and [ADR-0007](docs/adr/0007-ssm-instead-of-ssh.md) |
+| Rebuilt from Terraform | Three roots: the state bucket, the storage that outlives the host, and the host itself. Buckets live in separate state, so an ordinary host teardown cannot take the backups with it |
+| Backups that were actually restored | The world is archived to S3 and verified after upload. On 2026-08-13 an archive was downloaded by the instance role, restored onto a fresh volume, reconciled against release `1.0`, and a player joined the recovered world |
+| Start and stop as durable operations | Step Functions Standard. Stop rechecks the player count, flushes the world, stops every session container, verifies an immutable backup, and only then stops the instance |
+| An immutable release, cut by hand | Release `1.0`: 111 JARs, pinned and hashed. The pipeline that produces the next one is M3 |
+| Per-session observability | Prometheus and Grafana come up with the session and go down with it. Prometheus binds to loopback; Grafana is reachable only inside the overlay |
+
+## What is designed, not built
+
+Every row below has a decision record behind it and no code yet. Read the roadmap for the order.
+
+| Capability | Detail |
+| --- | --- |
+| Started by anyone, stopped by itself | An explicit request from the panel or a bot, and an idle watchdog that saves and stops. Today both ends are a script the owner runs |
 | Versioned mod releases | A mod set is immutable. Desired is the requested version; active is the last version that passed health checks |
 | Automatic mod deployment | Promoting a release saves the world, syncs mods, restarts the server, and rolls back if it fails to start |
-| Updates you approve, not updates that happen | A scheduled check resolves every mod, diffs by hash, and proposes a release. Five changed mods with changelogs is a decision; a server that updated itself is an incident |
-| Preview environments per proposal | A pull request boots a throwaway server on a copy of the real world. Join it and look at your base before approving. Under a cent a run |
+| Updates you approve, not updates that happen | A scheduled check resolves every mod, diffs by hash, and opens a pull request. Five changed mods with changelogs is a decision; a server that updated itself is an incident |
+| Preview environments per proposal | A pull request boots a throwaway server on a copy of the real world. Join it and look at your base before approving. A few cents a run |
 | Matching client pack | Every release generates a launcher-importable pack, published at a stable URL |
 | One API, several surfaces | Web panel, Discord bot, Telegram bot and CLI are all clients of the same control-plane API |
 | Sign in with an account you have | Cognito with Google. No passwords stored, anywhere |
@@ -30,9 +44,7 @@ The name is a working title. Check it is free on GitHub before claiming it; rena
 | Then sign in from chat too | Once linked, `/panel` in the bot returns a one-minute sign-in link. A chat account never creates an identity, only signs into one it is linked to |
 | Whitelist that maintains itself | The Minecraft identity is a third link, and `whitelist.json` is generated from the link table. Remove someone once, and they lose the panel, the bots and the game |
 | Several worlds, one at a time | Each pack is a world with its own release line, save data and backups. Start the one you want; the others cost only storage |
-| Connectivity you can choose | Raw address, DNS on your own domain, or an overlay network with no public port. One contract, three modes |
 | Chat notifications | "X requested the server", "server ready", "release 1.4 promoted", "backup failed" |
-| Backups you can restore | World archived after every session and before every release, with a restore drill that was actually run |
 
 ## Why it exists
 
@@ -91,9 +103,9 @@ flowchart LR
     end
 
     subgraph Runtime
-        EC2[EC2 Spot instance<br/>Docker: game server]
+        EC2[EC2 on-demand instance<br/>Docker: game server]
         EBS[(EBS: worlds)]
-        NET[Connectivity<br/>address, DNS, or overlay]
+        NET[Connectivity<br/>ZeroTier overlay today]
         CW[CloudWatch<br/>metrics, logs, alarms]
     end
 
@@ -125,28 +137,39 @@ Four flows carry the whole design:
 | Start | Explicit request from a surface, with an identity | Operation created → instance started → connection string published → mods reconciled against the desired release → health check → active committed → "ready" announced |
 | Stop | No players for N consecutive checks | World saved → archived to S3 → instance stopped → session length announced |
 | Release | A deployment operation writes the desired release | Announce → save and stop container → sync mods → start → health check → commit active, or roll back |
-| Interruption | Spot two-minute notice | Save world → stop container cleanly → announce → next start reattaches the volume |
+| Restore | The volume is lost, or a release ate content | Newest verified archive downloaded by the instance role → restored onto a fresh volume → release reconciled → health check → play |
+
+A fifth flow, handling a Spot two-minute notice, is designed but **not in use**: the project runs on-demand while
+[ADR-0027](docs/adr/0027-spot-request-shape.md) stays deferred.
 
 Full description, including failure modes: [docs/architecture.md](docs/architecture.md).
 
 ## Repository layout
 
 ```
-docs/              Architecture, roadmap, cost model, runbook, prior art, measurements, AWS account checklist
-docs/adr/          Architecture decision records — start here
-infra/terraform/   Terraform for all AWS resources
-lambdas/           Control-plane handlers, lifecycle automation, chat adapters
-workflows/         Step Functions ASL definitions for long-running operations
-server/            Container definition and on-instance scripts
-web/               Static control panel and pack download site
-scripts/           Local helpers: cut a release, restore a backup, check cost
+docs/                       Architecture, roadmap, costs, runbook, measurements, AWS checklist,
+                            and a command log per milestone
+docs/adr/                   Architecture decision records — start here
+infra/terraform-bootstrap/  The state bucket, created before a state backend can exist
+infra/terraform-storage/    Buckets that outlive the host, kept in their own state on purpose
+infra/terraform/            The host and everything disposable
+lambdas/                    Control-plane handlers and the shared domain code
+workflows/                  Step Functions ASL definitions for long-running operations
+server/                     Compose files, on-instance scripts, tests, observability, release contents
+scripts/                    Owner-side helpers: start, stop, audit the account bootstrap
+local/                      The local control-plane environment of ADR-0031
+web/                        Static panel and pack site — not built
 ```
 
 ## Decisions
 
-The decision records are the most useful part of this repository today. Thirty-two of them, each with the
-alternatives that were rejected and why — including one superseded and one rejected the same day it was written, which
-is the process working rather than failing.
+Thirty-two records, each with the alternatives that were rejected and why. Three have been superseded and one was
+rejected the same day it was written, which is the process working rather than failing — as is
+[ADR-0032](docs/adr/0032-on-demand-single-instance.md) replacing ADR-0004 rather than editing it a ninth time.
+
+Measurements deliberately do **not** live in these files. They live in
+[docs/measurements.md](docs/measurements.md), [docs/costs.md](docs/costs.md) and [docs/runbook.md](docs/runbook.md),
+which are allowed to change. The reason is written up in [docs/adr/README.md](docs/adr/README.md).
 
 | ADR | Decision | Status |
 | --- | --- | --- |
@@ -187,24 +210,26 @@ Index, template and the decisions still to make: [docs/adr/README.md](docs/adr/R
 
 ## Cost
 
-The target is a low double-digit USD figure per month for a few evenings of play a week, with the fixed
-part — the part billed whether anybody plays or not — kept to a few USD. The model, the drivers and the
-traps are in [docs/costs.md](docs/costs.md).
+**About $12.45 a month at list price**, and lower while the Free Plan credits apply — for a few evenings of play a
+week, with the fixed part kept to a few dollars. Comfortably under the $20 budget alarm.
 
-Every figure in this repository is indicative, and marked where it needs verification against the AWS
-pricing pages for the chosen region.
+The figures are now measured rather than estimated: real instance prices, a real world size, a real backup. The model,
+the drivers, the traps and an honest comparison against a rented box are in [docs/costs.md](docs/costs.md).
+
+One line dominates everything else, and it is not the instance type: **stopping when nobody plays.** Always on is about
+$129 a month. That is why a stop that silently fails is treated as an incident.
 
 ## Roadmap
 
-| Milestone | Outcome |
-| --- | --- |
-| M0 | A playable server, built by hand, deliberately throwaway |
-| M1 | The same thing rebuilt in Terraform, with backups and a tested restore |
-| M2 | On-demand start and idle stop, with a stable hostname |
-| M3 | Versioned mod releases and the deployment pipeline |
-| M4 | Control panel, Discord and Telegram bots, client pack distribution |
-| M5 | Observability, alerting and cost guardrails |
-| M6 | Several worlds — vanilla-plus, techno, magic, techno-magic — one active at a time |
+| Milestone | Outcome | State |
+| --- | --- | --- |
+| M0 | A playable server, built by hand, deliberately throwaway | **Done** 2026-08-13 |
+| M1 | The same thing rebuilt in Terraform, with backups and a tested restore | **Done** 2026-08-13 |
+| M2 | On-demand start and idle stop, over a stable overlay address | **In progress** — start and stop workflows run; the idle watchdog and the running-hours alarm are next |
+| M3 | Versioned mod releases and the deployment pipeline | Release `1.0` cut by hand; the pipeline is not built |
+| M4 | One bot and an allow-list; client pack distribution | |
+| M5 | Observability, alerting and cost guardrails | Session Grafana already runs; the durable alarms do not |
+| M6 | Several worlds — vanilla-plus, techno, magic, techno-magic — one active at a time | |
 
 Definition of done per milestone: [docs/roadmap.md](docs/roadmap.md).
 
@@ -222,7 +247,7 @@ Definition of done per milestone: [docs/roadmap.md](docs/roadmap.md).
 | Connectivity mode | How players reach the server: raw address, DNS, or overlay network |
 | Cold start | Time from a start request to the server accepting connections |
 | Idle watchdog | The check that stops the instance when nobody is online |
-| Spot interruption | AWS reclaiming the instance, with a two-minute warning |
+| Spot interruption | AWS reclaiming the instance, with a two-minute warning. Designed for, not in use — see [ADR-0027](docs/adr/0027-spot-request-shape.md) |
 
 ## Licence
 

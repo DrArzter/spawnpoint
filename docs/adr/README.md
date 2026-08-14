@@ -26,15 +26,19 @@ collected eleven before it was accepted.
 
 ## Start here — most of this is not blocking
 
-Thirty-two records is a wall, and a wall is not a plan. Almost none of it blocks anything you can do this week.
+Thirty-two records is a wall, and a wall is not a plan. Read the two or three that cover what you are building now.
 
 | To do this | You need |
 | --- | --- |
-| **Session zero** — run the pack locally, play an evening, fill in [measurements](../measurements.md) | **Nothing here** |
-| **M0** — a playable server, by hand | [0005](0005-containerised-game-server.md) container, [0022](0022-minecraft-account-as-linked-identity.md) `online-mode=false` and whitelist, [0024](0024-connectivity-modes.md) mode A |
+| ~~Session zero and M0~~ | **Done.** [docs/aws-m0-command-log.md](../aws-m0-command-log.md) records what was actually run |
+| ~~M1~~ | **Done.** [0011](0011-terraform-for-infrastructure.md), [0010](0010-world-persistence-and-backups.md), [0007](0007-ssm-instead-of-ssh.md) |
+| **M2** — finish on-demand: idle watchdog, running-hours alarm | [0006](0006-on-demand-start-and-idle-shutdown.md), [0025](0025-step-functions-for-long-operations.md), [0032](0032-on-demand-single-instance.md) |
+| M3 — releases and the pipeline | [0008](0008-versioned-mod-releases.md), [0030](0030-desired-and-active-release.md), then [0028](0028-update-proposals.md) and [0029](0029-preview-environments.md) |
 | Everything else | Later. Read when the milestone arrives |
 
-So: three records for the first real step, and none at all for the step before it.
+M0 was built on **mode C**, not the mode A this table used to name: the security group ended up with no inbound rules
+at all, and the game is reachable only inside the overlay. Better than planned, and worth recording as the thing that
+changed rather than quietly correcting.
 
 **Freeze lifted** on 2026-08-12, when `server/compose.yaml` landed. The rule it leaves behind stands: a decision is
 written down when it is about to be implemented, not instead of implementing it. See

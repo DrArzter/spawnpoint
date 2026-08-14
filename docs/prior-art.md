@@ -37,6 +37,30 @@ after a period with no connections.
 **Constraint to remember:** its trigger Lambda must live in `us-east-1`, because Route 53 ships query logs
 only to that region. If the implicit wake is ever added here, that constraint comes with it.
 
+### mc-router, Infrared, lazymc — wake-on-connect, implemented three times
+
+<https://github.com/itzg/mc-router> · <https://github.com/haveachin/infrared> · <https://github.com/timvisee/lazymc>
+
+Found 2026-08-14. [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md) declined "a proxy holding the player's
+connection while the server boots — the nicest possible wake" as needing an always-on process. That alternative is not
+hypothetical: it exists at least three times over. `mc-router` — by **itzg, the author of this project's server image**
+— routes clients by the hostname in the Minecraft handshake, and when the target container is stopped it starts it,
+holding the client with a loading MOTD. Infrared calls the same thing "autostart when pinged" plus an "idle
+placeholder"; lazymc sleeps a local server and wakes it on connect.
+
+**Worth borrowing**
+
+- The framing: this project's start workflow is a *distributed lazymc* — the same sleep-and-wake behaviour with the
+  always-on process replaced by Step Functions, so that nothing runs when nobody plays.
+- If measured cold-start friction ever demands the implicit wake, the answer is a known project on a tiny always-on
+  host, not something to design from scratch.
+
+**Not reused**
+
+- All three are resident processes, which is exactly the invariant in
+  [docs/architecture.md](architecture.md#what-runs-when-nobody-plays). The decline in ADR-0006 stands; it now points at
+  named projects instead of a hypothesis.
+
 ## The game container
 
 ### `itzg/docker-minecraft-server`
@@ -92,6 +116,53 @@ assume an always-on host, which contradicts the design.
 ### Kubernetes operators, for example `Shulker`
 
 Mentioned only for completeness. Rejected with the platform in [ADR-0014](adr/0014-no-kubernetes.md).
+
+## Across other games — routing and companions
+
+Surveyed 2026-08-14, prompted by the per-game adapter placeholder in [the ADR index](adr/README.md#decisions-still-to-record)
+and the strategy interface in [ADR-0033](adr/0033-connectivity-as-a-strategy.md). Two questions: can several games
+share one address, and what web companions would ride on a session.
+
+### Name-based routing exists exactly where the protocol carries a name
+
+- **Minecraft**: the handshake carries the requested hostname, so a whole proxy ecosystem exists — the wake-on-connect
+  trio above, plus gameplay-level proxies (Velocity, BungeeCord).
+- **Terraria**: TCP with a rich server API. `Dimensions` (<https://github.com/popstarfreas/Dimensions>) is a routing
+  and load-balancing proxy over TShock; players teleport between backing servers through it.
+- **Factorio, Project Zomboid, Valheim, Rust and the rest of the Steam-UDP family**: impossible by protocol, not by
+  neglect. The client resolves the domain itself and sends UDP to an address — the name never reaches the server, so
+  there is nothing to route on (<https://forums.factorio.com/viewtopic.php?t=42878>). Several servers on one host means
+  one port each.
+
+**Consequence for the adapter:** "can share one address" is a per-game property, like the auth model in
+[ADR-0033](adr/0033-connectivity-as-a-strategy.md) — TCP-with-a-name games can consolidate; UDP games take a port each
+and the connection string simply includes it.
+
+### Web companions — the live map is nearly universal
+
+What the second host-side HTTP service — the one that justifies the session proxy in
+[ADR-0033](adr/0033-connectivity-as-a-strategy.md) — would actually be, per game:
+
+| Game | Companion | Note |
+| --- | --- | --- |
+| Minecraft | BlueMap, Dynmap, squaremap; Plan for player analytics | The richest ecosystem, as usual |
+| 7 Days to Die | Alloc's Server Fixes web map, with CSMM built on its API | Semi-official; a map plus a server web API out of one mod |
+| Valheim | `valheim-webmap` (<https://github.com/h0tw1r3/valheim-webmap>) | Server-side only BepInEx mod: browser map, pins from chat, players need nothing |
+| Project Zomboid | `zomboid-control-panel` (<https://github.com/fpsacha/zomboid-control-panel>) | See below — much more than a map |
+| Terraria | Map-snapshot plugins; TShock's REST API (<https://tshock.readme.io/reference/rest-api-endpoints>) | The API is the interesting part: server control over HTTP |
+| Factorio | **`graftorio2`** (<https://github.com/remijouannet/graftorio2>) | No map; the ecosystem went to metrics instead — a mod exporting factory statistics to Prometheus for Grafana |
+
+Two of these matter beyond the list:
+
+**`graftorio2` slots into this project without a single new component.** The session already runs Prometheus and
+Grafana per [ADR-0015](adr/0015-observability-and-alerting.md); a Factorio session would add one scrape target and one
+dashboard to the same stack. That is the strongest confirmation yet that the per-game adapter's "companions" axis is
+real and reusable, not speculation.
+
+**`zomboid-control-panel` is this project built as a monolith.** Server control, an RCON console, a live player map, a
+mod manager, a scheduler, backups and a Discord bot — the same job list as this control plane, delivered as one
+always-on process on the host. Read it as the control experiment: what the same requirements produce without the
+nothing-runs-when-nobody-plays invariant in [docs/architecture.md](architecture.md#what-runs-when-nobody-plays).
 
 ## Prior art that is not about Minecraft at all
 

@@ -97,7 +97,10 @@ There is one honest consolidation case, and it is not security: the host serves 
 and the panel is static behind CloudFront — so today there is exactly one thing a proxy could front, for a handful of
 people, on a transport the overlay already encrypts. Not worth a component. If a **second** host-side HTTP service
 appears — a live map is the likely one — a session-scoped proxy joining the Compose session becomes reasonable
-quality-of-life, living and dying with the session like everything else.
+quality-of-life, living and dying with the session like everything else. When that day comes, the leaning is
+**Traefik**, precisely because its Docker provider builds routes from container labels: services that appear and
+disappear with the session declare their own routing, with no config file to keep in sync. Caddy is the simpler
+runner-up; a hand-maintained nginx config for a set of containers that changes per game is the wrong shape.
 
 **Secrets stay in the operator's own account.** A Tailscale auth key or a ZeroTier API token lives in that operator's
 SSM Parameter Store, referenced by name — never in the repository or in Terraform state. The automation reads it from

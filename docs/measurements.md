@@ -1,11 +1,11 @@
 # Measurements
 
-Nine blanks. Filling them turns most of the open questions in the ADRs from opinion into arithmetic.
+Nine numbers the ADRs need. Most are now answered — from a local evening first, then from the real M0 and M1 runs on
+AWS — and each answer carries the date and pack version beside it, because they all change when the pack does.
 
-All of them can be answered by running the intended pack locally with the `itzg` image and playing one evening with
-the group. No AWS account, no Terraform, no spending. Do this before M0.
-
-Record the date and the pack version beside each answer, because they all change when the pack does.
+This began as a pre-M0 to-do list: measure locally for nothing before guessing anything in the console. That worked,
+and the history is kept below rather than deleted. What is still open is narrow — milliseconds per tick under real load,
+and peak memory with the whole group rather than one player — and both are M2-or-later, blocking nothing already built.
 
 ## The blanks
 
@@ -39,13 +39,16 @@ Powah, Create — plus Sinytra Connector running Fabric mods on Forge. Two conse
 | How | Play with everybody on. Watch container memory, and the JVM heap the server reports |
 | Unblocks | Instance size in [ADR-0032](adr/0032-on-demand-single-instance.md). This is the number that decides the hourly rate |
 
-4 GB for 111 tech mods is already the lower end of the JVM heap bracket, and it works. The container snapshot confirms
-that a 4 GiB EC2 instance is insufficient: total container-accounted memory reached 5.863 GiB, about **1.86 GiB above
-the configured maximum Java heap**. The starting instance therefore needs at least 8 GiB. That leaves only about
-2.14 GiB before the physical 8 GiB ceiling for load growth, the operating system, Docker and the overlay agent. Since
-this was already reached with one exploring player, **16 GiB is the safer starting point for the first AWS run**. A
-full-group measurement decides whether downsizing to 8 GiB is safe rather than making 8 GiB the optimistic starting
-assumption.
+4 GB for 111 tech mods is already the lower end of the JVM heap bracket, and it works. Local `docker stats` reached
+5.863 GiB of container-accounted memory, about **1.86 GiB above the configured maximum Java heap** — so a 4 GiB instance
+is out, and 16 GiB was the planned starting size.
+
+**The first AWS run happened on 8 GiB, not 16.** The Free Plan permits `m7i-flex.large` and not a 16 GiB `r` type, and
+it held: one player, host memory peaking at **78.46%**, no OOM kill and no restart. So 8 GiB is proven for one player
+and 16 GiB is the reviewed upgrade for the full group — the reverse of the original "16 to be safe, downsize later", and
+a better order, because the cheap shape earned its place with a measurement instead of an assumption. The full-group
+session decides whether the `r8i-flex.large` upgrade, and with it Paid Plan, is needed. See
+[ADR-0032](adr/0032-on-demand-single-instance.md).
 
 Record the peak, not the average, and note how many players produced it. Watch CPU as well: the useful figure is how
 many cores' worth the server actually uses under load.
@@ -269,21 +272,17 @@ beats the originally selected non-Flex sibling on price for a workload that does
 | --- | --- |
 | Unblocks | The region in [ADR-0002](adr/0002-host-on-aws.md) — **together with latency above** — and the instance-type list in [ADR-0027](adr/0027-spot-request-shape.md) |
 
-This decides the region jointly with latency, and it decides whether the cost model survives: the Spot discount is
-load-bearing, not an optimisation. See [docs/costs.md](costs.md).
+This once decided the region jointly with latency. Both are settled now — `eu-central-1`, on-demand — so it is dormant
+research for the day Spot is reconsidered. The earlier claim that the Spot discount was "load-bearing" is retracted: the
+model was rebuilt on real on-demand prices and stands on stopping when idle, not on the discount. See
+[docs/costs.md](costs.md).
 
-### Before measuring anything: three one-time things
+### The account setup that used to live here — done
 
-Do these first. They take five minutes and two of them cannot be done retroactively.
-
-1. **MFA on the root account**, then stop using root. Create a normal administrative identity for daily work. Root with
-   no MFA is the single largest cost exposure in [docs/costs.md](costs.md), because it is the route to the
-   four-figure stories.
-2. **A Budgets alarm**, before any long-running resource exists. Set it well above the ~$7 model — $20 is a sensible
-   line that means "something is wrong" rather than "we played a lot".
-3. **Confirm which plan the account is on.** Stay on Free while the measured `m7i-flex.large` is sufficient, but keep
-   an independent world copy outside the account and move to Paid before plan expiry or a 16 GiB upgrade. See
-   [docs/costs.md](costs.md).
+This was a five-minute account checklist to run before any resource existed. It is done, and it graduated into its own
+document once it grew past five minutes: [docs/aws-account-checklist.md](aws-account-checklist.md), with the recorded
+values in [the runbook](runbook.md#account-bootstrap). Root MFA, the administrative identity, the Budgets alarm and the
+plan decision all live there now.
 
 ### Which instance types to price
 
@@ -333,23 +332,12 @@ Worth knowing rather than deciding, because it means the network gate in
 [ADR-0024](adr/0024-connectivity-modes.md) is mandatory rather than advisable. See
 [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
 
-## What is left, and it is not measurement
+## Where this stands
 
-Nothing above still blocks M0. What remains in the AWS console is **setup**, not research:
+M0 and M1 are built, so this is no longer a gate in front of anything — it is the record the later milestones read from.
+The instance size, volume size, region and connectivity mode were chosen from the numbers above rather than guessed, and
+[docs/costs.md](costs.md) now carries the real figures rather than placeholders.
 
-1. **MFA on root, then stop using it.** Create a normal administrative identity — the sequence, including the billing
-   toggle that only root can flip, is in [the runbook](runbook.md#account-bootstrap).
-2. **A Budgets alarm at about $20.** Above the expected Free Plan-backed session pattern, well below a surprise. A
-   failed stop can consume the finite credits and then cost about $91/month at the current list rate.
-3. **Pick one Availability Zone in `eu-central-1` and write it down.** The data volume is zonal, so this choice binds
-   every later launch. See [ADR-0032](adr/0032-on-demand-single-instance.md).
-4. **Confirm the account is on the Free plan** — correct while `m7i-flex.large` remains sufficient. Preserve an
-   independent world copy and move to Paid before expiry or the reviewed 16 GiB upgrade. See [docs/costs.md](costs.md).
-
-Then M0 is building rather than deciding.
-
-## Then what
-
-With these filled in, M0 is no longer a guess: the instance size, the volume size, the region and the connectivity
-mode all follow from the numbers. Update [docs/costs.md](costs.md) with the real figures at the same time, replacing
-the placeholders.
+Two measurements are still genuinely open, both M2-or-later and neither blocking: **milliseconds per tick under real
+load** with the group on, and **peak memory with the full group** rather than one player — the number that decides
+whether the 8 GiB Free Plan host gives way to the reviewed 16 GiB upgrade.

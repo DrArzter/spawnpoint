@@ -369,13 +369,15 @@ general-purpose families give real vCPUs rather than burstable credits, so the h
 
 Read that way the ordering is clear, and it settles an argument this document has now had three times:
 
-**EC2 Spot is the cheapest option on the table for like-for-like memory** — about a quarter of the dedicated VPS row
-that carries 16 GB. Part of that is the Spot discount, which is why [ADR-0027](adr/0027-spot-request-shape.md) treats it
-as load-bearing rather than as an optimisation, and part is being able to buy memory without buying cores.
+**At like-for-like memory the cloud on-demand host is not the expensive option** — it is level with, or cheaper than,
+the rented box. The 16 GiB comparison is about **$15.79 against €28.50**, because the VPS ladder only sells 16 GB on its
+8-core rung while this workload uses about a fifth of one core. Spot would be cheaper still — around $7.70 — but it is
+deferred ([ADR-0027](adr/0027-spot-request-shape.md)), and the model no longer leans on that discount.
 
-So the trade is now precise. Moving the game server to a rented box costs roughly **€6–20 a month more**, and buys: no
-capacity risk, no interruptions, no fleet, no AMI, a static address, and a shorter cold start. That is a real thing to
-buy. It is simply not a discount, and this document previously implied it was.
+So the trade is precise, and it is the opposite of what this document once claimed. A rented box is cheaper **only if
+you drop memory or accept a shared CPU** — the €7.50 to €14 rows, all of them 8 GB or less, or oversubscribed. Matched
+on memory and given real cores, on-demand EC2 is the cheaper option *and* keeps the on-demand lifecycle. The one thing
+the rented box can still offer is a faster single core, discussed above, which is the argument money here cannot settle.
 
 **One measurement now has money attached.** Whether the pack needs 8 GB or 16 GB decides between the €14 and €28 tiers,
 and between EC2 sizes. See item 2 in [docs/measurements.md](measurements.md).

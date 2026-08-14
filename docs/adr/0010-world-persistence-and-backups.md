@@ -64,7 +64,7 @@ it is ever needed.
 
 **Bad, or risky**
 
-- The volume is tied to one availability zone, which constrains where a Spot instance can launch.
+- The volume is tied to one availability zone, which constrains where the instance can launch.
 - An EBS volume kept for a stopped instance is billed continuously, unlike the instance. It becomes the
   main fixed cost.
 - A backup taken while the server is writing is worthless, and it may look fine.

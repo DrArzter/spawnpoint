@@ -31,8 +31,9 @@ Contents:
 - `observability/` — provisioned Prometheus configuration and Grafana session dashboard. `mc-monitor`, cAdvisor and
   node_exporter are declared beside Minecraft in Compose and share its lifetime.
 
-Planned later: fetch the desired release from S3, invoke backup/retention from orchestration, and handle the Spot
-interruption notice.
+Planned later: fetch the desired release from S3, and invoke backup/retention from orchestration. The Spot interruption
+notice is handled only if [ADR-0027](../docs/adr/0027-spot-request-shape.md) is un-deferred; the server runs on-demand
+today.
 
 The world, the mod directory and the configs are mounted from the persistent EBS volume. Nothing that matters
 is inside the image or on the root volume. See [ADR-0010](../docs/adr/0010-world-persistence-and-backups.md).

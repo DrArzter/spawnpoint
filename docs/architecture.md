@@ -1,13 +1,20 @@
 # Architecture
 
-Current as of 2026-08-11, and describing the intended design, not a deployed system. Nothing here is built
-yet. Where a decision is still open, the ADR that owns it is linked.
+Describes the intended design of the whole system, so most of it reads in the future tense. Some is now built —
+the on-demand game host, its storage, backups with a tested restore, and durable start and stop workflows. Most is not
+— the bots, the panel, the identity broker, the release pipeline. The [README](../README.md) separates those two; this
+document does not, because its subject is the design rather than the current build. Where a decision is still open, the
+ADR that owns it is linked.
+
+Two things have settled since this was written on 2026-08-11, and the text below reflects them: the server runs
+**on-demand**, not on Spot ([ADR-0032](adr/0032-on-demand-single-instance.md)), and it is reachable only over a
+**ZeroTier overlay** ([ADR-0024](adr/0024-connectivity-modes.md)), not a public DNS name.
 
 ## Components
 
 | Component | Runs on | Responsibility |
 | --- | --- | --- |
-| Game session stack | Docker Compose on one EC2 Spot instance | Minecraft plus session-local Prometheus, Grafana and exporters; all stop together |
+| Game session stack | Docker Compose on one on-demand EC2 instance | Minecraft plus session-local Prometheus, Grafana and exporters; all stop together |
 | Data volume | EBS, survives the instance | The world, the mod directory, configs |
 | Control-plane API | API Gateway + Lambda | The only thing allowed to change state. Owns every rule |
 | Operation orchestration | Step Functions, Standard workflows | Runs the long operations. The execution **is** the operation state, so there is no table for it. See [ADR-0025](adr/0025-step-functions-for-long-operations.md) |
@@ -19,7 +26,7 @@ yet. Where a decision is still open, the ADR that owns it is linked.
 | Identity | Cognito user pool | Google sign-in, and a custom flow for bot-issued sign-in links. Chat commands are authenticated by the platform itself |
 | Link table | DynamoDB | Maps chat and Minecraft accounts to an internal identity. Doubles as the allow-list, the chat sign-in route, and the source the whitelist is generated from. See [ADR-0019](adr/0019-account-linking.md), [ADR-0021](adr/0021-sign-in-from-linked-chat-account.md), [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md) |
 | Web panel and pack site | S3 + CloudFront | Static. Panel is a client of the API; packs are files |
-| Connectivity | Route 53, or an overlay agent on the instance, or neither | Publishes the connection string on start and retracts it on stop. One contract, three implementations. See [ADR-0024](adr/0024-connectivity-modes.md) |
+| Connectivity | An overlay agent on the instance today; Route 53 or a raw address are the other two modes of the same contract | Publishes the connection string on start and retracts it on stop. One contract, three implementations; **ZeroTier is the chosen mode**. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | Observability | Session Prometheus/Grafana + CloudWatch + Budgets | Detailed live game/host dashboard during play; durable AWS signals and alarms after the instance is gone |
 
 Boundaries that matter:
@@ -49,8 +56,8 @@ sequenceDiagram
     participant U as Player
     participant S as Surface (panel / bot)
     participant API as Control-plane API
-    participant EC2 as EC2 Spot instance
-    participant DNS as Route 53
+    participant EC2 as EC2 on-demand instance
+    participant NET as ZeroTier overlay
     participant BUS as Event bus
 
     U->>S: start
@@ -59,12 +66,12 @@ sequenceDiagram
     S-->>U: "starting, I will tell you when it is up"
     API->>BUS: start requested by <identity>
     API->>EC2: StartInstances
-    EC2->>EC2: boot, attach volume, reconcile mods vs desired release
-    API->>DNS: upsert A record to new public address
+    EC2->>EC2: boot, attach volume, join overlay, reconcile mods vs desired release
+    EC2->>NET: register the stable overlay address
     EC2->>EC2: start container, wait for healthy
     API->>BUS: server ready, address, cold-start duration
     BUS->>S: notification to channels
-    S-->>U: "ready: mc.example.com"
+    S-->>U: "ready: 172.29.x.x on the overlay"
 ```
 
 Notes
@@ -74,9 +81,9 @@ Notes
   explanation. See [ADR-0024](adr/0024-connectivity-modes.md).
 - A second start request while one is in flight joins the existing operation. It must never start a second
   instance. See [ADR-0016](adr/0016-chat-integrations.md).
-- Whether the DNS write is made by the Lambda or by the instance is still open. The Lambda is safer, since the
-  permission then does not sit on an internet-facing host. In overlay mode the instance registers itself, so the
-  credential is on the host by necessity. See [ADR-0024](adr/0024-connectivity-modes.md).
+- In the chosen overlay mode the instance registers its own membership, so this leg needs no AWS permission and no
+  internet-facing host holds a DNS credential. The Lambda-versus-instance question only returns if DNS mode is ever
+  revived. See [ADR-0024](adr/0024-connectivity-modes.md).
 
 ## Flow 2 — Idle stop
 
@@ -124,6 +131,10 @@ identical for the first few minutes, so the timeout has to come from a measured 
 must be an explicit "still starting" state. See [ADR-0009](adr/0009-s3-as-mod-source-of-truth.md).
 
 ## Flow 4 — Spot interruption
+
+**Designed, not in use.** The server runs on-demand ([ADR-0032](adr/0032-on-demand-single-instance.md)), which is not
+interrupted. This flow becomes real only if [ADR-0027](adr/0027-spot-request-shape.md) is adopted; it is kept because
+adopting Spot is a launch-configuration change, not a redesign.
 
 1. The interruption notice arrives, giving roughly two minutes.
 2. Save the world, confirm, stop the container cleanly.
@@ -229,8 +240,8 @@ nothing before the acknowledgement except verifying the signature. See [ADR-0016
 
 | Failure | Detection | Effect | Response |
 | --- | --- | --- | --- |
-| Spot interruption | Interruption notice | Session ends | Save, stop, announce; reattach on next start |
-| Spot capacity unavailable | Start operation fails | Cannot play | Try other instance types, then fall back to on-demand |
+| Spot interruption — *deferred; on-demand does not interrupt* | Interruption notice | Session ends | Save, stop, announce; reattach on next start. Live only if [ADR-0027](adr/0027-spot-request-shape.md) is adopted |
+| Capacity unavailable at start | Start operation fails | Cannot play | Rare for a single on-demand type; retry, or the owner picks another type. The Spot-to-on-demand fallback once written here is retracted — AWS discourages it. See [ADR-0027](adr/0027-spot-request-shape.md) |
 | Instance boots, container does not | Health check timeout | Server unreachable | Announce failure; if caused by a promotion, roll back automatically |
 | Bad mod promoted | Health check, or crash loop alarm | Server unusable | Automatic rollback to the previous release |
 | Connection string not published | Start operation never reaches ready | Up but unreachable | Operation reports failure; in DNS mode the raw address is the fallback |
@@ -252,8 +263,8 @@ nothing before the acknowledgement except verifying the signature. See [ADR-0016
 
 Collected from the ADRs, in rough order of how much they would change the design.
 
-1. **Region.** Still unchosen, and it fixes latency and price. [ADR-0002](adr/0002-host-on-aws.md)
-2. **Cold start duration.** The whole on-demand model rests on it being tolerable. [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md)
+1. ~~**Region.**~~ **Settled: `eu-central-1`.** Players are in Poland, Ukraine and western Russia. [ADR-0002](adr/0002-host-on-aws.md), [docs/measurements.md](measurements.md)
+2. **Cold start on the real instance.** Locally about 90 seconds; the end-to-end EC2 figure — boot, reconcile, health — is still wanted, and the whole on-demand model rests on it being tolerable. [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md)
 3. **Health check for a modded start.** The weakest part of the release pipeline. [ADR-0009](adr/0009-s3-as-mod-source-of-truth.md)
 4. **Whether the surfaces read execution state directly or through a flattened API view**, so they do not depend on
    Step Functions' own vocabulary. [ADR-0025](adr/0025-step-functions-for-long-operations.md)

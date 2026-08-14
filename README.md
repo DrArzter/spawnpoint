@@ -163,7 +163,7 @@ web/                        Static panel and pack site — not built
 
 ## Decisions
 
-Thirty-two records, each with the alternatives that were rejected and why. Three have been superseded and one was
+Thirty-three records, each with the alternatives that were rejected and why. Three have been superseded and one was
 rejected the same day it was written, which is the process working rather than failing — as is
 [ADR-0032](docs/adr/0032-on-demand-single-instance.md) replacing ADR-0004 rather than editing it a ninth time.
 
@@ -205,6 +205,7 @@ which are allowed to change. The reason is written up in [docs/adr/README.md](do
 | [0030](docs/adr/0030-desired-and-active-release.md) | Desired release is separate from confirmed active release | Accepted |
 | [0031](docs/adr/0031-first-class-local-control-plane.md) | First-class local control plane with shared ASL, Lambda and host contracts | Accepted |
 | [0032](docs/adr/0032-on-demand-single-instance.md) | Run the game server on one on-demand EC2 instance | Accepted |
+| [0033](docs/adr/0033-connectivity-as-a-strategy.md) | Connectivity is a strategy behind one interface, constrained by the game's auth model | Proposed |
 
 Index, template and the decisions still to make: [docs/adr/README.md](docs/adr/README.md).
 

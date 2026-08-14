@@ -8,6 +8,8 @@
 - Milestone: M2
 - Supersedes: [ADR-0017](0017-stable-server-address.md), which picked one approach. Its cost reasoning is
   inherited by mode B below
+- Amended by: [ADR-0033](0033-connectivity-as-a-strategy.md) — keeps the ZeroTier decision here, and turns the three
+  modes into a real pluggable interface with a safety invariant tying connectivity to the game's auth model
 
 ## Context
 

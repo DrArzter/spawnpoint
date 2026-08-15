@@ -1,8 +1,8 @@
 # ADR-0023 — Several worlds, one instance, one of them active at a time
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-11
-- Milestone: M6
+- Milestone: M2/M3 — prioritised after the first working on-demand session
 - Amended by: [ADR-0030](0030-desired-and-active-release.md)
 - Extends: [ADR-0008](0008-versioned-mod-releases.md), [ADR-0009](0009-s3-as-mod-source-of-truth.md), [ADR-0010](0010-world-persistence-and-backups.md)
 

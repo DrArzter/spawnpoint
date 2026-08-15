@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "profile_source": {
+    "repository": "https://github.com/DrArzter/my-docker-minecraft-server-config",
+    "commit": "0791ac0810c65fca3ca0517b9fbbbfe5023d0355"
+  },
+  "worlds": [
+    {
+      "id": "main",
+      "display_name": "Main modded",
+      "profile_id": "main"
+    },
+    {
+      "id": "vanilla",
+      "display_name": "Vanilla Forge",
+      "profile_id": "vanilla-forge"
+    }
+  ]
+}

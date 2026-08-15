@@ -199,8 +199,8 @@ Record here what was actually created:
 | SNS alert topic | `arn:aws:sns:eu-central-1:<account-id>:spawnpoint-alert` — Standard, with one confirmed email subscription. The account ID and email are deliberately not written here; query them through the CLI |
 | Project tag | `Project=spawnpoint`; M0 also uses `Environment=m0` and `ManagedBy=manual` |
 | Chosen Availability Zone | `eu-central-1a`, physical Zone ID `euc1-az2`; `m7i-flex.large`, `r8i-flex.large` and a public subnet were verified there on 2026-08-13 |
-| M0 EC2 identity | IAM role and instance profile `spawnpoint-m0-ec2`; role trusts EC2 and has only `AmazonSSMManagedInstanceCore` attached |
-| M0 security group | `spawnpoint-m0-minecraft` in the default VPC; no inbound rules yet, therefore neither Minecraft nor SSH is exposed |
+| M0 EC2 identity | Retired 2026-08-15: manual instance terminated, root and data EBS deleted, IAM role/profile deleted |
+| M0 security group | Retired 2026-08-15: `spawnpoint-m0-minecraft` deleted after its ENI dependency audit returned empty |
 | Cost allocation tag activated | TODO — **activate as soon as the first tagged resource exists.** [ADR-0002](adr/0002-host-on-aws.md) commits to a project tag; a cost allocation tag has to be activated in the billing console before it appears in cost data, and activation is **not retroactive**. Leave it and the early months have no per-project breakdown, permanently |
 
 **The SNS topic is the convergence point** that [ADR-0020](adr/0020-email-channel.md) and

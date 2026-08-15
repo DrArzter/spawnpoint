@@ -20,17 +20,18 @@ SP_REGION=eu-central-1
 - **Rollback** commands remove only that explicitly named resource.
 - Every billable write gets a separate cost warning; the current inventory records what continues to exist.
 
-## Current manual inventory
+## Retired manual inventory
 
-Last reconciled against AWS on 2026-08-13. Generated IDs stay out of the public repository; the read commands below
-resolve them by unique names and project tags.
+Last reconciled against AWS on 2026-08-15. M1/M2 had already restored and exercised the world on Terraform-managed
+resources and stored three verified archives in S3. The owner then authorised full M0 cleanup. Generated IDs stay out
+of the public repository; the read commands below resolve them by unique names and project tags.
 
 | Resource | Name | Location | Current state | Cost shape |
 | --- | --- | --- | --- | --- |
-| IAM role and instance profile | `spawnpoint-m0-ec2` | Global | Created; SSM core policy only | No standalone charge |
-| Security group | `spawnpoint-m0-minecraft` | `eu-central-1`, default VPC | Created; no inbound rules | No standalone charge |
-| EBS data volume | `spawnpoint-m0-data` | `eu-central-1a` / `euc1-az2` | Encrypted gp3, 20 GB; attached with `DeleteOnTermination=false`; XFS label `spawnpoint` | About $1.90/month list-price equivalent before credits |
-| EC2 smoke host | `spawnpoint-m0-smoke` | `eu-central-1a` / `euc1-az2` | `m7i-flex.large`, stopped; termination-protected; no key pair; 8 GB encrypted gp3 root | No compute while stopped; root is about $0.76/month list-price equivalent before credits |
+| IAM role and instance profile | `spawnpoint-m0-ec2` | Global | Deleted 2026-08-15 | None |
+| Security group | `spawnpoint-m0-minecraft` | `eu-central-1`, default VPC | Deleted 2026-08-15 | None |
+| EBS data volume | `spawnpoint-m0-data` | `eu-central-1a` / `euc1-az2` | Deleted 2026-08-15 after detachment was verified | None |
+| EC2 smoke host | `spawnpoint-m0-smoke` | `eu-central-1a` / `euc1-az2` | Terminated 2026-08-15; its disposable root was automatically deleted | None |
 
 Resolve the current generated IDs and verify that names remain unique:
 
@@ -859,6 +860,95 @@ aws ec2 describe-instance-attribute \
 Final state: instance `stopped`, no public IPv4, termination protection enabled. The encrypted 20 GiB data EBS
 remained attached with `DeleteOnTermination=false`; the disposable root volume remained
 `DeleteOnTermination=true`. Compute and public IPv4 charging stopped, while EBS storage remains allocated.
+
+## Executed M0 retirement
+
+Performed 2026-08-15 only after the Terraform production host used a distinct instance and data volume, the M1/M2
+server had passed real session checks, and three immutable world archives were present in S3. The production instance,
+production EBS, VPC, buckets and workflows were excluded from every deletion target.
+
+First resolve the manual host by tags, require exactly one stopped result, and inspect both block-device deletion
+flags. Termination protection is disabled only for that resolved M0 instance:
+
+```bash
+SP_M0_INSTANCE_ID="$(aws ec2 describe-instances \
+  --filters \
+    Name=tag:Name,Values=spawnpoint-m0-smoke \
+    Name=tag:ManagedBy,Values=manual \
+    Name=instance-state-name,Values=stopped \
+  --profile "$SP_PROFILE" --region "$SP_REGION" \
+  --query 'Reservations[].Instances[].InstanceId' --output text)"
+
+test "$(wc -w <<<"$SP_M0_INSTANCE_ID")" -eq 1
+
+aws ec2 describe-instances \
+  --instance-ids "$SP_M0_INSTANCE_ID" \
+  --profile "$SP_PROFILE" --region "$SP_REGION" \
+  --query 'Reservations[0].Instances[0].BlockDeviceMappings'
+
+aws ec2 modify-instance-attribute \
+  --instance-id "$SP_M0_INSTANCE_ID" \
+  --no-disable-api-termination \
+  --profile "$SP_PROFILE" --region "$SP_REGION"
+
+aws ec2 terminate-instances \
+  --instance-ids "$SP_M0_INSTANCE_ID" \
+  --profile "$SP_PROFILE" --region "$SP_REGION"
+
+aws ec2 wait instance-terminated \
+  --instance-ids "$SP_M0_INSTANCE_ID" \
+  --profile "$SP_PROFILE" --region "$SP_REGION"
+```
+
+The 8 GiB root had `DeleteOnTermination=true` and disappeared automatically. The separate 20 GiB data volume had
+`DeleteOnTermination=false`, as intended. It was resolved by both M0 tags and `available` state; its empty attachment
+list was checked before deletion:
+
+```bash
+SP_M0_DATA_VOLUME_ID="$(aws ec2 describe-volumes \
+  --filters \
+    Name=tag:Name,Values=spawnpoint-m0-data \
+    Name=tag:ManagedBy,Values=manual \
+    Name=status,Values=available \
+  --profile "$SP_PROFILE" --region "$SP_REGION" \
+  --query 'Volumes[0].VolumeId' --output text)"
+
+aws ec2 describe-volumes \
+  --volume-ids "$SP_M0_DATA_VOLUME_ID" \
+  --profile "$SP_PROFILE" --region "$SP_REGION" \
+  --query 'Volumes[0].{State:State,Attachments:length(Attachments)}'
+
+aws ec2 delete-volume \
+  --volume-id "$SP_M0_DATA_VOLUME_ID" \
+  --profile "$SP_PROFILE" --region "$SP_REGION"
+```
+
+Finally the dedicated, unused security group and IAM chain were removed in dependency order:
+
+```bash
+aws ec2 delete-security-group \
+  --group-id <resolved-spawnpoint-m0-minecraft-group-id> \
+  --profile "$SP_PROFILE" --region "$SP_REGION"
+
+aws iam remove-role-from-instance-profile \
+  --instance-profile-name spawnpoint-m0-ec2 \
+  --role-name spawnpoint-m0-ec2 \
+  --profile "$SP_PROFILE"
+aws iam delete-instance-profile \
+  --instance-profile-name spawnpoint-m0-ec2 \
+  --profile "$SP_PROFILE"
+aws iam detach-role-policy \
+  --role-name spawnpoint-m0-ec2 \
+  --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore \
+  --profile "$SP_PROFILE"
+aws iam delete-role --role-name spawnpoint-m0-ec2 --profile "$SP_PROFILE"
+```
+
+The final tag/name audit returned no M0 volumes, security groups, role or instance profile. EC2 still returns the
+terminated instance as historical API data for a while; it has no billable compute or attached storage. Production
+remained running, Minecraft TCP and Grafana health were reachable, and its Terraform-managed 20 GiB data volume stayed
+attached. The obsolete ZeroTier Central member is outside AWS and may remain as a zero-cost controller record; remove
+the old member there while retaining current production node `b9bc15e2cf`.
 
 ## DNS and Route 53
 

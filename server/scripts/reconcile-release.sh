@@ -50,13 +50,18 @@ if ! jq -e '
   (.created_at | type == "string" and length > 0) and
   (.created_by | type == "string" and length > 0) and
   (.changelog | type == "string") and
-  (.server.mods | type == "array" and length > 0) and
+  (.server.mods | type == "array") and
   all(.server.mods[];
     (.file | type == "string" and test("^[^/\\\\]+\\.jar$")) and
     (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
     (.bytes | type == "number" and floor == . and . >= 0)
   ) and
-  (([.server.mods[].file] | unique | length) == (.server.mods | length))
+  (([.server.mods[].file] | unique | length) == (.server.mods | length)) and
+  ((has("source_profile") | not) or (
+    (.source_profile.id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
+    (.source_profile.repository | type == "string" and length > 0) and
+    (.source_profile.commit | type == "string" and test("^[0-9a-f]{40}$"))
+  ))
 ' "${manifest}" >/dev/null; then
   die "invalid release manifest: ${manifest}"
 fi

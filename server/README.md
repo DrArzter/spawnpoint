@@ -148,7 +148,7 @@ they run in a container:
 ```bash
 docker run --rm -v "$PWD:/repo:ro" alpine:3.20 sh -c '
   apk add -q bash coreutils findutils diffutils tar zstd jq util-linux openssl >/dev/null
-  for t in backup-s3-test compose-files-test release-reconcile-test session-activity-test world-restore-test; do
+  for t in backup-s3-test compose-files-test profile-release-test release-reconcile-test session-activity-test world-restore-test; do
     bash /repo/server/tests/$t.sh || exit 1
   done'
 ```

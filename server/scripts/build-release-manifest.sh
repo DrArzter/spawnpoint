@@ -9,6 +9,8 @@ usage: build-release-manifest.sh <release> <minecraft-version> <loader-version> 
 Environment:
   RELEASE_CREATED_BY  Identity recorded in the release (default: local-operator)
   RELEASE_CHANGELOG   Short release description (default: Baseline release)
+  RELEASE_PROFILE_ID, RELEASE_PROFILE_REPOSITORY, RELEASE_PROFILE_COMMIT
+                      Optional all-or-nothing provenance for a source profile
 EOF
 }
 
@@ -24,6 +26,9 @@ mods_dir="$(realpath -e -- "$4")"
 output_manifest="$(realpath -m -- "$5")"
 created_by="${RELEASE_CREATED_BY:-local-operator}"
 changelog="${RELEASE_CHANGELOG:-Baseline release}"
+profile_id="${RELEASE_PROFILE_ID:-}"
+profile_repository="${RELEASE_PROFILE_REPOSITORY:-}"
+profile_commit="${RELEASE_PROFILE_COMMIT:-}"
 
 command -v jq >/dev/null 2>&1 || {
   printf 'error: required command not found: jq\n' >&2
@@ -41,6 +46,24 @@ command -v sha256sum >/dev/null 2>&1 || {
   printf 'error: release must use MAJOR.MINOR: %s\n' "${release}" >&2
   exit 1
 }
+profile_fields=0
+[[ -n "${profile_id}" ]] && profile_fields=$((profile_fields + 1))
+[[ -n "${profile_repository}" ]] && profile_fields=$((profile_fields + 1))
+[[ -n "${profile_commit}" ]] && profile_fields=$((profile_fields + 1))
+[[ "${profile_fields}" == 0 || "${profile_fields}" == 3 ]] || {
+  printf 'error: profile provenance must provide id, repository and commit together\n' >&2
+  exit 1
+}
+if (( profile_fields == 3 )); then
+  [[ "${profile_id}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || {
+    printf 'error: invalid source profile id: %s\n' "${profile_id}" >&2
+    exit 1
+  }
+  [[ "${profile_commit}" =~ ^[0-9a-f]{40}$ ]] || {
+    printf 'error: source profile commit must be a full lowercase Git SHA\n' >&2
+    exit 1
+  }
+fi
 [[ ! -e "${output_manifest}" && ! -L "${output_manifest}" ]] || {
   printf 'error: immutable release manifest already exists: %s\n' "${output_manifest}" >&2
   exit 1
@@ -73,11 +96,6 @@ while IFS= read -r -d '' mod; do
   count=$((count + 1))
 done < <(find "${mods_dir}" -maxdepth 1 -type f -name '*.jar' -print0 | sort -z)
 
-(( count > 0 )) || {
-  printf 'error: no JAR files found in %s\n' "${mods_dir}" >&2
-  exit 1
-}
-
 jq -s \
   --arg release "${release}" \
   --arg minecraft_version "${minecraft_version}" \
@@ -85,7 +103,10 @@ jq -s \
   --arg created_at "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
   --arg created_by "${created_by}" \
   --arg changelog "${changelog}" \
-  '{
+  --arg profile_id "${profile_id}" \
+  --arg profile_repository "${profile_repository}" \
+  --arg profile_commit "${profile_commit}" \
+  '({
     schema_version: 1,
     release: $release,
     minecraft_version: $minecraft_version,
@@ -94,7 +115,13 @@ jq -s \
     created_by: $created_by,
     changelog: $changelog,
     server: {mods: .}
-  }' "${entries_file}" >"${output_tmp}"
+  } + if $profile_id == "" then {} else {
+    source_profile: {
+      id: $profile_id,
+      repository: $profile_repository,
+      commit: $profile_commit
+    }
+  } end)' "${entries_file}" >"${output_tmp}"
 
 chmod 0644 "${output_tmp}"
 mv -- "${output_tmp}" "${output_manifest}"

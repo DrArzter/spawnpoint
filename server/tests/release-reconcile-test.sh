@@ -53,9 +53,13 @@ expect_failure "manifest is immutable" \
 expect_failure "release must be MAJOR.MINOR" \
   "${SCRIPTS}/build-release-manifest.sh" v1 1.20.1 47.4.0 "${fixture}/release/mods" "${fixture}/release/bad.json"
 mkdir -p -- "${fixture}/empty-mods"
-expect_failure "empty mod directory" \
-  "${SCRIPTS}/build-release-manifest.sh" 1.1 1.20.1 47.4.0 "${fixture}/empty-mods" "${fixture}/release/bad.json"
-[[ ! -e "${fixture}/release/bad.json" ]]
+empty_manifest="${fixture}/release/empty.json"
+empty_output="$(
+  "${SCRIPTS}/build-release-manifest.sh" \
+    1.1 1.20.1 47.4.0 "${fixture}/empty-mods" "${empty_manifest}"
+)"
+grep -qx 'mods=0' <<<"${empty_output}"
+jq -e '.server.mods == []' "${empty_manifest}" >/dev/null
 
 # --- reconcile: fresh target ---
 target="${fixture}/server/mods"

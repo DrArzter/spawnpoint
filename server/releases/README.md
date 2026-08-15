@@ -35,6 +35,26 @@ server/scripts/build-profile-release.sh \
   1.0 /path/to/resolved/mods /tmp/main-1.0/manifest.json
 ```
 
+Resolve a CurseForge source list locally without starting Minecraft, then build the manifest from those exact bytes:
+
+```bash
+PROFILE_ENV_FILE=/path/to/private/.env \
+  server/scripts/resolve-profile-mods.sh \
+    /path/to/my-docker-minecraft-server-config/profiles/main \
+    /tmp/main-1.0/mods
+
+server/scripts/build-profile-release.sh \
+  /path/to/my-docker-minecraft-server-config/profiles/main \
+  1.0 /tmp/main-1.0/mods /tmp/main-1.0/manifest.json
+```
+
+Keep that dotenv file private (`chmod 600 /path/to/private/.env`); it is an authoring-machine secret and is never
+copied into a release.
+
+The resolver delegates to the digest-pinned image's `mc-image-helper curseforge-files` command. It passes the API key
+only as container environment, downloads into a sibling stage, and refuses to overwrite a previous output. The game
+host later consumes uploaded hashes and bytes; it does not need a CurseForge API key or resolve moving URLs at boot.
+
 For `vanilla-forge`, pass an existing empty mods directory. A profile declaring a mod source refuses an empty resolved
 directory, and an empty-mod profile refuses supplied JARs. Uncommitted changes below the profile directory are refused,
 so the embedded commit always describes the inputs that were actually built.

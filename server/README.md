@@ -28,6 +28,7 @@ Contents:
     the archive visible for restore,
   - `restore-world.sh` — restore only into a new or empty non-live data directory,
   - `build-release-manifest.sh` — create an immutable SHA-256 manifest for an exact mod payload,
+  - `resolve-profile-mods.sh` — resolve a clean profile's CurseForge inputs locally into a new atomic JAR directory,
   - `reconcile-release.sh` — verify and atomically replace the mod directory with that exact payload,
   - `world-profile.sh` — resolve a required world ID to its pinned authoring profile and isolated runtime paths,
   - `prepare-world.sh` — idempotently create or verify a marker-bound world/data/mods directory.
@@ -150,7 +151,7 @@ they run in a container:
 ```bash
 docker run --rm -v "$PWD:/repo:ro" alpine:3.20 sh -c '
   apk add -q bash coreutils findutils diffutils tar zstd jq util-linux openssl >/dev/null
-  for t in backup-s3-test compose-files-test profile-release-test release-reconcile-test session-activity-test world-catalog-test world-restore-test; do
+  for t in backup-s3-test compose-files-test profile-release-test profile-resolver-test release-reconcile-test session-activity-test world-catalog-test world-restore-test; do
     bash /repo/server/tests/$t.sh || exit 1
   done'
 ```

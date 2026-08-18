@@ -37,3 +37,23 @@ output "stop_state_machine_arn" {
   description = "Standard workflow that backs up a quiet session before stopping EC2."
   value       = aws_sfn_state_machine.stop_server.arn
 }
+
+output "idle_watchdog_state_machine_arn" {
+  description = "Session-scoped watchdog: counts empty player checks, then runs the verified stop."
+  value       = aws_sfn_state_machine.idle_watchdog.arn
+}
+
+output "running_hours_alarm_name" {
+  description = "Backstop behind the watchdog; alarms to the guardrails topic after too many consecutive running hours."
+  value       = aws_cloudwatch_metric_alarm.running_hours.alarm_name
+}
+
+output "promote_state_machine_arn" {
+  description = "Release promotion: desired, verified stop and start, health-gated active commit, pointer-flip rollback."
+  value       = aws_sfn_state_machine.promote_release.arn
+}
+
+output "bot_webhook_url" {
+  description = "Register with Telegram setWebhook, together with the secret token from Parameter Store."
+  value       = aws_lambda_function_url.bot.function_url
+}

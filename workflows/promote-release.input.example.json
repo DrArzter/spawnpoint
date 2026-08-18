@@ -1,0 +1,49 @@
+{
+  "operationId": "promote-example-001",
+  "worldName": "world",
+  "release": "1.1",
+  "instanceId": "i-0123456789abcdef0",
+  "releaseBucket": "spawnpoint-releases-000000000000",
+  "connectionAddress": "172.29.23.24:25565",
+  "startStateMachineArn": "arn:aws:states:eu-central-1:000000000000:stateMachine:spawnpoint-start-server",
+  "stopStateMachineArn": "arn:aws:states:eu-central-1:000000000000:stateMachine:spawnpoint-stop-server",
+  "watchdogStateMachineArn": "arn:aws:states:eu-central-1:000000000000:stateMachine:spawnpoint-idle-watchdog",
+  "startTiming": {
+    "instancePollSeconds": 10,
+    "ssmPollSeconds": 10,
+    "commandPollSeconds": 15,
+    "maxInstancePolls": 30,
+    "maxSsmPolls": 30,
+    "maxCommandPolls": 60
+  },
+  "stopTiming": {
+    "instancePollSeconds": 10,
+    "ssmPollSeconds": 10,
+    "commandPollSeconds": 15,
+    "maxInstancePolls": 30,
+    "maxSsmPolls": 30,
+    "maxCommandPolls": 60
+  },
+  "watchdogInput": {
+    "operationId": "promote-example-001-watchdog",
+    "instanceId": "i-0123456789abcdef0",
+    "stopStateMachineArn": "arn:aws:states:eu-central-1:000000000000:stateMachine:spawnpoint-stop-server",
+    "timing": {
+      "checkIntervalSeconds": 300,
+      "emptyChecksRequired": 3,
+      "maxTotalChecks": 96,
+      "maxConsecutiveProbeFailures": 6,
+      "maxStopRefusals": 3,
+      "probePollSeconds": 10,
+      "maxProbePolls": 30
+    },
+    "stopTiming": {
+      "instancePollSeconds": 10,
+      "ssmPollSeconds": 10,
+      "commandPollSeconds": 15,
+      "maxInstancePolls": 30,
+      "maxSsmPolls": 30,
+      "maxCommandPolls": 60
+    }
+  }
+}

@@ -24,8 +24,32 @@ Constraints:
 - Slow actions are operations with state. The UI polls and shows progress; it never blocks on a request.
 - Published pack URLs are immutable. A new pack is a new version, never an overwrite.
 
-**Nothing here is on the critical path.** M4 was cut to one bot and a pack file at a stable URL, and the panel moved to
-"afterwards, if the project earns it". See [docs/roadmap.md](../docs/roadmap.md).
+**Nothing here is on the critical path.** M4 was cut to one bot and a pack file behind bot-issued links, and the panel
+moved to "afterwards, if the project earns it". See [docs/roadmap.md](../docs/roadmap.md).
+
+## The panel story, re-tiered (2026-08-17)
+
+The expensive panel was the *public* one; the tiers below get the value without the cost, in order of arrival:
+
+1. **The owner's localhost panel — the primary panel path.** `npm run panel` on the owner's machine: a local web app
+   over the same control-plane calls the bot makes (StartExecution, pointer and S3 reads, SSM file peeks), using the
+   owner's own `AWS_PROFILE` credential chain. Localhost is the authentication — the entire reason the panel was cut
+   evaporates. Non-negotiable hardening, because a local server that spends money is a drive-by target: bind
+   **127.0.0.1 only**, verify `Host`/`Origin` strictly, and require a startup-printed URL token (the Docker-API and
+   Zoom localhost incidents are the cautionary tales).
+2. **A session-scoped panel inside the overlay**, for players: lives and dies with the Compose session next to
+   Grafana, behind the Traefik noted in [ADR-0033](../docs/adr/0033-connectivity-as-a-strategy.md). By construction it
+   cannot *start* the server — it is down when the server is down.
+3. **The public Cognito panel** ([ADR-0012](../docs/adr/0012-web-control-panel.md),
+   [ADR-0018](../docs/adr/0018-identity-and-sign-in.md)): deferred further still — it now has to beat both tiers
+   above, not just the bot.
+
+**Panels render eggs.** The per-game adapter (see the placeholder in
+[the ADR index](../docs/adr/README.md#decisions-still-to-record)) is a declaration with many consumers — the workflows
+read its probes, the connectivity invariant reads its auth model, and the panel reads its *presentation*: which
+metrics matter (MSPT for Minecraft, UPS for Factorio), which files are worth a look, and **which of this project's
+blocks do not apply** (no pack block for Zomboid — the Workshop distributes; no whitelist block for Steam-auth games).
+A game's page shows what that game cares about, never Minecraft's page with blanks.
 
 Framework not yet chosen, and worth correcting one assumption in advance: **React is not excluded by anything in this
 design.** A React app builds to plain static files and needs no server, so it works behind CloudFront exactly like any

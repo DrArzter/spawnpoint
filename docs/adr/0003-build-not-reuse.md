@@ -46,7 +46,7 @@ here, and would be the wrong trade for a system with a deadline or a customer.
 
 - Every component is understood well enough to debug and to defend in an interview.
 - Freedom to choose the compute and storage model that fits, instead of inheriting Fargate and EFS.
-- The mod pipeline, which is the actual differentiator, is built on foundations that were designed
+- The mod pipeline, which is the genuinely new part of this design, is built on foundations that were designed
   for it.
 
 **Bad, or risky**

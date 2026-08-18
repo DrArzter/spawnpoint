@@ -39,9 +39,52 @@ five recent UTC days, two older ISO weeks and two still older UTC months. Malfor
 least-privilege Lambda will list objects, call this pure function, and delete only the returned keys; the game host has
 no deletion permission.
 
-Run its dependency-free tests with `npm test` from this directory. The repository currently exercises them with Node
-26; the exact supported Lambda Node runtime remains to be pinned when the first deployable handler is added.
+Run the tests with `npm test` from this directory. The repository exercises them with Node 26; the deployed Lambda
+runtime is pinned to **nodejs22.x** in Terraform, per the rule above, since the first deployable handler now exists.
 
-**Status:** backup-retention domain logic exists and is tested. The first M2 start workflow uses direct EC2/SSM
-integrations and therefore needs no task Lambda yet. Deployable lifecycle functions arrive when a step contains real
-domain logic; pipeline follows in M3, control-plane surfaces and adapters in M4.
+## The Telegram bot — the first deployed function
+
+Built on **grammY 1.45.1** (the TypeScript aiogram: router, middleware, typed API), adopted at the owner's call on the
+honest observation that restructuring later never happens in an evenings project — the roadmap itself names motivation
+as the scarce resource. The recorded costs: one pinned dependency, and the bundle grew from ~9 KB to ~930 KB (esbuild,
+ESM, `@aws-sdk/*` externalised — irrelevant at Lambda's limits). What grammY owns, we deleted rather than kept as a
+shadow: update parsing and command routing live in the framework, and the former `parseUpdate` is gone with its tests.
+
+The layout is the aiogram shape, mapped onto this project's boundary rule — domain decides, everything else carries:
+
+```
+src/domain/telegram-bot.ts   allow-list (strict: malformed ids throw), input builders, reply wording
+src/bot/bot.ts               composition root: middleware order, command registry, bot.catch
+src/bot/middleware/auth.ts   the allow-list gate — commands only, so strangers' chatter is never answered
+src/bot/commands/*.ts        start / status / pack, thin ctx glue
+src/bot/services/aws.ts      the AWS port: every SDK call, and the Parameter Store cache
+src/bot/handler.ts           cold-start wiring and grammY's aws-lambda-async webhook callback
+```
+
+**The builders remain the single source of the canonical timings**, and a test asserts they reproduce
+`workflows/*.input.example.json` verbatim. Every start is attributed: `requestedBy: "telegram:<id>"` rides into both
+execution inputs — the history is the audit record, the notifications leg will read it for "X requested the server".
+
+Transport decisions worth knowing: the Function URL uses `authorization_type = NONE` because Telegram cannot sign
+SigV4 — grammY's `secretToken` option enforces the webhook secret before any handler runs. `bot.catch` absorbs handler
+errors into a logged 200, because a non-200 makes Telegram redeliver the update and a broken bot becomes a retry
+storm. Secrets come from Parameter Store: token and webhook secret cached for the container's life, the allow-list on
+a 60-second TTL so `put-parameter --overwrite` takes effect without a redeploy.
+
+### What still grows later
+
+- ~~The notifications leg~~ **Built**: `src/bot/notifier.ts` + `src/domain/notifications.ts`. Step Functions publishes
+  every execution's status changes to EventBridge by itself, so the machines carry no announce states — the execution
+  lifecycle IS the event, and the domain module's judgement is mostly about *silence*: child executions (the
+  watchdog's stops, promotion's children) never double-announce their parents, stop successes are announced by
+  whoever ordered them, and a failed stop always speaks because it is the backup contract failing. The notifier's
+  role reads exactly two parameters and can do nothing else. The same function is subscribed to the guardrails
+  topic, so the budget, cost anomalies and the running-hours alarm reach the chat too (`src/domain/alerts.ts`); an
+  alert must never be lost to a parse error, so unrecognised formats are delivered raw, never thrown.
+- **Callbacks and dialogs**: grammY keyboards plus the first FSM state — a DynamoDB row behind a storage port, which
+  [ADR-0031](../docs/adr/0031-first-class-local-control-plane.md) requires for the local environment anyway.
+- **A second platform** (Discord, [ADR-0016](../docs/adr/0016-chat-integrations.md)): the command cores stay per-platform thin over shared services and domain; the adapter move, same as everywhere else in this design.
+
+**Status:** backup-retention domain logic and the Telegram bot exist and are tested; the bot is the first deployable
+function (M4). The M2/M3 workflows use direct EC2/SSM/S3 integrations and need no task Lambdas. Remaining adapters —
+notifications fan-out, and a Discord surface if the group wants one — follow within M4.

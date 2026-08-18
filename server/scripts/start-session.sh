@@ -55,6 +55,34 @@ jq -e \
 export SERVER_PROJECT_DIRECTORY="${SERVER_DIR}"
 export SERVER_COMPOSE_FILES="${SERVER_DIR}/compose.yaml:${SERVER_DIR}/compose.release.yaml"
 
+# Boot-time reconciliation (ADR-0030): if this world has a release pointer,
+# make the mod directory match its desired release before Minecraft starts.
+# A promotion made while the server was stopped lands here, on the next start.
+# No pointer (exit 3) is the legitimate pre-import state and starts as before;
+# any other failure refuses the start — wrong mods corrupt worlds.
+world_name="${WORLD_NAME:-$(read_env_value WORLD_NAME 2>/dev/null || printf 'world')}"
+release_bucket="${RELEASE_BUCKET:-$(read_env_value RELEASE_BUCKET 2>/dev/null || true)}"
+reconcile_status="skipped_no_bucket"
+desired_release="null"
+if [[ -n "${release_bucket}" ]]; then
+  export RELEASE_BUCKET="${release_bucket}"
+  if pointer_output="$(WORLD_NAME="${world_name}" "${SCRIPT_DIR}/read-release-pointer.sh" "${world_name}")"; then
+    desired_release="$(awk -F= '$1 == "desired_release" { print $2 }' <<<"${pointer_output}")"
+    payload_dir="${SERVER_DIR}/releases/${desired_release}"
+    "${SCRIPT_DIR}/download-release.sh" "${desired_release}" "${payload_dir}" >&2
+    "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" >&2
+    reconcile_status="applied"
+  elif [[ $? -eq 3 ]]; then
+    reconcile_status="skipped_no_pointer"
+  else
+    printf 'error: could not read the release pointer for world %s\n' "${world_name}" >&2
+    exit 1
+  fi
+fi
+
 "${SCRIPT_DIR}/start.sh"
 printf 'zerotier_network=%s\n' "${network_id,,}"
 printf 'connection_address=%s\n' "${expected_address}"
+printf 'world=%s\n' "${world_name}"
+printf 'reconcile=%s\n' "${reconcile_status}"
+printf 'desired_release=%s\n' "${desired_release}"

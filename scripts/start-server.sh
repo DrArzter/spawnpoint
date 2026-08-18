@@ -100,6 +100,83 @@ printf 'result=requested\n'
 printf 'operation_id=%s\n' "${operation_id}"
 printf 'execution_arn=%s\n' "${execution_arn}"
 
+# The watchdog starts with the session, unconditionally: if the session start
+# later fails, the watchdog's first check sees a non-running host and ends
+# cleanly. Non-fatal while the watchdog machine is not yet applied.
+watchdog_arn="$(
+  aws stepfunctions list-state-machines \
+    --profile "${profile}" \
+    --region "${region}" \
+    --query 'stateMachines[?name==`spawnpoint-idle-watchdog`].stateMachineArn' \
+    --output text
+)"
+stop_arn="$(
+  aws stepfunctions list-state-machines \
+    --profile "${profile}" \
+    --region "${region}" \
+    --query 'stateMachines[?name==`spawnpoint-stop-server`].stateMachineArn' \
+    --output text
+)"
+if [[ "${watchdog_arn}" == arn:aws:states:*:stateMachine:spawnpoint-idle-watchdog && "${stop_arn}" == arn:aws:states:*:stateMachine:spawnpoint-stop-server ]]; then
+  running_watchdog="$(
+    aws stepfunctions list-executions \
+      --state-machine-arn "${watchdog_arn}" \
+      --status-filter RUNNING \
+      --max-results 1 \
+      --profile "${profile}" \
+      --region "${region}" \
+      --query 'executions[0].executionArn' \
+      --output text
+  )"
+  if [[ "${running_watchdog}" != "None" ]]; then
+    printf 'watchdog=already_running\n'
+    printf 'watchdog_execution_arn=%s\n' "${running_watchdog}"
+  else
+    watchdog_input="$(
+      jq -cn \
+        --arg operation_id "${operation_id}" \
+        --arg instance_id "${instance_id}" \
+        --arg stop_arn "${stop_arn}" \
+        '{
+          operationId: $operation_id,
+          instanceId: $instance_id,
+          stopStateMachineArn: $stop_arn,
+          timing: {
+            checkIntervalSeconds: 300,
+            emptyChecksRequired: 3,
+            maxTotalChecks: 96,
+            maxConsecutiveProbeFailures: 6,
+            maxStopRefusals: 3,
+            probePollSeconds: 10,
+            maxProbePolls: 30
+          },
+          stopTiming: {
+            instancePollSeconds: 10,
+            ssmPollSeconds: 10,
+            commandPollSeconds: 15,
+            maxInstancePolls: 30,
+            maxSsmPolls: 30,
+            maxCommandPolls: 60
+          }
+        }'
+    )"
+    watchdog_execution_arn="$(
+      aws stepfunctions start-execution \
+        --state-machine-arn "${watchdog_arn}" \
+        --name "${operation_id}" \
+        --input "${watchdog_input}" \
+        --profile "${profile}" \
+        --region "${region}" \
+        --query executionArn \
+        --output text
+    )"
+    printf 'watchdog=requested\n'
+    printf 'watchdog_execution_arn=%s\n' "${watchdog_execution_arn}"
+  fi
+else
+  printf 'watchdog=unavailable (state machine not deployed yet)\n' >&2
+fi
+
 if ! ${follow}; then
   exit 0
 fi

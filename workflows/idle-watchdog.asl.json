@@ -1,0 +1,350 @@
+{
+  "Comment": "Watch a running Spawnpoint session and start the verified stop workflow after consecutive empty player checks, or at the hard session cap. The execution is the watchdog: it exists only while a session does.",
+  "QueryLanguage": "JSONPath",
+  "StartAt": "Initialize",
+  "States": {
+    "Initialize": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$",
+        "counters": {
+          "empty": 0,
+          "probeFailures": 0,
+          "stopRefusals": 0,
+          "total": 0,
+          "probePoll": 0
+        },
+        "observed": {}
+      },
+      "Next": "Wait Between Checks"
+    },
+    "Wait Between Checks": {
+      "Type": "Wait",
+      "SecondsPath": "$.request.timing.checkIntervalSeconds",
+      "Next": "Describe Host"
+    },
+    "Describe Host": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.instanceId)"
+      },
+      "ResultPath": "$.observed.instance",
+      "Next": "Host Still Running"
+    },
+    "Host Still Running": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name",
+          "StringEquals": "running",
+          "Next": "Send Probe"
+        }
+      ],
+      "Default": "Host Stopped Externally"
+    },
+    "Send Probe": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:sendCommand",
+      "Parameters": {
+        "DocumentName": "AWS-RunShellScript",
+        "InstanceIds.$": "States.Array($.request.instanceId)",
+        "Parameters": {
+          "commands": [
+            "set -euo pipefail",
+            "/srv/spawnpoint/app/server/scripts/idle-probe.sh"
+          ]
+        },
+        "TimeoutSeconds": 300
+      },
+      "ResultPath": "$.observed.command",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.observed.probeError",
+          "Next": "Count Probe Failure"
+        }
+      ],
+      "Next": "Wait Probe Result"
+    },
+    "Wait Probe Result": {
+      "Type": "Wait",
+      "SecondsPath": "$.request.timing.probePollSeconds",
+      "Next": "Get Probe Result"
+    },
+    "Get Probe Result": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:getCommandInvocation",
+      "Parameters": {
+        "CommandId.$": "$.observed.command.Command.CommandId",
+        "InstanceId.$": "$.request.instanceId"
+      },
+      "ResultPath": "$.observed.invocation",
+      "Catch": [
+        {
+          "ErrorEquals": ["Ssm.InvocationDoesNotExistException"],
+          "ResultPath": "$.observed.probeLookupError",
+          "Next": "Increment Probe Poll"
+        }
+      ],
+      "Next": "Route Probe Result"
+    },
+    "Route Probe Result": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.invocation.Status",
+          "StringEquals": "Success",
+          "Next": "Count Empty Check"
+        },
+        {
+          "And": [
+            {
+              "Variable": "$.observed.invocation.Status",
+              "StringEquals": "Failed"
+            },
+            {
+              "Variable": "$.observed.invocation.ResponseCode",
+              "NumericEquals": 3
+            }
+          ],
+          "Next": "Session Occupied"
+        },
+        {
+          "Or": [
+            {
+              "Variable": "$.observed.invocation.Status",
+              "StringEquals": "Pending"
+            },
+            {
+              "Variable": "$.observed.invocation.Status",
+              "StringEquals": "InProgress"
+            },
+            {
+              "Variable": "$.observed.invocation.Status",
+              "StringEquals": "Delayed"
+            }
+          ],
+          "Next": "Increment Probe Poll"
+        }
+      ],
+      "Default": "Count Probe Failure"
+    },
+    "Increment Probe Poll": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "counters": {
+          "empty.$": "$.counters.empty",
+          "probeFailures.$": "$.counters.probeFailures",
+          "stopRefusals.$": "$.counters.stopRefusals",
+          "total.$": "$.counters.total",
+          "probePoll.$": "States.MathAdd($.counters.probePoll, 1)"
+        },
+        "observed": {
+          "command.$": "$.observed.command"
+        }
+      },
+      "Next": "Probe Poll Limit Reached"
+    },
+    "Probe Poll Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.counters.probePoll",
+          "NumericGreaterThanEqualsPath": "$.request.timing.maxProbePolls",
+          "Next": "Count Probe Failure"
+        }
+      ],
+      "Default": "Wait Probe Result"
+    },
+    "Count Empty Check": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "counters": {
+          "empty.$": "States.MathAdd($.counters.empty, 1)",
+          "probeFailures": 0,
+          "stopRefusals.$": "$.counters.stopRefusals",
+          "total.$": "States.MathAdd($.counters.total, 1)",
+          "probePoll": 0
+        },
+        "observed": {}
+      },
+      "Next": "Empty Threshold Reached"
+    },
+    "Session Occupied": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "counters": {
+          "empty": 0,
+          "probeFailures": 0,
+          "stopRefusals.$": "$.counters.stopRefusals",
+          "total.$": "States.MathAdd($.counters.total, 1)",
+          "probePoll": 0
+        },
+        "observed": {}
+      },
+      "Next": "Session Cap Reached"
+    },
+    "Count Probe Failure": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "counters": {
+          "empty": 0,
+          "probeFailures.$": "States.MathAdd($.counters.probeFailures, 1)",
+          "stopRefusals.$": "$.counters.stopRefusals",
+          "total.$": "States.MathAdd($.counters.total, 1)",
+          "probePoll": 0
+        },
+        "observed": {}
+      },
+      "Next": "Probe Failure Limit Reached"
+    },
+    "Probe Failure Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.counters.probeFailures",
+          "NumericGreaterThanEqualsPath": "$.request.timing.maxConsecutiveProbeFailures",
+          "Next": "Watchdog Blind"
+        }
+      ],
+      "Default": "Session Cap Reached"
+    },
+    "Empty Threshold Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.counters.empty",
+          "NumericGreaterThanEqualsPath": "$.request.timing.emptyChecksRequired",
+          "Next": "Stop Idle Session"
+        }
+      ],
+      "Default": "Session Cap Reached"
+    },
+    "Session Cap Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.counters.total",
+          "NumericGreaterThanEqualsPath": "$.request.timing.maxTotalChecks",
+          "Next": "Stop Capped Session"
+        }
+      ],
+      "Default": "Wait Between Checks"
+    },
+    "Stop Idle Session": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn.$": "$.request.stopStateMachineArn",
+        "Input": {
+          "operationId.$": "States.Format('{}-idle-{}', $.request.operationId, $.counters.total)",
+          "instanceId.$": "$.request.instanceId",
+          "timing.$": "$.request.stopTiming"
+        }
+      },
+      "ResultPath": "$.observed.stop",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.observed.stopError",
+          "Next": "Stop Refused"
+        }
+      ],
+      "Next": "Stopped Idle"
+    },
+    "Stop Capped Session": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn.$": "$.request.stopStateMachineArn",
+        "Input": {
+          "operationId.$": "States.Format('{}-cap-{}', $.request.operationId, $.counters.total)",
+          "instanceId.$": "$.request.instanceId",
+          "timing.$": "$.request.stopTiming"
+        }
+      },
+      "ResultPath": "$.observed.stop",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.observed.stopError",
+          "Next": "Stop Refused"
+        }
+      ],
+      "Next": "Stopped At Cap"
+    },
+    "Stop Refused": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "counters": {
+          "empty": 0,
+          "probeFailures": 0,
+          "stopRefusals.$": "States.MathAdd($.counters.stopRefusals, 1)",
+          "total.$": "$.counters.total",
+          "probePoll": 0
+        },
+        "observed": {}
+      },
+      "Next": "Stop Refusal Limit Reached"
+    },
+    "Stop Refusal Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.counters.stopRefusals",
+          "NumericGreaterThanEqualsPath": "$.request.timing.maxStopRefusals",
+          "Next": "Watchdog Stop Failing"
+        }
+      ],
+      "Default": "Wait Between Checks"
+    },
+    "Host Stopped Externally": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "status": "host_stopped_externally",
+        "instanceId.$": "$.request.instanceId",
+        "checksTotal.$": "$.counters.total"
+      },
+      "End": true
+    },
+    "Stopped Idle": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "status": "stopped_idle",
+        "instanceId.$": "$.request.instanceId",
+        "checksTotal.$": "$.counters.total",
+        "stopExecutionArn.$": "$.observed.stop.ExecutionArn"
+      },
+      "End": true
+    },
+    "Stopped At Cap": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "status": "stopped_session_cap",
+        "instanceId.$": "$.request.instanceId",
+        "checksTotal.$": "$.counters.total",
+        "stopExecutionArn.$": "$.observed.stop.ExecutionArn"
+      },
+      "End": true
+    },
+    "Watchdog Blind": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.WatchdogBlind",
+      "Cause": "Consecutive player probes failed; the host is unobservable and EC2 was deliberately left running. Failing loudly so the execution failure is the alarm."
+    },
+    "Watchdog Stop Failing": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.WatchdogStopFailing",
+      "Cause": "The verified stop workflow failed repeatedly. EC2 may still be running; the running-hours alarm and the budget are the backstops."
+    }
+  }
+}

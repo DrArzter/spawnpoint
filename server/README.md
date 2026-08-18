@@ -17,6 +17,8 @@ Contents:
   - `start.sh` — idempotently start the Compose service and wait for Docker health or RCON readiness,
   - `status.sh` — report container health and verify the Minecraft control path through RCON,
   - `players.sh` — report a machine-readable player count; an unparseable response fails closed,
+  - `idle-probe.sh` — the watchdog's exit-code contract over `players.sh`: 0 empty, 3 occupied, anything else a probe
+    failure. The workflow reads the code, never the output,
   - `save-world.sh` — disable autosave, run `save-all flush`, and re-enable autosave even on failure,
   - `stop.sh` — save first, then let Compose perform the graceful container stop,
   - `archive-world.sh` — archive a stopped live world with Zstandard, write SHA-256 and verify the result,
@@ -26,7 +28,17 @@ Contents:
   - `download-world-backup.sh` — download only into a new temporary file, verify both S3 and local SHA-256, then make
     the archive visible for restore,
   - `restore-world.sh` — restore only into a new or empty non-live data directory,
+  - `read-release-pointer.sh` — read a world's desired/active release pointer (ADR-0030); exit 3 means "not imported
+    yet", which callers treat as a state, not an error,
+  - `download-release.sh` — ensure a complete verified local copy of a release; a cache on the data volume, so an
+    unchanged boot downloads nothing and a tampered entry is refetched,
+  - `resolve-mod-list.sh` — fetch a pinned mod list (`slug:fileId`, ADR-0028) from CurseForge into a payload
+    directory; SHA-1 and size verified against the API's own record, cache heals itself, an author-disabled
+    download fails with instructions. `server/tests/fake-curl` stands in for the API under test,
   - `build-release-manifest.sh` — create an immutable SHA-256 manifest for an exact mod payload,
+  - `upload-release.sh` — publish a release to the release bucket: mods first, manifest last, so a partial upload never
+    looks complete. Re-publishing an identical release is idempotent; identity ignores descriptive fields
+    (`created_at`, changelog) per [releases/README.md](releases/README.md),
   - `reconcile-release.sh` — verify and atomically replace the mod directory with that exact payload.
 - `observability/` — provisioned Prometheus configuration and Grafana session dashboard. `mc-monitor`, cAdvisor and
   node_exporter are declared beside Minecraft in Compose and share its lifetime.

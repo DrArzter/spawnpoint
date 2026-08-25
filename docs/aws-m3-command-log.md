@@ -72,11 +72,30 @@ SHAs rather than mutable tags.
 
 ## Apply and acceptance
 
-Not run yet. Before the first modded build:
+Both plans were saved and applied independently on 2026-08-25:
+
+```bash
+terraform -chdir=infra/terraform-releases plan \
+  -lock-timeout=30s -out=/tmp/spawnpoint-releases-20260825.tfplan
+terraform -chdir=infra/terraform-releases apply \
+  /tmp/spawnpoint-releases-20260825.tfplan
+
+terraform -chdir=infra/terraform-github plan \
+  -lock-timeout=30s -out=/tmp/spawnpoint-github-20260825.tfplan
+terraform -chdir=infra/terraform-github apply \
+  /tmp/spawnpoint-github-20260825.tfplan
+```
+
+Apply results: releases **8 added / 0 changed / 0 destroyed**; GitHub **3 added / 0 changed / 0 destroyed**. Both
+post-apply plans reported `No changes`. The AWS API independently reported CodeBuild
+`spawnpoint-release-builder` as `BUILD_GENERAL1_SMALL`, concurrency `1`, S3 source; Step Function
+`spawnpoint-build-release` as `ACTIVE / STANDARD`. IAM returned the exact subject and audience above and only the two
+documented Step Functions permissions. No build was started, EC2 remained outside both states, and no world pointer was
+changed.
+
+Before the first modded build:
 
 1. create SecureString `/spawnpoint/releases/curseforge-api-key` without printing its value;
-2. apply the saved, re-reviewed release plan;
-3. apply the saved, re-reviewed GitHub identity plan;
-4. configure the two non-secret GitHub repository variables from Terraform outputs;
-5. dispatch one new release and verify the manifest, hashes and execution result;
-6. leave promotion separate — a successful build must not alter a world pointer or start EC2.
+2. configure the two non-secret GitHub repository variables from Terraform outputs;
+3. dispatch one new release and verify the manifest, hashes and execution result;
+4. leave promotion separate — a successful build must not alter a world pointer or start EC2.

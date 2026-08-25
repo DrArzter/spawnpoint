@@ -23,7 +23,8 @@ The name is a working title.
 | Rebuilt from Terraform | Three roots: the state bucket, the storage that outlives the host, and the host itself. Buckets live in separate state, so an ordinary host teardown cannot take the backups with it |
 | Backups that were actually restored | The world is archived to S3 and verified after upload. On 2026-08-13 an archive was downloaded by the instance role, restored onto a fresh volume, reconciled against release `1.0`, and a player joined the recovered world |
 | Start and stop as durable operations | Step Functions Standard. Stop rechecks the player count, flushes the world, stops every session container, verifies an immutable backup, and only then stops the instance |
-| An immutable release, cut by hand | Release `1.0`: 111 JARs, pinned and hashed. The pipeline that produces the next one is M3 |
+| An immutable bootstrap release | Release `1.0`: 111 JARs, pinned and hashed, retained as the hand-cut baseline |
+| AWS-built release candidates | GitHub OIDC triggers a Standard Workflow and ephemeral CodeBuild job. Release `1.1` was resolved, hashed and published manifest-last without starting the game host |
 | Per-session observability | Prometheus and Grafana come up with the session and go down with it. Prometheus binds to loopback; Grafana is reachable only inside the overlay |
 
 ## What is designed, not built

@@ -114,6 +114,32 @@ its signed OIDC token.
 
 Before the first modded build:
 
-1. create SecureString `/spawnpoint/releases/curseforge-api-key` without printing its value;
-2. dispatch one new release and verify the manifest, hashes and execution result;
-3. leave promotion separate — a successful build must not alter a world pointer or start EC2.
+Completed on 2026-08-25. `CF_API_KEY` was parsed from the owner's existing private dotenv file and piped directly to
+`aws ssm put-parameter`; the value was never printed. Parameter `/spawnpoint/releases/curseforge-api-key` is a Standard
+`SecureString`, version 1. A comparison after decryption confirmed that AWS stored the exact dotenv value, and a direct
+CurseForge request returned HTTP 200.
+
+The first dispatch, GitHub run `32899722049`, proved checkout, profile validation, OIDC, STS, Step Functions, Parameter
+Store injection, the pinned resolver image, and resolution of **111 JARs / 623,584,605 bytes**. It then failed safely
+before the manifest commit marker. The cause was real input the tests had missed:
+`dungeons-and-taverns-3.0.3.f[Forge].jar`. `upload-release.sh` supplied S3 metadata using AWS CLI shorthand, where `]`
+is syntax rather than an opaque filename character. Some payload objects had already uploaded, but without
+`releases/1.1/manifest.json` the candidate was correctly invisible as a complete release.
+
+Commit `62d993c` serialises S3 metadata as JSON and adds a regression using that exact filename shape. The release,
+builder and backup S3 tests passed. Terraform then applied only the content-addressed builder update: **1 added / 2
+changed / 1 destroyed**; the destroyed object was the old builder ZIP in the versioned bucket. No host or world
+resource was in the plan.
+
+The retry, GitHub run `32900764882`, completed successfully in **4m26s**. Acceptance evidence:
+
+- manifest release `1.1`, Minecraft `1.20.1`, Forge `47.4.10`;
+- source profile `main` at exact config commit `fe3cd7f06a89f65454dbf8878d7e3c14f61db100`;
+- **111 JARs / 623,584,605 bytes** in the manifest;
+- **112 S3 objects / 623,605,181 bytes** under `releases/1.1/`: payload plus manifest;
+- manifest SHA-256 `9564b5bb4eeca49ef3b37d5f5105e7065c5c6be8f3f80963968208a0db96e7ce`, equal locally,
+  in object metadata and in the S3 checksum;
+- EC2 remained `stopped`, no `worlds/` pointer was created, and the post-fix Terraform plan reported `No changes`.
+
+Release construction is now acceptance-tested. Promotion deliberately remains a separate operation: building a
+candidate cannot change `desired_release`, `active_release`, start EC2 or touch a world.

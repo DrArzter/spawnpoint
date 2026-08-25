@@ -1,0 +1,4 @@
+bucket  = "spawnpoint-tfstate-<account-id>"
+key     = "spawnpoint/github-oidc.tfstate"
+region  = "eu-central-1"
+profile = "spawnpoint"

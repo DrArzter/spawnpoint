@@ -59,8 +59,10 @@ host later consumes uploaded hashes and bytes; it does not need a CurseForge API
 This is not the production release path. A release starts in GitHub Actions, which assumes a narrow AWS role through
 OIDC and signals the AWS workflow. An ephemeral AWS builder resolves and downloads CurseForge files, freezes their
 hashes and publishes the immutable release. Neither a developer workstation nor the game host is a production builder.
-The AWS builder and Action are the next pipeline slice; until they exist, `scripts/cut-release.sh` remains a manual
-bootstrap/diagnostic tool rather than the supported automation contract.
+The AWS builder, its Step Functions wrapper, the OIDC identity and the Action now exist in code; they remain inert until
+their Terraform roots are applied and the two output ARNs are configured as GitHub repository variables. Until that
+acceptance run succeeds, `scripts/cut-release.sh` remains a manual bootstrap/diagnostic tool rather than the supported
+automation contract.
 
 For `vanilla-forge`, pass an existing empty mods directory. A profile declaring a mod source refuses an empty resolved
 directory, and an empty-mod profile refuses supplied JARs. Uncommitted changes below the profile directory are refused,

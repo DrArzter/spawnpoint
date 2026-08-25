@@ -3,8 +3,9 @@
 Disposable game-host AWS resources live here. Persistent object storage has its own lifecycle in
 [`../terraform-storage`](../terraform-storage/), cost guardrails in
 [`../terraform-guardrails`](../terraform-guardrails/), and the state backend in
-[`../terraform-bootstrap`](../terraform-bootstrap/). Apply order: bootstrap → guardrails → storage → this root — the
-budget exists before anything that can spend.
+[`../terraform-bootstrap`](../terraform-bootstrap/). The AWS-side immutable release builder lives in
+[`../terraform-releases`](../terraform-releases/). Apply order: bootstrap → guardrails → storage → releases; this host
+root is independent after storage.
 
 Owns now: VPC, subnet, internet gateway, route table, security group, EC2 instance and data volume, game-host IAM,
 the start/stop/watchdog/promotion Step Functions, Lifecycle V2 state and coordinator, the Telegram bot/notifier, and
@@ -34,10 +35,8 @@ State backend bootstrap is a one-time, separately stateful Terraform step in
 The current compute/lifecycle slice owns one VPC, one public subnet and route, a zero-ingress security group, an
 SSM-only EC2 role/profile with scoped storage access, one on-demand EC2 host, and one separately attached encrypted
 data EBS. Standard workflows own start, verified stop, idle watching and release promotion. Lifecycle V2 coordination
-is present but inert, while the Telegram bot and notifier are additive control surfaces. A single-flight CodeBuild
-project contains the reviewed AWS-side release builder, wrapped by a narrow Standard workflow; neither has an external
-caller until the GitHub OIDC slice lands. The physical AZ ID is asserted because the volume is zonal. The instance has
-no SSH key and requires IMDSv2.
+is present but inert, while the Telegram bot and notifier are additive control surfaces. The physical AZ ID is asserted
+because the volume is zonal. The instance has no SSH key and requires IMDSv2.
 
 `spawnpoint-lifecycle-v2` is an encrypted, deletion-protected, on-demand DynamoDB table keyed only by `server_id`.
 It has no stream, secondary index or provisioned capacity, and V1 does not reference it. Its coordinator role can only
@@ -51,10 +50,9 @@ configuration or delete objects. Exact `5 daily / 2 weekly / 2 monthly` pruning 
 S3 lifecycle deletes by object age, not by "keep the newest N" semantics, so pretending it implements that policy
 would silently weaken the ADR.
 
-The release builder receives the CurseForge key directly from SecureString Parameter Store, checks out only the exact
-configuration commit requested, resolves the profile in a digest-pinned container, and publishes payload files before
-the manifest commit marker. Its reviewed source bundle is content-addressed in the private release bucket. CodeBuild
-can read only that source object and read/write `releases/*`; it cannot promote a release or touch world pointers.
+The separately stateful [release pipeline](../terraform-releases/) receives the CurseForge key directly from
+SecureString Parameter Store and can publish only immutable `releases/*`. Keeping it outside this root lets us deploy
+release construction without replacing EC2 or detaching the world's EBS volume.
 
 `m7i-flex.large` is the default while the account remains on the Free Plan. `r8i-flex.large` is the reviewed 16 GiB
 upgrade, but selecting it requires an explicit Paid Plan decision. The full-group memory measurement decides whether

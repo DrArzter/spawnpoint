@@ -116,27 +116,6 @@ mock_provider "aws" {
   }
 
   override_data {
-    target = data.aws_iam_policy_document.codebuild_assume_role
-    values = {
-      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-    }
-  }
-
-  override_data {
-    target = data.aws_iam_policy_document.release_builder
-    values = {
-      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-    }
-  }
-
-  override_data {
-    target = data.aws_iam_policy_document.build_release_workflow
-    values = {
-      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-    }
-  }
-
-  override_data {
     target = data.aws_sns_topic.alerts
     values = {
       arn = "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alerts"
@@ -438,74 +417,5 @@ run "notifier_listens_to_all_machines_and_needs_almost_nothing" {
   assert {
     condition     = aws_lambda_function.notifier.environment[0].variables["CHAT_IDS_PARAMETER"] == "/spawnpoint/bot/chat-ids"
     error_message = "Notification targets are a Parameter Store list — groups and DMs alike — not a deploy-time constant."
-  }
-}
-
-run "release_builder_is_inert_pinned_and_credential_scoped" {
-  command = plan
-
-  assert {
-    condition     = aws_codebuild_project.release_builder.source[0].type == "S3" && aws_codebuild_project.release_builder.artifacts[0].type == "NO_ARTIFACTS"
-    error_message = "The builder must execute the reviewed S3 source bundle and publish releases directly, not accept caller-controlled source or mutable build artifacts."
-  }
-
-  assert {
-    condition     = aws_codebuild_project.release_builder.environment[0].compute_type == "BUILD_GENERAL1_SMALL" && aws_codebuild_project.release_builder.concurrent_build_limit == 1
-    error_message = "Release resolution is a small single-flight batch job, not reserved or horizontally concurrent compute."
-  }
-
-  assert {
-    condition     = aws_codebuild_project.release_builder.environment[0].privileged_mode
-    error_message = "The digest-pinned resolver image requires Docker inside the ephemeral CodeBuild job."
-  }
-
-  assert {
-    condition = anytrue([
-      for variable in aws_codebuild_project.release_builder.environment[0].environment_variable :
-      variable.name == "CF_API_KEY" && variable.type == "PARAMETER_STORE" && variable.value == "/spawnpoint/releases/curseforge-api-key"
-    ])
-    error_message = "The CurseForge key must be injected directly from Parameter Store and never enter Terraform state as a value."
-  }
-
-  assert {
-    condition     = can(regex("^control-plane/release-builder/[0-9a-f]{64}\\.zip$", aws_s3_object.release_builder_source.key))
-    error_message = "The reviewed builder source must be a content-addressed object outside the immutable release namespace."
-  }
-
-  assert {
-    condition     = aws_cloudwatch_log_group.release_builder.retention_in_days == 14
-    error_message = "Release build logs must have bounded retention."
-  }
-}
-
-run "build_release_workflow_can_only_run_the_reviewed_builder" {
-  command = plan
-
-  assert {
-    condition     = aws_sfn_state_machine.build_release.type == "STANDARD"
-    error_message = "Release resolution can take minutes and must use a durable Standard workflow."
-  }
-
-  assert {
-    condition     = jsondecode(aws_sfn_state_machine.build_release.definition).States["Build Immutable Release"].Resource == "arn:aws:states:::codebuild:startBuild.sync"
-    error_message = "The workflow must wait for CodeBuild directly rather than orchestrating a long Lambda."
-  }
-
-  assert {
-    condition     = jsondecode(aws_sfn_state_machine.build_release.definition).States["Build Immutable Release"].Parameters.ProjectName == aws_codebuild_project.release_builder.name
-    error_message = "Callers must not choose which CodeBuild project receives the release-builder role."
-  }
-
-  assert {
-    condition = toset([
-      for variable in jsondecode(aws_sfn_state_machine.build_release.definition).States["Build Immutable Release"].Parameters.EnvironmentVariablesOverride :
-      variable.Name
-    ]) == toset(["PROFILE_ID", "CONFIG_COMMIT", "RELEASE", "RELEASE_CREATED_BY"])
-    error_message = "The workflow may override only release identity; it must not pass secrets, buckets, source locations or buildspecs."
-  }
-
-  assert {
-    condition     = jsondecode(aws_sfn_state_machine.build_release.definition).States["Release Ready"].Parameters.status == "READY"
-    error_message = "Only a synchronously successful build may produce the READY result."
   }
 }

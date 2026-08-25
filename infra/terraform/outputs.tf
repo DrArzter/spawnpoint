@@ -77,13 +77,3 @@ output "bot_webhook_url" {
   description = "Register with Telegram setWebhook, together with the secret token from Parameter Store."
   value       = aws_lambda_function_url.bot.function_url
 }
-
-output "release_builder_project_name" {
-  description = "CodeBuild project invoked only by the release proposal state machine."
-  value       = aws_codebuild_project.release_builder.name
-}
-
-output "build_release_state_machine_arn" {
-  description = "Standard workflow later invoked by GitHub Actions through its narrow OIDC role."
-  value       = aws_sfn_state_machine.build_release.arn
-}

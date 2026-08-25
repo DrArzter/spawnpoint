@@ -191,7 +191,7 @@ resource "aws_cloudwatch_event_rule" "execution_notifications" {
         aws_sfn_state_machine.stop_server.arn,
         aws_sfn_state_machine.idle_watchdog.arn,
         aws_sfn_state_machine.promote_release.arn,
-        aws_sfn_state_machine.build_release.arn,
+        "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-build-release",
       ]
       status = ["RUNNING", "SUCCEEDED", "FAILED", "TIMED_OUT", "ABORTED"]
     }

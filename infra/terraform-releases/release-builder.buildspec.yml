@@ -1,3 +1,4 @@
+# Reviewed entrypoint embedded into the content-addressed CodeBuild source.
 version: 0.2
 
 env:

@@ -1,3 +1,5 @@
+# Release construction has its own lifecycle and state; it does not depend on
+# the disposable game host.
 locals {
   curseforge_api_key_parameter_name = "/spawnpoint/releases/curseforge-api-key"
   release_builder_log_group_name    = "/aws/codebuild/spawnpoint-release-builder"

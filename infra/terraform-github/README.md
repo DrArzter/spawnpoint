@@ -11,10 +11,10 @@ credentials; there are no AWS access keys to store or rotate.
 
 ## Order
 
-`bootstrap` → `guardrails` → `storage` → `host` → **`github`**.
+`bootstrap` → `guardrails` → `storage` → `releases` → **`github`**.
 
-The role policy can be planned before the state machine exists, but applying it after the host root makes the first
-workflow run immediately useful.
+The role policy can be planned before the state machine exists, but applying it after the release-pipeline root makes
+the first workflow run immediately useful. It has no dependency on the game-host root.
 
 ## Plan and apply
 

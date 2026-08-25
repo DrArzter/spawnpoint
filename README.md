@@ -13,7 +13,7 @@ The name is a working title.
 >
 > The two tables below separate what runs from what is only designed. Command-by-command records of what was actually
 > executed, with verification and rollback beside each change: [M0](docs/aws-m0-command-log.md),
-> [M1](docs/aws-m1-command-log.md), [M2](docs/aws-m2-command-log.md).
+> [M1](docs/aws-m1-command-log.md), [M2](docs/aws-m2-command-log.md), [M3](docs/aws-m3-command-log.md).
 
 ## What runs today
 
@@ -154,6 +154,7 @@ infra/terraform-bootstrap/  The state bucket, created before a state backend can
 infra/terraform-guardrails/ Budget, alert topic and anomaly detection — applied before anything that can spend
 infra/terraform-storage/    Buckets that outlive the host, kept in their own state on purpose
 infra/terraform/            The host and everything disposable
+infra/terraform-releases/   Inert CodeBuild release builder and its Standard Workflow
 infra/terraform-github/     GitHub OIDC identity that may trigger only the AWS release builder
 lambdas/                    Control-plane handlers and the shared domain code
 workflows/                  Step Functions ASL definitions for long-running operations

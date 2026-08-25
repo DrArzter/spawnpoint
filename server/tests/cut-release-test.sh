@@ -135,4 +135,17 @@ second_cut="$("${REPOSITORY_ROOT}/scripts/cut-release.sh" "${fixture}/world.list
 grep -qx 'upload=already_present' <<<"${second_cut}"
 grep -qx 'pack=already_present' <<<"${second_cut}"
 
+# A vanilla-like profile still has a real immutable release: exact Minecraft
+# and Forge versions, with an intentionally empty mod array. Publishing it
+# commits only the manifest and lets reconciliation remove every stale JAR.
+mkdir -p -- "${fixture}/vanilla/mods"
+"${SCRIPTS}/build-release-manifest.sh" \
+  3.0 1.20.1 47.4.10 "${fixture}/vanilla/mods" "${fixture}/vanilla/manifest.json" >/dev/null
+vanilla_upload="$(RELEASE_SOURCE_DIR="${fixture}/vanilla" \
+  "${SCRIPTS}/upload-release.sh" "${fixture}/vanilla/manifest.json")"
+grep -qx 'result=uploaded' <<<"${vanilla_upload}"
+jq -e '.release == "3.0" and .server.mods == []' \
+  "${release_root}/releases/3.0/manifest.json" >/dev/null
+[[ -z "$(find "${release_root}/releases/3.0" -path '*/mods/*.jar' -print -quit)" ]]
+
 printf 'cut-release-test: ok\n'

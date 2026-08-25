@@ -34,8 +34,10 @@ State backend bootstrap is a one-time, separately stateful Terraform step in
 The current compute/lifecycle slice owns one VPC, one public subnet and route, a zero-ingress security group, an
 SSM-only EC2 role/profile with scoped storage access, one on-demand EC2 host, and one separately attached encrypted
 data EBS. Standard workflows own start, verified stop, idle watching and release promotion. Lifecycle V2 coordination
-is present but inert, while the Telegram bot and notifier are additive control surfaces. The physical AZ ID is asserted
-because the volume is zonal. The instance has no SSH key and requires IMDSv2.
+is present but inert, while the Telegram bot and notifier are additive control surfaces. An inert, single-flight
+CodeBuild project contains the reviewed AWS-side release builder; it has no trigger until the proposal workflow and
+GitHub OIDC slice land. The physical AZ ID is asserted because the volume is zonal. The instance has no SSH key and
+requires IMDSv2.
 
 `spawnpoint-lifecycle-v2` is an encrypted, deletion-protected, on-demand DynamoDB table keyed only by `server_id`.
 It has no stream, secondary index or provisioned capacity, and V1 does not reference it. Its coordinator role can only
@@ -48,6 +50,11 @@ The game-host role can write and verify backup objects and read immutable releas
 configuration or delete objects. Exact `5 daily / 2 weekly / 2 monthly` pruning belongs to the later backup operation:
 S3 lifecycle deletes by object age, not by "keep the newest N" semantics, so pretending it implements that policy
 would silently weaken the ADR.
+
+The release builder receives the CurseForge key directly from SecureString Parameter Store, checks out only the exact
+configuration commit requested, resolves the profile in a digest-pinned container, and publishes payload files before
+the manifest commit marker. Its reviewed source bundle is content-addressed in the private release bucket. CodeBuild
+can read only that source object and read/write `releases/*`; it cannot promote a release or touch world pointers.
 
 `m7i-flex.large` is the default while the account remains on the Free Plan. `r8i-flex.large` is the reviewed 16 GiB
 upgrade, but selecting it requires an explicit Paid Plan decision. The full-group memory measurement decides whether

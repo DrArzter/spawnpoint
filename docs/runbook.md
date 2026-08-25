@@ -178,16 +178,37 @@ activate.
 
 ## Promote a release
 
-**Built, not yet applied or acceptance-tested.** From the owner workstation:
+**Promotion is built, not yet applied or acceptance-tested.** Release construction is moving off the owner workstation:
+GitHub Actions will signal the AWS proposal workflow, and the AWS CodeBuild job will download and publish the immutable
+candidate. The builder infrastructure exists in Terraform but deliberately has no trigger yet.
 
-1. Cut it from the pinned list: `CF_API_KEY=... scripts/cut-release.sh <mod-list> <version> <mc> <loader>` — resolve,
-   manifest and publish in one command. (Piecewise: `build-release-manifest.sh` + `upload-release.sh`, for a payload
-   that already exists on disk; or the release came from an import.)
-2. Promote it: `scripts/promote-release.sh <world> <version>` — writes desired, runs the verified stop and start
+One-time secret setup, without putting the key value in shell history:
+
+```bash
+read -rsp 'CurseForge API key: ' CF_KEY && printf '\n'
+printf '%s' "$CF_KEY" | aws ssm put-parameter \
+  --name /spawnpoint/releases/curseforge-api-key \
+  --type SecureString \
+  --value file:///dev/stdin \
+  --profile spawnpoint \
+  --region eu-central-1
+unset CF_KEY
+```
+
+The intended production sequence is:
+
+1. GitHub Actions passes the profile ID, exact configuration commit and new release version to the AWS workflow through
+   OIDC. It never receives the CurseForge key and never downloads a mod.
+2. CodeBuild resolves the clean profile checkout, builds the exact manifest, uploads JARs first and the manifest last.
+   The resulting candidate is inert: no pointer changes and no server starts.
+3. Promote it: `scripts/promote-release.sh <world> <version>` — writes desired, runs the verified stop and start
    (boot-time reconciliation applies the release, the health gate proves it), commits active, and relaunches the
    watchdog if the server was running. A stopped server is stopped again afterwards.
-3. A failed start rolls back by itself: the pointer flips to the previous active and the server starts again on it.
+4. A failed start rolls back by itself: the pointer flips to the previous active and the server starts again on it.
    `status=rolled_back` in the output is the pipeline working, not failing.
+
+Until GitHub OIDC and the proposal state machine land, `scripts/cut-release.sh` remains only a manual
+bootstrap/diagnostic path. It is not the production contract and the game host never resolves CurseForge on boot.
 
 Do not promote during an active session unless it is urgent — the stop refuses while players are online
 (`PromotionRefused`, pointer restored, nothing changed). Announce first.

@@ -116,6 +116,20 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.codebuild_assume_role
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.release_builder
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
     target = data.aws_sns_topic.alerts
     values = {
       arn = "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alerts"
@@ -417,5 +431,42 @@ run "notifier_listens_to_all_machines_and_needs_almost_nothing" {
   assert {
     condition     = aws_lambda_function.notifier.environment[0].variables["CHAT_IDS_PARAMETER"] == "/spawnpoint/bot/chat-ids"
     error_message = "Notification targets are a Parameter Store list — groups and DMs alike — not a deploy-time constant."
+  }
+}
+
+run "release_builder_is_inert_pinned_and_credential_scoped" {
+  command = plan
+
+  assert {
+    condition     = aws_codebuild_project.release_builder.source[0].type == "S3" && aws_codebuild_project.release_builder.artifacts[0].type == "NO_ARTIFACTS"
+    error_message = "The builder must execute the reviewed S3 source bundle and publish releases directly, not accept caller-controlled source or mutable build artifacts."
+  }
+
+  assert {
+    condition     = aws_codebuild_project.release_builder.environment[0].compute_type == "BUILD_GENERAL1_SMALL" && aws_codebuild_project.release_builder.concurrent_build_limit == 1
+    error_message = "Release resolution is a small single-flight batch job, not reserved or horizontally concurrent compute."
+  }
+
+  assert {
+    condition     = aws_codebuild_project.release_builder.environment[0].privileged_mode
+    error_message = "The digest-pinned resolver image requires Docker inside the ephemeral CodeBuild job."
+  }
+
+  assert {
+    condition = anytrue([
+      for variable in aws_codebuild_project.release_builder.environment[0].environment_variable :
+      variable.name == "CF_API_KEY" && variable.type == "PARAMETER_STORE" && variable.value == "/spawnpoint/releases/curseforge-api-key"
+    ])
+    error_message = "The CurseForge key must be injected directly from Parameter Store and never enter Terraform state as a value."
+  }
+
+  assert {
+    condition     = can(regex("^control-plane/release-builder/[0-9a-f]{64}\\.zip$", aws_s3_object.release_builder_source.key))
+    error_message = "The reviewed builder source must be a content-addressed object outside the immutable release namespace."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_group.release_builder.retention_in_days == 14
+    error_message = "Release build logs must have bounded retention."
   }
 }

@@ -1,0 +1,10 @@
+version: 0.2
+
+env:
+  shell: bash
+
+phases:
+  build:
+    commands:
+      - chmod 0755 scripts/aws-release-builder.sh server/scripts/*.sh
+      - scripts/aws-release-builder.sh

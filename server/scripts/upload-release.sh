@@ -34,7 +34,7 @@ source_dir="$(realpath -e -- "${RELEASE_SOURCE_DIR:-$(dirname -- "${manifest}")}
 jq -e '
   .schema_version == 1 and
   (.release | type == "string" and test("^[0-9]+\\.[0-9]+$")) and
-  (.server.mods | type == "array" and length > 0) and
+  (.server.mods | type == "array") and
   all(.server.mods[];
     (.file | type == "string" and test("^[^/\\\\]+\\.jar$")) and
     (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and

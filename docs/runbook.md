@@ -178,10 +178,10 @@ activate.
 
 ## Promote a release
 
-**Promotion is built, not yet applied or acceptance-tested.** Release construction is moving off the owner workstation:
-GitHub Actions will signal the AWS proposal workflow, and the AWS CodeBuild job will download and publish the immutable
-candidate. The builder and its narrow Step Functions wrapper exist in Terraform, but no GitHub identity can trigger
-them until the OIDC slice lands.
+**Promotion is built, not yet applied or acceptance-tested.** Release construction has moved off the owner workstation:
+the GitHub Action, narrow AWS OIDC role, CodeBuild project and its Standard Workflow are deployed. The infrastructure
+is idle and post-apply plans are clean; the first end-to-end build still waits for the CurseForge SecureString and an
+acceptance dispatch. See [the M3 command log](aws-m3-command-log.md).
 
 One-time secret setup, without putting the key value in shell history:
 
@@ -208,8 +208,8 @@ The intended production sequence is:
 4. A failed start rolls back by itself: the pointer flips to the previous active and the server starts again on it.
    `status=rolled_back` in the output is the pipeline working, not failing.
 
-Until GitHub OIDC and the proposal state machine land, `scripts/cut-release.sh` remains only a manual
-bootstrap/diagnostic path. It is not the production contract and the game host never resolves CurseForge on boot.
+Until that first acceptance dispatch succeeds, `scripts/cut-release.sh` remains only a manual bootstrap/diagnostic
+path. It is not the production contract and the game host never resolves CurseForge on boot.
 
 Do not promote during an active session unless it is urgent — the stop refuses while players are online
 (`PromotionRefused`, pointer restored, nothing changed). Announce first.

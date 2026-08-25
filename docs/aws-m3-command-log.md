@@ -93,9 +93,27 @@ post-apply plans reported `No changes`. The AWS API independently reported CodeB
 documented Step Functions permissions. No build was started, EC2 remained outside both states, and no world pointer was
 changed.
 
+The Action was pushed to configuration commit `fe3cd7f`, and GitHub reported the workflow from `main`. Its two
+non-secret repository variables were set and read back:
+
+```bash
+gh variable set AWS_RELEASE_ROLE_ARN \
+  --repo DrArzter/my-docker-minecraft-server-config \
+  --body arn:aws:iam::614934752397:role/spawnpoint-github-release
+
+gh variable set AWS_BUILD_RELEASE_STATE_MACHINE_ARN \
+  --repo DrArzter/my-docker-minecraft-server-config \
+  --body arn:aws:states:eu-central-1:614934752397:stateMachine:spawnpoint-build-release
+
+gh workflow view build-release.yml \
+  --repo DrArzter/my-docker-minecraft-server-config --yaml
+```
+
+These values are resource identifiers, not credentials. The Action gets temporary credentials only after AWS verifies
+its signed OIDC token.
+
 Before the first modded build:
 
 1. create SecureString `/spawnpoint/releases/curseforge-api-key` without printing its value;
-2. configure the two non-secret GitHub repository variables from Terraform outputs;
-3. dispatch one new release and verify the manifest, hashes and execution result;
-4. leave promotion separate — a successful build must not alter a world pointer or start EC2.
+2. dispatch one new release and verify the manifest, hashes and execution result;
+3. leave promotion separate — a successful build must not alter a world pointer or start EC2.

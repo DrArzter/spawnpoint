@@ -180,7 +180,8 @@ activate.
 
 **Promotion is built, not yet applied or acceptance-tested.** Release construction is moving off the owner workstation:
 GitHub Actions will signal the AWS proposal workflow, and the AWS CodeBuild job will download and publish the immutable
-candidate. The builder infrastructure exists in Terraform but deliberately has no trigger yet.
+candidate. The builder and its narrow Step Functions wrapper exist in Terraform, but no GitHub identity can trigger
+them until the OIDC slice lands.
 
 One-time secret setup, without putting the key value in shell history:
 

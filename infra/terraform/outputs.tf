@@ -79,6 +79,11 @@ output "bot_webhook_url" {
 }
 
 output "release_builder_project_name" {
-  description = "Inert CodeBuild project later invoked only by the release proposal state machine."
+  description = "CodeBuild project invoked only by the release proposal state machine."
   value       = aws_codebuild_project.release_builder.name
+}
+
+output "build_release_state_machine_arn" {
+  description = "Standard workflow later invoked by GitHub Actions through its narrow OIDC role."
+  value       = aws_sfn_state_machine.build_release.arn
 }

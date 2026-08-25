@@ -205,3 +205,56 @@ resource "aws_codebuild_project" "release_builder" {
     Purpose = "immutable-release-candidate"
   }
 }
+
+resource "aws_iam_role" "build_release_workflow" {
+  name               = "spawnpoint-build-release"
+  assume_role_policy = data.aws_iam_policy_document.step_functions_assume_role.json
+
+  tags = {
+    Name = "spawnpoint-build-release"
+  }
+}
+
+data "aws_iam_policy_document" "build_release_workflow" {
+  statement {
+    sid = "RunOnlyReleaseBuilder"
+    actions = [
+      "codebuild:BatchGetBuilds",
+      "codebuild:StartBuild",
+      "codebuild:StopBuild",
+    ]
+    resources = [aws_codebuild_project.release_builder.arn]
+  }
+
+  statement {
+    sid = "ManagedRuleForSynchronousBuild"
+    actions = [
+      "events:DescribeRule",
+      "events:PutRule",
+      "events:PutTargets",
+    ]
+    resources = [
+      "arn:aws:events:${var.aws_region}:${data.aws_caller_identity.current.account_id}:rule/StepFunctionsGetEventForCodeBuildStartBuildRule",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "build_release_workflow" {
+  name   = "spawnpoint-build-release"
+  role   = aws_iam_role.build_release_workflow.id
+  policy = data.aws_iam_policy_document.build_release_workflow.json
+}
+
+resource "aws_sfn_state_machine" "build_release" {
+  name     = "spawnpoint-build-release"
+  role_arn = aws_iam_role.build_release_workflow.arn
+  type     = "STANDARD"
+  definition = templatefile("${path.module}/../../workflows/build-release.asl.json.tftpl", {
+    project_name = aws_codebuild_project.release_builder.name
+  })
+
+  tags = {
+    Name    = "spawnpoint-build-release"
+    Purpose = "immutable-release-candidate-build"
+  }
+}

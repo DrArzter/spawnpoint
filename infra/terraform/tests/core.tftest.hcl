@@ -130,6 +130,13 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.build_release_workflow
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
     target = data.aws_sns_topic.alerts
     values = {
       arn = "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alerts"
@@ -468,5 +475,37 @@ run "release_builder_is_inert_pinned_and_credential_scoped" {
   assert {
     condition     = aws_cloudwatch_log_group.release_builder.retention_in_days == 14
     error_message = "Release build logs must have bounded retention."
+  }
+}
+
+run "build_release_workflow_can_only_run_the_reviewed_builder" {
+  command = plan
+
+  assert {
+    condition     = aws_sfn_state_machine.build_release.type == "STANDARD"
+    error_message = "Release resolution can take minutes and must use a durable Standard workflow."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.build_release.definition).States["Build Immutable Release"].Resource == "arn:aws:states:::codebuild:startBuild.sync"
+    error_message = "The workflow must wait for CodeBuild directly rather than orchestrating a long Lambda."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.build_release.definition).States["Build Immutable Release"].Parameters.ProjectName == aws_codebuild_project.release_builder.name
+    error_message = "Callers must not choose which CodeBuild project receives the release-builder role."
+  }
+
+  assert {
+    condition = toset([
+      for variable in jsondecode(aws_sfn_state_machine.build_release.definition).States["Build Immutable Release"].Parameters.EnvironmentVariablesOverride :
+      variable.Name
+    ]) == toset(["PROFILE_ID", "CONFIG_COMMIT", "RELEASE", "RELEASE_CREATED_BY"])
+    error_message = "The workflow may override only release identity; it must not pass secrets, buckets, source locations or buildspecs."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.build_release.definition).States["Release Ready"].Parameters.status == "READY"
+    error_message = "Only a synchronously successful build may produce the READY result."
   }
 }

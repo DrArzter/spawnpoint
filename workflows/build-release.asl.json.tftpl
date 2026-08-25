@@ -1,0 +1,67 @@
+{
+  "Comment": "Resolve one pinned profile in AWS and publish an inert immutable release candidate.",
+  "QueryLanguage": "JSONPath",
+  "StartAt": "Validate Request Shape",
+  "States": {
+    "Validate Request Shape": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            { "Variable": "$.profileId", "IsPresent": true },
+            { "Variable": "$.profileId", "IsString": true },
+            { "Variable": "$.configCommit", "IsPresent": true },
+            { "Variable": "$.configCommit", "IsString": true },
+            { "Variable": "$.release", "IsPresent": true },
+            { "Variable": "$.release", "IsString": true }
+          ],
+          "Next": "Build Immutable Release"
+        }
+      ],
+      "Default": "Invalid Release Request"
+    },
+    "Build Immutable Release": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::codebuild:startBuild.sync",
+      "Parameters": {
+        "ProjectName": "${project_name}",
+        "EnvironmentVariablesOverride": [
+          { "Name": "PROFILE_ID", "Type": "PLAINTEXT", "Value.$": "$.profileId" },
+          { "Name": "CONFIG_COMMIT", "Type": "PLAINTEXT", "Value.$": "$.configCommit" },
+          { "Name": "RELEASE", "Type": "PLAINTEXT", "Value.$": "$.release" },
+          { "Name": "RELEASE_CREATED_BY", "Type": "PLAINTEXT", "Value": "github-actions" }
+        ]
+      },
+      "ResultPath": null,
+      "TimeoutSeconds": 2100,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.buildFailure",
+          "Next": "Release Build Failed"
+        }
+      ],
+      "Next": "Release Ready"
+    },
+    "Release Ready": {
+      "Type": "Pass",
+      "Parameters": {
+        "status": "READY",
+        "profileId.$": "$.profileId",
+        "configCommit.$": "$.configCommit",
+        "release.$": "$.release"
+      },
+      "End": true
+    },
+    "Invalid Release Request": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.InvalidReleaseRequest",
+      "Cause": "profileId, configCommit and release must be strings; the builder enforces their exact formats."
+    },
+    "Release Build Failed": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.ReleaseBuildFailed",
+      "Cause": "CodeBuild did not publish the immutable release manifest. Inspect the execution and build logs."
+    }
+  }
+}

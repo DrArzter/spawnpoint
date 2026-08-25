@@ -34,10 +34,10 @@ State backend bootstrap is a one-time, separately stateful Terraform step in
 The current compute/lifecycle slice owns one VPC, one public subnet and route, a zero-ingress security group, an
 SSM-only EC2 role/profile with scoped storage access, one on-demand EC2 host, and one separately attached encrypted
 data EBS. Standard workflows own start, verified stop, idle watching and release promotion. Lifecycle V2 coordination
-is present but inert, while the Telegram bot and notifier are additive control surfaces. An inert, single-flight
-CodeBuild project contains the reviewed AWS-side release builder; it has no trigger until the proposal workflow and
-GitHub OIDC slice land. The physical AZ ID is asserted because the volume is zonal. The instance has no SSH key and
-requires IMDSv2.
+is present but inert, while the Telegram bot and notifier are additive control surfaces. A single-flight CodeBuild
+project contains the reviewed AWS-side release builder, wrapped by a narrow Standard workflow; neither has an external
+caller until the GitHub OIDC slice lands. The physical AZ ID is asserted because the volume is zonal. The instance has
+no SSH key and requires IMDSv2.
 
 `spawnpoint-lifecycle-v2` is an encrypted, deletion-protected, on-demand DynamoDB table keyed only by `server_id`.
 It has no stream, secondary index or provisioned capacity, and V1 does not reference it. Its coordinator role can only

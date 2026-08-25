@@ -4,6 +4,19 @@ Amazon States Language definitions for operations that take minutes and can fail
 Functions workflows. TypeScript implements synchronous handlers and domain decisions; it does not hide orchestration
 loops inside Lambda.
 
+## Build release
+
+`build-release.asl.json.tftpl` accepts exactly the release identity — profile ID, full configuration Git SHA and
+`MAJOR.MINOR` release — and starts the one Terraform-owned CodeBuild project through the synchronous optimized service
+integration. The project name is rendered into the definition, never accepted from a caller. The workflow passes no
+CurseForge key, bucket, source bundle or buildspec override; CodeBuild receives the key directly from Parameter Store
+and all other authority from its own role.
+
+Missing or non-string fields fail before a build. Exact format validation happens again in the builder, which can use
+regular expressions and refuses moving Git refs. A successful job returns `READY`; a failed job fails the execution as
+`Spawnpoint.ReleaseBuildFailed`. Neither path writes a world pointer or starts EC2, so building remains distinct from
+promotion.
+
 ## Start server
 
 `start-server.asl.json` is the first M2 vertical slice:

@@ -71,7 +71,14 @@ case "${operation}" in
   put-object)
     mkdir -p -- "$(dirname -- "${object}")"
     cp -- "${body}" "${object}"
-    printf '%s\n' "${metadata}" >"${metadata_file}"
+    if jq -e 'type == "object"' <<<"${metadata}" >/dev/null 2>&1; then
+      printf 'sha256=%s,release=%s,file=%s\n' \
+        "$(jq -r '.sha256' <<<"${metadata}")" \
+        "$(jq -r '.release' <<<"${metadata}")" \
+        "$(jq -r '.file' <<<"${metadata}")" >"${metadata_file}"
+    else
+      printf '%s\n' "${metadata}" >"${metadata_file}"
+    fi
     printf '%s\n' "${checksum}" >>"${metadata_file}"
     ;;
   head-object)

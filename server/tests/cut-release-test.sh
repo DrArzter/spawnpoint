@@ -148,4 +148,17 @@ jq -e '.release == "3.0" and .server.mods == []' \
   "${release_root}/releases/3.0/manifest.json" >/dev/null
 [[ -z "$(find "${release_root}/releases/3.0" -path '*/mods/*.jar' -print -quit)" ]]
 
+# AWS CLI shorthand treats square brackets as syntax. Real mod filenames may
+# contain them, so release metadata is passed as JSON and must remain opaque.
+mkdir -p -- "${fixture}/special/mods"
+special_mod="dungeons-and-taverns-3.0.3.f[Forge].jar"
+printf 'special filename bytes\n' >"${fixture}/special/mods/${special_mod}"
+"${SCRIPTS}/build-release-manifest.sh" \
+  3.1 1.20.1 47.4.10 "${fixture}/special/mods" "${fixture}/special/manifest.json" >/dev/null
+special_upload="$(RELEASE_SOURCE_DIR="${fixture}/special" \
+  "${SCRIPTS}/upload-release.sh" "${fixture}/special/manifest.json")"
+grep -qx 'result=uploaded' <<<"${special_upload}"
+cmp -- "${fixture}/special/mods/${special_mod}" \
+  "${release_root}/releases/3.1/mods/${special_mod}"
+
 printf 'cut-release-test: ok\n'

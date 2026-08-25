@@ -59,10 +59,15 @@ head_release_object() {
 }
 
 upload_release_object() {
-  local key="$1" body="$2" digest="$3" extra_metadata="$4"
-  local digest_base64 bytes head_output remote_hex remote_base64 remote_bytes
+  local key="$1" body="$2" digest="$3" filename="$4"
+  local digest_base64 bytes metadata head_output remote_hex remote_base64 remote_bytes
   digest_base64="$(archive_checksum_base64 "${body}")"
   bytes="$(stat --format '%s' -- "${body}")"
+  metadata="$(jq -cn \
+    --arg sha256 "${digest}" \
+    --arg release "${release}" \
+    --arg file "${filename}" \
+    '{sha256: $sha256, release: $release, file: $file}')"
 
   s3_cli put-object \
     --bucket "${RELEASE_BUCKET}" \
@@ -70,7 +75,7 @@ upload_release_object() {
     --body "${body}" \
     --checksum-algorithm SHA256 \
     --checksum-sha256 "${digest_base64}" \
-    --metadata "sha256=${digest},release=${release},${extra_metadata}" \
+    --metadata "${metadata}" \
     >/dev/null
 
   head_output="$(head_release_object "${key}")" || die "could not inspect uploaded object: s3://${RELEASE_BUCKET}/${key}"
@@ -114,10 +119,10 @@ while IFS=$'\t' read -r filename expected_sha expected_bytes; do
   actual_sha="${actual_sha%% *}"
   [[ "${actual_sha}" == "${expected_sha}" ]] || die "SHA-256 mismatch for ${filename}"
 
-  upload_release_object "releases/${release}/mods/${filename}" "${source_file}" "${expected_sha}" "file=${filename}"
+  upload_release_object "releases/${release}/mods/${filename}" "${source_file}" "${expected_sha}" "${filename}"
 done < <(jq -r '.server.mods[] | [.file, .sha256, (.bytes | tostring)] | @tsv' "${manifest}")
 
-upload_release_object "${manifest_key}" "${manifest}" "${manifest_digest}" "file=manifest.json"
+upload_release_object "${manifest_key}" "${manifest}" "${manifest_digest}" "manifest.json"
 
 printf 'result=uploaded\n'
 printf 'bucket=%s\n' "${RELEASE_BUCKET}"

@@ -1,0 +1,10 @@
+# The mod list is a declaration and stays a file (ADR-0028): one pinned entry
+# per line, <curseforge-slug>:<fileId>. A CurseForge file id names one immutable
+# upload, so the pin is real. "Newest" is a proposal's job, never this file's.
+#
+# Blank lines and #-comments are ignored. Editing this list changes nothing by
+# itself: scripts/cut-release.sh resolves it into an immutable release, and
+# only a promotion deploys one.
+
+jei:5101366
+mekanism:4907231

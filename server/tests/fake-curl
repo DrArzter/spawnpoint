@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+
+# PATH shim standing in for curl against the CurseForge API, the same way
+# fake-aws stands in for S3. Routes:
+#   .../v1/mods/search?gameId=<g>&slug=<slug>  -> ${FAKE_CF_ROOT}/search-<slug>.json
+#   .../v1/mods/<modId>/files/<fileId>         -> ${FAKE_CF_ROOT}/file-<modId>-<fileId>.json
+#   https://fake.download/<name>               -> ${FAKE_CF_ROOT}/blobs/<name>
+# A missing fixture behaves like curl -f on a 404: exit 22, no output.
+# Refuses any request without an x-api-key header, so a script that forgets
+# authentication fails the test rather than silently passing.
+
+set -Eeuo pipefail
+
+: "${FAKE_CF_ROOT:?FAKE_CF_ROOT is required}"
+
+url=""
+output=""
+api_key_seen=false
+while (( $# > 0 )); do
+  case "$1" in
+    -H)
+      [[ "$2" == x-api-key:* ]] && api_key_seen=true
+      shift 2
+      ;;
+    -o)
+      output="$2"
+      shift 2
+      ;;
+    -fsSL | -f | -s | -S | -L)
+      shift
+      ;;
+    -*)
+      exit 64
+      ;;
+    *)
+      url="$1"
+      shift
+      ;;
+  esac
+done
+
+[[ -n "${url}" ]] || exit 64
+"${api_key_seen}" || exit 22
+
+fixture=""
+case "${url}" in
+  */v1/mods/search\?*slug=*)
+    slug="${url##*slug=}"
+    slug="${slug%%&*}"
+    fixture="${FAKE_CF_ROOT}/search-${slug}.json"
+    ;;
+  */v1/mods/*/files/*)
+    path="${url##*/v1/mods/}"
+    mod_id="${path%%/*}"
+    file_id="${path##*/}"
+    fixture="${FAKE_CF_ROOT}/file-${mod_id}-${file_id}.json"
+    ;;
+  https://fake.download/*)
+    fixture="${FAKE_CF_ROOT}/blobs/${url##*/}"
+    ;;
+  *)
+    exit 64
+    ;;
+esac
+
+[[ -f "${fixture}" ]] || exit 22
+
+if [[ -n "${output}" ]]; then
+  cp -- "${fixture}" "${output}"
+else
+  cat -- "${fixture}"
+fi

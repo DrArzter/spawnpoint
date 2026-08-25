@@ -32,6 +32,16 @@ the server runs. See [ADR-0008](0008-versioned-mod-releases.md).
 folder. A manifest pack in a launcher format is published alongside it, at effectively no cost, for anybody who does
 adopt a launcher later — but nothing depends on that happening.
 
+**The install rule is wholesale replacement: delete the mods folder, unzip the pack.** Decided 2026-08-15. This is the
+client-side mirror of the server's own reconcile — an atomic swap, performed by hands — and it removes the whole
+failure family in the context above: an old file left behind cannot exist when nothing old survives. It is also what
+makes a *full* archive mandatory: anything partial would require finding and deleting superseded JARs, which is a
+reconciliation, which needs a tool.
+
+**Delivery in the cut-down M4 is the bot, not a site.** The pack is pushed at promotion — the "release promoted"
+notification carries a fresh signed link — and `pack` re-issues one on demand. No CloudFront, no page; the
+distribution site returns only if the panel ever earns its place.
+
 Distribution is a static site on S3 behind CloudFront, sharing the distribution with the control panel:
 
 - the current pack, at a stable URL,
@@ -52,8 +62,9 @@ design.
 
 **Immutable content, ephemeral access.** The tempting fix — invalidate the old URL when a new release is published —
 must not be taken. Old packs staying available is what lets a player pin to the previous release when a new one breaks
-for them, and it is what the delta archive in [ADR-0028](0028-update-proposals.md) applies *from*. Versions are
-immutable and permanent. If anything expires, it is the **link**, not the pack.
+for them. Versions are immutable and permanent. If anything expires, it is the **link**, not the pack. (An earlier
+draft also justified old packs as what the player-facing delta archive applies from; that delta is now dropped — see
+[ADR-0028](0028-update-proposals.md).)
 
 And the important arithmetic: **the exposure is not the archive's size, it is the URL being open.**
 
@@ -127,6 +138,7 @@ An unusual amount of transfer is worth knowing about within hours, whichever of 
 | Custom launcher or updater program | Best possible experience, and a genuinely interesting build. Far more work, needs signing and per-platform packaging, and duplicates what launchers already do well |
 | Publish the pack on Modrinth or CurseForge | Free hosting and automatic updates in launchers, and worth doing eventually. Rejected as the primary route: it is public, it invites moderation and metadata work, and the pack is for one small group |
 | A local sync tool the players run | Reads the release manifest, downloads what changed, removes what went. It is the delta archive done properly, and it would make updates painless. Costs a real tool to write, package for Windows and support for five people — and it asks them to run a program from a friend. Worth revisiting only if archives become genuinely painful |
+| Send the archive as a Telegram file, cached by `file_id` | The most attractive delivery of all: uploaded once, re-sent by Telegram's own infrastructure for free, pushed rather than fetched, and no URL exists at all. Killed by one number: the Bot API caps bot uploads at **50 MB** against a ~600 MB pack, and the 2 GB self-hosted Bot API server is an always-on component. A delta would fit under the cap, but the delta is dead for players — applying one means deleting superseded JARs, which is a reconciliation, which needs the tool this table already declines twice |
 | A third-party launcher that imports the manifest — Prism, MultiMC, ATLauncher | Free, and they work with offline accounts, so "no official launcher" does not rule them out. Not chosen because it is a change to how five people already play, which is their call rather than this document's. The manifest is published so the option stays open at any time |
 
 ## Open questions

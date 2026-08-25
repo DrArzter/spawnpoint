@@ -75,6 +75,20 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.idle_watchdog
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.promote_workflow
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.lambda_assume_role
     values = {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
@@ -85,6 +99,26 @@ mock_provider "aws" {
     target = data.aws_iam_policy_document.lifecycle_coordinator
     values = {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.bot
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+  override_data {
+    target = data.aws_iam_policy_document.notifier
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
+    target = data.aws_sns_topic.alerts
+    values = {
+      arn = "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alerts"
     }
   }
 }
@@ -250,4 +284,138 @@ run "unreviewed_instance_type_is_rejected" {
   }
 
   expect_failures = [var.instance_type]
+}
+
+run "idle_watchdog_probes_host_and_runs_verified_stop" {
+  command = plan
+
+  assert {
+    condition     = aws_sfn_state_machine.idle_watchdog.type == "STANDARD"
+    error_message = "The watchdog waits for hours; only a Standard workflow makes those waits free."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.idle_watchdog.definition).States["Send Probe"].Parameters.Parameters.commands[1] == "/srv/spawnpoint/app/server/scripts/idle-probe.sh"
+    error_message = "The watchdog must probe through the host's exit-code contract, never parse RCON itself."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.idle_watchdog.definition).States["Stop Idle Session"].Resource == "arn:aws:states:::states:startExecution.sync:2"
+    error_message = "The watchdog must run the verified stop workflow synchronously, so a refusal is observable."
+  }
+}
+
+run "running_hours_alarm_is_a_presence_alarm_on_the_guardrails_topic" {
+  command = plan
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.running_hours.treat_missing_data == "notBreaching"
+    error_message = "A stopped host emits no metric; missing data must read as healthy."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.running_hours.threshold == -1 && aws_cloudwatch_metric_alarm.running_hours.comparison_operator == "GreaterThanThreshold"
+    error_message = "The alarm fires on metric presence — any CPU reading beats -1 — not on load."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.running_hours.period == 3600 && aws_cloudwatch_metric_alarm.running_hours.evaluation_periods == 10
+    error_message = "Ten hourly datapoints keep the alarm above the watchdog's 8h session cap."
+  }
+
+  assert {
+    condition     = contains(aws_cloudwatch_metric_alarm.running_hours.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alerts")
+    error_message = "The alarm must publish to the guardrails topic, where every alert converges."
+  }
+}
+
+run "promotion_flips_the_pointer_and_composes_existing_machines" {
+  command = plan
+
+  assert {
+    condition     = aws_sfn_state_machine.promote_release.type == "STANDARD"
+    error_message = "Promotion waits on child machines; only a Standard workflow makes that free."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.promote_release.definition).States["Write Desired"].Resource == "arn:aws:states:::aws-sdk:s3:putObject"
+    error_message = "The pointer must be written by a direct S3 integration, not a Lambda wrapper."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.promote_release.definition).States["Start With Target"].Resource == "arn:aws:states:::states:startExecution.sync:2"
+    error_message = "Promotion must run the existing start machine synchronously, so health gates the commit."
+  }
+
+  assert {
+    condition     = strcontains(aws_sfn_state_machine.promote_release.definition, "States.JsonToString($.document)")
+    error_message = "Pointer documents must be built as objects and serialised, never hand-formatted strings."
+  }
+}
+
+run "bot_is_a_webhook_with_the_gate_in_code" {
+  command = plan
+
+  assert {
+    condition     = aws_lambda_function.bot.runtime == "nodejs22.x"
+    error_message = "Pin the Lambda runtime; supported Node runtimes change over time (lambdas/README.md)."
+  }
+
+  assert {
+    condition     = aws_lambda_function_url.bot.authorization_type == "NONE"
+    error_message = "Telegram cannot sign SigV4; the gate is the webhook secret verified in the handler."
+  }
+
+  assert {
+    condition = alltrue([
+      for key in [
+        "START_STATE_MACHINE_ARN",
+        "WATCHDOG_STATE_MACHINE_ARN",
+        "STOP_STATE_MACHINE_ARN",
+        "INSTANCE_ID",
+        "RELEASE_BUCKET",
+        "BOT_TOKEN_PARAMETER",
+        "WEBHOOK_SECRET_PARAMETER",
+        "ALLOW_LIST_PARAMETER",
+      ] : contains(keys(aws_lambda_function.bot.environment[0].variables), key)
+    ])
+    error_message = "The handler's contract is its environment; every name it reads must be wired."
+  }
+
+  assert {
+    condition     = aws_lambda_function.bot.environment[0].variables["BOT_TOKEN_PARAMETER"] == "/spawnpoint/bot/token"
+    error_message = "Secrets stay in Parameter Store under /spawnpoint/bot/*, referenced by name."
+  }
+}
+
+run "notifier_listens_to_all_machines_and_needs_almost_nothing" {
+  command = plan
+
+  assert {
+    condition     = aws_lambda_function.notifier.runtime == "nodejs22.x" && aws_lambda_function.notifier.memory_size == 128
+    error_message = "The notifier is a small, pinned function."
+  }
+
+  assert {
+    condition     = aws_sns_topic_subscription.alerts_to_chat.protocol == "lambda" && aws_sns_topic_subscription.alerts_to_chat.topic_arn == "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alerts"
+    error_message = "Guardrail alerts must reach the chat through the one topic every alarm converges on."
+  }
+
+  assert {
+    condition     = aws_lambda_permission.notifier_sns.principal == "sns.amazonaws.com"
+    error_message = "Only the topic may invoke the notifier's SNS path."
+  }
+
+  # The event pattern and the permission's source_arn embed machine ARNs,
+  # which are computed — unknown at plan under the mock provider — so their
+  # contents cannot be asserted here. What plan does know: the principal.
+  assert {
+    condition     = aws_lambda_permission.notifier_events.principal == "events.amazonaws.com"
+    error_message = "Only EventBridge may invoke the notifier."
+  }
+
+  assert {
+    condition     = aws_lambda_function.notifier.environment[0].variables["CHAT_IDS_PARAMETER"] == "/spawnpoint/bot/chat-ids"
+    error_message = "Notification targets are a Parameter Store list — groups and DMs alike — not a deploy-time constant."
+  }
 }

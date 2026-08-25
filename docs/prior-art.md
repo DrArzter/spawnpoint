@@ -37,6 +37,25 @@ after a period with no connections.
 **Constraint to remember:** its trigger Lambda must live in `us-east-1`, because Route 53 ships query logs
 only to that region. If the implicit wake is ever added here, that constraint comes with it.
 
+### exaroton, Aternos — on-demand as a hosted service
+
+<https://exaroton.com> · <https://aternos.org>
+
+The same consumption model this project builds, offered as a service, by one company: Aternos free and queue-based,
+exaroton pay-per-use — **1 credit per GB of RAM per hour at €0.01, and the server stops when nobody is online**. The
+idle watchdog, shipped as a product. Recorded from their help centre 2026-08-17; verify pricing before relying on it.
+
+Two things worth knowing from the comparison. First, validation: the demand for start-on-request, stop-when-empty
+exists, and its economics work at scale. Second, calibration: at 8–16 GB their rate is roughly at parity with
+on-demand EC2, so this project's cost story comes from the lifecycle itself, not from a price difference with a hosted service.
+
+**Honest signposting, since this repository may be read by somebody choosing:** a group that wants a modded server in
+minutes with no cloud account should use exaroton — it is excellent at exactly that. This project is for the operator
+who wants to *own* the thing: the world and backups in their own account, infrastructure as code they can read, and
+releases as first-class deployments (immutable, health-gated, rolled back by a pointer flip). Those properties matter
+to the person operating the server rather than the people joining it, which is why this is a blueprint to deploy, not
+a service to sign up for.
+
 ### mc-router, Infrared, lazymc — wake-on-connect, implemented three times
 
 <https://github.com/itzg/mc-router> · <https://github.com/haveachin/infrared> · <https://github.com/timvisee/lazymc>
@@ -105,13 +124,23 @@ available, and server-side and client-side mod sets differ.
 
 Full server management panels: web UI, console access, file management, scheduled tasks, multiple servers.
 
+**A different layer of the stack, not an alternative implementation.** These panels manage *processes* on machines
+that already exist and run 24/7 — a panel plus a per-node daemon — and that is the right shape for their use case:
+many servers, many users, hardware you own. This project manages the *machine's* lifecycle and treats the mod set as
+a deployable artefact; the overlap is roughly the start button and the backups. Choosing between them is choosing a
+use case, not a winner: for a community with a dedicated box and many users, Pterodactyl is the mature answer, with
+hundreds of supported games, a browser console, file management and multi-user permissions.
+
 **Worth borrowing**
 
-- Their feature lists are a good checklist of what operators actually need day to day. Read them before
-  designing the panel in [ADR-0012](adr/0012-web-control-panel.md), then cut ruthlessly.
+- **Eggs**: a per-game template — image, ports, environment, install steps — with hundreds of instances. This is the
+  shipped prior art for the per-game adapter placeholder in [the ADR index](adr/README.md#decisions-still-to-record).
+- Their feature lists as a checklist of day-to-day operator needs; read, then cut ruthlessly
+  ([ADR-0012](adr/0012-web-control-panel.md)).
 
-**Not reused.** They are somebody else's control plane, which is the component being built here. They also
-assume an always-on host, which contradicts the design.
+**Not reused.** They are somebody else's control plane, which is the component being built here for the learning's
+sake, and they assume an always-on host, which contradicts the invariant in
+[docs/architecture.md](architecture.md#what-runs-when-nobody-plays).
 
 ### Kubernetes operators, for example `Shulker`
 
@@ -159,10 +188,11 @@ Grafana per [ADR-0015](adr/0015-observability-and-alerting.md); a Factorio sessi
 dashboard to the same stack. That is the strongest confirmation yet that the per-game adapter's "companions" axis is
 real and reusable, not speculation.
 
-**`zomboid-control-panel` is this project built as a monolith.** Server control, an RCON console, a live player map, a
-mod manager, a scheduler, backups and a Discord bot — the same job list as this control plane, delivered as one
-always-on process on the host. Read it as the control experiment: what the same requirements produce without the
-nothing-runs-when-nobody-plays invariant in [docs/architecture.md](architecture.md#what-runs-when-nobody-plays).
+**`zomboid-control-panel` covers the same job list with the opposite architectural choice.** Server control, an RCON
+console, a live player map, a mod manager, a scheduler, backups and a Discord bot — delivered as one always-on process
+on the host, which is a perfectly reasonable shape for a machine that runs anyway. A useful contrast for seeing which
+of this project's properties follow from the nothing-runs-when-nobody-plays invariant in
+[docs/architecture.md](architecture.md#what-runs-when-nobody-plays) rather than from the feature list.
 
 ### Which games could actually move in
 

@@ -29,10 +29,10 @@ Rules that apply to all of them:
   local integration adapters use LocalStack endpoints and the Docker host agent. Environment selection must not fork
   the business rules or the ASL definition. See [ADR-0031](../docs/adr/0031-first-class-local-control-plane.md).
 
-**Runtime direction: TypeScript on a supported Node.js Lambda runtime.** The state machines themselves remain Amazon
+**Runtime direction: TypeScript on supported Node.js Lambda runtimes.** The state machines themselves remain Amazon
 States Language definitions, created by Terraform; TypeScript implements API handlers and task logic, not orchestration
-hidden inside application code. Use one runtime across all Lambda groups and pin the exact Node.js version when the
-first function lands, because supported Lambda runtimes change over time.
+hidden inside application code. Pin each deployed function's runtime explicitly, because supported Lambda runtimes
+change over time; runtime convergence can happen separately from this additive integration.
 
 The first domain rule now exists without an AWS adapter: `planBackupRetention` chooses distinct recovery points as
 five recent UTC days, two older ISO weeks and two still older UTC months. Malformed inventory fails closed. A later
@@ -44,9 +44,9 @@ server state, an expiring lease with a monotonically increasing fencing token, s
 conservative idle observations. It is not connected to AWS or the working V1 workflows yet; the additive rollout and
 cutover boundary are documented in [`docs/lifecycle-v2-rollout.md`](../docs/lifecycle-v2-rollout.md).
 
-Run the tests with `npm test` from this directory. The repository currently exercises them with Node 26.
+Run all checks from this directory. The repository currently exercises them with Node 26:
 
-The Lifecycle V2 coordinator is the first deployable function. It targets the AWS-supported `nodejs24.x` runtime and
+The Lifecycle V2 coordinator targets the AWS-supported `nodejs24.x` runtime and
 bundles its pinned AWS SDK v3 clients with esbuild. Because development environments may set `NODE_ENV=production`,
 install build tooling explicitly before producing the deterministic ZIP:
 
@@ -61,6 +61,49 @@ The coordinator performs consistent reads and revision-guarded `PutItem` calls a
 write loss causes a bounded reread/retry; Step Functions still owns every wait and long operation. Its production role
 has only `GetItem`, `PutItem` on the V2 table and write access to its own bounded log group. No V1 role can invoke it.
 
-**Status:** backup-retention and Lifecycle V2 coordination domain logic exist and are tested. The Lifecycle V2
-coordinator is deployable but remains inert until separate V2 workflow roles receive invoke permission. V1 continues
-to use direct EC2/SSM integrations. Pipeline follows in M3, control-plane surfaces and adapters in M4.
+## The Telegram bot — the first active control surface
+
+Built on **grammY 1.45.1** (the TypeScript aiogram: router, middleware, typed API), adopted at the owner's call on the
+honest observation that restructuring later never happens in an evenings project — the roadmap itself names motivation
+as the scarce resource. The recorded costs: one pinned dependency, and the bundle grew from ~9 KB to ~930 KB (esbuild,
+ESM, `@aws-sdk/*` externalised — irrelevant at Lambda's limits). What grammY owns, we deleted rather than kept as a
+shadow: update parsing and command routing live in the framework, and the former `parseUpdate` is gone with its tests.
+
+The layout is the aiogram shape, mapped onto this project's boundary rule — domain decides, everything else carries:
+
+```
+src/domain/telegram-bot.ts   allow-list (strict: malformed ids throw), input builders, reply wording
+src/bot/bot.ts               composition root: middleware order, command registry, bot.catch
+src/bot/middleware/auth.ts   the allow-list gate — commands only, so strangers' chatter is never answered
+src/bot/commands/*.ts        start / status / pack, thin ctx glue
+src/bot/services/aws.ts      the AWS port: every SDK call, and the Parameter Store cache
+src/bot/handler.ts           cold-start wiring and grammY's aws-lambda-async webhook callback
+```
+
+**The builders remain the single source of the canonical timings**, and a test asserts they reproduce
+`workflows/*.input.example.json` verbatim. Every start is attributed: `requestedBy: "telegram:<id>"` rides into both
+execution inputs — the history is the audit record, the notifications leg will read it for "X requested the server".
+
+Transport decisions worth knowing: the Function URL uses `authorization_type = NONE` because Telegram cannot sign
+SigV4 — grammY's `secretToken` option enforces the webhook secret before any handler runs. `bot.catch` absorbs handler
+errors into a logged 200, because a non-200 makes Telegram redeliver the update and a broken bot becomes a retry
+storm. Secrets come from Parameter Store: token and webhook secret cached for the container's life, the allow-list on
+a 60-second TTL so `put-parameter --overwrite` takes effect without a redeploy.
+
+### What still grows later
+
+- ~~The notifications leg~~ **Built**: `src/bot/notifier.ts` + `src/domain/notifications.ts`. Step Functions publishes
+  every execution's status changes to EventBridge by itself, so the machines carry no announce states — the execution
+  lifecycle IS the event, and the domain module's judgement is mostly about *silence*: child executions (the
+  watchdog's stops, promotion's children) never double-announce their parents, stop successes are announced by
+  whoever ordered them, and a failed stop always speaks because it is the backup contract failing. The notifier's
+  role reads exactly two parameters and can do nothing else. The same function is subscribed to the guardrails
+  topic, so the budget, cost anomalies and the running-hours alarm reach the chat too (`src/domain/alerts.ts`); an
+  alert must never be lost to a parse error, so unrecognised formats are delivered raw, never thrown.
+- **Callbacks and dialogs**: grammY keyboards plus the first FSM state — a DynamoDB row behind a storage port, which
+  [ADR-0031](../docs/adr/0031-first-class-local-control-plane.md) requires for the local environment anyway.
+- **A second platform** (Discord, [ADR-0016](../docs/adr/0016-chat-integrations.md)): the command cores stay per-platform thin over shared services and domain; the adapter move, same as everywhere else in this design.
+
+**Status:** backup-retention, Lifecycle V2 coordination, Telegram bot, notifications and alert handling exist and are
+tested. The V2 coordinator is deployable but remains inert until separate V2 workflow roles receive invoke permission;
+V1 continues to use direct EC2/SSM integrations. The bot and notifier are active M4 surfaces on `nodejs22.x`.

@@ -89,10 +89,13 @@ incident. A policy that auto-applies before the rollback is trusted is a way to 
 
 Every approved release publishes a **full client pack**, which is the supported path.
 
-A **delta archive** — only the mods that changed — is published alongside it, as a convenience. It is a convenience
-rather than the mechanism because a delta is only valid from the immediately preceding release: somebody two releases
-behind who applies it ends up in a state that matches nothing. The delta names the release it applies from, and the
-instructions say to take the full pack if in doubt.
+~~A **delta archive** — only the mods that changed — is published alongside it, as a convenience.~~ **Dropped for
+players, 2026-08-15.** The staleness problem this paragraph originally admitted (a delta is only valid from the
+immediately preceding release) turned out to be the smaller one. The bigger one: applying a delta is not unzipping on
+top — a superseded JAR must be *removed*, or the loader refuses on a duplicate mod. That is a reconciliation, and
+without a client tool — declined in [ADR-0013](0013-modpack-distribution.md), twice — a delta hands each player a
+manual find-and-delete. Players get the full pack with the wholesale-replace rule, always. The delta survives only
+where something can actually reconcile: on the server, whose boot does exactly that.
 
 ### How a change becomes a deployment
 

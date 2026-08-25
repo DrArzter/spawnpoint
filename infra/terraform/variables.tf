@@ -49,3 +49,20 @@ variable "data_volume_size_gib" {
   }
 }
 
+variable "running_hours_alarm_hours" {
+  description = "Consecutive running hours before the alarm fires. Keep it above the watchdog's session cap (8h at the default timings), or every long legitimate evening pages."
+  type        = number
+  default     = 10
+
+  validation {
+    condition     = var.running_hours_alarm_hours >= 2
+    error_message = "An alarm under two hours fires during every ordinary session."
+  }
+}
+
+
+variable "connection_address" {
+  description = "The overlay address players connect to; shown by the bot and passed to the start workflow's readiness contract."
+  type        = string
+  default     = "172.29.23.24:25565"
+}

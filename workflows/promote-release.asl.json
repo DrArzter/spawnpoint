@@ -1,0 +1,533 @@
+{
+  "Comment": "Promote a world to a release (ADR-0030): write desired, run the verified stop and start machines synchronously — boot-time reconciliation applies the release, the start's health gate proves it — then commit active. On a failed start, flip the pointer back and start again: rollback is the same mechanism in reverse.",
+  "QueryLanguage": "JSONPath",
+  "StartAt": "Initialize",
+  "States": {
+    "Initialize": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$",
+        "observed": {}
+      },
+      "Next": "Read Pointer"
+    },
+    "Read Pointer": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:s3:getObject",
+      "Parameters": {
+        "Bucket.$": "$.request.releaseBucket",
+        "Key.$": "States.Format('worlds/{}/release.json', $.request.worldName)"
+      },
+      "ResultSelector": {
+        "raw.$": "$.Body"
+      },
+      "ResultPath": "$.pointerObject",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.observed.pointerError",
+          "Next": "World Not Imported"
+        }
+      ],
+      "Next": "Parse Pointer"
+    },
+    "Parse Pointer": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "observed.$": "$.observed",
+        "pointer.$": "States.StringToJson($.pointerObject.raw)"
+      },
+      "Next": "Pointer Matches World"
+    },
+    "Pointer Matches World": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.pointer.world",
+              "StringEqualsPath": "$.request.worldName"
+            },
+            {
+              "Variable": "$.pointer.schema_version",
+              "NumericEquals": 1
+            }
+          ],
+          "Next": "Already Active"
+        }
+      ],
+      "Default": "Bad Pointer"
+    },
+    "Already Active": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.pointer.active_release",
+              "IsNull": false
+            },
+            {
+              "Variable": "$.pointer.active_release",
+              "StringEqualsPath": "$.request.release"
+            }
+          ],
+          "Next": "Nothing To Do"
+        }
+      ],
+      "Default": "Verify Release Published"
+    },
+    "Verify Release Published": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:s3:headObject",
+      "Parameters": {
+        "Bucket.$": "$.request.releaseBucket",
+        "Key.$": "States.Format('releases/{}/manifest.json', $.request.release)"
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.observed.manifestError",
+          "Next": "Release Not Published"
+        }
+      ],
+      "Next": "Build Desired Document"
+    },
+    "Build Desired Document": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "observed.$": "$.observed",
+        "pointer.$": "$.pointer",
+        "document": {
+          "schema_version": 1,
+          "world.$": "$.request.worldName",
+          "desired_release.$": "$.request.release",
+          "active_release.$": "$.pointer.active_release",
+          "updated_at.$": "$$.State.EnteredTime",
+          "updated_by.$": "$.request.operationId",
+          "source": "promote"
+        }
+      },
+      "Next": "Write Desired"
+    },
+    "Write Desired": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:s3:putObject",
+      "Parameters": {
+        "Bucket.$": "$.request.releaseBucket",
+        "Key.$": "States.Format('worlds/{}/release.json', $.request.worldName)",
+        "ContentType": "application/json",
+        "Body.$": "States.JsonToString($.document)"
+      },
+      "ResultPath": null,
+      "Next": "Describe Instance"
+    },
+    "Describe Instance": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.instanceId)"
+      },
+      "ResultPath": "$.observed.instance",
+      "Next": "Route Origin State"
+    },
+    "Route Origin State": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name",
+          "StringEquals": "running",
+          "Next": "Mark Origin Running"
+        },
+        {
+          "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name",
+          "StringEquals": "stopped",
+          "Next": "Mark Origin Stopped"
+        }
+      ],
+      "Default": "Instance Unpromotable"
+    },
+    "Mark Origin Running": {
+      "Type": "Pass",
+      "Result": "running",
+      "ResultPath": "$.origin",
+      "Next": "Stop Session"
+    },
+    "Mark Origin Stopped": {
+      "Type": "Pass",
+      "Result": "stopped",
+      "ResultPath": "$.origin",
+      "Next": "Start With Target"
+    },
+    "Stop Session": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn.$": "$.request.stopStateMachineArn",
+        "Input": {
+          "operationId.$": "States.Format('{}-stop', $.request.operationId)",
+          "instanceId.$": "$.request.instanceId",
+          "timing.$": "$.request.stopTiming"
+        }
+      },
+      "ResultPath": "$.observed.stop",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.observed.stopError",
+          "Next": "Build Refusal Restore Document"
+        }
+      ],
+      "Next": "Start With Target"
+    },
+    "Build Refusal Restore Document": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "observed.$": "$.observed",
+        "pointer.$": "$.pointer",
+        "document": {
+          "schema_version": 1,
+          "world.$": "$.request.worldName",
+          "desired_release.$": "$.pointer.desired_release",
+          "active_release.$": "$.pointer.active_release",
+          "updated_at.$": "$$.State.EnteredTime",
+          "updated_by.$": "$.request.operationId",
+          "source": "promote-refused"
+        }
+      },
+      "Next": "Restore Desired After Refusal"
+    },
+    "Restore Desired After Refusal": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:s3:putObject",
+      "Parameters": {
+        "Bucket.$": "$.request.releaseBucket",
+        "Key.$": "States.Format('worlds/{}/release.json', $.request.worldName)",
+        "ContentType": "application/json",
+        "Body.$": "States.JsonToString($.document)"
+      },
+      "ResultPath": null,
+      "Next": "Promotion Refused"
+    },
+    "Start With Target": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn.$": "$.request.startStateMachineArn",
+        "Input": {
+          "operationId.$": "States.Format('{}-start', $.request.operationId)",
+          "instanceId.$": "$.request.instanceId",
+          "connectionAddress.$": "$.request.connectionAddress",
+          "timing.$": "$.request.startTiming"
+        }
+      },
+      "ResultPath": "$.observed.start",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.observed.startError",
+          "Next": "Rollback Possible"
+        }
+      ],
+      "Next": "Build Commit Document"
+    },
+    "Build Commit Document": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "observed.$": "$.observed",
+        "pointer.$": "$.pointer",
+        "origin.$": "$.origin",
+        "document": {
+          "schema_version": 1,
+          "world.$": "$.request.worldName",
+          "desired_release.$": "$.request.release",
+          "active_release.$": "$.request.release",
+          "updated_at.$": "$$.State.EnteredTime",
+          "updated_by.$": "$.request.operationId",
+          "source": "promote"
+        }
+      },
+      "Next": "Commit Active"
+    },
+    "Commit Active": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:s3:putObject",
+      "Parameters": {
+        "Bucket.$": "$.request.releaseBucket",
+        "Key.$": "States.Format('worlds/{}/release.json', $.request.worldName)",
+        "ContentType": "application/json",
+        "Body.$": "States.JsonToString($.document)"
+      },
+      "ResultPath": null,
+      "Next": "Route Completion"
+    },
+    "Route Completion": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.origin",
+          "StringEquals": "stopped",
+          "Next": "Stop After Commit"
+        }
+      ],
+      "Default": "Launch Watchdog"
+    },
+    "Launch Watchdog": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:sfn:startExecution",
+      "Parameters": {
+        "StateMachineArn.$": "$.request.watchdogStateMachineArn",
+        "Input.$": "States.JsonToString($.request.watchdogInput)"
+      },
+      "ResultPath": "$.observed.watchdog",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.observed.watchdogError",
+          "Next": "Promoted Watchdogless"
+        }
+      ],
+      "Next": "Promoted Running"
+    },
+    "Stop After Commit": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn.$": "$.request.stopStateMachineArn",
+        "Input": {
+          "operationId.$": "States.Format('{}-restop', $.request.operationId)",
+          "instanceId.$": "$.request.instanceId",
+          "timing.$": "$.request.stopTiming"
+        }
+      },
+      "ResultPath": "$.observed.restop",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.observed.restopError",
+          "Next": "Promoted But Running"
+        }
+      ],
+      "Next": "Promoted Stopped"
+    },
+    "Rollback Possible": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.pointer.active_release",
+          "IsNull": true,
+          "Next": "Promotion Failed No Rollback"
+        }
+      ],
+      "Default": "Build Rollback Document"
+    },
+    "Build Rollback Document": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "observed.$": "$.observed",
+        "pointer.$": "$.pointer",
+        "origin.$": "$.origin",
+        "document": {
+          "schema_version": 1,
+          "world.$": "$.request.worldName",
+          "desired_release.$": "$.pointer.active_release",
+          "active_release.$": "$.pointer.active_release",
+          "updated_at.$": "$$.State.EnteredTime",
+          "updated_by.$": "$.request.operationId",
+          "source": "promote-rollback"
+        }
+      },
+      "Next": "Write Rollback Desired"
+    },
+    "Write Rollback Desired": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:s3:putObject",
+      "Parameters": {
+        "Bucket.$": "$.request.releaseBucket",
+        "Key.$": "States.Format('worlds/{}/release.json', $.request.worldName)",
+        "ContentType": "application/json",
+        "Body.$": "States.JsonToString($.document)"
+      },
+      "ResultPath": null,
+      "Next": "Start With Previous"
+    },
+    "Start With Previous": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn.$": "$.request.startStateMachineArn",
+        "Input": {
+          "operationId.$": "States.Format('{}-rollback', $.request.operationId)",
+          "instanceId.$": "$.request.instanceId",
+          "connectionAddress.$": "$.request.connectionAddress",
+          "timing.$": "$.request.startTiming"
+        }
+      },
+      "ResultPath": "$.observed.rollbackStart",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.observed.rollbackError",
+          "Next": "Rollback Failed"
+        }
+      ],
+      "Next": "Route Rollback Completion"
+    },
+    "Route Rollback Completion": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.origin",
+          "StringEquals": "stopped",
+          "Next": "Stop After Rollback"
+        }
+      ],
+      "Default": "Launch Watchdog After Rollback"
+    },
+    "Launch Watchdog After Rollback": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:sfn:startExecution",
+      "Parameters": {
+        "StateMachineArn.$": "$.request.watchdogStateMachineArn",
+        "Input.$": "States.JsonToString($.request.watchdogInput)"
+      },
+      "ResultPath": "$.observed.watchdog",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.observed.watchdogError",
+          "Next": "Rolled Back"
+        }
+      ],
+      "Next": "Rolled Back"
+    },
+    "Stop After Rollback": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn.$": "$.request.stopStateMachineArn",
+        "Input": {
+          "operationId.$": "States.Format('{}-rollback-stop', $.request.operationId)",
+          "instanceId.$": "$.request.instanceId",
+          "timing.$": "$.request.stopTiming"
+        }
+      },
+      "ResultPath": "$.observed.restop",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.observed.restopError",
+          "Next": "Rolled Back But Running"
+        }
+      ],
+      "Next": "Rolled Back"
+    },
+    "Nothing To Do": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "status": "already_active",
+        "world.$": "$.request.worldName",
+        "release.$": "$.request.release"
+      },
+      "End": true
+    },
+    "Promoted Running": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "status": "promoted",
+        "world.$": "$.request.worldName",
+        "release.$": "$.request.release",
+        "server": "running",
+        "watchdog": "launched"
+      },
+      "End": true
+    },
+    "Promoted Watchdogless": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "status": "promoted",
+        "world.$": "$.request.worldName",
+        "release.$": "$.request.release",
+        "server": "running",
+        "watchdog": "failed_to_launch"
+      },
+      "End": true
+    },
+    "Promoted Stopped": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "status": "promoted",
+        "world.$": "$.request.worldName",
+        "release.$": "$.request.release",
+        "server": "stopped"
+      },
+      "End": true
+    },
+    "Rolled Back": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "status": "rolled_back",
+        "world.$": "$.request.worldName",
+        "failed_release.$": "$.request.release",
+        "active_release.$": "$.pointer.active_release"
+      },
+      "End": true
+    },
+    "World Not Imported": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.WorldNotImported",
+      "Cause": "No release pointer exists for this world. Import it first; promotion changes an existing pointer."
+    },
+    "Bad Pointer": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.BadPointer",
+      "Cause": "The release pointer failed validation or names a different world."
+    },
+    "Release Not Published": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.ReleaseNotPublished",
+      "Cause": "The target release has no manifest in the release bucket. Publish it before promoting."
+    },
+    "Instance Unpromotable": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.InstanceUnpromotable",
+      "Cause": "The instance is neither running nor stopped; wait for it to settle."
+    },
+    "Promotion Refused": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.PromotionRefused",
+      "Cause": "The verified stop refused or failed — players are likely online. The pointer was restored; nothing changed on the host."
+    },
+    "Promotion Failed No Rollback": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.PromotionFailedNoRollback",
+      "Cause": "The start failed and this world has no active release to roll back to. Desired still names the failed release; see the runbook."
+    },
+    "Rollback Failed": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.RollbackFailed",
+      "Cause": "The rollback start failed too. The pointer names the previous release; the host needs a human."
+    },
+    "Promoted But Running": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.PromotedButRunning",
+      "Cause": "The release was promoted and committed, but the stop afterwards failed — EC2 may still be running. The running-hours alarm is the backstop."
+    },
+    "Rolled Back But Running": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.RolledBackButRunning",
+      "Cause": "The rollback succeeded, but the stop afterwards failed — EC2 may still be running. The running-hours alarm is the backstop."
+    }
+  }
+}

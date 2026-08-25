@@ -82,16 +82,118 @@ players it performs `save-all flush`, stops every session container, creates a f
 immutable checksum-addressed S3 key and verifies the stored metadata before Step Functions may stop EC2.
 
 Never replace this with a direct `aws ec2 stop-instances` during normal operation: that bypasses the save and backup
-contract. Automatic shutdown after N empty readings is still pending; it will invoke this same state machine.
+contract.
+
+### Idle watchdog
+
+**Built, not yet applied or acceptance-tested.** `spawnpoint-idle-watchdog` is a Standard workflow started by
+`scripts/start-server.sh` alongside every session — one execution per session, nothing scheduled, nothing running
+between sessions. It probes `idle-probe.sh` over SSM every 5 minutes; three consecutive empty readings (15 min) start
+the verified stop above. A failed probe never counts as empty. The hard session cap is 96 checks (8 h), and stops the
+host regardless of the player count. See [workflows/README.md](../workflows/README.md).
+
+To apply: `terraform apply` in `infra/terraform` adds the watchdog machine, its role and the running-hours alarm
+(3 add). Validate the definition first, read-only:
+
+```bash
+aws stepfunctions validate-state-machine-definition --definition file://workflows/idle-watchdog.asl.json --type STANDARD --severity WARNING --profile spawnpoint --region eu-central-1
+```
+
+Acceptance drill, one evening: start a session with the watchdog input's `checkIntervalSeconds` at 60 and
+`emptyChecksRequired` at 2, join, leave, and watch the execution stop the host within ~3 minutes. Then record the date
+in the procedure table. If the watchdog itself fails, its execution failure is the signal —
+`Spawnpoint.WatchdogBlind` means the host was unobservable and was deliberately left running; the
+`spawnpoint-running-hours` alarm (10 consecutive hours → `spawnpoint-alerts`) and the budget are the backstops.
+
+## Telegram bot
+
+**Built, not yet applied or acceptance-tested.** `start`, `status`, `pack` — the M4 cut. One-time setup, in order:
+
+1. Create the bot with @BotFather, keep the token.
+2. Put the three parameters in Parameter Store (the only hand-made secrets in the system):
+
+```bash
+aws ssm put-parameter --name /spawnpoint/bot/token --type SecureString --value '<botfather token>' --profile spawnpoint --region eu-central-1
+aws ssm put-parameter --name /spawnpoint/bot/webhook-secret --type SecureString --value "$(openssl rand -hex 32)" --profile spawnpoint --region eu-central-1
+aws ssm put-parameter --name /spawnpoint/bot/allow-list --type String --value '<id1>,<id2>' --profile spawnpoint --region eu-central-1
+aws ssm put-parameter --name /spawnpoint/bot/chat-ids --type String --value '<group id>,<dm id>,...' --profile spawnpoint --region eu-central-1
+```
+
+   Telegram user ids are numbers; each player gets theirs from @userinfobot. Editing the allow-list is
+   `put-parameter --overwrite` — no deploy.
+3. Build and apply: `cd lambdas && npm install && npm run build`, then `terraform apply` in `infra/terraform`.
+4. Register the webhook, pointing Telegram at the `bot_webhook_url` output with the same secret:
+
+```bash
+curl -s "https://api.telegram.org/bot<token>/setWebhook" -d "url=<bot_webhook_url>" -d "secret_token=<webhook-secret value>"
+```
+
+The bot works in the group and in direct messages alike — commands answer wherever they were asked, and the
+allow-list is by user, not by chat. One platform rule to know: **a bot can never write to a person first.** A player
+who wants the bot in DMs (or a DM notification target) opens the bot once and presses Start; until then that DM does
+not exist for the bot. Notification targets are the `chat-ids` list — group ids are negative, DM ids positive, edit
+with `put-parameter --overwrite`, takes effect within a minute. One unreachable target never blocks the rest.
+
+Guardrail alerts arrive in the same chat: the notifier is subscribed to `spawnpoint-alerts`, so the budget, cost
+anomalies and the running-hours alarm all speak Telegram — and email on the same topic remains the out-of-band path
+that works even when the notifier does not (ADR-0020). An unrecognised alert format is delivered raw rather than
+dropped.
+
+Notifications need no wiring beyond the `chat-ids` parameter: Step Functions publishes every execution's status
+changes to EventBridge on its own, and the `spawnpoint-notifier` function turns the meaningful ones into group
+messages — requested (with who asked), ready (with the address), stopped by the watchdog, promoted, rolled back, and
+every failed stop, because a failed stop is the backup contract failing. Child executions stay silent by design, so
+nothing is announced twice. The group chat id: add the bot to the group, send a message, read `chat.id` from
+`getUpdates` (a negative number for groups).
+
+Acceptance: from a phone on the allow-list, `/status` answers, `/start` brings the server up — the group sees
+"requested" and "ready" arrive on their own — and `/pack` returns a working link whose zip carries INSTALL.txt. From a
+phone not on the list, every command is politely denied. Leave, and the watchdog's stop announces itself. That is
+M4's done-when.
+
+## Import a world
+
+Bring an existing world and the exact mods it runs on into the system, from the owner workstation:
+
+```bash
+scripts/import-world.sh <data-dir> <world-name> <mods-dir> <release> <minecraft-version> <loader-version>
+```
+
+Five steps, in an order where a failure never leaves a half-imported world looking whole: build the manifest → publish
+the release (mods first, manifest last) → archive the world → upload the verified archive → write the world's release
+pointer `worlds/<name>/release.json`. The pointer is **ADR-0030's document in its first real form**: `desired_release`
+set to what was imported, `active_release` null until a start passes the health check.
+
+- Importing a second world on the same pack is normal: the release upload reports `already_present`.
+- Re-importing an existing world is refused: changing its release is a promotion, not an import.
+- The same release version with different mod bytes is refused: releases are immutable.
+
+**Wired on the code side, pending apply.** `start-session.sh` now performs boot-time reconciliation: it reads the
+world's pointer, ensures a verified local copy of the desired release (a cache on the data volume — an unchanged boot
+downloads nothing, a tampered cache heals itself), and atomically reconciles the live mod directory before Minecraft
+starts. No pointer means the pre-import legacy path; any other failure refuses the start, because wrong mods corrupt
+worlds. The host's IAM policy gains read access to `worlds/*` in the same Terraform change — apply it together with
+the watchdog slice. The host `.env` must carry `RELEASE_BUCKET` (and optionally `WORLD_NAME`) for the pointer path to
+activate.
 
 ## Promote a release
 
-1. Cut the release: `# TODO: scripts/cut-release.sh <version>`
-2. Verify the manifest: `# TODO`
-3. Promote: `# TODO`
-4. Watch the operation to *ready*, or to *failed* and an automatic rollback.
+**Built, not yet applied or acceptance-tested.** From the owner workstation:
 
-Do not promote during an active session unless it is urgent. Announce first.
+1. Cut it from the pinned list: `CF_API_KEY=... scripts/cut-release.sh <mod-list> <version> <mc> <loader>` — resolve,
+   manifest and publish in one command. (Piecewise: `build-release-manifest.sh` + `upload-release.sh`, for a payload
+   that already exists on disk; or the release came from an import.)
+2. Promote it: `scripts/promote-release.sh <world> <version>` — writes desired, runs the verified stop and start
+   (boot-time reconciliation applies the release, the health gate proves it), commits active, and relaunches the
+   watchdog if the server was running. A stopped server is stopped again afterwards.
+3. A failed start rolls back by itself: the pointer flips to the previous active and the server starts again on it.
+   `status=rolled_back` in the output is the pipeline working, not failing.
+
+Do not promote during an active session unless it is urgent — the stop refuses while players are online
+(`PromotionRefused`, pointer restored, nothing changed). Announce first.
+
+If it ends `RollbackFailed`, `PromotedButRunning` or `RolledBackButRunning`: the pointer tells the truth about what
+should be running, the execution history says where it stopped, and the running-hours alarm is the cost backstop.
 
 ## Roll back a release
 

@@ -6,7 +6,7 @@ lambda_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 output_dir="${lambda_dir}/dist/lifecycle-coordinator"
 archive="${lambda_dir}/dist/lifecycle-coordinator.zip"
 
-mkdir -p "${output_dir}"
+mkdir -p "${output_dir}" "${lambda_dir}/dist/bot" "${lambda_dir}/dist/notifier"
 "${lambda_dir}/node_modules/.bin/esbuild" \
   "${lambda_dir}/src/handlers/lifecycle-coordinator.ts" \
   --bundle \
@@ -20,4 +20,25 @@ touch -t 198001010000 "${output_dir}/index.cjs"
 rm -f "${archive}"
 zip -X -j -q "${archive}" "${output_dir}/index.cjs"
 
-printf 'result=built\narchive=%s\n' "${archive}"
+"${lambda_dir}/node_modules/.bin/esbuild" \
+  "${lambda_dir}/src/bot/handler.ts" \
+  --bundle \
+  --platform=node \
+  --target=node22 \
+  --format=esm \
+  --external:@aws-sdk/* \
+  --outfile="${lambda_dir}/dist/bot/index.mjs"
+
+"${lambda_dir}/node_modules/.bin/esbuild" \
+  "${lambda_dir}/src/bot/notifier.ts" \
+  --bundle \
+  --platform=node \
+  --target=node22 \
+  --format=esm \
+  --external:@aws-sdk/* \
+  --outfile="${lambda_dir}/dist/notifier/index.mjs"
+
+printf 'result=built\narchive=%s\nbot=%s\nnotifier=%s\n' \
+  "${archive}" \
+  "${lambda_dir}/dist/bot/index.mjs" \
+  "${lambda_dir}/dist/notifier/index.mjs"

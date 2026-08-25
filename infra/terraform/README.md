@@ -6,9 +6,9 @@ Disposable game-host AWS resources live here. Persistent object storage has its 
 [`../terraform-bootstrap`](../terraform-bootstrap/). Apply order: bootstrap → guardrails → storage → this root — the
 budget exists before anything that can spend.
 
-Owns now: VPC, subnet, internet gateway, route table, security group, EC2 instance and data volume, and the game-host
-IAM role/policies. Later roots may own Lambda functions, Step Functions, API Gateway, EventBridge, SNS, DynamoDB,
-Route 53, CloudFront, CloudWatch alarms and AWS Budgets as their lifecycle boundaries become clear.
+Owns now: VPC, subnet, internet gateway, route table, security group, EC2 instance and data volume, game-host IAM,
+the start/stop/watchdog/promotion Step Functions, Lifecycle V2 state and coordinator, the Telegram bot/notifier, and
+their execution and running-hours alarms. Persistent buckets, guardrails and the state backend remain separate roots.
 
 Does not own: mod releases, the world, or anything else that is data rather than infrastructure. Those belong
 to the release pipeline. See [ADR-0011](../../docs/adr/0011-terraform-for-infrastructure.md) and
@@ -31,12 +31,11 @@ State backend bootstrap is a one-time, separately stateful Terraform step in
 
 ## Current slice
 
-The current compute/M2 lifecycle slice owns 24 resources: one VPC, one public subnet and route, a
-zero-ingress security group, an SSM-only EC2 role/profile with scoped storage access, one on-demand EC2 host, and one
-separately attached encrypted data EBS, plus Standard start and verified-stop state machines with separate dedicated
-IAM roles/policies, and the currently inert Lifecycle V2 coordination table plus coordinator Lambda, dedicated role,
-policy and bounded log group. The physical AZ ID is asserted because the volume is zonal. The instance has no SSH key
-and requires IMDSv2.
+The current compute/lifecycle slice owns one VPC, one public subnet and route, a zero-ingress security group, an
+SSM-only EC2 role/profile with scoped storage access, one on-demand EC2 host, and one separately attached encrypted
+data EBS. Standard workflows own start, verified stop, idle watching and release promotion. Lifecycle V2 coordination
+is present but inert, while the Telegram bot and notifier are additive control surfaces. The physical AZ ID is asserted
+because the volume is zonal. The instance has no SSH key and requires IMDSv2.
 
 `spawnpoint-lifecycle-v2` is an encrypted, deletion-protected, on-demand DynamoDB table keyed only by `server_id`.
 It has no stream, secondary index or provisioned capacity, and V1 does not reference it. Its coordinator role can only
@@ -97,10 +96,10 @@ persistent storage root was applied separately and is drift-free. The compute ro
 2026-08-13: **13 added, 0 changed, 0 destroyed**, with no S3 resource actions. A fresh plan after apply reported no
 changes.
 
-**Status:** state, persistent storage and M1 compute/network are live and drift-free. The restored M1 world passed its
-in-game acceptance test, was saved, archived to verified S3 and the Terraform host was stopped on 2026-08-14. Its
-encrypted 20 GiB data EBS remains attached with `DeleteOnTermination=false`. The manual M0 host also remains stopped;
-deleting those superseded manual resources is a separate, explicit cleanup decision.
+**Status:** state, persistent storage and M1 compute/network were live and drift-free at the last recorded production
+check. The restored M1 world passed its in-game acceptance test, was saved and archived to verified S3. Its encrypted
+20 GiB data EBS remains attached with `DeleteOnTermination=false`. The superseded manual M0 host and its resources were
+subsequently retired; see [`docs/aws-m0-command-log.md`](../../docs/aws-m0-command-log.md).
 
 The first M2 plan initially proposed replacing the stopped EC2 because AWS reads its ephemeral
 `associate_public_ip_address` attribute as false while no address is attached. That saved plan was rejected. The

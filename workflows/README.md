@@ -32,3 +32,52 @@ failed health check could stop somebody else's active session.
 succeeds. The host rechecks zero players, flushes the world, stops all session containers, creates a full archive and
 verifies its immutable S3 upload. Any refusal, archive failure or upload mismatch ends the workflow visibly while EC2
 remains running for diagnosis. An already-stopped instance is an idempotent successful result.
+
+## Idle watchdog
+
+`idle-watchdog.asl.json` is the sensor in front of that stop. One execution exists per session — started by
+`scripts/start-server.sh` alongside the session, so there is no schedule to enable and disable and nothing runs
+between sessions ([ADR-0006](../docs/adr/0006-on-demand-start-and-idle-shutdown.md),
+[ADR-0025](../docs/adr/0025-step-functions-for-long-operations.md)). The loop: wait, confirm the host is still
+running, probe `idle-probe.sh` over SSM, and count.
+
+- The probe is an **exit-code contract** — 0 empty, 3 occupied, anything else a probe failure — so the workflow never
+  parses RCON output.
+- After `emptyChecksRequired` consecutive empty checks it runs the **verified stop workflow synchronously** and ends.
+  A refused stop (players raced back in) resets the streak and resumes watching.
+- A failed probe **never counts as empty**; after `maxConsecutiveProbeFailures` the execution fails loudly as
+  `Spawnpoint.WatchdogBlind` — deliberately leaving EC2 running, because a blind watchdog must not stop a possibly
+  occupied server.
+- `maxTotalChecks` is the **hard session cap** (default 96 × 5 min = 8 h): the only guard that survives somebody
+  being online who should not be.
+- A host stopped by anything else ends the watchdog as a success, not an error.
+
+All intervals and limits arrive in the input, so an acceptance drill can run with a two-minute threshold while
+production uses fifteen. The running-hours CloudWatch alarm is the backstop behind the whole mechanism.
+
+## Promote release
+
+`promote-release.asl.json` implements [ADR-0030](../docs/adr/0030-desired-and-active-release.md) by composing the
+machines above instead of duplicating them. The insight that makes it small: **boot-time reconciliation turned the
+pointer into the single control surface**, so promotion is pointer writes around a verified stop and start, and
+rollback is the same mechanism in reverse.
+
+1. Read and validate the world's pointer; an already-active release ends idempotently.
+2. Verify the target release is published (its manifest exists).
+3. **Write desired.** From here every path must leave the pointer telling the truth.
+4. Running host → the verified stop (a refusal — players online — restores the pointer and fails as
+   `PromotionRefused`; nothing changed). Stopped host → straight to start.
+5. The existing start machine runs synchronously: the host reconciles to desired and the health gate proves it.
+6. Success → **commit active**. Failure → flip the pointer to the previous active and start again — the host
+   reconciles *back* by the same boot-time mechanism — ending `rolled_back`, or `RollbackFailed` if that start
+   fails too. A world whose active is null has nowhere to roll back to and fails as `PromotionFailedNoRollback`.
+7. A host that was running gets its watchdog relaunched (fire-and-forget; its failure never fails a finished
+   promotion). A host that was stopped is stopped again after the commit, so promotion never leaves a paid
+   surprise behind.
+
+Every bad ending is a distinct `Spawnpoint.*` error, because "failed" without "where" is midnight archaeology.
+Pointer documents are built as objects and serialised with `States.JsonToString` — never hand-formatted strings.
+
+**Known gap, deliberate:** nothing prevents a concurrent promotion and watchdog stop from interleaving. Single-flight
+is ADR-0025's open question; until it lands, promote when the session is quiet — the stop machine's player check is
+the guard that matters.

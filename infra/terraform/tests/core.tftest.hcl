@@ -75,20 +75,6 @@ mock_provider "aws" {
   }
 
   override_data {
-    target = data.aws_iam_policy_document.idle_watchdog
-    values = {
-      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-    }
-  }
-
-  override_data {
-    target = data.aws_iam_policy_document.promote_workflow
-    values = {
-      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-    }
-  }
-
-  override_data {
     target = data.aws_iam_policy_document.lambda_assume_role
     values = {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
@@ -286,25 +272,6 @@ run "unreviewed_instance_type_is_rejected" {
   expect_failures = [var.instance_type]
 }
 
-run "idle_watchdog_probes_host_and_runs_verified_stop" {
-  command = plan
-
-  assert {
-    condition     = aws_sfn_state_machine.idle_watchdog.type == "STANDARD"
-    error_message = "The watchdog waits for hours; only a Standard workflow makes those waits free."
-  }
-
-  assert {
-    condition     = jsondecode(aws_sfn_state_machine.idle_watchdog.definition).States["Send Probe"].Parameters.Parameters.commands[1] == "/srv/spawnpoint/app/server/scripts/idle-probe.sh"
-    error_message = "The watchdog must probe through the host's exit-code contract, never parse RCON itself."
-  }
-
-  assert {
-    condition     = jsondecode(aws_sfn_state_machine.idle_watchdog.definition).States["Stop Idle Session"].Resource == "arn:aws:states:::states:startExecution.sync:2"
-    error_message = "The watchdog must run the verified stop workflow synchronously, so a refusal is observable."
-  }
-}
-
 run "running_hours_alarm_is_a_presence_alarm_on_the_guardrails_topic" {
   command = plan
 
@@ -326,30 +293,6 @@ run "running_hours_alarm_is_a_presence_alarm_on_the_guardrails_topic" {
   assert {
     condition     = contains(aws_cloudwatch_metric_alarm.running_hours.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alerts")
     error_message = "The alarm must publish to the guardrails topic, where every alert converges."
-  }
-}
-
-run "promotion_flips_the_pointer_and_composes_existing_machines" {
-  command = plan
-
-  assert {
-    condition     = aws_sfn_state_machine.promote_release.type == "STANDARD"
-    error_message = "Promotion waits on child machines; only a Standard workflow makes that free."
-  }
-
-  assert {
-    condition     = jsondecode(aws_sfn_state_machine.promote_release.definition).States["Write Desired"].Resource == "arn:aws:states:::aws-sdk:s3:putObject"
-    error_message = "The pointer must be written by a direct S3 integration, not a Lambda wrapper."
-  }
-
-  assert {
-    condition     = jsondecode(aws_sfn_state_machine.promote_release.definition).States["Start With Target"].Resource == "arn:aws:states:::states:startExecution.sync:2"
-    error_message = "Promotion must run the existing start machine synchronously, so health gates the commit."
-  }
-
-  assert {
-    condition     = strcontains(aws_sfn_state_machine.promote_release.definition, "States.JsonToString($.document)")
-    error_message = "Pointer documents must be built as objects and serialised, never hand-formatted strings."
   }
 }
 

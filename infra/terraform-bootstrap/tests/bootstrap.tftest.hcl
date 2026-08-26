@@ -48,15 +48,16 @@ run "state_bucket_is_private_versioned_and_encrypted" {
     condition = alltrue([
       for rule in aws_s3_bucket_lifecycle_configuration.terraform_state_locks.rule :
       one(rule.noncurrent_version_expiration).noncurrent_days == 1
-    ]) && toset([
+      ]) && toset([
       for rule in aws_s3_bucket_lifecycle_configuration.terraform_state_locks.rule :
       one(rule.filter).prefix
-    ]) == toset([
+      ]) == toset([
       "spawnpoint/production.tfstate.tflock",
       "spawnpoint/storage.tfstate.tflock",
       "spawnpoint/guardrails.tfstate.tflock",
       "spawnpoint/github-oidc.tfstate.tflock",
       "spawnpoint/release-pipeline.tfstate.tflock",
+      "spawnpoint/operations.tfstate.tflock",
     ])
     error_message = "Versioning must not retain obsolete native lock objects indefinitely."
   }

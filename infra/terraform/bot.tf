@@ -32,7 +32,7 @@ data "aws_iam_policy_document" "bot" {
     actions = ["states:StartExecution"]
     resources = [
       aws_sfn_state_machine.start_server.arn,
-      aws_sfn_state_machine.idle_watchdog.arn,
+      local.idle_watchdog_state_machine_arn,
     ]
   }
 
@@ -87,7 +87,7 @@ resource "aws_lambda_function" "bot" {
     variables = {
       START_STATE_MACHINE_ARN    = aws_sfn_state_machine.start_server.arn
       STOP_STATE_MACHINE_ARN     = aws_sfn_state_machine.stop_server.arn
-      WATCHDOG_STATE_MACHINE_ARN = aws_sfn_state_machine.idle_watchdog.arn
+      WATCHDOG_STATE_MACHINE_ARN = local.idle_watchdog_state_machine_arn
       INSTANCE_ID                = aws_instance.game_host.id
       RELEASE_BUCKET             = data.aws_s3_bucket.releases.id
       WORLD_NAME                 = "world"
@@ -189,8 +189,8 @@ resource "aws_cloudwatch_event_rule" "execution_notifications" {
       stateMachineArn = [
         aws_sfn_state_machine.start_server.arn,
         aws_sfn_state_machine.stop_server.arn,
-        aws_sfn_state_machine.idle_watchdog.arn,
-        aws_sfn_state_machine.promote_release.arn,
+        local.idle_watchdog_state_machine_arn,
+        local.promote_state_machine_arn,
         "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-build-release",
       ]
       status = ["RUNNING", "SUCCEEDED", "FAILED", "TIMED_OUT", "ABORTED"]

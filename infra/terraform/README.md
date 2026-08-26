@@ -4,12 +4,14 @@ Disposable game-host AWS resources live here. Persistent object storage has its 
 [`../terraform-storage`](../terraform-storage/), cost guardrails in
 [`../terraform-guardrails`](../terraform-guardrails/), and the state backend in
 [`../terraform-bootstrap`](../terraform-bootstrap/). The AWS-side immutable release builder lives in
-[`../terraform-releases`](../terraform-releases/). Apply order: bootstrap → guardrails → storage → releases; this host
-root is independent after storage.
+[`../terraform-releases`](../terraform-releases/), and composed deployment/session operations in
+[`../terraform-operations`](../terraform-operations/). Apply order: bootstrap → guardrails → storage → host → releases
+→ operations → GitHub; after storage, host replacement remains independent from the control-plane roots.
 
 Owns now: VPC, subnet, internet gateway, route table, security group, EC2 instance and data volume, game-host IAM,
-the start/stop/watchdog/promotion Step Functions, Lifecycle V2 state and coordinator, the Telegram bot/notifier, and
-their execution and running-hours alarms. Persistent buckets, guardrails and the state backend remain separate roots.
+the primitive start/stop Step Functions, Lifecycle V2 state and coordinator, the Telegram bot/notifier, and their
+execution and running-hours alarms. The watchdog and promotion compose the primitive machines but are owned by the
+separate operations root. Persistent buckets, guardrails and the state backend remain separate roots.
 
 Does not own: mod releases, the world, or anything else that is data rather than infrastructure. Those belong
 to the release pipeline. See [ADR-0011](../../docs/adr/0011-terraform-for-infrastructure.md) and
@@ -34,9 +36,10 @@ State backend bootstrap is a one-time, separately stateful Terraform step in
 
 The current compute/lifecycle slice owns one VPC, one public subnet and route, a zero-ingress security group, an
 SSM-only EC2 role/profile with scoped storage access, one on-demand EC2 host, and one separately attached encrypted
-data EBS. Standard workflows own start, verified stop, idle watching and release promotion. Lifecycle V2 coordination
-is present but inert, while the Telegram bot and notifier are additive control surfaces. The physical AZ ID is asserted
-because the volume is zonal. The instance has no SSH key and requires IMDSv2.
+data EBS. This root owns the primitive start and verified-stop workflows; idle watching and release promotion are
+separately stateful compositions. Lifecycle V2 coordination is present but inert, while the Telegram bot and notifier
+are additive control surfaces. The physical AZ ID is asserted because the volume is zonal. The instance has no SSH
+key and requires IMDSv2.
 
 `spawnpoint-lifecycle-v2` is an encrypted, deletion-protected, on-demand DynamoDB table keyed only by `server_id`.
 It has no stream, secondary index or provisioned capacity, and V1 does not reference it. Its coordinator role can only

@@ -73,6 +73,10 @@ exec 9>"${lock_file}"
 flock -n 9 || die "another reconciliation is already changing ${target_dir}"
 
 stage_dir="$(mktemp -d "${target_parent}/.${target_name}.${release}.stage.XXXXXX")"
+# mktemp deliberately creates 0700. The directory becomes a container bind
+# mount after the atomic rename, so the non-root Minecraft user needs search
+# permission while release payloads remain read-only.
+chmod 0755 -- "${stage_dir}"
 backup_dir="${target_parent}/.${target_name}.${release}.previous.$$"
 target_moved=false
 committed=false
@@ -100,6 +104,7 @@ while IFS=$'\t' read -r filename expected_sha expected_bytes; do
   [[ "${actual_sha}" == "${expected_sha}" ]] || die "SHA-256 mismatch for ${filename}"
 
   cp --reflink=auto --preserve=mode,timestamps -- "${source_file}" "${stage_dir}/${filename}"
+  chmod 0644 -- "${stage_dir}/${filename}"
   copied_sha="$(sha256sum -- "${stage_dir}/${filename}")"
   copied_sha="${copied_sha%% *}"
   [[ "${copied_sha}" == "${expected_sha}" ]] || die "copied file failed verification: ${filename}"
@@ -108,6 +113,7 @@ done < <(jq -r '.server.mods[] | [.file, .sha256, (.bytes | tostring)] | @tsv' "
 actual_count="$(find "${stage_dir}" -maxdepth 1 -type f -name '*.jar' | wc -l)"
 [[ "${actual_count}" == "${expected_count}" ]] || die "staged mod count mismatch: expected ${expected_count}, got ${actual_count}"
 cp -- "${manifest}" "${stage_dir}/.spawnpoint-release.json"
+chmod 0644 -- "${stage_dir}/.spawnpoint-release.json"
 
 if [[ -e "${target_dir}" ]]; then
   mv -- "${target_dir}" "${backup_dir}"

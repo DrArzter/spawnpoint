@@ -69,6 +69,9 @@ grep -qx 'mods=2' <<<"${reconcile_output}"
 cmp -- "${fixture}/release/mods/alpha.jar" "${target}/alpha.jar"
 cmp -- "${manifest}" "${target}/.spawnpoint-release.json"
 [[ ! -e "${target}/readme.txt" ]]
+[[ "$(stat --format '%a' -- "${target}")" == "755" ]]
+[[ "$(stat --format '%a' -- "${target}/alpha.jar")" == "644" ]]
+[[ "$(stat --format '%a' -- "${target}/.spawnpoint-release.json")" == "644" ]]
 
 # Reconcile keeps its lock file beside the target; stage and backup directories
 # must not survive, in success or in failure.

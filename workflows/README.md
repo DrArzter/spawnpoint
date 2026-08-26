@@ -57,6 +57,12 @@ If both start and compensation fail, the record deliberately remains `stopping` 
 control plane's evidence. The definition is not wired into Terraform yet. Its input requires distinct `operationId`
 and `sessionId` values; operation history and session identity are related, but not interchangeable.
 
+`stop-server-v2.asl.json.tftpl` provides the matching session-level stop contract. It acquires a fenced lease for the
+exact active `sessionId`, moves it to `stopping`, and holds authority while the accepted V1 stop rechecks players,
+saves, verifies the S3 archive and stops EC2. Only then does it mark the session stopped and release the lease. A V1
+failure leaves the truthful `stopping` state in place so a later operation can retry; it never converts uncertainty
+into a false success.
+
 ## Stop server
 
 `stop-server.asl.json` invokes the host's indivisible session-close contract, then stops EC2 only after that command

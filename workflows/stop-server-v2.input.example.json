@@ -1,0 +1,15 @@
+{
+  "serverId": "minecraft",
+  "operationId": "manual-v2-stop-example-001",
+  "sessionId": "session-example-001",
+  "leaseTtlSeconds": 1800,
+  "instanceId": "i-0123456789abcdef0",
+  "stopTiming": {
+    "instancePollSeconds": 10,
+    "ssmPollSeconds": 10,
+    "commandPollSeconds": 15,
+    "maxInstancePolls": 30,
+    "maxSsmPolls": 30,
+    "maxCommandPolls": 60
+  }
+}

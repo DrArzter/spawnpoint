@@ -344,3 +344,37 @@ reason=container_not_running
 The command finished with response code `0` and empty stderr. A final Docker check was empty. EC2 was then returned to
 `stopped`, and the inert lifecycle table still contained zero items. Neither V1 workflow invokes this probe; Phase 4
 therefore changes no owner-facing start/stop behaviour.
+
+## Lifecycle V2 Phase 5: additive state machines
+
+The first production plan was deliberately rejected. Putting V2 resources in the host root exposed unrelated pending
+bot/EventBridge configuration, an absent SNS data lookup and a proposed EBS attachment replacement:
+
+```text
+Plan: 23 to add, 4 to change, 2 to destroy.
+```
+
+Nothing from that plan was applied. The three composed V2 workflows were moved to the separately stateful
+`infra/terraform-operations` root, which discovers the host and refers to existing V1 workflows by stable identity but
+does not own EC2, EBS or V1. Its mock suite passed **4 / 4**.
+
+The saved production plan was then exactly:
+
+```text
+Plan: 9 to add, 0 to change, 0 to destroy.
+```
+
+It created only:
+
+- `spawnpoint-start-server-v2`: one role, one inline policy and one Standard Workflow;
+- `spawnpoint-stop-server-v2`: one role, one inline policy and one Standard Workflow;
+- `spawnpoint-idle-watchdog-v2`: one role, one inline policy and one Standard Workflow.
+
+Apply completed **9 added / 0 changed / 0 destroyed**. A fresh operations-root plan immediately afterwards reported
+`No changes`. No execution was started, EC2 remained stopped, V1 names remain the CLI defaults and no V1 principal
+received coordinator invoke permission.
+
+Phase 6 is intentionally gated. The repository's coordinator now knows `cancelStopping`, and V1 stop distinguishes a
+final player-race as `Spawnpoint.PlayersOnline`; their currently deployed AWS revisions predate that protocol change.
+Update those two narrow runtime pieces before explicitly invoking V2. This is a compatibility prerequisite, not a
+reason to widen the already deployed V2 IAM roles.

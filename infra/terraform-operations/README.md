@@ -1,9 +1,11 @@
 # Session and deployment operations
 
-This Terraform root owns the two composed Standard Workflows that sit above the already deployed host workflows:
+This Terraform root owns composed Standard Workflows that sit above the already deployed host workflows:
 
 - `spawnpoint-idle-watchdog` observes one running session and invokes the verified stop after sustained idleness;
 - `spawnpoint-promote-release` moves a world from one immutable release to another and commits `active_release` only after the existing start workflow passes its health check.
+- the additive `spawnpoint-*-v2` lifecycle trio coordinates fenced sessions through the established DynamoDB
+  coordinator while V1 remains the production default.
 
 It is deliberately separate from `../terraform`. Applying this root must not replace the EC2 instance, detach EBS, or modify the start and stop machines. It discovers the current game host only to scope the watchdog's SSM permission and refers to the existing child workflows by their stable names.
 
@@ -28,7 +30,9 @@ terraform show operations.tfplan
 terraform apply operations.tfplan
 ```
 
-The first deployment should contain six additions only: two IAM roles, two inline policies and two Step Functions state machines.
+The first deployment contained six additions: two IAM roles, two inline policies and two Step Functions state
+machines. Lifecycle V2 Phase 5 is a later additive plan containing exactly nine more: three roles, three inline
+policies and three state machines.
 
 ## Local verification
 

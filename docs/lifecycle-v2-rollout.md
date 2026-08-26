@@ -59,11 +59,13 @@ working control plane.
 
 ## Current phase
 
-Phase 4 complete; Phase 5 has started in code but has not created AWS resources. The pure model is tested; Terraform owns the empty protected table and a short
+Phase 5 is deployed but remains inert. The pure model is tested; Terraform owns the empty protected table and a short
 TypeScript coordinator Lambda with consistent reads plus revision-guarded writes. The host now also has the separate
 `check-session-activity.sh` contract: only a successfully parsed zero-player RCON response is `idle`; stopped compute,
 RCON failure and an unparseable response are `unknown`. No workflow calls the probe yet, no V1 workflow has coordinator
 invoke permission, and production lifecycle behaviour remains unchanged. The V2 start, stop and watchdog definitions
 now complete the session contract in code: fenced session transitions surround the accepted V1 host operations, and
-watchdog observations are idempotent and session-scoped. They remain undeployed until a separate Terraform plan can
-prove that Phase 5 is additive and grants no V2 authority to V1 callers.
+watchdog observations are idempotent and session-scoped. Their isolated operations-root plan was exactly **9 add / 0
+change / 0 destroy**, and the post-apply plan reported `No changes`. Phase 6 must not start until the coordinator bundle
+and V1 stop protocol in AWS include the `cancelStopping` / `Spawnpoint.PlayersOnline` contract already present in the
+repository; V1 remains the owner-script default meanwhile.

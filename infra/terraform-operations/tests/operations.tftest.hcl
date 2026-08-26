@@ -58,6 +58,36 @@ mock_provider "aws" {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
     }
   }
+
+  override_data {
+    target = data.aws_iam_policy_document.lifecycle_v2_start_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.lifecycle_v2_start
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.lifecycle_v2_stop_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.lifecycle_v2_stop
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.lifecycle_v2_watchdog_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.lifecycle_v2_watchdog
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
 }
 
 run "host_can_read_but_never_write_world_pointers" {
@@ -122,5 +152,40 @@ run "promotion_flips_the_pointer_and_composes_existing_machines" {
       jsondecode(aws_sfn_state_machine.promote_release.definition).States[state].Parameters["Body.$"] == "$.document"
     ])
     error_message = "S3 SDK integration must receive the pointer object directly; JsonToString would double-encode it."
+  }
+}
+
+run "lifecycle_v2_workflows_are_additive_standard_and_session_scoped" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      aws_sfn_state_machine.lifecycle_v2_start.type == "STANDARD",
+      aws_sfn_state_machine.lifecycle_v2_stop.type == "STANDARD",
+      aws_sfn_state_machine.lifecycle_v2_watchdog.type == "STANDARD",
+    ])
+    error_message = "Every multi-minute Lifecycle V2 operation must remain a Standard Workflow."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_sfn_state_machine.lifecycle_v2_start.name == "spawnpoint-start-server-v2",
+      aws_sfn_state_machine.lifecycle_v2_stop.name == "spawnpoint-stop-server-v2",
+      aws_sfn_state_machine.lifecycle_v2_watchdog.name == "spawnpoint-idle-watchdog-v2",
+    ])
+    error_message = "V2 resources must remain separate from production V1 names until explicit cutover."
+  }
+
+  assert {
+    condition     = local.lifecycle_v2_coordinator_arn == "arn:aws:lambda:eu-central-1:123456789012:function:spawnpoint-lifecycle-coordinator-v2"
+    error_message = "The operations root must invoke only the established coordinator by its stable name."
+  }
+
+  assert {
+    condition = strcontains(templatefile("${path.module}/../../workflows/idle-watchdog-v2.asl.json.tftpl", {
+      coordinator_function_arn  = local.lifecycle_v2_coordinator_arn
+      stop_v2_state_machine_arn = local.lifecycle_v2_stop_arn
+    }), "recordPlayerObservation")
+    error_message = "V2 watchdog must persist observations through the coordinator."
   }
 }

@@ -47,15 +47,9 @@ data "aws_iam_policy_document" "game_host_storage" {
   }
 
   statement {
-    sid     = "ReadReleases"
-    actions = ["s3:GetObject"]
-    resources = [
-      "${data.aws_s3_bucket.releases.arn}/releases/*",
-      # Boot-time reconciliation reads the world's desired/active pointer
-      # (ADR-0030). Read-only: pointers are written by import and promotion,
-      # never by the host.
-      "${data.aws_s3_bucket.releases.arn}/worlds/*",
-    ]
+    sid       = "ReadReleases"
+    actions   = ["s3:GetObject"]
+    resources = ["${data.aws_s3_bucket.releases.arn}/releases/*"]
   }
 }
 

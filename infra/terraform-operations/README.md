@@ -7,6 +7,10 @@ This Terraform root owns the two composed Standard Workflows that sit above the 
 
 It is deliberately separate from `../terraform`. Applying this root must not replace the EC2 instance, detach EBS, or modify the start and stop machines. It discovers the current game host only to scope the watchdog's SSM permission and refers to the existing child workflows by their stable names.
 
+The root also owns one additive policy on the established game-host role: read-only `GetObject` access to
+`worlds/*`. The host needs it to observe desired/active state during boot, but cannot write a pointer. Keeping this
+permission here avoids applying unrelated disposable-host drift merely to activate deployment reconciliation.
+
 ## Order
 
 `bootstrap` → `guardrails` → `storage` → `host` → `releases` → **`operations`** → `github`.

@@ -51,6 +51,32 @@ mock_provider "aws" {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
     }
   }
+
+  override_data {
+    target = data.aws_iam_policy_document.game_host_world_pointers
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+}
+
+run "host_can_read_but_never_write_world_pointers" {
+  command = plan
+
+  assert {
+    condition     = aws_iam_role_policy.game_host_world_pointers.role == "spawnpoint-game-host"
+    error_message = "Pointer access must attach only to the established game-host role."
+  }
+
+  assert {
+    condition     = data.aws_iam_policy_document.game_host_world_pointers.statement[0].actions == toset(["s3:GetObject"])
+    error_message = "The host observes pointers; only control-plane operations may write them."
+  }
+
+  assert {
+    condition     = data.aws_iam_policy_document.game_host_world_pointers.statement[0].resources == toset(["arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*"])
+    error_message = "Host pointer access must not widen to the whole release bucket."
+  }
 }
 
 run "idle_watchdog_probes_host_and_runs_verified_stop" {

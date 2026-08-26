@@ -8,8 +8,8 @@ The name is a working title.
 
 > **Status: running on AWS.** M0 and M1 are done. The server is live on EC2, reachable only inside the overlay, rebuilt
 > from Terraform, and its world has been restored from an S3 archive in a real drill rather than a thought experiment.
-> M2 is in progress: start, stop and the idle watchdog are durable Step Functions workflows. The watchdog is deployed
-> but has not yet completed its first live session drill, so the server is still stopped deliberately between tests.
+> M2's start, stop and idle-watchdog path is acceptance-tested on active release `1.1`: a normal start launched the
+> session watchdog, three confirmed empty checks produced a verified backup, and EC2 stopped automatically.
 >
 > The two tables below separate what runs from what is only designed. Command-by-command records of what was actually
 > executed, with verification and rollback beside each change: [M0](docs/aws-m0-command-log.md),
@@ -23,7 +23,7 @@ The name is a working title.
 | Rebuilt from Terraform | Three roots: the state bucket, the storage that outlives the host, and the host itself. Buckets live in separate state, so an ordinary host teardown cannot take the backups with it |
 | Backups that were actually restored | The world is archived to S3 and verified after upload. On 2026-08-13 an archive was downloaded by the instance role, restored onto a fresh volume, reconciled against release `1.0`, and a player joined the recovered world |
 | Start and stop as durable operations | Step Functions Standard. Stop rechecks the player count, flushes the world, stops every session container, verifies an immutable backup, and only then stops the instance |
-| Session watchdog and release promotion | Separate Standard Workflows. Promotion `1.0 → 1.1` has passed its first health-gated deploy, backup and restop drill; the live idle-watchdog drill remains pending |
+| Session watchdog and release promotion | Separate Standard Workflows. Promotion `1.0 → 1.1` passed its health-gated deploy; the production-timing watchdog then observed three empty checks, backed up and stopped EC2 automatically |
 | An immutable bootstrap release | Release `1.0`: 111 JARs, pinned and hashed, retained as the hand-cut baseline |
 | AWS-built release candidates | GitHub OIDC triggers a Standard Workflow and ephemeral CodeBuild job. Release `1.1` was resolved, hashed and published manifest-last without starting the game host |
 | Per-session observability | Prometheus and Grafana come up with the session and go down with it. Prometheus binds to loopback; Grafana is reachable only inside the overlay |

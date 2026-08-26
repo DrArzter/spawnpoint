@@ -348,3 +348,32 @@ The accepted pointer is S3 VersionId `N4TTHnekWWVkgerKdX0BirtzYQED1gUk`, SHA-256
 Independent acceptance found EC2 `stopped`, no running start/stop/watchdog/promotion executions, and an operations
 Terraform plan with `No changes`. Release `1.1` is therefore active because it passed health, not merely because it was
 requested.
+
+## Idle-watchdog acceptance
+
+The first production-timing watchdog drill started from clean state: active release `1.1`, EC2 stopped and no running
+start, stop, watchdog or promotion executions. `scripts/start-server.sh` created start and watchdog executions with the
+shared operation ID `manual-20260826T164926Z`. Start completed healthy in **96 seconds** and explicitly reported
+`reconcile=applied`, `desired_release=1.1`.
+
+An independent player query returned 0/20. The watchdog then recorded successful `Count Empty Check` states at
+16:54:39, 16:59:49 and 17:05:00 UTC. Only those successful observations advanced the counter; it did not infer
+idleness from elapsed time. At `3/3` it synchronously started verified-stop execution
+`b7bb44c2-f348-49fa-ada0-0910355b77ed`.
+
+The nested stop completed in about **62 seconds**: it rechecked players, ran `save-all flush`, stopped all session
+containers, archived and uploaded the world, verified the object, then stopped EC2. The watchdog completed
+`SUCCEEDED` with `status=stopped_idle` and `checksTotal=3` after **16m36s** total.
+
+Acceptance backup:
+
+```text
+S3 key: worlds/world/archives/world-20260826T170524Z-7346253eec7e2de6a4d3087cfdda13d6c24c64ef5c7ad1760b77411fbf92d22c.tar.zst
+SHA-256: 7346253eec7e2de6a4d3087cfdda13d6c24c64ef5c7ad1760b77411fbf92d22c
+Bytes: 419,471,806
+S3 VersionId: 87E7fWjXsOwBRsAAy1eMVVkNEzMUCMuV
+```
+
+S3 returned matching SHA metadata and full-object checksum. Final independent checks found EC2 `stopped`, pointer
+still `desired_release=active_release=1.1`, zero running lifecycle executions and `No changes` in the operations
+Terraform root. The production start → observe → verified backup → automatic stop path is now acceptance-tested.

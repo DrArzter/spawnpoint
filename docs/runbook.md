@@ -7,8 +7,8 @@ performed. A procedure nobody has run is a guess.
 
 | Procedure | Owner | Last performed |
 | --- | --- | --- |
-| Start the server | Any player | 2026-08-14 — M2 Standard Workflow started stopped EC2, waited for SSM, invoked the host session contract and returned the private address |
-| Stop the server | Owner | 2026-08-14 — M2 Standard Workflow rechecked 0 players, flushed the world, stopped all session containers, verified an immutable S3 backup and only then stopped EC2 |
+| Start the server | Any player | 2026-08-26 — active release 1.1 reconciled, Minecraft healthy in 96 seconds, private address returned and session watchdog launched |
+| Stop the server | Owner | 2026-08-26 — watchdog observed three empty checks, then the verified stop flushed, archived, uploaded and checked the world before stopping EC2 |
 | Promote a release | Owner | 2026-08-26 — release 1.1 reconciled, passed Minecraft health, committed active, produced a verified backup and returned EC2 to stopped |
 | Adopt the existing world | Owner | 2026-08-26 — verified all 111 installed JARs against immutable release 1.0, then atomically created desired=active=1.0 without starting Minecraft |
 | Roll back a release | Owner | — |
@@ -87,7 +87,7 @@ contract.
 
 ### Idle watchdog
 
-**Deployed, not yet acceptance-tested.** `spawnpoint-idle-watchdog` is a Standard workflow started by
+**Deployed and acceptance-tested.** `spawnpoint-idle-watchdog` is a Standard workflow started by
 `scripts/start-server.sh` alongside every session — one execution per session, nothing scheduled, nothing running
 between sessions. It probes `idle-probe.sh` over SSM every 5 minutes; three consecutive empty readings (15 min) start
 the verified stop above. A failed probe never counts as empty. The hard session cap is 96 checks (8 h), and stops the
@@ -101,9 +101,9 @@ the definition first, read-only:
 aws stepfunctions validate-state-machine-definition --definition file://workflows/idle-watchdog.asl.json --type STANDARD --severity WARNING --profile spawnpoint --region eu-central-1
 ```
 
-Acceptance drill, one evening: start a session with the watchdog input's `checkIntervalSeconds` at 60 and
-`emptyChecksRequired` at 2, join, leave, and watch the execution stop the host within ~3 minutes. Then record the date
-in the procedure table. If the watchdog itself fails, its execution failure is the signal —
+The first acceptance drill used the production timings: release `1.1` started healthy, zero players were independently
+confirmed, and three successful empty probes stopped the server in 16m36s from watchdog start. The nested verified
+stop produced a checked backup before EC2 stopped. If the watchdog itself fails, its execution failure is the signal —
 `Spawnpoint.WatchdogBlind` means the host was unobservable and was deliberately left running; the
 `spawnpoint-running-hours` alarm (10 consecutive hours → `spawnpoint-alerts`) and the budget are the backstops.
 

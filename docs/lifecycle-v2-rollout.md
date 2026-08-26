@@ -66,6 +66,7 @@ RCON failure and an unparseable response are `unknown`. No workflow calls the pr
 invoke permission, and production lifecycle behaviour remains unchanged. The V2 start, stop and watchdog definitions
 now complete the session contract in code: fenced session transitions surround the accepted V1 host operations, and
 watchdog observations are idempotent and session-scoped. Their isolated operations-root plan was exactly **9 add / 0
-change / 0 destroy**, and the post-apply plan reported `No changes`. Phase 6 must not start until the coordinator bundle
-and V1 stop protocol in AWS include the `cancelStopping` / `Spawnpoint.PlayersOnline` contract already present in the
-repository; V1 remains the owner-script default meanwhile.
+change / 0 destroy**, and the post-apply plan reported `No changes`. The coordinator bundle and V1 stop definition were
+then updated independently in two reviewed **0 add / 1 in-place change / 0 destroy** targeted plans. Phase 6 begins by
+delivering the matching `stop-session.sh` exit-code contract to the stopped host, before any explicit V2 execution;
+V1 remains the owner-script default meanwhile.

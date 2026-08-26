@@ -374,7 +374,21 @@ Apply completed **9 added / 0 changed / 0 destroyed**. A fresh operations-root p
 `No changes`. No execution was started, EC2 remained stopped, V1 names remain the CLI defaults and no V1 principal
 received coordinator invoke permission.
 
-Phase 6 is intentionally gated. The repository's coordinator now knows `cancelStopping`, and V1 stop distinguishes a
-final player-race as `Spawnpoint.PlayersOnline`; their currently deployed AWS revisions predate that protocol change.
-Update those two narrow runtime pieces before explicitly invoking V2. This is a compatibility prerequisite, not a
-reason to widen the already deployed V2 IAM roles.
+Phase 6 was initially gated because the deployed coordinator and V1 stop predated the repository's player-race
+protocol. The main host root still contained unrelated pending resources and proposed replacement, so no full apply
+was allowed. Two saved targeted plans were reviewed and applied instead:
+
+```text
+aws_lambda_function.lifecycle_coordinator: 0 add / 1 in-place change / 0 destroy
+aws_sfn_state_machine.stop_server:          0 add / 1 in-place change / 0 destroy
+```
+
+The rebuilt coordinator archive SHA-256 was
+`ce3c712464de6a1639c31f73f1ab5769da19390ecc3fd94a910bf8e48e0d66f8`. A non-writing Lambda smoke returned the
+expected `LifecycleConflict: lifecycle deployment-smoke is not initialized`, proving the new Node bundle loaded and
+read the table; a subsequent DynamoDB count remained exactly zero.
+
+The final compatibility prerequisite is the host copy of `stop-session.sh`, whose repository version uses exit code
+`3` for a player found during the final recheck. EC2 stays stopped for now. Phase 6 will deliver that one host-side
+contract and run acceptance in the same paid session rather than starting the modded server twice. The deployed V2
+machines remain unreferenced by owner scripts until then.

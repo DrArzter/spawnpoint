@@ -109,7 +109,15 @@ stop produced a checked backup before EC2 stopped. If the watchdog itself fails,
 
 ## Telegram bot
 
-**Built, not yet applied or acceptance-tested.** `start`, `status`, `pack` — the M4 cut. One-time setup, in order:
+The exact first deployment, webhook and acceptance commands are recorded in
+[`aws-bot-command-log.md`](aws-bot-command-log.md).
+
+The command bot is deployed from the isolated `infra/terraform-bot` root. `/start` only opens its menu;
+`/server_start`, `/status`, and `/pack` are the operational M4 commands. One-time setup, in order:
+
+The `/start` message includes inline buttons for status, pack and server start. Starting is a two-step action:
+the first button or `/server_start` opens a confirmation screen, and only `Yes, start it` invokes Step Functions.
+Both slash commands and button callbacks use the same SSM allow-list.
 
 1. Create the bot with @BotFather, keep the token.
 2. Put the three parameters in Parameter Store (the only hand-made secrets in the system):
@@ -123,7 +131,8 @@ aws ssm put-parameter --name /spawnpoint/bot/chat-ids --type String --value '<gr
 
    Telegram user ids are numbers; each player gets theirs from @userinfobot. Editing the allow-list is
    `put-parameter --overwrite` — no deploy.
-3. Build and apply: `cd lambdas && npm install && npm run build`, then `terraform apply` in `infra/terraform`.
+3. Build and apply: `cd lambdas && npm install && npm run build`, then review a saved plan and apply it in
+   `infra/terraform-bot`.
 4. Register the webhook, pointing Telegram at the `bot_webhook_url` output with the same secret:
 
 ```bash
@@ -148,7 +157,8 @@ every failed stop, because a failed stop is the backup contract failing. Child e
 nothing is announced twice. The group chat id: add the bot to the group, send a message, read `chat.id` from
 `getUpdates` (a negative number for groups).
 
-Acceptance: from a phone on the allow-list, `/status` answers, `/start` brings the server up — the group sees
+Acceptance: from a phone on the allow-list, `/start` shows the menu without touching EC2, `/status` answers,
+`/server_start` brings the server up — the group sees
 "requested" and "ready" arrive on their own — and `/pack` returns a working link whose zip carries INSTALL.txt. From a
 phone not on the list, every command is politely denied. Leave, and the watchdog's stop announces itself. That is
 M4's done-when.

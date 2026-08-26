@@ -11,6 +11,7 @@ import {
   replies,
 } from "../src/domain/telegram-bot.ts";
 import { authMiddleware } from "../src/bot/middleware/auth.ts";
+import { callbacks, confirmStartKeyboard, mainMenuKeyboard } from "../src/bot/keyboards/main-menu.ts";
 
 type StubContext = {
   replies: string[];
@@ -19,11 +20,13 @@ type StubContext = {
     from?: { id: number };
     has: (filter: string) => boolean;
     reply: (text: string) => Promise<void>;
+    callbackQuery?: { data: string };
+    answerCallbackQuery: (options?: unknown) => Promise<void>;
   };
   next: () => Promise<void>;
 };
 
-function stubContext(args: { userId?: number; isCommand: boolean }): StubContext {
+function stubContext(args: { userId?: number; isCommand: boolean; isCallback?: boolean }): StubContext {
   const from = args.userId === undefined ? {} : { from: { id: args.userId } };
   const state: StubContext = {
     replies: [],
@@ -31,9 +34,11 @@ function stubContext(args: { userId?: number; isCommand: boolean }): StubContext
     ctx: {
       ...from,
       has: () => args.isCommand,
+      ...(args.isCallback ? { callbackQuery: { data: callbacks.status } } : {}),
       reply: async (text: string) => {
         state.replies.push(text);
       },
+      answerCallbackQuery: async () => undefined,
     },
     next: async () => {
       state.nextCalled = true;
@@ -68,6 +73,10 @@ test("the auth middleware gates commands only, and denies politely", async () =>
   const faceless = stubContext({ isCommand: true });
   await gate(faceless.ctx as never, faceless.next);
   assert.equal(faceless.nextCalled, false, "a command without a sender goes nowhere");
+
+  const callbackStranger = stubContext({ userId: 999, isCommand: false, isCallback: true });
+  await gate(callbackStranger.ctx as never, callbackStranger.next);
+  assert.equal(callbackStranger.nextCalled, false, "callbacks pass through the same allow-list");
 });
 
 test("the allow-list is strict: ids parse, garbage throws, absence denies", () => {
@@ -124,6 +133,22 @@ test("a requester is attributed when present, and the examples stay the ownerles
 });
 
 test("replies carry what the player actually needs", () => {
+  assert.match(replies.welcome(), /\/server_start/);
+  assert.doesNotMatch(replies.welcome(), /Starting the server/);
+  assert.match(replies.unknown(), /\/start — menu/);
+  assert.match(replies.confirmStart(), /billed game session/);
+
+  const menuCallbacks = mainMenuKeyboard().inline_keyboard
+    .flat()
+    .filter((button) => "callback_data" in button)
+    .map((button) => button.callback_data);
+  assert.deepEqual(menuCallbacks, [callbacks.status, callbacks.pack, callbacks.requestStart]);
+  const confirmationCallbacks = confirmStartKeyboard().inline_keyboard
+    .flat()
+    .filter((button) => "callback_data" in button)
+    .map((button) => button.callback_data);
+  assert.deepEqual(confirmationCallbacks, [callbacks.confirmStart, callbacks.menu]);
+
   const status = replies.status({
     instanceState: "running",
     desiredRelease: "1.1",

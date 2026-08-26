@@ -25,9 +25,11 @@ zip -X -j -q "${archive}" "${output_dir}/index.cjs"
   --bundle \
   --platform=node \
   --target=node22 \
-  --format=esm \
+  --format=cjs \
   --external:@aws-sdk/* \
-  --outfile="${lambda_dir}/dist/bot/index.mjs"
+  --outfile="${lambda_dir}/dist/bot/index.cjs"
+
+rm -f "${lambda_dir}/dist/bot/index.mjs"
 
 "${lambda_dir}/node_modules/.bin/esbuild" \
   "${lambda_dir}/src/bot/notifier.ts" \
@@ -40,5 +42,5 @@ zip -X -j -q "${archive}" "${output_dir}/index.cjs"
 
 printf 'result=built\narchive=%s\nbot=%s\nnotifier=%s\n' \
   "${archive}" \
-  "${lambda_dir}/dist/bot/index.mjs" \
+  "${lambda_dir}/dist/bot/index.cjs" \
   "${lambda_dir}/dist/notifier/index.mjs"

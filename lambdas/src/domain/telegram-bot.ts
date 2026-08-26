@@ -108,6 +108,18 @@ export function buildWatchdogInput(args: Readonly<{
 export const replies = {
   denied: (): string => "You are not on this server's list. Ask the owner to add your Telegram id.",
 
+  welcome: (): string =>
+    [
+      "Spawnpoint controls the shared game server.",
+      "",
+      "/status — show server and release state",
+      "/server_start — start a game session",
+      "/pack — download the current client mod pack",
+    ].join("\n"),
+
+  confirmStart: (): string =>
+    "Start the game server now? Booting the modpack takes a few minutes and begins a billed game session.",
+
   starting: (operationId: string): string =>
     `Starting the server — a few minutes for the mods to load. I will post here when it is ready. (${operationId})`,
 
@@ -136,7 +148,7 @@ export const replies = {
   packMissing: (release: string): string =>
     `Release ${release} has no published pack yet. Ask the owner to publish one.`,
 
-  unknown: (): string => "Commands: /start — start the server, /status — is it up, /pack — current mod pack.",
+  unknown: (): string => "Commands: /start — menu, /status — server state, /server_start — start a session, /pack — current mod pack.",
 
   failure: (): string => "Something went wrong on my side. The owner can read the logs.",
 } as const;

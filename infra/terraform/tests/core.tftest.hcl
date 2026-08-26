@@ -89,19 +89,6 @@ mock_provider "aws" {
   }
 
   override_data {
-    target = data.aws_iam_policy_document.bot
-    values = {
-      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-    }
-  }
-  override_data {
-    target = data.aws_iam_policy_document.notifier
-    values = {
-      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-    }
-  }
-
-  override_data {
     target = data.aws_sns_topic.alerts
     values = {
       arn = "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alerts"
@@ -293,72 +280,5 @@ run "running_hours_alarm_is_a_presence_alarm_on_the_guardrails_topic" {
   assert {
     condition     = contains(aws_cloudwatch_metric_alarm.running_hours.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alerts")
     error_message = "The alarm must publish to the guardrails topic, where every alert converges."
-  }
-}
-
-run "bot_is_a_webhook_with_the_gate_in_code" {
-  command = plan
-
-  assert {
-    condition     = aws_lambda_function.bot.runtime == "nodejs22.x"
-    error_message = "Pin the Lambda runtime; supported Node runtimes change over time (lambdas/README.md)."
-  }
-
-  assert {
-    condition     = aws_lambda_function_url.bot.authorization_type == "NONE"
-    error_message = "Telegram cannot sign SigV4; the gate is the webhook secret verified in the handler."
-  }
-
-  assert {
-    condition = alltrue([
-      for key in [
-        "START_STATE_MACHINE_ARN",
-        "WATCHDOG_STATE_MACHINE_ARN",
-        "STOP_STATE_MACHINE_ARN",
-        "INSTANCE_ID",
-        "RELEASE_BUCKET",
-        "BOT_TOKEN_PARAMETER",
-        "WEBHOOK_SECRET_PARAMETER",
-        "ALLOW_LIST_PARAMETER",
-      ] : contains(keys(aws_lambda_function.bot.environment[0].variables), key)
-    ])
-    error_message = "The handler's contract is its environment; every name it reads must be wired."
-  }
-
-  assert {
-    condition     = aws_lambda_function.bot.environment[0].variables["BOT_TOKEN_PARAMETER"] == "/spawnpoint/bot/token"
-    error_message = "Secrets stay in Parameter Store under /spawnpoint/bot/*, referenced by name."
-  }
-}
-
-run "notifier_listens_to_all_machines_and_needs_almost_nothing" {
-  command = plan
-
-  assert {
-    condition     = aws_lambda_function.notifier.runtime == "nodejs22.x" && aws_lambda_function.notifier.memory_size == 128
-    error_message = "The notifier is a small, pinned function."
-  }
-
-  assert {
-    condition     = aws_sns_topic_subscription.alerts_to_chat.protocol == "lambda" && aws_sns_topic_subscription.alerts_to_chat.topic_arn == "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alerts"
-    error_message = "Guardrail alerts must reach the chat through the one topic every alarm converges on."
-  }
-
-  assert {
-    condition     = aws_lambda_permission.notifier_sns.principal == "sns.amazonaws.com"
-    error_message = "Only the topic may invoke the notifier's SNS path."
-  }
-
-  # The event pattern and the permission's source_arn embed machine ARNs,
-  # which are computed — unknown at plan under the mock provider — so their
-  # contents cannot be asserted here. What plan does know: the principal.
-  assert {
-    condition     = aws_lambda_permission.notifier_events.principal == "events.amazonaws.com"
-    error_message = "Only EventBridge may invoke the notifier."
-  }
-
-  assert {
-    condition     = aws_lambda_function.notifier.environment[0].variables["CHAT_IDS_PARAMETER"] == "/spawnpoint/bot/chat-ids"
-    error_message = "Notification targets are a Parameter Store list — groups and DMs alike — not a deploy-time constant."
   }
 }

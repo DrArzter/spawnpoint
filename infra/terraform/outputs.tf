@@ -62,8 +62,3 @@ output "running_hours_alarm_name" {
   description = "Backstop behind the watchdog; alarms to the guardrails topic after too many consecutive running hours."
   value       = aws_cloudwatch_metric_alarm.running_hours.alarm_name
 }
-
-output "bot_webhook_url" {
-  description = "Register with Telegram setWebhook, together with the secret token from Parameter Store."
-  value       = aws_lambda_function_url.bot.function_url
-}

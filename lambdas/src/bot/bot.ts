@@ -6,20 +6,46 @@ import { Bot } from "grammy";
 
 import { replies } from "../domain/telegram-bot.ts";
 import { packCommand } from "./commands/pack.ts";
-import { startCommand } from "./commands/start.ts";
+import { requestStartCommand, startCommand } from "./commands/start.ts";
 import { statusCommand } from "./commands/status.ts";
+import { welcomeCommand } from "./commands/welcome.ts";
+import { callbacks, mainMenuKeyboard } from "./keyboards/main-menu.ts";
 import { authMiddleware, type AllowListSource } from "./middleware/auth.ts";
 
 export function buildBot(token: string, allowListSource: AllowListSource): Bot {
   const bot = new Bot(token);
 
   bot.use(authMiddleware(allowListSource));
-  bot.command("start", startCommand);
+  bot.command("start", welcomeCommand);
+  bot.command("server_start", requestStartCommand);
   bot.command("status", statusCommand);
   bot.command("pack", packCommand);
+
+  bot.callbackQuery(callbacks.menu, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.editMessageText(replies.welcome(), { reply_markup: mainMenuKeyboard() });
+  });
+  bot.callbackQuery(callbacks.status, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await statusCommand(ctx);
+  });
+  bot.callbackQuery(callbacks.pack, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await packCommand(ctx);
+  });
+  bot.callbackQuery(callbacks.requestStart, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await requestStartCommand(ctx);
+  });
+  bot.callbackQuery(callbacks.confirmStart, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await startCommand(ctx);
+  });
   // Reached only when no command above matched: an authorised user typing
   // an unknown command gets the menu, not silence.
-  bot.on("message:entities:bot_command", (ctx) => ctx.reply(replies.unknown()));
+  bot.on("message:entities:bot_command", (ctx) =>
+    ctx.reply(replies.unknown(), { reply_markup: mainMenuKeyboard() }),
+  );
 
   // Swallow and log: an unhandled error would bubble into a non-200, and
   // Telegram redelivers non-200 updates until they poison the webhook.

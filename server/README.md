@@ -45,6 +45,8 @@ Contents:
     looks complete. Re-publishing an identical release is idempotent; identity ignores descriptive fields
     (`created_at`, changelog) per [releases/README.md](releases/README.md),
   - `reconcile-release.sh` — verify and atomically replace the mod directory with that exact payload.
+  - `verify-installed-release.sh` — read-only proof that an existing mod directory exactly matches a fresh immutable
+    manifest; used before adopting a legacy world into pointer management.
 - `observability/` — provisioned Prometheus configuration and Grafana session dashboard. `mc-monitor`, cAdvisor and
   node_exporter are declared beside Minecraft in Compose and share its lifetime.
 
@@ -156,15 +158,17 @@ loader, a mis-named target and a concurrent run — leaving the live mod directo
 litter behind. `world-restore-test.sh` covers the backup contract: a byte-identical restore, refusal of the live data
 directory and of a non-empty destination, and verify-archive rejecting a missing or wrong checksum, a truncated
 archive with a fresh checksum, an archive without `level.dat`, and a path-traversal entry.
+`installed-release-test.sh` proves adoption cannot accept a changed, missing, extra or symlinked JAR, including a real
+bracketed Forge filename shape.
 
 The tests split by environment. `compose-bindings-test.sh` renders configuration with the real `docker compose`, so it
-runs on the host. The other four need a GNU userland (`realpath -m`, `stat --format`, `mapfile`, `flock`), so on macOS
+runs on the host. The script tests need a GNU userland (`realpath -m`, `stat --format`, `mapfile`, `flock`), so on macOS
 they run in a container:
 
 ```bash
 docker run --rm -v "$PWD:/repo:ro" alpine:3.20 sh -c '
-  apk add -q bash coreutils findutils diffutils tar zstd jq util-linux openssl >/dev/null
-  for t in backup-s3-test compose-files-test profile-release-test profile-resolver-test release-reconcile-test session-activity-test world-catalog-test world-restore-test; do
+  apk add -q bash coreutils findutils diffutils git tar zstd jq util-linux openssl >/dev/null
+  for t in backup-s3-test compose-files-test installed-release-test profile-release-test profile-resolver-test release-reconcile-test session-activity-test world-catalog-test world-restore-test; do
     bash /repo/server/tests/$t.sh || exit 1
   done'
 ```

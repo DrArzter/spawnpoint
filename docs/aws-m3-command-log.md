@@ -198,3 +198,22 @@ The bootstrap root was planned separately after adding cleanup for the new nativ
 lifecycle update would also activate three previously coded but unapplied cleanup rules (`guardrails`, `github-oidc`
 and `release-pipeline`). That combined housekeeping plan was deliberately **not applied** and `-target` was not used;
 state locking already works and promotion does not depend on expiring old lock-object versions.
+
+## Host pointer read boundary
+
+Boot-time reconciliation needs to read `worlds/<world>/release.json`, but the live game-host role initially had access
+only to `releases/*`. Applying the whole host root for that one permission remained unsafe because its unrelated drift
+still includes compute. Ownership of this additive boundary therefore moved to the operations root; the original host
+storage policy continues to own release and backup access.
+
+After operations **3 passed / 0 failed** and host **10 passed / 0 failed**, a saved production plan contained exactly:
+
+```text
+Plan: 1 to add, 0 to change, 0 to destroy.
+aws_iam_role_policy.game_host_world_pointers
+```
+
+The inline policy attaches to `spawnpoint-game-host`, grants only `s3:GetObject`, and scopes it only to
+`arn:aws:s3:::spawnpoint-releases-614934752397/worlds/*`. Apply completed **1 added / 0 changed / 0 destroyed**; a
+post-apply plan reported `No changes`, the AWS IAM API returned that exact single statement, and EC2 remained
+`stopped`. The host can now observe desired/active state but still cannot create, change or delete a pointer.

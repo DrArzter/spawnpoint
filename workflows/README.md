@@ -61,7 +61,8 @@ and `sessionId` values; operation history and session identity are related, but 
 exact active `sessionId`, moves it to `stopping`, and holds authority while the accepted V1 stop rechecks players,
 saves, verifies the S3 archive and stops EC2. Only then does it mark the session stopped and release the lease. A V1
 failure leaves the truthful `stopping` state in place so a later operation can retry; it never converts uncertainty
-into a false success.
+into a false success. The one non-fault outcome is `Spawnpoint.PlayersOnline`: V2 cancels that stop, restores `ready`,
+resets the session's empty streak and releases the lease before returning a distinct refusal.
 
 ## Stop server
 
@@ -69,6 +70,11 @@ into a false success.
 succeeds. The host rechecks zero players, flushes the world, stops all session containers, creates a full archive and
 verifies its immutable S3 upload. Any refusal, archive failure or upload mismatch ends the workflow visibly while EC2
 remains running for diagnosis. An already-stopped instance is an idempotent successful result.
+
+A player appearing during the final recheck is the distinct `Spawnpoint.PlayersOnline` failure. The host script uses
+exit code `3` for this expected race; save and backup faults retain ordinary failure codes. Lifecycle V2 uses that
+distinction to return the same session from `stopping` to `ready`, rather than leaving a healthy occupied server in a
+stuck lifecycle state.
 
 ## Idle watchdog
 

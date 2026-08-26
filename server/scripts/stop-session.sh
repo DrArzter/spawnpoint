@@ -50,7 +50,9 @@ fi
 players="$(rcon list)"
 grep -Eq '^There are 0 of a max of [0-9]+ players online:' <<<"${players}" || {
   printf 'error: refusing to stop while players are online: %s\n' "${players}" >&2
-  exit 1
+  # A player raced the earlier idle observation. This is a normal refusal,
+  # distinct from save, archive and upload failures.
+  exit 3
 }
 
 "${SCRIPT_DIR}/stop.sh"

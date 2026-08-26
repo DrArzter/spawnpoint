@@ -72,8 +72,17 @@ test("failed host stop never claims lifecycle is stopped", async () => {
   const definition = await loadDefinition();
   const failed = state(definition, "Verified Stop Failed");
 
-  assert.equal(state(definition, "Stop Accepted V1").Catch?.[0]?.Next, "Verified Stop Failed");
+  assert.equal(state(definition, "Stop Accepted V1").Catch?.[0]?.Next, "Route Stop Failure");
   assert.equal(failed.Type, "Fail");
   assert.match(JSON.stringify(failed), /remains stopping/);
   assert.notEqual(failed.Next, "Mark Session Stopped");
+});
+
+test("a player race restores the same session to ready before releasing the lease", async () => {
+  const definition = await loadDefinition();
+
+  assert.equal(state(definition, "Route Stop Failure").Default, "Verified Stop Failed");
+  assert.equal(state(definition, "Cancel Refused Stop").Next, "Release Refused Stop Lease");
+  assert.equal(state(definition, "Release Refused Stop Lease").Next, "Stop Refused Players Online");
+  assert.equal(state(definition, "Stop Refused Players Online").Type, "Fail");
 });

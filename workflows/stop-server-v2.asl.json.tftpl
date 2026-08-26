@@ -74,7 +74,7 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.stopFailure",
-          "Next": "Verified Stop Failed"
+          "Next": "Route Stop Failure"
         }
       ],
       "Next": "Mark Session Stopped"
@@ -107,6 +107,51 @@
       },
       "ResultPath": null,
       "Next": "Stopped"
+    },
+    "Route Stop Failure": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.stopFailure.Cause",
+          "StringMatches": "*Spawnpoint.PlayersOnline*",
+          "Next": "Cancel Refused Stop"
+        }
+      ],
+      "Default": "Verified Stop Failed"
+    },
+    "Cancel Refused Stop": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "cancelStopping",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Release Refused Stop Lease"
+    },
+    "Release Refused Stop Lease": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "releaseLease",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Stop Refused Players Online"
+    },
+    "Stop Refused Players Online": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.V2StopRefusedPlayersOnline",
+      "Cause": "A player joined during the final recheck; the exact session returned to ready and its idle streak was reset."
     },
     "Stopped": {
       "Type": "Pass",

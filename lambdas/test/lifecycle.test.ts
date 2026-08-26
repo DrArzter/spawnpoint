@@ -6,6 +6,7 @@ import {
   acquireLease,
   beginSession,
   beginStopping,
+  cancelStopping,
   initialLifecycleRecord,
   isIdleStopEligible,
   markSessionReady,
@@ -171,3 +172,22 @@ test("stop holds the lease until the exact session is durably stopped", () => {
   assert.equal(stopped.idle, null);
 });
 
+test("a player-race refusal returns the exact stopping session to ready", () => {
+  let ready = readySession();
+  let record = registerWatchdog(
+    ready.record,
+    ready.ownership,
+    "session-1",
+    "watchdog-1",
+    NOW + 3,
+  );
+  record = recordPlayerObservation(record, "session-1", "watchdog-1", "empty-1", 0, NOW + 4);
+  record = beginStopping(record, ready.ownership, "session-1", NOW + 5);
+  record = cancelStopping(record, ready.ownership, "session-1", NOW + 6);
+
+  assert.equal(record.desiredState, "running");
+  assert.equal(record.observedState, "ready");
+  assert.equal(record.activeSessionId, "session-1");
+  assert.equal(record.idle?.consecutiveEmpty, 0);
+  assert.equal(cancelStopping(record, ready.ownership, "session-1", NOW + 7), record);
+});

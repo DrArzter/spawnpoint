@@ -26,8 +26,11 @@ test("stop workflow stops EC2 only after the host command succeeds", async () =>
   const choice = definition.States["Stop Command Complete"];
   assert.ok(choice);
   const success = choice.Choices?.find((candidate) => candidate.StringEquals === "Success");
+  const playerRace = choice.Choices?.find((candidate) => JSON.stringify(candidate).includes("ResponseCode"));
 
   assert.equal(success?.Next, "Stop Instance");
+  assert.equal(playerRace?.Next, "Players Online");
+  assert.match(JSON.stringify(definition.States["Players Online"]), /Spawnpoint\.PlayersOnline/);
   assert.equal(choice.Default, "Session Stop Failed");
   const stopInstance = definition.States["Stop Instance"];
   assert.ok(stopInstance);

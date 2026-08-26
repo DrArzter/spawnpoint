@@ -32,6 +32,8 @@ is asynchronous, so acquisition must use a conditional write against the recorde
 7. A duplicated observation ID is idempotent and cannot advance the threshold twice.
 8. Stop holds its lease across player recheck, save, archive verification and EC2 stop. Start cannot cross that gap.
 9. Unknown or failed observations never count as evidence that the server is empty.
+10. A player found by stop's final recheck cancels that stop and resets the session's idle streak; backup or compute
+    failures remain `stopping` for explicit recovery.
 
 The dependency-free implementation and executable examples live in
 [`lambdas/src/domain/lifecycle.ts`](../lambdas/src/domain/lifecycle.ts) and

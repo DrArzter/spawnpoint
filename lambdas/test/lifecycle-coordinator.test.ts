@@ -137,3 +137,44 @@ test("initialize and same-owner lease acquisition remain idempotent", async () =
   assert.deepEqual(acquiredRetry, acquired);
 });
 
+test("coordinator cancels a player-race stop without changing session identity", async () => {
+  const store = new MemoryStore();
+  let now = 1_786_665_600;
+  const coordinate = createLifecycleCoordinator(store, () => now++);
+  await coordinate({ action: "initialize", serverId: "minecraft" });
+  const acquired = await coordinate({
+    action: "acquireLease",
+    serverId: "minecraft",
+    operationId: "session-op",
+    ttlSeconds: 300,
+  });
+  assert.ok(acquired.ownership);
+  await coordinate({
+    action: "beginSession",
+    serverId: "minecraft",
+    ownership: acquired.ownership,
+    sessionId: "session-1",
+  });
+  await coordinate({
+    action: "markSessionReady",
+    serverId: "minecraft",
+    ownership: acquired.ownership,
+    sessionId: "session-1",
+  });
+  await coordinate({
+    action: "beginStopping",
+    serverId: "minecraft",
+    ownership: acquired.ownership,
+    sessionId: "session-1",
+  });
+  const cancelled = await coordinate({
+    action: "cancelStopping",
+    serverId: "minecraft",
+    ownership: acquired.ownership,
+    sessionId: "session-1",
+  });
+
+  assert.equal(cancelled.record.desiredState, "running");
+  assert.equal(cancelled.record.observedState, "ready");
+  assert.equal(cancelled.record.activeSessionId, "session-1");
+});

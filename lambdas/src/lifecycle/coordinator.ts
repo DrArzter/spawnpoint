@@ -3,6 +3,7 @@ import {
   acquireLease,
   beginSession,
   beginStopping,
+  cancelStopping,
   initialLifecycleRecord,
   isIdleStopEligible,
   markSessionReady,
@@ -63,6 +64,7 @@ export type CoordinatorInput =
         threshold: number;
       }>)
   | (BaseInput & Readonly<{ action: "beginStopping"; ownership: LeaseOwnership; sessionId: string }>)
+  | (BaseInput & Readonly<{ action: "cancelStopping"; ownership: LeaseOwnership; sessionId: string }>)
   | (BaseInput & Readonly<{ action: "markStopped"; ownership: LeaseOwnership; sessionId: string }>);
 
 export type CoordinatorOutput = Readonly<{
@@ -193,6 +195,11 @@ export function createLifecycleCoordinator(
         record: beginStopping(record, input.ownership, input.sessionId, now),
       }));
     }
+    if (input.action === "cancelStopping") {
+      return mutate(input.serverId, (record, now) => ({
+        record: cancelStopping(record, input.ownership, input.sessionId, now),
+      }));
+    }
     if (input.action === "markStopped") {
       return mutate(input.serverId, (record, now) => ({
         record: markStopped(record, input.ownership, input.sessionId, now),
@@ -203,4 +210,3 @@ export function createLifecycleCoordinator(
     throw new Error(`unsupported lifecycle action: ${JSON.stringify(unreachable)}`);
   };
 }
-

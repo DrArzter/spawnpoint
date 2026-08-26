@@ -156,6 +156,19 @@
           "Next": "Stop Instance"
         },
         {
+          "And": [
+            {
+              "Variable": "$.observed.invocation.Status",
+              "StringEquals": "Failed"
+            },
+            {
+              "Variable": "$.observed.invocation.ResponseCode",
+              "NumericEquals": 3
+            }
+          ],
+          "Next": "Players Online"
+        },
+        {
           "Or": [
             {
               "Variable": "$.observed.invocation.Status",
@@ -296,6 +309,11 @@
       "Type": "Fail",
       "Error": "Spawnpoint.SessionStopFailed",
       "Cause": "The host refused or failed save, shutdown or backup; EC2 remains running."
+    },
+    "Players Online": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.PlayersOnline",
+      "Cause": "A player joined after the earlier idle observation; the host remains running and no backup was attempted."
     },
     "Session Stop Timed Out": {
       "Type": "Fail",

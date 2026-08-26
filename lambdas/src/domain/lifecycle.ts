@@ -325,6 +325,27 @@ export function beginStopping(
   };
 }
 
+export function cancelStopping(
+  record: LifecycleRecord,
+  ownership: LeaseOwnership,
+  sessionId: string,
+  nowEpochSeconds: number,
+): LifecycleRecord {
+  requireOwnership(record, ownership, nowEpochSeconds);
+  requireSession(record, sessionId);
+  if (record.desiredState === "running" && record.observedState === "ready") return record;
+  if (record.desiredState !== "stopped" || record.observedState !== "stopping") {
+    throw new LifecycleConflict("only a stopping session can return to ready");
+  }
+  return {
+    ...record,
+    desiredState: "running",
+    observedState: "ready",
+    idle: record.idle === null ? null : { ...record.idle, consecutiveEmpty: 0 },
+    updatedAtEpochSeconds: nowEpochSeconds,
+  };
+}
+
 export function markStopped(
   record: LifecycleRecord,
   ownership: LeaseOwnership,
@@ -344,4 +365,3 @@ export function markStopped(
     updatedAtEpochSeconds: nowEpochSeconds,
   };
 }
-

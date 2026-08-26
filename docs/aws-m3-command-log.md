@@ -143,3 +143,58 @@ The retry, GitHub run `32900764882`, completed successfully in **4m26s**. Accept
 
 Release construction is now acceptance-tested. Promotion deliberately remains a separate operation: building a
 candidate cannot change `desired_release`, `active_release`, start EC2 or touch a world.
+
+## Deployment operations root
+
+On 2026-08-26 the idle watchdog and release promotion were removed from the unapplied portion of the disposable host
+root and placed in `infra/terraform-operations`, using the independent state key
+`spawnpoint/operations.tfstate`. This avoids accepting the host root's unrelated EC2/EBS replacement proposal merely
+to deploy orchestration. The existing start and stop machines are consumed by stable ARN; the current host is read only
+to scope the watchdog's SSM permission to `i-09c9b5069308ac372`.
+
+Local checks, which use mock AWS data and create nothing:
+
+```bash
+terraform -chdir=infra/terraform-operations fmt -check -diff
+terraform -chdir=infra/terraform-operations init -backend=false
+terraform -chdir=infra/terraform-operations validate
+terraform -chdir=infra/terraform-operations test
+
+terraform -chdir=infra/terraform validate
+terraform -chdir=infra/terraform test
+terraform -chdir=infra/terraform-bootstrap validate
+terraform -chdir=infra/terraform-bootstrap test
+```
+
+Results: operations **2 passed / 0 failed**, host **10 passed / 0 failed**, bootstrap **1 passed / 0 failed**. Both ASL
+documents independently returned `result=OK` and no diagnostics from
+`aws stepfunctions validate-state-machine-definition`.
+
+The production deployment used a saved plan:
+
+```bash
+terraform -chdir=infra/terraform-operations init \
+  -reconfigure -backend-config=backend.hcl
+terraform -chdir=infra/terraform-operations plan \
+  -lock-timeout=30s -out=/tmp/spawnpoint-operations-20260826.tfplan
+terraform -chdir=infra/terraform-operations show \
+  /tmp/spawnpoint-operations-20260826.tfplan
+sha256sum /tmp/spawnpoint-operations-20260826.tfplan
+terraform -chdir=infra/terraform-operations apply \
+  /tmp/spawnpoint-operations-20260826.tfplan
+```
+
+The reviewed plan digest was
+`cae300db2650b0c123f5be5d3c3da857b8b460dd3dcd68d0aa055a68a7fcf6d4`. Plan and apply were exactly **6 added / 0
+changed / 0 destroyed**: two narrowly trusted IAM roles, two inline policies and the two Standard Workflows
+`spawnpoint-idle-watchdog` and `spawnpoint-promote-release`. A post-apply production plan reported `No changes`.
+
+The AWS API then showed both machines, no executions for either machine, EC2 still `stopped`, and
+`worlds/world/release.json` still absent (HTTP 404). Deployment therefore installed inert orchestration only; it did
+not start a session, promote a release or mutate world state. The existing world must be explicitly adopted at its
+verified release `1.0` before the first promotion to `1.1`.
+
+The bootstrap root was planned separately after adding cleanup for the new native lock key. Its single in-place S3
+lifecycle update would also activate three previously coded but unapplied cleanup rules (`guardrails`, `github-oidc`
+and `release-pipeline`). That combined housekeeping plan was deliberately **not applied** and `-target` was not used;
+state locking already works and promotion does not depend on expiring old lock-object versions.

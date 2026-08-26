@@ -86,14 +86,15 @@ contract.
 
 ### Idle watchdog
 
-**Built, not yet applied or acceptance-tested.** `spawnpoint-idle-watchdog` is a Standard workflow started by
+**Deployed, not yet acceptance-tested.** `spawnpoint-idle-watchdog` is a Standard workflow started by
 `scripts/start-server.sh` alongside every session — one execution per session, nothing scheduled, nothing running
 between sessions. It probes `idle-probe.sh` over SSM every 5 minutes; three consecutive empty readings (15 min) start
 the verified stop above. A failed probe never counts as empty. The hard session cap is 96 checks (8 h), and stops the
 host regardless of the player count. See [workflows/README.md](../workflows/README.md).
 
-To apply: `terraform apply` in `infra/terraform` adds the watchdog machine, its role and the running-hours alarm
-(3 add). Validate the definition first, read-only:
+To deploy it without touching EC2/EBS: review and apply `infra/terraform-operations`. The root also contains promotion;
+creating either state machine does not start an execution. The running-hours alarm remains in the host root. Validate
+the definition first, read-only:
 
 ```bash
 aws stepfunctions validate-state-machine-definition --definition file://workflows/idle-watchdog.asl.json --type STANDARD --severity WARNING --profile spawnpoint --region eu-central-1
@@ -178,7 +179,7 @@ activate.
 
 ## Promote a release
 
-**Promotion is built, not yet applied or acceptance-tested.** Release construction has moved off the owner workstation:
+**Promotion is deployed from `infra/terraform-operations`, not yet acceptance-tested.** Release construction has moved off the owner workstation:
 the GitHub Action, narrow AWS OIDC role, CodeBuild project and its Standard Workflow are deployed. The infrastructure
 is idle between builds and post-apply plans are clean. Release `1.1` completed the first end-to-end acceptance run:
 GitHub OIDC → Step Functions → CodeBuild → 111 hashed JARs → manifest-last S3 publication, without starting EC2 or

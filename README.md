@@ -30,13 +30,12 @@ The name is a working title.
 
 ## What is designed, not built
 
-Every row below has a decision record behind it and no code yet. Read the roadmap for the order.
+These are the remaining product-facing capabilities. Some have supporting domain code, but none is an accepted
+player-facing feature yet. Read the roadmap for the order.
 
 | Capability | Detail |
 | --- | --- |
-| Started by anyone, stopped by itself | An explicit request from the panel or a bot, and an idle watchdog that saves and stops. Today both ends are a script the owner runs |
-| Versioned mod releases | A mod set is immutable. Desired is the requested version; active is the last version that passed health checks |
-| Automatic mod deployment | Promoting a release saves the world, syncs mods, restarts the server, and rolls back if it fails to start |
+| Player-facing start control | The owner can start a session without the AWS console, and the accepted watchdog stops it automatically; the remaining work is exposing start/status/pack safely to players |
 | Updates you approve, not updates that happen | A scheduled check resolves every mod, diffs by hash, and opens a pull request. Five changed mods with changelogs is a decision; a server that updated itself is an incident |
 | Preview environments per proposal | A pull request boots a throwaway server on a copy of the real world. Join it and look at your base before approving. A few cents a run |
 | Matching client pack | Every release generates a launcher-importable pack, published at a stable URL |
@@ -232,8 +231,8 @@ $129 a month. That is why a stop that silently fails is treated as an incident.
 | --- | --- | --- |
 | M0 | A playable server, built by hand, deliberately throwaway | **Done** 2026-08-13 |
 | M1 | The same thing rebuilt in Terraform, with backups and a tested restore | **Done** 2026-08-13 |
-| M2 | On-demand start and idle stop, over a stable overlay address | **In progress** — start and stop workflows run; the idle watchdog and the running-hours alarm are next |
-| M3 | Versioned mod releases and the deployment pipeline | Release `1.0` cut by hand; the pipeline is not built |
+| M2 | On-demand start and idle stop, over a stable overlay address | **Accepted on demand** 2026-08-26 — start, health, three empty checks, verified backup and automatic EC2 stop; Spot remains deliberately deferred |
+| M3 | Versioned mod releases and the deployment pipeline | **In progress** — AWS built `1.1`, health-gated promotion `1.0 → 1.1` passed; a deliberate bad-release rollback drill remains |
 | M4 | One bot and an allow-list; client pack distribution | |
 | M5 | Observability, alerting and cost guardrails | Session Grafana already runs; the durable alarms do not |
 | M6 | Several worlds — vanilla-plus, techno, magic, techno-magic — one active at a time | |

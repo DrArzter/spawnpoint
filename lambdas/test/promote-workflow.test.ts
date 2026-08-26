@@ -81,7 +81,7 @@ test("active commits only after the target start succeeded", async () => {
   const commit = state(definition, "Commit Active");
   const document = state(definition, "Build Commit Document").Parameters?.document as Record<string, unknown>;
   assert.equal(document["active_release.$"], "$.request.release");
-  assert.match(String(commit.Parameters?.["Body.$"]), /JsonToString/);
+  assert.equal(commit.Parameters?.["Body.$"], "$.document");
 });
 
 test("rollback is the same mechanism in reverse: flip the pointer, start again", async () => {
@@ -140,14 +140,14 @@ test("an already-active release is an idempotent success", async () => {
   assert.equal(state(definition, "Nothing To Do").End, true);
 });
 
-test("every pointer write goes through JsonToString, and every failure mode is distinct", async () => {
+test("every pointer write passes one JSON object, and every failure mode is distinct", async () => {
   const definition = await loadDefinition();
   const puts = Object.values(definition.States).filter(
     (state) => state.Resource === "arn:aws:states:::aws-sdk:s3:putObject",
   );
   assert.equal(puts.length, 4);
   for (const put of puts) {
-    assert.match(String(put.Parameters?.["Body.$"]), /States\.JsonToString\(\$\.document\)/);
+    assert.equal(put.Parameters?.["Body.$"], "$.document");
   }
 
   const fails = Object.entries(definition.States).filter(([, state]) => state.Type === "Fail");

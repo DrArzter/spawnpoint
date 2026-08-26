@@ -39,6 +39,24 @@ The definition currently stops visibly on failure. Automatic EC2 compensation af
 it must first distinguish an instance that this execution started from one that was already running, otherwise a
 failed health check could stop somebody else's active session.
 
+## Start server V2
+
+`start-server-v2.asl.json.tftpl` is the first inert Lifecycle V2 composition. It does not replace the accepted V1
+machine. V1 remains the host operation that starts EC2, waits for SSM and proves Minecraft health; V2 owns the
+session-level facts around that operation:
+
+1. initialise the logical server record and acquire its fenced lease;
+2. create one explicitly identified session from fully stopped state;
+3. run the accepted V1 start synchronously;
+4. mark that exact session ready only after V1's health gate, then release the lease;
+5. if V1 fails, move the session to stopping, run the accepted verified V1 stop, mark stopped, release the lease and
+   fail with `Spawnpoint.V2StartFailedCompensated`.
+
+If both start and compensation fail, the record deliberately remains `stopping` and the execution fails as
+`Spawnpoint.V2StartCompensationFailed`; claiming `stopped` without a verified backup and EC2 stop would corrupt the
+control plane's evidence. The definition is not wired into Terraform yet. Its input requires distinct `operationId`
+and `sessionId` values; operation history and session identity are related, but not interchangeable.
+
 ## Stop server
 
 `stop-server.asl.json` invokes the host's indivisible session-close contract, then stops EC2 only after that command

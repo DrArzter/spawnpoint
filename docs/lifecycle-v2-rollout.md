@@ -57,8 +57,10 @@ working control plane.
 
 ## Current phase
 
-Phase 4 complete; Phase 5 is next. The pure model is tested; Terraform owns the empty protected table and a short
+Phase 4 complete; Phase 5 has started in code but has not created AWS resources. The pure model is tested; Terraform owns the empty protected table and a short
 TypeScript coordinator Lambda with consistent reads plus revision-guarded writes. The host now also has the separate
 `check-session-activity.sh` contract: only a successfully parsed zero-player RCON response is `idle`; stopped compute,
 RCON failure and an unparseable response are `unknown`. No workflow calls the probe yet, no V1 workflow has coordinator
-invoke permission, and production lifecycle behaviour remains unchanged.
+invoke permission, and production lifecycle behaviour remains unchanged. The first V2 definition wraps the accepted
+V1 start with lease/session transitions and verified-stop compensation, but remains undeployed until the stop and
+watchdog definitions complete the session contract.

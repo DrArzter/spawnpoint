@@ -1,0 +1,214 @@
+{
+  "Comment": "Lifecycle V2 start wrapper: fence one session, delegate host work to accepted V1, and compensate a failed start.",
+  "QueryLanguage": "JSONPath",
+  "StartAt": "Initialize",
+  "States": {
+    "Initialize": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$",
+        "coordination": {}
+      },
+      "Next": "Initialize Lifecycle"
+    },
+    "Initialize Lifecycle": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "initialize",
+          "serverId.$": "$.request.serverId"
+        }
+      },
+      "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Acquire Start Lease"
+    },
+    "Acquire Start Lease": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "acquireLease",
+          "serverId.$": "$.request.serverId",
+          "operationId.$": "$.request.operationId",
+          "ttlSeconds.$": "$.request.leaseTtlSeconds"
+        }
+      },
+      "ResultSelector": {
+        "ownership.$": "$.Payload.ownership"
+      },
+      "ResultPath": "$.coordination.lease",
+      "Next": "Begin Session"
+    },
+    "Begin Session": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "beginSession",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Start Accepted V1"
+    },
+    "Start Accepted V1": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn": "${start_v1_state_machine_arn}",
+        "Name.$": "States.Format('{}-host-start', $.request.operationId)",
+        "Input": {
+          "operationId.$": "$.request.operationId",
+          "instanceId.$": "$.request.instanceId",
+          "connectionAddress.$": "$.request.connectionAddress",
+          "timing.$": "$.request.startTiming"
+        }
+      },
+      "ResultPath": "$.hostStart",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.startFailure",
+          "Next": "Begin Compensating Stop"
+        }
+      ],
+      "Next": "Mark Session Ready"
+    },
+    "Mark Session Ready": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "markSessionReady",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Release Start Lease"
+    },
+    "Release Start Lease": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "releaseLease",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Ready"
+    },
+    "Ready": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "sessionId.$": "$.request.sessionId",
+        "serverId.$": "$.request.serverId",
+        "status": "ready",
+        "connectionAddress.$": "$.request.connectionAddress",
+        "hostStart.$": "$.hostStart.Output"
+      },
+      "End": true
+    },
+    "Begin Compensating Stop": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "beginStopping",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Stop Accepted V1"
+    },
+    "Stop Accepted V1": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn": "${stop_v1_state_machine_arn}",
+        "Name.$": "States.Format('{}-compensate', $.request.operationId)",
+        "Input": {
+          "operationId.$": "$.request.operationId",
+          "instanceId.$": "$.request.instanceId",
+          "timing.$": "$.request.stopTiming"
+        }
+      },
+      "ResultPath": "$.hostStop",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.stopFailure",
+          "Next": "Start Compensation Failed"
+        }
+      ],
+      "Next": "Mark Compensated Session Stopped"
+    },
+    "Mark Compensated Session Stopped": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "markStopped",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Release Compensating Lease"
+    },
+    "Release Compensating Lease": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "releaseLease",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Start Failed And Compensated"
+    },
+    "Start Failed And Compensated": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.V2StartFailedCompensated",
+      "Cause": "The accepted host start failed; the host was stopped and lifecycle state returned to stopped."
+    },
+    "Start Compensation Failed": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.V2StartCompensationFailed",
+      "Cause": "Both host start and its verified stop compensation failed; lifecycle remains stopping for explicit recovery."
+    }
+  }
+}

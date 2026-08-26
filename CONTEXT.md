@@ -17,3 +17,5 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 **Adoption**: Bringing an existing world under release-pointer management by verifying its already-installed release and recording that release as both desired and active. _Avoid_: “import” for this case; import creates a new managed world from external save data.
 
 **Operation**: One durable attempt to change or observe lifecycle state, with its own identity, status and failure history. The operation is separate from the desired and active release values it may change.
+
+**Session**: One identified period in which a world is being started, is ready for players, or is being stopped. A new start receives a new session identity so work left over from an earlier session cannot stop or modify it.

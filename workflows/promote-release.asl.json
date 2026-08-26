@@ -120,7 +120,7 @@
         "Bucket.$": "$.request.releaseBucket",
         "Key.$": "States.Format('worlds/{}/release.json', $.request.worldName)",
         "ContentType": "application/json",
-        "Body.$": "States.JsonToString($.document)"
+        "Body.$": "$.document"
       },
       "ResultPath": null,
       "Next": "Describe Instance"
@@ -208,7 +208,7 @@
         "Bucket.$": "$.request.releaseBucket",
         "Key.$": "States.Format('worlds/{}/release.json', $.request.worldName)",
         "ContentType": "application/json",
-        "Body.$": "States.JsonToString($.document)"
+        "Body.$": "$.document"
       },
       "ResultPath": null,
       "Next": "Promotion Refused"
@@ -261,7 +261,7 @@
         "Bucket.$": "$.request.releaseBucket",
         "Key.$": "States.Format('worlds/{}/release.json', $.request.worldName)",
         "ContentType": "application/json",
-        "Body.$": "States.JsonToString($.document)"
+        "Body.$": "$.document"
       },
       "ResultPath": null,
       "Next": "Route Completion"
@@ -352,7 +352,7 @@
         "Bucket.$": "$.request.releaseBucket",
         "Key.$": "States.Format('worlds/{}/release.json', $.request.worldName)",
         "ContentType": "application/json",
-        "Body.$": "States.JsonToString($.document)"
+        "Body.$": "$.document"
       },
       "ResultPath": null,
       "Next": "Start With Previous"

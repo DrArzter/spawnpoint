@@ -89,7 +89,9 @@ rollback is the same mechanism in reverse.
    surprise behind.
 
 Every bad ending is a distinct `Spawnpoint.*` error, because "failed" without "where" is midnight archaeology.
-Pointer documents are built as objects and serialised with `States.JsonToString` — never hand-formatted strings.
+Pointer documents are built as objects and passed directly to the S3 SDK integration, which serialises the blob.
+Applying `States.JsonToString` here would double-encode the object as a JSON string. Nested Step Functions execution
+inputs are different: those integrations explicitly require a string, so their `States.JsonToString` calls remain.
 
 **Known gap, deliberate:** nothing prevents a concurrent promotion and watchdog stop from interleaving. Single-flight
 is ADR-0025's open question; until it lands, promote when the session is quiet — the stop machine's player check is

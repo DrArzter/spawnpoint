@@ -117,7 +117,10 @@ run "promotion_flips_the_pointer_and_composes_existing_machines" {
   }
 
   assert {
-    condition     = strcontains(aws_sfn_state_machine.promote_release.definition, "States.JsonToString($.document)")
-    error_message = "Pointer documents must be built as objects and serialised, never hand-formatted strings."
+    condition = alltrue([
+      for state in ["Write Desired", "Restore Desired After Refusal", "Commit Active", "Write Rollback Desired"] :
+      jsondecode(aws_sfn_state_machine.promote_release.definition).States[state].Parameters["Body.$"] == "$.document"
+    ])
+    error_message = "S3 SDK integration must receive the pointer object directly; JsonToString would double-encode it."
   }
 }

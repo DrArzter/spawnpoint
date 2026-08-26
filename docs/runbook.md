@@ -9,7 +9,7 @@ performed. A procedure nobody has run is a guess.
 | --- | --- | --- |
 | Start the server | Any player | 2026-08-14 — M2 Standard Workflow started stopped EC2, waited for SSM, invoked the host session contract and returned the private address |
 | Stop the server | Owner | 2026-08-14 — M2 Standard Workflow rechecked 0 players, flushed the world, stopped all session containers, verified an immutable S3 backup and only then stopped EC2 |
-| Promote a release | Owner | — |
+| Promote a release | Owner | 2026-08-26 — release 1.1 reconciled, passed Minecraft health, committed active, produced a verified backup and returned EC2 to stopped |
 | Adopt the existing world | Owner | 2026-08-26 — verified all 111 installed JARs against immutable release 1.0, then atomically created desired=active=1.0 without starting Minecraft |
 | Roll back a release | Owner | — |
 | Restore the world | Owner | 2026-08-13 — the Terraform M1 host downloaded the verified S3 archive with its instance role, restored it onto a new EBS, reconciled release 1.0 and accepted a player in the recovered world |
@@ -180,11 +180,15 @@ activate.
 
 ## Promote a release
 
-**Promotion is deployed from `infra/terraform-operations`, not yet acceptance-tested.** Release construction has moved off the owner workstation:
+**Promotion is deployed and acceptance-tested.** Release construction has moved off the owner workstation:
 the GitHub Action, narrow AWS OIDC role, CodeBuild project and its Standard Workflow are deployed. The infrastructure
 is idle between builds and post-apply plans are clean. Release `1.1` completed the first end-to-end acceptance run:
 GitHub OIDC → Step Functions → CodeBuild → 111 hashed JARs → manifest-last S3 publication, without starting EC2 or
 changing a world pointer. See [the M3 command log](aws-m3-command-log.md).
+
+Release `1.1` also completed the first promotion drill on 2026-08-26: boot reconciliation installed it, Minecraft
+passed health, the workflow committed it active, then produced a verified backup and returned the originally stopped
+EC2 to `stopped`. The two fail-closed defects found before that acceptance are recorded in the same command log.
 
 One-time secret setup, without putting the key value in shell history:
 

@@ -302,3 +302,49 @@ The regression now asserts all four pointer writes pass `$.document` directly; o
 `States.JsonToString`. Operations tests passed **3 / 0** and the AWS ASL validator returned `OK`. The saved correction
 plan was exactly **0 add / 1 in-place change / 0 destroy**, updating only the definition of
 `spawnpoint-promote-release`; apply completed with that exact result.
+
+## Second attempt: container filesystem mode
+
+The corrected workflow wrote a real JSON object and the host successfully downloaded and reconciled all 111 files of
+release `1.1`. Minecraft then failed before opening the world with `AccessDeniedException: /data/mods`; rollback
+reconciled `1.0` but failed for the same reason. The atomic staging directory came from `mktemp -d` as mode `0700` and
+was renamed directly to the container bind-mount path. Payload hashes were correct, but the non-root Minecraft user
+could not traverse the directory.
+
+The pointer rollback itself was correct (`desired_release=active_release=1.0`). SSM command
+`f5f86a7f-6161-4364-9acc-7e4868fb8728` stopped all remaining observability containers, changed only the release
+directory/file modes to `0755`/`0644`, and reverified all **111 JARs / 623,534,143 bytes** against immutable `1.0`.
+EC2 was then stopped.
+
+Commit `809ea09` makes directory and file modes part of reconciliation's contract and adds regression assertions. The
+installed immutable maintenance bundle was:
+
+```text
+S3 key: releases/1.0/server/spawnpoint-server-809ea09.tar.zst
+SHA-256: 5fa6446786443439d3a886b58b26c4de31a8d3db0d96eed71cba98bbbfa20642
+Bytes: 45,365
+S3 VersionId: ohop0Um.PxMwahz3bttJhzku3v3CF7gX
+SSM command: 98facea8-a1d6-45d1-9ff1-75f3fcc53194
+```
+
+`installed-release-test`, `release-reconcile-test` and the full `boot-reconcile-test` passed before deployment.
+
+## First accepted promotion
+
+Execution `promote-20260826T163721Z` then completed `SUCCEEDED` in about **3m14s** from a stopped origin:
+
+1. read active `1.0` and wrote desired `1.1`;
+2. downloaded and atomically reconciled release `1.1`;
+3. started Minecraft and passed the existing health gate;
+4. committed `desired_release=active_release=1.1`;
+5. ran the verified stop synchronously, archived the world, uploaded and verified the backup, and stopped EC2.
+
+The accepted pointer is S3 VersionId `N4TTHnekWWVkgerKdX0BirtzYQED1gUk`, SHA-256
+`efd5b0cb57057163faa235095a545c0245734767ec7747efb9368f30a785b5af`. The new backup is
+`worlds/world/archives/world-20260826T163955Z-27ca02863028dc6983f2e4a326e4b59ae3f949779edd2f9553b16e4abe1cc6bf.tar.zst`,
+**419,511,533 bytes**, with matching SHA metadata, S3 full-object checksum and VersionId
+`Erd_F2zagoIl3Lhm.pHuYVeSA2c4unaJ`.
+
+Independent acceptance found EC2 `stopped`, no running start/stop/watchdog/promotion executions, and an operations
+Terraform plan with `No changes`. Release `1.1` is therefore active because it passed health, not merely because it was
+requested.

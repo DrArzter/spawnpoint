@@ -1,0 +1,480 @@
+{
+  "Comment": "Lifecycle V2 watchdog: register one execution per session, persist idempotent player observations, and stop only that session.",
+  "QueryLanguage": "JSONPath",
+  "StartAt": "Initialize",
+  "States": {
+    "Initialize": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$",
+        "counters": { "total": 0, "probeFailures": 0, "stopRefusals": 0, "probePoll": 0 },
+        "observed": {},
+        "coordination": {}
+      },
+      "Next": "Acquire Registration Lease"
+    },
+    "Acquire Registration Lease": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "acquireLease",
+          "serverId.$": "$.request.serverId",
+          "operationId.$": "$.request.operationId",
+          "ttlSeconds.$": "$.request.registrationLeaseTtlSeconds"
+        }
+      },
+      "ResultSelector": { "ownership.$": "$.Payload.ownership" },
+      "ResultPath": "$.coordination.lease",
+      "Next": "Register This Watchdog"
+    },
+    "Register This Watchdog": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "registerWatchdog",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership",
+          "sessionId.$": "$.request.sessionId",
+          "watchdogExecutionId.$": "$$.Execution.Id"
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.coordination.registrationError",
+          "Next": "Release Rejected Registration Lease"
+        }
+      ],
+      "Next": "Release Registration Lease"
+    },
+    "Release Rejected Registration Lease": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "releaseLease",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Watchdog Registration Rejected"
+    },
+    "Watchdog Registration Rejected": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.V2WatchdogRegistrationRejected",
+      "Cause": "The session is stale, is not ready, or already owns a different watchdog; the rejected execution released its lease."
+    },
+    "Release Registration Lease": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "releaseLease",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Wait Between Checks"
+    },
+    "Wait Between Checks": {
+      "Type": "Wait",
+      "SecondsPath": "$.request.timing.checkIntervalSeconds",
+      "Next": "Describe Host"
+    },
+    "Describe Host": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
+      "Parameters": { "InstanceIds.$": "States.Array($.request.instanceId)" },
+      "ResultPath": "$.observed.instance",
+      "Next": "Host Still Running"
+    },
+    "Host Still Running": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name",
+          "StringEquals": "running",
+          "Next": "Send Structured Probe"
+        }
+      ],
+      "Default": "Reconcile Externally Stopped Host"
+    },
+    "Send Structured Probe": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:sendCommand",
+      "Parameters": {
+        "DocumentName": "AWS-RunShellScript",
+        "InstanceIds.$": "States.Array($.request.instanceId)",
+        "Parameters": {
+          "commands": [
+            "set -euo pipefail",
+            "/srv/spawnpoint/app/server/scripts/check-session-activity.sh"
+          ]
+        },
+        "TimeoutSeconds": 300
+      },
+      "ResultPath": "$.observed.command",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.observed.probeError",
+          "Next": "Record Synthetic Unknown"
+        }
+      ],
+      "Next": "Wait Probe Result"
+    },
+    "Wait Probe Result": {
+      "Type": "Wait",
+      "SecondsPath": "$.request.timing.probePollSeconds",
+      "Next": "Get Probe Result"
+    },
+    "Get Probe Result": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:getCommandInvocation",
+      "Parameters": {
+        "CommandId.$": "$.observed.command.Command.CommandId",
+        "InstanceId.$": "$.request.instanceId"
+      },
+      "ResultPath": "$.observed.invocation",
+      "Catch": [
+        {
+          "ErrorEquals": ["Ssm.InvocationDoesNotExistException"],
+          "ResultPath": "$.observed.lookupError",
+          "Next": "Increment Probe Poll"
+        }
+      ],
+      "Next": "Route Probe Result"
+    },
+    "Route Probe Result": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.invocation.Status",
+          "StringEquals": "Success",
+          "Next": "Extract Player Count"
+        },
+        {
+          "Or": [
+            { "Variable": "$.observed.invocation.Status", "StringEquals": "Pending" },
+            { "Variable": "$.observed.invocation.Status", "StringEquals": "InProgress" },
+            { "Variable": "$.observed.invocation.Status", "StringEquals": "Delayed" }
+          ],
+          "Next": "Increment Probe Poll"
+        }
+      ],
+      "Default": "Record Command Unknown"
+    },
+    "Increment Probe Poll": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "counters": {
+          "total.$": "$.counters.total",
+          "probeFailures.$": "$.counters.probeFailures",
+          "stopRefusals.$": "$.counters.stopRefusals",
+          "probePoll.$": "States.MathAdd($.counters.probePoll, 1)"
+        },
+        "observed": { "command.$": "$.observed.command" },
+        "coordination.$": "$.coordination"
+      },
+      "Next": "Probe Poll Limit Reached"
+    },
+    "Probe Poll Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.counters.probePoll",
+          "NumericGreaterThanEqualsPath": "$.request.timing.maxProbePolls",
+          "Next": "Record Command Unknown"
+        }
+      ],
+      "Default": "Wait Probe Result"
+    },
+    "Extract Player Count": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "counters.$": "$.counters",
+        "coordination.$": "$.coordination",
+        "observed": {
+          "command.$": "$.observed.command",
+          "playersOnline.$": "States.StringToJson(States.ArrayGetItem(States.StringSplit(States.ArrayGetItem(States.StringSplit($.observed.invocation.StandardOutputContent, '\n'), 3), '='), 1))"
+        }
+      },
+      "Next": "Record Successful Observation"
+    },
+    "Record Successful Observation": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "recordPlayerObservation",
+          "serverId.$": "$.request.serverId",
+          "sessionId.$": "$.request.sessionId",
+          "watchdogExecutionId.$": "$$.Execution.Id",
+          "observationId.$": "$.observed.command.Command.CommandId",
+          "playersOnline.$": "$.observed.playersOnline"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Count Successful Probe"
+    },
+    "Count Successful Probe": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "counters": {
+          "total.$": "States.MathAdd($.counters.total, 1)",
+          "probeFailures": 0,
+          "stopRefusals.$": "$.counters.stopRefusals",
+          "probePoll": 0
+        },
+        "observed": {},
+        "coordination.$": "$.coordination"
+      },
+      "Next": "Check Idle Eligibility"
+    },
+    "Record Command Unknown": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "recordPlayerObservation",
+          "serverId.$": "$.request.serverId",
+          "sessionId.$": "$.request.sessionId",
+          "watchdogExecutionId.$": "$$.Execution.Id",
+          "observationId.$": "$.observed.command.Command.CommandId",
+          "playersOnline": null
+        }
+      },
+      "ResultPath": null,
+      "Next": "Count Probe Failure"
+    },
+    "Record Synthetic Unknown": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "recordPlayerObservation",
+          "serverId.$": "$.request.serverId",
+          "sessionId.$": "$.request.sessionId",
+          "watchdogExecutionId.$": "$$.Execution.Id",
+          "observationId.$": "States.Format('{}-send-failure-{}', $$.Execution.Id, $.counters.total)",
+          "playersOnline": null
+        }
+      },
+      "ResultPath": null,
+      "Next": "Count Probe Failure"
+    },
+    "Count Probe Failure": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "counters": {
+          "total.$": "States.MathAdd($.counters.total, 1)",
+          "probeFailures.$": "States.MathAdd($.counters.probeFailures, 1)",
+          "stopRefusals.$": "$.counters.stopRefusals",
+          "probePoll": 0
+        },
+        "observed": {},
+        "coordination.$": "$.coordination"
+      },
+      "Next": "Probe Failure Limit Reached"
+    },
+    "Probe Failure Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.counters.probeFailures",
+          "NumericGreaterThanEqualsPath": "$.request.timing.maxConsecutiveProbeFailures",
+          "Next": "Watchdog Blind"
+        }
+      ],
+      "Default": "Session Cap Reached"
+    },
+    "Check Idle Eligibility": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "isIdleStopEligible",
+          "serverId.$": "$.request.serverId",
+          "sessionId.$": "$.request.sessionId",
+          "watchdogExecutionId.$": "$$.Execution.Id",
+          "threshold.$": "$.request.timing.emptyChecksRequired"
+        }
+      },
+      "ResultSelector": { "eligible.$": "$.Payload.idleStopEligible" },
+      "ResultPath": "$.coordination.idle",
+      "Next": "Idle Stop Eligible"
+    },
+    "Idle Stop Eligible": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.coordination.idle.eligible", "BooleanEquals": true, "Next": "Stop Idle Session" }
+      ],
+      "Default": "Session Cap Reached"
+    },
+    "Session Cap Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.counters.total",
+          "NumericGreaterThanEqualsPath": "$.request.timing.maxTotalChecks",
+          "Next": "Stop Capped Session"
+        }
+      ],
+      "Default": "Wait Between Checks"
+    },
+    "Stop Idle Session": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn": "${stop_v2_state_machine_arn}",
+        "Name.$": "States.Format('{}-idle-{}', $.request.operationId, $.counters.total)",
+        "Input": {
+          "serverId.$": "$.request.serverId",
+          "operationId.$": "States.Format('{}-idle-{}', $.request.operationId, $.counters.total)",
+          "sessionId.$": "$.request.sessionId",
+          "leaseTtlSeconds.$": "$.request.stopLeaseTtlSeconds",
+          "instanceId.$": "$.request.instanceId",
+          "stopTiming.$": "$.request.stopTiming"
+        }
+      },
+      "ResultPath": "$.observed.stop",
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.stopError", "Next": "Route Idle Stop Failure" }
+      ],
+      "Next": "Stopped Idle"
+    },
+    "Route Idle Stop Failure": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.stopError.Cause",
+          "StringMatches": "*Spawnpoint.V2StopRefusedPlayersOnline*",
+          "Next": "Count Stop Refusal"
+        }
+      ],
+      "Default": "Watchdog Stop Failing"
+    },
+    "Count Stop Refusal": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "counters": {
+          "total.$": "$.counters.total",
+          "probeFailures": 0,
+          "stopRefusals.$": "States.MathAdd($.counters.stopRefusals, 1)",
+          "probePoll": 0
+        },
+        "observed": {},
+        "coordination.$": "$.coordination"
+      },
+      "Next": "Stop Refusal Limit Reached"
+    },
+    "Stop Refusal Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.counters.stopRefusals",
+          "NumericGreaterThanEqualsPath": "$.request.timing.maxStopRefusals",
+          "Next": "Watchdog Stop Failing"
+        }
+      ],
+      "Default": "Wait Between Checks"
+    },
+    "Stop Capped Session": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn": "${stop_v2_state_machine_arn}",
+        "Name.$": "States.Format('{}-cap-{}', $.request.operationId, $.counters.total)",
+        "Input": {
+          "serverId.$": "$.request.serverId",
+          "operationId.$": "States.Format('{}-cap-{}', $.request.operationId, $.counters.total)",
+          "sessionId.$": "$.request.sessionId",
+          "leaseTtlSeconds.$": "$.request.stopLeaseTtlSeconds",
+          "instanceId.$": "$.request.instanceId",
+          "stopTiming.$": "$.request.stopTiming"
+        }
+      },
+      "ResultPath": "$.observed.stop",
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.stopError", "Next": "Watchdog Stop Failing" }
+      ],
+      "Next": "Stopped At Cap"
+    },
+    "Reconcile Externally Stopped Host": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn": "${stop_v2_state_machine_arn}",
+        "Name.$": "States.Format('{}-reconcile-stopped', $.request.operationId)",
+        "Input": {
+          "serverId.$": "$.request.serverId",
+          "operationId.$": "States.Format('{}-reconcile-stopped', $.request.operationId)",
+          "sessionId.$": "$.request.sessionId",
+          "leaseTtlSeconds.$": "$.request.stopLeaseTtlSeconds",
+          "instanceId.$": "$.request.instanceId",
+          "stopTiming.$": "$.request.stopTiming"
+        }
+      },
+      "ResultPath": "$.observed.stop",
+      "Next": "Host Stopped Externally"
+    },
+    "Host Stopped Externally": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "sessionId.$": "$.request.sessionId",
+        "status": "host_stopped_externally",
+        "checksTotal.$": "$.counters.total"
+      },
+      "End": true
+    },
+    "Stopped Idle": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "sessionId.$": "$.request.sessionId",
+        "status": "stopped_idle",
+        "checksTotal.$": "$.counters.total"
+      },
+      "End": true
+    },
+    "Stopped At Cap": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "sessionId.$": "$.request.sessionId",
+        "status": "stopped_session_cap",
+        "checksTotal.$": "$.counters.total"
+      },
+      "End": true
+    },
+    "Watchdog Blind": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.V2WatchdogBlind",
+      "Cause": "Consecutive structured probes failed; unknown is never evidence of idle and the exact session remains running."
+    },
+    "Watchdog Stop Failing": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.V2WatchdogStopFailing",
+      "Cause": "The session-scoped verified stop failed; lifecycle state records whether the host remains ready or stopping."
+    }
+  }
+}

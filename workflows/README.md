@@ -98,6 +98,13 @@ running, probe `idle-probe.sh` over SSM, and count.
 All intervals and limits arrive in the input, so an acceptance drill can run with a two-minute threshold while
 production uses fifteen. The running-hours CloudWatch alarm is the backstop behind the whole mechanism.
 
+`idle-watchdog-v2.asl.json.tftpl` moves coordination facts out of execution-local counters. The execution registers
+itself against one exact `sessionId`; every structured player observation is written through the coordinator with the
+SSM command ID as its idempotency key. Successful zero-player reads alone advance DynamoDB's empty streak. A positive
+count or an unknown probe resets it, and only the coordinator's `isIdleStopEligible` decision can enter the V2 stop.
+The final stop still rechecks players: its expected player-race refusal returns to the loop, while a backup or compute
+failure ends loudly. A stale watchdog fails its coordinator mutation before it can start a stop for a newer session.
+
 ## Promote release
 
 `promote-release.asl.json` implements [ADR-0030](../docs/adr/0030-desired-and-active-release.md) by composing the

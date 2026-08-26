@@ -63,6 +63,7 @@ Phase 4 complete; Phase 5 has started in code but has not created AWS resources.
 TypeScript coordinator Lambda with consistent reads plus revision-guarded writes. The host now also has the separate
 `check-session-activity.sh` contract: only a successfully parsed zero-player RCON response is `idle`; stopped compute,
 RCON failure and an unparseable response are `unknown`. No workflow calls the probe yet, no V1 workflow has coordinator
-invoke permission, and production lifecycle behaviour remains unchanged. The V2 start and stop definitions now wrap
-the accepted V1 host operations with fenced session transitions and verified-stop compensation, but remain undeployed
-until the watchdog definition completes the session contract.
+invoke permission, and production lifecycle behaviour remains unchanged. The V2 start, stop and watchdog definitions
+now complete the session contract in code: fenced session transitions surround the accepted V1 host operations, and
+watchdog observations are idempotent and session-scoped. They remain undeployed until a separate Terraform plan can
+prove that Phase 5 is additive and grants no V2 authority to V1 callers.

@@ -1,0 +1,25 @@
+{
+  "serverId": "minecraft",
+  "operationId": "watchdog-example-001",
+  "sessionId": "session-example-001",
+  "registrationLeaseTtlSeconds": 60,
+  "stopLeaseTtlSeconds": 1800,
+  "instanceId": "i-0123456789abcdef0",
+  "timing": {
+    "checkIntervalSeconds": 300,
+    "emptyChecksRequired": 3,
+    "maxTotalChecks": 96,
+    "maxConsecutiveProbeFailures": 6,
+    "maxStopRefusals": 3,
+    "probePollSeconds": 10,
+    "maxProbePolls": 30
+  },
+  "stopTiming": {
+    "instancePollSeconds": 10,
+    "ssmPollSeconds": 10,
+    "commandPollSeconds": 15,
+    "maxInstancePolls": 30,
+    "maxSsmPolls": 30,
+    "maxCommandPolls": 60
+  }
+}

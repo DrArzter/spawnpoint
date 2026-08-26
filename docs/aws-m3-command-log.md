@@ -250,3 +250,55 @@ This is adoption evidence: the already-running lineage is exactly immutable rele
 changed during verification. The maintenance host was stopped directly because the game containers had never run.
 Afterwards EC2 reported `stopped`, promotion still had no executions, and `worlds/world/release.json` still returned
 404. Creating the pointer remains the next explicit state mutation.
+
+## Existing-world adoption
+
+The existing world was adopted on 2026-08-26 only after all preconditions independently held: EC2 was `stopped`,
+immutable release `1.0` had a published manifest, `worlds/world/release.json` returned 404, and SSM command
+`11dbff2f-914f-415b-8c60-80e9665d63bf` remained `Success` with the exact installed-payload proof above.
+
+The first pointer was reviewed locally, then created with S3 `PutObject --if-none-match '*'`; a concurrent or repeated
+adoption would receive HTTP 412 rather than overwrite state. Its complete domain value is:
+
+```json
+{
+  "schema_version": 1,
+  "world": "world",
+  "desired_release": "1.0",
+  "active_release": "1.0",
+  "updated_at": "2026-08-26T16:14:03Z",
+  "updated_by": "adopt-ssm-11dbff2f",
+  "source": "adopt-existing"
+}
+```
+
+Pointer SHA-256 is `74efd1adadbe1bbc6380b17ee443071de0acf492172123aaf2298a0cd1afcfb2`; S3 VersionId is
+`RpMjFUVuZmDvOqqwGimljoh6YQB0SbPv`. A checksum-enabled download was byte-identical to the reviewed file and returned
+the same full-object checksum. EC2 remained stopped and no promotion execution existed afterwards. Adoption is a
+one-time migration of an already proven lineage; every subsequent pointer change must use promotion.
+
+## First promotion attempt: safe serialization failure
+
+The first `1.0` → `1.1` execution, `promote-20260826T161802Z`, failed before Minecraft started. The workflow correctly
+attempted rollback, but both target and rollback starts rejected the pointer. Exact SSM stderr was:
+
+```text
+jq: error: Cannot index string with string "schema_version"
+error: invalid release pointer: s3://spawnpoint-releases-614934752397/worlds/world/release.json
+```
+
+The S3 SDK integration had received `States.JsonToString($.document)`. Because it serialises a JSON object into its
+blob itself, this produced a quoted JSON string rather than a JSON object. The failure was fail-closed: no container
+started and live mods remained all **111 JARs / 623,534,143 bytes** of release `1.0`. However EC2 remained running
+after the failed start/rollback, as the execution's `RollbackFailed` contract warned.
+
+Recovery wrote the byte-identical accepted adoption pointer as a new S3 version; broken versions were retained for
+forensics. A checksum-enabled round trip restored SHA-256
+`74efd1adadbe1bbc6380b17ee443071de0acf492172123aaf2298a0cd1afcfb2`. SSM command
+`e7e84602-1ed4-48d2-80a9-db30630cbdea` independently re-downloaded the `1.0` manifest and reverified the live payload,
+then EC2 was stopped.
+
+The regression now asserts all four pointer writes pass `$.document` directly; only nested Step Functions inputs keep
+`States.JsonToString`. Operations tests passed **3 / 0** and the AWS ASL validator returned `OK`. The saved correction
+plan was exactly **0 add / 1 in-place change / 0 destroy**, updating only the definition of
+`spawnpoint-promote-release`; apply completed with that exact result.

@@ -10,6 +10,7 @@ performed. A procedure nobody has run is a guess.
 | Start the server | Any player | 2026-08-14 — M2 Standard Workflow started stopped EC2, waited for SSM, invoked the host session contract and returned the private address |
 | Stop the server | Owner | 2026-08-14 — M2 Standard Workflow rechecked 0 players, flushed the world, stopped all session containers, verified an immutable S3 backup and only then stopped EC2 |
 | Promote a release | Owner | — |
+| Adopt the existing world | Owner | 2026-08-26 — verified all 111 installed JARs against immutable release 1.0, then atomically created desired=active=1.0 without starting Minecraft |
 | Roll back a release | Owner | — |
 | Restore the world | Owner | 2026-08-13 — the Terraform M1 host downloaded the verified S3 archive with its instance role, restored it onto a new EBS, reconciled release 1.0 and accepted a player in the recovered world |
 | Recover from a lost instance | Owner | — |

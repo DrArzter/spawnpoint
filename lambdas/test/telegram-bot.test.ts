@@ -135,19 +135,34 @@ test("a requester is attributed when present, and the examples stay the ownerles
 test("replies carry what the player actually needs", () => {
   assert.match(replies.welcome(), /\/server_start/);
   assert.doesNotMatch(replies.welcome(), /Starting the server/);
-  assert.match(replies.unknown(), /\/start — menu/);
+  assert.match(replies.unknown(), /\/help or \/start/);
   assert.match(replies.confirmStart(), /billed game session/);
 
   const menuCallbacks = mainMenuKeyboard().inline_keyboard
     .flat()
     .filter((button) => "callback_data" in button)
     .map((button) => button.callback_data);
-  assert.deepEqual(menuCallbacks, [callbacks.status, callbacks.pack, callbacks.requestStart]);
+  assert.deepEqual(menuCallbacks, [
+    callbacks.status,
+    callbacks.address,
+    callbacks.network,
+    callbacks.pack,
+    callbacks.requestStart,
+  ]);
   const confirmationCallbacks = confirmStartKeyboard().inline_keyboard
     .flat()
     .filter((button) => "callback_data" in button)
     .map((button) => button.callback_data);
   assert.deepEqual(confirmationCallbacks, [callbacks.confirmStart, callbacks.menu]);
+
+  assert.match(replies.network("b6079f73c6698651"), /sudo zerotier-cli join b6079f73c6698651/);
+  assert.match(
+    replies.address({
+      connectionAddress: "172.29.23.24:25565",
+      panelAddress: "http://172.29.23.24:3000",
+    }),
+    /Minecraft: <code>172\.29\.23\.24:25565<\/code>/,
+  );
 
   const status = replies.status({
     instanceState: "running",

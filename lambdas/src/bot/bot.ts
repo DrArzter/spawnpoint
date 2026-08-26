@@ -5,6 +5,7 @@
 import { Bot } from "grammy";
 
 import { replies } from "../domain/telegram-bot.ts";
+import { addressCommand, networkCommand } from "./commands/info.ts";
 import { packCommand } from "./commands/pack.ts";
 import { requestStartCommand, startCommand } from "./commands/start.ts";
 import { statusCommand } from "./commands/status.ts";
@@ -19,6 +20,9 @@ export function buildBot(token: string, allowListSource: AllowListSource): Bot {
   bot.command("start", welcomeCommand);
   bot.command("server_start", requestStartCommand);
   bot.command("status", statusCommand);
+  bot.command("address", addressCommand);
+  bot.command("network", networkCommand);
+  bot.command("help", welcomeCommand);
   bot.command("pack", packCommand);
 
   bot.callbackQuery(callbacks.menu, async (ctx) => {
@@ -28,6 +32,14 @@ export function buildBot(token: string, allowListSource: AllowListSource): Bot {
   bot.callbackQuery(callbacks.status, async (ctx) => {
     await ctx.answerCallbackQuery();
     await statusCommand(ctx);
+  });
+  bot.callbackQuery(callbacks.address, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await addressCommand(ctx);
+  });
+  bot.callbackQuery(callbacks.network, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await networkCommand(ctx);
   });
   bot.callbackQuery(callbacks.pack, async (ctx) => {
     await ctx.answerCallbackQuery();

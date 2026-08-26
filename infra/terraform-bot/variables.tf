@@ -21,6 +21,23 @@ variable "connection_address" {
   default     = "172.29.23.24:25565"
 }
 
+variable "panel_address" {
+  description = "Session-scoped Grafana URL reachable through the overlay."
+  type        = string
+  default     = "http://172.29.23.24:3000"
+}
+
+variable "zerotier_network_id" {
+  description = "Public ZeroTier network identifier shown by the onboarding command; not an authorization secret."
+  type        = string
+  default     = "b6079f73c6698651"
+
+  validation {
+    condition     = can(regex("^[0-9a-f]{16}$", var.zerotier_network_id))
+    error_message = "A ZeroTier network id is exactly 16 lowercase hexadecimal characters."
+  }
+}
+
 variable "enable_notifications" {
   description = "Deploy the EventBridge/SNS-to-Telegram notifier after the command bot is accepted."
   type        = bool

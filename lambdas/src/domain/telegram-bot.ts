@@ -113,12 +113,32 @@ export const replies = {
       "Spawnpoint controls the shared game server.",
       "",
       "/status — show server and release state",
+      "/address — Minecraft and Grafana addresses",
+      "/network — join the private ZeroTier network",
       "/server_start — start a game session",
       "/pack — download the current client mod pack",
     ].join("\n"),
 
   confirmStart: (): string =>
     "Start the game server now? Booting the modpack takes a few minutes and begins a billed game session.",
+
+  network: (networkId: string): string =>
+    [
+      "Join the private ZeroTier network:",
+      "",
+      `Network ID: <code>${networkId}</code>`,
+      `Linux, after installing ZeroTier: <code>sudo zerotier-cli join ${networkId}</code>`,
+      "Windows/macOS: open ZeroTier → Join New Network → paste the Network ID.",
+      "",
+      "Then ask the owner to authorize your device. Use /address after it is authorized.",
+    ].join("\n"),
+
+  address: (args: Readonly<{ connectionAddress: string; panelAddress: string }>): string =>
+    [
+      `Minecraft: <code>${args.connectionAddress}</code>`,
+      `Grafana: <code>${args.panelAddress}</code>`,
+      "Both are reachable only through ZeroTier and only while the AWS host is running.",
+    ].join("\n"),
 
   starting: (operationId: string): string =>
     `Starting the server — a few minutes for the mods to load. I will post here when it is ready. (${operationId})`,
@@ -148,7 +168,7 @@ export const replies = {
   packMissing: (release: string): string =>
     `Release ${release} has no published pack yet. Ask the owner to publish one.`,
 
-  unknown: (): string => "Commands: /start — menu, /status — server state, /server_start — start a session, /pack — current mod pack.",
+  unknown: (): string => "Unknown command. Use /help or /start to open the menu.",
 
   failure: (): string => "Something went wrong on my side. The owner can read the logs.",
 } as const;

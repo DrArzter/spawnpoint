@@ -119,6 +119,15 @@ The `/start` message includes inline buttons for status, pack and server start. 
 the first button or `/server_start` opens a confirmation screen, and only `Yes, start it` invokes Step Functions.
 Both slash commands and button callbacks use the same SSM allow-list.
 
+Player onboarding does not require reading this runbook:
+
+- `/network` returns ZeroTier network `b6079f73c6698651`, the ready-to-copy Linux command
+  `sudo zerotier-cli join b6079f73c6698651`, the GUI path for Windows/macOS, and reminds the player that the
+  owner must authorize the device;
+- `/address` returns Minecraft `172.29.23.24:25565` and Grafana `http://172.29.23.24:3000`, explicitly noting that
+  both need ZeroTier and the running AWS host;
+- `/help` reopens the complete button menu.
+
 1. Create the bot with @BotFather, keep the token.
 2. Put the three parameters in Parameter Store (the only hand-made secrets in the system):
 

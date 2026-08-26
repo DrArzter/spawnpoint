@@ -131,6 +131,26 @@ The explicit `/server_start` command also opens the confirmation screen rather
 than immediately starting EC2. This keeps both discoverable UI paths safe from
 an accidental tap or command completion.
 
+## Player onboarding commands
+
+The bot owns the small facts players otherwise keep asking the operator for:
+
+| Command | Answer |
+|---|---|
+| `/network` | ZeroTier network ID, ready Linux join command, Windows/macOS GUI path, manual authorization reminder |
+| `/address` | Minecraft and session-scoped Grafana addresses, plus their ZeroTier/running-host prerequisites |
+| `/help` | The full inline menu |
+
+The Network ID and overlay addresses are configuration, not credentials. They
+are supplied to Lambda as `ZEROTIER_NETWORK_ID`, `CONNECTION_ADDRESS` and
+`PANEL_ADDRESS`; actual network admission remains a separate owner action in
+ZeroTier Central.
+
+After deployment, Telegram's command menu was updated to `start`, `help`,
+`status`, `address`, `network`, `server_start`, and `pack`. Signed end-to-end
+smokes for `/network` and `/address` both returned HTTP 200, while EC2 remained
+`stopped` before and after.
+
 ## Safe status checks
 
 ```bash

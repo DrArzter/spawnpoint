@@ -64,6 +64,8 @@ run "bot_is_an_isolated_webhook" {
         "STOP_STATE_MACHINE_ARN",
         "INSTANCE_ID",
         "RELEASE_BUCKET",
+        "PANEL_ADDRESS",
+        "ZEROTIER_NETWORK_ID",
         "BOT_TOKEN_PARAMETER",
         "WEBHOOK_SECRET_PARAMETER",
         "ALLOW_LIST_PARAMETER",

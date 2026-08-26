@@ -8,7 +8,9 @@ bot plan cannot replace EC2, detach EBS or alter a state machine.
 The Lambda is invoked only by Telegram webhooks; no bot compute runs between
 messages. `/start` only opens the menu, `/server_start` starts the established
 V1 start and watchdog workflows, `/status` is read-only, and `/pack` returns a
-short-lived presigned S3 link when one exists. Telegram's webhook secret gates the public Function URL, then the
+short-lived presigned S3 link when one exists. `/network` gives the ZeroTier join
+command, while `/address` gives the stable Minecraft and session-scoped Grafana
+addresses. Telegram's webhook secret gates the public Function URL, then the
 SSM allow-list gates commands by numeric Telegram user ID.
 
 Secrets and identities live in SSM, not Terraform state:

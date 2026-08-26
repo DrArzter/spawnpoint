@@ -217,3 +217,36 @@ The inline policy attaches to `spawnpoint-game-host`, grants only `s3:GetObject`
 `arn:aws:s3:::spawnpoint-releases-614934752397/worlds/*`. Apply completed **1 added / 0 changed / 0 destroyed**; a
 post-apply plan reported `No changes`, the AWS IAM API returned that exact single statement, and EC2 remained
 `stopped`. The host can now observe desired/active state but still cannot create, change or delete a pointer.
+
+## Adoption preflight on the game host
+
+Commit `a3932ee` was archived as an immutable server-only maintenance bundle before the first pointer was written:
+
+```text
+S3 key: releases/1.0/server/spawnpoint-server-a3932ee.tar.zst
+SHA-256: f8ec9167e5e13964821ee1755f6bce6a7b41a89780b0ddd9db0a8eac922339c2
+Bytes: 45,243
+S3 VersionId: Mx.DbgKF_OOAZuKnxs5ijBxhKelwBsz5
+```
+
+The key returned 404 before upload. Its archive paths were checked before publication; it contains neither `.env` nor
+`server/data`. EC2 was then started directly for maintenance, without invoking the session workflow, watchdog or
+Minecraft. Read-only SSM inspection proved that no container was running, the data EBS was mounted, the installed
+marker named release `1.0`, and the live mod directory held 111 JARs.
+
+SSM command `11dbff2f-914f-415b-8c60-80e9665d63bf` downloaded that exact bundle with the instance role, verified its
+SHA-256 and archive paths, installed the server scripts, added only the non-secret `RELEASE_BUCKET` and `WORLD_NAME`
+keys to the existing mode-0600 runtime environment, and downloaded the immutable `1.0` manifest. The new read-only
+verifier returned:
+
+```text
+result=verified
+release=1.0
+mods=111
+bytes=623534143
+```
+
+This is adoption evidence: the already-running lineage is exactly immutable release `1.0`; no JAR was copied or
+changed during verification. The maintenance host was stopped directly because the game containers had never run.
+Afterwards EC2 reported `stopped`, promotion still had no executions, and `worlds/world/release.json` still returned
+404. Creating the pointer remains the next explicit state mutation.

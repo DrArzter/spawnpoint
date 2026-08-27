@@ -9,6 +9,13 @@
 # (FACTORIO_USERNAME and FACTORIO_TOKEN, from factorio.com/profile). The
 # server itself never needs an account: credentials are a cut-time concern.
 # An empty list resolves to an empty payload without contacting the portal.
+#
+# Two things the portal knows and a flat pin list does not, both fatal at the
+# server rather than here if unchecked: which engine series a mod release
+# declares, and which other mods it requires. The /full endpoint carries both
+# (info_json.factorio_version and info_json.dependencies; the short endpoint
+# omits dependencies), so resolution validates the list as a set, not as
+# independent lines.
 
 set -Eeuo pipefail
 
@@ -27,6 +34,35 @@ for command in curl jq sha1sum; do
 done
 
 api_base="${FACTORIO_API_BASE:-https://mods.factorio.com}"
+# The engine series this pack is for ("2.0"), from the profile when resolution
+# runs through one. Absent means the engine check cannot run, and the output
+# says so rather than staying quiet about it.
+target_engine="${FACTORIO_TARGET_VERSION:-}"
+engine_series=""
+if [[ -n "${target_engine}" ]]; then
+  [[ "${target_engine}" =~ ^([0-9]+\.[0-9]+) ]] || {
+    printf 'error: FACTORIO_TARGET_VERSION must look like 2.0 or 2.0.77: %s\n' "${target_engine}" >&2
+    exit 1
+  }
+  engine_series="${BASH_REMATCH[1]}"
+fi
+
+# Portal dependency syntax: an optional prefix (! incompatible, ? and (?)
+# optional, ~ required without load order), a mod name, then an optional
+# version constraint. Only required entries must be present in the list;
+# optional ones are the author's suggestion, not our problem.
+version_satisfies() {
+  local have="$1" operator="$2" want="$3" lower
+  lower="$(printf '%s\n%s\n' "${have}" "${want}" | sort -V | head -n1)"
+  case "${operator}" in
+    '=') [[ "${have}" == "${want}" ]] ;;
+    '>=') [[ "${have}" == "${want}" || "${lower}" == "${want}" ]] ;;
+    '>') [[ "${have}" != "${want}" && "${lower}" == "${want}" ]] ;;
+    '<=') [[ "${have}" == "${want}" || "${lower}" == "${have}" ]] ;;
+    '<') [[ "${have}" != "${want}" && "${lower}" == "${have}" ]] ;;
+    *) return 1 ;;
+  esac
+}
 list="$(realpath -e -- "${list}")"
 output_dir="$(realpath -m -- "${output_dir}")"
 mkdir -p -- "${output_dir}/mods"
@@ -49,6 +85,8 @@ if (( ${#entries[@]} == 0 )); then
   printf 'resolved=0\n'
   printf 'downloaded=0\n'
   printf 'kept=0\n'
+  printf 'engine_check=%s\n' "${engine_series:-skipped}"
+  printf 'required_dependencies=0\n'
   exit 0
 fi
 
@@ -60,11 +98,13 @@ fi
 resolved=0
 downloaded=0
 kept=0
+declare -a required_deps=()
+declare -a incompatible_with=()
 for entry in "${entries[@]}"; do
   name="${entry%%:*}"
   version="${entry##*:}"
 
-  mod_json="$(curl -fsSL "${api_base}/api/mods/${name}")" || {
+  mod_json="$(curl -fsSL "${api_base}/api/mods/${name}/full")" || {
     printf 'error: mod portal lookup failed for %s\n' "${name}" >&2
     exit 1
   }
@@ -87,6 +127,29 @@ for entry in "${entries[@]}"; do
     printf 'error: no download url from the portal for %s\n' "${entry}" >&2
     exit 1
   }
+
+  # Factorio loads a mod only if the series it declares is the game's own, so a
+  # 1.1 mod on a 2.0 server is a refused start, not a warning.
+  release_engine="$(jq -r '.info_json.factorio_version // empty' <<<"${release}")"
+  if [[ -n "${engine_series}" ]]; then
+    [[ "${release_engine}" == "${engine_series}" ]] || {
+      printf 'error: %s %s declares factorio %s, and this pack targets %s\n' \
+        "${name}" "${version}" "${release_engine:-none}" "${engine_series}" >&2
+      exit 1
+    }
+  fi
+
+  while IFS= read -r dependency; do
+    [[ -n "${dependency}" ]] || continue
+    case "${dependency}" in
+      '!'*) incompatible_with+=("${name}|$(sed -E 's/^![[:space:]]*//; s/[[:space:]].*$//' <<<"${dependency}")") ;;
+      '?'* | '(?)'*) ;;
+      *)
+        # Required, with or without the load-order-only ~ prefix.
+        required_deps+=("${name}|$(sed -E 's/^~?[[:space:]]*//' <<<"${dependency}")")
+        ;;
+    esac
+  done < <(jq -r '.info_json.dependencies // [] | .[]' <<<"${release}")
 
   resolved=$((resolved + 1))
   target="${output_dir}/mods/${file_name}"
@@ -117,8 +180,44 @@ for entry in "${entries[@]}"; do
   downloaded=$((downloaded + 1))
 done
 
+# The list is only a pack if it stands on its own: every required dependency
+# pinned, and nothing pinned that another mod refuses to load beside.
+declare -A pinned_versions=()
+for entry in "${entries[@]}"; do
+  pinned_versions["${entry%%:*}"]="${entry##*:}"
+done
+
+for record in "${required_deps[@]}"; do
+  requester="${record%%|*}"
+  requirement="${record#*|}"
+  read -r dep_name operator wanted <<<"${requirement}"
+  [[ "${dep_name}" != "base" ]] || continue
+  have="${pinned_versions[${dep_name}]:-}"
+  [[ -n "${have}" ]] || {
+    printf 'error: %s requires %s, which the pin list does not contain\n' "${requester}" "${dep_name}" >&2
+    exit 1
+  }
+  [[ -n "${operator:-}" && -n "${wanted:-}" ]] || continue
+  version_satisfies "${have}" "${operator}" "${wanted}" || {
+    printf 'error: %s requires %s %s %s, and the pin list has %s\n' \
+      "${requester}" "${dep_name}" "${operator}" "${wanted}" "${have}" >&2
+    exit 1
+  }
+done
+
+for record in "${incompatible_with[@]}"; do
+  requester="${record%%|*}"
+  conflicting="${record#*|}"
+  [[ -z "${pinned_versions[${conflicting}]:-}" ]] || {
+    printf 'error: %s cannot load beside %s, and both are pinned\n' "${requester}" "${conflicting}" >&2
+    exit 1
+  }
+done
+
 printf 'result=resolved\n'
 printf 'payload=%s\n' "${output_dir}"
 printf 'resolved=%s\n' "${resolved}"
 printf 'downloaded=%s\n' "${downloaded}"
 printf 'kept=%s\n' "${kept}"
+printf 'engine_check=%s\n' "${engine_series:-skipped}"
+printf 'required_dependencies=%s\n' "${#required_deps[@]}"

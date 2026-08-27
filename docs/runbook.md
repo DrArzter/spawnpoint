@@ -171,7 +171,13 @@ declaring `auth: game` on that world.
 reach the mod portal, `/pack` in the bot serves the release's own zips with the folder to drop them into.
 
 Mods, when wanted, are pinned portal versions: `games/factorio/resolve-mods.sh <mods.list> <payload>` resolves
-`name:version` lines and verifies the portal's own SHA-1 per file. **Credentials are a cut-time concern only** —
+`name:version` lines and verifies the portal's own SHA-1 per file. **The list is validated as a set, not as
+independent lines**, because the two ways a pack fails belong to the set: a release built for another engine series
+(`info_json.factorio_version`) is refused against `FACTORIO_TARGET_VERSION` — which a cut through a profile passes
+automatically from `factorio_version` — and a required dependency that is not itself pinned is refused by name, as is
+a pair of mods whose own metadata says they cannot load together. Optional dependencies (`?`, `(?)`) are the author's
+suggestion and are ignored; `base` is the engine, not a mod. Resolution reports `engine_check=<series>` or
+`engine_check=skipped`, so a run without a target says so instead of staying quiet. **Credentials are a cut-time concern only** —
 `FACTORIO_USERNAME` and `FACTORIO_TOKEN` from factorio.com/profile are needed to download mods, never to run the
 server: hidden servers skip matchmaking auth entirely. Cut with `RELEASE_GAME=factorio` through the ordinary
 build-manifest/upload path; `mod-list.json` is generated on the host at session start from the reconciled directory,

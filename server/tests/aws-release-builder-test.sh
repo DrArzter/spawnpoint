@@ -126,7 +126,9 @@ mkdir -p -- "${FAKE_FACTORIO_ROOT}/blobs"
 printf 'graftorio zip bytes\n' >"${FAKE_FACTORIO_ROOT}/blobs/graftorio2_0.4.20.zip"
 jq -n \
   --arg sha1 "$(sha1sum -- "${FAKE_FACTORIO_ROOT}/blobs/graftorio2_0.4.20.zip" | awk '{print $1}')" \
-  '{name: "graftorio2", releases: [{version: "0.4.20", file_name: "graftorio2_0.4.20.zip", sha1: $sha1, download_url: "/dl/graftorio2_0.4.20.zip"}]}' \
+  '{name: "graftorio2", releases: [{version: "0.4.20", file_name: "graftorio2_0.4.20.zip", sha1: $sha1,
+     download_url: "/dl/graftorio2_0.4.20.zip",
+     info_json: {factorio_version: "2.0", dependencies: ["base >= 2.0"]}}]}' \
   >"${FAKE_FACTORIO_ROOT}/mod-graftorio2.json"
 
 factorio_url=https://github.com/DrArzter/my-docker-factorio-server-config.git

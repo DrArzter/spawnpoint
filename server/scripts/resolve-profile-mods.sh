@@ -156,7 +156,8 @@ if [[ -n "${mods_source}" ]]; then
       printf 'error: factorio resolution needs %s, which this bundle does not carry\n' "${portal_resolver}" >&2
       exit 1
     }
-    bash "${portal_resolver}" "${source_file}" "${download_stage}" >&2
+    FACTORIO_TARGET_VERSION="${game_version}" \
+      bash "${portal_resolver}" "${source_file}" "${download_stage}" >&2
     ;;
   *)
     printf 'error: no resolver for %s\n' "${PROFILE_RESOLVER}" >&2

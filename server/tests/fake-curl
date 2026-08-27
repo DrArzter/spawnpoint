@@ -2,6 +2,7 @@
 
 # PATH shim standing in for curl against the CurseForge API, the same way
 # fake-aws stands in for S3. Routes:
+#   .../api/mods/<name>[/full]                 -> ${FAKE_FACTORIO_ROOT}/mod-<name>.json
 #   .../v1/mods/search?gameId=<g>&slug=<slug>  -> ${FAKE_CF_ROOT}/search-<slug>.json
 #   .../v1/mods/<modId>/files/<fileId>         -> ${FAKE_CF_ROOT}/file-<modId>-<fileId>.json
 #   https://fake.download/<name>               -> ${FAKE_CF_ROOT}/blobs/<name>
@@ -50,6 +51,9 @@ case "${url}" in
   */api/mods/*)
     : "${FAKE_FACTORIO_ROOT:?FAKE_FACTORIO_ROOT is required for portal routes}"
     mod_name="${url##*/api/mods/}"
+    # The portal serves dependencies only from /full; one fixture per mod backs
+    # both routes.
+    mod_name="${mod_name%/full}"
     fixture="${FAKE_FACTORIO_ROOT}/mod-${mod_name}.json"
     ;;
   *mods.factorio.com/dl/*)

@@ -93,4 +93,32 @@ expect_failure "a data-dir without the named world" \
   "${REPOSITORY_ROOT}/scripts/import-world.sh" \
   "${fixture}/pack" ghost "${fixture}/pack/mods" 2.0 1.20.1 47.4.0
 
+# --- the game axis: a factorio world imports through the same five steps,
+#     judged by its own sentinel and carrying its game in the manifest ---
+mkdir -p -- "${fixture}/fdata/saves" "${fixture}/fpack/mods"
+printf 'save bytes\n' >"${fixture}/fdata/saves/spawnpoint.zip"
+printf 'mod zip bytes\n' >"${fixture}/fpack/mods/alien-biomes_0.6.8.zip"
+factorio_output="$(
+  "${REPOSITORY_ROOT}/scripts/import-world.sh" \
+    "${fixture}/fdata" factorio "${fixture}/fpack/mods" 3.0 2.0.77 2.0.77 factorio
+)"
+grep -qx 'result=imported' <<<"${factorio_output}"
+grep -qx 'game=factorio' <<<"${factorio_output}"
+jq -e '.game == "factorio" and .loader.type == "factorio"' \
+  "${release_root}/releases/3.0/manifest.json" >/dev/null
+[[ -f "${release_root}/releases/3.0/mods/alien-biomes_0.6.8.zip" ]]
+[[ -f "${release_root}/worlds/factorio/release.json" ]]
+factorio_archive_key="$(awk -F= '$1 == "archive_key" { print $2 }' <<<"${factorio_output}")"
+[[ -f "${FAKE_S3_ROOT}/${BACKUP_BUCKET}/${factorio_archive_key}" ]]
+
+# a factorio import is judged by factorio's sentinel, not level.dat
+mkdir -p -- "${fixture}/fempty/saves"
+expect_failure "a factorio data dir with no save" \
+  "${REPOSITORY_ROOT}/scripts/import-world.sh" \
+  "${fixture}/fempty" factorio-two "${fixture}/fpack/mods" 3.1 2.0.77 2.0.77 factorio
+
+expect_failure "an unknown game" \
+  "${REPOSITORY_ROOT}/scripts/import-world.sh" \
+  "${fixture}/fdata" factorio-three "${fixture}/fpack/mods" 3.2 1.0 1.0 heroes
+
 printf 'import-world-test: ok\n'

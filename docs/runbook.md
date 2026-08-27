@@ -174,7 +174,7 @@ so it never travels in a payload.
 Bring an existing world and the exact mods it runs on into the system, from the owner workstation:
 
 ```bash
-scripts/import-world.sh <data-dir> <world-name> <mods-dir> <release> <minecraft-version> <loader-version>
+scripts/import-world.sh <data-dir> <world-name> <mods-dir> <release> <game-version> <loader-version> [game]
 ```
 
 Five steps, in an order where a failure never leaves a half-imported world looking whole: build the manifest → publish
@@ -185,6 +185,8 @@ set to what was imported, `active_release` null until a start passes the health 
 - Importing a second world on the same pack is normal: the release upload reports `already_present`.
 - Re-importing an existing world is refused: changing its release is a promotion, not an import.
 - The same release version with different mod bytes is refused: releases are immutable.
+- The optional seventh argument names the game (ADR-0034): the save sentinel, the archive shape and the manifest's
+  `game` follow the game module, so a factorio import is judged by `saves/*.zip` rather than `level.dat`.
 
 **Wired on the code side, pending apply.** `start-session.sh` now performs boot-time reconciliation: it reads the
 world's pointer, ensures a verified local copy of the desired release (a cache on the data volume — an unchanged boot
@@ -193,6 +195,48 @@ starts. No pointer means the pre-import legacy path; any other failure refuses t
 worlds. The host's IAM policy gains read access to `worlds/*` in the same Terraform change — apply it together with
 the watchdog slice. The host `.env` must carry `RELEASE_BUCKET` (and optionally `WORLD_NAME`) for the pointer path to
 activate.
+
+## Adopt an existing server or single-player save
+
+Import is the mechanics; adoption is the judgement around it. Two rules hold in every quadrant: version migrations
+are one-way — a save opened on a newer game version does not go back — and the release must hold the exact mods the
+save was played on, because missing content is how modded blocks and dimensions vanish.
+
+**Minecraft, from a local server.** `import-world.sh` as above. If the old server ran `online-mode=true`, player
+files are keyed by Mojang account UUIDs, and an offline-mode server (ADR-0022) derives UUIDs from names instead —
+every player would spawn fresh with an empty inventory. Remap each player first:
+
+```bash
+server/games/minecraft/remap-offline-uuids.sh <data-dir>/<world-name> <player-name>
+```
+
+The name is case-sensitive. The tool moves `playerdata`, `advancements` and `stats` to the offline-derived UUID,
+detects the source only when it is unambiguous, and refuses collisions before anything moved. If the old server was
+already offline-mode, nothing to do.
+
+**Minecraft, from a single-player save.** The save folder is a valid server world — copy it under `<data-dir>` and
+import as above. Two extra steps first. The single-player mods folder is the *client* set: strip client-only mods
+(maps, shader hooks — there is no reliable side metadata, this is a manual pass) and prove the subset with a local
+session (ADR-0031) before importing. Then the same UUID remap, because a signed-in single-player character is keyed
+by the Mojang UUID.
+
+**Factorio, from a local server.** The easiest quadrant: `saves/*.zip` is already the archive contract's shape, and
+`mod-list.json` never travels — it is regenerated from the mod directory at session start.
+
+```bash
+scripts/import-world.sh <factorio-data> <world-id> <factorio-data>/mods 1.0 2.0.77 2.0.77 factorio
+```
+
+**Factorio, from a single-player save.** Single-player and multiplayer saves are the same format, mods are not split
+into client and server sides (clients auto-sync from the server on join), and a player's character is matched by
+username — so the local-server steps above apply verbatim. The mods directory doubles as the profile's pin list:
+
+```bash
+server/games/factorio/derive-pins.sh <mods-dir>
+```
+
+prints `name:version` lines for `extras/mod-pins.txt`, and refuses a file it cannot pin rather than silently
+dropping a mod from the derived profile.
 
 ## Promote a release
 

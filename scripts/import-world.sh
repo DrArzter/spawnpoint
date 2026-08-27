@@ -15,12 +15,17 @@ SERVER_SCRIPTS="${REPOSITORY_ROOT}/server/scripts"
 
 usage() {
   cat >&2 <<'EOF'
-usage: import-world.sh <data-dir> <world-name> <mods-dir> <release> <minecraft-version> <loader-version>
+usage: import-world.sh <data-dir> <world-name> <mods-dir> <release> <game-version> <loader-version> [game]
 
-  data-dir           directory that CONTAINS the world folder(s), e.g. the server's data/
-  world-name         the world folder's name inside data-dir
-  mods-dir           the exact mod JARs this world runs on
+  data-dir           directory that CONTAINS the save — the world folder(s) for
+                     minecraft, saves/*.zip for factorio
+  world-name         minecraft: the world folder's name inside data-dir;
+                     other games: the world id the catalog will use
+  mods-dir           the exact mod files this world runs on
   release            MAJOR.MINOR for the new immutable release, e.g. 1.0
+  game-version       the game's own version; every game's manifest carries it
+                     in the minecraft_version field (recorded wart, ADR-0034)
+  game               defaults to minecraft (ADR-0034)
 
 Environment:
   AWS_PROFILE        defaults to spawnpoint
@@ -31,7 +36,7 @@ Environment:
 EOF
 }
 
-[[ $# -eq 6 ]] || {
+[[ $# -eq 6 || $# -eq 7 ]] || {
   usage
   exit 2
 }
@@ -42,6 +47,7 @@ mods_dir="$3"
 release="$4"
 minecraft_version="$5"
 loader_version="$6"
+game="${7:-minecraft}"
 
 export AWS_PROFILE="${AWS_PROFILE:-spawnpoint}"
 export AWS_REGION="${AWS_REGION:-eu-central-1}"
@@ -64,8 +70,14 @@ mods_dir="$(realpath -e -- "${mods_dir}")" || exit 1
   printf 'error: release must use MAJOR.MINOR: %s\n' "${release}" >&2
   exit 1
 }
-[[ -f "${data_dir}/${world_name}/level.dat" ]] || {
-  printf 'error: %s/%s/level.dat not found — data-dir must contain the world folder\n' "${data_dir}" "${world_name}" >&2
+# The game's own sentinel judges the save — level.dat for minecraft,
+# saves/*.zip for factorio — and load_game refuses an unknown game before
+# anything touches AWS (ADR-0034).
+# shellcheck source=../server/games/_dispatch.sh
+source "${REPOSITORY_ROOT}/server/games/_dispatch.sh"
+load_game "${game}"
+game_save_sentinel "${data_dir}" "${world_name}" || {
+  printf 'error: %s does not hold a %s save (world %s)\n' "${data_dir}" "${game}" "${world_name}" >&2
   exit 1
 }
 
@@ -99,6 +111,7 @@ cleanup() {
 trap cleanup EXIT
 
 # 1. Manifest from the exact mods this world runs on.
+RELEASE_GAME="${game}" \
 RELEASE_CREATED_BY="${actor}" \
 RELEASE_CHANGELOG="Imported with world ${world_name}" \
   "${SERVER_SCRIPTS}/build-release-manifest.sh" \
@@ -112,12 +125,14 @@ release_result="$(awk -F= '$1 == "result" { print $2 }' <"${staging}/release.out
 manifest_key="$(awk -F= '$1 == "manifest_key" { print $2 }' <"${staging}/release.out")"
 
 # 3 + 4. Archive the world and upload it, both through the existing verified paths.
+SPAWNPOINT_GAME="${game}" \
 SERVER_DATA_DIR="${data_dir}" \
 SERVER_BACKUP_DIR="${staging}/backups" \
 WORLD_NAME="${world_name}" \
   "${SERVER_SCRIPTS}/archive-world.sh" >"${staging}/archive.out"
 archive="$(awk -F= '$1 == "archive" { print $2 }' <"${staging}/archive.out")"
 
+SPAWNPOINT_GAME="${game}" \
 WORLD_NAME="${world_name}" \
   "${SERVER_SCRIPTS}/upload-world-backup.sh" "${archive}" >"${staging}/backup.out"
 archive_key="$(awk -F= '$1 == "object_key" { print $2 }' <"${staging}/backup.out")"
@@ -150,6 +165,7 @@ aws --region "${AWS_REGION}" --no-cli-pager s3api put-object \
 
 printf 'result=imported\n'
 printf 'world=%s\n' "${world_name}"
+printf 'game=%s\n' "${game}"
 printf 'release=%s\n' "${release}"
 printf 'release_result=%s\n' "${release_result}"
 printf 'manifest_key=%s\n' "${manifest_key}"

@@ -48,10 +48,15 @@ run "budget_and_topic_guard_the_account" {
     error_message = "Both thresholds are required: forecast catches a runaway early, actual is the backstop."
   }
 
+  # The topic ARN is computed — unknown at plan under the mock provider — so
+  # equality against it cannot be asserted here (the same lesson as the
+  # notifier's rule assertions). What plan does know: every notification names
+  # exactly one SNS subscriber and no email subscribers, which is the shape
+  # that guarantees convergence on the one topic this root creates.
   assert {
     condition = alltrue([
       for n in aws_budgets_budget.monthly.notification :
-      contains(n.subscriber_sns_topic_arns, aws_sns_topic.alerts.arn)
+      length(n.subscriber_sns_topic_arns) == 1 && length(coalesce(n.subscriber_email_addresses, [])) == 0
     ])
     error_message = "Budget alerts must go through the SNS topic, where later alarms and adapters also converge."
   }

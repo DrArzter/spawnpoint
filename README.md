@@ -166,6 +166,18 @@ local/                      The local control-plane environment of ADR-0031
 web/                        Static panel and pack site — not built
 ```
 
+## Checking your work
+
+Every local rung of the evidence ladder, one command — markdown links, shellcheck, the node tests, the containerised
+server suite, compose rendering, and `fmt`+`test` across all seven Terraform roots. Nothing in it needs AWS
+credentials or can create resources; the AWS acceptance rung lives in the runbook.
+
+```bash
+scripts/check.sh
+```
+
+`scripts/check.sh fast` skips the Terraform containers, the slowest rung.
+
 ## Decisions
 
 Thirty-four records, each with the alternatives that were rejected and why. Three have been superseded and one was

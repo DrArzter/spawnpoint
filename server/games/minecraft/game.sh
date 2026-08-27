@@ -5,6 +5,7 @@
 # the deployed workflows invoke those scripts with no game named.
 #
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # the GAME_* constants are the module's interface, read by _dispatch.sh consumers
 
 GAME_COMPOSE_FILES="compose.yaml:compose.release.yaml"
 GAME_COMPOSE_SERVICE="mc"

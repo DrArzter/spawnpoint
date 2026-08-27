@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034  # the WORLD_* variables are this library's interface, read by its sourcers
 
 set -Eeuo pipefail
 

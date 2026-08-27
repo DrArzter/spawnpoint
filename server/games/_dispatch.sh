@@ -17,6 +17,7 @@
 #   game_prepare_session       optional: last-mile files before the container starts
 #
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # GAME_ID is set for consumers, read by its sourcers
 
 GAMES_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 

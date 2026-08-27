@@ -8,6 +8,7 @@
 # generates (config/rconpw), so the module introduces no new secret.
 #
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # the GAME_* constants are the module's interface, read by _dispatch.sh consumers
 
 GAME_COMPOSE_FILES="games/factorio/compose.yaml"
 GAME_COMPOSE_SERVICE="factorio"

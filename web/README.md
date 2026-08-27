@@ -98,10 +98,10 @@ npm install
 npm run dev
 ```
 
-Open the printed localhost URL in a browser. Outside Telegram it identifies
-itself as `LOCAL PREVIEW`; inside Telegram it reads the client's theme through
-the official `telegram-web-app.js` bridge. `npm run build` produces static
-files in `web/dist`, suitable for the eventual private S3 + CloudFront site.
+Open the printed localhost URL in a browser. Inside Telegram it reads the
+client's theme through the official `telegram-web-app.js` bridge. `npm run
+build` produces static files in `web/dist`, suitable for the eventual private
+S3 + CloudFront site.
 
 Next slices: validate Telegram `initData` in the backend, expose a read-only
 status endpoint, deploy the static build, then add the bot's `web_app` button.

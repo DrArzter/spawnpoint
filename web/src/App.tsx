@@ -23,50 +23,43 @@ const stateLabel: Record<World["state"], string> = {
 };
 
 export function App() {
-  const [insideTelegram, setInsideTelegram] = useState(false);
   const [selectedWorld, setSelectedWorld] = useState("world");
 
-  useEffect(() => setInsideTelegram(initializeTelegram()), []);
+  useEffect(() => {
+    initializeTelegram();
+  }, []);
 
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div>
-          <p className="eyebrow">CONTROL PLANE</p>
-          <h1>Spawnpoint</h1>
-        </div>
-        <span className="preview-label">{insideTelegram ? "TELEGRAM" : "LOCAL PREVIEW"}</span>
+        <h1>Spawnpoint</h1>
       </header>
 
       <section className="hero" aria-labelledby="server-status-title">
         <div className="status-line">
           <span className="status-dot" aria-hidden="true" />
-          <span>HOST STOPPED</span>
+          <span>Server stopped</span>
         </div>
-        <h2 id="server-status-title">Ready when you are.</h2>
-        <p>The server costs nothing while stopped. Choose a world before starting a session.</p>
+        <h2 id="server-status-title">Choose a world</h2>
+        <p>Only one world can run at a time.</p>
         <dl className="facts">
           <div>
-            <dt>Selected world</dt>
+            <dt>Selected</dt>
             <dd>{worlds.find((world) => world.id === selectedWorld)?.title}</dd>
           </div>
           <div>
-            <dt>Last session</dt>
-            <dd>Not connected</dd>
+            <dt>Game</dt>
+            <dd>{worlds.find((world) => world.id === selectedWorld)?.game}</dd>
           </div>
         </dl>
         <button className="primary-action" type="button" disabled>
-          Start session
-          <span>Read-only preview</span>
+          Start server
         </button>
       </section>
 
       <section className="world-section" aria-labelledby="worlds-title">
         <div className="section-heading">
-          <div>
-            <p className="eyebrow">LIBRARY</p>
-            <h2 id="worlds-title">Worlds</h2>
-          </div>
+          <h2 id="worlds-title">Worlds</h2>
           <span>{worlds.length}</span>
         </div>
 
@@ -91,10 +84,6 @@ export function App() {
         </div>
       </section>
 
-      <footer>
-        <span>Static preview</span>
-        <span>No AWS actions connected</span>
-      </footer>
     </main>
   );
 }

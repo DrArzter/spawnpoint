@@ -13,6 +13,8 @@
 #   GAME_DEFAULT_AUTH          this server's auth model: none | game (ADR-0033).
 #                              Default to none — see README.md, "Assume the
 #                              server authenticates nobody"
+#   game_ready                 readiness: docker health as $1, succeed when the
+#                              game actually serves
 #   game_query_players_raw     transport: print the raw player query response
 #   game_parse_player_count    parser: raw on stdin -> integer on stdout
 #   game_save_paths            print NUL-separated paths under the data dir to archive

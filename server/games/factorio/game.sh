@@ -37,6 +37,15 @@ game_query_players_raw() {
     "/players online"
 }
 
+# Readiness: the image ships no health check, so the control path is the whole
+# signal — RCON answers and its reply parses. This cannot pass before the server
+# has booted, because the password file is written by the server itself.
+game_ready() {
+  local health="$1"
+  [[ "${health}" != "unhealthy" ]] || return 1
+  game_query_players_raw 2>/dev/null | game_parse_player_count >/dev/null 2>&1
+}
+
 # "Online players (N):" followed by one indented name per line.
 game_parse_player_count() {
   local response count

@@ -15,7 +15,7 @@ Contents:
   - `configure-zerotier.sh` — bind ZeroTier state to the mounted data volume before its first start, then join one
     validated network ID,
   - `start.sh` — idempotently start the Compose service and wait for Docker health or RCON readiness,
-  - `status.sh` — report container health and verify the Minecraft control path through RCON,
+  - `status.sh` — report container health and verify the game's control path through its own player query,
   - `players.sh` — report a machine-readable player count; an unparseable response fails closed,
   - `check-session-activity.sh` — expose the fail-closed player activity contract used by the future idle watchdog,
   - `idle-probe.sh` — the watchdog's exit-code contract over `players.sh`: 0 empty, 3 occupied, anything else a probe

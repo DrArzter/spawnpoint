@@ -12,6 +12,7 @@ SCRIPTS="${REPOSITORY_ROOT}/server/scripts"
 GAMES="${REPOSITORY_ROOT}/server/games"
 fixture="$(mktemp -d /tmp/spawnpoint-game-adapter-test.XXXXXXXX)"
 cleanup() {
+  [[ -z "${ready_rcon_pid:-}" ]] || kill "${ready_rcon_pid}" 2>/dev/null || true
   rm -rf -- "${fixture}"
 }
 trap cleanup EXIT
@@ -82,6 +83,42 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 rcon_port="$(cat "${fixture}/rcon-port")"
+
+python3 - "$fixture" <<'READY_RCON' &
+import socket, struct, sys
+
+def packet(req_id, ptype, body):
+    payload = struct.pack("<ii", req_id, ptype) + body + b"\x00\x00"
+    return struct.pack("<i", len(payload)) + payload
+
+def read(conn):
+    length = struct.unpack("<i", conn.recv(4))[0]
+    data = b""
+    while len(data) < length:
+        data += conn.recv(length - len(data))
+    req_id, ptype = struct.unpack("<ii", data[:8])
+    return req_id, ptype, data[8:-2]
+
+server = socket.socket()
+server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server.bind(("127.0.0.1", 0))
+server.listen(4)
+open(sys.argv[1] + "/ready-rcon-port", "w").write(str(server.getsockname()[1]))
+
+while True:
+    conn, _addr = server.accept()
+    req_id, _ptype, _body = read(conn)
+    conn.sendall(packet(req_id, 2, b""))
+    req_id, _ptype, _body = read(conn)
+    conn.sendall(packet(req_id, 0, b"Online players (0):"))
+    conn.close()
+READY_RCON
+ready_rcon_pid=$!
+for _ in $(seq 1 50); do
+  [[ -s "${fixture}/ready-rcon-port" ]] && break
+  sleep 0.1
+done
+ready_rcon_port="$(cat "${fixture}/ready-rcon-port")"
 
 wrong="$(python3 "${GAMES}/factorio/rcon-client.py" 127.0.0.1 "${rcon_port}" "wrong-password" "/players online" 2>&1)" && {
   printf 'expected auth refusal\n' >&2
@@ -172,5 +209,30 @@ grep -qx 'downloaded=0' <<<"${download_output}"
 expect_failure "an unknown RELEASE_GAME" \
   env RELEASE_GAME=quake "${SCRIPTS}/build-release-manifest.sh" \
   9.2 1.0 x "${fixture}/empty/mods" "${fixture}/empty/never.json"
+
+# --- readiness: the last minecraft assumption in the start path, now the
+#     module's call. Minecraft's control path is stubbed; factorio's is the real
+#     RCON round trip against the fake server above. ---
+(
+  source "${GAMES}/minecraft/game.sh"
+  rcon() { printf 'There are 0 of a max of 20 players online:\n'; }
+  game_ready none
+  game_ready healthy
+  if game_ready unhealthy; then exit 1; fi
+  if game_ready starting; then exit 1; fi
+  rcon() { return 1; }
+  if game_ready healthy; then exit 1; fi
+)
+(
+  export FACTORIO_DATA_DIR="${fixture}/ready-data"
+  export FACTORIO_RCON_PORT="${ready_rcon_port}"
+  mkdir -p -- "${FACTORIO_DATA_DIR}/config"
+  source "${GAMES}/factorio/game.sh"
+  # No password file yet: the server has not booted, so it cannot be ready.
+  if game_ready none; then exit 1; fi
+  printf 'correct-password\n' >"${FACTORIO_DATA_DIR}/config/rconpw"
+  game_ready none
+  if game_ready unhealthy; then exit 1; fi
+)
 
 printf 'game-adapter-test: ok\n'

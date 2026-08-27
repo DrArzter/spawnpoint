@@ -20,4 +20,4 @@ if [[ -z "${count}" ]]; then
 fi
 
 printf 'player_count=%s\n' "${count}"
-printf 'minecraft_status=%s\n' "${response}"
+printf 'player_query=%s\n' "$(tr '\n' ';' <<<"${response}")"

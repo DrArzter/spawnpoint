@@ -136,8 +136,21 @@ the guard that matters.
 
 ## A forward note on the probe contract
 
-`check-session-activity.sh` speaks `key=value` lines, and the V2 watchdog currently extracts `players_online` with
-string intrinsics **by line position**. With one game that is a fixed contract; the day a second game brings its own
-probe, line order becomes the thing that silently breaks first. When the per-game adapter lands, the workflow-side
-parse should key by name, not by position — recorded here so the future implementer inherits the warning, not the
-incident.
+`check-session-activity.sh` speaks `key=value` lines, and the V2 watchdog extracts `players_online` with string
+intrinsics **by line position** — `ArrayGetItem(StringSplit(stdout, '\n'), 3)`, the fourth line.
+
+Audited on 2026-08-27, when the adapter landed and a second game entered the catalog. The parse is **not** broken by
+the game axis: the probe prints the same four single-line keys for every game, because the count comes from
+`game_parse_player_count` rather than from a game's own wording. What it is fragile to is line *order* — adding or
+reordering a key in that script silently changes which value the machine reads, and nothing in the repository fails
+when it does.
+
+The same audit fixed two things the axis really had missed — readiness in `start.sh` and the control-path check in
+`status.sh`, both of which called Minecraft's in-container `rcon` CLI and could never have started a Factorio
+session — and moved the raw player-query text in `players.sh`/`status.sh` to a single line, because Factorio's answer
+spans several and a multi-line value in a `key=value` stream is the next version of this same trap.
+
+The fix at cutover is not a smarter split: it is for the probe to offer a JSON document and for the machine to use
+`States.StringToJson` on the whole of stdout, so there is no position and no order to depend on. Recorded here, with
+the tftest and the node test that assert the current expression, so the implementer inherits the warning rather than
+the incident.

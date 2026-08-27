@@ -19,6 +19,14 @@ game_query_players_raw() {
   rcon list
 }
 
+# Readiness, extracted verbatim from start.sh: the pinned image carries a Docker
+# health check, and where one exists both it and a working control path are
+# required.
+game_ready() {
+  local health="$1"
+  [[ "${health}" == "healthy" || "${health}" == "none" ]] && rcon list >/dev/null 2>&1
+}
+
 game_parse_player_count() {
   local response count
   response="$(cat)"

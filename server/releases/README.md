@@ -59,6 +59,15 @@ server/scripts/build-profile-release.sh \
 Keep that dotenv file private (`chmod 600 /path/to/private/.env`); it is an authoring-machine secret and is never
 copied into a release.
 
+## The client pack rides with publication
+
+`upload-release.sh` publishes the payload, the manifest and — for games whose clients need local mods — the client
+pack at `packs/<release>.zip`, which the bot serves as a one-hour presigned link. It lives in publication rather than
+in one caller because the workstation cut, the CodeBuild builder and `import-world.sh` all converge there; a pack
+built by only one of them is a pack most releases never get. An existing pack is recognised by existence, not digest:
+zips embed mtimes and are not byte-reproducible, and release immutability is already enforced by the manifest gate
+above. To fill the gap for a release published before this was true, run `scripts/publish-pack.sh <release>`.
+
 ## A profile names its game
 
 Authoring lives in one repository per game, because the contracts differ: a Minecraft profile pins a loader and

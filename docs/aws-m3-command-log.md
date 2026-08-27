@@ -99,11 +99,11 @@ non-secret repository variables were set and read back:
 ```bash
 gh variable set AWS_RELEASE_ROLE_ARN \
   --repo DrArzter/my-docker-minecraft-server-config \
-  --body arn:aws:iam::614934752397:role/spawnpoint-github-release
+  --body arn:aws:iam::${ACCOUNT_ID}:role/spawnpoint-github-release
 
 gh variable set AWS_BUILD_RELEASE_STATE_MACHINE_ARN \
   --repo DrArzter/my-docker-minecraft-server-config \
-  --body arn:aws:states:eu-central-1:614934752397:stateMachine:spawnpoint-build-release
+  --body arn:aws:states:eu-central-1:${ACCOUNT_ID}:stateMachine:spawnpoint-build-release
 
 gh workflow view build-release.yml \
   --repo DrArzter/my-docker-minecraft-server-config --yaml
@@ -214,7 +214,7 @@ aws_iam_role_policy.game_host_world_pointers
 ```
 
 The inline policy attaches to `spawnpoint-game-host`, grants only `s3:GetObject`, and scopes it only to
-`arn:aws:s3:::spawnpoint-releases-614934752397/worlds/*`. Apply completed **1 added / 0 changed / 0 destroyed**; a
+`arn:aws:s3:::spawnpoint-releases-${ACCOUNT_ID}/worlds/*`. Apply completed **1 added / 0 changed / 0 destroyed**; a
 post-apply plan reported `No changes`, the AWS IAM API returned that exact single statement, and EC2 remained
 `stopped`. The host can now observe desired/active state but still cannot create, change or delete a pointer.
 
@@ -284,7 +284,7 @@ attempted rollback, but both target and rollback starts rejected the pointer. Ex
 
 ```text
 jq: error: Cannot index string with string "schema_version"
-error: invalid release pointer: s3://spawnpoint-releases-614934752397/worlds/world/release.json
+error: invalid release pointer: s3://spawnpoint-releases-${ACCOUNT_ID}/worlds/world/release.json
 ```
 
 The S3 SDK integration had received `States.JsonToString($.document)`. Because it serialises a JSON object into its

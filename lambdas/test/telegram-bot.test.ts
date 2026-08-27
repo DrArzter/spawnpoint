@@ -142,5 +142,5 @@ test("replies carry what the player actually needs", () => {
   assert.doesNotMatch(stopped, /172\.29\.23\.24/, "no address for a stopped server");
 
   assert.match(replies.pack("1.0", "https://example/signed"), /delete your mods folder ENTIRELY/i);
-  assert.match(replies.packMissing("1.0"), /re-cut/);
+  assert.match(replies.packMissing("1.0"), /no published pack yet/);
 });

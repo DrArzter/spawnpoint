@@ -26,12 +26,12 @@ Fill in at M1 and keep current. This block is what somebody needs when something
 | --- | --- |
 | AWS account | Resolve with `aws sts get-caller-identity`; do not hard-code it |
 | Region | `eu-central-1` — see [ADR-0002](adr/0002-host-on-aws.md) |
-| Terraform state bucket | `spawnpoint-tfstate-614934752397` |
+| Terraform state bucket | `spawnpoint-tfstate-${ACCOUNT_ID}` |
 | Server hostname | TODO |
 | Instance ID / tag | `i-09c9b5069308ac372` / `spawnpoint-game-host` (Terraform M1) |
 | Data volume ID | `vol-01bcd86ae27b55682`, encrypted 20 GiB gp3, `DeleteOnTermination=false`, `eu-central-1a` |
-| Release bucket | `spawnpoint-releases-614934752397` |
-| Backup bucket | `spawnpoint-backups-614934752397` |
+| Release bucket | `spawnpoint-releases-${ACCOUNT_ID}` |
+| Backup bucket | `spawnpoint-backups-${ACCOUNT_ID}` |
 | Panel URL | Grafana at `http://172.29.23.24:3000` inside ZeroTier |
 | Container image | `itzg/minecraft-server` pinned by digest in `server/compose.yaml`, never `latest` |
 | Minecraft and loader version | Minecraft 1.20.1, Forge, immutable release `1.0` with 111 JARs |
@@ -169,6 +169,21 @@ server: hidden servers skip matchmaking auth entirely. Cut with `RELEASE_GAME=fa
 build-manifest/upload path; `mod-list.json` is generated on the host at session start from the reconciled directory,
 so it never travels in a payload.
 
+### The client pack
+
+`/pack` presigns `packs/<active release>.zip` for one hour. The pack is published by
+`server/scripts/upload-release.sh`, which every publisher goes through — the workstation cut, the CodeBuild builder
+and an import — so a release published from now on has one. Releases 1.0 and 1.1 were published before that was
+true, and the bot answers `no published pack yet` for them until the gap is filled:
+
+```bash
+scripts/publish-pack.sh 1.1
+```
+
+It downloads the release's verified payload and republishes it; the manifest gate refuses to change an existing
+release, so the only new object is the pack. Only games whose clients need local mods get a pack at all — a Factorio
+client syncs the server's mods itself, and publication reports `pack=not_applicable`.
+
 ## Import a world
 
 Bring an existing world and the exact mods it runs on into the system, from the owner workstation:
@@ -304,7 +319,7 @@ Practise this before it is needed. M1 includes a drill.
 
    ```bash
    aws s3api list-objects-v2 \
-     --bucket spawnpoint-backups-614934752397 \
+     --bucket spawnpoint-backups-${ACCOUNT_ID} \
      --prefix worlds/world/archives/ \
      --profile spawnpoint \
      --region eu-central-1
@@ -315,7 +330,7 @@ Practise this before it is needed. M1 includes a drill.
 
    ```bash
    AWS_PROFILE=spawnpoint AWS_REGION=eu-central-1 \
-   BACKUP_BUCKET=spawnpoint-backups-614934752397 \
+   BACKUP_BUCKET=spawnpoint-backups-${ACCOUNT_ID} \
      server/scripts/download-world-backup.sh <object-key> /tmp/world-from-s3.tar.zst
 
    server/scripts/verify-archive.sh /tmp/world-from-s3.tar.zst
@@ -509,7 +524,7 @@ aws s3api get-bucket-policy-status --bucket <bucket> --profile spawnpoint
 Record the created bucket name in the reference table. Keep a private copy of the ignored bootstrap state until a
 restore/import of that state has been tested. The bucket has `prevent_destroy`; never weaken it during ordinary cleanup.
 
-**Performed 2026-08-13.** Terraform created `spawnpoint-tfstate-614934752397`; versioning, SSE-S3, owner enforcement,
+**Performed 2026-08-13.** Terraform created `spawnpoint-tfstate-${ACCOUNT_ID}`; versioning, SSE-S3, owner enforcement,
 all four public-access blocks, non-public policy status and the TLS-only policy were verified through `s3api`. A real
 production-root plan exercised S3-native locking. Because bucket versioning also versions short-lived `.tflock`
 objects, a narrow lifecycle rule now expires obsolete lock versions after one day without expiring any state version.

@@ -107,7 +107,7 @@ AWS CLI inside EC2 used the scoped instance role to read the one backup bucket.
 
 ```bash
 AWS_REGION=eu-central-1 \
-BACKUP_BUCKET=spawnpoint-backups-614934752397 \
+BACKUP_BUCKET=spawnpoint-backups-${ACCOUNT_ID} \
   server/scripts/download-world-backup.sh <object-key> /tmp/world.tar.zst
 
 server/scripts/verify-archive.sh /tmp/world.tar.zst
@@ -127,12 +127,12 @@ commit marker. The manifest's S3 VersionId is `.LMUZdCEJfiHPzEtHaT_h1E1Dtu02j.A`
 ```bash
 # Write: copy immutable objects below a versioned prefix.
 aws s3 cp <local-mod-directory> \
-  s3://spawnpoint-releases-614934752397/releases/1.0/mods/ \
+  s3://spawnpoint-releases-${ACCOUNT_ID}/releases/1.0/mods/ \
   --recursive --profile spawnpoint --region eu-central-1
 
 # Write, last: publish the commit marker only after inventory verification.
 aws s3 cp server/releases/1.0/manifest.json \
-  s3://spawnpoint-releases-614934752397/releases/1.0/manifest.json \
+  s3://spawnpoint-releases-${ACCOUNT_ID}/releases/1.0/manifest.json \
   --profile spawnpoint --region eu-central-1
 ```
 

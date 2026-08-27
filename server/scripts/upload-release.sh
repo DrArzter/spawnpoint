@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 
-# Publish an immutable release — payload JARs plus manifest — to the release
-# bucket. Upload order is deliberate: mods first, manifest last, so a partial
-# upload can never present itself as a complete release. The manifest's
-# existence is the commit marker.
+# Publish an immutable release — payload files, manifest, and the client pack —
+# to the release bucket. Upload order is deliberate: mods first, manifest last,
+# so a partial upload can never present itself as a complete release. The
+# manifest's existence is the commit marker.
+#
+# The pack lives here rather than in one caller because every publisher needs
+# it: the workstation cut, the CodeBuild builder and an import all converge on
+# this script, and the bot's /pack serves whatever this leaves in packs/.
 
 set -Eeuo pipefail
 
@@ -45,6 +49,8 @@ jq -e '
 
 release="$(jq -r '.release' "${manifest}")"
 mods_count="$(jq -r '.server.mods | length' "${manifest}")"
+game="$(jq -r '.game // "minecraft"' "${manifest}")"
+pack_key="packs/${release}.zip"
 manifest_key="releases/${release}/manifest.json"
 manifest_digest="$(sha256sum -- "${manifest}" | awk '{print $1}')"
 
@@ -84,6 +90,51 @@ upload_release_object() {
     die "uploaded object failed verification: s3://${RELEASE_BUCKET}/${key}"
 }
 
+# The client pack: the same payload as a zip, installed by wholesale
+# replacement, which is what prevents duplicate-mod crashes (ADR-0013). Only
+# games whose clients need local mods get one — a factorio client syncs the
+# server's mods itself, so a pack would be a file nobody should download.
+# An existing pack is left alone rather than digest-compared: zips are not
+# byte-reproducible (embedded mtimes), and release immutability is already
+# enforced by the manifest gate.
+publish_pack() {
+  if [[ "${game}" != "minecraft" ]]; then
+    printf 'not_applicable'
+    return 0
+  fi
+  if head_release_object "${pack_key}" >/dev/null 2>&1; then
+    printf 'already_present'
+    return 0
+  fi
+
+  require_command zip
+  local pack_dir pack_zip pack_digest game_version loader_type loader_version
+  pack_dir="$(mktemp -d)"
+  pack_zip="${pack_dir}/pack.zip"
+  mkdir -p -- "${pack_dir}/pack"
+  while IFS= read -r filename; do
+    cp -- "${source_dir}/mods/${filename}" "${pack_dir}/pack/${filename}"
+  done < <(jq -r '.server.mods[].file' "${manifest}")
+
+  game_version="$(jq -r '.minecraft_version' "${manifest}")"
+  loader_type="$(jq -r '.loader.type' "${manifest}")"
+  loader_version="$(jq -r '.loader.version' "${manifest}")"
+  cat >"${pack_dir}/pack/INSTALL.txt" <<EOF
+Spawnpoint pack, release ${release} (Minecraft ${game_version}, ${loader_type} ${loader_version}).
+
+1. Delete your mods folder ENTIRELY. Do not merge, do not pick files.
+2. Unzip this archive in its place.
+
+Wholesale replacement is what prevents duplicate-mod crashes: nothing old survives.
+EOF
+
+  (cd "${pack_dir}/pack" && zip -qr "${pack_zip}" .)
+  pack_digest="$(sha256sum -- "${pack_zip}" | awk '{print $1}')"
+  upload_release_object "${pack_key}" "${pack_zip}" "${pack_digest}" "pack.zip"
+  rm -rf -- "${pack_dir}"
+  printf 'uploaded'
+}
+
 # An existing manifest is the immutability gate. Identity is the deployment
 # content — release, versions and the mods entries — not the whole document:
 # created_at and the changelog are descriptive, and two imports of the same
@@ -101,11 +152,14 @@ if head_release_object "${manifest_key}" >/dev/null 2>&1; then
     "${remote_manifest}" >/dev/null || die "could not fetch the existing manifest: s3://${RELEASE_BUCKET}/${manifest_key}"
   [[ "$(canonical_manifest "${manifest}")" == "$(canonical_manifest "${remote_manifest}")" ]] ||
     die "release ${release} already exists with different content: s3://${RELEASE_BUCKET}/${manifest_key}"
+  pack_result="$(publish_pack)"
   printf 'result=already_present\n'
   printf 'bucket=%s\n' "${RELEASE_BUCKET}"
   printf 'release=%s\n' "${release}"
   printf 'manifest_key=%s\n' "${manifest_key}"
   printf 'mods=%s\n' "${mods_count}"
+  printf 'pack=%s\n' "${pack_result}"
+  printf 'pack_key=%s\n' "${pack_key}"
   exit 0
 fi
 
@@ -123,9 +177,12 @@ while IFS=$'\t' read -r filename expected_sha expected_bytes; do
 done < <(jq -r '.server.mods[] | [.file, .sha256, (.bytes | tostring)] | @tsv' "${manifest}")
 
 upload_release_object "${manifest_key}" "${manifest}" "${manifest_digest}" "manifest.json"
+pack_result="$(publish_pack)"
 
 printf 'result=uploaded\n'
 printf 'bucket=%s\n' "${RELEASE_BUCKET}"
 printf 'release=%s\n' "${release}"
 printf 'manifest_key=%s\n' "${manifest_key}"
 printf 'mods=%s\n' "${mods_count}"
+printf 'pack=%s\n' "${pack_result}"
+printf 'pack_key=%s\n' "${pack_key}"

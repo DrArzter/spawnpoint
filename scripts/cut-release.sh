@@ -86,36 +86,8 @@ RELEASE_CHANGELOG="${RELEASE_CHANGELOG:-Cut from $(basename -- "${mod_list}")}" 
 upload_result="$(awk -F= '$1 == "result" { print $2 }' <"${staging}/upload.out")"
 manifest_key="$(awk -F= '$1 == "manifest_key" { print $2 }' <"${staging}/upload.out")"
 
-# The client pack: the same payload as a zip, installed by wholesale replacement
-# (delete the mods folder, unzip). Immutable like the release; the bot hands out
-# presigned links to it (ADR-0013).
-cat >"${staging}/mods/INSTALL.txt" <<EOF
-Spawnpoint pack, release ${release} (Minecraft ${minecraft_version}, Forge ${loader_version}).
-
-1. Delete your mods folder ENTIRELY. Do not merge, do not pick files.
-2. Unzip this archive in its place.
-
-Wholesale replacement is what prevents duplicate-mod crashes: nothing old survives.
-EOF
-pack_key="packs/${release}.zip"
-# An existing pack is left alone rather than digest-compared: zips are not
-# byte-reproducible (embedded mtimes), and release immutability was already
-# enforced by the manifest gate above — a same-version, different-bytes cut
-# died before reaching this line.
-if aws --region "${AWS_REGION}" --no-cli-pager s3api head-object \
-  --bucket "${RELEASE_BUCKET}" --key "${pack_key}" \
-  --query ContentLength --output text >/dev/null 2>&1; then
-  pack_result="already_present"
-else
-  (cd "${staging}/mods" && zip -qr "${staging}/pack.zip" .)
-  pack_digest="$(sha256sum -- "${staging}/pack.zip")"
-  pack_digest="${pack_digest%% *}"
-  aws --region "${AWS_REGION}" --no-cli-pager s3api put-object \
-    --bucket "${RELEASE_BUCKET}" --key "${pack_key}" \
-    --body "${staging}/pack.zip" \
-    --metadata "sha256=${pack_digest},release=${release}" >/dev/null
-  pack_result="uploaded"
-fi
+pack_result="$(awk -F= '$1 == "pack" { print $2 }' <"${staging}/upload.out")"
+pack_key="$(awk -F= '$1 == "pack_key" { print $2 }' <"${staging}/upload.out")"
 
 printf 'result=cut\n'
 printf 'release=%s\n' "${release}"

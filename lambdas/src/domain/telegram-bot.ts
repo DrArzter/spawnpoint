@@ -134,7 +134,7 @@ export const replies = {
     ].join("\n"),
 
   packMissing: (release: string): string =>
-    `Release ${release} has no published pack (it predates packs). Ask the owner to re-cut it.`,
+    `Release ${release} has no published pack yet. Ask the owner to publish one.`,
 
   unknown: (): string => "Commands: /start — start the server, /status — is it up, /pack — current mod pack.",
 

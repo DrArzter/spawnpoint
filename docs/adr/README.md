@@ -117,8 +117,15 @@ written, so the numbering stays chronological and nothing has to be renumbered w
   becomes a world argument with catalog lookup, notifications must start naming the world, and the connection address
   becomes a catalog field. The one external ceiling: ZeroTier's ten free device slots — each concurrent host eats
   one, which is where [ADR-0033](0033-connectivity-as-a-strategy.md)'s non-gating strategies for Steam-auth games
-  earn their place. Trigger: two groups wanting different worlds on the same evening; until then, one-at-a-time is
-  cheaper in every dimension.
+  earn their place. **The same-host variant is the deeper change and the cheaper bill**: several servers on one
+  instance breaks the load-bearing equation `session == instance lifetime` that ADR-0006, ADR-0032 and the stop
+  machine are built on — idle stop must split into a world level (compose-stop that game) and a host level
+  (StopInstances only when every world is idle, a last-one-out refcount the V2 lease model is the right foundation
+  for), and the invariant gains a middle state, "somebody plays something". In exchange: one ZeroTier slot regardless
+  of server count, one instance bill, and Factorio beside Minecraft costs hundreds of megabytes. Physics decides:
+  realistic only on the 16 GiB shape, and both games' single threads will elbow on two vCPUs — measure, never assume.
+  Trigger for either form: two groups wanting different worlds on the same evening; until then, one-at-a-time is
+  cheaper in every dimension, and the same-host form is the one to evaluate first when the trigger fires.
 - **Distribution model, if this is ever handed to other people.** "Clone the repo, authorise a browser, one command,
   a server in minutes" mixes two incompatible shapes: repo-clone needs credentials on the operator's own machine
   (`aws sso login` or a profile), while browser-authorise is the console / CloudFormation "Launch Stack" model. A

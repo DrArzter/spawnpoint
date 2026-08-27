@@ -11,7 +11,16 @@ import {
   replies,
 } from "../src/domain/telegram-bot.ts";
 import { authMiddleware } from "../src/bot/middleware/auth.ts";
-import { callbacks, confirmStartKeyboard, mainMenuKeyboard } from "../src/bot/keyboards/main-menu.ts";
+import {
+  addressKeyboard,
+  callbacks,
+  confirmStartKeyboard,
+  mainMenuKeyboard,
+  networkKeyboard,
+  packKeyboard,
+  statusKeyboard,
+} from "../src/bot/keyboards/main-menu.ts";
+import { render } from "../src/bot/ui/render.ts";
 
 type StubContext = {
   replies: string[];
@@ -88,6 +97,36 @@ test("the allow-list is strict: ids parse, garbage throws, absence denies", () =
   assert.equal(isAuthorized(111, []), false);
 });
 
+test("callback screens edit in place and unchanged refreshes are harmless", async () => {
+  let edited = false;
+  await render(
+    {
+      callbackQuery: { message: {} },
+      editMessageText: async () => {
+        edited = true;
+      },
+    } as never,
+    "<b>Status</b>",
+    undefined,
+    "edit",
+  );
+  assert.equal(edited, true);
+
+  await assert.doesNotReject(() =>
+    render(
+      {
+        callbackQuery: { message: {} },
+        editMessageText: async () => {
+          throw new Error("Call to 'editMessageText' failed! (400: Bad Request: message is not modified)");
+        },
+      } as never,
+      "same",
+      undefined,
+      "edit",
+    ),
+  );
+});
+
 test("the start input builder reproduces the committed example verbatim", async () => {
   const url = new URL("../../workflows/start-server.input.example.json", import.meta.url);
   const example = JSON.parse(await readFile(url, "utf8"));
@@ -133,10 +172,10 @@ test("a requester is attributed when present, and the examples stay the ownerles
 });
 
 test("replies carry what the player actually needs", () => {
-  assert.match(replies.welcome(), /\/server_start/);
+  assert.match(replies.welcome(), /Spawnpoint/);
   assert.doesNotMatch(replies.welcome(), /Starting the server/);
   assert.match(replies.unknown(), /\/help or \/start/);
-  assert.match(replies.confirmStart(), /billed game session/);
+  assert.match(replies.confirmStart(), /billed AWS session/);
 
   const menuCallbacks = mainMenuKeyboard().inline_keyboard
     .flat()
@@ -155,6 +194,42 @@ test("replies carry what the player actually needs", () => {
     .map((button) => button.callback_data);
   assert.deepEqual(confirmationCallbacks, [callbacks.confirmStart, callbacks.menu]);
 
+  const copiedNetworkValues = networkKeyboard("b6079f73c6698651").inline_keyboard
+    .flat()
+    .filter((button) => "copy_text" in button)
+    .map((button) => button.copy_text.text);
+  assert.deepEqual(copiedNetworkValues, [
+    "b6079f73c6698651",
+    "sudo zerotier-cli join b6079f73c6698651",
+  ]);
+
+  const copiedAddresses = addressKeyboard(
+    "172.29.23.24:25565",
+    "http://172.29.23.24:3000",
+  ).inline_keyboard
+    .flat()
+    .filter((button) => "copy_text" in button)
+    .map((button) => button.copy_text.text);
+  assert.deepEqual(copiedAddresses, ["172.29.23.24:25565", "http://172.29.23.24:3000"]);
+
+  const runningStatus = statusKeyboard("172.29.23.24:25565").inline_keyboard.flat();
+  assert.equal(
+    runningStatus.some((button) => "copy_text" in button),
+    true,
+    "running status offers a copy button",
+  );
+  assert.equal(
+    statusKeyboard().inline_keyboard.flat().some((button) => "copy_text" in button),
+    false,
+    "stopped status does not advertise an unusable address",
+  );
+
+  const packButtons = packKeyboard("https://example/signed").inline_keyboard.flat();
+  assert.equal(
+    packButtons.some((button) => "url" in button && button.url === "https://example/signed"),
+    true,
+  );
+
   assert.match(replies.network("b6079f73c6698651"), /sudo zerotier-cli join b6079f73c6698651/);
   assert.match(
     replies.address({
@@ -171,7 +246,7 @@ test("replies carry what the player actually needs", () => {
     connectionAddress: "172.29.23.24:25565",
   });
   assert.match(status, /172\.29\.23\.24:25565/);
-  assert.match(status, /active 1\.0/);
+  assert.match(status, /Active release: <code>1\.0<\/code>/);
 
   const stopped = replies.status({
     instanceState: "stopped",
@@ -181,6 +256,6 @@ test("replies carry what the player actually needs", () => {
   });
   assert.doesNotMatch(stopped, /172\.29\.23\.24/, "no address for a stopped server");
 
-  assert.match(replies.pack("1.0", "https://example/signed"), /delete your mods folder ENTIRELY/i);
+  assert.match(replies.pack("1.0"), /delete your mods folder entirely/i);
   assert.match(replies.packMissing("1.0"), /no published pack yet/);
 });

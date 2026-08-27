@@ -115,7 +115,9 @@ The exact first deployment, webhook and acceptance commands are recorded in
 The command bot is deployed from the isolated `infra/terraform-bot` root. `/start` only opens its menu;
 `/server_start`, `/status`, and `/pack` are the operational M4 commands. One-time setup, in order:
 
-The `/start` message includes inline buttons for status, pack and server start. Starting is a two-step action:
+The `/start` message is an HTML card with inline buttons for status, addresses, ZeroTier, pack and server start.
+Callback navigation edits that one card instead of appending a new message on every tap. Status has Refresh; every
+screen has Back; address and ZeroTier screens have client-side copy buttons. Starting is a two-step action:
 the first button or `/server_start` opens a confirmation screen, and only `Yes, start it` invokes Step Functions.
 Both slash commands and button callbacks use the same SSM allow-list.
 

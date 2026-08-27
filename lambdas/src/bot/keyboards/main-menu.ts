@@ -27,3 +27,34 @@ export function confirmStartKeyboard(): InlineKeyboard {
     .row()
     .text("↩️ Back", callbacks.menu);
 }
+
+export function statusKeyboard(connectionAddress?: string): InlineKeyboard {
+  const keyboard = new InlineKeyboard().text("🔄 Refresh", callbacks.status);
+  if (connectionAddress !== undefined) {
+    keyboard.copyText("📋 Copy address", connectionAddress);
+  }
+  return keyboard.row().text("↩️ Main menu", callbacks.menu);
+}
+
+export function addressKeyboard(connectionAddress: string, panelAddress: string): InlineKeyboard {
+  return new InlineKeyboard()
+    .copyText("📋 Minecraft", connectionAddress)
+    .copyText("📋 Grafana", panelAddress)
+    .row()
+    .text("↩️ Main menu", callbacks.menu);
+}
+
+export function networkKeyboard(networkId: string): InlineKeyboard {
+  return new InlineKeyboard()
+    .copyText("📋 Network ID", networkId)
+    .row()
+    .copyText("📋 Linux join command", `sudo zerotier-cli join ${networkId}`)
+    .row()
+    .text("↩️ Main menu", callbacks.menu);
+}
+
+export function packKeyboard(url?: string): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  if (url !== undefined) keyboard.url("⬇️ Download client pack", url).row();
+  return keyboard.text("↩️ Main menu", callbacks.menu);
+}

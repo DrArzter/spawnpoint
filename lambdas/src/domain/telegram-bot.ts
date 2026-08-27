@@ -27,6 +27,14 @@ export function isAuthorized(userId: number, allowList: readonly number[]): bool
   return allowList.includes(userId);
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 // Notification targets: a comma-separated list of chat ids. Groups are
 // negative, direct messages positive — both are legitimate targets, chosen by
 // the owner in one parameter. Same strictness as the allow-list: garbage is a
@@ -110,40 +118,52 @@ export const replies = {
 
   welcome: (): string =>
     [
-      "Spawnpoint controls the shared game server.",
+      "<b>🎮 Spawnpoint</b>",
+      "<blockquote>Shared game server control panel</blockquote>",
       "",
-      "/status — show server and release state",
-      "/address — Minecraft and Grafana addresses",
-      "/network — join the private ZeroTier network",
-      "/server_start — start a game session",
-      "/pack — download the current client mod pack",
+      "Choose an action below. Opening this menu never starts the AWS host.",
     ].join("\n"),
 
   confirmStart: (): string =>
-    "Start the game server now? Booting the modpack takes a few minutes and begins a billed game session.",
-
-  network: (networkId: string): string =>
     [
-      "Join the private ZeroTier network:",
+      "<b>🚀 Start game server?</b>",
       "",
-      `Network ID: <code>${networkId}</code>`,
-      `Linux, after installing ZeroTier: <code>sudo zerotier-cli join ${networkId}</code>`,
-      "Windows/macOS: open ZeroTier → Join New Network → paste the Network ID.",
-      "",
-      "Then ask the owner to authorize your device. Use /address after it is authorized.",
+      "Booting the modpack takes a few minutes and begins a billed AWS session.",
+      "Nothing happens until you press the confirmation button.",
     ].join("\n"),
 
-  address: (args: Readonly<{ connectionAddress: string; panelAddress: string }>): string =>
-    [
-      `Minecraft: <code>${args.connectionAddress}</code>`,
-      `Grafana: <code>${args.panelAddress}</code>`,
-      "Both are reachable only through ZeroTier and only while the AWS host is running.",
-    ].join("\n"),
+  network: (networkId: string): string => {
+    const safeNetworkId = escapeHtml(networkId);
+    return [
+      "<b>🌐 Join ZeroTier</b>",
+      "",
+      `Network ID: <code>${safeNetworkId}</code>`,
+      `Linux: <code>sudo zerotier-cli join ${safeNetworkId}</code>`,
+      "Windows/macOS: ZeroTier → Join New Network → paste the ID.",
+      "",
+      "After joining, ask the owner to authorize your device.",
+    ].join("\n");
+  },
+
+  address: (args: Readonly<{ connectionAddress: string; panelAddress: string }>): string => [
+    "<b>📍 Connection details</b>",
+    "",
+    `Minecraft: <code>${escapeHtml(args.connectionAddress)}</code>`,
+    `Grafana: <code>${escapeHtml(args.panelAddress)}</code>`,
+    "",
+    "Both are reachable only through ZeroTier and only while the AWS host is running.",
+  ].join("\n"),
 
   starting: (operationId: string): string =>
-    `Starting the server — a few minutes for the mods to load. I will post here when it is ready. (${operationId})`,
+    [
+      "<b>⏳ Server is starting</b>",
+      "",
+      "Allow a few minutes for the mods to load. I will post here when it is ready.",
+      `Operation: <code>${escapeHtml(operationId)}</code>`,
+    ].join("\n"),
 
-  alreadyRunning: (): string => "A start is already in flight; joining it rather than starting another.",
+  alreadyRunning: (): string =>
+    "<b>⏳ Start already in progress</b>\n\nI am following the existing operation.",
 
   status: (args: Readonly<{
     instanceState: string;
@@ -151,24 +171,33 @@ export const replies = {
     activeRelease: string | null;
     connectionAddress: string;
   }>): string => {
-    const lines = [`Server: ${args.instanceState}`];
-    if (args.instanceState === "running") lines.push(`Address: ${args.connectionAddress}`);
-    lines.push(`Release: active ${args.activeRelease ?? "none yet"}, desired ${args.desiredRelease ?? "none"}`);
+    const stateIcon = args.instanceState === "running" ? "🟢" : args.instanceState === "stopped" ? "⚫" : "🟡";
+    const lines = ["<b>📊 Server status</b>", "", `${stateIcon} Host: <b>${escapeHtml(args.instanceState)}</b>`];
+    if (args.instanceState === "running") {
+      lines.push(`🎮 Address: <code>${escapeHtml(args.connectionAddress)}</code>`);
+    }
+    lines.push(
+      "",
+      `Active release: <code>${escapeHtml(args.activeRelease ?? "none yet")}</code>`,
+      `Desired release: <code>${escapeHtml(args.desiredRelease ?? "none")}</code>`,
+    );
     return lines.join("\n");
   },
 
-  pack: (release: string, url: string): string =>
+  pack: (release: string): string =>
     [
-      `Pack for release ${release}. The link lives for one hour; ask again for a fresh one.`,
+      "<b>📦 Client pack</b>",
       "",
-      "Install: delete your mods folder ENTIRELY, then unzip this in its place.",
-      url,
+      `Release: <code>${escapeHtml(release)}</code>`,
+      "The download button lives for one hour; open this screen again for a fresh link.",
+      "",
+      "<b>Install:</b> delete your mods folder entirely, then unzip the pack in its place.",
     ].join("\n"),
 
   packMissing: (release: string): string =>
-    `Release ${release} has no published pack yet. Ask the owner to publish one.`,
+    `<b>📦 Client pack unavailable</b>\n\nRelease <code>${escapeHtml(release)}</code> has no published pack yet.`,
 
-  unknown: (): string => "Unknown command. Use /help or /start to open the menu.",
+  unknown: (): string => "<b>Unknown command</b>\n\nUse /help or /start to open the menu.",
 
   failure: (): string => "Something went wrong on my side. The owner can read the logs.",
 } as const;

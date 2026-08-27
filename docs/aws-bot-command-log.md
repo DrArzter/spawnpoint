@@ -151,6 +151,46 @@ After deployment, Telegram's command menu was updated to `start`, `help`,
 smokes for `/network` and `/address` both returned HTTP 200, while EC2 remained
 `stopped` before and after.
 
+## Chat UI polish
+
+The next UI-only deployment kept the same commands and safety boundaries, but
+made the bot behave like a small control panel:
+
+- callback navigation edits one HTML-formatted card instead of filling chat
+  history with a response for every tap;
+- status has Refresh and only offers Copy address while the host is running;
+- the address card copies Minecraft and Grafana endpoints directly;
+- the ZeroTier card copies either the network ID or the full Linux join
+  command;
+- the pack URL lives behind a Download button, while its expiry and install
+  instructions remain visible in the card.
+
+Telegram's `copy_text` inline buttons copy locally in the client and never call
+Lambda. The Start menu remains informational, and starting AWS still requires
+the separate confirmation callback.
+
+The UI bundle was checked and deployed on 2026-08-27 with:
+
+```bash
+cd lambdas
+npm test
+npm run typecheck
+npm run build
+
+terraform -chdir=../infra/terraform-bot validate
+terraform -chdir=../infra/terraform-bot plan -out=bot-ui.tfplan
+terraform -chdir=../infra/terraform-bot apply bot-ui.tfplan
+terraform -chdir=../infra/terraform-bot plan -detailed-exitcode
+```
+
+The saved plan and apply were exactly `0 add / 1 change / 0 destroy`: only the
+existing bot Lambda's `source_code_hash` changed. The post-apply plan returned
+`No changes`. A signed `/start` webhook smoke returned HTTP 200, its Lambda
+invocation completed without an application error, and EC2 state remained
+`stopped`. The Node.js runtime emitted a non-fatal dependency warning for the
+deprecated built-in `punycode` module; this is not a failed update or handler
+error, but should disappear when the transitive dependency is upgraded.
+
 ## Safe status checks
 
 ```bash

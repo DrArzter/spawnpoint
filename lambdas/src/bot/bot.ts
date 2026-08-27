@@ -12,51 +12,52 @@ import { statusCommand } from "./commands/status.ts";
 import { welcomeCommand } from "./commands/welcome.ts";
 import { callbacks, mainMenuKeyboard } from "./keyboards/main-menu.ts";
 import { authMiddleware, type AllowListSource } from "./middleware/auth.ts";
+import { render } from "./ui/render.ts";
 
 export function buildBot(token: string, allowListSource: AllowListSource): Bot {
   const bot = new Bot(token);
 
   bot.use(authMiddleware(allowListSource));
-  bot.command("start", welcomeCommand);
-  bot.command("server_start", requestStartCommand);
-  bot.command("status", statusCommand);
-  bot.command("address", addressCommand);
-  bot.command("network", networkCommand);
-  bot.command("help", welcomeCommand);
-  bot.command("pack", packCommand);
+  bot.command("start", (ctx) => welcomeCommand(ctx));
+  bot.command("server_start", (ctx) => requestStartCommand(ctx));
+  bot.command("status", (ctx) => statusCommand(ctx));
+  bot.command("address", (ctx) => addressCommand(ctx));
+  bot.command("network", (ctx) => networkCommand(ctx));
+  bot.command("help", (ctx) => welcomeCommand(ctx));
+  bot.command("pack", (ctx) => packCommand(ctx));
 
   bot.callbackQuery(callbacks.menu, async (ctx) => {
     await ctx.answerCallbackQuery();
-    await ctx.editMessageText(replies.welcome(), { reply_markup: mainMenuKeyboard() });
+    await welcomeCommand(ctx, "edit");
   });
   bot.callbackQuery(callbacks.status, async (ctx) => {
     await ctx.answerCallbackQuery();
-    await statusCommand(ctx);
+    await statusCommand(ctx, "edit");
   });
   bot.callbackQuery(callbacks.address, async (ctx) => {
     await ctx.answerCallbackQuery();
-    await addressCommand(ctx);
+    await addressCommand(ctx, "edit");
   });
   bot.callbackQuery(callbacks.network, async (ctx) => {
     await ctx.answerCallbackQuery();
-    await networkCommand(ctx);
+    await networkCommand(ctx, "edit");
   });
   bot.callbackQuery(callbacks.pack, async (ctx) => {
     await ctx.answerCallbackQuery();
-    await packCommand(ctx);
+    await packCommand(ctx, "edit");
   });
   bot.callbackQuery(callbacks.requestStart, async (ctx) => {
     await ctx.answerCallbackQuery();
-    await requestStartCommand(ctx);
+    await requestStartCommand(ctx, "edit");
   });
   bot.callbackQuery(callbacks.confirmStart, async (ctx) => {
     await ctx.answerCallbackQuery();
-    await startCommand(ctx);
+    await startCommand(ctx, "edit");
   });
   // Reached only when no command above matched: an authorised user typing
   // an unknown command gets the menu, not silence.
   bot.on("message:entities:bot_command", (ctx) =>
-    ctx.reply(replies.unknown(), { reply_markup: mainMenuKeyboard() }),
+    render(ctx, replies.unknown(), mainMenuKeyboard()),
   );
 
   // Swallow and log: an unhandled error would bubble into a non-200, and

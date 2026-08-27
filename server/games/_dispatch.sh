@@ -10,7 +10,9 @@
 #   GAME_COMPOSE_SERVICE       the compose service holding the game process
 #   GAME_MOD_EXTENSION         what a mod file looks like (jar, zip)
 #   GAME_LOADER_TYPE           what manifests carry as loader.type
-#   GAME_DEFAULT_AUTH          the game's own auth model: none | game (ADR-0033)
+#   GAME_DEFAULT_AUTH          this server's auth model: none | game (ADR-0033).
+#                              Default to none — see README.md, "Assume the
+#                              server authenticates nobody"
 #   game_query_players_raw     transport: print the raw player query response
 #   game_parse_player_count    parser: raw on stdin -> integer on stdout
 #   game_save_paths            print NUL-separated paths under the data dir to archive

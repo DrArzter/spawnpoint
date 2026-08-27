@@ -257,10 +257,17 @@ Worth its own note because it bends the adapter's mod axis. Checked 2026-08-14; 
 
 - **Minecraft**: distribution is the hard part — every client needs the exact matching JARs, which is why M3/M4
   exist. Pinning is trivial: a CurseForge file ID is immutable.
-- **Zomboid**: distribution is free — a joining client auto-downloads the server's Workshop items. **Pinning is
+- **Zomboid**: distribution is mostly free — a joining client auto-downloads the server's Workshop items. **Pinning is
   impossible**: the Workshop has no versions, everything tracks latest. When a mod author pushes an update
   mid-evening, auto-updated clients mismatch the still-running server and some players cannot join; every guide's fix
   is "restart the server so it re-pulls".
+
+Two house rules apply to Zomboid when its module is written, both recorded in
+[server/games/README.md](../server/games/README.md) after Factorio needed them. Its auth default is `none` unless the
+server this repository configures actually verifies Steam identities — a direct-connect server without Steam
+authentication verifies nobody, and the connectivity invariant reads that default to decide whether the world may be
+published without an overlay. And publication still builds the client pack: automatic Workshop delivery is the normal
+path, not a guarantee, and the release already holds the files a client that cannot reach the Workshop would need.
 
 Two consequences for this project:
 

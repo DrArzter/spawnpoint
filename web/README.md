@@ -86,4 +86,23 @@ row above that a page genuinely beats chat at.
 
 So the order, when it comes: backup list → status → anything else.
 
-**Status:** empty. Populated in M4, download page before panel.
+## Telegram Mini App preview
+
+The first panel slice is a read-only React/Vite Mini App shell. It deliberately
+uses mock data and has no AWS action wired, so visual work cannot accidentally
+start a billed session:
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Open the printed localhost URL in a browser. Outside Telegram it identifies
+itself as `LOCAL PREVIEW`; inside Telegram it reads the client's theme through
+the official `telegram-web-app.js` bridge. `npm run build` produces static
+files in `web/dist`, suitable for the eventual private S3 + CloudFront site.
+
+Next slices: validate Telegram `initData` in the backend, expose a read-only
+status endpoint, deploy the static build, then add the bot's `web_app` button.
+No mutating action is connected before authenticated status works end to end.

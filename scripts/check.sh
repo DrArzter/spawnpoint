@@ -46,6 +46,10 @@ check_node() {
   (cd lambdas && npm test)
 }
 
+check_web() {
+  (cd web && npm run build)
+}
+
 check_server_suite() {
   docker run --rm -v "${REPOSITORY_ROOT}:/repo:ro" "${ALPINE_IMAGE}" sh -c '
     apk add -q bash coreutils findutils diffutils tar zstd jq util-linux openssl curl zip unzip python3 git >/dev/null
@@ -89,6 +93,7 @@ check_terraform() {
 step "markdown links" check_links
 step "shellcheck" check_shell
 step "node tests (lambdas)" check_node
+step "production build (mini app)" check_web
 step "server test suite (container)" check_server_suite
 step "compose bindings (host docker)" check_compose_bindings
 if [[ "${mode}" != "fast" ]]; then

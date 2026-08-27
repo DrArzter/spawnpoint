@@ -169,6 +169,32 @@
           "Next": "Players Online"
         },
         {
+          "And": [
+            {
+              "Variable": "$.observed.invocation.Status",
+              "StringEquals": "Failed"
+            },
+            {
+              "Variable": "$.observed.invocation.ResponseCode",
+              "NumericEquals": 4
+            }
+          ],
+          "Next": "Host Still Busy"
+        },
+        {
+          "And": [
+            {
+              "Variable": "$.observed.invocation.Status",
+              "StringEquals": "Failed"
+            },
+            {
+              "Variable": "$.observed.invocation.ResponseCode",
+              "NumericEquals": 5
+            }
+          ],
+          "Next": "Host Activity Unknown"
+        },
+        {
           "Or": [
             {
               "Variable": "$.observed.invocation.Status",
@@ -274,6 +300,23 @@
         }
       ],
       "Default": "Wait Before Instance Poll"
+    },
+    "Host Still Busy": {
+      "Type": "Pass",
+      "Comment": "The session stopped and its world is backed up, and another game on this host is still being played, so the instance deliberately keeps running.",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "status": "session_stopped_host_busy",
+        "instanceId.$": "$.request.instanceId",
+        "commandId.$": "$.observed.command.Command.CommandId",
+        "commandOutput.$": "$.observed.invocation.StandardOutputContent"
+      },
+      "End": true
+    },
+    "Host Activity Unknown": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.HostActivityUnknown",
+      "Cause": "The session stopped and its world is backed up, but whether another game is active on this host could not be read, so the instance was left running deliberately. The running-hours alarm is the backstop."
     },
     "Already Stopped": {
       "Type": "Pass",

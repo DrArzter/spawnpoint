@@ -64,4 +64,29 @@ printf 'exited\n' >"${FAKE_STATES_DIR}/factorio"
 output="$("${sensor}" mc)"
 grep -qx 'host=idle' <<<"${output}"
 
+# --- the gate as the stop path sees it: an exit code, not a line to parse.
+#     stop-session runs the real gate at the end, so its code carries the
+#     answer to "may this host sleep?" ---
+gate_exit() {
+  local asking="$1"
+  local code=0
+  "${sensor}" "${asking}" >/dev/null 2>&1 || code=$?
+  printf '%s' "${code}"
+}
+
+# A readable host answers with 0 whoever asks; the answer itself is the host=
+# line, and only an unreadable sensor is a non-zero exit (fail closed).
+printf 'running\n' >"${FAKE_STATES_DIR}/factorio"
+[[ "$(gate_exit mc)" == "0" ]]
+[[ "$(gate_exit factorio)" == "0" ]]
+rm -f -- "${FAKE_STATES_DIR}/factorio"
+
+# A sensor that cannot inspect a container refuses rather than reporting idle.
+cat >"${fixture}/bin/docker" <<'BROKEN'
+#!/usr/bin/env bash
+exit 1
+BROKEN
+chmod 0755 "${fixture}/bin/docker"
+[[ "$(gate_exit mc)" == "2" ]]
+
 printf 'host-activity-test: ok\n'

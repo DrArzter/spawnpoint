@@ -87,4 +87,24 @@ upload_output="$(
 
 printf '%s\n' "${archive_output}"
 printf '%s\n' "${upload_output}"
+
+# Last one out turns off the lights. The session this command was asked about is
+# stopped and backed up; whether the *host* may sleep is a separate question,
+# and its answer is an exit code rather than a line to parse:
+#   0  nothing else is active — the instance may stop
+#   4  another game on this host is still busy — leave the instance running
+#   5  the answer could not be read — fail closed, and be loud about it
+# With one game on the host the answer is always 0, which is why this can land
+# before the topology it protects.
+host_activity=0
+host_output="$("${SCRIPT_DIR}/check-host-activity.sh" "${SERVER_COMPOSE_SERVICE}")" || host_activity=$?
+printf '%s\n' "${host_output}"
 printf 'result=session_stopped_and_backed_up\n'
+
+if (( host_activity != 0 )); then
+  printf 'error: could not determine whether other games are active on this host\n' >&2
+  exit 5
+fi
+if ! grep -qx 'host=idle' <<<"${host_output}"; then
+  exit 4
+fi

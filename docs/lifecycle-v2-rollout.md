@@ -19,16 +19,28 @@ state. Its single lifecycle item contains only coordination facts that must outl
 lease expired from resuming later and writing over its replacement. TTL cleanup alone is not a lock: DynamoDB expiry
 is asynchronous, so acquisition must use a conditional write against the recorded expiry and fencing token.
 
-## A gate to add before cutover: the host-idle check
+## The host-idle gate, and the probe's shape: both landed before cutover
 
-The stop path currently ends in an unconditional `StopInstances`, which encodes `session == instance lifetime`. That
-is true while one world runs at a time and false the day two run on one host. The sensor for the two-level stop
-already exists — `server/scripts/check-host-activity.sh` reports `host=idle|busy` excluding the asking world, with
-the same fail-closed contract as the session probe — so the V2 stop workflow should ask it in a Choice before
-`StopInstances`: last one out turns off the lights, everyone else stops only their own containers. Today the answer
-is always idle, so the gate costs one state and changes nothing observable; added at cutover it is a Choice, added
-after cutover it is a migration. See the concurrent-worlds placeholder in
-[docs/adr/README.md](adr/README.md#decisions-still-to-record).
+Done 2026-08-27, in the order the note asked for — as a Choice while it is cheap, rather than as a migration once V2
+carries traffic.
+
+**The gate.** `stop-session.sh` ends by asking `check-host-activity.sh` whether anything else on this host is being
+played, and answers through its exit code rather than a line for the machine to parse — the same contract the
+player-race refusal already uses: `0` the instance may stop, `4` another game is active so it deliberately keeps
+running, `5` the answer could not be read. The V1 stop machine, which is what V2 delegates the actual stop to, gained
+the two matching arms: `Host Still Busy` is a **success** (the session stopped and its world is backed up; only the
+instance stays up), and `Host Activity Unknown` is a deliberate **failure**, because an unreadable answer treated as
+idle is how a second world gets killed under its players. With one game on the host the answer is always `0`, so the
+gate changes nothing today.
+
+**Apply order.** The state machine first, the host's repository copy second. The machine ignores exit codes it does
+not know about only in the sense that they fall to `Session Stop Failed` — red, instance left running — so a host that
+learns to return `4` before the machine understands it would report a failure on a healthy stop.
+
+**The probe.** `check-session-activity.sh` gained `PROBE_FORMAT=json`, and the V2 watchdog now reads
+`States.StringToJson(...).playersOnline` instead of splitting stdout and taking the fourth line. The old parse was
+never wrong about the game — the probe prints the same keys for every game — but it depended on the order the script
+printed them in, and nothing in the repository would have failed when that changed.
 
 ## Required invariants
 

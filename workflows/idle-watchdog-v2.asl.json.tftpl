@@ -117,7 +117,7 @@
         "Parameters": {
           "commands": [
             "set -euo pipefail",
-            "/srv/spawnpoint/app/server/scripts/check-session-activity.sh"
+            "PROBE_FORMAT=json /srv/spawnpoint/app/server/scripts/check-session-activity.sh"
           ]
         },
         "TimeoutSeconds": 300
@@ -207,7 +207,7 @@
         "coordination.$": "$.coordination",
         "observed": {
           "command.$": "$.observed.command",
-          "playersOnline.$": "States.StringToJson(States.ArrayGetItem(States.StringSplit(States.ArrayGetItem(States.StringSplit($.observed.invocation.StandardOutputContent, '\n'), 3), '='), 1))"
+          "playersOnline.$": "States.StringToJson($.observed.invocation.StandardOutputContent).playersOnline"
         }
       },
       "Next": "Record Successful Observation"

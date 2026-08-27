@@ -44,6 +44,28 @@ test("stop workflow stops EC2 only after the host command succeeds", async () =>
   );
 });
 
+test("the host stops only when nothing else on it is being played", async () => {
+  const definition = await loadDefinition();
+  const choice = definition.States["Stop Command Complete"];
+  const byResponseCode = (code: number) =>
+    choice?.Choices?.find((candidate) => JSON.stringify(candidate).includes(`"NumericEquals":${code}`));
+
+  // The session's own stop succeeded in all three cases; what differs is
+  // whether the instance may sleep. Exit codes rather than parsed output, the
+  // same contract the player-race refusal already uses.
+  assert.equal(byResponseCode(4)?.Next, "Host Still Busy");
+  assert.equal(byResponseCode(5)?.Next, "Host Activity Unknown");
+
+  const busy = definition.States["Host Still Busy"];
+  assert.equal(busy?.Type, "Pass", "a session stopped beside a busy neighbour is a success, not a failure");
+  assert.match(JSON.stringify(busy), /session_stopped_host_busy/);
+  assert.doesNotMatch(JSON.stringify(busy), /stopInstances/);
+
+  const unknown = definition.States["Host Activity Unknown"];
+  assert.equal(unknown?.Type, "Fail", "an unreadable answer must be loud, not silently treated as idle");
+  assert.match(JSON.stringify(unknown), /Spawnpoint\.HostActivityUnknown/);
+});
+
 test("stop workflow has bounded SSM, command and EC2 polling", async () => {
   const serialized = JSON.stringify(await loadDefinition());
   for (const counter of ["maxSsmPolls", "maxCommandPolls", "maxInstancePolls"]) {

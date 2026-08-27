@@ -117,4 +117,34 @@ output="$(run_probe 2)"
 assert_line "${output}" 'activity=unknown'
 assert_line "${output}" 'container_state=absent'
 
+# --- the shape a state machine reads: one document, parsed by name, with the
+#     same facts and no trailing whitespace to trust ---
+export FAKE_CONTAINER_STATE=running
+export FAKE_RCON_FAIL=0
+export FAKE_RCON_RESPONSE='There are 0 of a max of 20 players online:'
+json="$(PROBE_FORMAT=json run_probe 0)"
+jq -e '.result == "observed" and .activity == "idle" and .playersOnline == 0 and .containerState == "running"' \
+  >/dev/null <<<"${json}"
+[[ "${json}" == "$(tr -d '\n' <<<"${json}")" ]]
+[[ "$(wc -l <<<"${json}")" == "1" ]]
+
+export FAKE_RCON_RESPONSE='There are 2 of a max of 20 players online: Alice, Bob'
+json="$(PROBE_FORMAT=json run_probe 0)"
+jq -e '.activity == "active" and .playersOnline == 2' >/dev/null <<<"${json}"
+if grep -Eq 'Alice|Bob' <<<"${json}"; then
+  printf 'json probe leaked player names: %s\n' "${json}" >&2
+  exit 1
+fi
+
+export FAKE_RCON_FAIL=1
+json="$(PROBE_FORMAT=json run_probe 2)"
+jq -e '.result == "unavailable" and .activity == "unknown" and .playersOnline == null and .reason == "rcon_unavailable"' \
+  >/dev/null <<<"${json}"
+
+export FAKE_RCON_FAIL=0
+if PROBE_FORMAT=yaml "${probe}" >/dev/null 2>&1; then
+  printf 'expected failure: an unknown PROBE_FORMAT\n' >&2
+  exit 1
+fi
+
 printf 'result=passed\n'

@@ -69,6 +69,12 @@ test("watchdog identity is the Step Functions execution and every observation is
   assert.match(serialized, /isIdleStopEligible/);
   assert.match(serialized, /check-session-activity\.sh/);
   assert.match(serialized, /playersOnline/);
+  // The probe is asked for a document and read by name. Splitting its output
+  // into lines made the machine depend on the order the script prints them in,
+  // which nothing in the repository would have failed on.
+  assert.match(serialized, /PROBE_FORMAT=json/);
+  assert.match(serialized, /States\.StringToJson\(\$\.observed\.invocation\.StandardOutputContent\)\.playersOnline/);
+  assert.doesNotMatch(serialized, /StringSplit/);
   assert.equal(state(definition, "Register This Watchdog").Catch?.[0]?.Next, "Release Rejected Registration Lease");
   assert.equal(state(definition, "Release Rejected Registration Lease").Next, "Watchdog Registration Rejected");
 });

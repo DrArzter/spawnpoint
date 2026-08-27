@@ -194,25 +194,61 @@ on the host, which is a perfectly reasonable shape for a machine that runs anywa
 of this project's properties follow from the nothing-runs-when-nobody-plays invariant in
 [docs/architecture.md](architecture.md#what-runs-when-nobody-plays) rather than from the feature list.
 
+### How games distribute mods — five models, not two
+
+Surveyed 2026-08-27 while mapping candidate games onto the running system. The per-game adapter's "mod strategy" axis
+turned out to be an enum of five, and each model answers "what is a release?" and "does a client pack exist?"
+differently:
+
+| Model | Mechanics | Games seen | What "release" means here |
+| --- | --- | --- | --- |
+| **A. Manual archive** | Somebody assembles files; every client installs by hand | Minecraft (this project), Valheim (BepInEx both sides) | Immutable payload + manifest — the full M3 pipeline, packs included |
+| **B. Portal-sync** | Versions exist upstream; the game client syncs the exact list from the official portal on join | Factorio ([Sync mods with server](https://forums.factorio.com/viewtopic.php?t=30745)) | Real pins, no client pack needed — the best of both worlds |
+| **C. Workshop coordinated-latest** | Steam Workshop has no versions; server and clients track latest, delivery is automatic | Project Zomboid, [Don't Starve Together](https://help.akliz.net/docs/install-mods-on-a-dont-starve-together-server) (server auto-downloads via `dedicated_server_mods_setup.lua`, clients auto-get all-clients mods) | A pinned *list* of ids, not bytes; verification weakens to "ids match" honestly |
+| **D. Server-push** | The server itself hands mods to connecting clients | [Vintage Story](https://wiki.vintagestory.at/Adding_mods) (full, since 1.16), [7 Days to Die](https://7d2dmodding.wiki.gg/wiki/Category:XML_Modding) (XML modlets only; asset mods stay manual), Luanti | Server payload is the release; client pack shrinks to asset-only or nothing |
+| **E. Server-only plugins** | The client stays vanilla (often anti-cheat-locked); all modding is server-side | [Rust — Oxide/Carbon](https://umod.org/community/general-support/33905-client-side-modding), TShock (Terraria), SourceMod family | Pinned-release applies server-side; distribution is a non-concept |
+
+Vintage Story deserves a footnote: its `modinfo.json` declares `Side: Universal | Server | Client` — the
+client-versus-server axis built into the mod format itself, which is exactly what this project's manifest lacks (an
+open question in [ADR-0013](adr/0013-modpack-distribution.md)).
+
 ### Which games could actually move in
 
-Scored 2026-08-14 against this host's real constraints: a headless Linux dedicated server with a docker image, a
-player-count probe for the idle watchdog, the auth model (does the game need the overlay gate), memory against the
-8/16 GiB instance shapes, and cold start — paid nightly under this lifecycle. Memory figures are community consensus,
-to be measured before any move, the way [docs/measurements.md](measurements.md) measured Minecraft.
+Scored 2026-08-14 against this host's real constraints, re-scored 2026-08-27 against the running system: a headless
+Linux dedicated server with a docker image, a probe for the idle watchdog (transport **and** parser — the V2 probe is
+`container state + query + regex` behind a `key=value` contract), the auth model (does the game need the overlay
+gate), the distribution model above, memory against the 8/16 GiB instance shapes, and cold start — paid nightly under
+this lifecycle. Memory figures are community consensus, to be measured before any move, the way
+[docs/measurements.md](measurements.md) measured Minecraft. Lifecycle V2, the bot, notifications, guardrails and the
+backup mechanics are untouched by every game below — the game-agnostic core held.
 
-| Tier | Game | Why |
-| --- | --- | --- |
-| Moves in almost free | **Factorio** | Official headless server, RCON built in, `factoriotools/factorio-docker` is its itzg. Hundreds of MB, instant start. The mod portal has a real API, so the M3 pipeline maps almost 1:1, and graftorio2 lands in the existing Grafana |
-| Moves in almost free | **Terraria (TShock)** | Tiny, TCP, REST for health and players, whitelist and password. Cheapest tenant of all |
-| Moves in almost free | **Project Zomboid** | Official dedicated server, RCON, and the Workshop distributes mods to clients by itself. 4–8 GiB with mods — the group favourite; see the mod-model note below |
-| Moves in almost free | **7 Days to Die** | Official Linux dedicated, telnet admin, Alloc's map as the companion. 8–12 GiB asks for the 16 GiB shape |
-| With friction | **Valheim** | Dedicated and docker exist, but no RCON — the player probe becomes A2S query or a log tail, the first genuinely per-game `players.sh` |
-| With friction | **Satisfactory** | Official dedicated with an HTTPS API for health; 8–16 GiB |
-| With friction | **Rust** | Dedicated and RCON exist, but 12+ GiB, world generation makes cold start minutes long, and wipe culture wants the several-worlds model of [ADR-0023](adr/0023-multiple-worlds.md) |
-| With friction | **Palworld** | Dedicated and REST exist; notorious memory growth makes 16 GiB a floor, not a ceiling |
-| Does not move in | **Ark** | 16+ GiB and multi-minute starts — the nightly cold start would kill the motivation the roadmap protects |
-| Does not move in | **Kenshi coop, Lethal Company, Raft and most co-op indies** | No dedicated server: the "server" is a rendering, licensed, Steam-logged-in game client — the Porthole disqualification class from [ADR-0024](adr/0024-connectivity-modes.md) |
+| Tier | Game | Probe | Auth | Mods | Memory | Note |
+| --- | --- | --- | --- | --- | --- | --- |
+| Moves in almost free | **Factorio** | RCON built in | Own | **B** | Hundreds of MB | `factoriotools/factorio-docker` is its itzg; the resolver swaps CurseForge for the mod portal (a factorio.com token instead of `CF_API_KEY`); graftorio2 lands in the existing Grafana. The cleanest first tenant for validating the adapter |
+| Moves in almost free | **Terraria (TShock)** | REST | Password/whitelist | **E** | Tiny | Cheapest tenant of all |
+| Moves in almost free | **Project Zomboid** | RCON (`players`, own format) | Steam | **C** | 4–8 GiB | The group favourite; the one game that *bends* the release model — see the note below |
+| Moves in almost free | **Don't Starve Together** | Log/query | Klei/Steam | **C** | Tiny | Official Linux dedicated; server-side workshop auto-download is built in |
+| Moves in almost free | **Vintage Story** | Own API / log | Own accounts | **D** | Modest | Official Linux dedicated (.NET); mod format carries the client/server side axis natively |
+| Moves in almost free | **Rust** | WebRCON | Steam+EAC | **E** | 12+ GiB | Plugins never touch clients; wipe culture maps onto several-worlds ([ADR-0023](adr/0023-multiple-worlds.md)); world generation stretches cold start |
+| With friction | **7 Days to Die** | **Telnet** — the only transport change among the three studied | Steam | **D** (XML) + **A** (assets) | 8–12 GiB | Probe needs a telnet wrapper; XML modlets push free, asset packs stay manual; Alloc's map as companion |
+| With friction | **Valheim** | A2S query / log — no RCON | Steam + password | **A** | 2–4 GiB | First genuinely per-game `players` probe; BepInEx mods manual on both sides |
+| With friction | **Satisfactory** | HTTPS API | Own | mostly unmodded | 8–16 GiB | Official dedicated with an HTTP health API |
+| With friction | **Palworld** | REST | Steam | — | 16+ GiB floor | Notorious memory growth |
+| With friction | **Barotrauma** | Own console | Steam | **C** | Tiny | Official Linux dedicated; verify the workshop sync details before relying on them |
+| Wine tier | **V Rising, Enshrouded, Sons of the Forest** | varies | Steam | varies | 8–16 GiB | Windows-only dedicated servers run under Wine/Proton in community docker images — compatible with this host's shape, but every game update is a fragility event. Verify per game before promising anybody an evening |
+| Does not move in | **Ark** | RCON | Steam | C | 16+ GiB | Multi-minute starts — the nightly cold start would kill the motivation the roadmap protects |
+| Does not move in | **Kenshi coop, Lethal Company, Raft and most co-op indies** | — | — | — | — | No dedicated server: the "server" is a rendering, licensed, Steam-logged-in game client — the Porthole disqualification class from [ADR-0024](adr/0024-connectivity-modes.md) |
+
+Cross-cutting, from mapping the three studied in depth (Factorio, Zomboid, 7DtD) onto the running system:
+
+- **The probe is a transport times a parser.** RCON, telnet, A2S, REST, log tail — the transport varies; the
+  `key=value` contract to the watchdog stays. The most Minecraft-coupled node is not the probe but the **profile
+  resolver**, which runs itzg's `mc-image-helper` and writes `loader.type: "forge"` into every manifest — the manifest
+  needs a game axis before a second tenant.
+- **The backup sentinel is per-game.** `level.dat` is Minecraft's; Factorio's save is a single zip, Zomboid's a
+  directory family. The world catalog is the natural home for a per-world validation marker.
+- **Instance shape becomes a per-world property.** Factorio is happy below the current host; 7 Days to Die wants the
+  16 GiB shape. The catalog again.
 
 ### Project Zomboid's mod model — the inverse of Minecraft's
 

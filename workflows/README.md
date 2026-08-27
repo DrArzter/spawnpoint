@@ -133,3 +133,11 @@ inputs are different: those integrations explicitly require a string, so their `
 **Known gap, deliberate:** nothing prevents a concurrent promotion and watchdog stop from interleaving. Single-flight
 is ADR-0025's open question; until it lands, promote when the session is quiet — the stop machine's player check is
 the guard that matters.
+
+## A forward note on the probe contract
+
+`check-session-activity.sh` speaks `key=value` lines, and the V2 watchdog currently extracts `players_online` with
+string intrinsics **by line position**. With one game that is a fixed contract; the day a second game brings its own
+probe, line order becomes the thing that silently breaks first. When the per-game adapter lands, the workflow-side
+parse should key by name, not by position — recorded here so the future implementer inherits the warning, not the
+incident.

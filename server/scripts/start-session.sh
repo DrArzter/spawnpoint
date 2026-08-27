@@ -13,6 +13,27 @@ read_env_value() {
     "${runtime_env}"
 }
 
+# Resolve the world and its game before any host plumbing is examined: a
+# session refused for what the world IS — the gate-versus-auth invariant
+# (ADR-0033), or a connectivity strategy that does not exist yet — is refused
+# here, not after the environment checks.
+# shellcheck source=../games/_dispatch.sh
+source "${SERVER_DIR}/games/_dispatch.sh"
+# shellcheck source=_connectivity.sh
+source "${SCRIPT_DIR}/_connectivity.sh"
+resolve_game
+
+# Catalog worlds carry connectivity and a declared auth override; the env-only
+# path predates the axis and is the overlay by construction.
+session_connectivity="${WORLD_CONNECTIVITY:-zerotier}"
+session_auth="${WORLD_AUTH:-${GAME_DEFAULT_AUTH:-none}}"
+assert_connectivity_invariant "${session_auth}" "${session_connectivity}"
+[[ "${session_connectivity}" == "zerotier" ]] || {
+  printf 'error: connectivity strategy %s is not implemented yet; the overlay is the one that exists\n' \
+    "${session_connectivity}" >&2
+  exit 1
+}
+
 [[ -f "${runtime_env}" ]] || {
   printf 'error: runtime environment does not exist: %s\n' "${runtime_env}" >&2
   exit 1
@@ -51,10 +72,6 @@ jq -e \
     printf 'error: ZeroTier network %s is not ready at %s\n' "${network_id}" "${expected_address}" >&2
     exit 1
   }
-
-# shellcheck source=../games/_dispatch.sh
-source "${SERVER_DIR}/games/_dispatch.sh"
-resolve_game
 
 export SERVER_PROJECT_DIRECTORY="${SERVER_DIR}"
 if [[ -z "${SERVER_COMPOSE_FILES:-}" ]]; then

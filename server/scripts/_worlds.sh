@@ -5,6 +5,9 @@ set -Eeuo pipefail
 
 WORLD_SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WORLD_SERVER_DIR="$(cd -- "${WORLD_SCRIPT_DIR}/.." && pwd)"
+
+# shellcheck source=_connectivity.sh
+source "${WORLD_SCRIPT_DIR}/_connectivity.sh"
 WORLD_CATALOG="$(realpath -e -- "${SPAWNPOINT_WORLD_CATALOG:-${WORLD_SERVER_DIR}/worlds/catalog.json}")"
 WORLDS_DIRECTORY="$(realpath -m -- "${SPAWNPOINT_WORLDS_DIRECTORY:-${WORLD_SERVER_DIR}/runtime/worlds}")"
 
@@ -27,13 +30,33 @@ validate_world_catalog() {
       (.display_name | type == "string" and length > 0) and
       (.profile_id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
       ((.game // "minecraft") | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
-      ((.host // "primary") | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$"))
+      ((.host // "primary") | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
+      ((.connectivity // "zerotier") | IN("zerotier", "raw", "route53")) and
+      ((has("auth") | not) or (.auth | IN("none", "game", "external")))
     ) and
     (([.worlds[].id] | unique | length) == (.worlds | length))
   ' "${WORLD_CATALOG}" >/dev/null || {
     printf 'error: invalid world catalog: %s\n' "${WORLD_CATALOG}" >&2
     exit 1
   }
+
+  # The gate-versus-auth invariant (ADR-0033) is a static property of the
+  # catalog: an unsafe world cannot even be loaded, let alone started. The
+  # declared auth wins over the game's default, so the check refuses only the
+  # silent combination — an open server is a diff someone wrote, never a
+  # default someone forgot.
+  local entry entry_id entry_game entry_connectivity entry_auth
+  while IFS= read -r entry; do
+    entry_id="$(jq -r '.id' <<<"${entry}")"
+    entry_game="$(jq -r '.game // "minecraft"' <<<"${entry}")"
+    entry_connectivity="$(jq -r '.connectivity // "zerotier"' <<<"${entry}")"
+    entry_auth="$(jq -r '.auth // empty' <<<"${entry}")"
+    [[ -n "${entry_auth}" ]] || entry_auth="$(game_default_auth "${WORLD_SERVER_DIR}/games" "${entry_game}")"
+    assert_connectivity_invariant "${entry_auth}" "${entry_connectivity}" || {
+      printf 'error: invalid world catalog: %s (world %s)\n' "${WORLD_CATALOG}" "${entry_id}" >&2
+      exit 1
+    }
+  done < <(jq -c '.worlds[]' "${WORLD_CATALOG}")
 }
 
 load_world() {
@@ -60,6 +83,11 @@ load_world() {
   # a second host exists, nothing but this value changes. "primary" is the one
   # host that exists today.
   WORLD_HOST="$(jq -r '.host // "primary"' <<<"${match}")"
+  # Connectivity is a strategy (ADR-0033): which one, and the world's declared
+  # auth override, are catalog data like `game` and `host`. Absent connectivity
+  # means the overlay this deployment runs; absent auth means the game default.
+  WORLD_CONNECTIVITY="$(jq -r '.connectivity // "zerotier"' <<<"${match}")"
+  WORLD_AUTH="$(jq -r '.auth // empty' <<<"${match}")"
   WORLD_PROFILE_REPOSITORY="$(jq -r '.profile_source.repository' "${WORLD_CATALOG}")"
   WORLD_PROFILE_COMMIT="$(jq -r '.profile_source.commit' "${WORLD_CATALOG}")"
   WORLD_DIRECTORY="$(realpath -m -- "${WORLDS_DIRECTORY}/${WORLD_ID}")"

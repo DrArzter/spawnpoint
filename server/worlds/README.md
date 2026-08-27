@@ -7,6 +7,19 @@ same profile, but two different worlds never share a runtime directory.
 The profile repository is pinned to a full Git commit. Updating that commit only makes new authoring input available;
 it does not change an active release. Release manifests still pin the resolved JAR bytes by SHA-256.
 
+Optional per-world fields, each defaulting to the behaviour that predates its axis:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `game` | `minecraft` | Which game module runs the world ([ADR-0034](../../docs/adr/0034-per-game-adapter.md)) |
+| `host` | `primary` | Which host the world runs on — topology is data |
+| `connectivity` | `zerotier` | The strategy that publishes the world ([ADR-0033](../../docs/adr/0033-connectivity-as-a-strategy.md)) |
+| `auth` | the game's own model | Declared override: `external` states that authentication is handled outside the game defaults, which lets a non-gating strategy publish the world |
+
+The catalog validator enforces the gate-versus-auth invariant statically: a world with no authentication on a
+non-gating connectivity is not a loadable catalog. An open server is always a diff someone wrote, never a default
+someone forgot.
+
 Inspect a catalog entry without changing the filesystem:
 
 ```bash

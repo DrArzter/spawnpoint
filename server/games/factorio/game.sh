@@ -14,6 +14,9 @@ GAME_COMPOSE_FILES="games/factorio/compose.yaml"
 GAME_COMPOSE_SERVICE="factorio"
 GAME_MOD_EXTENSION="zip"
 GAME_LOADER_TYPE="factorio"
+# The server verifies joining players against factorio.com unless configured
+# otherwise (verify_user_identity), so factorio worlds need no gate (ADR-0033).
+GAME_DEFAULT_AUTH="game"
 
 FACTORIO_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 FACTORIO_DATA_DIR="${FACTORIO_DATA_DIR:-${FACTORIO_GAME_DIR}/data}"

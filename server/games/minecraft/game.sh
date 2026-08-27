@@ -11,6 +11,9 @@ GAME_COMPOSE_FILES="compose.yaml:compose.release.yaml"
 GAME_COMPOSE_SERVICE="mc"
 GAME_MOD_EXTENSION="jar"
 GAME_LOADER_TYPE="forge"
+# online-mode=false (ADR-0022) authenticates nobody, so minecraft worlds need
+# a gating connectivity unless the catalog declares auth handled (ADR-0033).
+GAME_DEFAULT_AUTH="none"
 
 game_query_players_raw() {
   rcon list

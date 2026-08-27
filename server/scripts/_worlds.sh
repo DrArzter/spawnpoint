@@ -24,7 +24,8 @@ validate_world_catalog() {
     all(.worlds[];
       (.id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
       (.display_name | type == "string" and length > 0) and
-      (.profile_id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$"))
+      (.profile_id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
+      ((.game // "minecraft") | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$"))
     ) and
     (([.worlds[].id] | unique | length) == (.worlds | length))
   ' "${WORLD_CATALOG}" >/dev/null || {
@@ -50,6 +51,9 @@ load_world() {
   WORLD_ID="${requested_world_id}"
   WORLD_DISPLAY_NAME="$(jq -r '.display_name' <<<"${match}")"
   WORLD_PROFILE_ID="$(jq -r '.profile_id' <<<"${match}")"
+  # Absent means minecraft: every world that predates the game axis keeps its
+  # exact pre-axis behaviour.
+  WORLD_GAME="$(jq -r '.game // "minecraft"' <<<"${match}")"
   WORLD_PROFILE_REPOSITORY="$(jq -r '.profile_source.repository' "${WORLD_CATALOG}")"
   WORLD_PROFILE_COMMIT="$(jq -r '.profile_source.commit' "${WORLD_CATALOG}")"
   WORLD_DIRECTORY="$(realpath -m -- "${WORLDS_DIRECTORY}/${WORLD_ID}")"

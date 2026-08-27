@@ -44,9 +44,9 @@ s3_cli get-object \
 jq -e '
   .schema_version == 1 and
   (.release | type == "string") and
-  (.server.mods | type == "array" and length > 0) and
+  (.server.mods | type == "array") and
   all(.server.mods[];
-    (.file | type == "string" and test("^[^/\\\\]+\\.jar$")) and
+    (.file | type == "string" and test("^[^/\\\\]+\\.(jar|zip)$")) and
     (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
     (.bytes | type == "number")
   )

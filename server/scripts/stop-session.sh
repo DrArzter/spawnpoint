@@ -28,8 +28,20 @@ aws_region="${AWS_REGION:-$(read_env_value AWS_REGION)}"
   exit 1
 }
 
+# shellcheck source=../games/_dispatch.sh
+source "${SERVER_DIR}/games/_dispatch.sh"
+resolve_game
+
 export SERVER_PROJECT_DIRECTORY="${SERVER_DIR}"
-export SERVER_COMPOSE_FILES="${SERVER_DIR}/compose.yaml:${SERVER_DIR}/compose.release.yaml"
+if [[ -z "${SERVER_COMPOSE_FILES:-}" ]]; then
+  compose_files=""
+  IFS=':' read -r -a game_compose <<<"${GAME_COMPOSE_FILES}"
+  for compose_file in "${game_compose[@]}"; do
+    compose_files="${compose_files:+${compose_files}:}${SERVER_DIR}/${compose_file}"
+  done
+  export SERVER_COMPOSE_FILES="${compose_files}"
+fi
+export SERVER_COMPOSE_SERVICE="${SERVER_COMPOSE_SERVICE:-${GAME_COMPOSE_SERVICE}}"
 
 # shellcheck source=_common.sh
 source "${SCRIPT_DIR}/_common.sh"
@@ -47,8 +59,12 @@ fi
   exit 1
 }
 
-players="$(rcon list)"
-grep -Eq '^There are 0 of a max of [0-9]+ players online:' <<<"${players}" || {
+players="$(game_query_players_raw)"
+player_count="$(game_parse_player_count <<<"${players}")" || {
+  printf 'error: refusing to stop on an unreadable player count: %s\n' "${players}" >&2
+  exit 1
+}
+[[ "${player_count}" == "0" ]] || {
   printf 'error: refusing to stop while players are online: %s\n' "${players}" >&2
   # A player raced the earlier idle observation. This is a normal refusal,
   # distinct from save, archive and upload failures.

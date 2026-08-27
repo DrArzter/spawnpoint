@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+# Factorio: the first tenant after Minecraft, and the reason the adapter is
+# functions rather than configuration — its player query needs a different
+# transport (Source RCON spoken from the host; the image ships no in-container
+# CLI), a different parser, and saves that are zip files rather than a world
+# directory. The RCON password is read from the file the server itself
+# generates (config/rconpw), so the module introduces no new secret.
+#
+# shellcheck shell=bash
+
+GAME_COMPOSE_FILES="games/factorio/compose.yaml"
+GAME_COMPOSE_SERVICE="factorio"
+GAME_MOD_EXTENSION="zip"
+GAME_LOADER_TYPE="factorio"
+
+FACTORIO_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+FACTORIO_DATA_DIR="${FACTORIO_DATA_DIR:-${FACTORIO_GAME_DIR}/data}"
+FACTORIO_RCON_HOST="${FACTORIO_RCON_HOST:-127.0.0.1}"
+FACTORIO_RCON_PORT="${FACTORIO_RCON_PORT:-27015}"
+
+game_query_players_raw() {
+  local password_file="${FACTORIO_DATA_DIR}/config/rconpw"
+  [[ -s "${password_file}" ]] || {
+    printf 'error: factorio rcon password file not found: %s\n' "${password_file}" >&2
+    return 1
+  }
+  python3 "${FACTORIO_GAME_DIR}/rcon-client.py" \
+    "${FACTORIO_RCON_HOST}" "${FACTORIO_RCON_PORT}" \
+    "$(head -n1 -- "${password_file}")" \
+    "/players online"
+}
+
+# "Online players (N):" followed by one indented name per line.
+game_parse_player_count() {
+  local response count
+  response="$(cat)"
+  count="$(sed -nE 's/^Online players \(([0-9]+)\).*$/\1/p' <<<"${response}")"
+  [[ "${count}" =~ ^[0-9]+$ ]] || return 1
+  printf '%s\n' "${count}"
+}
+
+# A Factorio save is saves/<name>.zip; archive the directory whole so autosave
+# rotations travel together.
+game_save_paths() {
+  local data_dir="$1" _world_name="$2"
+  [[ -d "${data_dir}/saves" ]] || return 0
+  printf 'saves\0'
+}
+
+game_save_sentinel() {
+  local data_dir="$1" _world_name="$2"
+  [[ -n "$(find "${data_dir}/saves" -maxdepth 1 -type f -name '*.zip' -print -quit 2>/dev/null)" ]]
+}
+
+game_archive_sentinel_regex() {
+  local _world_name="$1"
+  printf '^saves/[^/]+\\.zip$'
+}

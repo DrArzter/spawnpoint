@@ -52,15 +52,27 @@ jq -e \
     exit 1
   }
 
+# shellcheck source=../games/_dispatch.sh
+source "${SERVER_DIR}/games/_dispatch.sh"
+resolve_game
+
 export SERVER_PROJECT_DIRECTORY="${SERVER_DIR}"
-export SERVER_COMPOSE_FILES="${SERVER_DIR}/compose.yaml:${SERVER_DIR}/compose.release.yaml"
+if [[ -z "${SERVER_COMPOSE_FILES:-}" ]]; then
+  compose_files=""
+  IFS=':' read -r -a game_compose <<<"${GAME_COMPOSE_FILES}"
+  for compose_file in "${game_compose[@]}"; do
+    compose_files="${compose_files:+${compose_files}:}${SERVER_DIR}/${compose_file}"
+  done
+  export SERVER_COMPOSE_FILES="${compose_files}"
+fi
+export SERVER_COMPOSE_SERVICE="${SERVER_COMPOSE_SERVICE:-${GAME_COMPOSE_SERVICE}}"
 
 # Boot-time reconciliation (ADR-0030): if this world has a release pointer,
 # make the mod directory match its desired release before Minecraft starts.
 # A promotion made while the server was stopped lands here, on the next start.
 # No pointer (exit 3) is the legitimate pre-import state and starts as before;
 # any other failure refuses the start — wrong mods corrupt worlds.
-world_name="${WORLD_NAME:-$(read_env_value WORLD_NAME 2>/dev/null || printf 'world')}"
+world_name="${WORLD_NAME:-${WORLD_ID:-$(read_env_value WORLD_NAME 2>/dev/null || printf 'world')}}"
 release_bucket="${RELEASE_BUCKET:-$(read_env_value RELEASE_BUCKET 2>/dev/null || true)}"
 reconcile_status="skipped_no_bucket"
 desired_release="null"
@@ -70,7 +82,12 @@ if [[ -n "${release_bucket}" ]]; then
     desired_release="$(awk -F= '$1 == "desired_release" { print $2 }' <<<"${pointer_output}")"
     payload_dir="${SERVER_DIR}/releases/${desired_release}"
     "${SCRIPT_DIR}/download-release.sh" "${desired_release}" "${payload_dir}" >&2
-    "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" >&2
+    if [[ "${GAME_ID}" == "minecraft" ]]; then
+      "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" >&2
+    else
+      "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" \
+        "${SERVER_DIR}/games/${GAME_ID}/data/mods" >&2
+    fi
     reconcile_status="applied"
   elif [[ $? -eq 3 ]]; then
     reconcile_status="skipped_no_pointer"

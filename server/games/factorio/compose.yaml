@@ -1,0 +1,24 @@
+# Factorio session: the first non-Minecraft tenant. Same lifecycle, same host,
+# selected per world by the catalog's game field (ADR-0023: one world active
+# at a time). The image follows ADR-0005's rule — reused packaging, and
+# `stable` moves, so pin a digest before this world's first AWS session.
+services:
+  factorio:
+    image: factoriotools/factorio:stable
+    ports:
+      # The game speaks UDP; players arrive over the overlay, so the port is
+      # never public (mode C, ADR-0024).
+      - "34197:34197/udp"
+      # RCON stays host-local: the probe's transport, never a player surface.
+      - "127.0.0.1:27015:27015"
+    volumes:
+      - "./data:/factorio"
+    environment:
+      # First boot generates a map; later boots load the newest save, which is
+      # exactly the shape the backup contract archives (saves/*.zip).
+      LOAD_LATEST_SAVE: "true"
+      GENERATE_NEW_SAVE: "true"
+      SAVE_NAME: "spawnpoint"
+    restart: "no" # same reasoning as the Minecraft service: a restart policy
+    # would fight the idle stop and hide crash loops.
+    stop_grace_period: 60s

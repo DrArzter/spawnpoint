@@ -224,7 +224,7 @@ backup mechanics are untouched by every game below — the game-agnostic core he
 
 | Tier | Game | Probe | Auth | Mods | Memory | Note |
 | --- | --- | --- | --- | --- | --- | --- |
-| Moves in almost free | **Factorio** | RCON built in | Own | **B** | Hundreds of MB | `factoriotools/factorio-docker` is its itzg; the resolver swaps CurseForge for the mod portal (a factorio.com token instead of `CF_API_KEY`); graftorio2 lands in the existing Grafana. The cleanest first tenant for validating the adapter |
+| Moves in almost free | **Factorio** | RCON built in | Own | **B** | Hundreds of MB | `factoriotools/factorio-docker` is its itzg; the resolver swaps CurseForge for the mod portal (a factorio.com token instead of `CF_API_KEY`); graftorio2 lands in the existing Grafana. **Landed as the first tenant**: a vanilla Factorio world in the catalog exercises the adapter ([ADR-0034](adr/0034-per-game-adapter.md)); the portal resolver is the next slice |
 | Moves in almost free | **Terraria (TShock)** | REST | Password/whitelist | **E** | Tiny | Cheapest tenant of all |
 | Moves in almost free | **Project Zomboid** | RCON (`players`, own format) | Steam | **C** | 4–8 GiB | The group favourite; the one game that *bends* the release model — see the note below |
 | Moves in almost free | **Don't Starve Together** | Log/query | Klei/Steam | **C** | Tiny | Official Linux dedicated; server-side workshop auto-download is built in |

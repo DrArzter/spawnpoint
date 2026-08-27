@@ -36,7 +36,7 @@ jq -e '
   (.release | type == "string" and test("^[0-9]+\\.[0-9]+$")) and
   (.server.mods | type == "array") and
   all(.server.mods[];
-    (.file | type == "string" and test("^[^/\\\\]+\\.jar$")) and
+    (.file | type == "string" and test("^[^/\\\\]+\\.(jar|zip)$")) and
     (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
     (.bytes | type == "number" and floor == . and . >= 0)
   ) and
@@ -89,7 +89,7 @@ upload_release_object() {
 # created_at and the changelog are descriptive, and two imports of the same
 # pack legitimately differ there (see server/releases/README.md).
 canonical_manifest() {
-  jq -S '{release, minecraft_version, loader, server}' "$1"
+  jq -S '{game: (.game // "minecraft"), release, minecraft_version, loader, server}' "$1"
 }
 
 if head_release_object "${manifest_key}" >/dev/null 2>&1; then

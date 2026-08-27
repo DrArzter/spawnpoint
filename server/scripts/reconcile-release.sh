@@ -45,14 +45,15 @@ if ! jq -e '
   .schema_version == 1 and
   (.release | type == "string" and test("^[0-9]+\\.[0-9]+$")) and
   (.minecraft_version | type == "string" and length > 0) and
-  (.loader.type == "forge") and
+  (((.game // "minecraft") == "minecraft" and .loader.type == "forge") or
+   ((.game // "minecraft") == "factorio" and .loader.type == "factorio")) and
   (.loader.version | type == "string" and length > 0) and
   (.created_at | type == "string" and length > 0) and
   (.created_by | type == "string" and length > 0) and
   (.changelog | type == "string") and
   (.server.mods | type == "array") and
   all(.server.mods[];
-    (.file | type == "string" and test("^[^/\\\\]+\\.jar$")) and
+    (.file | type == "string" and test("^[^/\\\\]+\\.(jar|zip)$")) and
     (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
     (.bytes | type == "number" and floor == . and . >= 0)
   ) and
@@ -110,7 +111,7 @@ while IFS=$'\t' read -r filename expected_sha expected_bytes; do
   [[ "${copied_sha}" == "${expected_sha}" ]] || die "copied file failed verification: ${filename}"
 done < <(jq -r '.server.mods[] | [.file, .sha256, (.bytes | tostring)] | @tsv' "${manifest}")
 
-actual_count="$(find "${stage_dir}" -maxdepth 1 -type f -name '*.jar' | wc -l)"
+actual_count="$(find "${stage_dir}" -maxdepth 1 -type f \( -name '*.jar' -o -name '*.zip' \) | wc -l)"
 [[ "${actual_count}" == "${expected_count}" ]] || die "staged mod count mismatch: expected ${expected_count}, got ${actual_count}"
 cp -- "${manifest}" "${stage_dir}/.spawnpoint-release.json"
 chmod 0644 -- "${stage_dir}/.spawnpoint-release.json"

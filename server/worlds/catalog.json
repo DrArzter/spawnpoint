@@ -14,6 +14,12 @@
       "id": "vanilla",
       "display_name": "Vanilla Forge",
       "profile_id": "vanilla-forge"
+    },
+    {
+      "id": "factorio",
+      "display_name": "Factorio vanilla",
+      "profile_id": "factorio-vanilla",
+      "game": "factorio"
     }
   ]
 }

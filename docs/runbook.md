@@ -153,6 +153,15 @@ Acceptance: from a phone on the allow-list, `/status` answers, `/start` brings t
 phone not on the list, every command is politely denied. Leave, and the watchdog's stop announces itself. That is
 M4's done-when.
 
+## The Factorio world
+
+**Built, not yet session-tested on AWS.** The catalog carries world `factorio` (game `factorio`). Owner path for its
+first session, once the host has the code: `WORLD_ID=factorio` in the session environment selects the game module —
+compose, probe, saves and sentinels all follow from it. First boot generates the map (`GENERATE_NEW_SAVE`), later
+boots load the newest save, and the ordinary backup contract archives `saves/`. The game port exists only inside the
+overlay; RCON stays host-local, its password read from `games/factorio/data/config/rconpw`. No release pointer means
+the vanilla legacy path — the portal resolver and factorio releases are the next slice.
+
 ## Import a world
 
 Bring an existing world and the exact mods it runs on into the system, from the owner workstation:

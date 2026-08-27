@@ -9,6 +9,14 @@ source "${SCRIPT_DIR}/_common.sh"
 archive="${1:-}"
 world_name="${WORLD_NAME:-world}"
 
+# The archive sentinel is per game: level.dat for minecraft, a saves/*.zip
+# for factorio. Same default rule as everywhere — no game named means
+# minecraft, byte-identical to the pre-adapter behaviour.
+# shellcheck source=../games/_dispatch.sh
+source "$(cd -- "${SCRIPT_DIR}/.." && pwd)/games/_dispatch.sh"
+resolve_game
+sentinel_regex="$(game_archive_sentinel_regex "${world_name}")"
+
 [[ -n "${archive}" ]] || die "usage: verify-archive.sh <archive.tar.zst>"
 archive="$(realpath -m -- "${archive}")"
 [[ -f "${archive}" ]] || die "archive does not exist: ${archive}"
@@ -23,17 +31,17 @@ archive="$(realpath -m -- "${archive}")"
 mapfile -t entries < <(tar --list --zstd --file "${archive}")
 (( ${#entries[@]} > 0 )) || die "archive contains no entries"
 
-has_level_dat=false
+has_sentinel=false
 for entry in "${entries[@]}"; do
   if [[ "${entry}" == /* ]] || [[ "/${entry}/" == *"/../"* ]]; then
     die "unsafe path in archive: ${entry}"
   fi
-  if [[ "${entry}" == "${world_name}/level.dat" ]]; then
-    has_level_dat=true
+  if [[ "${entry}" =~ ${sentinel_regex} ]]; then
+    has_sentinel=true
   fi
 done
 
-[[ "${has_level_dat}" == "true" ]] || die "archive does not contain ${world_name}/level.dat"
+[[ "${has_sentinel}" == "true" ]] || die "archive does not contain a recognisable ${GAME_ID} save (${sentinel_regex})"
 
 # Reading every compressed member catches truncation that a listing alone might miss.
 tar --extract --zstd --to-stdout --file "${archive}" >/dev/null

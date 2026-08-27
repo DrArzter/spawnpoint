@@ -10,6 +10,13 @@ if [[ -z "${SERVER_COMPOSE_FILES:-}" && -z "${SERVER_COMPOSE_FILE:-}" ]]; then
   export SERVER_COMPOSE_FILES="${SERVER_DIR}/compose.yaml:${SERVER_DIR}/compose.release.yaml"
 fi
 
+# The game supplies the transport and the parser; the contract to the
+# watchdog — these key=value lines, in this order — never varies by game.
+# shellcheck source=../games/_dispatch.sh
+source "${SERVER_DIR}/games/_dispatch.sh"
+resolve_game
+export SERVER_COMPOSE_SERVICE="${SERVER_COMPOSE_SERVICE:-${GAME_COMPOSE_SERVICE}}"
+
 # shellcheck source=_common.sh
 source "${SCRIPT_DIR}/_common.sh"
 
@@ -32,16 +39,11 @@ if [[ "${state}" != "running" ]]; then
   unavailable container_not_running "${state}"
 fi
 
-if ! response="$(rcon list 2>/dev/null)"; then
+if ! response="$(game_query_players_raw 2>/dev/null)"; then
   unavailable rcon_unavailable "${state}"
 fi
 
-count="$(
-  sed -nE \
-    's/^There are ([0-9]+) of a max of [0-9]+ players online:.*$/\1/p' \
-    <<<"${response}"
-)"
-if [[ ! "${count}" =~ ^[0-9]+$ ]]; then
+if ! count="$(game_parse_player_count <<<"${response}")"; then
   unavailable player_count_unparseable "${state}"
 fi
 

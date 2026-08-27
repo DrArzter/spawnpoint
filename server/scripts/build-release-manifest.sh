@@ -26,6 +26,24 @@ mods_dir="$(realpath -e -- "$4")"
 output_manifest="$(realpath -m -- "$5")"
 created_by="${RELEASE_CREATED_BY:-local-operator}"
 changelog="${RELEASE_CHANGELOG:-Baseline release}"
+# The game decides the mod file extension and loader.type; the version
+# argument carries that game's version. Absent means minecraft, so every
+# existing caller keeps its exact pre-axis behaviour.
+release_game="${RELEASE_GAME:-minecraft}"
+case "${release_game}" in
+  minecraft)
+    mod_extension="jar"
+    loader_type="forge"
+    ;;
+  factorio)
+    mod_extension="zip"
+    loader_type="factorio"
+    ;;
+  *)
+    printf 'error: unknown RELEASE_GAME: %s\n' "${release_game}" >&2
+    exit 1
+    ;;
+esac
 profile_id="${RELEASE_PROFILE_ID:-}"
 profile_repository="${RELEASE_PROFILE_REPOSITORY:-}"
 profile_commit="${RELEASE_PROFILE_COMMIT:-}"
@@ -94,7 +112,7 @@ while IFS= read -r -d '' mod; do
     --argjson bytes "${bytes}" \
     '{file: $file, sha256: $sha256, bytes: $bytes}' >>"${entries_file}"
   count=$((count + 1))
-done < <(find "${mods_dir}" -maxdepth 1 -type f -name '*.jar' -print0 | sort -z)
+done < <(find "${mods_dir}" -maxdepth 1 -type f -name "*.${mod_extension}" -print0 | sort -z)
 
 jq -s \
   --arg release "${release}" \
@@ -103,14 +121,17 @@ jq -s \
   --arg created_at "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
   --arg created_by "${created_by}" \
   --arg changelog "${changelog}" \
+  --arg game "${release_game}" \
+  --arg loader_type "${loader_type}" \
   --arg profile_id "${profile_id}" \
   --arg profile_repository "${profile_repository}" \
   --arg profile_commit "${profile_commit}" \
   '({
     schema_version: 1,
+    game: $game,
     release: $release,
     minecraft_version: $minecraft_version,
-    loader: {type: "forge", version: $loader_version},
+    loader: {type: $loader_type, version: $loader_version},
     created_at: $created_at,
     created_by: $created_by,
     changelog: $changelog,

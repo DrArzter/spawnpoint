@@ -62,7 +62,7 @@ while IFS=$'\t' read -r filename expected_sha expected_bytes; do
   verified_bytes=$((verified_bytes + actual_bytes))
 done < <(jq -r '.server.mods[] | [.file, .sha256, (.bytes | tostring)] | @tsv' "${manifest}")
 
-actual_count="$(find "${mods_dir}" -maxdepth 1 -type f -name '*.jar' -printf '.' | wc -c)"
+actual_count="$(find "${mods_dir}" -maxdepth 1 -type f \( -name '*.jar' -o -name '*.zip' \) -printf '.' | wc -c)"
 [[ "${actual_count}" == "${expected_count}" ]] ||
   die "installed JAR count mismatch: expected ${expected_count}, got ${actual_count}"
 

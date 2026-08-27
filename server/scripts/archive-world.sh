@@ -12,8 +12,12 @@ world_name="${WORLD_NAME:-world}"
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 archive="${1:-${backup_dir}/${world_name}-${timestamp}.tar.zst}"
 
+# shellcheck source=../games/_dispatch.sh
+source "$(cd -- "${SCRIPT_DIR}/.." && pwd)/games/_dispatch.sh"
+resolve_game
+
 [[ -d "${data_dir}" ]] || die "data directory does not exist: ${data_dir}"
-[[ -f "${data_dir}/${world_name}/level.dat" ]] || die "expected world metadata not found: ${data_dir}/${world_name}/level.dat"
+game_save_sentinel "${data_dir}" "${world_name}" || die "no recognisable ${GAME_ID} save found in ${data_dir}"
 
 # A fixture or restored copy outside the live data directory is safe to archive while
 # the server runs. The live data directory is not: its caller must stop Minecraft first.
@@ -29,10 +33,8 @@ archive="$(realpath -m -- "${archive}")"
 [[ ! -e "${archive}" ]] || die "archive already exists: ${archive}"
 [[ ! -e "${archive}.sha256" ]] || die "checksum already exists: ${archive}.sha256"
 
-mapfile -d '' world_paths < <(
-  find "${data_dir}" -mindepth 1 -maxdepth 1 -type d -name "${world_name}*" -printf '%f\0' | sort -z
-)
-(( ${#world_paths[@]} > 0 )) || die "no world directories found for ${world_name}"
+mapfile -d '' world_paths < <(game_save_paths "${data_dir}" "${world_name}")
+(( ${#world_paths[@]} > 0 )) || die "no save paths reported for ${world_name}"
 
 temporary_archive="$(mktemp --tmpdir="$(dirname -- "${archive}")" '.world-archive.XXXXXX.tar.zst')"
 cleanup() {

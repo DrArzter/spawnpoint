@@ -47,6 +47,12 @@ Contents:
   - `reconcile-release.sh` — verify and atomically replace the mod directory with that exact payload.
   - `verify-installed-release.sh` — read-only proof that an existing mod directory exactly matches a fresh immutable
     manifest; used before adopting a legacy world into pointer management.
+- `games/` — one module per game ([ADR-0034](../docs/adr/0034-per-game-adapter.md)): `game.sh` supplies the player
+  probe's transport and parser, the save layout and sentinels, the mod extension and loader identity, and the game's
+  Compose file. `_dispatch.sh` selects by the world's catalog `game` field; **no game named means minecraft,
+  byte-identical to the pre-adapter scripts**. Factorio is the first tenant: RCON spoken from the host by
+  `games/factorio/rcon-client.py`, password read from the `config/rconpw` the server itself generates, saves archived
+  as `saves/*.zip`.
 - `observability/` — provisioned Prometheus configuration and Grafana session dashboard. `mc-monitor`, cAdvisor and
   node_exporter are declared beside Minecraft in Compose and share its lifetime.
 

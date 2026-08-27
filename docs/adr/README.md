@@ -26,7 +26,7 @@ collected eleven before it was accepted.
 
 ## Start here — most of this is not blocking
 
-Thirty-three records is a wall, and a wall is not a plan. Read the two or three that cover what you are building now.
+Thirty-four records is a wall, and a wall is not a plan. Read the two or three that cover what you are building now.
 
 | To do this | You need |
 | --- | --- |
@@ -90,6 +90,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0031](0031-first-class-local-control-plane.md) | First-class local control plane with shared ASL, Lambda and host contracts | Accepted | M1–M5 |
 | [0032](0032-on-demand-single-instance.md) | Run the game server on one on-demand EC2 instance | Accepted, supersedes [0004](0004-ec2-spot-for-the-game-server.md) | M0 |
 | [0033](0033-connectivity-as-a-strategy.md) | Connectivity is a strategy behind one interface, constrained by the game's auth model | Proposed, amends [0024](0024-connectivity-modes.md) | M2 |
+| [0034](0034-per-game-adapter.md) | A game is a module: data plus functions, minecraft the byte-identical default | Accepted | cross-cutting |
 
 ## Decisions still to record
 
@@ -107,18 +108,6 @@ written, so the numbering stays chronological and nothing has to be renumbered w
   arrives after the money is spent. Needs the current Budgets action capabilities verified before it becomes an ADR.
 - **Retiring a world.** Archived to cold storage and removed, or kept indefinitely. Needed before the first
   abandoned pack, not after. See [ADR-0023](0023-multiple-worlds.md).
-- **A per-game adapter.** The infrastructure is game-agnostic; the control plane is Minecraft-shaped in a handful of
-  places — the health probe, the player-count probe, the mod pipeline, and the auth model. Generalising to other
-  dockerised servers (Factorio, Project Zomboid, and the rest) means one adapter per game defining image and compose,
-  data directory, health probe, player-count probe, auth model, connectivity axis, mod strategy (*pinned-release*
-  versus *coordinated-latest* — see the Zomboid note in [docs/prior-art.md](../prior-art.md)), and **presentation**:
-  which metrics matter (MSPT for Minecraft, UPS for Factorio), which files are worth showing, and which of this
-  project's blocks do not apply to that game at all. One declaration, many consumers — workflows read the probes, the
-  connectivity invariant reads the auth model, a panel reads the presentation. Pterodactyl's eggs are the shipped
-  prior art. Deliberately **not** an ADR yet: nothing multi-game is about to be built, and a full record now would be
-  speculation carried as a decision — the exact rot [ADR-0032](0032-on-demand-single-instance.md) had to be superseded
-  for. [ADR-0033](0033-connectivity-as-a-strategy.md) defines only the connectivity axis of it. Write it when a second
-  game is actually on the table.
 - **Distribution model, if this is ever handed to other people.** "Clone the repo, authorise a browser, one command,
   a server in minutes" mixes two incompatible shapes: repo-clone needs credentials on the operator's own machine
   (`aws sso login` or a profile), while browser-authorise is the console / CloudFormation "Launch Stack" model. A

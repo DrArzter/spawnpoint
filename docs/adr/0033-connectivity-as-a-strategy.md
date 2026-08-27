@@ -2,6 +2,8 @@
 
 - Status: Proposed
 - Date: 2026-08-14
+- Revised: 2026-08-27 — the invariant gained its operator override: it refuses the silent combination, never a
+  declared one
 - Milestone: M2, and the multi-game part later
 - Amends: [ADR-0024](0024-connectivity-modes.md) — keeps its decision that **this project uses ZeroTier**, and turns
   its "one contract, three modes" from a choice made once into an actual interface with an invariant
@@ -21,8 +23,9 @@ game that authenticates its own players — the Steam-based servers, Factorio, P
 there a public address or a DNS name is fine and cheaper to onboard. So the correct connectivity is a function of the
 game's auth model, not a global preference.
 
-**One combination is unsafe and should be impossible by construction.** A no-auth game reached over a non-gating
-connectivity is an open server. Today that is prevented only by prose spread across
+**One combination is unsafe and should be impossible by accident.** A no-auth game reached over a non-gating
+connectivity is an open server. An operator may still choose that deliberately — with authentication supplied outside
+the game's defaults, or with eyes open — but today the line between "chose" and "forgot" is only prose spread across
 [ADR-0022](0022-minecraft-account-as-linked-identity.md) and [ADR-0024](0024-connectivity-modes.md). It should be an
 invariant checked at the seam, not a thing a future edit can quietly violate.
 
@@ -67,12 +70,24 @@ The two often named alongside them do not, and for different reasons:
 **The invariant, enforced at the seam rather than in prose:**
 
 ```
-if not game.auth_provides_identity and not strategy.is_gate:
-    refuse to start
+auth = world.auth if declared else game.default_auth   # data, like `game` and `host`
+if auth == none and not strategy.is_gate:
+    refuse to start                                    # only the silent combination refuses
 ```
 
-So offline-mode Minecraft may run only behind a gating strategy; a self-authenticating game may use any. This is the
-prose of [ADR-0022](0022-minecraft-account-as-linked-identity.md) turned into a rule that cannot be forgotten.
+So offline-mode Minecraft runs behind a gating strategy **by default**, and a self-authenticating game may use any.
+This is the prose of [ADR-0022](0022-minecraft-account-as-linked-identity.md) turned into a rule that cannot be
+violated *by accident*.
+
+**The override is part of the invariant, not an exception to it.** The control plane cannot actually know a world's
+effective auth model: it is server configuration and mods, not the game id. `online-mode=true` is one settings line,
+and a whole family of login-wall mods and plugins exists precisely to put real authentication in front of servers
+that ship none. An operator who wants a public world and has auth covered is stating a fact the system cannot see
+from outside the container, so the system takes the declaration: a per-world `auth: external` in the catalog
+publishes the world on any strategy, and the refusal fires only when the combination is *silent*. The invariant's job
+is to make the risky pairing explicit and attributable, never to forbid a configuration the operator chose — the same
+reason `game` and `host` are catalog data: situations differ, and the code must handle all of them rather than the
+one this project happens to run.
 
 ### What a non-gating strategy exposes, and what already answers it
 
@@ -82,7 +97,7 @@ doing double duty:
 
 | Threat at a public port | What answers it |
 | --- | --- |
-| Join attempts by strangers | The game's own authentication — which is exactly what the invariant above requires before a non-gating strategy is allowed at all |
+| Join attempts by strangers | Authentication — the game's own, or the declared equivalent (an auth mod, `online-mode=true`), which is exactly what the invariant above demands before a non-gating strategy publishes |
 | Automated exploitation of a known server vulnerability, typically ending in a crypto miner | The real risk, and Minecraft has lived it (Log4Shell). Blast radius, not prevention: the security group opens the game port and nothing else; the server runs in a container; **IMDSv2 with `hop_limit=1` means a compromised container cannot reach the instance role's credentials**; and the role could not launch instances anyway, so the account cannot be turned into a mining fleet |
 | A miner squatting on the host itself | The idle stop is keyed to **player count**, not CPU — `stop-session.sh` refuses to stop only while players are online, so a busy-but-empty host is stopped at the next idle check. The running-hours alarm and the budget are the backstops behind that |
 | Running a known-vulnerable version for months | Patch currency is [ADR-0028](0028-update-proposals.md)'s job: updates arrive as proposals instead of never |
@@ -117,7 +132,8 @@ correctly, and each is built only when a second game or a zero-setup onboarding 
 
 - The lifecycle stops knowing about DNS or overlays. Adding a connectivity option becomes a new adapter, not edits
   scattered across the start flow.
-- The unsafe combination becomes unrepresentable rather than merely discouraged.
+- The unsafe combination cannot happen silently: it either refuses the start or carries the operator's explicit
+  per-world declaration.
 - Onboarding cost becomes an explicit property of the chosen strategy — raw IP costs nothing, an overlay costs a
   per-device step and a third-party account, DNS costs a domain — so the operator picks the trade knowingly.
 - It reopens the implicit DNS-wake of [ADR-0006](0006-on-demand-start-and-idle-shutdown.md) as a per-strategy
@@ -140,7 +156,10 @@ correctly, and each is built only when a second game or a zero-setup onboarding 
 - Build only the strategy in use. Add raw IP when a preview needs it; Route 53 and Tailscale when a second game or a
   zero-setup onboarding actually arrives. The interface is cheap; the implementations are not, and must earn their place.
 - Keep identity-on-the-volume for any overlay, so the published address survives an instance rebuild.
-- Encode the gate-versus-auth invariant as a validation that fails the start, and cover it with a test.
+- Encode the gate-versus-auth invariant as a validation that fails the start, and cover both branches with tests:
+  the silent combination refuses, the declared one publishes.
+- The declaration is a catalog field, so it is reviewed and versioned like any other world change — an open server is
+  a diff someone wrote, never a default someone forgot.
 
 ## Alternatives considered
 
@@ -156,6 +175,7 @@ correctly, and each is built only when a second game or a zero-setup onboarding 
   of the network.
 - Whether the Route 53 strategy should also restore the implicit DNS-wake, or keep the explicit, attributed trigger for
   the reasons in [ADR-0006](0006-on-demand-start-and-idle-shutdown.md).
-- Whether the strategy is chosen per deployment, or could vary per world once the per-game adapter exists. That adapter
-  — image, data directory, health probe, player-count probe, auth model, and this connectivity axis — is the larger
-  decision this one is a slice of, and it stays a placeholder until a second game is actually on the table.
+- ~~Whether the strategy is chosen per deployment, or could vary per world once the per-game adapter exists.~~
+  Answered 2026-08-27 by [ADR-0034](0034-per-game-adapter.md): the adapter exists, worlds already carry `game` and
+  `host`, and connectivity — with its `auth` override — joins them as per-world catalog data when the first
+  non-gating strategy is built.

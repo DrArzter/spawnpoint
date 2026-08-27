@@ -7,5 +7,5 @@ env:
 phases:
   build:
     commands:
-      - chmod 0755 scripts/aws-release-builder.sh server/scripts/*.sh
+      - chmod 0755 scripts/aws-release-builder.sh server/scripts/*.sh server/games/*/*.sh
       - scripts/aws-release-builder.sh

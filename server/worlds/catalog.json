@@ -19,7 +19,11 @@
       "id": "factorio",
       "display_name": "Factorio vanilla",
       "profile_id": "factorio-vanilla",
-      "game": "factorio"
+      "game": "factorio",
+      "profile_source": {
+        "repository": "https://github.com/DrArzter/my-docker-factorio-server-config",
+        "commit": "36bb80df5424107f109a01852c999475a51a490e"
+      }
     }
   ]
 }

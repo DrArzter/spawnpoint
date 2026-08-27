@@ -3,13 +3,16 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_profiles.sh
+source "${SCRIPT_DIR}/_profiles.sh"
 
 usage() {
   cat >&2 <<'EOF'
 usage: build-profile-release.sh <profile-directory> <release> <resolved-mods-directory> <output-manifest>
 
 The profile must belong to a clean Git checkout. Its exact origin URL, full commit and profile ID are embedded in the
-release manifest. A profile with mods.source=null requires an empty resolved mod directory.
+release manifest. A profile with mods.source=null requires an empty resolved mod directory. The profile's game
+(ADR-0034) selects the version field, the loader contract and the mod extension; absence means minecraft.
 EOF
 }
 
@@ -59,48 +62,49 @@ profile_id="$(jq -er '.id' "${profile}")"
   exit 1
 }
 
-jq -e '
-  .schema_version == 1 and
-  (.id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
-  (.minecraft_version | type == "string" and length > 0) and
-  .loader.type == "forge" and
-  (.loader.version | type == "string" and length > 0) and
-  (.mods.source == null or (.mods.source | type == "string" and length > 0))
-' "${profile}" >/dev/null || {
-  printf 'error: unsupported or invalid profile metadata: %s\n' "${profile}" >&2
-  exit 1
-}
+game="$(profile_game "${profile}")"
+profile_game_facts "${game}"
+validate_profile_metadata "${profile}"
 
 mods_source="$(jq -r '.mods.source // empty' "${profile}")"
-jar_count="$(find "${resolved_mods_directory}" -maxdepth 1 -type f -name '*.jar' | wc -l)"
+mod_count="$(find "${resolved_mods_directory}" -maxdepth 1 -type f -name "*.${PROFILE_MOD_EXTENSION}" | wc -l)"
 if [[ -n "${mods_source}" ]]; then
   [[ -f "${profile_directory}/${mods_source}" ]] || {
     printf 'error: profile mod source does not exist: %s\n' "${mods_source}" >&2
     exit 1
   }
-  (( jar_count > 0 )) || {
-    printf 'error: modded profile %s resolved to zero JARs\n' "${profile_id}" >&2
+  (( mod_count > 0 )) || {
+    printf 'error: modded profile %s resolved to zero %s files\n' "${profile_id}" "${PROFILE_MOD_EXTENSION}" >&2
     exit 1
   }
 else
-  (( jar_count == 0 )) || {
-    printf 'error: empty-mod profile %s received %s resolved JARs\n' "${profile_id}" "${jar_count}" >&2
+  (( mod_count == 0 )) || {
+    printf 'error: empty-mod profile %s received %s resolved files\n' "${profile_id}" "${mod_count}" >&2
     exit 1
   }
 fi
 
-minecraft_version="$(jq -r '.minecraft_version' "${profile}")"
-loader_version="$(jq -r '.loader.version' "${profile}")"
+game_version="$(jq -r --arg field "${PROFILE_VERSION_FIELD}" '.[$field]' "${profile}")"
+# Every game's manifest carries its version in the minecraft_version field
+# (the recorded wart in ADR-0034), and a game that is its own loader repeats
+# the engine version there rather than inventing a second vocabulary.
+if [[ "${PROFILE_LOADER_VERSIONED}" == true ]]; then
+  loader_version="$(jq -r '.loader.version' "${profile}")"
+else
+  loader_version="${game_version}"
+fi
 
+RELEASE_GAME="${game}" \
 RELEASE_PROFILE_ID="${profile_id}" \
 RELEASE_PROFILE_REPOSITORY="${profile_repository}" \
 RELEASE_PROFILE_COMMIT="${profile_commit}" \
   "${SCRIPT_DIR}/build-release-manifest.sh" \
     "${release}" \
-    "${minecraft_version}" \
+    "${game_version}" \
     "${loader_version}" \
     "${resolved_mods_directory}" \
     "${output_manifest}"
 
 printf 'profile_id=%s\n' "${profile_id}"
+printf 'game=%s\n' "${game}"
 printf 'profile_commit=%s\n' "${profile_commit}"

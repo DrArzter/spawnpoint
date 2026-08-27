@@ -82,4 +82,71 @@ expect_failure "empty-mod profile with resolved JARs" \
   "${scripts}/build-profile-release.sh" \
     "${config_repo}/profiles/vanilla-forge" 1.1 "${fixture}/main-mods" "${fixture}/wrong.json"
 
+# --- the game axis: a factorio profile from its own repository (ADR-0034) ---
+factorio_repo="${fixture}/factorio-config"
+mkdir -p -- "${factorio_repo}/profiles/factorio-modded/extras" "${fixture}/factorio-mods"
+git -C "${factorio_repo}" init --quiet
+git -C "${factorio_repo}" remote add origin https://github.com/example/factorio-config.git
+cat >"${factorio_repo}/profiles/factorio-modded/profile.json" <<'EOF'
+{"schema_version":1,"game":"factorio","id":"factorio-modded","factorio_version":"2.0.77","loader":{"type":"factorio","version":null},"mods":{"source":"extras/mod-pins.txt"}}
+EOF
+printf 'graftorio2:0.4.20\n' >"${factorio_repo}/profiles/factorio-modded/extras/mod-pins.txt"
+git -C "${factorio_repo}" add profiles
+git -C "${factorio_repo}" \
+  -c user.name=Spawnpoint-Test \
+  -c user.email=spawnpoint@example.invalid \
+  commit --quiet -m 'factorio profile'
+factorio_commit="$(git -C "${factorio_repo}" rev-parse HEAD)"
+
+printf 'zip bytes\n' >"${fixture}/factorio-mods/graftorio2_0.4.20.zip"
+printf 'a jar has no business in a factorio release\n' >"${fixture}/factorio-mods/stray.jar"
+factorio_manifest="${fixture}/factorio-manifest.json"
+factorio_output="$(
+  "${scripts}/build-profile-release.sh" \
+    "${factorio_repo}/profiles/factorio-modded" 2.0 "${fixture}/factorio-mods" "${factorio_manifest}"
+)"
+grep -Fxq 'game=factorio' <<<"${factorio_output}"
+grep -Fxq 'mods=1' <<<"${factorio_output}"
+jq -e \
+  --arg commit "${factorio_commit}" '
+    .game == "factorio"
+    and .minecraft_version == "2.0.77"
+    and .loader == {type: "factorio", version: "2.0.77"}
+    and .source_profile == {
+      id: "factorio-modded",
+      repository: "https://github.com/example/factorio-config.git",
+      commit: $commit
+    }
+    and (.server.mods | length) == 1
+    and .server.mods[0].file == "graftorio2_0.4.20.zip"
+  ' "${factorio_manifest}" >/dev/null
+
+# a minecraft-shaped profile that claims factorio is refused by the game's own
+# loader contract rather than passing through with the wrong vocabulary
+mkdir -p -- "${config_repo}/profiles/mislabelled"
+cat >"${config_repo}/profiles/mislabelled/profile.json" <<'EOF'
+{"schema_version":1,"game":"factorio","id":"mislabelled","minecraft_version":"1.20.1","loader":{"type":"forge","version":"47.4.10"},"mods":{"source":null}}
+EOF
+git -C "${config_repo}" add profiles
+git -C "${config_repo}" \
+  -c user.name=Spawnpoint-Test \
+  -c user.email=spawnpoint@example.invalid \
+  commit --quiet -m 'mislabelled profile'
+expect_failure "a profile whose game and loader disagree" \
+  "${scripts}/build-profile-release.sh" \
+    "${config_repo}/profiles/mislabelled" 2.1 "${fixture}/vanilla-mods" "${fixture}/mislabelled.json"
+
+mkdir -p -- "${config_repo}/profiles/unknown-game"
+cat >"${config_repo}/profiles/unknown-game/profile.json" <<'EOF'
+{"schema_version":1,"game":"quake","id":"unknown-game","minecraft_version":"1.0","loader":{"type":"forge","version":"1"},"mods":{"source":null}}
+EOF
+git -C "${config_repo}" add profiles
+git -C "${config_repo}" \
+  -c user.name=Spawnpoint-Test \
+  -c user.email=spawnpoint@example.invalid \
+  commit --quiet -m 'unknown game'
+expect_failure "a profile naming a game with no contract" \
+  "${scripts}/build-profile-release.sh" \
+    "${config_repo}/profiles/unknown-game" 2.2 "${fixture}/vanilla-mods" "${fixture}/unknown.json"
+
 printf 'result=passed\n'

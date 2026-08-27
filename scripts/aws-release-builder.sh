@@ -11,7 +11,9 @@ repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 server_scripts="${repository_root}/server/scripts"
 config_repository="${CONFIG_REPOSITORY_URL:-https://github.com/DrArzter/my-docker-minecraft-server-config.git}"
 
-for variable in CONFIG_COMMIT PROFILE_ID RELEASE RELEASE_BUCKET CF_API_KEY; do
+# CF_API_KEY is checked after the profile is read: it is a minecraft-only
+# requirement, and the game is a property of the profile (ADR-0034).
+for variable in CONFIG_COMMIT PROFILE_ID RELEASE RELEASE_BUCKET; do
   [[ -n "${!variable:-}" && "${!variable}" != "REQUIRED_BY_CALLER" ]] || {
     printf 'error: %s is required\n' "${variable}" >&2
     exit 1
@@ -30,13 +32,21 @@ done
   printf 'error: RELEASE must use MAJOR.MINOR: %s\n' "${RELEASE}" >&2
   exit 1
 }
-[[ "${config_repository}" == "https://github.com/DrArzter/my-docker-minecraft-server-config" ||
-   "${config_repository}" == "https://github.com/DrArzter/my-docker-minecraft-server-config.git" ]] || {
-  printf 'error: untrusted CONFIG_REPOSITORY_URL: %s\n' "${config_repository}" >&2
-  exit 1
-}
+# One authoring repository per game (their schemas differ); the allow-list is
+# the trust boundary, and the game itself still comes from the profile.
+case "${config_repository}" in
+  https://github.com/DrArzter/my-docker-minecraft-server-config | \
+  https://github.com/DrArzter/my-docker-minecraft-server-config.git | \
+  https://github.com/DrArzter/my-docker-factorio-server-config | \
+  https://github.com/DrArzter/my-docker-factorio-server-config.git) ;;
+  *)
+    printf 'error: untrusted CONFIG_REPOSITORY_URL: %s\n' "${config_repository}" >&2
+    exit 1
+    ;;
+esac
 
-for command in aws docker git jq realpath; do
+# docker is a minecraft-resolver dependency, checked by the resolver itself.
+for command in aws git jq realpath; do
   command -v "${command}" >/dev/null 2>&1 || {
     printf 'error: required command not found: %s\n' "${command}" >&2
     exit 1
@@ -65,6 +75,14 @@ profile_directory="${config_checkout}/profiles/${PROFILE_ID}"
   exit 1
 }
 
+game="$(jq -r '.game // "minecraft"' "${profile_directory}/profile.json")"
+if [[ "${game}" == "minecraft" ]]; then
+  [[ -n "${CF_API_KEY:-}" && "${CF_API_KEY}" != "REQUIRED_BY_CALLER" ]] || {
+    printf 'error: CF_API_KEY is required for a minecraft profile\n' >&2
+    exit 1
+  }
+fi
+
 payload="${workspace}/payload"
 "${server_scripts}/resolve-profile-mods.sh" "${profile_directory}" "${payload}/mods"
 
@@ -78,6 +96,7 @@ RELEASE_SOURCE_DIR="${payload}" \
 
 printf 'result=release_ready\n'
 printf 'profile_id=%s\n' "${PROFILE_ID}"
+printf 'game=%s\n' "${game}"
 printf 'config_commit=%s\n' "${CONFIG_COMMIT}"
 printf 'release=%s\n' "${RELEASE}"
 printf 'manifest_key=releases/%s/manifest.json\n' "${RELEASE}"

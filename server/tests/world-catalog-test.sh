@@ -52,4 +52,52 @@ jq '.profile.id = "vanilla-forge"' \
 mv -- "${fixture}/tampered-marker.json" "${fixture}/worlds/main/.spawnpoint-world.json"
 expect_failure "mismatched marker" "${scripts}/prepare-world.sh" main
 
+# --- provenance is per world when it needs to be: one authoring repository per
+#     game, and a pin bump for one world must not invalidate another's marker ---
+real_factorio="$("${scripts}/world-profile.sh" factorio)"
+grep -Fxq 'profile_repository=https://github.com/DrArzter/my-docker-factorio-server-config' <<<"${real_factorio}"
+grep -Fq 'profile_commit=' <<<"${real_factorio}"
+[[ "$(awk -F= '$1 == "profile_commit" { print $2 }' <<<"${real_factorio}")" \
+  != "$(awk -F= '$1 == "profile_commit" { print $2 }' <<<"${main_output}")" ]]
+
+override_commit="1111111111111111111111111111111111111111"
+write_catalog() {
+  jq -n --argjson worlds "$1" '{
+    schema_version: 1,
+    profile_source: {
+      repository: "https://example.invalid/default-profiles",
+      commit: "0000000000000000000000000000000000000000"
+    },
+    worlds: $worlds
+  }' >"${fixture}/catalog.json"
+}
+run_profile() {
+  SPAWNPOINT_WORLD_CATALOG="${fixture}/catalog.json" "${scripts}/world-profile.sh" "$1"
+}
+
+write_catalog "$(jq -n --arg commit "${override_commit}" '[
+  {id: "inherits", display_name: "Inherits", profile_id: "inherits"},
+  {id: "overrides", display_name: "Overrides", profile_id: "overrides",
+   profile_source: {repository: "https://example.invalid/own-profiles", commit: $commit}}
+]')"
+inherited="$(run_profile inherits)"
+grep -Fxq 'profile_repository=https://example.invalid/default-profiles' <<<"${inherited}"
+grep -Fxq 'profile_commit=0000000000000000000000000000000000000000' <<<"${inherited}"
+overridden="$(run_profile overrides)"
+grep -Fxq 'profile_repository=https://example.invalid/own-profiles' <<<"${overridden}"
+grep -Fxq "profile_commit=${override_commit}" <<<"${overridden}"
+
+# the marker a prepared world carries records the world's own provenance
+SPAWNPOINT_WORLD_CATALOG="${fixture}/catalog.json" "${scripts}/prepare-world.sh" overrides >/dev/null
+jq -e --arg commit "${override_commit}" '
+  .profile.repository == "https://example.invalid/own-profiles" and .profile.commit == $commit
+' "${fixture}/worlds/overrides/.spawnpoint-world.json" >/dev/null
+
+write_catalog '[{"id": "bad", "display_name": "Bad", "profile_id": "bad",
+  "profile_source": {"repository": "https://example.invalid/x", "commit": "not-a-sha"}}]'
+expect_failure "a per-world profile_source with a short commit" run_profile bad
+write_catalog '[{"id": "bad", "display_name": "Bad", "profile_id": "bad",
+  "profile_source": {"commit": "1111111111111111111111111111111111111111"}}]'
+expect_failure "a per-world profile_source with no repository" run_profile bad
+
 printf 'result=passed\n'

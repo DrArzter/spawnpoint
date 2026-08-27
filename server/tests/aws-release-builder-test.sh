@@ -88,4 +88,93 @@ jq -e \
   "${manifest}" >/dev/null
 [[ -f "${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/4.0/mods/example-1.0.jar" ]]
 
+# --- the bundle is self-contained: everything the packaged scripts reach for
+#     is packaged too. A missing file here fails only in CodeBuild, where it is
+#     most expensive to discover. ---
+packaged="$(grep -oE 'filename = "[^"]+"' "${repository_root}/infra/terraform-releases/release-builder.tf" |
+  sed -E 's/^filename = "(.*)"$/\1/')"
+while IFS= read -r entry; do
+  [[ "${entry}" == *.sh && -f "${repository_root}/${entry}" ]] || continue
+  while IFS= read -r reference; do
+    case "${reference}" in
+      _*) reference="server/scripts/${reference}" ;;
+      *) reference="server/${reference}" ;;
+    esac
+    grep -Fxq "${reference}" <<<"${packaged}" || {
+      printf 'error: %s reaches for %s, which the release bundle does not package\n' "${entry}" "${reference}" >&2
+      exit 1
+    }
+  done < <(grep -oE '_[a-z0-9_]+\.sh|games/[a-z0-9-]+/[a-z0-9-]+\.sh' "${repository_root}/${entry}" | sort -u)
+done <<<"${packaged}"
+
+# --- the game axis: a factorio profile cuts through the same builder, with no
+#     CurseForge key, no container, and its own authoring repository ---
+factorio_config="${fixture}/factorio-config"
+mkdir -p -- "${factorio_config}/profiles/factorio-vanilla/extras"
+git -C "${factorio_config}" init --quiet
+cat >"${factorio_config}/profiles/factorio-vanilla/profile.json" <<'EOF'
+{"schema_version":1,"game":"factorio","id":"factorio-vanilla","factorio_version":"2.0.77","loader":{"type":"factorio","version":null},"mods":{"source":"extras/mod-pins.txt"}}
+EOF
+printf 'graftorio2:0.4.20\n' >"${factorio_config}/profiles/factorio-vanilla/extras/mod-pins.txt"
+git -C "${factorio_config}" add profiles
+git -C "${factorio_config}" -c user.name=Test -c user.email=test@example.invalid commit --quiet -m profile
+factorio_commit="$(git -C "${factorio_config}" rev-parse HEAD)"
+
+ln -s -- "${repository_root}/server/tests/fake-curl" "${fixture}/bin/curl"
+export FAKE_FACTORIO_ROOT="${fixture}/fake-portal"
+mkdir -p -- "${FAKE_FACTORIO_ROOT}/blobs"
+printf 'graftorio zip bytes\n' >"${FAKE_FACTORIO_ROOT}/blobs/graftorio2_0.4.20.zip"
+jq -n \
+  --arg sha1 "$(sha1sum -- "${FAKE_FACTORIO_ROOT}/blobs/graftorio2_0.4.20.zip" | awk '{print $1}')" \
+  '{name: "graftorio2", releases: [{version: "0.4.20", file_name: "graftorio2_0.4.20.zip", sha1: $sha1, download_url: "/dl/graftorio2_0.4.20.zip"}]}' \
+  >"${FAKE_FACTORIO_ROOT}/mod-graftorio2.json"
+
+factorio_url=https://github.com/DrArzter/my-docker-factorio-server-config.git
+factorio_output="$(
+  env \
+    PATH="${fixture}/bin:${PATH}" \
+    GIT_ALLOW_PROTOCOL=file \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0="url.file://${factorio_config}.insteadOf" \
+    GIT_CONFIG_VALUE_0="${factorio_url}" \
+    CONFIG_REPOSITORY_URL="${factorio_url}" \
+    CONFIG_COMMIT="${factorio_commit}" \
+    PROFILE_ID=factorio-vanilla \
+    RELEASE=5.0 \
+    RELEASE_BUCKET=spawnpoint-test-releases \
+    FAKE_FACTORIO_ROOT="${FAKE_FACTORIO_ROOT}" \
+    FACTORIO_USERNAME=arzter \
+    FACTORIO_TOKEN=portal-token \
+    "${builder}"
+)"
+grep -qx 'result=release_ready' <<<"${factorio_output}"
+grep -qx 'game=factorio' <<<"${factorio_output}"
+factorio_manifest="${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/5.0/manifest.json"
+jq -e '
+  .game == "factorio"
+  and .loader == {type: "factorio", version: "2.0.77"}
+  and (.server.mods | length) == 1
+' "${factorio_manifest}" >/dev/null
+[[ -f "${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/5.0/mods/graftorio2_0.4.20.zip" ]]
+
+# the CurseForge key is a minecraft requirement, enforced once the profile is
+# known rather than for every game
+if minecraft_without_key="$(
+  env \
+    PATH="${fixture}/bin:${PATH}" \
+    GIT_ALLOW_PROTOCOL=file \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0="url.file://${config_repo}.insteadOf" \
+    GIT_CONFIG_VALUE_0=https://github.com/DrArzter/my-docker-minecraft-server-config.git \
+    CONFIG_COMMIT="${config_commit}" \
+    PROFILE_ID=main \
+    RELEASE=6.0 \
+    RELEASE_BUCKET=spawnpoint-test-releases \
+    "${builder}" 2>&1
+)"; then
+  printf 'expected failure: a minecraft profile without CF_API_KEY\n' >&2
+  exit 1
+fi
+grep -q 'CF_API_KEY is required for a minecraft profile' <<<"${minecraft_without_key}"
+
 printf 'result=passed\n'

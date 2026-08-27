@@ -15,6 +15,7 @@ Optional per-world fields, each defaulting to the behaviour that predates its ax
 | `host` | `primary` | Which host the world runs on — topology is data |
 | `connectivity` | `zerotier` | The strategy that publishes the world ([ADR-0033](../../docs/adr/0033-connectivity-as-a-strategy.md)) |
 | `auth` | the game's own model | Declared override: `external` states that authentication is handled outside the game defaults, which lets a non-gating strategy publish the world |
+| `profile_source` | the catalog-level `profile_source` | This world's own authoring repository and pinned commit — authoring lives one repository per game, and a pin bump for one world must not invalidate another world's prepared marker |
 
 The catalog validator enforces the gate-versus-auth invariant statically: a world with no authentication on a
 non-gating connectivity is not a loadable catalog. An open server is always a diff someone wrote, never a default

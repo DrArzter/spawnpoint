@@ -31,6 +31,10 @@ validate_world_catalog() {
       (.profile_id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
       ((.game // "minecraft") | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
       ((.host // "primary") | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
+      ((has("profile_source") | not) or (
+        (.profile_source.repository | type == "string" and length > 0) and
+        (.profile_source.commit | type == "string" and test("^[0-9a-f]{40}$"))
+      )) and
       ((.connectivity // "zerotier") | IN("zerotier", "raw", "route53")) and
       ((has("auth") | not) or (.auth | IN("none", "game", "external")))
     ) and
@@ -88,8 +92,15 @@ load_world() {
   # means the overlay this deployment runs; absent auth means the game default.
   WORLD_CONNECTIVITY="$(jq -r '.connectivity // "zerotier"' <<<"${match}")"
   WORLD_AUTH="$(jq -r '.auth // empty' <<<"${match}")"
-  WORLD_PROFILE_REPOSITORY="$(jq -r '.profile_source.repository' "${WORLD_CATALOG}")"
-  WORLD_PROFILE_COMMIT="$(jq -r '.profile_source.commit' "${WORLD_CATALOG}")"
+  # Provenance is per world when it needs to be: authoring repositories are one
+  # per game, and bumping the pin for one world must not invalidate another
+  # world's prepared marker. The catalog-level profile_source is the default.
+  WORLD_PROFILE_REPOSITORY="$(jq -r '.profile_source.repository // empty' <<<"${match}")"
+  WORLD_PROFILE_COMMIT="$(jq -r '.profile_source.commit // empty' <<<"${match}")"
+  [[ -n "${WORLD_PROFILE_REPOSITORY}" ]] ||
+    WORLD_PROFILE_REPOSITORY="$(jq -r '.profile_source.repository' "${WORLD_CATALOG}")"
+  [[ -n "${WORLD_PROFILE_COMMIT}" ]] ||
+    WORLD_PROFILE_COMMIT="$(jq -r '.profile_source.commit' "${WORLD_CATALOG}")"
   WORLD_DIRECTORY="$(realpath -m -- "${WORLDS_DIRECTORY}/${WORLD_ID}")"
   WORLD_DATA_DIRECTORY="${WORLD_DIRECTORY}/data"
   WORLD_MODS_DIRECTORY="${WORLD_DIRECTORY}/mods"

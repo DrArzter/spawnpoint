@@ -100,4 +100,30 @@ expect_failure "an unpinned entry" \
   ' "${FACTORIO_DATA_DIR}/mods/mod-list.json" >/dev/null
 )
 
+# --- the profile seam: resolve-profile-mods dispatches to this resolver when
+#     the profile names factorio, with no container anywhere in the path ---
+config="${fixture}/factorio-config"
+mkdir -p -- "${config}/profiles/factorio-modded/extras"
+git -C "${config}" init --quiet
+git -C "${config}" remote add origin https://github.com/example/factorio-config.git
+cat >"${config}/profiles/factorio-modded/profile.json" <<'EOF'
+{"schema_version":1,"game":"factorio","id":"factorio-modded","factorio_version":"2.0.77","loader":{"type":"factorio","version":null},"mods":{"source":"extras/mod-pins.txt"}}
+EOF
+cp -- "${fixture}/factorio.list" "${config}/profiles/factorio-modded/extras/mod-pins.txt"
+git -C "${config}" add profiles
+git -C "${config}" -c user.name=Test -c user.email=test@example.invalid commit --quiet -m profiles
+
+profile_output="$(
+  "${REPOSITORY_ROOT}/server/scripts/resolve-profile-mods.sh" \
+    "${config}/profiles/factorio-modded" "${fixture}/profile-payload/mods"
+)"
+grep -qx 'game=factorio' <<<"${profile_output}"
+grep -qx 'mods=2' <<<"${profile_output}"
+cmp -- "${FAKE_FACTORIO_ROOT}/blobs/graftorio2_0.4.20.zip" \
+  "${fixture}/profile-payload/mods/graftorio2_0.4.20.zip"
+
+expect_failure "resolving into an existing output directory" \
+  "${REPOSITORY_ROOT}/server/scripts/resolve-profile-mods.sh" \
+  "${config}/profiles/factorio-modded" "${fixture}/profile-payload/mods"
+
 printf 'factorio-resolver-test: ok\n'

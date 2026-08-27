@@ -52,6 +52,31 @@ server/scripts/build-profile-release.sh \
 Keep that dotenv file private (`chmod 600 /path/to/private/.env`); it is an authoring-machine secret and is never
 copied into a release.
 
+## A profile names its game
+
+Authoring lives in one repository per game, because the contracts differ: a Minecraft profile pins a loader and
+CurseForge URLs, a Factorio profile pins an engine version and exact portal versions. A profile declares its game in
+a `game` field and **absence means minecraft**, so every existing profile and every release already cut from one is
+unchanged. From that field, `server/scripts/_profiles.sh` derives the version field the profile uses, the loader
+contract it must satisfy, the mod extension a release contains, and which resolver runs — the pinned
+`mc-image-helper` container for minecraft, `server/games/factorio/resolve-mods.sh` for factorio, which needs no
+container at all. The same three commands cut a Factorio release:
+
+```bash
+FACTORIO_USERNAME=... FACTORIO_TOKEN=... \
+  server/scripts/resolve-profile-mods.sh \
+    /path/to/my-docker-factorio-server-config/profiles/factorio-vanilla \
+    /tmp/factorio-1.0/mods
+
+server/scripts/build-profile-release.sh \
+  /path/to/my-docker-factorio-server-config/profiles/factorio-vanilla \
+  1.0 /tmp/factorio-1.0/mods /tmp/factorio-1.0/manifest.json
+```
+
+The manifest's `minecraft_version` carries the engine version and its `loader` repeats it, because a game that is its
+own loader has no second version to record. That field name is the wart recorded in ADR-0034; renaming a published
+schema costs more than the note.
+
 The resolver delegates to the digest-pinned image's `mc-image-helper curseforge-files` command. It passes the API key
 only as container environment, downloads into a sibling stage, and refuses to overwrite a previous output. The game
 host later consumes uploaded hashes and bytes; it does not need a CurseForge API key or resolve moving URLs at boot.

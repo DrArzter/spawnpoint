@@ -30,8 +30,20 @@ data "archive_file" "release_builder_source" {
   }
 
   source {
+    content  = file("${path.module}/../../server/scripts/_profiles.sh")
+    filename = "server/scripts/_profiles.sh"
+  }
+
+  source {
     content  = file("${path.module}/../../server/scripts/resolve-profile-mods.sh")
     filename = "server/scripts/resolve-profile-mods.sh"
+  }
+
+  # The factorio resolver is a game module rather than a container, so the
+  # bundle carries it the way it carries the shared scripts.
+  source {
+    content  = file("${path.module}/../../server/games/factorio/resolve-mods.sh")
+    filename = "server/games/factorio/resolve-mods.sh"
   }
 
   source {

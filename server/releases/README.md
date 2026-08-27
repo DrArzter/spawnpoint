@@ -1,5 +1,12 @@
 # Release manifests
 
+**This directory holds the contract, not the artefacts.** A release lives in the release bucket, versioned, and the
+world's pointer says which one is desired ([ADR-0030](../../docs/adr/0030-desired-and-active-release.md)); the same
+path on a host is the download cache `start-session.sh` reconciles from. Release 1.0's manifest was tracked here
+while it was being published by hand — its S3 object and VersionId are recorded in
+[docs/aws-m1-command-log.md](../../docs/aws-m1-command-log.md), which is where that provenance belongs. Nothing here
+is a source of truth for a deployed release.
+
 Each immutable release is stored as `<version>/manifest.json`. Its payload has the same root and contains the JARs
 under `mods/` when staged on a server or published to the release bucket.
 

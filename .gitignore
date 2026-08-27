@@ -31,6 +31,10 @@ mods/
 *.mrpack
 server/data/
 server/backups/
+# Release payloads are immutable artefacts in S3 (ADR-0009, ADR-0030), and this
+# directory doubles as the host's download cache. The repository tracks the
+# contract in server/releases/README.md, never an artefact.
+server/releases/*/
 logs/
 crash-reports/
 banned-*.json

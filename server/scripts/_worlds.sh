@@ -25,7 +25,8 @@ validate_world_catalog() {
       (.id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
       (.display_name | type == "string" and length > 0) and
       (.profile_id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
-      ((.game // "minecraft") | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$"))
+      ((.game // "minecraft") | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
+      ((.host // "primary") | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$"))
     ) and
     (([.worlds[].id] | unique | length) == (.worlds | length))
   ' "${WORLD_CATALOG}" >/dev/null || {
@@ -54,6 +55,10 @@ load_world() {
   # Absent means minecraft: every world that predates the game axis keeps its
   # exact pre-axis behaviour.
   WORLD_GAME="$(jq -r '.game // "minecraft"' <<<"${match}")"
+  # Topology is data: which host a world runs on is a catalog fact, so the day
+  # a second host exists, nothing but this value changes. "primary" is the one
+  # host that exists today.
+  WORLD_HOST="$(jq -r '.host // "primary"' <<<"${match}")"
   WORLD_PROFILE_REPOSITORY="$(jq -r '.profile_source.repository' "${WORLD_CATALOG}")"
   WORLD_PROFILE_COMMIT="$(jq -r '.profile_source.commit' "${WORLD_CATALOG}")"
   WORLD_DIRECTORY="$(realpath -m -- "${WORLDS_DIRECTORY}/${WORLD_ID}")"

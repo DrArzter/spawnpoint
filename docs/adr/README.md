@@ -122,10 +122,14 @@ written, so the numbering stays chronological and nothing has to be renumbered w
   machine are built on — idle stop must split into a world level (compose-stop that game) and a host level
   (StopInstances only when every world is idle, a last-one-out refcount the V2 lease model is the right foundation
   for), and the invariant gains a middle state, "somebody plays something". In exchange: one ZeroTier slot regardless
-  of server count, one instance bill, and Factorio beside Minecraft costs hundreds of megabytes. Physics decides:
-  realistic only on the 16 GiB shape, and both games' single threads will elbow on two vCPUs — measure, never assume.
-  Trigger for either form: two groups wanting different worlds on the same evening; until then, one-at-a-time is
-  cheaper in every dimension, and the same-host form is the one to evaluate first when the trigger fires.
+  of server count and one instance bill. **Hardware is a dial, never the argument** — the instance type is already a
+  variable, and sizing for neighbours is a catalog value; what must be ready is the *code*, and its topology
+  assumptions live in exactly three places: the unconditional `StopInstances` after a session stop, the single V2
+  lifecycle item, and instance resolution as a singleton. The first seam is already cut: the catalog carries a
+  per-world `host` (data, defaulting to the one host that exists), and `check-host-activity.sh` answers "may this
+  host sleep once I stop?" — trivially idle today, a Choice state at V2 cutover tomorrow. Trigger for either form:
+  two groups wanting different worlds on the same evening; the same-host form is the one to evaluate first when it
+  fires.
 - **Distribution model, if this is ever handed to other people.** "Clone the repo, authorise a browser, one command,
   a server in minutes" mixes two incompatible shapes: repo-clone needs credentials on the operator's own machine
   (`aws sso login` or a profile), while browser-authorise is the console / CloudFormation "Launch Stack" model. A

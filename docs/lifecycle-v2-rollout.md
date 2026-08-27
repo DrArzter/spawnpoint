@@ -19,6 +19,17 @@ state. Its single lifecycle item contains only coordination facts that must outl
 lease expired from resuming later and writing over its replacement. TTL cleanup alone is not a lock: DynamoDB expiry
 is asynchronous, so acquisition must use a conditional write against the recorded expiry and fencing token.
 
+## A gate to add before cutover: the host-idle check
+
+The stop path currently ends in an unconditional `StopInstances`, which encodes `session == instance lifetime`. That
+is true while one world runs at a time and false the day two run on one host. The sensor for the two-level stop
+already exists — `server/scripts/check-host-activity.sh` reports `host=idle|busy` excluding the asking world, with
+the same fail-closed contract as the session probe — so the V2 stop workflow should ask it in a Choice before
+`StopInstances`: last one out turns off the lights, everyone else stops only their own containers. Today the answer
+is always idle, so the gate costs one state and changes nothing observable; added at cutover it is a Choice, added
+after cutover it is a migration. See the concurrent-worlds placeholder in
+[docs/adr/README.md](adr/README.md#decisions-still-to-record).
+
 ## Required invariants
 
 1. At most one unexpired mutating lease exists for a server.

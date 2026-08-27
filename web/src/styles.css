@@ -38,27 +38,19 @@ button {
   padding: calc(22px + env(safe-area-inset-top)) 18px calc(24px + env(safe-area-inset-bottom));
 }
 
-.topbar,
 .section-heading,
 .world-card {
   display: flex;
   align-items: center;
 }
 
-.topbar,
 .section-heading {
   justify-content: space-between;
 }
 
-h1,
 h2,
 p {
   margin: 0;
-}
-
-h1 {
-  font-size: 25px;
-  letter-spacing: -0.04em;
 }
 
 h2 {
@@ -74,7 +66,6 @@ h2 {
 }
 
 .hero {
-  margin-top: 28px;
   padding: 24px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--tg-text) 8%, transparent);

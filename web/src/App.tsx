@@ -31,10 +31,6 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <h1>Spawnpoint</h1>
-      </header>
-
       <section className="hero" aria-labelledby="server-status-title">
         <div className="status-line">
           <span className="status-dot" aria-hidden="true" />

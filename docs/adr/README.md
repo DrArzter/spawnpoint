@@ -108,6 +108,17 @@ written, so the numbering stays chronological and nothing has to be renumbered w
   arrives after the money is spent. Needs the current Budgets action capabilities verified before it becomes an ADR.
 - **Retiring a world.** Archived to cold storage and removed, or kept indefinitely. Needed before the first
   abandoned pack, not after. See [ADR-0023](0023-multiple-worlds.md).
+- **Concurrent worlds on separate hosts.** Lifting ADR-0023's one-active-at-a-time to one instance per active world.
+  Most of the design is ready by construction — per-world pointers and backup lineages, instance-parametric state
+  machines, per-server lease semantics in Lifecycle V2, per-host watchdog economics. The mechanical seams, named so
+  they do not rot in a conversation: the host Terraform root holds exactly one instance (a `for_each` over the
+  catalog, with `moved` blocks protecting the live host), workflow IAM scopes mutations to one instance ARN (a list
+  or a tag condition), the V2 lifecycle table is a single item (key by instance), the bot's single `INSTANCE_ID`
+  becomes a world argument with catalog lookup, notifications must start naming the world, and the connection address
+  becomes a catalog field. The one external ceiling: ZeroTier's ten free device slots — each concurrent host eats
+  one, which is where [ADR-0033](0033-connectivity-as-a-strategy.md)'s non-gating strategies for Steam-auth games
+  earn their place. Trigger: two groups wanting different worlds on the same evening; until then, one-at-a-time is
+  cheaper in every dimension.
 - **Distribution model, if this is ever handed to other people.** "Clone the repo, authorise a browser, one command,
   a server in minutes" mixes two incompatible shapes: repo-clone needs credentials on the operator's own machine
   (`aws sso login` or a profile), while browser-authorise is the console / CloudFormation "Launch Stack" model. A

@@ -9,11 +9,12 @@ set -Eeuo pipefail
 
 repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 server_scripts="${repository_root}/server/scripts"
-config_repository="${CONFIG_REPOSITORY_URL:-https://github.com/DrArzter/my-docker-minecraft-server-config.git}"
-
-# CF_API_KEY is checked after the profile is read: it is a minecraft-only
-# requirement, and the game is a property of the profile (ADR-0034).
-for variable in CONFIG_COMMIT PROFILE_ID RELEASE RELEASE_BUCKET; do
+# No default authoring repository: with one repository per game, a default is a
+# silent choice of game, and the profile it resolves might even exist in the
+# other repository. CF_API_KEY is checked later instead, after the profile is
+# read: it is a minecraft-only requirement, and the game is a property of the
+# profile (ADR-0034).
+for variable in CONFIG_COMMIT PROFILE_ID RELEASE RELEASE_BUCKET CONFIG_REPOSITORY_URL; do
   [[ -n "${!variable:-}" && "${!variable}" != "REQUIRED_BY_CALLER" ]] || {
     printf 'error: %s is required\n' "${variable}" >&2
     exit 1
@@ -34,6 +35,7 @@ done
 }
 # One authoring repository per game (their schemas differ); the allow-list is
 # the trust boundary, and the game itself still comes from the profile.
+config_repository="${CONFIG_REPOSITORY_URL}"
 case "${config_repository}" in
   https://github.com/DrArzter/my-docker-minecraft-server-config | \
   https://github.com/DrArzter/my-docker-minecraft-server-config.git | \

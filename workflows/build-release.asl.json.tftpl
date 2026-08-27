@@ -13,7 +13,9 @@
             { "Variable": "$.configCommit", "IsPresent": true },
             { "Variable": "$.configCommit", "IsString": true },
             { "Variable": "$.release", "IsPresent": true },
-            { "Variable": "$.release", "IsString": true }
+            { "Variable": "$.release", "IsString": true },
+            { "Variable": "$.configRepositoryUrl", "IsPresent": true },
+            { "Variable": "$.configRepositoryUrl", "IsString": true }
           ],
           "Next": "Build Immutable Release"
         }
@@ -29,6 +31,7 @@
           { "Name": "PROFILE_ID", "Type": "PLAINTEXT", "Value.$": "$.profileId" },
           { "Name": "CONFIG_COMMIT", "Type": "PLAINTEXT", "Value.$": "$.configCommit" },
           { "Name": "RELEASE", "Type": "PLAINTEXT", "Value.$": "$.release" },
+          { "Name": "CONFIG_REPOSITORY_URL", "Type": "PLAINTEXT", "Value.$": "$.configRepositoryUrl" },
           { "Name": "RELEASE_CREATED_BY", "Type": "PLAINTEXT", "Value": "github-actions" }
         ]
       },

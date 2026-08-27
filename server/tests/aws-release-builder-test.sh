@@ -24,6 +24,7 @@ base_env=(
   PROFILE_ID=main
   RELEASE=1.1
   RELEASE_BUCKET=spawnpoint-releases-123456789012
+  CONFIG_REPOSITORY_URL=https://github.com/DrArzter/my-docker-minecraft-server-config.git
   CF_API_KEY=test-only
 )
 
@@ -33,6 +34,11 @@ expect_failure "unsafe profile id" env "${base_env[@]}" PROFILE_ID=../main "${bu
 expect_failure "invalid release" env "${base_env[@]}" RELEASE=latest "${builder}"
 expect_failure "untrusted config repository" env "${base_env[@]}" \
   CONFIG_REPOSITORY_URL=https://github.com/example/untrusted.git "${builder}"
+# With one authoring repository per game, an absent URL must refuse rather than
+# silently pick a game.
+expect_failure "no config repository named" \
+  env CONFIG_COMMIT=0123456789abcdef0123456789abcdef01234567 PROFILE_ID=main RELEASE=1.1 \
+  RELEASE_BUCKET=spawnpoint-releases-123456789012 CF_API_KEY=test-only "${builder}"
 
 # Full orchestration without network, Docker or AWS: Git rewrites only the
 # trusted public URL to a local fixture, while PATH adapters stand in for the
@@ -73,6 +79,7 @@ builder_output="$(
     GIT_CONFIG_COUNT=1 \
     GIT_CONFIG_KEY_0="url.file://${config_repo}.insteadOf" \
     GIT_CONFIG_VALUE_0=https://github.com/DrArzter/my-docker-minecraft-server-config.git \
+    CONFIG_REPOSITORY_URL=https://github.com/DrArzter/my-docker-minecraft-server-config.git \
     CONFIG_COMMIT="${config_commit}" \
     PROFILE_ID=main \
     RELEASE=4.0 \
@@ -168,6 +175,7 @@ if minecraft_without_key="$(
     GIT_CONFIG_COUNT=1 \
     GIT_CONFIG_KEY_0="url.file://${config_repo}.insteadOf" \
     GIT_CONFIG_VALUE_0=https://github.com/DrArzter/my-docker-minecraft-server-config.git \
+    CONFIG_REPOSITORY_URL=https://github.com/DrArzter/my-docker-minecraft-server-config.git \
     CONFIG_COMMIT="${config_commit}" \
     PROFILE_ID=main \
     RELEASE=6.0 \

@@ -198,6 +198,23 @@ It downloads the release's verified payload and republishes it; the manifest gat
 release, so the only new object is the pack. Only games whose clients need local mods get a pack at all — a Factorio
 client syncs the server's mods itself, and publication reports `pack=not_applicable`.
 
+### Cutting a release through AWS
+
+The authoring repository is a **required input**, not a default. With one repository per game, a default would be a
+silent choice of game — and the profile it resolved might exist in both. The state machine refuses a request without
+`configRepositoryUrl`, the CodeBuild project carries `REQUIRED_BY_CALLER`, and the builder's allow-list still decides
+which URLs are acceptable at all.
+
+That makes the rollout order matter, because the Action lives in each authoring repository:
+
+1. **First** update each repository's `build-release.yml` to send `configRepositoryUrl` in the execution input. An
+   extra field is harmless to the machine that ignores it, so this is safe to land before anything is applied.
+2. **Then** apply `infra/terraform-operations` (the state machine) and `infra/terraform-releases` (the project
+   environment). Applying before step 1 breaks release builds until the Actions are updated.
+
+The Factorio repository's Action is already written this way. A Factorio cut additionally needs portal credentials at
+cut time (`FACTORIO_USERNAME`, `FACTORIO_TOKEN`); the wiring for those is the next slice and is not deployed yet.
+
 ## Import a world
 
 Bring an existing world and the exact mods it runs on into the system, from the owner workstation:

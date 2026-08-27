@@ -86,6 +86,14 @@ run "build_release_workflow_can_only_run_the_reviewed_builder" {
   command = plan
 
   assert {
+    condition = length([
+      for variable in aws_codebuild_project.release_builder.environment[0].environment_variable :
+      variable if variable.name == "CONFIG_REPOSITORY_URL" && variable.value == "REQUIRED_BY_CALLER"
+    ]) == 1
+    error_message = "One authoring repository per game, so the project must not default to either one."
+  }
+
+  assert {
     condition     = aws_sfn_state_machine.build_release.type == "STANDARD"
     error_message = "Release resolution can take minutes and must use a durable Standard workflow."
   }
@@ -104,7 +112,7 @@ run "build_release_workflow_can_only_run_the_reviewed_builder" {
     condition = toset([
       for variable in jsondecode(aws_sfn_state_machine.build_release.definition).States["Build Immutable Release"].Parameters.EnvironmentVariablesOverride :
       variable.Name
-    ]) == toset(["PROFILE_ID", "CONFIG_COMMIT", "RELEASE", "RELEASE_CREATED_BY"])
+    ]) == toset(["PROFILE_ID", "CONFIG_COMMIT", "RELEASE", "CONFIG_REPOSITORY_URL", "RELEASE_CREATED_BY"])
     error_message = "The workflow may override only release identity, never secrets, buckets, source or buildspec."
   }
 

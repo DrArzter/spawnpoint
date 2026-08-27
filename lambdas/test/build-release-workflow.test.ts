@@ -63,9 +63,25 @@ test("the workflow runs only the fixed builder and passes no authority", async (
   const overrides = build.Parameters?.EnvironmentVariablesOverride as Array<{ Name: string }>;
   assert.deepEqual(
     new Set(overrides.map((variable) => variable.Name)),
-    new Set(["PROFILE_ID", "CONFIG_COMMIT", "RELEASE", "RELEASE_CREATED_BY"]),
+    new Set(["PROFILE_ID", "CONFIG_COMMIT", "RELEASE", "CONFIG_REPOSITORY_URL", "RELEASE_CREATED_BY"]),
   );
   assert.doesNotMatch(JSON.stringify(build), /CF_API_KEY|RELEASE_BUCKET|BuildspecOverride|SourceLocationOverride/);
+});
+
+test("the authoring repository is a required input, never a default", async () => {
+  const definition = await loadDefinition();
+  const validation = state(definition, "Validate Request Shape");
+  const conditions = (validation.Choices?.[0]?.And ?? []) as Array<Record<string, unknown>>;
+  assert.ok(
+    conditions.some((condition) => condition.Variable === "$.configRepositoryUrl" && condition.IsPresent === true),
+    "a request without configRepositoryUrl must be refused, not defaulted to one game's repository",
+  );
+  const build = state(definition, "Build Immutable Release");
+  assert.doesNotMatch(
+    JSON.stringify(build.Parameters),
+    /my-docker-[a-z]+-server-config/,
+    "the definition must not name an authoring repository",
+  );
 });
 
 test("READY is reachable only after synchronous CodeBuild success", async () => {

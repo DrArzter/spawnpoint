@@ -1,5 +1,6 @@
 {
   "profileId": "main",
   "configCommit": "0123456789abcdef0123456789abcdef01234567",
-  "release": "1.1"
+  "release": "1.1",
+  "configRepositoryUrl": "https://github.com/DrArzter/my-docker-minecraft-server-config.git"
 }

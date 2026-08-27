@@ -181,9 +181,11 @@ resource "aws_codebuild_project" "release_builder" {
       value = data.aws_s3_bucket.releases.id
     }
 
+    # One authoring repository per game, so the caller names it. The builder's
+    # allow-list decides which names are acceptable.
     environment_variable {
       name  = "CONFIG_REPOSITORY_URL"
-      value = "https://github.com/DrArzter/my-docker-minecraft-server-config.git"
+      value = "REQUIRED_BY_CALLER"
     }
 
     environment_variable {

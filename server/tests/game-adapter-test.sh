@@ -235,4 +235,56 @@ expect_failure "an unknown RELEASE_GAME" \
   if game_ready unhealthy; then exit 1; fi
 )
 
+# --- zomboid: the parser refuses to trust an undocumented wording, the world
+#     is two directories, and the release path is deliberately absent ---
+(
+  source "${GAMES}/zomboid/game.sh"
+  [[ "$(game_parse_player_count <<<'Players connected (0):')" == "0" ]]
+  [[ "$(game_parse_player_count <<<'Players connected (2):
+-Alice
+-Bob')" == "2" ]]
+  # A header that disagrees with the names listed is a wording this parser does
+  # not actually understand, and reporting a count from it would report an empty
+  # server that is not empty.
+  if game_parse_player_count <<<'Players connected (2):
+-Alice' >/dev/null 2>&1; then exit 1; fi
+  if game_parse_player_count <<<'There are 2 of a max of 20 players online: a, b' >/dev/null 2>&1; then exit 1; fi
+  if game_parse_player_count <<<'Online players (1):' >/dev/null 2>&1; then exit 1; fi
+)
+
+zomboid_world="${fixture}/zomboid-data"
+mkdir -p -- "${zomboid_world}/Saves/Multiplayer/spawnpoint" "${zomboid_world}/db"
+printf 'chunk\n' >"${zomboid_world}/Saves/Multiplayer/spawnpoint/map_10_20.bin"
+printf 'sqlite\n' >"${zomboid_world}/Saves/Multiplayer/spawnpoint/players.db"
+printf 'accounts\n' >"${zomboid_world}/db/spawnpoint.db"
+(
+  source "${GAMES}/zomboid/game.sh"
+  game_save_sentinel "${zomboid_world}" spawnpoint
+  if game_save_sentinel "${zomboid_world}" other-world; then exit 1; fi
+  paths="$(game_save_paths "${zomboid_world}" spawnpoint | tr '\0' ' ')"
+  [[ "${paths}" == "Saves db " ]]
+)
+
+zomboid_archive_output="$(
+  SPAWNPOINT_GAME=zomboid \
+  SERVER_DATA_DIR="${zomboid_world}" \
+  SERVER_BACKUP_DIR="${fixture}/backups" \
+  WORLD_NAME=spawnpoint \
+    "${SCRIPTS}/archive-world.sh"
+)"
+zomboid_archive="$(awk -F= '$1 == "archive" { print $2 }' <<<"${zomboid_archive_output}")"
+zomboid_listing="$(tar --list --zstd --file "${zomboid_archive}")"
+grep -qx 'Saves/Multiplayer/spawnpoint/map_10_20.bin' <<<"${zomboid_listing}"
+grep -qx 'Saves/Multiplayer/spawnpoint/players.db' <<<"${zomboid_listing}"
+grep -qx 'db/spawnpoint.db' <<<"${zomboid_listing}"
+SPAWNPOINT_GAME=zomboid WORLD_NAME=spawnpoint "${SCRIPTS}/verify-archive.sh" "${zomboid_archive}" >/dev/null
+expect_failure "a zomboid archive judged by another game's sentinel" \
+  env SPAWNPOINT_GAME=factorio WORLD_NAME=spawnpoint "${SCRIPTS}/verify-archive.sh" "${zomboid_archive}"
+
+# Workshop ids are not bytes, so this game has no release payload: the manifest
+# builder must refuse rather than invent an extension to search for.
+expect_failure "a zomboid release" \
+  env RELEASE_GAME=zomboid "${SCRIPTS}/build-release-manifest.sh" \
+  1.0 42.20 42.20 "${zomboid_world}/db" "${fixture}/zomboid-never.json"
+
 printf 'game-adapter-test: ok\n'

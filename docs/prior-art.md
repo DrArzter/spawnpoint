@@ -226,7 +226,7 @@ backup mechanics are untouched by every game below — the game-agnostic core he
 | --- | --- | --- | --- | --- | --- | --- |
 | Moves in almost free | **Factorio** | RCON built in | Own | **B** | Hundreds of MB | `factoriotools/factorio-docker` is its itzg; the resolver swaps CurseForge for the mod portal (a factorio.com token instead of `CF_API_KEY`); graftorio2 lands in the existing Grafana. **Landed as the first tenant**: a vanilla Factorio world in the catalog exercises the adapter ([ADR-0034](adr/0034-per-game-adapter.md)); the portal resolver is the next slice |
 | Moves in almost free | **Terraria (TShock)** | REST | Password/whitelist | **E** | Tiny | Cheapest tenant of all |
-| Moves in almost free | **Project Zomboid** | RCON (`players`, own format) | Steam | **C** | 4–8 GiB | The group favourite; the one game that *bends* the release model — see the note below |
+| Moves in almost free | **Project Zomboid** | RCON (`players`, own format) | Steam, when the server runs it | **C** | 4–8 GiB | The group favourite; the one game that *bends* the release model — see the note below. **Module landed 2026-08-27**; a world needs a profile repository before it can enter the catalog |
 | Moves in almost free | **Don't Starve Together** | Log/query | Klei/Steam | **C** | Tiny | Official Linux dedicated; server-side workshop auto-download is built in |
 | Moves in almost free | **Vintage Story** | Own API / log | Own accounts | **D** | Modest | Official Linux dedicated (.NET); mod format carries the client/server side axis natively |
 | Moves in almost free | **Rust** | WebRCON | Steam+EAC | **E** | 12+ GiB | Plugins never touch clients; wipe culture maps onto several-worlds ([ADR-0023](adr/0023-multiple-worlds.md)); world generation stretches cold start |
@@ -262,7 +262,22 @@ Worth its own note because it bends the adapter's mod axis. Checked 2026-08-14; 
   mid-evening, auto-updated clients mismatch the still-running server and some players cannot join; every guide's fix
   is "restart the server so it re-pulls".
 
-Two house rules apply to Zomboid when its module is written, both recorded in
+Checked 2026-08-27, before writing the module, because both answers decide whether it can exist at all:
+
+- **The dedicated server installs anonymously.** It is a separate Steam app (380870) and `steamcmd +login anonymous`
+  is enough, so neither the server nor this project needs a Steam account. Only the players need to own the game
+  ([SteamCMD guides](https://pimylifeup.com/project-zomboid-dedicated-server-linux/),
+  [PZwiki](https://pzwiki.net/wiki/Dedicated_server)).
+- **The server fetches its own mods.** Workshop ids listed in its configuration are downloaded at startup by the
+  server itself ([Nodecraft](https://nodecraft.com/support/games/project-zomboid/how-to-download-and-enable-workshop-mods-on-your-project-zomboid-server)),
+  which is why no credential wiring is needed for a modded world either.
+
+So the release model, not the credentials, is the constraint. **A Zomboid world carries no release pointer**: the mod
+set is Workshop ids in its profile, pinned by the profile's Git commit, and the immutable-bytes manifest simply does
+not apply. The manifest builder refuses `RELEASE_GAME=zomboid` on purpose, and the boot-time reconciliation treats a
+world with no pointer as the legitimate pre-release state it already handles.
+
+Two house rules apply to Zomboid, both recorded in
 [server/games/README.md](../server/games/README.md) after Factorio needed them. Its auth default is `none` unless the
 server this repository configures actually verifies Steam identities — a direct-connect server without Steam
 authentication verifies nobody, and the connectivity invariant reads that default to decide whether the world may be

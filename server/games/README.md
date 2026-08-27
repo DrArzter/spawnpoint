@@ -25,7 +25,7 @@ ability to verify one:
 | --- | --- | --- |
 | Minecraft | Mojang accounts are verified | `online-mode=false` ([ADR-0022](../../docs/adr/0022-minecraft-account-as-linked-identity.md)) verifies nobody |
 | Factorio | the server checks players against factorio.com | verification needs a *visible* server holding credentials; this one is hidden, which is why it needs no account |
-| Project Zomboid | Steam identities are verified | true only with Steam authentication enabled and the server registered with Steam; a direct-connect server without it verifies nobody |
+| Project Zomboid | Steam identities are verified | true only with Steam authentication enabled and the server registered with Steam; a direct-connect server without it verifies nobody, and this project has not exercised that configuration |
 
 ## Build the client pack unless the game genuinely cannot use one
 
@@ -40,6 +40,14 @@ game it does not know, deliberately.
 
 Skip the pack only for a game whose players install nothing locally — a server-side plugin loader, for example
 (distribution model E in [docs/prior-art.md](../../docs/prior-art.md)).
+
+## Do not trust an undocumented response format
+
+The player probe's parser decides whether a server is empty, and "empty" stops an instance. When a game's reply
+wording cannot be verified against documentation — Project Zomboid's `players` output is the case that forced this —
+make the parser **self-checking** rather than optimistic: read the count one way, count the listed players another,
+and refuse unless they agree. A refusal is read as "not idle" by the probe and as a refusal by the stop, so the
+failure costs a few minutes of instance time. A wrong count in the other direction stops a server with people on it.
 
 ## The rest of the checklist
 

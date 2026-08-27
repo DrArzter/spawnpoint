@@ -1,0 +1,32 @@
+# Project Zomboid session. The image is reused packaging (ADR-0005) built on the
+# official SteamCMD image; it runs RCON and, on SIGTERM, issues `save` then
+# `quit` before exiting — which is what makes our stop contract safe here.
+# `latest` moves, so pin a digest before this world's first AWS session.
+services:
+  zomboid:
+    image: terule/pz-dedicated-server:latest
+    ports:
+      # The game speaks UDP on two ports; players arrive over the overlay, so
+      # neither is public (ADR-0024 mode C).
+      - "16261:16261/udp"
+      - "16262:16262/udp"
+      # RCON stays host-local: the probe's transport, never a player surface.
+      - "127.0.0.1:27015:27015"
+    environment:
+      # The server downloads its Workshop items itself at startup; the mod set
+      # is configuration, pinned by the profile's commit rather than by bytes.
+      SERVER_NAME: "${ZOMBOID_SERVER_NAME:-spawnpoint}"
+      RCON_PASSWORD: ${ZOMBOID_RCON_PASSWORD:?set ZOMBOID_RCON_PASSWORD in .env}
+      ADMIN_PASSWORD: ${ZOMBOID_ADMIN_PASSWORD:?set ZOMBOID_ADMIN_PASSWORD in .env}
+      MEMORY_XMX_GB: "${ZOMBOID_MEMORY_GB:-6}"
+    volumes:
+      # This mount is the game's Zomboid folder: Saves/, db/ and Server/ all
+      # live inside it, which is what lets one archive hold a whole world.
+      - "./games/zomboid/data:/project-zomboid-config"
+      - "zomboid-server-files:/project-zomboid"
+    restart: "no" # same reasoning as every other game service: a restart policy
+    # would fight the idle stop and hide a crash loop.
+    stop_grace_period: 180s
+
+volumes:
+  zomboid-server-files:

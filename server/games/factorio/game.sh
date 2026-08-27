@@ -57,3 +57,28 @@ game_archive_sentinel_regex() {
   local _world_name="$1"
   printf '^saves/[^/]+\\.zip$'
 }
+
+# Factorio reads mods/mod-list.json to know what is enabled. The file is a
+# pure function of the mod directory's contents (<name>_<version>.zip), so it
+# is generated at session preparation rather than carried in release payloads
+# — the manifest schema stays mods-only (ADR-0034's open question, answered).
+game_prepare_session() {
+  local mods_dir="${FACTORIO_DATA_DIR}/mods"
+  mkdir -p -- "${mods_dir}"
+  local names=()
+  local zip name
+  while IFS= read -r -d '' zip; do
+    name="$(basename -- "${zip}")"
+    [[ "${name}" =~ ^(.+)_[0-9]+(\.[0-9]+)*\.zip$ ]] || continue
+    names+=("${BASH_REMATCH[1]}")
+  done < <(find "${mods_dir}" -maxdepth 1 -type f -name '*.zip' -print0 | sort -z)
+
+  {
+    printf '{\n  "mods": [\n'
+    printf '    { "name": "base", "enabled": true }'
+    for name in "${names[@]}"; do
+      printf ',\n    { "name": "%s", "enabled": true }' "${name}"
+    done
+    printf '\n  ]\n}\n'
+  } >"${mods_dir}/mod-list.json"
+}

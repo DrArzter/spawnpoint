@@ -160,7 +160,14 @@ first session, once the host has the code: `WORLD_ID=factorio` in the session en
 compose, probe, saves and sentinels all follow from it. First boot generates the map (`GENERATE_NEW_SAVE`), later
 boots load the newest save, and the ordinary backup contract archives `saves/`. The game port exists only inside the
 overlay; RCON stays host-local, its password read from `games/factorio/data/config/rconpw`. No release pointer means
-the vanilla legacy path — the portal resolver and factorio releases are the next slice.
+the vanilla legacy path.
+
+Mods, when wanted, are pinned portal versions: `games/factorio/resolve-mods.sh <mods.list> <payload>` resolves
+`name:version` lines and verifies the portal's own SHA-1 per file. **Credentials are a cut-time concern only** —
+`FACTORIO_USERNAME` and `FACTORIO_TOKEN` from factorio.com/profile are needed to download mods, never to run the
+server: hidden servers skip matchmaking auth entirely. Cut with `RELEASE_GAME=factorio` through the ordinary
+build-manifest/upload path; `mod-list.json` is generated on the host at session start from the reconciled directory,
+so it never travels in a payload.
 
 ## Import a world
 

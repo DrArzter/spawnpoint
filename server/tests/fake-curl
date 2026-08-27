@@ -11,8 +11,6 @@
 
 set -Eeuo pipefail
 
-: "${FAKE_CF_ROOT:?FAKE_CF_ROOT is required}"
-
 url=""
 output=""
 api_key_seen=false
@@ -40,22 +38,43 @@ while (( $# > 0 )); do
 done
 
 [[ -n "${url}" ]] || exit 64
-"${api_key_seen}" || exit 22
+# CurseForge routes require the API key header; the Factorio portal's browse
+# API is genuinely public and must work without one.
+case "${url}" in
+  *mods.factorio.com*) ;;
+  *) "${api_key_seen}" || exit 22 ;;
+esac
 
 fixture=""
 case "${url}" in
+  */api/mods/*)
+    : "${FAKE_FACTORIO_ROOT:?FAKE_FACTORIO_ROOT is required for portal routes}"
+    mod_name="${url##*/api/mods/}"
+    fixture="${FAKE_FACTORIO_ROOT}/mod-${mod_name}.json"
+    ;;
+  *mods.factorio.com/dl/*)
+    : "${FAKE_FACTORIO_ROOT:?FAKE_FACTORIO_ROOT is required for portal routes}"
+    # The real portal refuses unauthenticated downloads; so does the fake.
+    [[ "${url}" == *"username="* && "${url}" == *"token="* ]] || exit 22
+    file="${url##*/dl/}"
+    file="${file%%\?*}"
+    fixture="${FAKE_FACTORIO_ROOT}/blobs/${file}"
+    ;;
   */v1/mods/search\?*slug=*)
+    : "${FAKE_CF_ROOT:?FAKE_CF_ROOT is required for CurseForge routes}"
     slug="${url##*slug=}"
     slug="${slug%%&*}"
     fixture="${FAKE_CF_ROOT}/search-${slug}.json"
     ;;
   */v1/mods/*/files/*)
+    : "${FAKE_CF_ROOT:?FAKE_CF_ROOT is required for CurseForge routes}"
     path="${url##*/v1/mods/}"
     mod_id="${path%%/*}"
     file_id="${path##*/}"
     fixture="${FAKE_CF_ROOT}/file-${mod_id}-${file_id}.json"
     ;;
   https://fake.download/*)
+    : "${FAKE_CF_ROOT:?FAKE_CF_ROOT is required for CurseForge routes}"
     fixture="${FAKE_CF_ROOT}/blobs/${url##*/}"
     ;;
   *)

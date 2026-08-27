@@ -14,6 +14,7 @@
 #   game_parse_player_count    parser: raw on stdin -> integer on stdout
 #   game_save_paths            print NUL-separated paths under the data dir to archive
 #   game_save_sentinel         succeed only if the data dir holds a real save
+#   game_prepare_session       optional: last-mile files before the container starts
 #
 # shellcheck shell=bash
 

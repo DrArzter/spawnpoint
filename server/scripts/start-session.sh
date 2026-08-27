@@ -97,6 +97,12 @@ if [[ -n "${release_bucket}" ]]; then
   fi
 fi
 
+# A game may need last-mile files derived from the reconciled directory —
+# factorio's mod-list.json is generated here, never carried in payloads.
+if declare -F game_prepare_session >/dev/null; then
+  game_prepare_session
+fi
+
 "${SCRIPT_DIR}/start.sh"
 printf 'zerotier_network=%s\n' "${network_id,,}"
 printf 'connection_address=%s\n' "${expected_address}"

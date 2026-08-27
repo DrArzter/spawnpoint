@@ -12,6 +12,7 @@ import { statusCommand } from "./commands/status.ts";
 import { welcomeCommand } from "./commands/welcome.ts";
 import { callbacks, mainMenuKeyboard } from "./keyboards/main-menu.ts";
 import { authMiddleware, type AllowListSource } from "./middleware/auth.ts";
+import { env } from "./services/aws.ts";
 import { render } from "./ui/render.ts";
 
 export function buildBot(token: string, allowListSource: AllowListSource): Bot {
@@ -57,7 +58,7 @@ export function buildBot(token: string, allowListSource: AllowListSource): Bot {
   // Reached only when no command above matched: an authorised user typing
   // an unknown command gets the menu, not silence.
   bot.on("message:entities:bot_command", (ctx) =>
-    render(ctx, replies.unknown(), mainMenuKeyboard()),
+    render(ctx, replies.unknown(), mainMenuKeyboard(env("MINI_APP_URL"))),
   );
 
   // Swallow and log: an unhandled error would bubble into a non-200, and

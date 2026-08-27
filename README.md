@@ -158,18 +158,19 @@ infra/terraform/            The host and everything disposable
 infra/terraform-releases/   Inert CodeBuild release builder and its Standard Workflow
 infra/terraform-operations/ Idle-session and release-deployment workflow compositions
 infra/terraform-github/     GitHub OIDC identity that may trigger only the AWS release builder
+infra/terraform-web/        Private S3 + CloudFront hosting for the Telegram Mini App
 lambdas/                    Control-plane handlers and the shared domain code
 workflows/                  Step Functions ASL definitions for long-running operations
 server/                     Compose files, on-instance scripts, tests, observability, release contents
 scripts/                    Owner-side helpers: start, stop, audit the account bootstrap
 local/                      The local control-plane environment of ADR-0031
-web/                        Static panel and pack site — not built
+web/                        React/Vite Telegram Mini App — read-only preview deployed
 ```
 
 ## Checking your work
 
 Every local rung of the evidence ladder, one command — markdown links, shellcheck, the node tests, the containerised
-server suite, compose rendering, and `fmt`+`test` across all seven Terraform roots. Nothing in it needs AWS
+server suite, compose rendering, and `fmt`+`test` across every Terraform root. Nothing in it needs AWS
 credentials or can create resources; the AWS acceptance rung lives in the runbook.
 
 ```bash

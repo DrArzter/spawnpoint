@@ -85,6 +85,7 @@ resource "aws_lambda_function" "bot" {
       CONNECTION_ADDRESS         = var.connection_address
       PANEL_ADDRESS              = var.panel_address
       ZEROTIER_NETWORK_ID        = var.zerotier_network_id
+      MINI_APP_URL               = var.mini_app_url
       BOT_TOKEN_PARAMETER        = "/spawnpoint/bot/token"
       WEBHOOK_SECRET_PARAMETER   = "/spawnpoint/bot/webhook-secret"
       ALLOW_LIST_PARAMETER       = "/spawnpoint/bot/allow-list"

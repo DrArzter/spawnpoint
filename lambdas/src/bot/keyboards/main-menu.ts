@@ -10,8 +10,10 @@ export const callbacks = {
   confirmStart: "start:confirm",
 } as const;
 
-export function mainMenuKeyboard(): InlineKeyboard {
-  return new InlineKeyboard()
+export function mainMenuKeyboard(miniAppUrl?: string): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  if (miniAppUrl !== undefined) keyboard.webApp("Open panel", miniAppUrl).row();
+  return keyboard
     .text("Status", callbacks.status)
     .text("Addresses", callbacks.address)
     .row()

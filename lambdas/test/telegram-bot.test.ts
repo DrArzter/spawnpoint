@@ -177,7 +177,8 @@ test("replies carry what the player actually needs", () => {
   assert.match(replies.unknown(), /\/help or \/start/);
   assert.match(replies.confirmStart(), /billed AWS session/);
 
-  const menuCallbacks = mainMenuKeyboard().inline_keyboard
+  const menu = mainMenuKeyboard("https://example.com/");
+  const menuCallbacks = menu.inline_keyboard
     .flat()
     .filter((button) => "callback_data" in button)
     .map((button) => button.callback_data);
@@ -188,6 +189,12 @@ test("replies carry what the player actually needs", () => {
     callbacks.pack,
     callbacks.requestStart,
   ]);
+  assert.equal(
+    menu.inline_keyboard.flat().some(
+      (button) => "web_app" in button && button.web_app.url === "https://example.com/",
+    ),
+    true,
+  );
   const confirmationCallbacks = confirmStartKeyboard().inline_keyboard
     .flat()
     .filter((button) => "callback_data" in button)

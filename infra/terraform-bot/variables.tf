@@ -38,6 +38,17 @@ variable "zerotier_network_id" {
   }
 }
 
+variable "mini_app_url" {
+  description = "Public HTTPS Telegram Mini App URL shown by the bot."
+  type        = string
+  default     = "https://dwk99t8cin0cf.cloudfront.net/"
+
+  validation {
+    condition     = startswith(var.mini_app_url, "https://")
+    error_message = "Telegram Mini Apps must use HTTPS."
+  }
+}
+
 variable "enable_notifications" {
   description = "Deploy the EventBridge/SNS-to-Telegram notifier after the command bot is accepted."
   type        = bool

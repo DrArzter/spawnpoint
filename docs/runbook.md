@@ -32,6 +32,7 @@ Fill in at M1 and keep current. This block is what somebody needs when something
 | Data volume ID | `vol-01bcd86ae27b55682`, encrypted 20 GiB gp3, `DeleteOnTermination=false`, `eu-central-1a` |
 | Release bucket | `spawnpoint-releases-${ACCOUNT_ID}` |
 | Backup bucket | `spawnpoint-backups-${ACCOUNT_ID}` |
+| Mini App | `https://dwk99t8cin0cf.cloudfront.net/` via CloudFront `E1UUZEI6NMXTB7`; private origin `spawnpoint-web-${ACCOUNT_ID}` |
 | Panel URL | Grafana at `http://172.29.23.24:3000` inside ZeroTier |
 | Container image | `itzg/minecraft-server` pinned by digest in `server/compose.yaml`, never `latest` |
 | Minecraft and loader version | Minecraft 1.20.1, Forge, immutable release `1.0` with 111 JARs |
@@ -111,6 +112,12 @@ stop produced a checked backup before EC2 stopped. If the watchdog itself fails,
 
 The exact first deployment, webhook and acceptance commands are recorded in
 [`aws-bot-command-log.md`](aws-bot-command-log.md).
+
+The read-only React Mini App is deployed separately; its exact infrastructure,
+upload and acceptance commands are recorded in
+[`aws-web-command-log.md`](aws-web-command-log.md). The bot opens it through
+`Open panel`; its Start button is deliberately disabled. Telegram Desktop on
+Linux requires WebKitGTK (`webkit2gtk-4.1` on CachyOS/Arch).
 
 The command bot is deployed from the isolated `infra/terraform-bot` root. `/start` only opens its menu;
 `/server_start`, `/status`, and `/pack` are the operational M4 commands. One-time setup, in order:

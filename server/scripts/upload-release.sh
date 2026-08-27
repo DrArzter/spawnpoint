@@ -51,6 +51,9 @@ release="$(jq -r '.release' "${manifest}")"
 mods_count="$(jq -r '.server.mods | length' "${manifest}")"
 game="$(jq -r '.game // "minecraft"' "${manifest}")"
 pack_key="packs/${release}.zip"
+# Checked here rather than at pack time: a missing zip must fail before the
+# payload is uploaded, so a run cannot leave a published release with no pack.
+require_command zip
 manifest_key="releases/${release}/manifest.json"
 manifest_digest="$(sha256sum -- "${manifest}" | awk '{print $1}')"
 
@@ -90,36 +93,24 @@ upload_release_object() {
     die "uploaded object failed verification: s3://${RELEASE_BUCKET}/${key}"
 }
 
-# The client pack: the same payload as a zip, installed by wholesale
-# replacement, which is what prevents duplicate-mod crashes (ADR-0013). Only
-# games whose clients need local mods get one — a factorio client syncs the
-# server's mods itself, so a pack would be a file nobody should download.
+# The client pack: the release's own mod files as a zip, installed by wholesale
+# replacement, which is what prevents duplicate-mod crashes (ADR-0013). Every
+# game whose players keep mods locally gets one. Factorio normally hands its
+# mods to joining clients itself, but that path is not always available — a
+# client that cannot reach the mod portal, or whose sync fails, still needs the
+# exact files — and the release already holds them, so the pack costs a zip.
+# The install instruction is the game's, because the folder and the rules are.
 # An existing pack is left alone rather than digest-compared: zips are not
 # byte-reproducible (embedded mtimes), and release immutability is already
 # enforced by the manifest gate.
-publish_pack() {
-  if [[ "${game}" != "minecraft" ]]; then
-    printf 'not_applicable'
-    return 0
-  fi
-  if head_release_object "${pack_key}" >/dev/null 2>&1; then
-    printf 'already_present'
-    return 0
-  fi
-
-  require_command zip
-  local pack_dir pack_zip pack_digest game_version loader_type loader_version
-  pack_dir="$(mktemp -d)"
-  pack_zip="${pack_dir}/pack.zip"
-  mkdir -p -- "${pack_dir}/pack"
-  while IFS= read -r filename; do
-    cp -- "${source_dir}/mods/${filename}" "${pack_dir}/pack/${filename}"
-  done < <(jq -r '.server.mods[].file' "${manifest}")
-
+write_install_notes() {
+  local target="$1" game_version loader_type loader_version
   game_version="$(jq -r '.minecraft_version' "${manifest}")"
-  loader_type="$(jq -r '.loader.type' "${manifest}")"
-  loader_version="$(jq -r '.loader.version' "${manifest}")"
-  cat >"${pack_dir}/pack/INSTALL.txt" <<EOF
+  case "${game}" in
+    minecraft)
+      loader_type="$(jq -r '.loader.type' "${manifest}")"
+      loader_version="$(jq -r '.loader.version' "${manifest}")"
+      cat >"${target}" <<EOF
 Spawnpoint pack, release ${release} (Minecraft ${game_version}, ${loader_type} ${loader_version}).
 
 1. Delete your mods folder ENTIRELY. Do not merge, do not pick files.
@@ -127,6 +118,44 @@ Spawnpoint pack, release ${release} (Minecraft ${game_version}, ${loader_type} $
 
 Wholesale replacement is what prevents duplicate-mod crashes: nothing old survives.
 EOF
+      ;;
+    factorio)
+      cat >"${target}" <<EOF
+Spawnpoint pack, release ${release} (Factorio ${game_version}).
+
+Usually you do not need this: joining the server offers the mods it runs. Use the pack when that
+offer does not arrive, or when your game cannot reach the mod portal.
+
+1. Close Factorio.
+2. Delete every .zip in your mods folder. Leave mod-list.json alone; the game rewrites it.
+3. Copy the .zip files from this archive into that folder:
+     Windows  %APPDATA%\Factorio\mods
+     Linux    ~/.factorio/mods
+     macOS    ~/Library/Application Support/factorio/mods
+
+Two versions of one mod stop the game from loading, which is why step 2 is a deletion and not a merge.
+EOF
+      ;;
+    *)
+      die "no install notes for game: ${game}"
+      ;;
+  esac
+}
+
+publish_pack() {
+  if head_release_object "${pack_key}" >/dev/null 2>&1; then
+    printf 'already_present'
+    return 0
+  fi
+
+  local pack_dir pack_zip pack_digest
+  pack_dir="$(mktemp -d)"
+  pack_zip="${pack_dir}/pack.zip"
+  mkdir -p -- "${pack_dir}/pack"
+  while IFS= read -r filename; do
+    cp -- "${source_dir}/mods/${filename}" "${pack_dir}/pack/${filename}"
+  done < <(jq -r '.server.mods[].file' "${manifest}")
+  write_install_notes "${pack_dir}/pack/INSTALL.txt"
 
   (cd "${pack_dir}/pack" && zip -qr "${pack_zip}" .)
   pack_digest="$(sha256sum -- "${pack_zip}" | awk '{print $1}')"

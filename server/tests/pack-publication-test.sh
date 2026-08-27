@@ -54,8 +54,8 @@ grep -qx 'result=already_present' <<<"${backfill}"
 grep -qx 'pack=uploaded' <<<"${backfill}"
 [[ -f "${pack}" ]]
 
-# --- factorio: clients sync mods from the server, so a pack would be a file
-#     nobody should download ---
+# --- factorio: the sync from the server covers the common case, but a client
+#     that cannot reach the portal still needs the exact files ---
 mkdir -p -- "${fixture}/factorio/mods"
 printf 'zip bytes\n' >"${fixture}/factorio/mods/alien-biomes_0.6.8.zip"
 RELEASE_GAME=factorio "${SCRIPTS}/build-release-manifest.sh" 7.1 2.0.77 2.0.77 \
@@ -63,7 +63,42 @@ RELEASE_GAME=factorio "${SCRIPTS}/build-release-manifest.sh" 7.1 2.0.77 2.0.77 \
 factorio_output="$(
   RELEASE_SOURCE_DIR="${fixture}/factorio" "${SCRIPTS}/upload-release.sh" "${fixture}/factorio/manifest.json"
 )"
-grep -qx 'pack=not_applicable' <<<"${factorio_output}"
-[[ ! -e "${release_root}/packs/7.1.zip" ]]
+grep -qx 'pack=uploaded' <<<"${factorio_output}"
+factorio_pack="${release_root}/packs/7.1.zip"
+[[ -f "${factorio_pack}" ]]
+grep -q 'alien-biomes_0.6.8.zip' <<<"$(unzip -l "${factorio_pack}")"
+factorio_notes="$(unzip -p "${factorio_pack}" INSTALL.txt)"
+grep -q 'Factorio 2.0.77' <<<"${factorio_notes}"
+grep -q 'mods folder' <<<"${factorio_notes}"
+# the minecraft instruction must not leak into another game's notes
+! grep -qi 'delete your mods folder ENTIRELY' <<<"${factorio_notes}"
+
+# --- a missing zip refuses before anything is published: the alternative is a
+#     complete release with no pack and a red build, which is how the gap
+#     appeared in the first place ---
+nozip="${fixture}/nozip-bin"
+mkdir -p -- "${nozip}"
+for binary in /usr/bin/* /bin/*; do
+  name="$(basename -- "${binary}")"
+  [[ "${name}" != "zip" ]] || continue
+  ln -sf -- "${binary}" "${nozip}/${name}"
+done
+ln -sf -- "${REPOSITORY_ROOT}/server/tests/fake-aws" "${nozip}/aws"
+
+mkdir -p -- "${fixture}/late/mods"
+printf 'jar\n' >"${fixture}/late/mods/gamma-1.0.jar"
+"${SCRIPTS}/build-release-manifest.sh" 7.2 1.20.1 47.4.10 \
+  "${fixture}/late/mods" "${fixture}/late/manifest.json" >/dev/null
+if nozip_output="$(
+  env PATH="${nozip}" FAKE_S3_ROOT="${FAKE_S3_ROOT}" RELEASE_BUCKET="${RELEASE_BUCKET}" \
+    RELEASE_SOURCE_DIR="${fixture}/late" \
+    "${SCRIPTS}/upload-release.sh" "${fixture}/late/manifest.json" 2>&1
+)"; then
+  printf 'expected failure: publishing a minecraft release without zip\n' >&2
+  exit 1
+fi
+grep -q 'zip' <<<"${nozip_output}"
+[[ ! -e "${release_root}/releases/7.2/manifest.json" ]]
+[[ ! -e "${release_root}/releases/7.2/mods/gamma-1.0.jar" ]]
 
 printf 'pack-publication-test: ok\n'

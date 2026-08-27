@@ -44,8 +44,11 @@ expect_failure "an unknown strategy id" \
 # game defaults come from the modules; a module without one authenticates nobody
 (
   source "${SCRIPTS}/_connectivity.sh"
+  # Both default to none, and for the same reason: neither server verifies who
+  # connects. Minecraft runs offline-mode; the factorio server is hidden, which
+  # is what frees it from needing an account and from being able to verify one.
   [[ "$(game_default_auth "${REPOSITORY_ROOT}/server/games" minecraft)" == "none" ]]
-  [[ "$(game_default_auth "${REPOSITORY_ROOT}/server/games" factorio)" == "game" ]]
+  [[ "$(game_default_auth "${REPOSITORY_ROOT}/server/games" factorio)" == "none" ]]
 )
 expect_failure "a game with no module" \
   bash -c "source '${SCRIPTS}/_connectivity.sh'; game_default_auth '${REPOSITORY_ROOT}/server/games' heroes"
@@ -81,10 +84,16 @@ declared_output="$(run_profile open)"
 grep -Fxq 'connectivity=raw' <<<"${declared_output}"
 grep -Fxq 'auth=external' <<<"${declared_output}"
 
-# a self-authenticating game needs no declaration on a non-gating strategy
+# a hidden factorio server verifies nobody either, so the silent combination
+# refuses for it too — the game's name is not the auth model
 write_catalog '{"id": "pub", "display_name": "Pub", "profile_id": "pub", "game": "factorio", "connectivity": "raw"}'
+expect_failure "a factorio world on a non-gating strategy with no declaration" run_profile pub
+
+# the operator who runs the visible, credentialed variant says so, and publishes
+write_catalog '{"id": "pub", "display_name": "Pub", "profile_id": "pub", "game": "factorio", "connectivity": "raw", "auth": "game"}'
 factorio_output="$(run_profile pub)"
 grep -Fxq 'auth=game' <<<"${factorio_output}"
+grep -Fxq 'connectivity=raw' <<<"${factorio_output}"
 
 # an explicit "none" is a written contradiction and refuses like the silent one
 write_catalog '{"id": "w", "display_name": "W", "profile_id": "w", "game": "factorio", "connectivity": "raw", "auth": "none"}'
@@ -104,7 +113,7 @@ grep -Fxq 'connectivity=zerotier' <<<"${main_output}"
 grep -Fxq 'auth=none' <<<"${main_output}"
 factorio_world_output="$("${SCRIPTS}/world-profile.sh" factorio)"
 grep -Fxq 'connectivity=zerotier' <<<"${factorio_world_output}"
-grep -Fxq 'auth=game' <<<"${factorio_world_output}"
+grep -Fxq 'auth=none' <<<"${factorio_world_output}"
 
 # --- the runtime seam: start-session refuses an unimplemented strategy for
 #     what the world is, before touching the environment or the host ---

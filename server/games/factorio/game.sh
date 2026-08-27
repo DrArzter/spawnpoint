@@ -14,9 +14,11 @@ GAME_COMPOSE_FILES="games/factorio/compose.yaml"
 GAME_COMPOSE_SERVICE="factorio"
 GAME_MOD_EXTENSION="zip"
 GAME_LOADER_TYPE="factorio"
-# The server verifies joining players against factorio.com unless configured
-# otherwise (verify_user_identity), so factorio worlds need no gate (ADR-0033).
-GAME_DEFAULT_AUTH="game"
+# Fail closed, and for the same reason the server needs no factorio.com
+# account: a hidden server skips matchmaking entirely, so it also verifies
+# nobody. Identity verification belongs to a visible, credentialed server; a
+# world that runs one declares `auth: game` in the catalog (ADR-0033).
+GAME_DEFAULT_AUTH="none"
 
 FACTORIO_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 FACTORIO_DATA_DIR="${FACTORIO_DATA_DIR:-${FACTORIO_GAME_DIR}/data}"

@@ -19,9 +19,15 @@ one-time choice toward a real interface.
 
 **Connectivity is not independent of the game.** With `online-mode=false` ([ADR-0022](0022-minecraft-account-as-linked-identity.md))
 Minecraft authenticates nobody, so *who can reach the port* is the access boundary, and only an overlay supplies it. A
-game that authenticates its own players — the Steam-based servers, Factorio, Project Zomboid — needs no such gate, and
-there a public address or a DNS name is fine and cheaper to onboard. So the correct connectivity is a function of the
-game's auth model, not a global preference.
+game that authenticates its own players needs no such gate, and there a public address or a DNS name is fine and
+cheaper to onboard. So the correct connectivity is a function of the game's auth model, not a global preference.
+
+That model is a property of the *server*, not of the game's name — which is why the default has to fail closed.
+Factorio is the instructive case: its identity verification runs only on a server that is visible in the matchmaking
+list and holds factorio.com credentials, and the hidden server this project runs deliberately holds none. The same
+fact that frees the server from needing an account also means it verifies nobody, so a hidden Factorio world is as
+gate-dependent as offline-mode Minecraft, and the operator who runs the visible, credentialed variant says so
+explicitly.
 
 **One combination is unsafe and should be impossible by accident.** A no-auth game reached over a non-gating
 connectivity is an open server. An operator may still choose that deliberately — with authentication supplied outside

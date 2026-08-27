@@ -162,6 +162,14 @@ boots load the newest save, and the ordinary backup contract archives `saves/`. 
 overlay; RCON stays host-local, its password read from `games/factorio/data/config/rconpw`. No release pointer means
 the vanilla legacy path.
 
+**Who may join.** The world runs a hidden server, which is why it needs no factorio.com account — and the same fact
+means it verifies nobody, so its catalog auth is `none` and it depends on the overlay exactly as the Minecraft world
+does ([ADR-0033](adr/0033-connectivity-as-a-strategy.md)). Running the visible, credentialed variant is the case for
+declaring `auth: game` on that world.
+
+**Mods on the players' side.** Joining normally offers the server's mods; when that does not arrive, or a game cannot
+reach the mod portal, `/pack` in the bot serves the release's own zips with the folder to drop them into.
+
 Mods, when wanted, are pinned portal versions: `games/factorio/resolve-mods.sh <mods.list> <payload>` resolves
 `name:version` lines and verifies the portal's own SHA-1 per file. **Credentials are a cut-time concern only** —
 `FACTORIO_USERNAME` and `FACTORIO_TOKEN` from factorio.com/profile are needed to download mods, never to run the

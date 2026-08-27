@@ -12,14 +12,14 @@ test("a CloudWatch alarm renders with its state and reason", () => {
       NewStateReason: "Threshold Crossed: 10 datapoints were greater than the threshold (-1.0).",
     }),
   });
-  assert.match(alarm, /🚨 spawnpoint-running-hours: ALARM/);
+  assert.match(alarm, /\[ALARM\] spawnpoint-running-hours/);
   assert.match(alarm, /10 datapoints/);
 
   const recovered = renderAlert({
     subject: null,
     message: JSON.stringify({ AlarmName: "spawnpoint-running-hours", NewStateValue: "OK" }),
   });
-  assert.match(recovered, /✅ spawnpoint-running-hours: OK/);
+  assert.match(recovered, /\[OK\] spawnpoint-running-hours/);
 });
 
 test("a cost anomaly renders with its impact and link", () => {
@@ -30,7 +30,7 @@ test("a cost anomaly renders with its impact and link", () => {
       impact: { totalImpact: 7.5 },
     }),
   });
-  assert.match(rendered, /💸/);
+  assert.match(rendered, /\[COST\]/);
   assert.match(rendered, /\$7\.50/);
   assert.match(rendered, /anomaly-detection/);
 });
@@ -40,11 +40,11 @@ test("budgets prose and anything unrecognised are delivered, never dropped", () 
     subject: "AWS Budgets: spawnpoint-monthly has exceeded your alert threshold",
     message: "Dear AWS Customer, your actual spend has exceeded 100% of the limit...",
   });
-  assert.match(budget, /🔔 AWS Budgets: spawnpoint-monthly/);
+  assert.match(budget, /\[ALERT\] AWS Budgets: spawnpoint-monthly/);
   assert.match(budget, /actual spend/);
 
   const garbage = renderAlert({ subject: null, message: "{not json at all" });
-  assert.match(garbage, /🔔 Alert/);
+  assert.match(garbage, /\[ALERT\] Alert/);
   assert.match(garbage, /not json at all/);
 
   const longMessage = renderAlert({ subject: "x", message: "a".repeat(2000) });

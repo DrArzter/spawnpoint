@@ -118,15 +118,16 @@ export const replies = {
 
   welcome: (): string =>
     [
-      "<b>🎮 Spawnpoint</b>",
-      "<blockquote>Shared game server control panel</blockquote>",
+      "<b>Spawnpoint</b>",
+      "Game server control panel",
       "",
-      "Choose an action below. Opening this menu never starts the AWS host.",
+      "Choose an action below.",
+      "Opening this menu does not start the AWS host.",
     ].join("\n"),
 
   confirmStart: (): string =>
     [
-      "<b>🚀 Start game server?</b>",
+      "<b>Start server</b>",
       "",
       "Booting the modpack takes a few minutes and begins a billed AWS session.",
       "Nothing happens until you press the confirmation button.",
@@ -135,7 +136,7 @@ export const replies = {
   network: (networkId: string): string => {
     const safeNetworkId = escapeHtml(networkId);
     return [
-      "<b>🌐 Join ZeroTier</b>",
+      "<b>ZeroTier</b>",
       "",
       `Network ID: <code>${safeNetworkId}</code>`,
       `Linux: <code>sudo zerotier-cli join ${safeNetworkId}</code>`,
@@ -146,7 +147,7 @@ export const replies = {
   },
 
   address: (args: Readonly<{ connectionAddress: string; panelAddress: string }>): string => [
-    "<b>📍 Connection details</b>",
+    "<b>Addresses</b>",
     "",
     `Minecraft: <code>${escapeHtml(args.connectionAddress)}</code>`,
     `Grafana: <code>${escapeHtml(args.panelAddress)}</code>`,
@@ -156,14 +157,14 @@ export const replies = {
 
   starting: (operationId: string): string =>
     [
-      "<b>⏳ Server is starting</b>",
+      "<b>Server is starting</b>",
       "",
       "Allow a few minutes for the mods to load. I will post here when it is ready.",
       `Operation: <code>${escapeHtml(operationId)}</code>`,
     ].join("\n"),
 
   alreadyRunning: (): string =>
-    "<b>⏳ Start already in progress</b>\n\nI am following the existing operation.",
+    "<b>Start already in progress</b>\n\nI am following the existing operation.",
 
   status: (args: Readonly<{
     instanceState: string;
@@ -171,10 +172,13 @@ export const replies = {
     activeRelease: string | null;
     connectionAddress: string;
   }>): string => {
-    const stateIcon = args.instanceState === "running" ? "🟢" : args.instanceState === "stopped" ? "⚫" : "🟡";
-    const lines = ["<b>📊 Server status</b>", "", `${stateIcon} Host: <b>${escapeHtml(args.instanceState)}</b>`];
+    const lines = [
+      "<b>Server status</b>",
+      "",
+      `State: <code>${escapeHtml(args.instanceState.toUpperCase())}</code>`,
+    ];
     if (args.instanceState === "running") {
-      lines.push(`🎮 Address: <code>${escapeHtml(args.connectionAddress)}</code>`);
+      lines.push(`Address: <code>${escapeHtml(args.connectionAddress)}</code>`);
     }
     lines.push(
       "",
@@ -186,7 +190,7 @@ export const replies = {
 
   pack: (release: string): string =>
     [
-      "<b>📦 Client pack</b>",
+      "<b>Client pack</b>",
       "",
       `Release: <code>${escapeHtml(release)}</code>`,
       "The download button lives for one hour; open this screen again for a fresh link.",
@@ -195,7 +199,7 @@ export const replies = {
     ].join("\n"),
 
   packMissing: (release: string): string =>
-    `<b>📦 Client pack unavailable</b>\n\nRelease <code>${escapeHtml(release)}</code> has no published pack yet.`,
+    `<b>Client pack unavailable</b>\n\nRelease <code>${escapeHtml(release)}</code> has no published pack yet.`,
 
   unknown: (): string => "<b>Unknown command</b>\n\nUse /help or /start to open the menu.",
 

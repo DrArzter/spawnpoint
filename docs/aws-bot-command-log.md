@@ -121,9 +121,9 @@ The visible `/start` response also has an inline menu, adapted from the local
 `openai-telegram-bot` navigation pattern without copying its polling, FSM or
 database architecture:
 
-- `📊 Server status` and `📦 Client pack` are read-only callbacks;
-- `🚀 Start game server` opens a confirmation screen;
-- only `✅ Yes, start it` begins the workflow, while `↩️ Back` edits the
+- `Server status` and `Client pack` are read-only callbacks;
+- `Start server` opens a confirmation screen;
+- only the second `Start server` confirmation begins the workflow, while `Cancel` edits the
   existing message back to the main menu;
 - callbacks pass through the same numeric SSM allow-list as slash commands.
 
@@ -164,6 +164,11 @@ made the bot behave like a small control panel:
   command;
 - the pack URL lives behind a Download button, while its expiry and install
   instructions remain visible in the card.
+
+After visual review, decorative emoji were removed from cards, buttons and
+automatic notifications. Cards retain Telegram HTML only for restrained bold
+headings and monospace values; machine notifications use textual markers such
+as `[READY]`, `[STOPPED]` and `[ALARM]`.
 
 Telegram's `copy_text` inline buttons copy locally in the client and never call
 Lambda. The Start menu remains informational, and starting AWS still requires

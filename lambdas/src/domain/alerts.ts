@@ -25,9 +25,9 @@ export function renderAlert(alert: SnsAlert): string {
 
   // CloudWatch alarm state change.
   if (parsed && typeof parsed.AlarmName === "string" && typeof parsed.NewStateValue === "string") {
-    const icon = parsed.NewStateValue === "ALARM" ? "🚨" : parsed.NewStateValue === "OK" ? "✅" : "❔";
+    const state = `[${parsed.NewStateValue}]`;
     const reason = typeof parsed.NewStateReason === "string" ? `\n${clip(parsed.NewStateReason, 300)}` : "";
-    return `${icon} ${parsed.AlarmName}: ${parsed.NewStateValue}${reason}`;
+    return `${state} ${parsed.AlarmName}${reason}`;
   }
 
   // Cost Anomaly Detection.
@@ -36,10 +36,10 @@ export function renderAlert(alert: SnsAlert): string {
     const dollars =
       impact && typeof impact.totalImpact === "number" ? ` about $${impact.totalImpact.toFixed(2)}` : "";
     const link = typeof parsed.anomalyDetailsLink === "string" ? `\n${parsed.anomalyDetailsLink}` : "";
-    return `💸 Cost anomaly detected —${dollars || " see details"}.${link}`;
+    return `[COST] Anomaly detected —${dollars || " see details"}.${link}`;
   }
 
   // AWS Budgets sends prose; so does anything unrecognised. Deliver, never drop.
   const subject = alert.subject ?? "Alert";
-  return `🔔 ${subject}\n${clip(alert.message)}`;
+  return `[ALERT] ${subject}\n${clip(alert.message)}`;
 }

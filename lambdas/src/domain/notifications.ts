@@ -55,13 +55,13 @@ export function renderNotification(event: ExecutionEvent): string | null {
     case "spawnpoint-start-server": {
       if (CHILD_NAME.test(event.name)) return null;
       if (event.status === "RUNNING") {
-        return `⏳ ${requester ?? "the owner"} requested the server. Mods take a few minutes.`;
+        return `[STARTING] ${requester ?? "the owner"} requested the server. Mods take a few minutes.`;
       }
       if (event.status === "SUCCEEDED") {
         const address = str(event.output, "connectionAddress") ?? str(event.output, "address");
-        return address === null ? "✅ Server is up." : `✅ Server is up: ${address}`;
+        return address === null ? "[READY] Server is up." : `[READY] Server is up: ${address}`;
       }
-      return `❌ Start failed (${event.name}). The owner can read the execution history.`;
+      return `[FAILED] Start failed (${event.name}). The owner can read the execution history.`;
     }
 
     case "spawnpoint-idle-watchdog": {
@@ -69,14 +69,14 @@ export function renderNotification(event: ExecutionEvent): string | null {
       if (event.status === "SUCCEEDED") {
         switch (str(event.output, "status")) {
           case "stopped_idle":
-            return "🌙 Nobody online — server saved, backed up and stopped.";
+            return "[STOPPED] Nobody online — server saved, backed up and stopped.";
           case "stopped_session_cap":
-            return "⏱ Session cap reached — server saved, backed up and stopped.";
+            return "[STOPPED] Session cap reached — server saved, backed up and stopped.";
           default:
             return null;
         }
       }
-      return `🚨 The idle watchdog died (${event.name}). If the server is up, it will not stop itself — the running-hours alarm is the backstop.`;
+      return `[ALARM] The idle watchdog died (${event.name}). If the server is up, it will not stop itself — the running-hours alarm is the backstop.`;
     }
 
     case "spawnpoint-stop-server": {
@@ -84,28 +84,28 @@ export function renderNotification(event: ExecutionEvent): string | null {
       // prints its own result. A FAILED stop is a failed backup contract and
       // is always worth a message, child or not.
       if (!failed) return null;
-      return `🚨 A stop failed (${event.name}) — the world may be unsaved or the backup unverified, and EC2 may still be running.`;
+      return `[ALARM] A stop failed (${event.name}) — the world may be unsaved or the backup unverified, and EC2 may still be running.`;
     }
 
     case "spawnpoint-promote-release": {
       if (CHILD_NAME.test(event.name)) return null;
       const release = str(event.input, "release");
       if (event.status === "RUNNING") {
-        return `🚀 Release ${release ?? "?"} is being promoted.`;
+        return `[DEPLOYING] Release ${release ?? "?"} is being promoted.`;
       }
       if (event.status === "SUCCEEDED") {
         switch (str(event.output, "status")) {
           case "promoted":
-            return `📦 Release ${release ?? "?"} is live${str(event.output, "server") === "running" ? " and the server is up" : ""}. /pack for the new archive.`;
+            return `[DEPLOYED] Release ${release ?? "?"} is live${str(event.output, "server") === "running" ? " and the server is up" : ""}. /pack for the new archive.`;
           case "rolled_back":
-            return `↩️ Release ${release ?? "?"} failed its health check and was rolled back to ${str(event.output, "active_release") ?? "the previous release"}. Nothing to update.`;
+            return `[ROLLED BACK] Release ${release ?? "?"} failed its health check and was rolled back to ${str(event.output, "active_release") ?? "the previous release"}. Nothing to update.`;
           case "already_active":
             return null;
           default:
             return null;
         }
       }
-      return `❌ Promotion of ${release ?? "?"} failed (${event.name}). The pointer tells the truth; see the runbook.`;
+      return `[FAILED] Promotion of ${release ?? "?"} failed (${event.name}). The pointer tells the truth; see the runbook.`;
     }
 
     default:

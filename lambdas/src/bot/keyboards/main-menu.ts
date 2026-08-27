@@ -12,49 +12,49 @@ export const callbacks = {
 
 export function mainMenuKeyboard(): InlineKeyboard {
   return new InlineKeyboard()
-    .text("📊 Server status", callbacks.status)
-    .text("📍 Server address", callbacks.address)
+    .text("Status", callbacks.status)
+    .text("Addresses", callbacks.address)
     .row()
-    .text("🌐 Join ZeroTier", callbacks.network)
-    .text("📦 Client pack", callbacks.pack)
+    .text("ZeroTier", callbacks.network)
+    .text("Client pack", callbacks.pack)
     .row()
-    .text("🚀 Start game server", callbacks.requestStart);
+    .text("Start server", callbacks.requestStart);
 }
 
 export function confirmStartKeyboard(): InlineKeyboard {
   return new InlineKeyboard()
-    .text("✅ Yes, start it", callbacks.confirmStart)
+    .text("Start server", callbacks.confirmStart)
     .row()
-    .text("↩️ Back", callbacks.menu);
+    .text("Cancel", callbacks.menu);
 }
 
 export function statusKeyboard(connectionAddress?: string): InlineKeyboard {
-  const keyboard = new InlineKeyboard().text("🔄 Refresh", callbacks.status);
+  const keyboard = new InlineKeyboard().text("Refresh", callbacks.status);
   if (connectionAddress !== undefined) {
-    keyboard.copyText("📋 Copy address", connectionAddress);
+    keyboard.copyText("Copy address", connectionAddress);
   }
-  return keyboard.row().text("↩️ Main menu", callbacks.menu);
+  return keyboard.row().text("Menu", callbacks.menu);
 }
 
 export function addressKeyboard(connectionAddress: string, panelAddress: string): InlineKeyboard {
   return new InlineKeyboard()
-    .copyText("📋 Minecraft", connectionAddress)
-    .copyText("📋 Grafana", panelAddress)
+    .copyText("Copy Minecraft address", connectionAddress)
+    .copyText("Copy Grafana address", panelAddress)
     .row()
-    .text("↩️ Main menu", callbacks.menu);
+    .text("Menu", callbacks.menu);
 }
 
 export function networkKeyboard(networkId: string): InlineKeyboard {
   return new InlineKeyboard()
-    .copyText("📋 Network ID", networkId)
+    .copyText("Copy network ID", networkId)
     .row()
-    .copyText("📋 Linux join command", `sudo zerotier-cli join ${networkId}`)
+    .copyText("Copy Linux command", `sudo zerotier-cli join ${networkId}`)
     .row()
-    .text("↩️ Main menu", callbacks.menu);
+    .text("Menu", callbacks.menu);
 }
 
 export function packKeyboard(url?: string): InlineKeyboard {
   const keyboard = new InlineKeyboard();
-  if (url !== undefined) keyboard.url("⬇️ Download client pack", url).row();
-  return keyboard.text("↩️ Main menu", callbacks.menu);
+  if (url !== undefined) keyboard.url("Download client pack", url).row();
+  return keyboard.text("Menu", callbacks.menu);
 }

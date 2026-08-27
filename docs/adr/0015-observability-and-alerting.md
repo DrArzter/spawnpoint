@@ -70,6 +70,20 @@ Alarms, and what each does:
 Log retention is finite and short. Indefinite retention of logs from a five-player server is a slow, pointless
 cost.
 
+## The tier is shared; a game brings only its own exporter
+
+Recorded 2026-08-27, when a second game entered the catalog. Prometheus, Grafana, the node exporter and cAdvisor
+lived inside Minecraft's Compose file, so a Factorio session would have started with no observability at all — the
+same shape of coupling the readiness check had. They now live in `server/observability/compose.yaml`, which every
+game's module lists first in its Compose files.
+
+What belongs to a game rather than to the tier: its exporter, the scrape file that finds it
+(`observability/scrape/<game>.yml`, mounted into the shared Prometheus by that game's Compose file, matched by a glob
+that legitimately matches nothing), and its dashboards (`observability/grafana/dashboards/<game>/`). The shared
+dashboards cover the host and report memory and CPU **by session container**, which needs no game name at all. A game
+with no exporter of its own — Factorio today, since `graftorio2` has published nothing for the 2.0 series — still
+gets host, container and disk metrics.
+
 ## Consequences
 
 **Good**

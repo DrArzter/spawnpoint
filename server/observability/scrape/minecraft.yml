@@ -1,0 +1,5 @@
+# Mounted into the shared Prometheus by server/compose.yaml, so it exists only
+# in a Minecraft session.
+- job_name: minecraft
+  static_configs:
+    - targets: [minecraft-exporter:8080]

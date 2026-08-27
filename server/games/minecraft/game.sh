@@ -7,7 +7,7 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the GAME_* constants are the module's interface, read by _dispatch.sh consumers
 
-GAME_COMPOSE_FILES="compose.yaml:compose.release.yaml"
+GAME_COMPOSE_FILES="observability/compose.yaml:compose.yaml:compose.release.yaml"
 GAME_COMPOSE_SERVICE="mc"
 GAME_MOD_EXTENSION="jar"
 GAME_LOADER_TYPE="forge"

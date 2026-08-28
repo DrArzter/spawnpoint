@@ -4,9 +4,8 @@ import { Button } from "../components/ui/Button";
 import { DataColumn, DataTable } from "../components/ui/DataTable";
 import { Tabs } from "../components/ui/Tabs";
 import { Icon } from "../Icon";
-import { Game, games, Member, OwnerBootstrap, permissions, Role } from "../model";
+import { AccessTab, Game, games, Member, OwnerBootstrap, permissions, Role } from "../model";
 
-type AccessTab = "users" | "roles" | "notifications";
 type SubscriptionState = Record<string, boolean>;
 
 const accessTabs = [
@@ -15,18 +14,19 @@ const accessTabs = [
   { id: "notifications", label: "My notifications" },
 ] as const;
 
-export function AccessScreen({ bootstrap, members, roles, onMembersChange, onRolesChange }: {
+export function AccessScreen({ bootstrap, members, roles, tab, onMembersChange, onRolesChange, onTabChange }: {
   bootstrap: OwnerBootstrap;
   members: Member[];
   roles: Role[];
+  tab: AccessTab;
   onMembersChange: (members: Member[]) => void;
   onRolesChange: (roles: Role[]) => void;
+  onTabChange: (tab: AccessTab) => void;
 }) {
-  const [tab, setTab] = useState<AccessTab>("users");
   const [creatingRole, setCreatingRole] = useState(false);
   return <>
     <div className="page-heading action-heading"><div><h1>Access</h1><p>Users, linked accounts, roles and your subscriptions</p></div>{tab === "roles" && <Button icon={<Icon name="plus" />} onClick={() => setCreatingRole(true)} variant="primary">Create role</Button>}</div>
-    <Tabs label="Access settings" onChange={setTab} options={accessTabs} value={tab} />
+    <Tabs label="Access settings" onChange={onTabChange} options={accessTabs} value={tab} />
     <div aria-live="polite" role="tabpanel">
       {tab === "users" && <Users bootstrap={bootstrap} members={members} roles={roles} onChange={onMembersChange} />}
       {tab === "roles" && <Roles creating={creatingRole} onCancel={() => setCreatingRole(false)} onCreate={(role) => { onRolesChange([...roles, role]); setCreatingRole(false); }} roles={roles} />}

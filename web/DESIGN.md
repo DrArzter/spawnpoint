@@ -23,7 +23,12 @@ Spawnpoint uses a quiet, operational control-panel language inspired by Google C
 - Dense tables collapse into per-record cards based on their content container.
 - Profile, role editing, and action clusters stack before their content becomes cramped.
 - From 1600 px, typography and control density scale up one step; the content canvas grows to 1880 px.
-- From 2200 px, overview activity moves beside the session controls and the canvas may grow to 2240 px instead of leaving a 4K display mostly empty.
+- From 2400 px, the information architecture stays unchanged while typography, fields, tables and controls scale up substantially; the canvas may grow to 3000 px instead of leaving a 4K display mostly empty.
+- Wide-screen adaptation enlarges existing fields and preserves their reading order. It must not rearrange Overview merely to occupy horizontal space.
+
+## Navigation
+
+- Static hosting uses hash routes (`#/overview`, `#/profile`, `#/access/roles`) so reload and browser back/forward preserve the selected screen without CloudFront path rewrites.
 
 ## Theme behavior
 

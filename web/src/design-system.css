@@ -444,34 +444,222 @@ body {
   }
 }
 
-@media (min-width: 2200px) {
+@media (min-width: 2400px) {
   :root {
-    --layout-sidebar-width: 280px;
-    --layout-content-max: 2240px;
-    --text-xs: 13px;
-    --text-sm: 14px;
-    --text-md: 16px;
+    --layout-sidebar-width: 320px;
+    --layout-content-max: 3000px;
+    --control-height: 52px;
+    --text-xs: 14px;
+    --text-sm: 16px;
+    --text-md: 18px;
+    --text-lg: 24px;
+    --text-xl: 40px;
   }
 
-  .page-content:has(> .service-panel) {
-    display: grid;
-    grid-template-columns: minmax(0, 1.65fr) minmax(440px, .85fr);
-    column-gap: 28px;
-    align-content: start;
+  .product-mark,
+  .context-bar {
+    min-height: 84px;
   }
 
-  .page-content:has(> .service-panel) > .page-heading {
-    grid-column: 1 / -1;
+  .product-mark {
+    padding-right: 28px;
+    padding-left: 28px;
   }
 
-  .page-content:has(> .service-panel) > :is(.service-panel, .invite-panel, .summary-grid) {
-    grid-column: 1;
+  .product-mark strong {
+    font-size: 22px;
   }
 
-  .page-content:has(> .service-panel) > .data-section {
-    grid-column: 2;
-    grid-row: 2 / span 3;
-    margin-top: 0;
+  .product-mark > .avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 13px;
+  }
+
+  .side-nav nav {
+    gap: 6px;
+    padding: 22px 14px;
+  }
+
+  .side-nav nav button {
+    min-height: 56px;
+    gap: 16px;
+    padding-right: 20px;
+    padding-left: 20px;
+    border-radius: 28px;
+  }
+
+  .side-nav nav .icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .theme-toggle {
+    height: 58px;
+    padding-right: 28px;
+    padding-left: 28px;
+    font-size: var(--text-sm);
+  }
+
+  .identity {
+    min-height: 82px;
+    padding: 18px 28px;
+  }
+
+  .identity > .avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 13px;
+  }
+
+  .identity strong {
+    font-size: var(--text-md);
+  }
+
+  .identity small {
+    font-size: var(--text-xs);
+  }
+
+  .context-bar {
+    padding-right: 44px;
+    padding-left: 44px;
+  }
+
+  .context-breadcrumbs,
+  .crumb-menu > button,
+  .top-status {
+    font-size: var(--text-sm);
+  }
+
+  .page-content {
+    padding: 56px 64px 100px;
+  }
+
+  .page-heading {
+    margin-bottom: 34px;
+  }
+
+  .service-panel {
+    min-height: 190px;
+    padding: 40px;
+  }
+
+  .service-icon {
+    width: 72px;
+    height: 72px;
+  }
+
+  .service-summary h2 {
+    font-size: 34px;
+  }
+
+  .service-summary div > p:last-child {
+    font-size: var(--text-sm);
+  }
+
+  .ui-button {
+    padding-right: 24px;
+    padding-left: 24px;
+    font-size: var(--text-sm);
+  }
+
+  .summary-grid {
+    margin-top: 28px;
+  }
+
+  .stat {
+    min-height: 170px;
+    padding: 34px;
+  }
+
+  .stat strong {
+    margin-top: 16px;
+    margin-bottom: 10px;
+    font-size: 34px;
+  }
+
+  .data-section {
+    margin-top: 38px;
+  }
+
+  .activity-table > div {
+    min-height: 72px;
+    padding-right: 26px;
+    padding-left: 26px;
+  }
+
+  .ui-tabs {
+    gap: 28px;
+    margin-bottom: 28px;
+  }
+
+  .ui-tabs button {
+    min-height: 52px;
+    font-size: var(--text-sm);
+  }
+
+  .ui-table th,
+  .ui-table td {
+    padding: 18px 22px;
+  }
+
+  .ui-table th {
+    height: 54px;
+  }
+
+  .ui-table td {
+    min-height: 70px;
+  }
+
+  .profile-heading {
+    margin-bottom: 36px;
+  }
+
+  .avatar-large {
+    width: 96px;
+    height: 96px;
+    font-size: 26px;
+  }
+
+  .profile-layout,
+  .users-layout,
+  .roles-layout,
+  .notification-settings {
+    gap: 26px;
+  }
+
+  .profile-details > header,
+  .setting-heading,
+  .bootstrap-summary,
+  .invite-panel > header,
+  .link-editor > header {
+    padding: 28px;
+  }
+
+  .profile-details form > label,
+  .link-editor form {
+    padding: 24px 28px;
+    font-size: var(--text-sm);
+  }
+
+  .profile-details input,
+  .link-editor input,
+  .link-editor select {
+    font-size: var(--text-sm);
+  }
+
+  .profile-details footer,
+  .delivery-row {
+    min-height: 84px;
+    padding: 18px 28px;
+  }
+
+  .linked-list > div,
+  .setting-row {
+    min-height: 76px;
+    padding-right: 28px;
+    padding-left: 28px;
+    font-size: var(--text-sm);
   }
 }
 

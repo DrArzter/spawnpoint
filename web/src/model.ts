@@ -1,4 +1,5 @@
 export type Page = "dashboard" | "metrics" | "console" | "storage" | "access" | "profile";
+export type AccessTab = "users" | "roles" | "notifications";
 export type ServerState = "stopped" | "starting" | "running";
 
 export type World = { id: string; title: string; release: string; ready: boolean };

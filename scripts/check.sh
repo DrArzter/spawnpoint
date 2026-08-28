@@ -75,18 +75,17 @@ check_compose_bindings() {
 
 check_terraform() {
   local root
-  for root in infra/terraform infra/terraform-bootstrap infra/terraform-storage infra/terraform-guardrails infra/terraform-operations infra/terraform-releases infra/terraform-github infra/terraform-bot infra/terraform-web; do
+  for root in infra/terraform infra/terraform-bootstrap infra/terraform-storage infra/terraform-guardrails infra/terraform-operations infra/terraform-releases infra/terraform-github infra/terraform-access infra/terraform-bot infra/terraform-web; do
     [[ -d "${root}" ]] || continue
     printf -- '--- %s\n' "${root}"
     docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp/terraform-home \
       -v "${REPOSITORY_ROOT}:/workspace" -w "/workspace/${root}" \
       "${TERRAFORM_IMAGE}" fmt -check || return 1
-    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp/terraform-home \
+    docker run --rm --user "$(id -u):$(id -g)" \
+      -e HOME=/tmp/terraform-home -e TF_DATA_DIR=/tmp/terraform-data \
       -v "${REPOSITORY_ROOT}:/workspace" -w "/workspace/${root}" \
-      "${TERRAFORM_IMAGE}" init -backend=false -input=false >/dev/null || return 1
-    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp/terraform-home \
-      -v "${REPOSITORY_ROOT}:/workspace" -w "/workspace/${root}" \
-      "${TERRAFORM_IMAGE}" test || return 1
+      --entrypoint sh "${TERRAFORM_IMAGE}" -c \
+      'terraform init -backend=false -input=false >/dev/null && terraform test -var=aws_profile=' || return 1
   done
 }
 

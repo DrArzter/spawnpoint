@@ -1,0 +1,6 @@
+bucket       = "spawnpoint-tfstate-<account-id>"
+key          = "spawnpoint/access.tfstate"
+region       = "eu-central-1"
+profile      = "spawnpoint"
+encrypt      = true
+use_lockfile = true

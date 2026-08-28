@@ -22,6 +22,10 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Identity**: One person authorised to use Spawnpoint, independent of the chat, game and network accounts through which that person is recognised.
 
+**Visitor**: A platform-authenticated person who has reached a Spawnpoint surface but has not been approved as an identity. A visitor may see only explicitly public, non-sensitive information.
+
+**Access candidate**: A visitor whose external account has been observed and is waiting for an Owner to approve or dismiss access. It is not an identity and carries no role or operational permission.
+
 **Bootstrap owner**: The first identity granted the built-in Owner role through a one-time trusted setup path. After it is claimed, all other identities and roles are managed through normal access control. _Avoid_: Superadmin; Owner is the privileged role, while bootstrap describes only how its first holder is established.
 
 **Profile**: The user-facing representation of an identity, including its display details and linked accounts. It is not an authentication authority.

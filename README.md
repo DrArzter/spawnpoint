@@ -40,9 +40,8 @@ player-facing feature yet. Read the roadmap for the order.
 | Preview environments per proposal | A pull request boots a throwaway server on a copy of the real world. Join it and look at your base before approving. A few cents a run |
 | Matching client pack | Every release generates a launcher-importable pack, published at a stable URL |
 | One API, several surfaces | Web panel, Discord bot, Telegram bot and CLI are all clients of the same control-plane API |
-| Sign in with an account you have | Cognito with Google. No passwords stored, anywhere |
-| Connect your chat accounts | "Connect Telegram" and "Connect Discord" on the account page, by a one-time code sent to the bot |
-| Then sign in from chat too | Once linked, `/panel` in the bot returns a one-minute sign-in link. A chat account never creates an identity, only signs into one it is linked to |
+| Sign in with an account you have | Signed Telegram browser or Mini App login. No passwords stored, anywhere |
+| Approve people, not IDs in config | A Telegram login creates a Visitor; an Owner reviews it and assigns a role in the panel |
 | Whitelist that maintains itself | The Minecraft identity is a third link, and `whitelist.json` is generated from the link table. Remove someone once, and they lose the panel, the bots and the game |
 | Several worlds, one at a time | Each pack is a world with its own release line, save data and backups. Start the one you want; the others cost only storage |
 | Chat notifications | "X requested the server", "server ready", "release 1.4 promoted", "backup failed" |
@@ -208,7 +207,7 @@ which are allowed to change. The reason is written up in [docs/adr/README.md](do
 | [0015](docs/adr/0015-observability-and-alerting.md) | Session Grafana/Prometheus; CloudWatch signals and durable alarms | Accepted |
 | [0016](docs/adr/0016-chat-integrations.md) | Discord and Telegram as control surfaces | Proposed |
 | [0017](docs/adr/0017-stable-server-address.md) | Stable hostname in Route 53 | Superseded by 0024 |
-| [0018](docs/adr/0018-identity-and-sign-in.md) | Cognito broker; panel sign-in with Google | Proposed |
+| [0018](docs/adr/0018-identity-and-sign-in.md) | Cognito broker; earlier Google-first design | Superseded by 0037 |
 | [0019](docs/adr/0019-account-linking.md) | Link chat accounts with a one-time code | Proposed |
 | [0020](docs/adr/0020-email-channel.md) | SNS email for alerts; SES deferred | Accepted |
 | [0021](docs/adr/0021-sign-in-from-linked-chat-account.md) | Chat sign-in, but only into a linked account | Proposed |
@@ -247,7 +246,7 @@ $129 a month. That is why a stop that silently fails is treated as an incident.
 | M1 | The same thing rebuilt in Terraform, with backups and a tested restore | **Done** 2026-08-13 |
 | M2 | On-demand start and idle stop, over a stable overlay address | **Accepted on demand** 2026-08-26 — start, health, three empty checks, verified backup and automatic EC2 stop; Spot remains deliberately deferred |
 | M3 | Versioned mod releases and the deployment pipeline | **In progress** — AWS built `1.1`, health-gated promotion `1.0 → 1.1` passed; a deliberate bad-release rollback drill remains |
-| M4 | One bot and an allow-list; client pack distribution | |
+| M4 | Telegram bot, shared identity/role authorization and client pack distribution | **In progress** |
 | M5 | Observability, alerting and cost guardrails | Session Grafana already runs; the durable alarms do not |
 | M6 | Several worlds — vanilla-plus, techno, magic, techno-magic — one active at a time | |
 

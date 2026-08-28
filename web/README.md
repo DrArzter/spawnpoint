@@ -3,9 +3,9 @@
 The static site on S3 behind CloudFront. Two things, one distribution:
 
 **Control panel** — a client of the control-plane API, with no rules of its own. Server status and player
-count, a Start button, release history with changelogs, backup list, and the owner-only actions. Sign-in
-through Cognito with Google. See [ADR-0012](../docs/adr/0012-web-control-panel.md) and
-[ADR-0018](../docs/adr/0018-identity-and-sign-in.md).
+count, a Start button, release history with changelogs, backup list, and the owner-only actions. Browser sign-in
+uses Telegram's signed Login Widget; the Mini App verifies `initData`. See
+[ADR-0037](../docs/adr/0037-telegram-only-browser-identity.md).
 
 **Account page** — "Connect Telegram" and "Connect Discord". Shows a one-time code to send to the bot, lists
 linked accounts, and allows unlinking. The code is displayed here only and never sent through chat. Once
@@ -40,9 +40,9 @@ The expensive panel was the *public* one; the tiers below get the value without 
 2. **A session-scoped panel inside the overlay**, for players: lives and dies with the Compose session next to
    Grafana, behind the Traefik noted in [ADR-0033](../docs/adr/0033-connectivity-as-a-strategy.md). By construction it
    cannot *start* the server — it is down when the server is down.
-3. **The public Cognito panel** ([ADR-0012](../docs/adr/0012-web-control-panel.md),
-   [ADR-0018](../docs/adr/0018-identity-and-sign-in.md)): deferred further still — it now has to beat both tiers
-   above, not just the bot.
+3. **The public Telegram panel** ([ADR-0037](../docs/adr/0037-telegram-only-browser-identity.md)): now implemented as
+   a static client with signed Telegram login and the same access directory as the bot. Authentication observes a
+   visitor; Owner approval supplies the role.
 
 **Panels render eggs.** The per-game adapter (see the placeholder in
 [the ADR index](../docs/adr/README.md#decisions-still-to-record)) is a declaration with many consumers — the workflows

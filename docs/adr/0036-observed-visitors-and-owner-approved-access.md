@@ -11,7 +11,7 @@ An Owner or another identity with `access.manage` reviews candidates in the cont
 
 The SSM allow-list remains only as a migration fallback while the common authorization API is introduced. It must not remain a second source of truth: after cutover, bots and the panel resolve the same Identity and permissions from the access store.
 
-Google remains the first browser authentication provider through Cognito. Google sign-in may create or attach a Cognito login, but authorization still comes from the Spawnpoint Identity and its grants; possessing an arbitrary Google account does not grant operational access.
+Telegram is the browser authentication provider, as decided by [ADR-0037](0037-telegram-only-browser-identity.md). A successful signed Widget or Mini App login observes a Visitor, but authorization still comes from the Spawnpoint Identity and its grants; possessing an arbitrary Telegram account grants no operational access.
 
 ## Consequences
 

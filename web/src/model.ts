@@ -1,9 +1,33 @@
 export type Page = "dashboard" | "metrics" | "console" | "storage" | "access" | "profile";
 export type AccessTab = "users" | "roles" | "notifications";
-export type ServerState = "stopped" | "starting" | "running";
+export type ServerState = "stopped" | "starting" | "running" | "stopping" | "unknown";
 
-export type World = { id: string; title: string; release: string; ready: boolean };
-export type Game = { id: string; code: string; title: string; worlds: readonly World[] };
+export type ReleasePointer = {
+  state: "available" | "unconfigured" | "unavailable";
+  desiredRelease: string | null;
+  activeRelease: string | null;
+};
+export type World = { id: string; displayName: string; profileId: string; release: ReleasePointer };
+export type Lifecycle = {
+  schemaVersion: 1;
+  serverId: string;
+  desiredState: "stopped" | "running";
+  observedState: "stopped" | "starting" | "ready" | "stopping" | "unknown";
+  activeSessionId: string | null;
+  updatedAtEpochSeconds: number;
+};
+export type Game = { id: string; code: string; displayName: string; lifecycle: Lifecycle | null; worlds: readonly World[] };
+export type Host = {
+  id: string;
+  name: string;
+  state: "pending" | "running" | "stopping" | "stopped" | "unknown";
+  providerRef?: string;
+  instanceType?: string | null;
+  availabilityZone?: string | null;
+  launchedAt?: string | null;
+};
+export type Operation = { id: string; type: "start" | "stop" | "promote"; status: "running"; startedAt: string; providerRef?: string };
+export type ControlPlaneSnapshot = { observedAt: string; games: readonly Game[]; hosts: readonly Host[]; operations: readonly Operation[] };
 
 export type Permission = {
   id: string;
@@ -14,42 +38,43 @@ export type Permission = {
 export type Role = { id: string; name: string; description: string; permissions: string[]; system?: boolean };
 export type LinkKind = "telegram" | "discord" | "minecraft" | "factorio" | "steam" | "zerotier";
 export type LinkedAccount = { id: string; kind: LinkKind; value: string; verified: boolean };
-export type Member = { id: number; name: string; roleId: string; links: LinkedAccount[] };
+export type Member = { id: string; name: string; roleId: string; links: LinkedAccount[] };
 export type OwnerBootstrap =
-  | { state: "unclaimed"; email: string }
-  | { state: "claimed"; email: string; ownerId: number; claimedAt: string };
-
-export const games: readonly Game[] = [
-  {
-    id: "minecraft", code: "MC", title: "Minecraft",
-    worlds: [
-      { id: "modded-survival", title: "Modded survival", release: "1.0", ready: true },
-      { id: "vanilla", title: "Vanilla", release: "Draft", ready: false },
-    ],
-  },
-  { id: "factorio", code: "FA", title: "Factorio", worlds: [{ id: "factorio-vanilla", title: "Vanilla", release: "2.0.77", ready: true }] },
-  { id: "zomboid", code: "PZ", title: "Project Zomboid", worlds: [{ id: "zomboid-dedicated", title: "Dedicated server", release: "Draft", ready: false }] },
-];
+  | { state: "unclaimed"; telegramId: string }
+  | { state: "claimed"; telegramId: string; ownerId: string; claimedAt: string };
 
 export const permissions: readonly Permission[] = [
-  { id: "server.view", group: "Server", label: "View server state" },
-  { id: "server.start", group: "Server", label: "Start server" },
-  { id: "server.stop", group: "Server", label: "Stop server" },
-  { id: "console.view", group: "Console", label: "View RCON output" },
-  { id: "console.execute", group: "Console", label: "Execute RCON commands" },
-  { id: "releases.view", group: "Storage", label: "View releases" },
-  { id: "releases.promote", group: "Storage", label: "Promote releases" },
-  { id: "backups.view", group: "Storage", label: "View backups" },
-  { id: "backups.restore", group: "Storage", label: "Restore backups" },
-  { id: "metrics.view", group: "Observability", label: "View metrics and logs" },
+  { id: "status.read", group: "Server", label: "View coarse server state" },
+  { id: "connection.read", group: "Server", label: "View connection details" },
+  { id: "session.start", group: "Server", label: "Start a game session" },
+  { id: "session.stop", group: "Server", label: "Stop a game session" },
+  { id: "invitation.send", group: "Server", label: "Invite players" },
+  { id: "console.use", group: "Console", label: "Use the RCON console" },
+  { id: "release.read", group: "Storage", label: "View releases" },
+  { id: "release.promote", group: "Storage", label: "Promote releases" },
+  { id: "backup.read", group: "Storage", label: "View backups" },
+  { id: "backup.restore", group: "Storage", label: "Restore backups" },
+  { id: "metrics.read", group: "Observability", label: "View metrics and logs" },
+  { id: "access.read", group: "Access", label: "View users and roles" },
   { id: "access.manage", group: "Access", label: "Manage users and roles" },
+  { id: "access.owner.grant", group: "Access", label: "Grant Owner access" },
 ];
 
 export const initialRoles: Role[] = [
   {
+    id: "viewer", name: "Viewer", system: true,
+    description: "Can see the coarse server status only.",
+    permissions: ["status.read"],
+  },
+  {
     id: "player", name: "Player", system: true,
     description: "Can play and control a game session.",
-    permissions: ["server.view", "server.start", "server.stop", "metrics.view"],
+    permissions: ["status.read", "connection.read", "session.start", "invitation.send"],
+  },
+  {
+    id: "operator", name: "Operator", system: true,
+    description: "Can operate sessions, console, metrics, releases and backups.",
+    permissions: permissions.filter((permission) => permission.group !== "Access").map((permission) => permission.id),
   },
   {
     id: "owner", name: "Owner", system: true,
@@ -57,29 +82,3 @@ export const initialRoles: Role[] = [
     permissions: permissions.map((permission) => permission.id),
   },
 ];
-
-export const initialMembers: Member[] = [
-  {
-    id: 1,
-    name: "DrArzter",
-    roleId: "owner",
-    links: [
-      { id: "link-1", kind: "telegram", value: "1780660807", verified: true },
-      { id: "link-2", kind: "minecraft", value: "DrArzter", verified: true },
-      { id: "link-3", kind: "zerotier", value: "b9bc15e2cf", verified: true },
-    ],
-  },
-  {
-    id: 2,
-    name: "Alex",
-    roleId: "player",
-    links: [{ id: "link-4", kind: "telegram", value: "381204700", verified: true }],
-  },
-];
-
-export const initialOwnerBootstrap: OwnerBootstrap = {
-  state: "claimed",
-  email: "drarzter@example.com",
-  ownerId: 1,
-  claimedAt: "27 Aug 2026, 18:42",
-};

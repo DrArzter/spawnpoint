@@ -13,6 +13,7 @@ data "aws_iam_policy_document" "access_api" {
     sid = "ReadAndManageAccessDirectory"
     actions = [
       "dynamodb:GetItem",
+      "dynamodb:PutItem",
       "dynamodb:Query",
       "dynamodb:TransactWriteItems",
       "dynamodb:UpdateItem",
@@ -21,6 +22,48 @@ data "aws_iam_policy_document" "access_api" {
       data.aws_dynamodb_table.access.arn,
       "${data.aws_dynamodb_table.access.arn}/index/gsi1",
     ]
+  }
+
+  statement {
+    sid       = "ReadLifecycleState"
+    actions   = ["dynamodb:GetItem"]
+    resources = [data.aws_dynamodb_table.lifecycle.arn]
+  }
+
+  statement {
+    sid       = "DiscoverGameHosts"
+    actions   = ["ec2:DescribeInstances"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "ReadWorldReleasePointers"
+    actions   = ["s3:GetObject"]
+    resources = ["${data.aws_s3_bucket.releases.arn}/worlds/*"]
+  }
+
+  statement {
+    sid       = "DiscoverWorldReleasePointers"
+    actions   = ["s3:ListBucket"]
+    resources = [data.aws_s3_bucket.releases.arn]
+
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["worlds/*"]
+    }
+  }
+
+  statement {
+    sid       = "ReadRunningOperations"
+    actions   = ["states:ListExecutions"]
+    resources = [for machine in local.operation_state_machines : machine.arn]
+  }
+
+  statement {
+    sid       = "VerifyTelegramLogin"
+    actions   = ["ssm:GetParameter"]
+    resources = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.bot_token_parameter}"]
   }
 }
 
@@ -47,8 +90,12 @@ resource "aws_lambda_function" "access_api" {
 
   environment {
     variables = {
-      ACCESS_TABLE_NAME     = data.aws_dynamodb_table.access.name
-      BOOTSTRAP_OWNER_EMAIL = lower(trimspace(var.bootstrap_owner_email))
+      ACCESS_TABLE_NAME           = data.aws_dynamodb_table.access.name
+      BOOTSTRAP_OWNER_TELEGRAM_ID = trimspace(var.bootstrap_owner_telegram_id)
+      BOT_TOKEN_PARAMETER         = var.bot_token_parameter
+      LIFECYCLE_TABLE_NAME        = data.aws_dynamodb_table.lifecycle.name
+      OPERATION_STATE_MACHINES    = jsonencode(local.operation_state_machines)
+      RELEASE_BUCKET              = data.aws_s3_bucket.releases.id
     }
   }
 
@@ -67,18 +114,6 @@ resource "aws_apigatewayv2_api" "access" {
   }
 }
 
-resource "aws_apigatewayv2_authorizer" "cognito" {
-  api_id           = aws_apigatewayv2_api.access.id
-  authorizer_type  = "JWT"
-  identity_sources = ["$request.header.Authorization"]
-  name             = "spawnpoint-cognito"
-
-  jwt_configuration {
-    audience = [aws_cognito_user_pool_client.panel.id]
-    issuer   = "https://${aws_cognito_user_pool.access.endpoint}"
-  }
-}
-
 resource "aws_apigatewayv2_integration" "access_api" {
   api_id                 = aws_apigatewayv2_api.access.id
   integration_type       = "AWS_PROXY"
@@ -89,10 +124,16 @@ resource "aws_apigatewayv2_integration" "access_api" {
 
 locals {
   access_routes = toset([
+    "POST /auth/telegram",
+    "GET /session",
     "GET /me",
+    "GET /control-plane",
+    "POST /access/request",
     "GET /access/candidates",
+    "GET /access/identities",
     "POST /access/candidates/{telegramId}/approve",
     "POST /access/candidates/{telegramId}/dismiss",
+    "POST /access/identities/{identityId}/role",
   ])
 }
 
@@ -102,8 +143,7 @@ resource "aws_apigatewayv2_route" "access" {
   api_id             = aws_apigatewayv2_api.access.id
   route_key          = each.value
   target             = "integrations/${aws_apigatewayv2_integration.access_api.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+  authorization_type = "NONE"
 }
 
 resource "aws_apigatewayv2_stage" "default" {

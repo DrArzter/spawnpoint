@@ -1,20 +1,20 @@
-// The allow-list gate. Commands and inline-button callbacks are operational;
-// ordinary chat is ignored without making the bot scold every stranger.
-
 import type { Context, NextFunction } from "grammy";
 
-import { isAuthorized, parseAllowList, replies } from "../../domain/telegram-bot.ts";
-
-export type AllowListSource = () => Promise<string>;
+import type { Permission } from "../../access/domain.ts";
+import { replies } from "../../domain/telegram-bot.ts";
 
 export type SpawnpointAccessContext = Context & {
   spawnpointAccess?: Readonly<{ authorized: boolean }>;
 };
 
-type PublicInteractions = Readonly<{
-  commands: ReadonlySet<string>;
-  callbacks: ReadonlySet<string>;
+type InteractionPermissions = Readonly<{
+  publicCommands: ReadonlySet<string>;
+  publicCallbacks: ReadonlySet<string>;
+  commands: ReadonlyMap<string, Permission>;
+  callbacks: ReadonlyMap<string, Permission>;
 }>;
+
+export type PermissionResolver = (telegramId: number, permission: Permission) => Promise<boolean>;
 
 function commandName(ctx: Context): string | null {
   const message = ctx.message;
@@ -27,7 +27,7 @@ export function contextIsAuthorized(ctx: Context): boolean {
   return (ctx as SpawnpointAccessContext).spawnpointAccess?.authorized === true;
 }
 
-export function authMiddleware(allowListSource: AllowListSource, publicInteractions: PublicInteractions) {
+export function authMiddleware(resolvePermission: PermissionResolver, interactions: InteractionPermissions) {
   return async (ctx: Context, next: NextFunction): Promise<void> => {
     const isCommand = ctx.has("message:entities:bot_command");
     const isCallback = ctx.callbackQuery !== undefined;
@@ -35,19 +35,25 @@ export function authMiddleware(allowListSource: AllowListSource, publicInteracti
     const userId = ctx.from?.id;
     if (userId === undefined) return;
 
-    const allowList = parseAllowList(await allowListSource());
-    const authorized = isAuthorized(userId, allowList);
+    const command = commandName(ctx);
+    const callback = ctx.callbackQuery?.data;
+    const isPublic = command !== null
+      ? interactions.publicCommands.has(command)
+      : callback !== undefined && interactions.publicCallbacks.has(callback);
+    if (isPublic) {
+      const authorized = await resolvePermission(userId, "status.read");
+      (ctx as SpawnpointAccessContext).spawnpointAccess = { authorized };
+      return next();
+    }
+
+    const permission = command !== null
+      ? interactions.commands.get(command) ?? "status.read"
+      : callback === undefined ? "status.read" : interactions.callbacks.get(callback) ?? "status.read";
+    const authorized = await resolvePermission(userId, permission);
     (ctx as SpawnpointAccessContext).spawnpointAccess = { authorized };
-    const publicCommand = commandName(ctx);
-    const isPublic = publicCommand !== null
-      ? publicInteractions.commands.has(publicCommand)
-      : ctx.callbackQuery?.data !== undefined && publicInteractions.callbacks.has(ctx.callbackQuery.data);
-    if (!authorized && !isPublic) {
-      if (isCallback) {
-        await ctx.answerCallbackQuery({ text: replies.denied(), show_alert: true });
-      } else {
-        await ctx.reply(replies.denied());
-      }
+    if (!authorized) {
+      if (isCallback) await ctx.answerCallbackQuery({ text: replies.denied(), show_alert: true });
+      else await ctx.reply(replies.denied());
       return;
     }
     return next();

@@ -4,6 +4,22 @@ data "aws_dynamodb_table" "access" {
   name = "spawnpoint-access"
 }
 
+data "aws_dynamodb_table" "lifecycle" {
+  name = "spawnpoint-lifecycle-v2"
+}
+
+data "aws_s3_bucket" "releases" {
+  bucket = "spawnpoint-releases-${data.aws_caller_identity.current.account_id}"
+}
+
+locals {
+  operation_state_machines = [
+    { type = "start", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-start-server" },
+    { type = "stop", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-stop-server" },
+    { type = "promote", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-promote-release" },
+  ]
+}
+
 data "aws_iam_policy_document" "lambda_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]

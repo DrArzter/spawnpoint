@@ -4,7 +4,11 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 ## Language
 
+**Game**: A server runtime family such as Minecraft or Factorio. A game may have many worlds.
+
 **World**: A named, persistent game save with its own release pointer and backup lineage.
+
+**Host**: A compute machine capable of running a session. A host is not permanently owned by a world; a session temporarily binds one world to one host. _Avoid_: Server or instance when the domain concept, rather than the AWS resource, is meant.
 
 **Release**: An immutable, content-verified server configuration and mod set identified by a version.
 
@@ -18,7 +22,7 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Operation**: One durable attempt to change or observe lifecycle state, with its own identity, status and failure history. The operation is separate from the desired and active release values it may change.
 
-**Session**: One identified period in which a world is being started, is ready for players, or is being stopped. A new start receives a new session identity so work left over from an earlier session cannot stop or modify it.
+**Session**: One identified period in which a world is being started on a host, is ready for players, or is being stopped. A new start receives a new session identity so work left over from an earlier session cannot stop or modify it.
 
 **Identity**: One person authorised to use Spawnpoint, independent of the chat, game and network accounts through which that person is recognised.
 

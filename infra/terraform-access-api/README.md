@@ -1,13 +1,12 @@
 # Access API and browser identity
 
-This isolated root owns Cognito, the JWT-protected HTTP API and its Lambda. It reads the access table but cannot affect game compute.
+This isolated root owns Telegram browser and Mini App sign-in, the session-protected HTTP API and its Lambda. It reads the access table but cannot affect game compute.
 
-The SPA uses Cognito Authorization Code with PKCE. Google is optional during the first apply because Google requires Cognito's redirect URI before it can issue client credentials.
+The Lambda verifies either the official Login Widget signature or Mini App `initData`, then issues one short-lived Spawnpoint session format. Spawnpoint roles, not successful Telegram authentication, decide what the caller may do.
 
-1. Copy `terraform.tfvars.example` to ignored `terraform.tfvars` and set the explicitly chosen bootstrap owner email.
-2. Apply once to obtain `google_redirect_uri`.
-3. Create a Google OAuth 2.0 **Web application** with that redirect URI.
-4. Add its client id and secret to the ignored tfvars and apply again.
-5. Wire the non-secret API URL, Cognito domain, pool id and client id into the web build.
+1. In BotFather, open the bot's **Web Login** settings and register `dwk99t8cin0cf.cloudfront.net`.
+2. Ensure `/spawnpoint/bot/token` already exists as a SecureString; do not copy the token into Terraform.
+3. Copy `terraform.tfvars.example` to ignored `terraform.tfvars` and set the explicitly chosen bootstrap Owner Telegram ID.
+4. Apply, then deploy the web build. `scripts/deploy-web.sh` reads the API URL and bot username from Terraform outputs.
 
-An arbitrary Google account can authenticate to Cognito, but `/me` returns no identity unless it is the exact verified bootstrap email or has already been linked by an Owner.
+Any Telegram account may authenticate and becomes an observed Visitor. It receives no operational access until an Owner approves it. The configured Telegram account atomically claims the first Owner once.

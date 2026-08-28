@@ -12,19 +12,28 @@ import { requestStartCommand, startCommand } from "./commands/start.ts";
 import { statusCommand } from "./commands/status.ts";
 import { welcomeCommand } from "./commands/welcome.ts";
 import { callbacks, mainMenuKeyboard } from "./keyboards/main-menu.ts";
-import { authMiddleware, type AllowListSource } from "./middleware/auth.ts";
+import { authMiddleware } from "./middleware/auth.ts";
 import { observeContacts } from "./middleware/contact.ts";
 import type { AccessStore } from "./services/access.ts";
 import { env } from "./services/aws.ts";
 import { render } from "./ui/render.ts";
 
-export function buildBot(token: string, allowListSource: AllowListSource, accessStore: AccessStore): Bot {
+export function buildBot(token: string, accessStore: AccessStore): Bot {
   const bot = new Bot(token);
 
   bot.use(observeContacts(accessStore));
-  bot.use(authMiddleware(allowListSource, {
-    commands: new Set(["start", "help", "status"]),
-    callbacks: new Set([callbacks.menu, callbacks.status, callbacks.requestAccess]),
+  bot.use(authMiddleware(accessStore.hasPermission, {
+    publicCommands: new Set(["start", "help", "status"]),
+    publicCallbacks: new Set([callbacks.menu, callbacks.status, callbacks.requestAccess]),
+    commands: new Map([
+      ["address", "connection.read"], ["network", "connection.read"], ["pack", "release.read"],
+      ["server_start", "session.start"],
+    ]),
+    callbacks: new Map([
+      [callbacks.address, "connection.read"], [callbacks.network, "connection.read"],
+      [callbacks.pack, "release.read"], [callbacks.requestStart, "session.start"],
+      [callbacks.confirmStart, "session.start"],
+    ]),
   }));
   bot.command("start", (ctx) => welcomeCommand(ctx));
   bot.command("server_start", (ctx) => requestStartCommand(ctx));

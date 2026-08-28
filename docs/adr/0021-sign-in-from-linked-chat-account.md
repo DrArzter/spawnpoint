@@ -1,6 +1,6 @@
 # ADR-0021 — Discord and Telegram can sign in, but only into an account they are already linked to
 
-- Status: Proposed
+- Status: Superseded by [ADR-0037](0037-telegram-only-browser-identity.md)
 - Date: 2026-08-11
 - Milestone: M4
 - Amends: [ADR-0018](0018-identity-and-sign-in.md) and [ADR-0019](0019-account-linking.md)

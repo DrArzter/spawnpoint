@@ -15,6 +15,22 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_dynamodb_table.lifecycle
+    values = {
+      name = "spawnpoint-lifecycle-v2"
+      arn  = "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-lifecycle-v2"
+    }
+  }
+
+  override_data {
+    target = data.aws_s3_bucket.releases
+    values = {
+      id  = "spawnpoint-releases-123456789012"
+      arn = "arn:aws:s3:::spawnpoint-releases-123456789012"
+    }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.lambda_assume_role
     values = { json = "{}" }
   }
@@ -23,6 +39,7 @@ mock_provider "aws" {
     target = data.aws_iam_policy_document.access_api
     values = { json = "{}" }
   }
+
 }
 
 mock_provider "archive" {
@@ -37,21 +54,22 @@ mock_provider "archive" {
   }
 }
 
-run "access_api_is_jwt_only_and_scoped_to_the_access_table" {
+run "access_api_verifies_telegram_sessions_and_is_scoped" {
   command = plan
 
   variables {
-    bootstrap_owner_email = "owner@example.com"
+    bootstrap_owner_telegram_id = "1780660807"
+    telegram_bot_username       = "drarzterbot"
   }
 
   assert {
-    condition     = aws_apigatewayv2_authorizer.cognito.authorizer_type == "JWT"
-    error_message = "The browser API must reject requests without a Cognito JWT before Lambda."
+    condition     = contains(local.access_routes, "POST /auth/telegram")
+    error_message = "The browser must have one endpoint that exchanges a verified Telegram login for a Spawnpoint session."
   }
 
   assert {
-    condition     = alltrue([for route in aws_apigatewayv2_route.access : route.authorization_type == "JWT"])
-    error_message = "No access-management route may accidentally become public."
+    condition     = alltrue([for route in aws_apigatewayv2_route.access : route.authorization_type == "NONE"])
+    error_message = "The access Lambda must receive every route and verify the Spawnpoint session before protected dispatch."
   }
 
   assert {
@@ -60,12 +78,22 @@ run "access_api_is_jwt_only_and_scoped_to_the_access_table" {
   }
 
   assert {
-    condition     = aws_cognito_user_pool.access.deletion_protection == "ACTIVE" && aws_cognito_user_pool.access.admin_create_user_config[0].allow_admin_create_user_only
-    error_message = "The user pool must be protected and must not allow password self-sign-up."
+    condition     = contains(local.access_routes, "GET /session") && contains(local.access_routes, "POST /access/request") && contains(local.access_routes, "GET /access/identities") && contains(local.access_routes, "POST /access/identities/{identityId}/role")
+    error_message = "An authenticated Telegram visitor must be able to establish a session and request access."
   }
 
   assert {
-    condition     = aws_cognito_user_pool_client.panel.allowed_oauth_flows == toset(["code"]) && !aws_cognito_user_pool_client.panel.generate_secret
-    error_message = "The SPA uses Authorization Code + PKCE with a public client, never a browser-held secret."
+    condition     = contains(local.access_routes, "GET /control-plane")
+    error_message = "Approved identities need one read-only control-plane snapshot endpoint."
+  }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.LIFECYCLE_TABLE_NAME == "spawnpoint-lifecycle-v2" && aws_lambda_function.access_api.environment[0].variables.RELEASE_BUCKET == "spawnpoint-releases-123456789012"
+    error_message = "The read model must use the established lifecycle and release stores."
+  }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.BOT_TOKEN_PARAMETER == "/spawnpoint/bot/token"
+    error_message = "The verifier must read the existing bot token from SecureString rather than Terraform state."
   }
 }

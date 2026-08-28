@@ -58,8 +58,8 @@ data "aws_iam_policy_document" "bot" {
   }
 
   statement {
-    sid       = "ObserveAccessCandidates"
-    actions   = ["dynamodb:UpdateItem"]
+    sid       = "AuthorizeAndObserveTelegramAccounts"
+    actions   = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
     resources = [data.aws_dynamodb_table.access.arn]
   }
 }
@@ -94,7 +94,6 @@ resource "aws_lambda_function" "bot" {
       MINI_APP_URL               = var.mini_app_url
       BOT_TOKEN_PARAMETER        = "/spawnpoint/bot/token"
       WEBHOOK_SECRET_PARAMETER   = "/spawnpoint/bot/webhook-secret"
-      ALLOW_LIST_PARAMETER       = "/spawnpoint/bot/allow-list"
       ACCESS_TABLE_NAME          = data.aws_dynamodb_table.access.name
     }
   }

@@ -69,9 +69,3 @@ export function hasPermission(identity: Identity, role: Role, permission: Permis
 export function isBuiltInRoleId(value: string): value is BuiltInRoleId {
   return Object.hasOwn(builtInRoles, value);
 }
-
-export function normalizeVerifiedEmail(claims: Readonly<Record<string, unknown>>): string | null {
-  const email = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : "";
-  const verified = claims.email_verified === true || claims.email_verified === "true";
-  return email !== "" && verified ? email : null;
-}

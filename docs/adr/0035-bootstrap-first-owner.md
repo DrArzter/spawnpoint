@@ -1,6 +1,6 @@
 # ADR-0035 — Bootstrap the first Owner through one verified Google identity
 
-- Status: Proposed
+- Status: Superseded by [ADR-0037](0037-telegram-only-browser-identity.md)
 - Date: 2026-08-27
 - Milestone: M4
 - Amends: [ADR-0018](0018-identity-and-sign-in.md), which did not define how the first privileged identity is established

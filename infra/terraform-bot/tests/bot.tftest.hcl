@@ -78,7 +78,6 @@ run "bot_is_an_isolated_webhook" {
         "MINI_APP_URL",
         "BOT_TOKEN_PARAMETER",
         "WEBHOOK_SECRET_PARAMETER",
-        "ALLOW_LIST_PARAMETER",
         "ACCESS_TABLE_NAME",
       ] : contains(keys(aws_lambda_function.bot.environment[0].variables), key)
     ])

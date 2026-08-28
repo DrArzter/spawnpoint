@@ -15,8 +15,8 @@ anything a Lambda would only wrap is a direct service integration instead. See
 | Control plane | start, status, releases, promote, backups, restore, logs, link, unlink | Authorises requests, enforces single-flight operation rules and starts Step Functions executions. See [ADR-0012](../docs/adr/0012-web-control-panel.md), [ADR-0019](../docs/adr/0019-account-linking.md) and [ADR-0025](../docs/adr/0025-step-functions-for-long-operations.md) |
 | Lifecycle | idle check, post-session backup, and a Spot interruption handler only if [ADR-0027](../docs/adr/0027-spot-request-shape.md) is un-deferred | Scheduled or event-driven. No public surface |
 | Pipeline | release validation, health interpretation, client pack build | Domain tasks invoked by a promotion workflow. Host reconciliation runs through SSM. See [ADR-0025](../docs/adr/0025-step-functions-for-long-operations.md) and [ADR-0030](../docs/adr/0030-desired-and-active-release.md) |
-| Adapters | Discord interactions, Telegram webhook, event fan-out to both | Verify every request. Never trust the identity in the payload unverified. A bot also issues sign-in links, so these are security-relevant. See [ADR-0016](../docs/adr/0016-chat-integrations.md) and [ADR-0021](../docs/adr/0021-sign-in-from-linked-chat-account.md) |
-| Auth | Cognito custom authentication triggers for the bot-issued sign-in link | Verifies one thing: is this token present, unused and unexpired. Keep it that small |
+| Adapters | Discord interactions, Telegram webhook, event fan-out to both | Verify every request. Never trust the identity in the payload unverified. See [ADR-0016](../docs/adr/0016-chat-integrations.md) |
+| Auth | Access API with signed Telegram and Spawnpoint sessions | Verifies Login Widget or Mini App identity, then resolves the same identity and permissions used by the bot. See [ADR-0037](../docs/adr/0037-telegram-only-browser-identity.md) |
 
 Rules that apply to all of them:
 
@@ -72,9 +72,9 @@ shadow: update parsing and command routing live in the framework, and the former
 The layout is the aiogram shape, mapped onto this project's boundary rule — domain decides, everything else carries:
 
 ```
-src/domain/telegram-bot.ts   allow-list (strict: malformed ids throw), input builders, reply wording
+src/domain/telegram-bot.ts   input builders, notification target parsing, reply wording
 src/bot/bot.ts               composition root: middleware order, command registry, bot.catch
-src/bot/middleware/auth.ts   the allow-list gate — commands only, so strangers' chatter is never answered
+src/bot/middleware/auth.ts   per-command permission gate backed by the shared access directory
 src/bot/commands/*.ts        start / status / pack, thin ctx glue
 src/bot/services/aws.ts      the AWS port: every SDK call, and the Parameter Store cache
 src/bot/handler.ts           cold-start wiring and grammY's aws-lambda-async webhook callback
@@ -87,8 +87,7 @@ execution inputs — the history is the audit record, the notifications leg will
 Transport decisions worth knowing: the Function URL uses `authorization_type = NONE` because Telegram cannot sign
 SigV4 — grammY's `secretToken` option enforces the webhook secret before any handler runs. `bot.catch` absorbs handler
 errors into a logged 200, because a non-200 makes Telegram redeliver the update and a broken bot becomes a retry
-storm. Secrets come from Parameter Store: token and webhook secret cached for the container's life, the allow-list on
-a 60-second TTL so `put-parameter --overwrite` takes effect without a redeploy.
+storm. Secrets come from Parameter Store; authorization comes from the DynamoDB identity, role and direct grants.
 
 ### What still grows later
 

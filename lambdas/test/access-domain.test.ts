@@ -5,7 +5,6 @@ import {
   builtInRoles,
   effectivePermissions,
   hasPermission,
-  normalizeVerifiedEmail,
 } from "../src/access/domain.ts";
 
 test("visitor, player, operator and owner capabilities increase deliberately", () => {
@@ -23,10 +22,4 @@ test("direct grants add one exception without weakening the role contract", () =
   assert.deepEqual([...effectivePermissions(identity, builtInRoles.viewer)].sort(), ["metrics.read", "status.read"]);
   assert.equal(hasPermission(identity, builtInRoles.viewer, "metrics.read"), true);
   assert.throws(() => effectivePermissions(identity, builtInRoles.player), /does not match/);
-});
-
-test("bootstrap accepts only a normalized verified email claim", () => {
-  assert.equal(normalizeVerifiedEmail({ email: " Owner@Example.COM ", email_verified: "true" }), "owner@example.com");
-  assert.equal(normalizeVerifiedEmail({ email: "owner@example.com", email_verified: false }), null);
-  assert.equal(normalizeVerifiedEmail({ email_verified: true }), null);
 });

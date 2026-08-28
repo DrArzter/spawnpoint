@@ -65,7 +65,9 @@ test("notification targets accept groups and DMs, and refuse to be silently empt
 });
 
 test("the auth middleware gates commands only, and denies politely", async () => {
-  const gate = authMiddleware(async () => "111,222", { commands: new Set(), callbacks: new Set() });
+  const gate = authMiddleware(async (telegramId) => [111, 222].includes(telegramId), {
+    publicCommands: new Set(), publicCallbacks: new Set(), commands: new Map(), callbacks: new Map(),
+  });
 
   const member = stubContext({ userId: 111, isCommand: true });
   await gate(member.ctx as never, member.next);
@@ -87,13 +89,15 @@ test("the auth middleware gates commands only, and denies politely", async () =>
 
   const callbackStranger = stubContext({ userId: 999, isCommand: false, isCallback: true });
   await gate(callbackStranger.ctx as never, callbackStranger.next);
-  assert.equal(callbackStranger.nextCalled, false, "callbacks pass through the same allow-list");
+  assert.equal(callbackStranger.nextCalled, false, "callbacks pass through the same permission check");
 });
 
 test("public interactions reach visitors without making restricted callbacks public", async () => {
-  const gate = authMiddleware(async () => "111", {
-    commands: new Set(["start", "status"]),
-    callbacks: new Set([callbacks.status, callbacks.requestAccess]),
+  const gate = authMiddleware(async (telegramId, permission) => telegramId === 111 && permission === "session.start", {
+    publicCommands: new Set(["start", "status"]),
+    publicCallbacks: new Set([callbacks.status, callbacks.requestAccess]),
+    commands: new Map([["server_start", "session.start"]]),
+    callbacks: new Map([[callbacks.confirmStart, "session.start"]]),
   });
   const visitorCommand = stubContext({ userId: 999, isCommand: true });
   visitorCommand.ctx = {

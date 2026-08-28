@@ -23,8 +23,8 @@ Two things have settled since this was written on 2026-08-11, and the text below
 | Backup store | S3, versioned, lifecycle rules | World archives |
 | Event bus | SNS | One topic. Every notable event is published to it |
 | Chat adapters | Lambda per platform | Format events for Discord and Telegram; receive commands |
-| Identity | Cognito user pool | Google sign-in, and a custom flow for bot-issued sign-in links. Chat commands are authenticated by the platform itself |
-| Link table | DynamoDB | Maps chat and Minecraft accounts to an internal identity. Doubles as the allow-list, the chat sign-in route, and the source the whitelist is generated from. See [ADR-0019](adr/0019-account-linking.md), [ADR-0021](adr/0021-sign-in-from-linked-chat-account.md), [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md) |
+| Identity | Access Lambda + DynamoDB | Verifies signed Telegram browser/Mini App identity and issues a short-lived Spawnpoint session; roles grant access separately. See [ADR-0037](adr/0037-telegram-only-browser-identity.md) |
+| Access directory | DynamoDB | Maps Telegram, game and network accounts to an internal identity, role and direct grants. The bot and panel read the same authority |
 | Web panel and pack site | S3 + CloudFront | Static. Panel is a client of the API; packs are files |
 | Connectivity | An overlay agent on the instance today; Route 53 or a raw address are the other two modes of the same contract | Publishes the connection string on start and retracts it on stop. One contract, three implementations; **ZeroTier is the chosen mode**. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | Observability | Session Prometheus/Grafana + CloudWatch + Budgets | Detailed live game/host dashboard during play; durable AWS signals and alarms after the instance is gone |
@@ -163,7 +163,7 @@ every component here would have needed a permanent one.
 | Release pipeline | A state machine triggered by a write to the live pointer. Idle otherwise |
 | Idle watchdog | An EventBridge schedule, not a daemon — and the rule is enabled only while the instance is running |
 | Interruption handler | An EventBridge rule on the Spot notice. Nothing polls for it |
-| Identity | Cognito is managed and billed per monthly active user |
+| Identity | Login verification runs only on Lambda requests; there is no continuously billed identity service |
 | Link and token state | DynamoDB in **on-demand** capacity mode |
 | The game server itself | Started on request, stopped when idle. See [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md) |
 
@@ -227,10 +227,9 @@ nothing before the acknowledgement except verifying the signature. See [ADR-0016
 | Instance permissions | Instance profile scoped to the two buckets it needs, and nothing else |
 | Lambda permissions | Per-function roles. SSM send limited to instances carrying the project tag |
 | Who may act | Two roles: player may start and read, owner may promote and restore. Being linked is what makes a chat account authorised at all |
-| Identity | Cognito user pool with Google sign-in. Verified signatures for both bots — Ed25519 for Discord, secret token for Telegram — so the platform does the authenticating. Payload identity is never trusted unverified. See [ADR-0018](adr/0018-identity-and-sign-in.md) |
+| Identity | The access Lambda verifies Telegram Login Widget signatures and Mini App `initData`. The webhook secret authenticates bot transport; both surfaces then resolve the same Telegram account in the access directory. See [ADR-0037](adr/0037-telegram-only-browser-identity.md) |
 | Account linking | One-time code, generated in the panel, redeemed in the bot. Linking grants no privilege and never changes a role. See [ADR-0019](adr/0019-account-linking.md) |
-| Chat sign-in | Only into an already linked identity. Bot issues a single-use, one-minute link, in a direct message only. No just-in-time provisioning: a chat account never creates an identity. See [ADR-0021](adr/0021-sign-in-from-linked-chat-account.md) |
-| Token hygiene | Link codes and sign-in tokens live in separate tables with different shapes, so one can never be redeemed at the other endpoint |
+| Browser sign-in | Telegram Login Widget redirects signed user data to the panel, which exchanges it for a 12-hour Spawnpoint session. Authentication creates at most a Visitor/access candidate; Owner approval creates the identity and role |
 | Secrets | Bot tokens and RCON password in SSM Parameter Store, encrypted. Never in Terraform state or the repository |
 | Public surfaces | Pack site and panel are public; the API requires identity on every request |
 | Audit | CloudTrail records every SSM command and every API call. Operations record their requester |
@@ -254,7 +253,7 @@ nothing before the acknowledgement except verifying the signature. See [ADR-0016
 | Volume or region loss | — | Total loss of the volume | Restore from S3 archive into a new volume |
 | **Account closure** | Billing notice, or silence | Total loss of everything, including the backups | Paid Plan rather than Free Plan, and one copy of the world held outside AWS. See [docs/costs.md](costs.md) |
 | Chat platform outage | Commands time out | No chat control | Panel and owner CLI remain available |
-| Google sign-in outage | Panel login fails | No panel for new sessions | `/panel` from a linked chat account still signs in; owner CLI remains available |
+| Telegram sign-in outage | Panel login and bot commands fail | No new browser sessions or chat control | Existing browser sessions continue until token expiry; owner CLI remains available |
 | Chat account not linked | Command refused | That person cannot use chat commands | Refusal names the link flow. See [ADR-0019](adr/0019-account-linking.md) |
 | Whitelist projection writes an empty list | Reconciliation refuses to write it | Would lock the whole group out | Empty result treated as a bug; manual path in the runbook. See [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md) |
 | Username-to-UUID API unavailable | Binding fails | No new players can be added | Existing bindings are cached, so play is unaffected |

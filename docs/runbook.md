@@ -127,7 +127,7 @@ The `/start` message is an HTML card with inline buttons for status, addresses, 
 Callback navigation edits that one card instead of appending a new message on every tap. Status has Refresh; every
 screen has Back; address and ZeroTier screens have client-side copy buttons. Starting is a two-step action:
 the first button or `/server_start` opens a confirmation screen, and only `Yes, start it` invokes Step Functions.
-Both slash commands and button callbacks use the same SSM allow-list.
+Both slash commands and button callbacks resolve the same Spawnpoint identity and permissions as the panel.
 
 Player onboarding does not require reading this runbook:
 
@@ -139,17 +139,18 @@ Player onboarding does not require reading this runbook:
 - `/help` reopens the complete button menu.
 
 1. Create the bot with @BotFather, keep the token.
-2. Put the three parameters in Parameter Store (the only hand-made secrets in the system):
+   Under **Web Login**, set `dwk99t8cin0cf.cloudfront.net` as its domain. This enables the browser Login Widget;
+   Mini App authentication uses the separately signed `initData` Telegram already supplies.
+2. Put the bot secrets and notification targets in Parameter Store:
 
 ```bash
 aws ssm put-parameter --name /spawnpoint/bot/token --type SecureString --value '<botfather token>' --profile spawnpoint --region eu-central-1
 aws ssm put-parameter --name /spawnpoint/bot/webhook-secret --type SecureString --value "$(openssl rand -hex 32)" --profile spawnpoint --region eu-central-1
-aws ssm put-parameter --name /spawnpoint/bot/allow-list --type String --value '<id1>,<id2>' --profile spawnpoint --region eu-central-1
 aws ssm put-parameter --name /spawnpoint/bot/chat-ids --type String --value '<group id>,<dm id>,...' --profile spawnpoint --region eu-central-1
 ```
 
-   Telegram user ids are numbers; each player gets theirs from @userinfobot. Editing the allow-list is
-   `put-parameter --overwrite` — no deploy.
+   A person sends `/start`, signs in to the panel with Telegram and requests access. An Owner approves the observed
+   Telegram account and assigns a role; no Parameter Store edit or deploy is involved.
 3. Build and apply: `cd lambdas && npm install && npm run build`, then review a saved plan and apply it in
    `infra/terraform-bot`.
 4. Register the webhook, pointing Telegram at the `bot_webhook_url` output with the same secret:
@@ -158,8 +159,8 @@ aws ssm put-parameter --name /spawnpoint/bot/chat-ids --type String --value '<gr
 curl -s "https://api.telegram.org/bot<token>/setWebhook" -d "url=<bot_webhook_url>" -d "secret_token=<webhook-secret value>"
 ```
 
-The bot works in the group and in direct messages alike — commands answer wherever they were asked, and the
-allow-list is by user, not by chat. One platform rule to know: **a bot can never write to a person first.** A player
+The bot works in the group and in direct messages alike — commands answer wherever they were asked, and authorization
+is by identity, not by chat. One platform rule to know: **a bot can never write to a person first.** A player
 who wants the bot in DMs (or a DM notification target) opens the bot once and presses Start; until then that DM does
 not exist for the bot. Notification targets are the `chat-ids` list — group ids are negative, DM ids positive, edit
 with `put-parameter --overwrite`, takes effect within a minute. One unreachable target never blocks the rest.
@@ -176,10 +177,10 @@ every failed stop, because a failed stop is the backup contract failing. Child e
 nothing is announced twice. The group chat id: add the bot to the group, send a message, read `chat.id` from
 `getUpdates` (a negative number for groups).
 
-Acceptance: from a phone on the allow-list, `/start` shows the menu without touching EC2, `/status` answers,
+Acceptance: from an approved Telegram identity, `/start` shows the menu without touching EC2, `/status` answers,
 `/server_start` brings the server up — the group sees
 "requested" and "ready" arrive on their own — and `/pack` returns a working link whose zip carries INSTALL.txt. From a
-phone not on the list, every command is politely denied. Leave, and the watchdog's stop announces itself. That is
+non-approved account, only public status and access request work; operational commands are politely denied. Leave, and the watchdog's stop announces itself. That is
 M4's done-when.
 
 ## The Factorio world

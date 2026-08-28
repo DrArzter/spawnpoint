@@ -1,6 +1,6 @@
 # ADR-0018 — Cognito as the identity broker, with Google, Discord and Telegram sign-in
 
-- Status: Proposed
+- Status: Superseded by [ADR-0037](0037-telegram-only-browser-identity.md)
 - Date: 2026-08-11
 - Milestone: M4
 - Amends: [ADR-0012](0012-web-control-panel.md), which proposed Discord OAuth alone

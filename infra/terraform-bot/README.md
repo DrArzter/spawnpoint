@@ -11,13 +11,12 @@ V1 start and watchdog workflows, `/status` is read-only, and `/pack` returns a
 short-lived presigned S3 link when one exists. `/network` gives the ZeroTier join
 command, while `/address` gives the stable Minecraft and session-scoped Grafana
 addresses. Telegram's webhook secret gates the public Function URL, then the
-SSM allow-list gates commands by numeric Telegram user ID.
+shared access table resolves the Telegram account to one Spawnpoint identity and checks the command's permission.
 
-Secrets and identities live in SSM, not Terraform state:
+Secrets live in SSM; identities and roles live in the shared DynamoDB access table:
 
 - `/spawnpoint/bot/token` (`SecureString`)
 - `/spawnpoint/bot/webhook-secret` (`SecureString`)
-- `/spawnpoint/bot/allow-list` (`String`, comma-separated IDs)
 - `/spawnpoint/bot/chat-ids` (`String`, reserved for the later notifier)
 
 Build and verify before planning:

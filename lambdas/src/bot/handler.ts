@@ -10,12 +10,10 @@ import { buildBot } from "./bot.ts";
 import { accessStore } from "./services/access.ts";
 import { env, parameter } from "./services/aws.ts";
 
-const ALLOW_LIST_TTL_SECONDS = 60;
-
 async function build() {
   const token = await parameter(env("BOT_TOKEN_PARAMETER"));
   const secret = await parameter(env("WEBHOOK_SECRET_PARAMETER"));
-  const bot = buildBot(token, () => parameter(env("ALLOW_LIST_PARAMETER"), ALLOW_LIST_TTL_SECONDS), accessStore);
+  const bot = buildBot(token, accessStore);
   await bot.init();
   return webhookCallback(bot, "aws-lambda-async", {
     secretToken: secret,

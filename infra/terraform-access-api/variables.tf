@@ -11,35 +11,35 @@ variable "aws_profile" {
 }
 
 variable "panel_url" {
-  description = "HTTPS origin receiving Cognito authorization-code callbacks."
+  description = "HTTPS origin hosting the Telegram Login Widget and calling the access API."
   type        = string
   default     = "https://dwk99t8cin0cf.cloudfront.net/"
 }
 
-variable "bootstrap_owner_email" {
-  description = "Exact verified Google email allowed to atomically claim the first Owner."
+variable "bootstrap_owner_telegram_id" {
+  description = "Exact Telegram user id allowed to atomically claim the first Owner."
   type        = string
   sensitive   = true
 
   validation {
-    condition     = can(regex("^[^@[:space:]]+@[^@[:space:]]+$", var.bootstrap_owner_email))
-    error_message = "bootstrap_owner_email must be an email address explicitly selected by the operator."
+    condition     = can(regex("^[1-9][0-9]{4,19}$", var.bootstrap_owner_telegram_id))
+    error_message = "bootstrap_owner_telegram_id must be an explicitly selected numeric Telegram user id."
   }
 }
 
-variable "google_client_id" {
-  description = "Google OAuth web client id. Leave empty until the Google provider is configured."
+variable "telegram_bot_username" {
+  description = "Bot username registered for Web Login in BotFather, without the leading @."
   type        = string
-  default     = ""
+  default     = "drarzterbot"
+
+  validation {
+    condition     = can(regex("^[A-Za-z][A-Za-z0-9_]{3,30}bot$", var.telegram_bot_username))
+    error_message = "telegram_bot_username must be a valid Telegram bot username without @."
+  }
 }
 
-variable "google_client_secret" {
-  description = "Google OAuth web client secret. Stored only in encrypted remote Terraform state and Cognito."
+variable "bot_token_parameter" {
+  description = "Existing SecureString parameter containing the Telegram bot token used to verify login signatures."
   type        = string
-  sensitive   = true
-  default     = ""
-}
-
-locals {
-  google_enabled = var.google_client_id != "" && var.google_client_secret != ""
+  default     = "/spawnpoint/bot/token"
 }

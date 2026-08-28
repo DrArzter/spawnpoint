@@ -8,6 +8,25 @@ AWS_PROFILE_NAME="${AWS_PROFILE_NAME:-spawnpoint}"
 AWS_REGION_NAME="${AWS_REGION_NAME:-eu-central-1}"
 WEB_ROOT="${REPOSITORY_ROOT}/web"
 TERRAFORM_ROOT="${REPOSITORY_ROOT}/infra/terraform-web"
+ACCESS_TERRAFORM_ROOT="${REPOSITORY_ROOT}/infra/terraform-access-api"
+
+terraform_output_if_available() {
+  local name="$1"
+  "${TERRAFORM_BIN}" -chdir="${ACCESS_TERRAFORM_ROOT}" output -raw "${name}" 2>/dev/null || true
+}
+
+if [[ -z "${VITE_ACCESS_API_URL:-}" ]]; then
+  VITE_ACCESS_API_URL="$(terraform_output_if_available api_url)"
+fi
+if [[ -z "${VITE_TELEGRAM_BOT_USERNAME:-}" ]]; then
+  VITE_TELEGRAM_BOT_USERNAME="$(terraform_output_if_available telegram_bot_username)"
+fi
+export VITE_ACCESS_API_URL VITE_TELEGRAM_BOT_USERNAME
+
+if [[ -z "${VITE_ACCESS_API_URL}" || -z "${VITE_TELEGRAM_BOT_USERNAME}" ]]; then
+  printf 'error: access API is not applied; refusing to publish a panel without authentication\n' >&2
+  exit 1
+fi
 
 cd -- "${WEB_ROOT}"
 npm run build

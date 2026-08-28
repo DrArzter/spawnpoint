@@ -1,6 +1,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 
+import { builtInRoles, hasPermission, isBuiltInRoleId, Permission } from "../../access/domain.ts";
 import { env } from "./aws.ts";
 
 export type TelegramContact = Readonly<{
@@ -13,6 +14,7 @@ export type TelegramContact = Readonly<{
 export type AccessStore = Readonly<{
   observe: (contact: TelegramContact) => Promise<void>;
   request: (contact: TelegramContact) => Promise<void>;
+  hasPermission: (telegramId: number, permission: Permission) => Promise<boolean>;
 }>;
 
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({ region: env("AWS_REGION") }));
@@ -75,4 +77,25 @@ async function writeContact(contact: TelegramContact, requested: boolean): Promi
 export const accessStore: AccessStore = {
   observe: (contact) => writeContact(contact, false),
   request: (contact) => writeContact(contact, true),
+  hasPermission: async (telegramId, permission) => {
+    const account = await document.send(new GetCommand({
+      TableName: env("ACCESS_TABLE_NAME"),
+      Key: { pk: `TELEGRAM#${telegramId}`, sk: "ACCOUNT" },
+    }));
+    const identityId = account.Item?.identity_id;
+    if (typeof identityId !== "string") return false;
+    const profile = await document.send(new GetCommand({
+      TableName: env("ACCESS_TABLE_NAME"),
+      Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" },
+    }));
+    const item = profile.Item;
+    if (item === undefined || typeof item.role_id !== "string" || !isBuiltInRoleId(item.role_id)) return false;
+    const identity = {
+      id: identityId,
+      displayName: String(item.display_name ?? identityId),
+      roleId: item.role_id,
+      directGrants: Array.isArray(item.direct_grants) ? item.direct_grants as Permission[] : [],
+    };
+    return hasPermission(identity, builtInRoles[item.role_id], permission);
+  },
 };

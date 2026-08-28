@@ -46,6 +46,18 @@ AWS_REGION_NAME=eu-central-1 \
 scripts/deploy-web.sh
 ```
 
+On a workstation without Terraform CLI, pass the already reviewed outputs
+explicitly; the upload path remains identical and still touches only static
+objects in the dedicated web bucket:
+
+```bash
+WEB_BUCKET_NAME=spawnpoint-web-614934752397 \
+MINI_APP_URL=https://dwk99t8cin0cf.cloudfront.net/ \
+AWS_PROFILE_NAME=spawnpoint \
+AWS_REGION_NAME=eu-central-1 \
+scripts/deploy-web.sh
+```
+
 The script runs the TypeScript/Vite production build, resolves the dedicated
 bucket and URL from Terraform outputs, synchronizes only `dist/assets` and
 uploads `index.html`. Hashed assets receive an immutable one-year cache;

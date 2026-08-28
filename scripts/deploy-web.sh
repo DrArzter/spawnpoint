@@ -12,8 +12,17 @@ TERRAFORM_ROOT="${REPOSITORY_ROOT}/infra/terraform-web"
 cd -- "${WEB_ROOT}"
 npm run build
 
-bucket_name="$(${TERRAFORM_BIN} -chdir="${TERRAFORM_ROOT}" output -raw bucket_name)"
-mini_app_url="$(${TERRAFORM_BIN} -chdir="${TERRAFORM_ROOT}" output -raw mini_app_url)"
+bucket_name="${WEB_BUCKET_NAME:-}"
+mini_app_url="${MINI_APP_URL:-}"
+
+if [[ -z "${bucket_name}" || -z "${mini_app_url}" ]]; then
+  command -v "${TERRAFORM_BIN}" >/dev/null 2>&1 || {
+    printf 'error: terraform is unavailable; set WEB_BUCKET_NAME and MINI_APP_URL explicitly\n' >&2
+    exit 1
+  }
+  [[ -n "${bucket_name}" ]] || bucket_name="$(${TERRAFORM_BIN} -chdir="${TERRAFORM_ROOT}" output -raw bucket_name)"
+  [[ -n "${mini_app_url}" ]] || mini_app_url="$(${TERRAFORM_BIN} -chdir="${TERRAFORM_ROOT}" output -raw mini_app_url)"
+fi
 
 aws s3 sync "${WEB_ROOT}/dist/assets" "s3://${bucket_name}/assets" \
   --delete \

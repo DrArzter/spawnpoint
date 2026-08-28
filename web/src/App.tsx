@@ -9,7 +9,7 @@ import { ProfileScreen } from "./screens/ProfileScreen";
 import { StorageScreen } from "./screens/StorageScreen";
 import { Icon, IconName } from "./Icon";
 import { games, initialMembers, initialOwnerBootstrap, initialRoles, Member, Page, Role, ServerState } from "./model";
-import { applyTheme, getPreferredTheme, getViewerProfile, initializeTelegram, Theme } from "./telegram";
+import { applyTheme, getThemePreference, getViewerProfile, initializeTelegram, persistThemePreference, resolveTheme, subscribeToSystemTheme, Theme, ThemePreference } from "./telegram";
 
 const navigation: readonly { id: Page; label: string; icon: IconName }[] = [
   { id: "dashboard", label: "Overview", icon: "dashboard" },
@@ -25,13 +25,19 @@ export function App() {
   const [worldId, setWorldId] = useState(games[0].worlds[0].id);
   const [serverState, setServerState] = useState<ServerState>("stopped");
   const [notice, setNotice] = useState("");
-  const [theme, setTheme] = useState<Theme>(getPreferredTheme);
+  const [themePreference, setThemePreference] = useState<ThemePreference>(getThemePreference);
+  const [theme, setTheme] = useState<Theme>(() => resolveTheme(getThemePreference()));
   const [picker, setPicker] = useState<"game" | "world" | null>(null);
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [roles, setRoles] = useState<Role[]>(initialRoles);
   const [viewer] = useState(getViewerProfile);
 
-  useEffect(() => initializeTelegram(setTheme), []);
+  useEffect(() => initializeTelegram(), []);
+  useEffect(() => {
+    persistThemePreference(themePreference);
+    setTheme(resolveTheme(themePreference));
+    if (themePreference === "system") return subscribeToSystemTheme(setTheme);
+  }, [themePreference]);
   useEffect(() => applyTheme(theme), [theme]);
   useEffect(() => {
     if (!notice) return;
@@ -55,6 +61,12 @@ export function App() {
     window.setTimeout(() => setServerState("running"), 900);
   }
 
+  function toggleTheme() {
+    setThemePreference((current) => current === "system" ? (theme === "dark" ? "light" : "dark") : "system");
+  }
+
+  const themeLabel = themePreference === "system" ? `System theme · ${theme}` : `${themePreference[0].toUpperCase()}${themePreference.slice(1)} theme`;
+
   return (
     <div className="console-shell">
       <aside className="side-nav">
@@ -67,7 +79,7 @@ export function App() {
           ))}
         </nav>
         <div className="nav-footer">
-          <button aria-label={`Use ${theme === "light" ? "dark" : "light"} theme`} className="theme-toggle" onClick={() => setTheme(theme === "light" ? "dark" : "light")} type="button"><Icon name={theme === "light" ? "moon" : "sun"} /><span>{theme === "light" ? "Dark theme" : "Light theme"}</span></button>
+          <button aria-label={`${themeLabel}. Change theme`} className="theme-toggle" onClick={toggleTheme} title={`${themeLabel}. Click to ${themePreference === "system" ? `use ${theme === "light" ? "dark" : "light"}` : "follow the system"}`} type="button"><Icon name={theme === "light" ? "moon" : "sun"} /><span>{themeLabel}</span></button>
           <button className="identity" onClick={() => setPage("profile")} type="button"><Avatar name={members[0].name} photoUrl={viewer.photoUrl} /><div><strong>{members[0].name}</strong><small>Owner · View profile</small></div></button>
         </div>
       </aside>
@@ -81,7 +93,7 @@ export function App() {
             <Icon name="arrow" size={14} />
             <div className="crumb-menu"><button aria-expanded={picker === "world"} onClick={() => setPicker(picker === "world" ? null : "world")} type="button">{world.title}<Icon name="down" size={14} /></button>{picker === "world" && <div className="picker-menu world-picker">{game.worlds.map((item) => <button className={item.id === world.id ? "selected" : ""} key={item.id} onClick={() => { setWorldId(item.id); setPicker(null); }} type="button"><div><strong>{item.title}</strong><small>Release {item.release}</small></div></button>)}</div>}</div>
           </div>
-          <div className="top-actions"><button aria-label={`Use ${theme === "light" ? "dark" : "light"} theme`} className="header-theme-toggle" onClick={() => setTheme(theme === "light" ? "dark" : "light")} type="button"><Icon name={theme === "light" ? "moon" : "sun"} /></button><span className={`top-status ${serverState}`}><i />{serverState}</span></div>
+          <div className="top-actions"><button aria-label={`${themeLabel}. Change theme`} className="header-theme-toggle" onClick={toggleTheme} title={themeLabel} type="button"><Icon name={theme === "light" ? "moon" : "sun"} /></button><span className={`top-status ${serverState}`}><i />{serverState}</span></div>
         </header>
 
         <div className="page-content">

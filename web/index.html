@@ -6,6 +6,20 @@
     <meta name="theme-color" content="#0b0d10" />
     <title>Spawnpoint</title>
     <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
+    <script>
+      (() => {
+        try {
+          const saved = localStorage.getItem("spawnpoint.theme");
+          const telegram = window.Telegram?.WebApp;
+          const system = telegram?.initData
+            ? telegram.colorScheme
+            : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          const theme = saved === "light" || saved === "dark" ? saved : system;
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme = theme;
+        } catch {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

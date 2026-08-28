@@ -38,6 +38,7 @@ type TelegramWebApp = {
 };
 
 export type Theme = "light" | "dark";
+export type ThemePreference = Theme | "system";
 export type ViewerProfile = {
   displayName: string;
   inTelegram: boolean;
@@ -52,10 +53,48 @@ declare global {
   }
 }
 
-export function getPreferredTheme(): Theme {
-  const telegramTheme = window.Telegram?.WebApp.colorScheme;
-  if (telegramTheme) return telegramTheme;
+const THEME_STORAGE_KEY = "spawnpoint.theme";
+
+function systemTheme(): Theme {
+  const app = window.Telegram?.WebApp;
+  if (app?.initData && app.colorScheme) return app.colorScheme;
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+export function getThemePreference(): ThemePreference {
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === "light" || stored === "dark" || stored === "system") return stored;
+  } catch {
+    // Storage may be unavailable in a restricted embedded browser.
+  }
+  return "system";
+}
+
+export function resolveTheme(preference: ThemePreference): Theme {
+  return preference === "system" ? systemTheme() : preference;
+}
+
+export function persistThemePreference(preference: ThemePreference): void {
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, preference);
+  } catch {
+    // The active theme still works for this session when storage is blocked.
+  }
+}
+
+export function subscribeToSystemTheme(onChange: (theme: Theme) => void): () => void {
+  const app = window.Telegram?.WebApp;
+  if (app?.initData) {
+    const handleThemeChanged = () => onChange(app.colorScheme);
+    app.onEvent("themeChanged", handleThemeChanged);
+    return () => app.offEvent("themeChanged", handleThemeChanged);
+  }
+
+  const media = window.matchMedia("(prefers-color-scheme: dark)");
+  const handleMediaChanged = (event: MediaQueryListEvent) => onChange(event.matches ? "dark" : "light");
+  media.addEventListener("change", handleMediaChanged);
+  return () => media.removeEventListener("change", handleMediaChanged);
 }
 
 export function getViewerProfile(): ViewerProfile {
@@ -80,6 +119,7 @@ export function openInBrowser(): void {
 export function applyTheme(theme: Theme): void {
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#111318" : "#f8fafd");
   const app = window.Telegram?.WebApp;
   if (!app?.initData) return;
   const background = theme === "dark" ? "#111318" : "#f8fafd";
@@ -87,15 +127,11 @@ export function applyTheme(theme: Theme): void {
   app.setBackgroundColor(background);
 }
 
-export function initializeTelegram(onThemeChange: (theme: Theme) => void): () => void {
+export function initializeTelegram(): void {
   const app = window.Telegram?.WebApp;
-  if (!app) return () => undefined;
+  if (!app) return;
   const isTelegramSession = app.initData.length > 0;
-  if (!isTelegramSession) return () => undefined;
-
-  const handleThemeChanged = () => onThemeChange(app.colorScheme);
-  app.onEvent("themeChanged", handleThemeChanged);
+  if (!isTelegramSession) return;
   app.expand();
   app.ready();
-  return () => app.offEvent("themeChanged", handleThemeChanged);
 }

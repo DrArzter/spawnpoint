@@ -19,6 +19,8 @@
   --text-md: 14px;
   --text-lg: 18px;
   --text-xl: 28px;
+  --layout-sidebar-width: 220px;
+  --layout-content-max: 1880px;
   --blue: var(--color-accent);
   --blue-soft: var(--color-accent-container);
   --border: var(--color-border);
@@ -64,6 +66,22 @@ body {
   color: var(--color-text);
   font-size: var(--text-md);
   line-height: 1.45;
+}
+
+.page-content {
+  width: min(100%, clamp(1180px, 76vw, var(--layout-content-max)));
+  padding-right: clamp(16px, 2.2vw, 56px);
+  padding-left: clamp(16px, 2.2vw, 56px);
+}
+
+@media (min-width: 821px) {
+  .side-nav {
+    width: var(--layout-sidebar-width);
+  }
+
+  .workspace {
+    margin-left: var(--layout-sidebar-width);
+  }
 }
 
 .side-nav nav button {
@@ -344,6 +362,117 @@ body {
 @media (pointer: coarse) {
   :root { --control-height: 44px; }
   .ui-tabs button { min-height: 44px; }
+}
+
+@media (min-width: 1600px) {
+  :root {
+    --layout-sidebar-width: 248px;
+    --control-height: 44px;
+    --text-xs: 12px;
+    --text-sm: 13px;
+    --text-md: 15px;
+    --text-lg: 20px;
+    --text-xl: 32px;
+  }
+
+  .product-mark,
+  .context-bar {
+    min-height: 72px;
+  }
+
+  .product-mark strong {
+    font-size: 19px;
+  }
+
+  .page-content {
+    padding-top: 40px;
+    padding-bottom: 80px;
+  }
+
+  h1 {
+    font-size: var(--text-xl);
+  }
+
+  h2 {
+    font-size: var(--text-lg);
+  }
+
+  .service-panel {
+    min-height: 152px;
+    padding: 30px;
+  }
+
+  .service-icon {
+    width: 60px;
+    height: 60px;
+  }
+
+  .service-summary h2 {
+    font-size: 28px;
+  }
+
+  .service-summary div > p:last-child,
+  .stat p,
+  .section-title p,
+  .activity-table > div {
+    font-size: var(--text-sm);
+  }
+
+  .stat {
+    padding: 26px;
+  }
+
+  .stat strong {
+    font-size: 27px;
+  }
+
+  .stat small {
+    font-size: var(--text-xs);
+  }
+
+  .activity-table > div {
+    min-height: 60px;
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+
+  .profile-details > header,
+  .setting-heading,
+  .bootstrap-summary,
+  .invite-panel > header {
+    padding: 22px;
+  }
+}
+
+@media (min-width: 2200px) {
+  :root {
+    --layout-sidebar-width: 280px;
+    --layout-content-max: 2240px;
+    --text-xs: 13px;
+    --text-sm: 14px;
+    --text-md: 16px;
+  }
+
+  .page-content:has(> .service-panel) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(440px, .85fr);
+    column-gap: 28px;
+    align-content: start;
+  }
+
+  .page-content:has(> .service-panel) > .page-heading {
+    grid-column: 1 / -1;
+  }
+
+  .page-content:has(> .service-panel) > :is(.service-panel, .invite-panel, .summary-grid) {
+    grid-column: 1;
+  }
+
+  .page-content:has(> .service-panel) > .data-section {
+    grid-column: 2;
+    grid-row: 2 / span 3;
+    margin-top: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

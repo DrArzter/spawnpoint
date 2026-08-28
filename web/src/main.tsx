@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
 import "./styles.css";
+import "./responsive.css";
+import "./design-system.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

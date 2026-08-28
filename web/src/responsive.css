@@ -1,0 +1,117 @@
+/* Pages adapt to the width they actually receive, not to the browser viewport. */
+.page-content {
+  container: content / inline-size;
+}
+
+.profile-layout > * {
+  min-width: 0;
+}
+
+@container content (max-width: 900px) {
+  .users-columns:has(.link-editor) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .roles-layout:has(.role-editor) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container content (max-width: 760px) {
+  .profile-layout,
+  .chart-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stat:nth-child(2) {
+    border-right: 0;
+  }
+
+  .stat:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+@container content (max-width: 640px) {
+  .service-panel,
+  .action-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .service-actions {
+    justify-content: flex-end;
+  }
+
+  .action-heading > button {
+    align-self: flex-start;
+  }
+
+  .activity-table > div {
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+  }
+
+  .activity-table > div span:nth-child(3) {
+    display: none;
+  }
+}
+
+@container content (max-width: 480px) {
+  .profile-heading {
+    gap: 14px;
+  }
+
+  .avatar-large {
+    width: 60px;
+    height: 60px;
+  }
+
+  .profile-layout {
+    gap: 14px;
+  }
+
+  .profile-source {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .profile-source strong {
+    text-align: left;
+  }
+
+  .link-editor form > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .linked-list > div {
+    grid-template-columns: 90px minmax(0, 1fr);
+  }
+
+  .linked-list > div button {
+    grid-column: 2;
+  }
+
+  .bootstrap-summary {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .bootstrap-owner dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .bootstrap-owner dl > div {
+    padding-right: 0;
+  }
+
+  .subscription-table > header,
+  .subscription-table > div {
+    grid-template-columns: minmax(0, 1fr) 76px 76px;
+  }
+}

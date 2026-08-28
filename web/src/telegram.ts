@@ -17,12 +17,33 @@ type ThemeParams = Partial<{
 
 type TelegramWebApp = {
   initData: string;
+  initDataUnsafe?: {
+    user?: {
+      id: number;
+      first_name: string;
+      last_name?: string;
+      username?: string;
+      photo_url?: string;
+    };
+  };
   colorScheme: "light" | "dark";
   themeParams: ThemeParams;
   ready(): void;
   expand(): void;
   setHeaderColor(color: string): void;
   setBackgroundColor(color: string): void;
+  openLink(url: string): void;
+  onEvent(event: "themeChanged", callback: () => void): void;
+  offEvent(event: "themeChanged", callback: () => void): void;
+};
+
+export type Theme = "light" | "dark";
+export type ViewerProfile = {
+  displayName: string;
+  inTelegram: boolean;
+  username?: string;
+  photoUrl?: string;
+  telegramId?: string;
 };
 
 declare global {
@@ -31,30 +52,50 @@ declare global {
   }
 }
 
-export function initializeTelegram(): boolean {
-  const app = window.Telegram?.WebApp;
-  if (!app) return false;
-  const isTelegramSession = app.initData.length > 0;
-  if (!isTelegramSession) return false;
+export function getPreferredTheme(): Theme {
+  const telegramTheme = window.Telegram?.WebApp.colorScheme;
+  if (telegramTheme) return telegramTheme;
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
 
-  const root = document.documentElement;
-  const theme = app.themeParams;
-  const variables: Record<string, string | undefined> = {
-    "--tg-bg": theme.bg_color,
-    "--tg-text": theme.text_color,
-    "--tg-hint": theme.hint_color,
-    "--tg-accent": theme.button_color ?? theme.link_color,
-    "--tg-accent-text": theme.button_text_color,
-    "--tg-surface": theme.secondary_bg_color ?? theme.section_bg_color,
-    "--tg-danger": theme.destructive_text_color,
+export function getViewerProfile(): ViewerProfile {
+  const user = window.Telegram?.WebApp.initDataUnsafe?.user;
+  if (!user) return { displayName: "DrArzter", inTelegram: false };
+  return {
+    displayName: [user.first_name, user.last_name].filter(Boolean).join(" "),
+    inTelegram: true,
+    username: user.username,
+    photoUrl: user.photo_url,
+    telegramId: String(user.id),
   };
-  for (const [name, value] of Object.entries(variables)) {
-    if (value) root.style.setProperty(name, value);
-  }
+}
 
-  app.setHeaderColor(theme.header_bg_color ?? theme.bg_color ?? "#0b0d10");
-  app.setBackgroundColor(theme.bg_color ?? "#0b0d10");
+export function openInBrowser(): void {
+  const url = `${window.location.origin}${window.location.pathname}`;
+  const app = window.Telegram?.WebApp;
+  if (app?.initData) app.openLink(url);
+  else window.open(url, "_blank", "noopener,noreferrer");
+}
+
+export function applyTheme(theme: Theme): void {
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.style.colorScheme = theme;
+  const app = window.Telegram?.WebApp;
+  if (!app?.initData) return;
+  const background = theme === "dark" ? "#111318" : "#f8fafd";
+  app.setHeaderColor(theme === "dark" ? "#17191f" : "#ffffff");
+  app.setBackgroundColor(background);
+}
+
+export function initializeTelegram(onThemeChange: (theme: Theme) => void): () => void {
+  const app = window.Telegram?.WebApp;
+  if (!app) return () => undefined;
+  const isTelegramSession = app.initData.length > 0;
+  if (!isTelegramSession) return () => undefined;
+
+  const handleThemeChanged = () => onThemeChange(app.colorScheme);
+  app.onEvent("themeChanged", handleThemeChanged);
   app.expand();
   app.ready();
-  return true;
+  return () => app.offEvent("themeChanged", handleThemeChanged);
 }

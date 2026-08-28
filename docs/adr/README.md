@@ -91,6 +91,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0032](0032-on-demand-single-instance.md) | Run the game server on one on-demand EC2 instance | Accepted, supersedes [0004](0004-ec2-spot-for-the-game-server.md) | M0 |
 | [0033](0033-connectivity-as-a-strategy.md) | Connectivity is a strategy behind one interface, constrained by the game's auth model | Proposed, amends [0024](0024-connectivity-modes.md) | M2 |
 | [0034](0034-per-game-adapter.md) | A game is a module: data plus functions, minecraft the byte-identical default | Accepted | cross-cutting |
+| [0035](0035-bootstrap-first-owner.md) | Bootstrap the first Owner through one verified Google identity | Proposed | M4 |
 
 ## Decisions still to record
 

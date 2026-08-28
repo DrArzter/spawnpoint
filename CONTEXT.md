@@ -19,3 +19,15 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 **Operation**: One durable attempt to change or observe lifecycle state, with its own identity, status and failure history. The operation is separate from the desired and active release values it may change.
 
 **Session**: One identified period in which a world is being started, is ready for players, or is being stopped. A new start receives a new session identity so work left over from an earlier session cannot stop or modify it.
+
+**Identity**: One person authorised to use Spawnpoint, independent of the chat, game and network accounts through which that person is recognised.
+
+**Bootstrap owner**: The first identity granted the built-in Owner role through a one-time trusted setup path. After it is claimed, all other identities and roles are managed through normal access control. _Avoid_: Superadmin; Owner is the privileged role, while bootstrap describes only how its first holder is established.
+
+**Profile**: The user-facing representation of an identity, including its display details and linked accounts. It is not an authentication authority.
+
+**Linked account**: An external chat, game or network identity associated with exactly one Spawnpoint identity. _Avoid_: User; one user may have several linked accounts.
+
+**Subscription**: One identity's opt-in to a category of notifications, optionally scoped to a particular game. Roles do not imply subscriptions.
+
+**Invitation**: A request from one identity to play a selected game world, addressed either to specific identities or to every eligible identity.

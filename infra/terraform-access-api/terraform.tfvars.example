@@ -1,0 +1,6 @@
+bootstrap_owner_email = "owner@example.com"
+
+# Create a Google OAuth 2.0 Web application, configure google_redirect_uri
+# from the first apply, then set both values and apply again.
+google_client_id     = ""
+google_client_secret = ""

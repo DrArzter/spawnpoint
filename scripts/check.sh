@@ -75,7 +75,7 @@ check_compose_bindings() {
 
 check_terraform() {
   local root
-  for root in infra/terraform infra/terraform-bootstrap infra/terraform-storage infra/terraform-guardrails infra/terraform-operations infra/terraform-releases infra/terraform-github infra/terraform-access infra/terraform-bot infra/terraform-web; do
+  for root in infra/terraform infra/terraform-bootstrap infra/terraform-storage infra/terraform-guardrails infra/terraform-operations infra/terraform-releases infra/terraform-github infra/terraform-access infra/terraform-access-api infra/terraform-bot infra/terraform-web; do
     [[ -d "${root}" ]] || continue
     printf -- '--- %s\n' "${root}"
     docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp/terraform-home \

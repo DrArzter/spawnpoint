@@ -1,0 +1,121 @@
+resource "aws_iam_role" "access_api" {
+  name               = "spawnpoint-access-api"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+
+resource "aws_iam_role_policy_attachment" "access_api_logs" {
+  role       = aws_iam_role.access_api.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+data "aws_iam_policy_document" "access_api" {
+  statement {
+    sid = "ReadAndManageAccessDirectory"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:Query",
+      "dynamodb:TransactWriteItems",
+      "dynamodb:UpdateItem",
+    ]
+    resources = [
+      data.aws_dynamodb_table.access.arn,
+      "${data.aws_dynamodb_table.access.arn}/index/gsi1",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "access_api" {
+  name   = "spawnpoint-access-api"
+  role   = aws_iam_role.access_api.id
+  policy = data.aws_iam_policy_document.access_api.json
+}
+
+resource "aws_cloudwatch_log_group" "access_api" {
+  name              = "/aws/lambda/spawnpoint-access-api"
+  retention_in_days = 14
+}
+
+resource "aws_lambda_function" "access_api" {
+  function_name    = "spawnpoint-access-api"
+  role             = aws_iam_role.access_api.arn
+  runtime          = "nodejs22.x"
+  handler          = "index.handler"
+  filename         = data.archive_file.access_api.output_path
+  source_code_hash = data.archive_file.access_api.output_base64sha256
+  timeout          = 10
+  memory_size      = 256
+
+  environment {
+    variables = {
+      ACCESS_TABLE_NAME     = data.aws_dynamodb_table.access.name
+      BOOTSTRAP_OWNER_EMAIL = lower(trimspace(var.bootstrap_owner_email))
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.access_api]
+}
+
+resource "aws_apigatewayv2_api" "access" {
+  name          = "spawnpoint-access"
+  protocol_type = "HTTP"
+
+  cors_configuration {
+    allow_origins = [trimsuffix(var.panel_url, "/")]
+    allow_headers = ["authorization", "content-type"]
+    allow_methods = ["GET", "POST", "OPTIONS"]
+    max_age       = 3600
+  }
+}
+
+resource "aws_apigatewayv2_authorizer" "cognito" {
+  api_id           = aws_apigatewayv2_api.access.id
+  authorizer_type  = "JWT"
+  identity_sources = ["$request.header.Authorization"]
+  name             = "spawnpoint-cognito"
+
+  jwt_configuration {
+    audience = [aws_cognito_user_pool_client.panel.id]
+    issuer   = "https://${aws_cognito_user_pool.access.endpoint}"
+  }
+}
+
+resource "aws_apigatewayv2_integration" "access_api" {
+  api_id                 = aws_apigatewayv2_api.access.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.access_api.invoke_arn
+  payload_format_version = "2.0"
+  timeout_milliseconds   = 10000
+}
+
+locals {
+  access_routes = toset([
+    "GET /me",
+    "GET /access/candidates",
+    "POST /access/candidates/{telegramId}/approve",
+    "POST /access/candidates/{telegramId}/dismiss",
+  ])
+}
+
+resource "aws_apigatewayv2_route" "access" {
+  for_each = local.access_routes
+
+  api_id             = aws_apigatewayv2_api.access.id
+  route_key          = each.value
+  target             = "integrations/${aws_apigatewayv2_integration.access_api.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+}
+
+resource "aws_apigatewayv2_stage" "default" {
+  api_id      = aws_apigatewayv2_api.access.id
+  name        = "$default"
+  auto_deploy = true
+}
+
+resource "aws_lambda_permission" "access_api" {
+  statement_id  = "AllowApiGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.access_api.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.access.execution_arn}/*/*"
+}

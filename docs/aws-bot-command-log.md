@@ -216,3 +216,15 @@ aws ec2 describe-instances \
 
 Do not paste the BotFather token into a command history and do not run
 `source .env`. Read the one exact variable and validate its shape instead.
+
+## Separate browser entry point
+
+On 2026-08-28 the main menu gained a second panel entry. `Open panel` remains
+Telegram's `web_app` button, while `Open panel in browser` is a normal HTTPS
+URL button to the same CloudFront application. This gives desktop clients a
+usable escape hatch when their embedded WebView is missing or undesirable.
+
+The Lambda bundle passed tests, TypeScript checking and the production build.
+The reviewed Terraform plan was exactly `0 add / 1 change / 0 destroy`, with
+only `aws_lambda_function.bot.source_code_hash` changing. The saved plan was
+applied and the post-apply plan returned `No changes`.

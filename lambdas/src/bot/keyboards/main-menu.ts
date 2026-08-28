@@ -12,7 +12,13 @@ export const callbacks = {
 
 export function mainMenuKeyboard(miniAppUrl?: string): InlineKeyboard {
   const keyboard = new InlineKeyboard();
-  if (miniAppUrl !== undefined) keyboard.webApp("Open panel", miniAppUrl).row();
+  if (miniAppUrl !== undefined) {
+    keyboard
+      .webApp("Open panel", miniAppUrl)
+      .row()
+      .url("Open panel in browser", miniAppUrl)
+      .row();
+  }
   return keyboard
     .text("Status", callbacks.status)
     .text("Addresses", callbacks.address)

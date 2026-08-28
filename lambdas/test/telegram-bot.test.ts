@@ -195,6 +195,12 @@ test("replies carry what the player actually needs", () => {
     ),
     true,
   );
+  assert.equal(
+    menu.inline_keyboard.flat().some(
+      (button) => "url" in button && button.url === "https://example.com/" && button.text === "Open panel in browser",
+    ),
+    true,
+  );
   const confirmationCallbacks = confirmStartKeyboard().inline_keyboard
     .flat()
     .filter((button) => "callback_data" in button)

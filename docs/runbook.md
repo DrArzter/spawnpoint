@@ -113,10 +113,11 @@ stop produced a checked backup before EC2 stopped. If the watchdog itself fails,
 The exact first deployment, webhook and acceptance commands are recorded in
 [`aws-bot-command-log.md`](aws-bot-command-log.md).
 
-The read-only React Mini App is deployed separately; its exact infrastructure,
+The React control panel is deployed separately; its exact infrastructure,
 upload and acceptance commands are recorded in
-[`aws-web-command-log.md`](aws-web-command-log.md). The bot opens it through
-`Open panel`; its Start button is deliberately disabled. Telegram Desktop on
+[`aws-web-command-log.md`](aws-web-command-log.md). The bot offers both
+`Open panel` for Telegram's embedded Mini App and `Open panel in browser` as a
+normal HTTPS link. Telegram Desktop on
 Linux requires WebKitGTK (`webkit2gtk-4.1` on CachyOS/Arch).
 
 The command bot is deployed from the isolated `infra/terraform-bot` root. `/start` only opens its menu;

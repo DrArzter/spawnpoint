@@ -56,6 +56,12 @@ data "aws_iam_policy_document" "bot" {
     actions   = ["ssm:GetParameter"]
     resources = ["arn:aws:ssm:${var.aws_region}:${local.account_id}:parameter/spawnpoint/bot/*"]
   }
+
+  statement {
+    sid       = "ObserveAccessCandidates"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = [data.aws_dynamodb_table.access.arn]
+  }
 }
 
 resource "aws_iam_role_policy" "bot" {
@@ -89,6 +95,7 @@ resource "aws_lambda_function" "bot" {
       BOT_TOKEN_PARAMETER        = "/spawnpoint/bot/token"
       WEBHOOK_SECRET_PARAMETER   = "/spawnpoint/bot/webhook-secret"
       ALLOW_LIST_PARAMETER       = "/spawnpoint/bot/allow-list"
+      ACCESS_TABLE_NAME          = data.aws_dynamodb_table.access.name
     }
   }
 

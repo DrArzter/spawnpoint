@@ -7,7 +7,27 @@ import { isAuthorized, parseAllowList, replies } from "../../domain/telegram-bot
 
 export type AllowListSource = () => Promise<string>;
 
-export function authMiddleware(allowListSource: AllowListSource) {
+export type SpawnpointAccessContext = Context & {
+  spawnpointAccess?: Readonly<{ authorized: boolean }>;
+};
+
+type PublicInteractions = Readonly<{
+  commands: ReadonlySet<string>;
+  callbacks: ReadonlySet<string>;
+}>;
+
+function commandName(ctx: Context): string | null {
+  const message = ctx.message;
+  const entity = message?.entities?.find((candidate) => candidate.type === "bot_command" && candidate.offset === 0);
+  if (message?.text === undefined || entity === undefined) return null;
+  return message.text.slice(1, entity.length).split("@")[0]?.toLowerCase() ?? null;
+}
+
+export function contextIsAuthorized(ctx: Context): boolean {
+  return (ctx as SpawnpointAccessContext).spawnpointAccess?.authorized === true;
+}
+
+export function authMiddleware(allowListSource: AllowListSource, publicInteractions: PublicInteractions) {
   return async (ctx: Context, next: NextFunction): Promise<void> => {
     const isCommand = ctx.has("message:entities:bot_command");
     const isCallback = ctx.callbackQuery !== undefined;
@@ -16,7 +36,13 @@ export function authMiddleware(allowListSource: AllowListSource) {
     if (userId === undefined) return;
 
     const allowList = parseAllowList(await allowListSource());
-    if (!isAuthorized(userId, allowList)) {
+    const authorized = isAuthorized(userId, allowList);
+    (ctx as SpawnpointAccessContext).spawnpointAccess = { authorized };
+    const publicCommand = commandName(ctx);
+    const isPublic = publicCommand !== null
+      ? publicInteractions.commands.has(publicCommand)
+      : ctx.callbackQuery?.data !== undefined && publicInteractions.callbacks.has(ctx.callbackQuery.data);
+    if (!authorized && !isPublic) {
       if (isCallback) {
         await ctx.answerCallbackQuery({ text: replies.denied(), show_alert: true });
       } else {

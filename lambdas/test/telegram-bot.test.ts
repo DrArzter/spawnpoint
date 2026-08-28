@@ -11,6 +11,7 @@ import {
   replies,
 } from "../src/domain/telegram-bot.ts";
 import { authMiddleware } from "../src/bot/middleware/auth.ts";
+import { telegramContact } from "../src/bot/middleware/contact.ts";
 import {
   addressKeyboard,
   callbacks,
@@ -19,6 +20,7 @@ import {
   networkKeyboard,
   packKeyboard,
   statusKeyboard,
+  visitorMenuKeyboard,
 } from "../src/bot/keyboards/main-menu.ts";
 import { render } from "../src/bot/ui/render.ts";
 
@@ -63,7 +65,7 @@ test("notification targets accept groups and DMs, and refuse to be silently empt
 });
 
 test("the auth middleware gates commands only, and denies politely", async () => {
-  const gate = authMiddleware(async () => "111,222");
+  const gate = authMiddleware(async () => "111,222", { commands: new Set(), callbacks: new Set() });
 
   const member = stubContext({ userId: 111, isCommand: true });
   await gate(member.ctx as never, member.next);
@@ -86,6 +88,44 @@ test("the auth middleware gates commands only, and denies politely", async () =>
   const callbackStranger = stubContext({ userId: 999, isCommand: false, isCallback: true });
   await gate(callbackStranger.ctx as never, callbackStranger.next);
   assert.equal(callbackStranger.nextCalled, false, "callbacks pass through the same allow-list");
+});
+
+test("public interactions reach visitors without making restricted callbacks public", async () => {
+  const gate = authMiddleware(async () => "111", {
+    commands: new Set(["start", "status"]),
+    callbacks: new Set([callbacks.status, callbacks.requestAccess]),
+  });
+  const visitorCommand = stubContext({ userId: 999, isCommand: true });
+  visitorCommand.ctx = {
+    ...visitorCommand.ctx,
+    has: () => true,
+    message: { text: "/status", entities: [{ type: "bot_command", offset: 0, length: 7 }] },
+  } as never;
+  await gate(visitorCommand.ctx as never, visitorCommand.next);
+  assert.equal(visitorCommand.nextCalled, true);
+
+  const visitorStatus = stubContext({ userId: 999, isCommand: false, isCallback: true });
+  await gate(visitorStatus.ctx as never, visitorStatus.next);
+  assert.equal(visitorStatus.nextCalled, true);
+
+  const restricted = stubContext({ userId: 999, isCommand: false, isCallback: true });
+  restricted.ctx.callbackQuery = { data: callbacks.confirmStart };
+  await gate(restricted.ctx as never, restricted.next);
+  assert.equal(restricted.nextCalled, false);
+});
+
+test("only private Telegram chats become access candidates", () => {
+  const privateContact = telegramContact({
+    chat: { id: 999, type: "private" },
+    from: { id: 111, first_name: "Ada", last_name: "Lovelace", username: "ada" },
+  } as never);
+  assert.deepEqual(privateContact, {
+    id: 111,
+    chatId: 999,
+    displayName: "Ada Lovelace",
+    username: "ada",
+  });
+  assert.equal(telegramContact({ chat: { id: -1, type: "group" }, from: { id: 111 } } as never), null);
 });
 
 test("the allow-list is strict: ids parse, garbage throws, absence denies", () => {
@@ -195,6 +235,10 @@ test("replies carry what the player actually needs", () => {
     ),
     true,
   );
+  assert.deepEqual(
+    visitorMenuKeyboard().inline_keyboard.flat().map((button) => "callback_data" in button ? button.callback_data : null),
+    [callbacks.status, callbacks.requestAccess],
+  );
   assert.equal(
     menu.inline_keyboard.flat().some(
       (button) => "url" in button && button.url === "https://example.com/" && button.text === "Open panel in browser",
@@ -268,6 +312,12 @@ test("replies carry what the player actually needs", () => {
     connectionAddress: "172.29.23.24:25565",
   });
   assert.doesNotMatch(stopped, /172\.29\.23\.24/, "no address for a stopped server");
+
+  const visitorStatus = replies.publicStatus("running");
+  assert.match(visitorStatus, /RUNNING/);
+  assert.doesNotMatch(visitorStatus, /172\.29|release|ZeroTier|Grafana/i);
+  assert.match(replies.visitorWelcome(), /request access/i);
+  assert.match(replies.accessRequested(), /owner can now review/i);
 
   assert.match(replies.pack("1.0"), /delete your mods folder entirely/i);
   assert.match(replies.packMissing("1.0"), /no published pack yet/);

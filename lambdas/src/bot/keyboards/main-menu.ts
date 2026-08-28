@@ -8,6 +8,7 @@ export const callbacks = {
   pack: "menu:pack",
   requestStart: "menu:start",
   confirmStart: "start:confirm",
+  requestAccess: "access:request",
 } as const;
 
 export function mainMenuKeyboard(miniAppUrl?: string): InlineKeyboard {
@@ -27,6 +28,13 @@ export function mainMenuKeyboard(miniAppUrl?: string): InlineKeyboard {
     .text("Client pack", callbacks.pack)
     .row()
     .text("Start server", callbacks.requestStart);
+}
+
+export function visitorMenuKeyboard(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("Status", callbacks.status)
+    .row()
+    .text("Request access", callbacks.requestAccess);
 }
 
 export function confirmStartKeyboard(): InlineKeyboard {

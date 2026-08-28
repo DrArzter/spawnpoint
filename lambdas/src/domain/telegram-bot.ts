@@ -125,6 +125,31 @@ export const replies = {
       "Opening this menu does not start the AWS host.",
     ].join("\n"),
 
+  visitorWelcome: (): string =>
+    [
+      "<b>Spawnpoint</b>",
+      "Game server control panel",
+      "",
+      "You can see whether a game host is online or request access from an owner.",
+      "Server addresses, private-network details and paid actions stay hidden until approval.",
+    ].join("\n"),
+
+  publicStatus: (instanceState: string): string =>
+    [
+      "<b>Server status</b>",
+      "",
+      `State: <code>${escapeHtml(instanceState.toUpperCase())}</code>`,
+      "Games: Minecraft, Factorio, Project Zomboid",
+      "",
+      "Request access to receive connection details and game controls.",
+    ].join("\n"),
+
+  accessRequested: (): string =>
+    "<b>Access requested</b>\n\nAn owner can now review your Telegram account in Spawnpoint. Sending the request again is harmless.",
+
+  requestAccessInPrivate: (): string =>
+    "Open a private chat with this bot and send /start before requesting access.",
+
   confirmStart: (): string =>
     [
       "<b>Start server</b>",

@@ -12,6 +12,10 @@ data "aws_s3_bucket" "releases" {
   bucket = local.release_bucket_name
 }
 
+data "aws_dynamodb_table" "access" {
+  name = "spawnpoint-access"
+}
+
 data "aws_instance" "game_host" {
   filter {
     name   = "tag:Name"

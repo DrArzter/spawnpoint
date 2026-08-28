@@ -20,6 +20,16 @@ touch -t 198001010000 "${output_dir}/index.cjs"
 rm -f "${archive}"
 zip -X -j -q "${archive}" "${output_dir}/index.cjs"
 
+mkdir -p "${lambda_dir}/dist/access-api"
+"${lambda_dir}/node_modules/.bin/esbuild" \
+  "${lambda_dir}/src/handlers/access-api.ts" \
+  --bundle \
+  --platform=node \
+  --target=node22 \
+  --format=cjs \
+  --external:@aws-sdk/* \
+  --outfile="${lambda_dir}/dist/access-api/index.cjs"
+
 "${lambda_dir}/node_modules/.bin/esbuild" \
   "${lambda_dir}/src/bot/handler.ts" \
   --bundle \
@@ -40,7 +50,8 @@ rm -f "${lambda_dir}/dist/bot/index.mjs"
   --external:@aws-sdk/* \
   --outfile="${lambda_dir}/dist/notifier/index.mjs"
 
-printf 'result=built\narchive=%s\nbot=%s\nnotifier=%s\n' \
+printf 'result=built\narchive=%s\naccess_api=%s\nbot=%s\nnotifier=%s\n' \
   "${archive}" \
+  "${lambda_dir}/dist/access-api/index.cjs" \
   "${lambda_dir}/dist/bot/index.cjs" \
   "${lambda_dir}/dist/notifier/index.mjs"

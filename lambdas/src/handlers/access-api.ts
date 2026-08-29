@@ -5,8 +5,9 @@ import { randomUUID } from "node:crypto";
 
 import { builtInRoles, hasPermission, Identity, isBuiltInRoleId, Permission, permissions } from "../access/domain.ts";
 import { issueSessionToken, TelegramProfile, verifyLoginWidget, verifyMiniAppInitData, verifySessionToken } from "../access/telegram-auth.ts";
-import { awsControlPlaneSources } from "../control-plane/aws.ts";
+import { awsControlPlaneSources, startSessionExecution, stopSessionExecution } from "../control-plane/aws.ts";
 import { readControlPlaneSnapshot } from "../control-plane/read-model.ts";
+import { planSessionOperation, type SessionAction } from "../control-plane/session-control.ts";
 
 type Event = Readonly<{
   requestContext?: { http?: { method?: string } };
@@ -183,6 +184,23 @@ async function controlPlane(identity: Identity): Promise<Response> {
   return response(200, snapshot);
 }
 
+async function controlSession(identity: Identity, action: SessionAction, gameId: string, worldId: string): Promise<Response> {
+  const forbidden = requirePermission(identity, action === "start" ? "session.start" : "session.stop");
+  if (forbidden !== null) return forbidden;
+  const [hosts, operations] = await Promise.all([
+    awsControlPlaneSources.listHosts(),
+    awsControlPlaneSources.listRunningOperations(),
+  ]);
+  const plan = planSessionOperation(gameId, worldId, action, hosts, operations);
+  if (plan.kind === "reject") return response(plan.reason === "unknown_world" ? 404 : 409, { error: plan.reason });
+  if (plan.kind === "noop") return response(200, { result: plan.reason });
+  const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
+  const requestedBy = `identity:${identity.id}`;
+  if (action === "start") await startSessionExecution(operationId, plan.host.providerRef, requestedBy);
+  else await stopSessionExecution(operationId, plan.host.providerRef, requestedBy);
+  return response(202, { result: "requested", operationId });
+}
+
 async function candidates(): Promise<Response> {
   const pages = await Promise.all(["CANDIDATE#REQUESTED", "CANDIDATE#OBSERVED"].map((state) => document.send(new QueryCommand({
     TableName: tableName, IndexName: "gsi1", KeyConditionExpression: "gsi1pk = :state",
@@ -323,6 +341,10 @@ export async function handler(event: Event): Promise<Response> {
     return response(200, { identity, role });
   }
   if (method === "GET" && path === "/control-plane") return controlPlane(identity);
+  const gameId = event.pathParameters?.gameId;
+  const worldId = event.pathParameters?.worldId;
+  if (method === "POST" && gameId && worldId && path.endsWith("/start")) return controlSession(identity, "start", gameId, worldId);
+  if (method === "POST" && gameId && worldId && path.endsWith("/stop")) return controlSession(identity, "stop", gameId, worldId);
   const forbidden = requirePermission(identity, "access.manage");
   if (forbidden !== null) return forbidden;
   if (method === "GET" && path === "/access/candidates") return candidates();

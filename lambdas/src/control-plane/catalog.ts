@@ -2,6 +2,7 @@ export type CatalogWorld = Readonly<{
   id: string;
   displayName: string;
   profileId: string;
+  sessionControl: "v1" | null;
 }>;
 
 export type CatalogGame = Readonly<{
@@ -19,8 +20,8 @@ export const gameCatalog: readonly CatalogGame[] = [
     code: "MC",
     displayName: "Minecraft",
     worlds: [
-      { id: "world", displayName: "Main modded", profileId: "main" },
-      { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge" },
+      { id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1" },
+      { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge", sessionControl: null },
     ],
   },
   {
@@ -28,7 +29,7 @@ export const gameCatalog: readonly CatalogGame[] = [
     code: "FA",
     displayName: "Factorio",
     worlds: [
-      { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla" },
+      { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControl: null },
     ],
   },
 ];

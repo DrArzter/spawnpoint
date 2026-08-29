@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   buildStartInput,
+  buildStopInput,
   buildWatchdogInput,
   isAuthorized,
   parseAllowList,
@@ -191,6 +192,12 @@ test("the watchdog input builder reproduces the committed example verbatim", asy
     stopStateMachineArn: example.stopStateMachineArn,
   });
   assert.deepEqual(built, example);
+});
+
+test("the stop input builder reproduces the committed example verbatim", async () => {
+  const url = new URL("../../workflows/stop-server.input.example.json", import.meta.url);
+  const example = JSON.parse(await readFile(url, "utf8"));
+  assert.deepEqual(buildStopInput({ operationId: example.operationId, instanceId: example.instanceId }), example);
 });
 
 test("a requester is attributed when present, and the examples stay the ownerless case", async () => {

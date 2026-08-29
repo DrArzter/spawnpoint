@@ -43,3 +43,9 @@ variable "bot_token_parameter" {
   type        = string
   default     = "/spawnpoint/bot/token"
 }
+
+variable "connection_address" {
+  description = "Stable overlay address returned by the supported V1 start workflow."
+  type        = string
+  default     = "172.29.23.24:25565"
+}

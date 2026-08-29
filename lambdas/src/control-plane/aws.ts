@@ -2,9 +2,10 @@ import { DescribeInstancesCommand, EC2Client, type Instance } from "@aws-sdk/cli
 import { GetObjectCommand, NoSuchKey, S3Client } from "@aws-sdk/client-s3";
 import { GetCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { ListExecutionsCommand, SFNClient } from "@aws-sdk/client-sfn";
+import { ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
+import { buildStartInput, buildStopInput, buildWatchdogInput } from "../domain/telegram-bot.ts";
 import type { ControlPlaneSources, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 
 type OperationMachine = Readonly<{ type: OperationObservation["type"]; arn: string }>;
@@ -116,3 +117,31 @@ export const awsControlPlaneSources: ControlPlaneSources = {
   readReleasePointer,
   listRunningOperations,
 };
+
+function machineArn(type: OperationObservation["type"]): string {
+  const machine = operationMachines().find((candidate) => candidate.type === type);
+  if (!machine) throw new Error(`missing ${type} state machine`);
+  return machine.arn;
+}
+
+export async function startSessionExecution(operationId: string, instanceId: string, requestedBy: string): Promise<string> {
+  const started = await sfn.send(new StartExecutionCommand({
+    stateMachineArn: machineArn("start"), name: operationId,
+    input: JSON.stringify(buildStartInput({ operationId, instanceId, requestedBy, connectionAddress: requiredEnv("CONNECTION_ADDRESS") })),
+  }));
+  await sfn.send(new StartExecutionCommand({
+    stateMachineArn: requiredEnv("WATCHDOG_STATE_MACHINE_ARN"), name: operationId,
+    input: JSON.stringify(buildWatchdogInput({ operationId, instanceId, requestedBy, stopStateMachineArn: machineArn("stop") })),
+  }));
+  if (!started.executionArn) throw new Error("start execution did not return an ARN");
+  return started.executionArn;
+}
+
+export async function stopSessionExecution(operationId: string, instanceId: string, requestedBy: string): Promise<string> {
+  const stopped = await sfn.send(new StartExecutionCommand({
+    stateMachineArn: machineArn("stop"), name: operationId,
+    input: JSON.stringify(buildStopInput({ operationId, instanceId, requestedBy })),
+  }));
+  if (!stopped.executionArn) throw new Error("stop execution did not return an ARN");
+  return stopped.executionArn;
+}

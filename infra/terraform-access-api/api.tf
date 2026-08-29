@@ -61,6 +61,15 @@ data "aws_iam_policy_document" "access_api" {
   }
 
   statement {
+    sid     = "ControlSupportedSession"
+    actions = ["states:StartExecution"]
+    resources = concat(
+      [for machine in local.operation_state_machines : machine.arn if contains(["start", "stop"], machine.type)],
+      [local.watchdog_state_machine_arn],
+    )
+  }
+
+  statement {
     sid       = "VerifyTelegramLogin"
     actions   = ["ssm:GetParameter"]
     resources = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.bot_token_parameter}"]
@@ -96,6 +105,8 @@ resource "aws_lambda_function" "access_api" {
       LIFECYCLE_TABLE_NAME        = data.aws_dynamodb_table.lifecycle.name
       OPERATION_STATE_MACHINES    = jsonencode(local.operation_state_machines)
       RELEASE_BUCKET              = data.aws_s3_bucket.releases.id
+      CONNECTION_ADDRESS          = var.connection_address
+      WATCHDOG_STATE_MACHINE_ARN  = local.watchdog_state_machine_arn
     }
   }
 
@@ -128,6 +139,8 @@ locals {
     "GET /session",
     "GET /me",
     "GET /control-plane",
+    "POST /games/{gameId}/worlds/{worldId}/start",
+    "POST /games/{gameId}/worlds/{worldId}/stop",
     "POST /access/request",
     "GET /access/candidates",
     "GET /access/identities",

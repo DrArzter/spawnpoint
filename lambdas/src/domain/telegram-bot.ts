@@ -113,6 +113,19 @@ export function buildWatchdogInput(args: Readonly<{
   };
 }
 
+export function buildStopInput(args: Readonly<{
+  operationId: string;
+  instanceId: string;
+  requestedBy?: string;
+}>) {
+  return {
+    operationId: args.operationId,
+    instanceId: args.instanceId,
+    ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
+    timing: POLL_TIMING,
+  };
+}
+
 export const replies = {
   denied: (): string => "You are not on this server's list. Ask the owner to add your Telegram id.",
 

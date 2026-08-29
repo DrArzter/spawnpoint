@@ -88,6 +88,11 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition     = contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/start") && contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/stop")
+    error_message = "Supported worlds need authenticated session-operation routes."
+  }
+
+  assert {
     condition     = aws_lambda_function.access_api.environment[0].variables.LIFECYCLE_TABLE_NAME == "spawnpoint-lifecycle-v2" && aws_lambda_function.access_api.environment[0].variables.RELEASE_BUCKET == "spawnpoint-releases-123456789012"
     error_message = "The read model must use the established lifecycle and release stores."
   }

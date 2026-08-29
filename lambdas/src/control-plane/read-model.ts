@@ -43,6 +43,7 @@ export type ControlPlaneSnapshot = Readonly<{
       id: string;
       displayName: string;
       profileId: string;
+      sessionControlAvailable: boolean;
       release: ReleasePointerObservation;
     }>>;
   }>>;
@@ -92,6 +93,7 @@ export async function readControlPlaneSnapshot(
           id: world.id,
           displayName: world.displayName,
           profileId: world.profileId,
+          sessionControlAvailable: world.sessionControl !== null,
           release: options.includeDesiredRelease ? release : { ...release, desiredRelease: null },
         };
       }),

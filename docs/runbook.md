@@ -161,21 +161,24 @@ curl -s "https://api.telegram.org/bot<token>/setWebhook" -d "url=<bot_webhook_ur
 
 The bot works in the group and in direct messages alike — commands answer wherever they were asked, and authorization
 is by identity, not by chat. One platform rule to know: **a bot can never write to a person first.** A player
-who wants the bot in DMs (or a DM notification target) opens the bot once and presses Start; until then that DM does
-not exist for the bot. Notification targets are the `chat-ids` list — group ids are negative, DM ids positive, edit
-with `put-parameter --overwrite`, takes effect within a minute. One unreachable target never blocks the rest.
+who wants the bot in DMs opens the bot once and presses Start; until then that DM does not exist for the bot. The bot
+remembers that direct chat separately, so later commands in a group cannot redirect personal notifications there.
+Users choose ordinary server lifecycle notifications in **Access → My notifications**. Negative IDs in the legacy
+`chat-ids` parameter remain shared group destinations; positive IDs remain fallback destinations only for operational
+and guardrail alerts. Edit the parameter with `put-parameter --overwrite`; it takes effect within a minute. One
+unreachable target never blocks the rest.
 
-Guardrail alerts arrive in the same chat: the notifier is subscribed to `spawnpoint-alerts`, so the budget, cost
+Guardrail alerts arrive in the same chat: the notifier is subscribed to `spawnpoint-alert`, so the budget, cost
 anomalies and the running-hours alarm all speak Telegram — and email on the same topic remains the out-of-band path
 that works even when the notifier does not (ADR-0020). An unrecognised alert format is delivered raw rather than
 dropped.
 
-Notifications need no wiring beyond the `chat-ids` parameter: Step Functions publishes every execution's status
-changes to EventBridge on its own, and the `spawnpoint-notifier` function turns the meaningful ones into group
-messages — requested (with who asked), ready (with the address), stopped by the watchdog, promoted, rolled back, and
-every failed stop, because a failed stop is the backup contract failing. Child executions stay silent by design, so
-nothing is announced twice. The group chat id: add the bot to the group, send a message, read `chat.id` from
-`getUpdates` (a negative number for groups).
+Step Functions publishes every execution's status changes to EventBridge on its own. The `spawnpoint-notifier`
+function turns meaningful lifecycle events into messages and resolves personal recipients from DynamoDB subscriptions.
+Shared group IDs still receive ordinary start/stop announcements. Promotions, rollbacks, failed starts/stops and
+guardrail alerts go to every configured operational target because they are not optional social notifications.
+Child executions stay silent by design, so nothing is announced twice. To obtain a group chat ID, add the bot to the
+group, send a message and read `chat.id` from `getUpdates` (a negative number for groups).
 
 Acceptance: from an approved Telegram identity, `/start` shows the menu without touching EC2, `/status` answers,
 `/server_start` brings the server up — the group sees

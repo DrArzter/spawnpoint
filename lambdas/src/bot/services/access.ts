@@ -39,21 +39,26 @@ async function writeContact(contact: TelegramContact, requested: boolean): Promi
     ":candidateIndex": requested ? "CANDIDATE#REQUESTED" : "CANDIDATE#OBSERVED",
   };
 
+  const assignments = [
+    "#platform = :platform",
+    "platform_user_id = :platformUserId",
+    "chat_id = :chatId",
+    "#displayName = :displayName",
+    "#username = :username",
+    "first_seen_at = if_not_exists(first_seen_at, :firstSeenAt)",
+    "last_seen_at = :lastSeenAt",
+    "#status = if_not_exists(#status, :candidateStatus)",
+    "gsi1pk = if_not_exists(gsi1pk, :candidateIndex)",
+    "gsi1sk = :lastSeenAt",
+  ];
+  // Telegram lets the bot answer in groups, but personal subscriptions must
+  // never redirect to whichever group the user happened to use most recently.
+  if (contact.chatId === contact.id) assignments.push("direct_chat_id = :chatId");
+
   await document.send(new UpdateCommand({
     TableName: env("ACCESS_TABLE_NAME"),
     Key: { pk: `TELEGRAM#${contact.id}`, sk: "ACCOUNT" },
-    UpdateExpression: [
-      "SET #platform = :platform",
-      "platform_user_id = :platformUserId",
-      "chat_id = :chatId",
-      "#displayName = :displayName",
-      "#username = :username",
-      "first_seen_at = if_not_exists(first_seen_at, :firstSeenAt)",
-      "last_seen_at = :lastSeenAt",
-      "#status = if_not_exists(#status, :candidateStatus)",
-      "gsi1pk = if_not_exists(gsi1pk, :candidateIndex)",
-      "gsi1sk = :lastSeenAt",
-    ].join(", "),
+    UpdateExpression: `SET ${assignments.join(", ")}`,
     ExpressionAttributeNames: names,
     ExpressionAttributeValues: values,
   }));

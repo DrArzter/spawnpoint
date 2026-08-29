@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseExecutionEvent, renderNotification, type ExecutionEvent } from "../src/domain/notifications.ts";
+import { notificationSubscriptionKey, parseExecutionEvent, renderNotification, type ExecutionEvent } from "../src/domain/notifications.ts";
 
 const ARN_PREFIX = "arn:aws:states:eu-central-1:123456789012:stateMachine:";
 
@@ -126,4 +126,18 @@ test("unknown machines and malformed details are silence, not crashes", () => {
   });
   assert.ok(withBadJson);
   assert.equal(withBadJson.input, null);
+});
+
+test("ordinary lifecycle messages map to per-game subscriptions", () => {
+  assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server", "RUNNING")), "minecraft.started");
+  assert.equal(
+    notificationSubscriptionKey(event("spawnpoint-start-server", "SUCCEEDED", { input: { gameId: "factorio", worldId: "factorio" } })),
+    "factorio.started",
+  );
+  assert.equal(
+    notificationSubscriptionKey(event("spawnpoint-idle-watchdog", "SUCCEEDED", { input: { worldId: "factorio" }, output: { status: "stopped_idle" } })),
+    "factorio.stopped",
+  );
+  assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server", "FAILED")), null, "failures remain operational alerts");
+  assert.equal(notificationSubscriptionKey(event("spawnpoint-promote-release", "SUCCEEDED")), null, "release messages are not personal lifecycle subscriptions");
 });

@@ -33,6 +33,15 @@ data "aws_iam_policy_document" "notifier" {
     actions   = ["ssm:GetParameter"]
     resources = ["arn:aws:ssm:${var.aws_region}:${local.account_id}:parameter/spawnpoint/bot/*"]
   }
+
+  statement {
+    sid     = "ReadNotificationSubscriptions"
+    actions = ["dynamodb:Scan", "dynamodb:Query"]
+    resources = [
+      data.aws_dynamodb_table.access.arn,
+      "${data.aws_dynamodb_table.access.arn}/index/gsi1",
+    ]
+  }
 }
 
 resource "aws_iam_role_policy" "notifier" {
@@ -57,6 +66,7 @@ resource "aws_lambda_function" "notifier" {
     variables = {
       BOT_TOKEN_PARAMETER = "/spawnpoint/bot/token"
       CHAT_IDS_PARAMETER  = "/spawnpoint/bot/chat-ids"
+      ACCESS_TABLE_NAME   = data.aws_dynamodb_table.access.name
     }
   }
 }

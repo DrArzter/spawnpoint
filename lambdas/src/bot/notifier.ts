@@ -5,20 +5,23 @@
 // the Telegram API — no Step Functions, no EC2, no S3.
 
 import { renderAlert } from "../domain/alerts.ts";
-import { parseExecutionEvent, renderNotification } from "../domain/notifications.ts";
+import { notificationSubscriptionKey, parseExecutionEvent, renderNotification } from "../domain/notifications.ts";
 import { parseChatIds } from "../domain/telegram-bot.ts";
 import { env, parameter } from "./services/aws.ts";
+import { subscribedTelegramChatIds } from "./services/subscribers.ts";
 
 type SnsEvent = Readonly<{
   Records?: ReadonlyArray<{ Sns?: { Subject?: string | null; Message?: string } }>;
 }>;
 type EventBridgeEvent = Readonly<{ detail?: unknown }>;
 
-async function sendToAll(text: string): Promise<void> {
+async function configuredChatIds(): Promise<readonly number[]> {
+  return parseChatIds(await parameter(env("CHAT_IDS_PARAMETER"), 60));
+}
+
+async function sendToTargets(text: string, chatIds: readonly number[]): Promise<void> {
+  if (chatIds.length === 0) return;
   const token = await parameter(env("BOT_TOKEN_PARAMETER"));
-  // Groups and direct messages alike; a DM target only works after that
-  // person has opened the bot once — Telegram forbids bots writing first.
-  const chatIds = parseChatIds(await parameter(env("CHAT_IDS_PARAMETER"), 60));
 
   const results = await Promise.allSettled(
     chatIds.map(async (chatId) => {
@@ -47,7 +50,7 @@ export async function handler(event: SnsEvent | EventBridgeEvent): Promise<void>
   if (Array.isArray(records)) {
     for (const record of records) {
       if (record.Sns?.Message === undefined) continue;
-      await sendToAll(renderAlert({ subject: record.Sns.Subject ?? null, message: record.Sns.Message }));
+      await sendToTargets(renderAlert({ subject: record.Sns.Subject ?? null, message: record.Sns.Message }), await configuredChatIds());
     }
     return;
   }
@@ -59,5 +62,12 @@ export async function handler(event: SnsEvent | EventBridgeEvent): Promise<void>
   }
   const text = renderNotification(parsed);
   if (text === null) return;
-  await sendToAll(text);
+  const subscriptionKey = notificationSubscriptionKey(parsed);
+  if (subscriptionKey === null) {
+    await sendToTargets(text, await configuredChatIds());
+    return;
+  }
+  const [configured, subscribers] = await Promise.all([configuredChatIds(), subscribedTelegramChatIds(subscriptionKey)]);
+  const groups = configured.filter((chatId) => chatId < 0);
+  await sendToTargets(text, [...new Set([...groups, ...subscribers])]);
 }

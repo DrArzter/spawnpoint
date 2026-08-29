@@ -13,6 +13,8 @@ export type ExecutionEvent = Readonly<{
   output: Record<string, unknown> | null;
 }>;
 
+export type NotificationSubscriptionKey = "minecraft.started" | "minecraft.stopped" | "factorio.started" | "factorio.stopped";
+
 export function parseExecutionEvent(detail: unknown): ExecutionEvent | null {
   if (typeof detail !== "object" || detail === null) return null;
   const d = detail as Record<string, unknown>;
@@ -46,6 +48,25 @@ const str = (record: Record<string, unknown> | null, key: string): string | null
 // A watchdog child stop is named <op>-idle-N / <op>-cap-N; promotion's
 // children end in -stop / -restop / -rollback / -rollback-stop / -start.
 const CHILD_NAME = /-(idle|cap)-[0-9]+$|-(re)?stop$|-rollback(-stop)?$|-start$/;
+
+function eventGame(event: ExecutionEvent): "minecraft" | "factorio" {
+  const gameId = str(event.input, "gameId");
+  const worldId = str(event.input, "worldId") ?? str(event.input, "world");
+  return gameId === "factorio" || worldId === "factorio" ? "factorio" : "minecraft";
+}
+
+export function notificationSubscriptionKey(event: ExecutionEvent): NotificationSubscriptionKey | null {
+  if (CHILD_NAME.test(event.name)) return null;
+  const game = eventGame(event);
+  if (event.machine === "spawnpoint-start-server" && (event.status === "RUNNING" || event.status === "SUCCEEDED")) {
+    return `${game}.started`;
+  }
+  if (event.machine === "spawnpoint-idle-watchdog" && event.status === "SUCCEEDED") {
+    const status = str(event.output, "status");
+    if (status === "stopped_idle" || status === "stopped_session_cap") return `${game}.stopped`;
+  }
+  return null;
+}
 
 export function renderNotification(event: ExecutionEvent): string | null {
   const requester = str(event.input, "requestedBy");

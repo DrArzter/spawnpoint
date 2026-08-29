@@ -228,3 +228,49 @@ The Lambda bundle passed tests, TypeScript checking and the production build.
 The reviewed Terraform plan was exactly `0 add / 1 change / 0 destroy`, with
 only `aws_lambda_function.bot.source_code_hash` changing. The saved plan was
 applied and the post-apply plan returned `No changes`.
+
+## Personal notification subscriptions
+
+On 2026-08-29 the previously dormant notifier was deployed and connected to
+the subscription records written by **Access → My notifications**. Ordinary
+start/stop events go to configured group chats and to opted-in personal chats.
+Promotions, failures and guardrail alerts remain operational messages and are
+sent to all explicit `chat-ids` targets.
+
+The bot now stores `direct_chat_id` only when a person actually talks to it in
+a private chat. A later command in a group may update the last-used `chat_id`,
+but cannot redirect that person's private subscription into the group.
+
+Validation and the reviewed deployment used:
+
+```bash
+cd lambdas
+npm test
+npm run typecheck
+npm run build
+
+docker run --rm \
+  -v "$PWD/..:/workspace" \
+  -w /workspace/infra/terraform-bot \
+  hashicorp/terraform:1.15.8 validate
+
+docker run --rm \
+  -v "$HOME/.aws:/root/.aws:ro" \
+  -v "$PWD/..:/workspace" \
+  -w /workspace/infra/terraform-bot \
+  hashicorp/terraform:1.15.8 plan \
+  -var aws_profile=spawnpoint \
+  -var enable_notifications=true \
+  -out=notifier-subscriptions.tfplan
+
+docker run --rm \
+  -v "$HOME/.aws:/root/.aws:ro" \
+  -v "$PWD/..:/workspace" \
+  -w /workspace/infra/terraform-bot \
+  hashicorp/terraform:1.15.8 apply notifier-subscriptions.tfplan
+```
+
+The plan was exactly `9 add / 1 change / 0 destroy`: notifier Lambda, IAM,
+EventBridge and SNS wiring were created; only the existing bot Lambda bundle
+changed in place. A non-notifying Lambda smoke returned HTTP 200 with no
+function error. The game EC2 instance remained `stopped`.

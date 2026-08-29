@@ -10,7 +10,7 @@ import { MetricsScreen } from "./screens/MetricsScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
 import { StorageScreen } from "./screens/StorageScreen";
 import { Icon, IconName } from "./Icon";
-import { AccessTab, ControlPlaneSnapshot, Game, initialRoles, Member, OwnerBootstrap, Page, Role, ServerState } from "./model";
+import { AccessTab, ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Role, ServerState } from "./model";
 import { ensureRoute, pushRoute, readRoute } from "./routing";
 import { applyTheme, getThemePreference, initializeTelegram, persistThemePreference, resolveTheme, subscribeToSystemTheme, Theme, ThemePreference, ViewerProfile } from "./telegram";
 
@@ -113,7 +113,13 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
     roleId: session.identity.roleId,
     links: [{ id: "viewer-telegram", kind: "telegram", value: session.profile.telegramId, verified: true }],
   }]);
-  const [roles, setRoles] = useState<Role[]>(initialRoles);
+  const [roles, setRoles] = useState<Role[]>(() => session.role ? [{
+    id: session.role.id,
+    name: session.role.name,
+    description: "Current signed-in role",
+    permissions: session.role.permissions,
+    system: true,
+  }] : []);
   const [viewer] = useState<ViewerProfile>({
     displayName: session.identity.displayName,
     inTelegram: Boolean(window.Telegram?.WebApp.initData),

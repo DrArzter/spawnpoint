@@ -33,7 +33,7 @@ export function ProfileScreen({ member, role, viewer, onChange, onSignOut }: { m
           <footer><span aria-live="polite" role="status">{saved ? "Saved" : ""}</span><Button type="submit" variant="primary">Save profile</Button></footer>
         </form>
       </section>
-      <LinkedAccountsEditor member={member} onChange={onChange} />
+      <LinkedAccountsEditor member={member} />
     </div>
   </>;
 }

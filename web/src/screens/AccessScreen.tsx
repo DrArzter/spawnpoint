@@ -1,14 +1,12 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { AccessCandidate, approveAccessCandidate, dismissAccessCandidate, loadAccessCandidates, loadAccessIdentities, updateIdentityRole } from "../auth";
+import { useEffect, useState } from "react";
+import { AccessCandidate, approveAccessCandidate, dismissAccessCandidate, loadAccessCandidates, loadAccessIdentities, loadAccessRoles, loadSubscriptions, SubscriptionState, updateIdentityRole, updateSubscriptions } from "../auth";
 import { Avatar } from "../components/Avatar";
 import { LinkedAccountsEditor } from "../components/LinkedAccountsEditor";
 import { Button } from "../components/ui/Button";
 import { DataColumn, DataTable } from "../components/ui/DataTable";
 import { Tabs } from "../components/ui/Tabs";
 import { Icon } from "../Icon";
-import { AccessTab, Game, Member, OwnerBootstrap, permissions, Role } from "../model";
-
-type SubscriptionState = Record<string, boolean>;
+import { AccessTab, Game, Member, OwnerBootstrap, Role } from "../model";
 
 const accessTabs = [
   { id: "users", label: "Users" },
@@ -26,19 +24,41 @@ export function AccessScreen({ bootstrap, games, members, roles, tab, onMembersC
   onRolesChange: (roles: Role[]) => void;
   onTabChange: (tab: AccessTab) => void;
 }) {
-  const [creatingRole, setCreatingRole] = useState(false);
+  const [roleState, setRoleState] = useState<"loading" | "ready" | "error">("loading");
+  const [roleError, setRoleError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    loadAccessRoles()
+      .then((items) => { if (active) { onRolesChange(items); setRoleState("ready"); } })
+      .catch((error: unknown) => { if (active) { setRoleError(error instanceof Error ? error.message : "Roles could not be loaded."); setRoleState("error"); } });
+    return () => { active = false; };
+  }, []);
+
+  async function retryRoles() {
+    setRoleState("loading");
+    setRoleError("");
+    try {
+      onRolesChange(await loadAccessRoles());
+      setRoleState("ready");
+    } catch (error) {
+      setRoleError(error instanceof Error ? error.message : "Roles could not be loaded.");
+      setRoleState("error");
+    }
+  }
+
   return <>
-    <div className="page-heading action-heading"><div><h1>Access</h1><p>Users, linked accounts, roles and your subscriptions</p></div>{tab === "roles" && <Button icon={<Icon name="plus" />} onClick={() => setCreatingRole(true)} variant="primary">Create role</Button>}</div>
+    <div className="page-heading action-heading"><div><h1>Access</h1><p>Users, linked accounts, roles and your subscriptions</p></div>{tab === "roles" && <Button disabled icon={<Icon name="plus" />} title="Custom roles are not connected to the access API yet." variant="primary">Create role</Button>}</div>
     <Tabs label="Access settings" onChange={onTabChange} options={accessTabs} value={tab} />
     <div aria-live="polite" role="tabpanel">
-      {tab === "users" && <Users bootstrap={bootstrap} members={members} roles={roles} onChange={onMembersChange} />}
-      {tab === "roles" && <Roles creating={creatingRole} onCancel={() => setCreatingRole(false)} onCreate={(role) => { onRolesChange([...roles, role]); setCreatingRole(false); }} roles={roles} />}
+      {tab === "users" && <Users bootstrap={bootstrap} members={members} roles={roles} rolesLoading={roleState === "loading"} onChange={onMembersChange} />}
+      {tab === "roles" && <Roles error={roleError} onRetry={() => void retryRoles()} roles={roles} state={roleState} />}
       {tab === "notifications" && <Notifications games={games} />}
     </div>
   </>;
 }
 
-function Users({ bootstrap, members, roles, onChange }: { bootstrap: OwnerBootstrap; members: Member[]; roles: Role[]; onChange: (members: Member[]) => void }) {
+function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstrap: OwnerBootstrap; members: Member[]; roles: Role[]; rolesLoading: boolean; onChange: (members: Member[]) => void }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showBootstrap, setShowBootstrap] = useState(false);
   const [candidates, setCandidates] = useState<AccessCandidate[]>([]);
@@ -50,7 +70,7 @@ function Users({ bootstrap, members, roles, onChange }: { bootstrap: OwnerBootst
   const columns: DataColumn<Member>[] = [
     { id: "user", label: "User", width: "1.4fr", render: (member) => <span className="user-cell"><i>{member.name.slice(0, 2).toUpperCase()}</i><strong>{member.name}</strong></span> },
     { id: "links", label: "Linked accounts", width: "1.2fr", render: (member) => <span className="link-summary">{member.links.length ? member.links.map((link) => <small key={link.id}>{link.kind}</small>) : "None"}</span> },
-    { id: "role", label: "Role", width: ".8fr", render: (member) => <select aria-label={`Role for ${member.name}`} onChange={(event) => void changeRole(member, event.target.value)} value={member.roleId}>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select> },
+    { id: "role", label: "Role", width: ".8fr", render: (member) => <select aria-label={`Role for ${member.name}`} disabled={rolesLoading || roles.length === 0} onChange={(event) => void changeRole(member, event.target.value)} value={member.roleId}>{roles.length === 0 && <option value={member.roleId}>{member.roleId}</option>}{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select> },
     { id: "action", label: "Action", width: "100px", render: (member) => <Button aria-expanded={member.id === editingId} onClick={() => setEditingId(member.id === editingId ? null : member.id)} variant="ghost">Manage</Button> },
   ];
 
@@ -117,46 +137,80 @@ function Users({ bootstrap, members, roles, onChange }: { bootstrap: OwnerBootst
       {candidates.map((candidate) => <article key={candidate.platformUserId}>
         <Avatar name={candidate.displayName} photoUrl={candidate.photoUrl ?? undefined} />
         <div><strong>{candidate.displayName}</strong><small>{candidate.username ? `@${candidate.username} · ` : ""}{candidate.status === "REQUESTED" ? "Requested access" : "Signed in"}</small></div>
-        <select aria-label={`Role for ${candidate.displayName}`} onChange={(event) => setCandidateRoles((current) => ({ ...current, [candidate.platformUserId]: event.target.value }))} value={candidateRoles[candidate.platformUserId] ?? "viewer"}>{roles.filter((role) => role.id !== "owner").map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select>
-        <div><Button onClick={() => void dismiss(candidate)} variant="ghost">Dismiss</Button><Button onClick={() => void approve(candidate)} variant="primary">Approve</Button></div>
+        <select aria-label={`Role for ${candidate.displayName}`} disabled={rolesLoading || roles.length === 0} onChange={(event) => setCandidateRoles((current) => ({ ...current, [candidate.platformUserId]: event.target.value }))} value={candidateRoles[candidate.platformUserId] ?? "viewer"}>{roles.length === 0 && <option value="viewer">Loading roles…</option>}{roles.filter((role) => role.id !== "owner").map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select>
+        <div><Button onClick={() => void dismiss(candidate)} variant="ghost">Dismiss</Button><Button disabled={rolesLoading || roles.length === 0} onClick={() => void approve(candidate)} variant="primary">Approve</Button></div>
       </article>)}
       {candidateError && <p className="candidate-error" role="alert">{candidateError}</p>}
     </section>
-    <div className="users-columns"><DataTable columns={columns} label="Users and access roles" rowKey={(member) => member.id} rows={members} />{editing && <LinkedAccountsEditor member={editing} onChange={(next) => onChange(members.map((member) => member.id === next.id ? next : member))} onClose={() => setEditingId(null)} />}</div>
+    <div className="users-columns"><DataTable columns={columns} label="Users and access roles" rowKey={(member) => member.id} rows={members} />{editing && <LinkedAccountsEditor member={editing} onClose={() => setEditingId(null)} />}</div>
   </div>;
 }
 
-function Roles({ roles, creating, onCreate, onCancel }: { roles: Role[]; creating: boolean; onCreate: (role: Role) => void; onCancel: () => void }) {
+function Roles({ roles, state, error, onRetry }: { roles: Role[]; state: "loading" | "ready" | "error"; error: string; onRetry: () => void }) {
   const columns: DataColumn<Role>[] = [
     { id: "role", label: "Role", width: "1fr", render: (role) => <strong>{role.name}</strong> },
     { id: "description", label: "Description", width: "2fr", render: (role) => role.description },
     { id: "permissions", label: "Permissions", width: ".7fr", render: (role) => role.permissions.length },
     { id: "type", label: "Type", width: ".7fr", render: (role) => <small className={`role-type ${role.system ? "built-in" : "custom"}`}>{role.system ? "Built-in" : "Custom"}</small> },
   ];
-  return <div className="roles-layout"><DataTable columns={columns} label="Roles and permissions" rowKey={(role) => role.id} rows={roles} />{creating && <RoleForm onCancel={onCancel} onCreate={onCreate} />}</div>;
-}
-
-function RoleForm({ onCreate, onCancel }: { onCreate: (role: Role) => void; onCancel: () => void }) {
-  const [name, setName] = useState("");
-  const [selected, setSelected] = useState<string[]>(["status.read"]);
-  const groups = useMemo(() => [...new Set(permissions.map((item) => item.group))], []);
-  function submit(event: FormEvent) { event.preventDefault(); if (name.trim()) onCreate({ id: `custom-${Date.now()}`, name: name.trim(), description: "Custom role", permissions: selected }); }
-  return <form className="role-editor" onSubmit={submit}><header><div><h2>Create role</h2><p>Choose exactly what this role can do.</p></div><Button onClick={onCancel} variant="ghost">Close</Button></header><label>Role name<input autoFocus onChange={(event) => setName(event.target.value)} placeholder="Moderator" required value={name} /></label><div className="permission-groups">{groups.map((group) => <fieldset key={group}><legend>{group}</legend>{permissions.filter((item) => item.group === group).map((permission) => <label key={permission.id}><input checked={selected.includes(permission.id)} onChange={() => setSelected((current) => current.includes(permission.id) ? current.filter((id) => id !== permission.id) : [...current, permission.id])} type="checkbox" /><span>{permission.label}<small>{permission.id}</small></span></label>)}</fieldset>)}</div><footer><Button onClick={onCancel} variant="ghost">Cancel</Button><Button type="submit" variant="primary">Create role</Button></footer></form>;
+  return <div className="roles-layout">
+    {state === "error" && <div className="inline-state" role="alert"><div><strong>Roles could not be loaded</strong><p>{error}</p></div><Button onClick={onRetry}>Try again</Button></div>}
+    <DataTable columns={columns} emptyLabel={state === "loading" ? "Loading roles…" : "No roles are configured."} label="Roles and permissions" rowKey={(role) => role.id} rows={roles} />
+  </div>;
 }
 
 function Notifications({ games }: { games: readonly Game[] }) {
-  const initial: SubscriptionState = { invitations_all: true, invitations_direct: true };
-  for (const game of games) { initial[`${game.id}_started`] = game.id !== "zomboid"; initial[`${game.id}_stopped`] = game.id === "minecraft"; }
-  const [subscriptions, setSubscriptions] = useState<SubscriptionState>(initial);
-  const toggle = (id: string) => setSubscriptions((current) => ({ ...current, [id]: !current[id] }));
+  const [subscriptions, setSubscriptions] = useState<SubscriptionState>({});
+  const [state, setState] = useState<"loading" | "ready" | "saving" | "saved" | "error">("loading");
+  const [error, setError] = useState("");
+
+  async function reload() {
+    setState("loading");
+    setError("");
+    try {
+      setSubscriptions(await loadSubscriptions());
+      setState("ready");
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Your notification subscriptions could not be loaded.");
+      setState("error");
+    }
+  }
+
+  useEffect(() => { void reload(); }, []);
+
+  async function toggle(id: string) {
+    if (state === "loading" || state === "saving") return;
+    const previous = subscriptions;
+    const next = { ...subscriptions, [id]: !subscriptions[id] };
+    setSubscriptions(next);
+    setState("saving");
+    setError("");
+    try {
+      setSubscriptions(await updateSubscriptions(next));
+      setState("saved");
+    } catch (saveError) {
+      setSubscriptions(previous);
+      setError(saveError instanceof Error ? saveError.message : "Your notification subscriptions could not be saved.");
+      setState("error");
+    }
+  }
+
+  const controlsDisabled = state === "loading" || state === "saving";
   const columns: DataColumn<Game>[] = [
     { id: "game", label: "Game", render: (game) => <strong>{game.displayName}</strong>, width: "1fr" },
-    { id: "started", label: "Started", render: (game) => <Setting checked={subscriptions[`${game.id}_started`]} label={`${game.displayName} started`} onChange={() => toggle(`${game.id}_started`)} />, width: "110px" },
-    { id: "stopped", label: "Stopped", render: (game) => <Setting checked={subscriptions[`${game.id}_stopped`]} label={`${game.displayName} stopped`} onChange={() => toggle(`${game.id}_stopped`)} />, width: "110px" },
+    { id: "started", label: "Started", render: (game) => <Setting checked={Boolean(subscriptions[`${game.id}.started`])} disabled={controlsDisabled} label={`${game.displayName} started`} onChange={() => void toggle(`${game.id}.started`)} />, width: "110px" },
+    { id: "stopped", label: "Stopped", render: (game) => <Setting checked={Boolean(subscriptions[`${game.id}.stopped`])} disabled={controlsDisabled} label={`${game.displayName} stopped`} onChange={() => void toggle(`${game.id}.stopped`)} />, width: "110px" },
   ];
-  return <div className="notification-settings"><div className="preference-intro"><h2>Your subscriptions</h2><p>These preferences apply only to your identity and do not affect other players.</p></div><section><div className="setting-heading"><div><h2>Server events</h2><p>Choose event types independently for each game.</p></div></div><DataTable columns={columns} label="Server event subscriptions" rowKey={(game) => game.id} rows={games} /></section><section><div className="setting-heading"><div><h2>Game invitations</h2><p>Choose whether other players may notify you.</p></div></div><Setting checked={subscriptions.invitations_all} label="Invitations sent to everyone" note="A player invited everyone to join a game" onChange={() => toggle("invitations_all")} /><Setting checked={subscriptions.invitations_direct} label="Invitations sent directly to me" note="A player invited only selected people" onChange={() => toggle("invitations_direct")} /></section><section className="delivery-row"><div><h2>Delivery channel</h2><p>Telegram account linked to your identity</p></div><span>Connected</span></section></div>;
+  const status = state === "loading" ? "Loading saved preferences…" : state === "saving" ? "Saving…" : state === "saved" ? "Saved in Spawnpoint" : "";
+  return <div className="notification-settings">
+    <div className="preference-intro"><div><h2>Your subscriptions</h2><p>These preferences are stored for your Spawnpoint identity and survive reloads.</p></div><span aria-live="polite" role="status">{status}</span></div>
+    {state === "error" && <div className="inline-state" role="alert"><div><strong>Subscriptions are unavailable</strong><p>{error}</p></div><Button onClick={() => void reload()}>Try again</Button></div>}
+    <section><div className="setting-heading"><div><h2>Server events</h2><p>Choose event types independently for each game.</p></div></div><DataTable columns={columns} label="Server event subscriptions" rowKey={(game) => game.id} rows={games} /></section>
+    <section><div className="setting-heading"><div><h2>Game invitations</h2><p>Choose whether other players may notify you.</p></div></div><Setting checked={Boolean(subscriptions["invitation.broadcast"])} disabled={controlsDisabled} label="Invitations sent to everyone" note="A player invited everyone to join a game" onChange={() => void toggle("invitation.broadcast")} /><Setting checked={Boolean(subscriptions["invitation.direct"])} disabled={controlsDisabled} label="Invitations sent directly to me" note="A player invited only selected people" onChange={() => void toggle("invitation.direct")} /></section>
+    <section className="delivery-row"><div><h2>Delivery channel</h2><p>Telegram is linked. Notification filtering will use these preferences when the notifier is connected.</p></div><span>Linked</span></section>
+  </div>;
 }
 
-function Setting({ checked, label, note, onChange }: { checked: boolean; label: string; note?: string; onChange: () => void }) {
-  return <label className="setting-row"><span><strong>{label}</strong>{note && <small>{note}</small>}</span><input aria-label={label} checked={checked} onChange={onChange} type="checkbox" /><i /></label>;
+function Setting({ checked, disabled, label, note, onChange }: { checked: boolean; disabled: boolean; label: string; note?: string; onChange: () => void }) {
+  return <label className="setting-row"><span><strong>{label}</strong>{note && <small>{note}</small>}</span><input aria-label={label} checked={checked} disabled={disabled} onChange={onChange} type="checkbox" /><i /></label>;
 }

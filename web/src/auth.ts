@@ -37,6 +37,14 @@ export type AccessIdentity = Readonly<{
   directGrants: string[];
   links: ReadonlyArray<{ platform: string; value: string; verified: boolean }>;
 }>;
+export type AccessRole = Readonly<{
+  id: string;
+  name: string;
+  description: string;
+  permissions: string[];
+  system: boolean;
+}>;
+export type SubscriptionState = Record<string, boolean>;
 export type AuthState =
   | { status: "loading" }
   | { status: "signed-out" }
@@ -204,6 +212,31 @@ export async function loadAccessIdentities(): Promise<AccessIdentity[]> {
   if (!response.ok) throw new Error("Users could not be loaded.");
   const body = await response.json() as { identities: AccessIdentity[] };
   return body.identities;
+}
+
+export async function loadAccessRoles(): Promise<AccessRole[]> {
+  const response = await authorizedFetch("/access/roles");
+  if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot view access roles." : "Roles could not be loaded.");
+  const body = await response.json() as { roles: AccessRole[] };
+  return body.roles;
+}
+
+export async function loadSubscriptions(): Promise<SubscriptionState> {
+  const response = await authorizedFetch("/me/subscriptions");
+  if (!response.ok) throw new Error("Your notification subscriptions could not be loaded.");
+  const body = await response.json() as { subscriptions: SubscriptionState };
+  return body.subscriptions;
+}
+
+export async function updateSubscriptions(subscriptions: SubscriptionState): Promise<SubscriptionState> {
+  const response = await authorizedFetch("/me/subscriptions", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ subscriptions }),
+  });
+  if (!response.ok) throw new Error("Your notification subscriptions could not be saved.");
+  const body = await response.json() as { subscriptions: SubscriptionState };
+  return body.subscriptions;
 }
 
 export async function updateIdentityRole(identityId: string, roleId: string): Promise<void> {

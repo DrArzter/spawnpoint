@@ -107,6 +107,31 @@ resource "aws_lambda_permission" "notifier_events" {
   source_arn    = aws_cloudwatch_event_rule.execution_notifications[0].arn
 }
 
+resource "aws_cloudwatch_event_rule" "invitation_notifications" {
+  count       = var.enable_notifications ? 1 : 0
+  name        = "spawnpoint-invitation-notifications"
+  description = "Spawnpoint game invitations delivered to Telegram."
+  event_pattern = jsonencode({
+    source        = ["spawnpoint.access"]
+    "detail-type" = ["Game Invitation"]
+  })
+}
+
+resource "aws_cloudwatch_event_target" "invitation_notifications" {
+  count = var.enable_notifications ? 1 : 0
+  rule  = aws_cloudwatch_event_rule.invitation_notifications[0].name
+  arn   = aws_lambda_function.notifier[0].arn
+}
+
+resource "aws_lambda_permission" "notifier_invitation_events" {
+  count         = var.enable_notifications ? 1 : 0
+  statement_id  = "AllowInvitationEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.notifier[0].function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.invitation_notifications[0].arn
+}
+
 resource "aws_sns_topic_subscription" "alerts_to_chat" {
   count     = var.enable_notifications ? 1 : 0
   topic_arn = data.aws_sns_topic.alerts[0].arn

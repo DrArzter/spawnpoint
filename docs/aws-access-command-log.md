@@ -62,3 +62,45 @@ terraform apply bot-access.tfplan
 ```
 
 The reviewed plan updates only the existing bot Lambda and its inline IAM policy. The bot receives `dynamodb:UpdateItem` only on `spawnpoint-access`; it cannot scan identities or grant roles.
+
+## Game invitations
+
+On 2026-08-29 invitations stopped being UI-only. An authenticated identity with
+`invitation.send` can load a deliberately narrow directory containing only an
+identity ID and display name. The API excludes the caller and validates the
+same rule again when a direct invitation is created.
+
+Each accepted request writes an immutable `INVITATION#<uuid> / EVENT` record to
+`spawnpoint-access`, then publishes a `spawnpoint.access / Game Invitation`
+event to the default EventBridge bus. The access Lambda may only call
+`events:PutEvents` on that one bus; Telegram delivery remains owned by the
+notifier Lambda.
+
+Validation and deployment:
+
+```bash
+npm test --prefix lambdas
+npm run typecheck --prefix lambdas
+npm run build --prefix lambdas
+npm run build --prefix web
+
+cd infra/terraform-access-api
+terraform plan -out=access-invitations.tfplan
+terraform apply access-invitations.tfplan
+
+cd ../terraform-bot
+terraform plan -var enable_notifications=true -out=bot-invitations.tfplan
+terraform apply bot-invitations.tfplan
+```
+
+The reviewed access plan was `2 add / 2 change / 0 destroy`; the notifier plan
+was `3 add / 1 change / 0 destroy`. Always pass
+`enable_notifications=true` when operating the production bot root. Omitting
+it intentionally describes the pre-notifier configuration and therefore
+produces a destructive plan. Both post-apply plans returned `No changes`, and
+the game EC2 instance remained `stopped`.
+
+A safe smoke test calls `GET /invitations/recipients` with a short-lived local
+session and does not publish an event. It returned one recipient and confirmed
+that the current Owner was absent. Do not smoke-test the POST route casually:
+that is a real invitation and may send Telegram messages.

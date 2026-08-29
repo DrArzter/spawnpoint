@@ -71,8 +71,14 @@ async function identityAccounts(identityId: string): Promise<Item[]> {
   return items;
 }
 
-export async function subscribedTelegramChatIds(key: NotificationSubscriptionKey): Promise<number[]> {
-  const identityIds = subscribedIdentityIds(await subscriptionItems(), key);
+export async function subscribedTelegramChatIds(
+  key: NotificationSubscriptionKey,
+  options: Readonly<{ include?: readonly string[]; exclude?: readonly string[] }> = {},
+): Promise<number[]> {
+  const included = options.include === undefined ? null : new Set(options.include);
+  const excluded = new Set(options.exclude ?? []);
+  const identityIds = subscribedIdentityIds(await subscriptionItems(), key)
+    .filter((identityId) => (included === null || included.has(identityId)) && !excluded.has(identityId));
   const accounts = await Promise.all(identityIds.map(identityAccounts));
   return telegramChatIds(accounts.flat());
 }

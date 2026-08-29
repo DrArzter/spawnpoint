@@ -5,6 +5,7 @@
 // the Telegram API — no Step Functions, no EC2, no S3.
 
 import { renderAlert } from "../domain/alerts.ts";
+import { parseInvitationEvent, renderInvitation } from "../domain/invitations.ts";
 import { notificationSubscriptionKey, parseExecutionEvent, renderNotification } from "../domain/notifications.ts";
 import { parseChatIds } from "../domain/telegram-bot.ts";
 import { env, parameter } from "./services/aws.ts";
@@ -13,7 +14,7 @@ import { subscribedTelegramChatIds } from "./services/subscribers.ts";
 type SnsEvent = Readonly<{
   Records?: ReadonlyArray<{ Sns?: { Subject?: string | null; Message?: string } }>;
 }>;
-type EventBridgeEvent = Readonly<{ detail?: unknown }>;
+type EventBridgeEvent = Readonly<{ source?: string; "detail-type"?: string; detail?: unknown }>;
 
 async function configuredChatIds(): Promise<readonly number[]> {
   return parseChatIds(await parameter(env("CHAT_IDS_PARAMETER"), 60));
@@ -55,7 +56,23 @@ export async function handler(event: SnsEvent | EventBridgeEvent): Promise<void>
     return;
   }
 
-  const parsed = parseExecutionEvent((event as EventBridgeEvent).detail);
+  const eventBridge = event as EventBridgeEvent;
+  if (eventBridge.source === "spawnpoint.access" && eventBridge["detail-type"] === "Game Invitation") {
+    const invitation = parseInvitationEvent(eventBridge.detail);
+    if (invitation === null) {
+      console.error("unparseable invitation", JSON.stringify(event).slice(0, 500));
+      return;
+    }
+    const key = invitation.audience === "broadcast" ? "invitation.broadcast" : "invitation.direct";
+    const subscribers = await subscribedTelegramChatIds(key, invitation.audience === "direct"
+      ? { include: invitation.recipientIdentityIds, exclude: [invitation.senderIdentityId] }
+      : { exclude: [invitation.senderIdentityId] });
+    const groups = invitation.audience === "broadcast" ? (await configuredChatIds()).filter((chatId) => chatId < 0) : [];
+    await sendToTargets(renderInvitation(invitation), [...new Set([...groups, ...subscribers])]);
+    return;
+  }
+
+  const parsed = parseExecutionEvent(eventBridge.detail);
   if (parsed === null) {
     console.error("unparseable event", JSON.stringify(event).slice(0, 500));
     return;

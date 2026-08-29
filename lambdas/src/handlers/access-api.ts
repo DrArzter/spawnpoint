@@ -1,11 +1,14 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge";
 import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { randomUUID } from "node:crypto";
 
-import { builtInRoles, hasPermission, Identity, isBuiltInRoleId, Permission, permissions } from "../access/domain.ts";
-import { issueSessionToken, TelegramProfile, verifyLoginWidget, verifyMiniAppInitData, verifySessionToken } from "../access/telegram-auth.ts";
+import { builtInRoles, hasPermission, isBuiltInRoleId, permissions, type Identity, type Permission } from "../access/domain.ts";
+import { issueSessionToken, verifyLoginWidget, verifyMiniAppInitData, verifySessionToken, type TelegramProfile } from "../access/telegram-auth.ts";
 import { defaultSubscriptions, validateSubscriptions } from "../access/subscriptions.ts";
+import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
+import { gameCatalog } from "../control-plane/catalog.ts";
 import { awsControlPlaneSources, startSessionExecution, stopSessionExecution } from "../control-plane/aws.ts";
 import { readControlPlaneSnapshot } from "../control-plane/read-model.ts";
 import { planSessionOperation, type SessionAction } from "../control-plane/session-control.ts";
@@ -28,6 +31,7 @@ const configuredBotTokenParameter = process.env.BOT_TOKEN_PARAMETER;
 if (!configuredBotTokenParameter) throw new Error("missing environment variable: BOT_TOKEN_PARAMETER");
 const botTokenParameter: string = configuredBotTokenParameter;
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const events = new EventBridgeClient({});
 const ssm = new SSMClient({});
 let botTokenPromise: Promise<string> | undefined;
 
@@ -272,6 +276,75 @@ async function identities(): Promise<Response> {
   return response(200, { identities: items });
 }
 
+async function invitationRecipients(identity: Identity): Promise<Response> {
+  const forbidden = requirePermission(identity, "invitation.send");
+  if (forbidden !== null) return forbidden;
+  const profiles = await document.send(new QueryCommand({
+    TableName: tableName,
+    IndexName: "gsi1",
+    KeyConditionExpression: "gsi1pk = :state",
+    ExpressionAttributeValues: { ":state": "IDENTITY#ACTIVE" },
+  }));
+  return response(200, { recipients: (profiles.Items ?? [])
+    .filter((profile) => profile.identity_id !== identity.id)
+    .map((profile) => ({ id: String(profile.identity_id), displayName: String(profile.display_name) }))
+    .sort((left, right) => left.displayName.localeCompare(right.displayName)) });
+}
+
+async function createInvitation(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
+  const forbidden = requirePermission(identity, "invitation.send");
+  if (forbidden !== null) return forbidden;
+  let parsed: { audience?: unknown; recipientIdentityIds?: unknown };
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const audience = parsed.audience;
+  if (audience !== "broadcast" && audience !== "direct") return response(400, { error: "invalid_audience" });
+  const requested = parsed.recipientIdentityIds;
+  if (audience === "direct" && (!Array.isArray(requested) || requested.length === 0 || requested.length > 100 || !requested.every((id) => typeof id === "string" && /^[0-9a-f-]{36}$/.test(id)))) {
+    return response(400, { error: "invalid_recipients" });
+  }
+  const recipientIdentityIds = audience === "direct" ? [...new Set(requested as string[])].filter((id) => id !== identity.id) : [];
+  if (audience === "direct" && recipientIdentityIds.length === 0) return response(400, { error: "invalid_recipients" });
+  const game = gameCatalog.find((candidate) => candidate.id === gameId);
+  const world = game?.worlds.find((candidate) => candidate.id === worldId);
+  if (game === undefined || world === undefined) return response(404, { error: "unknown_world" });
+
+  if (audience === "direct") {
+    const profiles = await Promise.all(recipientIdentityIds.map((id) => document.send(new GetCommand({
+      TableName: tableName, Key: { pk: `IDENTITY#${id}`, sk: "PROFILE" }, ProjectionExpression: "identity_id, #status",
+      ExpressionAttributeNames: { "#status": "status" },
+    }))));
+    if (profiles.some((profile) => profile.Item?.status !== "ACTIVE")) return response(400, { error: "invalid_recipients" });
+  }
+
+  const invitationId = randomUUID();
+  const now = new Date().toISOString();
+  const detail: InvitationEvent = {
+    invitationId, audience: audience as InvitationAudience, gameId, gameName: game.displayName,
+    worldId, worldName: world.displayName, senderIdentityId: identity.id,
+    senderDisplayName: identity.displayName, recipientIdentityIds,
+  };
+  await document.send(new PutCommand({ TableName: tableName, Item: {
+    pk: `INVITATION#${invitationId}`, sk: "EVENT", invitation_id: invitationId, audience,
+    game_id: gameId, world_id: worldId, sender_identity_id: identity.id,
+    recipient_identity_ids: recipientIdentityIds, status: "CREATED", created_at: now,
+    gsi1pk: "INVITATION", gsi1sk: now,
+  } }));
+  const published = await events.send(new PutEventsCommand({ Entries: [{
+    EventBusName: process.env.EVENT_BUS_NAME ?? "default", Source: "spawnpoint.access",
+    DetailType: "Game Invitation", Detail: JSON.stringify(detail),
+  }] }));
+  if ((published.FailedEntryCount ?? 0) > 0) {
+    await document.send(new UpdateCommand({ TableName: tableName, Key: { pk: `INVITATION#${invitationId}`, sk: "EVENT" },
+      UpdateExpression: "SET #status = :failed", ExpressionAttributeNames: { "#status": "status" }, ExpressionAttributeValues: { ":failed": "PUBLISH_FAILED" },
+    }));
+    return response(502, { error: "invitation_publish_failed" });
+  }
+  await document.send(new UpdateCommand({ TableName: tableName, Key: { pk: `INVITATION#${invitationId}`, sk: "EVENT" },
+    UpdateExpression: "SET #status = :published, published_at = :now", ExpressionAttributeNames: { "#status": "status" }, ExpressionAttributeValues: { ":published": "PUBLISHED", ":now": new Date().toISOString() },
+  }));
+  return response(202, { invitation: { id: invitationId, audience, recipientCount: audience === "direct" ? recipientIdentityIds.length : null, state: "queued" } });
+}
+
 async function updateRole(callerIdentity: Identity, identityId: string, body: string | undefined): Promise<Response> {
   let parsed: { roleId?: unknown };
   try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
@@ -373,10 +446,12 @@ export async function handler(event: Event): Promise<Response> {
   if (method === "GET" && path === "/access/roles") return roles(identity);
   if (method === "GET" && path === "/me/subscriptions") return subscriptions(identity);
   if (method === "PUT" && path === "/me/subscriptions") return updateSubscriptions(identity, event.body);
+  if (method === "GET" && path === "/invitations/recipients") return invitationRecipients(identity);
   const gameId = event.pathParameters?.gameId;
   const worldId = event.pathParameters?.worldId;
   if (method === "POST" && gameId && worldId && path.endsWith("/start")) return controlSession(identity, "start", gameId, worldId);
   if (method === "POST" && gameId && worldId && path.endsWith("/stop")) return controlSession(identity, "stop", gameId, worldId);
+  if (method === "POST" && gameId && worldId && path.endsWith("/invitations")) return createInvitation(identity, gameId, worldId, event.body);
   const forbidden = requirePermission(identity, "access.manage");
   if (forbidden !== null) return forbidden;
   if (method === "GET" && path === "/access/candidates") return candidates();

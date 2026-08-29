@@ -13,7 +13,7 @@ export type ExecutionEvent = Readonly<{
   output: Record<string, unknown> | null;
 }>;
 
-export type NotificationSubscriptionKey = "minecraft.started" | "minecraft.stopped" | "factorio.started" | "factorio.stopped";
+export type NotificationSubscriptionKey = "minecraft.started" | "minecraft.stopped" | "factorio.started" | "factorio.stopped" | "invitation.broadcast" | "invitation.direct";
 
 export function parseExecutionEvent(detail: unknown): ExecutionEvent | null {
   if (typeof detail !== "object" || detail === null) return null;

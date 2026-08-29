@@ -25,6 +25,12 @@ data "aws_iam_policy_document" "access_api" {
   }
 
   statement {
+    sid       = "PublishInvitationEvents"
+    actions   = ["events:PutEvents"]
+    resources = ["arn:aws:events:${var.aws_region}:${data.aws_caller_identity.current.account_id}:event-bus/default"]
+  }
+
+  statement {
     sid       = "ReadLifecycleState"
     actions   = ["dynamodb:GetItem"]
     resources = [data.aws_dynamodb_table.lifecycle.arn]
@@ -142,8 +148,10 @@ locals {
     "GET /access/roles",
     "GET /me/subscriptions",
     "PUT /me/subscriptions",
+    "GET /invitations/recipients",
     "POST /games/{gameId}/worlds/{worldId}/start",
     "POST /games/{gameId}/worlds/{worldId}/stop",
+    "POST /games/{gameId}/worlds/{worldId}/invitations",
     "POST /access/request",
     "GET /access/candidates",
     "GET /access/identities",

@@ -274,3 +274,24 @@ The plan was exactly `9 add / 1 change / 0 destroy`: notifier Lambda, IAM,
 EventBridge and SNS wiring were created; only the existing bot Lambda bundle
 changed in place. A non-notifying Lambda smoke returned HTTP 200 with no
 function error. The game EC2 instance remained `stopped`.
+
+## Invitation delivery
+
+The notifier also accepts custom EventBridge events with source
+`spawnpoint.access` and detail type `Game Invitation`:
+
+- a broadcast goes to configured group chats and identities subscribed to
+  `invitation.broadcast`;
+- a direct invitation goes only to selected identities subscribed to
+  `invitation.direct`;
+- the sender identity is excluded in both cases;
+- only a positive private `direct_chat_id` is used for personal delivery.
+
+The EventBridge rule is `spawnpoint-invitation-notifications`. Its Terraform
+plan must be run with `-var enable_notifications=true`; the reviewed change was
+`3 add / 1 change / 0 destroy`, followed by a `No changes` plan.
+
+The production wiring smoke published one direct invitation event with an
+empty recipient list. EventBridge reported `FailedEntryCount: 0`, and the
+notifier completed without errors or Telegram delivery. This checks the rule,
+target and Lambda permission without messaging a real person.

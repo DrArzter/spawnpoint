@@ -110,3 +110,17 @@ partition so `GET /games/{gameId}/worlds/{worldId}/invitations` returns the five
 latest attempts by the current identity without scanning other players or
 worlds. The browser labels `READY` as queued and does not call it delivered
 until the notifier records the outcome.
+
+The recipient directory now also returns delivery readiness. It exposes only
+whether direct invitations are enabled and whether the identity has a usable
+private Telegram chat; chat IDs and subscription records remain private. The
+panel keeps unavailable identities visible, explains how they can become
+reachable, and prevents selecting them. The notifier still rechecks both facts
+when delivery starts because readiness can change after the directory loads.
+
+The production update changed only the existing access Lambda (`0 add / 1
+change / 0 destroy`) and the static web assets. A safe read-only smoke test
+returned HTTP 200 with one `notifications_off` identity. It printed only counts
+per readiness state, did not create an invitation, and sent no Telegram
+message. The post-apply Terraform plan returned `No changes`; the game EC2
+instance remained `stopped`.

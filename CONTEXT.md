@@ -45,3 +45,5 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 **Invitation**: A durable request from one identity to play a selected game world, addressed either to specific identities or to every eligible identity. Creation and notification delivery are separate facts: an accepted invitation may still have no reachable recipients.
 
 **Invitation delivery**: The single claimed attempt to notify the eligible recipients of an invitation. Its outcome records how many targets succeeded or failed; it is not inferred from invitation creation.
+
+**Invitation delivery readiness**: A current indication that an identity has opted into an invitation category and has a reachable notification channel. It helps a sender choose recipients, but is not a delivery guarantee; eligibility is checked again when delivery begins.

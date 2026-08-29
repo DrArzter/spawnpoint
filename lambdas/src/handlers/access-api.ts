@@ -5,6 +5,7 @@ import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { randomUUID } from "node:crypto";
 
 import { builtInRoles, hasPermission, isBuiltInRoleId, permissions, type Identity, type Permission } from "../access/domain.ts";
+import { directInvitationReadiness } from "../access/invitation-readiness.ts";
 import { issueSessionToken, verifyLoginWidget, verifyMiniAppInitData, verifySessionToken, type TelegramProfile } from "../access/telegram-auth.ts";
 import { defaultSubscriptions, validateSubscriptions } from "../access/subscriptions.ts";
 import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
@@ -285,10 +286,30 @@ async function invitationRecipients(identity: Identity): Promise<Response> {
     KeyConditionExpression: "gsi1pk = :state",
     ExpressionAttributeValues: { ":state": "IDENTITY#ACTIVE" },
   }));
-  return response(200, { recipients: (profiles.Items ?? [])
-    .filter((profile) => profile.identity_id !== identity.id)
-    .map((profile) => ({ id: String(profile.identity_id), displayName: String(profile.display_name) }))
-    .sort((left, right) => left.displayName.localeCompare(right.displayName)) });
+  const candidates = (profiles.Items ?? []).filter((profile) => profile.identity_id !== identity.id);
+  const recipients = await Promise.all(candidates.map(async (profile) => {
+    const identityId = String(profile.identity_id);
+    const subscriptions = await document.send(new GetCommand({
+      TableName: tableName,
+      Key: { pk: `IDENTITY#${identityId}`, sk: "SUBSCRIPTIONS" },
+      ConsistentRead: true,
+    }));
+    const subscriptionMap = subscriptions.Item?.subscriptions;
+    const directEnabled = subscriptionMap !== null && typeof subscriptionMap === "object"
+      && (subscriptionMap as Record<string, unknown>)["invitation.direct"] === true;
+    const accounts = directEnabled ? await document.send(new QueryCommand({
+      TableName: tableName,
+      IndexName: "gsi1",
+      KeyConditionExpression: "gsi1pk = :identity",
+      ExpressionAttributeValues: { ":identity": `IDENTITY#${identityId}` },
+    })) : { Items: [] };
+    return {
+      id: identityId,
+      displayName: String(profile.display_name),
+      delivery: directInvitationReadiness(subscriptions.Item, accounts.Items ?? []),
+    };
+  }));
+  return response(200, { recipients: recipients.sort((left, right) => left.displayName.localeCompare(right.displayName)) });
 }
 
 async function createInvitation(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {

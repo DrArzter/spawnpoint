@@ -1,10 +1,11 @@
 import { Button } from "../components/ui/Button";
 import { Icon } from "../Icon";
+import { useEffect, useRef, useState } from "react";
 import type { Game, Host, Operation, ServerState, World } from "../model";
 
 type LoadState = "loading" | "ready" | "error";
 
-export function DashboardScreen({ game, world, hosts, operations, serverState, loadState, error, onRetry, canInvite, canStart, canStop }: {
+export function DashboardScreen({ game, world, hosts, operations, serverState, loadState, error, onRetry, onOperation, operationRequest, canInvite, canStart, canStop }: {
   game: Game;
   world: World;
   hosts: readonly Host[];
@@ -13,17 +14,33 @@ export function DashboardScreen({ game, world, hosts, operations, serverState, l
   loadState: LoadState;
   error: string;
   onRetry: () => void;
+  onOperation: (action: "start" | "stop") => void;
+  operationRequest: { state: "idle" | "pending" | "success" | "error"; message: string };
   canInvite: boolean;
   canStart: boolean;
   canStop: boolean;
 }) {
+  const [confirming, setConfirming] = useState<"start" | "stop" | null>(null);
+  const confirmButton = useRef<HTMLButtonElement>(null);
   const activeRelease = world.release.activeRelease;
   const desiredRelease = world.release.desiredRelease;
   const operation = operations[0];
   const host = hosts[0];
-  const controlsHint = "Session controls are the next control-plane slice and are not connected yet.";
+  const sessionAction = serverState === "running" ? "stop" : "start";
+  const permitted = sessionAction === "start" ? canStart : canStop;
+  const transitioning = serverState === "starting" || serverState === "stopping" || operationRequest.state === "pending";
+  const controlDisabled = !world.sessionControlAvailable || !permitted || transitioning;
+  const controlsHint = !world.sessionControlAvailable ? "This world is not connected to a session workflow yet." : !permitted ? `Your role cannot ${sessionAction} sessions.` : transitioning ? "A control-plane operation is already in progress." : `Review and confirm the ${sessionAction} request.`;
   const inviteHint = canInvite ? "Telegram invitation delivery is not connected yet." : "Your role cannot send invitations.";
   const stateLabel = serverState === "running" ? "Online" : serverState === "starting" ? "Starting" : serverState === "stopping" ? "Stopping" : serverState === "unknown" ? "Unknown" : "Stopped";
+
+  useEffect(() => { if (confirming) confirmButton.current?.focus(); }, [confirming]);
+
+  function confirmOperation() {
+    if (!confirming) return;
+    onOperation(confirming);
+    setConfirming(null);
+  }
 
   return <>
     <div className="page-heading"><div><h1>{world.displayName}</h1><p>{game.displayName} · {activeRelease ? `active release ${activeRelease}` : world.release.state === "unconfigured" ? "not adopted yet" : "release unavailable"}</p></div></div>
@@ -35,9 +52,14 @@ export function DashboardScreen({ game, world, hosts, operations, serverState, l
       </div>
       <div className="service-actions">
         <Button disabled icon={<Icon name="users" />} title={inviteHint} variant="ghost">Invite players</Button>
-        <Button disabled icon={<Icon name={serverState === "running" ? "stop" : "play"} />} title={canStart || canStop ? controlsHint : "Your role cannot control sessions."} variant={serverState === "running" ? "danger" : "primary"}>{serverState === "running" ? "Stop" : "Start"}</Button>
+        <Button disabled={controlDisabled} icon={<Icon name={sessionAction === "stop" ? "stop" : "play"} />} onClick={() => setConfirming(sessionAction)} title={controlsHint} variant={sessionAction === "stop" ? "danger" : "primary"}>{sessionAction === "stop" ? "Stop" : "Start"}</Button>
       </div>
     </section>
+    {confirming && <section aria-labelledby="operation-confirmation-title" className="operation-confirmation" role="alertdialog">
+      <div><h2 id="operation-confirmation-title">{confirming === "start" ? "Start a billed AWS session?" : "Save, back up and stop this session?"}</h2><p>{confirming === "start" ? `Spawnpoint will boot the host and start ${world.displayName}. Modded Minecraft may take several minutes to become healthy.` : "Spawnpoint will refuse while players are online, then save the world, create a verified backup and stop the host."}</p></div>
+      <div><Button onClick={() => setConfirming(null)} variant="ghost">Cancel</Button><Button onClick={confirmOperation} ref={confirmButton} variant={confirming === "stop" ? "danger" : "primary"}>{confirming === "start" ? "Start session" : "Stop session"}</Button></div>
+    </section>}
+    {operationRequest.state !== "idle" && <div aria-live="polite" className={`operation-feedback ${operationRequest.state}`} role={operationRequest.state === "error" ? "alert" : "status"}>{operationRequest.message}</div>}
     <section className="summary-grid">
       <Stat label="Host" value={host?.state ?? (loadState === "loading" ? "Loading…" : "None")} detail={host?.instanceType ?? "Shared compute pool"} />
       <Stat label="Active release" value={activeRelease ?? "—"} detail={activeRelease ? "Last health-checked release" : "No verified active release"} />

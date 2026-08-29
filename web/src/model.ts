@@ -7,7 +7,7 @@ export type ReleasePointer = {
   desiredRelease: string | null;
   activeRelease: string | null;
 };
-export type World = { id: string; displayName: string; profileId: string; release: ReleasePointer };
+export type World = { id: string; displayName: string; profileId: string; sessionControlAvailable: boolean; release: ReleasePointer };
 export type Lifecycle = {
   schemaVersion: 1;
   serverId: string;

@@ -1,10 +1,10 @@
-import { ButtonHTMLAttributes, ReactNode } from "react";
+import { ButtonHTMLAttributes, forwardRef, ReactNode } from "react";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
-export function Button({ children, className = "", icon, variant = "secondary", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {
+export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & {
   icon?: ReactNode;
   variant?: ButtonVariant;
-}) {
-  return <button className={`ui-button ui-button-${variant} ${className}`.trim()} {...props}>{icon}{children}</button>;
-}
+}>(function Button({ children, className = "", icon, variant = "secondary", ...props }, ref) {
+  return <button className={`ui-button ui-button-${variant} ${className}`.trim()} ref={ref} {...props}>{icon}{children}</button>;
+});

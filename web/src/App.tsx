@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ActiveSession, AuthState, endSession, loadControlPlane, requestAccess, restoreAuth, telegramBotUsername, telegramLoginRedirectUrl } from "./auth";
+import { ActiveSession, AuthState, endSession, loadControlPlane, requestAccess, requestSessionOperation, restoreAuth, telegramBotUsername, telegramLoginRedirectUrl } from "./auth";
 import { AccessScreen } from "./screens/AccessScreen";
 import { Avatar } from "./components/Avatar";
 import { Button } from "./components/ui/Button";
@@ -106,6 +106,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
   const [themePreference, setThemePreference] = useState<ThemePreference>(getThemePreference);
   const [theme, setTheme] = useState<Theme>(() => resolveTheme(getThemePreference()));
   const [picker, setPicker] = useState<"game" | "world" | null>(null);
+  const [operationRequest, setOperationRequest] = useState<{ state: "idle" | "pending" | "success" | "error"; message: string }>({ state: "idle", message: "" });
   const [members, setMembers] = useState<Member[]>(() => [{
     id: session.identity.id,
     name: session.identity.displayName,
@@ -167,6 +168,18 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
     }
   }
 
+  async function runSessionOperation(action: "start" | "stop") {
+    if (!game || !world) return;
+    setOperationRequest({ state: "pending", message: action === "start" ? "Requesting session start…" : "Requesting safe stop…" });
+    try {
+      const result = await requestSessionOperation(game.id, world.id, action);
+      setOperationRequest({ state: "success", message: result.result === "already_stopped" ? "The host is already stopped." : `${action === "start" ? "Start" : "Stop"} accepted${result.operationId ? ` · ${result.operationId}` : ""}.` });
+      await refreshControlPlane();
+    } catch (error) {
+      setOperationRequest({ state: "error", message: error instanceof Error ? error.message : `The ${action} request failed.` });
+    }
+  }
+
   function selectGame(id: string) {
     const next = games.find((item) => item.id === id);
     if (!next) return;
@@ -216,7 +229,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
         </header>
 
         <div className="page-content">
-          {page === "dashboard" && game && world && <DashboardScreen canInvite={granted.has("invitation.send")} canStart={granted.has("session.start")} canStop={granted.has("session.stop")} error={controlPlane.error} game={game} hosts={snapshot?.hosts ?? []} loadState={controlPlane.status} onRetry={() => void refreshControlPlane()} operations={snapshot?.operations ?? []} serverState={serverState} world={world} />}
+          {page === "dashboard" && game && world && <DashboardScreen canInvite={granted.has("invitation.send")} canStart={granted.has("session.start")} canStop={granted.has("session.stop")} error={controlPlane.error} game={game} hosts={snapshot?.hosts ?? []} loadState={controlPlane.status} onOperation={(action) => void runSessionOperation(action)} onRetry={() => void refreshControlPlane()} operationRequest={operationRequest} operations={snapshot?.operations ?? []} serverState={serverState} world={world} />}
           {page === "dashboard" && (!game || !world) && <ControlPlaneUnavailable state={controlPlane} onRetry={() => void refreshControlPlane()} />}
           {page === "metrics" && <MetricsScreen serverState={serverState} />}
           {page === "console" && <ConsoleScreen serverState={serverState} />}

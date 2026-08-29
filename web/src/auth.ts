@@ -166,6 +166,23 @@ export async function loadControlPlane(): Promise<ControlPlaneSnapshot> {
   return response.json() as Promise<ControlPlaneSnapshot>;
 }
 
+export async function requestSessionOperation(gameId: string, worldId: string, action: "start" | "stop"): Promise<{ result: "requested" | "already_stopped"; operationId?: string }> {
+  const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/${action}`, { method: "POST" });
+  const body = await response.json() as { error?: string; result?: "requested" | "already_stopped"; operationId?: string };
+  if (!response.ok) {
+    const messages: Record<string, string> = {
+      forbidden: `Your role cannot ${action} sessions.`,
+      unsupported_world: "This world is not connected to a session workflow yet.",
+      operation_in_progress: "Another control-plane operation is already running.",
+      host_not_unique: "Spawnpoint could not select exactly one compatible host.",
+      host_transitioning: "The compute host is already changing state. Refresh and try again shortly.",
+    };
+    throw new Error(messages[body.error ?? ""] ?? `The ${action} request could not be accepted.`);
+  }
+  if (!body.result) throw new Error("Spawnpoint returned an invalid operation response.");
+  return { result: body.result, ...(body.operationId ? { operationId: body.operationId } : {}) };
+}
+
 export async function approveAccessCandidate(telegramId: string, roleId: string): Promise<{ id: string; displayName: string; roleId: string }> {
   const response = await authorizedFetch(`/access/candidates/${telegramId}/approve`, {
     method: "POST",

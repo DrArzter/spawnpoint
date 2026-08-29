@@ -39,13 +39,15 @@ export function InvitationComposer({ game, world, onClose }: { game: Game; world
 
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const visibleRecipients = recipients.filter((recipient) => normalizedQuery === "" || recipient.displayName.toLocaleLowerCase().includes(normalizedQuery));
+  const reachableCount = recipients.filter((recipient) => recipient.delivery === "ready").length;
   const selectedCount = selected.size;
   const sendDisabled = request.state === "pending" || (audience === "direct" && selectedCount === 0);
 
-  function toggleRecipient(id: string) {
+  function toggleRecipient(recipient: InvitationRecipient) {
+    if (recipient.delivery !== "ready") return;
     setSelected((current) => {
       const next = new Set(current);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(recipient.id)) next.delete(recipient.id); else next.add(recipient.id);
       return next;
     });
   }
@@ -86,8 +88,11 @@ export function InvitationComposer({ game, world, onClose }: { game: Game; world
           {recipientState === "error" && <div className="recipient-state error" role="alert"><span>Players could not be loaded.</span><Button onClick={() => window.location.reload()} variant="ghost">Reload panel</Button></div>}
           {recipientState === "ready" && recipients.length === 0 && <div className="recipient-state">No other approved players yet.</div>}
           {recipientState === "ready" && recipients.length > 0 && <div className="recipient-list" role="group" aria-label="Players">
-            <div className="recipient-list-toolbar"><span>{normalizedQuery ? `${visibleRecipients.length} matches` : `${recipients.length} available`}</span>{selectedCount > 0 && <button onClick={() => setSelected(new Set())} type="button">Clear selection</button>}</div>
-            <div className="recipient-scroll">{visibleRecipients.map((recipient) => <label key={recipient.id}><input checked={selected.has(recipient.id)} onChange={() => toggleRecipient(recipient.id)} type="checkbox" /><span className="recipient-avatar">{initials(recipient.displayName)}</span><span><strong>{recipient.displayName}</strong><small>{selected.has(recipient.id) ? "Selected" : "Direct invitation"}</small></span></label>)}
+            <div className="recipient-list-toolbar"><span>{normalizedQuery ? `${visibleRecipients.length} matches` : `${reachableCount} reachable · ${recipients.length} people`}</span>{selectedCount > 0 && <button onClick={() => setSelected(new Set())} type="button">Clear selection</button>}</div>
+            <div className="recipient-scroll">{visibleRecipients.map((recipient) => {
+              const ready = recipient.delivery === "ready";
+              return <label className={ready ? "" : "unavailable"} key={recipient.id}><input checked={selected.has(recipient.id)} disabled={!ready} onChange={() => toggleRecipient(recipient)} type="checkbox" /><span className="recipient-avatar">{initials(recipient.displayName)}</span><span><strong>{recipient.displayName}</strong><small>{recipientDeliveryLabel(recipient, selected.has(recipient.id))}</small></span></label>;
+            })}
               {visibleRecipients.length === 0 && <div className="recipient-state">No players match “{query.trim()}”.</div>}
             </div>
           </div>}
@@ -138,4 +143,11 @@ function formatDate(value: string): string {
 
 function initials(value: string): string {
   return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "?";
+}
+
+function recipientDeliveryLabel(recipient: InvitationRecipient, selected: boolean): string {
+  if (selected) return "Selected";
+  if (recipient.delivery === "ready") return "Ready for direct invitations";
+  if (recipient.delivery === "notifications_off") return "Direct invitations are turned off";
+  return "Open the bot privately to receive invitations";
 }

@@ -742,10 +742,27 @@ body {
   background: var(--color-surface-hover);
 }
 
+.recipient-scroll > label.unavailable {
+  cursor: not-allowed;
+}
+
+.recipient-scroll > label.unavailable:hover {
+  background: transparent;
+}
+
+.recipient-scroll > label.unavailable .recipient-avatar,
+.recipient-scroll > label.unavailable strong {
+  opacity: .62;
+}
+
 .recipient-scroll input {
   width: 16px;
   height: 16px;
   accent-color: var(--color-accent);
+}
+
+.recipient-scroll input:disabled {
+  cursor: not-allowed;
 }
 
 .recipient-avatar {

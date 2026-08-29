@@ -45,7 +45,11 @@ export type AccessRole = Readonly<{
   system: boolean;
 }>;
 export type SubscriptionState = Record<string, boolean>;
-export type InvitationRecipient = Readonly<{ id: string; displayName: string }>;
+export type InvitationRecipient = Readonly<{
+  id: string;
+  displayName: string;
+  delivery: "ready" | "notifications_off" | "bot_unavailable";
+}>;
 export type InvitationSummary = Readonly<{
   id: string;
   audience: "broadcast" | "direct";

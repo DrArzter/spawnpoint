@@ -45,6 +45,7 @@ export type AccessRole = Readonly<{
   system: boolean;
 }>;
 export type SubscriptionState = Record<string, boolean>;
+export type InvitationRecipient = Readonly<{ id: string; displayName: string }>;
 export type AuthState =
   | { status: "loading" }
   | { status: "signed-out" }
@@ -189,6 +190,30 @@ export async function requestSessionOperation(gameId: string, worldId: string, a
   }
   if (!body.result) throw new Error("Spawnpoint returned an invalid operation response.");
   return { result: body.result, ...(body.operationId ? { operationId: body.operationId } : {}) };
+}
+
+export async function loadInvitationRecipients(): Promise<InvitationRecipient[]> {
+  const response = await authorizedFetch("/invitations/recipients");
+  if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot invite players." : "Players could not be loaded.");
+  const body = await response.json() as { recipients: InvitationRecipient[] };
+  return body.recipients;
+}
+
+export async function sendInvitation(gameId: string, worldId: string, audience: "broadcast" | "direct", recipientIdentityIds: readonly string[]): Promise<void> {
+  const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/invitations`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ audience, recipientIdentityIds }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    const messages: Record<string, string> = {
+      forbidden: "Your role cannot invite players.",
+      invalid_recipients: "One or more selected players are no longer available.",
+      invitation_publish_failed: "The invitation was saved, but Telegram delivery could not be queued.",
+    };
+    throw new Error(messages[body.error ?? ""] ?? "The invitation could not be sent.");
+  }
 }
 
 export async function approveAccessCandidate(telegramId: string, roleId: string): Promise<{ id: string; displayName: string; roleId: string }> {

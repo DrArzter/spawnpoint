@@ -30,6 +30,8 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Access candidate**: A visitor whose external account has been observed and is waiting for an Owner to approve or dismiss access. It is not an identity and carries no role or operational permission.
 
+**Access decision notification**: A transactional reply telling a visitor that their own access request was approved. It is not a subscription and does not itself grant or prove any permission.
+
 **Role**: A named reusable set of permissions assigned to an identity. Built-in roles provide safe defaults; custom roles may be added without changing clients.
 
 **Direct grant**: An exceptional permission attached to one identity in addition to its role. Direct grants only add permissions; a custom role is used when permissions must be removed.

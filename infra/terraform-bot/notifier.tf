@@ -79,6 +79,7 @@ resource "aws_lambda_function" "notifier" {
       BOT_TOKEN_PARAMETER = "/spawnpoint/bot/token"
       CHAT_IDS_PARAMETER  = "/spawnpoint/bot/chat-ids"
       ACCESS_TABLE_NAME   = data.aws_dynamodb_table.access.name
+      MINI_APP_URL        = var.mini_app_url
     }
   }
 }
@@ -122,10 +123,10 @@ resource "aws_lambda_permission" "notifier_events" {
 resource "aws_cloudwatch_event_rule" "invitation_notifications" {
   count       = var.enable_notifications ? 1 : 0
   name        = "spawnpoint-invitation-notifications"
-  description = "Spawnpoint game invitations delivered to Telegram."
+  description = "Spawnpoint access events delivered to Telegram."
   event_pattern = jsonencode({
     source        = ["spawnpoint.access"]
-    "detail-type" = ["Game Invitation"]
+    "detail-type" = ["Game Invitation", "Access Approved"]
   })
 }
 

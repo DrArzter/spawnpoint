@@ -124,3 +124,29 @@ returned HTTP 200 with one `notifications_off` identity. It printed only counts
 per readiness state, did not create an invitation, and sent no Telegram
 message. The post-apply Terraform plan returned `No changes`; the game EC2
 instance remained `stopped`.
+
+## Access approval notification
+
+An approval now emits a narrow `spawnpoint.access / Access Approved` event
+after the identity transaction commits, but only when the requesting Telegram
+account has a positive private-chat ID. The notifier sends that person a
+transactional confirmation with Mini App and browser buttons. This reply is
+not governed by game-notification subscriptions: it answers the visitor's own
+access request and never substitutes for the API's session and permission
+checks.
+
+Event publication is best-effort after the durable approval. If EventBridge is
+temporarily unavailable, the API logs the notification failure but still
+returns the successfully committed identity instead of inviting a misleading
+retry and `candidate_unavailable` conflict.
+
+Deployment used two saved plans:
+
+- access API: `0 add / 1 change / 0 destroy`;
+- bot/notifier: `0 add / 2 change / 0 destroy`.
+
+The second plan updated only the existing notifier Lambda and existing access
+event rule. Both post-apply plans returned `No changes`. A read-only
+`TestEventPattern` smoke check returned true for `Access Approved` and `Game
+Invitation`, and false for an unrelated event. No synthetic approval event was
+published and no Telegram message was sent during the test.

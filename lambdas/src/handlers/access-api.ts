@@ -8,6 +8,7 @@ import { builtInRoles, hasPermission, isBuiltInRoleId, permissions, type Identit
 import { directInvitationReadiness } from "../access/invitation-readiness.ts";
 import { issueSessionToken, verifyLoginWidget, verifyMiniAppInitData, verifySessionToken, type TelegramProfile } from "../access/telegram-auth.ts";
 import { defaultSubscriptions, validateSubscriptions } from "../access/subscriptions.ts";
+import { privateTelegramChatId, type AccessApprovedEvent } from "../domain/access-events.ts";
 import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
 import { gameCatalog } from "../control-plane/catalog.ts";
 import { awsControlPlaneSources, startSessionExecution, stopSessionExecution } from "../control-plane/aws.ts";
@@ -434,6 +435,27 @@ async function approve(identity: Identity, telegramId: string, body: string | un
       ExpressionAttributeValues: { ":identityId": identityId, ":approved": "APPROVED", ":linked": `IDENTITY#${identityId}`, ":now": now, ":by": identity.id },
     } },
   ] }));
+  const telegramChatId = privateTelegramChatId(candidate.Item.direct_chat_id ?? candidate.Item.chat_id);
+  if (telegramChatId !== null) {
+    const detail: AccessApprovedEvent = {
+      telegramChatId,
+      identityId,
+      displayName: name,
+      roleName: builtInRoles[roleId].name,
+    };
+    try {
+      const published = await events.send(new PutEventsCommand({ Entries: [{
+        Source: "spawnpoint.access",
+        DetailType: "Access Approved",
+        Detail: JSON.stringify(detail),
+      }] }));
+      if ((published.FailedEntryCount ?? 0) > 0) throw new Error(published.Entries?.[0]?.ErrorMessage ?? "EventBridge rejected access approval");
+    } catch (error) {
+      // Approval is already committed. A best-effort notification must not make
+      // the client retry the access mutation and receive a false conflict.
+      console.error("access approval notification was not published", error);
+    }
+  }
   return response(201, { identity: { id: identityId, displayName: name, roleId, directGrants } });
 }
 

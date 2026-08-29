@@ -1,4 +1,5 @@
 export type InvitationAudience = "broadcast" | "direct";
+export type InvitationDeliveryStatus = "DELIVERED" | "PARTIAL" | "FAILED" | "NO_RECIPIENTS";
 
 export type InvitationEvent = Readonly<{
   invitationId: string;
@@ -40,4 +41,11 @@ export function parseInvitationEvent(value: unknown): InvitationEvent | null {
 export function renderInvitation(event: InvitationEvent): string {
   const target = event.audience === "broadcast" ? "everyone" : "you";
   return `[INVITE] ${event.senderDisplayName} invited ${target} to play ${event.gameName} — ${event.worldName}.`;
+}
+
+export function invitationDeliveryStatus(targetCount: number, successCount: number): InvitationDeliveryStatus {
+  if (targetCount === 0) return "NO_RECIPIENTS";
+  if (successCount === targetCount) return "DELIVERED";
+  if (successCount === 0) return "FAILED";
+  return "PARTIAL";
 }

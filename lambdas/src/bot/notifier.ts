@@ -5,11 +5,11 @@
 // the Telegram API — no Step Functions, no EC2, no S3.
 
 import { renderAlert } from "../domain/alerts.ts";
-import { parseInvitationEvent, renderInvitation } from "../domain/invitations.ts";
+import { invitationDeliveryStatus, parseInvitationEvent, renderInvitation } from "../domain/invitations.ts";
 import { notificationSubscriptionKey, parseExecutionEvent, renderNotification } from "../domain/notifications.ts";
 import { parseChatIds } from "../domain/telegram-bot.ts";
 import { env, parameter } from "./services/aws.ts";
-import { subscribedTelegramChatIds } from "./services/subscribers.ts";
+import { claimInvitationDelivery, completeInvitationDelivery, subscribedTelegramChatIds } from "./services/subscribers.ts";
 
 type SnsEvent = Readonly<{
   Records?: ReadonlyArray<{ Sns?: { Subject?: string | null; Message?: string } }>;
@@ -20,8 +20,8 @@ async function configuredChatIds(): Promise<readonly number[]> {
   return parseChatIds(await parameter(env("CHAT_IDS_PARAMETER"), 60));
 }
 
-async function sendToTargets(text: string, chatIds: readonly number[]): Promise<void> {
-  if (chatIds.length === 0) return;
+async function sendToTargets(text: string, chatIds: readonly number[], throwOnTotalFailure = true): Promise<{ targetCount: number; successCount: number }> {
+  if (chatIds.length === 0) return { targetCount: 0, successCount: 0 };
   const token = await parameter(env("BOT_TOKEN_PARAMETER"));
 
   const results = await Promise.allSettled(
@@ -41,9 +41,10 @@ async function sendToTargets(text: string, chatIds: readonly number[]): Promise<
   for (const failure of failures) console.error((failure as PromiseRejectedResult).reason);
   // One unreachable chat (a member who never opened the bot) must not spend
   // the retry; only a total failure is worth another swing.
-  if (failures.length === results.length) {
+  if (throwOnTotalFailure && failures.length === results.length) {
     throw new Error("every notification target failed");
   }
+  return { targetCount: results.length, successCount: results.length - failures.length };
 }
 
 export async function handler(event: SnsEvent | EventBridgeEvent): Promise<void> {
@@ -63,12 +64,24 @@ export async function handler(event: SnsEvent | EventBridgeEvent): Promise<void>
       console.error("unparseable invitation", JSON.stringify(event).slice(0, 500));
       return;
     }
-    const key = invitation.audience === "broadcast" ? "invitation.broadcast" : "invitation.direct";
-    const subscribers = await subscribedTelegramChatIds(key, invitation.audience === "direct"
-      ? { include: invitation.recipientIdentityIds, exclude: [invitation.senderIdentityId] }
-      : { exclude: [invitation.senderIdentityId] });
-    const groups = invitation.audience === "broadcast" ? (await configuredChatIds()).filter((chatId) => chatId < 0) : [];
-    await sendToTargets(renderInvitation(invitation), [...new Set([...groups, ...subscribers])]);
+    if (!await claimInvitationDelivery(invitation.invitationId)) return;
+    try {
+      const key = invitation.audience === "broadcast" ? "invitation.broadcast" : "invitation.direct";
+      const subscribers = await subscribedTelegramChatIds(key, invitation.audience === "direct"
+        ? { include: invitation.recipientIdentityIds, exclude: [invitation.senderIdentityId] }
+        : { exclude: [invitation.senderIdentityId] });
+      const groups = invitation.audience === "broadcast" ? (await configuredChatIds()).filter((chatId) => chatId < 0) : [];
+      const delivery = await sendToTargets(renderInvitation(invitation), [...new Set([...groups, ...subscribers])], false);
+      await completeInvitationDelivery(
+        invitation.invitationId,
+        invitationDeliveryStatus(delivery.targetCount, delivery.successCount),
+        delivery.targetCount,
+        delivery.successCount,
+      );
+    } catch (error) {
+      console.error("invitation delivery failed before completion", error);
+      await completeInvitationDelivery(invitation.invitationId, "FAILED", 0, 0);
+    }
     return;
   }
 

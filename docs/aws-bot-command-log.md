@@ -295,3 +295,20 @@ The production wiring smoke published one direct invitation event with an
 empty recipient list. EventBridge reported `FailedEntryCount: 0`, and the
 notifier completed without errors or Telegram delivery. This checks the rule,
 target and Lambda permission without messaging a real person.
+
+Delivery is idempotent at the invitation level. The notifier conditionally
+claims `READY → DELIVERING`; duplicate EventBridge events cannot claim the same
+record. It then writes `DELIVERED`, `PARTIAL`, `FAILED`, or `NO_RECIPIENTS`
+along with target, success and failure counts. See
+[ADR-0038](adr/0038-invitation-delivery-claim.md).
+
+The production receipt smoke used an isolated record with no GSI projection
+and a direct event with an empty recipient list. The notifier changed it from
+`READY` to `NO_RECIPIENTS` and stored zero targets, successes and failures.
+The temporary record was then conditionally deleted; no Telegram message was
+sent and no test row remains in invitation history.
+
+Notifier write access is constrained with `dynamodb:LeadingKeys` to
+`INVITATION#*`; it cannot update identities, roles or subscriptions. A second
+empty-recipient smoke after applying that restriction again reached
+`NO_RECIPIENTS`, and its temporary record was also conditionally deleted.

@@ -104,3 +104,9 @@ A safe smoke test calls `GET /invitations/recipients` with a short-lived local
 session and does not publish an event. It returned one recipient and confirmed
 that the current Owner was absent. Do not smoke-test the POST route casually:
 that is a real invitation and may send Telegram messages.
+
+The next slice added delivery receipts. New records use a sender/game/world GSI
+partition so `GET /games/{gameId}/worlds/{worldId}/invitations` returns the five
+latest attempts by the current identity without scanning other players or
+worlds. The browser labels `READY` as queued and does not call it delivered
+until the notifier records the outcome.

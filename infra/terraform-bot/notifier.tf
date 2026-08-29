@@ -42,6 +42,18 @@ data "aws_iam_policy_document" "notifier" {
       "${data.aws_dynamodb_table.access.arn}/index/gsi1",
     ]
   }
+
+  statement {
+    sid       = "RecordInvitationDelivery"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = [data.aws_dynamodb_table.access.arn]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["INVITATION#*"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "notifier" {

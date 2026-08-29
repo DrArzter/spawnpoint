@@ -326,8 +326,8 @@ async function createInvitation(identity: Identity, gameId: string, worldId: str
   await document.send(new PutCommand({ TableName: tableName, Item: {
     pk: `INVITATION#${invitationId}`, sk: "EVENT", invitation_id: invitationId, audience,
     game_id: gameId, world_id: worldId, sender_identity_id: identity.id,
-    recipient_identity_ids: recipientIdentityIds, status: "CREATED", created_at: now,
-    gsi1pk: "INVITATION", gsi1sk: now,
+    recipient_identity_ids: recipientIdentityIds, status: "READY", created_at: now, published_at: now,
+    gsi1pk: `INVITATION#SENDER#${identity.id}#GAME#${gameId}#WORLD#${worldId}`, gsi1sk: `${now}#${invitationId}`,
   } }));
   const published = await events.send(new PutEventsCommand({ Entries: [{
     EventBusName: process.env.EVENT_BUS_NAME ?? "default", Source: "spawnpoint.access",
@@ -339,10 +339,23 @@ async function createInvitation(identity: Identity, gameId: string, worldId: str
     }));
     return response(502, { error: "invitation_publish_failed" });
   }
-  await document.send(new UpdateCommand({ TableName: tableName, Key: { pk: `INVITATION#${invitationId}`, sk: "EVENT" },
-    UpdateExpression: "SET #status = :published, published_at = :now", ExpressionAttributeNames: { "#status": "status" }, ExpressionAttributeValues: { ":published": "PUBLISHED", ":now": new Date().toISOString() },
-  }));
   return response(202, { invitation: { id: invitationId, audience, recipientCount: audience === "direct" ? recipientIdentityIds.length : null, state: "queued" } });
+}
+
+async function invitationHistory(identity: Identity, gameId: string, worldId: string): Promise<Response> {
+  const forbidden = requirePermission(identity, "invitation.send");
+  if (forbidden !== null) return forbidden;
+  const page = await document.send(new QueryCommand({
+    TableName: tableName, IndexName: "gsi1", KeyConditionExpression: "gsi1pk = :sender",
+    ExpressionAttributeValues: { ":sender": `INVITATION#SENDER#${identity.id}#GAME#${gameId}#WORLD#${worldId}` }, ScanIndexForward: false, Limit: 5,
+  }));
+  return response(200, { invitations: (page.Items ?? [])
+    .map((item) => ({
+      id: item.invitation_id, audience: item.audience, status: item.status,
+      recipientCount: Array.isArray(item.recipient_identity_ids) ? item.recipient_identity_ids.length : null,
+      targetCount: item.delivery_target_count ?? null, successCount: item.delivery_success_count ?? null,
+      failureCount: item.delivery_failure_count ?? null, createdAt: item.created_at,
+    })) });
 }
 
 async function updateRole(callerIdentity: Identity, identityId: string, body: string | undefined): Promise<Response> {
@@ -452,6 +465,7 @@ export async function handler(event: Event): Promise<Response> {
   if (method === "POST" && gameId && worldId && path.endsWith("/start")) return controlSession(identity, "start", gameId, worldId);
   if (method === "POST" && gameId && worldId && path.endsWith("/stop")) return controlSession(identity, "stop", gameId, worldId);
   if (method === "POST" && gameId && worldId && path.endsWith("/invitations")) return createInvitation(identity, gameId, worldId, event.body);
+  if (method === "GET" && gameId && worldId && path.endsWith("/invitations")) return invitationHistory(identity, gameId, worldId);
   const forbidden = requirePermission(identity, "access.manage");
   if (forbidden !== null) return forbidden;
   if (method === "GET" && path === "/access/candidates") return candidates();

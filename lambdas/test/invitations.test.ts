@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseInvitationEvent, renderInvitation } from "../src/domain/invitations.ts";
+import { invitationDeliveryStatus, parseInvitationEvent, renderInvitation } from "../src/domain/invitations.ts";
 
 const direct = {
   invitationId: "inv-1",
@@ -33,4 +33,11 @@ test("malformed invitations are rejected", () => {
   assert.equal(parseInvitationEvent({ ...direct, audience: "friends" }), null);
   assert.equal(parseInvitationEvent({ ...direct, recipientIdentityIds: [42] }), null);
   assert.equal(parseInvitationEvent({ ...direct, senderDisplayName: "" }), null);
+});
+
+test("delivery status distinguishes no audience, complete, partial and failed attempts", () => {
+  assert.equal(invitationDeliveryStatus(0, 0), "NO_RECIPIENTS");
+  assert.equal(invitationDeliveryStatus(2, 2), "DELIVERED");
+  assert.equal(invitationDeliveryStatus(2, 1), "PARTIAL");
+  assert.equal(invitationDeliveryStatus(2, 0), "FAILED");
 });

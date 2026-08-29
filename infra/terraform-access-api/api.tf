@@ -152,6 +152,7 @@ locals {
     "POST /games/{gameId}/worlds/{worldId}/start",
     "POST /games/{gameId}/worlds/{worldId}/stop",
     "POST /games/{gameId}/worlds/{worldId}/invitations",
+    "GET /games/{gameId}/worlds/{worldId}/invitations",
     "POST /access/request",
     "GET /access/candidates",
     "GET /access/identities",

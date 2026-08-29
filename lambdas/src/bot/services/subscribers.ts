@@ -1,7 +1,8 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, QueryCommand, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 
 import type { NotificationSubscriptionKey } from "../../domain/notifications.ts";
+import type { InvitationDeliveryStatus } from "../../domain/invitations.ts";
 
 type Item = Record<string, unknown>;
 type Key = Record<string, unknown>;
@@ -81,4 +82,40 @@ export async function subscribedTelegramChatIds(
     .filter((identityId) => (included === null || included.has(identityId)) && !excluded.has(identityId));
   const accounts = await Promise.all(identityIds.map(identityAccounts));
   return telegramChatIds(accounts.flat());
+}
+
+export async function claimInvitationDelivery(invitationId: string): Promise<boolean> {
+  try {
+    await database().send(new UpdateCommand({
+      TableName: requiredEnv("ACCESS_TABLE_NAME"),
+      Key: { pk: `INVITATION#${invitationId}`, sk: "EVENT" },
+      UpdateExpression: "SET #status = :delivering, delivery_started_at = :now",
+      ConditionExpression: "#status = :ready",
+      ExpressionAttributeNames: { "#status": "status" },
+      ExpressionAttributeValues: { ":ready": "READY", ":delivering": "DELIVERING", ":now": new Date().toISOString() },
+    }));
+    return true;
+  } catch (error) {
+    if (error instanceof Error && error.name === "ConditionalCheckFailedException") return false;
+    throw error;
+  }
+}
+
+export async function completeInvitationDelivery(
+  invitationId: string,
+  status: InvitationDeliveryStatus,
+  targetCount: number,
+  successCount: number,
+): Promise<void> {
+  await database().send(new UpdateCommand({
+    TableName: requiredEnv("ACCESS_TABLE_NAME"),
+    Key: { pk: `INVITATION#${invitationId}`, sk: "EVENT" },
+    UpdateExpression: "SET #status = :status, delivery_target_count = :targets, delivery_success_count = :successes, delivery_failure_count = :failures, delivery_completed_at = :now",
+    ConditionExpression: "#status = :delivering",
+    ExpressionAttributeNames: { "#status": "status" },
+    ExpressionAttributeValues: {
+      ":status": status, ":targets": targetCount, ":successes": successCount,
+      ":failures": targetCount - successCount, ":now": new Date().toISOString(), ":delivering": "DELIVERING",
+    },
+  }));
 }

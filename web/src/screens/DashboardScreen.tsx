@@ -1,8 +1,8 @@
 import { Button } from "../components/ui/Button";
+import { InvitationComposer } from "../components/InvitationComposer";
 import { Icon } from "../Icon";
 import { useEffect, useRef, useState } from "react";
 import type { Game, Host, Operation, ServerState, World } from "../model";
-import { loadInvitationRecipients, sendInvitation, type InvitationRecipient } from "../auth";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -23,12 +23,6 @@ export function DashboardScreen({ game, world, hosts, operations, serverState, l
 }) {
   const [confirming, setConfirming] = useState<"start" | "stop" | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [audience, setAudience] = useState<"broadcast" | "direct">("broadcast");
-  const [recipients, setRecipients] = useState<InvitationRecipient[]>([]);
-  const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(new Set());
-  const [recipientQuery, setRecipientQuery] = useState("");
-  const [recipientState, setRecipientState] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [inviteRequest, setInviteRequest] = useState<{ state: "idle" | "pending" | "success" | "error"; message: string }>({ state: "idle", message: "" });
   const confirmButton = useRef<HTMLButtonElement>(null);
   const activeRelease = world.release.activeRelease;
   const desiredRelease = world.release.desiredRelease;
@@ -43,43 +37,11 @@ export function DashboardScreen({ game, world, hosts, operations, serverState, l
   const stateLabel = serverState === "running" ? "Online" : serverState === "starting" ? "Starting" : serverState === "stopping" ? "Stopping" : serverState === "unknown" ? "Unknown" : "Stopped";
 
   useEffect(() => { if (confirming) confirmButton.current?.focus(); }, [confirming]);
-  useEffect(() => {
-    if (!inviteOpen || recipientState !== "idle") return;
-    setRecipientState("loading");
-    void loadInvitationRecipients().then((items) => {
-      setRecipients(items);
-      setRecipientState("ready");
-    }).catch(() => setRecipientState("error"));
-  }, [inviteOpen, recipientState]);
-
-  const normalizedQuery = recipientQuery.trim().toLocaleLowerCase();
-  const visibleRecipients = recipients.filter((recipient) => normalizedQuery === "" || recipient.displayName.toLocaleLowerCase().includes(normalizedQuery));
-  const directCount = selectedRecipients.size;
-  const sendDisabled = inviteRequest.state === "pending" || (audience === "direct" && directCount === 0);
 
   function confirmOperation() {
     if (!confirming) return;
     onOperation(confirming);
     setConfirming(null);
-  }
-
-  function toggleRecipient(id: string) {
-    setSelectedRecipients((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  async function submitInvitation() {
-    setInviteRequest({ state: "pending", message: "Queueing Telegram invitation…" });
-    try {
-      await sendInvitation(game.id, world.id, audience, [...selectedRecipients]);
-      setInviteRequest({ state: "success", message: audience === "broadcast" ? "Invitation queued for everyone." : `Invitation queued for ${directCount} ${directCount === 1 ? "player" : "players"}.` });
-      setSelectedRecipients(new Set());
-    } catch (inviteError) {
-      setInviteRequest({ state: "error", message: inviteError instanceof Error ? inviteError.message : "The invitation could not be sent." });
-    }
   }
 
   return <>
@@ -91,33 +53,11 @@ export function DashboardScreen({ game, world, hosts, operations, serverState, l
         <div><h2>{loadState === "loading" ? "Loading current state" : stateLabel}</h2><p>{host ? `${host.name} · ${host.state}` : loadState === "ready" ? "No compute host is currently available" : "Reading AWS control-plane state"}</p></div>
       </div>
       <div className="service-actions">
-        <Button disabled={!canInvite} icon={<Icon name="users" />} onClick={() => { setInviteOpen((open) => !open); setInviteRequest({ state: "idle", message: "" }); }} title={inviteHint} variant="ghost">Invite players</Button>
+        <Button disabled={!canInvite} icon={<Icon name="users" />} onClick={() => setInviteOpen((open) => !open)} title={inviteHint} variant="ghost">Invite players</Button>
         <Button disabled={controlDisabled} icon={<Icon name={sessionAction === "stop" ? "stop" : "play"} />} onClick={() => setConfirming(sessionAction)} title={controlsHint} variant={sessionAction === "stop" ? "danger" : "primary"}>{sessionAction === "stop" ? "Stop" : "Start"}</Button>
       </div>
     </section>
-    {inviteOpen && <section aria-labelledby="invite-title" className="invite-panel">
-      <header><div><h2 id="invite-title">Invite players</h2><p>{game.displayName} · {world.displayName}</p></div><Button aria-label="Close invitation panel" onClick={() => setInviteOpen(false)} variant="ghost">Close</Button></header>
-      <div className="invite-body">
-        <fieldset className="audience-options"><legend>Audience</legend>
-          <label className={audience === "broadcast" ? "active" : ""}><input checked={audience === "broadcast"} name="invite-audience" onChange={() => setAudience("broadcast")} type="radio" /><span><strong>Everyone</strong><small>Group chats and people subscribed to invitations</small></span></label>
-          <label className={audience === "direct" ? "active" : ""}><input checked={audience === "direct"} name="invite-audience" onChange={() => setAudience("direct")} type="radio" /><span><strong>Specific people</strong><small>Only selected people with direct invitations enabled</small></span></label>
-        </fieldset>
-        {audience === "direct" && <div className="recipient-picker">
-          <div className="recipient-tools"><label><span>Find a player</span><input autoComplete="off" onChange={(event) => setRecipientQuery(event.target.value)} placeholder="Search by display name" type="search" value={recipientQuery} /></label><span>{directCount} selected</span></div>
-          {recipientState === "loading" && <div className="recipient-state" role="status">Loading players…</div>}
-          {recipientState === "error" && <div className="recipient-state error" role="alert"><span>Players could not be loaded.</span><Button onClick={() => setRecipientState("idle")} variant="ghost">Try again</Button></div>}
-          {recipientState === "ready" && recipients.length === 0 && <div className="recipient-state">No other approved players yet.</div>}
-          {recipientState === "ready" && recipients.length > 0 && <div className="recipient-list" role="group" aria-label="Players">
-            <div className="recipient-list-toolbar"><span>{normalizedQuery ? `${visibleRecipients.length} matches` : `${recipients.length} available`}</span>{directCount > 0 && <button onClick={() => setSelectedRecipients(new Set())} type="button">Clear selection</button>}</div>
-            <div className="recipient-scroll">{visibleRecipients.map((recipient) => <label key={recipient.id}><input checked={selectedRecipients.has(recipient.id)} onChange={() => toggleRecipient(recipient.id)} type="checkbox" /><span className="recipient-avatar">{initials(recipient.displayName)}</span><span><strong>{recipient.displayName}</strong><small>{selectedRecipients.has(recipient.id) ? "Selected" : "Direct invitation"}</small></span></label>)}
-              {visibleRecipients.length === 0 && <div className="recipient-state">No players match “{recipientQuery.trim()}”.</div>}
-            </div>
-          </div>}
-        </div>}
-      </div>
-      <footer><div><strong>{audience === "broadcast" ? "Invite everyone" : directCount === 0 ? "Choose at least one player" : `${directCount} ${directCount === 1 ? "player" : "players"} selected`}</strong><p>Delivery respects each player’s notification preferences.</p></div><Button disabled={sendDisabled} onClick={() => void submitInvitation()} variant="primary">{inviteRequest.state === "pending" ? "Sending…" : "Send invitation"}</Button></footer>
-      {inviteRequest.state !== "idle" && <div aria-live="polite" className={`invite-feedback ${inviteRequest.state}`} role={inviteRequest.state === "error" ? "alert" : "status"}>{inviteRequest.message}</div>}
-    </section>}
+    {inviteOpen && <InvitationComposer game={game} onClose={() => setInviteOpen(false)} world={world} />}
     {confirming && <section aria-labelledby="operation-confirmation-title" className="operation-confirmation" role="alertdialog">
       <div><h2 id="operation-confirmation-title">{confirming === "start" ? "Start a billed AWS session?" : "Save, back up and stop this session?"}</h2><p>{confirming === "start" ? `Spawnpoint will boot the host and start ${world.displayName}. Modded Minecraft may take several minutes to become healthy.` : "Spawnpoint will refuse while players are online, then save the world, create a verified backup and stop the host."}</p></div>
       <div><Button onClick={() => setConfirming(null)} variant="ghost">Cancel</Button><Button onClick={confirmOperation} ref={confirmButton} variant={confirming === "stop" ? "danger" : "primary"}>{confirming === "start" ? "Start session" : "Stop session"}</Button></div>
@@ -146,8 +86,4 @@ function operationLabel(type: Operation["type"]): string {
 function formatTime(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.valueOf()) ? "Unknown time" : new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(date);
-}
-
-function initials(value: string): string {
-  return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "?";
 }

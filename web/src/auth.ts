@@ -46,6 +46,16 @@ export type AccessRole = Readonly<{
 }>;
 export type SubscriptionState = Record<string, boolean>;
 export type InvitationRecipient = Readonly<{ id: string; displayName: string }>;
+export type InvitationSummary = Readonly<{
+  id: string;
+  audience: "broadcast" | "direct";
+  status: "READY" | "DELIVERING" | "DELIVERED" | "PARTIAL" | "FAILED" | "NO_RECIPIENTS" | "PUBLISH_FAILED";
+  recipientCount: number | null;
+  targetCount: number | null;
+  successCount: number | null;
+  failureCount: number | null;
+  createdAt: string;
+}>;
 export type AuthState =
   | { status: "loading" }
   | { status: "signed-out" }
@@ -197,6 +207,13 @@ export async function loadInvitationRecipients(): Promise<InvitationRecipient[]>
   if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot invite players." : "Players could not be loaded.");
   const body = await response.json() as { recipients: InvitationRecipient[] };
   return body.recipients;
+}
+
+export async function loadInvitationHistory(gameId: string, worldId: string): Promise<InvitationSummary[]> {
+  const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/invitations`);
+  if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot view invitation history." : "Invitation history could not be loaded.");
+  const body = await response.json() as { invitations: InvitationSummary[] };
+  return body.invitations;
 }
 
 export async function sendInvitation(gameId: string, worldId: string, audience: "broadcast" | "direct", recipientIdentityIds: readonly string[]): Promise<void> {

@@ -120,7 +120,7 @@ resource "aws_apigatewayv2_api" "access" {
   cors_configuration {
     allow_origins = [trimsuffix(var.panel_url, "/")]
     allow_headers = ["authorization", "content-type"]
-    allow_methods = ["GET", "POST", "OPTIONS"]
+    allow_methods = ["GET", "POST", "PUT", "OPTIONS"]
     max_age       = 3600
   }
 }
@@ -139,6 +139,9 @@ locals {
     "GET /session",
     "GET /me",
     "GET /control-plane",
+    "GET /access/roles",
+    "GET /me/subscriptions",
+    "PUT /me/subscriptions",
     "POST /games/{gameId}/worlds/{worldId}/start",
     "POST /games/{gameId}/worlds/{worldId}/stop",
     "POST /access/request",

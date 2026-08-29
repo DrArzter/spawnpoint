@@ -1,10 +1,11 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { randomUUID } from "node:crypto";
 
 import { builtInRoles, hasPermission, Identity, isBuiltInRoleId, Permission, permissions } from "../access/domain.ts";
 import { issueSessionToken, TelegramProfile, verifyLoginWidget, verifyMiniAppInitData, verifySessionToken } from "../access/telegram-auth.ts";
+import { defaultSubscriptions, validateSubscriptions } from "../access/subscriptions.ts";
 import { awsControlPlaneSources, startSessionExecution, stopSessionExecution } from "../control-plane/aws.ts";
 import { readControlPlaneSnapshot } from "../control-plane/read-model.ts";
 import { planSessionOperation, type SessionAction } from "../control-plane/session-control.ts";
@@ -201,6 +202,34 @@ async function controlSession(identity: Identity, action: SessionAction, gameId:
   return response(202, { result: "requested", operationId });
 }
 
+function roles(identity: Identity): Response {
+  const forbidden = requirePermission(identity, "access.read");
+  if (forbidden !== null) return forbidden;
+  const descriptions: Record<string, string> = {
+    viewer: "Can see coarse server status only.",
+    player: "Can view connection details, start a session and invite players.",
+    operator: "Can operate sessions, console, metrics, releases and backups.",
+    owner: "Full access to Spawnpoint, including access management.",
+  };
+  return response(200, { roles: Object.values(builtInRoles).map((role) => ({ ...role, description: descriptions[role.id], system: true })) });
+}
+
+async function subscriptions(identity: Identity): Promise<Response> {
+  const stored = await document.send(new GetCommand({ TableName: tableName, Key: { pk: `IDENTITY#${identity.id}`, sk: "SUBSCRIPTIONS" }, ConsistentRead: true }));
+  return response(200, { subscriptions: { ...defaultSubscriptions(), ...(stored.Item?.subscriptions as Record<string, boolean> | undefined ?? {}) } });
+}
+
+async function updateSubscriptions(identity: Identity, body: string | undefined): Promise<Response> {
+  let parsed: { subscriptions?: unknown };
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const next = validateSubscriptions(parsed.subscriptions);
+  if (next === null) return response(400, { error: "invalid_subscriptions" });
+  await document.send(new PutCommand({ TableName: tableName, Item: {
+    pk: `IDENTITY#${identity.id}`, sk: "SUBSCRIPTIONS", subscriptions: next, updated_at: new Date().toISOString(),
+  } }));
+  return response(200, { subscriptions: next });
+}
+
 async function candidates(): Promise<Response> {
   const pages = await Promise.all(["CANDIDATE#REQUESTED", "CANDIDATE#OBSERVED"].map((state) => document.send(new QueryCommand({
     TableName: tableName, IndexName: "gsi1", KeyConditionExpression: "gsi1pk = :state",
@@ -341,6 +370,9 @@ export async function handler(event: Event): Promise<Response> {
     return response(200, { identity, role });
   }
   if (method === "GET" && path === "/control-plane") return controlPlane(identity);
+  if (method === "GET" && path === "/access/roles") return roles(identity);
+  if (method === "GET" && path === "/me/subscriptions") return subscriptions(identity);
+  if (method === "PUT" && path === "/me/subscriptions") return updateSubscriptions(identity, event.body);
   const gameId = event.pathParameters?.gameId;
   const worldId = event.pathParameters?.worldId;
   if (method === "POST" && gameId && worldId && path.endsWith("/start")) return controlSession(identity, "start", gameId, worldId);

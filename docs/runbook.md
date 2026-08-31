@@ -37,6 +37,7 @@ Fill in at M1 and keep current. This block is what somebody needs when something
 | Container image | `itzg/minecraft-server` pinned by digest in `server/compose.yaml`, never `latest` |
 | Minecraft and loader version | Minecraft 1.20.1, Forge, immutable release `1.0` with 111 JARs |
 | World ids | `world` (Minecraft, profile `main`), `vanilla`, `factorio`, `zomboid` — the ids the panel, the bot and `--world` all use |
+| Addresses | Composed, never configured: `SPAWNPOINT_CONNECTION_HOST` / `connection_host` (the overlay address) plus the game's own port — `world` 25565, `factorio` 34197/udp, `zomboid` 16261/udp |
 
 ## Start the server
 
@@ -71,8 +72,8 @@ aws ec2 start-instances \
   --region eu-central-1
 ```
 
-Do not treat EC2 `running` as game readiness. The workflow checks SSM, the authorised ZeroTier identity and the host
-Minecraft health contract before returning `172.29.23.24:25565`.
+Do not treat EC2 `running` as game readiness. The workflow checks SSM, the authorised ZeroTier identity and the
+game's own readiness contract before returning the world's address — the overlay host plus that game's port.
 
 ```bash
 # TODO: dig +short <hostname>

@@ -89,7 +89,7 @@ resource "aws_lambda_function" "bot" {
       RELEASE_BUCKET             = data.aws_s3_bucket.releases.id
       WORLD_NAME                 = "world"
       WORLD_ID                   = "world"
-      CONNECTION_ADDRESS         = var.connection_address
+      CONNECTION_HOST            = var.connection_host
       PANEL_ADDRESS              = var.panel_address
       ZEROTIER_NETWORK_ID        = var.zerotier_network_id
       MINI_APP_URL               = var.mini_app_url

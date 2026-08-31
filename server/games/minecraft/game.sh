@@ -11,6 +11,9 @@ GAME_COMPOSE_FILES="observability/compose.yaml:compose.yaml:compose.release.yaml
 GAME_COMPOSE_SERVICE="mc"
 GAME_MOD_EXTENSION="jar"
 GAME_LOADER_TYPE="forge"
+# The port a player types after the address the connectivity strategy publishes.
+GAME_CONNECT_PORT="25565"
+GAME_CONNECT_PROTOCOL="tcp"
 # online-mode=false (ADR-0022) authenticates nobody, so minecraft worlds need
 # a gating connectivity unless the catalog declares auth handled (ADR-0033).
 GAME_DEFAULT_AUTH="none"

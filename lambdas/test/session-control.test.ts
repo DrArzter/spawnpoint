@@ -15,7 +15,7 @@ test("any world in the catalog can execute, because the machines take a world id
 });
 
 test("a world listed before its session workflow exists is refused, not attempted", () => {
-  const catalog = [{ id: "later", code: "LT", displayName: "Later", worlds: [
+  const catalog = [{ id: "later", code: "LT", displayName: "Later", connectPort: 12345, worlds: [
     { id: "later", displayName: "Later", profileId: "later", sessionControl: null },
   ] }];
   assert.deepEqual(

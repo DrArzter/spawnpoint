@@ -23,6 +23,10 @@ GAME_COMPOSE_SERVICE="zomboid"
 # release scripts; they are set for the contract and left honest.
 GAME_MOD_EXTENSION=""
 GAME_LOADER_TYPE="workshop"
+# The port a player types after the address the connectivity strategy publishes.
+  # 16262/udp is opened beside it, but players type only this one.
+GAME_CONNECT_PORT="16261"
+GAME_CONNECT_PROTOCOL="udp"
 # Fail closed: the server verifies Steam identities only when it runs in Steam
 # mode with that verification on, and this project has not exercised that
 # configuration. A world whose server does verify declares `auth: game`

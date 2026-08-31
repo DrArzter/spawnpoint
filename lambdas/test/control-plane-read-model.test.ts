@@ -51,3 +51,35 @@ test("the panel's catalog offers exactly the worlds the host catalog resolves", 
   // cannot resolve fails at the session command, after the instance is running.
   assert.deepEqual([...panelPairs].sort(), [...hostPairs].sort());
 });
+
+test("each world's address carries its own game's port, and only for callers allowed one", async () => {
+  const sources: ControlPlaneSources = {
+    listHosts: async () => [],
+    listRunningOperations: async () => [],
+    readLifecycle: async () => null,
+    readReleasePointer: async () => null,
+  };
+
+  const visible = await readControlPlaneSnapshot(sources, {
+    includeInfrastructure: false,
+    includeDesiredRelease: false,
+    connectionHost: "172.29.23.24",
+  });
+  const addresses = new Map(
+    visible.games.flatMap((game) => game.worlds.map((world) => [world.id, world.connectionAddress])),
+  );
+  assert.equal(addresses.get("world"), "172.29.23.24:25565");
+  assert.equal(addresses.get("factorio"), "172.29.23.24:34197");
+  assert.equal(addresses.get("zomboid"), "172.29.23.24:16261");
+
+  // One configured string used to answer 25565 for every game. It cannot now.
+  assert.equal(new Set(addresses.values()).size, 3);
+
+  const withheld = await readControlPlaneSnapshot(sources, {
+    includeInfrastructure: false,
+    includeDesiredRelease: false,
+  });
+  for (const game of withheld.games) {
+    for (const world of game.worlds) assert.equal(world.connectionAddress, null);
+  }
+});

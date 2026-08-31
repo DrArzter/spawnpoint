@@ -111,7 +111,7 @@ resource "aws_lambda_function" "access_api" {
       LIFECYCLE_TABLE_NAME        = data.aws_dynamodb_table.lifecycle.name
       OPERATION_STATE_MACHINES    = jsonencode(local.operation_state_machines)
       RELEASE_BUCKET              = data.aws_s3_bucket.releases.id
-      CONNECTION_ADDRESS          = var.connection_address
+      CONNECTION_HOST             = var.connection_host
       WATCHDOG_STATE_MACHINE_ARN  = local.watchdog_state_machine_arn
     }
   }

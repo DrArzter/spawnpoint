@@ -14,6 +14,9 @@ GAME_COMPOSE_FILES="observability/compose.yaml:games/factorio/compose.yaml"
 GAME_COMPOSE_SERVICE="factorio"
 GAME_MOD_EXTENSION="zip"
 GAME_LOADER_TYPE="factorio"
+# The port a player types after the address the connectivity strategy publishes.
+GAME_CONNECT_PORT="34197"
+GAME_CONNECT_PROTOCOL="udp"
 # Fail closed, and for the same reason the server needs no factorio.com
 # account: a hidden server skips matchmaking entirely, so it also verifies
 # nobody. Identity verification belongs to a visible, credentialed server; a

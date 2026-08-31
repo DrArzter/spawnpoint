@@ -44,6 +44,7 @@ export type ControlPlaneSnapshot = Readonly<{
       displayName: string;
       profileId: string;
       sessionControlAvailable: boolean;
+      connectionAddress: string | null;
       release: ReleasePointerObservation;
     }>>;
   }>>;
@@ -67,10 +68,17 @@ export type ControlPlaneSnapshot = Readonly<{
 
 export async function readControlPlaneSnapshot(
   sources: ControlPlaneSources,
-  options: Readonly<{ includeInfrastructure: boolean; includeDesiredRelease: boolean }>,
+  options: Readonly<{
+    includeInfrastructure: boolean;
+    includeDesiredRelease: boolean;
+    // The connectivity strategy's answer for this deployment. Null when the
+    // caller may not see an address at all, which is the visitor's case.
+    connectionHost?: string | null;
+  }>,
   catalog: readonly CatalogGame[] = gameCatalog,
   now: () => Date = () => new Date(),
 ): Promise<ControlPlaneSnapshot> {
+  const connectionHost = options.connectionHost ?? null;
   const worlds = catalog.flatMap((game) => game.worlds);
   const [hosts, operations, lifecycles, pointers] = await Promise.all([
     sources.listHosts(),
@@ -94,6 +102,9 @@ export async function readControlPlaneSnapshot(
           displayName: world.displayName,
           profileId: world.profileId,
           sessionControlAvailable: world.sessionControl !== null,
+          // Composed here for the same reason the host composes it: the
+          // strategy owns the host part, the game owns the port.
+          connectionAddress: connectionHost === null ? null : `${connectionHost}:${game.connectPort}`,
           release: options.includeDesiredRelease ? release : { ...release, desiredRelease: null },
         };
       }),

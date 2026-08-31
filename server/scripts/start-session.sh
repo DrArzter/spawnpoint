@@ -122,7 +122,11 @@ fi
 
 "${SCRIPT_DIR}/start.sh"
 printf 'zerotier_network=%s\n' "${network_id,,}"
-printf 'connection_address=%s\n' "${expected_address}"
+# The address is composed, never configured: the strategy answers with the host
+# part — the overlay address here — and the game answers with the port. A single
+# configured string used to carry Minecraft's port for every game.
+printf 'connection_host=%s\n' "${expected_address}"
+printf 'connection_address=%s\n' "${expected_address}:${GAME_CONNECT_PORT}"
 printf 'world=%s\n' "${world_name}"
 printf 'reconcile=%s\n' "${reconcile_status}"
 printf 'desired_release=%s\n' "${desired_release}"

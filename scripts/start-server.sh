@@ -4,7 +4,22 @@ set -Eeuo pipefail
 
 profile="${AWS_PROFILE:-spawnpoint}"
 region="${AWS_REGION:-eu-central-1}"
-connection_address="${SPAWNPOINT_CONNECTION_ADDRESS:-172.29.23.24:25565}"
+connection_host="${SPAWNPOINT_CONNECTION_HOST:-172.29.23.24}"
+# The address is composed, not configured: the host part above comes from the
+# connectivity strategy, and the port from the game the world runs. Reading it
+# from the same catalog the host uses keeps the two answers identical.
+connect_port_for_world() {
+  local world="$1" game
+  game="$(jq -r --arg id "${world}" '.worlds[] | select(.id == $id) | .game // "minecraft"' \
+    "$(dirname -- "${BASH_SOURCE[0]}")/../server/worlds/catalog.json")"
+  [[ -n "${game}" ]] || {
+    printf 'error: unknown world: %s\n' "${world}" >&2
+    exit 1
+  }
+  awk -F'"' '/^GAME_CONNECT_PORT=/ { print $2 }' \
+    "$(dirname -- "${BASH_SOURCE[0]}")/../server/games/${game}/game.sh"
+}
+
 follow=true
 # Which world this session runs. The machines require it and have no default,
 # so this is the one place a workstation start still assumes something.
@@ -82,6 +97,7 @@ instance_id="$(
   exit 1
 }
 
+connection_address="${connection_host}:$(connect_port_for_world "${world_id}")"
 operation_id="manual-$(date -u +%Y%m%dT%H%M%SZ)"
 input="$(
   jq -cn \

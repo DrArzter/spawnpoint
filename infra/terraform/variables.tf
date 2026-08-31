@@ -60,9 +60,3 @@ variable "running_hours_alarm_hours" {
   }
 }
 
-
-variable "connection_address" {
-  description = "The overlay address players connect to; shown by the bot and passed to the start workflow's readiness contract."
-  type        = string
-  default     = "172.29.23.24:25565"
-}

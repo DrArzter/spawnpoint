@@ -10,6 +10,8 @@
 #   GAME_COMPOSE_SERVICE       the compose service holding the game process
 #   GAME_MOD_EXTENSION         what a mod file looks like (jar, zip)
 #   GAME_LOADER_TYPE           what manifests carry as loader.type
+#   GAME_CONNECT_PORT          the port a player types; the host part of the
+#   GAME_CONNECT_PROTOCOL      address comes from the connectivity strategy
 #   GAME_DEFAULT_AUTH          this server's auth model: none | game (ADR-0033).
 #                              Default to none — see README.md, "Assume the
 #                              server authenticates nobody"

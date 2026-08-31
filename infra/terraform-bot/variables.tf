@@ -15,10 +15,10 @@ variable "aws_profile" {
   default     = "spawnpoint"
 }
 
-variable "connection_address" {
-  description = "Stable overlay address returned by /status and by the start workflow."
+variable "connection_host" {
+  description = "Host part of every world's address — the overlay address this deployment publishes. Each game's port completes it."
   type        = string
-  default     = "172.29.23.24:25565"
+  default     = "172.29.23.24"
 }
 
 variable "panel_address" {

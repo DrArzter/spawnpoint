@@ -95,6 +95,23 @@ is to make the risky pairing explicit and attributable, never to forbid a config
 reason `game` and `host` are catalog data: situations differ, and the code must handle all of them rather than the
 one this project happens to run.
 
+### The address is composed: the strategy answers the host, the game answers the port
+
+Added 2026-08-31, when a second and third game made the old shape wrong in production. `publish()` returns "what a
+player types", and that string has two owners: the **host part** belongs to the strategy (an overlay address, an
+ephemeral public IP, a DNS name) and the **port** belongs to the game (25565, 34197/udp, 16261/udp). Spawnpoint had
+one configured string, `172.29.23.24:25565`, returned by the panel, the bot and the start workflow for every world —
+so a Factorio session would have handed players Minecraft's port.
+
+So the game module declares `GAME_CONNECT_PORT`, the deployment configures only the host part, and every surface
+composes: the host does it in `start-session.sh`, the API in the control-plane read model, the bot for the world it
+operates, and the workstation scripts by reading the same catalog the host reads. An address is therefore never
+stored anywhere; it is derived, which is what makes a second strategy a change of one value rather than a hunt
+through configuration.
+
+One consequence worth naming: the port is not withheld from anyone, but the host part is. A visitor who may not read
+the connection gets `null`, not a partial address.
+
 ### What a non-gating strategy exposes, and what already answers it
 
 A public game port is found by mass scanners within hours — that is background radiation, not a targeted attack. Worth

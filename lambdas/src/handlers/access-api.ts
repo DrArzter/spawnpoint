@@ -186,6 +186,9 @@ async function controlPlane(identity: Identity): Promise<Response> {
   const snapshot = await readControlPlaneSnapshot(awsControlPlaneSources, {
     includeInfrastructure: can("access.manage"),
     includeDesiredRelease: can("release.read"),
+    // The host part of every address; the game's port completes it. Withheld
+    // from a caller who may not read the connection, like any other reference.
+    connectionHost: can("connection.read") ? process.env.CONNECTION_HOST ?? null : null,
   });
   return response(200, snapshot);
 }

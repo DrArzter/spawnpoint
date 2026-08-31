@@ -1,6 +1,7 @@
 # ADR-0016 — Discord and Telegram are control surfaces and the notification channel
 
-- Status: Proposed
+- Status: Proposed — the Telegram half is deployed as of 2026-08-29 (commands, inline panel navigation, notification
+  subscriptions); Discord has not been attempted, which is why this stays open rather than accepted
 - Date: 2026-08-11
 - Milestone: M4
 

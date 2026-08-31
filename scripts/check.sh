@@ -73,10 +73,12 @@ check_compose_bindings() {
   bash server/tests/compose-bindings-test.sh
 }
 
+# Roots are discovered, not listed: the list had to be extended by hand the day
+# the access, bot and web roots landed, and the next root would be remembered
+# or not.
 check_terraform() {
   local root
-  for root in infra/terraform infra/terraform-bootstrap infra/terraform-storage infra/terraform-guardrails infra/terraform-operations infra/terraform-releases infra/terraform-github infra/terraform-access infra/terraform-access-api infra/terraform-bot infra/terraform-web; do
-    [[ -d "${root}" ]] || continue
+  while IFS= read -r root; do
     printf -- '--- %s\n' "${root}"
     docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp/terraform-home \
       -v "${REPOSITORY_ROOT}:/workspace" -w "/workspace/${root}" \
@@ -86,7 +88,8 @@ check_terraform() {
       -v "${REPOSITORY_ROOT}:/workspace" -w "/workspace/${root}" \
       --entrypoint sh "${TERRAFORM_IMAGE}" -c \
       'terraform init -backend=false -input=false >/dev/null && terraform test -var=aws_profile=' || return 1
-  done
+  done < <(find infra -mindepth 1 -maxdepth 1 -type d \
+    -exec sh -c 'ls "$1"/*.tf >/dev/null 2>&1' _ {} \; -print | sort)
 }
 
 step "markdown links" check_links

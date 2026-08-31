@@ -1,6 +1,7 @@
 # ADR-0012 — One control-plane API, with the web panel as one of several clients
 
-- Status: Proposed
+- Status: Accepted — implemented 2026-08-29: the Mini App holds no credentials and reaches Step Functions only through
+  the access API, and the bot's buttons resolve the same identity and permissions as the panel
 - Date: 2026-08-11
 - Milestone: M4
 - Amended by: [ADR-0018](0018-identity-and-sign-in.md) — the authentication paragraph below is superseded

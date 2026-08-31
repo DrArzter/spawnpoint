@@ -68,11 +68,11 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0009](0009-s3-as-mod-source-of-truth.md) | S3 holds releases; promotion drives the deployment | Superseded by [0030](0030-desired-and-active-release.md) | M3 |
 | [0010](0010-world-persistence-and-backups.md) | World on persistent EBS, backups to S3 | Accepted | M1 |
 | [0011](0011-terraform-for-infrastructure.md) | Manage the infrastructure with Terraform | Accepted | M1 |
-| [0012](0012-web-control-panel.md) | One control-plane API; the panel is one client | Proposed | M4 |
+| [0012](0012-web-control-panel.md) | One control-plane API; the panel is one client | **Accepted** — implemented | M4 |
 | [0013](0013-modpack-distribution.md) | Distribute the client pack from S3 and CloudFront | Proposed | M4 |
 | [0014](0014-no-kubernetes.md) | Do not use Kubernetes | Accepted | — |
 | [0015](0015-observability-and-alerting.md) | Session Grafana/Prometheus; CloudWatch signals and durable alarms | Accepted | M5 |
-| [0016](0016-chat-integrations.md) | Discord and Telegram as control and notification surfaces | Proposed | M4 |
+| [0016](0016-chat-integrations.md) | Discord and Telegram as control and notification surfaces | Proposed — Telegram deployed, Discord untried | M4 |
 | [0017](0017-stable-server-address.md) | Stable hostname in Route 53, not an Elastic IP | Superseded by [0024](0024-connectivity-modes.md) | M2 |
 | [0018](0018-identity-and-sign-in.md) | Cognito broker; panel sign-in with Google | Superseded by [0037](0037-telegram-only-browser-identity.md) | M4 |
 | [0019](0019-account-linking.md) | Link chat accounts with a one-time code | Proposed | M4 |

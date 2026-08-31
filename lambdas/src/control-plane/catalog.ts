@@ -2,6 +2,9 @@ export type CatalogWorld = Readonly<{
   id: string;
   displayName: string;
   profileId: string;
+  // Whether the deployed session machines can operate this world. Since they
+  // take a world id, that is every world in this catalog; the field stays for a
+  // world listed before its host or profile exists.
   sessionControl: "v1" | null;
 }>;
 
@@ -21,7 +24,7 @@ export const gameCatalog: readonly CatalogGame[] = [
     displayName: "Minecraft",
     worlds: [
       { id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1" },
-      { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge", sessionControl: null },
+      { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge", sessionControl: "v1" },
     ],
   },
   {
@@ -29,7 +32,7 @@ export const gameCatalog: readonly CatalogGame[] = [
     code: "FA",
     displayName: "Factorio",
     worlds: [
-      { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControl: null },
+      { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControl: "v1" },
     ],
   },
 ];

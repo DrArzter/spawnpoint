@@ -115,10 +115,7 @@
         "DocumentName": "AWS-RunShellScript",
         "InstanceIds.$": "States.Array($.request.instanceId)",
         "Parameters": {
-          "commands": [
-            "set -euo pipefail",
-            "PROBE_FORMAT=json /srv/spawnpoint/app/server/scripts/check-session-activity.sh"
-          ]
+          "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} PROBE_FORMAT=json /srv/spawnpoint/app/server/scripts/check-session-activity.sh', $.request.worldId))"
         },
         "TimeoutSeconds": 300
       },
@@ -351,6 +348,7 @@
           "sessionId.$": "$.request.sessionId",
           "leaseTtlSeconds.$": "$.request.stopLeaseTtlSeconds",
           "instanceId.$": "$.request.instanceId",
+          "worldId.$": "$.request.worldId",
           "stopTiming.$": "$.request.stopTiming"
         }
       },
@@ -409,6 +407,7 @@
           "sessionId.$": "$.request.sessionId",
           "leaseTtlSeconds.$": "$.request.stopLeaseTtlSeconds",
           "instanceId.$": "$.request.instanceId",
+          "worldId.$": "$.request.worldId",
           "stopTiming.$": "$.request.stopTiming"
         }
       },
@@ -430,6 +429,7 @@
           "sessionId.$": "$.request.sessionId",
           "leaseTtlSeconds.$": "$.request.stopLeaseTtlSeconds",
           "instanceId.$": "$.request.instanceId",
+          "worldId.$": "$.request.worldId",
           "stopTiming.$": "$.request.stopTiming"
         }
       },

@@ -178,6 +178,7 @@ test("the start input builder reproduces the committed example verbatim", async 
   const built = buildStartInput({
     operationId: example.operationId,
     instanceId: example.instanceId,
+    worldId: example.worldId,
     connectionAddress: example.connectionAddress,
   });
   assert.deepEqual(built, example);
@@ -189,6 +190,7 @@ test("the watchdog input builder reproduces the committed example verbatim", asy
   const built = buildWatchdogInput({
     operationId: example.operationId,
     instanceId: example.instanceId,
+    worldId: example.worldId,
     stopStateMachineArn: example.stopStateMachineArn,
   });
   assert.deepEqual(built, example);
@@ -197,7 +199,10 @@ test("the watchdog input builder reproduces the committed example verbatim", asy
 test("the stop input builder reproduces the committed example verbatim", async () => {
   const url = new URL("../../workflows/stop-server.input.example.json", import.meta.url);
   const example = JSON.parse(await readFile(url, "utf8"));
-  assert.deepEqual(buildStopInput({ operationId: example.operationId, instanceId: example.instanceId }), example);
+  assert.deepEqual(
+    buildStopInput({ operationId: example.operationId, instanceId: example.instanceId, worldId: example.worldId }),
+    example,
+  );
 });
 
 test("a requester is attributed when present, and the examples stay the ownerless case", async () => {
@@ -206,6 +211,7 @@ test("a requester is attributed when present, and the examples stay the ownerles
   const attributed = buildStartInput({
     operationId: example.operationId,
     instanceId: example.instanceId,
+    worldId: example.worldId,
     connectionAddress: example.connectionAddress,
     requestedBy: "telegram:111",
   });
@@ -216,6 +222,7 @@ test("a requester is attributed when present, and the examples stay the ownerles
   const watchdog = buildWatchdogInput({
     operationId: "op",
     instanceId: "i-0",
+    worldId: "world",
     stopStateMachineArn: "arn:stop",
     requestedBy: "telegram:111",
   });

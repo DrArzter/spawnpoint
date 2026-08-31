@@ -200,8 +200,8 @@ async function controlSession(identity: Identity, action: SessionAction, gameId:
   if (plan.kind === "noop") return response(200, { result: plan.reason });
   const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
   const requestedBy = `identity:${identity.id}`;
-  if (action === "start") await startSessionExecution(operationId, plan.host.providerRef, requestedBy);
-  else await stopSessionExecution(operationId, plan.host.providerRef, requestedBy);
+  if (action === "start") await startSessionExecution(operationId, plan.host.providerRef, requestedBy, worldId);
+  else await stopSessionExecution(operationId, plan.host.providerRef, requestedBy, worldId);
   return response(202, { result: "requested", operationId });
 }
 

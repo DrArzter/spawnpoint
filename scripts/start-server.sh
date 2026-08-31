@@ -6,13 +6,31 @@ profile="${AWS_PROFILE:-spawnpoint}"
 region="${AWS_REGION:-eu-central-1}"
 connection_address="${SPAWNPOINT_CONNECTION_ADDRESS:-172.29.23.24:25565}"
 follow=true
+# Which world this session runs. The machines require it and have no default,
+# so this is the one place a workstation start still assumes something.
+world_id="${SPAWNPOINT_WORLD:-world}"
 
-if [[ "${1:-}" == "--no-follow" ]]; then
-  follow=false
-elif [[ $# -gt 0 ]]; then
-  printf 'usage: %s [--no-follow]\n' "$0" >&2
+while (( $# > 0 )); do
+  case "$1" in
+    --no-follow)
+      follow=false
+      shift
+      ;;
+    --world)
+      world_id="${2:-}"
+      shift 2
+      ;;
+    *)
+      printf 'usage: %s [--no-follow] [--world <world-id>]\n' "$0" >&2
+      exit 1
+      ;;
+  esac
+done
+
+[[ "${world_id}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || {
+  printf 'error: invalid world id: %s\n' "${world_id}" >&2
   exit 1
-fi
+}
 
 for command in aws jq; do
   command -v "${command}" >/dev/null 2>&1 || {
@@ -69,10 +87,12 @@ input="$(
   jq -cn \
     --arg operation_id "${operation_id}" \
     --arg instance_id "${instance_id}" \
+    --arg world_id "${world_id}" \
     --arg connection_address "${connection_address}" \
     '{
       operationId: $operation_id,
       instanceId: $instance_id,
+      worldId: $world_id,
       connectionAddress: $connection_address,
       timing: {
         instancePollSeconds: 10,
@@ -136,10 +156,12 @@ if [[ "${watchdog_arn}" == arn:aws:states:*:stateMachine:spawnpoint-idle-watchdo
       jq -cn \
         --arg operation_id "${operation_id}" \
         --arg instance_id "${instance_id}" \
+        --arg world_id "${world_id}" \
         --arg stop_arn "${stop_arn}" \
         '{
           operationId: $operation_id,
           instanceId: $instance_id,
+          worldId: $world_id,
           stopStateMachineArn: $stop_arn,
           timing: {
             checkIntervalSeconds: 300,

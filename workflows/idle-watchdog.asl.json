@@ -50,10 +50,7 @@
         "DocumentName": "AWS-RunShellScript",
         "InstanceIds.$": "States.Array($.request.instanceId)",
         "Parameters": {
-          "commands": [
-            "set -euo pipefail",
-            "/srv/spawnpoint/app/server/scripts/idle-probe.sh"
-          ]
+          "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} /srv/spawnpoint/app/server/scripts/idle-probe.sh', $.request.worldId))"
         },
         "TimeoutSeconds": 300
       },
@@ -244,6 +241,7 @@
         "Input": {
           "operationId.$": "States.Format('{}-idle-{}', $.request.operationId, $.counters.total)",
           "instanceId.$": "$.request.instanceId",
+          "worldId.$": "$.request.worldId",
           "timing.$": "$.request.stopTiming"
         }
       },
@@ -265,6 +263,7 @@
         "Input": {
           "operationId.$": "States.Format('{}-cap-{}', $.request.operationId, $.counters.total)",
           "instanceId.$": "$.request.instanceId",
+          "worldId.$": "$.request.worldId",
           "timing.$": "$.request.stopTiming"
         }
       },

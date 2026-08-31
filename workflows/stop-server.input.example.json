@@ -1,6 +1,7 @@
 {
   "operationId": "manual-stop-example-001",
   "instanceId": "i-0123456789abcdef0",
+  "worldId": "world",
   "timing": {
     "ssmPollSeconds": 10,
     "commandPollSeconds": 15,

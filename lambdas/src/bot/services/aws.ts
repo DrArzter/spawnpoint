@@ -82,6 +82,10 @@ export async function startSession(requestedBy: string): Promise<string> {
         buildStartInput({
           operationId,
           instanceId: env("INSTANCE_ID"),
+          // The bot has no world picker yet, so it names the world it is
+          // configured for rather than relying on a machine default, which no
+          // longer exists.
+          worldId: env("WORLD_ID"),
           connectionAddress: env("CONNECTION_ADDRESS"),
           requestedBy,
         }),
@@ -96,6 +100,7 @@ export async function startSession(requestedBy: string): Promise<string> {
         buildWatchdogInput({
           operationId,
           instanceId: env("INSTANCE_ID"),
+          worldId: env("WORLD_ID"),
           stopStateMachineArn: env("STOP_STATE_MACHINE_ARN"),
           requestedBy,
         }),

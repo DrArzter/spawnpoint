@@ -117,9 +117,15 @@ run "idle_watchdog_probes_host_and_runs_verified_stop" {
     error_message = "The watchdog waits for hours; only a Standard workflow makes those waits free."
   }
 
+  # The command is built by ASL from the request's world, so the assertion reads
+  # the template rather than a fixed string: the probe must still be the host's
+  # exit-code contract, and it must name the world the session is for.
   assert {
-    condition     = jsondecode(aws_sfn_state_machine.idle_watchdog.definition).States["Send Probe"].Parameters.Parameters.commands[1] == "/srv/spawnpoint/app/server/scripts/idle-probe.sh"
-    error_message = "The watchdog must probe through the host's exit-code contract, never parse RCON itself."
+    condition = strcontains(
+      jsondecode(aws_sfn_state_machine.idle_watchdog.definition).States["Send Probe"].Parameters.Parameters["commands.$"],
+      "States.Format('WORLD_ID={} /srv/spawnpoint/app/server/scripts/idle-probe.sh', $.request.worldId)"
+    )
+    error_message = "The watchdog must probe through the host's exit-code contract for the world it was started for."
   }
 
   assert {

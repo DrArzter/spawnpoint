@@ -42,8 +42,18 @@ Fill in at M1 and keep current. This block is what somebody needs when something
 Current M2 path from an authenticated owner workstation:
 
 ```bash
-scripts/start-server.sh
+scripts/start-server.sh --world factorio
 ```
+
+**A session names its world.** The state machines pass it to the host, so
+`start-server.sh`, `stop-server.sh`, the bot and the panel all say which world they mean; there is no default in the
+machines, because a default world is a silent choice of world. The workstation scripts fall back to
+`SPAWNPOINT_WORLD` or `world` for the invocation people already have in their shell history.
+
+**Rollout order, as with the authoring repository:** update the callers first — an extra input field is harmless to a
+machine that ignores it — then apply `infra/terraform` (V1 machines), `infra/terraform-operations` (watchdog and V2)
+and `infra/terraform-bot`. Applying first would make every start fail on a missing `$.request.worldId` until the
+callers catch up. The host needs no change: `WORLD_ID` is what `start-session.sh` already reads.
 
 It starts the durable workflow and follows it until terminal state. Add `--no-follow` to return immediately with the
 execution ARN. A second call while an execution is still running joins it rather than starting another one.
@@ -112,6 +122,11 @@ stop produced a checked backup before EC2 stopped. If the watchdog itself fails,
 
 The exact first deployment, webhook and acceptance commands are recorded in
 [`aws-bot-command-log.md`](aws-bot-command-log.md).
+
+**Starting a world other than the running one is refused.** The host's EC2 state does not say which world is up, and
+a second game beside a running one is memory nobody has measured ([ADR-0023](adr/0023-multiple-worlds.md) keeps one
+world active at a time), so a start against a running host answers `host_already_running`. Stop the active world
+first; the host-idle gate then decides whether the instance sleeps.
 
 The React control panel is deployed separately; its exact infrastructure,
 upload and acceptance commands are recorded in

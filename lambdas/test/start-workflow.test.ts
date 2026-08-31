@@ -101,3 +101,19 @@ test("every polling loop is bounded and ready follows SSM success", async () => 
   assert.ok(ready);
   assert.equal(ready.End, true);
 });
+
+test("the host command names the world, and ASL builds the string", async () => {
+  const definition = await loadDefinition();
+  const command = JSON.stringify(definition.States["Start Session Command"]);
+
+  // States.Format interpolates the world id, so it never passes through a shell
+  // that could interpret it; the API validates its shape before starting an
+  // execution and load_world validates it again on the host.
+  assert.match(command, /States\.Format\('WORLD_ID=\{\} \/srv\/spawnpoint\/app\/server\/scripts\/start-session\.sh'/);
+  assert.match(command, /\$\.request\.worldId/);
+  assert.doesNotMatch(
+    command,
+    /"commands": \[[^\]]*start-session\.sh"/,
+    "a fixed command string would start whichever world the host happens to be configured for",
+  );
+});

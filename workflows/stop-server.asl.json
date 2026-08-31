@@ -113,10 +113,7 @@
         "DocumentName": "AWS-RunShellScript",
         "InstanceIds.$": "States.Array($.request.instanceId)",
         "Parameters": {
-          "commands": [
-            "set -euo pipefail",
-            "/srv/spawnpoint/app/server/scripts/stop-session.sh"
-          ]
+          "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} /srv/spawnpoint/app/server/scripts/stop-session.sh', $.request.worldId))"
         },
         "TimeoutSeconds": 900
       },

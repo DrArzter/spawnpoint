@@ -6,15 +6,22 @@ profile="${AWS_PROFILE:-spawnpoint}"
 region="${AWS_REGION:-eu-central-1}"
 follow=true
 confirmed=false
+# The machines require a world and have no default; this is the workstation's
+# one remaining assumption.
+world_id="${SPAWNPOINT_WORLD:-world}"
 
 usage() {
-  printf 'usage: %s [--yes] [--no-follow]\n' "$0" >&2
+  printf 'usage: %s [--yes] [--no-follow] [--world <world-id>]\n' "$0" >&2
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --yes)
       confirmed=true
+      ;;
+    --world)
+      world_id="${2:-}"
+      shift 2
       ;;
     --no-follow)
       follow=false
@@ -26,6 +33,11 @@ while [[ $# -gt 0 ]]; do
   esac
   shift
 done
+
+[[ "${world_id}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || {
+  printf 'error: invalid world id: %s\n' "${world_id}" >&2
+  exit 1
+}
 
 for command in aws jq; do
   command -v "${command}" >/dev/null 2>&1 || {
@@ -95,9 +107,11 @@ input="$(
   jq -cn \
     --arg operation_id "${operation_id}" \
     --arg instance_id "${instance_id}" \
+    --arg world_id "${world_id}" \
     '{
       operationId: $operation_id,
       instanceId: $instance_id,
+      worldId: $world_id,
       timing: {
         ssmPollSeconds: 10,
         commandPollSeconds: 15,

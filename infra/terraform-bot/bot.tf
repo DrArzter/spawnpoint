@@ -88,6 +88,7 @@ resource "aws_lambda_function" "bot" {
       INSTANCE_ID                = data.aws_instance.game_host.id
       RELEASE_BUCKET             = data.aws_s3_bucket.releases.id
       WORLD_NAME                 = "world"
+      WORLD_ID                   = "world"
       CONNECTION_ADDRESS         = var.connection_address
       PANEL_ADDRESS              = var.panel_address
       ZEROTIER_NETWORK_ID        = var.zerotier_network_id

@@ -1,6 +1,7 @@
 {
   "operationId": "manual-example-001",
   "instanceId": "i-0123456789abcdef0",
+  "worldId": "world",
   "stopStateMachineArn": "arn:aws:states:eu-central-1:000000000000:stateMachine:spawnpoint-stop-server",
   "timing": {
     "checkIntervalSeconds": 300,

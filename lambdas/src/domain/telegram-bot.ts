@@ -85,12 +85,16 @@ const WATCHDOG_TIMING = {
 export function buildStartInput(args: Readonly<{
   operationId: string;
   instanceId: string;
+  worldId: string;
   connectionAddress: string;
   requestedBy?: string;
 }>) {
   return {
     operationId: args.operationId,
     instanceId: args.instanceId,
+    // Required, never defaulted: the machines pass it to the host, and a
+    // default world would be a silent choice of which world somebody started.
+    worldId: args.worldId,
     connectionAddress: args.connectionAddress,
     ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
     timing: POLL_TIMING,
@@ -100,12 +104,14 @@ export function buildStartInput(args: Readonly<{
 export function buildWatchdogInput(args: Readonly<{
   operationId: string;
   instanceId: string;
+  worldId: string;
   stopStateMachineArn: string;
   requestedBy?: string;
 }>) {
   return {
     operationId: args.operationId,
     instanceId: args.instanceId,
+    worldId: args.worldId,
     stopStateMachineArn: args.stopStateMachineArn,
     ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
     timing: WATCHDOG_TIMING,
@@ -116,11 +122,13 @@ export function buildWatchdogInput(args: Readonly<{
 export function buildStopInput(args: Readonly<{
   operationId: string;
   instanceId: string;
+  worldId: string;
   requestedBy?: string;
 }>) {
   return {
     operationId: args.operationId,
     instanceId: args.instanceId,
+    worldId: args.worldId,
     ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
     timing: POLL_TIMING,
   };

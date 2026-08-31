@@ -124,23 +124,43 @@ function machineArn(type: OperationObservation["type"]): string {
   return machine.arn;
 }
 
-export async function startSessionExecution(operationId: string, instanceId: string, requestedBy: string): Promise<string> {
+// The world id reaches a shell command on the host through the machines'
+// States.Format, so its shape is checked here as well as by load_world there.
+const WORLD_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
+function requireWorldId(worldId: string): string {
+  if (!WORLD_ID.test(worldId)) throw new Error(`invalid world id: ${worldId}`);
+  return worldId;
+}
+
+export async function startSessionExecution(
+  operationId: string,
+  instanceId: string,
+  requestedBy: string,
+  worldId: string,
+): Promise<string> {
+  requireWorldId(worldId);
   const started = await sfn.send(new StartExecutionCommand({
     stateMachineArn: machineArn("start"), name: operationId,
-    input: JSON.stringify(buildStartInput({ operationId, instanceId, requestedBy, connectionAddress: requiredEnv("CONNECTION_ADDRESS") })),
+    input: JSON.stringify(buildStartInput({ operationId, instanceId, worldId, requestedBy, connectionAddress: requiredEnv("CONNECTION_ADDRESS") })),
   }));
   await sfn.send(new StartExecutionCommand({
     stateMachineArn: requiredEnv("WATCHDOG_STATE_MACHINE_ARN"), name: operationId,
-    input: JSON.stringify(buildWatchdogInput({ operationId, instanceId, requestedBy, stopStateMachineArn: machineArn("stop") })),
+    input: JSON.stringify(buildWatchdogInput({ operationId, instanceId, worldId, requestedBy, stopStateMachineArn: machineArn("stop") })),
   }));
   if (!started.executionArn) throw new Error("start execution did not return an ARN");
   return started.executionArn;
 }
 
-export async function stopSessionExecution(operationId: string, instanceId: string, requestedBy: string): Promise<string> {
+export async function stopSessionExecution(
+  operationId: string,
+  instanceId: string,
+  requestedBy: string,
+  worldId: string,
+): Promise<string> {
+  requireWorldId(worldId);
   const stopped = await sfn.send(new StartExecutionCommand({
     stateMachineArn: machineArn("stop"), name: operationId,
-    input: JSON.stringify(buildStopInput({ operationId, instanceId, requestedBy })),
+    input: JSON.stringify(buildStopInput({ operationId, instanceId, worldId, requestedBy })),
   }));
   if (!stopped.executionArn) throw new Error("stop execution did not return an ARN");
   return stopped.executionArn;

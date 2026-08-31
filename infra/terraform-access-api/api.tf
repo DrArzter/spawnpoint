@@ -43,6 +43,12 @@ data "aws_iam_policy_document" "access_api" {
   }
 
   statement {
+    sid       = "PresignPackUploads"
+    actions   = ["s3:PutObject"]
+    resources = ["${data.aws_s3_bucket.releases.arn}/uploads/*"]
+  }
+
+  statement {
     sid     = "ReadWorldReleasePointersAndPacks"
     actions = ["s3:GetObject"]
     resources = [
@@ -66,16 +72,22 @@ data "aws_iam_policy_document" "access_api" {
   }
 
   statement {
-    sid       = "ReadRunningOperations"
-    actions   = ["states:ListExecutions"]
-    resources = [for machine in local.operation_state_machines : machine.arn]
+    sid     = "ReadRunningOperations"
+    actions = ["states:ListExecutions"]
+    resources = [
+      for machine in local.operation_state_machines : machine.arn
+      if contains(["start", "stop", "promote"], machine.type)
+    ]
   }
 
   statement {
     sid     = "ControlSupportedSession"
     actions = ["states:StartExecution"]
     resources = concat(
-      [for machine in local.operation_state_machines : machine.arn if contains(["start", "stop"], machine.type)],
+      [
+        for machine in local.operation_state_machines : machine.arn
+        if contains(["start", "stop", "publishPack"], machine.type)
+      ],
       [local.watchdog_state_machine_arn],
     )
   }
@@ -159,6 +171,8 @@ locals {
     "POST /games/{gameId}/worlds/{worldId}/invitations",
     "GET /games/{gameId}/worlds/{worldId}/invitations",
     "GET /games/{gameId}/worlds/{worldId}/pack",
+    "POST /releases/uploads",
+    "POST /releases/uploads/{uploadId}/publish",
     "POST /access/request",
     "GET /access/candidates",
     "GET /access/identities",

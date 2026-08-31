@@ -88,10 +88,20 @@ case "${operation}" in
     printf '%s\t%s\t%s\n' "${sha_field#sha256=}" "${stored_checksum}" "$(stat --format '%s' -- "${object}")"
     ;;
   get-object)
-    [[ -f "${object}" && -f "${metadata_file}" && -n "${destination}" ]] || exit 254
+    [[ -f "${object}" && -n "${destination}" ]] || exit 254
     cp -- "${object}" "${destination}"
-    stored_checksum="$(sed -n '2p' "${metadata_file}")"
-    jq -n --arg checksum "${stored_checksum}" '{ChecksumSHA256: $checksum}'
+    # An object a browser PUT through a presigned URL has no metadata sidecar,
+    # which is exactly what an uploaded pack looks like.
+    if [[ -f "${metadata_file}" ]]; then
+      stored_checksum="$(sed -n '2p' "${metadata_file}")"
+      jq -n --arg checksum "${stored_checksum}" '{ChecksumSHA256: $checksum}'
+    else
+      jq -n '{}'
+    fi
+    ;;
+  delete-object)
+    rm -f -- "${object}" "${metadata_file}"
+    jq -n '{}'
     ;;
   *)
     exit 64

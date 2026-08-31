@@ -59,3 +59,34 @@
     flex-wrap: wrap;
   }
 }
+
+/* Publishing a pack is an operator action that lives beside the release table,
+   so it borrows the surface and spacing the rest of the panel uses. */
+.pack-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-surface);
+  background: var(--color-surface);
+}
+
+.pack-upload p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.pack-upload-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.pack-upload-fields input:not([type="file"]) {
+  flex: 1 1 8rem;
+  min-width: 6rem;
+}

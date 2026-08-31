@@ -11,7 +11,14 @@ import { defaultSubscriptions, validateSubscriptions } from "../access/subscript
 import { privateTelegramChatId, type AccessApprovedEvent } from "../domain/access-events.ts";
 import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
 import { gameCatalog } from "../control-plane/catalog.ts";
-import { awsControlPlaneSources, packDownloadUrl, startSessionExecution, stopSessionExecution } from "../control-plane/aws.ts";
+import {
+  awsControlPlaneSources,
+  packDownloadUrl,
+  packUploadTarget,
+  startPackPublishExecution,
+  startSessionExecution,
+  stopSessionExecution,
+} from "../control-plane/aws.ts";
 import { readControlPlaneSnapshot } from "../control-plane/read-model.ts";
 import { packRelease, planSessionOperation, type SessionAction } from "../control-plane/session-control.ts";
 
@@ -492,6 +499,52 @@ async function packDownload(gameId: string, worldId: string): Promise<Response> 
   return response(200, { release: choice.release, url, expiresIn: 3600 });
 }
 
+// Uploading is two steps on purpose. The panel puts hundreds of megabytes
+// straight into S3 with a presigned URL, so no request through this API ever
+// carries the bytes; then it asks for the upload to be published, which is the
+// step that validates the archive and builds the release — in CodeBuild, where
+// unzipping something that size is ordinary work rather than a Lambda timeout.
+const UPLOAD_ID = /^[0-9a-f-]{36}$/;
+
+async function createPackUpload(): Promise<Response> {
+  const uploadId = randomUUID();
+  const target = await packUploadTarget(uploadId);
+  return response(201, { uploadId, url: target.url, expiresIn: 3600, contentType: "application/zip" });
+}
+
+async function publishPackUpload(identity: Identity, uploadId: string, body: string | undefined): Promise<Response> {
+  if (!UPLOAD_ID.test(uploadId)) return response(400, { error: "invalid_upload_id" });
+
+  let parsed: { release?: unknown; gameId?: unknown; gameVersion?: unknown; loaderVersion?: unknown };
+  try {
+    parsed = body ? JSON.parse(body) as typeof parsed : {};
+  } catch {
+    return response(400, { error: "invalid_json" });
+  }
+
+  const release = typeof parsed.release === "string" ? parsed.release : "";
+  if (!/^[0-9]+\.[0-9]+$/.test(release)) return response(400, { error: "invalid_release" });
+  const gameId = typeof parsed.gameId === "string" && parsed.gameId !== "" ? parsed.gameId : "minecraft";
+  if (!gameCatalog.some((game) => game.id === gameId)) return response(400, { error: "unknown_game" });
+  const gameVersion = typeof parsed.gameVersion === "string" ? parsed.gameVersion : "";
+  const loaderVersion = typeof parsed.loaderVersion === "string" ? parsed.loaderVersion : "";
+  // Both end up in an immutable manifest, so an empty one would publish a
+  // release that documents nothing about what it runs on.
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/.test(gameVersion)) return response(400, { error: "invalid_game_version" });
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/.test(loaderVersion)) return response(400, { error: "invalid_loader_version" });
+
+  const operationId = `upload-${uploadId.slice(0, 8)}-${release.replace(".", "-")}`;
+  await startPackPublishExecution(operationId, {
+    uploadKey: `uploads/${uploadId}.zip`,
+    release,
+    game: gameId,
+    gameVersion,
+    loaderVersion,
+    requestedBy: `spawnpoint:${identity.id}`,
+  });
+  return response(202, { result: "publishing", operationId, release });
+}
+
 function me(identity: Identity): Response {
   const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
   return response(200, { identity, role });
@@ -555,6 +608,10 @@ export const routes: Readonly<Record<string, Route>> = {
     invitationHistory(identity, parameter(event, "gameId"), parameter(event, "worldId"))),
   "GET /games/{gameId}/worlds/{worldId}/pack": permissionRoute("connection.read", (_identity, event) =>
     packDownload(parameter(event, "gameId"), parameter(event, "worldId"))),
+
+  "POST /releases/uploads": permissionRoute("release.upload", () => createPackUpload()),
+  "POST /releases/uploads/{uploadId}/publish": permissionRoute("release.upload", (identity, event) =>
+    publishPackUpload(identity, parameter(event, "uploadId"), event.body)),
 
   "GET /access/candidates": permissionRoute("access.manage", () => candidates()),
   "GET /access/identities": permissionRoute("access.manage", () => identities()),

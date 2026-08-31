@@ -206,6 +206,46 @@ export async function requestPackDownload(gameId: string, worldId: string): Prom
   return { release: body.release, url: body.url };
 }
 
+export async function uploadPack(
+  file: File,
+  details: Readonly<{ release: string; gameId: string; gameVersion: string; loaderVersion: string }>,
+  onProgress?: (stage: "uploading" | "publishing") => void,
+): Promise<{ operationId: string; release: string }> {
+  const created = await authorizedFetch("/releases/uploads", { method: "POST" });
+  const target = await created.json() as { error?: string; uploadId?: string; url?: string; contentType?: string };
+  if (!created.ok || target.uploadId === undefined || target.url === undefined) {
+    throw new Error(target.error === "forbidden" ? "Your role cannot upload packs." : "The upload could not be started.");
+  }
+
+  // The bytes go straight to storage with the presigned URL: they never pass
+  // through the API, which is what makes a several-hundred-megabyte pack
+  // possible at all.
+  onProgress?.("uploading");
+  const put = await fetch(target.url, {
+    method: "PUT",
+    body: file,
+    headers: { "content-type": target.contentType ?? "application/zip" },
+  });
+  if (!put.ok) throw new Error("The pack could not be uploaded to storage.");
+
+  onProgress?.("publishing");
+  const published = await authorizedFetch(`/releases/uploads/${encodeURIComponent(target.uploadId)}/publish`, {
+    method: "POST",
+    body: JSON.stringify(details),
+  });
+  const body = await published.json() as { error?: string; operationId?: string; release?: string };
+  if (!published.ok || body.operationId === undefined || body.release === undefined) {
+    const messages: Record<string, string> = {
+      invalid_release: "A release number looks like 1.2.",
+      invalid_game_version: "Give the game version the pack is built for.",
+      invalid_loader_version: "Give the loader version the pack is built for.",
+      unknown_game: "That game is not in the catalog.",
+    };
+    throw new Error(messages[body.error ?? ""] ?? "The pack was uploaded but publishing was refused.");
+  }
+  return { operationId: body.operationId, release: body.release };
+}
+
 export async function requestSessionOperation(gameId: string, worldId: string, action: "start" | "stop"): Promise<{ result: "requested" | "already_stopped"; operationId?: string }> {
   const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/${action}`, { method: "POST" });
   const body = await response.json() as { error?: string; result?: "requested" | "already_stopped"; operationId?: string };

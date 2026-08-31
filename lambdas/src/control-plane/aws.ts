@@ -1,5 +1,5 @@
 import { DescribeInstancesCommand, EC2Client, type Instance } from "@aws-sdk/client-ec2";
-import { GetObjectCommand, HeadObjectCommand, NoSuchKey, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, HeadObjectCommand, NoSuchKey, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { GetCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
@@ -9,7 +9,8 @@ import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildStartInput, buildStopInput, buildWatchdogInput } from "../domain/telegram-bot.ts";
 import type { ControlPlaneSources, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 
-type OperationMachine = Readonly<{ type: OperationObservation["type"]; arn: string }>;
+type MachineType = OperationObservation["type"] | "publishPack";
+type OperationMachine = Readonly<{ type: MachineType; arn: string }>;
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -24,7 +25,11 @@ function operationMachines(): readonly OperationMachine[] {
     if (item === null || typeof item !== "object") throw new Error("invalid operation state machine entry");
     const type = "type" in item ? item.type : undefined;
     const arn = "arn" in item ? item.arn : undefined;
-    if ((type !== "start" && type !== "stop" && type !== "promote") || typeof arn !== "string" || !arn) {
+    if (
+      (type !== "start" && type !== "stop" && type !== "promote" && type !== "publishPack") ||
+      typeof arn !== "string" ||
+      !arn
+    ) {
       throw new Error("invalid operation state machine entry");
     }
     return { type, arn };
@@ -98,12 +103,20 @@ async function readReleasePointer(worldId: string): Promise<ReleasePointerObserv
   }
 }
 
+function isSessionOperation(type: MachineType): type is OperationObservation["type"] {
+  return type === "start" || type === "stop" || type === "promote";
+}
+
 async function listRunningOperations(): Promise<readonly OperationObservation[]> {
-  const groups = await Promise.all(operationMachines().map(async (machine) => {
+  // Publishing an uploaded pack runs beside a session rather than against it:
+  // it writes to the release bucket and never touches the host, so it must not
+  // appear as an operation in progress that refuses a start.
+  const machines = operationMachines().filter((machine) => isSessionOperation(machine.type));
+  const groups = await Promise.all(machines.map(async (machine) => {
     const response = await sfn.send(new ListExecutionsCommand({ stateMachineArn: machine.arn, statusFilter: "RUNNING", maxResults: 10 }));
     return (response.executions ?? []).flatMap((execution) => execution.name && execution.startDate && execution.executionArn ? [{
       id: execution.name,
-      type: machine.type,
+      type: machine.type as OperationObservation["type"],
       status: "running" as const,
       startedAt: execution.startDate.toISOString(),
       providerRef: execution.executionArn,
@@ -119,7 +132,7 @@ export const awsControlPlaneSources: ControlPlaneSources = {
   listRunningOperations,
 };
 
-function machineArn(type: OperationObservation["type"]): string {
+function machineArn(type: MachineType): string {
   const machine = operationMachines().find((candidate) => candidate.type === type);
   if (!machine) throw new Error(`missing ${type} state machine`);
   return machine.arn;
@@ -179,4 +192,38 @@ export async function packDownloadUrl(release: string): Promise<string | null> {
     return null;
   }
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: 3600 });
+}
+
+// A pack is hundreds of megabytes, so the panel puts it into S3 itself with a
+// presigned URL and this process never sees the bytes. The key is composed here
+// rather than accepted from the caller: an uploader chooses the file, never the
+// object it lands on.
+export async function packUploadTarget(uploadId: string): Promise<Readonly<{ key: string; url: string }>> {
+  const key = `uploads/${uploadId}.zip`;
+  const url = await getSignedUrl(
+    s3,
+    new PutObjectCommand({ Bucket: requiredEnv("RELEASE_BUCKET"), Key: key, ContentType: "application/zip" }),
+    { expiresIn: 3600 },
+  );
+  return { key, url };
+}
+
+export async function startPackPublishExecution(
+  operationId: string,
+  args: Readonly<{
+    uploadKey: string;
+    release: string;
+    game: string;
+    gameVersion: string;
+    loaderVersion: string;
+    requestedBy: string;
+  }>,
+): Promise<string> {
+  const started = await sfn.send(new StartExecutionCommand({
+    stateMachineArn: machineArn("publishPack"),
+    name: operationId,
+    input: JSON.stringify({ operationId, ...args }),
+  }));
+  if (!started.executionArn) throw new Error("pack publish execution did not return an ARN");
+  return started.executionArn;
 }

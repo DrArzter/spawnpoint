@@ -7,8 +7,23 @@ import type { World } from "../model";
 
 type ReleaseRow = { name: string; status: string };
 
-export function StorageScreen({ world, onDownloadPack }: { world: World; onDownloadPack?: (worldId: string) => void }) {
+export type PackUploadRequest = Readonly<{
+  file: File;
+  release: string;
+  gameVersion: string;
+  loaderVersion: string;
+}>;
+
+export function StorageScreen({ world, onDownloadPack, onUploadPack }: {
+  world: World;
+  onDownloadPack?: (worldId: string) => void;
+  onUploadPack?: (request: PackUploadRequest) => void;
+}) {
   const [tab, setTab] = useState<"releases" | "backups">("releases");
+  const [file, setFile] = useState<File | null>(null);
+  const [release, setRelease] = useState("");
+  const [gameVersion, setGameVersion] = useState("");
+  const [loaderVersion, setLoaderVersion] = useState("");
   const releases = useMemo<ReleaseRow[]>(() => {
     const rows = new Map<string, ReleaseRow>();
     if (world.release.activeRelease) rows.set(world.release.activeRelease, { name: world.release.activeRelease, status: "Active" });
@@ -38,6 +53,21 @@ export function StorageScreen({ world, onDownloadPack }: { world: World; onDownl
   return <>
     <div className="page-heading"><h1>Releases</h1><p>Release pointers and verified backups for {world.displayName}</p></div>
     <Tabs label="Storage view" onChange={setTab} options={[{ id: "releases", label: "Releases" }, { id: "backups", label: "Backups" }]} value={tab} />
+    {tab === "releases" && onUploadPack !== undefined && <form className="pack-upload" onSubmit={(event) => {
+      event.preventDefault();
+      if (file === null) return;
+      onUploadPack({ file, release, gameVersion, loaderVersion });
+    }}>
+      <strong>Publish a pack you already have</strong>
+      <p>The archive holds the mod files, flat or inside one mods/ folder. It uploads straight to storage and becomes an immutable release; nothing is deployed until you promote it.</p>
+      <div className="pack-upload-fields">
+        <input accept=".zip,application/zip" aria-label="Pack archive" onChange={(event) => setFile(event.target.files?.[0] ?? null)} type="file" />
+        <input aria-label="Release number" onChange={(event) => setRelease(event.target.value)} placeholder="Release, e.g. 1.2" value={release} />
+        <input aria-label="Game version" onChange={(event) => setGameVersion(event.target.value)} placeholder="Game version" value={gameVersion} />
+        <input aria-label="Loader version" onChange={(event) => setLoaderVersion(event.target.value)} placeholder="Loader version" value={loaderVersion} />
+        <Button disabled={file === null || release === "" || gameVersion === "" || loaderVersion === ""} type="submit" variant="primary">Upload and publish</Button>
+      </div>
+    </form>}
     {tab === "releases" && <DataTable columns={columns} emptyLabel={world.release.state === "unconfigured" ? "This world has no release pointer yet" : "Release data is unavailable"} label="Release pointers" rowKey={(row) => row.name} rows={releases} />}
     {tab === "backups" && <div className="empty-state"><strong>Backup inventory is not connected yet</strong><p>The backup API will list only S3 objects whose metadata and checksum have been verified. No placeholder backups are shown.</p></div>}
   </>;

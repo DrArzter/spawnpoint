@@ -9,6 +9,15 @@ set -Eeuo pipefail
 
 repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 server_scripts="${repository_root}/server/scripts"
+
+# Two callers reach this bundle. A profile build resolves mods from an authoring
+# repository; a pack publish takes an archive an operator uploaded. The machine
+# says which by whether it passes an upload key, and the modes share nothing but
+# the reviewed scripts underneath.
+if [[ -n "${UPLOAD_KEY:-}" && "${UPLOAD_KEY}" != "REQUIRED_BY_CALLER" ]]; then
+  exec "${repository_root}/scripts/aws-pack-upload-builder.sh"
+fi
+
 # No default authoring repository: with one repository per game, a default is a
 # silent choice of game, and the profile it resolves might even exist in the
 # other repository. CF_API_KEY is checked later instead, after the profile is

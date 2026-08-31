@@ -34,6 +34,18 @@ data "archive_file" "release_builder_source" {
     filename = "server/scripts/_profiles.sh"
   }
 
+  # The pack-upload mode: its entrypoint, and the validator that treats an
+  # uploaded archive as hostile.
+  source {
+    content  = file("${path.module}/../../scripts/aws-pack-upload-builder.sh")
+    filename = "scripts/aws-pack-upload-builder.sh"
+  }
+
+  source {
+    content  = file("${path.module}/../../server/scripts/extract-pack-upload.sh")
+    filename = "server/scripts/extract-pack-upload.sh"
+  }
+
   source {
     content  = file("${path.module}/../../server/scripts/resolve-profile-mods.sh")
     filename = "server/scripts/resolve-profile-mods.sh"
@@ -120,7 +132,22 @@ data "aws_iam_policy_document" "release_builder" {
       "s3:GetObject",
       "s3:PutObject",
     ]
-    resources = ["${data.aws_s3_bucket.releases.arn}/releases/*"]
+    resources = [
+      "${data.aws_s3_bucket.releases.arn}/releases/*",
+      # The client pack is published alongside every release now.
+      "${data.aws_s3_bucket.releases.arn}/packs/*",
+    ]
+  }
+
+  statement {
+    sid = "ConsumeUploadedPacks"
+    actions = [
+      "s3:GetObject",
+      # The upload is deleted once its release exists: leaving it would keep a
+      # second copy of every pack in the bucket.
+      "s3:DeleteObject",
+    ]
+    resources = ["${data.aws_s3_bucket.releases.arn}/uploads/*"]
   }
 
   statement {
@@ -259,6 +286,20 @@ resource "aws_iam_role_policy" "build_release_workflow" {
   name   = "spawnpoint-build-release"
   role   = aws_iam_role.build_release_workflow.id
   policy = data.aws_iam_policy_document.build_release_workflow.json
+}
+
+resource "aws_sfn_state_machine" "publish_uploaded_pack" {
+  name     = "spawnpoint-publish-uploaded-pack"
+  role_arn = aws_iam_role.build_release_workflow.arn
+  type     = "STANDARD"
+  definition = templatefile("${path.module}/../../workflows/publish-uploaded-pack.asl.json.tftpl", {
+    project_name = aws_codebuild_project.release_builder.name
+  })
+
+  tags = {
+    Name    = "spawnpoint-publish-uploaded-pack"
+    Purpose = "publish-release-from-uploaded-pack"
+  }
 }
 
 resource "aws_sfn_state_machine" "build_release" {

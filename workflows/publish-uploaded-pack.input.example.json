@@ -1,0 +1,9 @@
+{
+  "operationId": "upload-0123abcd-1-2",
+  "uploadKey": "uploads/0123abcd-4567-89ab-cdef-0123456789ab.zip",
+  "release": "1.2",
+  "game": "minecraft",
+  "gameVersion": "1.20.1",
+  "loaderVersion": "47.4.10",
+  "requestedBy": "spawnpoint:0123abcd-4567-89ab-cdef-0123456789ab"
+}

@@ -17,6 +17,7 @@ import { planSessionOperation, type SessionAction } from "../control-plane/sessi
 
 type Event = Readonly<{
   requestContext?: { http?: { method?: string } };
+  routeKey?: string;
   rawPath?: string;
   pathParameters?: Record<string, string | undefined>;
   headers?: Record<string, string | undefined>;
@@ -180,8 +181,6 @@ async function requestAccess(account: Caller): Promise<Response> {
 }
 
 async function controlPlane(identity: Identity): Promise<Response> {
-  const forbidden = requirePermission(identity, "status.read");
-  if (forbidden !== null) return forbidden;
   const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : undefined;
   const can = (permission: Permission) => role !== undefined && hasPermission(identity, role, permission);
   const snapshot = await readControlPlaneSnapshot(awsControlPlaneSources, {
@@ -192,8 +191,6 @@ async function controlPlane(identity: Identity): Promise<Response> {
 }
 
 async function controlSession(identity: Identity, action: SessionAction, gameId: string, worldId: string): Promise<Response> {
-  const forbidden = requirePermission(identity, action === "start" ? "session.start" : "session.stop");
-  if (forbidden !== null) return forbidden;
   const [hosts, operations] = await Promise.all([
     awsControlPlaneSources.listHosts(),
     awsControlPlaneSources.listRunningOperations(),
@@ -209,8 +206,6 @@ async function controlSession(identity: Identity, action: SessionAction, gameId:
 }
 
 function roles(identity: Identity): Response {
-  const forbidden = requirePermission(identity, "access.read");
-  if (forbidden !== null) return forbidden;
   const descriptions: Record<string, string> = {
     viewer: "Can see coarse server status only.",
     player: "Can view connection details, start a session and invite players.",
@@ -279,8 +274,6 @@ async function identities(): Promise<Response> {
 }
 
 async function invitationRecipients(identity: Identity): Promise<Response> {
-  const forbidden = requirePermission(identity, "invitation.send");
-  if (forbidden !== null) return forbidden;
   const profiles = await document.send(new QueryCommand({
     TableName: tableName,
     IndexName: "gsi1",
@@ -314,8 +307,6 @@ async function invitationRecipients(identity: Identity): Promise<Response> {
 }
 
 async function createInvitation(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
-  const forbidden = requirePermission(identity, "invitation.send");
-  if (forbidden !== null) return forbidden;
   let parsed: { audience?: unknown; recipientIdentityIds?: unknown };
   try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
   const audience = parsed.audience;
@@ -365,8 +356,6 @@ async function createInvitation(identity: Identity, gameId: string, worldId: str
 }
 
 async function invitationHistory(identity: Identity, gameId: string, worldId: string): Promise<Response> {
-  const forbidden = requirePermission(identity, "invitation.send");
-  if (forbidden !== null) return forbidden;
   const page = await document.send(new QueryCommand({
     TableName: tableName, IndexName: "gsi1", KeyConditionExpression: "gsi1pk = :sender",
     ExpressionAttributeValues: { ":sender": `INVITATION#SENDER#${identity.id}#GAME#${gameId}#WORLD#${worldId}` }, ScanIndexForward: false, Limit: 5,
@@ -484,41 +473,106 @@ async function authenticate(event: Event): Promise<Response> {
   return response(200, { sessionToken: issueSessionToken(profile, token), expiresIn: 12 * 60 * 60 });
 }
 
+function me(identity: Identity): Response {
+  const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
+  return response(200, { identity, role });
+}
+
+// Authority is declared here, once per route, and nowhere else. The dispatcher
+// resolves exactly what a route's level requires and refuses before the handler
+// runs, so a handler never decides whether it should have been reached — it
+// only enforces rules that depend on its own payload, like granting the owner
+// role. The keys are the API's own route keys, which is what API Gateway sends;
+// access-api-routing.test.ts compares this table with the deployed list so
+// neither side can drift silently.
+type RouteAccess =
+  | Readonly<{ kind: "public" }>
+  | Readonly<{ kind: "session" }>
+  | Readonly<{ kind: "identity" }>
+  | Readonly<{ kind: "permission"; permission: Permission }>;
+
+type Handler<Subject> = (subject: Subject, event: Event) => Promise<Response> | Response;
+type Route = Readonly<{ access: RouteAccess; handle: Handler<never> }>;
+
+// One constructor per access level, so each route reads as a sentence and its
+// closure argument is typed by the level rather than asserted at the call.
+const publicRoute = (handle: (event: Event) => Promise<Response> | Response): Route => ({
+  access: { kind: "public" },
+  handle: ((_subject: never, event: Event) => handle(event)) as Handler<never>,
+});
+const sessionRoute = (handle: Handler<Caller>): Route => ({ access: { kind: "session" }, handle: handle as Handler<never> });
+const identityRoute = (handle: Handler<Identity>): Route => ({ access: { kind: "identity" }, handle: handle as Handler<never> });
+const permissionRoute = (permission: Permission, handle: Handler<Identity>): Route => ({
+  access: { kind: "permission", permission },
+  handle: handle as Handler<never>,
+});
+
+const parameter = (event: Event, name: string): string => event.pathParameters?.[name] ?? "";
+
+export const routes: Readonly<Record<string, Route>> = {
+  "POST /auth/telegram": publicRoute((event) => authenticate(event)),
+
+  "GET /session": sessionRoute((account) => session(account)),
+  "POST /access/request": sessionRoute(async (account) => {
+    await observe(account);
+    return requestAccess(account);
+  }),
+
+  "GET /me": identityRoute((identity) => me(identity)),
+  "GET /me/subscriptions": identityRoute((identity) => subscriptions(identity)),
+  "PUT /me/subscriptions": identityRoute((identity, event) => updateSubscriptions(identity, event.body)),
+
+  "GET /control-plane": permissionRoute("status.read", (identity) => controlPlane(identity)),
+  "GET /access/roles": permissionRoute("access.read", (identity) => roles(identity)),
+  "GET /invitations/recipients": permissionRoute("invitation.send", (identity) => invitationRecipients(identity)),
+
+  "POST /games/{gameId}/worlds/{worldId}/start": permissionRoute("session.start", (identity, event) =>
+    controlSession(identity, "start", parameter(event, "gameId"), parameter(event, "worldId"))),
+  "POST /games/{gameId}/worlds/{worldId}/stop": permissionRoute("session.stop", (identity, event) =>
+    controlSession(identity, "stop", parameter(event, "gameId"), parameter(event, "worldId"))),
+  "POST /games/{gameId}/worlds/{worldId}/invitations": permissionRoute("invitation.send", (identity, event) =>
+    createInvitation(identity, parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
+  "GET /games/{gameId}/worlds/{worldId}/invitations": permissionRoute("invitation.send", (identity, event) =>
+    invitationHistory(identity, parameter(event, "gameId"), parameter(event, "worldId"))),
+
+  "GET /access/candidates": permissionRoute("access.manage", () => candidates()),
+  "GET /access/identities": permissionRoute("access.manage", () => identities()),
+  "POST /access/candidates/{telegramId}/approve": permissionRoute("access.manage", (identity, event) => {
+    const telegramId = parameter(event, "telegramId");
+    if (!/^\d+$/.test(telegramId)) return response(400, { error: "invalid_telegram_id" });
+    return approve(identity, telegramId, event.body);
+  }),
+  "POST /access/candidates/{telegramId}/dismiss": permissionRoute("access.manage", (identity, event) => {
+    const telegramId = parameter(event, "telegramId");
+    if (!/^\d+$/.test(telegramId)) return response(400, { error: "invalid_telegram_id" });
+    return dismiss(identity, telegramId);
+  }),
+  "POST /access/identities/{identityId}/role": permissionRoute("access.manage", (identity, event) => {
+    const identityId = parameter(event, "identityId");
+    if (!/^[0-9a-f-]{36}$/.test(identityId)) return response(400, { error: "invalid_identity_id" });
+    return updateRole(identity, identityId, event.body);
+  }),
+};
+
 export async function handler(event: Event): Promise<Response> {
-  const method = event.requestContext?.http?.method ?? "";
-  const path = event.rawPath ?? "";
-  if (method === "POST" && path === "/auth/telegram") return authenticate(event);
-  const authenticated = await caller(event);
-  if (authenticated === null) return response(401, { error: "invalid_or_expired_session" });
-  if (method === "GET" && path === "/session") return session(authenticated);
-  if (method === "POST" && path === "/access/request") { await observe(authenticated); return requestAccess(authenticated); }
-  const identity = await resolveIdentity(authenticated.telegramId);
+  const routeKey = event.routeKey ?? `${event.requestContext?.http?.method ?? ""} ${event.rawPath ?? ""}`;
+  const route = routes[routeKey];
+  // Default deny: an unrouted request never reaches a handler, and neither does
+  // a route somebody deployed without declaring its authority here.
+  if (route === undefined) return response(404, { error: "not_found" });
+
+  const call = (subject: unknown) =>
+    (route.handle as (subject: unknown, event: Event) => Promise<Response> | Response)(subject, event);
+  if (route.access.kind === "public") return call(undefined);
+
+  const account = await caller(event);
+  if (account === null) return response(401, { error: "invalid_or_expired_session" });
+  if (route.access.kind === "session") return call(account);
+
+  const identity = await resolveIdentity(account.telegramId);
   if (identity === null) return response(403, { error: "access_not_granted" });
-  if (method === "GET" && path === "/me") {
-    const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
-    return response(200, { identity, role });
-  }
-  if (method === "GET" && path === "/control-plane") return controlPlane(identity);
-  if (method === "GET" && path === "/access/roles") return roles(identity);
-  if (method === "GET" && path === "/me/subscriptions") return subscriptions(identity);
-  if (method === "PUT" && path === "/me/subscriptions") return updateSubscriptions(identity, event.body);
-  if (method === "GET" && path === "/invitations/recipients") return invitationRecipients(identity);
-  const gameId = event.pathParameters?.gameId;
-  const worldId = event.pathParameters?.worldId;
-  if (method === "POST" && gameId && worldId && path.endsWith("/start")) return controlSession(identity, "start", gameId, worldId);
-  if (method === "POST" && gameId && worldId && path.endsWith("/stop")) return controlSession(identity, "stop", gameId, worldId);
-  if (method === "POST" && gameId && worldId && path.endsWith("/invitations")) return createInvitation(identity, gameId, worldId, event.body);
-  if (method === "GET" && gameId && worldId && path.endsWith("/invitations")) return invitationHistory(identity, gameId, worldId);
-  const forbidden = requirePermission(identity, "access.manage");
-  if (forbidden !== null) return forbidden;
-  if (method === "GET" && path === "/access/candidates") return candidates();
-  if (method === "GET" && path === "/access/identities") return identities();
-  const telegramId = event.pathParameters?.telegramId;
-  if (telegramId !== undefined && !/^\d+$/.test(telegramId)) return response(400, { error: "invalid_telegram_id" });
-  if (method === "POST" && path.endsWith("/approve") && telegramId !== undefined) return approve(identity, telegramId, event.body);
-  if (method === "POST" && path.endsWith("/dismiss") && telegramId !== undefined) return dismiss(identity, telegramId);
-  const identityId = event.pathParameters?.identityId;
-  if (identityId !== undefined && !/^[0-9a-f-]{36}$/.test(identityId)) return response(400, { error: "invalid_identity_id" });
-  if (method === "POST" && path.endsWith("/role") && identityId !== undefined) return updateRole(identity, identityId, event.body);
-  return response(404, { error: "not_found" });
+  if (route.access.kind === "identity") return call(identity);
+
+  const forbidden = requirePermission(identity, route.access.permission);
+  return forbidden ?? call(identity);
 }

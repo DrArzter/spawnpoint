@@ -42,6 +42,10 @@ check_shell() {
       scripts/*.sh server/tests/*.sh server/user-data.sh'
 }
 
+check_workflows() {
+  python3 scripts/check-workflows.py
+}
+
 check_node() {
   (cd lambdas && npm test)
 }
@@ -94,6 +98,7 @@ check_terraform() {
 
 step "markdown links" check_links
 step "shellcheck" check_shell
+step "workflow hygiene" check_workflows
 step "node tests (lambdas)" check_node
 step "production build (mini app)" check_web
 step "server test suite (container)" check_server_suite

@@ -99,10 +99,16 @@ written down when it is about to be implemented, not instead of implementing it.
 Placeholders, so they are not forgotten. Deliberately unnumbered: a number is assigned when the ADR is
 written, so the numbering stays chronological and nothing has to be renumbered when plans change.
 
-- **CI for infrastructure.** Whether `terraform plan` runs in GitHub Actions. The identity question is already
-  answered by [ADR-0028](0028-update-proposals.md), which needs GitHub to assume an AWS role through OIDC with no
-  stored access keys; a Terraform role would be the same mechanism with wider permissions, which is precisely why it
-  is a separate decision.
+- **CI for infrastructure.** Half answered on 2026-08-31: `.github/workflows/check.yml` runs `scripts/check.sh` on
+  every push and pull request, which covers every rung that needs no credentials — links, shellcheck, the node tests,
+  the containerised server suite, the mini app's build, and `fmt` plus `test` across all eleven Terraform roots. It
+  holds `contents: read` and nothing else, and `scripts/check-workflows.py` fails the build if that changes, if an
+  action stops being pinned to a commit, or if the workflow starts keeping its own copy of the rungs instead of
+  calling the script.
+  What remains is the half with an identity attached: whether `terraform plan` runs against real state. The mechanism
+  is already answered by [ADR-0028](0028-update-proposals.md) — GitHub assumes an AWS role through OIDC with no
+  stored keys — and a Terraform role would be the same mechanism with wider permissions, which is precisely why it
+  stays a separate decision.
 - **In-game verification of a Minecraft binding.** Only if a real conflict occurs, or when in-game events start
   naming people. Deferred deliberately in [ADR-0022](0022-minecraft-account-as-linked-identity.md).
 - **Cost guardrail response.** Leaning answered by [docs/costs.md](../costs.md): **act, not merely notify.** A Budgets

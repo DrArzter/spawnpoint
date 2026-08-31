@@ -178,6 +178,10 @@ scripts/check.sh
 
 `scripts/check.sh fast` skips the Terraform containers, the slowest rung.
 
+The same command runs in CI on every push and pull request. That workflow holds `contents: read` and no cloud
+identity — a check that could create resources would no longer be only a check — and a hygiene check fails the build
+if it ever gains one, unpins an action, or starts keeping its own copy of the rungs.
+
 ## Decisions
 
 Thirty-four records, each with the alternatives that were rejected and why. Three have been superseded and one was

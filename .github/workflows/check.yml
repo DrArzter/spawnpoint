@@ -1,0 +1,52 @@
+name: Check
+
+# Every local rung of the evidence ladder, on the same command a developer runs.
+# This workflow deliberately holds no cloud identity: `contents: read` and no
+# OIDC, so it can read the repository and create nothing. The AWS acceptance
+# rung stays where it belongs, in the runbook, performed by an owner.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: scripts/check.sh
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the commit under test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The node tests run TypeScript directly, which needs a runtime that
+      # strips types without a flag.
+      - name: Use Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            lambdas/package-lock.json
+            web/package-lock.json
+
+      - name: Install the lambdas' dependencies
+        run: npm ci
+        working-directory: lambdas
+
+      - name: Install the mini app's dependencies
+        run: npm ci
+        working-directory: web
+
+      # Docker is preinstalled on the runner, which is what the containerised
+      # server suite and the Terraform roots need.
+      - name: Run every check
+        run: scripts/check.sh

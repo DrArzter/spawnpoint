@@ -1,4 +1,4 @@
-import type { HostObservation, OperationObservation } from "./read-model.ts";
+import type { HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 import { gameCatalog, type CatalogGame } from "./catalog.ts";
 
 export type SessionAction = "start" | "stop";
@@ -40,4 +40,19 @@ export function planSessionOperation(
   // at a time until that changes). Refuse rather than quietly co-tenant.
   if (action === "start" && host.state === "running") return { kind: "reject", reason: "host_already_running" };
   return { kind: "execute", host };
+}
+
+export type PackChoice =
+  | Readonly<{ kind: "release"; release: string }>
+  | Readonly<{ kind: "none"; reason: "no_release_pointer" | "no_release_selected" }>;
+
+// Which release a player should be handed the files for. The active release is
+// what the server is actually running; a desired one that has not been through
+// a start is what it will run next, and offering that instead would hand out a
+// pack for a world nobody is playing yet. So: active first, desired only when
+// nothing is active.
+export function packRelease(pointer: ReleasePointerObservation | null): PackChoice {
+  if (pointer === null || pointer.state !== "available") return { kind: "none", reason: "no_release_pointer" };
+  const release = pointer.activeRelease ?? pointer.desiredRelease;
+  return release === null ? { kind: "none", reason: "no_release_selected" } : { kind: "release", release };
 }

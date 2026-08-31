@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { HostObservation, OperationObservation } from "../src/control-plane/read-model.ts";
-import { planSessionOperation } from "../src/control-plane/session-control.ts";
+import { packRelease, planSessionOperation } from "../src/control-plane/session-control.ts";
 
 const host = (state: HostObservation["state"]): HostObservation => ({ id: "host", name: "Host", state, providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null });
 const operation: OperationObservation = { id: "op", type: "start", status: "running", startedAt: "2026-08-29T00:00:00Z", providerRef: "arn:op" };
@@ -43,4 +43,25 @@ test("stop is idempotent and transitional host states are rejected", () => {
   assert.deepEqual(planSessionOperation("minecraft", "world", "stop", [host("stopped")], []), { kind: "noop", reason: "already_stopped" });
   assert.equal(planSessionOperation("minecraft", "world", "stop", [host("running")], []).kind, "execute");
   assert.deepEqual(planSessionOperation("minecraft", "world", "start", [host("stopping")], []), { kind: "reject", reason: "host_transitioning" });
+});
+
+test("a player is handed the pack for the release the world is running", () => {
+  assert.deepEqual(
+    packRelease({ state: "available", activeRelease: "1.1", desiredRelease: "1.2" }),
+    { kind: "release", release: "1.1" },
+    "a desired release has not been through a start; its pack would fit a world nobody is playing",
+  );
+  assert.deepEqual(
+    packRelease({ state: "available", activeRelease: null, desiredRelease: "1.2" }),
+    { kind: "release", release: "1.2" },
+  );
+  assert.deepEqual(
+    packRelease({ state: "available", activeRelease: null, desiredRelease: null }),
+    { kind: "none", reason: "no_release_selected" },
+  );
+  assert.deepEqual(
+    packRelease({ state: "unconfigured", activeRelease: null, desiredRelease: null }),
+    { kind: "none", reason: "no_release_pointer" },
+  );
+  assert.deepEqual(packRelease(null), { kind: "none", reason: "no_release_pointer" });
 });

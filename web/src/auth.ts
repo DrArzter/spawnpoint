@@ -189,6 +189,23 @@ export async function loadControlPlane(): Promise<ControlPlaneSnapshot> {
   return response.json() as Promise<ControlPlaneSnapshot>;
 }
 
+export async function requestPackDownload(gameId: string, worldId: string): Promise<{ release: string; url: string }> {
+  const response = await authorizedFetch(
+    `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/pack`,
+  );
+  const body = await response.json() as { error?: string; release?: string; url?: string };
+  if (!response.ok || body.url === undefined || body.release === undefined) {
+    const messages: Record<string, string> = {
+      forbidden: "Your role cannot read this world's connection details.",
+      no_release_pointer: "This world has no release yet, so there is no pack to install.",
+      no_release_selected: "This world's release pointer names no release yet.",
+      no_pack_published: "This release was published before packs existed. Ask the owner to publish one.",
+    };
+    throw new Error(messages[body.error ?? ""] ?? "The pack link could not be created.");
+  }
+  return { release: body.release, url: body.url };
+}
+
 export async function requestSessionOperation(gameId: string, worldId: string, action: "start" | "stop"): Promise<{ result: "requested" | "already_stopped"; operationId?: string }> {
   const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/${action}`, { method: "POST" });
   const body = await response.json() as { error?: string; result?: "requested" | "already_stopped"; operationId?: string };

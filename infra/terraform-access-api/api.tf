@@ -43,9 +43,14 @@ data "aws_iam_policy_document" "access_api" {
   }
 
   statement {
-    sid       = "ReadWorldReleasePointers"
-    actions   = ["s3:GetObject"]
-    resources = ["${data.aws_s3_bucket.releases.arn}/worlds/*"]
+    sid     = "ReadWorldReleasePointersAndPacks"
+    actions = ["s3:GetObject"]
+    resources = [
+      "${data.aws_s3_bucket.releases.arn}/worlds/*",
+      # Presigning a pack link signs this same permission, so the panel can hand
+      # a player the files without ever holding a credential.
+      "${data.aws_s3_bucket.releases.arn}/packs/*",
+    ]
   }
 
   statement {
@@ -153,6 +158,7 @@ locals {
     "POST /games/{gameId}/worlds/{worldId}/stop",
     "POST /games/{gameId}/worlds/{worldId}/invitations",
     "GET /games/{gameId}/worlds/{worldId}/invitations",
+    "GET /games/{gameId}/worlds/{worldId}/pack",
     "POST /access/request",
     "GET /access/candidates",
     "GET /access/identities",

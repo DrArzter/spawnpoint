@@ -1,5 +1,6 @@
 import { DescribeInstancesCommand, EC2Client, type Instance } from "@aws-sdk/client-ec2";
-import { GetObjectCommand, NoSuchKey, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, HeadObjectCommand, NoSuchKey, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { GetCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
@@ -164,4 +165,18 @@ export async function stopSessionExecution(
   }));
   if (!stopped.executionArn) throw new Error("stop execution did not return an ARN");
   return stopped.executionArn;
+}
+
+// The pack a player installs: the same object the bot serves, presigned for an
+// hour. A missing object is a normal answer — releases published before packs
+// were part of publication have none — so it is reported, not thrown.
+export async function packDownloadUrl(release: string): Promise<string | null> {
+  const bucket = requiredEnv("RELEASE_BUCKET");
+  const key = `packs/${release}.zip`;
+  try {
+    await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+  } catch {
+    return null;
+  }
+  return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: 3600 });
 }

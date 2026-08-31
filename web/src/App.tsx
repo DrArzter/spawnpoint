@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ActiveSession, AuthState, endSession, loadControlPlane, requestAccess, requestSessionOperation, restoreAuth, telegramBotUsername, telegramLoginRedirectUrl } from "./auth";
+import { ActiveSession, AuthState, endSession, loadControlPlane, requestAccess, requestPackDownload, requestSessionOperation, restoreAuth, telegramBotUsername, telegramLoginRedirectUrl } from "./auth";
 import { AccessScreen } from "./screens/AccessScreen";
 import { Avatar } from "./components/Avatar";
 import { Button } from "./components/ui/Button";
@@ -186,6 +186,20 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
     }
   }
 
+  async function downloadPack() {
+    if (!game || !world) return;
+    setOperationRequest({ state: "pending", message: "Preparing the pack link…" });
+    try {
+      const { release, url } = await requestPackDownload(game.id, world.id);
+      // The link is presigned for an hour and never kept: a stale one would be
+      // a broken download later rather than a working one.
+      window.open(url, "_blank", "noopener,noreferrer");
+      setOperationRequest({ state: "success", message: `Pack for release ${release} is downloading.` });
+    } catch (error) {
+      setOperationRequest({ state: "error", message: error instanceof Error ? error.message : "The pack link failed." });
+    }
+  }
+
   function selectGame(id: string) {
     const next = games.find((item) => item.id === id);
     if (!next) return;
@@ -239,7 +253,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
           {page === "dashboard" && (!game || !world) && <ControlPlaneUnavailable state={controlPlane} onRetry={() => void refreshControlPlane()} />}
           {page === "metrics" && <MetricsScreen serverState={serverState} />}
           {page === "console" && <ConsoleScreen serverState={serverState} />}
-          {page === "storage" && world && <StorageScreen world={world} />}
+          {page === "storage" && world && <StorageScreen onDownloadPack={() => void downloadPack()} world={world} />}
           {page === "access" && <AccessScreen bootstrap={bootstrap} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate("access", tab)} roles={roles} tab={accessTab} />}
           {page === "profile" && currentMember && <ProfileScreen member={currentMember} onChange={(next) => setMembers((current) => current.map((member) => member.id === next.id ? next : member))} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
         </div>

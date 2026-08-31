@@ -57,7 +57,7 @@ test("each world's address carries its own game's port, and only for callers all
     listHosts: async () => [],
     listRunningOperations: async () => [],
     readLifecycle: async () => null,
-    readReleasePointer: async () => null,
+    readReleasePointer: async () => ({ state: "unconfigured", desiredRelease: null, activeRelease: null }),
   };
 
   const visible = await readControlPlaneSnapshot(sources, {

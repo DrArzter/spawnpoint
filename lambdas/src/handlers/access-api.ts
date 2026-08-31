@@ -11,9 +11,9 @@ import { defaultSubscriptions, validateSubscriptions } from "../access/subscript
 import { privateTelegramChatId, type AccessApprovedEvent } from "../domain/access-events.ts";
 import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
 import { gameCatalog } from "../control-plane/catalog.ts";
-import { awsControlPlaneSources, startSessionExecution, stopSessionExecution } from "../control-plane/aws.ts";
+import { awsControlPlaneSources, packDownloadUrl, startSessionExecution, stopSessionExecution } from "../control-plane/aws.ts";
 import { readControlPlaneSnapshot } from "../control-plane/read-model.ts";
-import { planSessionOperation, type SessionAction } from "../control-plane/session-control.ts";
+import { packRelease, planSessionOperation, type SessionAction } from "../control-plane/session-control.ts";
 
 type Event = Readonly<{
   requestContext?: { http?: { method?: string } };
@@ -476,6 +476,22 @@ async function authenticate(event: Event): Promise<Response> {
   return response(200, { sessionToken: issueSessionToken(profile, token), expiresIn: 12 * 60 * 60 });
 }
 
+// The files a player needs to join, for the release the world is actually
+// running. Whoever may learn where to connect may have what it takes to
+// connect: the same permission covers both, rather than inventing a second one
+// that would always be granted together with it.
+async function packDownload(gameId: string, worldId: string): Promise<Response> {
+  const world = gameCatalog.find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
+  if (world === undefined) return response(404, { error: "unknown_world" });
+
+  const choice = packRelease(await awsControlPlaneSources.readReleasePointer(worldId));
+  if (choice.kind === "none") return response(409, { error: choice.reason });
+
+  const url = await packDownloadUrl(choice.release);
+  if (url === null) return response(409, { error: "no_pack_published", release: choice.release });
+  return response(200, { release: choice.release, url, expiresIn: 3600 });
+}
+
 function me(identity: Identity): Response {
   const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
   return response(200, { identity, role });
@@ -537,6 +553,8 @@ export const routes: Readonly<Record<string, Route>> = {
     createInvitation(identity, parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
   "GET /games/{gameId}/worlds/{worldId}/invitations": permissionRoute("invitation.send", (identity, event) =>
     invitationHistory(identity, parameter(event, "gameId"), parameter(event, "worldId"))),
+  "GET /games/{gameId}/worlds/{worldId}/pack": permissionRoute("connection.read", (_identity, event) =>
+    packDownload(parameter(event, "gameId"), parameter(event, "worldId"))),
 
   "GET /access/candidates": permissionRoute("access.manage", () => candidates()),
   "GET /access/identities": permissionRoute("access.manage", () => identities()),

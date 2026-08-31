@@ -4,7 +4,7 @@ import test from "node:test";
 import type { HostObservation, OperationObservation } from "../src/control-plane/read-model.ts";
 import { packRelease, planSessionOperation } from "../src/control-plane/session-control.ts";
 
-const host = (state: HostObservation["state"]): HostObservation => ({ id: "host", name: "Host", state, providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null });
+const host = (state: HostObservation["state"]): HostObservation => ({ id: "host", name: "Host", state, providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: null });
 const operation: OperationObservation = { id: "op", type: "start", status: "running", startedAt: "2026-08-29T00:00:00Z", providerRef: "arn:op" };
 
 test("any world in the catalog can execute, because the machines take a world id", () => {
@@ -16,7 +16,7 @@ test("any world in the catalog can execute, because the machines take a world id
 
 test("a world listed before its session workflow exists is refused, not attempted", () => {
   const catalog = [{ id: "later", code: "LT", displayName: "Later", connectPort: 12345, worlds: [
-    { id: "later", displayName: "Later", profileId: "later", sessionControl: null },
+    { id: "later", displayName: "Later", profileId: "later", sessionControl: null, connectivity: "zerotier" as const },
   ] }];
   assert.deepEqual(
     planSessionOperation("later", "later", "start", [host("stopped")], [], catalog),

@@ -115,14 +115,61 @@ factorio_world_output="$("${SCRIPTS}/world-profile.sh" factorio)"
 grep -Fxq 'connectivity=zerotier' <<<"${factorio_world_output}"
 grep -Fxq 'auth=none' <<<"${factorio_world_output}"
 
-# --- the runtime seam: start-session refuses an unimplemented strategy for
-#     what the world is, before touching the environment or the host ---
-write_catalog '{"id": "open", "display_name": "Open", "profile_id": "open", "connectivity": "raw", "auth": "external"}'
-if session_output="$(WORLD_ID=open SPAWNPOINT_WORLD_CATALOG="${fixture}/catalog.json" \
+# --- the runtime seam: a strategy the catalog accepts but the host cannot
+#     perform is refused by name, before any host plumbing is touched ---
+write_catalog '{"id": "named", "display_name": "Named", "profile_id": "named", "connectivity": "route53", "auth": "external"}'
+if session_output="$(WORLD_ID=named SPAWNPOINT_WORLD_CATALOG="${fixture}/catalog.json" \
   "${SCRIPTS}/start-session.sh" 2>&1)"; then
   printf 'expected failure: start-session on an unimplemented strategy\n' >&2
   exit 1
 fi
-grep -q 'not implemented yet' <<<"${session_output}"
+grep -q 'connectivity strategy route53 is not implemented' <<<"${session_output}"
+
+# --- the raw strategy: a world reaches players without the overlay ---
+# The address reader is the whole of publish() for raw, so it is exercised
+# against a stub metadata service rather than mocked away.
+mkdir -p -- "${fixture}/imds"
+python3 - "${fixture}" <<'IMDS' &
+import http.server, sys, threading
+
+fixture = sys.argv[1]
+
+class Metadata(http.server.BaseHTTPRequestHandler):
+    def do_PUT(self):
+        self.send_response(200); self.end_headers(); self.wfile.write(b"token-value")
+    def do_GET(self):
+        # A token is required, which is what makes this IMDSv2.
+        if self.headers.get("X-aws-ec2-metadata-token") != "token-value":
+            self.send_response(401); self.end_headers(); return
+        if self.path != "/latest/meta-data/public-ipv4":
+            self.send_response(404); self.end_headers(); return
+        self.send_response(200); self.end_headers(); self.wfile.write(b"203.0.113.10")
+    def log_message(self, *_args):
+        pass
+
+server = http.server.HTTPServer(("127.0.0.1", 0), Metadata)
+open(fixture + "/imds/port", "w").write(str(server.server_address[1]))
+server.serve_forever()
+IMDS
+imds_pid=$!
+for _ in $(seq 1 50); do
+  [[ -s "${fixture}/imds/port" ]] && break
+  sleep 0.1
+done
+imds_base="http://127.0.0.1:$(cat "${fixture}/imds/port")"
+
+[[ "$(IMDS_BASE="${imds_base}" "${SCRIPTS}/read-public-address.sh")" == "203.0.113.10" ]]
+# No metadata service at all is a refusal, not an empty address.
+if IMDS_BASE="http://127.0.0.1:1" IMDS_TIMEOUT_SECONDS=1 "${SCRIPTS}/read-public-address.sh" >/dev/null 2>&1; then
+  printf 'expected failure: no metadata service\n' >&2
+  exit 1
+fi
+kill "${imds_pid}" 2>/dev/null || true
+
+# A raw world with a declared auth loads, and reports the strategy it uses.
+write_catalog '{"id": "open", "display_name": "Open", "profile_id": "open", "connectivity": "raw", "auth": "external"}'
+raw_output="$(run_profile open)"
+grep -Fxq 'connectivity=raw' <<<"${raw_output}"
+grep -Fxq 'auth=external' <<<"${raw_output}"
 
 printf 'connectivity-invariant-test: ok\n'

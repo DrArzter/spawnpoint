@@ -75,6 +75,7 @@ async function listHosts(): Promise<readonly HostObservation[]> {
       instanceType: instance.InstanceType ?? null,
       availabilityZone: instance.Placement?.AvailabilityZone ?? null,
       launchedAt: instance.LaunchTime?.toISOString() ?? null,
+      publicIp: instance.PublicIpAddress ?? null,
     }];
   }).sort((a, b) => a.id.localeCompare(b.id));
 }

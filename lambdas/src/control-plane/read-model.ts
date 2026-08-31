@@ -9,6 +9,9 @@ export type HostObservation = Readonly<{
   instanceType: string | null;
   availabilityZone: string | null;
   launchedAt: string | null;
+  // Ephemeral by design: a stopped host has none, and a started one usually has
+  // a different address than last time. Which is why nothing stores it.
+  publicIp: string | null;
 }>;
 
 export type ReleasePointerObservation = Readonly<{
@@ -45,6 +48,7 @@ export type ControlPlaneSnapshot = Readonly<{
       profileId: string;
       sessionControlAvailable: boolean;
       connectionAddress: string | null;
+      connectivity: string;
       release: ReleasePointerObservation;
     }>>;
   }>>;
@@ -79,6 +83,12 @@ export async function readControlPlaneSnapshot(
   now: () => Date = () => new Date(),
 ): Promise<ControlPlaneSnapshot> {
   const connectionHost = options.connectionHost ?? null;
+  const worldConnectionHost = (connectivity: string): string | null => {
+    if (connectionHost === null) return null;
+    if (connectivity !== "raw") return connectionHost;
+    const running = hosts.find((host) => host.state === "running" && host.publicIp !== null);
+    return running?.publicIp ?? null;
+  };
   const worlds = catalog.flatMap((game) => game.worlds);
   const [hosts, operations, lifecycles, pointers] = await Promise.all([
     sources.listHosts(),
@@ -102,9 +112,15 @@ export async function readControlPlaneSnapshot(
           displayName: world.displayName,
           profileId: world.profileId,
           sessionControlAvailable: world.sessionControl !== null,
+          connectivity: world.connectivity,
           // Composed here for the same reason the host composes it: the
-          // strategy owns the host part, the game owns the port.
-          connectionAddress: connectionHost === null ? null : `${connectionHost}:${game.connectPort}`,
+          // strategy owns the host part, the game owns the port. An overlay
+          // world uses the configured address; a public one uses whatever
+          // address the instance holds right now, which is nothing at all while
+          // it is stopped.
+          connectionAddress: worldConnectionHost(world.connectivity) === null
+            ? null
+            : `${worldConnectionHost(world.connectivity)}:${game.connectPort}`,
           release: options.includeDesiredRelease ? release : { ...release, desiredRelease: null },
         };
       }),

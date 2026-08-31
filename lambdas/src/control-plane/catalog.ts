@@ -6,6 +6,10 @@ export type CatalogWorld = Readonly<{
   // take a world id, that is every world in this catalog; the field stays for a
   // world listed before its host or profile exists.
   sessionControl: "v1" | null;
+  // Which strategy publishes this world, mirroring server/worlds/catalog.json:
+  // "zerotier" reaches players through the overlay, "raw" through whatever
+  // public address the instance holds for that session.
+  connectivity: "zerotier" | "raw";
 }>;
 
 export type CatalogGame = Readonly<{
@@ -28,8 +32,8 @@ export const gameCatalog: readonly CatalogGame[] = [
     displayName: "Minecraft",
     connectPort: 25565,
     worlds: [
-      { id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1" },
-      { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge", sessionControl: "v1" },
+      { id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1", connectivity: "zerotier" },
+      { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge", sessionControl: "v1", connectivity: "zerotier" },
     ],
   },
   {
@@ -38,7 +42,7 @@ export const gameCatalog: readonly CatalogGame[] = [
     displayName: "Factorio",
     connectPort: 34197,
     worlds: [
-      { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControl: "v1" },
+      { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControl: "v1", connectivity: "zerotier" },
     ],
   },
   {
@@ -47,7 +51,7 @@ export const gameCatalog: readonly CatalogGame[] = [
     displayName: "Project Zomboid",
     connectPort: 16261,
     worlds: [
-      { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControl: "v1" },
+      { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControl: "v1", connectivity: "zerotier" },
     ],
   },
 ];

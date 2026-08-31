@@ -321,6 +321,36 @@ named as unverified rather than dropped**, since a silently shortened list is ho
 Restoring is still `scripts/restore-world.sh` from an owner workstation, and the procedure remains unrehearsed. The
 inventory exists so that when it is rehearsed, the choice of archive is made from what is actually there.
 
+## Publishing a world without the overlay
+
+A world reaches players over the ephemeral public address of the instance instead of ZeroTier by declaring two
+fields in [`server/worlds/catalog.json`](../server/worlds/catalog.json):
+
+```json
+{ "id": "world", "connectivity": "raw", "auth": "external" }
+```
+
+`connectivity: raw` is the strategy; `auth` is the operator saying how players are authenticated, because the control
+plane cannot see inside the container. Both the catalog validator on the host and a `check` block in
+`infra/terraform` refuse a public world that declares no auth — the Terraform half matters because a port opened
+there would outlive a refused start.
+
+What the two fields do, once applied:
+
+- **The security group opens that world's game port and nothing else.** The rule is derived from the catalog, and the
+  port is read out of the game's own module, so nobody keeps a second list of numbers. With no world declaring a
+  public strategy, the group has no inbound rules at all, exactly as before.
+- **The address becomes the instance's current public IPv4**, read at session start from IMDSv2 — which answers the
+  host and refuses a container, thanks to the hop limit the host root already sets. The panel and the bot compose it
+  with the game's port the same way they compose the overlay address.
+- **There is no address between sessions.** The IP is ephemeral and a stopped instance has none, so the panel shows
+  nothing rather than yesterday's address. Players read the current one from the panel each session; that is what
+  makes a domain unnecessary rather than merely optional.
+- **ZeroTier is not required for that world's start.** The overlay check runs only for worlds that use it.
+
+A public IPv4 is billed by the hour while the instance runs, which is pennies beside the instance itself, and nothing
+at all while it is stopped.
+
 ## Import a world
 
 Bring an existing world and the exact mods it runs on into the system, from the owner workstation:

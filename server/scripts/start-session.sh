@@ -28,31 +28,18 @@ resolve_game
 session_connectivity="${WORLD_CONNECTIVITY:-zerotier}"
 session_auth="${WORLD_AUTH:-${GAME_DEFAULT_AUTH:-none}}"
 assert_connectivity_invariant "${session_auth}" "${session_connectivity}"
-[[ "${session_connectivity}" == "zerotier" ]] || {
-  printf 'error: connectivity strategy %s is not implemented yet; the overlay is the one that exists\n' \
-    "${session_connectivity}" >&2
-  exit 1
-}
+# Refused for what the world is, before any host plumbing is examined: a
+# strategy this host cannot perform is not a missing .env or a missing tool.
+case "${session_connectivity}" in
+  zerotier | raw) ;;
+  *)
+    printf 'error: connectivity strategy %s is not implemented\n' "${session_connectivity}" >&2
+    exit 1
+    ;;
+esac
 
 [[ -f "${runtime_env}" ]] || {
   printf 'error: runtime environment does not exist: %s\n' "${runtime_env}" >&2
-  exit 1
-}
-
-network_id="${ZEROTIER_NETWORK_ID:-$(read_env_value ZEROTIER_NETWORK_ID)}"
-expected_address="${ZEROTIER_ADDRESS:-$(read_env_value ZEROTIER_ADDRESS)}"
-
-[[ "${network_id}" =~ ^[0-9a-fA-F]{16}$ ]] || {
-  printf 'error: expected a 16-character ZeroTier network ID\n' >&2
-  exit 1
-}
-[[ "${expected_address}" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || {
-  printf 'error: expected a ZeroTier IPv4 address without a prefix length\n' >&2
-  exit 1
-}
-
-command -v zerotier-cli >/dev/null 2>&1 || {
-  printf 'error: zerotier-cli is not installed\n' >&2
   exit 1
 }
 command -v jq >/dev/null 2>&1 || {
@@ -60,18 +47,53 @@ command -v jq >/dev/null 2>&1 || {
   exit 1
 }
 
-network_json="$(zerotier-cli -j listnetworks)"
-jq -e \
-  --arg network_id "${network_id,,}" \
-  --arg expected_address "${expected_address}" \
-  'any(.[];
-    (.nwid | ascii_downcase) == $network_id
-    and .status == "OK"
-    and any(.assignedAddresses[]?; split("/")[0] == $expected_address)
-  )' >/dev/null <<<"${network_json}" || {
-    printf 'error: ZeroTier network %s is not ready at %s\n' "${network_id}" "${expected_address}" >&2
-    exit 1
-  }
+# publish(): the strategy answers with the host part of the address, and it is
+# the strategy that decides what "ready to publish" means. The overlay must be
+# joined and assigned before a session starts; a public address only has to
+# exist, because the instance already holds it.
+network_id=""
+case "${session_connectivity}" in
+  zerotier)
+    network_id="${ZEROTIER_NETWORK_ID:-$(read_env_value ZEROTIER_NETWORK_ID)}"
+    connection_host="${ZEROTIER_ADDRESS:-$(read_env_value ZEROTIER_ADDRESS)}"
+
+    [[ "${network_id}" =~ ^[0-9a-fA-F]{16}$ ]] || {
+      printf 'error: expected a 16-character ZeroTier network ID\n' >&2
+      exit 1
+    }
+    [[ "${connection_host}" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || {
+      printf 'error: expected a ZeroTier IPv4 address without a prefix length\n' >&2
+      exit 1
+    }
+    command -v zerotier-cli >/dev/null 2>&1 || {
+      printf 'error: zerotier-cli is not installed\n' >&2
+      exit 1
+    }
+
+    network_json="$(zerotier-cli -j listnetworks)"
+    jq -e \
+      --arg network_id "${network_id,,}" \
+      --arg connection_host "${connection_host}" \
+      'any(.[];
+        (.nwid | ascii_downcase) == $network_id
+        and .status == "OK"
+        and any(.assignedAddresses[]?; split("/")[0] == $connection_host)
+      )' >/dev/null <<<"${network_json}" || {
+        printf 'error: ZeroTier network %s is not ready at %s\n' "${network_id}" "${connection_host}" >&2
+        exit 1
+      }
+    ;;
+  raw)
+    # The address changes with every session, so it is read now rather than
+    # configured. IMDSv2 with hop_limit=1 answers the host itself and refuses a
+    # container, which is the same property that keeps the instance role out of
+    # a compromised game server (ADR-0033).
+    connection_host="$("${SCRIPT_DIR}/read-public-address.sh")" || {
+      printf 'error: this host has no public address to publish\n' >&2
+      exit 1
+    }
+    ;;
+esac
 
 export SERVER_PROJECT_DIRECTORY="${SERVER_DIR}"
 if [[ -z "${SERVER_COMPOSE_FILES:-}" ]]; then
@@ -121,12 +143,15 @@ if declare -F game_prepare_session >/dev/null; then
 fi
 
 "${SCRIPT_DIR}/start.sh"
-printf 'zerotier_network=%s\n' "${network_id,,}"
+if [[ -n "${network_id}" ]]; then
+  printf 'zerotier_network=%s\n' "${network_id,,}"
+fi
 # The address is composed, never configured: the strategy answers with the host
-# part — the overlay address here — and the game answers with the port. A single
-# configured string used to carry Minecraft's port for every game.
-printf 'connection_host=%s\n' "${expected_address}"
-printf 'connection_address=%s\n' "${expected_address}:${GAME_CONNECT_PORT}"
+# part and the game answers with the port. A single configured string used to
+# carry Minecraft's port for every game.
+printf 'connectivity=%s\n' "${session_connectivity}"
+printf 'connection_host=%s\n' "${connection_host}"
+printf 'connection_address=%s\n' "${connection_host}:${GAME_CONNECT_PORT}"
 printf 'world=%s\n' "${world_name}"
 printf 'reconcile=%s\n' "${reconcile_status}"
 printf 'desired_release=%s\n' "${desired_release}"

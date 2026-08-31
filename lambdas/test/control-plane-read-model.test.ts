@@ -7,8 +7,8 @@ import { gameCatalog } from "../src/control-plane/catalog.ts";
 
 const sources: ControlPlaneSources = {
   listHosts: async () => [
-    { id: "host-a", name: "Host A", state: "stopped", providerRef: "i-secret", instanceType: "m7i-flex.large", availabilityZone: "eu-central-1a", launchedAt: "2026-08-01T00:00:00.000Z" },
-    { id: "host-b", name: "Host B", state: "running", providerRef: "i-secret-2", instanceType: "m7i-flex.large", availabilityZone: "eu-central-1b", launchedAt: "2026-08-02T00:00:00.000Z" },
+    { id: "host-a", name: "Host A", state: "stopped", providerRef: "i-secret", instanceType: "m7i-flex.large", availabilityZone: "eu-central-1a", launchedAt: "2026-08-01T00:00:00.000Z", publicIp: null },
+    { id: "host-b", name: "Host B", state: "running", providerRef: "i-secret-2", instanceType: "m7i-flex.large", availabilityZone: "eu-central-1b", launchedAt: "2026-08-02T00:00:00.000Z", publicIp: "203.0.113.10" },
   ],
   readLifecycle: async (serverId) => serverId === "minecraft" ? initialLifecycleRecord("minecraft", 100) : null,
   readReleasePointer: async (worldId) => worldId === "world"
@@ -82,4 +82,42 @@ test("each world's address carries its own game's port, and only for callers all
   for (const game of withheld.games) {
     for (const world of game.worlds) assert.equal(world.connectionAddress, null);
   }
+});
+
+test("a public world's address is the instance's current one, and nothing while it is stopped", async () => {
+  const publicCatalog = [{
+    id: "minecraft",
+    code: "MC",
+    displayName: "Minecraft",
+    connectPort: 25565,
+    worlds: [
+      { id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1" as const, connectivity: "raw" as const },
+      { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge", sessionControl: "v1" as const, connectivity: "zerotier" as const },
+    ],
+  }];
+  const withHosts = (hosts: Awaited<ReturnType<ControlPlaneSources["listHosts"]>>): ControlPlaneSources => ({
+    listHosts: async () => hosts,
+    listRunningOperations: async () => [],
+    readLifecycle: async () => null,
+    readReleasePointer: async () => ({ state: "unconfigured", desiredRelease: null, activeRelease: null }),
+  });
+  const options = { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" };
+
+  const running = await readControlPlaneSnapshot(
+    withHosts([{ id: "h", name: "Host", state: "running", providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: "203.0.113.10" }]),
+    options,
+    publicCatalog,
+  );
+  const addresses = new Map(running.games[0]!.worlds.map((world) => [world.id, world.connectionAddress]));
+  assert.equal(addresses.get("world"), "203.0.113.10:25565", "a public world publishes the address the instance holds");
+  assert.equal(addresses.get("vanilla"), "172.29.23.24:25565", "an overlay world beside it is unaffected");
+
+  const stopped = await readControlPlaneSnapshot(
+    withHosts([{ id: "h", name: "Host", state: "stopped", providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: null }]),
+    options,
+    publicCatalog,
+  );
+  const whenStopped = new Map(stopped.games[0]!.worlds.map((world) => [world.id, world.connectionAddress]));
+  assert.equal(whenStopped.get("world"), null, "an ephemeral address does not exist between sessions, so none is shown");
+  assert.equal(whenStopped.get("vanilla"), "172.29.23.24:25565", "the overlay address is stable and still shown");
 });

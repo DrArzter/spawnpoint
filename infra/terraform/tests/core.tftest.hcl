@@ -105,8 +105,18 @@ run "free_plan_host_preserves_m0_invariants" {
   }
 
   assert {
-    condition     = length(aws_security_group.game_host.ingress) == 0
-    error_message = "Mode C must not publish Minecraft, SSH or Grafana through the VPC security group."
+    condition     = length(local.public_game_ports) == 0
+    error_message = "No world declares a public connectivity today, so the host must open no port at all. Opening one is a catalog diff — and the check block refuses a public world that declares no authentication."
+  }
+
+  # The mechanism itself: a world that does declare one must produce exactly one
+  # rule, on its own game's port, read from that game's module.
+  assert {
+    condition = length([
+      for world in local.public_worlds : world
+      if !contains(["external", "game"], world.auth)
+    ]) == 0
+    error_message = "A public world without a declared auth model would open a port the host then refuses to start."
   }
 
   assert {

@@ -6,7 +6,7 @@
   },
   "worlds": [
     {
-      "id": "main",
+      "id": "world",
       "display_name": "Main modded",
       "profile_id": "main"
     },
@@ -23,6 +23,16 @@
       "profile_source": {
         "repository": "https://github.com/DrArzter/my-docker-factorio-server-config",
         "commit": "36bb80df5424107f109a01852c999475a51a490e"
+      }
+    },
+    {
+      "id": "zomboid",
+      "display_name": "Project Zomboid vanilla",
+      "profile_id": "zomboid-vanilla",
+      "game": "zomboid",
+      "profile_source": {
+        "repository": "https://github.com/DrArzter/my-docker-zomboid-server-config",
+        "commit": "c9d0926076a6f9c054da200818b15c5efa260120"
       }
     }
   ]

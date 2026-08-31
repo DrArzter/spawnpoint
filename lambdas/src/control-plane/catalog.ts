@@ -35,4 +35,12 @@ export const gameCatalog: readonly CatalogGame[] = [
       { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControl: "v1" },
     ],
   },
+  {
+    id: "zomboid",
+    code: "PZ",
+    displayName: "Project Zomboid",
+    worlds: [
+      { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControl: "v1" },
+    ],
+  },
 ];

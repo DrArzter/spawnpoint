@@ -4,7 +4,16 @@ import test from "node:test";
 import { defaultSubscriptions, subscriptionKeys, validateSubscriptions } from "../src/access/subscriptions.ts";
 
 test("subscription keys follow the deployed game catalog", () => {
-  assert.deepEqual(subscriptionKeys(), ["minecraft.started", "minecraft.stopped", "factorio.started", "factorio.stopped", "invitation.broadcast", "invitation.direct"]);
+  assert.deepEqual(subscriptionKeys(), [
+    "minecraft.started",
+    "minecraft.stopped",
+    "factorio.started",
+    "factorio.stopped",
+    "zomboid.started",
+    "zomboid.stopped",
+    "invitation.broadcast",
+    "invitation.direct",
+  ]);
   assert.equal(Object.values(defaultSubscriptions()).every((value) => value === false), true);
 });
 

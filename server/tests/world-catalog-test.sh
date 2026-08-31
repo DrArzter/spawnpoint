@@ -21,8 +21,8 @@ expect_failure() {
 
 export SPAWNPOINT_WORLDS_DIRECTORY="${fixture}/worlds"
 
-main_output="$("${scripts}/world-profile.sh" main)"
-grep -Fxq 'world_id=main' <<<"${main_output}"
+main_output="$("${scripts}/world-profile.sh" world)"
+grep -Fxq 'world_id=world' <<<"${main_output}"
 grep -Fxq 'profile_id=main' <<<"${main_output}"
 grep -Fxq 'profile_commit=0791ac0810c65fca3ca0517b9fbbbfe5023d0355' <<<"${main_output}"
 
@@ -31,26 +31,26 @@ grep -Fxq 'profile_id=vanilla-forge' <<<"${vanilla_output}"
 expect_failure "unknown world" "${scripts}/world-profile.sh" missing
 expect_failure "invalid world id" "${scripts}/world-profile.sh" '../main'
 
-prepare_output="$("${scripts}/prepare-world.sh" main)"
+prepare_output="$("${scripts}/prepare-world.sh" world)"
 grep -Fxq 'result=prepared' <<<"${prepare_output}"
-[[ -d "${fixture}/worlds/main/data" ]]
-[[ -d "${fixture}/worlds/main/mods" ]]
+[[ -d "${fixture}/worlds/world/data" ]]
+[[ -d "${fixture}/worlds/world/mods" ]]
 jq -e '
-  .world_id == "main" and
+  .world_id == "world" and
   .profile.id == "main" and
   .profile.commit == "0791ac0810c65fca3ca0517b9fbbbfe5023d0355"
-' "${fixture}/worlds/main/.spawnpoint-world.json" >/dev/null
+' "${fixture}/worlds/world/.spawnpoint-world.json" >/dev/null
 
-repeat_output="$("${scripts}/prepare-world.sh" main)"
+repeat_output="$("${scripts}/prepare-world.sh" world)"
 grep -Fxq 'result=already_prepared' <<<"${repeat_output}"
 
 "${scripts}/prepare-world.sh" vanilla >/dev/null
-[[ "$(realpath "${fixture}/worlds/main")" != "$(realpath "${fixture}/worlds/vanilla")" ]]
+[[ "$(realpath "${fixture}/worlds/world")" != "$(realpath "${fixture}/worlds/vanilla")" ]]
 
 jq '.profile.id = "vanilla-forge"' \
-  "${fixture}/worlds/main/.spawnpoint-world.json" >"${fixture}/tampered-marker.json"
-mv -- "${fixture}/tampered-marker.json" "${fixture}/worlds/main/.spawnpoint-world.json"
-expect_failure "mismatched marker" "${scripts}/prepare-world.sh" main
+  "${fixture}/worlds/world/.spawnpoint-world.json" >"${fixture}/tampered-marker.json"
+mv -- "${fixture}/tampered-marker.json" "${fixture}/worlds/world/.spawnpoint-world.json"
+expect_failure "mismatched marker" "${scripts}/prepare-world.sh" world
 
 # --- provenance is per world when it needs to be: one authoring repository per
 #     game, and a pin bump for one world must not invalidate another's marker ---

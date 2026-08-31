@@ -108,7 +108,7 @@ write_catalog '{"id": "w", "display_name": "W", "profile_id": "w", "game": "hero
 expect_failure "a catalog naming a game with no module" run_profile w
 
 # the real catalog stays valid and reports the axis with its defaults
-main_output="$("${SCRIPTS}/world-profile.sh" main)"
+main_output="$("${SCRIPTS}/world-profile.sh" world)"
 grep -Fxq 'connectivity=zerotier' <<<"${main_output}"
 grep -Fxq 'auth=none' <<<"${main_output}"
 factorio_world_output="$("${SCRIPTS}/world-profile.sh" factorio)"

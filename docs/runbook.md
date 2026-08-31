@@ -36,6 +36,7 @@ Fill in at M1 and keep current. This block is what somebody needs when something
 | Panel URL | Grafana at `http://172.29.23.24:3000` inside ZeroTier |
 | Container image | `itzg/minecraft-server` pinned by digest in `server/compose.yaml`, never `latest` |
 | Minecraft and loader version | Minecraft 1.20.1, Forge, immutable release `1.0` with 111 JARs |
+| World ids | `world` (Minecraft, profile `main`), `vanilla`, `factorio`, `zomboid` — the ids the panel, the bot and `--world` all use |
 
 ## Start the server
 
@@ -262,6 +263,25 @@ That makes the rollout order matter, because the Action lives in each authoring 
 
 The Factorio repository's Action is already written this way. A Factorio cut additionally needs portal credentials at
 cut time (`FACTORIO_USERNAME`, `FACTORIO_TOKEN`); the wiring for those is the next slice and is not deployed yet.
+
+## Project Zomboid world
+
+`WORLD_ID=zomboid`. The dedicated server installs with an anonymous Steam login and downloads its own Workshop items,
+so neither the host nor this project needs a Steam account; the people joining need to own the game. Its profile
+lives in [`my-docker-zomboid-server-config`](https://github.com/DrArzter/my-docker-zomboid-server-config), pinned per
+world in the catalog.
+
+Two operator secrets belong in the host `.env` before its first session, because this image takes them from the
+environment rather than generating them: `ZOMBOID_RCON_PASSWORD` (how the probe reads the player count and the stop
+saves the world) and `ZOMBOID_ADMIN_PASSWORD`. The image pins `latest` today; **pin a digest before the first AWS
+session** ([ADR-0005](adr/0005-containerised-game-server.md)).
+
+What that first session verifies is the one fact no documentation states: the exact wording of the `players` RCON
+reply. The parser cross-checks the header count against the listed names and refuses when they disagree, so a wrong
+guess costs instance minutes rather than stopping a server with people on it — but it does need looking at.
+
+Mods are not wired: a modded Zomboid world needs the capture step described in [prior art](prior-art.md), because the
+Workshop has no versions to resolve and this image exposes no variable for a mod list.
 
 ## Import a world
 

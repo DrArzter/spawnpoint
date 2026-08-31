@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { initialLifecycleRecord } from "../src/domain/lifecycle.ts";
 import { readControlPlaneSnapshot, type ControlPlaneSources } from "../src/control-plane/read-model.ts";
+import { gameCatalog } from "../src/control-plane/catalog.ts";
 
 const sources: ControlPlaneSources = {
   listHosts: async () => [
@@ -32,4 +33,21 @@ test("redacts infrastructure references and desired releases from coarse status"
   assert.equal("providerRef" in snapshot.operations[0]!, false);
   assert.equal(snapshot.games[0]?.worlds[0]?.release.activeRelease, "1.0");
   assert.equal(snapshot.games[0]?.worlds[0]?.release.desiredRelease, null);
+});
+
+test("the panel's catalog offers exactly the worlds the host catalog resolves", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const url = new URL("../../server/worlds/catalog.json", import.meta.url);
+  const hostCatalog = JSON.parse(await readFile(url, "utf8")) as {
+    worlds: ReadonlyArray<{ id: string; game?: string }>;
+  };
+
+  const hostPairs = new Set(hostCatalog.worlds.map((world) => `${world.game ?? "minecraft"}/${world.id}`));
+  const panelPairs = new Set(gameCatalog.flatMap((game) => game.worlds.map((world) => `${game.id}/${world.id}`)));
+
+  // Two lists of the same worlds is a duplication this project accepts for now,
+  // deliberately: the panel is a Lambda and the host catalog is a file on a
+  // volume. What it must not do is drift — a world the panel offers and the host
+  // cannot resolve fails at the session command, after the instance is running.
+  assert.deepEqual([...panelPairs].sort(), [...hostPairs].sort());
 });

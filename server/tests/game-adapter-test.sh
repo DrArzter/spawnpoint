@@ -133,7 +133,7 @@ wait "${fake_rcon_pid}"
 # --- dispatch: the catalog names the game, absence means minecraft ---
 output="$(WORLD_ID=factorio bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; printf '%s %s %s\n' \"\${GAME_ID}\" \"\${GAME_COMPOSE_SERVICE}\" \"\${GAME_MOD_EXTENSION}\"")"
 [[ "${output}" == "factorio factorio zip" ]]
-output="$(WORLD_ID=main bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; printf '%s\n' \"\${GAME_ID}\"")"
+output="$(WORLD_ID=world bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; printf '%s\n' \"\${GAME_ID}\"")"
 [[ "${output}" == "minecraft" ]]
 output="$(bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; printf '%s\n' \"\${GAME_ID}\"")"
 [[ "${output}" == "minecraft" ]]

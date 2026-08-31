@@ -24,7 +24,7 @@ someone forgot.
 Inspect a catalog entry without changing the filesystem:
 
 ```bash
-server/scripts/world-profile.sh main
+server/scripts/world-profile.sh world
 server/scripts/world-profile.sh vanilla
 ```
 

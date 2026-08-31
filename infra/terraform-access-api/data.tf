@@ -8,6 +8,10 @@ data "aws_dynamodb_table" "lifecycle" {
   name = "spawnpoint-lifecycle-v2"
 }
 
+data "aws_s3_bucket" "backups" {
+  bucket = "spawnpoint-backups-${data.aws_caller_identity.current.account_id}"
+}
+
 data "aws_s3_bucket" "releases" {
   bucket = "spawnpoint-releases-${data.aws_caller_identity.current.account_id}"
 }

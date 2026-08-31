@@ -307,6 +307,20 @@ guess costs instance minutes rather than stopping a server with people on it —
 Mods are not wired: a modded Zomboid world needs the capture step described in [prior art](prior-art.md), because the
 Workshop has no versions to resolve and this image exposes no variable for a mod list.
 
+### Seeing what a restore could choose
+
+The panel's Releases screen has a Backups tab: the newest verified archives for the world, with the size, the time
+they were stored and the head of the SHA-256 the key is addressed by. `backup.read` is the permission.
+
+**What "verified" means here is exactly what a listing can prove**: the key carries a well-formed digest, which
+`upload-world-backup.sh` puts there, and S3 holds a SHA-256 checksum for the object. That is checked without ever
+downloading an archive — the API's role has `ListBucket` on the backup bucket and **no** `GetObject`, so the panel can
+enumerate a world's backups and cannot read one. Anything in the prefix that fails those two checks is **counted and
+named as unverified rather than dropped**, since a silently shortened list is how corruption stays invisible.
+
+Restoring is still `scripts/restore-world.sh` from an owner workstation, and the procedure remains unrehearsed. The
+inventory exists so that when it is rehearsed, the choice of archive is made from what is actually there.
+
 ## Import a world
 
 Bring an existing world and the exact mods it runs on into the system, from the owner workstation:

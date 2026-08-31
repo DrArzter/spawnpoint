@@ -11,8 +11,10 @@ import { defaultSubscriptions, validateSubscriptions } from "../access/subscript
 import { privateTelegramChatId, type AccessApprovedEvent } from "../domain/access-events.ts";
 import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
 import { gameCatalog } from "../control-plane/catalog.ts";
+import { backupInventory } from "../control-plane/backups.ts";
 import {
   awsControlPlaneSources,
+  listWorldBackups,
   packDownloadUrl,
   packUploadTarget,
   startPackPublishExecution,
@@ -499,6 +501,15 @@ async function packDownload(gameId: string, worldId: string): Promise<Response> 
   return response(200, { release: choice.release, url, expiresIn: 3600 });
 }
 
+// What a restore would have to choose between. The inventory is read from a
+// listing rather than by touching an archive, so this role cannot download a
+// world even though it can say which backups exist.
+async function backups(gameId: string, worldId: string): Promise<Response> {
+  const world = gameCatalog.find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
+  if (world === undefined) return response(404, { error: "unknown_world" });
+  return response(200, backupInventory(await listWorldBackups(worldId)));
+}
+
 // Uploading is two steps on purpose. The panel puts hundreds of megabytes
 // straight into S3 with a presigned URL, so no request through this API ever
 // carries the bytes; then it asks for the upload to be published, which is the
@@ -608,6 +619,9 @@ export const routes: Readonly<Record<string, Route>> = {
     invitationHistory(identity, parameter(event, "gameId"), parameter(event, "worldId"))),
   "GET /games/{gameId}/worlds/{worldId}/pack": permissionRoute("connection.read", (_identity, event) =>
     packDownload(parameter(event, "gameId"), parameter(event, "worldId"))),
+
+  "GET /games/{gameId}/worlds/{worldId}/backups": permissionRoute("backup.read", (_identity, event) =>
+    backups(parameter(event, "gameId"), parameter(event, "worldId"))),
 
   "POST /releases/uploads": permissionRoute("release.upload", () => createPackUpload()),
   "POST /releases/uploads/{uploadId}/publish": permissionRoute("release.upload", (identity, event) =>

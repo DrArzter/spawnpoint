@@ -1,9 +1,18 @@
 import { DescribeInstancesCommand, EC2Client, type Instance } from "@aws-sdk/client-ec2";
-import { GetObjectCommand, HeadObjectCommand, NoSuchKey, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  GetObjectCommand,
+  HeadObjectCommand,
+  ListObjectsV2Command,
+  NoSuchKey,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { GetCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
+
+import type { BackupObject } from "./backups.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildStartInput, buildStopInput, buildWatchdogInput } from "../domain/telegram-bot.ts";
@@ -226,4 +235,22 @@ export async function startPackPublishExecution(
   }));
   if (!started.executionArn) throw new Error("pack publish execution did not return an ARN");
   return started.executionArn;
+}
+
+// Deliberately ListObjectsV2 and nothing else: the digest lives in the key and
+// the listing reports each object's checksum algorithm, so the panel can show
+// an inventory without this role ever being able to read a world archive.
+export async function listWorldBackups(worldId: string): Promise<readonly BackupObject[]> {
+  const response = await s3.send(new ListObjectsV2Command({
+    Bucket: requiredEnv("BACKUP_BUCKET"),
+    Prefix: `worlds/${worldId}/archives/`,
+    MaxKeys: 200,
+    OptionalObjectAttributes: undefined,
+  }));
+  return (response.Contents ?? []).flatMap((object) => object.Key && object.LastModified ? [{
+    key: object.Key,
+    sizeBytes: object.Size ?? 0,
+    storedAt: object.LastModified.toISOString(),
+    checksumAlgorithms: object.ChecksumAlgorithm ?? [],
+  }] : []);
 }

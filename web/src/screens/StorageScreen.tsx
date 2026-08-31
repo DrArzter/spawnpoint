@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "../components/ui/Button";
 import { DataColumn, DataTable } from "../components/ui/DataTable";
 import { Tabs } from "../components/ui/Tabs";
 import type { World } from "../model";
+import { loadBackups, type BackupInventory } from "../auth";
 
 type ReleaseRow = { name: string; status: string };
 
@@ -14,8 +15,10 @@ export type PackUploadRequest = Readonly<{
   loaderVersion: string;
 }>;
 
-export function StorageScreen({ world, onDownloadPack, onUploadPack }: {
+export function StorageScreen({ world, gameId, canReadBackups, onDownloadPack, onUploadPack }: {
   world: World;
+  gameId: string;
+  canReadBackups: boolean;
   onDownloadPack?: (worldId: string) => void;
   onUploadPack?: (request: PackUploadRequest) => void;
 }) {
@@ -24,6 +27,20 @@ export function StorageScreen({ world, onDownloadPack, onUploadPack }: {
   const [release, setRelease] = useState("");
   const [gameVersion, setGameVersion] = useState("");
   const [loaderVersion, setLoaderVersion] = useState("");
+  const [backups, setBackups] = useState<BackupInventory | null>(null);
+  const [backupError, setBackupError] = useState<string | null>(null);
+
+  // Loaded when the tab is opened rather than with the screen: an inventory is
+  // a listing per world, and nobody pays for it while reading releases.
+  useEffect(() => {
+    if (tab !== "backups" || !canReadBackups) return;
+    let current = true;
+    setBackupError(null);
+    loadBackups(gameId, world.id)
+      .then((inventory) => { if (current) setBackups(inventory); })
+      .catch((error: unknown) => { if (current) setBackupError(error instanceof Error ? error.message : "Unavailable"); });
+    return () => { current = false; };
+  }, [tab, canReadBackups, gameId, world.id]);
   const releases = useMemo<ReleaseRow[]>(() => {
     const rows = new Map<string, ReleaseRow>();
     if (world.release.activeRelease) rows.set(world.release.activeRelease, { name: world.release.activeRelease, status: "Active" });
@@ -50,6 +67,15 @@ export function StorageScreen({ world, onDownloadPack, onUploadPack }: {
     },
   ];
 
+  const backupColumns: DataColumn<BackupInventory["entries"][number]>[] = [
+    { id: "archive", label: "Archive", render: (row) => <strong>{row.archiveName}</strong>, width: "1.6fr" },
+    { id: "stored", label: "Stored", render: (row) => new Date(row.storedAt).toLocaleString(), width: "1.2fr" },
+    { id: "size", label: "Size", render: (row) => `${(row.sizeBytes / 1048576).toFixed(1)} MiB`, width: "0.8fr" },
+    // The digest is the key: showing its head is enough to compare two rows,
+    // and the whole thing is available by copying the archive name.
+    { id: "checksum", label: "SHA-256", render: (row) => <code>{row.checksum.slice(0, 12)}…</code>, width: "0.9fr" },
+  ];
+
   return <>
     <div className="page-heading"><h1>Releases</h1><p>Release pointers and verified backups for {world.displayName}</p></div>
     <Tabs label="Storage view" onChange={setTab} options={[{ id: "releases", label: "Releases" }, { id: "backups", label: "Backups" }]} value={tab} />
@@ -69,6 +95,20 @@ export function StorageScreen({ world, onDownloadPack, onUploadPack }: {
       </div>
     </form>}
     {tab === "releases" && <DataTable columns={columns} emptyLabel={world.release.state === "unconfigured" ? "This world has no release pointer yet" : "Release data is unavailable"} label="Release pointers" rowKey={(row) => row.name} rows={releases} />}
-    {tab === "backups" && <div className="empty-state"><strong>Backup inventory is not connected yet</strong><p>The backup API will list only S3 objects whose metadata and checksum have been verified. No placeholder backups are shown.</p></div>}
+    {tab === "backups" && !canReadBackups && <div className="empty-state"><strong>Your role cannot read backups</strong><p>Ask an owner for the backup.read permission.</p></div>}
+    {tab === "backups" && canReadBackups && backupError !== null && <div className="empty-state"><strong>The inventory is unavailable</strong><p>{backupError}</p></div>}
+    {tab === "backups" && canReadBackups && backupError === null && <>
+      <DataTable
+        columns={backupColumns}
+        emptyLabel={backups === null ? "Reading the inventory…" : "This world has no verified backups yet"}
+        label="Verified backups"
+        rowKey={(row) => row.key}
+        rows={backups?.entries ?? []}
+      />
+      {backups !== null && (backups.unverified > 0 || backups.truncated) && <p className="muted">
+        {backups.unverified > 0 && `${backups.unverified} object${backups.unverified === 1 ? "" : "s"} in this world's archive prefix could not be verified from the listing and are not shown. `}
+        {backups.truncated && "Older backups exist beyond the newest shown."}
+      </p>}
+    </>}
   </>;
 }

@@ -267,7 +267,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
           {page === "dashboard" && (!game || !world) && <ControlPlaneUnavailable state={controlPlane} onRetry={() => void refreshControlPlane()} />}
           {page === "metrics" && <MetricsScreen serverState={serverState} />}
           {page === "console" && <ConsoleScreen serverState={serverState} />}
-          {page === "storage" && world && <StorageScreen onDownloadPack={() => void downloadPack()} onUploadPack={granted.has("release.upload") ? (request) => void publishUploadedPack(request) : undefined} world={world} />}
+          {page === "storage" && world && <StorageScreen canReadBackups={granted.has("backup.read")} gameId={game?.id ?? ""} onDownloadPack={() => void downloadPack()} onUploadPack={granted.has("release.upload") ? (request) => void publishUploadedPack(request) : undefined} world={world} />}
           {page === "access" && <AccessScreen bootstrap={bootstrap} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate("access", tab)} roles={roles} tab={accessTab} />}
           {page === "profile" && currentMember && <ProfileScreen member={currentMember} onChange={(next) => setMembers((current) => current.map((member) => member.id === next.id ? next : member))} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
         </div>

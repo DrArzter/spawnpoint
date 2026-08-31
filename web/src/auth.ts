@@ -246,6 +246,20 @@ export async function uploadPack(
   return { operationId: body.operationId, release: body.release };
 }
 
+export type BackupEntry = { key: string; archiveName: string; checksum: string; sizeBytes: number; storedAt: string };
+export type BackupInventory = { entries: BackupEntry[]; unverified: number; truncated: boolean };
+
+export async function loadBackups(gameId: string, worldId: string): Promise<BackupInventory> {
+  const response = await authorizedFetch(
+    `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/backups`,
+  );
+  const body = await response.json() as { error?: string } & Partial<BackupInventory>;
+  if (!response.ok || body.entries === undefined) {
+    throw new Error(body.error === "forbidden" ? "Your role cannot read backups." : "The backup inventory is unavailable.");
+  }
+  return { entries: body.entries, unverified: body.unverified ?? 0, truncated: body.truncated ?? false };
+}
+
 export async function requestSessionOperation(gameId: string, worldId: string, action: "start" | "stop"): Promise<{ result: "requested" | "already_stopped"; operationId?: string }> {
   const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/${action}`, { method: "POST" });
   const body = await response.json() as { error?: string; result?: "requested" | "already_stopped"; operationId?: string };

@@ -42,6 +42,21 @@ data "aws_iam_policy_document" "access_api" {
     resources = ["*"]
   }
 
+  # Enumerate backups without being able to read one: the digest is in the key
+  # and a listing reports the checksum algorithm, so no GetObject on a world
+  # archive is needed to show — or to verify — an inventory.
+  statement {
+    sid       = "ListWorldBackups"
+    actions   = ["s3:ListBucket"]
+    resources = [data.aws_s3_bucket.backups.arn]
+
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["worlds/*/archives/*", "worlds/*", "worlds/*/archives/"]
+    }
+  }
+
   statement {
     sid       = "PresignPackUploads"
     actions   = ["s3:PutObject"]
@@ -128,6 +143,7 @@ resource "aws_lambda_function" "access_api" {
       LIFECYCLE_TABLE_NAME        = data.aws_dynamodb_table.lifecycle.name
       OPERATION_STATE_MACHINES    = jsonencode(local.operation_state_machines)
       RELEASE_BUCKET              = data.aws_s3_bucket.releases.id
+      BACKUP_BUCKET               = data.aws_s3_bucket.backups.id
       CONNECTION_HOST             = var.connection_host
       WATCHDOG_STATE_MACHINE_ARN  = local.watchdog_state_machine_arn
     }
@@ -171,6 +187,7 @@ locals {
     "POST /games/{gameId}/worlds/{worldId}/invitations",
     "GET /games/{gameId}/worlds/{worldId}/invitations",
     "GET /games/{gameId}/worlds/{worldId}/pack",
+    "GET /games/{gameId}/worlds/{worldId}/backups",
     "POST /releases/uploads",
     "POST /releases/uploads/{uploadId}/publish",
     "POST /access/request",

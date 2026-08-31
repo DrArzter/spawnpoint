@@ -22,7 +22,7 @@
       "game": "factorio",
       "profile_source": {
         "repository": "https://github.com/DrArzter/my-docker-factorio-server-config",
-        "commit": "36bb80df5424107f109a01852c999475a51a490e"
+        "commit": "d1fd24e5c98a2d396a29a6dc86363cd685689d58"
       }
     },
     {
@@ -32,7 +32,7 @@
       "game": "zomboid",
       "profile_source": {
         "repository": "https://github.com/DrArzter/my-docker-zomboid-server-config",
-        "commit": "c9d0926076a6f9c054da200818b15c5efa260120"
+        "commit": "ae299ac089012ca167bf5695304c7cf2b46638a6"
       }
     }
   ]

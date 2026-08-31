@@ -13,9 +13,9 @@ services:
       # RCON stays host-local: the probe's transport, never a player surface.
       - "127.0.0.1:27015:27015"
     environment:
-      # The server downloads its Workshop items itself at startup; the mod set
-      # is configuration, pinned by the profile's commit rather than by bytes.
-      SERVER_NAME: "${ZOMBOID_SERVER_NAME:-spawnpoint}"
+      # The image documents no variable for the server name and none for
+      # Workshop items, so this world is vanilla until the mod list can be
+      # rendered into the server's own ini file. See docs/prior-art.md.
       RCON_PASSWORD: ${ZOMBOID_RCON_PASSWORD:?set ZOMBOID_RCON_PASSWORD in .env}
       ADMIN_PASSWORD: ${ZOMBOID_ADMIN_PASSWORD:?set ZOMBOID_ADMIN_PASSWORD in .env}
       MEMORY_XMX_GB: "${ZOMBOID_MEMORY_GB:-6}"

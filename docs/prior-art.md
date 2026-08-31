@@ -272,10 +272,30 @@ Checked 2026-08-27, before writing the module, because both answers decide wheth
   server itself ([Nodecraft](https://nodecraft.com/support/games/project-zomboid/how-to-download-and-enable-workshop-mods-on-your-project-zomboid-server)),
   which is why no credential wiring is needed for a modded world either.
 
-So the release model, not the credentials, is the constraint. **A Zomboid world carries no release pointer**: the mod
-set is Workshop ids in its profile, pinned by the profile's Git commit, and the immutable-bytes manifest simply does
-not apply. The manifest builder refuses `RELEASE_GAME=zomboid` on purpose, and the boot-time reconciliation treats a
-world with no pointer as the legitimate pre-release state it already handles.
+So the release model, not the credentials, is the constraint. **A Zomboid world carries no release pointer today**:
+the mod set is Workshop ids, the immutable-bytes manifest does not apply, the manifest builder refuses
+`RELEASE_GAME=zomboid` on purpose, and boot-time reconciliation treats a world with no pointer as the legitimate
+pre-release state it already handles.
+
+**How the ids reach the server is the open question, and the image decided part of it.** Checked against
+[`Terule/pz-dedicated-server`](https://github.com/Terule/pz-dedicated-server) on 2026-08-31: it documents fourteen
+environment variables and **none** of them is a Workshop list, and none is the server name either. So a modded
+Zomboid world cannot be configured by environment the way Minecraft and Factorio are — the ids belong in the server's
+own ini file inside the data volume, which means somebody must render them there before the container starts. Two
+shapes for that, and the choice is not obvious:
+
+| Shape | What it buys | What it costs |
+| --- | --- | --- |
+| The ids live beside the world (an operator-placed file, rendered into the ini by `game_prepare_session`) | No schema change; the world is self-contained | No promotion, no rollback, no history — the mod set is whatever is on the disk |
+| The ids become a release: a manifest with a `workshop` array and no files, pointer-flipped like any other | Promotion, rollback and an audit trail arrive for free, and model C's honesty is written into the manifest | Stretches "release" from bytes to ids, and a rollback is only as reproducible as the Workshop is |
+
+The second is the better fit for a project whose release machinery already exists, and it makes the weakening
+explicit rather than absent. It is not built: the first Zomboid world can be vanilla, and vanilla needs neither.
+
+Two smaller findings from the same check, already fixed in the module: the image takes `RCON_PASSWORD` from the
+environment rather than writing it into the volume the way Factorio does, and since nothing sets the server name, the
+save directory's name belongs to the server — so the save sentinel looks for whatever single world lives under
+`Saves/Multiplayer` instead of assuming the catalog's world id.
 
 Two house rules apply to Zomboid, both recorded in
 [server/games/README.md](../server/games/README.md) after Factorio needed them. Its auth default is `none` unless the

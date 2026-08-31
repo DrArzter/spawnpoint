@@ -252,34 +252,51 @@ expect_failure "an unknown RELEASE_GAME" \
   if game_parse_player_count <<<'Online players (1):' >/dev/null 2>&1; then exit 1; fi
 )
 
+# The server names its own save directory, so the module must not assume it:
+# "servertest" is the name the game uses when nobody sets one.
 zomboid_world="${fixture}/zomboid-data"
-mkdir -p -- "${zomboid_world}/Saves/Multiplayer/spawnpoint" "${zomboid_world}/db"
-printf 'chunk\n' >"${zomboid_world}/Saves/Multiplayer/spawnpoint/map_10_20.bin"
-printf 'sqlite\n' >"${zomboid_world}/Saves/Multiplayer/spawnpoint/players.db"
-printf 'accounts\n' >"${zomboid_world}/db/spawnpoint.db"
+mkdir -p -- "${zomboid_world}/Saves/Multiplayer/servertest" "${zomboid_world}/db"
+printf 'chunk\n' >"${zomboid_world}/Saves/Multiplayer/servertest/map_10_20.bin"
+printf 'sqlite\n' >"${zomboid_world}/Saves/Multiplayer/servertest/players.db"
+printf 'accounts\n' >"${zomboid_world}/db/servertest.db"
 (
   source "${GAMES}/zomboid/game.sh"
-  game_save_sentinel "${zomboid_world}" spawnpoint
-  if game_save_sentinel "${zomboid_world}" other-world; then exit 1; fi
-  paths="$(game_save_paths "${zomboid_world}" spawnpoint | tr '\0' ' ')"
+  # Any world id finds the save, because the save's name belongs to the server.
+  game_save_sentinel "${zomboid_world}" zomboid
+  game_save_sentinel "${zomboid_world}" whatever-the-catalog-calls-it
+  paths="$(game_save_paths "${zomboid_world}" zomboid | tr '\0' ' ')"
   [[ "${paths}" == "Saves db " ]]
+
+  # An empty Saves tree is not a save, and the accounts database alone is not
+  # either: restoring that would be players with no world.
+  mkdir -p -- "${fixture}/zomboid-empty/Saves/Multiplayer" "${fixture}/zomboid-empty/db"
+  printf 'accounts\n' >"${fixture}/zomboid-empty/db/servertest.db"
+  if game_save_sentinel "${fixture}/zomboid-empty" zomboid; then exit 1; fi
+
+  # The password comes from the environment the image is given, not from a file.
+  export ZOMBOID_RCON_PASSWORD="from-env"
+  [[ "$(zomboid_rcon_password)" == "from-env" ]]
+  unset ZOMBOID_RCON_PASSWORD
+  printf 'ZOMBOID_RCON_PASSWORD=from-file\n' >"${fixture}/zomboid.env"
+  [[ "$(SERVER_ENV_FILE="${fixture}/zomboid.env" zomboid_rcon_password)" == "from-file" ]]
+  if SERVER_ENV_FILE="${fixture}/missing.env" zomboid_rcon_password 2>/dev/null; then exit 1; fi
 )
 
 zomboid_archive_output="$(
   SPAWNPOINT_GAME=zomboid \
   SERVER_DATA_DIR="${zomboid_world}" \
   SERVER_BACKUP_DIR="${fixture}/backups" \
-  WORLD_NAME=spawnpoint \
+  WORLD_NAME=zomboid \
     "${SCRIPTS}/archive-world.sh"
 )"
 zomboid_archive="$(awk -F= '$1 == "archive" { print $2 }' <<<"${zomboid_archive_output}")"
 zomboid_listing="$(tar --list --zstd --file "${zomboid_archive}")"
-grep -qx 'Saves/Multiplayer/spawnpoint/map_10_20.bin' <<<"${zomboid_listing}"
-grep -qx 'Saves/Multiplayer/spawnpoint/players.db' <<<"${zomboid_listing}"
-grep -qx 'db/spawnpoint.db' <<<"${zomboid_listing}"
-SPAWNPOINT_GAME=zomboid WORLD_NAME=spawnpoint "${SCRIPTS}/verify-archive.sh" "${zomboid_archive}" >/dev/null
+grep -qx 'Saves/Multiplayer/servertest/map_10_20.bin' <<<"${zomboid_listing}"
+grep -qx 'Saves/Multiplayer/servertest/players.db' <<<"${zomboid_listing}"
+grep -qx 'db/servertest.db' <<<"${zomboid_listing}"
+SPAWNPOINT_GAME=zomboid WORLD_NAME=zomboid "${SCRIPTS}/verify-archive.sh" "${zomboid_archive}" >/dev/null
 expect_failure "a zomboid archive judged by another game's sentinel" \
-  env SPAWNPOINT_GAME=factorio WORLD_NAME=spawnpoint "${SCRIPTS}/verify-archive.sh" "${zomboid_archive}"
+  env SPAWNPOINT_GAME=factorio WORLD_NAME=zomboid "${SCRIPTS}/verify-archive.sh" "${zomboid_archive}"
 
 # Workshop ids are not bytes, so this game has no release payload: the manifest
 # builder must refuse rather than invent an extension to search for.

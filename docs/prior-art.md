@@ -277,20 +277,36 @@ the mod set is Workshop ids, the immutable-bytes manifest does not apply, the ma
 `RELEASE_GAME=zomboid` on purpose, and boot-time reconciliation treats a world with no pointer as the legitimate
 pre-release state it already handles.
 
-**How the ids reach the server is the open question, and the image decided part of it.** Checked against
+**How the mods reach the server is the open question, and the image decided part of it.** Checked against
 [`Terule/pz-dedicated-server`](https://github.com/Terule/pz-dedicated-server) on 2026-08-31: it documents fourteen
 environment variables and **none** of them is a Workshop list, and none is the server name either. So a modded
-Zomboid world cannot be configured by environment the way Minecraft and Factorio are — the ids belong in the server's
-own ini file inside the data volume, which means somebody must render them there before the container starts. Two
-shapes for that, and the choice is not obvious:
+Zomboid world cannot be configured by environment the way Minecraft and Factorio are.
 
-| Shape | What it buys | What it costs |
-| --- | --- | --- |
-| The ids live beside the world (an operator-placed file, rendered into the ini by `game_prepare_session`) | No schema change; the world is self-contained | No promotion, no rollback, no history — the mod set is whatever is on the disk |
-| The ids become a release: a manifest with a `workshop` array and no files, pointer-flipped like any other | Promotion, rollback and an audit trail arrive for free, and model C's honesty is written into the manifest | Stretches "release" from bytes to ids, and a rollback is only as reproducible as the Workshop is |
+The first instinct was to make a release out of the *ids* — a manifest with a `workshop` array and no files — since
+the Workshop has no versions to pin. That was thinking one step short. **The bytes are already the thing this project
+stores**: releases live in S3 with their hashes, and nothing about them requires the upstream to offer versions. What
+Zomboid actually lacks is not a version to pin but an API to resolve, and the credential-free way to obtain the files
+is the one the server already performs for itself.
 
-The second is the better fit for a project whose release machinery already exists, and it makes the weakening
-explicit rather than absent. It is not built: the first Zomboid world can be vanilla, and vanilla needs neither.
+So the shape is **capture, not resolve**:
+
+1. A cut boots the server once with the desired `WorkshopItems`. It downloads them itself, with no Steam account,
+   which is the same fact that let the dedicated server install anonymously.
+2. What landed in the mods directory becomes the release payload — one archive per Workshop item, hashed and
+   uploaded exactly like a jar or a portal zip.
+3. Every later session reconciles those bytes and leaves the downloader off, so a boot needs neither Steam nor a
+   guess about what changed upstream.
+
+This buys reproducibility that the "ids" shape could not: a rollback returns the files that were played on, not
+whatever the Workshop holds today. It needs no manifest schema change — a Zomboid release is bytes like every other
+release — and it costs two small pieces of machinery: the capture step, and an extraction step at reconcile time,
+because a Workshop item is a directory tree rather than a single file.
+
+One risk stays, and it belongs to the game rather than to this design: **clients update their Workshop mods
+themselves**, so a pinned server can fall behind the people joining it. Un-pinned servers paper over this by
+restarting to re-pull, which an on-demand host does at every session anyway. With pinned bytes the remedy becomes
+cutting a new release — a recorded, revertible act instead of a ritual, and exactly what
+[ADR-0028](adr/0028-update-proposals.md) already describes for mod updates.
 
 Two smaller findings from the same check, already fixed in the module: the image takes `RCON_PASSWORD` from the
 environment rather than writing it into the volume the way Factorio does, and since nothing sets the server name, the

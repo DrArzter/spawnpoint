@@ -8,10 +8,11 @@
 #     an anonymous login, and it downloads the Workshop items listed in its own
 #     configuration at startup. So neither the server nor this project needs a
 #     Steam account — only the players do, and they own the game.
-#   * The Workshop has no versions. A mod set therefore cannot be pinned by
-#     bytes the way a CurseForge file or a portal release can, so a Zomboid
-#     world carries no release pointer: its mods are Workshop ids in its
-#     profile, pinned by the profile's Git commit. See docs/prior-art.md.
+#   * The Workshop has no versions and no resolvable API, but that does not
+#     stop a release from being bytes: the server downloads its own Workshop
+#     items, so a cut can capture what landed and pin those files like any
+#     other payload. Not built yet — this world is vanilla, and vanilla needs
+#     no payload at all. See docs/prior-art.md for the capture shape.
 #
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the GAME_* constants are the module's interface, read by _dispatch.sh consumers

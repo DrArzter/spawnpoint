@@ -9,6 +9,7 @@ import {
 } from "../auth";
 import type { Game, World } from "../model";
 import { Button } from "./ui/Button";
+import { EmptyState, Notice, SectionHeader, Surface, StatusBadge } from "./ui/Page";
 
 type Audience = "broadcast" | "direct";
 
@@ -74,8 +75,8 @@ export function InvitationComposer({ game, world, onClose }: { game: Game; world
     }
   }
 
-  return <section aria-labelledby="invite-title" className="invite-panel">
-    <header><div><h2 id="invite-title">Invite players</h2><p>{game.displayName} · {world.displayName}</p></div><Button aria-label="Close invitation panel" onClick={onClose} variant="ghost">Close</Button></header>
+  return <Surface aria-labelledby="invite-title" className="invite-panel">
+    <SectionHeader actions={<Button aria-label="Close invitation panel" onClick={onClose} variant="ghost">Close</Button>} description={`${game.displayName} · ${world.displayName}`} title="Invite players" />
     <div className="invite-body">
       <fieldset className="audience-options"><legend>Audience</legend>
         <label className={audience === "broadcast" ? "active" : ""}><input checked={audience === "broadcast"} name="invite-audience" onChange={() => setAudience("broadcast")} type="radio" /><span><strong>Everyone</strong><small>Group chats and people subscribed to invitations</small></span></label>
@@ -84,9 +85,9 @@ export function InvitationComposer({ game, world, onClose }: { game: Game; world
       <div className="invite-detail">
         {audience === "broadcast" ? <div className="broadcast-summary"><strong>One message, no manual selection</strong><p>The invitation reaches configured group chats and people who opted into broadcast invitations. Your own private chat is excluded.</p></div> : <div className="recipient-picker">
           <div className="recipient-tools"><label><span>Find a player</span><input autoComplete="off" onChange={(event) => setQuery(event.target.value)} placeholder="Search by display name" type="search" value={query} /></label><span>{selectedCount} selected</span></div>
-          {recipientState === "loading" && <div className="recipient-state" role="status">Loading players…</div>}
-          {recipientState === "error" && <div className="recipient-state error" role="alert"><span>Players could not be loaded.</span><Button onClick={() => window.location.reload()} variant="ghost">Reload panel</Button></div>}
-          {recipientState === "ready" && recipients.length === 0 && <div className="recipient-state">No other approved players yet.</div>}
+          {recipientState === "loading" && <EmptyState busy description="Reading approved identities and their Telegram delivery settings." title="Loading players" />}
+          {recipientState === "error" && <Notice action={<Button onClick={() => window.location.reload()} variant="ghost">Reload panel</Button>} title="Players could not be loaded" tone="danger" />}
+          {recipientState === "ready" && recipients.length === 0 && <EmptyState description="Approve another player before sending a direct invitation." title="No other approved players yet" />}
           {recipientState === "ready" && recipients.length > 0 && <div className="recipient-list" role="group" aria-label="Players">
             <div className="recipient-list-toolbar"><span>{normalizedQuery ? `${visibleRecipients.length} matches` : `${reachableCount} reachable · ${recipients.length} people`}</span>{selectedCount > 0 && <button onClick={() => setSelected(new Set())} type="button">Clear selection</button>}</div>
             <div className="recipient-scroll">{visibleRecipients.map((recipient) => {
@@ -100,9 +101,9 @@ export function InvitationComposer({ game, world, onClose }: { game: Game; world
         <InvitationHistory history={history} state={historyState} onRefresh={() => void refreshHistory()} />
       </div>
     </div>
-    <footer><div><strong>{audience === "broadcast" ? "Invite everyone" : selectedCount === 0 ? "Choose at least one player" : `${selectedCount} ${selectedCount === 1 ? "player" : "players"} selected`}</strong><p>Acceptance is recorded separately from the delivery result.</p></div><Button disabled={sendDisabled} onClick={() => void submit()} variant="primary">{request.state === "pending" ? "Sending…" : "Send invitation"}</Button></footer>
-    {request.state !== "idle" && <div aria-live="polite" className={`invite-feedback ${request.state}`} role={request.state === "error" ? "alert" : "status"}>{request.message}</div>}
-  </section>;
+    <footer><div><strong>{audience === "broadcast" ? "Invite everyone" : selectedCount === 0 ? "Choose at least one player" : `${selectedCount} ${selectedCount === 1 ? "player" : "players"} selected`}</strong><p>Acceptance is recorded separately from the delivery result.</p></div><Button disabled={sendDisabled} loading={request.state === "pending"} onClick={() => void submit()} variant="primary">Send invitation</Button></footer>
+    {request.state !== "idle" && <Notice description={request.message} title={request.state === "pending" ? "Invitation queued" : request.state === "success" ? "Invitation accepted" : "Invitation failed"} tone={request.state === "error" ? "danger" : request.state === "success" ? "success" : "info"} />}
+  </Surface>;
 }
 
 function InvitationHistory({ history, state, onRefresh }: { history: InvitationSummary[]; state: "loading" | "ready" | "error"; onRefresh: () => void }) {
@@ -110,7 +111,7 @@ function InvitationHistory({ history, state, onRefresh }: { history: InvitationS
     {state === "loading" && <div className="history-state" role="status">Reading delivery results…</div>}
     {state === "error" && <div className="history-state error" role="alert">Delivery history could not be loaded.</div>}
     {state === "ready" && history.length === 0 && <div className="history-state">No invitations sent yet.</div>}
-    {state === "ready" && history.length > 0 && <ol>{history.slice(0, 3).map((item) => <li key={item.id}><span className={`delivery-status ${statusTone(item.status)}`}>{statusLabel(item.status)}</span><span>{item.audience === "broadcast" ? "Everyone" : `${item.recipientCount ?? 0} selected`}</span><span>{deliveryDetail(item)}</span><time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time></li>)}</ol>}
+    {state === "ready" && history.length > 0 && <ol>{history.slice(0, 3).map((item) => <li key={item.id}><StatusBadge label={statusLabel(item.status)} tone={statusTone(item.status)} /><span>{item.audience === "broadcast" ? "Everyone" : `${item.recipientCount ?? 0} selected`}</span><span>{deliveryDetail(item)}</span><time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time></li>)}</ol>}
   </section>;
 }
 
@@ -122,9 +123,9 @@ function statusLabel(status: InvitationSummary["status"]): string {
   return labels[status];
 }
 
-function statusTone(status: InvitationSummary["status"]): string {
+function statusTone(status: InvitationSummary["status"]): "neutral" | "success" | "danger" {
   if (status === "DELIVERED") return "success";
-  if (status === "FAILED" || status === "PUBLISH_FAILED") return "error";
+  if (status === "FAILED" || status === "PUBLISH_FAILED") return "danger";
   return "neutral";
 }
 

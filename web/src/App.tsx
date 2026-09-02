@@ -4,6 +4,7 @@ import { ActiveSession, AuthState, endSession, loadControlPlane, requestAccess, 
 import { AccessScreen } from "./screens/AccessScreen";
 import { Avatar } from "./components/Avatar";
 import { Button } from "./components/ui/Button";
+import { EmptyState, PageHeader } from "./components/ui/Page";
 import { ConsoleScreen } from "./screens/ConsoleScreen";
 import { DashboardScreen } from "./screens/DashboardScreen";
 import { MetricsScreen } from "./screens/MetricsScreen";
@@ -107,6 +108,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
   const [theme, setTheme] = useState<Theme>(() => resolveTheme(getThemePreference()));
   const [picker, setPicker] = useState<"game" | "world" | null>(null);
   const [operationRequest, setOperationRequest] = useState<{ state: "idle" | "pending" | "success" | "error"; message: string }>({ state: "idle", message: "" });
+  const [storageRequest, setStorageRequest] = useState<{ state: "idle" | "pending" | "success" | "error"; message: string }>({ state: "idle", message: "" });
   const [members, setMembers] = useState<Member[]>(() => [{
     id: session.identity.id,
     name: session.identity.displayName,
@@ -164,6 +166,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
     const nextWorld = game.worlds.find((item) => item.id === worldId) ?? game.worlds[0];
     if (nextWorld && worldId !== nextWorld.id) setWorldId(nextWorld.id);
   }, [game, gameId, worldId]);
+  useEffect(() => setStorageRequest({ state: "idle", message: "" }), [game?.id, world?.id]);
 
   async function refreshControlPlane() {
     setControlPlane({ status: "loading", snapshot: null, error: "" });
@@ -188,29 +191,35 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
 
   async function downloadPack() {
     if (!game || !world) return;
-    setOperationRequest({ state: "pending", message: "Preparing the pack link…" });
+    // Open during the click's user-activation window; waiting for the API first
+    // makes otherwise valid downloads look like unsolicited pop-ups.
+    const downloadWindow = window.open("about:blank", "_blank");
+    if (downloadWindow !== null) downloadWindow.opener = null;
+    setStorageRequest({ state: "pending", message: "Preparing the pack link…" });
     try {
       const { release, url } = await requestPackDownload(game.id, world.id);
       // The link is presigned for an hour and never kept: a stale one would be
       // a broken download later rather than a working one.
-      window.open(url, "_blank", "noopener,noreferrer");
-      setOperationRequest({ state: "success", message: `Pack for release ${release} is downloading.` });
+      if (downloadWindow !== null) downloadWindow.location.replace(url);
+      else window.location.assign(url);
+      setStorageRequest({ state: "success", message: `Pack for release ${release} is downloading.` });
     } catch (error) {
-      setOperationRequest({ state: "error", message: error instanceof Error ? error.message : "The pack link failed." });
+      downloadWindow?.close();
+      setStorageRequest({ state: "error", message: error instanceof Error ? error.message : "The pack link failed." });
     }
   }
 
   async function publishUploadedPack(request: { file: File; release: string; gameVersion: string; loaderVersion: string }) {
     if (!game) return;
-    setOperationRequest({ state: "pending", message: "Uploading the pack…" });
+    setStorageRequest({ state: "pending", message: "Uploading the pack…" });
     try {
       const result = await uploadPack(request.file, { ...request, gameId: game.id }, (stage) => {
-        setOperationRequest({ state: "pending", message: stage === "uploading" ? "Uploading the pack…" : "Publishing the release…" });
+        setStorageRequest({ state: "pending", message: stage === "uploading" ? "Uploading the pack…" : "Publishing the release…" });
       });
-      setOperationRequest({ state: "success", message: `Release ${result.release} is being published · ${result.operationId}` });
+      setStorageRequest({ state: "success", message: `Release ${result.release} is being published · ${result.operationId}` });
       await refreshControlPlane();
     } catch (error) {
-      setOperationRequest({ state: "error", message: error instanceof Error ? error.message : "The upload failed." });
+      setStorageRequest({ state: "error", message: error instanceof Error ? error.message : "The upload failed." });
     }
   }
 
@@ -267,7 +276,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
           {page === "dashboard" && (!game || !world) && <ControlPlaneUnavailable state={controlPlane} onRetry={() => void refreshControlPlane()} />}
           {page === "metrics" && <MetricsScreen serverState={serverState} />}
           {page === "console" && <ConsoleScreen serverState={serverState} />}
-          {page === "storage" && world && <StorageScreen canReadBackups={granted.has("backup.read")} gameId={game?.id ?? ""} onDownloadPack={() => void downloadPack()} onUploadPack={granted.has("release.upload") ? (request) => void publishUploadedPack(request) : undefined} world={world} />}
+          {page === "storage" && world && <StorageScreen canReadBackups={granted.has("backup.read")} gameId={game?.id ?? ""} onDownloadPack={granted.has("connection.read") ? () => void downloadPack() : undefined} onUploadPack={granted.has("release.upload") ? (request) => void publishUploadedPack(request) : undefined} request={storageRequest} world={world} />}
           {page === "access" && <AccessScreen bootstrap={bootstrap} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate("access", tab)} roles={roles} tab={accessTab} />}
           {page === "profile" && currentMember && <ProfileScreen member={currentMember} onChange={(next) => setMembers((current) => current.map((member) => member.id === next.id ? next : member))} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
         </div>
@@ -295,5 +304,5 @@ function deriveServerState(game: Game | undefined, snapshot: ControlPlaneSnapsho
 }
 
 function ControlPlaneUnavailable({ state, onRetry }: { state: ControlPlaneState; onRetry: () => void }) {
-  return <><div className="page-heading"><h1>Overview</h1><p>Games, worlds and current AWS state</p></div><div className="empty-state" aria-busy={state.status === "loading"}><strong>{state.status === "loading" ? "Loading control-plane state" : "Control-plane state unavailable"}</strong><p>{state.status === "error" ? state.error : "Reading games, worlds, hosts and running operations."}</p>{state.status === "error" && <Button onClick={onRetry}>Try again</Button>}</div></>;
+  return <><PageHeader description="Games, worlds and current AWS state" title="Overview" /><EmptyState action={state.status === "error" && <Button onClick={onRetry}>Try again</Button>} busy={state.status === "loading"} description={state.status === "error" ? state.error : "Reading games, worlds, hosts and running operations."} icon="dashboard" title={state.status === "loading" ? "Loading control-plane state" : "Control-plane state unavailable"} /></>;
 }

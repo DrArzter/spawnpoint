@@ -1,5 +1,6 @@
 import { Button } from "../components/ui/Button";
 import { InvitationComposer } from "../components/InvitationComposer";
+import { EmptyState, KeyValueGrid, Notice, PageHeader, SectionHeader, Surface } from "../components/ui/Page";
 import { Icon } from "../Icon";
 import { useEffect, useRef, useState } from "react";
 import type { Game, Host, Operation, ServerState, World } from "../model";
@@ -25,7 +26,6 @@ export function DashboardScreen({ game, world, hosts, operations, serverState, l
   const [inviteOpen, setInviteOpen] = useState(false);
   const confirmButton = useRef<HTMLButtonElement>(null);
   const activeRelease = world.release.activeRelease;
-  const desiredRelease = world.release.desiredRelease;
   const operation = operations[0];
   const host = hosts[0];
   const sessionAction = serverState === "running" ? "stop" : "start";
@@ -45,12 +45,12 @@ export function DashboardScreen({ game, world, hosts, operations, serverState, l
   }
 
   return <>
-    <div className="page-heading"><div><h1>{world.displayName}</h1><p>{game.displayName} · {activeRelease ? `active release ${activeRelease}` : world.release.state === "unconfigured" ? "not adopted yet" : "release unavailable"}</p></div></div>
-    {loadState === "error" && <div className="info-banner error-banner" role="alert"><strong>Current state could not be loaded.</strong><span>{error}</span><Button onClick={onRetry}>Try again</Button></div>}
+    <PageHeader description={`${game.displayName} · ${activeRelease ? `active release ${activeRelease}` : world.release.state === "unconfigured" ? "not adopted yet" : "release unavailable"}`} title={world.displayName} />
+    {loadState === "error" && <Notice action={<Button onClick={onRetry}>Try again</Button>} description={error} title="Current state could not be loaded" tone="danger" />}
     <section className="service-panel" aria-busy={loadState === "loading"}>
       <div className="service-summary">
         <span className={`service-icon ${serverState}`}><i /></span>
-        <div><h2>{loadState === "loading" ? "Loading current state" : stateLabel}</h2><p>{host ? `${host.name} · ${host.state}` : loadState === "ready" ? "No compute host is currently available" : "Reading AWS control-plane state"}</p></div>
+        <div><h2>{loadState === "loading" ? "Loading current state" : stateLabel}</h2><p>{host ? `${host.name}${host.instanceType ? ` · ${host.instanceType}` : ""}` : loadState === "ready" ? "No compute host is currently available" : "Reading AWS control-plane state"}</p></div>
       </div>
       <div className="service-actions">
         <Button disabled={!canInvite} icon={<Icon name="users" />} onClick={() => setInviteOpen((open) => !open)} title={inviteHint} variant="ghost">Invite players</Button>
@@ -58,25 +58,21 @@ export function DashboardScreen({ game, world, hosts, operations, serverState, l
       </div>
     </section>
     {inviteOpen && <InvitationComposer game={game} onClose={() => setInviteOpen(false)} world={world} />}
-    {confirming && <section aria-labelledby="operation-confirmation-title" className="operation-confirmation" role="alertdialog">
-      <div><h2 id="operation-confirmation-title">{confirming === "start" ? "Start a billed AWS session?" : "Save, back up and stop this session?"}</h2><p>{confirming === "start" ? `Spawnpoint will boot the host and start ${world.displayName}. Modded Minecraft may take several minutes to become healthy.` : "Spawnpoint will refuse while players are online, then save the world, create a verified backup and stop the host."}</p></div>
+    {confirming && <Surface aria-labelledby="operation-confirmation-title" className="operation-confirmation" role="alertdialog">
+      <div><h2 id="operation-confirmation-title">{confirming === "start" ? "Start a billed AWS session?" : "Save, back up and stop this session?"}</h2><p>{confirming === "start" ? `Spawnpoint will boot the host and start ${world.displayName}. The game may take several minutes to become healthy.` : "Spawnpoint will refuse while players are online, then save the world, create a verified backup and stop the host."}</p></div>
       <div><Button onClick={() => setConfirming(null)} variant="ghost">Cancel</Button><Button onClick={confirmOperation} ref={confirmButton} variant={confirming === "stop" ? "danger" : "primary"}>{confirming === "start" ? "Start session" : "Stop session"}</Button></div>
-    </section>}
-    {operationRequest.state !== "idle" && <div aria-live="polite" className={`operation-feedback ${operationRequest.state}`} role={operationRequest.state === "error" ? "alert" : "status"}>{operationRequest.message}</div>}
-    <section className="summary-grid">
-      <Stat label="Host" value={host?.state ?? (loadState === "loading" ? "Loading…" : "None")} detail={host?.instanceType ?? "Shared compute pool"} />
-      <Stat label="Active release" value={activeRelease ?? "—"} detail={activeRelease ? "Last health-checked release" : "No verified active release"} />
-      <Stat label="Desired release" value={desiredRelease ?? "—"} detail={desiredRelease ? (desiredRelease === activeRelease ? "Matches active" : "Deployment pending or failed") : "Hidden or not configured"} />
-      <Stat label="Operation" value={operation?.type ?? "None"} detail={operation ? `Running since ${formatTime(operation.startedAt)}` : "No operation in progress"} />
-    </section>
-    <section className="data-section"><div className="section-title"><div><h2>Running operations</h2><p>Step Functions executions affecting the control plane</p></div></div>
-      {operations.length > 0 ? <div className="activity-table">{operations.map((item) => <div key={`${item.type}-${item.id}`}><span className="event-dot" /><strong>{operationLabel(item.type)}</strong><span>{item.id}</span><time>{formatTime(item.startedAt)}</time></div>)}</div> : <div className="empty-state"><strong>No operation in progress</strong><p>Completed execution history will be added with the operations API. This view no longer invents activity.</p></div>}
-    </section>
+    </Surface>}
+    {operationRequest.state !== "idle" && <Notice description={operationRequest.message} title={operationRequest.state === "pending" ? "Operation requested" : operationRequest.state === "success" ? "Operation accepted" : "Operation failed"} tone={operationRequest.state === "error" ? "danger" : operationRequest.state === "success" ? "success" : "info"} />}
+    <KeyValueGrid label="World state summary" items={[
+      { label: "Connection", value: world.connectionAddress ?? "—", detail: world.connectionAddress ? (world.connectivity === "raw" ? "Current public address" : "ZeroTier address") : serverState === "running" ? "Address unavailable" : "Available while the session is online" },
+      { label: "Host", value: host?.state ?? (loadState === "loading" ? "Loading…" : "None"), detail: host?.instanceType ?? "Shared compute pool" },
+      { label: "Active release", value: activeRelease ?? "—", detail: activeRelease ? "Last health-checked release" : "No verified active release" },
+      { label: "Operation", value: operation?.type ?? "None", detail: operation ? `Running since ${formatTime(operation.startedAt)}` : "No operation in progress" },
+    ]} />
+    <Surface className="data-section"><SectionHeader description="Step Functions executions affecting the control plane" title="Running operations" />
+      {operations.length > 0 ? <div className="activity-table">{operations.map((item) => <div key={`${item.type}-${item.id}`}><span className="event-dot" /><strong>{operationLabel(item.type)}</strong><span>{item.id}</span><time>{formatTime(item.startedAt)}</time></div>)}</div> : <EmptyState description="Completed execution history will appear after the operations API exposes it. Spawnpoint does not invent activity." icon="dashboard" title="No operation in progress" />}
+    </Surface>
   </>;
-}
-
-function Stat({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return <article className="stat"><p>{label}</p><strong>{value}</strong><small>{detail}</small></article>;
 }
 
 function operationLabel(type: Operation["type"]): string {

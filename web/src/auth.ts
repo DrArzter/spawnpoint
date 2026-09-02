@@ -1,4 +1,5 @@
 import type { ControlPlaneSnapshot } from "./model";
+import { previewCandidates, previewEnabled, previewIdentities, previewInvitations, previewRecipients, previewRoles, previewSession, previewSnapshot, previewSubscriptions } from "./preview";
 
 export type ActiveSession = Readonly<{
   state: "active";
@@ -120,6 +121,7 @@ async function loadSession(token: string): Promise<SpawnpointSession> {
 }
 
 export async function restoreAuth(): Promise<AuthState> {
+  if (previewEnabled) return { status: "authenticated", session: previewSession };
   if (!authConfigured()) return { status: "unconfigured" };
   const login = loginPayloadFromQuery();
   if (login !== null) {
@@ -172,11 +174,13 @@ async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Re
 }
 
 export async function requestAccess(): Promise<void> {
+  if (previewEnabled) return;
   const response = await authorizedFetch("/access/request", { method: "POST" });
   if (!response.ok) throw new Error("The access request could not be sent.");
 }
 
 export async function loadAccessCandidates(): Promise<AccessCandidate[]> {
+  if (previewEnabled) return previewCandidates;
   const response = await authorizedFetch("/access/candidates");
   if (!response.ok) throw new Error("Access requests could not be loaded.");
   const body = await response.json() as { candidates: AccessCandidate[] };
@@ -184,12 +188,14 @@ export async function loadAccessCandidates(): Promise<AccessCandidate[]> {
 }
 
 export async function loadControlPlane(): Promise<ControlPlaneSnapshot> {
+  if (previewEnabled) return previewSnapshot;
   const response = await authorizedFetch("/control-plane");
   if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot view server status." : "The control-plane state could not be loaded.");
   return response.json() as Promise<ControlPlaneSnapshot>;
 }
 
 export async function requestPackDownload(gameId: string, worldId: string): Promise<{ release: string; url: string }> {
+  if (previewEnabled) return { release: "1.2", url: "about:blank#spawnpoint-preview-pack" };
   const response = await authorizedFetch(
     `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/pack`,
   );
@@ -211,6 +217,11 @@ export async function uploadPack(
   details: Readonly<{ release: string; gameId: string; gameVersion: string; loaderVersion: string }>,
   onProgress?: (stage: "uploading" | "publishing") => void,
 ): Promise<{ operationId: string; release: string }> {
+  if (previewEnabled) {
+    onProgress?.("uploading");
+    onProgress?.("publishing");
+    return { operationId: `preview-upload-${details.gameId}-${details.release}`, release: details.release };
+  }
   const created = await authorizedFetch("/releases/uploads", { method: "POST" });
   const target = await created.json() as { error?: string; uploadId?: string; url?: string; contentType?: string };
   if (!created.ok || target.uploadId === undefined || target.url === undefined) {
@@ -250,6 +261,14 @@ export type BackupEntry = { key: string; archiveName: string; checksum: string; 
 export type BackupInventory = { entries: BackupEntry[]; unverified: number; truncated: boolean };
 
 export async function loadBackups(gameId: string, worldId: string): Promise<BackupInventory> {
+  if (previewEnabled) return {
+    entries: [
+      { key: `worlds/${worldId}/archives/preview-a`, archiveName: `${worldId}-20260829T173200Z.tar.zst`, checksum: "8b4e3a7d24c09ea61de95cdb613cfb9bea802cff4cb67f2ed0a910832d96f231", sizeBytes: 184549376, storedAt: "2026-08-29T17:32:00.000Z" },
+      { key: `worlds/${worldId}/archives/preview-b`, archiveName: `${worldId}-20260827T221500Z.tar.zst`, checksum: "294c47d3cbd1d52ed7117338b0e44a28d5ae53b9b0ad9f563172c8b4fbfd19cc", sizeBytes: 178257920, storedAt: "2026-08-27T22:15:00.000Z" },
+    ],
+    unverified: 1,
+    truncated: false,
+  };
   const response = await authorizedFetch(
     `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/backups`,
   );
@@ -261,6 +280,7 @@ export async function loadBackups(gameId: string, worldId: string): Promise<Back
 }
 
 export async function requestSessionOperation(gameId: string, worldId: string, action: "start" | "stop"): Promise<{ result: "requested" | "already_stopped"; operationId?: string }> {
+  if (previewEnabled) return { result: "requested", operationId: `preview-${gameId}-${worldId}-${action}` };
   const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/${action}`, { method: "POST" });
   const body = await response.json() as { error?: string; result?: "requested" | "already_stopped"; operationId?: string };
   if (!response.ok) {
@@ -278,6 +298,7 @@ export async function requestSessionOperation(gameId: string, worldId: string, a
 }
 
 export async function loadInvitationRecipients(): Promise<InvitationRecipient[]> {
+  if (previewEnabled) return previewRecipients;
   const response = await authorizedFetch("/invitations/recipients");
   if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot invite players." : "Players could not be loaded.");
   const body = await response.json() as { recipients: InvitationRecipient[] };
@@ -285,6 +306,7 @@ export async function loadInvitationRecipients(): Promise<InvitationRecipient[]>
 }
 
 export async function loadInvitationHistory(gameId: string, worldId: string): Promise<InvitationSummary[]> {
+  if (previewEnabled) return previewInvitations;
   const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/invitations`);
   if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot view invitation history." : "Invitation history could not be loaded.");
   const body = await response.json() as { invitations: InvitationSummary[] };
@@ -292,6 +314,7 @@ export async function loadInvitationHistory(gameId: string, worldId: string): Pr
 }
 
 export async function sendInvitation(gameId: string, worldId: string, audience: "broadcast" | "direct", recipientIdentityIds: readonly string[]): Promise<void> {
+  if (previewEnabled) return;
   const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/invitations`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -309,6 +332,7 @@ export async function sendInvitation(gameId: string, worldId: string, audience: 
 }
 
 export async function approveAccessCandidate(telegramId: string, roleId: string): Promise<{ id: string; displayName: string; roleId: string }> {
+  if (previewEnabled) return { id: `identity-${telegramId}`, displayName: previewCandidates.find((candidate) => candidate.platformUserId === telegramId)?.displayName ?? "Preview user", roleId };
   const response = await authorizedFetch(`/access/candidates/${telegramId}/approve`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -320,11 +344,13 @@ export async function approveAccessCandidate(telegramId: string, roleId: string)
 }
 
 export async function dismissAccessCandidate(telegramId: string): Promise<void> {
+  if (previewEnabled) return;
   const response = await authorizedFetch(`/access/candidates/${telegramId}/dismiss`, { method: "POST" });
   if (!response.ok) throw new Error("This Telegram account could not be dismissed.");
 }
 
 export async function loadAccessIdentities(): Promise<AccessIdentity[]> {
+  if (previewEnabled) return previewIdentities;
   const response = await authorizedFetch("/access/identities");
   if (!response.ok) throw new Error("Users could not be loaded.");
   const body = await response.json() as { identities: AccessIdentity[] };
@@ -332,6 +358,7 @@ export async function loadAccessIdentities(): Promise<AccessIdentity[]> {
 }
 
 export async function loadAccessRoles(): Promise<AccessRole[]> {
+  if (previewEnabled) return previewRoles;
   const response = await authorizedFetch("/access/roles");
   if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot view access roles." : "Roles could not be loaded.");
   const body = await response.json() as { roles: AccessRole[] };
@@ -339,6 +366,7 @@ export async function loadAccessRoles(): Promise<AccessRole[]> {
 }
 
 export async function loadSubscriptions(): Promise<SubscriptionState> {
+  if (previewEnabled) return previewSubscriptions;
   const response = await authorizedFetch("/me/subscriptions");
   if (!response.ok) throw new Error("Your notification subscriptions could not be loaded.");
   const body = await response.json() as { subscriptions: SubscriptionState };
@@ -346,6 +374,7 @@ export async function loadSubscriptions(): Promise<SubscriptionState> {
 }
 
 export async function updateSubscriptions(subscriptions: SubscriptionState): Promise<SubscriptionState> {
+  if (previewEnabled) return subscriptions;
   const response = await authorizedFetch("/me/subscriptions", {
     method: "PUT",
     headers: { "content-type": "application/json" },
@@ -357,6 +386,7 @@ export async function updateSubscriptions(subscriptions: SubscriptionState): Pro
 }
 
 export async function updateIdentityRole(identityId: string, roleId: string): Promise<void> {
+  if (previewEnabled) return;
   const response = await authorizedFetch(`/access/identities/${identityId}/role`, {
     method: "POST",
     headers: { "content-type": "application/json" },

@@ -119,11 +119,11 @@ export function openInBrowser(): void {
 export function applyTheme(theme: Theme): void {
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#111318" : "#f8fafd");
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#11151b" : "#f6f8fc");
   const app = window.Telegram?.WebApp;
   if (!app?.initData) return;
-  const background = theme === "dark" ? "#111318" : "#f8fafd";
-  app.setHeaderColor(theme === "dark" ? "#17191f" : "#ffffff");
+  const background = theme === "dark" ? "#11151b" : "#f6f8fc";
+  app.setHeaderColor(theme === "dark" ? "#171c24" : "#f0f3f9");
   app.setBackgroundColor(background);
 }
 

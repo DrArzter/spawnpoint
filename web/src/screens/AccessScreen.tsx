@@ -5,6 +5,7 @@ import { LinkedAccountsEditor } from "../components/LinkedAccountsEditor";
 import { Button } from "../components/ui/Button";
 import { DataColumn, DataTable } from "../components/ui/DataTable";
 import { Tabs } from "../components/ui/Tabs";
+import { EmptyState, PageHeader, RetryState, SectionHeader, StatusBadge, Switch } from "../components/ui/Page";
 import { Icon } from "../Icon";
 import { AccessTab, Game, Member, OwnerBootstrap, Role } from "../model";
 
@@ -48,7 +49,7 @@ export function AccessScreen({ bootstrap, games, members, roles, tab, onMembersC
   }
 
   return <>
-    <div className="page-heading action-heading"><div><h1>Access</h1><p>Users, linked accounts, roles and your subscriptions</p></div>{tab === "roles" && <Button disabled icon={<Icon name="plus" />} title="Custom roles are not connected to the access API yet." variant="primary">Create role</Button>}</div>
+    <PageHeader actions={tab === "roles" ? <Button disabled icon={<Icon name="plus" />} title="Custom roles are not connected to the access API yet." variant="primary">Create role</Button> : undefined} description="Users, linked accounts, roles and your subscriptions" title="Access" />
     <Tabs label="Access settings" onChange={onTabChange} options={accessTabs} value={tab} />
     <div aria-live="polite" role="tabpanel">
       {tab === "users" && <Users bootstrap={bootstrap} members={members} roles={roles} rolesLoading={roleState === "loading"} onChange={onMembersChange} />}
@@ -122,18 +123,15 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
 
   return <div className="users-layout">
     <section className="bootstrap-owner">
-      <div className="bootstrap-summary">
-        <div><h2>Initial owner</h2><p>{bootstrap.state === "claimed" ? `${owner?.name ?? "The owner"} claimed the one-time setup with a verified Telegram account.` : `Sign in with the configured Telegram account (${bootstrap.telegramId}) to create the first Owner.`}</p></div>
-        <span className={`bootstrap-state ${bootstrap.state}`}>{bootstrap.state === "claimed" ? "Complete" : "Action required"}</span>
-      </div>
+      <SectionHeader actions={<StatusBadge label={bootstrap.state === "claimed" ? "Complete" : "Action required"} tone={bootstrap.state === "claimed" ? "success" : "warning"} />} description={bootstrap.state === "claimed" ? `${owner?.name ?? "The owner"} claimed the one-time setup with a verified Telegram account.` : `Sign in with the configured Telegram account (${bootstrap.telegramId}) to create the first Owner.`} title="Initial owner" />
       <dl><div><dt>Telegram ID</dt><dd>{bootstrap.telegramId}</dd></div><div><dt>Role</dt><dd>Owner</dd></div>{bootstrap.state === "claimed" && <div><dt>Claimed</dt><dd>{bootstrap.claimedAt}</dd></div>}</dl>
       <button aria-expanded={showBootstrap} className="bootstrap-explainer" onClick={() => setShowBootstrap((value) => !value)} type="button">{showBootstrap ? "Hide setup details" : "How the first Owner is set"}<Icon name="down" size={14} /></button>
       {showBootstrap && <ol className="bootstrap-steps"><li>Set the initial Owner Telegram ID in the deployment configuration.</li><li>Sign in through Telegram with that exact account.</li><li>Spawnpoint creates the Owner and permanently closes the one-time setup.</li><li>Add game and network accounts from the Owner profile.</li></ol>}
     </section>
     <section className="access-requests">
-      <header><div><h2>Telegram access requests</h2><p>Signing in proves the Telegram account. Approval is what creates a Spawnpoint identity and role.</p></div><span>{candidates.length}</span></header>
-      {candidateState === "loading" && <p className="candidate-empty">Loading access requests…</p>}
-      {candidateState === "ready" && candidates.length === 0 && <p className="candidate-empty">No Telegram accounts are waiting for review.</p>}
+      <SectionHeader actions={<StatusBadge label={`${candidates.length} waiting`} tone={candidates.length > 0 ? "info" : "neutral"} />} description="Signing in proves the Telegram account. Approval creates a Spawnpoint identity and assigns its first role." title="Telegram access requests" />
+      {candidateState === "loading" && <EmptyState busy description="Reading Telegram accounts that requested access." icon="access" title="Loading access requests" />}
+      {candidateState === "ready" && candidates.length === 0 && <EmptyState description="New requests will appear here after a visitor signs in and asks for access." icon="access" title="Nobody is waiting for review" />}
       {candidates.map((candidate) => <article key={candidate.platformUserId}>
         <Avatar name={candidate.displayName} photoUrl={candidate.photoUrl ?? undefined} />
         <div><strong>{candidate.displayName}</strong><small>{candidate.username ? `@${candidate.username} · ` : ""}{candidate.status === "REQUESTED" ? "Requested access" : "Signed in"}</small></div>
@@ -154,7 +152,7 @@ function Roles({ roles, state, error, onRetry }: { roles: Role[]; state: "loadin
     { id: "type", label: "Type", width: ".7fr", render: (role) => <small className={`role-type ${role.system ? "built-in" : "custom"}`}>{role.system ? "Built-in" : "Custom"}</small> },
   ];
   return <div className="roles-layout">
-    {state === "error" && <div className="inline-state" role="alert"><div><strong>Roles could not be loaded</strong><p>{error}</p></div><Button onClick={onRetry}>Try again</Button></div>}
+    {state === "error" && <RetryState description={error} onRetry={onRetry} title="Roles could not be loaded" />}
     <DataTable columns={columns} emptyLabel={state === "loading" ? "Loading roles…" : "No roles are configured."} label="Roles and permissions" rowKey={(role) => role.id} rows={roles} />
   </div>;
 }
@@ -198,19 +196,15 @@ function Notifications({ games }: { games: readonly Game[] }) {
   const controlsDisabled = state === "loading" || state === "saving";
   const columns: DataColumn<Game>[] = [
     { id: "game", label: "Game", render: (game) => <strong>{game.displayName}</strong>, width: "1fr" },
-    { id: "started", label: "Started", render: (game) => <Setting checked={Boolean(subscriptions[`${game.id}.started`])} disabled={controlsDisabled} label={`${game.displayName} started`} onChange={() => void toggle(`${game.id}.started`)} />, width: "110px" },
-    { id: "stopped", label: "Stopped", render: (game) => <Setting checked={Boolean(subscriptions[`${game.id}.stopped`])} disabled={controlsDisabled} label={`${game.displayName} stopped`} onChange={() => void toggle(`${game.id}.stopped`)} />, width: "110px" },
+    { id: "started", label: "Started", render: (game) => <Switch checked={Boolean(subscriptions[`${game.id}.started`])} disabled={controlsDisabled} label={`${game.displayName} started`} onChange={() => void toggle(`${game.id}.started`)} />, width: "110px" },
+    { id: "stopped", label: "Stopped", render: (game) => <Switch checked={Boolean(subscriptions[`${game.id}.stopped`])} disabled={controlsDisabled} label={`${game.displayName} stopped`} onChange={() => void toggle(`${game.id}.stopped`)} />, width: "110px" },
   ];
   const status = state === "loading" ? "Loading saved preferences…" : state === "saving" ? "Saving…" : state === "saved" ? "Saved in Spawnpoint" : "";
   return <div className="notification-settings">
     <div className="preference-intro"><div><h2>Your subscriptions</h2><p>These preferences are stored for your Spawnpoint identity and survive reloads.</p></div><span aria-live="polite" role="status">{status}</span></div>
-    {state === "error" && <div className="inline-state" role="alert"><div><strong>Subscriptions are unavailable</strong><p>{error}</p></div><Button onClick={() => void reload()}>Try again</Button></div>}
-    <section><div className="setting-heading"><div><h2>Server events</h2><p>Choose event types independently for each game.</p></div></div><DataTable columns={columns} label="Server event subscriptions" rowKey={(game) => game.id} rows={games} /></section>
-    <section><div className="setting-heading"><div><h2>Game invitations</h2><p>Choose whether other players may notify you.</p></div></div><Setting checked={Boolean(subscriptions["invitation.broadcast"])} disabled={controlsDisabled} label="Invitations sent to everyone" note="A player invited everyone to join a game" onChange={() => void toggle("invitation.broadcast")} /><Setting checked={Boolean(subscriptions["invitation.direct"])} disabled={controlsDisabled} label="Invitations sent directly to me" note="A player invited only selected people" onChange={() => void toggle("invitation.direct")} /></section>
-    <section className="delivery-row"><div><h2>Delivery channel</h2><p>Telegram is linked. Notification filtering will use these preferences when the notifier is connected.</p></div><span>Linked</span></section>
+    {state === "error" && <RetryState description={error} onRetry={() => void reload()} title="Subscriptions are unavailable" />}
+    <section><SectionHeader description="Choose event types independently for each game." title="Server events" /><DataTable columns={columns} label="Server event subscriptions" rowKey={(game) => game.id} rows={games} /></section>
+    <section><SectionHeader description="Choose whether other players may notify you." title="Game invitations" /><Switch checked={Boolean(subscriptions["invitation.broadcast"])} disabled={controlsDisabled} label="Invitations sent to everyone" note="A player invited everyone to join a game" onChange={() => void toggle("invitation.broadcast")} /><Switch checked={Boolean(subscriptions["invitation.direct"])} disabled={controlsDisabled} label="Invitations sent directly to me" note="A player invited only selected people" onChange={() => void toggle("invitation.direct")} /></section>
+    <section className="delivery-row"><div><h2>Delivery channel</h2><p>Telegram is linked and receives the notification categories enabled above.</p></div><StatusBadge label="Linked" tone="success" /></section>
   </div>;
-}
-
-function Setting({ checked, disabled, label, note, onChange }: { checked: boolean; disabled: boolean; label: string; note?: string; onChange: () => void }) {
-  return <label className="setting-row"><span><strong>{label}</strong>{note && <small>{note}</small>}</span><input aria-label={label} checked={checked} disabled={disabled} onChange={onChange} type="checkbox" /><i /></label>;
 }

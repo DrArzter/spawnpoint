@@ -1,15 +1,16 @@
 import { Icon } from "../Icon";
 import { Member } from "../model";
 import { Button } from "./ui/Button";
+import { EmptyState, Notice, SectionHeader, Surface } from "./ui/Page";
 
 const providerLabels: Record<Member["links"][number]["kind"], string> = {
   telegram: "Telegram", discord: "Discord", minecraft: "Minecraft", factorio: "Factorio", steam: "Steam", zerotier: "ZeroTier client",
 };
 
 export function LinkedAccountsEditor({ member, onClose }: { member: Member; onClose?: () => void }) {
-  return <aside className="link-editor">
-    <header><div><h2>Linked accounts</h2><p>Game identities, chat accounts and network clients</p></div>{onClose && <Button onClick={onClose} variant="ghost">Close</Button>}</header>
-    <div className="linked-list">{member.links.length ? member.links.map((link) => <div key={link.id}><span className="link-kind"><Icon name="link" /><strong>{providerLabels[link.kind]}</strong></span><span>{link.value}<small>{link.verified ? "Verified" : "Pending verification"}</small></span></div>) : <p className="empty-links">No linked accounts yet.</p>}</div>
-    <div className="link-editor-note"><strong>Link management is not connected yet</strong><p>Existing links come from Spawnpoint. Adding and removing accounts will be enabled after verification flows are implemented.</p></div>
-  </aside>;
+  return <Surface as="aside" className="link-editor">
+    <SectionHeader actions={onClose && <Button onClick={onClose} variant="ghost">Close</Button>} description="Game identities, chat accounts and network clients" title="Linked accounts" />
+    <div className="linked-list">{member.links.length ? member.links.map((link) => <div key={link.id}><span className="link-kind"><Icon name="link" /><strong>{providerLabels[link.kind]}</strong></span><span>{link.value}<small>{link.verified ? "Verified" : "Pending verification"}</small></span></div>) : <EmptyState description="Link a supported account after its verification flow is available." icon="link" title="No linked accounts yet" />}</div>
+    <Notice description="Existing links come from Spawnpoint. Adding and removing accounts will be enabled after verification flows are implemented." title="Link management is not connected yet" />
+  </Surface>;
 }

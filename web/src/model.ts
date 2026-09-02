@@ -7,7 +7,15 @@ export type ReleasePointer = {
   desiredRelease: string | null;
   activeRelease: string | null;
 };
-export type World = { id: string; displayName: string; profileId: string; sessionControlAvailable: boolean; release: ReleasePointer };
+export type World = {
+  id: string;
+  displayName: string;
+  profileId: string;
+  sessionControlAvailable: boolean;
+  connectivity: "zerotier" | "raw";
+  connectionAddress: string | null;
+  release: ReleasePointer;
+};
 export type Lifecycle = {
   schemaVersion: 1;
   serverId: string;
@@ -25,6 +33,7 @@ export type Host = {
   instanceType?: string | null;
   availabilityZone?: string | null;
   launchedAt?: string | null;
+  publicIp?: string | null;
 };
 export type Operation = { id: string; type: "start" | "stop" | "promote"; status: "running"; startedAt: string; providerRef?: string };
 export type ControlPlaneSnapshot = { observedAt: string; games: readonly Game[]; hosts: readonly Host[]; operations: readonly Operation[] };

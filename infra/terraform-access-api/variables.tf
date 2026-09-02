@@ -45,7 +45,12 @@ variable "bot_token_parameter" {
 }
 
 variable "connection_host" {
-  description = "Stable overlay address returned by the supported V1 start workflow."
+  description = "Host part of every world's address — the overlay IPv4 address this deployment publishes. Each game's port completes it."
   type        = string
-  default     = "172.29.23.24:25565"
+  default     = "172.29.23.24"
+
+  validation {
+    condition     = can(cidrhost("${var.connection_host}/32", 0))
+    error_message = "connection_host must be an IPv4 address without a port; the game catalog appends each game's port."
+  }
 }

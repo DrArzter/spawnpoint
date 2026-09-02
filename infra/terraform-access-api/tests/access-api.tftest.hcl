@@ -106,4 +106,9 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
     condition     = aws_lambda_function.access_api.environment[0].variables.BOT_TOKEN_PARAMETER == "/spawnpoint/bot/token"
     error_message = "The verifier must read the existing bot token from SecureString rather than Terraform state."
   }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.CONNECTION_HOST == "172.29.23.24"
+    error_message = "The API receives a host only; the read model appends the selected game's port exactly once."
+  }
 }

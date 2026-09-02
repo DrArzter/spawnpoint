@@ -54,6 +54,13 @@ check_web() {
   (cd web && npm run build)
 }
 
+# The bot, notifier and access-api roots archive lambdas/dist/*, so a Terraform
+# plan needs the bundles to exist. Building them here rather than in CI keeps
+# the ladder identical in both places, which is the whole point of one command.
+check_lambda_bundles() {
+  (cd lambdas && npm run build)
+}
+
 check_server_suite() {
   docker run --rm -v "${REPOSITORY_ROOT}:/repo:ro" "${ALPINE_IMAGE}" sh -c '
     apk add -q bash coreutils findutils diffutils tar zstd jq util-linux openssl curl zip unzip python3 git >/dev/null
@@ -101,6 +108,7 @@ step "shellcheck" check_shell
 step "workflow hygiene" check_workflows
 step "node tests (lambdas)" check_node
 step "production build (mini app)" check_web
+step "lambda bundles" check_lambda_bundles
 step "server test suite (container)" check_server_suite
 step "compose bindings (host docker)" check_compose_bindings
 if [[ "${mode}" != "fast" ]]; then

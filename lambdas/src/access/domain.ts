@@ -8,9 +8,6 @@ export const permissions = [
   "console.use",
   "release.read",
   "release.promote",
-  // Publishing a pack somebody uploaded: it creates an immutable artefact and
-  // costs storage, which is a different act from deploying one.
-  "release.upload",
   "backup.read",
   "backup.restore",
   "access.read",

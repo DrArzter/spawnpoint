@@ -15,14 +15,18 @@ variable "aws_profile" {
   default     = "spawnpoint"
 }
 
-variable "github_repository" {
-  description = "The single owner/repository allowed to request an AWS release build."
-  type        = string
-  default     = "DrArzter/my-docker-minecraft-server-config"
+variable "github_repositories" {
+  description = "Configuration repositories allowed to publish catalogs and request release builds from main."
+  type        = set(string)
+  default = [
+    "DrArzter/my-docker-minecraft-server-config",
+    "DrArzter/my-docker-factorio-server-config",
+    "DrArzter/my-docker-zomboid-server-config",
+  ]
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_repository))
-    error_message = "Use the GitHub owner/repository form."
+    condition     = length(var.github_repositories) > 0 && alltrue([for repository in var.github_repositories : can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", repository))])
+    error_message = "Each entry must use the GitHub owner/repository form."
   }
 }
 

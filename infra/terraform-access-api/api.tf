@@ -58,16 +58,11 @@ data "aws_iam_policy_document" "access_api" {
   }
 
   statement {
-    sid       = "PresignPackUploads"
-    actions   = ["s3:PutObject"]
-    resources = ["${data.aws_s3_bucket.releases.arn}/uploads/*"]
-  }
-
-  statement {
     sid     = "ReadWorldReleasePointersAndPacks"
     actions = ["s3:GetObject"]
     resources = [
       "${data.aws_s3_bucket.releases.arn}/worlds/*",
+      "${data.aws_s3_bucket.releases.arn}/presets/*",
       # Presigning a pack link signs this same permission, so the panel can hand
       # a player the files without ever holding a credential.
       "${data.aws_s3_bucket.releases.arn}/packs/*",
@@ -99,10 +94,7 @@ data "aws_iam_policy_document" "access_api" {
     sid     = "ControlSupportedSession"
     actions = ["states:StartExecution"]
     resources = concat(
-      [
-        for machine in local.operation_state_machines : machine.arn
-        if contains(["start", "stop", "publishPack"], machine.type)
-      ],
+      [for machine in local.operation_state_machines : machine.arn if contains(["start", "stop"], machine.type)],
       [local.watchdog_state_machine_arn],
     )
   }
@@ -188,8 +180,6 @@ locals {
     "GET /games/{gameId}/worlds/{worldId}/invitations",
     "GET /games/{gameId}/worlds/{worldId}/pack",
     "GET /games/{gameId}/worlds/{worldId}/backups",
-    "POST /releases/uploads",
-    "POST /releases/uploads/{uploadId}/publish",
     "POST /access/request",
     "GET /access/candidates",
     "GET /access/identities",

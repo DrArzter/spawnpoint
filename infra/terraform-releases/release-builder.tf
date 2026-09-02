@@ -20,6 +20,11 @@ data "archive_file" "release_builder_source" {
   }
 
   source {
+    content  = file("${path.module}/../../scripts/aws-preset-catalog-builder.sh")
+    filename = "scripts/aws-preset-catalog-builder.sh"
+  }
+
+  source {
     content  = file("${path.module}/../../server/scripts/_common.sh")
     filename = "server/scripts/_common.sh"
   }
@@ -32,18 +37,6 @@ data "archive_file" "release_builder_source" {
   source {
     content  = file("${path.module}/../../server/scripts/_profiles.sh")
     filename = "server/scripts/_profiles.sh"
-  }
-
-  # The pack-upload mode: its entrypoint, and the validator that treats an
-  # uploaded archive as hostile.
-  source {
-    content  = file("${path.module}/../../scripts/aws-pack-upload-builder.sh")
-    filename = "scripts/aws-pack-upload-builder.sh"
-  }
-
-  source {
-    content  = file("${path.module}/../../server/scripts/extract-pack-upload.sh")
-    filename = "server/scripts/extract-pack-upload.sh"
   }
 
   source {
@@ -136,18 +129,8 @@ data "aws_iam_policy_document" "release_builder" {
       "${data.aws_s3_bucket.releases.arn}/releases/*",
       # The client pack is published alongside every release now.
       "${data.aws_s3_bucket.releases.arn}/packs/*",
+      "${data.aws_s3_bucket.releases.arn}/presets/*",
     ]
-  }
-
-  statement {
-    sid = "ConsumeUploadedPacks"
-    actions = [
-      "s3:GetObject",
-      # The upload is deleted once its release exists: leaving it would keep a
-      # second copy of every pack in the bucket.
-      "s3:DeleteObject",
-    ]
-    resources = ["${data.aws_s3_bucket.releases.arn}/uploads/*"]
   }
 
   statement {
@@ -288,20 +271,6 @@ resource "aws_iam_role_policy" "build_release_workflow" {
   policy = data.aws_iam_policy_document.build_release_workflow.json
 }
 
-resource "aws_sfn_state_machine" "publish_uploaded_pack" {
-  name     = "spawnpoint-publish-uploaded-pack"
-  role_arn = aws_iam_role.build_release_workflow.arn
-  type     = "STANDARD"
-  definition = templatefile("${path.module}/../../workflows/publish-uploaded-pack.asl.json.tftpl", {
-    project_name = aws_codebuild_project.release_builder.name
-  })
-
-  tags = {
-    Name    = "spawnpoint-publish-uploaded-pack"
-    Purpose = "publish-release-from-uploaded-pack"
-  }
-}
-
 resource "aws_sfn_state_machine" "build_release" {
   name     = "spawnpoint-build-release"
   role_arn = aws_iam_role.build_release_workflow.arn
@@ -313,5 +282,19 @@ resource "aws_sfn_state_machine" "build_release" {
   tags = {
     Name    = "spawnpoint-build-release"
     Purpose = "immutable-release-candidate-build"
+  }
+}
+
+resource "aws_sfn_state_machine" "publish_preset_catalog" {
+  name     = "spawnpoint-publish-preset-catalog"
+  role_arn = aws_iam_role.build_release_workflow.arn
+  type     = "STANDARD"
+  definition = templatefile("${path.module}/../../workflows/publish-preset-catalog.asl.json.tftpl", {
+    project_name = aws_codebuild_project.release_builder.name
+  })
+
+  tags = {
+    Name    = "spawnpoint-publish-preset-catalog"
+    Purpose = "git-preset-discovery"
   }
 }

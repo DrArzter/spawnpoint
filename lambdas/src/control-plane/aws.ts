@@ -4,7 +4,6 @@ import {
   HeadObjectCommand,
   ListObjectsV2Command,
   NoSuchKey,
-  PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -13,12 +12,14 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 
 import type { BackupObject } from "./backups.ts";
+import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts";
+import { gameCatalog } from "./catalog.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildStartInput, buildStopInput, buildWatchdogInput } from "../domain/telegram-bot.ts";
 import type { ControlPlaneSources, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 
-type MachineType = OperationObservation["type"] | "publishPack";
+type MachineType = OperationObservation["type"];
 type OperationMachine = Readonly<{ type: MachineType; arn: string }>;
 
 function requiredEnv(name: string): string {
@@ -35,7 +36,7 @@ function operationMachines(): readonly OperationMachine[] {
     const type = "type" in item ? item.type : undefined;
     const arn = "arn" in item ? item.arn : undefined;
     if (
-      (type !== "start" && type !== "stop" && type !== "promote" && type !== "publishPack") ||
+      (type !== "start" && type !== "stop" && type !== "promote") ||
       typeof arn !== "string" ||
       !arn
     ) {
@@ -113,14 +114,32 @@ async function readReleasePointer(worldId: string): Promise<ReleasePointerObserv
   }
 }
 
+async function listPresets(): Promise<readonly PresetObservation[]> {
+  const groups = await Promise.all(gameCatalog.map(async (game) => {
+    try {
+      const response = await s3.send(new GetObjectCommand({
+        Bucket: requiredEnv("RELEASE_BUCKET"),
+        Key: `presets/${game.id}/catalog.json`,
+      }));
+      const body = await response.Body?.transformToString();
+      if (!body) return [];
+      const parsed = parsePresetCatalog(JSON.parse(body), game.id);
+      if (parsed === null) throw new Error("invalid preset catalog");
+      return parsed;
+    } catch (error) {
+      if (error instanceof NoSuchKey || (error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound"))) return [];
+      console.error("preset_catalog_read_failed", { gameId: game.id, errorName: error instanceof Error ? error.name : "UnknownError" });
+      return [];
+    }
+  }));
+  return groups.flat();
+}
+
 function isSessionOperation(type: MachineType): type is OperationObservation["type"] {
   return type === "start" || type === "stop" || type === "promote";
 }
 
 async function listRunningOperations(): Promise<readonly OperationObservation[]> {
-  // Publishing an uploaded pack runs beside a session rather than against it:
-  // it writes to the release bucket and never touches the host, so it must not
-  // appear as an operation in progress that refuses a start.
   const machines = operationMachines().filter((machine) => isSessionOperation(machine.type));
   const groups = await Promise.all(machines.map(async (machine) => {
     const response = await sfn.send(new ListExecutionsCommand({ stateMachineArn: machine.arn, statusFilter: "RUNNING", maxResults: 10 }));
@@ -140,6 +159,7 @@ export const awsControlPlaneSources: ControlPlaneSources = {
   readLifecycle,
   readReleasePointer,
   listRunningOperations,
+  listPresets,
 };
 
 function machineArn(type: MachineType): string {
@@ -202,40 +222,6 @@ export async function packDownloadUrl(release: string): Promise<string | null> {
     return null;
   }
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: 3600 });
-}
-
-// A pack is hundreds of megabytes, so the panel puts it into S3 itself with a
-// presigned URL and this process never sees the bytes. The key is composed here
-// rather than accepted from the caller: an uploader chooses the file, never the
-// object it lands on.
-export async function packUploadTarget(uploadId: string): Promise<Readonly<{ key: string; url: string }>> {
-  const key = `uploads/${uploadId}.zip`;
-  const url = await getSignedUrl(
-    s3,
-    new PutObjectCommand({ Bucket: requiredEnv("RELEASE_BUCKET"), Key: key, ContentType: "application/zip" }),
-    { expiresIn: 3600 },
-  );
-  return { key, url };
-}
-
-export async function startPackPublishExecution(
-  operationId: string,
-  args: Readonly<{
-    uploadKey: string;
-    release: string;
-    game: string;
-    gameVersion: string;
-    loaderVersion: string;
-    requestedBy: string;
-  }>,
-): Promise<string> {
-  const started = await sfn.send(new StartExecutionCommand({
-    stateMachineArn: machineArn("publishPack"),
-    name: operationId,
-    input: JSON.stringify({ operationId, ...args }),
-  }));
-  if (!started.executionArn) throw new Error("pack publish execution did not return an ARN");
-  return started.executionArn;
 }
 
 // Deliberately ListObjectsV2 and nothing else: the digest lives in the key and

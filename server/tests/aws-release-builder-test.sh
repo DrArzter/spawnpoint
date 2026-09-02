@@ -189,40 +189,4 @@ if minecraft_without_key="$(
 fi
 grep -q 'CF_API_KEY is required for a minecraft profile' <<<"${minecraft_without_key}"
 
-# --- the upload mode: same bundle, same entrypoint, an operator's archive ---
-mkdir -p -- "${fixture}/upload-build"
-printf 'alpha jar\n' >"${fixture}/upload-build/alpha-1.0.jar"
-printf 'beta jar\n' >"${fixture}/upload-build/beta-2.0.jar"
-(cd "${fixture}/upload-build" && zip -q -r "${fixture}/pack.zip" .)
-
-upload_id="0123abcd-4567-89ab-cdef-0123456789ab"
-upload_key="uploads/${upload_id}.zip"
-mkdir -p -- "${FAKE_S3_ROOT}/spawnpoint-test-releases/uploads"
-cp -- "${fixture}/pack.zip" "${FAKE_S3_ROOT}/spawnpoint-test-releases/${upload_key}"
-
-upload_output="$(
-  env \
-    PATH="${fixture}/bin:${PATH}" \
-    UPLOAD_KEY="${upload_key}" \
-    RELEASE=7.0 \
-    RELEASE_BUCKET=spawnpoint-test-releases \
-    GAME_VERSION=1.20.1 \
-    LOADER_VERSION=47.4.10 \
-    FAKE_S3_ROOT="${FAKE_S3_ROOT}" \
-    "${builder}"
-)"
-grep -qx 'result=release_ready' <<<"${upload_output}"
-grep -qx 'mods=2' <<<"${upload_output}"
-jq -e '.game == "minecraft" and (.server.mods | length) == 2' \
-  "${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/7.0/manifest.json" >/dev/null
-[[ -f "${FAKE_S3_ROOT}/spawnpoint-test-releases/packs/7.0.zip" ]]
-# The upload is consumed: a second copy of every pack in the bucket is waste.
-[[ ! -f "${FAKE_S3_ROOT}/spawnpoint-test-releases/${upload_key}" ]]
-
-# An upload key outside uploads/<uuid>.zip is refused before anything is read.
-expect_failure "an upload key the API would never compose" \
-  env PATH="${fixture}/bin:${PATH}" UPLOAD_KEY="releases/1.0/manifest.json" RELEASE=7.1 \
-  RELEASE_BUCKET=spawnpoint-test-releases GAME_VERSION=1.20.1 LOADER_VERSION=47.4.10 \
-  FAKE_S3_ROOT="${FAKE_S3_ROOT}" "${builder}"
-
 printf 'result=passed\n'

@@ -1,10 +1,12 @@
 data "aws_caller_identity" "current" {}
 
 locals {
-  github_subject = "repo:${var.github_repository}:ref:refs/heads/${var.github_branch}"
+  github_subjects = toset([for repository in var.github_repositories : "repo:${repository}:ref:refs/heads/${var.github_branch}"])
 
-  build_release_state_machine_arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-build-release"
-  build_release_execution_arn     = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:execution:spawnpoint-build-release:*"
+  build_release_state_machine_arn  = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-build-release"
+  build_release_execution_arn      = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:execution:spawnpoint-build-release:*"
+  preset_catalog_state_machine_arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-publish-preset-catalog"
+  preset_catalog_execution_arn     = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:execution:spawnpoint-publish-preset-catalog:*"
 }
 
 # AWS validates GitHub's certificate against its trusted root CA library, so
@@ -39,7 +41,7 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [local.github_subject]
+      values   = local.github_subjects
     }
   }
 }
@@ -61,14 +63,14 @@ data "aws_iam_policy_document" "github_release" {
     sid       = "StartOnlyReleaseBuilder"
     effect    = "Allow"
     actions   = ["states:StartExecution"]
-    resources = [local.build_release_state_machine_arn]
+    resources = [local.build_release_state_machine_arn, local.preset_catalog_state_machine_arn]
   }
 
   statement {
     sid       = "ObserveOnlyReleaseBuilderExecutions"
     effect    = "Allow"
     actions   = ["states:DescribeExecution"]
-    resources = [local.build_release_execution_arn]
+    resources = [local.build_release_execution_arn, local.preset_catalog_execution_arn]
   }
 }
 

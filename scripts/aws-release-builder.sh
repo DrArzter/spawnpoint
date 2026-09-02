@@ -10,12 +10,8 @@ set -Eeuo pipefail
 repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 server_scripts="${repository_root}/server/scripts"
 
-# Two callers reach this bundle. A profile build resolves mods from an authoring
-# repository; a pack publish takes an archive an operator uploaded. The machine
-# says which by whether it passes an upload key, and the modes share nothing but
-# the reviewed scripts underneath.
-if [[ -n "${UPLOAD_KEY:-}" && "${UPLOAD_KEY}" != "REQUIRED_BY_CALLER" ]]; then
-  exec "${repository_root}/scripts/aws-pack-upload-builder.sh"
+if [[ "${BUILDER_MODE:-release}" == "preset-catalog" ]]; then
+  exec "${repository_root}/scripts/aws-preset-catalog-builder.sh"
 fi
 
 # No default authoring repository: with one repository per game, a default is a
@@ -49,7 +45,9 @@ case "${config_repository}" in
   https://github.com/DrArzter/my-docker-minecraft-server-config | \
   https://github.com/DrArzter/my-docker-minecraft-server-config.git | \
   https://github.com/DrArzter/my-docker-factorio-server-config | \
-  https://github.com/DrArzter/my-docker-factorio-server-config.git) ;;
+  https://github.com/DrArzter/my-docker-factorio-server-config.git | \
+  https://github.com/DrArzter/my-docker-zomboid-server-config | \
+  https://github.com/DrArzter/my-docker-zomboid-server-config.git) ;;
   *)
     printf 'error: untrusted CONFIG_REPOSITORY_URL: %s\n' "${config_repository}" >&2
     exit 1
@@ -57,7 +55,7 @@ case "${config_repository}" in
 esac
 
 # docker is a minecraft-resolver dependency, checked by the resolver itself.
-for command in aws git jq realpath; do
+for command in awk aws find git jq realpath sha256sum sort; do
   command -v "${command}" >/dev/null 2>&1 || {
     printf 'error: required command not found: %s\n' "${command}" >&2
     exit 1
@@ -104,6 +102,49 @@ RELEASE_CHANGELOG="${RELEASE_CHANGELOG:-Profile ${PROFILE_ID} at ${CONFIG_COMMIT
 
 RELEASE_SOURCE_DIR="${payload}" \
   "${server_scripts}/upload-release.sh" "${payload}/manifest.json"
+
+# A release and preset discovery are separate records, joined by the digest of
+# the profile directory rather than by the repository-wide commit. This keeps
+# an older build from marking a newer preset ready, while an unrelated edit in
+# the same repository does not invalidate the profile that was actually built.
+profile_digest="$({
+  while IFS= read -r -d '' file; do
+    relative="${file#"${profile_directory}/"}"
+    printf '%s  %s\n' "$(sha256sum -- "${file}" | awk '{print $1}')" "${relative}"
+  done < <(find "${profile_directory}" -type f -print0 | sort -z)
+} | sha256sum | awk '{print $1}')"
+catalog_key="presets/${game}/catalog.json"
+catalog="${workspace}/preset-catalog.json"
+if aws s3api get-object --bucket "${RELEASE_BUCKET}" --key "${catalog_key}" "${catalog}" >/dev/null 2>&1; then
+  if jq -e \
+    --arg id "${PROFILE_ID}" \
+    --arg digest "${profile_digest}" \
+    '.schema_version == 1 and any(.presets[]?; .id == $id and .profile_digest == $digest)' \
+    "${catalog}" >/dev/null; then
+    jq \
+      --arg id "${PROFILE_ID}" \
+      --arg digest "${profile_digest}" \
+      --arg release "${RELEASE}" '
+      .presets |= map(
+        if .id == $id and .profile_digest == $digest
+        then .build_status = "ready" | .latest_release = $release
+        else . end
+      )
+    ' "${catalog}" >"${catalog}.updated"
+    aws s3api put-object \
+      --bucket "${RELEASE_BUCKET}" \
+      --key "${catalog_key}" \
+      --body "${catalog}.updated" \
+      --server-side-encryption AES256 \
+      --content-type application/json \
+      >/dev/null
+    printf 'preset_catalog=updated\n'
+  else
+    printf 'preset_catalog=stale\n'
+  fi
+else
+  printf 'preset_catalog=missing\n'
+fi
 
 printf 'result=release_ready\n'
 printf 'profile_id=%s\n' "${PROFILE_ID}"

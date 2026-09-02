@@ -1,0 +1,51 @@
+{
+  "Comment": "Project one exact configuration commit into the preset catalog.",
+  "QueryLanguage": "JSONPath",
+  "StartAt": "Validate Request Shape",
+  "States": {
+    "Validate Request Shape": {
+      "Type": "Choice",
+      "Choices": [{
+        "And": [
+          { "Variable": "$.configCommit", "IsPresent": true },
+          { "Variable": "$.configCommit", "IsString": true },
+          { "Variable": "$.configRepositoryUrl", "IsPresent": true },
+          { "Variable": "$.configRepositoryUrl", "IsString": true }
+        ],
+        "Next": "Publish Preset Catalog"
+      }],
+      "Default": "Invalid Catalog Request"
+    },
+    "Publish Preset Catalog": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::codebuild:startBuild.sync",
+      "Parameters": {
+        "ProjectName": "${project_name}",
+        "EnvironmentVariablesOverride": [
+          { "Name": "BUILDER_MODE", "Type": "PLAINTEXT", "Value": "preset-catalog" },
+          { "Name": "CONFIG_COMMIT", "Type": "PLAINTEXT", "Value.$": "$.configCommit" },
+          { "Name": "CONFIG_REPOSITORY_URL", "Type": "PLAINTEXT", "Value.$": "$.configRepositoryUrl" }
+        ]
+      },
+      "ResultPath": null,
+      "TimeoutSeconds": 900,
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.buildFailure", "Next": "Catalog Build Failed" }],
+      "Next": "Catalog Ready"
+    },
+    "Catalog Ready": {
+      "Type": "Pass",
+      "Parameters": { "status": "READY", "configCommit.$": "$.configCommit" },
+      "End": true
+    },
+    "Invalid Catalog Request": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.InvalidPresetCatalogRequest",
+      "Cause": "configCommit and configRepositoryUrl must be strings; the builder enforces their exact values."
+    },
+    "Catalog Build Failed": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.PresetCatalogBuildFailed",
+      "Cause": "CodeBuild did not publish the preset catalog. Inspect the execution and build logs."
+    }
+  }
+}

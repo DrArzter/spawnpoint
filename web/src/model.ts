@@ -13,6 +13,14 @@ export type World = {
   profileId: string;
   sessionControlAvailable: boolean;
   connectivity: "zerotier" | "raw";
+  materialization: "existing" | "not_created";
+  preset: null | {
+    repository: string;
+    commit: string;
+    profileDigest: string;
+    buildStatus: "unbuilt" | "building" | "ready" | "failed";
+    latestRelease: string | null;
+  };
   connectionAddress: string | null;
   release: ReleasePointer;
 };

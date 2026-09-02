@@ -32,7 +32,11 @@ export function DashboardScreen({ game, world, hosts, operations, serverState, l
   const permitted = sessionAction === "start" ? canStart : canStop;
   const transitioning = serverState === "starting" || serverState === "stopping" || operationRequest.state === "pending";
   const controlDisabled = !world.sessionControlAvailable || !permitted || transitioning;
-  const controlsHint = !world.sessionControlAvailable ? "This world is not connected to a session workflow yet." : !permitted ? `Your role cannot ${sessionAction} sessions.` : transitioning ? "A control-plane operation is already in progress." : `Review and confirm the ${sessionAction} request.`;
+  const controlsHint = !world.sessionControlAvailable
+    ? world.materialization === "not_created"
+      ? world.preset?.buildStatus === "ready" ? "World creation is not deployed yet." : "This preset needs a successful release build before its first start."
+      : "This world is not connected to a session workflow yet."
+    : !permitted ? `Your role cannot ${sessionAction} sessions.` : transitioning ? "A control-plane operation is already in progress." : `Review and confirm the ${sessionAction} request.`;
   const inviteHint = canInvite ? "Invite everyone or choose specific players." : "Your role cannot send invitations.";
   const stateLabel = serverState === "running" ? "Online" : serverState === "starting" ? "Starting" : serverState === "stopping" ? "Stopping" : serverState === "unknown" ? "Unknown" : "Stopped";
 
@@ -45,7 +49,7 @@ export function DashboardScreen({ game, world, hosts, operations, serverState, l
   }
 
   return <>
-    <PageHeader description={`${game.displayName} · ${activeRelease ? `active release ${activeRelease}` : world.release.state === "unconfigured" ? "not adopted yet" : "release unavailable"}`} title={world.displayName} />
+    <PageHeader description={`${game.displayName} · ${activeRelease ? `active release ${activeRelease}` : world.materialization === "not_created" ? `preset ${world.preset?.buildStatus ?? "unbuilt"} · world not created` : world.release.state === "unconfigured" ? "no release selected" : "release unavailable"}`} title={world.displayName} />
     {loadState === "error" && <Notice action={<Button onClick={onRetry}>Try again</Button>} description={error} title="Current state could not be loaded" tone="danger" />}
     <section className="service-panel" aria-busy={loadState === "loading"}>
       <div className="service-summary">

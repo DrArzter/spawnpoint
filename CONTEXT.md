@@ -6,7 +6,11 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Game**: A server runtime family such as Minecraft or Factorio. A game may have many worlds.
 
-**World**: A named, persistent game save with its own release pointer and backup lineage.
+**Preset**: A versioned declaration in a game's configuration repository describing how a world should run. A preset is authoring input, not a world, save, or deployable release. _Avoid_: Pack or uploaded archive when the Git declaration is meant.
+
+**World**: A named, persistent playable instance of a preset, with its own save, release pointer, generation and backup lineage. A preset may exist before its world is first started.
+
+**World generation**: One save lineage of a world. Regenerating a world closes the current generation with a recoverable backup and starts a fresh generation from the selected preset without reusing the previous save.
 
 **Host**: A compute machine capable of running a session. A host is not permanently owned by a world; a session temporarily binds one world to one host. _Avoid_: Server or instance when the domain concept, rather than the AWS resource, is meant.
 

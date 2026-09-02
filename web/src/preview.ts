@@ -6,7 +6,7 @@ export const previewEnabled = import.meta.env.DEV && new URLSearchParams(window.
 export const previewSession: ActiveSession = {
   state: "active",
   identity: { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [] },
-  role: { id: "owner", name: "Owner", permissions: ["status.read", "connection.read", "session.start", "session.stop", "invitation.send", "metrics.read", "console.use", "release.read", "release.promote", "release.upload", "backup.read", "backup.restore", "access.read", "access.manage"] },
+  role: { id: "owner", name: "Owner", permissions: ["status.read", "connection.read", "session.start", "session.stop", "invitation.send", "metrics.read", "console.use", "release.read", "release.promote", "backup.read", "backup.restore", "access.read", "access.manage"] },
   profile: { telegramId: "1780660807", username: "drarzter", photoUrl: null },
   bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "1780660807", claimedAt: "2026-08-28T18:24:00.000Z" },
 };
@@ -15,14 +15,14 @@ export const previewSnapshot: ControlPlaneSnapshot = {
   observedAt: "2026-08-29T18:40:00.000Z",
   games: [
     { id: "minecraft", code: "MC", displayName: "Minecraft", lifecycle: { schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "session-42", updatedAtEpochSeconds: 1788028800 }, worlds: [
-      { id: "world", displayName: "Modded survival", profileId: "minecraft-modded", sessionControlAvailable: true, connectivity: "zerotier", connectionAddress: "172.29.23.24:25565", release: { state: "available", activeRelease: "1.2", desiredRelease: "1.2" } },
-      { id: "vanilla", displayName: "Vanilla", profileId: "minecraft-vanilla", sessionControlAvailable: true, connectivity: "zerotier", connectionAddress: "172.29.23.24:25565", release: { state: "available", activeRelease: "1.21", desiredRelease: "1.21" } },
+      { id: "world", displayName: "Modded survival", profileId: "minecraft-modded", sessionControlAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, connectionAddress: "172.29.23.24:25565", release: { state: "available", activeRelease: "1.2", desiredRelease: "1.2" } },
+      { id: "vanilla", displayName: "Vanilla", profileId: "minecraft-vanilla", sessionControlAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, connectionAddress: "172.29.23.24:25565", release: { state: "available", activeRelease: "1.21", desiredRelease: "1.21" } },
     ] },
     { id: "factorio", code: "FA", displayName: "Factorio", lifecycle: { schemaVersion: 1, serverId: "factorio", desiredState: "stopped", observedState: "stopped", activeSessionId: null, updatedAtEpochSeconds: 1788024000 }, worlds: [
-      { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControlAvailable: true, connectivity: "zerotier", connectionAddress: "172.29.23.24:34197", release: { state: "unconfigured", activeRelease: null, desiredRelease: null } },
+      { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControlAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, connectionAddress: "172.29.23.24:34197", release: { state: "unconfigured", activeRelease: null, desiredRelease: null } },
     ] },
     { id: "zomboid", code: "PZ", displayName: "Project Zomboid", lifecycle: { schemaVersion: 1, serverId: "zomboid", desiredState: "stopped", observedState: "stopped", activeSessionId: null, updatedAtEpochSeconds: 1788024000 }, worlds: [
-      { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControlAvailable: true, connectivity: "zerotier", connectionAddress: "172.29.23.24:16261", release: { state: "unconfigured", activeRelease: null, desiredRelease: null } },
+      { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControlAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, connectionAddress: "172.29.23.24:16261", release: { state: "unconfigured", activeRelease: null, desiredRelease: null } },
     ] },
   ],
   hosts: [{ id: "host-game", name: "Shared game host", state: "running", instanceType: "m7i-flex.large", availabilityZone: "eu-central-1a", launchedAt: "2026-08-29T18:32:00.000Z", publicIp: "203.0.113.42" }],

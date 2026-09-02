@@ -1,5 +1,6 @@
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
-import { gameCatalog, type CatalogGame } from "./catalog.ts";
+import { catalogWithPresets, gameCatalog, type CatalogGame } from "./catalog.ts";
+import type { PresetObservation } from "./preset-catalog.ts";
 
 export type HostObservation = Readonly<{
   id: string;
@@ -33,6 +34,7 @@ export type ControlPlaneSources = Readonly<{
   readLifecycle: (serverId: string) => Promise<LifecycleRecord | null>;
   readReleasePointer: (worldId: string) => Promise<ReleasePointerObservation>;
   listRunningOperations: () => Promise<readonly OperationObservation[]>;
+  listPresets?: () => Promise<readonly PresetObservation[]>;
 }>;
 
 export type ControlPlaneSnapshot = Readonly<{
@@ -49,6 +51,8 @@ export type ControlPlaneSnapshot = Readonly<{
       sessionControlAvailable: boolean;
       connectionAddress: string | null;
       connectivity: string;
+      materialization: "existing" | "not_created";
+      preset: CatalogGame["worlds"][number]["preset"] | null;
       release: ReleasePointerObservation;
     }>>;
   }>>;
@@ -83,24 +87,25 @@ export async function readControlPlaneSnapshot(
   now: () => Date = () => new Date(),
 ): Promise<ControlPlaneSnapshot> {
   const connectionHost = options.connectionHost ?? null;
+  const effectiveCatalog = catalogWithPresets(await (sources.listPresets?.() ?? Promise.resolve([])), catalog);
   const worldConnectionHost = (connectivity: string): string | null => {
     if (connectionHost === null) return null;
     if (connectivity !== "raw") return connectionHost;
     const running = hosts.find((host) => host.state === "running" && host.publicIp !== null);
     return running?.publicIp ?? null;
   };
-  const worlds = catalog.flatMap((game) => game.worlds);
+  const worlds = effectiveCatalog.flatMap((game) => game.worlds);
   const [hosts, operations, lifecycles, pointers] = await Promise.all([
     sources.listHosts(),
     sources.listRunningOperations(),
-    Promise.all(catalog.map((game) => sources.readLifecycle(game.id))),
+    Promise.all(effectiveCatalog.map((game) => sources.readLifecycle(game.id))),
     Promise.all(worlds.map((world) => sources.readReleasePointer(world.id))),
   ]);
   const pointerByWorld = new Map(worlds.map((world, index) => [world.id, pointers[index]!]));
 
   return {
     observedAt: now().toISOString(),
-    games: catalog.map((game, gameIndex) => ({
+    games: effectiveCatalog.map((game, gameIndex) => ({
       id: game.id,
       code: game.code,
       displayName: game.displayName,
@@ -113,6 +118,8 @@ export async function readControlPlaneSnapshot(
           profileId: world.profileId,
           sessionControlAvailable: world.sessionControl !== null,
           connectivity: world.connectivity,
+          materialization: world.materialization ?? "existing",
+          preset: world.preset ?? null,
           // Composed here for the same reason the host composes it: the
           // strategy owns the host part, the game owns the port. An overlay
           // world uses the configured address; a public one uses whatever

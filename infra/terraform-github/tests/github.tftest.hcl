@@ -23,12 +23,16 @@ mock_provider "aws" {
   }
 }
 
-run "trusts_only_the_config_repository_main_branch" {
+run "trusts_only_the_config_repositories_main_branches" {
   command = plan
 
   assert {
-    condition     = local.github_subject == "repo:DrArzter/my-docker-minecraft-server-config:ref:refs/heads/main"
-    error_message = "The role trust must be exact, not repository-wide or organization-wide."
+    condition = local.github_subjects == toset([
+      "repo:DrArzter/my-docker-minecraft-server-config:ref:refs/heads/main",
+      "repo:DrArzter/my-docker-factorio-server-config:ref:refs/heads/main",
+      "repo:DrArzter/my-docker-zomboid-server-config:ref:refs/heads/main",
+    ])
+    error_message = "The role trust must name each config repository's main branch exactly."
   }
 
   assert {
@@ -51,6 +55,11 @@ run "role_can_only_start_and_observe_the_release_builder" {
   assert {
     condition     = local.build_release_state_machine_arn == "arn:aws:states:eu-central-1:123456789012:stateMachine:spawnpoint-build-release"
     error_message = "StartExecution must target only the fixed release-build state machine."
+  }
+
+  assert {
+    condition     = local.preset_catalog_state_machine_arn == "arn:aws:states:eu-central-1:123456789012:stateMachine:spawnpoint-publish-preset-catalog"
+    error_message = "Catalog publication must target only its fixed state machine."
   }
 
   assert {

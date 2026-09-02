@@ -1,3 +1,5 @@
+import type { PresetObservation } from "./preset-catalog.ts";
+
 export type CatalogWorld = Readonly<{
   id: string;
   displayName: string;
@@ -10,6 +12,14 @@ export type CatalogWorld = Readonly<{
   // "zerotier" reaches players through the overlay, "raw" through whatever
   // public address the instance holds for that session.
   connectivity: "zerotier" | "raw";
+  materialization?: "existing" | "not_created";
+  preset?: Readonly<{
+    repository: string;
+    commit: string;
+    profileDigest: string;
+    buildStatus: "unbuilt" | "building" | "ready" | "failed";
+    latestRelease: string | null;
+  }>;
 }>;
 
 export type CatalogGame = Readonly<{
@@ -55,6 +65,53 @@ export const gameCatalog: readonly CatalogGame[] = [
     ],
   },
 ];
+
+// Static entries preserve every already managed world. A discovered preset
+// enriches the static world that already uses its profile, or becomes a
+// not-yet-created world candidate. It is deliberately not startable until the
+// materialisation workflow exists; discovery must never outrun safe creation.
+export function catalogWithPresets(
+  presets: readonly PresetObservation[],
+  catalog: readonly CatalogGame[] = gameCatalog,
+): readonly CatalogGame[] {
+  return catalog.map((game) => {
+    const forGame = presets.filter((preset) => preset.gameId === game.id);
+    const consumed = new Set<string>();
+    const existing = game.worlds.map((world) => {
+      const preset = forGame.find((candidate) => candidate.id === world.profileId);
+      if (preset === undefined) return { ...world, materialization: "existing" as const };
+      consumed.add(preset.id);
+      return {
+        ...world,
+        displayName: preset.displayName,
+        materialization: "existing" as const,
+        preset: {
+          repository: preset.repository,
+          commit: preset.commit,
+          profileDigest: preset.profileDigest,
+          buildStatus: preset.buildStatus,
+          latestRelease: preset.latestRelease,
+        },
+      };
+    });
+    const discovered = forGame.filter((preset) => !consumed.has(preset.id)).map((preset) => ({
+      id: preset.id,
+      displayName: preset.displayName,
+      profileId: preset.id,
+      sessionControl: null,
+      connectivity: "zerotier" as const,
+      materialization: "not_created" as const,
+      preset: {
+        repository: preset.repository,
+        commit: preset.commit,
+        profileDigest: preset.profileDigest,
+        buildStatus: preset.buildStatus,
+        latestRelease: preset.latestRelease,
+      },
+    }));
+    return { ...game, worlds: [...existing, ...discovered] };
+  });
+}
 
 // A world id is unique across games in this catalog, and the drift test against
 // server/worlds/catalog.json keeps it that way.

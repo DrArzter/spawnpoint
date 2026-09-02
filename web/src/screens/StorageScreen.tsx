@@ -9,26 +9,14 @@ import { EmptyState, Notice, PageHeader, RetryState } from "../components/ui/Pag
 
 type ReleaseRow = { name: string; status: string };
 
-export type PackUploadRequest = Readonly<{
-  file: File;
-  release: string;
-  gameVersion: string;
-  loaderVersion: string;
-}>;
-
-export function StorageScreen({ world, gameId, canReadBackups, onDownloadPack, onUploadPack, request }: {
+export function StorageScreen({ world, gameId, canReadBackups, onDownloadPack, request }: {
   world: World;
   gameId: string;
   canReadBackups: boolean;
   onDownloadPack?: (worldId: string) => void;
-  onUploadPack?: (request: PackUploadRequest) => void;
   request: { state: "idle" | "pending" | "success" | "error"; message: string };
 }) {
   const [tab, setTab] = useState<"releases" | "backups">("releases");
-  const [file, setFile] = useState<File | null>(null);
-  const [release, setRelease] = useState("");
-  const [gameVersion, setGameVersion] = useState("");
-  const [loaderVersion, setLoaderVersion] = useState("");
   const [backups, setBackups] = useState<BackupInventory | null>(null);
   const [backupError, setBackupError] = useState<string | null>(null);
   const [backupRevision, setBackupRevision] = useState(0);
@@ -84,20 +72,6 @@ export function StorageScreen({ world, gameId, canReadBackups, onDownloadPack, o
     <PageHeader description={`Release pointers and verified backups for ${world.displayName}`} title="Releases" />
     <Tabs label="Storage view" onChange={setTab} options={[{ id: "releases", label: "Releases" }, { id: "backups", label: "Backups" }]} value={tab} />
     {tab === "releases" && request.state !== "idle" && <Notice description={request.message} title={request.state === "pending" ? "Working on the pack" : request.state === "success" ? "Pack request accepted" : "Pack request failed"} tone={request.state === "error" ? "danger" : request.state === "success" ? "success" : "info"} />}
-    {tab === "releases" && onUploadPack !== undefined && <form className="pack-upload" onSubmit={(event) => {
-      event.preventDefault();
-      if (file === null) return;
-      onUploadPack({ file, release, gameVersion, loaderVersion });
-    }}>
-      <header><strong>Publish a pack you already have</strong><p>The archive holds the mod files, flat or inside one mods/ folder. It uploads straight to storage and becomes an immutable release; nothing is deployed until you promote it.</p></header>
-      <div className="pack-upload-fields">
-        <label className="pack-upload-file"><span>Pack archive</span><input accept=".zip,application/zip" disabled={request.state === "pending"} onChange={(event) => setFile(event.target.files?.[0] ?? null)} required type="file" /></label>
-        <label><span>Release</span><input disabled={request.state === "pending"} onChange={(event) => setRelease(event.target.value)} pattern="[0-9]+\.[0-9]+" placeholder="1.2" required value={release} /></label>
-        <label><span>Game version</span><input disabled={request.state === "pending"} maxLength={32} onChange={(event) => setGameVersion(event.target.value)} pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,31}" placeholder="1.21.8" required value={gameVersion} /></label>
-        <label><span>Loader version</span><input disabled={request.state === "pending"} maxLength={32} onChange={(event) => setLoaderVersion(event.target.value)} pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,31}" placeholder="58.1.4" required value={loaderVersion} /></label>
-        <Button disabled={file === null || release === "" || gameVersion === "" || loaderVersion === ""} loading={request.state === "pending"} type="submit" variant="primary">Upload and publish</Button>
-      </div>
-    </form>}
     {tab === "releases" && <DataTable columns={columns} emptyLabel={world.release.state === "unconfigured" ? "This world has no release pointer yet" : "Release data is unavailable"} label="Release pointers" rowKey={(row) => row.name} rows={releases} />}
     {tab === "backups" && !canReadBackups && <EmptyState description="Ask an owner for the backup.read permission." icon="storage" title="Your role cannot read backups" />}
     {tab === "backups" && canReadBackups && backupError !== null && <RetryState description={backupError} onRetry={() => setBackupRevision((current) => current + 1)} title="The inventory is unavailable" />}

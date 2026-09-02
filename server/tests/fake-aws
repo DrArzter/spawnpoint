@@ -51,7 +51,7 @@ while (( $# > 0 )); do
       checksum="$2"
       shift 2
       ;;
-    --checksum-mode | --checksum-algorithm | --query | --output)
+    --checksum-mode | --checksum-algorithm | --query | --output | --server-side-encryption | --content-type)
       shift 2
       ;;
     --*)
@@ -90,8 +90,7 @@ case "${operation}" in
   get-object)
     [[ -f "${object}" && -n "${destination}" ]] || exit 254
     cp -- "${object}" "${destination}"
-    # An object a browser PUT through a presigned URL has no metadata sidecar,
-    # which is exactly what an uploaded pack looks like.
+    # Objects placed directly into the fake bucket have no metadata sidecar.
     if [[ -f "${metadata_file}" ]]; then
       stored_checksum="$(sed -n '2p' "${metadata_file}")"
       jq -n --arg checksum "${stored_checksum}" '{ChecksumSHA256: $checksum}'

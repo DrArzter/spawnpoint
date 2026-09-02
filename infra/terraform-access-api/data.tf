@@ -22,9 +22,6 @@ locals {
     { type = "start", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-start-server" },
     { type = "stop", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-stop-server" },
     { type = "promote", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-promote-release" },
-    # Publishing an uploaded pack writes a release and touches no host, so it is
-    # startable but never listed as an operation in progress.
-    { type = "publishPack", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-publish-uploaded-pack" },
   ]
 }
 

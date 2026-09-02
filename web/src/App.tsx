@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ActiveSession, AuthState, endSession, loadControlPlane, requestAccess, requestPackDownload, requestSessionOperation, uploadPack, restoreAuth, telegramBotUsername, telegramLoginRedirectUrl } from "./auth";
+import { ActiveSession, AuthState, endSession, loadControlPlane, requestAccess, requestPackDownload, requestSessionOperation, restoreAuth, telegramBotUsername, telegramLoginRedirectUrl } from "./auth";
 import { AccessScreen } from "./screens/AccessScreen";
 import { Avatar } from "./components/Avatar";
 import { Button } from "./components/ui/Button";
@@ -209,20 +209,6 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
     }
   }
 
-  async function publishUploadedPack(request: { file: File; release: string; gameVersion: string; loaderVersion: string }) {
-    if (!game) return;
-    setStorageRequest({ state: "pending", message: "Uploading the pack…" });
-    try {
-      const result = await uploadPack(request.file, { ...request, gameId: game.id }, (stage) => {
-        setStorageRequest({ state: "pending", message: stage === "uploading" ? "Uploading the pack…" : "Publishing the release…" });
-      });
-      setStorageRequest({ state: "success", message: `Release ${result.release} is being published · ${result.operationId}` });
-      await refreshControlPlane();
-    } catch (error) {
-      setStorageRequest({ state: "error", message: error instanceof Error ? error.message : "The upload failed." });
-    }
-  }
-
   function selectGame(id: string) {
     const next = games.find((item) => item.id === id);
     if (!next) return;
@@ -276,7 +262,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
           {page === "dashboard" && (!game || !world) && <ControlPlaneUnavailable state={controlPlane} onRetry={() => void refreshControlPlane()} />}
           {page === "metrics" && <MetricsScreen serverState={serverState} />}
           {page === "console" && <ConsoleScreen serverState={serverState} />}
-          {page === "storage" && world && <StorageScreen canReadBackups={granted.has("backup.read")} gameId={game?.id ?? ""} onDownloadPack={granted.has("connection.read") ? () => void downloadPack() : undefined} onUploadPack={granted.has("release.upload") ? (request) => void publishUploadedPack(request) : undefined} request={storageRequest} world={world} />}
+          {page === "storage" && world && <StorageScreen canReadBackups={granted.has("backup.read")} gameId={game?.id ?? ""} onDownloadPack={granted.has("connection.read") ? () => void downloadPack() : undefined} request={storageRequest} world={world} />}
           {page === "access" && <AccessScreen bootstrap={bootstrap} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate("access", tab)} roles={roles} tab={accessTab} />}
           {page === "profile" && currentMember && <ProfileScreen member={currentMember} onChange={(next) => setMembers((current) => current.map((member) => member.id === next.id ? next : member))} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
         </div>

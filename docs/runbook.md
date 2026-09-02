@@ -233,21 +233,12 @@ server: hidden servers skip matchmaking auth entirely. Cut with `RELEASE_GAME=fa
 build-manifest/upload path; `mod-list.json` is generated on the host at session start from the reconciled directory,
 so it never travels in a payload.
 
-### Publishing a pack you already have
+### Presets are authored in Git
 
-The panel's Releases screen takes an archive of mod files — flat, or inside one `mods/` folder — a release number and
-the two versions the manifest must record. The bytes go straight into the release bucket through a presigned PUT, so
-several hundred megabytes never pass through the API; then a Standard workflow runs the same reviewed CodeBuild
-bundle in its upload mode, which validates the archive, builds the manifest, publishes the release and its pack, and
-deletes the upload.
-
-`release.upload` is the permission, held by the Owner role. The bot cannot offer this at all: Telegram lets a bot
-download 20 MB and a pack is hundreds.
-
-**The archive is treated as hostile**, because an operator's zip is still somebody's file: entry names are validated
-before anything is written, symlinks are refused, duplicate file names are refused because they would silently become
-one release file, and caps on entry count, single-file size and total expansion make a compression bomb a refusal
-rather than a full disk. Publishing writes a release and never a pointer, so nothing is deployed until a promotion.
+The panel is deliberately read-only for release authoring. A preset is changed in its game's configuration repository;
+the validated Git revision is built into an immutable release and published to the preset catalog. The panel then
+discovers it through the control plane. Operator scripts for importing an existing world or backfilling an old client
+pack remain recovery tools, not a way to define a preset.
 
 ### The client pack
 

@@ -118,7 +118,7 @@ The first acceptance drill used the production timings: release `1.1` started he
 confirmed, and three successful empty probes stopped the server in 16m36s from watchdog start. The nested verified
 stop produced a checked backup before EC2 stopped. If the watchdog itself fails, its execution failure is the signal —
 `Spawnpoint.WatchdogBlind` means the host was unobservable and was deliberately left running; the
-`spawnpoint-running-hours` alarm (10 consecutive hours → `spawnpoint-alerts`) and the budget are the backstops.
+`spawnpoint-running-hours` alarm (10 consecutive hours → `spawnpoint-alert`) and the budget are the backstops.
 
 ## Telegram bot
 

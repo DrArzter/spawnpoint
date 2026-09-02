@@ -73,7 +73,9 @@ test("watchdog identity is the Step Functions execution and every observation is
   // into lines made the machine depend on the order the script prints them in,
   // which nothing in the repository would have failed on.
   assert.match(serialized, /PROBE_FORMAT=json/);
-  assert.match(serialized, /States\.StringToJson\(\$\.observed\.invocation\.StandardOutputContent\)\.playersOnline/);
+  assert.match(serialized, /States\.StringToJson\(\$\.observed\.invocation\.StandardOutputContent\)/);
+  assert.equal(state(definition, "Parse Probe Output").Next, "Extract Player Count");
+  assert.equal(state(definition, "Extract Player Count").Parameters?.observed?.["playersOnline.$"], "$.observed.probe.playersOnline");
   assert.doesNotMatch(serialized, /StringSplit/);
   assert.equal(state(definition, "Register This Watchdog").Catch?.[0]?.Next, "Release Rejected Registration Lease");
   assert.equal(state(definition, "Release Rejected Registration Lease").Next, "Watchdog Registration Rejected");

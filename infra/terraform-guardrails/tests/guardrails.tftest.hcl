@@ -24,8 +24,8 @@ run "budget_and_topic_guard_the_account" {
   command = plan
 
   assert {
-    condition     = aws_sns_topic.alerts.name == "spawnpoint-alerts"
-    error_message = "Every alerting service converges on the one spawnpoint-alerts topic."
+    condition     = aws_sns_topic.alerts.name == "spawnpoint-alert"
+    error_message = "Every alerting service converges on the one spawnpoint-alert topic."
   }
 
   assert {
@@ -90,7 +90,7 @@ run "anomaly_detection_can_wait_for_cost_explorer" {
   }
 
   assert {
-    condition     = aws_sns_topic.alerts.name == "spawnpoint-alerts"
+    condition     = aws_sns_topic.alerts.name == "spawnpoint-alert"
     error_message = "The topic and budget must not depend on the anomaly toggle."
   }
 }

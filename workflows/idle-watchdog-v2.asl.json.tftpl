@@ -157,7 +157,7 @@
         {
           "Variable": "$.observed.invocation.Status",
           "StringEquals": "Success",
-          "Next": "Extract Player Count"
+          "Next": "Parse Probe Output"
         },
         {
           "Or": [
@@ -196,6 +196,19 @@
       ],
       "Default": "Wait Probe Result"
     },
+    "Parse Probe Output": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "counters.$": "$.counters",
+        "coordination.$": "$.coordination",
+        "observed": {
+          "command.$": "$.observed.command",
+          "probe.$": "States.StringToJson($.observed.invocation.StandardOutputContent)"
+        }
+      },
+      "Next": "Extract Player Count"
+    },
     "Extract Player Count": {
       "Type": "Pass",
       "Parameters": {
@@ -204,7 +217,7 @@
         "coordination.$": "$.coordination",
         "observed": {
           "command.$": "$.observed.command",
-          "playersOnline.$": "States.StringToJson($.observed.invocation.StandardOutputContent).playersOnline"
+          "playersOnline.$": "$.observed.probe.playersOnline"
         }
       },
       "Next": "Record Successful Observation"

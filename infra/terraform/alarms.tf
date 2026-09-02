@@ -1,7 +1,7 @@
 # The topic lives in ../terraform-guardrails, found by name the same way the
 # storage buckets are: a convention, not shared state.
 data "aws_sns_topic" "alerts" {
-  name = "spawnpoint-alerts"
+  name = "spawnpoint-alert"
 }
 
 # Presence-of-metric trick: EC2 only emits CPUUtilization while the instance

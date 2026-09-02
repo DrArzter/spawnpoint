@@ -4,10 +4,10 @@ data "aws_caller_identity" "current" {}
 #     alarms and chat adapters converge on ---
 
 resource "aws_sns_topic" "alerts" {
-  name = "spawnpoint-alerts"
+  name = "spawnpoint-alert"
 
   tags = {
-    Name    = "spawnpoint-alerts"
+    Name    = "spawnpoint-alert"
     Purpose = "cost-and-operational-alerts"
   }
 }

@@ -78,8 +78,11 @@ locals {
 }
 
 resource "aws_security_group" "game_host" {
+  # AWS makes a security group's description immutable. Keep the legacy text
+  # so adding catalog-driven public rules never replaces the group (and, by
+  # dependency, the host). The ingress blocks below are the source of truth.
   name        = "spawnpoint-game-host"
-  description = "Game host reachable over the overlay; a world that declares a public strategy opens its own port"
+  description = "ZeroTier-only game host; deliberately no inbound rules"
   vpc_id      = aws_vpc.main.id
 
   dynamic "ingress" {

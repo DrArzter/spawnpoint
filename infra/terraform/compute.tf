@@ -65,7 +65,11 @@ resource "aws_instance" "game_host" {
     # because no ephemeral public IPv4 is currently associated. Treating that
     # readback as configuration drift would replace the host on every idle stop.
     # The public subnet remains the source of truth for assigning one on start.
-    ignore_changes = [associate_public_ip_address]
+    # The SSM parameter intentionally tracks Amazon's latest AL2023 image for
+    # replacement hosts. An AMI is immutable, though, so a routine parameter
+    # update must not destroy a healthy long-lived host and detach its data
+    # volume. Host replacement remains an explicit operator decision.
+    ignore_changes = [ami, associate_public_ip_address]
 
     precondition {
       condition     = data.aws_availability_zone.selected.zone_id == var.availability_zone_id

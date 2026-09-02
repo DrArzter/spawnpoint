@@ -7,7 +7,7 @@ lifecycle is its own: persistent, surviving every host teardown, with thresholds
 that separation is a new state key, and therefore a new lock-cleanup rule in
 [`../terraform-bootstrap`](../terraform-bootstrap/); that rule is added, not left implicit.
 
-Owns: one SNS topic (`spawnpoint-alerts`) with a service-scoped access policy, its email subscription, an
+Owns: one SNS topic (`spawnpoint-alert`) with a service-scoped access policy, its email subscription, an
 `aws_budgets_budget` with a forecasted and an actual threshold, and an optional cost anomaly monitor and subscription.
 
 ## Order

@@ -91,7 +91,7 @@ mock_provider "aws" {
   override_data {
     target = data.aws_sns_topic.alerts
     values = {
-      arn = "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alerts"
+      arn = "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"
     }
   }
 }
@@ -288,7 +288,7 @@ run "running_hours_alarm_is_a_presence_alarm_on_the_guardrails_topic" {
   }
 
   assert {
-    condition     = contains(aws_cloudwatch_metric_alarm.running_hours.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alerts")
+    condition     = contains(aws_cloudwatch_metric_alarm.running_hours.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert")
     error_message = "The alarm must publish to the guardrails topic, where every alert converges."
   }
 }

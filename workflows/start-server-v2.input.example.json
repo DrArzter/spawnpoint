@@ -7,7 +7,6 @@
   "watchdogStopLeaseTtlSeconds": 1800,
   "instanceId": "i-0123456789abcdef0",
   "worldId": "world",
-  "connectionAddress": "172.29.23.24:25565",
   "startTiming": {
     "instancePollSeconds": 10,
     "ssmPollSeconds": 10,

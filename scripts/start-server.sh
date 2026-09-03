@@ -4,10 +4,8 @@ set -Eeuo pipefail
 
 profile="${AWS_PROFILE:-spawnpoint}"
 region="${AWS_REGION:-eu-central-1}"
-connection_host="${SPAWNPOINT_CONNECTION_HOST:-172.29.23.24}"
-# The address is composed, not configured: the host part above comes from the
-# connectivity strategy, and the port from the game the world runs. Reading it
-# from the same catalog the host uses keeps the two answers identical.
+# The V2 server id is the world's game, read from the same catalog the host
+# uses so the two answers cannot drift apart.
 game_for_world() {
   local world="$1" game
   game="$(jq -r --arg id "${world}" '.worlds[] | select(.id == $id) | .game // "minecraft"' \
@@ -17,11 +15,6 @@ game_for_world() {
     exit 1
   }
   printf '%s\n' "${game}"
-}
-
-connect_port_for_game() {
-  awk -F'"' '/^GAME_CONNECT_PORT=/ { print $2 }' \
-    "$(dirname -- "${BASH_SOURCE[0]}")/../server/games/$1/game.sh"
 }
 
 follow=true
@@ -106,7 +99,6 @@ server_id="$(game_for_world "${world_id}")"
   printf 'error: invalid server id: %s\n' "${server_id}" >&2
   exit 1
 }
-connection_address="${connection_host}:$(connect_port_for_game "${server_id}")"
 operation_id="manual-$(date -u +%Y%m%dT%H%M%SZ)"
 session_id="session-${operation_id}"
 input="$(
@@ -116,7 +108,6 @@ input="$(
     --arg session_id "${session_id}" \
     --arg instance_id "${instance_id}" \
     --arg world_id "${world_id}" \
-    --arg connection_address "${connection_address}" \
     '{
       serverId: $server_id,
       operationId: $operation_id,
@@ -126,7 +117,6 @@ input="$(
       watchdogStopLeaseTtlSeconds: 1800,
       instanceId: $instance_id,
       worldId: $world_id,
-      connectionAddress: $connection_address,
       startTiming: {
         instancePollSeconds: 10,
         ssmPollSeconds: 10,

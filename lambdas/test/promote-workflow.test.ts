@@ -188,3 +188,16 @@ test("target and rollback starts receive distinct generated session ids", async 
   assert.equal(target["sessionId.$"], "$.sessions.target");
   assert.equal(rollback["sessionId.$"], "$.sessions.rollback");
 });
+
+// The nested starts name the world — the V1 start builds its host command from
+// it and would fail on a missing path — and carry no address, which the host
+// reports back instead.
+test("promotion's nested starts name the world and carry no address", async () => {
+  const definition = await loadDefinition();
+  for (const name of ["Start With Target", "Start With Previous"]) {
+    const nested = (state(definition, name) as Record<string, any>).Parameters.Input as Record<string, string>;
+    assert.equal(nested["worldId.$"], "$.request.worldId", `${name} must name the world`);
+    assert.ok(!("connectionAddress.$" in nested), `${name} must not echo an address`);
+  }
+  assert.ok(!JSON.stringify(definition).includes("$.request.connectionAddress"));
+});

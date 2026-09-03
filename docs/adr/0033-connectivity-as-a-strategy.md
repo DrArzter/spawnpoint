@@ -40,6 +40,14 @@ invariant checked at the seam, not a thing a future edit can quietly violate.
 **Connectivity is a strategy behind one interface.** The start and stop lifecycle, the "announce the address" step and
 the readiness check depend only on the interface, never on which strategy is active.
 
+**The address is the host's answer, carried back — never an input echoed as a result.** `publish()` runs on the host at
+session start, and the host's session summary is the one place the address is born; the start machine parses that
+summary and carries `connectionAddress`, `connectionHost` and `connectivity` to whoever asked. Nothing configures or
+stores a full address: the overlay strategy's host part is configuration, a public strategy's host part is read from
+the instance each session, and the game supplies the port in both cases. This is forced by the raw strategy — a
+public address does not exist before the instance starts, so no caller can supply it — and it also removes the
+class of bug where a configured string carried one game's port for every game.
+
 The interface is small:
 
 ```
@@ -183,6 +191,18 @@ correctly, and each is built only when a second game or a zero-setup onboarding 
   the silent combination refuses, the declared one publishes.
 - The declaration is a catalog field, so it is reviewed and versioned like any other world change — an open server is
   a diff someone wrote, never a default someone forgot.
+
+## Status of the strategies
+
+| Strategy | State | Since |
+| --- | --- | --- |
+| ZeroTier overlay | Implemented; the default for every catalog world | ADR-0024 |
+| Raw public IP | Implemented: security-group ingress derived from the catalog, IMDSv2 address read at session start, address composed per world in the panel and the bot, nothing between sessions | 2026-09-03 |
+| Route 53 | Placeholder; the catalog validator accepts the id, the host refuses it by name | — |
+| Tailscale, bring-your-own | Not started | — |
+
+Turning the raw strategy on for a world is two catalog fields, `connectivity: raw` and a declared `auth`, and the
+runbook records the rollout order.
 
 ## Alternatives considered
 

@@ -188,6 +188,16 @@ run "start_workflow_is_standard_and_uses_direct_integrations" {
     condition     = jsondecode(aws_sfn_state_machine.start_server.definition).States["Start Session Command"].Resource == "arn:aws:states:::aws-sdk:ssm:sendCommand"
     error_message = "The workflow must invoke the host through SSM directly."
   }
+
+  assert {
+    condition     = strcontains(aws_sfn_state_machine.start_server.definition, "SESSION_FORMAT=json") && strcontains(aws_sfn_state_machine.start_server.definition, "$.session.summary.connection_address")
+    error_message = "The start machine must ask the host for a JSON session summary and carry its address back."
+  }
+
+  assert {
+    condition     = !strcontains(aws_sfn_state_machine.start_server.definition, "$.request.connectionAddress")
+    error_message = "No state may echo a caller-supplied address: a public world's address does not exist before the start."
+  }
 }
 
 run "stop_workflow_is_standard_and_stops_only_after_backup_step" {

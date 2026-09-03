@@ -37,7 +37,7 @@ Fill in at M1 and keep current. This block is what somebody needs when something
 | Container image | `itzg/minecraft-server` pinned by digest in `server/compose.yaml`, never `latest` |
 | Minecraft and loader version | Minecraft 1.20.1, Forge, immutable release `1.0` with 111 JARs |
 | World ids | `world` (Minecraft, profile `main`), `vanilla`, `factorio`, `zomboid` — the ids the panel, the bot and `--world` all use |
-| Addresses | Composed, never configured: `SPAWNPOINT_CONNECTION_HOST` / `connection_host` (the overlay address) plus the game's own port — `world` 25565, `factorio` 34197/udp, `zomboid` 16261/udp |
+| Addresses | Composed, never configured: the strategy's host part — the overlay address for `zerotier` worlds, the instance's current public IPv4 for `raw` ones — plus the game's own port: `world` 25565, `factorio` 34197/udp, `zomboid` 16261/udp. The start machine carries the host's answer back; a `raw` world has no address between sessions |
 
 ## Start the server
 
@@ -73,7 +73,8 @@ aws ec2 start-instances \
 ```
 
 Do not treat EC2 `running` as game readiness. The workflow checks SSM, the authorised ZeroTier identity and the
-game's own readiness contract before returning the world's address — the overlay host plus that game's port.
+game's own readiness contract before returning the world's address — the strategy's host part plus that game's port,
+read from the host's session summary rather than supplied by the caller.
 
 ```bash
 # TODO: dig +short <hostname>
@@ -341,6 +342,14 @@ What the two fields do, once applied:
 
 A public IPv4 is billed by the hour while the instance runs, which is pennies beside the instance itself, and nothing
 at all while it is stopped.
+
+**Rollout order for the summary contract** (once, for every deployment that predates it): the host copy first —
+`SESSION_FORMAT=json` is opt-in, so an old machine keeps reading the old stream — then `infra/terraform` (the V1 start
+machine, which asks for JSON and parses it), then `infra/terraform-operations` (the V2 start and promotion, which pass
+the answer through), and the callers last: `infra/terraform-bot`, `infra/terraform-access-api`, and the workstation
+scripts, which stop sending an address once no machine reads one from the request. Applying a machine before its host
+copy fails every start on an unparseable summary; dropping the request field before the V2 machine is applied fails
+on a missing path. The order above avoids both.
 
 ## Import a world
 

@@ -96,7 +96,8 @@ test("every polling loop is bounded and ready follows SSM success", async () => 
   const commandChoice = definition.States["Session Command Complete"];
   assert.ok(commandChoice);
   const success = commandChoice.Choices?.find((choice) => choice.StringEquals === "Success");
-  assert.equal(success?.Next, "Ready");
+  assert.equal(success?.Next, "Read Session Summary");
+  assert.equal(definition.States["Read Session Summary"]?.Next, "Ready");
   const ready = definition.States.Ready;
   assert.ok(ready);
   assert.equal(ready.End, true);
@@ -109,11 +110,33 @@ test("the host command names the world, and ASL builds the string", async () => 
   // States.Format interpolates the world id, so it never passes through a shell
   // that could interpret it; the API validates its shape before starting an
   // execution and load_world validates it again on the host.
-  assert.match(command, /States\.Format\('WORLD_ID=\{\} \/srv\/spawnpoint\/app\/server\/scripts\/start-session\.sh'/);
+  assert.match(command, /States\.Format\('WORLD_ID=\{\} SESSION_FORMAT=json \/srv\/spawnpoint\/app\/server\/scripts\/start-session\.sh'/);
   assert.match(command, /\$\.request\.worldId/);
   assert.doesNotMatch(
     command,
     /"commands": \[[^\]]*start-session\.sh"/,
     "a fixed command string would start whichever world the host happens to be configured for",
   );
+});
+
+// The address used to be a request field echoed back as the result, which was
+// right only while every world used the overlay: a public address does not
+// exist before the instance starts, so nobody can supply it. Now the host's
+// session summary is the one JSON document on stdout, the machine parses the
+// whole of it, and Ready carries the strategy's answer.
+test("the address is the host's answer, carried by the machine, never echoed from the request", async () => {
+  const definition = await loadDefinition();
+  const states = definition.States as Record<string, any>;
+  const summary = states["Read Session Summary"];
+  assert.equal(summary.Type, "Pass");
+  assert.equal(summary.Parameters["summary.$"], "States.StringToJson($.observed.invocation.StandardOutputContent)");
+  assert.equal(summary.ResultPath, "$.session");
+  const ready = states.Ready;
+  assert.equal(ready.Parameters["connectionAddress.$"], "$.session.summary.connection_address");
+  assert.equal(ready.Parameters["connectivity.$"], "$.session.summary.connectivity");
+  assert.equal(ready.Parameters["connectionHost.$"], "$.session.summary.connection_host");
+  assert.ok(!JSON.stringify(definition).includes("$.request.connectionAddress"), "no state may echo a caller's address");
+
+  const example = JSON.parse(await readFile(new URL("../../workflows/start-server.input.example.json", import.meta.url), "utf8"));
+  assert.ok(!("connectionAddress" in example), "the request carries no address to echo");
 });

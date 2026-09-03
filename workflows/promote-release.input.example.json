@@ -8,7 +8,6 @@
   "release": "1.1",
   "instanceId": "i-0123456789abcdef0",
   "releaseBucket": "spawnpoint-releases-000000000000",
-  "connectionAddress": "172.29.23.24:25565",
   "leaseTtlSeconds": 1800,
   "watchdogRegistrationLeaseTtlSeconds": 60,
   "watchdogStopLeaseTtlSeconds": 1800,

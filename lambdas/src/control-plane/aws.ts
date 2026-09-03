@@ -240,13 +240,12 @@ export async function startSessionExecution(
   requestedBy: string,
   serverId: string,
   worldId: string,
-  connectionAddress: string,
 ): Promise<string> {
   requireWorldId(worldId);
   const started = await sfn.send(new StartExecutionCommand({
     stateMachineArn: machineArn("start"), name: operationId,
     input: JSON.stringify(buildLifecycleStartInput({
-      serverId, operationId, sessionId: `session-${randomUUID()}`, instanceId, worldId, requestedBy, connectionAddress,
+      serverId, operationId, sessionId: `session-${randomUUID()}`, instanceId, worldId, requestedBy,
     })),
   }));
   if (!started.executionArn) throw new Error("start execution did not return an ARN");

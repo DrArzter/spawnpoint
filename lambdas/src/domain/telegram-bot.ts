@@ -86,7 +86,6 @@ export function buildStartInput(args: Readonly<{
   operationId: string;
   instanceId: string;
   worldId: string;
-  connectionAddress: string;
   requestedBy?: string;
 }>) {
   return {
@@ -94,8 +93,9 @@ export function buildStartInput(args: Readonly<{
     instanceId: args.instanceId,
     // Required, never defaulted: the machines pass it to the host, and a
     // default world would be a silent choice of which world somebody started.
+    // No address: the host's session summary answers with it and the machine
+    // carries it back — a public address does not exist before the start.
     worldId: args.worldId,
-    connectionAddress: args.connectionAddress,
     ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
     timing: POLL_TIMING,
   };
@@ -140,7 +140,6 @@ export function buildLifecycleStartInput(args: Readonly<{
   sessionId: string;
   instanceId: string;
   worldId: string;
-  connectionAddress: string;
   requestedBy?: string;
 }>) {
   return {
@@ -152,7 +151,6 @@ export function buildLifecycleStartInput(args: Readonly<{
     watchdogStopLeaseTtlSeconds: 1800,
     instanceId: args.instanceId,
     worldId: args.worldId,
-    connectionAddress: args.connectionAddress,
     ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
     startTiming: POLL_TIMING,
     stopTiming: POLL_TIMING,
@@ -238,13 +236,19 @@ export const replies = {
     ].join("\n");
   },
 
-  address: (args: Readonly<{ connectionAddress: string; panelAddress: string }>): string => [
+  // A null address is a strategy with no standing answer: a public world's
+  // address is issued per session and read from /status while it runs.
+  address: (args: Readonly<{ connectionAddress: string | null; panelAddress: string }>): string => [
     "<b>Addresses</b>",
     "",
-    `Minecraft: <code>${escapeHtml(args.connectionAddress)}</code>`,
+    args.connectionAddress === null
+      ? "Minecraft: issued per session — the public address changes with every start; /status shows the current one while the server runs."
+      : `Minecraft: <code>${escapeHtml(args.connectionAddress)}</code>`,
     `Grafana: <code>${escapeHtml(args.panelAddress)}</code>`,
     "",
-    "Both are reachable only through ZeroTier and only while the AWS host is running.",
+    args.connectionAddress === null
+      ? "Grafana is reachable only through ZeroTier; both only while the AWS host is running."
+      : "Both are reachable only through ZeroTier and only while the AWS host is running.",
   ].join("\n"),
 
   starting: (operationId: string): string =>
@@ -262,7 +266,7 @@ export const replies = {
     instanceState: string;
     desiredRelease: string | null;
     activeRelease: string | null;
-    connectionAddress: string;
+    connectionAddress: string | null;
   }>): string => {
     const lines = [
       "<b>Server status</b>",
@@ -270,7 +274,11 @@ export const replies = {
       `State: <code>${escapeHtml(args.instanceState.toUpperCase())}</code>`,
     ];
     if (args.instanceState === "running") {
-      lines.push(`Address: <code>${escapeHtml(args.connectionAddress)}</code>`);
+      lines.push(
+        args.connectionAddress === null
+          ? "Address: not published yet — refresh in a moment"
+          : `Address: <code>${escapeHtml(args.connectionAddress)}</code>`,
+      );
     }
     lines.push(
       "",

@@ -218,10 +218,9 @@ async function controlSession(identity: Identity, action: SessionAction, gameId:
   const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
   const requestedBy = `identity:${identity.id}`;
   if (action === "start") {
-    const game = effectiveCatalog.find((candidate) => candidate.id === gameId)!;
-    const connectionHost = process.env.CONNECTION_HOST;
-    if (!connectionHost) throw new Error("missing environment variable: CONNECTION_HOST");
-    await startSessionExecution(operationId, plan.host.providerRef, requestedBy, gameId, worldId, `${connectionHost}:${game.connectPort}`);
+    // No address in the request: the host's session summary answers with it
+    // and the machine carries it back (ADR-0033).
+    await startSessionExecution(operationId, plan.host.providerRef, requestedBy, gameId, worldId);
   }
   else {
     if (lifecycle?.activeSessionId === null || lifecycle?.activeSessionId === undefined) {

@@ -88,3 +88,15 @@ test("a failed V1 start is durably stopped before lifecycle is cleared", async (
   assert.equal(state(definition, "Release Compensating Lease").Next, "Start Failed And Compensated");
   assert.equal(state(definition, "Start Failed And Compensated").Type, "Fail");
 });
+
+test("V2 passes the host's address through instead of echoing the request's", async () => {
+  const definition = await loadDefinition();
+  const parameters = (name: string): Record<string, any> => (state(definition, name) as Record<string, any>).Parameters;
+  const nested = parameters("Start Accepted V1").Input as Record<string, string>;
+  assert.ok(!("connectionAddress.$" in nested), "the nested V1 request carries no address");
+  assert.equal(nested["worldId.$"], "$.request.worldId");
+  const ready = parameters("Ready");
+  assert.equal(ready["connectionAddress.$"], "$.hostStart.Output.connectionAddress");
+  assert.equal(ready["connectivity.$"], "$.hostStart.Output.connectivity");
+  assert.ok(!JSON.stringify(definition).includes("$.request.connectionAddress"));
+});

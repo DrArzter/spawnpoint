@@ -52,9 +52,12 @@ export function statusKeyboard(connectionAddress?: string): InlineKeyboard {
   return keyboard.row().text("Menu", callbacks.menu);
 }
 
-export function addressKeyboard(connectionAddress: string, panelAddress: string): InlineKeyboard {
-  return new InlineKeyboard()
-    .copyText("Copy Minecraft address", connectionAddress)
+export function addressKeyboard(connectionAddress: string | null, panelAddress: string): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  if (connectionAddress !== null) {
+    keyboard.copyText("Copy Minecraft address", connectionAddress);
+  }
+  return keyboard
     .copyText("Copy Grafana address", panelAddress)
     .row()
     .text("Menu", callbacks.menu);

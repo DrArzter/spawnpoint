@@ -189,7 +189,7 @@
         "DocumentName": "AWS-RunShellScript",
         "InstanceIds.$": "States.Array($.request.instanceId)",
         "Parameters": {
-          "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} /srv/spawnpoint/app/server/scripts/start-session.sh', $.request.worldId))"
+          "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} SESSION_FORMAT=json /srv/spawnpoint/app/server/scripts/start-session.sh', $.request.worldId))"
         },
         "TimeoutSeconds": 900
       },
@@ -226,7 +226,7 @@
         {
           "Variable": "$.observed.invocation.Status",
           "StringEquals": "Success",
-          "Next": "Ready"
+          "Next": "Read Session Summary"
         },
         {
           "Or": [
@@ -274,13 +274,23 @@
       ],
       "Default": "Wait Before Command Poll"
     },
+    "Read Session Summary": {
+      "Type": "Pass",
+      "Parameters": {
+        "summary.$": "States.StringToJson($.observed.invocation.StandardOutputContent)"
+      },
+      "ResultPath": "$.session",
+      "Next": "Ready"
+    },
     "Ready": {
       "Type": "Pass",
       "Parameters": {
         "operationId.$": "$.request.operationId",
         "status": "ready",
         "instanceId.$": "$.request.instanceId",
-        "connectionAddress.$": "$.request.connectionAddress",
+        "connectivity.$": "$.session.summary.connectivity",
+        "connectionHost.$": "$.session.summary.connection_host",
+        "connectionAddress.$": "$.session.summary.connection_address",
         "commandId.$": "$.observed.command.Command.CommandId",
         "commandOutput.$": "$.observed.invocation.StandardOutputContent"
       },

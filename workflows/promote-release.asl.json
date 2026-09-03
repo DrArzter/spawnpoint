@@ -151,7 +151,6 @@
           "watchdogStopLeaseTtlSeconds.$": "$.request.watchdogStopLeaseTtlSeconds",
           "instanceId.$": "$.request.instanceId",
           "worldId.$": "$.request.worldId",
-          "connectionAddress.$": "$.request.connectionAddress",
           "startTiming.$": "$.request.startTiming",
           "stopTiming.$": "$.request.stopTiming",
           "watchdogTiming.$": "$.request.watchdogTiming"
@@ -237,7 +236,6 @@
           "watchdogStopLeaseTtlSeconds.$": "$.request.watchdogStopLeaseTtlSeconds",
           "instanceId.$": "$.request.instanceId",
           "worldId.$": "$.request.worldId",
-          "connectionAddress.$": "$.request.connectionAddress",
           "startTiming.$": "$.request.startTiming",
           "stopTiming.$": "$.request.stopTiming",
           "watchdogTiming.$": "$.request.watchdogTiming"

@@ -141,3 +141,21 @@ export function connectPortForWorld(worldId: string, catalog: readonly CatalogGa
   if (game === undefined) throw new Error(`unknown world: ${worldId}`);
   return game.connectPort;
 }
+
+// The address a player types, composed here exactly as the host composes it:
+// the strategy answers with the host part and the game with the port. Null when
+// the strategy has no answer — an overlay address withheld from a caller who
+// may not read one, or a public address that exists only while the instance
+// runs. Nothing stores an address; each surface asks this function.
+export function worldAddress(
+  worldId: string,
+  answers: Readonly<{ connectionHost: string | null; publicIp: string | null }>,
+  catalog: readonly CatalogGame[] = gameCatalog,
+): string | null {
+  const game = catalog.find((candidate) => candidate.worlds.some((world) => world.id === worldId));
+  const world = game?.worlds.find((candidate) => candidate.id === worldId);
+  if (game === undefined || world === undefined) throw new Error(`unknown world: ${worldId}`);
+  if (answers.connectionHost === null) return null;
+  const host = world.connectivity === "raw" ? answers.publicIp : answers.connectionHost;
+  return host === null ? null : `${host}:${game.connectPort}`;
+}

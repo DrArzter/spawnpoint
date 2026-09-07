@@ -30,7 +30,7 @@ terraform apply github.tfplan
 The expected first plan is three resources: one `aws_iam_openid_connect_provider`, one `aws_iam_role`, and one
 `aws_iam_role_policy`. Applying this root does not run a build and does not create paid compute.
 
-After apply, copy the two ARN outputs into GitHub repository **variables** (not secrets):
+After apply, copy the workflow outputs into GitHub repository **variables** (not secrets):
 
 ```bash
 gh variable set AWS_RELEASE_ROLE_ARN \
@@ -40,8 +40,18 @@ gh variable set AWS_RELEASE_ROLE_ARN \
 gh variable set AWS_BUILD_RELEASE_STATE_MACHINE_ARN \
   --repo DrArzter/my-docker-minecraft-server-config \
   --body "$(terraform output -raw build_release_state_machine_arn)"
+
+gh variable set AWS_PRESET_CATALOG_STATE_MACHINE_ARN \
+  --repo DrArzter/my-docker-minecraft-server-config \
+  --body "$(terraform output -raw publish_preset_catalog_state_machine_arn)"
+
+gh variable set AWS_RELEASE_BUCKET \
+  --repo DrArzter/my-docker-minecraft-server-config \
+  --body "$(terraform output -raw release_bucket_name)"
 ```
 
+The workflow uploads a content-addressed snapshot of the selected Git commit to the release bucket. This lets the
+same pipeline consume public or private config repositories without a long-lived GitHub credential in CodeBuild.
 The CurseForge key stays in AWS Systems Manager Parameter Store. GitHub never sees it.
 
 ## Local verification

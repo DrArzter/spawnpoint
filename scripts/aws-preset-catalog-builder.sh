@@ -6,7 +6,11 @@
 
 set -Eeuo pipefail
 
-for variable in CONFIG_COMMIT RELEASE_BUCKET CONFIG_REPOSITORY_URL; do
+repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/_config-source.sh
+source "${repository_root}/scripts/_config-source.sh"
+
+for variable in CONFIG_COMMIT CONFIG_SOURCE_KEY CONFIG_SOURCE_SHA256 RELEASE_BUCKET CONFIG_REPOSITORY_URL; do
   [[ -n "${!variable:-}" && "${!variable}" != "REQUIRED_BY_CALLER" ]] || {
     printf 'error: %s is required\n' "${variable}" >&2
     exit 1
@@ -31,7 +35,7 @@ case "${CONFIG_REPOSITORY_URL}" in
     ;;
 esac
 
-for command in awk aws find git jq sha256sum sort; do
+for command in awk aws find grep jq sha256sum sort tar; do
   command -v "${command}" >/dev/null 2>&1 || {
     printf 'error: required command not found: %s\n' "${command}" >&2
     exit 1
@@ -44,12 +48,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-checkout="${workspace}/config"
-git init --quiet "${checkout}"
-git -C "${checkout}" remote add origin "${CONFIG_REPOSITORY_URL}"
-git -C "${checkout}" fetch --quiet --depth=1 origin "${CONFIG_COMMIT}"
-git -C "${checkout}" checkout --quiet --detach FETCH_HEAD
-[[ "$(git -C "${checkout}" rev-parse HEAD)" == "${CONFIG_COMMIT}" ]]
+materialize_config_source "${workspace}"
+checkout="${CONFIG_CHECKOUT}"
 
 mapfile -t profiles < <(find "${checkout}/profiles" -mindepth 2 -maxdepth 2 -type f -name profile.json -print | sort)
 [[ "${#profiles[@]}" -gt 0 ]] || {

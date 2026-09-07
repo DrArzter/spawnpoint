@@ -15,7 +15,11 @@
             { "Variable": "$.release", "IsPresent": true },
             { "Variable": "$.release", "IsString": true },
             { "Variable": "$.configRepositoryUrl", "IsPresent": true },
-            { "Variable": "$.configRepositoryUrl", "IsString": true }
+            { "Variable": "$.configRepositoryUrl", "IsString": true },
+            { "Variable": "$.configSourceKey", "IsPresent": true },
+            { "Variable": "$.configSourceKey", "IsString": true },
+            { "Variable": "$.configSourceSha256", "IsPresent": true },
+            { "Variable": "$.configSourceSha256", "IsString": true }
           ],
           "Next": "Build Immutable Release"
         }
@@ -32,6 +36,8 @@
           { "Name": "CONFIG_COMMIT", "Type": "PLAINTEXT", "Value.$": "$.configCommit" },
           { "Name": "RELEASE", "Type": "PLAINTEXT", "Value.$": "$.release" },
           { "Name": "CONFIG_REPOSITORY_URL", "Type": "PLAINTEXT", "Value.$": "$.configRepositoryUrl" },
+          { "Name": "CONFIG_SOURCE_KEY", "Type": "PLAINTEXT", "Value.$": "$.configSourceKey" },
+          { "Name": "CONFIG_SOURCE_SHA256", "Type": "PLAINTEXT", "Value.$": "$.configSourceSha256" },
           { "Name": "RELEASE_CREATED_BY", "Type": "PLAINTEXT", "Value": "github-actions" }
         ]
       },
@@ -59,7 +65,7 @@
     "Invalid Release Request": {
       "Type": "Fail",
       "Error": "Spawnpoint.InvalidReleaseRequest",
-      "Cause": "profileId, configCommit and release must be strings; the builder enforces their exact formats."
+      "Cause": "profileId, configCommit, release and config source identity must be strings; the builder enforces their exact formats."
     },
     "Release Build Failed": {
       "Type": "Fail",

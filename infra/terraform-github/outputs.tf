@@ -13,6 +13,11 @@ output "publish_preset_catalog_state_machine_arn" {
   value       = local.preset_catalog_state_machine_arn
 }
 
+output "release_bucket_name" {
+  description = "Set this as the AWS_RELEASE_BUCKET GitHub repository variable."
+  value       = "spawnpoint-releases-${data.aws_caller_identity.current.account_id}"
+}
+
 output "trusted_github_subjects" {
   description = "Exact OIDC subjects accepted by the role; useful when diagnosing denied assumptions."
   value       = local.github_subjects

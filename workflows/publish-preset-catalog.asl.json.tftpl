@@ -10,7 +10,11 @@
           { "Variable": "$.configCommit", "IsPresent": true },
           { "Variable": "$.configCommit", "IsString": true },
           { "Variable": "$.configRepositoryUrl", "IsPresent": true },
-          { "Variable": "$.configRepositoryUrl", "IsString": true }
+          { "Variable": "$.configRepositoryUrl", "IsString": true },
+          { "Variable": "$.configSourceKey", "IsPresent": true },
+          { "Variable": "$.configSourceKey", "IsString": true },
+          { "Variable": "$.configSourceSha256", "IsPresent": true },
+          { "Variable": "$.configSourceSha256", "IsString": true }
         ],
         "Next": "Publish Preset Catalog"
       }],
@@ -24,7 +28,9 @@
         "EnvironmentVariablesOverride": [
           { "Name": "BUILDER_MODE", "Type": "PLAINTEXT", "Value": "preset-catalog" },
           { "Name": "CONFIG_COMMIT", "Type": "PLAINTEXT", "Value.$": "$.configCommit" },
-          { "Name": "CONFIG_REPOSITORY_URL", "Type": "PLAINTEXT", "Value.$": "$.configRepositoryUrl" }
+          { "Name": "CONFIG_REPOSITORY_URL", "Type": "PLAINTEXT", "Value.$": "$.configRepositoryUrl" },
+          { "Name": "CONFIG_SOURCE_KEY", "Type": "PLAINTEXT", "Value.$": "$.configSourceKey" },
+          { "Name": "CONFIG_SOURCE_SHA256", "Type": "PLAINTEXT", "Value.$": "$.configSourceSha256" }
         ]
       },
       "ResultPath": null,
@@ -40,7 +46,7 @@
     "Invalid Catalog Request": {
       "Type": "Fail",
       "Error": "Spawnpoint.InvalidPresetCatalogRequest",
-      "Cause": "configCommit and configRepositoryUrl must be strings; the builder enforces their exact values."
+      "Cause": "configCommit, configRepositoryUrl, configSourceKey and configSourceSha256 must be strings; the builder enforces their exact values."
     },
     "Catalog Build Failed": {
       "Type": "Fail",

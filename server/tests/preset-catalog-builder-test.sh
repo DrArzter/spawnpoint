@@ -22,19 +22,35 @@ commit="$(git -C "${config}" rev-parse HEAD)"
 ln -s -- "${repository_root}/server/tests/fake-aws" "${fixture}/bin/aws"
 export FAKE_S3_ROOT="${fixture}/s3"
 url="https://github.com/DrArzter/my-docker-factorio-server-config.git"
+source_key="config-sources/DrArzter/my-docker-factorio-server-config/${commit}.tar.gz"
+source_archive="${fixture}/config-source.tar.gz"
+git -C "${config}" archive --format=tar.gz --output="${source_archive}" "${commit}" profiles
+source_sha256="$(sha256sum -- "${source_archive}" | awk '{print $1}')"
+mkdir -p -- "${FAKE_S3_ROOT}/spawnpoint-test-releases/$(dirname -- "${source_key}")"
+cp -- "${source_archive}" "${FAKE_S3_ROOT}/spawnpoint-test-releases/${source_key}"
 
 run_builder() {
   env \
     PATH="${fixture}/bin:${PATH}" \
-    GIT_ALLOW_PROTOCOL=file \
-    GIT_CONFIG_COUNT=1 \
-    GIT_CONFIG_KEY_0="url.file://${config}.insteadOf" \
-    GIT_CONFIG_VALUE_0="${url}" \
     CONFIG_REPOSITORY_URL="${url}" \
     CONFIG_COMMIT="${commit}" \
+    CONFIG_SOURCE_KEY="${source_key}" \
+    CONFIG_SOURCE_SHA256="${source_sha256}" \
     RELEASE_BUCKET=spawnpoint-test-releases \
     "${builder}"
 }
+
+if env \
+  PATH="${fixture}/bin:${PATH}" \
+  CONFIG_REPOSITORY_URL="${url}" \
+  CONFIG_COMMIT="${commit}" \
+  CONFIG_SOURCE_KEY="${source_key}" \
+  CONFIG_SOURCE_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
+  RELEASE_BUCKET=spawnpoint-test-releases \
+  "${builder}" >/dev/null 2>&1; then
+  printf 'expected failure: tampered config snapshot\n' >&2
+  exit 1
+fi
 
 output="$(run_builder)"
 grep -qx 'result=preset_catalog_ready' <<<"${output}"

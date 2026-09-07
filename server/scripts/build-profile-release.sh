@@ -10,8 +10,9 @@ usage() {
   cat >&2 <<'EOF'
 usage: build-profile-release.sh <profile-directory> <release> <resolved-mods-directory> <output-manifest>
 
-The profile must belong to a clean Git checkout. Its exact origin URL, full commit and profile ID are embedded in the
-release manifest. A profile with mods.source=null requires an empty resolved mod directory. The profile's game
+The profile must belong to a clean Git checkout, or PROFILE_SOURCE_REPOSITORY and PROFILE_SOURCE_COMMIT must identify
+its verified Git snapshot. Its origin URL, full commit and profile ID are embedded in the release manifest. A profile
+with mods.source=null requires an empty resolved mod directory. The profile's game
 (ADR-0034) selects the version field, the loader contract and the mod extension; absence means minecraft.
 EOF
 }
@@ -21,7 +22,7 @@ EOF
   exit 2
 }
 
-for command in git jq realpath; do
+for command in jq realpath; do
   command -v "${command}" >/dev/null 2>&1 || {
     printf 'error: required command not found: %s\n' "${command}" >&2
     exit 1
@@ -43,19 +44,31 @@ profile="${profile_directory}/profile.json"
   exit 1
 }
 
-git_root="$(git -C "${profile_directory}" rev-parse --show-toplevel)"
-profile_relative="$(realpath --relative-to="${git_root}" -- "${profile_directory}")"
-[[ "${profile_relative}" != .. && "${profile_relative}" != ../* ]] || {
-  printf 'error: profile directory is outside its Git checkout\n' >&2
-  exit 1
-}
-[[ -z "$(git -C "${git_root}" status --porcelain --untracked-files=all -- "${profile_relative}")" ]] || {
-  printf 'error: source profile has uncommitted changes: %s\n' "${profile_relative}" >&2
-  exit 1
-}
-
-profile_commit="$(git -C "${git_root}" rev-parse HEAD)"
-profile_repository="$(git -C "${git_root}" remote get-url origin)"
+if [[ -n "${PROFILE_SOURCE_REPOSITORY:-}" || -n "${PROFILE_SOURCE_COMMIT:-}" ]]; then
+  [[ -n "${PROFILE_SOURCE_REPOSITORY:-}" && "${PROFILE_SOURCE_COMMIT:-}" =~ ^[0-9a-f]{40}$ ]] || {
+    printf 'error: verified snapshot source requires repository and full commit\n' >&2
+    exit 1
+  }
+  profile_repository="${PROFILE_SOURCE_REPOSITORY}"
+  profile_commit="${PROFILE_SOURCE_COMMIT}"
+else
+  command -v git >/dev/null 2>&1 || {
+    printf 'error: required command not found: git\n' >&2
+    exit 1
+  }
+  git_root="$(git -C "${profile_directory}" rev-parse --show-toplevel)"
+  profile_relative="$(realpath --relative-to="${git_root}" -- "${profile_directory}")"
+  [[ "${profile_relative}" != .. && "${profile_relative}" != ../* ]] || {
+    printf 'error: profile directory is outside its Git checkout\n' >&2
+    exit 1
+  }
+  [[ -z "$(git -C "${git_root}" status --porcelain --untracked-files=all -- "${profile_relative}")" ]] || {
+    printf 'error: source profile has uncommitted changes: %s\n' "${profile_relative}" >&2
+    exit 1
+  }
+  profile_commit="$(git -C "${git_root}" rev-parse HEAD)"
+  profile_repository="$(git -C "${git_root}" remote get-url origin)"
+fi
 profile_id="$(jq -er '.id' "${profile}")"
 [[ "${profile_id}" == "$(basename -- "${profile_directory}")" ]] || {
   printf 'error: profile id must match its directory name\n' >&2

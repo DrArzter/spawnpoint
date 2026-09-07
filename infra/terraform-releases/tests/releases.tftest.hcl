@@ -112,8 +112,8 @@ run "build_release_workflow_can_only_run_the_reviewed_builder" {
     condition = toset([
       for variable in jsondecode(aws_sfn_state_machine.build_release.definition).States["Build Immutable Release"].Parameters.EnvironmentVariablesOverride :
       variable.Name
-    ]) == toset(["PROFILE_ID", "CONFIG_COMMIT", "RELEASE", "CONFIG_REPOSITORY_URL", "RELEASE_CREATED_BY"])
-    error_message = "The workflow may override only release identity, never secrets, buckets, source or buildspec."
+    ]) == toset(["PROFILE_ID", "CONFIG_COMMIT", "CONFIG_SOURCE_KEY", "CONFIG_SOURCE_SHA256", "RELEASE", "CONFIG_REPOSITORY_URL", "RELEASE_CREATED_BY"])
+    error_message = "The workflow may override only release and staged Git source identity, never secrets, buckets or buildspec."
   }
 
   assert {

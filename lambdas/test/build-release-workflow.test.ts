@@ -63,7 +63,15 @@ test("the workflow runs only the fixed builder and passes no authority", async (
   const overrides = build.Parameters?.EnvironmentVariablesOverride as Array<{ Name: string }>;
   assert.deepEqual(
     new Set(overrides.map((variable) => variable.Name)),
-    new Set(["PROFILE_ID", "CONFIG_COMMIT", "RELEASE", "CONFIG_REPOSITORY_URL", "RELEASE_CREATED_BY"]),
+    new Set([
+      "PROFILE_ID",
+      "CONFIG_COMMIT",
+      "CONFIG_SOURCE_KEY",
+      "CONFIG_SOURCE_SHA256",
+      "RELEASE",
+      "CONFIG_REPOSITORY_URL",
+      "RELEASE_CREATED_BY",
+    ]),
   );
   assert.doesNotMatch(JSON.stringify(build), /CF_API_KEY|RELEASE_BUCKET|BuildspecOverride|SourceLocationOverride/);
 });

@@ -25,6 +25,8 @@ base_env=(
   RELEASE=1.1
   RELEASE_BUCKET=spawnpoint-releases-123456789012
   CONFIG_REPOSITORY_URL=https://github.com/DrArzter/my-docker-minecraft-server-config.git
+  CONFIG_SOURCE_KEY=config-sources/DrArzter/my-docker-minecraft-server-config/0123456789abcdef0123456789abcdef01234567.tar.gz
+  CONFIG_SOURCE_SHA256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   CF_API_KEY=test-only
 )
 
@@ -72,15 +74,27 @@ chmod 0755 "${fixture}/bin/docker"
 ln -s -- "${repository_root}/server/tests/fake-aws" "${fixture}/bin/aws"
 
 export FAKE_S3_ROOT="${fixture}/fake-s3"
+stage_config_source() {
+  local repository="$1"
+  local repository_slug="$2"
+  local commit="$3"
+  local archive="${fixture}/${commit}.tar.gz"
+  local key="config-sources/${repository_slug}/${commit}.tar.gz"
+  git -C "${repository}" archive --format=tar.gz --output="${archive}" "${commit}" profiles
+  mkdir -p -- "${FAKE_S3_ROOT}/spawnpoint-test-releases/$(dirname -- "${key}")"
+  cp -- "${archive}" "${FAKE_S3_ROOT}/spawnpoint-test-releases/${key}"
+  printf '%s\t%s\n' "${key}" "$(sha256sum -- "${archive}" | awk '{print $1}')"
+}
+IFS=$'\t' read -r config_source_key config_source_sha256 < <(
+  stage_config_source "${config_repo}" "DrArzter/my-docker-minecraft-server-config" "${config_commit}"
+)
 builder_output="$(
   env \
     PATH="${fixture}/bin:${PATH}" \
-    GIT_ALLOW_PROTOCOL=file \
-    GIT_CONFIG_COUNT=1 \
-    GIT_CONFIG_KEY_0="url.file://${config_repo}.insteadOf" \
-    GIT_CONFIG_VALUE_0=https://github.com/DrArzter/my-docker-minecraft-server-config.git \
     CONFIG_REPOSITORY_URL=https://github.com/DrArzter/my-docker-minecraft-server-config.git \
     CONFIG_COMMIT="${config_commit}" \
+    CONFIG_SOURCE_KEY="${config_source_key}" \
+    CONFIG_SOURCE_SHA256="${config_source_sha256}" \
     PROFILE_ID=main \
     RELEASE=4.0 \
     RELEASE_BUCKET=spawnpoint-test-releases \
@@ -141,15 +155,16 @@ jq -n \
   >"${FAKE_FACTORIO_ROOT}/mod-graftorio2.json"
 
 factorio_url=https://github.com/DrArzter/my-docker-factorio-server-config.git
+IFS=$'\t' read -r factorio_source_key factorio_source_sha256 < <(
+  stage_config_source "${factorio_config}" "DrArzter/my-docker-factorio-server-config" "${factorio_commit}"
+)
 factorio_output="$(
   env \
     PATH="${fixture}/bin:${PATH}" \
-    GIT_ALLOW_PROTOCOL=file \
-    GIT_CONFIG_COUNT=1 \
-    GIT_CONFIG_KEY_0="url.file://${factorio_config}.insteadOf" \
-    GIT_CONFIG_VALUE_0="${factorio_url}" \
     CONFIG_REPOSITORY_URL="${factorio_url}" \
     CONFIG_COMMIT="${factorio_commit}" \
+    CONFIG_SOURCE_KEY="${factorio_source_key}" \
+    CONFIG_SOURCE_SHA256="${factorio_source_sha256}" \
     PROFILE_ID=factorio-vanilla \
     RELEASE=5.0 \
     RELEASE_BUCKET=spawnpoint-test-releases \
@@ -173,12 +188,10 @@ jq -e '
 if minecraft_without_key="$(
   env \
     PATH="${fixture}/bin:${PATH}" \
-    GIT_ALLOW_PROTOCOL=file \
-    GIT_CONFIG_COUNT=1 \
-    GIT_CONFIG_KEY_0="url.file://${config_repo}.insteadOf" \
-    GIT_CONFIG_VALUE_0=https://github.com/DrArzter/my-docker-minecraft-server-config.git \
     CONFIG_REPOSITORY_URL=https://github.com/DrArzter/my-docker-minecraft-server-config.git \
     CONFIG_COMMIT="${config_commit}" \
+    CONFIG_SOURCE_KEY="${config_source_key}" \
+    CONFIG_SOURCE_SHA256="${config_source_sha256}" \
     PROFILE_ID=main \
     RELEASE=6.0 \
     RELEASE_BUCKET=spawnpoint-test-releases \

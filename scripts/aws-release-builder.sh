@@ -9,6 +9,8 @@ set -Eeuo pipefail
 
 repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 server_scripts="${repository_root}/server/scripts"
+# shellcheck source=scripts/_config-source.sh
+source "${repository_root}/scripts/_config-source.sh"
 
 if [[ "${BUILDER_MODE:-release}" == "preset-catalog" ]]; then
   exec "${repository_root}/scripts/aws-preset-catalog-builder.sh"
@@ -19,7 +21,7 @@ fi
 # other repository. CF_API_KEY is checked later instead, after the profile is
 # read: it is a minecraft-only requirement, and the game is a property of the
 # profile (ADR-0034).
-for variable in CONFIG_COMMIT PROFILE_ID RELEASE RELEASE_BUCKET CONFIG_REPOSITORY_URL; do
+for variable in CONFIG_COMMIT CONFIG_SOURCE_KEY CONFIG_SOURCE_SHA256 PROFILE_ID RELEASE RELEASE_BUCKET CONFIG_REPOSITORY_URL; do
   [[ -n "${!variable:-}" && "${!variable}" != "REQUIRED_BY_CALLER" ]] || {
     printf 'error: %s is required\n' "${variable}" >&2
     exit 1
@@ -55,7 +57,7 @@ case "${config_repository}" in
 esac
 
 # docker is a minecraft-resolver dependency, checked by the resolver itself.
-for command in awk aws find git jq realpath sha256sum sort; do
+for command in awk aws find git grep jq realpath sha256sum sort tar; do
   command -v "${command}" >/dev/null 2>&1 || {
     printf 'error: required command not found: %s\n' "${command}" >&2
     exit 1
@@ -68,15 +70,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
-config_checkout="${workspace}/config"
-git init --quiet "${config_checkout}"
+materialize_config_source "${workspace}"
+config_checkout="${CONFIG_CHECKOUT}"
+# Existing profile resolvers require a clean checkout before reading relative
+# inputs. Reconstruct one around the already hash-verified inert snapshot; the
+# release manifest still records CONFIG_COMMIT rather than this synthetic SHA.
+git -C "${config_checkout}" init --quiet
 git -C "${config_checkout}" remote add origin "${config_repository}"
-git -C "${config_checkout}" fetch --quiet --depth=1 origin "${CONFIG_COMMIT}"
-git -C "${config_checkout}" checkout --quiet --detach FETCH_HEAD
-[[ "$(git -C "${config_checkout}" rev-parse HEAD)" == "${CONFIG_COMMIT}" ]] || {
-  printf 'error: fetched config commit does not match CONFIG_COMMIT\n' >&2
-  exit 1
-}
+git -C "${config_checkout}" add profiles
+git -C "${config_checkout}" -c user.name=Spawnpoint -c user.email=spawnpoint@invalid \
+  commit --quiet -m "Verified config snapshot ${CONFIG_COMMIT}"
 
 profile_directory="${config_checkout}/profiles/${PROFILE_ID}"
 [[ -d "${profile_directory}" && ! -L "${profile_directory}" ]] || {
@@ -97,6 +100,8 @@ payload="${workspace}/payload"
 
 RELEASE_CREATED_BY="${RELEASE_CREATED_BY:-github-actions}" \
 RELEASE_CHANGELOG="${RELEASE_CHANGELOG:-Profile ${PROFILE_ID} at ${CONFIG_COMMIT}}" \
+PROFILE_SOURCE_REPOSITORY="${config_repository}" \
+PROFILE_SOURCE_COMMIT="${CONFIG_COMMIT}" \
   "${server_scripts}/build-profile-release.sh" \
     "${profile_directory}" "${RELEASE}" "${payload}/mods" "${payload}/manifest.json"
 

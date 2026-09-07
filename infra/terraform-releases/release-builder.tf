@@ -25,6 +25,11 @@ data "archive_file" "release_builder_source" {
   }
 
   source {
+    content  = file("${path.module}/../../scripts/_config-source.sh")
+    filename = "scripts/_config-source.sh"
+  }
+
+  source {
     content  = file("${path.module}/../../server/scripts/_common.sh")
     filename = "server/scripts/_common.sh"
   }
@@ -77,6 +82,10 @@ resource "aws_s3_object" "release_builder_source" {
   tags = {
     Name    = "spawnpoint-release-builder-source"
     Purpose = "reviewed-codebuild-input"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
@@ -140,6 +149,12 @@ data "aws_iam_policy_document" "release_builder" {
   }
 
   statement {
+    sid       = "ReadGitConfigSnapshots"
+    actions   = ["s3:GetObject"]
+    resources = ["${data.aws_s3_bucket.releases.arn}/config-sources/*"]
+  }
+
+  statement {
     sid = "WriteOnlyOwnLogs"
     actions = [
       "logs:CreateLogStream",
@@ -200,6 +215,16 @@ resource "aws_codebuild_project" "release_builder" {
 
     environment_variable {
       name  = "CONFIG_COMMIT"
+      value = "REQUIRED_BY_CALLER"
+    }
+
+    environment_variable {
+      name  = "CONFIG_SOURCE_KEY"
+      value = "REQUIRED_BY_CALLER"
+    }
+
+    environment_variable {
+      name  = "CONFIG_SOURCE_SHA256"
       value = "REQUIRED_BY_CALLER"
     }
 

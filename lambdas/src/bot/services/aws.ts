@@ -8,12 +8,16 @@ import { ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sd
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { buildStartInput, buildWatchdogInput } from "../../domain/telegram-bot.ts";
+import { connectPortForWorld } from "../../control-plane/catalog.ts";
 
 export const env = (name: string): string => {
   const value = process.env[name];
   if (!value) throw new Error(`missing environment variable: ${name}`);
   return value;
 };
+
+export const connectionAddress = (worldId = env("WORLD_ID")): string =>
+  `${env("CONNECTION_HOST")}:${connectPortForWorld(worldId)}`;
 
 const region = env("AWS_REGION");
 const sfn = new SFNClient({ region });
@@ -86,7 +90,7 @@ export async function startSession(requestedBy: string): Promise<string> {
           // configured for rather than relying on a machine default, which no
           // longer exists.
           worldId: env("WORLD_ID"),
-          connectionAddress: env("CONNECTION_ADDRESS"),
+          connectionAddress: connectionAddress(),
           requestedBy,
         }),
       ),

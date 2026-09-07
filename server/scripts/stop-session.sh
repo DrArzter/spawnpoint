@@ -32,6 +32,11 @@ aws_region="${AWS_REGION:-$(read_env_value AWS_REGION)}"
 source "${SERVER_DIR}/games/_dispatch.sh"
 resolve_game
 
+if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
+  export SERVER_DATA_DIR="${WORLD_DATA_DIRECTORY}"
+  export WORLD_NAME="${WORLD_ID}"
+fi
+
 export SERVER_PROJECT_DIRECTORY="${SERVER_DIR}"
 if [[ -z "${SERVER_COMPOSE_FILES:-}" ]]; then
   compose_files=""

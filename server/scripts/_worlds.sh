@@ -8,7 +8,9 @@ WORLD_SERVER_DIR="$(cd -- "${WORLD_SCRIPT_DIR}/.." && pwd)"
 
 # shellcheck source=_connectivity.sh
 source "${WORLD_SCRIPT_DIR}/_connectivity.sh"
-WORLD_CATALOG="$(realpath -e -- "${SPAWNPOINT_WORLD_CATALOG:-${WORLD_SERVER_DIR}/worlds/catalog.json}")"
+default_world_catalog="${WORLD_SERVER_DIR}/worlds/catalog.json"
+[[ ! -f "${WORLD_SERVER_DIR}/runtime/world-catalog.json" ]] || default_world_catalog="${WORLD_SERVER_DIR}/runtime/world-catalog.json"
+WORLD_CATALOG="$(realpath -e -- "${SPAWNPOINT_WORLD_CATALOG:-${default_world_catalog}}")"
 WORLDS_DIRECTORY="$(realpath -m -- "${SPAWNPOINT_WORLDS_DIRECTORY:-${WORLD_SERVER_DIR}/runtime/worlds}")"
 
 require_world_command() {
@@ -37,6 +39,11 @@ validate_world_catalog() {
       )) and
       ((.connectivity // "zerotier") | IN("zerotier", "raw", "route53")) and
       ((has("auth") | not) or (.auth | IN("none", "game", "external")))
+      and ((.storage_layout // "legacy") | IN("legacy", "generation"))
+      and (if (.storage_layout // "legacy") == "generation" then
+        (.generation_id | type == "string" and test("^gen-[0-9a-f]{32}$")) and
+        (.release | type == "string" and test("^[0-9]+\\.[0-9]+$"))
+      else true end)
     ) and
     (([.worlds[].id] | unique | length) == (.worlds | length))
   ' "${WORLD_CATALOG}" >/dev/null || {
@@ -101,11 +108,24 @@ load_world() {
     WORLD_PROFILE_REPOSITORY="$(jq -r '.profile_source.repository' "${WORLD_CATALOG}")"
   [[ -n "${WORLD_PROFILE_COMMIT}" ]] ||
     WORLD_PROFILE_COMMIT="$(jq -r '.profile_source.commit' "${WORLD_CATALOG}")"
-  WORLD_DIRECTORY="$(realpath -m -- "${WORLDS_DIRECTORY}/${WORLD_ID}")"
+  WORLD_STORAGE_LAYOUT="$(jq -r '.storage_layout // "legacy"' <<<"${match}")"
+  WORLD_GENERATION_ID="$(jq -r '.generation_id // empty' <<<"${match}")"
+  WORLD_RELEASE="$(jq -r '.release // empty' <<<"${match}")"
+  if [[ "${WORLD_STORAGE_LAYOUT}" == "generation" ]]; then
+    WORLD_DIRECTORY="$(realpath -m -- "${WORLDS_DIRECTORY}/${WORLD_ID}/generations/${WORLD_GENERATION_ID}")"
+    [[ "${WORLD_DIRECTORY}" == "${WORLDS_DIRECTORY}/${WORLD_ID}/generations/"* ]] || {
+      printf 'error: resolved generation directory escaped storage root\n' >&2
+      exit 1
+    }
+  else
+    WORLD_DIRECTORY="$(realpath -m -- "${WORLDS_DIRECTORY}/${WORLD_ID}")"
+  fi
   WORLD_DATA_DIRECTORY="${WORLD_DIRECTORY}/data"
   WORLD_MODS_DIRECTORY="${WORLD_DIRECTORY}/mods"
+  export SPAWNPOINT_WORLD_DATA_DIRECTORY="${WORLD_DATA_DIRECTORY}"
+  export SPAWNPOINT_WORLD_MODS_DIRECTORY="${WORLD_MODS_DIRECTORY}"
 
-  [[ "$(dirname -- "${WORLD_DIRECTORY}")" == "${WORLDS_DIRECTORY}" ]] || {
+  [[ "${WORLD_STORAGE_LAYOUT}" == "generation" || "$(dirname -- "${WORLD_DIRECTORY}")" == "${WORLDS_DIRECTORY}" ]] || {
     printf 'error: resolved world directory escaped storage root\n' >&2
     exit 1
   }

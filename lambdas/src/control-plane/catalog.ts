@@ -1,4 +1,5 @@
 import type { PresetObservation } from "./preset-catalog.ts";
+import { worldIdForPreset, type WorldRecord } from "./world-registry.ts";
 
 export type CatalogWorld = Readonly<{
   id: string;
@@ -51,28 +52,25 @@ export const gameCatalog: readonly CatalogGame[] = [
     code: "FA",
     displayName: "Factorio",
     connectPort: 34197,
-    worlds: [
-      { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControl: "v1", connectivity: "zerotier" },
-    ],
+    worlds: [],
   },
   {
     id: "zomboid",
     code: "PZ",
     displayName: "Project Zomboid",
     connectPort: 16261,
-    worlds: [
-      { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControl: "v1", connectivity: "zerotier" },
-    ],
+    worlds: [],
   },
 ];
 
 // Static entries preserve every already managed world. A discovered preset
 // enriches the static world that already uses its profile, or becomes a
-// not-yet-created world candidate. It is deliberately not startable until the
-// materialisation workflow exists; discovery must never outrun safe creation.
+// not-yet-created world candidate. Only a preset with a ready immutable release
+// is startable; first start persists the separate world and generation ids.
 export function catalogWithPresets(
   presets: readonly PresetObservation[],
   catalog: readonly CatalogGame[] = gameCatalog,
+  worldRecords: readonly WorldRecord[] = [],
 ): readonly CatalogGame[] {
   return catalog.map((game) => {
     const forGame = presets.filter((preset) => preset.gameId === game.id);
@@ -94,11 +92,39 @@ export function catalogWithPresets(
         },
       };
     });
+    const materialized = worldRecords
+      .filter((record) => record.gameId === game.id && record.status === "active")
+      .filter((record) => !existing.some((world) => world.id === record.worldId))
+      .map((record) => {
+        consumed.add(record.preset.id);
+        const current = forGame.find((preset) => preset.id === record.preset.id && preset.profileDigest === record.preset.profileDigest);
+        return {
+          id: record.worldId,
+          displayName: record.displayName,
+          profileId: record.preset.id,
+          sessionControl: "v1" as const,
+          connectivity: record.connectivity,
+          materialization: "existing" as const,
+          preset: current === undefined ? {
+            repository: record.preset.repository,
+            commit: record.preset.commit,
+            profileDigest: record.preset.profileDigest,
+            buildStatus: "ready" as const,
+            latestRelease: record.currentGeneration.release,
+          } : {
+            repository: current.repository,
+            commit: current.commit,
+            profileDigest: current.profileDigest,
+            buildStatus: current.buildStatus,
+            latestRelease: current.latestRelease,
+          },
+        };
+      });
     const discovered = forGame.filter((preset) => !consumed.has(preset.id)).map((preset) => ({
-      id: preset.id,
+      id: worldIdForPreset(preset),
       displayName: preset.displayName,
       profileId: preset.id,
-      sessionControl: null,
+      sessionControl: preset.buildStatus === "ready" && preset.latestRelease !== null ? "v1" as const : null,
       connectivity: "zerotier" as const,
       materialization: "not_created" as const,
       preset: {
@@ -109,7 +135,7 @@ export function catalogWithPresets(
         latestRelease: preset.latestRelease,
       },
     }));
-    return { ...game, worlds: [...existing, ...discovered] };
+    return { ...game, worlds: [...existing, ...materialized, ...discovered] };
   });
 }
 

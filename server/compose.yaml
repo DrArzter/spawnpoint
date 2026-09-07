@@ -40,8 +40,8 @@ services:
       ENFORCE_WHITELIST: "TRUE"
 
     volumes:
-      - "./data:/data"
-      - "./mods:/data/mods"
+      - "${SPAWNPOINT_WORLD_DATA_DIRECTORY:-./data}:/data"
+      - "${SPAWNPOINT_WORLD_MODS_DIRECTORY:-./mods}:/data/mods"
       - "./extras:/extras"
 
     # PROJECT: `always` fights an idle stop that stops the container rather than

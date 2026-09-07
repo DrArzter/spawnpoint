@@ -12,7 +12,7 @@ services:
       # RCON stays host-local: the probe's transport, never a player surface.
       - "127.0.0.1:27015:27015"
     volumes:
-      - "./data:/factorio"
+      - "${SPAWNPOINT_WORLD_DATA_DIRECTORY:-./games/factorio/data}:/factorio"
     environment:
       # First boot generates a map; later boots load the newest save, which is
       # exactly the shape the backup contract archives (saves/*.zip).

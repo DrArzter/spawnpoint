@@ -1,6 +1,7 @@
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { catalogWithPresets, gameCatalog, type CatalogGame } from "./catalog.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
+import type { WorldRecord } from "./world-registry.ts";
 
 export type HostObservation = Readonly<{
   id: string;
@@ -35,6 +36,7 @@ export type ControlPlaneSources = Readonly<{
   readReleasePointer: (worldId: string) => Promise<ReleasePointerObservation>;
   listRunningOperations: () => Promise<readonly OperationObservation[]>;
   listPresets?: () => Promise<readonly PresetObservation[]>;
+  listWorldRecords?: () => Promise<readonly WorldRecord[]>;
 }>;
 
 export type ControlPlaneSnapshot = Readonly<{
@@ -87,7 +89,11 @@ export async function readControlPlaneSnapshot(
   now: () => Date = () => new Date(),
 ): Promise<ControlPlaneSnapshot> {
   const connectionHost = options.connectionHost ?? null;
-  const effectiveCatalog = catalogWithPresets(await (sources.listPresets?.() ?? Promise.resolve([])), catalog);
+  const [presets, worldRecords] = await Promise.all([
+    sources.listPresets?.() ?? Promise.resolve([]),
+    sources.listWorldRecords?.() ?? Promise.resolve([]),
+  ]);
+  const effectiveCatalog = catalogWithPresets(presets, catalog, worldRecords);
   const worldConnectionHost = (connectivity: string): string | null => {
     if (connectionHost === null) return null;
     if (connectivity !== "raw") return connectionHost;

@@ -31,6 +31,28 @@ grep -Fxq 'profile_id=vanilla-forge' <<<"${vanilla_output}"
 expect_failure "unknown world" "${scripts}/world-profile.sh" missing
 expect_failure "invalid world id" "${scripts}/world-profile.sh" '../main'
 
+# A registry record adds one generation-backed world without changing the
+# deployed static catalog or redirecting any legacy world's data directory.
+mkdir -p -- "${fixture}/bin" "${fixture}/s3/releases/worlds/minecraft-creative"
+ln -s -- "${repository_root}/server/tests/fake-aws" "${fixture}/bin/aws"
+cat >"${fixture}/s3/releases/worlds/minecraft-creative/world.json" <<'EOF'
+{"schema_version":1,"world_id":"minecraft-creative","game":"minecraft","display_name":"Creative","status":"active","connectivity":"zerotier","storage_layout":"generation","preset":{"id":"creative","repository":"https://github.com/DrArzter/config","commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","profile_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},"current_generation":{"id":"gen-123456781234123412341234567890ab","release":"42.7","created_at":"2026-09-07T18:00:00.000Z"}}
+EOF
+dynamic_output="$(
+  PATH="${fixture}/bin:${PATH}" \
+  FAKE_S3_ROOT="${fixture}/s3" \
+  RELEASE_BUCKET=releases \
+  SPAWNPOINT_RUNTIME_DIRECTORY="${fixture}/runtime" \
+    "${scripts}/refresh-world-catalog.sh" minecraft-creative
+)"
+dynamic_catalog="$(awk -F= '$1 == "catalog" { print substr($0, index($0, "=") + 1) }' <<<"${dynamic_output}")"
+dynamic_profile="$(SPAWNPOINT_WORLD_CATALOG="${dynamic_catalog}" "${scripts}/world-profile.sh" minecraft-creative)"
+grep -Fxq 'profile_id=creative' <<<"${dynamic_profile}"
+grep -Fq '/worlds/minecraft-creative/generations/gen-123456781234123412341234567890ab/data' <<<"${dynamic_profile}"
+SPAWNPOINT_WORLD_CATALOG="${dynamic_catalog}" "${scripts}/prepare-world.sh" minecraft-creative >/dev/null
+jq -e '.generation == {id: "gen-123456781234123412341234567890ab", release: "42.7"}' \
+  "${fixture}/worlds/minecraft-creative/generations/gen-123456781234123412341234567890ab/.spawnpoint-world.json" >/dev/null
+
 prepare_output="$("${scripts}/prepare-world.sh" world)"
 grep -Fxq 'result=prepared' <<<"${prepare_output}"
 [[ -d "${fixture}/worlds/world/data" ]]
@@ -54,12 +76,6 @@ expect_failure "mismatched marker" "${scripts}/prepare-world.sh" world
 
 # --- provenance is per world when it needs to be: one authoring repository per
 #     game, and a pin bump for one world must not invalidate another's marker ---
-real_factorio="$("${scripts}/world-profile.sh" factorio)"
-grep -Fxq 'profile_repository=https://github.com/DrArzter/my-docker-factorio-server-config' <<<"${real_factorio}"
-grep -Fq 'profile_commit=' <<<"${real_factorio}"
-[[ "$(awk -F= '$1 == "profile_commit" { print $2 }' <<<"${real_factorio}")" \
-  != "$(awk -F= '$1 == "profile_commit" { print $2 }' <<<"${main_output}")" ]]
-
 override_commit="1111111111111111111111111111111111111111"
 write_catalog() {
   jq -n --argjson worlds "$1" '{

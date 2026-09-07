@@ -58,6 +58,18 @@ test("each world's address carries its own game's port, and only for callers all
     listRunningOperations: async () => [],
     readLifecycle: async () => null,
     readReleasePointer: async () => ({ state: "unconfigured", desiredRelease: null, activeRelease: null }),
+    listPresets: async () => [
+      {
+        id: "factorio-vanilla", displayName: "Factorio vanilla", gameId: "factorio",
+        repository: "https://github.com/example/factorio", commit: "1".repeat(40), profileDigest: "2".repeat(64),
+        buildStatus: "ready", latestRelease: "1.0",
+      },
+      {
+        id: "zomboid-vanilla", displayName: "Project Zomboid vanilla", gameId: "zomboid",
+        repository: "https://github.com/example/zomboid", commit: "3".repeat(40), profileDigest: "4".repeat(64),
+        buildStatus: "ready", latestRelease: "1.0",
+      },
+    ],
   };
 
   const visible = await readControlPlaneSnapshot(sources, {
@@ -69,8 +81,8 @@ test("each world's address carries its own game's port, and only for callers all
     visible.games.flatMap((game) => game.worlds.map((world) => [world.id, world.connectionAddress])),
   );
   assert.equal(addresses.get("world"), "172.29.23.24:25565");
-  assert.equal(addresses.get("factorio"), "172.29.23.24:34197");
-  assert.equal(addresses.get("zomboid"), "172.29.23.24:16261");
+  assert.equal(addresses.get("factorio-vanilla"), "172.29.23.24:34197");
+  assert.equal(addresses.get("zomboid-vanilla"), "172.29.23.24:16261");
 
   // One configured string used to answer 25565 for every game. It cannot now.
   assert.equal(new Set(addresses.values()).size, 3);

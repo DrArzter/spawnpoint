@@ -1,3 +1,10 @@
+locals {
+  game_host_release_resources = [
+    "${data.aws_s3_bucket.releases.arn}/releases/*",
+    "${data.aws_s3_bucket.releases.arn}/worlds/*",
+  ]
+}
+
 data "aws_iam_policy_document" "ec2_assume_role" {
   statement {
     effect  = "Allow"
@@ -49,7 +56,7 @@ data "aws_iam_policy_document" "game_host_storage" {
   statement {
     sid       = "ReadReleases"
     actions   = ["s3:GetObject"]
-    resources = ["${data.aws_s3_bucket.releases.arn}/releases/*"]
+    resources = local.game_host_release_resources
   }
 }
 

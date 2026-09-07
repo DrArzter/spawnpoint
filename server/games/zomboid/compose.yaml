@@ -22,7 +22,7 @@ services:
     volumes:
       # This mount is the game's Zomboid folder: Saves/, db/ and Server/ all
       # live inside it, which is what lets one archive hold a whole world.
-      - "./games/zomboid/data:/project-zomboid-config"
+      - "${SPAWNPOINT_WORLD_DATA_DIRECTORY:-./games/zomboid/data}:/project-zomboid-config"
       - "zomboid-server-files:/project-zomboid"
     restart: "no" # same reasoning as every other game service: a restart policy
     # would fight the idle stop and hide a crash loop.

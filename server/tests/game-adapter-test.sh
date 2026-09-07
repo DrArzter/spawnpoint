@@ -131,7 +131,10 @@ response="$(python3 "${GAMES}/factorio/rcon-client.py" 127.0.0.1 "${rcon_port}" 
 wait "${fake_rcon_pid}"
 
 # --- dispatch: the catalog names the game, absence means minecraft ---
-output="$(WORLD_ID=factorio bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; printf '%s %s %s\n' \"\${GAME_ID}\" \"\${GAME_COMPOSE_SERVICE}\" \"\${GAME_MOD_EXTENSION}\"")"
+cat >"${fixture}/catalog.json" <<'EOF'
+{"schema_version":1,"profile_source":{"repository":"https://example.invalid/profiles","commit":"0000000000000000000000000000000000000000"},"worlds":[{"id":"factorio","display_name":"Factorio test","profile_id":"factorio-vanilla","game":"factorio"}]}
+EOF
+output="$(WORLD_ID=factorio SPAWNPOINT_WORLD_CATALOG="${fixture}/catalog.json" bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; printf '%s %s %s\n' \"\${GAME_ID}\" \"\${GAME_COMPOSE_SERVICE}\" \"\${GAME_MOD_EXTENSION}\"")"
 [[ "${output}" == "factorio factorio zip" ]]
 output="$(WORLD_ID=world bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; printf '%s\n' \"\${GAME_ID}\"")"
 [[ "${output}" == "minecraft" ]]
@@ -141,7 +144,7 @@ expect_failure "a world naming a game with no module" \
   env SPAWNPOINT_GAME=heroes-of-might bash -c "source '${GAMES}/_dispatch.sh'; resolve_game"
 
 # world-profile reports the axis
-profile_output="$("${SCRIPTS}/world-profile.sh" factorio)"
+profile_output="$(SPAWNPOINT_WORLD_CATALOG="${fixture}/catalog.json" "${SCRIPTS}/world-profile.sh" factorio)"
 grep -qx 'game=factorio' <<<"${profile_output}"
 
 # --- factorio saves: archive, verify with the per-game sentinel, restore ---

@@ -4,6 +4,7 @@ import {
   HeadObjectCommand,
   ListObjectsV2Command,
   NoSuchKey,
+  PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -14,6 +15,7 @@ import { ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sd
 import type { BackupObject } from "./backups.ts";
 import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts";
 import { gameCatalog } from "./catalog.ts";
+import { newWorldRecord, parseWorldRecord, worldRecordDocument, type WorldRecord } from "./world-registry.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildStartInput, buildStopInput, buildWatchdogInput } from "../domain/telegram-bot.ts";
@@ -135,6 +137,26 @@ async function listPresets(): Promise<readonly PresetObservation[]> {
   return groups.flat();
 }
 
+async function listWorldRecords(): Promise<readonly WorldRecord[]> {
+  const bucket = requiredEnv("RELEASE_BUCKET");
+  const listing = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: "worlds/", MaxKeys: 500 }));
+  const keys = (listing.Contents ?? []).flatMap((object) =>
+    object.Key && /^worlds\/[a-z0-9][a-z0-9-]{0,31}\/world\.json$/.test(object.Key) ? [object.Key] : []);
+  const records = await Promise.all(keys.map(async (key) => {
+    try {
+      const response = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      const body = await response.Body?.transformToString();
+      const record = body ? parseWorldRecord(JSON.parse(body)) : null;
+      if (record === null || key !== `worlds/${record.worldId}/world.json`) throw new Error("invalid world record");
+      return record;
+    } catch (error) {
+      console.error("world_record_read_failed", { key, errorName: error instanceof Error ? error.name : "UnknownError" });
+      return null;
+    }
+  }));
+  return records.filter((record): record is WorldRecord => record !== null);
+}
+
 function isSessionOperation(type: MachineType): type is OperationObservation["type"] {
   return type === "start" || type === "stop" || type === "promote";
 }
@@ -160,7 +182,68 @@ export const awsControlPlaneSources: ControlPlaneSources = {
   readReleasePointer,
   listRunningOperations,
   listPresets,
+  listWorldRecords,
 };
+
+function preconditionFailed(error: unknown): boolean {
+  return error instanceof Error && (error.name === "PreconditionFailed" || error.name === "ConditionalRequestConflict");
+}
+
+async function readJsonObject(key: string): Promise<Record<string, unknown>> {
+  const response = await s3.send(new GetObjectCommand({ Bucket: requiredEnv("RELEASE_BUCKET"), Key: key }));
+  const body = await response.Body?.transformToString();
+  if (!body) throw new Error(`empty object: ${key}`);
+  const parsed = JSON.parse(body) as unknown;
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(`invalid object: ${key}`);
+  return parsed as Record<string, unknown>;
+}
+
+async function createJsonObject(key: string, value: Record<string, unknown>): Promise<void> {
+  await s3.send(new PutObjectCommand({
+    Bucket: requiredEnv("RELEASE_BUCKET"), Key: key, Body: JSON.stringify(value),
+    ContentType: "application/json", ServerSideEncryption: "AES256", IfNoneMatch: "*",
+  }));
+}
+
+export async function materializePresetWorld(
+  preset: PresetObservation,
+  generationUuid: string,
+  createdAt: string,
+): Promise<WorldRecord> {
+  const proposed = newWorldRecord(preset, generationUuid, createdAt);
+  const pointerKey = `worlds/${proposed.worldId}/release.json`;
+  try {
+    await createJsonObject(pointerKey, {
+      schema_version: 1,
+      world: proposed.worldId,
+      desired_release: proposed.currentGeneration.release,
+      active_release: null,
+      updated_at: createdAt,
+      updated_by: "world-materialization",
+    });
+  } catch (error) {
+    if (!preconditionFailed(error)) throw error;
+    const existing = await readJsonObject(pointerKey);
+    if (existing.world !== proposed.worldId || existing.desired_release !== proposed.currentGeneration.release) {
+      throw new Error("world_release_pointer_conflict");
+    }
+  }
+
+  const recordKey = `worlds/${proposed.worldId}/world.json`;
+  try {
+    await createJsonObject(recordKey, worldRecordDocument(proposed));
+    return proposed;
+  } catch (error) {
+    if (!preconditionFailed(error)) throw error;
+    const existing = parseWorldRecord(await readJsonObject(recordKey));
+    if (
+      existing === null || existing.worldId !== proposed.worldId || existing.gameId !== proposed.gameId ||
+      existing.preset.id !== proposed.preset.id || existing.preset.profileDigest !== proposed.preset.profileDigest ||
+      existing.currentGeneration.release !== proposed.currentGeneration.release
+    ) throw new Error("world_record_conflict");
+    return existing;
+  }
+}
 
 function machineArn(type: MachineType): string {
   const machine = operationMachines().find((candidate) => candidate.type === type);
@@ -181,11 +264,12 @@ export async function startSessionExecution(
   instanceId: string,
   requestedBy: string,
   worldId: string,
+  connectionAddress: string,
 ): Promise<string> {
   requireWorldId(worldId);
   const started = await sfn.send(new StartExecutionCommand({
     stateMachineArn: machineArn("start"), name: operationId,
-    input: JSON.stringify(buildStartInput({ operationId, instanceId, worldId, requestedBy, connectionAddress: requiredEnv("CONNECTION_ADDRESS") })),
+    input: JSON.stringify(buildStartInput({ operationId, instanceId, worldId, requestedBy, connectionAddress })),
   }));
   await sfn.send(new StartExecutionCommand({
     stateMachineArn: requiredEnv("WATCHDOG_STATE_MACHINE_ARN"), name: operationId,

@@ -130,6 +130,14 @@ run "free_plan_host_preserves_m0_invariants" {
   }
 
   assert {
+    condition = local.game_host_release_resources == [
+      "arn:aws:s3:::spawnpoint-releases-123456789012/releases/*",
+      "arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*",
+    ]
+    error_message = "The host must be able to read both immutable releases and dynamically materialized world records."
+  }
+
+  assert {
     condition     = aws_instance.game_host.root_block_device[0].encrypted && aws_instance.game_host.root_block_device[0].delete_on_termination
     error_message = "The disposable root volume must be encrypted and deleted with the instance."
   }

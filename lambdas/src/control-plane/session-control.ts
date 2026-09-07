@@ -1,9 +1,9 @@
 import type { HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
-import { gameCatalog, type CatalogGame } from "./catalog.ts";
+import { gameCatalog, type CatalogGame, type CatalogWorld } from "./catalog.ts";
 
 export type SessionAction = "start" | "stop";
 export type SessionPlan =
-  | Readonly<{ kind: "execute"; host: HostObservation }>
+  | Readonly<{ kind: "execute"; host: HostObservation; world: CatalogWorld }>
   | Readonly<{ kind: "noop"; reason: "already_stopped" }>
   | Readonly<{
       kind: "reject";
@@ -39,7 +39,7 @@ export function planSessionOperation(
   // running one is memory nobody has measured (ADR-0023 keeps one world active
   // at a time until that changes). Refuse rather than quietly co-tenant.
   if (action === "start" && host.state === "running") return { kind: "reject", reason: "host_already_running" };
-  return { kind: "execute", host };
+  return { kind: "execute", host, world };
 }
 
 export type PackChoice =

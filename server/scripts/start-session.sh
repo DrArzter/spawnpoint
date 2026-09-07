@@ -13,6 +13,14 @@ read_env_value() {
     "${runtime_env}"
 }
 
+if [[ -n "${WORLD_ID:-}" && -z "${SPAWNPOINT_WORLD_CATALOG:-}" ]]; then
+  configured_release_bucket="${RELEASE_BUCKET:-$(read_env_value RELEASE_BUCKET 2>/dev/null || true)}"
+  catalog_output="$(RELEASE_BUCKET="${configured_release_bucket}" "${SCRIPT_DIR}/refresh-world-catalog.sh" "${WORLD_ID}")"
+  export SPAWNPOINT_WORLD_CATALOG
+  SPAWNPOINT_WORLD_CATALOG="$(awk -F= '$1 == "catalog" { print substr($0, index($0, "=") + 1) }' <<<"${catalog_output}")"
+  [[ -n "${SPAWNPOINT_WORLD_CATALOG}" ]] || { printf 'error: world catalog refresh returned no path\n' >&2; exit 1; }
+fi
+
 # Resolve the world and its game before any host plumbing is examined: a
 # session refused for what the world IS — the gate-versus-auth invariant
 # (ADR-0033), or a connectivity strategy that does not exist yet — is refused
@@ -22,6 +30,10 @@ source "${SERVER_DIR}/games/_dispatch.sh"
 # shellcheck source=_connectivity.sh
 source "${SCRIPT_DIR}/_connectivity.sh"
 resolve_game
+
+if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
+  "${SCRIPT_DIR}/prepare-world.sh" "${WORLD_ID}" >&2
+fi
 
 # Catalog worlds carry connectivity and a declared auth override; the env-only
 # path predates the axis and is the overlay by construction.
@@ -125,7 +137,7 @@ if [[ -n "${release_bucket}" ]]; then
       "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" >&2
     else
       "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" \
-        "${SERVER_DIR}/games/${GAME_ID}/data/mods" >&2
+        "${SPAWNPOINT_WORLD_MODS_DIRECTORY:-${SERVER_DIR}/games/${GAME_ID}/data/mods}" >&2
     fi
     reconcile_status="applied"
   elif [[ $? -eq 3 ]]; then

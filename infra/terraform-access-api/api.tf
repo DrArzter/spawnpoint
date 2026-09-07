@@ -1,3 +1,10 @@
+locals {
+  world_creation_resources = [
+    "${data.aws_s3_bucket.releases.arn}/worlds/*/world.json",
+    "${data.aws_s3_bucket.releases.arn}/worlds/*/release.json",
+  ]
+}
+
 resource "aws_iam_role" "access_api" {
   name               = "spawnpoint-access-api"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
@@ -67,6 +74,12 @@ data "aws_iam_policy_document" "access_api" {
       # a player the files without ever holding a credential.
       "${data.aws_s3_bucket.releases.arn}/packs/*",
     ]
+  }
+
+  statement {
+    sid       = "CreateWorldAndInitialReleasePointer"
+    actions   = ["s3:PutObject"]
+    resources = local.world_creation_resources
   }
 
   statement {

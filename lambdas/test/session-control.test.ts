@@ -2,15 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { HostObservation, OperationObservation } from "../src/control-plane/read-model.ts";
+import { catalogWithPresets } from "../src/control-plane/catalog.ts";
 import { packRelease, planSessionOperation } from "../src/control-plane/session-control.ts";
 
 const host = (state: HostObservation["state"]): HostObservation => ({ id: "host", name: "Host", state, providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: null });
 const operation: OperationObservation = { id: "op", type: "start", status: "running", startedAt: "2026-08-29T00:00:00Z", providerRef: "arn:op" };
 
 test("any world in the catalog can execute, because the machines take a world id", () => {
+  const catalog = catalogWithPresets([{
+    id: "factorio-vanilla", displayName: "Factorio vanilla", gameId: "factorio",
+    repository: "https://github.com/example/factorio", commit: "1".repeat(40), profileDigest: "2".repeat(64),
+    buildStatus: "ready", latestRelease: "1.0",
+  }]);
   assert.equal(planSessionOperation("minecraft", "world", "start", [host("stopped")], []).kind, "execute");
   assert.equal(planSessionOperation("minecraft", "vanilla", "start", [host("stopped")], []).kind, "execute");
-  assert.equal(planSessionOperation("factorio", "factorio", "start", [host("stopped")], []).kind, "execute");
+  assert.equal(planSessionOperation("factorio", "factorio-vanilla", "start", [host("stopped")], [], catalog).kind, "execute");
   assert.deepEqual(planSessionOperation("minecraft", "missing", "start", [host("stopped")], []), { kind: "reject", reason: "unknown_world" });
 });
 
@@ -26,11 +32,11 @@ test("a world listed before its session workflow exists is refused, not attempte
 
 test("a running host refuses a start, because its state does not say which world is up", () => {
   assert.deepEqual(
-    planSessionOperation("factorio", "factorio", "start", [host("running")], []),
+    planSessionOperation("minecraft", "world", "start", [host("running")], []),
     { kind: "reject", reason: "host_already_running" },
   );
   // Stopping the world that is up stays possible; that is how the host frees.
-  assert.equal(planSessionOperation("factorio", "factorio", "stop", [host("running")], []).kind, "execute");
+  assert.equal(planSessionOperation("minecraft", "world", "stop", [host("running")], []).kind, "execute");
 });
 
 test("global operations and ambiguous hosts fail closed", () => {

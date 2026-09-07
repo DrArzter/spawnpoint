@@ -14,26 +14,6 @@
       "id": "vanilla",
       "display_name": "Vanilla Forge",
       "profile_id": "vanilla-forge"
-    },
-    {
-      "id": "factorio",
-      "display_name": "Factorio vanilla",
-      "profile_id": "factorio-vanilla",
-      "game": "factorio",
-      "profile_source": {
-        "repository": "https://github.com/DrArzter/my-docker-factorio-server-config",
-        "commit": "d1fd24e5c98a2d396a29a6dc86363cd685689d58"
-      }
-    },
-    {
-      "id": "zomboid",
-      "display_name": "Project Zomboid vanilla",
-      "profile_id": "zomboid-vanilla",
-      "game": "zomboid",
-      "profile_source": {
-        "repository": "https://github.com/DrArzter/my-docker-zomboid-server-config",
-        "commit": "ae299ac089012ca167bf5695304c7cf2b46638a6"
-      }
     }
   ]
 }

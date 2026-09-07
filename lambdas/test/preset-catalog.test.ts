@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { parsePresetCatalog } from "../src/control-plane/preset-catalog.ts";
 import { catalogWithPresets, gameCatalog } from "../src/control-plane/catalog.ts";
+import { newWorldRecord } from "../src/control-plane/world-registry.ts";
 
 const document = {
   schema_version: 1,
@@ -33,13 +34,30 @@ test("parses a versioned per-game preset catalog", () => {
   }]);
 });
 
+test("a ready preset becomes a startable candidate and then a materialized world", () => {
+  const preset = parsePresetCatalog({
+    ...document,
+    presets: [{ id: "space-age", display_name: "Space Age", profile_digest: "2".repeat(64), build_status: "ready", latest_release: "2.0" }],
+  }, "factorio")![0]!;
+  const candidate = catalogWithPresets([preset], gameCatalog)
+    .find((game) => game.id === "factorio")!.worlds.find((world) => world.id === "factorio-space-age")!;
+  assert.equal(candidate.materialization, "not_created");
+  assert.equal(candidate.sessionControl, "v1");
+
+  const record = newWorldRecord(preset, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
+  const materialized = catalogWithPresets([preset], gameCatalog, [record])
+    .find((game) => game.id === "factorio")!.worlds.find((world) => world.id === "factorio-space-age")!;
+  assert.equal(materialized.materialization, "existing");
+  assert.equal(materialized.sessionControl, "v1");
+});
+
 test("rejects a catalog for another game, duplicate ids, and ready presets without releases", () => {
   assert.equal(parsePresetCatalog(document, "minecraft"), null);
   assert.equal(parsePresetCatalog({ ...document, presets: [document.presets[0], document.presets[0]] }, "factorio"), null);
   assert.equal(parsePresetCatalog({ ...document, presets: [{ ...document.presets[0], latest_release: null }] }, "factorio"), null);
 });
 
-test("enriches an existing profile and exposes a new preset without making it startable", () => {
+test("exposes only ready unmaterialized presets as startable", () => {
   const parsed = parsePresetCatalog({
     ...document,
     presets: [
@@ -49,11 +67,13 @@ test("enriches an existing profile and exposes a new preset without making it st
   }, "factorio")!;
   const catalog = catalogWithPresets(parsed, gameCatalog);
   const factorio = catalog.find((game) => game.id === "factorio")!;
-  const existing = factorio.worlds.find((world) => world.profileId === "factorio-vanilla")!;
-  const discovered = factorio.worlds.find((world) => world.id === "space-age")!;
+  const ready = factorio.worlds.find((world) => world.profileId === "factorio-vanilla")!;
+  const discovered = factorio.worlds.find((world) => world.id === "factorio-space-age")!;
 
-  assert.equal(existing.materialization, "existing");
-  assert.equal(existing.preset?.commit, document.source.commit);
+  assert.equal(ready.id, "factorio-vanilla");
+  assert.equal(ready.materialization, "not_created");
+  assert.equal(ready.sessionControl, "v1");
+  assert.equal(ready.preset?.commit, document.source.commit);
   assert.equal(discovered.materialization, "not_created");
   assert.equal(discovered.sessionControl, null);
 });

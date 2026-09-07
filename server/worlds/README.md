@@ -1,8 +1,14 @@
 # World catalog
 
-`catalog.json` maps a player-facing world ID to an exact profile source. A world owns its save, runtime data and backup
+`catalog.json` contains only deployment-pinned legacy worlds and maps a player-facing world ID to an exact profile source. A world owns its save, runtime data and backup
 lineage; a profile owns Minecraft/loader configuration and mod authoring inputs. Several worlds may eventually use the
 same profile, but two different worlds never share a runtime directory.
+
+New worlds do not require a catalog edit in this repository. The control plane discovers presets from each game's
+configuration repository. On the first Start of a preset with a ready immutable release, it writes
+`worlds/<world-id>/world.json` and an initial `release.json` to the release bucket. The host projects that record into
+`runtime/world-catalog.json` and creates an isolated generation at
+`runtime/worlds/<world-id>/generations/<generation-id>/`. Static Minecraft directories keep their legacy layout.
 
 The profile repository is pinned to a full Git commit. Updating that commit only makes new authoring input available;
 it does not change an active release. Release manifests still pin the resolved JAR bytes by SHA-256.

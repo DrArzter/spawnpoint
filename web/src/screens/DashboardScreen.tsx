@@ -34,7 +34,7 @@ export function DashboardScreen({ game, world, hosts, operations, serverState, l
   const controlDisabled = !world.sessionControlAvailable || !permitted || transitioning;
   const controlsHint = !world.sessionControlAvailable
     ? world.materialization === "not_created"
-      ? world.preset?.buildStatus === "ready" ? "World creation is not deployed yet." : "This preset needs a successful release build before its first start."
+      ? "This preset needs a successful release build before its first start."
       : "This world is not connected to a session workflow yet."
     : !permitted ? `Your role cannot ${sessionAction} sessions.` : transitioning ? "A control-plane operation is already in progress." : `Review and confirm the ${sessionAction} request.`;
   const inviteHint = canInvite ? "Invite everyone or choose specific players." : "Your role cannot send invitations.";
@@ -49,7 +49,7 @@ export function DashboardScreen({ game, world, hosts, operations, serverState, l
   }
 
   return <>
-    <PageHeader description={`${game.displayName} · ${activeRelease ? `active release ${activeRelease}` : world.materialization === "not_created" ? `preset ${world.preset?.buildStatus ?? "unbuilt"} · world not created` : world.release.state === "unconfigured" ? "no release selected" : "release unavailable"}`} title={world.displayName} />
+    <PageHeader description={`${game.displayName} · ${activeRelease ? `active release ${activeRelease}` : world.materialization === "not_created" ? world.preset?.buildStatus === "ready" ? "ready for first start" : `release ${world.preset?.buildStatus ?? "unbuilt"}` : world.release.state === "unconfigured" ? "no release selected" : "release unavailable"}`} title={world.displayName} />
     {loadState === "error" && <Notice action={<Button onClick={onRetry}>Try again</Button>} description={error} title="Current state could not be loaded" tone="danger" />}
     <section className="service-panel" aria-busy={loadState === "loading"}>
       <div className="service-summary">
@@ -63,7 +63,7 @@ export function DashboardScreen({ game, world, hosts, operations, serverState, l
     </section>
     {inviteOpen && <InvitationComposer game={game} onClose={() => setInviteOpen(false)} world={world} />}
     {confirming && <Surface aria-labelledby="operation-confirmation-title" className="operation-confirmation" role="alertdialog">
-      <div><h2 id="operation-confirmation-title">{confirming === "start" ? "Start a billed AWS session?" : "Save, back up and stop this session?"}</h2><p>{confirming === "start" ? `Spawnpoint will boot the host and start ${world.displayName}. The game may take several minutes to become healthy.` : "Spawnpoint will refuse while players are online, then save the world, create a verified backup and stop the host."}</p></div>
+      <div><h2 id="operation-confirmation-title">{confirming === "start" ? "Start a billed AWS session?" : "Save, back up and stop this session?"}</h2><p>{confirming === "start" ? world.materialization === "not_created" ? `Spawnpoint will create ${world.displayName} from its ready preset, open its first generation and boot the host. The first start may take several minutes.` : `Spawnpoint will boot the host and start ${world.displayName}. The game may take several minutes to become healthy.` : "Spawnpoint will refuse while players are online, then save the world, create a verified backup and stop the host."}</p></div>
       <div><Button onClick={() => setConfirming(null)} variant="ghost">Cancel</Button><Button onClick={confirmOperation} ref={confirmButton} variant={confirming === "stop" ? "danger" : "primary"}>{confirming === "start" ? "Start session" : "Stop session"}</Button></div>
     </Surface>}
     {operationRequest.state !== "idle" && <Notice description={operationRequest.message} title={operationRequest.state === "pending" ? "Operation requested" : operationRequest.state === "success" ? "Operation accepted" : "Operation failed"} tone={operationRequest.state === "error" ? "danger" : operationRequest.state === "success" ? "success" : "info"} />}

@@ -107,13 +107,10 @@ expect_failure "an unknown auth value in the catalog" run_profile w
 write_catalog '{"id": "w", "display_name": "W", "profile_id": "w", "game": "heroes"}'
 expect_failure "a catalog naming a game with no module" run_profile w
 
-# the real catalog stays valid and reports the axis with its defaults
+# the deployed legacy catalog stays valid and reports the axis with its defaults
 main_output="$("${SCRIPTS}/world-profile.sh" world)"
 grep -Fxq 'connectivity=zerotier' <<<"${main_output}"
 grep -Fxq 'auth=none' <<<"${main_output}"
-factorio_world_output="$("${SCRIPTS}/world-profile.sh" factorio)"
-grep -Fxq 'connectivity=zerotier' <<<"${factorio_world_output}"
-grep -Fxq 'auth=none' <<<"${factorio_world_output}"
 
 # --- the runtime seam: a strategy the catalog accepts but the host cannot
 #     perform is refused by name, before any host plumbing is touched ---

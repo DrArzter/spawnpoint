@@ -10,11 +10,12 @@ import { issueSessionToken, verifyLoginWidget, verifyMiniAppInitData, verifySess
 import { defaultSubscriptions, validateSubscriptions } from "../access/subscriptions.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../domain/access-events.ts";
 import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
-import { gameCatalog } from "../control-plane/catalog.ts";
+import { catalogWithPresets, gameCatalog } from "../control-plane/catalog.ts";
 import { backupInventory } from "../control-plane/backups.ts";
 import {
   awsControlPlaneSources,
   listWorldBackups,
+  materializePresetWorld,
   packDownloadUrl,
   startSessionExecution,
   stopSessionExecution,
@@ -201,16 +202,33 @@ async function controlPlane(identity: Identity): Promise<Response> {
 }
 
 async function controlSession(identity: Identity, action: SessionAction, gameId: string, worldId: string): Promise<Response> {
-  const [hosts, operations] = await Promise.all([
+  const [hosts, operations, presets, worldRecords] = await Promise.all([
     awsControlPlaneSources.listHosts(),
     awsControlPlaneSources.listRunningOperations(),
+    awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
+    awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
   ]);
-  const plan = planSessionOperation(gameId, worldId, action, hosts, operations);
+  const effectiveCatalog = catalogWithPresets(presets, gameCatalog, worldRecords);
+  const plan = planSessionOperation(gameId, worldId, action, hosts, operations, effectiveCatalog);
   if (plan.kind === "reject") return response(plan.reason === "unknown_world" ? 404 : 409, { error: plan.reason });
   if (plan.kind === "noop") return response(200, { result: plan.reason });
+  if (action === "start" && plan.world.materialization === "not_created") {
+    const preset = presets.find((candidate) =>
+      candidate.gameId === gameId && candidate.id === plan.world.profileId &&
+      candidate.profileDigest === plan.world.preset?.profileDigest);
+    if (preset === undefined || preset.buildStatus !== "ready" || preset.latestRelease === null) {
+      return response(409, { error: "preset_release_not_ready" });
+    }
+    await materializePresetWorld(preset, randomUUID(), new Date().toISOString());
+  }
   const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
   const requestedBy = `identity:${identity.id}`;
-  if (action === "start") await startSessionExecution(operationId, plan.host.providerRef, requestedBy, worldId);
+  if (action === "start") {
+    const game = effectiveCatalog.find((candidate) => candidate.id === gameId)!;
+    const connectionHost = process.env.CONNECTION_HOST;
+    if (!connectionHost) throw new Error("missing environment variable: CONNECTION_HOST");
+    await startSessionExecution(operationId, plan.host.providerRef, requestedBy, worldId, `${connectionHost}:${game.connectPort}`);
+  }
   else await stopSessionExecution(operationId, plan.host.providerRef, requestedBy, worldId);
   return response(202, { result: "requested", operationId });
 }

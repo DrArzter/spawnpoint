@@ -30,13 +30,31 @@ expected_marker="$(jq -cn \
   --arg world_id "${WORLD_ID}" \
   --arg profile_id "${WORLD_PROFILE_ID}" \
   --arg repository "${WORLD_PROFILE_REPOSITORY}" \
-  --arg commit "${WORLD_PROFILE_COMMIT}" '
+  --arg commit "${WORLD_PROFILE_COMMIT}" \
+  --arg generation_id "${WORLD_GENERATION_ID}" \
+  --arg release "${WORLD_RELEASE}" '
   {
     schema_version: 1,
     world_id: $world_id,
     profile: {id: $profile_id, repository: $repository, commit: $commit}
-  }
+  } + (if $generation_id == "" then {} else {
+    generation: {id: $generation_id, release: $release}
+  } end)
 ')"
+
+world_parent="${WORLDS_DIRECTORY}"
+stage_prefix="${WORLD_ID}"
+if [[ "${WORLD_STORAGE_LAYOUT}" == "generation" ]]; then
+  world_root="${WORLDS_DIRECTORY}/${WORLD_ID}"
+  generations_root="${world_root}/generations"
+  [[ ! -L "${world_root}" && ! -L "${generations_root}" ]] || {
+    printf 'error: generation storage contains a symbolic link\n' >&2
+    exit 1
+  }
+  mkdir -p -- "${generations_root}"
+  world_parent="${generations_root}"
+  stage_prefix="${WORLD_GENERATION_ID}"
+fi
 
 if [[ -e "${WORLD_DIRECTORY}" || -L "${WORLD_DIRECTORY}" ]]; then
   [[ -d "${WORLD_DIRECTORY}" && ! -L "${WORLD_DIRECTORY}" ]] || {
@@ -62,9 +80,9 @@ if [[ -e "${WORLD_DIRECTORY}" || -L "${WORLD_DIRECTORY}" ]]; then
   }
   printf 'result=already_prepared\n'
 else
-  stage="$(mktemp -d "${WORLDS_DIRECTORY}/.${WORLD_ID}.stage.XXXXXXXX")"
+  stage="$(mktemp -d "${world_parent}/.${stage_prefix}.stage.XXXXXXXX")"
   cleanup() {
-    if [[ -n "${stage:-}" && "$(dirname -- "${stage}")" == "${WORLDS_DIRECTORY}" && "$(basename -- "${stage}")" == ".${WORLD_ID}.stage."* ]]; then
+    if [[ -n "${stage:-}" && "$(dirname -- "${stage}")" == "${world_parent}" && "$(basename -- "${stage}")" == ".${stage_prefix}.stage."* ]]; then
       rm -rf -- "${stage}"
     fi
   }

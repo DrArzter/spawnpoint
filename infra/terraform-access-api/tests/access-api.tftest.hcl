@@ -111,4 +111,12 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
     condition     = aws_lambda_function.access_api.environment[0].variables.CONNECTION_HOST == "172.29.23.24"
     error_message = "The API receives a host only; the read model appends the selected game's port exactly once."
   }
+
+  assert {
+    condition = local.world_creation_resources == [
+      "arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*/world.json",
+      "arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*/release.json",
+    ]
+    error_message = "First Start may create only the immutable world descriptor and its initial release pointer."
+  }
 }

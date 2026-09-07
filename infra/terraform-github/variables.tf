@@ -15,28 +15,19 @@ variable "aws_profile" {
   default     = "spawnpoint"
 }
 
-variable "github_repositories" {
-  description = "Configuration repositories allowed to publish catalogs and request release builds from main."
+variable "github_subjects" {
+  description = "Exact GitHub OIDC subject claims allowed to publish catalogs and request release builds."
   type        = set(string)
   default = [
-    "DrArzter/my-docker-minecraft-server-config",
-    "DrArzter/my-docker-factorio-server-config",
-    "DrArzter/my-docker-zomboid-server-config",
+    "repo:DrArzter/my-docker-minecraft-server-config:ref:refs/heads/main",
+    "repo:DrArzter@102290466/my-docker-factorio-server-config@1348549387:ref:refs/heads/main",
+    "repo:DrArzter@102290466/my-docker-zomboid-server-config@1352117153:ref:refs/heads/main",
   ]
 
   validation {
-    condition     = length(var.github_repositories) > 0 && alltrue([for repository in var.github_repositories : can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", repository))])
-    error_message = "Each entry must use the GitHub owner/repository form."
-  }
-}
-
-variable "github_branch" {
-  description = "The only branch whose workflow may assume the AWS release role."
-  type        = string
-  default     = "main"
-
-  validation {
-    condition     = can(regex("^[A-Za-z0-9._/-]+$", var.github_branch))
-    error_message = "Provide a valid branch name without a refs/heads/ prefix."
+    condition = length(var.github_subjects) > 0 && alltrue([
+      for subject in var.github_subjects : can(regex("^repo:[^:]+:ref:refs/heads/[^:]+$", subject))
+    ])
+    error_message = "Each entry must be an exact repository branch subject claim emitted by GitHub OIDC."
   }
 }

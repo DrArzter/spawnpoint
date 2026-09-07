@@ -1,7 +1,7 @@
 data "aws_caller_identity" "current" {}
 
 locals {
-  github_subjects = toset([for repository in var.github_repositories : "repo:${repository}:ref:refs/heads/${var.github_branch}"])
+  github_subjects = var.github_subjects
 
   build_release_state_machine_arn  = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-build-release"
   build_release_execution_arn      = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:execution:spawnpoint-build-release:*"

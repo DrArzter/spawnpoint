@@ -29,8 +29,8 @@ run "trusts_only_the_config_repositories_main_branches" {
   assert {
     condition = local.github_subjects == toset([
       "repo:DrArzter/my-docker-minecraft-server-config:ref:refs/heads/main",
-      "repo:DrArzter/my-docker-factorio-server-config:ref:refs/heads/main",
-      "repo:DrArzter/my-docker-zomboid-server-config:ref:refs/heads/main",
+      "repo:DrArzter@102290466/my-docker-factorio-server-config@1348549387:ref:refs/heads/main",
+      "repo:DrArzter@102290466/my-docker-zomboid-server-config@1352117153:ref:refs/heads/main",
     ])
     error_message = "The role trust must name each config repository's main branch exactly."
   }

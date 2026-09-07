@@ -9,6 +9,7 @@ type State = {
   Default?: string;
   Resource?: string;
   Parameters?: Record<string, unknown>;
+  Retry?: Array<{ ErrorEquals: string[]; MaxAttempts: number }>;
   Catch?: Array<{ Next: string }>;
   Choices?: Array<Record<string, unknown>>;
 };
@@ -74,6 +75,8 @@ test("the workflow runs only the fixed builder and passes no authority", async (
     ]),
   );
   assert.doesNotMatch(JSON.stringify(build), /CF_API_KEY|RELEASE_BUCKET|BuildspecOverride|SourceLocationOverride/);
+  assert.deepEqual(build.Retry?.[0]?.ErrorEquals, ["CodeBuild.AccountLimitExceededException"]);
+  assert.equal(build.Retry?.[0]?.MaxAttempts, 6);
 });
 
 test("the authoring repository is a required input, never a default", async () => {

@@ -35,6 +35,12 @@
       },
       "ResultPath": null,
       "TimeoutSeconds": 900,
+      "Retry": [{
+        "ErrorEquals": ["CodeBuild.AccountLimitExceededException"],
+        "IntervalSeconds": 10,
+        "BackoffRate": 1.5,
+        "MaxAttempts": 6
+      }],
       "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.buildFailure", "Next": "Catalog Build Failed" }],
       "Next": "Catalog Ready"
     },

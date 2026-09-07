@@ -176,7 +176,7 @@ resource "aws_codebuild_project" "release_builder" {
   service_role           = aws_iam_role.release_builder.arn
   build_timeout          = 30
   queued_timeout         = 60
-  concurrent_build_limit = 1
+  concurrent_build_limit = 3
 
   source {
     type      = "S3"

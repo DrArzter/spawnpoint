@@ -43,6 +43,12 @@
       },
       "ResultPath": null,
       "TimeoutSeconds": 2100,
+      "Retry": [{
+        "ErrorEquals": ["CodeBuild.AccountLimitExceededException"],
+        "IntervalSeconds": 10,
+        "BackoffRate": 1.5,
+        "MaxAttempts": 6
+      }],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],

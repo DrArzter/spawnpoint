@@ -54,8 +54,8 @@ run "release_builder_is_inert_pinned_and_credential_scoped" {
   }
 
   assert {
-    condition     = aws_codebuild_project.release_builder.environment[0].compute_type == "BUILD_GENERAL1_SMALL" && aws_codebuild_project.release_builder.concurrent_build_limit == 1
-    error_message = "Release resolution is a small single-flight batch job."
+    condition     = aws_codebuild_project.release_builder.environment[0].compute_type == "BUILD_GENERAL1_SMALL" && aws_codebuild_project.release_builder.concurrent_build_limit == 3
+    error_message = "Release resolution stays small while allowing one independent build per supported game."
   }
 
   assert {

@@ -99,7 +99,7 @@ data "aws_iam_policy_document" "access_api" {
     actions = ["states:ListExecutions"]
     resources = [
       for machine in local.operation_state_machines : machine.arn
-      if contains(["start", "stop", "promote"], machine.type)
+      if contains(["start", "stop", "promote", "world"], machine.type)
     ]
   }
 
@@ -107,7 +107,7 @@ data "aws_iam_policy_document" "access_api" {
     sid     = "ControlSupportedSession"
     actions = ["states:StartExecution"]
     resources = concat(
-      [for machine in local.operation_state_machines : machine.arn if contains(["start", "stop"], machine.type)],
+      [for machine in local.operation_state_machines : machine.arn if contains(["start", "stop", "world"], machine.type)],
       [local.watchdog_state_machine_arn],
     )
   }
@@ -193,6 +193,9 @@ locals {
     "GET /games/{gameId}/worlds/{worldId}/invitations",
     "GET /games/{gameId}/worlds/{worldId}/pack",
     "GET /games/{gameId}/worlds/{worldId}/backups",
+    "POST /games/{gameId}/worlds/{worldId}/archive",
+    "POST /games/{gameId}/worlds/{worldId}/regenerate",
+    "POST /games/{gameId}/worlds/{worldId}/restore",
     "POST /access/request",
     "GET /access/candidates",
     "GET /access/identities",

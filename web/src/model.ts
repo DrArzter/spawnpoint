@@ -13,7 +13,8 @@ export type World = {
   profileId: string;
   sessionControlAvailable: boolean;
   connectivity: "zerotier" | "raw";
-  materialization: "existing" | "not_created";
+  materialization: "existing" | "not_created" | "archived";
+  worldLifecycleAvailable: boolean;
   preset: null | {
     repository: string;
     commit: string;
@@ -43,7 +44,7 @@ export type Host = {
   launchedAt?: string | null;
   publicIp?: string | null;
 };
-export type Operation = { id: string; type: "start" | "stop" | "promote"; status: "running"; startedAt: string; providerRef?: string };
+export type Operation = { id: string; type: "start" | "stop" | "promote" | "world"; status: "running"; startedAt: string; providerRef?: string };
 export type ControlPlaneSnapshot = { observedAt: string; games: readonly Game[]; hosts: readonly Host[]; operations: readonly Operation[] };
 
 export type Role = { id: string; name: string; description: string; permissions: string[]; system?: boolean };

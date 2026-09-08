@@ -44,7 +44,7 @@ test("registry parsing fails closed", () => {
 
 test("regeneration closes the old generation and never overwrites it", () => {
   const record = newWorldRecord(preset, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
-  const next = regenerateWorldRecord(record, "43.1", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "2026-09-08T10:00:00.000Z");
+  const next = regenerateWorldRecord(record, { ...preset, latestRelease: "43.1" }, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "2026-09-08T10:00:00.000Z");
 
   assert.equal(next.currentGeneration.id, "gen-aaaaaaaabbbbccccddddeeeeeeeeeeee");
   assert.equal(next.currentGeneration.release, "43.1");

@@ -90,15 +90,22 @@ export function archiveWorldRecord(record: WorldRecord): WorldRecord {
 
 export function regenerateWorldRecord(
   record: WorldRecord,
-  release: string,
+  preset: PresetObservation,
   generationUuid: string,
   createdAt: string,
 ): WorldRecord {
   if (record.status !== "active") throw new Error("world_archived");
-  if (!RELEASE.test(release) || Number.isNaN(Date.parse(createdAt))) throw new Error("invalid_generation");
+  if (preset.gameId !== record.gameId || preset.id !== record.preset.id) throw new Error("preset_mismatch");
+  if (preset.buildStatus !== "ready" || preset.latestRelease === null || Number.isNaN(Date.parse(createdAt))) {
+    throw new Error("preset_release_not_ready");
+  }
   return {
     ...record,
-    currentGeneration: { id: generationId(generationUuid), release, createdAt, source: { kind: "preset" } },
+    displayName: preset.displayName,
+    preset: {
+      id: preset.id, repository: preset.repository, commit: preset.commit, profileDigest: preset.profileDigest,
+    },
+    currentGeneration: { id: generationId(generationUuid), release: preset.latestRelease, createdAt, source: { kind: "preset" } },
     previousGenerations: [...record.previousGenerations, closedCurrent(record, createdAt)],
   };
 }

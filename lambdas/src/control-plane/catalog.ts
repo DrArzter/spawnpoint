@@ -13,7 +13,8 @@ export type CatalogWorld = Readonly<{
   // "zerotier" reaches players through the overlay, "raw" through whatever
   // public address the instance holds for that session.
   connectivity: "zerotier" | "raw";
-  materialization?: "existing" | "not_created";
+  materialization?: "existing" | "not_created" | "archived";
+  worldLifecycle?: "v1" | null;
   preset?: Readonly<{
     repository: string;
     commit: string;
@@ -77,12 +78,13 @@ export function catalogWithPresets(
     const consumed = new Set<string>();
     const existing = game.worlds.map((world) => {
       const preset = forGame.find((candidate) => candidate.id === world.profileId);
-      if (preset === undefined) return { ...world, materialization: "existing" as const };
+      if (preset === undefined) return { ...world, materialization: "existing" as const, worldLifecycle: null };
       consumed.add(preset.id);
       return {
         ...world,
         displayName: preset.displayName,
         materialization: "existing" as const,
+        worldLifecycle: null,
         preset: {
           repository: preset.repository,
           commit: preset.commit,
@@ -99,7 +101,7 @@ export function catalogWithPresets(
       consumed.add(record.preset.id);
     }
     const materialized = worldRecords
-      .filter((record) => record.gameId === game.id && record.status === "active")
+      .filter((record) => record.gameId === game.id)
       .filter((record) => !existing.some((world) => world.id === record.worldId))
       .map((record) => {
         const current = forGame.find((preset) => preset.id === record.preset.id && preset.profileDigest === record.preset.profileDigest);
@@ -107,9 +109,10 @@ export function catalogWithPresets(
           id: record.worldId,
           displayName: record.displayName,
           profileId: record.preset.id,
-          sessionControl: "v1" as const,
+          sessionControl: record.status === "active" ? "v1" as const : null,
           connectivity: record.connectivity,
-          materialization: "existing" as const,
+          materialization: record.status === "active" ? "existing" as const : "archived" as const,
+          worldLifecycle: "v1" as const,
           preset: current === undefined ? {
             repository: record.preset.repository,
             commit: record.preset.commit,
@@ -132,6 +135,7 @@ export function catalogWithPresets(
       sessionControl: preset.buildStatus === "ready" && preset.latestRelease !== null ? "v1" as const : null,
       connectivity: "zerotier" as const,
       materialization: "not_created" as const,
+      worldLifecycle: null,
       preset: {
         repository: preset.repository,
         commit: preset.commit,

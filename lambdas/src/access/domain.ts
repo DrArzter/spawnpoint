@@ -10,6 +10,7 @@ export const permissions = [
   "release.promote",
   "backup.read",
   "backup.restore",
+  "world.manage",
   "access.read",
   "access.manage",
   "access.owner.grant",

@@ -18,10 +18,13 @@ data "aws_s3_bucket" "releases" {
 
 locals {
   watchdog_state_machine_arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-idle-watchdog"
+  stop_state_machine_arn     = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-stop-server"
+  world_lifecycle_arn        = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-world-lifecycle"
   operation_state_machines = [
     { type = "start", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-start-server" },
     { type = "stop", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-stop-server" },
     { type = "promote", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-promote-release" },
+    { type = "world", arn = local.world_lifecycle_arn },
   ]
 }
 
@@ -40,4 +43,10 @@ data "archive_file" "access_api" {
   type        = "zip"
   source_dir  = "${path.module}/../../lambdas/dist/access-api"
   output_path = "${path.module}/../../lambdas/dist/access-api.zip"
+}
+
+data "archive_file" "world_lifecycle" {
+  type        = "zip"
+  source_dir  = "${path.module}/../../lambdas/dist/world-lifecycle"
+  output_path = "${path.module}/../../lambdas/dist/world-lifecycle.zip"
 }

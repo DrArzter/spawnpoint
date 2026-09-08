@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ActiveSession, AuthState, endSession, loadControlPlane, requestAccess, requestPackDownload, requestSessionOperation, restoreAuth, telegramBotUsername, telegramLoginRedirectUrl } from "./auth";
+import { ActiveSession, AuthState, endSession, loadControlPlane, requestAccess, requestPackDownload, requestSessionOperation, requestWorldLifecycle, restoreAuth, telegramBotUsername, telegramLoginRedirectUrl } from "./auth";
 import { AccessScreen } from "./screens/AccessScreen";
 import { Avatar } from "./components/Avatar";
 import { Button } from "./components/ui/Button";
@@ -109,6 +109,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
   const [picker, setPicker] = useState<"game" | "world" | null>(null);
   const [operationRequest, setOperationRequest] = useState<{ state: "idle" | "pending" | "success" | "error"; message: string }>({ state: "idle", message: "" });
   const [storageRequest, setStorageRequest] = useState<{ state: "idle" | "pending" | "success" | "error"; message: string }>({ state: "idle", message: "" });
+  const [lifecycleRequest, setLifecycleRequest] = useState<{ state: "idle" | "pending" | "success" | "error"; message: string }>({ state: "idle", message: "" });
   const [members, setMembers] = useState<Member[]>(() => [{
     id: session.identity.id,
     name: session.identity.displayName,
@@ -161,12 +162,23 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
   const currentMember = members.find((member) => member.id === session.identity.id) ?? members[0];
 
   useEffect(() => {
+    if (!snapshot?.operations.length) return;
+    const timer = window.setInterval(() => {
+      loadControlPlane()
+        .then((next) => setControlPlane({ status: "ready", snapshot: next, error: "" }))
+        .catch(() => undefined);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [snapshot?.operations.length]);
+
+  useEffect(() => {
     if (!game) return;
     if (gameId !== game.id) setGameId(game.id);
     const nextWorld = game.worlds.find((item) => item.id === worldId) ?? game.worlds[0];
     if (nextWorld && worldId !== nextWorld.id) setWorldId(nextWorld.id);
   }, [game, gameId, worldId]);
   useEffect(() => setStorageRequest({ state: "idle", message: "" }), [game?.id, world?.id]);
+  useEffect(() => setLifecycleRequest({ state: "idle", message: "" }), [game?.id, world?.id]);
 
   async function refreshControlPlane() {
     setControlPlane({ status: "loading", snapshot: null, error: "" });
@@ -206,6 +218,18 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
     } catch (error) {
       downloadWindow?.close();
       setStorageRequest({ state: "error", message: error instanceof Error ? error.message : "The pack link failed." });
+    }
+  }
+
+  async function runWorldLifecycle(action: "archive" | "regenerate" | "restore", backupKey?: string) {
+    if (!game || !world) return;
+    setLifecycleRequest({ state: "pending", message: `Requesting ${action}…` });
+    try {
+      const result = await requestWorldLifecycle(game.id, world.id, action, backupKey);
+      setLifecycleRequest({ state: "success", message: `${action[0]!.toUpperCase()}${action.slice(1)} accepted · ${result.operationId}.` });
+      await refreshControlPlane();
+    } catch (error) {
+      setLifecycleRequest({ state: "error", message: error instanceof Error ? error.message : `The ${action} request failed.` });
     }
   }
 
@@ -252,7 +276,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
             <span>Games</span><Icon name="arrow" size={14} />
             <div className="crumb-menu"><button aria-expanded={picker === "game"} disabled={!game} onClick={() => setPicker(picker === "game" ? null : "game")} type="button">{game?.displayName ?? "Loading…"}<Icon name="down" size={14} /></button>{picker === "game" && game && <div className="picker-menu">{games.map((item) => <button className={item.id === game.id ? "selected" : ""} key={item.id} onClick={() => { selectGame(item.id); setPicker(null); }} type="button"><span>{item.code}</span><div><strong>{item.displayName}</strong><small>{item.worlds.length} {item.worlds.length === 1 ? "world" : "worlds"}</small></div></button>)}</div>}</div>
             <Icon name="arrow" size={14} />
-            <div className="crumb-menu"><button aria-expanded={picker === "world"} disabled={!world} onClick={() => setPicker(picker === "world" ? null : "world")} type="button">{world?.displayName ?? "Unavailable"}<Icon name="down" size={14} /></button>{picker === "world" && game && world && <div className="picker-menu world-picker">{game.worlds.map((item) => <button className={item.id === world.id ? "selected" : ""} key={item.id} onClick={() => { setWorldId(item.id); setPicker(null); }} type="button"><div><strong>{item.displayName}</strong><small>{item.release.activeRelease ? `Active ${item.release.activeRelease}` : item.release.state === "unconfigured" ? "Not adopted" : "Release unavailable"}</small></div></button>)}</div>}</div>
+            <div className="crumb-menu"><button aria-expanded={picker === "world"} disabled={!world} onClick={() => setPicker(picker === "world" ? null : "world")} type="button">{world?.displayName ?? "Unavailable"}<Icon name="down" size={14} /></button>{picker === "world" && game && world && <div className="picker-menu world-picker">{game.worlds.map((item) => <button className={item.id === world.id ? "selected" : ""} key={item.id} onClick={() => { setWorldId(item.id); setPicker(null); }} type="button"><div><strong>{item.displayName}</strong><small>{item.materialization === "archived" ? "Archived" : item.release.activeRelease ? `Active ${item.release.activeRelease}` : item.release.state === "unconfigured" ? "Not adopted" : "Release unavailable"}</small></div></button>)}</div>}</div>
           </div>
           <div className="top-actions"><button aria-label={`${themeLabel}. Change theme`} className="header-theme-toggle" onClick={toggleTheme} title={themeLabel} type="button"><Icon name={theme === "light" ? "moon" : "sun"} /></button><span className={`top-status ${serverState}`}><i />{serverState}</span></div>
         </header>
@@ -262,7 +286,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
           {page === "dashboard" && (!game || !world) && <ControlPlaneUnavailable state={controlPlane} onRetry={() => void refreshControlPlane()} />}
           {page === "metrics" && <MetricsScreen serverState={serverState} />}
           {page === "console" && <ConsoleScreen serverState={serverState} />}
-          {page === "storage" && world && <StorageScreen canReadBackups={granted.has("backup.read")} gameId={game?.id ?? ""} onDownloadPack={granted.has("connection.read") ? () => void downloadPack() : undefined} request={storageRequest} world={world} />}
+          {page === "storage" && world && <StorageScreen canManageWorld={granted.has("world.manage")} canReadBackups={granted.has("backup.read")} canRestoreBackup={granted.has("backup.restore")} gameId={game?.id ?? ""} lifecycleRequest={lifecycleRequest} onDownloadPack={granted.has("connection.read") ? () => void downloadPack() : undefined} onWorldAction={(action, backupKey) => void runWorldLifecycle(action, backupKey)} packRequest={storageRequest} world={world} />}
           {page === "access" && <AccessScreen bootstrap={bootstrap} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate("access", tab)} roles={roles} tab={accessTab} />}
           {page === "profile" && currentMember && <ProfileScreen member={currentMember} onChange={(next) => setMembers((current) => current.map((member) => member.id === next.id ? next : member))} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
         </div>

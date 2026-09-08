@@ -11,6 +11,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { GetCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
+import { randomUUID } from "node:crypto";
 
 import type { BackupObject } from "./backups.ts";
 import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts";
@@ -38,7 +39,7 @@ function operationMachines(): readonly OperationMachine[] {
     const type = "type" in item ? item.type : undefined;
     const arn = "arn" in item ? item.arn : undefined;
     if (
-      (type !== "start" && type !== "stop" && type !== "promote") ||
+      (type !== "start" && type !== "stop" && type !== "promote" && type !== "world") ||
       typeof arn !== "string" ||
       !arn
     ) {
@@ -158,7 +159,7 @@ async function listWorldRecords(): Promise<readonly WorldRecord[]> {
 }
 
 function isSessionOperation(type: MachineType): type is OperationObservation["type"] {
-  return type === "start" || type === "stop" || type === "promote";
+  return type === "start" || type === "stop" || type === "promote" || type === "world";
 }
 
 async function listRunningOperations(): Promise<readonly OperationObservation[]> {
@@ -292,6 +293,31 @@ export async function stopSessionExecution(
   }));
   if (!stopped.executionArn) throw new Error("stop execution did not return an ARN");
   return stopped.executionArn;
+}
+
+export async function worldLifecycleExecution(
+  operationId: string,
+  instanceId: string,
+  requestedBy: string,
+  worldId: string,
+  action: "archive" | "regenerate" | "restore",
+  backupKey: string | undefined,
+  stopRequired: boolean,
+): Promise<string> {
+  requireWorldId(worldId);
+  const stop = buildStopInput({ operationId, instanceId, requestedBy, worldId });
+  const started = await sfn.send(new StartExecutionCommand({
+    stateMachineArn: machineArn("world"), name: operationId,
+    input: JSON.stringify({
+      operationId, instanceId, requestedBy, worldId, action, stopRequired,
+      stopTiming: stop.timing,
+      requestedAt: new Date().toISOString(),
+      generationUuid: randomUUID(),
+      backupKey: backupKey ?? "",
+    }),
+  }));
+  if (!started.executionArn) throw new Error("world lifecycle execution did not return an ARN");
+  return started.executionArn;
 }
 
 // The pack a player installs: the same object the bot serves, presigned for an

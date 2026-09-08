@@ -31,12 +31,35 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_s3_bucket.backups
+    values = {
+      id  = "spawnpoint-backups-123456789012"
+      arn = "arn:aws:s3:::spawnpoint-backups-123456789012"
+    }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.lambda_assume_role
     values = { json = "{}" }
   }
 
   override_data {
     target = data.aws_iam_policy_document.access_api
+    values = { json = "{}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.world_lifecycle
+    values = { json = "{}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.world_lifecycle_workflow_assume
+    values = { json = "{}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.world_lifecycle_workflow
     values = { json = "{}" }
   }
 
@@ -49,6 +72,15 @@ mock_provider "archive" {
     target = data.archive_file.access_api
     values = {
       output_path         = "access-api.zip"
+      output_base64sha256 = "test"
+    }
+  }
+
+
+  override_data {
+    target = data.archive_file.world_lifecycle
+    values = {
+      output_path         = "world-lifecycle.zip"
       output_base64sha256 = "test"
     }
   }
@@ -118,5 +150,20 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
       "arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*/release.json",
     ]
     error_message = "First Start may create only the immutable world descriptor and its initial release pointer."
+  }
+
+
+  assert {
+    condition = alltrue([
+      contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/archive"),
+      contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/regenerate"),
+      contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/restore"),
+    ])
+    error_message = "Materialized worlds need explicit archive, regenerate and restore routes."
+  }
+
+  assert {
+    condition     = aws_sfn_state_machine.world_lifecycle.type == "STANDARD"
+    error_message = "World mutations must be durable workflows because a verified stop may take minutes."
   }
 }

@@ -1,0 +1,72 @@
+{
+  "Comment": "Stop and back up an active session before changing the durable world generation record.",
+  "QueryLanguage": "JSONPath",
+  "StartAt": "Needs Verified Stop",
+  "States": {
+    "Needs Verified Stop": {
+      "Type": "Choice",
+      "Choices": [{
+        "Variable": "$.stopRequired",
+        "BooleanEquals": true,
+        "Next": "Stop And Back Up"
+      }],
+      "Default": "Apply World Mutation"
+    },
+    "Stop And Back Up": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn": "${stop_state_machine_arn}",
+        "Name.$": "States.Format('{}-stop', $.operationId)",
+        "Input": {
+          "operationId.$": "$.operationId",
+          "instanceId.$": "$.instanceId",
+          "worldId.$": "$.worldId",
+          "requestedBy.$": "$.requestedBy",
+          "timing.$": "$.stopTiming"
+        }
+      },
+      "ResultPath": "$.verifiedStop",
+      "Next": "Apply World Mutation"
+    },
+    "Apply World Mutation": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${world_lifecycle_function_arn}",
+        "Payload": {
+          "action.$": "$.action",
+          "worldId.$": "$.worldId",
+          "generationUuid.$": "$.generationUuid",
+          "backupKey.$": "$.backupKey",
+          "requestedAt.$": "$.requestedAt",
+          "requestedBy.$": "$.requestedBy"
+        }
+      },
+      "Retry": [{
+        "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+        "IntervalSeconds": 2,
+        "MaxAttempts": 3,
+        "BackoffRate": 2
+      }],
+      "ResultSelector": {
+        "result.$": "$.Payload.result",
+        "worldId.$": "$.Payload.worldId",
+        "generationId.$": "$.Payload.generationId"
+      },
+      "ResultPath": "$.mutation",
+      "Next": "Complete"
+    },
+    "Complete": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.operationId",
+        "action.$": "$.action",
+        "worldId.$": "$.mutation.worldId",
+        "generationId.$": "$.mutation.generationId",
+        "result.$": "$.mutation.result"
+      },
+      "End": true
+    }
+  }
+}

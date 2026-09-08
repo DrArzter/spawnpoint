@@ -33,7 +33,9 @@ export function DashboardScreen({ game, world, hosts, operations, serverState, l
   const transitioning = serverState === "starting" || serverState === "stopping" || operationRequest.state === "pending";
   const controlDisabled = !world.sessionControlAvailable || !permitted || transitioning;
   const controlsHint = !world.sessionControlAvailable
-    ? world.materialization === "not_created"
+    ? world.materialization === "archived"
+      ? "This world is archived. Restore a backup to open a new active generation."
+      : world.materialization === "not_created"
       ? "This preset needs a successful release build before its first start."
       : "This world is not connected to a session workflow yet."
     : !permitted ? `Your role cannot ${sessionAction} sessions.` : transitioning ? "A control-plane operation is already in progress." : `Review and confirm the ${sessionAction} request.`;
@@ -80,7 +82,7 @@ export function DashboardScreen({ game, world, hosts, operations, serverState, l
 }
 
 function operationLabel(type: Operation["type"]): string {
-  return type === "start" ? "Starting session" : type === "stop" ? "Stopping session" : "Promoting release";
+  return type === "start" ? "Starting session" : type === "stop" ? "Stopping session" : type === "world" ? "Updating world" : "Promoting release";
 }
 
 function formatTime(value: string): string {

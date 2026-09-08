@@ -24,7 +24,7 @@ export type ReleasePointerObservation = Readonly<{
 
 export type OperationObservation = Readonly<{
   id: string;
-  type: "start" | "stop" | "promote";
+  type: "start" | "stop" | "promote" | "world";
   status: "running";
   startedAt: string;
   providerRef: string;
@@ -53,7 +53,8 @@ export type ControlPlaneSnapshot = Readonly<{
       sessionControlAvailable: boolean;
       connectionAddress: string | null;
       connectivity: string;
-      materialization: "existing" | "not_created";
+      materialization: "existing" | "not_created" | "archived";
+      worldLifecycleAvailable: boolean;
       preset: CatalogGame["worlds"][number]["preset"] | null;
       release: ReleasePointerObservation;
     }>>;
@@ -125,6 +126,7 @@ export async function readControlPlaneSnapshot(
           sessionControlAvailable: world.sessionControl !== null,
           connectivity: world.connectivity,
           materialization: world.materialization ?? "existing",
+          worldLifecycleAvailable: world.worldLifecycle !== null && world.worldLifecycle !== undefined,
           preset: world.preset ?? null,
           // Composed here for the same reason the host composes it: the
           // strategy owns the host part, the game owns the port. An overlay

@@ -19,6 +19,7 @@ import {
   packDownloadUrl,
   startSessionExecution,
   stopSessionExecution,
+  worldLifecycleExecution,
 } from "../control-plane/aws.ts";
 import { readControlPlaneSnapshot } from "../control-plane/read-model.ts";
 import { packRelease, planSessionOperation, type SessionAction } from "../control-plane/session-control.ts";
@@ -230,6 +231,39 @@ async function controlSession(identity: Identity, action: SessionAction, gameId:
     await startSessionExecution(operationId, plan.host.providerRef, requestedBy, worldId, `${connectionHost}:${game.connectPort}`);
   }
   else await stopSessionExecution(operationId, plan.host.providerRef, requestedBy, worldId);
+  return response(202, { result: "requested", operationId });
+}
+
+async function controlWorldLifecycle(
+  identity: Identity,
+  action: "archive" | "regenerate" | "restore",
+  gameId: string,
+  worldId: string,
+  body: string | undefined,
+): Promise<Response> {
+  let parsed: { backupKey?: unknown } = {};
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const backupKey = action === "restore" && typeof parsed.backupKey === "string" ? parsed.backupKey : undefined;
+  if (action === "restore" && (backupKey === undefined || !backupKey.startsWith(`worlds/${worldId}/archives/`))) {
+    return response(400, { error: "invalid_backup_key" });
+  }
+  const [hosts, operations, worldRecords] = await Promise.all([
+    awsControlPlaneSources.listHosts(),
+    awsControlPlaneSources.listRunningOperations(),
+    awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
+  ]);
+  const record = worldRecords.find((candidate) => candidate.gameId === gameId && candidate.worldId === worldId);
+  if (record === undefined) return response(404, { error: "unknown_materialized_world" });
+  if (operations.length > 0) return response(409, { error: "operation_in_progress" });
+  if (hosts.length !== 1) return response(409, { error: "host_not_unique" });
+  const host = hosts[0]!;
+  if (host.state === "pending" || host.state === "stopping" || host.state === "unknown") {
+    return response(409, { error: "host_transitioning" });
+  }
+  const operationId = `panel-world-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
+  await worldLifecycleExecution(
+    operationId, host.providerRef, `identity:${identity.id}`, worldId, action, backupKey, host.state === "running",
+  );
   return response(202, { result: "requested", operationId });
 }
 
@@ -592,6 +626,12 @@ export const routes: Readonly<Record<string, Route>> = {
 
   "GET /games/{gameId}/worlds/{worldId}/backups": permissionRoute("backup.read", (_identity, event) =>
     backups(parameter(event, "gameId"), parameter(event, "worldId"))),
+  "POST /games/{gameId}/worlds/{worldId}/archive": permissionRoute("world.manage", (identity, event) =>
+    controlWorldLifecycle(identity, "archive", parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
+  "POST /games/{gameId}/worlds/{worldId}/regenerate": permissionRoute("world.manage", (identity, event) =>
+    controlWorldLifecycle(identity, "regenerate", parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
+  "POST /games/{gameId}/worlds/{worldId}/restore": permissionRoute("backup.restore", (identity, event) =>
+    controlWorldLifecycle(identity, "restore", parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
 
   "GET /access/candidates": permissionRoute("access.manage", () => candidates()),
   "GET /access/identities": permissionRoute("access.manage", () => identities()),

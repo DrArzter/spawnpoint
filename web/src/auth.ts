@@ -234,6 +234,36 @@ export async function loadBackups(gameId: string, worldId: string): Promise<Back
   return { entries: body.entries, unverified: body.unverified ?? 0, truncated: body.truncated ?? false };
 }
 
+export async function requestWorldLifecycle(
+  gameId: string,
+  worldId: string,
+  action: "archive" | "regenerate" | "restore",
+  backupKey?: string,
+): Promise<{ result: "requested"; operationId: string }> {
+  if (previewEnabled) return { result: "requested", operationId: `preview-world-${action}` };
+  const response = await authorizedFetch(
+    `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/${action}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(backupKey === undefined ? {} : { backupKey }),
+    },
+  );
+  const body = await response.json() as { error?: string; result?: "requested"; operationId?: string };
+  if (!response.ok || body.result !== "requested" || body.operationId === undefined) {
+    const messages: Record<string, string> = {
+      forbidden: "Your role cannot manage this world.",
+      invalid_backup_key: "This backup does not belong to the selected world.",
+      unknown_materialized_world: "Create this world with its first Start before managing its lifecycle.",
+      operation_in_progress: "Another control-plane operation is already running.",
+      host_not_unique: "Spawnpoint could not select exactly one compatible host.",
+      host_transitioning: "The compute host is already changing state. Try again shortly.",
+    };
+    throw new Error(messages[body.error ?? ""] ?? `The ${action} request could not be accepted.`);
+  }
+  return { result: body.result, operationId: body.operationId };
+}
+
 export async function requestSessionOperation(gameId: string, worldId: string, action: "start" | "stop"): Promise<{ result: "requested" | "already_stopped"; operationId?: string }> {
   if (previewEnabled) return { result: "requested", operationId: `preview-${gameId}-${worldId}-${action}` };
   const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/${action}`, { method: "POST" });

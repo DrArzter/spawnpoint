@@ -8,6 +8,7 @@ locals {
   preset_catalog_state_machine_arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-publish-preset-catalog"
   preset_catalog_execution_arn     = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:execution:spawnpoint-publish-preset-catalog:*"
   config_source_objects_arn        = "arn:aws:s3:::spawnpoint-releases-${data.aws_caller_identity.current.account_id}/config-sources/*"
+  preset_catalog_objects_arn       = "arn:aws:s3:::spawnpoint-releases-${data.aws_caller_identity.current.account_id}/presets/*/catalog.json"
 }
 
 # AWS validates GitHub's certificate against its trusted root CA library, so
@@ -79,6 +80,13 @@ data "aws_iam_policy_document" "github_release" {
     effect    = "Allow"
     actions   = ["s3:GetObject", "s3:PutObject"]
     resources = [local.config_source_objects_arn]
+  }
+
+  statement {
+    sid       = "ReadPublishedPresetCatalogs"
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = [local.preset_catalog_objects_arn]
   }
 }
 

@@ -66,4 +66,9 @@ run "role_can_only_start_and_observe_the_release_builder" {
     condition     = local.build_release_execution_arn == "arn:aws:states:eu-central-1:123456789012:execution:spawnpoint-build-release:*"
     error_message = "DescribeExecution must target only executions belonging to the release builder."
   }
+
+  assert {
+    condition     = local.preset_catalog_objects_arn == "arn:aws:s3:::spawnpoint-releases-123456789012/presets/*/catalog.json"
+    error_message = "Automatic builds may read only published preset catalogs, never release payloads or world state."
+  }
 }

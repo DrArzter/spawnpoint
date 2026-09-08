@@ -42,7 +42,12 @@ validate_world_catalog() {
       and ((.storage_layout // "legacy") | IN("legacy", "generation"))
       and (if (.storage_layout // "legacy") == "generation" then
         (.generation_id | type == "string" and test("^gen-[0-9a-f]{32}$")) and
-        (.release | type == "string" and test("^[0-9]+\\.[0-9]+$"))
+        (.release | type == "string" and test("^[0-9]+\\.[0-9]+$")) and
+        ((has("restore") | not) or (
+          (.restore.backup_key | type == "string" and test("^worlds/[a-z0-9][a-z0-9-]{0,31}/archives/[A-Za-z0-9._-]+\\.tar\\.zst$")) and
+          (.restore.checksum | type == "string" and test("^[0-9a-f]{64}$")) and
+          (.restore.source_generation_id | type == "string" and test("^gen-[0-9a-f]{32}$"))
+        ))
       else true end)
     ) and
     (([.worlds[].id] | unique | length) == (.worlds | length))
@@ -111,6 +116,9 @@ load_world() {
   WORLD_STORAGE_LAYOUT="$(jq -r '.storage_layout // "legacy"' <<<"${match}")"
   WORLD_GENERATION_ID="$(jq -r '.generation_id // empty' <<<"${match}")"
   WORLD_RELEASE="$(jq -r '.release // empty' <<<"${match}")"
+  WORLD_RESTORE_BACKUP_KEY="$(jq -r '.restore.backup_key // empty' <<<"${match}")"
+  WORLD_RESTORE_CHECKSUM="$(jq -r '.restore.checksum // empty' <<<"${match}")"
+  WORLD_RESTORE_SOURCE_GENERATION_ID="$(jq -r '.restore.source_generation_id // empty' <<<"${match}")"
   if [[ "${WORLD_STORAGE_LAYOUT}" == "generation" ]]; then
     WORLD_DIRECTORY="$(realpath -m -- "${WORLDS_DIRECTORY}/${WORLD_ID}/generations/${WORLD_GENERATION_ID}")"
     [[ "${WORLD_DIRECTORY}" == "${WORLDS_DIRECTORY}/${WORLD_ID}/generations/"* ]] || {

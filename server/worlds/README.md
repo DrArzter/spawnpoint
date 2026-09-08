@@ -10,6 +10,11 @@ configuration repository. On the first Start of a preset with a ready immutable 
 `runtime/world-catalog.json` and creates an isolated generation at
 `runtime/worlds/<world-id>/generations/<generation-id>/`. Static Minecraft directories keep their legacy layout.
 
+Generation-aware backups encode the source generation in their immutable object name. A restored `current_generation`
+points at that checksum-addressed object; on its first start the host verifies and expands it into a new generation
+directory. The old directory and the closed generation entry remain untouched. An archived world keeps its record and
+therefore still consumes its preset instead of reappearing as an uncreated candidate.
+
 The profile repository is pinned to a full Git commit. Updating that commit only makes new authoring input available;
 it does not change an active release. Release manifests still pin the resolved JAR bytes by SHA-256.
 

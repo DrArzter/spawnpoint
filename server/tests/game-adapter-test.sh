@@ -165,6 +165,10 @@ SPAWNPOINT_GAME=factorio WORLD_NAME=factorio "${SCRIPTS}/verify-archive.sh" "${a
 expect_failure "a factorio archive judged by minecraft's sentinel" \
   env WORLD_NAME=factorio "${SCRIPTS}/verify-archive.sh" "${archive}"
 
+SPAWNPOINT_GAME=factorio WORLD_NAME=factorio \
+  "${SCRIPTS}/restore-world.sh" "${archive}" "${fixture}/factorio-restored" >/dev/null
+cmp -- "${fixture}/factorio-data/saves/spawnpoint.zip" "${fixture}/factorio-restored/saves/spawnpoint.zip"
+
 mkdir -p -- "${fixture}/factorio-empty/saves"
 expect_failure "archiving a factorio data dir with no save" \
   env SPAWNPOINT_GAME=factorio SERVER_DATA_DIR="${fixture}/factorio-empty" \
@@ -307,6 +311,11 @@ grep -qx 'db/servertest.db' <<<"${zomboid_listing}"
 SPAWNPOINT_GAME=zomboid WORLD_NAME=zomboid "${SCRIPTS}/verify-archive.sh" "${zomboid_archive}" >/dev/null
 expect_failure "a zomboid archive judged by another game's sentinel" \
   env SPAWNPOINT_GAME=factorio WORLD_NAME=zomboid "${SCRIPTS}/verify-archive.sh" "${zomboid_archive}"
+
+SPAWNPOINT_GAME=zomboid WORLD_NAME=zomboid \
+  "${SCRIPTS}/restore-world.sh" "${zomboid_archive}" "${fixture}/zomboid-restored" >/dev/null
+diff -r -- "${zomboid_world}/Saves" "${fixture}/zomboid-restored/Saves"
+diff -r -- "${zomboid_world}/db" "${fixture}/zomboid-restored/db"
 
 # Workshop ids are not bytes, so the vanilla release tested above deliberately
 # carries an empty payload. A future Workshop resolver owns that translation.

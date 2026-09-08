@@ -10,6 +10,12 @@ archive="${1:-}"
 destination="${2:-}"
 world_name="${WORLD_NAME:-world}"
 
+# Restore is game-aware for the same reason verification and archiving are:
+# the durable save sentinel is not a Minecraft level.dat for every tenant.
+# shellcheck source=../games/_dispatch.sh
+source "$(cd -- "${SCRIPT_DIR}/.." && pwd)/games/_dispatch.sh"
+resolve_game
+
 [[ -n "${archive}" && -n "${destination}" ]] || die "usage: restore-world.sh <archive.tar.zst> <new-data-directory>"
 
 archive="$(realpath -m -- "${archive}")"
@@ -29,7 +35,7 @@ fi
 
 tar --extract --zstd --file "${archive}" --directory "${destination}" --no-same-owner --no-same-permissions
 
-[[ -f "${destination}/${world_name}/level.dat" ]] || die "restore completed without ${world_name}/level.dat"
+game_save_sentinel "${destination}" "${world_name}" || die "restore completed without a recognisable ${GAME_ID} save"
 
 printf 'result=restored\n'
 printf 'archive=%s\n' "${archive}"

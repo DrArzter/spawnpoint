@@ -10,7 +10,12 @@ data_dir="${SERVER_DATA_DIR:-${SERVER_DIR}/data}"
 backup_dir="${SERVER_BACKUP_DIR:-${SERVER_DIR}/backups}"
 world_name="${WORLD_NAME:-world}"
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
-archive="${1:-${backup_dir}/${world_name}-${timestamp}.tar.zst}"
+generation_segment=""
+if [[ -n "${WORLD_GENERATION_ID:-}" ]]; then
+  [[ "${WORLD_GENERATION_ID}" =~ ^gen-[0-9a-f]{32}$ ]] || die "invalid WORLD_GENERATION_ID"
+  generation_segment="-${WORLD_GENERATION_ID}"
+fi
+archive="${1:-${backup_dir}/${world_name}${generation_segment}-${timestamp}.tar.zst}"
 
 # shellcheck source=../games/_dispatch.sh
 source "$(cd -- "${SCRIPT_DIR}/.." && pwd)/games/_dispatch.sh"

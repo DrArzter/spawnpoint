@@ -92,11 +92,16 @@ export function catalogWithPresets(
         },
       };
     });
+    // A registry record consumes its preset even while archived. Otherwise an
+    // archived world would immediately reappear as a pristine candidate and a
+    // first Start could accidentally create a second lifecycle for one preset.
+    for (const record of worldRecords.filter((candidate) => candidate.gameId === game.id)) {
+      consumed.add(record.preset.id);
+    }
     const materialized = worldRecords
       .filter((record) => record.gameId === game.id && record.status === "active")
       .filter((record) => !existing.some((world) => world.id === record.worldId))
       .map((record) => {
-        consumed.add(record.preset.id);
         const current = forGame.find((preset) => preset.id === record.preset.id && preset.profileDigest === record.preset.profileDigest);
         return {
           id: record.worldId,

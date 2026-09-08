@@ -53,6 +53,40 @@ SPAWNPOINT_WORLD_CATALOG="${dynamic_catalog}" "${scripts}/prepare-world.sh" mine
 jq -e '.generation == {id: "gen-123456781234123412341234567890ab", release: "42.7"}' \
   "${fixture}/worlds/minecraft-creative/generations/gen-123456781234123412341234567890ab/.spawnpoint-world.json" >/dev/null
 
+# A restore generation carries only a checksum-addressed backup reference in
+# the registry. First preparation downloads, verifies and expands it into the
+# new generation; it never writes over the old directory.
+restore_checksum="$(printf 'restored level\n' | sha256sum | awk '{print $1}')"
+restore_source="gen-123456781234123412341234567890ab"
+restore_generation="gen-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+mkdir -p -- "${fixture}/restore-source/minecraft-creative" "${fixture}/s3/backups/worlds/minecraft-creative/archives"
+printf 'restored level\n' >"${fixture}/restore-source/minecraft-creative/level.dat"
+restore_archive="${fixture}/s3/backups/worlds/minecraft-creative/archives/minecraft-creative-${restore_source}-20260908T100000Z-placeholder.tar.zst"
+tar --create --zstd --file "${restore_archive}" --directory "${fixture}/restore-source" minecraft-creative
+restore_checksum="$(sha256sum "${restore_archive}" | awk '{print $1}')"
+restore_base64="$(openssl dgst -sha256 -binary "${restore_archive}" | base64 | tr -d '\n')"
+restore_key="worlds/minecraft-creative/archives/minecraft-creative-${restore_source}-20260908T100000Z-${restore_checksum}.tar.zst"
+mv -- "${restore_archive}" "${fixture}/s3/backups/${restore_key}"
+printf 'sha256=%s,world=minecraft-creative\n%s\n' "${restore_checksum}" "${restore_base64}" \
+  >"${fixture}/s3/backups/${restore_key}.fake-metadata"
+jq --arg generation "${restore_generation}" --arg key "${restore_key}" --arg checksum "${restore_checksum}" '
+  .current_generation = {
+    id: $generation, release: "42.7", created_at: "2026-09-08T10:00:00.000Z",
+    source: {kind: "backup", key: $key, checksum: $checksum, generation_id: "gen-123456781234123412341234567890ab"}
+  }
+' "${fixture}/s3/releases/worlds/minecraft-creative/world.json" >"${fixture}/restored-world.json"
+mv -- "${fixture}/restored-world.json" "${fixture}/s3/releases/worlds/minecraft-creative/world.json"
+PATH="${fixture}/bin:${PATH}" FAKE_S3_ROOT="${fixture}/s3" RELEASE_BUCKET=releases \
+  SPAWNPOINT_RUNTIME_DIRECTORY="${fixture}/runtime-restored" \
+  "${scripts}/refresh-world-catalog.sh" minecraft-creative >/dev/null
+PATH="${fixture}/bin:${PATH}" FAKE_S3_ROOT="${fixture}/s3" BACKUP_BUCKET=backups \
+  SPAWNPOINT_WORLD_CATALOG="${fixture}/runtime-restored/world-catalog.json" \
+  "${scripts}/prepare-world.sh" minecraft-creative >/dev/null
+grep -Fxq 'restored level' \
+  "${fixture}/worlds/minecraft-creative/generations/${restore_generation}/data/minecraft-creative/level.dat"
+jq -e --arg key "${restore_key}" '.restore.backup_key == $key' \
+  "${fixture}/worlds/minecraft-creative/generations/${restore_generation}/.spawnpoint-world.json" >/dev/null
+
 prepare_output="$("${scripts}/prepare-world.sh" world)"
 grep -Fxq 'result=prepared' <<<"${prepare_output}"
 [[ -d "${fixture}/worlds/world/data" ]]

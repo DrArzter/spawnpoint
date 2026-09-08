@@ -35,6 +35,10 @@ resolve_game
 if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
   export SERVER_DATA_DIR="${WORLD_DATA_DIRECTORY}"
   export WORLD_NAME="${WORLD_ID}"
+  # Child archive/upload processes must bind the immutable backup to the exact
+  # generation it came from. The id is also encoded in the object name, so the
+  # control plane can select restores without downloading world data.
+  export WORLD_GENERATION_ID WORLD_RELEASE
 fi
 
 export SERVER_PROJECT_DIRECTORY="${SERVER_DIR}"

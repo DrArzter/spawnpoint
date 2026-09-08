@@ -13,6 +13,8 @@ mkdir -p -- "${fixture}/data/world/region" "${fixture}/backups" "${fixture}/fake
 ln -s -- "${REPOSITORY_ROOT}/server/tests/fake-aws" "${fixture}/bin/aws"
 printf 'level fixture\n' >"${fixture}/data/world/level.dat"
 printf 'region fixture\n' >"${fixture}/data/world/region/r.0.0.mca"
+export WORLD_GENERATION_ID="gen-123456781234123412341234567890ab"
+export WORLD_RELEASE="42.7"
 
 archive_output="$(
   SERVER_DATA_DIR="${fixture}/data" \
@@ -21,6 +23,7 @@ archive_output="$(
     "${REPOSITORY_ROOT}/server/scripts/archive-world.sh"
 )"
 archive="$(awk -F= '$1 == "archive" { print $2 }' <<<"${archive_output}")"
+[[ "$(basename -- "${archive}")" == "world-${WORLD_GENERATION_ID}-"*.tar.zst ]]
 
 export PATH="${fixture}/bin:${PATH}"
 export FAKE_S3_ROOT="${fixture}/fake-s3"
@@ -41,6 +44,8 @@ grep -qx 'result=downloaded_and_verified' <<<"${download_output}"
 cmp -- "${archive}" "${download}"
 
 metadata_file="${fixture}/fake-s3/${BACKUP_BUCKET}/${object_key}.fake-metadata"
+grep -q "generation=${WORLD_GENERATION_ID}" "${metadata_file}"
+grep -q "release=${WORLD_RELEASE}" "${metadata_file}"
 sed -i -E '1s/^sha256=[0-9a-f]{64}/sha256=0000000000000000000000000000000000000000000000000000000000000000/' "${metadata_file}"
 if "${REPOSITORY_ROOT}/server/scripts/download-world-backup.sh" "${object_key}" "${fixture}/corrupt.tar.zst" >/dev/null 2>&1; then
   printf 'expected corrupt metadata download to fail\n' >&2

@@ -33,6 +33,16 @@ key_prefix="${key_prefix%/}"
 [[ -n "${key_prefix}" && "${key_prefix}" != *".."* ]] || die "unsafe BACKUP_KEY_PREFIX: ${key_prefix}"
 object_key="${key_prefix}/${archive_name%.tar.zst}-${digest}.tar.zst"
 
+metadata="sha256=${digest},world=${world_name},archive-name=${archive_name}"
+if [[ -n "${WORLD_GENERATION_ID:-}" ]]; then
+  [[ "${WORLD_GENERATION_ID}" =~ ^gen-[0-9a-f]{32}$ ]] || die "invalid WORLD_GENERATION_ID"
+  metadata="${metadata},generation=${WORLD_GENERATION_ID}"
+fi
+if [[ -n "${WORLD_RELEASE:-}" ]]; then
+  [[ "${WORLD_RELEASE}" =~ ^[0-9]+\.[0-9]+$ ]] || die "invalid WORLD_RELEASE"
+  metadata="${metadata},release=${WORLD_RELEASE}"
+fi
+
 if head_output="$(head_backup_object "${object_key}" 2>/dev/null)"; then
   IFS=$'\t' read -r remote_hex remote_base64 remote_bytes <<<"${head_output}"
   if [[ "${remote_hex}" == "${digest}" && "${remote_base64}" == "${digest_base64}" && "${remote_bytes}" == "${archive_bytes}" ]]; then
@@ -52,7 +62,7 @@ s3_cli put-object \
   --body "${archive}" \
   --checksum-algorithm SHA256 \
   --checksum-sha256 "${digest_base64}" \
-  --metadata "sha256=${digest},world=${world_name},archive-name=${archive_name}" \
+  --metadata "${metadata}" \
   >/dev/null
 
 verify_remote_backup "${object_key}" "${digest}" "${digest_base64}" "${archive_bytes}"

@@ -21,8 +21,19 @@ test("the newest verified backups come first, named as they were archived", () =
   assert.deepEqual(inventory.entries.map((entry) => entry.storedAt), ["2026-08-31T09:00:00Z", "2026-08-30T10:15:00Z"]);
   assert.equal(inventory.entries[0]?.archiveName, "world-20260831T090000Z.tar.zst");
   assert.equal(inventory.entries[0]?.checksum, digest("b"));
+  assert.equal(inventory.entries[0]?.generationId, null);
   assert.equal(inventory.unverified, 0);
   assert.equal(inventory.truncated, false);
+});
+
+test("a generation-aware backup exposes its source generation without reading the archive", () => {
+  const generation = `gen-${"1".repeat(32)}`;
+  const inventory = backupInventory([
+    object(`worlds/world/archives/world-${generation}-20260908T090000Z-${digest("e")}.tar.zst`, "2026-09-08T09:00:00Z"),
+  ]);
+
+  assert.equal(inventory.entries[0]?.generationId, generation);
+  assert.equal(inventory.entries[0]?.archiveName, `world-${generation}-20260908T090000Z.tar.zst`);
 });
 
 test("an object that cannot be verified from the listing is counted, never hidden", () => {

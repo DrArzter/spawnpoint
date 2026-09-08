@@ -49,6 +49,11 @@ test("a ready preset becomes a startable candidate and then a materialized world
     .find((game) => game.id === "factorio")!.worlds.find((world) => world.id === "factorio-space-age")!;
   assert.equal(materialized.materialization, "existing");
   assert.equal(materialized.sessionControl, "v1");
+
+  const archived = { ...record, status: "archived" as const };
+  const afterArchive = catalogWithPresets([preset], gameCatalog, [archived])
+    .find((game) => game.id === "factorio")!.worlds;
+  assert.equal(afterArchive.some((world) => world.profileId === preset.id), false);
 });
 
 test("rejects a catalog for another game, duplicate ids, and ready presets without releases", () => {

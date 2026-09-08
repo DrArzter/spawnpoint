@@ -212,14 +212,14 @@ export async function requestPackDownload(gameId: string, worldId: string): Prom
   return { release: body.release, url: body.url };
 }
 
-export type BackupEntry = { key: string; archiveName: string; checksum: string; sizeBytes: number; storedAt: string };
+export type BackupEntry = { key: string; archiveName: string; checksum: string; generationId: string | null; sizeBytes: number; storedAt: string };
 export type BackupInventory = { entries: BackupEntry[]; unverified: number; truncated: boolean };
 
 export async function loadBackups(gameId: string, worldId: string): Promise<BackupInventory> {
   if (previewEnabled) return {
     entries: [
-      { key: `worlds/${worldId}/archives/preview-a`, archiveName: `${worldId}-20260829T173200Z.tar.zst`, checksum: "8b4e3a7d24c09ea61de95cdb613cfb9bea802cff4cb67f2ed0a910832d96f231", sizeBytes: 184549376, storedAt: "2026-08-29T17:32:00.000Z" },
-      { key: `worlds/${worldId}/archives/preview-b`, archiveName: `${worldId}-20260827T221500Z.tar.zst`, checksum: "294c47d3cbd1d52ed7117338b0e44a28d5ae53b9b0ad9f563172c8b4fbfd19cc", sizeBytes: 178257920, storedAt: "2026-08-27T22:15:00.000Z" },
+      { key: `worlds/${worldId}/archives/preview-a`, archiveName: `${worldId}-20260829T173200Z.tar.zst`, checksum: "8b4e3a7d24c09ea61de95cdb613cfb9bea802cff4cb67f2ed0a910832d96f231", generationId: null, sizeBytes: 184549376, storedAt: "2026-08-29T17:32:00.000Z" },
+      { key: `worlds/${worldId}/archives/preview-b`, archiveName: `${worldId}-20260827T221500Z.tar.zst`, checksum: "294c47d3cbd1d52ed7117338b0e44a28d5ae53b9b0ad9f563172c8b4fbfd19cc", generationId: null, sizeBytes: 178257920, storedAt: "2026-08-27T22:15:00.000Z" },
     ],
     unverified: 1,
     truncated: false,

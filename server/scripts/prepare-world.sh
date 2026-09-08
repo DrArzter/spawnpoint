@@ -32,14 +32,20 @@ expected_marker="$(jq -cn \
   --arg repository "${WORLD_PROFILE_REPOSITORY}" \
   --arg commit "${WORLD_PROFILE_COMMIT}" \
   --arg generation_id "${WORLD_GENERATION_ID}" \
-  --arg release "${WORLD_RELEASE}" '
+  --arg release "${WORLD_RELEASE}" \
+  --arg restore_key "${WORLD_RESTORE_BACKUP_KEY}" \
+  --arg restore_checksum "${WORLD_RESTORE_CHECKSUM}" \
+  --arg restore_generation "${WORLD_RESTORE_SOURCE_GENERATION_ID}" '
   {
     schema_version: 1,
     world_id: $world_id,
     profile: {id: $profile_id, repository: $repository, commit: $commit}
-  } + (if $generation_id == "" then {} else {
-    generation: {id: $generation_id, release: $release}
-  } end)
+  } + (if $generation_id == "" then {} else
+    {generation: {id: $generation_id, release: $release}} +
+    (if $restore_key == "" then {} else {
+      restore: {backup_key: $restore_key, checksum: $restore_checksum, source_generation_id: $restore_generation}
+    } end)
+  end)
 ')"
 
 world_parent="${WORLDS_DIRECTORY}"
@@ -87,7 +93,22 @@ else
     fi
   }
   trap cleanup EXIT
-  mkdir -p -- "${stage}/data" "${stage}/mods"
+  mkdir -p -- "${stage}/mods"
+  if [[ -n "${WORLD_RESTORE_BACKUP_KEY}" ]]; then
+    restore_archive="${stage}/restore.tar.zst"
+    SPAWNPOINT_GAME="${WORLD_GAME}" WORLD_NAME="${WORLD_ID}" \
+      "${SCRIPT_DIR}/download-world-backup.sh" "${WORLD_RESTORE_BACKUP_KEY}" "${restore_archive}" >/dev/null
+    actual_restore_checksum="$(sha256sum -- "${restore_archive}" | awk '{print $1}')"
+    [[ "${actual_restore_checksum}" == "${WORLD_RESTORE_CHECKSUM}" ]] || {
+      printf 'error: restored backup does not match the generation descriptor\n' >&2
+      exit 1
+    }
+    SPAWNPOINT_GAME="${WORLD_GAME}" WORLD_NAME="${WORLD_ID}" \
+      "${SCRIPT_DIR}/restore-world.sh" "${restore_archive}" "${stage}/data" >/dev/null
+    rm -f -- "${restore_archive}" "${restore_archive}.sha256"
+  else
+    mkdir -p -- "${stage}/data"
+  fi
   printf '%s\n' "${expected_marker}" >"${stage}/.spawnpoint-world.json"
   chmod 0644 "${stage}/.spawnpoint-world.json"
   mv -T -- "${stage}" "${WORLD_DIRECTORY}"

@@ -45,7 +45,13 @@ else
     (.preset.commit | type == "string" and test("^[0-9a-f]{40}$")) and
     (.preset.profile_digest | type == "string" and test("^[0-9a-f]{64}$")) and
     (.current_generation.id | type == "string" and test("^gen-[0-9a-f]{32}$")) and
-    (.current_generation.release | type == "string" and test("^[0-9]+\\.[0-9]+$"))
+    (.current_generation.release | type == "string" and test("^[0-9]+\\.[0-9]+$")) and
+    ((.current_generation.source // {kind: "preset"}) as $source |
+      ($source.kind == "preset") or
+      ($source.kind == "backup" and
+        ($source.key | type == "string" and test("^worlds/[a-z0-9][a-z0-9-]{0,31}/archives/[A-Za-z0-9._-]+\\.tar\\.zst$")) and
+        ($source.checksum | type == "string" and test("^[0-9a-f]{64}$")) and
+        ($source.generation_id | type == "string" and test("^gen-[0-9a-f]{32}$"))))
   ' "${record}" >/dev/null || { printf 'error: invalid world registry record: %s\n' "${world_id}" >&2; exit 1; }
   jq --slurpfile record "${record}" '
     .worlds += [{
@@ -58,7 +64,14 @@ else
       generation_id: $record[0].current_generation.id,
       release: $record[0].current_generation.release,
       profile_source: {repository: $record[0].preset.repository, commit: $record[0].preset.commit}
-    }]
+    } + (if ($record[0].current_generation.source.kind // "preset") == "backup" then {
+      restore: {
+        backup_key: $record[0].current_generation.source.key,
+        checksum: $record[0].current_generation.source.checksum,
+        source_generation_id: $record[0].current_generation.source.generation_id
+      }
+    } else {} end)
+    ]
   ' "${BASE_CATALOG}" >"${stage}"
 fi
 

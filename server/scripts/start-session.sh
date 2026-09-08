@@ -32,6 +32,9 @@ source "${SCRIPT_DIR}/_connectivity.sh"
 resolve_game
 
 if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
+  if [[ -n "${WORLD_RESTORE_BACKUP_KEY:-}" ]]; then
+    export BACKUP_BUCKET="${BACKUP_BUCKET:-$(read_env_value BACKUP_BUCKET)}"
+  fi
   "${SCRIPT_DIR}/prepare-world.sh" "${WORLD_ID}" >&2
 fi
 

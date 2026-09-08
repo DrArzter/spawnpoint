@@ -136,6 +136,14 @@ offer does not arrive, or when your game cannot reach the mod portal.
 Two versions of one mod stop the game from loading, which is why step 2 is a deletion and not a merge.
 EOF
       ;;
+    zomboid)
+      cat >"${target}" <<EOF
+Spawnpoint pack, release ${release} (Project Zomboid build ${game_version}).
+
+Vanilla releases contain no client-side files. Workshop-backed presets will
+publish their exact client installation contract here when that resolver lands.
+EOF
+      ;;
     *)
       die "no install notes for game: ${game}"
       ;;

@@ -39,6 +39,10 @@ case "${release_game}" in
     mod_extension="zip"
     loader_type="factorio"
     ;;
+  zomboid)
+    mod_extension="zip"
+    loader_type="workshop"
+    ;;
   *)
     printf 'error: unknown RELEASE_GAME: %s\n' "${release_game}" >&2
     exit 1

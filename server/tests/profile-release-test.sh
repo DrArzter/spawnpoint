@@ -121,6 +121,32 @@ jq -e \
     and .server.mods[0].file == "graftorio2_0.4.20.zip"
   ' "${factorio_manifest}" >/dev/null
 
+# A vanilla Zomboid preset is a first-class empty immutable release. Workshop
+# resolution is not implied by this path and will get its own resolver tests.
+zomboid_repo="${fixture}/zomboid-config"
+mkdir -p -- "${zomboid_repo}/profiles/zomboid-vanilla" "${fixture}/zomboid-mods"
+git -C "${zomboid_repo}" init --quiet
+git -C "${zomboid_repo}" remote add origin https://github.com/example/zomboid-config.git
+cat >"${zomboid_repo}/profiles/zomboid-vanilla/profile.json" <<'EOF'
+{"schema_version":1,"game":"zomboid","id":"zomboid-vanilla","zomboid_build":"42.20","loader":{"type":"workshop","version":null},"mods":{"source":null}}
+EOF
+git -C "${zomboid_repo}" add profiles
+git -C "${zomboid_repo}" -c user.name=Spawnpoint-Test -c user.email=spawnpoint@example.invalid commit --quiet -m 'zomboid profile'
+zomboid_manifest="${fixture}/zomboid-manifest.json"
+zomboid_output="$(
+  "${scripts}/build-profile-release.sh" \
+    "${zomboid_repo}/profiles/zomboid-vanilla" 3.0 "${fixture}/zomboid-mods" "${zomboid_manifest}"
+)"
+grep -Fxq 'game=zomboid' <<<"${zomboid_output}"
+grep -Fxq 'mods=0' <<<"${zomboid_output}"
+jq -e '
+  .game == "zomboid"
+  and .minecraft_version == "42.20"
+  and .loader == {type: "workshop", version: "42.20"}
+  and .source_profile.id == "zomboid-vanilla"
+  and .server.mods == []
+' "${zomboid_manifest}" >/dev/null
+
 # a minecraft-shaped profile that claims factorio is refused by the game's own
 # loader contract rather than passing through with the wrong vocabulary
 mkdir -p -- "${config_repo}/profiles/mislabelled"

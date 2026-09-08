@@ -209,9 +209,16 @@ download_output="$("${SCRIPTS}/download-release.sh" 9.1 "${fixture}/cache/9.1")"
 grep -qx 'downloaded=0' <<<"${download_output}"
 [[ -f "${fixture}/cache/9.1/manifest.json" ]]
 
+RELEASE_GAME=zomboid "${SCRIPTS}/build-release-manifest.sh" \
+  9.2 42.20 42.20 "${fixture}/empty/mods" "${fixture}/empty/zomboid-manifest.json" >/dev/null
+RELEASE_SOURCE_DIR="${fixture}/empty" \
+  "${SCRIPTS}/upload-release.sh" "${fixture}/empty/zomboid-manifest.json" >/dev/null
+[[ -f "${FAKE_S3_ROOT}/${RELEASE_BUCKET}/releases/9.2/manifest.json" ]]
+[[ -f "${FAKE_S3_ROOT}/${RELEASE_BUCKET}/packs/9.2.zip" ]]
+
 expect_failure "an unknown RELEASE_GAME" \
   env RELEASE_GAME=quake "${SCRIPTS}/build-release-manifest.sh" \
-  9.2 1.0 x "${fixture}/empty/mods" "${fixture}/empty/never.json"
+  9.3 1.0 x "${fixture}/empty/mods" "${fixture}/empty/never.json"
 
 # --- readiness: the last minecraft assumption in the start path, now the
 #     module's call. Minecraft's control path is stubbed; factorio's is the real
@@ -301,10 +308,7 @@ SPAWNPOINT_GAME=zomboid WORLD_NAME=zomboid "${SCRIPTS}/verify-archive.sh" "${zom
 expect_failure "a zomboid archive judged by another game's sentinel" \
   env SPAWNPOINT_GAME=factorio WORLD_NAME=zomboid "${SCRIPTS}/verify-archive.sh" "${zomboid_archive}"
 
-# Workshop ids are not bytes, so this game has no release payload: the manifest
-# builder must refuse rather than invent an extension to search for.
-expect_failure "a zomboid release" \
-  env RELEASE_GAME=zomboid "${SCRIPTS}/build-release-manifest.sh" \
-  1.0 42.20 42.20 "${zomboid_world}/db" "${fixture}/zomboid-never.json"
+# Workshop ids are not bytes, so the vanilla release tested above deliberately
+# carries an empty payload. A future Workshop resolver owns that translation.
 
 printf 'game-adapter-test: ok\n'

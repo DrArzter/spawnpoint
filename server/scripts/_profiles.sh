@@ -37,6 +37,15 @@ profile_game_facts() {
       PROFILE_MOD_EXTENSION="zip"
       PROFILE_RESOLVER="factorio-portal"
       ;;
+    zomboid)
+      PROFILE_VERSION_FIELD="zomboid_build"
+      PROFILE_LOADER_TYPE="workshop"
+      PROFILE_LOADER_VERSIONED=false
+      # Vanilla profiles resolve no files. Workshop resolution remains a
+      # separate future adapter, but the release shape already has a safe axis.
+      PROFILE_MOD_EXTENSION="zip"
+      PROFILE_RESOLVER="zomboid-workshop"
+      ;;
     *)
       printf 'error: unsupported profile game: %s\n' "${game}" >&2
       exit 1

@@ -356,6 +356,8 @@ a { color: var(--color-accent); text-underline-offset: 3px; }
 .operation-confirmation { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 14px; padding: 18px 20px; border: 1px solid var(--color-warning); border-radius: var(--radius-surface); background: var(--color-warning-bg); }
 .operation-confirmation p { max-width: 72ch; margin-top: 5px; color: var(--color-text-secondary); }
 .operation-confirmation > div:last-child { display: flex; flex: 0 0 auto; gap: 8px; }
+.purge-confirmation { display: grid; max-width: 420px; gap: 6px; margin-top: 14px; color: var(--color-text-secondary); font-size: var(--text-sm); font-weight: 600; }
+.purge-confirmation input { min-height: var(--control-height); padding: 0 12px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-control); background: var(--color-surface); color: var(--color-text); }
 
 .terminal-panel { overflow: hidden; border-color: #364050; background: #11161d; color: #e6edf7; }
 .terminal-panel > header { display: flex; min-height: 48px; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: 1px solid #364050; background: #171d26; }

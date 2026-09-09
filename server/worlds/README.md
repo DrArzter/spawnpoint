@@ -15,6 +15,11 @@ points at that checksum-addressed object; on its first start the host verifies a
 directory. The old directory and the closed generation entry remain untouched. An archived world keeps its record and
 therefore still consumes its preset instead of reappearing as an uncreated candidate.
 
+Purge is available only for an archived world. It permanently removes every version of the world's registry record,
+release pointer and S3 backups, then leaves one small completed purge marker containing the generation IDs. Because a
+stopped EC2 instance is not booted merely to delete cache, `start-session.sh` consumes those markers before preparing
+a later world with the same ID and removes only the named generation directories.
+
 The profile repository is pinned to a full Git commit. Updating that commit only makes new authoring input available;
 it does not change an active release. Release manifests still pin the resolved JAR bytes by SHA-256.
 

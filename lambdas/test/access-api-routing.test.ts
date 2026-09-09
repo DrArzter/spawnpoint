@@ -91,3 +91,9 @@ test("administrative routes all sit behind access.manage", () => {
     );
   }
 });
+
+test("permanent world deletion is owner-level world management", () => {
+  assert.deepEqual(routes["POST /games/{gameId}/worlds/{worldId}/purge"]?.access, {
+    kind: "permission", permission: "world.manage",
+  });
+});

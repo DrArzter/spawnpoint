@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { HostObservation, OperationObservation } from "../src/control-plane/read-model.ts";
 import { catalogWithPresets } from "../src/control-plane/catalog.ts";
-import { packRelease, planSessionOperation } from "../src/control-plane/session-control.ts";
+import { packRelease, planSessionOperation, worldLifecycleNeedsStop } from "../src/control-plane/session-control.ts";
 
 const host = (state: HostObservation["state"]): HostObservation => ({ id: "host", name: "Host", state, providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: null });
 const operation: OperationObservation = { id: "op", type: "start", status: "running", startedAt: "2026-08-29T00:00:00Z", providerRef: "arn:op" };
@@ -70,4 +70,10 @@ test("a player is handed the pack for the release the world is running", () => {
     { kind: "none", reason: "no_release_pointer" },
   );
   assert.deepEqual(packRelease(null), { kind: "none", reason: "no_release_pointer" });
+});
+
+test("only an active world can require a verified stop before a lifecycle mutation", () => {
+  assert.equal(worldLifecycleNeedsStop("active", "running"), true);
+  assert.equal(worldLifecycleNeedsStop("active", "stopped"), false);
+  assert.equal(worldLifecycleNeedsStop("archived", "running"), false, "another running world must not be stopped");
 });

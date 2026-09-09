@@ -196,6 +196,7 @@ locals {
     "POST /games/{gameId}/worlds/{worldId}/archive",
     "POST /games/{gameId}/worlds/{worldId}/regenerate",
     "POST /games/{gameId}/worlds/{worldId}/restore",
+    "POST /games/{gameId}/worlds/{worldId}/purge",
     "POST /access/request",
     "GET /access/candidates",
     "GET /access/identities",

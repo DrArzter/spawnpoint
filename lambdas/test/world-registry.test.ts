@@ -4,7 +4,7 @@ import test from "node:test";
 import type { PresetObservation } from "../src/control-plane/preset-catalog.ts";
 import {
   archiveWorldRecord, newWorldRecord, parseWorldRecord, regenerateWorldRecord,
-  restoreWorldRecord, worldIdForPreset, worldRecordDocument,
+  purgeGenerationIds, restoreWorldRecord, worldIdForPreset, worldRecordDocument,
 } from "../src/control-plane/world-registry.ts";
 
 const preset: PresetObservation = {
@@ -81,4 +81,14 @@ test("restore refuses a backup that cannot be tied to this world's generation hi
     checksum: "c".repeat(64),
     generationId: `gen-${"f".repeat(32)}`,
   }, "ffffffff-eeee-dddd-cccc-bbbbbbbbbbbb", "2026-09-08T11:00:00.000Z"), /backup_generation_unknown/);
+});
+
+test("purge is possible only after archive and names every generation to clean", () => {
+  const initial = newWorldRecord(preset, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
+  const regenerated = regenerateWorldRecord(initial, preset, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "2026-09-08T10:00:00.000Z");
+  assert.throws(() => purgeGenerationIds(regenerated), /world_not_archived/);
+  assert.deepEqual(purgeGenerationIds(archiveWorldRecord(regenerated)), [
+    regenerated.currentGeneration.id,
+    initial.currentGeneration.id,
+  ]);
 });

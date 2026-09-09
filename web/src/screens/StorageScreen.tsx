@@ -10,7 +10,7 @@ import { EmptyState, Notice, PageHeader, RetryState, Surface } from "../componen
 type ReleaseRow = { name: string; status: string };
 
 type RequestState = { state: "idle" | "pending" | "success" | "error"; message: string };
-type WorldAction = { action: "archive" | "regenerate" | "restore"; backupKey?: string; backupName?: string };
+type WorldAction = { action: "archive" | "regenerate" | "restore" | "purge"; backupKey?: string; backupName?: string };
 
 export function StorageScreen({ world, gameId, canReadBackups, canManageWorld, canRestoreBackup, onDownloadPack, onWorldAction, packRequest, lifecycleRequest }: {
   world: World;
@@ -19,7 +19,7 @@ export function StorageScreen({ world, gameId, canReadBackups, canManageWorld, c
   canManageWorld: boolean;
   canRestoreBackup: boolean;
   onDownloadPack?: (worldId: string) => void;
-  onWorldAction: (action: "archive" | "regenerate" | "restore", backupKey?: string) => void;
+  onWorldAction: (action: "archive" | "regenerate" | "restore" | "purge", backupKey?: string) => void;
   packRequest: RequestState;
   lifecycleRequest: RequestState;
 }) {
@@ -28,12 +28,15 @@ export function StorageScreen({ world, gameId, canReadBackups, canManageWorld, c
   const [backupError, setBackupError] = useState<string | null>(null);
   const [backupRevision, setBackupRevision] = useState(0);
   const [confirming, setConfirming] = useState<WorldAction | null>(null);
+  const [purgeConfirmation, setPurgeConfirmation] = useState("");
   const confirmButton = useRef<HTMLButtonElement>(null);
+  const purgeInput = useRef<HTMLInputElement>(null);
   const actionTrigger = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (confirming === null) return;
-    confirmButton.current?.focus();
+    if (confirming.action === "purge") purgeInput.current?.focus();
+    else confirmButton.current?.focus();
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setConfirming(null);
     };
@@ -46,6 +49,7 @@ export function StorageScreen({ world, gameId, canReadBackups, canManageWorld, c
 
   function requestConfirmation(action: WorldAction, trigger: HTMLButtonElement) {
     actionTrigger.current = trigger;
+    setPurgeConfirmation("");
     setConfirming(action);
   }
 
@@ -117,24 +121,28 @@ export function StorageScreen({ world, gameId, canReadBackups, canManageWorld, c
     ? "Archive this world?"
     : confirming?.action === "regenerate"
       ? "Create a fresh generation?"
-      : "Restore this backup?";
+      : confirming?.action === "purge"
+        ? "Permanently delete this world?"
+        : "Restore this backup?";
   const actionDescription = confirming?.action === "archive"
     ? "Spawnpoint will safely stop and back up an active session, then hide the world from normal session control. Its generations and backups remain intact."
     : confirming?.action === "regenerate"
       ? "Spawnpoint will safely stop and back up the current generation, close it, and create an empty generation from the preset’s latest ready release."
-      : `Spawnpoint will safely stop and back up the current generation, then restore ${confirming?.backupName ?? "the selected backup"} into a new generation.`;
+      : confirming?.action === "purge"
+        ? "This permanently deletes the world registry, release pointer and every version of every S3 backup. This cannot be undone from the dashboard."
+        : `Spawnpoint will safely stop and back up the current generation, then restore ${confirming?.backupName ?? "the selected backup"} into a new generation.`;
 
   return <>
     <PageHeader actions={world.worldLifecycleAvailable && world.materialization === "existing" && <>
       {world.materialization === "existing" && <Button disabled={!canManageWorld || lifecycleRequest.state === "pending"} onClick={(event) => requestConfirmation({ action: "archive" }, event.currentTarget)}>Archive</Button>}
       {world.materialization === "existing" && <Button disabled={!canManageWorld || lifecycleRequest.state === "pending"} onClick={(event) => requestConfirmation({ action: "regenerate" }, event.currentTarget)} variant="danger">Regenerate</Button>}
-    </>} description={`Release pointers and verified backups for ${world.displayName}`} title="Releases" />
+    </> || world.worldLifecycleAvailable && world.materialization === "archived" && <Button disabled={!canManageWorld || lifecycleRequest.state === "pending"} onClick={(event) => requestConfirmation({ action: "purge" }, event.currentTarget)} variant="danger">Delete permanently</Button>} description={`Release pointers and verified backups for ${world.displayName}`} title="Releases" />
     <Tabs label="Storage view" onChange={setTab} options={[{ id: "releases", label: "Releases" }, { id: "backups", label: "Backups" }]} value={tab} />
     {world.materialization === "archived" && <Notice description="Choose a generation-aware backup in the Backups tab to restore this world into a new active generation." title="This world is archived" tone="warning" />}
     {lifecycleRequest.state !== "idle" && <Notice description={lifecycleRequest.message} title={lifecycleRequest.state === "pending" ? "World operation requested" : lifecycleRequest.state === "success" ? "World operation accepted" : "World operation failed"} tone={lifecycleRequest.state === "error" ? "danger" : lifecycleRequest.state === "success" ? "success" : "info"} />}
     {confirming !== null && <Surface aria-describedby="world-operation-confirmation-description" aria-labelledby="world-operation-confirmation-title" className="operation-confirmation" role="alertdialog">
-      <div><h2 id="world-operation-confirmation-title">{actionTitle}</h2><p id="world-operation-confirmation-description">{actionDescription}</p></div>
-      <div><Button onClick={() => setConfirming(null)} variant="ghost">Cancel</Button><Button onClick={confirmAction} ref={confirmButton} variant={confirming.action === "archive" ? "primary" : "danger"}>{confirming.action === "archive" ? "Archive world" : confirming.action === "regenerate" ? "Create generation" : "Restore backup"}</Button></div>
+      <div><h2 id="world-operation-confirmation-title">{actionTitle}</h2><p id="world-operation-confirmation-description">{actionDescription}</p>{confirming.action === "purge" && <label className="purge-confirmation">Type <code>{world.id}</code> to confirm<input autoComplete="off" onChange={(event) => setPurgeConfirmation(event.target.value)} ref={purgeInput} value={purgeConfirmation} /></label>}</div>
+      <div><Button onClick={() => setConfirming(null)} variant="ghost">Cancel</Button><Button disabled={confirming.action === "purge" && purgeConfirmation !== world.id} onClick={confirmAction} ref={confirmButton} variant={confirming.action === "archive" ? "primary" : "danger"}>{confirming.action === "archive" ? "Archive world" : confirming.action === "regenerate" ? "Create generation" : confirming.action === "purge" ? "Delete world forever" : "Restore backup"}</Button></div>
     </Surface>}
     {tab === "releases" && packRequest.state !== "idle" && <Notice description={packRequest.message} title={packRequest.state === "pending" ? "Working on the pack" : packRequest.state === "success" ? "Pack request accepted" : "Pack request failed"} tone={packRequest.state === "error" ? "danger" : packRequest.state === "success" ? "success" : "info"} />}
     {tab === "releases" && <DataTable columns={columns} emptyLabel={world.release.state === "unconfigured" ? "This world has no release pointer yet" : "Release data is unavailable"} label="Release pointers" rowKey={(row) => row.name} rows={releases} />}

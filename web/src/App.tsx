@@ -221,7 +221,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
     }
   }
 
-  async function runWorldLifecycle(action: "archive" | "regenerate" | "restore", backupKey?: string) {
+  async function runWorldLifecycle(action: "archive" | "regenerate" | "restore" | "purge", backupKey?: string) {
     if (!game || !world) return;
     setLifecycleRequest({ state: "pending", message: `Requesting ${action}…` });
     try {

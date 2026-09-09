@@ -2,6 +2,10 @@ import type { HostObservation, OperationObservation, ReleasePointerObservation }
 import { gameCatalog, type CatalogGame, type CatalogWorld } from "./catalog.ts";
 
 export type SessionAction = "start" | "stop";
+
+export function worldLifecycleNeedsStop(worldStatus: "active" | "archived", hostState: HostObservation["state"]): boolean {
+  return worldStatus === "active" && hostState === "running";
+}
 export type SessionPlan =
   | Readonly<{ kind: "execute"; host: HostObservation; world: CatalogWorld }>
   | Readonly<{ kind: "noop"; reason: "already_stopped" }>

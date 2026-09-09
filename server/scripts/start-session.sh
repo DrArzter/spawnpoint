@@ -32,6 +32,8 @@ source "${SCRIPT_DIR}/_connectivity.sh"
 resolve_game
 
 if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
+  export RELEASE_BUCKET="${RELEASE_BUCKET:-$(read_env_value RELEASE_BUCKET)}"
+  "${SCRIPT_DIR}/reconcile-purged-worlds.sh" "${WORLD_ID}" >&2
   if [[ -n "${WORLD_RESTORE_BACKUP_KEY:-}" ]]; then
     export BACKUP_BUCKET="${BACKUP_BUCKET:-$(read_env_value BACKUP_BUCKET)}"
   fi

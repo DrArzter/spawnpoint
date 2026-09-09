@@ -1,18 +1,20 @@
 import {
-  GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client,
+  DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, ListObjectVersionsCommand,
+  NoSuchKey, PutObjectCommand, S3Client,
 } from "@aws-sdk/client-s3";
 
 import { backupInventory } from "../control-plane/backups.ts";
 import { parsePresetCatalog } from "../control-plane/preset-catalog.ts";
 import {
-  archiveWorldRecord, parseWorldRecord, regenerateWorldRecord, restoreWorldRecord,
+  archiveWorldRecord, parseWorldRecord, purgeGenerationIds, regenerateWorldRecord, restoreWorldRecord,
   worldRecordDocument, type WorldRecord,
 } from "../control-plane/world-registry.ts";
 
 type Input = Readonly<{
-  action: "archive" | "regenerate" | "restore";
+  action: "archive" | "regenerate" | "restore" | "purge";
   worldId: string;
   generationUuid?: string;
+  targetGenerationId?: string;
   backupKey?: string;
   requestedAt: string;
   requestedBy: string;
@@ -20,6 +22,7 @@ type Input = Readonly<{
 
 const WORLD_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const GENERATION_ID = /^gen-[0-9a-f]{32}$/;
 const s3 = new S3Client({});
 
 function requiredEnv(name: string): string {
@@ -37,18 +40,114 @@ async function jsonObject(bucket: string, key: string): Promise<{ value: Record<
   return { value: value as Record<string, unknown>, etag: response.ETag };
 }
 
+async function optionalJsonObject(bucket: string, key: string): Promise<{ value: Record<string, unknown>; etag: string } | null> {
+  try {
+    return await jsonObject(bucket, key);
+  } catch (error) {
+    if (error instanceof NoSuchKey || (error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound"))) return null;
+    throw error;
+  }
+}
+
 function parseInput(value: unknown): Input {
   if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid_input");
   const input = value as Record<string, unknown>;
   if (
-    (input.action !== "archive" && input.action !== "regenerate" && input.action !== "restore") ||
+    (input.action !== "archive" && input.action !== "regenerate" && input.action !== "restore" && input.action !== "purge") ||
     typeof input.worldId !== "string" || !WORLD_ID.test(input.worldId) ||
     typeof input.requestedAt !== "string" || Number.isNaN(Date.parse(input.requestedAt)) ||
     typeof input.requestedBy !== "string" || !input.requestedBy ||
-    (input.action !== "archive" && (typeof input.generationUuid !== "string" || !UUID.test(input.generationUuid))) ||
+    (input.action !== "archive" && input.action !== "purge" && (typeof input.generationUuid !== "string" || !UUID.test(input.generationUuid))) ||
+    (input.action === "purge" && (typeof input.targetGenerationId !== "string" || !GENERATION_ID.test(input.targetGenerationId))) ||
     (input.action === "restore" && typeof input.backupKey !== "string")
   ) throw new Error("invalid_input");
   return input as Input;
+}
+
+async function versionedObjects(bucket: string, prefix: string, exactKey?: string) {
+  const objects: Array<{ Key: string; VersionId: string }> = [];
+  let keyMarker: string | undefined;
+  let versionIdMarker: string | undefined;
+  do {
+    const page = await s3.send(new ListObjectVersionsCommand({
+      Bucket: bucket, Prefix: prefix, KeyMarker: keyMarker, VersionIdMarker: versionIdMarker,
+    }));
+    for (const object of [...(page.Versions ?? []), ...(page.DeleteMarkers ?? [])]) {
+      if (object.Key && object.VersionId && (exactKey === undefined || object.Key === exactKey)) {
+        objects.push({ Key: object.Key, VersionId: object.VersionId });
+      }
+    }
+    keyMarker = page.IsTruncated ? page.NextKeyMarker : undefined;
+    versionIdMarker = page.IsTruncated ? page.NextVersionIdMarker : undefined;
+  } while (keyMarker !== undefined);
+  return objects;
+}
+
+async function permanentlyDelete(bucket: string, prefix: string, exactKey?: string): Promise<void> {
+  const objects = await versionedObjects(bucket, prefix, exactKey);
+  for (let offset = 0; offset < objects.length; offset += 1000) {
+    const page = objects.slice(offset, offset + 1000);
+    const deleted = await s3.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: page, Quiet: true } }));
+    if ((deleted.Errors ?? []).length > 0) throw new Error("purge_delete_failed");
+  }
+}
+
+function purgeMarker(value: Record<string, unknown>, worldId: string, targetGenerationId: string) {
+  const generations = value.generation_ids;
+  if (
+    value.schema_version !== 1 || value.world_id !== worldId || value.target_generation_id !== targetGenerationId ||
+    (value.status !== "pending" && value.status !== "completed") || !Array.isArray(generations) ||
+    generations.length < 1 || generations.some((generation) => typeof generation !== "string" || !GENERATION_ID.test(generation))
+  ) throw new Error("invalid_purge_marker");
+  return { status: value.status, generations: generations as string[] };
+}
+
+async function purgeWorld(input: Input, releaseBucket: string) {
+  const targetGenerationId = input.targetGenerationId!;
+  const markerKey = `worlds/${input.worldId}/purges/${targetGenerationId}.json`;
+  const recordKey = `worlds/${input.worldId}/world.json`;
+  let marker = await optionalJsonObject(releaseBucket, markerKey);
+  const storedRecord = await optionalJsonObject(releaseBucket, recordKey);
+  const currentRecord = storedRecord === null ? null : parseWorldRecord(storedRecord.value);
+  if (storedRecord !== null && currentRecord === null) throw new Error("invalid_world_record");
+  if (currentRecord !== null && currentRecord.currentGeneration.id !== targetGenerationId) {
+    if (marker !== null && purgeMarker(marker.value, input.worldId, targetGenerationId).status === "completed") {
+      return { result: "already_applied", worldId: input.worldId, generationId: targetGenerationId };
+    }
+    throw new Error("operation_id_conflict");
+  }
+  let generations: readonly string[];
+  if (marker === null) {
+    if (storedRecord === null) throw new Error("invalid_world_record");
+    if (currentRecord!.worldId !== input.worldId) throw new Error("invalid_world_record");
+    generations = purgeGenerationIds(currentRecord!);
+    const document = {
+      schema_version: 1, world_id: input.worldId, target_generation_id: targetGenerationId,
+      status: "pending", generation_ids: generations, requested_at: input.requestedAt, requested_by: input.requestedBy,
+    };
+    await s3.send(new PutObjectCommand({
+      Bucket: releaseBucket, Key: markerKey, IfNoneMatch: "*", ContentType: "application/json",
+      ServerSideEncryption: "AES256", Body: JSON.stringify(document),
+    }));
+    marker = await jsonObject(releaseBucket, markerKey);
+  } else {
+    const parsed = purgeMarker(marker.value, input.worldId, targetGenerationId);
+    if (parsed.status === "completed") {
+      if (storedRecord !== null) await permanentlyDelete(releaseBucket, recordKey, recordKey);
+      return { result: storedRecord === null ? "already_applied" : "purge", worldId: input.worldId, generationId: targetGenerationId };
+    }
+    generations = parsed.generations;
+  }
+
+  const backupBucket = requiredEnv("BACKUP_BUCKET");
+  await permanentlyDelete(backupBucket, `worlds/${input.worldId}/archives/`);
+  await permanentlyDelete(releaseBucket, `worlds/${input.worldId}/release.json`, `worlds/${input.worldId}/release.json`);
+  await s3.send(new PutObjectCommand({
+    Bucket: releaseBucket, Key: markerKey, IfMatch: marker.etag, ContentType: "application/json",
+    ServerSideEncryption: "AES256", Body: JSON.stringify({ ...marker.value, status: "completed", purged_at: input.requestedAt }),
+  }));
+  await permanentlyDelete(releaseBucket, recordKey, recordKey);
+  return { result: "purge", worldId: input.worldId, generationId: targetGenerationId, generations };
 }
 
 async function verifiedBackups(worldId: string) {
@@ -100,6 +199,7 @@ async function writePointer(record: WorldRecord, input: Input): Promise<void> {
 export async function handler(event: unknown) {
   const input = parseInput(event);
   const releaseBucket = requiredEnv("RELEASE_BUCKET");
+  if (input.action === "purge") return purgeWorld(input, releaseBucket);
   const recordKey = `worlds/${input.worldId}/world.json`;
   const stored = await jsonObject(releaseBucket, recordKey);
   const record = parseWorldRecord(stored.value);

@@ -39,6 +39,7 @@ test("a running session is synchronously stopped and backed up before mutation",
   assert.equal(stop.Next, "Apply World Mutation");
   assert.equal(mutate.Resource, "arn:aws:states:::lambda:invoke");
   assert.match(JSON.stringify(stop.Parameters), /worldId/);
+  assert.match(JSON.stringify(mutate.Parameters), /targetGenerationId/);
 });
 
 test("a stopped host mutates without being started", async () => {

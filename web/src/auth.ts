@@ -238,7 +238,7 @@ export async function loadBackups(gameId: string, worldId: string): Promise<Back
 export async function requestWorldLifecycle(
   gameId: string,
   worldId: string,
-  action: "archive" | "regenerate" | "restore",
+  action: "archive" | "regenerate" | "restore" | "purge",
   backupKey?: string,
 ): Promise<{ result: "requested"; operationId: string }> {
   if (previewEnabled) return { result: "requested", operationId: `preview-world-${action}` };
@@ -247,13 +247,15 @@ export async function requestWorldLifecycle(
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(backupKey === undefined ? {} : { backupKey }),
+      body: JSON.stringify(action === "restore" ? { backupKey } : action === "purge" ? { confirmation: worldId } : {}),
     },
   );
   const body = await response.json() as { error?: string; result?: "requested"; operationId?: string };
   if (!response.ok || body.result !== "requested" || body.operationId === undefined) {
     const messages: Record<string, string> = {
       forbidden: "Your role cannot manage this world.",
+      invalid_purge_confirmation: "Type the exact world ID before permanently deleting it.",
+      world_not_archived: "Archive this world before permanently deleting it.",
       invalid_backup_key: "This backup does not belong to the selected world.",
       unknown_materialized_world: "Create this world with its first Start before managing its lifecycle.",
       operation_in_progress: "Another control-plane operation is already running.",

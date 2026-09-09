@@ -300,16 +300,17 @@ export async function worldLifecycleExecution(
   instanceId: string,
   requestedBy: string,
   worldId: string,
-  action: "archive" | "regenerate" | "restore",
+  action: "archive" | "regenerate" | "restore" | "purge",
   backupKey: string | undefined,
   stopRequired: boolean,
+  targetGenerationId: string,
 ): Promise<string> {
   requireWorldId(worldId);
   const stop = buildStopInput({ operationId, instanceId, requestedBy, worldId });
   const started = await sfn.send(new StartExecutionCommand({
     stateMachineArn: machineArn("world"), name: operationId,
     input: JSON.stringify({
-      operationId, instanceId, requestedBy, worldId, action, stopRequired,
+      operationId, instanceId, requestedBy, worldId, action, stopRequired, targetGenerationId,
       stopTiming: stop.timing,
       requestedAt: new Date().toISOString(),
       generationUuid: randomUUID(),

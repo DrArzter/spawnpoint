@@ -20,6 +20,7 @@ data "aws_iam_policy_document" "world_lifecycle" {
     resources = [
       "${data.aws_s3_bucket.releases.arn}/worlds/*/world.json",
       "${data.aws_s3_bucket.releases.arn}/worlds/*/release.json",
+      "${data.aws_s3_bucket.releases.arn}/worlds/*/purges/*.json",
       "${data.aws_s3_bucket.releases.arn}/presets/*/catalog.json",
     ]
   }
@@ -30,18 +31,45 @@ data "aws_iam_policy_document" "world_lifecycle" {
     resources = [
       "${data.aws_s3_bucket.releases.arn}/worlds/*/world.json",
       "${data.aws_s3_bucket.releases.arn}/worlds/*/release.json",
+      "${data.aws_s3_bucket.releases.arn}/worlds/*/purges/*.json",
     ]
   }
 
   statement {
     sid       = "ListWorldBackups"
-    actions   = ["s3:ListBucket"]
+    actions   = ["s3:ListBucket", "s3:ListBucketVersions"]
     resources = [data.aws_s3_bucket.backups.arn]
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
       values   = ["worlds/*/archives/*"]
     }
+  }
+
+  statement {
+    sid       = "PurgeWorldBackups"
+    actions   = ["s3:DeleteObject", "s3:DeleteObjectVersion"]
+    resources = ["${data.aws_s3_bucket.backups.arn}/worlds/*/archives/*"]
+  }
+
+  statement {
+    sid       = "ListWorldReleaseVersions"
+    actions   = ["s3:ListBucketVersions"]
+    resources = [data.aws_s3_bucket.releases.arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["worlds/*/world.json", "worlds/*/release.json"]
+    }
+  }
+
+  statement {
+    sid     = "PurgeWorldRegistryAndPointer"
+    actions = ["s3:DeleteObject", "s3:DeleteObjectVersion"]
+    resources = [
+      "${data.aws_s3_bucket.releases.arn}/worlds/*/world.json",
+      "${data.aws_s3_bucket.releases.arn}/worlds/*/release.json",
+    ]
   }
 }
 

@@ -88,6 +88,11 @@ export function archiveWorldRecord(record: WorldRecord): WorldRecord {
   return { ...record, status: "archived" };
 }
 
+export function purgeGenerationIds(record: WorldRecord): readonly string[] {
+  if (record.status !== "archived") throw new Error("world_not_archived");
+  return [record.currentGeneration.id, ...record.previousGenerations.map((generation) => generation.id)];
+}
+
 export function regenerateWorldRecord(
   record: WorldRecord,
   preset: PresetObservation,

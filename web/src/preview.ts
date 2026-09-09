@@ -20,6 +20,7 @@ export const previewSnapshot: ControlPlaneSnapshot = {
     ] },
     { id: "factorio", code: "FA", displayName: "Factorio", lifecycle: { schemaVersion: 1, serverId: "factorio", desiredState: "stopped", observedState: "stopped", activeSessionId: null, updatedAtEpochSeconds: 1788024000 }, worlds: [
       { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, connectionAddress: "172.29.23.24:34197", release: { state: "unconfigured", activeRelease: null, desiredRelease: null } },
+      { id: "factorio-archive", displayName: "Archived rail world", profileId: "factorio-rail", sessionControlAvailable: false, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "archived", preset: null, connectionAddress: null, release: { state: "available", activeRelease: "1.0", desiredRelease: "1.0" } },
     ] },
     { id: "zomboid", code: "PZ", displayName: "Project Zomboid", lifecycle: { schemaVersion: 1, serverId: "zomboid", desiredState: "stopped", observedState: "stopped", activeSessionId: null, updatedAtEpochSeconds: 1788024000 }, worlds: [
       { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, connectionAddress: "172.29.23.24:16261", release: { state: "unconfigured", activeRelease: null, desiredRelease: null } },

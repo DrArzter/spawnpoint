@@ -17,15 +17,18 @@ export PATH="${fixture}/bin:${PATH}"
 export FAKE_STATES_DIR="${fixture}/states"
 mkdir -p -- "${FAKE_STATES_DIR}"
 
-# A docker stub speaking exactly the two shapes _common uses: `compose ... ps
-# --all --quiet SERVICE` answers a fake id when a state is configured, and
-# `inspect` answers that state.
+# The host sensor inspects Compose labels directly, so missing secrets for an
+# inactive game's Compose file can never make the whole host unknowable.
 cat >"${fixture}/bin/docker" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 args=("$@")
-if [[ "${args[0]}" == "compose" ]]; then
-  service="${args[$((${#args[@]} - 1))]}"
+if [[ "${args[0]}" == "ps" ]]; then
+  service=""
+  for arg in "${args[@]}"; do
+    [[ "${arg}" != label=com.docker.compose.service=* ]] || service="${arg##*=}"
+  done
+  [[ -n "${service}" ]] || exit 64
   if [[ -f "${FAKE_STATES_DIR}/${service}" ]]; then
     printf 'fake-%s\n' "${service}"
   fi

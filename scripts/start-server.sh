@@ -33,7 +33,7 @@ while (( $# > 0 )); do
       ;;
     --world)
       world_id="${2:-}"
-      shift
+      shift 2
       ;;
     *)
       printf 'usage: %s [--no-follow] [--world <world-id>]\n' "$0" >&2

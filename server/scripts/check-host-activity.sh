@@ -17,6 +17,11 @@ GAMES_DIR="${SERVER_DIR}/games"
 excluded_service="${1:-}"
 
 export SERVER_PROJECT_DIRECTORY="${SERVER_PROJECT_DIRECTORY:-${SERVER_DIR}}"
+compose_project="${SERVER_COMPOSE_PROJECT:-$(basename -- "${SERVER_PROJECT_DIRECTORY}")}"
+command -v docker >/dev/null 2>&1 || {
+  printf 'result=unavailable\nreason=docker_missing\n'
+  exit 2
+}
 
 other_active=0
 active_services=""
@@ -24,16 +29,15 @@ for module in "${GAMES_DIR}"/*/game.sh; do
   service="$(
     # shellcheck source=/dev/null
     source "${module}"
-    compose_files=""
-    IFS=':' read -r -a game_compose <<<"${GAME_COMPOSE_FILES}"
-    for compose_file in "${game_compose[@]}"; do
-      compose_files="${compose_files:+${compose_files}:}${SERVER_DIR}/${compose_file}"
-    done
-    state="$(
-      SERVER_COMPOSE_FILES="${compose_files}" \
-      SERVER_COMPOSE_SERVICE="${GAME_COMPOSE_SERVICE}" \
-        "${SCRIPT_DIR}/status-container-state.sh" 2>/dev/null
-    )" || exit 2
+    ids="$(docker ps --all --quiet \
+      --filter "label=com.docker.compose.project=${compose_project}" \
+      --filter "label=com.docker.compose.service=${GAME_COMPOSE_SERVICE}")" || exit 2
+    [[ "$(grep -c . <<<"${ids}")" -le 1 ]] || exit 2
+    if [[ -z "${ids}" ]]; then
+      state="absent"
+    else
+      state="$(docker inspect --format '{{.State.Status}}' "${ids}")" || exit 2
+    fi
     printf '%s=%s\n' "${GAME_COMPOSE_SERVICE}" "${state}"
   )" || {
     printf 'result=unavailable\n'

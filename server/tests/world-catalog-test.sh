@@ -31,8 +31,9 @@ grep -Fxq 'profile_id=vanilla-forge' <<<"${vanilla_output}"
 expect_failure "unknown world" "${scripts}/world-profile.sh" missing
 expect_failure "invalid world id" "${scripts}/world-profile.sh" '../main'
 
-# A registry record adds one generation-backed world without changing the
-# deployed static catalog or redirecting any legacy world's data directory.
+# A registry record adds one generation-backed world. Once a static world has
+# been migrated, its registry record also takes precedence over the legacy
+# catalog entry so the host cannot keep consulting the old release pointer.
 mkdir -p -- "${fixture}/bin" "${fixture}/s3/releases/worlds/minecraft-creative"
 ln -s -- "${repository_root}/server/tests/fake-aws" "${fixture}/bin/aws"
 cat >"${fixture}/s3/releases/worlds/minecraft-creative/world.json" <<'EOF'
@@ -52,6 +53,21 @@ grep -Fq '/worlds/minecraft-creative/generations/gen-123456781234123412341234567
 SPAWNPOINT_WORLD_CATALOG="${dynamic_catalog}" "${scripts}/prepare-world.sh" minecraft-creative >/dev/null
 jq -e '.generation == {id: "gen-123456781234123412341234567890ab", release: "42.7"}' \
   "${fixture}/worlds/minecraft-creative/generations/gen-123456781234123412341234567890ab/.spawnpoint-world.json" >/dev/null
+
+mkdir -p -- "${fixture}/s3/releases/worlds/world"
+jq '.world_id = "world" | .display_name = "Main migrated" | .preset.id = "main"' \
+  "${fixture}/s3/releases/worlds/minecraft-creative/world.json" \
+  >"${fixture}/s3/releases/worlds/world/world.json"
+migrated_output="$(
+  PATH="${fixture}/bin:${PATH}" \
+  FAKE_S3_ROOT="${fixture}/s3" \
+  RELEASE_BUCKET=releases \
+  SPAWNPOINT_RUNTIME_DIRECTORY="${fixture}/runtime-migrated" \
+    "${scripts}/refresh-world-catalog.sh" world
+)"
+migrated_catalog="$(awk -F= '$1 == "catalog" { print substr($0, index($0, "=") + 1) }' <<<"${migrated_output}")"
+migrated_profile="$(SPAWNPOINT_WORLD_CATALOG="${migrated_catalog}" "${scripts}/world-profile.sh" world)"
+grep -Fq '/worlds/world/generations/gen-123456781234123412341234567890ab/data' <<<"${migrated_profile}"
 
 # A restore generation carries only a checksum-addressed backup reference in
 # the registry. First preparation downloads, verifies and expands it into the

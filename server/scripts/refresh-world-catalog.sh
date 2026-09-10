@@ -26,15 +26,24 @@ exec 9>"${RUNTIME_DIRECTORY}/.world-catalog.lock"
 flock 9
 stage="$(mktemp "${RUNTIME_DIRECTORY}/.world-catalog.XXXXXXXX")"
 record="$(mktemp "${RUNTIME_DIRECTORY}/.world-record.XXXXXXXX")"
-cleanup() { rm -f -- "${stage}" "${record}"; }
+record_error="$(mktemp "${RUNTIME_DIRECTORY}/.world-record-error.XXXXXXXX")"
+cleanup() { rm -f -- "${stage}" "${record}" "${record_error}"; }
 trap cleanup EXIT
 
-if jq -e --arg id "${world_id}" 'any(.worlds[]; .id == $id)' "${BASE_CATALOG}" >/dev/null; then
-  cp -- "${BASE_CATALOG}" "${stage}"
-else
-  [[ -n "${RELEASE_BUCKET:-}" ]] || { printf 'error: RELEASE_BUCKET is required for a materialized world\n' >&2; exit 1; }
+registry_record=false
+if [[ -n "${RELEASE_BUCKET:-}" ]]; then
   command -v aws >/dev/null 2>&1 || { printf 'error: required command not found: aws\n' >&2; exit 1; }
-  aws s3api get-object --bucket "${RELEASE_BUCKET}" --key "worlds/${world_id}/world.json" "${record}" >/dev/null
+  if aws s3api get-object --bucket "${RELEASE_BUCKET}" --key "worlds/${world_id}/world.json" "${record}" \
+      >/dev/null 2>"${record_error}"; then
+    registry_record=true
+  elif ! grep -Eq '\((NoSuchKey|NotFound|404)\)' "${record_error}"; then
+    cat "${record_error}" >&2
+    printf 'error: could not read world registry record: %s\n' "${world_id}" >&2
+    exit 1
+  fi
+fi
+
+if ${registry_record}; then
   jq -e --arg id "${world_id}" '
     .schema_version == 1 and .world_id == $id and
     (.game | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
@@ -54,7 +63,7 @@ else
         ($source.generation_id | type == "string" and test("^gen-[0-9a-f]{32}$"))))
   ' "${record}" >/dev/null || { printf 'error: invalid world registry record: %s\n' "${world_id}" >&2; exit 1; }
   jq --slurpfile record "${record}" '
-    .worlds += [{
+    .worlds = ([.worlds[] | select(.id != $record[0].world_id)] + [{
       id: $record[0].world_id,
       display_name: $record[0].display_name,
       profile_id: $record[0].preset.id,
@@ -71,11 +80,17 @@ else
         source_generation_id: $record[0].current_generation.source.generation_id
       }
     } else {} end)
-    ]
+    ])
   ' "${BASE_CATALOG}" >"${stage}"
+elif jq -e --arg id "${world_id}" 'any(.worlds[]; .id == $id)' "${BASE_CATALOG}" >/dev/null; then
+  cp -- "${BASE_CATALOG}" "${stage}"
+else
+  [[ -n "${RELEASE_BUCKET:-}" ]] || { printf 'error: RELEASE_BUCKET is required for a materialized world\n' >&2; exit 1; }
+  printf 'error: world registry record not found: %s\n' "${world_id}" >&2
+  exit 1
 fi
 
 mv -T -- "${stage}" "${RUNTIME_CATALOG}"
 trap - EXIT
-rm -f -- "${record}"
+rm -f -- "${record}" "${record_error}"
 printf 'catalog=%s\n' "${RUNTIME_CATALOG}"

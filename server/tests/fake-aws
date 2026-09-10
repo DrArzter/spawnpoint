@@ -94,7 +94,10 @@ case "${operation}" in
     printf '%s\t%s\t%s\n' "${sha_field#sha256=}" "${stored_checksum}" "$(stat --format '%s' -- "${object}")"
     ;;
   get-object)
-    [[ -f "${object}" && -n "${destination}" ]] || exit 254
+    if [[ ! -f "${object}" || -z "${destination}" ]]; then
+      printf 'An error occurred (NoSuchKey) when calling the GetObject operation\n' >&2
+      exit 254
+    fi
     cp -- "${object}" "${destination}"
     # Objects placed directly into the fake bucket have no metadata sidecar.
     if [[ -f "${metadata_file}" ]]; then

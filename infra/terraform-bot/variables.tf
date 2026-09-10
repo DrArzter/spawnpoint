@@ -50,7 +50,7 @@ variable "mini_app_url" {
 }
 
 variable "enable_notifications" {
-  description = "Deploy the EventBridge/SNS-to-Telegram notifier after the command bot is accepted."
+  description = "Deploy the accepted EventBridge/SNS-to-Telegram notification surface; disable only for an isolated bot bootstrap."
   type        = bool
-  default     = false
+  default     = true
 }

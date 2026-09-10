@@ -287,9 +287,12 @@ The notifier also accepts custom EventBridge events with source
 - the sender identity is excluded in both cases;
 - only a positive private `direct_chat_id` is used for personal delivery.
 
-The EventBridge rule is `spawnpoint-invitation-notifications`. Its Terraform
-plan must be run with `-var enable_notifications=true`; the reviewed change was
-`3 add / 1 change / 0 destroy`, followed by a `No changes` plan.
+The EventBridge rule is `spawnpoint-invitation-notifications`. Notifications
+were initially enabled explicitly with `-var enable_notifications=true`; the
+reviewed change was `3 add / 1 change / 0 destroy`, followed by a `No changes`
+plan. Since production acceptance, notifications default to enabled so an
+ordinary plan cannot accidentally propose their removal. Pass
+`-var enable_notifications=false` only for an isolated bot bootstrap.
 
 The production wiring smoke published one direct invitation event with an
 empty recipient list. EventBridge reported `FailedEntryCount: 0`, and the

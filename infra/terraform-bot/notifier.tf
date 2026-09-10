@@ -1,6 +1,6 @@
-# Notifications are deliberately a second slice. Keeping the definitions in
-# this root establishes one owner, while the false default keeps the first bot
-# deployment to the command surface only.
+# The accepted notification surface shares this root with the command bot so
+# an ordinary plan preserves both. An isolated bootstrap can explicitly turn
+# it off until its SNS topic and notification targets exist.
 data "archive_file" "notifier_bundle" {
   count       = var.enable_notifications ? 1 : 0
   type        = "zip"

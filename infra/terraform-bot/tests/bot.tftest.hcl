@@ -50,6 +50,10 @@ mock_provider "aws" {
 run "bot_is_an_isolated_webhook" {
   command = plan
 
+  variables {
+    enable_notifications = false
+  }
+
   assert {
     condition     = aws_lambda_function.bot.runtime == "nodejs22.x"
     error_message = "Pin the bot to the reviewed Node runtime."
@@ -97,6 +101,6 @@ run "bot_is_an_isolated_webhook" {
 
   assert {
     condition     = length(aws_lambda_function.notifier) == 0 && length(aws_cloudwatch_event_rule.execution_notifications) == 0
-    error_message = "The first slice must keep notifications disabled and deploy only the command bot."
+    error_message = "An explicitly isolated bootstrap must deploy only the command bot."
   }
 }

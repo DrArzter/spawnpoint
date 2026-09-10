@@ -8,7 +8,7 @@ const ARN_PREFIX = "arn:aws:states:eu-central-1:123456789012:stateMachine:";
 function event(
   machine: string,
   status: ExecutionEvent["status"],
-  args: { name?: string; input?: Record<string, unknown>; output?: Record<string, unknown> } = {},
+  args: { name?: string; input?: Record<string, unknown>; output?: Record<string, unknown>; error?: string; cause?: string } = {},
 ): ExecutionEvent {
   const parsed = parseExecutionEvent({
     stateMachineArn: `${ARN_PREFIX}${machine}`,
@@ -16,6 +16,8 @@ function event(
     name: args.name ?? "bot-20260817T000000Z",
     input: args.input === undefined ? undefined : JSON.stringify(args.input),
     output: args.output === undefined ? undefined : JSON.stringify(args.output),
+    error: args.error,
+    cause: args.cause,
   });
   assert.ok(parsed, "fixture event must parse");
   return parsed;
@@ -79,6 +81,17 @@ test("a failed stop always speaks, child or not — it is the backup contract fa
   for (const name of ["manual-1", "bot-20260817T000000Z-idle-3", "promote-1-restop"]) {
     assert.match(renderNotification(event("spawnpoint-stop-server", "FAILED", { name })) ?? "", /backup/);
   }
+});
+
+test("an unknown host after a verified backup does not claim the world may be unsaved", () => {
+  const message = renderNotification(event("spawnpoint-stop-server", "FAILED", {
+    name: "manual-stop-1",
+    error: "Spawnpoint.HostActivityUnknown",
+    cause: "The session stopped and its world is backed up, but host activity was unreadable.",
+  })) ?? "";
+  assert.match(message, /world was saved and its backup verified/);
+  assert.match(message, /EC2 may still be running/);
+  assert.doesNotMatch(message, /may be unsaved/);
 });
 
 test("promotion narrates its whole arc", () => {

@@ -11,6 +11,8 @@ export type ExecutionEvent = Readonly<{
   name: string;
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
+  error: string | null;
+  cause: string | null;
 }>;
 
 export type NotificationSubscriptionKey = "minecraft.started" | "minecraft.stopped" | "factorio.started" | "factorio.stopped" | "invitation.broadcast" | "invitation.direct";
@@ -37,6 +39,8 @@ export function parseExecutionEvent(detail: unknown): ExecutionEvent | null {
     name: d.name,
     input: parse(d.input),
     output: parse(d.output),
+    error: typeof d.error === "string" ? d.error : null,
+    cause: typeof d.cause === "string" ? d.cause : null,
   };
 }
 
@@ -105,6 +109,9 @@ export function renderNotification(event: ExecutionEvent): string | null {
       // prints its own result. A FAILED stop is a failed backup contract and
       // is always worth a message, child or not.
       if (!failed) return null;
+      if (event.error === "Spawnpoint.HostActivityUnknown") {
+        return `[ALARM] The world was saved and its backup verified (${event.name}), but host activity could not be checked. EC2 may still be running.`;
+      }
       return `[ALARM] A stop failed (${event.name}) — the world may be unsaved or the backup unverified, and EC2 may still be running.`;
     }
 

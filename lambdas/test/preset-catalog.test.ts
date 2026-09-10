@@ -34,24 +34,23 @@ test("parses a versioned per-game preset catalog", () => {
   }]);
 });
 
-test("a ready preset becomes a startable candidate and then a materialized world", () => {
+test("a ready preset remains reusable after several worlds are materialized", () => {
   const preset = parsePresetCatalog({
     ...document,
     presets: [{ id: "space-age", display_name: "Space Age", profile_digest: "2".repeat(64), build_status: "ready", latest_release: "2.0" }],
   }, "factorio")![0]!;
-  const candidate = catalogWithPresets([preset], gameCatalog)
-    .find((game) => game.id === "factorio")!.worlds.find((world) => world.id === "factorio-space-age")!;
-  assert.equal(candidate.materialization, "not_created");
-  assert.equal(candidate.sessionControl, "v1");
+  const empty = catalogWithPresets([preset], gameCatalog).find((game) => game.id === "factorio")!;
+  assert.deepEqual(empty.worlds, []);
+  assert.equal(empty.presets?.[0]?.id, "space-age");
 
-  const record = newWorldRecord(preset, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
-  const materialized = catalogWithPresets([preset], gameCatalog, [record])
-    .find((game) => game.id === "factorio")!.worlds.find((world) => world.id === "factorio-space-age")!;
-  assert.equal(materialized.materialization, "existing");
-  assert.equal(materialized.sessionControl, "v1");
-  assert.equal(materialized.worldLifecycle, "v1");
+  const first = newWorldRecord(preset, { worldId: "factorio-rostik-a1b2c3d4", displayName: "Rostik", release: "2.0" }, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
+  const second = newWorldRecord(preset, { worldId: "factorio-gosha-b1c2d3e4", displayName: "Gosha", release: "2.0" }, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "2026-09-07T19:00:00.000Z");
+  const materialized = catalogWithPresets([preset], gameCatalog, [first, second]).find((game) => game.id === "factorio")!;
+  assert.deepEqual(materialized.worlds.map((world) => world.displayName), ["Rostik", "Gosha"]);
+  assert.ok(materialized.worlds.every((world) => world.sessionControl === "v1" && world.worldLifecycle === "v1"));
+  assert.equal(materialized.presets?.length, 1, "creating worlds never consumes the preset");
 
-  const archived = { ...record, status: "archived" as const };
+  const archived = { ...first, status: "archived" as const };
   const afterArchive = catalogWithPresets([preset], gameCatalog, [archived])
     .find((game) => game.id === "factorio")!.worlds;
   const archivedWorld = afterArchive.find((world) => world.profileId === preset.id)!;
@@ -67,7 +66,7 @@ test("rejects a catalog for another game, duplicate ids, and ready presets witho
   assert.equal(parsePresetCatalog({ ...document, presets: [{ ...document.presets[0], latest_release: null }] }, "factorio"), null);
 });
 
-test("exposes only ready unmaterialized presets as startable", () => {
+test("exposes preset build readiness without projecting presets into worlds", () => {
   const parsed = parsePresetCatalog({
     ...document,
     presets: [
@@ -77,13 +76,9 @@ test("exposes only ready unmaterialized presets as startable", () => {
   }, "factorio")!;
   const catalog = catalogWithPresets(parsed, gameCatalog);
   const factorio = catalog.find((game) => game.id === "factorio")!;
-  const ready = factorio.worlds.find((world) => world.profileId === "factorio-vanilla")!;
-  const discovered = factorio.worlds.find((world) => world.id === "factorio-space-age")!;
-
-  assert.equal(ready.id, "factorio-vanilla");
-  assert.equal(ready.materialization, "not_created");
-  assert.equal(ready.sessionControl, "v1");
-  assert.equal(ready.preset?.commit, document.source.commit);
-  assert.equal(discovered.materialization, "not_created");
-  assert.equal(discovered.sessionControl, null);
+  assert.deepEqual(factorio.worlds, []);
+  assert.deepEqual(factorio.presets?.map((preset) => [preset.id, preset.buildStatus, preset.latestRelease]), [
+    ["factorio-vanilla", "ready", "1.0"],
+    ["space-age", "unbuilt", null],
+  ]);
 });

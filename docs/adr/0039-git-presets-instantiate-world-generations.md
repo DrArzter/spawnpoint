@@ -1,6 +1,6 @@
 # ADR-0039 — Git presets instantiate recoverable world generations
 
-- Status: Accepted
+- Status: Superseded by [ADR-0040](0040-reusable-presets-and-world-wipes.md)
 - Date: 2026-09-02
 - Extends: [ADR-0023](0023-multiple-worlds.md), [ADR-0028](0028-update-proposals.md), and [ADR-0030](0030-desired-and-active-release.md)
 

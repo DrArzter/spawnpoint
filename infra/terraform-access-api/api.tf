@@ -1,7 +1,7 @@
 locals {
   world_creation_resources = [
     "${data.aws_s3_bucket.releases.arn}/worlds/*/world.json",
-    "${data.aws_s3_bucket.releases.arn}/worlds/*/release.json",
+    "${data.aws_s3_bucket.releases.arn}/worlds/*/generations/*/release.json",
   ]
 }
 
@@ -193,8 +193,10 @@ locals {
     "GET /games/{gameId}/worlds/{worldId}/invitations",
     "GET /games/{gameId}/worlds/{worldId}/pack",
     "GET /games/{gameId}/worlds/{worldId}/backups",
+    "POST /games/{gameId}/presets/{presetId}/worlds",
     "POST /games/{gameId}/worlds/{worldId}/archive",
     "POST /games/{gameId}/worlds/{worldId}/regenerate",
+    "POST /games/{gameId}/worlds/{worldId}/wipe",
     "POST /games/{gameId}/worlds/{worldId}/restore",
     "POST /games/{gameId}/worlds/{worldId}/purge",
     "POST /access/request",

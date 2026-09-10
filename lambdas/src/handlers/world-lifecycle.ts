@@ -5,9 +5,11 @@ import {
 
 import { backupInventory } from "../control-plane/backups.ts";
 import { parsePresetCatalog } from "../control-plane/preset-catalog.ts";
+import { type ReleaseState } from "../control-plane/release-state.ts";
+import { S3ReleaseStateStore } from "../control-plane/s3-release-state-store.ts";
+import { S3WorldRepository } from "../control-plane/s3-world-repository.ts";
 import {
-  archiveWorldRecord, parseWorldRecord, purgeGenerationIds, regenerateWorldRecord, restoreWorldRecord,
-  worldRecordDocument, type WorldRecord,
+  archiveWorldRecord, parseWorldRecord, purgeGenerationIds, regenerateWorldRecord, restoreWorldRecord, type WorldRecord,
 } from "../control-plane/world-registry.ts";
 
 type Input = Readonly<{
@@ -16,6 +18,7 @@ type Input = Readonly<{
   generationUuid?: string;
   targetGenerationId?: string;
   backupKey?: string;
+  release?: string;
   requestedAt: string;
   requestedBy: string;
 }>;
@@ -59,7 +62,8 @@ function parseInput(value: unknown): Input {
     typeof input.requestedBy !== "string" || !input.requestedBy ||
     (input.action !== "archive" && input.action !== "purge" && (typeof input.generationUuid !== "string" || !UUID.test(input.generationUuid))) ||
     (input.action === "purge" && (typeof input.targetGenerationId !== "string" || !GENERATION_ID.test(input.targetGenerationId))) ||
-    (input.action === "restore" && typeof input.backupKey !== "string")
+    (input.action === "restore" && typeof input.backupKey !== "string") ||
+    (input.action === "regenerate" && (typeof input.release !== "string" || !/^[0-9]+\.[0-9]+$/.test(input.release)))
   ) throw new Error("invalid_input");
   return input as Input;
 }
@@ -141,6 +145,7 @@ async function purgeWorld(input: Input, releaseBucket: string) {
 
   const backupBucket = requiredEnv("BACKUP_BUCKET");
   await permanentlyDelete(backupBucket, `worlds/${input.worldId}/archives/`);
+  await permanentlyDelete(releaseBucket, `worlds/${input.worldId}/generations/`);
   await permanentlyDelete(releaseBucket, `worlds/${input.worldId}/release.json`, `worlds/${input.worldId}/release.json`);
   await s3.send(new PutObjectCommand({
     Bucket: releaseBucket, Key: markerKey, IfMatch: marker.etag, ContentType: "application/json",
@@ -170,42 +175,37 @@ async function latestPreset(record: WorldRecord) {
   return preset;
 }
 
-async function activeRelease(worldId: string): Promise<string | null> {
-  const { value } = await jsonObject(requiredEnv("RELEASE_BUCKET"), `worlds/${worldId}/release.json`);
-  const active = value.active_release;
-  if (active !== null && (typeof active !== "string" || !/^[0-9]+\.[0-9]+$/.test(active))) {
-    throw new Error("invalid_release_pointer");
+async function writeInitialReleaseState(record: WorldRecord, input: Input): Promise<void> {
+  const store = new S3ReleaseStateStore(s3, requiredEnv("RELEASE_BUCKET"));
+  const state: ReleaseState = {
+    worldId: record.worldId,
+    generationId: record.currentGeneration.id,
+    desiredRelease: record.currentGeneration.release,
+    activeRelease: null,
+    updatedAt: input.requestedAt,
+    updatedBy: input.requestedBy,
+    source: input.action === "restore" ? "restore-backup" : "start-wipe",
+  };
+  try {
+    await store.create(state);
+  } catch (error) {
+    if (!(error instanceof Error) || (error.name !== "PreconditionFailed" && error.name !== "ConditionalRequestConflict")) throw error;
+    const existing = await store.read({ worldId: state.worldId, generationId: state.generationId });
+    if (existing === null || existing.state.desiredRelease !== state.desiredRelease) throw new Error("release_state_conflict");
   }
-  return active as string | null;
-}
-
-async function writePointer(record: WorldRecord, input: Input): Promise<void> {
-  const bucket = requiredEnv("RELEASE_BUCKET");
-  const key = `worlds/${record.worldId}/release.json`;
-  const current = await jsonObject(bucket, key);
-  await s3.send(new PutObjectCommand({
-    Bucket: bucket, Key: key, IfMatch: current.etag, ContentType: "application/json", ServerSideEncryption: "AES256",
-    Body: JSON.stringify({
-      ...current.value,
-      schema_version: 1,
-      world: record.worldId,
-      desired_release: record.currentGeneration.release,
-      updated_at: input.requestedAt,
-      updated_by: input.requestedBy,
-    }),
-  }));
 }
 
 export async function handler(event: unknown) {
   const input = parseInput(event);
   const releaseBucket = requiredEnv("RELEASE_BUCKET");
   if (input.action === "purge") return purgeWorld(input, releaseBucket);
-  const recordKey = `worlds/${input.worldId}/world.json`;
-  const stored = await jsonObject(releaseBucket, recordKey);
-  const record = parseWorldRecord(stored.value);
-  if (record === null || record.worldId !== input.worldId) throw new Error("invalid_world_record");
+  const worlds = new S3WorldRepository(s3, releaseBucket);
+  const stored = await worlds.read(input.worldId);
+  if (stored === null) throw new Error("invalid_world_record");
+  const record = stored.record;
 
   const expectedGenerationId = input.generationUuid ? `gen-${input.generationUuid.replaceAll("-", "")}` : null;
+  const releaseStates = new S3ReleaseStateStore(s3, releaseBucket);
   let next: WorldRecord;
   let changed = true;
   if (input.action === "archive" && record.status === "archived") {
@@ -219,13 +219,16 @@ export async function handler(event: unknown) {
     changed = false;
   } else {
     const backups = await verifiedBackups(record.worldId);
-    if (await activeRelease(record.worldId) !== null && !backups.some((backup) => backup.generationId === record.currentGeneration.id)) {
+    const currentRelease = await releaseStates.readOrMigrateLegacy({ worldId: record.worldId, generationId: record.currentGeneration.id });
+    if (currentRelease !== null && currentRelease.state.activeRelease !== null && !backups.some((backup) => backup.generationId === record.currentGeneration.id)) {
       throw new Error("current_generation_backup_missing");
     }
     if (input.action === "archive") {
       next = archiveWorldRecord(record);
     } else if (input.action === "regenerate") {
-      next = regenerateWorldRecord(record, await latestPreset(record), input.generationUuid!, input.requestedAt);
+      const preset = await latestPreset(record);
+      if (input.release !== preset.latestRelease) throw new Error("release_not_available");
+      next = regenerateWorldRecord(record, preset, input.release, input.generationUuid!, input.requestedAt);
     } else {
       const backup = backups.find((candidate) => candidate.key === input.backupKey);
       if (backup === undefined || backup.generationId === null) throw new Error("backup_not_verified");
@@ -236,12 +239,8 @@ export async function handler(event: unknown) {
   }
 
   if (changed) {
-    await s3.send(new PutObjectCommand({
-      Bucket: releaseBucket, Key: recordKey, IfMatch: stored.etag,
-      ContentType: "application/json", ServerSideEncryption: "AES256",
-      Body: JSON.stringify(worldRecordDocument(next)),
-    }));
+    await worlds.replace(next, stored.etag);
   }
-  if (input.action !== "archive") await writePointer(next, input);
+  if (input.action !== "archive") await writeInitialReleaseState(next, input);
   return { result: changed ? input.action : "already_applied", worldId: next.worldId, generationId: next.currentGeneration.id };
 }

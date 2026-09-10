@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ActiveSession, AuthState, endSession, loadControlPlane, requestAccess, requestPackDownload, requestSessionOperation, requestWorldLifecycle, restoreAuth, telegramBotUsername, telegramLoginRedirectUrl } from "./auth";
+import { ActiveSession, AuthState, endSession, loadControlPlane, requestAccess, requestCreateWorld, requestPackDownload, requestSessionOperation, requestWorldLifecycle, restoreAuth, telegramBotUsername, telegramLoginRedirectUrl } from "./auth";
 import { AccessScreen } from "./screens/AccessScreen";
 import { Avatar } from "./components/Avatar";
 import { Button } from "./components/ui/Button";
@@ -103,10 +103,11 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
   const page = route.page === "profile" || visibleNavigation.some((item) => item.id === route.page) ? route.page : "dashboard";
   const [controlPlane, setControlPlane] = useState<ControlPlaneState>({ status: "loading", snapshot: null, error: "" });
   const [gameId, setGameId] = useState<string | null>(null);
+  const [presetId, setPresetId] = useState<string | null>(null);
   const [worldId, setWorldId] = useState<string | null>(null);
   const [themePreference, setThemePreference] = useState<ThemePreference>(getThemePreference);
   const [theme, setTheme] = useState<Theme>(() => resolveTheme(getThemePreference()));
-  const [picker, setPicker] = useState<"game" | "world" | null>(null);
+  const [picker, setPicker] = useState<"game" | "preset" | "world" | "wipe" | null>(null);
   const [operationRequest, setOperationRequest] = useState<{ state: "idle" | "pending" | "success" | "error"; message: string }>({ state: "idle", message: "" });
   const [storageRequest, setStorageRequest] = useState<{ state: "idle" | "pending" | "success" | "error"; message: string }>({ state: "idle", message: "" });
   const [lifecycleRequest, setLifecycleRequest] = useState<{ state: "idle" | "pending" | "success" | "error"; message: string }>({ state: "idle", message: "" });
@@ -157,7 +158,10 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
   const snapshot = controlPlane.snapshot;
   const games = snapshot?.games ?? [];
   const game = games.find((item) => item.id === gameId) ?? games[0];
-  const world = game?.worlds.find((item) => item.id === worldId) ?? game?.worlds[0];
+  const preset = game?.presets.find((item) => item.id === presetId) ?? game?.presets[0];
+  const presetWorlds = preset ? game?.worlds.filter((item) => item.preset?.id === preset.id || item.profileId === preset.id) ?? [] : game?.worlds ?? [];
+  const world = presetWorlds.find((item) => item.id === worldId) ?? presetWorlds[0];
+  const currentWipe = world?.wipes.find((wipe) => wipe.state === "current") ?? world?.wipes.at(-1);
   const serverState = deriveServerState(game, snapshot);
   const currentMember = members.find((member) => member.id === session.identity.id) ?? members[0];
 
@@ -174,9 +178,13 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
   useEffect(() => {
     if (!game) return;
     if (gameId !== game.id) setGameId(game.id);
-    const nextWorld = game.worlds.find((item) => item.id === worldId) ?? game.worlds[0];
+    const nextPreset = game.presets.find((item) => item.id === presetId) ?? game.presets[0];
+    if (nextPreset && presetId !== nextPreset.id) setPresetId(nextPreset.id);
+    const candidates = nextPreset ? game.worlds.filter((item) => item.preset?.id === nextPreset.id || item.profileId === nextPreset.id) : game.worlds;
+    const nextWorld = candidates.find((item) => item.id === worldId) ?? candidates[0];
     if (nextWorld && worldId !== nextWorld.id) setWorldId(nextWorld.id);
-  }, [game, gameId, worldId]);
+    if (!nextWorld && worldId !== null) setWorldId(null);
+  }, [game, gameId, presetId, worldId]);
   useEffect(() => setStorageRequest({ state: "idle", message: "" }), [game?.id, world?.id]);
   useEffect(() => setLifecycleRequest({ state: "idle", message: "" }), [game?.id, world?.id]);
 
@@ -225,7 +233,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
     if (!game || !world) return;
     setLifecycleRequest({ state: "pending", message: `Requesting ${action}…` });
     try {
-      const result = await requestWorldLifecycle(game.id, world.id, action, backupKey);
+      const result = await requestWorldLifecycle(game.id, world.id, action, backupKey, action === "regenerate" ? world.preset?.latestRelease ?? undefined : undefined);
       setLifecycleRequest({ state: "success", message: `${action[0]!.toUpperCase()}${action.slice(1)} accepted · ${result.operationId}.` });
       await refreshControlPlane();
     } catch (error) {
@@ -233,11 +241,20 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
     }
   }
 
+  async function createWorld(displayName: string) {
+    if (!game || !preset || preset.latestRelease === null) throw new Error("This preset has no ready release.");
+    const created = await requestCreateWorld(game.id, preset.id, displayName, preset.latestRelease);
+    await refreshControlPlane();
+    setWorldId(created.id);
+  }
+
   function selectGame(id: string) {
     const next = games.find((item) => item.id === id);
     if (!next) return;
     setGameId(next.id);
-    setWorldId(next.worlds[0]?.id ?? null);
+    const nextPreset = next.presets[0];
+    setPresetId(nextPreset?.id ?? null);
+    setWorldId(nextPreset ? next.worlds.find((item) => item.preset?.id === nextPreset.id || item.profileId === nextPreset.id)?.id ?? null : next.worlds[0]?.id ?? null);
   }
 
   function toggleTheme() {
@@ -272,11 +289,12 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
       <main className="workspace">
         <header className="context-bar">
           <button aria-label="Open my profile" className="mobile-brand" onClick={() => navigate("profile")} type="button"><Avatar name={viewer.displayName} photoUrl={viewer.photoUrl} size="small" /><strong>Spawnpoint</strong></button>
-          <div className="context-breadcrumbs" aria-label="Selected game world">
+          <div className="context-breadcrumbs" aria-label="Selected game, preset, save and wipe">
             <span>Games</span><Icon name="arrow" size={14} />
-            <div className="crumb-menu"><button aria-expanded={picker === "game"} disabled={!game} onClick={() => setPicker(picker === "game" ? null : "game")} type="button">{game?.displayName ?? "Loading…"}<Icon name="down" size={14} /></button>{picker === "game" && game && <div className="picker-menu">{games.map((item) => <button className={item.id === game.id ? "selected" : ""} key={item.id} onClick={() => { selectGame(item.id); setPicker(null); }} type="button"><span>{item.code}</span><div><strong>{item.displayName}</strong><small>{item.worlds.length} {item.worlds.length === 1 ? "world" : "worlds"}</small></div></button>)}</div>}</div>
-            <Icon name="arrow" size={14} />
-            <div className="crumb-menu"><button aria-expanded={picker === "world"} disabled={!world} onClick={() => setPicker(picker === "world" ? null : "world")} type="button">{world?.displayName ?? "Unavailable"}<Icon name="down" size={14} /></button>{picker === "world" && game && world && <div className="picker-menu world-picker">{game.worlds.map((item) => <button className={item.id === world.id ? "selected" : ""} key={item.id} onClick={() => { setWorldId(item.id); setPicker(null); }} type="button"><div><strong>{item.displayName}</strong><small>{item.materialization === "archived" ? "Archived" : item.release.activeRelease ? `Active ${item.release.activeRelease}` : item.release.state === "unconfigured" ? "Not adopted" : "Release unavailable"}</small></div></button>)}</div>}</div>
+            <div className="crumb-menu"><button aria-expanded={picker === "game"} disabled={!game} onClick={() => setPicker(picker === "game" ? null : "game")} type="button">{game?.displayName ?? "Loading…"}<Icon name="down" size={14} /></button>{picker === "game" && game && <div className="picker-menu">{games.map((item) => <button className={item.id === game.id ? "selected" : ""} key={item.id} onClick={() => { selectGame(item.id); setPicker(null); }} type="button"><span>{item.code}</span><div><strong>{item.displayName}</strong><small>{item.presets.length} presets · {item.worlds.length} saves</small></div></button>)}</div>}</div>
+            {preset && <><Icon name="arrow" size={14} /><div className="crumb-menu"><button aria-expanded={picker === "preset"} onClick={() => setPicker(picker === "preset" ? null : "preset")} type="button">{preset.displayName}<Icon name="down" size={14} /></button>{picker === "preset" && game && <div className="picker-menu world-picker">{game.presets.map((item) => <button className={item.id === preset.id ? "selected" : ""} key={item.id} onClick={() => { setPresetId(item.id); setWorldId(game.worlds.find((candidate) => candidate.preset?.id === item.id || candidate.profileId === item.id)?.id ?? null); setPicker(null); }} type="button"><div><strong>{item.displayName}</strong><small>{item.latestRelease ? `Latest release ${item.latestRelease}` : item.buildStatus}</small></div></button>)}</div>}</div></>}
+            {world && <><Icon name="arrow" size={14} /><div className="crumb-menu"><button aria-expanded={picker === "world"} onClick={() => setPicker(picker === "world" ? null : "world")} type="button">{world.displayName}<Icon name="down" size={14} /></button>{picker === "world" && <div className="picker-menu world-picker">{presetWorlds.map((item) => <button className={item.id === world.id ? "selected" : ""} key={item.id} onClick={() => { setWorldId(item.id); setPicker(null); }} type="button"><div><strong>{item.displayName}</strong><small>{item.materialization === "archived" ? "Archived" : item.release.activeRelease ? `Release ${item.release.activeRelease}` : "Not started"}</small></div></button>)}</div>}</div></>}
+            {currentWipe && <><Icon name="arrow" size={14} /><div className="crumb-menu"><button aria-expanded={picker === "wipe"} onClick={() => setPicker(picker === "wipe" ? null : "wipe")} type="button">Wipe #{currentWipe.number}<Icon name="down" size={14} /></button>{picker === "wipe" && world && <div className="picker-menu world-picker">{[...world.wipes].reverse().map((wipe) => <button className={wipe.id === currentWipe.id ? "selected" : ""} key={wipe.id} onClick={() => setPicker(null)} type="button"><div><strong>Wipe #{wipe.number}</strong><small>{wipe.state === "current" ? `Current · release ${world.release.activeRelease ?? wipe.originRelease}` : `Closed · release ${wipe.originRelease}`}</small></div></button>)}</div>}</div></>}
           </div>
           <div className="top-actions"><button aria-label={`${themeLabel}. Change theme`} className="header-theme-toggle" onClick={toggleTheme} title={themeLabel} type="button"><Icon name={theme === "light" ? "moon" : "sun"} /></button><span className={`top-status ${serverState}`}><i />{serverState}</span></div>
         </header>
@@ -286,7 +304,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
           {page === "dashboard" && (!game || !world) && <ControlPlaneUnavailable state={controlPlane} onRetry={() => void refreshControlPlane()} />}
           {page === "metrics" && <MetricsScreen serverState={serverState} />}
           {page === "console" && <ConsoleScreen serverState={serverState} />}
-          {page === "storage" && world && <StorageScreen canManageWorld={granted.has("world.manage")} canReadBackups={granted.has("backup.read")} canRestoreBackup={granted.has("backup.restore")} gameId={game?.id ?? ""} lifecycleRequest={lifecycleRequest} onDownloadPack={granted.has("connection.read") ? () => void downloadPack() : undefined} onWorldAction={(action, backupKey) => void runWorldLifecycle(action, backupKey)} packRequest={storageRequest} world={world} />}
+          {page === "storage" && game && (preset || world) && <StorageScreen canManageWorld={granted.has("world.manage")} canReadBackups={granted.has("backup.read")} canRestoreBackup={granted.has("backup.restore")} gameId={game.id} lifecycleRequest={lifecycleRequest} onCreateWorld={createWorld} onDownloadPack={granted.has("connection.read") && world ? () => void downloadPack() : undefined} onWorldAction={(action, backupKey) => void runWorldLifecycle(action, backupKey)} packRequest={storageRequest} preset={preset} world={world} />}
           {page === "access" && <AccessScreen bootstrap={bootstrap} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate("access", tab)} roles={roles} tab={accessTab} />}
           {page === "profile" && currentMember && <ProfileScreen member={currentMember} onChange={(next) => setMembers((current) => current.map((member) => member.id === next.id ? next : member))} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
         </div>

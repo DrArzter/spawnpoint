@@ -43,14 +43,27 @@ printf 'jar two\n' >"${fixture}/source/pack/mods/beta.jar"
 host="${fixture}/host"
 mkdir -p -- "${host}"
 
-# 1. The pointer answers with the imported desired release.
-pointer_output="$(WORLD_NAME=world "${SCRIPTS}/read-release-pointer.sh" world)"
+# The import fixture still models the historical ingestion path. Move its
+# pointer to the generation-scoped contract before exercising modern boot.
+generation_id="gen-123456781234123412341234567890ab"
+legacy_pointer="${FAKE_S3_ROOT}/${RELEASE_BUCKET}/worlds/world/release.json"
+state_dir="${FAKE_S3_ROOT}/${RELEASE_BUCKET}/worlds/world/generations/${generation_id}"
+mkdir -p -- "${state_dir}"
+jq --arg generation "${generation_id}" '
+  .schema_version = 2 |
+  .world_id = .world |
+  .generation_id = $generation |
+  del(.world)
+' "${legacy_pointer}" >"${state_dir}/release.json"
+
+# 1. The release state answers for one exact wipe.
+pointer_output="$("${SCRIPTS}/read-release-pointer.sh" world "${generation_id}")"
 grep -qx 'desired_release=1.0' <<<"${pointer_output}"
 grep -qx 'active_release=null' <<<"${pointer_output}"
 
 # A world that was never imported is exit 3 — a state, not an error.
 set +e
-WORLD_NAME=ghost "${SCRIPTS}/read-release-pointer.sh" ghost >/dev/null 2>&1
+"${SCRIPTS}/read-release-pointer.sh" ghost "${generation_id}" >/dev/null 2>&1
 [[ $? -eq 3 ]] || {
   printf 'expected exit 3 for an absent pointer\n' >&2
   exit 1

@@ -27,6 +27,7 @@ key=""
 body=""
 metadata=""
 checksum=""
+if_none_match=""
 destination=""
 
 while (( $# > 0 )); do
@@ -51,6 +52,10 @@ while (( $# > 0 )); do
       checksum="$2"
       shift 2
       ;;
+    --if-none-match)
+      if_none_match="$2"
+      shift 2
+      ;;
     --checksum-mode | --checksum-algorithm | --query | --output | --server-side-encryption | --content-type)
       shift 2
       ;;
@@ -69,6 +74,7 @@ metadata_file="${object}.fake-metadata"
 
 case "${operation}" in
   put-object)
+    [[ "${if_none_match}" != "*" || ! -f "${object}" ]] || exit 255
     mkdir -p -- "$(dirname -- "${object}")"
     cp -- "${body}" "${object}"
     if jq -e 'type == "object"' <<<"${metadata}" >/dev/null 2>&1; then

@@ -4,7 +4,7 @@ import test from "node:test";
 import type { PresetObservation } from "../src/control-plane/preset-catalog.ts";
 import {
   archiveWorldRecord, newWorldRecord, parseWorldRecord, regenerateWorldRecord,
-  purgeGenerationIds, restoreWorldRecord, worldIdForPreset, worldRecordDocument,
+  purgeGenerationIds, restoreWorldRecord, worldIdForName, worldRecordDocument,
 } from "../src/control-plane/world-registry.ts";
 
 const preset: PresetObservation = {
@@ -12,39 +12,38 @@ const preset: PresetObservation = {
   repository: "https://github.com/DrArzter/config", commit: "a".repeat(40), profileDigest: "b".repeat(64),
   buildStatus: "ready", latestRelease: "42.7",
 };
+const identity = { worldId: "minecraft-creative-a1b2c3d4", displayName: "Rostik's world", release: "42.7" };
 
 test("preset, world and generation identities stay distinct", () => {
-  const record = newWorldRecord(preset, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
+  const record = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
   assert.equal(record.preset.id, "creative");
-  assert.equal(record.worldId, "minecraft-creative");
+  assert.equal(record.worldId, identity.worldId);
+  assert.equal(record.displayName, identity.displayName);
   assert.equal(record.currentGeneration.id, "gen-123456781234123412341234567890ab");
   assert.deepEqual(parseWorldRecord(worldRecordDocument(record)), record);
 });
 
-test("long preset ids produce stable bounded world ids", () => {
-  const long = { ...preset, id: "a-very-long-preset-identifier" };
-  assert.equal(worldIdForPreset(long).length <= 32, true);
-  assert.equal(worldIdForPreset(long), worldIdForPreset(long));
-});
-
-test("a preset already namespaced by its game is not prefixed twice", () => {
-  assert.equal(worldIdForPreset({ ...preset, gameId: "factorio", id: "factorio-vanilla" }), "factorio-vanilla");
+test("world ids are generated from a display name and independent identity", () => {
+  const generated = worldIdForName("minecraft", "Rostik's Industrial World", "12345678-1234-1234-1234-1234567890ab");
+  assert.match(generated, /^minecraft-rostik-s-indu-[0-9a-f]{8}$/);
+  assert.equal(generated.length <= 32, true);
+  assert.equal(worldIdForName("minecraft", "Мир Ростика", "12345678-1234-1234-1234-1234567890ab"), "minecraft-world-12345678");
 });
 
 test("an unbuilt preset cannot create a world", () => {
-  assert.throws(() => newWorldRecord({ ...preset, buildStatus: "unbuilt", latestRelease: null }, "12345678-1234-1234-1234-1234567890ab", new Date().toISOString()), /preset_release_not_ready/);
+  assert.throws(() => newWorldRecord({ ...preset, buildStatus: "unbuilt", latestRelease: null }, identity, "12345678-1234-1234-1234-1234567890ab", new Date().toISOString()), /invalid_world_creation/);
 });
 
 test("registry parsing fails closed", () => {
-  const record = newWorldRecord(preset, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
+  const record = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
   const document = worldRecordDocument(record);
   assert.equal(parseWorldRecord({ ...document, world_id: "../escape" }), null);
   assert.equal(parseWorldRecord({ ...document, storage_layout: "legacy" }), null);
 });
 
 test("regeneration closes the old generation and never overwrites it", () => {
-  const record = newWorldRecord(preset, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
-  const next = regenerateWorldRecord(record, { ...preset, latestRelease: "43.1" }, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "2026-09-08T10:00:00.000Z");
+  const record = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
+  const next = regenerateWorldRecord(record, { ...preset, latestRelease: "43.1" }, "43.1", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "2026-09-08T10:00:00.000Z");
 
   assert.equal(next.currentGeneration.id, "gen-aaaaaaaabbbbccccddddeeeeeeeeeeee");
   assert.equal(next.currentGeneration.release, "43.1");
@@ -54,7 +53,7 @@ test("regeneration closes the old generation and never overwrites it", () => {
 });
 
 test("restore creates a new generation pinned to the backup generation's release", () => {
-  const initial = newWorldRecord(preset, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
+  const initial = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
   const archived = archiveWorldRecord(initial);
   const checksum = "c".repeat(64);
   const restored = restoreWorldRecord(archived, {
@@ -75,7 +74,7 @@ test("restore creates a new generation pinned to the backup generation's release
 });
 
 test("restore refuses a backup that cannot be tied to this world's generation history", () => {
-  const record = newWorldRecord(preset, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
+  const record = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
   assert.throws(() => restoreWorldRecord(record, {
     key: `worlds/${record.worldId}/archives/world-gen-${"f".repeat(32)}-20260908T090000Z-${"c".repeat(64)}.tar.zst`,
     checksum: "c".repeat(64),
@@ -84,8 +83,8 @@ test("restore refuses a backup that cannot be tied to this world's generation hi
 });
 
 test("purge is possible only after archive and names every generation to clean", () => {
-  const initial = newWorldRecord(preset, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
-  const regenerated = regenerateWorldRecord(initial, preset, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "2026-09-08T10:00:00.000Z");
+  const initial = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
+  const regenerated = regenerateWorldRecord(initial, preset, "42.7", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "2026-09-08T10:00:00.000Z");
   assert.throws(() => purgeGenerationIds(regenerated), /world_not_archived/);
   assert.deepEqual(purgeGenerationIds(archiveWorldRecord(regenerated)), [
     regenerated.currentGeneration.id,

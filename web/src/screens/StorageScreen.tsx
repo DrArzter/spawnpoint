@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "../components/ui/Button";
 import { DataColumn, DataTable } from "../components/ui/DataTable";
 import { Tabs } from "../components/ui/Tabs";
-import type { World } from "../model";
+import type { Preset, World } from "../model";
 import { loadBackups, type BackupInventory } from "../auth";
 import { EmptyState, Notice, PageHeader, RetryState, Surface } from "../components/ui/Page";
 
@@ -12,18 +12,58 @@ type ReleaseRow = { name: string; status: string };
 type RequestState = { state: "idle" | "pending" | "success" | "error"; message: string };
 type WorldAction = { action: "archive" | "regenerate" | "restore" | "purge"; backupKey?: string; backupName?: string };
 
-export function StorageScreen({ world, gameId, canReadBackups, canManageWorld, canRestoreBackup, onDownloadPack, onWorldAction, packRequest, lifecycleRequest }: {
-  world: World;
+type StorageProps = {
+  world?: World;
+  preset?: Preset;
   gameId: string;
   canReadBackups: boolean;
   canManageWorld: boolean;
   canRestoreBackup: boolean;
   onDownloadPack?: (worldId: string) => void;
   onWorldAction: (action: "archive" | "regenerate" | "restore" | "purge", backupKey?: string) => void;
+  onCreateWorld: (displayName: string) => Promise<void>;
   packRequest: RequestState;
   lifecycleRequest: RequestState;
-}) {
-  const [tab, setTab] = useState<"releases" | "backups">("releases");
+};
+
+export function StorageScreen(props: StorageProps) {
+  const { preset, world, canManageWorld, onCreateWorld } = props;
+  const [creating, setCreating] = useState(world === undefined);
+  const [name, setName] = useState("");
+  const [request, setRequest] = useState<RequestState>({ state: "idle", message: "" });
+
+  async function create() {
+    if (!name.trim() || !preset) return;
+    setRequest({ state: "pending", message: "Creating the first wipe…" });
+    try {
+      await onCreateWorld(name.trim());
+      setRequest({ state: "success", message: `${name.trim()} was created.` });
+      setName("");
+      setCreating(false);
+    } catch (error) {
+      setRequest({ state: "error", message: error instanceof Error ? error.message : "The save could not be created." });
+    }
+  }
+
+  const creator = creating && preset && <Surface className="create-world-form">
+    <div><h2>Create a new save</h2><p>Spawnpoint will open Wipe #1 from {preset.displayName} release {preset.latestRelease ?? "—"}.</p></div>
+    <label>Name<input autoComplete="off" maxLength={80} onChange={(event) => setName(event.target.value)} placeholder="Rostik" value={name} /></label>
+    <div><Button onClick={() => setCreating(false)} variant="ghost">Cancel</Button><Button disabled={!canManageWorld || preset.buildStatus !== "ready" || preset.latestRelease === null || !name.trim() || request.state === "pending"} onClick={() => void create()} variant="primary">Create save</Button></div>
+  </Surface>;
+
+  if (world === undefined && preset) return <>
+    <PageHeader description={`${preset.displayName} · ${preset.latestRelease ? `latest release ${preset.latestRelease}` : preset.buildStatus}`} title="Releases" />
+    {request.state === "error" && <Notice description={request.message} title="Save creation failed" tone="danger" />}
+    {creator ?? <EmptyState action={<Button onClick={() => setCreating(true)}>Create save</Button>} description="This preset is reusable. Create as many independent saves as you need." icon="storage" title="No saves yet" />}
+  </>;
+
+  if (world === undefined) return <EmptyState description="Choose a preset or an existing save." icon="storage" title="Nothing selected" />;
+
+  return <WorldStorageScreen {...props} onBeginCreate={() => setCreating(true)} creator={creator} world={world} />;
+}
+
+function WorldStorageScreen({ world, preset, gameId, canReadBackups, canManageWorld, canRestoreBackup, onDownloadPack, onWorldAction, packRequest, lifecycleRequest, onBeginCreate, creator }: StorageProps & { world: World; onBeginCreate: () => void; creator: ReactNode }) {
+  const [tab, setTab] = useState<"releases" | "backups" | "wipes">("releases");
   const [backups, setBackups] = useState<BackupInventory | null>(null);
   const [backupError, setBackupError] = useState<string | null>(null);
   const [backupRevision, setBackupRevision] = useState(0);
@@ -110,6 +150,12 @@ export function StorageScreen({ world, gameId, canReadBackups, canManageWorld, c
       width: "0.6fr",
     },
   ];
+  const wipeColumns: DataColumn<World["wipes"][number]>[] = [
+    { id: "wipe", label: "Wipe", render: (row) => <strong>Wipe #{row.number}</strong>, width: "0.8fr" },
+    { id: "release", label: "Started on", render: (row) => `Release ${row.originRelease}`, width: "0.9fr" },
+    { id: "opened", label: "Opened", render: (row) => new Date(row.createdAt).toLocaleString(), width: "1.2fr" },
+    { id: "state", label: "Status", render: (row) => row.state === "current" ? "Current" : row.closedAt ? `Closed ${new Date(row.closedAt).toLocaleDateString()}` : "Closed", width: "1fr" },
+  ];
 
   function confirmAction() {
     if (confirming === null) return;
@@ -120,32 +166,34 @@ export function StorageScreen({ world, gameId, canReadBackups, canManageWorld, c
   const actionTitle = confirming?.action === "archive"
     ? "Archive this world?"
     : confirming?.action === "regenerate"
-      ? "Create a fresh generation?"
+      ? "Start a new wipe?"
       : confirming?.action === "purge"
         ? "Permanently delete this world?"
         : "Restore this backup?";
   const actionDescription = confirming?.action === "archive"
     ? "Spawnpoint will safely stop and back up an active session, then hide the world from normal session control. Its generations and backups remain intact."
     : confirming?.action === "regenerate"
-      ? "Spawnpoint will safely stop and back up the current generation, close it, and create an empty generation from the preset’s latest ready release."
+      ? `Spawnpoint will safely stop and back up the current wipe, close it, and create an empty wipe from ${preset?.displayName ?? "its preset"} release ${preset?.latestRelease ?? "—"}.`
       : confirming?.action === "purge"
         ? "This permanently deletes the world registry, release pointer and every version of every S3 backup. This cannot be undone from the dashboard."
-        : `Spawnpoint will safely stop and back up the current generation, then restore ${confirming?.backupName ?? "the selected backup"} into a new generation.`;
+        : `Spawnpoint will safely stop and back up the current wipe, then restore ${confirming?.backupName ?? "the selected backup"} as a new wipe.`;
 
   return <>
-    <PageHeader actions={world.worldLifecycleAvailable && world.materialization === "existing" && <>
+    <PageHeader actions={<>{preset && <Button disabled={!canManageWorld} onClick={onBeginCreate}>Create another</Button>}{world.worldLifecycleAvailable && world.materialization === "existing" && <>
       {world.materialization === "existing" && <Button disabled={!canManageWorld || lifecycleRequest.state === "pending"} onClick={(event) => requestConfirmation({ action: "archive" }, event.currentTarget)}>Archive</Button>}
-      {world.materialization === "existing" && <Button disabled={!canManageWorld || lifecycleRequest.state === "pending"} onClick={(event) => requestConfirmation({ action: "regenerate" }, event.currentTarget)} variant="danger">Regenerate</Button>}
-    </> || world.worldLifecycleAvailable && world.materialization === "archived" && <Button disabled={!canManageWorld || lifecycleRequest.state === "pending"} onClick={(event) => requestConfirmation({ action: "purge" }, event.currentTarget)} variant="danger">Delete permanently</Button>} description={`Release pointers and verified backups for ${world.displayName}`} title="Releases" />
-    <Tabs label="Storage view" onChange={setTab} options={[{ id: "releases", label: "Releases" }, { id: "backups", label: "Backups" }]} value={tab} />
-    {world.materialization === "archived" && <Notice description="Choose a generation-aware backup in the Backups tab to restore this world into a new active generation." title="This world is archived" tone="warning" />}
+      {world.materialization === "existing" && <Button disabled={!canManageWorld || lifecycleRequest.state === "pending" || preset?.latestRelease == null} onClick={(event) => requestConfirmation({ action: "regenerate" }, event.currentTarget)} variant="danger">New wipe</Button>}
+    </>}{world.worldLifecycleAvailable && world.materialization === "archived" && <Button disabled={!canManageWorld || lifecycleRequest.state === "pending"} onClick={(event) => requestConfirmation({ action: "purge" }, event.currentTarget)} variant="danger">Delete permanently</Button>}</>} description={`Releases, wipes and verified backups for ${world.displayName}`} title="Releases" />
+    {creator}
+    <Tabs label="Storage view" onChange={setTab} options={[{ id: "releases", label: "Releases" }, { id: "wipes", label: "Wipes" }, { id: "backups", label: "Backups" }]} value={tab} />
+    {world.materialization === "archived" && <Notice description="Choose a wipe-aware backup in the Backups tab to restore this save as a new wipe." title="This save is archived" tone="warning" />}
     {lifecycleRequest.state !== "idle" && <Notice description={lifecycleRequest.message} title={lifecycleRequest.state === "pending" ? "World operation requested" : lifecycleRequest.state === "success" ? "World operation accepted" : "World operation failed"} tone={lifecycleRequest.state === "error" ? "danger" : lifecycleRequest.state === "success" ? "success" : "info"} />}
     {confirming !== null && <Surface aria-describedby="world-operation-confirmation-description" aria-labelledby="world-operation-confirmation-title" className="operation-confirmation" role="alertdialog">
       <div><h2 id="world-operation-confirmation-title">{actionTitle}</h2><p id="world-operation-confirmation-description">{actionDescription}</p>{confirming.action === "purge" && <label className="purge-confirmation">Type <code>{world.id}</code> to confirm<input autoComplete="off" onChange={(event) => setPurgeConfirmation(event.target.value)} ref={purgeInput} value={purgeConfirmation} /></label>}</div>
-      <div><Button onClick={() => setConfirming(null)} variant="ghost">Cancel</Button><Button disabled={confirming.action === "purge" && purgeConfirmation !== world.id} onClick={confirmAction} ref={confirmButton} variant={confirming.action === "archive" ? "primary" : "danger"}>{confirming.action === "archive" ? "Archive world" : confirming.action === "regenerate" ? "Create generation" : confirming.action === "purge" ? "Delete world forever" : "Restore backup"}</Button></div>
+      <div><Button onClick={() => setConfirming(null)} variant="ghost">Cancel</Button><Button disabled={confirming.action === "purge" && purgeConfirmation !== world.id} onClick={confirmAction} ref={confirmButton} variant={confirming.action === "archive" ? "primary" : "danger"}>{confirming.action === "archive" ? "Archive save" : confirming.action === "regenerate" ? "Start new wipe" : confirming.action === "purge" ? "Delete save forever" : "Restore backup"}</Button></div>
     </Surface>}
     {tab === "releases" && packRequest.state !== "idle" && <Notice description={packRequest.message} title={packRequest.state === "pending" ? "Working on the pack" : packRequest.state === "success" ? "Pack request accepted" : "Pack request failed"} tone={packRequest.state === "error" ? "danger" : packRequest.state === "success" ? "success" : "info"} />}
     {tab === "releases" && <DataTable columns={columns} emptyLabel={world.release.state === "unconfigured" ? "This world has no release pointer yet" : "Release data is unavailable"} label="Release pointers" rowKey={(row) => row.name} rows={releases} />}
+    {tab === "wipes" && <DataTable columns={wipeColumns} emptyLabel="No wipe history is available for this save" label="Wipe history" rowKey={(row) => row.id} rows={[...world.wipes].reverse()} />}
     {tab === "backups" && !canReadBackups && <EmptyState description="Ask an owner for the backup.read permission." icon="storage" title="Your role cannot read backups" />}
     {tab === "backups" && canReadBackups && backupError !== null && <RetryState description={backupError} onRetry={() => setBackupRevision((current) => current + 1)} title="The inventory is unavailable" />}
     {tab === "backups" && canReadBackups && backupError === null && <>

@@ -4,19 +4,32 @@ import test from "node:test";
 import type { HostObservation, OperationObservation } from "../src/control-plane/read-model.ts";
 import { catalogWithPresets } from "../src/control-plane/catalog.ts";
 import { packRelease, planSessionOperation, worldLifecycleNeedsStop } from "../src/control-plane/session-control.ts";
+import { newWorldRecord } from "../src/control-plane/world-registry.ts";
 
 const host = (state: HostObservation["state"]): HostObservation => ({ id: "host", name: "Host", state, providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: null });
 const operation: OperationObservation = { id: "op", type: "start", status: "running", startedAt: "2026-08-29T00:00:00Z", providerRef: "arn:op" };
 
 test("any world in the catalog can execute, because the machines take a world id", () => {
-  const catalog = catalogWithPresets([{
+  const factorioPreset = {
     id: "factorio-vanilla", displayName: "Factorio vanilla", gameId: "factorio",
     repository: "https://github.com/example/factorio", commit: "1".repeat(40), profileDigest: "2".repeat(64),
     buildStatus: "ready", latestRelease: "1.0",
-  }]);
+  } as const;
+  const world = newWorldRecord(
+    factorioPreset,
+    { worldId: "factorio-factory-12345678", displayName: "Factory", release: "1.0" },
+    "12345678-1234-1234-1234-1234567890ab",
+    "2026-09-08T00:00:00.000Z",
+  );
+  const catalog = catalogWithPresets([factorioPreset], undefined, [world]);
   assert.equal(planSessionOperation("minecraft", "world", "start", [host("stopped")], []).kind, "execute");
   assert.equal(planSessionOperation("minecraft", "vanilla", "start", [host("stopped")], []).kind, "execute");
-  assert.equal(planSessionOperation("factorio", "factorio-vanilla", "start", [host("stopped")], [], catalog).kind, "execute");
+  assert.equal(planSessionOperation("factorio", world.worldId, "start", [host("stopped")], [], catalog).kind, "execute");
+  assert.deepEqual(
+    planSessionOperation("factorio", factorioPreset.id, "start", [host("stopped")], [], catalog),
+    { kind: "reject", reason: "unknown_world" },
+    "a preset itself is never executable",
+  );
   assert.deepEqual(planSessionOperation("minecraft", "missing", "start", [host("stopped")], []), { kind: "reject", reason: "unknown_world" });
 });
 
@@ -53,20 +66,20 @@ test("stop is idempotent and transitional host states are rejected", () => {
 
 test("a player is handed the pack for the release the world is running", () => {
   assert.deepEqual(
-    packRelease({ state: "available", activeRelease: "1.1", desiredRelease: "1.2" }),
+    packRelease({ state: "available", generationId: "generation-1", activeRelease: "1.1", desiredRelease: "1.2" }),
     { kind: "release", release: "1.1" },
     "a desired release has not been through a start; its pack would fit a world nobody is playing",
   );
   assert.deepEqual(
-    packRelease({ state: "available", activeRelease: null, desiredRelease: "1.2" }),
+    packRelease({ state: "available", generationId: "generation-1", activeRelease: null, desiredRelease: "1.2" }),
     { kind: "release", release: "1.2" },
   );
   assert.deepEqual(
-    packRelease({ state: "available", activeRelease: null, desiredRelease: null }),
+    packRelease({ state: "available", generationId: "generation-1", activeRelease: null, desiredRelease: null }),
     { kind: "none", reason: "no_release_selected" },
   );
   assert.deepEqual(
-    packRelease({ state: "unconfigured", activeRelease: null, desiredRelease: null }),
+    packRelease({ state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null }),
     { kind: "none", reason: "no_release_pointer" },
   );
   assert.deepEqual(packRelease(null), { kind: "none", reason: "no_release_pointer" });

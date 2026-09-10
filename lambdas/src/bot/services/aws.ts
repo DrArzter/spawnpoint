@@ -9,6 +9,8 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { buildStartInput, buildWatchdogInput } from "../../domain/telegram-bot.ts";
 import { connectPortForWorld } from "../../control-plane/catalog.ts";
+import { S3ReleaseStateStore } from "../../control-plane/s3-release-state-store.ts";
+import { S3WorldRepository } from "../../control-plane/s3-world-repository.ts";
 
 export const env = (name: string): string => {
   const value = process.env[name];
@@ -44,16 +46,18 @@ export type Pointer = Readonly<{ desired_release: string | null; active_release:
 
 export async function readPointer(): Promise<Pointer | null> {
   try {
-    const object = await s3.send(
-      new GetObjectCommand({
-        Bucket: env("RELEASE_BUCKET"),
-        Key: `worlds/${env("WORLD_NAME")}/release.json`,
-      }),
-    );
-    const body = await object.Body?.transformToString();
-    if (!body) return null;
-    const parsed = JSON.parse(body) as Pointer;
-    return { desired_release: parsed.desired_release ?? null, active_release: parsed.active_release ?? null };
+    const bucket = env("RELEASE_BUCKET");
+    const world = await new S3WorldRepository(s3, bucket).read(env("WORLD_ID"));
+    if (world === null) return null;
+    const release = await new S3ReleaseStateStore(s3, bucket).read({
+      worldId: world.record.worldId,
+      generationId: world.record.currentGeneration.id,
+    });
+    if (release === null) return null;
+    return {
+      desired_release: release.state.desiredRelease,
+      active_release: release.state.activeRelease,
+    };
   } catch {
     return null;
   }

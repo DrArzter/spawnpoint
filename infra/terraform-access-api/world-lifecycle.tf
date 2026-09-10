@@ -20,6 +20,7 @@ data "aws_iam_policy_document" "world_lifecycle" {
     resources = [
       "${data.aws_s3_bucket.releases.arn}/worlds/*/world.json",
       "${data.aws_s3_bucket.releases.arn}/worlds/*/release.json",
+      "${data.aws_s3_bucket.releases.arn}/worlds/*/generations/*/release.json",
       "${data.aws_s3_bucket.releases.arn}/worlds/*/purges/*.json",
       "${data.aws_s3_bucket.releases.arn}/presets/*/catalog.json",
     ]
@@ -31,6 +32,7 @@ data "aws_iam_policy_document" "world_lifecycle" {
     resources = [
       "${data.aws_s3_bucket.releases.arn}/worlds/*/world.json",
       "${data.aws_s3_bucket.releases.arn}/worlds/*/release.json",
+      "${data.aws_s3_bucket.releases.arn}/worlds/*/generations/*/release.json",
       "${data.aws_s3_bucket.releases.arn}/worlds/*/purges/*.json",
     ]
   }
@@ -59,7 +61,7 @@ data "aws_iam_policy_document" "world_lifecycle" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["worlds/*/world.json", "worlds/*/release.json"]
+      values   = ["worlds/*/world.json", "worlds/*/release.json", "worlds/*/generations/*"]
     }
   }
 
@@ -69,6 +71,7 @@ data "aws_iam_policy_document" "world_lifecycle" {
     resources = [
       "${data.aws_s3_bucket.releases.arn}/worlds/*/world.json",
       "${data.aws_s3_bucket.releases.arn}/worlds/*/release.json",
+      "${data.aws_s3_bucket.releases.arn}/worlds/*/generations/*",
     ]
   }
 }

@@ -212,6 +212,30 @@ export async function requestPackDownload(gameId: string, worldId: string): Prom
   return { release: body.release, url: body.url };
 }
 
+export async function requestCreateWorld(
+  gameId: string,
+  presetId: string,
+  displayName: string,
+  release: string,
+): Promise<{ id: string; displayName: string }> {
+  if (previewEnabled) return { id: `${gameId}-${displayName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-preview`, displayName };
+  const response = await authorizedFetch(
+    `/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/worlds`,
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ displayName, release }) },
+  );
+  const body = await response.json() as { error?: string; world?: { id: string; displayName: string } };
+  if (!response.ok || body.world === undefined) {
+    const messages: Record<string, string> = {
+      forbidden: "Your role cannot create worlds.",
+      invalid_world_name: "Enter a name between 1 and 80 characters.",
+      preset_release_not_ready: "This preset has no ready release yet.",
+      release_not_available: "The selected release is no longer available. Refresh and try again.",
+    };
+    throw new Error(messages[body.error ?? ""] ?? "The world could not be created.");
+  }
+  return body.world;
+}
+
 export type BackupEntry = { key: string; archiveName: string; checksum: string; generationId: string | null; sizeBytes: number; storedAt: string };
 export type BackupInventory = { entries: BackupEntry[]; unverified: number; truncated: boolean };
 
@@ -240,14 +264,15 @@ export async function requestWorldLifecycle(
   worldId: string,
   action: "archive" | "regenerate" | "restore" | "purge",
   backupKey?: string,
+  release?: string,
 ): Promise<{ result: "requested"; operationId: string }> {
   if (previewEnabled) return { result: "requested", operationId: `preview-world-${action}` };
   const response = await authorizedFetch(
-    `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/${action}`,
+    `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/${action === "regenerate" ? "wipe" : action}`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(action === "restore" ? { backupKey } : action === "purge" ? { confirmation: worldId } : {}),
+      body: JSON.stringify(action === "restore" ? { backupKey } : action === "purge" ? { confirmation: worldId } : action === "regenerate" ? { release } : {}),
     },
   );
   const body = await response.json() as { error?: string; result?: "requested"; operationId?: string };

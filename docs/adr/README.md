@@ -79,7 +79,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0020](0020-email-channel.md) | SNS email for alerts; SES deferred | Accepted | M5 |
 | [0021](0021-sign-in-from-linked-chat-account.md) | Chat sign-in, but only into an already linked account | Superseded by [0037](0037-telegram-only-browser-identity.md) | M4 |
 | [0022](0022-minecraft-account-as-linked-identity.md) | Minecraft account is a linked identity; whitelist derived; `online-mode=false` | Proposed | M4 |
-| [0023](0023-multiple-worlds.md) | Several worlds, one active at a time | Proposed | M6 |
+| [0023](0023-multiple-worlds.md) | Several worlds, one active at a time | Accepted | M6 |
 | [0024](0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Accepted — **ZeroTier** | M2 |
 | [0025](0025-step-functions-for-long-operations.md) | Step Functions for long operations; Lambda for the rest | Accepted | M2 |
 | [0026](0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | **Rejected** on measurement; kept for its threshold | M1 |
@@ -92,7 +92,12 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0033](0033-connectivity-as-a-strategy.md) | Connectivity is a strategy behind one interface, constrained by the game's auth model | Proposed, amends [0024](0024-connectivity-modes.md) | M2 |
 | [0034](0034-per-game-adapter.md) | A game is a module: data plus functions, minecraft the byte-identical default | Accepted | cross-cutting |
 | [0035](0035-bootstrap-first-owner.md) | Bootstrap the first Owner through one verified Google identity | Superseded by [0037](0037-telegram-only-browser-identity.md) | M4 |
+| [0036](0036-observed-visitors-and-owner-approved-access.md) | Observe visitors, but let an Owner grant access | Proposed | M4 |
 | [0037](0037-telegram-only-browser-identity.md) | Telegram-only browser identity through signed Widget and Mini App payloads | Accepted | M4 |
+| [0038](0038-invitation-delivery-claim.md) | Claim an invitation once before Telegram delivery | Accepted | M4 |
+| [0039](0039-git-presets-instantiate-world-generations.md) | Git presets instantiate recoverable world generations | **Superseded** by [0040](0040-reusable-presets-and-world-wipes.md) | cross-cutting |
+| [0040](0040-reusable-presets-and-world-wipes.md) | Reusable presets create worlds whose wipes own release state | Accepted | cross-cutting |
+| [0041](0041-evaluate-spt-profile-backed-adapter.md) | Evaluate SPT as a profile-backed adapter without distributing EFT | Proposed | later |
 
 ## Decisions still to record
 

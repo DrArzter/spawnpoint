@@ -1,5 +1,7 @@
 import type { PresetObservation } from "./preset-catalog.ts";
-import { worldIdForPreset, type WorldRecord } from "./world-registry.ts";
+import type { WorldRecord } from "./world-registry.ts";
+
+export type CatalogPreset = PresetObservation;
 
 export type CatalogWorld = Readonly<{
   id: string;
@@ -16,6 +18,7 @@ export type CatalogWorld = Readonly<{
   materialization?: "existing" | "not_created" | "archived";
   worldLifecycle?: "v1" | null;
   preset?: Readonly<{
+    id: string;
     repository: string;
     commit: string;
     profileDigest: string;
@@ -32,6 +35,7 @@ export type CatalogGame = Readonly<{
   // connectivity strategy (ADR-0033); the port belongs to the game, and one
   // configured address string used to carry Minecraft's port for all of them.
   connectPort: number;
+  presets?: readonly CatalogPreset[];
   worlds: readonly CatalogWorld[];
 }>;
 
@@ -64,10 +68,9 @@ export const gameCatalog: readonly CatalogGame[] = [
   },
 ];
 
-// Static entries preserve every already managed world. A discovered preset
-// enriches the static world that already uses its profile, or becomes a
-// not-yet-created world candidate. Only a preset with a ready immutable release
-// is startable; first start persists the separate world and generation ids.
+// Static entries preserve every already managed legacy world. Presets remain
+// reusable templates in their own collection; they are never projected into
+// fake not-yet-created worlds and are never consumed by world creation.
 export function catalogWithPresets(
   presets: readonly PresetObservation[],
   catalog: readonly CatalogGame[] = gameCatalog,
@@ -75,17 +78,16 @@ export function catalogWithPresets(
 ): readonly CatalogGame[] {
   return catalog.map((game) => {
     const forGame = presets.filter((preset) => preset.gameId === game.id);
-    const consumed = new Set<string>();
     const existing = game.worlds.map((world) => {
       const preset = forGame.find((candidate) => candidate.id === world.profileId);
       if (preset === undefined) return { ...world, materialization: "existing" as const, worldLifecycle: null };
-      consumed.add(preset.id);
       return {
         ...world,
         displayName: preset.displayName,
         materialization: "existing" as const,
         worldLifecycle: null,
         preset: {
+          id: preset.id,
           repository: preset.repository,
           commit: preset.commit,
           profileDigest: preset.profileDigest,
@@ -94,12 +96,6 @@ export function catalogWithPresets(
         },
       };
     });
-    // A registry record consumes its preset even while archived. Otherwise an
-    // archived world would immediately reappear as a pristine candidate and a
-    // first Start could accidentally create a second lifecycle for one preset.
-    for (const record of worldRecords.filter((candidate) => candidate.gameId === game.id)) {
-      consumed.add(record.preset.id);
-    }
     const materialized = worldRecords
       .filter((record) => record.gameId === game.id)
       .filter((record) => !existing.some((world) => world.id === record.worldId))
@@ -114,12 +110,14 @@ export function catalogWithPresets(
           materialization: record.status === "active" ? "existing" as const : "archived" as const,
           worldLifecycle: "v1" as const,
           preset: current === undefined ? {
+            id: record.preset.id,
             repository: record.preset.repository,
             commit: record.preset.commit,
             profileDigest: record.preset.profileDigest,
             buildStatus: "ready" as const,
             latestRelease: record.currentGeneration.release,
           } : {
+            id: current.id,
             repository: current.repository,
             commit: current.commit,
             profileDigest: current.profileDigest,
@@ -128,23 +126,7 @@ export function catalogWithPresets(
           },
         };
       });
-    const discovered = forGame.filter((preset) => !consumed.has(preset.id)).map((preset) => ({
-      id: worldIdForPreset(preset),
-      displayName: preset.displayName,
-      profileId: preset.id,
-      sessionControl: preset.buildStatus === "ready" && preset.latestRelease !== null ? "v1" as const : null,
-      connectivity: "zerotier" as const,
-      materialization: "not_created" as const,
-      worldLifecycle: null,
-      preset: {
-        repository: preset.repository,
-        commit: preset.commit,
-        profileDigest: preset.profileDigest,
-        buildStatus: preset.buildStatus,
-        latestRelease: preset.latestRelease,
-      },
-    }));
-    return { ...game, worlds: [...existing, ...materialized, ...discovered] };
+    return { ...game, presets: forGame, worlds: [...existing, ...materialized] };
   });
 }
 

@@ -16,7 +16,10 @@ import { randomUUID } from "node:crypto";
 import type { BackupObject } from "./backups.ts";
 import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts";
 import { gameCatalog } from "./catalog.ts";
-import { newWorldRecord, parseWorldRecord, worldRecordDocument, type WorldRecord } from "./world-registry.ts";
+import { type ReleaseState } from "./release-state.ts";
+import { S3ReleaseStateStore } from "./s3-release-state-store.ts";
+import { S3WorldRepository } from "./s3-world-repository.ts";
+import { newWorldRecord, type WorldRecord } from "./world-registry.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildStartInput, buildStopInput, buildWatchdogInput } from "../domain/telegram-bot.ts";
@@ -94,26 +97,23 @@ async function readLifecycle(serverId: string): Promise<LifecycleRecord | null> 
   return response.Item?.lifecycle as LifecycleRecord | undefined ?? null;
 }
 
-async function readReleasePointer(worldId: string): Promise<ReleasePointerObservation> {
+async function readReleasePointer(worldId: string, generationId: string | null): Promise<ReleasePointerObservation> {
   try {
-    const response = await s3.send(new GetObjectCommand({
-      Bucket: requiredEnv("RELEASE_BUCKET"),
-      Key: `worlds/${worldId}/release.json`,
-    }));
-    const body = await response.Body?.transformToString();
-    if (!body) return { state: "unavailable", desiredRelease: null, activeRelease: null };
-    const parsed = JSON.parse(body) as Record<string, unknown>;
+    if (generationId === null) return { state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null };
+    const stored = await new S3ReleaseStateStore(s3, requiredEnv("RELEASE_BUCKET")).readOrMigrateLegacy({ worldId, generationId });
+    if (stored === null) return { state: "unconfigured", generationId, desiredRelease: null, activeRelease: null };
     return {
       state: "available",
-      desiredRelease: typeof parsed.desired_release === "string" ? parsed.desired_release : null,
-      activeRelease: typeof parsed.active_release === "string" ? parsed.active_release : null,
+      generationId: stored.state.generationId,
+      desiredRelease: stored.state.desiredRelease,
+      activeRelease: stored.state.activeRelease,
     };
   } catch (error) {
     if (error instanceof NoSuchKey || (error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound"))) {
-      return { state: "unconfigured", desiredRelease: null, activeRelease: null };
+      return { state: "unconfigured", generationId, desiredRelease: null, activeRelease: null };
     }
     console.error("release_pointer_read_failed", { worldId, errorName: error instanceof Error ? error.name : "UnknownError" });
-    return { state: "unavailable", desiredRelease: null, activeRelease: null };
+    return { state: "unavailable", generationId, desiredRelease: null, activeRelease: null };
   }
 }
 
@@ -139,23 +139,7 @@ async function listPresets(): Promise<readonly PresetObservation[]> {
 }
 
 async function listWorldRecords(): Promise<readonly WorldRecord[]> {
-  const bucket = requiredEnv("RELEASE_BUCKET");
-  const listing = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: "worlds/", MaxKeys: 500 }));
-  const keys = (listing.Contents ?? []).flatMap((object) =>
-    object.Key && /^worlds\/[a-z0-9][a-z0-9-]{0,31}\/world\.json$/.test(object.Key) ? [object.Key] : []);
-  const records = await Promise.all(keys.map(async (key) => {
-    try {
-      const response = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-      const body = await response.Body?.transformToString();
-      const record = body ? parseWorldRecord(JSON.parse(body)) : null;
-      if (record === null || key !== `worlds/${record.worldId}/world.json`) throw new Error("invalid world record");
-      return record;
-    } catch (error) {
-      console.error("world_record_read_failed", { key, errorName: error instanceof Error ? error.name : "UnknownError" });
-      return null;
-    }
-  }));
-  return records.filter((record): record is WorldRecord => record !== null);
+  return new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET")).list();
 }
 
 function isSessionOperation(type: MachineType): type is OperationObservation["type"] {
@@ -190,56 +174,45 @@ function preconditionFailed(error: unknown): boolean {
   return error instanceof Error && (error.name === "PreconditionFailed" || error.name === "ConditionalRequestConflict");
 }
 
-async function readJsonObject(key: string): Promise<Record<string, unknown>> {
-  const response = await s3.send(new GetObjectCommand({ Bucket: requiredEnv("RELEASE_BUCKET"), Key: key }));
-  const body = await response.Body?.transformToString();
-  if (!body) throw new Error(`empty object: ${key}`);
-  const parsed = JSON.parse(body) as unknown;
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(`invalid object: ${key}`);
-  return parsed as Record<string, unknown>;
-}
-
-async function createJsonObject(key: string, value: Record<string, unknown>): Promise<void> {
-  await s3.send(new PutObjectCommand({
-    Bucket: requiredEnv("RELEASE_BUCKET"), Key: key, Body: JSON.stringify(value),
-    ContentType: "application/json", ServerSideEncryption: "AES256", IfNoneMatch: "*",
-  }));
-}
-
 export async function materializePresetWorld(
   preset: PresetObservation,
+  identity: Readonly<{ worldId: string; displayName: string; release: string }>,
   generationUuid: string,
   createdAt: string,
 ): Promise<WorldRecord> {
-  const proposed = newWorldRecord(preset, generationUuid, createdAt);
-  const pointerKey = `worlds/${proposed.worldId}/release.json`;
+  const proposed = newWorldRecord(preset, identity, generationUuid, createdAt);
+  const releaseState: ReleaseState = {
+    worldId: proposed.worldId,
+    generationId: proposed.currentGeneration.id,
+    desiredRelease: proposed.currentGeneration.release,
+    activeRelease: null,
+    updatedAt: createdAt,
+    updatedBy: "world-creation",
+    source: "create-world",
+  };
+  const bucket = requiredEnv("RELEASE_BUCKET");
+  const releaseStates = new S3ReleaseStateStore(s3, bucket);
+  const worlds = new S3WorldRepository(s3, bucket);
   try {
-    await createJsonObject(pointerKey, {
-      schema_version: 1,
-      world: proposed.worldId,
-      desired_release: proposed.currentGeneration.release,
-      active_release: null,
-      updated_at: createdAt,
-      updated_by: "world-materialization",
-    });
+    await releaseStates.create(releaseState);
   } catch (error) {
     if (!preconditionFailed(error)) throw error;
-    const existing = await readJsonObject(pointerKey);
-    if (existing.world !== proposed.worldId || existing.desired_release !== proposed.currentGeneration.release) {
+    const existing = await releaseStates.read({ worldId: proposed.worldId, generationId: proposed.currentGeneration.id });
+    if (existing === null || existing.state.desiredRelease !== proposed.currentGeneration.release) {
       throw new Error("world_release_pointer_conflict");
     }
   }
 
-  const recordKey = `worlds/${proposed.worldId}/world.json`;
   try {
-    await createJsonObject(recordKey, worldRecordDocument(proposed));
+    await worlds.create(proposed);
     return proposed;
   } catch (error) {
     if (!preconditionFailed(error)) throw error;
-    const existing = parseWorldRecord(await readJsonObject(recordKey));
+    const existing = (await worlds.read(proposed.worldId))?.record ?? null;
     if (
       existing === null || existing.worldId !== proposed.worldId || existing.gameId !== proposed.gameId ||
-      existing.preset.id !== proposed.preset.id || existing.preset.profileDigest !== proposed.preset.profileDigest ||
+      existing.displayName !== proposed.displayName || existing.preset.id !== proposed.preset.id ||
+      existing.preset.profileDigest !== proposed.preset.profileDigest ||
       existing.currentGeneration.release !== proposed.currentGeneration.release
     ) throw new Error("world_record_conflict");
     return existing;
@@ -302,6 +275,7 @@ export async function worldLifecycleExecution(
   worldId: string,
   action: "archive" | "regenerate" | "restore" | "purge",
   backupKey: string | undefined,
+  release: string | undefined,
   stopRequired: boolean,
   targetGenerationId: string,
 ): Promise<string> {
@@ -315,6 +289,7 @@ export async function worldLifecycleExecution(
       requestedAt: new Date().toISOString(),
       generationUuid: randomUUID(),
       backupKey: backupKey ?? "",
+      release: release ?? "",
     }),
   }));
   if (!started.executionArn) throw new Error("world lifecycle execution did not return an ARN");

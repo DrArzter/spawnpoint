@@ -53,6 +53,16 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.release_state_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.release_state
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.game_host_world_pointers
     values = {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
@@ -134,7 +144,7 @@ run "idle_watchdog_probes_host_and_runs_verified_stop" {
   }
 }
 
-run "promotion_flips_the_pointer_and_composes_existing_machines" {
+run "promotion_delegates_release_state_and_composes_existing_machines" {
   command = plan
 
   assert {
@@ -143,8 +153,8 @@ run "promotion_flips_the_pointer_and_composes_existing_machines" {
   }
 
   assert {
-    condition     = jsondecode(aws_sfn_state_machine.promote_release.definition).States["Write Desired"].Resource == "arn:aws:states:::aws-sdk:s3:putObject"
-    error_message = "The pointer must be written by a direct S3 integration, not a Lambda wrapper."
+    condition     = jsondecode(aws_sfn_state_machine.promote_release.definition).States["Prepare Release"].Resource == "arn:aws:states:::lambda:invoke"
+    error_message = "Promotion must delegate release-state persistence to its storage adapter."
   }
 
   assert {
@@ -154,10 +164,15 @@ run "promotion_flips_the_pointer_and_composes_existing_machines" {
 
   assert {
     condition = alltrue([
-      for state in ["Write Desired", "Restore Desired After Refusal", "Commit Active", "Write Rollback Desired"] :
-      jsondecode(aws_sfn_state_machine.promote_release.definition).States[state].Parameters["Body.$"] == "$.document"
+      for state in ["Prepare Release", "Restore Desired After Refusal", "Commit Active", "Write Rollback Desired"] :
+      jsondecode(aws_sfn_state_machine.promote_release.definition).States[state].Parameters.FunctionName == local.release_state_function_arn
     ])
-    error_message = "S3 SDK integration must receive the pointer object directly; JsonToString would double-encode it."
+    error_message = "Every release-state transition must use the same adapter Lambda."
+  }
+
+  assert {
+    condition     = !strcontains(aws_sfn_state_machine.promote_release.definition, "worlds/")
+    error_message = "Promotion orchestration must not know the physical S3 world layout."
   }
 }
 

@@ -23,6 +23,7 @@ import {
 } from "../control-plane/aws.ts";
 import { readControlPlaneSnapshot } from "../control-plane/read-model.ts";
 import { packRelease, planSessionOperation, worldLifecycleNeedsStop, type SessionAction } from "../control-plane/session-control.ts";
+import { worldIdForName } from "../control-plane/world-registry.ts";
 
 type Event = Readonly<{
   requestContext?: { http?: { method?: string } };
@@ -213,15 +214,6 @@ async function controlSession(identity: Identity, action: SessionAction, gameId:
   const plan = planSessionOperation(gameId, worldId, action, hosts, operations, effectiveCatalog);
   if (plan.kind === "reject") return response(plan.reason === "unknown_world" ? 404 : 409, { error: plan.reason });
   if (plan.kind === "noop") return response(200, { result: plan.reason });
-  if (action === "start" && plan.world.materialization === "not_created") {
-    const preset = presets.find((candidate) =>
-      candidate.gameId === gameId && candidate.id === plan.world.profileId &&
-      candidate.profileDigest === plan.world.preset?.profileDigest);
-    if (preset === undefined || preset.buildStatus !== "ready" || preset.latestRelease === null) {
-      return response(409, { error: "preset_release_not_ready" });
-    }
-    await materializePresetWorld(preset, randomUUID(), new Date().toISOString());
-  }
   const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
   const requestedBy = `identity:${identity.id}`;
   if (action === "start") {
@@ -234,6 +226,40 @@ async function controlSession(identity: Identity, action: SessionAction, gameId:
   return response(202, { result: "requested", operationId });
 }
 
+async function createWorld(identity: Identity, gameId: string, presetId: string, body: string | undefined): Promise<Response> {
+  let parsed: { displayName?: unknown; release?: unknown };
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const displayName = typeof parsed.displayName === "string" ? parsed.displayName.trim() : "";
+  const release = typeof parsed.release === "string" ? parsed.release : "";
+  if (displayName.length < 1 || displayName.length > 80) return response(400, { error: "invalid_world_name" });
+  if (!/^[0-9]+\.[0-9]+$/.test(release)) return response(400, { error: "invalid_release" });
+  const presets = await (awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]));
+  const preset = presets.find((candidate) => candidate.gameId === gameId && candidate.id === presetId);
+  if (preset === undefined) return response(404, { error: "unknown_preset" });
+  if (preset.buildStatus !== "ready" || preset.latestRelease === null) return response(409, { error: "preset_release_not_ready" });
+  if (release !== preset.latestRelease) return response(409, { error: "release_not_available" });
+  const worldUuid = randomUUID();
+  const worldId = worldIdForName(gameId, displayName, worldUuid);
+  const createdAt = new Date().toISOString();
+  const record = await materializePresetWorld(
+    preset,
+    { worldId, displayName, release },
+    randomUUID(),
+    createdAt,
+  );
+  return response(201, {
+    world: {
+      id: record.worldId,
+      displayName: record.displayName,
+      presetId: record.preset.id,
+      generationId: record.currentGeneration.id,
+      wipeNumber: 1,
+      release: record.currentGeneration.release,
+    },
+    createdBy: identity.id,
+  });
+}
+
 async function controlWorldLifecycle(
   identity: Identity,
   action: "archive" | "regenerate" | "restore" | "purge",
@@ -241,13 +267,17 @@ async function controlWorldLifecycle(
   worldId: string,
   body: string | undefined,
 ): Promise<Response> {
-  let parsed: { backupKey?: unknown; confirmation?: unknown } = {};
+  let parsed: { backupKey?: unknown; confirmation?: unknown; release?: unknown } = {};
   try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
   const backupKey = action === "restore" && typeof parsed.backupKey === "string" ? parsed.backupKey : undefined;
+  const release = action === "regenerate" && typeof parsed.release === "string" ? parsed.release : undefined;
   if (action === "restore" && (backupKey === undefined || !backupKey.startsWith(`worlds/${worldId}/archives/`))) {
     return response(400, { error: "invalid_backup_key" });
   }
   if (action === "purge" && parsed.confirmation !== worldId) return response(400, { error: "invalid_purge_confirmation" });
+  if (action === "regenerate" && (release === undefined || !/^[0-9]+\.[0-9]+$/.test(release))) {
+    return response(400, { error: "invalid_release" });
+  }
   const [hosts, operations, worldRecords] = await Promise.all([
     awsControlPlaneSources.listHosts(),
     awsControlPlaneSources.listRunningOperations(),
@@ -264,7 +294,7 @@ async function controlWorldLifecycle(
   }
   const operationId = `panel-world-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
   await worldLifecycleExecution(
-    operationId, host.providerRef, `identity:${identity.id}`, worldId, action, backupKey,
+    operationId, host.providerRef, `identity:${identity.id}`, worldId, action, backupKey, release,
     worldLifecycleNeedsStop(record.status, host.state), record.currentGeneration.id,
   );
   return response(202, { result: "requested", operationId });
@@ -546,7 +576,12 @@ async function packDownload(gameId: string, worldId: string): Promise<Response> 
   const world = gameCatalog.find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
   if (world === undefined) return response(404, { error: "unknown_world" });
 
-  const choice = packRelease(await awsControlPlaneSources.readReleasePointer(worldId));
+  const worldRecord = await awsControlPlaneSources.listWorldRecords?.()
+    .then((records) => records.find((record) => record.worldId === worldId));
+  const choice = packRelease(await awsControlPlaneSources.readReleasePointer(
+    worldId,
+    worldRecord?.currentGeneration.id ?? null,
+  ));
   if (choice.kind === "none") return response(409, { error: choice.reason });
 
   const url = await packDownloadUrl(choice.release);
@@ -616,6 +651,9 @@ export const routes: Readonly<Record<string, Route>> = {
   "GET /access/roles": permissionRoute("access.read", (identity) => roles(identity)),
   "GET /invitations/recipients": permissionRoute("invitation.send", (identity) => invitationRecipients(identity)),
 
+  "POST /games/{gameId}/presets/{presetId}/worlds": permissionRoute("world.manage", (identity, event) =>
+    createWorld(identity, parameter(event, "gameId"), parameter(event, "presetId"), event.body)),
+
   "POST /games/{gameId}/worlds/{worldId}/start": permissionRoute("session.start", (identity, event) =>
     controlSession(identity, "start", parameter(event, "gameId"), parameter(event, "worldId"))),
   "POST /games/{gameId}/worlds/{worldId}/stop": permissionRoute("session.stop", (identity, event) =>
@@ -632,6 +670,8 @@ export const routes: Readonly<Record<string, Route>> = {
   "POST /games/{gameId}/worlds/{worldId}/archive": permissionRoute("world.manage", (identity, event) =>
     controlWorldLifecycle(identity, "archive", parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
   "POST /games/{gameId}/worlds/{worldId}/regenerate": permissionRoute("world.manage", (identity, event) =>
+    controlWorldLifecycle(identity, "regenerate", parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
+  "POST /games/{gameId}/worlds/{worldId}/wipe": permissionRoute("world.manage", (identity, event) =>
     controlWorldLifecycle(identity, "regenerate", parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
   "POST /games/{gameId}/worlds/{worldId}/restore": permissionRoute("backup.restore", (identity, event) =>
     controlWorldLifecycle(identity, "restore", parameter(event, "gameId"), parameter(event, "worldId"), event.body)),

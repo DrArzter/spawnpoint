@@ -123,8 +123,8 @@ if [[ -z "${SERVER_COMPOSE_FILES:-}" ]]; then
 fi
 export SERVER_COMPOSE_SERVICE="${SERVER_COMPOSE_SERVICE:-${GAME_COMPOSE_SERVICE}}"
 
-# Boot-time reconciliation (ADR-0030): if this world has a release pointer,
-# make the mod directory match its desired release before Minecraft starts.
+# Boot-time reconciliation (ADR-0030): make the mod directory match the
+# desired release of this world's exact wipe before the game starts.
 # A promotion made while the server was stopped lands here, on the next start.
 # No pointer (exit 3) is the legitimate pre-import state and starts as before;
 # any other failure refuses the start — wrong mods corrupt worlds.
@@ -134,7 +134,11 @@ reconcile_status="skipped_no_bucket"
 desired_release="null"
 if [[ -n "${release_bucket}" ]]; then
   export RELEASE_BUCKET="${release_bucket}"
-  if pointer_output="$(WORLD_NAME="${world_name}" "${SCRIPT_DIR}/read-release-pointer.sh" "${world_name}")"; then
+  [[ "${WORLD_GENERATION_ID:-}" =~ ^gen-[0-9a-f]{32}$ ]] || {
+    printf 'error: world %s has no current wipe id\n' "${world_name}" >&2
+    exit 1
+  }
+  if pointer_output="$("${SCRIPT_DIR}/read-release-pointer.sh" "${world_name}" "${WORLD_GENERATION_ID}")"; then
     desired_release="$(awk -F= '$1 == "desired_release" { print $2 }' <<<"${pointer_output}")"
     payload_dir="${SERVER_DIR}/releases/${desired_release}"
     "${SCRIPT_DIR}/download-release.sh" "${desired_release}" "${payload_dir}" >&2

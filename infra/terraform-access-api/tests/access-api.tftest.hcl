@@ -147,9 +147,9 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   assert {
     condition = local.world_creation_resources == [
       "arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*/world.json",
-      "arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*/release.json",
+      "arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*/generations/*/release.json",
     ]
-    error_message = "First Start may create only the immutable world descriptor and its initial release pointer."
+    error_message = "Create world may write only the world descriptor and its first wipe's release state."
   }
 
 

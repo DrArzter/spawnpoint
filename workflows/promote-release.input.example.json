@@ -1,6 +1,7 @@
 {
   "operationId": "promote-example-001",
-  "worldName": "world",
+  "worldId": "minecraft-main-12345678",
+  "generationId": "gen-123456781234123412341234567890ab",
   "release": "1.1",
   "instanceId": "i-0123456789abcdef0",
   "releaseBucket": "spawnpoint-releases-000000000000",
@@ -27,6 +28,7 @@
   "watchdogInput": {
     "operationId": "promote-example-001-watchdog",
     "instanceId": "i-0123456789abcdef0",
+    "worldId": "minecraft-main-12345678",
     "stopStateMachineArn": "arn:aws:states:eu-central-1:000000000000:stateMachine:spawnpoint-stop-server",
     "timing": {
       "checkIntervalSeconds": 300,

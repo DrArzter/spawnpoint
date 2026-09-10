@@ -12,8 +12,8 @@ const sources: ControlPlaneSources = {
   ],
   readLifecycle: async (serverId) => serverId === "minecraft" ? initialLifecycleRecord("minecraft", 100) : null,
   readReleasePointer: async (worldId) => worldId === "world"
-    ? { state: "available", desiredRelease: "1.1", activeRelease: "1.0" }
-    : { state: "unconfigured", desiredRelease: null, activeRelease: null },
+    ? { state: "available", generationId: null, desiredRelease: "1.1", activeRelease: "1.0" }
+    : { state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null },
   listRunningOperations: async () => [{ id: "start-1", type: "start", status: "running", startedAt: "2026-08-29T00:00:00.000Z", providerRef: "arn:execution" }],
 };
 
@@ -57,7 +57,7 @@ test("each world's address carries its own game's port, and only for callers all
     listHosts: async () => [],
     listRunningOperations: async () => [],
     readLifecycle: async () => null,
-    readReleasePointer: async () => ({ state: "unconfigured", desiredRelease: null, activeRelease: null }),
+    readReleasePointer: async () => ({ state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null }),
     listPresets: async () => [
       {
         id: "factorio-vanilla", displayName: "Factorio vanilla", gameId: "factorio",
@@ -81,11 +81,10 @@ test("each world's address carries its own game's port, and only for callers all
     visible.games.flatMap((game) => game.worlds.map((world) => [world.id, world.connectionAddress])),
   );
   assert.equal(addresses.get("world"), "172.29.23.24:25565");
-  assert.equal(addresses.get("factorio-vanilla"), "172.29.23.24:34197");
-  assert.equal(addresses.get("zomboid-vanilla"), "172.29.23.24:16261");
-
-  // One configured string used to answer 25565 for every game. It cannot now.
-  assert.equal(new Set(addresses.values()).size, 3);
+  assert.equal(addresses.has("factorio-vanilla"), false, "a reusable preset is not a world until one is created");
+  assert.equal(addresses.has("zomboid-vanilla"), false, "a reusable preset is not a world until one is created");
+  assert.equal(visible.games.find((game) => game.id === "factorio")?.presets[0]?.id, "factorio-vanilla");
+  assert.equal(visible.games.find((game) => game.id === "zomboid")?.presets[0]?.id, "zomboid-vanilla");
 
   const withheld = await readControlPlaneSnapshot(sources, {
     includeInfrastructure: false,
@@ -111,7 +110,7 @@ test("a public world's address is the instance's current one, and nothing while 
     listHosts: async () => hosts,
     listRunningOperations: async () => [],
     readLifecycle: async () => null,
-    readReleasePointer: async () => ({ state: "unconfigured", desiredRelease: null, activeRelease: null }),
+    readReleasePointer: async () => ({ state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null }),
   });
   const options = { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" };
 

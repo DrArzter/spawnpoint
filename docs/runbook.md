@@ -362,12 +362,28 @@ set to what was imported, `active_release` null until a start passes the health 
   `game` follow the game module, so a factorio import is judged by `saves/*.zip` rather than `level.dat`.
 
 **Wired on the code side, pending apply.** `start-session.sh` now performs boot-time reconciliation: it reads the
-world's pointer, ensures a verified local copy of the desired release (a cache on the data volume — an unchanged boot
+current wipe's release state, ensures a verified local copy of the desired release (a cache on the data volume — an unchanged boot
 downloads nothing, a tampered cache heals itself), and atomically reconciles the live mod directory before Minecraft
-starts. No pointer means the pre-import legacy path; any other failure refuses the start, because wrong mods corrupt
-worlds. The host's IAM policy gains read access to `worlds/*` in the same Terraform change — apply it together with
-the watchdog slice. The host `.env` must carry `RELEASE_BUCKET` (and optionally `WORLD_NAME`) for the pointer path to
-activate.
+starts. A missing or malformed wipe state refuses the start, because guessing a release can corrupt worlds. The host's
+IAM policy gains read access to `worlds/*` in the same Terraform change. The host `.env` must carry `RELEASE_BUCKET`.
+
+Before that runtime cutover, adopt each legacy pointer into the explicit world/wipe model. The command is dry-run by
+default, derives a deterministic first wipe ID, validates the matching ready preset and prints both destination keys:
+
+```bash
+scripts/migrate-world-state.sh world
+scripts/migrate-world-state.sh vanilla
+```
+
+Review the output, then create only the missing generation state and world descriptor:
+
+```bash
+scripts/migrate-world-state.sh world --apply
+scripts/migrate-world-state.sh vanilla --apply
+```
+
+The operation is idempotent. An identical partial write is resumed; an existing object with different content is
+refused. The legacy pointer remains read-only migration evidence and is no longer consulted by normal runtime paths.
 
 ## Adopt an existing server or single-player save
 

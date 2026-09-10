@@ -18,6 +18,7 @@ export type HostObservation = Readonly<{
 
 export type ReleasePointerObservation = Readonly<{
   state: "available" | "unconfigured" | "unavailable";
+  generationId: string | null;
   desiredRelease: string | null;
   activeRelease: string | null;
 }>;
@@ -33,7 +34,7 @@ export type OperationObservation = Readonly<{
 export type ControlPlaneSources = Readonly<{
   listHosts: () => Promise<readonly HostObservation[]>;
   readLifecycle: (serverId: string) => Promise<LifecycleRecord | null>;
-  readReleasePointer: (worldId: string) => Promise<ReleasePointerObservation>;
+  readReleasePointer: (worldId: string, generationId: string | null) => Promise<ReleasePointerObservation>;
   listRunningOperations: () => Promise<readonly OperationObservation[]>;
   listPresets?: () => Promise<readonly PresetObservation[]>;
   listWorldRecords?: () => Promise<readonly WorldRecord[]>;
@@ -46,6 +47,15 @@ export type ControlPlaneSnapshot = Readonly<{
     code: string;
     displayName: string;
     lifecycle: LifecycleRecord | null;
+    presets: ReadonlyArray<Readonly<{
+      id: string;
+      displayName: string;
+      repository: string;
+      commit: string;
+      profileDigest: string;
+      buildStatus: "unbuilt" | "building" | "ready" | "failed";
+      latestRelease: string | null;
+    }>>;
     worlds: ReadonlyArray<Readonly<{
       id: string;
       displayName: string;
@@ -56,6 +66,14 @@ export type ControlPlaneSnapshot = Readonly<{
       materialization: "existing" | "not_created" | "archived";
       worldLifecycleAvailable: boolean;
       preset: CatalogGame["worlds"][number]["preset"] | null;
+      wipes: ReadonlyArray<Readonly<{
+        id: string;
+        number: number;
+        state: "current" | "closed";
+        createdAt: string;
+        closedAt: string | null;
+        originRelease: string;
+      }>>;
       release: ReleasePointerObservation;
     }>>;
   }>>;
@@ -95,6 +113,7 @@ export async function readControlPlaneSnapshot(
     sources.listWorldRecords?.() ?? Promise.resolve([]),
   ]);
   const effectiveCatalog = catalogWithPresets(presets, catalog, worldRecords);
+  const recordByWorld = new Map(worldRecords.map((record) => [record.worldId, record]));
   const worldConnectionHost = (connectivity: string): string | null => {
     if (connectionHost === null) return null;
     if (connectivity !== "raw") return connectionHost;
@@ -106,7 +125,10 @@ export async function readControlPlaneSnapshot(
     sources.listHosts(),
     sources.listRunningOperations(),
     Promise.all(effectiveCatalog.map((game) => sources.readLifecycle(game.id))),
-    Promise.all(worlds.map((world) => sources.readReleasePointer(world.id))),
+    Promise.all(worlds.map((world) => sources.readReleasePointer(
+      world.id,
+      recordByWorld.get(world.id)?.currentGeneration.id ?? null,
+    ))),
   ]);
   const pointerByWorld = new Map(worlds.map((world, index) => [world.id, pointers[index]!]));
 
@@ -117,8 +139,19 @@ export async function readControlPlaneSnapshot(
       code: game.code,
       displayName: game.displayName,
       lifecycle: lifecycles[gameIndex] ?? null,
+      presets: (game.presets ?? []).map((preset) => ({
+        id: preset.id,
+        displayName: preset.displayName,
+        repository: preset.repository,
+        commit: preset.commit,
+        profileDigest: preset.profileDigest,
+        buildStatus: preset.buildStatus,
+        latestRelease: preset.latestRelease,
+      })),
       worlds: game.worlds.map((world) => {
-        const release = pointerByWorld.get(world.id) ?? { state: "unavailable" as const, desiredRelease: null, activeRelease: null };
+        const release = pointerByWorld.get(world.id) ?? { state: "unavailable" as const, generationId: null, desiredRelease: null, activeRelease: null };
+        const record = recordByWorld.get(world.id);
+        const generations = record === undefined ? [] : [...record.previousGenerations, record.currentGeneration];
         return {
           id: world.id,
           displayName: world.displayName,
@@ -128,6 +161,16 @@ export async function readControlPlaneSnapshot(
           materialization: world.materialization ?? "existing",
           worldLifecycleAvailable: world.worldLifecycle !== null && world.worldLifecycle !== undefined,
           preset: world.preset ?? null,
+          wipes: generations.map((generation, index) => ({
+            id: generation.id,
+            number: index + 1,
+            state: index === generations.length - 1 ? "current" as const : "closed" as const,
+            createdAt: generation.createdAt,
+            closedAt: "closedAt" in generation && typeof generation.closedAt === "string"
+              ? generation.closedAt
+              : null,
+            originRelease: generation.release,
+          })),
           // Composed here for the same reason the host composes it: the
           // strategy owns the host part, the game owns the port. An overlay
           // world uses the configured address; a public one uses whatever

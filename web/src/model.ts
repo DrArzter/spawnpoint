@@ -4,8 +4,26 @@ export type ServerState = "stopped" | "starting" | "running" | "stopping" | "unk
 
 export type ReleasePointer = {
   state: "available" | "unconfigured" | "unavailable";
+  generationId: string | null;
   desiredRelease: string | null;
   activeRelease: string | null;
+};
+export type Preset = {
+  id: string;
+  displayName: string;
+  repository: string;
+  commit: string;
+  profileDigest: string;
+  buildStatus: "unbuilt" | "building" | "ready" | "failed";
+  latestRelease: string | null;
+};
+export type Wipe = {
+  id: string;
+  number: number;
+  state: "current" | "closed";
+  createdAt: string;
+  closedAt: string | null;
+  originRelease: string;
 };
 export type World = {
   id: string;
@@ -15,7 +33,9 @@ export type World = {
   connectivity: "zerotier" | "raw";
   materialization: "existing" | "not_created" | "archived";
   worldLifecycleAvailable: boolean;
+  wipes: readonly Wipe[];
   preset: null | {
+    id: string;
     repository: string;
     commit: string;
     profileDigest: string;
@@ -33,7 +53,7 @@ export type Lifecycle = {
   activeSessionId: string | null;
   updatedAtEpochSeconds: number;
 };
-export type Game = { id: string; code: string; displayName: string; lifecycle: Lifecycle | null; worlds: readonly World[] };
+export type Game = { id: string; code: string; displayName: string; lifecycle: Lifecycle | null; presets: readonly Preset[]; worlds: readonly World[] };
 export type Host = {
   id: string;
   name: string;

@@ -142,18 +142,15 @@ data "aws_iam_policy_document" "promote_workflow" {
   }
 
   statement {
-    sid     = "ReadReleaseStore"
-    actions = ["s3:GetObject"]
-    resources = [
-      "${data.aws_s3_bucket.releases.arn}/releases/*",
-      "${data.aws_s3_bucket.releases.arn}/worlds/*",
-    ]
+    sid       = "VerifyPublishedRelease"
+    actions   = ["s3:GetObject"]
+    resources = ["${data.aws_s3_bucket.releases.arn}/releases/*"]
   }
 
   statement {
-    sid       = "WriteOnlyPointers"
-    actions   = ["s3:PutObject"]
-    resources = ["${data.aws_s3_bucket.releases.arn}/worlds/*"]
+    sid       = "MutateReleaseState"
+    actions   = ["lambda:InvokeFunction"]
+    resources = [aws_lambda_function.release_state.arn]
   }
 
   statement {
@@ -200,10 +197,12 @@ resource "aws_iam_role_policy" "promote_workflow" {
 }
 
 resource "aws_sfn_state_machine" "promote_release" {
-  name       = "spawnpoint-promote-release"
-  role_arn   = aws_iam_role.promote_workflow.arn
-  type       = "STANDARD"
-  definition = file("${path.module}/../../workflows/promote-release.asl.json")
+  name     = "spawnpoint-promote-release"
+  role_arn = aws_iam_role.promote_workflow.arn
+  type     = "STANDARD"
+  definition = templatefile("${path.module}/../../workflows/promote-release.asl.json", {
+    release_state_function_arn = local.release_state_function_arn
+  })
 
   tags = {
     Name    = "spawnpoint-promote-release"

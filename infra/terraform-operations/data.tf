@@ -6,6 +6,7 @@ locals {
   start_state_machine_arn         = "arn:aws:states:${var.aws_region}:${local.account_id}:stateMachine:spawnpoint-start-server"
   stop_state_machine_arn          = "arn:aws:states:${var.aws_region}:${local.account_id}:stateMachine:spawnpoint-stop-server"
   idle_watchdog_state_machine_arn = "arn:aws:states:${var.aws_region}:${local.account_id}:stateMachine:spawnpoint-idle-watchdog"
+  release_state_function_arn      = "arn:aws:lambda:${var.aws_region}:${local.account_id}:function:spawnpoint-release-state"
 }
 
 data "aws_s3_bucket" "releases" {

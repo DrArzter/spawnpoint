@@ -41,24 +41,36 @@ function object(value: unknown): ObjectValue | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as ObjectValue : null;
 }
 
-export function worldIdForPreset(preset: PresetObservation): string {
-  const natural = preset.id.startsWith(`${preset.gameId}-`) ? preset.id : `${preset.gameId}-${preset.id}`;
-  if (natural.length <= 32) return natural;
-  return `${preset.gameId.slice(0, 7)}-${preset.id.slice(0, 15)}-${preset.profileDigest.slice(0, 8)}`;
+export function worldIdForName(gameId: string, displayName: string, worldUuid: string): string {
+  if (!ID.test(gameId) || !/^[0-9a-f-]{36}$/.test(worldUuid)) throw new Error("invalid_world_identity");
+  const slug = displayName.normalize("NFKD").toLowerCase()
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || "world";
+  const namespace = gameId.slice(0, 12);
+  const suffix = worldUuid.replaceAll("-", "").slice(0, 8);
+  const available = 32 - namespace.length - suffix.length - 2;
+  const boundedSlug = slug.slice(0, Math.max(1, available)).replace(/-$/, "") || "w";
+  return `${namespace}-${boundedSlug}-${suffix}`;
 }
 
 export function newWorldRecord(
   preset: PresetObservation,
+  identity: Readonly<{ worldId: string; displayName: string; release: string }>,
   generationUuid: string,
   createdAt: string,
 ): WorldRecord {
-  if (preset.buildStatus !== "ready" || preset.latestRelease === null) throw new Error("preset_release_not_ready");
+  if (
+    preset.buildStatus !== "ready" || preset.latestRelease === null ||
+    !ID.test(identity.worldId) || identity.displayName.length < 1 || identity.displayName.length > 80 ||
+    !RELEASE.test(identity.release) || Number.isNaN(Date.parse(createdAt))
+  ) throw new Error("invalid_world_creation");
   const generationId = `gen-${generationUuid.replaceAll("-", "")}`;
   if (!GENERATION_ID.test(generationId)) throw new Error("invalid_generation_id");
   return {
-    worldId: worldIdForPreset(preset),
+    worldId: identity.worldId,
     gameId: preset.gameId,
-    displayName: preset.displayName,
+    displayName: identity.displayName,
     status: "active",
     connectivity: "zerotier",
     preset: {
@@ -67,7 +79,7 @@ export function newWorldRecord(
       commit: preset.commit,
       profileDigest: preset.profileDigest,
     },
-    currentGeneration: { id: generationId, release: preset.latestRelease, createdAt, source: { kind: "preset" } },
+    currentGeneration: { id: generationId, release: identity.release, createdAt, source: { kind: "preset" } },
     previousGenerations: [],
   };
 }
@@ -96,21 +108,21 @@ export function purgeGenerationIds(record: WorldRecord): readonly string[] {
 export function regenerateWorldRecord(
   record: WorldRecord,
   preset: PresetObservation,
+  release: string,
   generationUuid: string,
   createdAt: string,
 ): WorldRecord {
   if (record.status !== "active") throw new Error("world_archived");
   if (preset.gameId !== record.gameId || preset.id !== record.preset.id) throw new Error("preset_mismatch");
-  if (preset.buildStatus !== "ready" || preset.latestRelease === null || Number.isNaN(Date.parse(createdAt))) {
+  if (preset.buildStatus !== "ready" || preset.latestRelease === null || !RELEASE.test(release) || Number.isNaN(Date.parse(createdAt))) {
     throw new Error("preset_release_not_ready");
   }
   return {
     ...record,
-    displayName: preset.displayName,
     preset: {
       id: preset.id, repository: preset.repository, commit: preset.commit, profileDigest: preset.profileDigest,
     },
-    currentGeneration: { id: generationId(generationUuid), release: preset.latestRelease, createdAt, source: { kind: "preset" } },
+    currentGeneration: { id: generationId(generationUuid), release, createdAt, source: { kind: "preset" } },
     previousGenerations: [...record.previousGenerations, closedCurrent(record, createdAt)],
   };
 }

@@ -5,17 +5,10 @@ set -Eeuo pipefail
 profile="${AWS_PROFILE:-spawnpoint}"
 region="${AWS_REGION:-eu-central-1}"
 connection_host="${SPAWNPOINT_CONNECTION_HOST:-172.29.23.24}"
-# The address is composed, not configured: the host part above comes from the
-# connectivity strategy, and the port from the game the world runs. Reading it
-# from the same catalog the host uses keeps the two answers identical.
-connect_port_for_world() {
-  local world="$1" game
-  game="$(jq -r --arg id "${world}" '.worlds[] | select(.id == $id) | .game // "minecraft"' \
-    "$(dirname -- "${BASH_SOURCE[0]}")/../server/worlds/catalog.json")"
-  [[ -n "${game}" ]] || {
-    printf 'error: unknown world: %s\n' "${world}" >&2
-    exit 1
-  }
+# The world registry owns the world-to-game relation. Local static catalogs are
+# deployment adapters and cannot resolve worlds created later from a preset.
+connect_port_for_game() {
+  local game="$1"
   awk -F'"' '/^GAME_CONNECT_PORT=/ { print $2 }' \
     "$(dirname -- "${BASH_SOURCE[0]}")/../server/games/${game}/game.sh"
 }
@@ -34,7 +27,7 @@ fi
   printf 'usage: %s <world> <release> [--no-follow]\n' "$0" >&2
   exit 1
 }
-[[ "${world}" =~ ^[A-Za-z0-9._-]+$ ]] || {
+[[ "${world}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || {
   printf 'error: unsafe world name: %s\n' "${world}" >&2
   exit 1
 }
@@ -103,22 +96,50 @@ instance_id="$(
 
 account_id="$(aws sts get-caller-identity --profile "${profile}" --query Account --output text)"
 release_bucket="${RELEASE_BUCKET:-spawnpoint-releases-${account_id}}"
+world_record="$({
+  aws s3 cp \
+    "s3://${release_bucket}/worlds/${world}/world.json" - \
+    --profile "${profile}" \
+    --region "${region}"
+} 2>/dev/null)" || {
+  printf 'error: world is not registered: %s\n' "${world}" >&2
+  exit 1
+}
+generation_id="$(jq -er --arg world "${world}" '
+  select(.schema_version == 1 and .world_id == $world and .storage_layout == "generation") |
+  .current_generation.id |
+  select(test("^gen-[0-9a-f]{32}$"))
+' <<<"${world_record}")" || {
+  printf 'error: world registry has no valid current wipe: %s\n' "${world}" >&2
+  exit 1
+}
+game="$(jq -er '.game | select(test("^[a-z0-9][a-z0-9-]{0,31}$"))' <<<"${world_record}")" || {
+  printf 'error: world registry has no valid game: %s\n' "${world}" >&2
+  exit 1
+}
+connect_port="$(connect_port_for_game "${game}")"
+[[ "${connect_port}" =~ ^[0-9]+$ ]] || {
+  printf 'error: unsupported game adapter: %s\n' "${game}" >&2
+  exit 1
+}
 
 operation_id="promote-$(date -u +%Y%m%dT%H%M%SZ)"
 input="$(
   jq -cn \
     --arg operation_id "${operation_id}" \
     --arg world "${world}" \
+    --arg generation_id "${generation_id}" \
     --arg release "${release}" \
     --arg instance_id "${instance_id}" \
     --arg release_bucket "${release_bucket}" \
-    --arg connection_address "${connection_host}:$(connect_port_for_world "${world}")" \
+    --arg connection_address "${connection_host}:${connect_port}" \
     --arg start_arn "${start_arn}" \
     --arg stop_arn "${stop_arn}" \
     --arg watchdog_arn "${watchdog_arn}" \
     '{
       operationId: $operation_id,
-      worldName: $world,
+      worldId: $world,
+      generationId: $generation_id,
       release: $release,
       instanceId: $instance_id,
       releaseBucket: $release_bucket,
@@ -137,6 +158,7 @@ input="$(
       watchdogInput: {
         operationId: ($operation_id + "-watchdog"),
         instanceId: $instance_id,
+        worldId: $world,
         stopStateMachineArn: $stop_arn,
         timing: {
           checkIntervalSeconds: 300, emptyChecksRequired: 3, maxTotalChecks: 96,

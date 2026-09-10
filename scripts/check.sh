@@ -63,7 +63,7 @@ check_lambda_bundles() {
 
 check_server_suite() {
   docker run --rm -v "${REPOSITORY_ROOT}:/repo:ro" "${ALPINE_IMAGE}" sh -c '
-    apk add -q bash coreutils findutils diffutils tar zstd jq util-linux openssl curl zip unzip python3 git >/dev/null
+    apk add -q bash coreutils findutils diffutils tar zstd jq util-linux openssl curl zip unzip python3 git rsync >/dev/null
     fail=0
     for t in /repo/server/tests/*-test.sh; do
       name="$(basename "$t")"

@@ -105,6 +105,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
   const [gameId, setGameId] = useState<string | null>(null);
   const [presetId, setPresetId] = useState<string | null>(null);
   const [worldId, setWorldId] = useState<string | null>(null);
+  const [wipeId, setWipeId] = useState<string | null>(null);
   const [themePreference, setThemePreference] = useState<ThemePreference>(getThemePreference);
   const [theme, setTheme] = useState<Theme>(() => resolveTheme(getThemePreference()));
   const [picker, setPicker] = useState<"game" | "preset" | "world" | "wipe" | null>(null);
@@ -162,6 +163,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
   const presetWorlds = preset ? game?.worlds.filter((item) => item.preset?.id === preset.id || item.profileId === preset.id) ?? [] : game?.worlds ?? [];
   const world = presetWorlds.find((item) => item.id === worldId) ?? presetWorlds[0];
   const currentWipe = world?.wipes.find((wipe) => wipe.state === "current") ?? world?.wipes.at(-1);
+  const selectedWipe = world?.wipes.find((wipe) => wipe.id === wipeId) ?? currentWipe;
   const serverState = deriveServerState(game, snapshot);
   const currentMember = members.find((member) => member.id === session.identity.id) ?? members[0];
 
@@ -187,6 +189,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
   }, [game, gameId, presetId, worldId]);
   useEffect(() => setStorageRequest({ state: "idle", message: "" }), [game?.id, world?.id]);
   useEffect(() => setLifecycleRequest({ state: "idle", message: "" }), [game?.id, world?.id]);
+  useEffect(() => setWipeId(currentWipe?.id ?? null), [world?.id]);
 
   async function refreshControlPlane() {
     setControlPlane({ status: "loading", snapshot: null, error: "" });
@@ -231,6 +234,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
 
   async function runWorldLifecycle(action: "archive" | "regenerate" | "restore" | "purge", backupKey?: string) {
     if (!game || !world) return;
+    if (action === "regenerate" || action === "restore") setWipeId(null);
     setLifecycleRequest({ state: "pending", message: `Requesting ${action}…` });
     try {
       const result = await requestWorldLifecycle(game.id, world.id, action, backupKey, action === "regenerate" ? world.preset?.latestRelease ?? undefined : undefined);
@@ -294,7 +298,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
             <div className="crumb-menu"><button aria-expanded={picker === "game"} disabled={!game} onClick={() => setPicker(picker === "game" ? null : "game")} type="button">{game?.displayName ?? "Loading…"}<Icon name="down" size={14} /></button>{picker === "game" && game && <div className="picker-menu">{games.map((item) => <button className={item.id === game.id ? "selected" : ""} key={item.id} onClick={() => { selectGame(item.id); setPicker(null); }} type="button"><span>{item.code}</span><div><strong>{item.displayName}</strong><small>{item.presets.length} presets · {item.worlds.length} saves</small></div></button>)}</div>}</div>
             {preset && <><Icon name="arrow" size={14} /><div className="crumb-menu"><button aria-expanded={picker === "preset"} onClick={() => setPicker(picker === "preset" ? null : "preset")} type="button">{preset.displayName}<Icon name="down" size={14} /></button>{picker === "preset" && game && <div className="picker-menu world-picker">{game.presets.map((item) => <button className={item.id === preset.id ? "selected" : ""} key={item.id} onClick={() => { setPresetId(item.id); setWorldId(game.worlds.find((candidate) => candidate.preset?.id === item.id || candidate.profileId === item.id)?.id ?? null); setPicker(null); }} type="button"><div><strong>{item.displayName}</strong><small>{item.latestRelease ? `Latest release ${item.latestRelease}` : item.buildStatus}</small></div></button>)}</div>}</div></>}
             {world && <><Icon name="arrow" size={14} /><div className="crumb-menu"><button aria-expanded={picker === "world"} onClick={() => setPicker(picker === "world" ? null : "world")} type="button">{world.displayName}<Icon name="down" size={14} /></button>{picker === "world" && <div className="picker-menu world-picker">{presetWorlds.map((item) => <button className={item.id === world.id ? "selected" : ""} key={item.id} onClick={() => { setWorldId(item.id); setPicker(null); }} type="button"><div><strong>{item.displayName}</strong><small>{item.materialization === "archived" ? "Archived" : item.release.activeRelease ? `Release ${item.release.activeRelease}` : "Not started"}</small></div></button>)}</div>}</div></>}
-            {currentWipe && <><Icon name="arrow" size={14} /><div className="crumb-menu"><button aria-expanded={picker === "wipe"} onClick={() => setPicker(picker === "wipe" ? null : "wipe")} type="button">Wipe #{currentWipe.number}<Icon name="down" size={14} /></button>{picker === "wipe" && world && <div className="picker-menu world-picker">{[...world.wipes].reverse().map((wipe) => <button className={wipe.id === currentWipe.id ? "selected" : ""} key={wipe.id} onClick={() => setPicker(null)} type="button"><div><strong>Wipe #{wipe.number}</strong><small>{wipe.state === "current" ? `Current · release ${world.release.activeRelease ?? wipe.originRelease}` : `Closed · release ${wipe.originRelease}`}</small></div></button>)}</div>}</div></>}
+            {selectedWipe && <><Icon name="arrow" size={14} /><div className="crumb-menu"><button aria-expanded={picker === "wipe"} onClick={() => setPicker(picker === "wipe" ? null : "wipe")} type="button">Wipe #{selectedWipe.number}<Icon name="down" size={14} /></button>{picker === "wipe" && world && <div className="picker-menu world-picker">{[...world.wipes].reverse().map((wipe) => <button className={wipe.id === selectedWipe.id ? "selected" : ""} key={wipe.id} onClick={() => { setWipeId(wipe.id); setPicker(null); }} type="button"><div><strong>Wipe #{wipe.number}</strong><small>{wipe.state === "current" ? `Current · release ${world.release.activeRelease ?? wipe.originRelease}` : `Closed · release ${wipe.originRelease}`}</small></div></button>)}</div>}</div></>}
           </div>
           <div className="top-actions"><button aria-label={`${themeLabel}. Change theme`} className="header-theme-toggle" onClick={toggleTheme} title={themeLabel} type="button"><Icon name={theme === "light" ? "moon" : "sun"} /></button><span className={`top-status ${serverState}`}><i />{serverState}</span></div>
         </header>
@@ -304,7 +308,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
           {page === "dashboard" && (!game || !world) && <ControlPlaneUnavailable state={controlPlane} onRetry={() => void refreshControlPlane()} />}
           {page === "metrics" && <MetricsScreen serverState={serverState} />}
           {page === "console" && <ConsoleScreen serverState={serverState} />}
-          {page === "storage" && game && (preset || world) && <StorageScreen canManageWorld={granted.has("world.manage")} canReadBackups={granted.has("backup.read")} canRestoreBackup={granted.has("backup.restore")} gameId={game.id} lifecycleRequest={lifecycleRequest} onCreateWorld={createWorld} onDownloadPack={granted.has("connection.read") && world ? () => void downloadPack() : undefined} onWorldAction={(action, backupKey) => void runWorldLifecycle(action, backupKey)} packRequest={storageRequest} preset={preset} world={world} />}
+          {page === "storage" && game && (preset || world) && <StorageScreen canManageWorld={granted.has("world.manage")} canReadBackups={granted.has("backup.read")} canRestoreBackup={granted.has("backup.restore")} gameId={game.id} lifecycleRequest={lifecycleRequest} onCreateWorld={createWorld} onDownloadPack={granted.has("connection.read") && world ? () => void downloadPack() : undefined} onSelectWipe={setWipeId} onWorldAction={(action, backupKey) => void runWorldLifecycle(action, backupKey)} packRequest={storageRequest} preset={preset} selectedWipeId={selectedWipe?.id} world={world} />}
           {page === "access" && <AccessScreen bootstrap={bootstrap} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate("access", tab)} roles={roles} tab={accessTab} />}
           {page === "profile" && currentMember && <ProfileScreen member={currentMember} onChange={(next) => setMembers((current) => current.map((member) => member.id === next.id ? next : member))} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
         </div>

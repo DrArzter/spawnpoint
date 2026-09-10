@@ -142,7 +142,10 @@ if [[ -n "${release_bucket}" ]]; then
     desired_release="$(awk -F= '$1 == "desired_release" { print $2 }' <<<"${pointer_output}")"
     payload_dir="${SERVER_DIR}/releases/${desired_release}"
     "${SCRIPT_DIR}/download-release.sh" "${desired_release}" "${payload_dir}" >&2
-    if [[ "${GAME_ID}" == "minecraft" ]]; then
+    if [[ "${WORLD_STORAGE_LAYOUT}" == "generation" ]]; then
+      "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" \
+        "${SPAWNPOINT_WORLD_MODS_DIRECTORY}" >&2
+    elif [[ "${GAME_ID}" == "minecraft" ]]; then
       "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" >&2
     else
       "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" \

@@ -68,7 +68,7 @@ services:
       - "${GRAFANA_BIND_ADDRESS:-127.0.0.1}:3000:3000"
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./observability/grafana/dashboards/shared:/var/lib/grafana/dashboards:ro
+      - ./observability/grafana/dashboards/shared:/var/lib/grafana/dashboards/shared:ro
       - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus

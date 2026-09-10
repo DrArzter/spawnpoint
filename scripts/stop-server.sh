@@ -21,7 +21,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --world)
       world_id="${2:-}"
-      shift 2
+      shift
       ;;
     --no-follow)
       follow=false

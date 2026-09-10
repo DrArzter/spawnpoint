@@ -382,6 +382,14 @@ scripts/migrate-world-state.sh world --apply
 scripts/migrate-world-state.sh vanilla --apply
 ```
 
+For a legacy world that already has host-local data, keep the host stopped and adopt its data and mods into the
+registered first wipe before allowing a start. The command stages and checksum-verifies a copy, atomically publishes
+it, and leaves the legacy directories untouched as rollback evidence:
+
+```bash
+server/scripts/adopt-legacy-world-generation.sh world server/data server/mods
+```
+
 The operation is idempotent. An identical partial write is resumed; an existing object with different content is
 refused. The legacy pointer remains read-only migration evidence and is no longer consulted by normal runtime paths.
 

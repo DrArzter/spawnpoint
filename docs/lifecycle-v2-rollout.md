@@ -97,6 +97,27 @@ record before touching the host, stops the exact active session, and gives targe
 identities. Lifecycle V2 start owns watchdog registration, so promotion has no watchdog bypass or watchdogless success
 path.
 
+## Phase 8 acceptance: V2 release promotion
+
+Production promotion moved to Lifecycle V2 on 2026-09-11 in commit `3e3adb1`. The saved operations plan contained
+exactly two in-place updates — the promotion role policy and state-machine definition — and no additions or
+destructions. A fresh plan after apply reported `No changes`.
+
+The first smoke execution, `promote-20260911T234331Z`, targeted the already-active release `1.1`. It returned
+`already_active` without changing lifecycle revision `23` or starting EC2. Two stopped-origin executions then
+exercised the complete composition:
+
+- `promote-20260911T234437Z` promoted `1.1 → 34246388450.1`, started a new fenced target session, passed health and
+  required watchdog registration, committed active, archived the wipe, and stopped that exact session;
+- `promote-20260911T234937Z` repeated the same path to restore `34246388450.1 → 1.1`.
+
+The verified archives were
+`world-gen-5ef02ba44b4796544786716f89d2e10b-20260911T234833Z-babc578e277684f7fef2356b62d7e2c2974a4d9b0d6690c0e26a8b9f806ae8a0.tar.zst`
+and
+`world-gen-5ef02ba44b4796544786716f89d2e10b-20260911T235231Z-07ff1556eae6ad1d0fbbc23dd0d4d7e10b2a5177a971a069214fc551a28701db.tar.zst`.
+Afterward the wipe pointer read `desired_release=active_release=1.1`, lifecycle revision `45` was
+`stopped/stopped` with no active session or lease, and EC2 was stopped.
+
 The first cutover run also exposed the expected duplicate-stop edge: a user stopped the session before its watchdog's
 next probe, then the watchdog observed stopped EC2 and repeated the exact stop. V2 stop now reads lifecycle before
 acquiring a lease, returns `already_stopped` without mutation for a closed server, and rejects a stale session before

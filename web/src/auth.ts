@@ -80,6 +80,10 @@ export function telegramLoginRedirectUrl(): string {
   return `${window.location.origin}${window.location.pathname}`;
 }
 
+export function telegramBotUrl(): string {
+  return `https://t.me/${telegramBotUsername}`;
+}
+
 function readToken(): string | null {
   return window.sessionStorage.getItem(TOKEN_KEY);
 }

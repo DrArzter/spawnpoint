@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ActiveSession, AuthState, endSession, loadControlPlane, requestAccess, requestCreateWorld, requestPackDownload, requestSessionOperation, requestWorldLifecycle, restoreAuth, telegramBotUsername, telegramLoginRedirectUrl } from "./auth";
+import { ActiveSession, AuthState, endSession, loadControlPlane, requestAccess, requestCreateWorld, requestPackDownload, requestSessionOperation, requestWorldLifecycle, restoreAuth, telegramBotUrl, telegramBotUsername, telegramLoginRedirectUrl } from "./auth";
 import { AccessScreen } from "./screens/AccessScreen";
 import { Avatar } from "./components/Avatar";
 import { Button } from "./components/ui/Button";
@@ -60,7 +60,7 @@ function AuthBoundary({ auth, onChange }: { auth: AuthState; onChange: (state: A
     <section className="auth-panel" aria-busy={auth.status === "loading"}>
       <div className="auth-brand"><span>S</span><strong>Spawnpoint</strong></div>
       {auth.status === "loading" && <><h1>Checking your session</h1><p>Verifying the Telegram account associated with this browser.</p><div className="auth-progress" /></>}
-      {auth.status === "signed-out" && <><h1>Sign in with Telegram</h1><p>Telegram verifies who you are. An Owner separately decides which Spawnpoint actions you may use.</p><TelegramLoginButton onError={() => onChange({ status: "error", message: "Telegram Login could not be loaded. Check your connection and try again." })} /><small>Telegram returns you to this page after confirmation.</small></>}
+      {auth.status === "signed-out" && <><h1>Sign in with Telegram</h1><p>Telegram verifies who you are. An Owner separately decides which Spawnpoint actions you may use.</p><TelegramLoginButton /><small>Telegram returns you to this page after confirmation.</small></>}
       {auth.status === "unconfigured" && <><h1>Authentication is not configured</h1><p>This build has no Spawnpoint access API or Telegram bot username. Configure the deployment before publishing it.</p></>}
       {auth.status === "error" && <><h1>Could not sign in</h1><p>{auth.message}</p><Button onClick={() => onChange({ status: "signed-out" })} variant="primary">Try again</Button></>}
       {visitor && <><Avatar name={visitor.candidate.displayName} photoUrl={visitor.candidate.photoUrl ?? undefined} size="large" /><h1>{requested ? "Access requested" : "You are signed in"}</h1><p>{requested ? "An Owner can now review your Telegram account in Spawnpoint. The panel will remain locked until access is granted." : "This Telegram account is not approved yet. Send a request and an Owner will be able to assign your role."}</p>{!requested && <Button disabled={requesting} onClick={() => void sendRequest()} variant="primary">Request access</Button>}{requestError && <p className="auth-error" role="alert">{requestError}</p>}<small>Telegram ID {visitor.candidate.telegramId}{visitor.candidate.username ? ` · @${visitor.candidate.username}` : ""}</small></>}
@@ -68,8 +68,9 @@ function AuthBoundary({ auth, onChange }: { auth: AuthState; onChange: (state: A
   </main>;
 }
 
-function TelegramLoginButton({ onError }: { onError: () => void }) {
+function TelegramLoginButton() {
   const host = useRef<HTMLDivElement>(null);
+  const [widgetFailed, setWidgetFailed] = useState(false);
 
   useEffect(() => {
     const container = host.current;
@@ -82,12 +83,20 @@ function TelegramLoginButton({ onError }: { onError: () => void }) {
     script.dataset.radius = "6";
     script.dataset.userpic = "false";
     script.dataset.authUrl = telegramLoginRedirectUrl();
-    script.onerror = onError;
+    script.onerror = () => setWidgetFailed(true);
     container.replaceChildren(script);
     return () => container.replaceChildren();
-  }, [onError]);
+  }, []);
 
-  return <div className="telegram-login" ref={host} />;
+  return <div className="telegram-login-options">
+    <div className="telegram-login" ref={host} />
+    {widgetFailed && <p className="auth-login-note" role="status">The browser could not load Telegram Login.</p>}
+    <div className="auth-login-fallback">
+      <span>Sign-in window not opening?</span>
+      <a className="ui-button ui-button-secondary ui-button-medium" href={telegramBotUrl()}>Open bot in Telegram</a>
+      <small>Then tap <strong>Open panel</strong>.</small>
+    </div>
+  </div>;
 }
 
 type ControlPlaneState =

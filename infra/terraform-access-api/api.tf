@@ -104,12 +104,9 @@ data "aws_iam_policy_document" "access_api" {
   }
 
   statement {
-    sid     = "ControlSupportedSession"
-    actions = ["states:StartExecution"]
-    resources = concat(
-      [for machine in local.operation_state_machines : machine.arn if contains(["start", "stop", "world"], machine.type)],
-      [local.watchdog_state_machine_arn],
-    )
+    sid       = "ControlSupportedSession"
+    actions   = ["states:StartExecution"]
+    resources = [for machine in local.operation_state_machines : machine.arn if contains(["start", "stop", "world"], machine.type)]
   }
 
   statement {
@@ -150,7 +147,6 @@ resource "aws_lambda_function" "access_api" {
       RELEASE_BUCKET              = data.aws_s3_bucket.releases.id
       BACKUP_BUCKET               = data.aws_s3_bucket.backups.id
       CONNECTION_HOST             = var.connection_host
-      WATCHDOG_STATE_MACHINE_ARN  = local.watchdog_state_machine_arn
     }
   }
 

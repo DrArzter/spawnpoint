@@ -134,6 +134,52 @@ export function buildStopInput(args: Readonly<{
   };
 }
 
+export function buildLifecycleStartInput(args: Readonly<{
+  serverId: string;
+  operationId: string;
+  sessionId: string;
+  instanceId: string;
+  worldId: string;
+  connectionAddress: string;
+  requestedBy?: string;
+}>) {
+  return {
+    serverId: args.serverId,
+    operationId: args.operationId,
+    sessionId: args.sessionId,
+    leaseTtlSeconds: 1800,
+    watchdogRegistrationLeaseTtlSeconds: 60,
+    watchdogStopLeaseTtlSeconds: 1800,
+    instanceId: args.instanceId,
+    worldId: args.worldId,
+    connectionAddress: args.connectionAddress,
+    ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
+    startTiming: POLL_TIMING,
+    stopTiming: POLL_TIMING,
+    watchdogTiming: WATCHDOG_TIMING,
+  };
+}
+
+export function buildLifecycleStopInput(args: Readonly<{
+  serverId: string;
+  operationId: string;
+  sessionId: string;
+  instanceId: string;
+  worldId: string;
+  requestedBy?: string;
+}>) {
+  return {
+    serverId: args.serverId,
+    operationId: args.operationId,
+    sessionId: args.sessionId,
+    leaseTtlSeconds: 1800,
+    instanceId: args.instanceId,
+    worldId: args.worldId,
+    ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
+    stopTiming: POLL_TIMING,
+  };
+}
+
 export const replies = {
   denied: (): string => "You are not on this server's list. Ask the owner to add your Telegram id.",
 

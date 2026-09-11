@@ -135,6 +135,11 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition     = strcontains(aws_lambda_function.access_api.environment[0].variables.OPERATION_STATE_MACHINES, "spawnpoint-start-server-v2") && strcontains(aws_lambda_function.access_api.environment[0].variables.OPERATION_STATE_MACHINES, "spawnpoint-stop-server-v2")
+    error_message = "Panel session controls must use the fenced Lifecycle V2 wrappers."
+  }
+
+  assert {
     condition     = aws_lambda_function.access_api.environment[0].variables.BOT_TOKEN_PARAMETER == "/spawnpoint/bot/token"
     error_message = "The verifier must read the existing bot token from SecureString rather than Terraform state."
   }

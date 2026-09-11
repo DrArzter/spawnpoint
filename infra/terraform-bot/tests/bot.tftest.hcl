@@ -73,8 +73,7 @@ run "bot_is_an_isolated_webhook" {
     condition = alltrue([
       for key in [
         "START_STATE_MACHINE_ARN",
-        "WATCHDOG_STATE_MACHINE_ARN",
-        "STOP_STATE_MACHINE_ARN",
+        "SERVER_ID",
         "INSTANCE_ID",
         "RELEASE_BUCKET",
         "PANEL_ADDRESS",

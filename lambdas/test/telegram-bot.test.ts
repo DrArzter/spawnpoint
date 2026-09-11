@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  buildLifecycleStartInput,
+  buildLifecycleStopInput,
   buildStartInput,
   buildStopInput,
   buildWatchdogInput,
@@ -203,6 +205,29 @@ test("the stop input builder reproduces the committed example verbatim", async (
     buildStopInput({ operationId: example.operationId, instanceId: example.instanceId, worldId: example.worldId }),
     example,
   );
+});
+
+test("the Lifecycle V2 builders reproduce their committed examples verbatim", async () => {
+  const startUrl = new URL("../../workflows/start-server-v2.input.example.json", import.meta.url);
+  const start = JSON.parse(await readFile(startUrl, "utf8"));
+  assert.deepEqual(buildLifecycleStartInput({
+    serverId: start.serverId,
+    operationId: start.operationId,
+    sessionId: start.sessionId,
+    instanceId: start.instanceId,
+    worldId: start.worldId,
+    connectionAddress: start.connectionAddress,
+  }), start);
+
+  const stopUrl = new URL("../../workflows/stop-server-v2.input.example.json", import.meta.url);
+  const stop = JSON.parse(await readFile(stopUrl, "utf8"));
+  assert.deepEqual(buildLifecycleStopInput({
+    serverId: stop.serverId,
+    operationId: stop.operationId,
+    sessionId: stop.sessionId,
+    instanceId: stop.instanceId,
+    worldId: stop.worldId,
+  }), stop);
 });
 
 test("a requester is attributed when present, and the examples stay the ownerless case", async () => {

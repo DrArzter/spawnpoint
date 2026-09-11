@@ -9,6 +9,12 @@ confirmed=false
 # The machines require a world and have no default; this is the workstation's
 # one remaining assumption.
 world_id="${SPAWNPOINT_WORLD:-world}"
+server_id="${SPAWNPOINT_SERVER_ID:-}"
+
+game_for_world() {
+  jq -r --arg id "$1" '.worlds[] | select(.id == $id) | .game // "minecraft"' \
+    "$(dirname -- "${BASH_SOURCE[0]}")/../server/worlds/catalog.json"
+}
 
 usage() {
   printf 'usage: %s [--yes] [--no-follow] [--world <world-id>]\n' "$0" >&2
@@ -46,15 +52,27 @@ for command in aws jq; do
   }
 done
 
+if [[ -z "${server_id}" ]]; then
+  server_id="$(game_for_world "${world_id}")"
+fi
+[[ -n "${server_id}" ]] || {
+  printf 'error: unknown world: %s\n' "${world_id}" >&2
+  exit 1
+}
+[[ "${server_id}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || {
+  printf 'error: invalid server id: %s\n' "${server_id}" >&2
+  exit 1
+}
+
 state_machine_arn="$(
   aws stepfunctions list-state-machines \
     --profile "${profile}" \
     --region "${region}" \
-    --query 'stateMachines[?name==`spawnpoint-stop-server`].stateMachineArn' \
+    --query 'stateMachines[?name==`spawnpoint-stop-server-v2`].stateMachineArn' \
     --output text
 )"
-[[ "${state_machine_arn}" == arn:aws:states:*:stateMachine:spawnpoint-stop-server ]] || {
-  printf 'error: expected exactly one spawnpoint-stop-server state machine\n' >&2
+[[ "${state_machine_arn}" == arn:aws:states:*:stateMachine:spawnpoint-stop-server-v2 ]] || {
+  printf 'error: expected exactly one spawnpoint-stop-server-v2 state machine\n' >&2
   exit 1
 }
 
@@ -103,16 +121,34 @@ if ! ${confirmed}; then
 fi
 
 operation_id="manual-stop-$(date -u +%Y%m%dT%H%M%SZ)"
+session_id="$(
+  aws dynamodb get-item \
+    --table-name spawnpoint-lifecycle-v2 \
+    --key "{\"server_id\":{\"S\":\"${server_id}\"}}" \
+    --consistent-read \
+    --profile "${profile}" \
+    --region "${region}" \
+    --query 'Item.lifecycle.M.activeSessionId.S' \
+    --output text
+)"
+if [[ "${session_id}" == "None" ]]; then
+  session_id="closed-session"
+fi
 input="$(
   jq -cn \
+    --arg server_id "${server_id}" \
     --arg operation_id "${operation_id}" \
+    --arg session_id "${session_id}" \
     --arg instance_id "${instance_id}" \
     --arg world_id "${world_id}" \
     '{
+      serverId: $server_id,
       operationId: $operation_id,
+      sessionId: $session_id,
+      leaseTtlSeconds: 1800,
       instanceId: $instance_id,
       worldId: $world_id,
-      timing: {
+      stopTiming: {
         ssmPollSeconds: 10,
         commandPollSeconds: 15,
         instancePollSeconds: 10,

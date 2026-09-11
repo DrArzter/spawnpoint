@@ -82,14 +82,21 @@ working control plane.
 
 ## Current phase
 
-Phase 5 is deployed but remains inert. The pure model is tested; Terraform owns the empty protected table and a short
-TypeScript coordinator Lambda with consistent reads plus revision-guarded writes. The host now also has the separate
-`check-session-activity.sh` contract: only a successfully parsed zero-player RCON response is `idle`; stopped compute,
-RCON failure and an unparseable response are `unknown`. No workflow calls the probe yet, no V1 workflow has coordinator
-invoke permission, and production lifecycle behaviour remains unchanged. The V2 start, stop and watchdog definitions
-now complete the session contract in code: fenced session transitions surround the accepted V1 host operations, and
-watchdog observations are idempotent and session-scoped. Their isolated operations-root plan was exactly **9 add / 0
-change / 0 destroy**, and the post-apply plan reported `No changes`. The coordinator bundle and V1 stop definition were
-then updated independently in two reviewed **0 add / 1 in-place change / 0 destroy** targeted plans. Phase 6 begins by
-delivering the matching `stop-session.sh` exit-code contract to the stopped host, before any explicit V2 execution;
-V1 remains the owner-script default meanwhile.
+Phase 7 cut over on 2026-09-11. A direct production acceptance first exercised
+`starting → ready → stopping → stopped` with one session ID and fenced leases. The verified stop uploaded a
+419,378,199-byte world archive before EC2 stopped. The panel then started the same world through the deployed Access
+API, proving that the public path resolves `spawnpoint-start-server-v2`; that wrapper now launches the one V2 watchdog
+only after readiness and compensates with a verified stop if the watchdog cannot be launched.
+
+The panel, Telegram bot and owner scripts now call only V2 start/stop entry points. V1 remains deployed as the private
+host adapter composed by V2; it is no longer a user-facing resolver. World archive/regenerate operations pass the
+active session ID through the same V2 verified stop instead of bypassing lifecycle state.
+
+The first cutover run also exposed the expected duplicate-stop edge: a user stopped the session before its watchdog's
+next probe, then the watchdog observed stopped EC2 and repeated the exact stop. V2 stop now reads lifecycle before
+acquiring a lease, returns `already_stopped` without mutation for a closed server, and rejects a stale session before
+it can take a lease. Production idempotency acceptance returned `SUCCEEDED / already_stopped`; the leaked pre-fix lease
+was taken over with fencing token 7 and released, leaving `desired=stopped`, `observed=stopped`, no session and no lease.
+
+Phase 8 retirement is deliberately deferred until the observation period proves no hidden caller still invokes a V1
+ARN. All three isolated Terraform roots reported `No changes` immediately after cutover.

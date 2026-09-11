@@ -6,8 +6,9 @@ import { GetObjectCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { randomUUID } from "node:crypto";
 
-import { buildStartInput, buildWatchdogInput } from "../../domain/telegram-bot.ts";
+import { buildLifecycleStartInput } from "../../domain/telegram-bot.ts";
 import { connectPortForWorld } from "../../control-plane/catalog.ts";
 import { clientPackKey } from "../../control-plane/release-artifacts.ts";
 import { S3ReleaseStateStore } from "../../control-plane/s3-release-state-store.ts";
@@ -72,14 +73,15 @@ export async function instanceState(): Promise<string> {
 }
 
 export async function startIsRunning(): Promise<boolean> {
-  const running = await sfn.send(
-    new ListExecutionsCommand({
+  const [running, host] = await Promise.all([
+    sfn.send(new ListExecutionsCommand({
       stateMachineArn: env("START_STATE_MACHINE_ARN"),
       statusFilter: "RUNNING",
       maxResults: 1,
-    }),
-  );
-  return (running.executions ?? []).length > 0;
+    })),
+    instanceState(),
+  ]);
+  return (running.executions ?? []).length > 0 || host !== "stopped";
 }
 
 // One session = the start machine plus its watchdog, attributed to whoever asked.
@@ -90,29 +92,16 @@ export async function startSession(requestedBy: string): Promise<string> {
       stateMachineArn: env("START_STATE_MACHINE_ARN"),
       name: operationId,
       input: JSON.stringify(
-        buildStartInput({
+        buildLifecycleStartInput({
+          serverId: env("SERVER_ID"),
           operationId,
+          sessionId: `session-${randomUUID()}`,
           instanceId: env("INSTANCE_ID"),
           // The bot has no world picker yet, so it names the world it is
           // configured for rather than relying on a machine default, which no
           // longer exists.
           worldId: env("WORLD_ID"),
           connectionAddress: connectionAddress(),
-          requestedBy,
-        }),
-      ),
-    }),
-  );
-  await sfn.send(
-    new StartExecutionCommand({
-      stateMachineArn: env("WATCHDOG_STATE_MACHINE_ARN"),
-      name: operationId,
-      input: JSON.stringify(
-        buildWatchdogInput({
-          operationId,
-          instanceId: env("INSTANCE_ID"),
-          worldId: env("WORLD_ID"),
-          stopStateMachineArn: env("STOP_STATE_MACHINE_ARN"),
           requestedBy,
         }),
       ),

@@ -48,7 +48,7 @@ data "aws_iam_policy_document" "lifecycle_v2_start" {
   statement {
     sid       = "StartOnlyAcceptedHostOperations"
     actions   = ["states:StartExecution"]
-    resources = [local.start_state_machine_arn, local.stop_state_machine_arn]
+    resources = [local.start_state_machine_arn, local.stop_state_machine_arn, local.lifecycle_v2_watchdog_arn]
   }
 
   statement {
@@ -81,6 +81,7 @@ resource "aws_sfn_state_machine" "lifecycle_v2_start" {
     coordinator_function_arn   = local.lifecycle_v2_coordinator_arn
     start_v1_state_machine_arn = local.start_state_machine_arn
     stop_v1_state_machine_arn  = local.stop_state_machine_arn
+    watchdog_state_machine_arn = local.lifecycle_v2_watchdog_arn
   })
 
   tags = {

@@ -204,11 +204,12 @@ async function controlPlane(identity: Identity): Promise<Response> {
 }
 
 async function controlSession(identity: Identity, action: SessionAction, gameId: string, worldId: string): Promise<Response> {
-  const [hosts, operations, presets, worldRecords] = await Promise.all([
+  const [hosts, operations, presets, worldRecords, lifecycle] = await Promise.all([
     awsControlPlaneSources.listHosts(),
     awsControlPlaneSources.listRunningOperations(),
     awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
     awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
+    awsControlPlaneSources.readLifecycle(gameId),
   ]);
   const effectiveCatalog = catalogWithPresets(presets, gameCatalog, worldRecords);
   const plan = planSessionOperation(gameId, worldId, action, hosts, operations, effectiveCatalog);
@@ -220,9 +221,14 @@ async function controlSession(identity: Identity, action: SessionAction, gameId:
     const game = effectiveCatalog.find((candidate) => candidate.id === gameId)!;
     const connectionHost = process.env.CONNECTION_HOST;
     if (!connectionHost) throw new Error("missing environment variable: CONNECTION_HOST");
-    await startSessionExecution(operationId, plan.host.providerRef, requestedBy, worldId, `${connectionHost}:${game.connectPort}`);
+    await startSessionExecution(operationId, plan.host.providerRef, requestedBy, gameId, worldId, `${connectionHost}:${game.connectPort}`);
   }
-  else await stopSessionExecution(operationId, plan.host.providerRef, requestedBy, worldId);
+  else {
+    if (lifecycle?.activeSessionId === null || lifecycle?.activeSessionId === undefined) {
+      return response(409, { error: "active_session_unavailable" });
+    }
+    await stopSessionExecution(operationId, plan.host.providerRef, requestedBy, gameId, lifecycle.activeSessionId, worldId);
+  }
   return response(202, { result: "requested", operationId });
 }
 
@@ -278,10 +284,11 @@ async function controlWorldLifecycle(
   if (action === "regenerate" && (release === undefined || !/^[0-9]+\.[0-9]+$/.test(release))) {
     return response(400, { error: "invalid_release" });
   }
-  const [hosts, operations, worldRecords] = await Promise.all([
+  const [hosts, operations, worldRecords, lifecycle] = await Promise.all([
     awsControlPlaneSources.listHosts(),
     awsControlPlaneSources.listRunningOperations(),
     awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
+    awsControlPlaneSources.readLifecycle(gameId),
   ]);
   const record = worldRecords.find((candidate) => candidate.gameId === gameId && candidate.worldId === worldId);
   if (record === undefined) return response(404, { error: "unknown_materialized_world" });
@@ -293,9 +300,11 @@ async function controlWorldLifecycle(
     return response(409, { error: "host_transitioning" });
   }
   const operationId = `panel-world-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
+  const stopRequired = worldLifecycleNeedsStop(record.status, host.state);
+  if (stopRequired && !lifecycle?.activeSessionId) return response(409, { error: "active_session_unavailable" });
   await worldLifecycleExecution(
-    operationId, host.providerRef, `identity:${identity.id}`, worldId, action, backupKey, release,
-    worldLifecycleNeedsStop(record.status, host.state), record.currentGeneration.id,
+    operationId, host.providerRef, `identity:${identity.id}`, gameId, lifecycle?.activeSessionId ?? "none", worldId, action, backupKey, release,
+    stopRequired, record.currentGeneration.id,
   );
   return response(202, { result: "requested", operationId });
 }

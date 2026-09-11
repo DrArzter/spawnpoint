@@ -23,7 +23,7 @@ import { S3WorldRepository } from "./s3-world-repository.ts";
 import { newWorldRecord, type WorldRecord } from "./world-registry.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
-import { buildStartInput, buildStopInput, buildWatchdogInput } from "../domain/telegram-bot.ts";
+import { buildLifecycleStartInput, buildLifecycleStopInput, buildStopInput } from "../domain/telegram-bot.ts";
 import type { ControlPlaneSources, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 
 type MachineType = OperationObservation["type"];
@@ -238,17 +238,16 @@ export async function startSessionExecution(
   operationId: string,
   instanceId: string,
   requestedBy: string,
+  serverId: string,
   worldId: string,
   connectionAddress: string,
 ): Promise<string> {
   requireWorldId(worldId);
   const started = await sfn.send(new StartExecutionCommand({
     stateMachineArn: machineArn("start"), name: operationId,
-    input: JSON.stringify(buildStartInput({ operationId, instanceId, worldId, requestedBy, connectionAddress })),
-  }));
-  await sfn.send(new StartExecutionCommand({
-    stateMachineArn: requiredEnv("WATCHDOG_STATE_MACHINE_ARN"), name: operationId,
-    input: JSON.stringify(buildWatchdogInput({ operationId, instanceId, worldId, requestedBy, stopStateMachineArn: machineArn("stop") })),
+    input: JSON.stringify(buildLifecycleStartInput({
+      serverId, operationId, sessionId: `session-${randomUUID()}`, instanceId, worldId, requestedBy, connectionAddress,
+    })),
   }));
   if (!started.executionArn) throw new Error("start execution did not return an ARN");
   return started.executionArn;
@@ -258,12 +257,14 @@ export async function stopSessionExecution(
   operationId: string,
   instanceId: string,
   requestedBy: string,
+  serverId: string,
+  sessionId: string,
   worldId: string,
 ): Promise<string> {
   requireWorldId(worldId);
   const stopped = await sfn.send(new StartExecutionCommand({
     stateMachineArn: machineArn("stop"), name: operationId,
-    input: JSON.stringify(buildStopInput({ operationId, instanceId, worldId, requestedBy })),
+    input: JSON.stringify(buildLifecycleStopInput({ serverId, operationId, sessionId, instanceId, worldId, requestedBy })),
   }));
   if (!stopped.executionArn) throw new Error("stop execution did not return an ARN");
   return stopped.executionArn;
@@ -273,6 +274,8 @@ export async function worldLifecycleExecution(
   operationId: string,
   instanceId: string,
   requestedBy: string,
+  serverId: string,
+  sessionId: string,
   worldId: string,
   action: "archive" | "regenerate" | "restore" | "purge",
   backupKey: string | undefined,
@@ -285,7 +288,7 @@ export async function worldLifecycleExecution(
   const started = await sfn.send(new StartExecutionCommand({
     stateMachineArn: machineArn("world"), name: operationId,
     input: JSON.stringify({
-      operationId, instanceId, requestedBy, worldId, action, stopRequired, targetGenerationId,
+      serverId, operationId, sessionId, leaseTtlSeconds: 1800, instanceId, requestedBy, worldId, action, stopRequired, targetGenerationId,
       stopTiming: stop.timing,
       requestedAt: new Date().toISOString(),
       generationUuid: randomUUID(),

@@ -5,6 +5,7 @@
   "registrationLeaseTtlSeconds": 60,
   "stopLeaseTtlSeconds": 1800,
   "instanceId": "i-0123456789abcdef0",
+  "worldId": "world",
   "timing": {
     "checkIntervalSeconds": 300,
     "emptyChecksRequired": 3,

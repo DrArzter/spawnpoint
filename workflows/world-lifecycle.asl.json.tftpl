@@ -19,11 +19,14 @@
         "StateMachineArn": "${stop_state_machine_arn}",
         "Name.$": "States.Format('{}-stop', $.operationId)",
         "Input": {
+          "serverId.$": "$.serverId",
           "operationId.$": "$.operationId",
+          "sessionId.$": "$.sessionId",
+          "leaseTtlSeconds.$": "$.leaseTtlSeconds",
           "instanceId.$": "$.instanceId",
           "worldId.$": "$.worldId",
           "requestedBy.$": "$.requestedBy",
-          "timing.$": "$.stopTiming"
+          "stopTiming.$": "$.stopTiming"
         }
       },
       "ResultPath": "$.verifiedStop",

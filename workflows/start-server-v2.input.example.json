@@ -3,7 +3,10 @@
   "operationId": "manual-v2-example-001",
   "sessionId": "session-example-001",
   "leaseTtlSeconds": 1800,
+  "watchdogRegistrationLeaseTtlSeconds": 60,
+  "watchdogStopLeaseTtlSeconds": 1800,
   "instanceId": "i-0123456789abcdef0",
+  "worldId": "world",
   "connectionAddress": "172.29.23.24:25565",
   "startTiming": {
     "instancePollSeconds": 10,
@@ -20,5 +23,14 @@
     "maxInstancePolls": 30,
     "maxSsmPolls": 30,
     "maxCommandPolls": 60
+  },
+  "watchdogTiming": {
+    "checkIntervalSeconds": 300,
+    "emptyChecksRequired": 3,
+    "maxTotalChecks": 96,
+    "maxConsecutiveProbeFailures": 6,
+    "maxStopRefusals": 3,
+    "probePollSeconds": 10,
+    "maxProbePolls": 30
   }
 }

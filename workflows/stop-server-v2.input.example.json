@@ -4,6 +4,7 @@
   "sessionId": "session-example-001",
   "leaseTtlSeconds": 1800,
   "instanceId": "i-0123456789abcdef0",
+  "worldId": "world",
   "stopTiming": {
     "instancePollSeconds": 10,
     "ssmPollSeconds": 10,

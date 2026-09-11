@@ -60,12 +60,24 @@ test("V2 stop holds one fenced lease across the accepted verified stop", async (
   const definition = await loadDefinition();
 
   assert.equal(definition.QueryLanguage, "JSONPath");
+  assert.equal(state(definition, "Read Lifecycle").Next, "Route Lifecycle");
+  assert.equal(state(definition, "Route Lifecycle").Default, "Stale Session");
   assert.equal(state(definition, "Acquire Stop Lease").Next, "Begin Stopping Session");
   assert.equal(state(definition, "Begin Stopping Session").Next, "Stop Accepted V1");
   assert.equal(state(definition, "Stop Accepted V1").Resource, "arn:aws:states:::states:startExecution.sync:2");
   assert.equal(state(definition, "Stop Accepted V1").Next, "Mark Session Stopped");
   assert.equal(state(definition, "Mark Session Stopped").Next, "Release Stop Lease");
   assert.equal(state(definition, "Release Stop Lease").Next, "Stopped");
+});
+
+test("an already stopped server exits before acquiring a lease", async () => {
+  const definition = await loadDefinition();
+  const route = state(definition, "Route Lifecycle");
+
+  assert.match(JSON.stringify(route), /Already Stopped/);
+  assert.equal(state(definition, "Already Stopped").Type, "Pass");
+  assert.equal(state(definition, "Already Stopped").End, true);
+  assert.equal(state(definition, "Stale Session").Type, "Fail");
 });
 
 test("failed host stop never claims lifecycle is stopped", async () => {

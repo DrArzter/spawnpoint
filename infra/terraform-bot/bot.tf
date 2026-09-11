@@ -22,12 +22,9 @@ resource "aws_iam_role_policy_attachment" "bot_logs" {
 
 data "aws_iam_policy_document" "bot" {
   statement {
-    sid     = "StartSessionMachines"
-    actions = ["states:StartExecution"]
-    resources = [
-      local.start_state_machine_arn,
-      local.idle_watchdog_state_machine_arn,
-    ]
+    sid       = "StartSessionMachines"
+    actions   = ["states:StartExecution"]
+    resources = [local.start_state_machine_arn]
   }
 
   statement {
@@ -82,20 +79,19 @@ resource "aws_lambda_function" "bot" {
 
   environment {
     variables = {
-      START_STATE_MACHINE_ARN    = local.start_state_machine_arn
-      STOP_STATE_MACHINE_ARN     = local.stop_state_machine_arn
-      WATCHDOG_STATE_MACHINE_ARN = local.idle_watchdog_state_machine_arn
-      INSTANCE_ID                = data.aws_instance.game_host.id
-      RELEASE_BUCKET             = data.aws_s3_bucket.releases.id
-      WORLD_NAME                 = "world"
-      WORLD_ID                   = "world"
-      CONNECTION_HOST            = var.connection_host
-      PANEL_ADDRESS              = var.panel_address
-      ZEROTIER_NETWORK_ID        = var.zerotier_network_id
-      MINI_APP_URL               = var.mini_app_url
-      BOT_TOKEN_PARAMETER        = "/spawnpoint/bot/token"
-      WEBHOOK_SECRET_PARAMETER   = "/spawnpoint/bot/webhook-secret"
-      ACCESS_TABLE_NAME          = data.aws_dynamodb_table.access.name
+      START_STATE_MACHINE_ARN  = local.start_state_machine_arn
+      SERVER_ID                = "minecraft"
+      INSTANCE_ID              = data.aws_instance.game_host.id
+      RELEASE_BUCKET           = data.aws_s3_bucket.releases.id
+      WORLD_NAME               = "world"
+      WORLD_ID                 = "world"
+      CONNECTION_HOST          = var.connection_host
+      PANEL_ADDRESS            = var.panel_address
+      ZEROTIER_NETWORK_ID      = var.zerotier_network_id
+      MINI_APP_URL             = var.mini_app_url
+      BOT_TOKEN_PARAMETER      = "/spawnpoint/bot/token"
+      WEBHOOK_SECRET_PARAMETER = "/spawnpoint/bot/webhook-secret"
+      ACCESS_TABLE_NAME        = data.aws_dynamodb_table.access.name
     }
   }
 

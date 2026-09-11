@@ -9,7 +9,41 @@
         "request.$": "$",
         "coordination": {}
       },
-      "Next": "Acquire Stop Lease"
+      "Next": "Read Lifecycle"
+    },
+    "Read Lifecycle": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "get",
+          "serverId.$": "$.request.serverId"
+        }
+      },
+      "ResultSelector": {
+        "record.$": "$.Payload.record"
+      },
+      "ResultPath": "$.coordination.lifecycle",
+      "Next": "Route Lifecycle"
+    },
+    "Route Lifecycle": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            { "Variable": "$.coordination.lifecycle.record.desiredState", "StringEquals": "stopped" },
+            { "Variable": "$.coordination.lifecycle.record.observedState", "StringEquals": "stopped" }
+          ],
+          "Next": "Already Stopped"
+        },
+        {
+          "Variable": "$.coordination.lifecycle.record.activeSessionId",
+          "StringEqualsPath": "$.request.sessionId",
+          "Next": "Acquire Stop Lease"
+        }
+      ],
+      "Default": "Stale Session"
     },
     "Acquire Stop Lease": {
       "Type": "Task",
@@ -164,6 +198,21 @@
         "hostStop.$": "$.hostStop.Output"
       },
       "End": true
+    },
+    "Already Stopped": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "sessionId.$": "$.request.sessionId",
+        "serverId.$": "$.request.serverId",
+        "status": "already_stopped"
+      },
+      "End": true
+    },
+    "Stale Session": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.V2StaleSession",
+      "Cause": "The stop request does not belong to the active server session."
     },
     "Verified Stop Failed": {
       "Type": "Fail",

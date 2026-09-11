@@ -138,7 +138,7 @@ data "aws_iam_policy_document" "world_lifecycle_workflow" {
   }
   statement {
     actions   = ["states:DescribeExecution", "states:StopExecution"]
-    resources = ["arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:execution:spawnpoint-stop-server:*"]
+    resources = ["arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:execution:spawnpoint-stop-server-v2:*"]
   }
   statement {
     actions   = ["events:PutRule", "events:PutTargets", "events:DescribeRule"]

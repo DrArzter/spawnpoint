@@ -121,7 +121,51 @@
         }
       },
       "ResultPath": null,
+      "Next": "Start Session Watchdog"
+    },
+    "Start Session Watchdog": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:sfn:startExecution",
+      "Parameters": {
+        "StateMachineArn": "${watchdog_state_machine_arn}",
+        "Name.$": "States.Format('{}-watchdog', $.request.operationId)",
+        "Input": {
+          "serverId.$": "$.request.serverId",
+          "operationId.$": "States.Format('{}-watchdog', $.request.operationId)",
+          "sessionId.$": "$.request.sessionId",
+          "registrationLeaseTtlSeconds.$": "$.request.watchdogRegistrationLeaseTtlSeconds",
+          "stopLeaseTtlSeconds.$": "$.request.watchdogStopLeaseTtlSeconds",
+          "instanceId.$": "$.request.instanceId",
+          "worldId.$": "$.request.worldId",
+          "timing.$": "$.request.watchdogTiming",
+          "stopTiming.$": "$.request.stopTiming"
+        }
+      },
+      "ResultPath": "$.watchdog",
+      "Catch": [{
+        "ErrorEquals": ["States.ALL"],
+        "ResultPath": "$.watchdogFailure",
+        "Next": "Acquire Watchdog Compensation Lease"
+      }],
       "Next": "Ready"
+    },
+    "Acquire Watchdog Compensation Lease": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "acquireLease",
+          "serverId.$": "$.request.serverId",
+          "operationId.$": "States.Format('{}-watchdog-compensation', $.request.operationId)",
+          "ttlSeconds.$": "$.request.leaseTtlSeconds"
+        }
+      },
+      "ResultSelector": {
+        "ownership.$": "$.Payload.ownership"
+      },
+      "ResultPath": "$.coordination.lease",
+      "Next": "Begin Compensating Stop"
     },
     "Ready": {
       "Type": "Pass",
@@ -159,6 +203,7 @@
         "Input": {
           "operationId.$": "$.request.operationId",
           "instanceId.$": "$.request.instanceId",
+          "worldId.$": "$.request.worldId",
           "timing.$": "$.request.stopTiming"
         }
       },
@@ -204,7 +249,7 @@
     "Start Failed And Compensated": {
       "Type": "Fail",
       "Error": "Spawnpoint.V2StartFailedCompensated",
-      "Cause": "The accepted host start failed; the host was stopped and lifecycle state returned to stopped."
+      "Cause": "The host start or required watchdog launch failed; the host was stopped and lifecycle state returned to stopped."
     },
     "Start Compensation Failed": {
       "Type": "Fail",

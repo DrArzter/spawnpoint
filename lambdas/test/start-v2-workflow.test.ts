@@ -8,6 +8,7 @@ type State = {
   End?: boolean;
   Default?: string;
   Resource?: string;
+  Parameters?: Record<string, unknown>;
   Choices?: Array<Record<string, unknown>>;
   Catch?: Array<{ Next: string }>;
 };
@@ -65,7 +66,11 @@ test("V2 start owns lifecycle around the accepted V1 host operation", async () =
   assert.equal(state(definition, "Start Accepted V1").Resource, "arn:aws:states:::states:startExecution.sync:2");
   assert.equal(state(definition, "Start Accepted V1").Next, "Mark Session Ready");
   assert.equal(state(definition, "Mark Session Ready").Next, "Release Start Lease");
-  assert.equal(state(definition, "Release Start Lease").Next, "Ready");
+  assert.equal(state(definition, "Release Start Lease").Next, "Start Session Watchdog");
+  assert.equal(state(definition, "Start Session Watchdog").Resource, "arn:aws:states:::aws-sdk:sfn:startExecution");
+  assert.equal(state(definition, "Start Session Watchdog").Next, "Ready");
+  assert.equal(state(definition, "Start Session Watchdog").Catch?.[0]?.Next, "Acquire Watchdog Compensation Lease");
+  assert.equal(state(definition, "Acquire Watchdog Compensation Lease").Next, "Begin Compensating Stop");
 });
 
 test("a failed V1 start is durably stopped before lifecycle is cleared", async () => {
@@ -74,6 +79,10 @@ test("a failed V1 start is durably stopped before lifecycle is cleared", async (
   assert.equal(state(definition, "Start Accepted V1").Catch?.[0]?.Next, "Begin Compensating Stop");
   assert.equal(state(definition, "Begin Compensating Stop").Next, "Stop Accepted V1");
   assert.equal(state(definition, "Stop Accepted V1").Resource, "arn:aws:states:::states:startExecution.sync:2");
+  assert.equal(
+    (state(definition, "Stop Accepted V1").Parameters?.Input as Record<string, unknown>)["worldId.$"],
+    "$.request.worldId",
+  );
   assert.equal(state(definition, "Stop Accepted V1").Next, "Mark Compensated Session Stopped");
   assert.equal(state(definition, "Mark Compensated Session Stopped").Next, "Release Compensating Lease");
   assert.equal(state(definition, "Release Compensating Lease").Next, "Start Failed And Compensated");

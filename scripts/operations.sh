@@ -25,8 +25,8 @@ for command in aws jq; do
 done
 
 state_machines="$(aws stepfunctions list-state-machines --profile "${profile}" --region "${region}" --output json)"
-start_arn="$(jq -r '.stateMachines[] | select(.name == "spawnpoint-start-server") | .stateMachineArn' <<<"${state_machines}")"
-stop_arn="$(jq -r '.stateMachines[] | select(.name == "spawnpoint-stop-server") | .stateMachineArn' <<<"${state_machines}")"
+start_arn="$(jq -r '.stateMachines[] | select(.name == "spawnpoint-start-server-v2") | .stateMachineArn' <<<"${state_machines}")"
+stop_arn="$(jq -r '.stateMachines[] | select(.name == "spawnpoint-stop-server-v2") | .stateMachineArn' <<<"${state_machines}")"
 [[ -n "${start_arn}" && -n "${stop_arn}" ]] || {
   printf 'error: Spawnpoint lifecycle state machines not found\n' >&2
   exit 1
@@ -42,4 +42,3 @@ jq -nr --argjson start "$(jq .executions <<<"${start}")" --argjson stop "$(jq .e
   | [.operation, .status, .startDate, (.stopDate // "-"), .name]
   | @tsv
 '
-

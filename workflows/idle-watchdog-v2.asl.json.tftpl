@@ -376,6 +376,11 @@
       "Choices": [
         {
           "Variable": "$.observed.stopError.Cause",
+          "StringMatches": "*Spawnpoint.V2StaleSession*",
+          "Next": "Session Superseded"
+        },
+        {
+          "Variable": "$.observed.stopError.Cause",
           "StringMatches": "*Spawnpoint.V2StopRefusedPlayersOnline*",
           "Next": "Count Stop Refusal"
         }
@@ -426,9 +431,20 @@
       },
       "ResultPath": "$.observed.stop",
       "Catch": [
-        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.stopError", "Next": "Watchdog Stop Failing" }
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.stopError", "Next": "Route Capped Stop Failure" }
       ],
       "Next": "Stopped At Cap"
+    },
+    "Route Capped Stop Failure": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.stopError.Cause",
+          "StringMatches": "*Spawnpoint.V2StaleSession*",
+          "Next": "Session Superseded"
+        }
+      ],
+      "Default": "Watchdog Stop Failing"
     },
     "Reconcile Externally Stopped Host": {
       "Type": "Task",
@@ -447,7 +463,31 @@
         }
       },
       "ResultPath": "$.observed.stop",
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.stopError", "Next": "Route Reconcile Failure" }
+      ],
       "Next": "Host Stopped Externally"
+    },
+    "Route Reconcile Failure": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.stopError.Cause",
+          "StringMatches": "*Spawnpoint.V2StaleSession*",
+          "Next": "Session Superseded"
+        }
+      ],
+      "Default": "Watchdog Stop Failing"
+    },
+    "Session Superseded": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "sessionId.$": "$.request.sessionId",
+        "status": "session_superseded",
+        "checksTotal.$": "$.counters.total"
+      },
+      "End": true
     },
     "Host Stopped Externally": {
       "Type": "Pass",

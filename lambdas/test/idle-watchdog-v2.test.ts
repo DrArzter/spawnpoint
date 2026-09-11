@@ -103,3 +103,16 @@ test("idle and capped stops target only the V2 session-scoped stop machine", asy
   assert.equal(state(definition, "Route Idle Stop Failure").Default, "Watchdog Stop Failing");
   assert.equal(state(definition, "Count Stop Refusal").Next, "Stop Refusal Limit Reached");
 });
+
+test("a stale watchdog exits successfully after a newer session owns lifecycle", async () => {
+  const definition = await loadDefinition();
+  for (const name of ["Route Idle Stop Failure", "Route Capped Stop Failure", "Route Reconcile Failure"]) {
+    const route = state(definition, name);
+    const stale = route.Choices?.find((choice) => JSON.stringify(choice).includes("V2StaleSession"));
+    assert.equal(stale?.Next, "Session Superseded");
+    assert.equal(route.Default, "Watchdog Stop Failing");
+  }
+  assert.equal(state(definition, "Stop Capped Session").Catch?.[0]?.Next, "Route Capped Stop Failure");
+  assert.equal(state(definition, "Reconcile Externally Stopped Host").Catch?.[0]?.Next, "Route Reconcile Failure");
+  assert.equal(state(definition, "Session Superseded").End, true);
+});

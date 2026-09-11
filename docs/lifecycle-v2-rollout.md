@@ -118,6 +118,13 @@ and
 Afterward the wipe pointer read `desired_release=active_release=1.1`, lifecycle revision `45` was
 `stopped/stopped` with no active session or lease, and EC2 was stopped.
 
+The drill also caught a clean-handoff reporting defect. The first target watchdog woke while the second target
+session was already stopping: its fenced stop correctly returned `V2StaleSession`, but the watchdog reported that
+safe loss of ownership as a failure. All watchdog stop branches now terminate successfully as
+`session_superseded` for that one error; backup, host-stop and unknown failures remain loud. The second watchdog,
+which woke after lifecycle was fully stopped, completed through the existing idempotent path without changing
+revision `45`.
+
 The first cutover run also exposed the expected duplicate-stop edge: a user stopped the session before its watchdog's
 next probe, then the watchdog observed stopped EC2 and repeated the exact stop. V2 stop now reads lifecycle before
 acquiring a lease, returns `already_stopped` without mutation for a closed server, and rejects a stale session before

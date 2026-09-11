@@ -65,8 +65,8 @@ test("desired is written before any host action, per ADR-0030", async () => {
   const definition = await loadDefinition();
   assert.equal(state(definition, "Verify Release Published").Next, "Prepare Release");
   assert.equal(state(definition, "Prepare Release").Resource, "arn:aws:states:::lambda:invoke");
-  assert.equal(state(definition, "Already Active").Default, "Describe Instance");
-  assert.equal(state(definition, "Mark Origin Running").Next, "Stop Session");
+  assert.equal(state(definition, "Already Active").Default, "Read Lifecycle");
+  assert.equal(state(definition, "Mark Origin Running").Next, "Stop Origin Session");
   assert.equal(state(definition, "Mark Origin Stopped").Next, "Start With Target");
 });
 
@@ -84,7 +84,7 @@ test("active commits only after the target start succeeded", async () => {
   assert.equal(payload["generationId.$"], "$.request.generationId");
 });
 
-test("rollback is the same mechanism in reverse: flip the pointer, start again", async () => {
+test("rollback is the same mechanism in reverse with a distinct fenced session", async () => {
   const definition = await loadDefinition();
 
   const gate = state(definition, "Rollback Possible");
@@ -95,11 +95,13 @@ test("rollback is the same mechanism in reverse: flip the pointer, start again",
   assert.equal(state(definition, "Write Rollback Desired").Next, "Start With Previous");
   assert.equal((state(definition, "Write Rollback Desired").Parameters?.Payload as Record<string, unknown>).action, "rollback");
   assert.equal(state(definition, "Start With Previous").Catch?.[0]?.Next, "Rollback Failed");
+  const rollbackInput = state(definition, "Start With Previous").Parameters?.Input as Record<string, unknown>;
+  assert.equal(rollbackInput["sessionId.$"], "$.sessions.rollback");
 });
 
 test("a refused stop restores the pointer before failing", async () => {
   const definition = await loadDefinition();
-  assert.equal(state(definition, "Stop Session").Catch?.[0]?.Next, "Restore Desired After Refusal");
+  assert.equal(state(definition, "Stop Origin Session").Catch?.[0]?.Next, "Restore Desired After Refusal");
   const restored = state(definition, "Restore Desired After Refusal").Parameters?.Payload as Record<string, unknown>;
   assert.equal(restored.action, "restore");
   assert.equal(restored["previous.$"], "$.mutation.previous");
@@ -107,23 +109,27 @@ test("a refused stop restores the pointer before failing", async () => {
   assert.equal(state(definition, "Promotion Refused").Type, "Fail");
 });
 
-test("the watchdog relaunch is fire-and-forget and never fails a finished promotion", async () => {
+test("promotion composes only Lifecycle V2 and lets V2 start own the watchdog", async () => {
   const definition = await loadDefinition();
-  for (const [name, terminal] of [
-    ["Launch Watchdog", "Promoted Watchdogless"],
-    ["Launch Watchdog After Rollback", "Rolled Back"],
-  ] as const) {
-    const launch = state(definition, name);
-    assert.equal(launch.Resource, "arn:aws:states:::aws-sdk:sfn:startExecution");
-    assert.equal(launch.Catch?.[0]?.Next, terminal);
-    assert.notEqual(state(definition, terminal).Type, "Fail");
+  const serialized = JSON.stringify(definition);
+  assert.equal(serialized.includes("watchdogStateMachineArn"), false);
+  assert.equal(serialized.includes("spawnpoint-idle-watchdog"), false);
+
+  for (const name of ["Start With Target", "Start With Previous"]) {
+    const start = state(definition, name);
+    assert.equal(start.Parameters?.StateMachineArn, "${start_v2_state_machine_arn}");
+    const input = start.Parameters?.Input as Record<string, unknown>;
+    assert.equal(input["watchdogTiming.$"], "$.request.watchdogTiming");
+  }
+  for (const name of ["Stop Origin Session", "Stop Target After Commit", "Stop Rollback Session"]) {
+    assert.equal(state(definition, name).Parameters?.StateMachineArn, "${stop_v2_state_machine_arn}");
   }
 });
 
 test("a promotion that cannot re-stop the host fails loudly, not silently", async () => {
   const definition = await loadDefinition();
-  assert.equal(state(definition, "Stop After Commit").Catch?.[0]?.Next, "Promoted But Running");
-  assert.equal(state(definition, "Stop After Rollback").Catch?.[0]?.Next, "Rolled Back But Running");
+  assert.equal(state(definition, "Stop Target After Commit").Catch?.[0]?.Next, "Promoted But Running");
+  assert.equal(state(definition, "Stop Rollback Session").Catch?.[0]?.Next, "Rolled Back But Running");
   for (const name of ["Promoted But Running", "Rolled Back But Running"]) {
     assert.equal(state(definition, name).Type, "Fail");
     assert.match(JSON.stringify(state(definition, name)), /running-hours alarm/);
@@ -146,11 +152,39 @@ test("the workflow delegates all release-state writes and knows no world storage
   assert.equal(puts.length, 0);
   assert.equal(JSON.stringify(definition).includes("worlds/"), false);
   const mutations = Object.values(definition.States).filter((candidate) =>
-    candidate.Resource === "arn:aws:states:::lambda:invoke");
-  assert.equal(mutations.length, 4);
+    candidate.Resource === "arn:aws:states:::lambda:invoke" &&
+    candidate.Parameters?.FunctionName === "${release_state_function_arn}");
+  assert.equal(mutations.length, 5);
 
   const fails = Object.entries(definition.States).filter(([, state]) => state.Type === "Fail");
   assert.equal(fails.length, 8);
   const errors = new Set(fails.map(([, state]) => (state as { Error?: string }).Error));
   assert.equal(errors.size, 8, "every failure mode must be distinguishable");
+});
+
+test("release identity is preset-scoped and child machine ARNs are not caller-controlled", async () => {
+  const definition = await loadDefinition();
+  const verify = state(definition, "Verify Release Published");
+  assert.equal(
+    verify.Parameters?.["Key.$"],
+    "States.Format('releases/{}/{}/{}/manifest.json', $.request.gameId, $.request.presetId, $.request.release)",
+  );
+
+  const serialized = JSON.stringify(definition);
+  assert.equal(serialized.includes("startStateMachineArn"), false);
+  assert.equal(serialized.includes("stopStateMachineArn"), false);
+  assert.equal(state(definition, "Read Lifecycle").Parameters?.FunctionName, "${coordinator_function_arn}");
+});
+
+test("target and rollback starts receive distinct generated session ids", async () => {
+  const definition = await loadDefinition();
+  const initialize = state(definition, "Initialize");
+  const sessions = initialize.Parameters?.sessions as Record<string, unknown>;
+  assert.equal(sessions["target.$"], "States.Format('session-{}', States.UUID())");
+  assert.equal(sessions["rollback.$"], "States.Format('session-{}', States.UUID())");
+
+  const target = state(definition, "Start With Target").Parameters?.Input as Record<string, unknown>;
+  const rollback = state(definition, "Start With Previous").Parameters?.Input as Record<string, unknown>;
+  assert.equal(target["sessionId.$"], "$.sessions.target");
+  assert.equal(rollback["sessionId.$"], "$.sessions.rollback");
 });

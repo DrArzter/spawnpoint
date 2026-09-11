@@ -466,10 +466,11 @@ The intended production sequence is:
    OIDC. It never receives the CurseForge key and never downloads a mod.
 2. CodeBuild resolves the clean profile checkout, builds the exact manifest, uploads JARs first and the manifest last.
    The resulting candidate is inert: no pointer changes and no server starts.
-3. Promote it: `scripts/promote-release.sh <world> <version>` — writes desired, runs the verified stop and start
-   (boot-time reconciliation applies the release, the health gate proves it), commits active, and relaunches the
-   watchdog if the server was running. A stopped server is stopped again afterwards.
-4. A failed start rolls back by itself: the pointer flips to the previous active and the server starts again on it.
+3. Promote it: `scripts/promote-release.sh <world> <version>` — writes desired and composes Lifecycle V2 against the
+   exact active session. Boot-time reconciliation applies the release; health and watchdog registration gate the
+   commit. A stopped server is started for verification and stopped again afterwards.
+4. A failed start rolls back by itself in a distinct fenced session: the pointer flips to the previous active and the
+   server starts again on it.
    `status=rolled_back` in the output is the pipeline working, not failing.
 
 `scripts/cut-release.sh` remains only a manual bootstrap/diagnostic path. The accepted production contract is the

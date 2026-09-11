@@ -3,11 +3,14 @@
 This Terraform root owns composed Standard Workflows that sit above the already deployed host workflows:
 
 - `spawnpoint-idle-watchdog` observes one running session and invokes the verified stop after sustained idleness;
-- `spawnpoint-promote-release` moves a world from one immutable release to another and commits `active_release` only after the existing start workflow passes its health check.
-- the additive `spawnpoint-*-v2` lifecycle trio coordinates fenced sessions through the established DynamoDB
-  coordinator while V1 remains the production default.
+- `spawnpoint-promote-release` moves one wipe between immutable releases through Lifecycle V2 and commits
+  `active_release` only after health and watchdog registration succeed;
+- the `spawnpoint-*-v2` lifecycle trio coordinates fenced sessions through the established DynamoDB coordinator.
+  V1 is a private host adapter used only by these V2 workflows.
 
-It is deliberately separate from `../terraform`. Applying this root must not replace the EC2 instance, detach EBS, or modify the start and stop machines. It discovers the current game host only to scope the watchdog's SSM permission and refers to the existing child workflows by their stable names.
+It is deliberately separate from `../terraform`. Applying this root must not replace the EC2 instance, detach EBS,
+or modify the primitive host workflows. It discovers the current game host only to scope the watchdog's SSM
+permission; promotion invokes fixed Lifecycle V2 ARNs and never accepts workflow ARNs from its caller.
 
 The root also owns one additive policy on the established game-host role: read-only `GetObject` access to
 `worlds/*`. The host needs it to observe desired/active state during boot, but cannot write a pointer. Keeping this

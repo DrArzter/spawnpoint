@@ -159,7 +159,18 @@ run "promotion_delegates_release_state_and_composes_existing_machines" {
 
   assert {
     condition     = jsondecode(aws_sfn_state_machine.promote_release.definition).States["Start With Target"].Resource == "arn:aws:states:::states:startExecution.sync:2"
-    error_message = "Promotion must run the existing start machine synchronously, so health gates the commit."
+    error_message = "Promotion must run Lifecycle V2 start synchronously, so health and watchdog registration gate the commit."
+  }
+
+  assert {
+    condition = alltrue([
+      jsondecode(aws_sfn_state_machine.promote_release.definition).States["Start With Target"].Parameters.StateMachineArn == local.lifecycle_v2_start_arn,
+      jsondecode(aws_sfn_state_machine.promote_release.definition).States["Start With Previous"].Parameters.StateMachineArn == local.lifecycle_v2_start_arn,
+      jsondecode(aws_sfn_state_machine.promote_release.definition).States["Stop Origin Session"].Parameters.StateMachineArn == local.lifecycle_v2_stop_arn,
+      jsondecode(aws_sfn_state_machine.promote_release.definition).States["Stop Target After Commit"].Parameters.StateMachineArn == local.lifecycle_v2_stop_arn,
+      jsondecode(aws_sfn_state_machine.promote_release.definition).States["Stop Rollback Session"].Parameters.StateMachineArn == local.lifecycle_v2_stop_arn,
+    ])
+    error_message = "Promotion must compose only the fixed Lifecycle V2 start and stop machines."
   }
 
   assert {
@@ -173,6 +184,11 @@ run "promotion_delegates_release_state_and_composes_existing_machines" {
   assert {
     condition     = !strcontains(aws_sfn_state_machine.promote_release.definition, "worlds/")
     error_message = "Promotion orchestration must not know the physical S3 world layout."
+  }
+
+  assert {
+    condition     = !strcontains(aws_sfn_state_machine.promote_release.definition, "watchdogStateMachineArn")
+    error_message = "Promotion must leave watchdog ownership inside Lifecycle V2 start."
   }
 }
 

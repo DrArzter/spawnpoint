@@ -136,9 +136,9 @@ resource "aws_iam_role" "promote_workflow" {
 
 data "aws_iam_policy_document" "promote_workflow" {
   statement {
-    sid       = "ReadHostState"
-    actions   = ["ec2:DescribeInstances"]
-    resources = ["*"]
+    sid       = "ReadLifecycle"
+    actions   = ["lambda:InvokeFunction"]
+    resources = [local.lifecycle_v2_coordinator_arn]
   }
 
   statement {
@@ -154,12 +154,11 @@ data "aws_iam_policy_document" "promote_workflow" {
   }
 
   statement {
-    sid     = "StartChildMachines"
+    sid     = "StartOnlyLifecycleV2Children"
     actions = ["states:StartExecution"]
     resources = [
-      local.start_state_machine_arn,
-      local.stop_state_machine_arn,
-      local.idle_watchdog_state_machine_arn,
+      local.lifecycle_v2_start_arn,
+      local.lifecycle_v2_stop_arn,
     ]
   }
 
@@ -171,8 +170,8 @@ data "aws_iam_policy_document" "promote_workflow" {
       "states:StopExecution",
     ]
     resources = [
-      "arn:aws:states:${var.aws_region}:${local.account_id}:execution:spawnpoint-start-server:*",
-      "arn:aws:states:${var.aws_region}:${local.account_id}:execution:spawnpoint-stop-server:*",
+      "arn:aws:states:${var.aws_region}:${local.account_id}:execution:spawnpoint-start-server-v2:*",
+      "arn:aws:states:${var.aws_region}:${local.account_id}:execution:spawnpoint-stop-server-v2:*",
     ]
   }
 
@@ -202,6 +201,9 @@ resource "aws_sfn_state_machine" "promote_release" {
   type     = "STANDARD"
   definition = templatefile("${path.module}/../../workflows/promote-release.asl.json", {
     release_state_function_arn = local.release_state_function_arn
+    coordinator_function_arn   = local.lifecycle_v2_coordinator_arn
+    start_v2_state_machine_arn = local.lifecycle_v2_start_arn
+    stop_v2_state_machine_arn  = local.lifecycle_v2_stop_arn
   })
 
   tags = {

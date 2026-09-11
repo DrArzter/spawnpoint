@@ -1,129 +1,288 @@
 {
-  "Comment": "Promote one world's current wipe through a release-state service. The workflow coordinates host actions but never knows storage keys or pointer schemas.",
+  "Comment": "Promote one world's current wipe through Lifecycle V2. Release storage and session coordination remain behind their adapters.",
   "QueryLanguage": "JSONPath",
   "StartAt": "Initialize",
   "States": {
-    "Initialize": { "Type": "Pass", "Parameters": { "request.$": "$", "observed": {} }, "Next": "Verify Release Published" },
+    "Initialize": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$",
+        "sessions": {
+          "target.$": "States.Format('session-{}', States.UUID())",
+          "rollback.$": "States.Format('session-{}', States.UUID())"
+        },
+        "observed": {}
+      },
+      "Next": "Verify Release Published"
+    },
     "Verify Release Published": {
-      "Type": "Task", "Resource": "arn:aws:states:::aws-sdk:s3:headObject",
-      "Parameters": { "Bucket.$": "$.request.releaseBucket", "Key.$": "States.Format('releases/{}/manifest.json', $.request.release)" },
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:s3:headObject",
+      "Parameters": {
+        "Bucket.$": "$.request.releaseBucket",
+        "Key.$": "States.Format('releases/{}/{}/{}/manifest.json', $.request.gameId, $.request.presetId, $.request.release)"
+      },
       "ResultPath": null,
       "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.manifestError", "Next": "Release Not Published" }],
       "Next": "Prepare Release"
     },
     "Prepare Release": {
-      "Type": "Task", "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": { "FunctionName": "${release_state_function_arn}", "Payload": {
-        "action": "prepare", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId",
-        "release.$": "$.request.release", "operationId.$": "$.request.operationId"
-      }},
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${release_state_function_arn}",
+        "Payload": {
+          "action": "prepare",
+          "worldId.$": "$.request.worldId",
+          "generationId.$": "$.request.generationId",
+          "release.$": "$.request.release",
+          "operationId.$": "$.request.operationId"
+        }
+      },
       "ResultSelector": { "status.$": "$.Payload.status", "state.$": "$.Payload.state", "previous.$": "$.Payload.previous" },
       "ResultPath": "$.mutation",
       "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.pointerError", "Next": "World Not Imported" }],
       "Next": "Already Active"
     },
-    "Already Active": { "Type": "Choice", "Choices": [{ "Variable": "$.mutation.status", "StringEquals": "already_active", "Next": "Nothing To Do" }], "Default": "Describe Instance" },
-    "Describe Instance": {
-      "Type": "Task", "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
-      "Parameters": { "InstanceIds.$": "States.Array($.request.instanceId)" }, "ResultPath": "$.observed.instance", "Next": "Route Origin State"
+    "Already Active": {
+      "Type": "Choice",
+      "Choices": [{ "Variable": "$.mutation.status", "StringEquals": "already_active", "Next": "Nothing To Do" }],
+      "Default": "Read Lifecycle"
     },
-    "Route Origin State": { "Type": "Choice", "Choices": [
-      { "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name", "StringEquals": "running", "Next": "Mark Origin Running" },
-      { "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name", "StringEquals": "stopped", "Next": "Mark Origin Stopped" }
-    ], "Default": "Instance Unpromotable" },
-    "Mark Origin Running": { "Type": "Pass", "Result": "running", "ResultPath": "$.origin", "Next": "Stop Session" },
+    "Read Lifecycle": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": { "action": "get", "serverId.$": "$.request.serverId" }
+      },
+      "ResultSelector": { "record.$": "$.Payload.record" },
+      "ResultPath": "$.observed.lifecycle",
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.lifecycleError", "Next": "Restore Desired After Unavailable Lifecycle" }],
+      "Next": "Route Origin State"
+    },
+    "Route Origin State": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            { "Variable": "$.observed.lifecycle.record.observedState", "StringEquals": "ready" },
+            { "Variable": "$.observed.lifecycle.record.activeSessionId", "IsPresent": true },
+            { "Variable": "$.observed.lifecycle.record.activeSessionId", "IsNull": false }
+          ],
+          "Next": "Mark Origin Running"
+        },
+        {
+          "And": [
+            { "Variable": "$.observed.lifecycle.record.desiredState", "StringEquals": "stopped" },
+            { "Variable": "$.observed.lifecycle.record.observedState", "StringEquals": "stopped" }
+          ],
+          "Next": "Mark Origin Stopped"
+        }
+      ],
+      "Default": "Restore Desired After Unavailable Lifecycle"
+    },
+    "Mark Origin Running": { "Type": "Pass", "Result": "running", "ResultPath": "$.origin", "Next": "Stop Origin Session" },
     "Mark Origin Stopped": { "Type": "Pass", "Result": "stopped", "ResultPath": "$.origin", "Next": "Start With Target" },
-    "Stop Session": {
-      "Type": "Task", "Resource": "arn:aws:states:::states:startExecution.sync:2",
-      "Parameters": { "StateMachineArn.$": "$.request.stopStateMachineArn", "Input": {
-        "operationId.$": "States.Format('{}-stop', $.request.operationId)", "instanceId.$": "$.request.instanceId",
-        "worldId.$": "$.request.worldId", "timing.$": "$.request.stopTiming"
-      }},
+    "Stop Origin Session": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn": "${stop_v2_state_machine_arn}",
+        "Name.$": "States.Format('{}-origin-stop', $.request.operationId)",
+        "Input": {
+          "serverId.$": "$.request.serverId",
+          "operationId.$": "States.Format('{}-origin-stop', $.request.operationId)",
+          "sessionId.$": "$.observed.lifecycle.record.activeSessionId",
+          "leaseTtlSeconds.$": "$.request.leaseTtlSeconds",
+          "instanceId.$": "$.request.instanceId",
+          "worldId.$": "$.request.worldId",
+          "stopTiming.$": "$.request.stopTiming"
+        }
+      },
       "ResultPath": "$.observed.stop",
       "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.stopError", "Next": "Restore Desired After Refusal" }],
       "Next": "Start With Target"
     },
     "Restore Desired After Refusal": {
-      "Type": "Task", "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": { "FunctionName": "${release_state_function_arn}", "Payload": {
-        "action": "restore", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId",
-        "operationId.$": "$.request.operationId", "previous.$": "$.mutation.previous"
-      }}, "ResultPath": "$.observed.restore", "Next": "Promotion Refused"
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${release_state_function_arn}",
+        "Payload": {
+          "action": "restore",
+          "worldId.$": "$.request.worldId",
+          "generationId.$": "$.request.generationId",
+          "operationId.$": "$.request.operationId",
+          "previous.$": "$.mutation.previous"
+        }
+      },
+      "ResultPath": "$.observed.restore",
+      "Next": "Promotion Refused"
+    },
+    "Restore Desired After Unavailable Lifecycle": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${release_state_function_arn}",
+        "Payload": {
+          "action": "restore",
+          "worldId.$": "$.request.worldId",
+          "generationId.$": "$.request.generationId",
+          "operationId.$": "$.request.operationId",
+          "previous.$": "$.mutation.previous"
+        }
+      },
+      "ResultPath": "$.observed.restore",
+      "Next": "Lifecycle Unavailable"
     },
     "Start With Target": {
-      "Type": "Task", "Resource": "arn:aws:states:::states:startExecution.sync:2",
-      "Parameters": { "StateMachineArn.$": "$.request.startStateMachineArn", "Input": {
-        "operationId.$": "States.Format('{}-start', $.request.operationId)", "instanceId.$": "$.request.instanceId",
-        "worldId.$": "$.request.worldId", "connectionAddress.$": "$.request.connectionAddress", "timing.$": "$.request.startTiming"
-      }},
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn": "${start_v2_state_machine_arn}",
+        "Name.$": "States.Format('{}-target-start', $.request.operationId)",
+        "Input": {
+          "serverId.$": "$.request.serverId",
+          "operationId.$": "States.Format('{}-target-start', $.request.operationId)",
+          "sessionId.$": "$.sessions.target",
+          "leaseTtlSeconds.$": "$.request.leaseTtlSeconds",
+          "watchdogRegistrationLeaseTtlSeconds.$": "$.request.watchdogRegistrationLeaseTtlSeconds",
+          "watchdogStopLeaseTtlSeconds.$": "$.request.watchdogStopLeaseTtlSeconds",
+          "instanceId.$": "$.request.instanceId",
+          "worldId.$": "$.request.worldId",
+          "connectionAddress.$": "$.request.connectionAddress",
+          "startTiming.$": "$.request.startTiming",
+          "stopTiming.$": "$.request.stopTiming",
+          "watchdogTiming.$": "$.request.watchdogTiming"
+        }
+      },
       "ResultPath": "$.observed.start",
       "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.startError", "Next": "Rollback Possible" }],
       "Next": "Commit Active"
     },
     "Commit Active": {
-      "Type": "Task", "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": { "FunctionName": "${release_state_function_arn}", "Payload": {
-        "action": "commit", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId",
-        "release.$": "$.request.release", "operationId.$": "$.request.operationId"
-      }}, "ResultPath": "$.observed.commit", "Next": "Route Completion"
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${release_state_function_arn}",
+        "Payload": {
+          "action": "commit",
+          "worldId.$": "$.request.worldId",
+          "generationId.$": "$.request.generationId",
+          "release.$": "$.request.release",
+          "operationId.$": "$.request.operationId"
+        }
+      },
+      "ResultPath": "$.observed.commit",
+      "Next": "Route Completion"
     },
-    "Route Completion": { "Type": "Choice", "Choices": [{ "Variable": "$.origin", "StringEquals": "stopped", "Next": "Stop After Commit" }], "Default": "Launch Watchdog" },
-    "Launch Watchdog": {
-      "Type": "Task", "Resource": "arn:aws:states:::aws-sdk:sfn:startExecution",
-      "Parameters": { "StateMachineArn.$": "$.request.watchdogStateMachineArn", "Input.$": "States.JsonToString($.request.watchdogInput)" },
-      "ResultPath": "$.observed.watchdog",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.watchdogError", "Next": "Promoted Watchdogless" }], "Next": "Promoted Running"
+    "Route Completion": {
+      "Type": "Choice",
+      "Choices": [{ "Variable": "$.origin", "StringEquals": "stopped", "Next": "Stop Target After Commit" }],
+      "Default": "Promoted Running"
     },
-    "Stop After Commit": {
-      "Type": "Task", "Resource": "arn:aws:states:::states:startExecution.sync:2",
-      "Parameters": { "StateMachineArn.$": "$.request.stopStateMachineArn", "Input": {
-        "operationId.$": "States.Format('{}-restop', $.request.operationId)", "instanceId.$": "$.request.instanceId",
-        "worldId.$": "$.request.worldId", "timing.$": "$.request.stopTiming"
-      }}, "ResultPath": "$.observed.restop",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.restopError", "Next": "Promoted But Running" }], "Next": "Promoted Stopped"
+    "Stop Target After Commit": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn": "${stop_v2_state_machine_arn}",
+        "Name.$": "States.Format('{}-target-stop', $.request.operationId)",
+        "Input": {
+          "serverId.$": "$.request.serverId",
+          "operationId.$": "States.Format('{}-target-stop', $.request.operationId)",
+          "sessionId.$": "$.sessions.target",
+          "leaseTtlSeconds.$": "$.request.leaseTtlSeconds",
+          "instanceId.$": "$.request.instanceId",
+          "worldId.$": "$.request.worldId",
+          "stopTiming.$": "$.request.stopTiming"
+        }
+      },
+      "ResultPath": "$.observed.restop",
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.restopError", "Next": "Promoted But Running" }],
+      "Next": "Promoted Stopped"
     },
-    "Rollback Possible": { "Type": "Choice", "Choices": [{ "Variable": "$.mutation.previous.activeRelease", "IsNull": true, "Next": "Promotion Failed No Rollback" }], "Default": "Write Rollback Desired" },
+    "Rollback Possible": {
+      "Type": "Choice",
+      "Choices": [{ "Variable": "$.mutation.previous.activeRelease", "IsNull": true, "Next": "Promotion Failed No Rollback" }],
+      "Default": "Write Rollback Desired"
+    },
     "Write Rollback Desired": {
-      "Type": "Task", "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": { "FunctionName": "${release_state_function_arn}", "Payload": {
-        "action": "rollback", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "operationId.$": "$.request.operationId"
-      }}, "ResultPath": "$.observed.rollback", "Next": "Start With Previous"
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${release_state_function_arn}",
+        "Payload": {
+          "action": "rollback",
+          "worldId.$": "$.request.worldId",
+          "generationId.$": "$.request.generationId",
+          "operationId.$": "$.request.operationId"
+        }
+      },
+      "ResultPath": "$.observed.rollback",
+      "Next": "Start With Previous"
     },
     "Start With Previous": {
-      "Type": "Task", "Resource": "arn:aws:states:::states:startExecution.sync:2",
-      "Parameters": { "StateMachineArn.$": "$.request.startStateMachineArn", "Input": {
-        "operationId.$": "States.Format('{}-rollback', $.request.operationId)", "instanceId.$": "$.request.instanceId",
-        "worldId.$": "$.request.worldId", "connectionAddress.$": "$.request.connectionAddress", "timing.$": "$.request.startTiming"
-      }}, "ResultPath": "$.observed.rollbackStart",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.rollbackError", "Next": "Rollback Failed" }], "Next": "Route Rollback Completion"
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn": "${start_v2_state_machine_arn}",
+        "Name.$": "States.Format('{}-rollback-start', $.request.operationId)",
+        "Input": {
+          "serverId.$": "$.request.serverId",
+          "operationId.$": "States.Format('{}-rollback-start', $.request.operationId)",
+          "sessionId.$": "$.sessions.rollback",
+          "leaseTtlSeconds.$": "$.request.leaseTtlSeconds",
+          "watchdogRegistrationLeaseTtlSeconds.$": "$.request.watchdogRegistrationLeaseTtlSeconds",
+          "watchdogStopLeaseTtlSeconds.$": "$.request.watchdogStopLeaseTtlSeconds",
+          "instanceId.$": "$.request.instanceId",
+          "worldId.$": "$.request.worldId",
+          "connectionAddress.$": "$.request.connectionAddress",
+          "startTiming.$": "$.request.startTiming",
+          "stopTiming.$": "$.request.stopTiming",
+          "watchdogTiming.$": "$.request.watchdogTiming"
+        }
+      },
+      "ResultPath": "$.observed.rollbackStart",
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.rollbackError", "Next": "Rollback Failed" }],
+      "Next": "Route Rollback Completion"
     },
-    "Route Rollback Completion": { "Type": "Choice", "Choices": [{ "Variable": "$.origin", "StringEquals": "stopped", "Next": "Stop After Rollback" }], "Default": "Launch Watchdog After Rollback" },
-    "Launch Watchdog After Rollback": {
-      "Type": "Task", "Resource": "arn:aws:states:::aws-sdk:sfn:startExecution",
-      "Parameters": { "StateMachineArn.$": "$.request.watchdogStateMachineArn", "Input.$": "States.JsonToString($.request.watchdogInput)" },
-      "ResultPath": "$.observed.watchdog",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.watchdogError", "Next": "Rolled Back" }], "Next": "Rolled Back"
+    "Route Rollback Completion": {
+      "Type": "Choice",
+      "Choices": [{ "Variable": "$.origin", "StringEquals": "stopped", "Next": "Stop Rollback Session" }],
+      "Default": "Rolled Back"
     },
-    "Stop After Rollback": {
-      "Type": "Task", "Resource": "arn:aws:states:::states:startExecution.sync:2",
-      "Parameters": { "StateMachineArn.$": "$.request.stopStateMachineArn", "Input": {
-        "operationId.$": "States.Format('{}-rollback-stop', $.request.operationId)", "instanceId.$": "$.request.instanceId",
-        "worldId.$": "$.request.worldId", "timing.$": "$.request.stopTiming"
-      }}, "ResultPath": "$.observed.restop",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.restopError", "Next": "Rolled Back But Running" }], "Next": "Rolled Back"
+    "Stop Rollback Session": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn": "${stop_v2_state_machine_arn}",
+        "Name.$": "States.Format('{}-rollback-stop', $.request.operationId)",
+        "Input": {
+          "serverId.$": "$.request.serverId",
+          "operationId.$": "States.Format('{}-rollback-stop', $.request.operationId)",
+          "sessionId.$": "$.sessions.rollback",
+          "leaseTtlSeconds.$": "$.request.leaseTtlSeconds",
+          "instanceId.$": "$.request.instanceId",
+          "worldId.$": "$.request.worldId",
+          "stopTiming.$": "$.request.stopTiming"
+        }
+      },
+      "ResultPath": "$.observed.restop",
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.restopError", "Next": "Rolled Back But Running" }],
+      "Next": "Rolled Back"
     },
     "Nothing To Do": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "status": "already_active", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release" }, "End": true },
-    "Promoted Running": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "status": "promoted", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release", "server": "running", "watchdog": "launched" }, "End": true },
-    "Promoted Watchdogless": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "status": "promoted", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release", "server": "running", "watchdog": "failed_to_launch" }, "End": true },
+    "Promoted Running": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "status": "promoted", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release", "server": "running", "sessionId.$": "$.sessions.target" }, "End": true },
     "Promoted Stopped": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "status": "promoted", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release", "server": "stopped" }, "End": true },
-    "Rolled Back": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "status": "rolled_back", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "failedRelease.$": "$.request.release", "activeRelease.$": "$.mutation.previous.activeRelease" }, "End": true },
+    "Rolled Back": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "status": "rolled_back", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "failedRelease.$": "$.request.release", "activeRelease.$": "$.mutation.previous.activeRelease", "server.$": "$.origin" }, "End": true },
     "World Not Imported": { "Type": "Fail", "Error": "Spawnpoint.WorldNotImported", "Cause": "No release state exists for this world's current wipe." },
-    "Release Not Published": { "Type": "Fail", "Error": "Spawnpoint.ReleaseNotPublished", "Cause": "The target release has no manifest in the release bucket." },
-    "Instance Unpromotable": { "Type": "Fail", "Error": "Spawnpoint.InstanceUnpromotable", "Cause": "The instance is neither running nor stopped; wait for it to settle." },
-    "Promotion Refused": { "Type": "Fail", "Error": "Spawnpoint.PromotionRefused", "Cause": "The verified stop failed. The previous release state was restored." },
+    "Release Not Published": { "Type": "Fail", "Error": "Spawnpoint.ReleaseNotPublished", "Cause": "The target release has no manifest for this game and preset." },
+    "Lifecycle Unavailable": { "Type": "Fail", "Error": "Spawnpoint.LifecycleUnavailable", "Cause": "The server lifecycle is absent or transitional. The previous desired release was restored." },
+    "Promotion Refused": { "Type": "Fail", "Error": "Spawnpoint.PromotionRefused", "Cause": "The fenced, verified stop failed. The previous desired release was restored." },
     "Promotion Failed No Rollback": { "Type": "Fail", "Error": "Spawnpoint.PromotionFailedNoRollback", "Cause": "The target start failed and this wipe has no active release to roll back to." },
-    "Rollback Failed": { "Type": "Fail", "Error": "Spawnpoint.RollbackFailed", "Cause": "The rollback start failed too; the host needs a human." },
-    "Promoted But Running": { "Type": "Fail", "Error": "Spawnpoint.PromotedButRunning", "Cause": "The release was promoted, but the final stop failed. The running-hours alarm is the backstop." },
-    "Rolled Back But Running": { "Type": "Fail", "Error": "Spawnpoint.RolledBackButRunning", "Cause": "Rollback succeeded, but the final stop failed. The running-hours alarm is the backstop." }
+    "Rollback Failed": { "Type": "Fail", "Error": "Spawnpoint.RollbackFailed", "Cause": "The rollback start failed too; lifecycle state identifies the exact recovery point." },
+    "Promoted But Running": { "Type": "Fail", "Error": "Spawnpoint.PromotedButRunning", "Cause": "The release was promoted, but its exact target session could not be stopped. The watchdog and running-hours alarm are backstops." },
+    "Rolled Back But Running": { "Type": "Fail", "Error": "Spawnpoint.RolledBackButRunning", "Cause": "Rollback succeeded, but its exact session could not be stopped. The watchdog and running-hours alarm are backstops." }
   }
 }

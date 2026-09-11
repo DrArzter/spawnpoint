@@ -103,14 +103,14 @@ state_machines="$(
     --region "${region}" \
     --output json
 )"
-start_arn="$(jq -r '.stateMachines[] | select(.name == "spawnpoint-start-server") | .stateMachineArn' <<<"${state_machines}")"
-stop_arn="$(jq -r '.stateMachines[] | select(.name == "spawnpoint-stop-server") | .stateMachineArn' <<<"${state_machines}")"
-[[ "${start_arn}" == arn:aws:states:*:stateMachine:spawnpoint-start-server ]] || {
-  printf 'error: spawnpoint-start-server state machine not found\n' >&2
+start_arn="$(jq -r '.stateMachines[] | select(.name == "spawnpoint-start-server-v2") | .stateMachineArn' <<<"${state_machines}")"
+stop_arn="$(jq -r '.stateMachines[] | select(.name == "spawnpoint-stop-server-v2") | .stateMachineArn' <<<"${state_machines}")"
+[[ "${start_arn}" == arn:aws:states:*:stateMachine:spawnpoint-start-server-v2 ]] || {
+  printf 'error: spawnpoint-start-server-v2 state machine not found\n' >&2
   exit 1
 }
-[[ "${stop_arn}" == arn:aws:states:*:stateMachine:spawnpoint-stop-server ]] || {
-  printf 'error: spawnpoint-stop-server state machine not found\n' >&2
+[[ "${stop_arn}" == arn:aws:states:*:stateMachine:spawnpoint-stop-server-v2 ]] || {
+  printf 'error: spawnpoint-stop-server-v2 state machine not found\n' >&2
   exit 1
 }
 

@@ -92,6 +92,10 @@ The panel, Telegram bot and owner scripts now call only V2 start/stop entry poin
 host adapter composed by V2; it is no longer a user-facing resolver. World archive/regenerate operations pass the
 active session ID through the same V2 verified stop instead of bypassing lifecycle state.
 
+The legacy release-promotion script is fail-closed at cutover: its workflow still composes V1 start/stop and therefore
+cannot be a supported mutation entry point until promotion receives an explicit V2 session contract. Release builds
+and ordinary world starts remain available; re-enabling promotion is phase 8 work, not a hidden V1 exception.
+
 The first cutover run also exposed the expected duplicate-stop edge: a user stopped the session before its watchdog's
 next probe, then the watchdog observed stopped EC2 and repeated the exact stop. V2 stop now reads lifecycle before
 acquiring a lease, returns `already_stopped` without mutation for a closed server, and rejects a stale session before

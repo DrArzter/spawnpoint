@@ -15,9 +15,9 @@ export const previewSnapshot: ControlPlaneSnapshot = {
   observedAt: "2026-08-29T18:40:00.000Z",
   games: [
     { id: "minecraft", code: "MC", displayName: "Minecraft", lifecycle: { schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "session-42", updatedAtEpochSeconds: 1788028800 }, presets: [
-      { id: "industrial", displayName: "Industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "a".repeat(40), profileDigest: "b".repeat(64), buildStatus: "ready", latestRelease: "1.3" },
+      { id: "industrial", displayName: "Industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "a".repeat(40), profileDigest: "b".repeat(64), releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3" },
     ], worlds: [
-      { id: "minecraft-rostik-12345678", displayName: "Rostik", profileId: "industrial", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: { id: "industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "a".repeat(40), profileDigest: "b".repeat(64), buildStatus: "ready", latestRelease: "1.3" }, wipes: [
+      { id: "minecraft-rostik-12345678", displayName: "Rostik", profileId: "industrial", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: { id: "industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "a".repeat(40), profileDigest: "b".repeat(64), releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3" }, wipes: [
         { id: `gen-${"1".repeat(32)}`, number: 1, state: "closed", createdAt: "2026-04-01T12:00:00.000Z", closedAt: "2026-08-20T12:00:00.000Z", originRelease: "1.1" },
         { id: `gen-${"2".repeat(32)}`, number: 2, state: "current", createdAt: "2026-08-20T12:00:00.000Z", closedAt: null, originRelease: "1.2" },
       ], connectionAddress: "172.29.23.24:25565", release: { state: "available", generationId: `gen-${"2".repeat(32)}`, activeRelease: "1.2", desiredRelease: "1.2" } },

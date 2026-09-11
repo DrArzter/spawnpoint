@@ -232,12 +232,12 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
     }
   }
 
-  async function runWorldLifecycle(action: "archive" | "regenerate" | "restore" | "purge", backupKey?: string) {
+  async function runWorldLifecycle(action: "archive" | "regenerate" | "restore" | "purge", backupKey?: string, release?: string) {
     if (!game || !world) return;
     if (action === "regenerate" || action === "restore") setWipeId(null);
     setLifecycleRequest({ state: "pending", message: `Requesting ${action}…` });
     try {
-      const result = await requestWorldLifecycle(game.id, world.id, action, backupKey, action === "regenerate" ? world.preset?.latestRelease ?? undefined : undefined);
+      const result = await requestWorldLifecycle(game.id, world.id, action, backupKey, release);
       setLifecycleRequest({ state: "success", message: `${action[0]!.toUpperCase()}${action.slice(1)} accepted · ${result.operationId}.` });
       await refreshControlPlane();
     } catch (error) {
@@ -245,9 +245,9 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
     }
   }
 
-  async function createWorld(displayName: string) {
-    if (!game || !preset || preset.latestRelease === null) throw new Error("This preset has no ready release.");
-    const created = await requestCreateWorld(game.id, preset.id, displayName, preset.latestRelease);
+  async function createWorld(displayName: string, release: string) {
+    if (!game || !preset || !preset.releases.includes(release)) throw new Error("Choose an available release.");
+    const created = await requestCreateWorld(game.id, preset.id, displayName, release);
     await refreshControlPlane();
     setWorldId(created.id);
   }
@@ -308,7 +308,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
           {page === "dashboard" && (!game || !world) && <ControlPlaneUnavailable state={controlPlane} onRetry={() => void refreshControlPlane()} />}
           {page === "metrics" && <MetricsScreen serverState={serverState} />}
           {page === "console" && <ConsoleScreen serverState={serverState} />}
-          {page === "storage" && game && (preset || world) && <StorageScreen canManageWorld={granted.has("world.manage")} canReadBackups={granted.has("backup.read")} canRestoreBackup={granted.has("backup.restore")} gameId={game.id} lifecycleRequest={lifecycleRequest} onCreateWorld={createWorld} onDownloadPack={granted.has("connection.read") && world ? () => void downloadPack() : undefined} onSelectWipe={setWipeId} onWorldAction={(action, backupKey) => void runWorldLifecycle(action, backupKey)} packRequest={storageRequest} preset={preset} selectedWipeId={selectedWipe?.id} world={world} />}
+          {page === "storage" && game && (preset || world) && <StorageScreen canManageWorld={granted.has("world.manage")} canReadBackups={granted.has("backup.read")} canRestoreBackup={granted.has("backup.restore")} gameId={game.id} lifecycleRequest={lifecycleRequest} onCreateWorld={createWorld} onDownloadPack={granted.has("connection.read") && world ? () => void downloadPack() : undefined} onSelectWipe={setWipeId} onWorldAction={(action, backupKey, release) => void runWorldLifecycle(action, backupKey, release)} packRequest={storageRequest} preset={preset} selectedWipeId={selectedWipe?.id} world={world} />}
           {page === "access" && <AccessScreen bootstrap={bootstrap} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate("access", tab)} roles={roles} tab={accessTab} />}
           {page === "profile" && currentMember && <ProfileScreen member={currentMember} onChange={(next) => setMembers((current) => current.map((member) => member.id === next.id ? next : member))} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
         </div>

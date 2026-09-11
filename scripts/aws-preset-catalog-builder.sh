@@ -89,7 +89,7 @@ for profile in "${profiles[@]}"; do
     --arg id "${directory_id}" \
     --arg display_name "$(jq -r '.display_name' "${profile}")" \
     --arg profile_digest "${digest}" \
-    '{id: $id, display_name: $display_name, profile_digest: $profile_digest, build_status: "unbuilt", latest_release: null}' \
+    '{id: $id, display_name: $display_name, profile_digest: $profile_digest, build_status: "unbuilt", releases: [], latest_release: null}' \
     >>"${entries}"
 done
 
@@ -98,7 +98,7 @@ jq -s \
   --arg game "${game}" \
   --arg repository "${CONFIG_REPOSITORY_URL%.git}" \
   --arg commit "${CONFIG_COMMIT}" \
-  '{schema_version: 1, game: $game, source: {repository: $repository, commit: $commit}, presets: .}' \
+  '{schema_version: 2, game: $game, source: {repository: $repository, commit: $commit}, presets: .}' \
   "${entries}" >"${catalog}"
 
 # Preserve a successful build for an unchanged profile. A repository commit
@@ -110,7 +110,11 @@ if aws s3api get-object --bucket "${RELEASE_BUCKET}" --key "${catalog_key}" "${e
   jq --slurpfile old "${existing}" '
     .presets |= map(. as $new |
       ([$old[0].presets[]? | select(.id == $new.id and .profile_digest == $new.profile_digest)] | first // null) as $previous |
-      if $previous then .build_status = $previous.build_status | .latest_release = $previous.latest_release else . end
+      if $previous then
+        .build_status = $previous.build_status |
+        .releases = ($previous.releases // (if $previous.latest_release == null then [] else [$previous.latest_release] end)) |
+        .latest_release = $previous.latest_release
+      else . end
     )
   ' "${catalog}" >"${catalog}.merged"
   mv -- "${catalog}.merged" "${catalog}"

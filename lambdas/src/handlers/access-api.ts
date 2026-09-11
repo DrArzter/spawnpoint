@@ -236,8 +236,8 @@ async function createWorld(identity: Identity, gameId: string, presetId: string,
   const presets = await (awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]));
   const preset = presets.find((candidate) => candidate.gameId === gameId && candidate.id === presetId);
   if (preset === undefined) return response(404, { error: "unknown_preset" });
-  if (preset.buildStatus !== "ready" || preset.latestRelease === null) return response(409, { error: "preset_release_not_ready" });
-  if (release !== preset.latestRelease) return response(409, { error: "release_not_available" });
+  if (preset.buildStatus !== "ready" || preset.releases.length === 0) return response(409, { error: "preset_release_not_ready" });
+  if (!preset.releases.includes(release)) return response(409, { error: "release_not_available" });
   const worldUuid = randomUUID();
   const worldId = worldIdForName(gameId, displayName, worldUuid);
   const createdAt = new Date().toISOString();
@@ -573,18 +573,16 @@ async function authenticate(event: Event): Promise<Response> {
 // connect: the same permission covers both, rather than inventing a second one
 // that would always be granted together with it.
 async function packDownload(gameId: string, worldId: string): Promise<Response> {
-  const world = gameCatalog.find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
-  if (world === undefined) return response(404, { error: "unknown_world" });
-
   const worldRecord = await awsControlPlaneSources.listWorldRecords?.()
-    .then((records) => records.find((record) => record.worldId === worldId));
+    .then((records) => records.find((record) => record.gameId === gameId && record.worldId === worldId));
+  if (worldRecord === undefined) return response(404, { error: "unknown_world" });
   const choice = packRelease(await awsControlPlaneSources.readReleasePointer(
     worldId,
-    worldRecord?.currentGeneration.id ?? null,
+    worldRecord.currentGeneration.id,
   ));
   if (choice.kind === "none") return response(409, { error: choice.reason });
 
-  const url = await packDownloadUrl(choice.release);
+  const url = await packDownloadUrl(gameId, worldRecord.preset.id, choice.release);
   if (url === null) return response(409, { error: "no_pack_published", release: choice.release });
   return response(200, { release: choice.release, url, expiresIn: 3600 });
 }

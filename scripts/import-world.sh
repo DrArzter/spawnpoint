@@ -33,6 +33,8 @@ Environment:
   BACKUP_BUCKET      defaults to spawnpoint-backups-<account-id>
   RELEASE_BUCKET     defaults to spawnpoint-releases-<account-id>
   IMPORT_ACTOR       recorded in the manifest and pointer; defaults to import
+  RELEASE_PROFILE_ID, RELEASE_PROFILE_REPOSITORY and RELEASE_PROFILE_COMMIT
+                     required release provenance; use the imported world's preset and exact Git revision
 EOF
 }
 
@@ -56,6 +58,12 @@ actor="${IMPORT_ACTOR:-import}"
 for command in aws jq sha256sum; do
   command -v "${command}" >/dev/null 2>&1 || {
     printf 'error: required command not found: %s\n' "${command}" >&2
+    exit 1
+  }
+done
+for variable in RELEASE_PROFILE_ID RELEASE_PROFILE_REPOSITORY RELEASE_PROFILE_COMMIT; do
+  [[ -n "${!variable:-}" ]] || {
+    printf 'error: %s is required\n' "${variable}" >&2
     exit 1
   }
 done

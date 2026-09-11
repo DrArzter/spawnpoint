@@ -226,9 +226,10 @@ export async function handler(event: unknown) {
     if (input.action === "archive") {
       next = archiveWorldRecord(record);
     } else if (input.action === "regenerate") {
+      const release = input.release!;
       const preset = await latestPreset(record);
-      if (input.release !== preset.latestRelease) throw new Error("release_not_available");
-      next = regenerateWorldRecord(record, preset, input.release, input.generationUuid!, input.requestedAt);
+      if (!preset.releases.includes(release)) throw new Error("release_not_available");
+      next = regenerateWorldRecord(record, preset, release, input.generationUuid!, input.requestedAt);
     } else {
       const backup = backups.find((candidate) => candidate.key === input.backupKey);
       if (backup === undefined || backup.generationId === null) throw new Error("backup_not_verified");

@@ -7,8 +7,8 @@ while it was being published by hand — its S3 object and VersionId are recorde
 [docs/aws-m1-command-log.md](../../docs/aws-m1-command-log.md), which is where that provenance belongs. Nothing here
 is a source of truth for a deployed release.
 
-Each immutable release is stored as `<version>/manifest.json`. Its payload has the same root and contains the JARs
-under `mods/` when staged on a server or published to the release bucket.
+Each immutable release is stored as `releases/<game>/<preset>/<version>/manifest.json`. Its payload has the same root
+and contains the mod files under `mods/` when staged on a server or published to the release bucket.
 
 Manifest schema version 1 records:
 
@@ -61,12 +61,13 @@ copied into a release.
 
 ## The client pack rides with publication
 
-`upload-release.sh` publishes the payload, the manifest and — for games whose clients need local mods — the client
-pack at `packs/<release>.zip`, which the bot serves as a one-hour presigned link. It lives in publication rather than
+`upload-release.sh` publishes the payload, the manifest and the client pack at
+`releases/<game>/<preset>/<release>/client.zip`, which the bot serves as a one-hour presigned link. It lives in publication rather than
 in one caller because the workstation cut, the CodeBuild builder and `import-world.sh` all converge there; a pack
 built by only one of them is a pack most releases never get. An existing pack is recognised by existence, not digest:
 zips embed mtimes and are not byte-reproducible, and release immutability is already enforced by the manifest gate
-above. To fill the gap for a release published before this was true, run `scripts/publish-pack.sh <release>`.
+above. To fill the gap for a release published before this was true, run
+`scripts/publish-pack.sh <game> <preset> <release>`.
 
 ## A profile names its game
 

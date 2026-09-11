@@ -124,7 +124,7 @@ if aws s3api get-object --bucket "${RELEASE_BUCKET}" --key "${catalog_key}" "${c
   if jq -e \
     --arg id "${PROFILE_ID}" \
     --arg digest "${profile_digest}" \
-    '.schema_version == 1 and any(.presets[]?; .id == $id and .profile_digest == $digest)' \
+    '(.schema_version == 1 or .schema_version == 2) and any(.presets[]?; .id == $id and .profile_digest == $digest)' \
     "${catalog}" >/dev/null; then
     jq \
       --arg id "${PROFILE_ID}" \
@@ -132,9 +132,11 @@ if aws s3api get-object --bucket "${RELEASE_BUCKET}" --key "${catalog_key}" "${c
       --arg release "${RELEASE}" '
       .presets |= map(
         if .id == $id and .profile_digest == $digest
-        then .build_status = "ready" | .latest_release = $release
+        then .build_status = "ready" |
+          .releases = (reduce (((.releases // []) + [$release])[]) as $version ([]; if index($version) == null then . + [$version] else . end)) |
+          .latest_release = $release
         else . end
-      )
+      ) | .schema_version = 2
     ' "${catalog}" >"${catalog}.updated"
     aws s3api put-object \
       --bucket "${RELEASE_BUCKET}" \
@@ -156,4 +158,4 @@ printf 'profile_id=%s\n' "${PROFILE_ID}"
 printf 'game=%s\n' "${game}"
 printf 'config_commit=%s\n' "${CONFIG_COMMIT}"
 printf 'release=%s\n' "${RELEASE}"
-printf 'manifest_key=releases/%s/manifest.json\n' "${RELEASE}"
+printf 'manifest_key=releases/%s/%s/%s/manifest.json\n' "${game}" "${PROFILE_ID}" "${RELEASE}"

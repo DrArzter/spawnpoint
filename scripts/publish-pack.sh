@@ -2,7 +2,7 @@
 
 # Publish the client pack for a release that already exists in the bucket.
 # Releases cut before packs were part of publication — and any release cut by a
-# path that skipped them — have a manifest and a payload but no packs/<release>.zip,
+# path that skipped them — can have a manifest and a payload but no client.zip,
 # which is what the bot's /pack serves. This downloads the verified payload and
 # republishes, which fills the missing pack and touches nothing else: the
 # manifest gate refuses to change an existing release.
@@ -12,9 +12,9 @@ set -Eeuo pipefail
 REPOSITORY_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_SCRIPTS="${REPOSITORY_ROOT}/server/scripts"
 
-[[ $# -eq 1 ]] || {
+[[ $# -eq 3 ]] || {
   cat >&2 <<'EOF'
-usage: publish-pack.sh <release>
+usage: publish-pack.sh <game> <preset> <release>
 
 Environment:
   AWS_PROFILE      defaults to spawnpoint
@@ -24,7 +24,17 @@ EOF
   exit 2
 }
 
-release="$1"
+game="$1"
+preset="$2"
+release="$3"
+[[ "${game}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || {
+  printf 'error: invalid game id: %s\n' "${game}" >&2
+  exit 1
+}
+[[ "${preset}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || {
+  printf 'error: invalid preset id: %s\n' "${preset}" >&2
+  exit 1
+}
 [[ "${release}" =~ ^[0-9]+\.[0-9]+$ ]] || {
   printf 'error: release must use MAJOR.MINOR: %s\n' "${release}" >&2
   exit 1
@@ -57,7 +67,7 @@ trap cleanup EXIT
 
 # Verified download: every file is checked against the manifest's hashes, so
 # the pack can only ever contain the release's own bytes.
-"${SERVER_SCRIPTS}/download-release.sh" "${release}" "${staging}/payload" >&2
+"${SERVER_SCRIPTS}/download-release.sh" "${game}" "${preset}" "${release}" "${staging}/payload" >&2
 
 RELEASE_SOURCE_DIR="${staging}/payload" \
   "${SERVER_SCRIPTS}/upload-release.sh" "${staging}/payload/manifest.json"

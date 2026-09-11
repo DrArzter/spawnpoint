@@ -21,8 +21,8 @@ type StorageProps = {
   canRestoreBackup: boolean;
   onDownloadPack?: (worldId: string) => void;
   onSelectWipe: (wipeId: string) => void;
-  onWorldAction: (action: "archive" | "regenerate" | "restore" | "purge", backupKey?: string) => void;
-  onCreateWorld: (displayName: string) => Promise<void>;
+  onWorldAction: (action: "archive" | "regenerate" | "restore" | "purge", backupKey?: string, release?: string) => void;
+  onCreateWorld: (displayName: string, release: string) => Promise<void>;
   packRequest: RequestState;
   selectedWipeId?: string;
   lifecycleRequest: RequestState;
@@ -32,13 +32,16 @@ export function StorageScreen(props: StorageProps) {
   const { preset, world, canManageWorld, onCreateWorld } = props;
   const [creating, setCreating] = useState(world === undefined);
   const [name, setName] = useState("");
+  const [release, setRelease] = useState(preset?.latestRelease ?? "");
   const [request, setRequest] = useState<RequestState>({ state: "idle", message: "" });
 
+  useEffect(() => setRelease(preset?.latestRelease ?? ""), [preset?.id, preset?.latestRelease]);
+
   async function create() {
-    if (!name.trim() || !preset) return;
+    if (!name.trim() || !preset || !preset.releases.includes(release)) return;
     setRequest({ state: "pending", message: "Creating the first wipe…" });
     try {
-      await onCreateWorld(name.trim());
+      await onCreateWorld(name.trim(), release);
       setRequest({ state: "success", message: `${name.trim()} was created.` });
       setName("");
       setCreating(false);
@@ -48,9 +51,10 @@ export function StorageScreen(props: StorageProps) {
   }
 
   const creator = creating && preset && <Surface className="create-world-form">
-    <div><h2>Create a new save</h2><p>Spawnpoint will open Wipe #1 from {preset.displayName} release {preset.latestRelease ?? "—"}.</p></div>
+    <div><h2>Create a new save</h2><p>Spawnpoint will open Wipe #1 from the selected immutable {preset.displayName} release.</p></div>
     <label>Name<input autoComplete="off" maxLength={80} onChange={(event) => setName(event.target.value)} placeholder="Rostik" value={name} /></label>
-    <div><Button onClick={() => setCreating(false)} variant="ghost">Cancel</Button><Button disabled={!canManageWorld || preset.buildStatus !== "ready" || preset.latestRelease === null || !name.trim() || request.state === "pending"} onClick={() => void create()} variant="primary">Create save</Button></div>
+    <label>Release<select onChange={(event) => setRelease(event.target.value)} value={release}><option disabled value="">Choose release</option>{[...preset.releases].reverse().map((version) => <option key={version} value={version}>{version}{version === preset.latestRelease ? " · latest" : ""}</option>)}</select></label>
+    <div><Button onClick={() => setCreating(false)} variant="ghost">Cancel</Button><Button disabled={!canManageWorld || preset.buildStatus !== "ready" || !preset.releases.includes(release) || !name.trim() || request.state === "pending"} onClick={() => void create()} variant="primary">Create save</Button></div>
   </Surface>;
 
   if (world === undefined && preset) return <>
@@ -71,6 +75,7 @@ function WorldStorageScreen({ world, preset, gameId, canReadBackups, canManageWo
   const [backupRevision, setBackupRevision] = useState(0);
   const [confirming, setConfirming] = useState<WorldAction | null>(null);
   const [purgeConfirmation, setPurgeConfirmation] = useState("");
+  const [wipeRelease, setWipeRelease] = useState(preset?.latestRelease ?? "");
   const confirmButton = useRef<HTMLButtonElement>(null);
   const purgeInput = useRef<HTMLInputElement>(null);
   const actionTrigger = useRef<HTMLButtonElement | null>(null);
@@ -95,6 +100,7 @@ function WorldStorageScreen({ world, preset, gameId, canReadBackups, canManageWo
     actionTrigger.current = trigger;
     setPurgeConfirmation("");
     setConfirming(action);
+    if (action.action === "regenerate") setWipeRelease(preset?.latestRelease ?? "");
   }
 
   // Loaded when the tab is opened rather than with the screen: an inventory is
@@ -169,7 +175,7 @@ function WorldStorageScreen({ world, preset, gameId, canReadBackups, canManageWo
 
   function confirmAction() {
     if (confirming === null) return;
-    onWorldAction(confirming.action, confirming.backupKey);
+    onWorldAction(confirming.action, confirming.backupKey, confirming.action === "regenerate" ? wipeRelease : undefined);
     setConfirming(null);
   }
 
@@ -188,7 +194,7 @@ function WorldStorageScreen({ world, preset, gameId, canReadBackups, canManageWo
   const actionDescription = confirming?.action === "archive"
     ? "Spawnpoint will safely stop and back up an active session, then hide the world from normal session control. Its generations and backups remain intact."
     : confirming?.action === "regenerate"
-      ? `Spawnpoint will safely stop and back up the current wipe, close it, and create an empty wipe from ${preset?.displayName ?? "its preset"} release ${preset?.latestRelease ?? "—"}.`
+      ? `Spawnpoint will safely stop and back up the current wipe, close it, and create an empty wipe from the selected ${preset?.displayName ?? "preset"} release.`
       : confirming?.action === "purge"
         ? "This permanently deletes the world registry, release pointer and every version of every S3 backup. This cannot be undone from the dashboard."
         : `Spawnpoint will safely stop and back up the current wipe, then restore ${confirming?.backupName ?? "the selected backup"} as a new wipe.`;
@@ -203,8 +209,8 @@ function WorldStorageScreen({ world, preset, gameId, canReadBackups, canManageWo
     {world.materialization === "archived" && <Notice description="Choose a wipe-aware backup in the Backups tab to restore this save as a new wipe." title="This save is archived" tone="warning" />}
     {lifecycleRequest.state !== "idle" && <Notice description={lifecycleRequest.message} title={lifecycleRequest.state === "pending" ? "World operation requested" : lifecycleRequest.state === "success" ? "World operation accepted" : "World operation failed"} tone={lifecycleRequest.state === "error" ? "danger" : lifecycleRequest.state === "success" ? "success" : "info"} />}
     {confirming !== null && <Surface aria-describedby="world-operation-confirmation-description" aria-labelledby="world-operation-confirmation-title" className="operation-confirmation" role="alertdialog">
-      <div><h2 id="world-operation-confirmation-title">{actionTitle}</h2><p id="world-operation-confirmation-description">{actionDescription}</p>{confirming.action === "purge" && <label className="purge-confirmation">Type <code>{world.id}</code> to confirm<input autoComplete="off" onChange={(event) => setPurgeConfirmation(event.target.value)} ref={purgeInput} value={purgeConfirmation} /></label>}</div>
-      <div><Button onClick={() => setConfirming(null)} variant="ghost">Cancel</Button><Button disabled={confirming.action === "purge" && purgeConfirmation !== world.id} onClick={confirmAction} ref={confirmButton} variant={confirming.action === "archive" ? "primary" : "danger"}>{confirming.action === "archive" ? "Archive save" : confirming.action === "regenerate" ? "Start new wipe" : confirming.action === "purge" ? "Delete save forever" : "Restore backup"}</Button></div>
+      <div><h2 id="world-operation-confirmation-title">{actionTitle}</h2><p id="world-operation-confirmation-description">{actionDescription}</p>{confirming.action === "regenerate" && preset && <label className="wipe-release">Release<select onChange={(event) => setWipeRelease(event.target.value)} value={wipeRelease}><option disabled value="">Choose release</option>{[...preset.releases].reverse().map((version) => <option key={version} value={version}>{version}{version === preset.latestRelease ? " · latest" : ""}</option>)}</select></label>}{confirming.action === "purge" && <label className="purge-confirmation">Type <code>{world.id}</code> to confirm<input autoComplete="off" onChange={(event) => setPurgeConfirmation(event.target.value)} ref={purgeInput} value={purgeConfirmation} /></label>}</div>
+      <div><Button onClick={() => setConfirming(null)} variant="ghost">Cancel</Button><Button disabled={(confirming.action === "purge" && purgeConfirmation !== world.id) || (confirming.action === "regenerate" && !preset?.releases.includes(wipeRelease))} onClick={confirmAction} ref={confirmButton} variant={confirming.action === "archive" ? "primary" : "danger"}>{confirming.action === "archive" ? "Archive save" : confirming.action === "regenerate" ? "Start new wipe" : confirming.action === "purge" ? "Delete save forever" : "Restore backup"}</Button></div>
     </Surface>}
     {tab === "releases" && packRequest.state !== "idle" && <Notice description={packRequest.message} title={packRequest.state === "pending" ? "Working on the pack" : packRequest.state === "success" ? "Pack request accepted" : "Pack request failed"} tone={packRequest.state === "error" ? "danger" : packRequest.state === "success" ? "success" : "info"} />}
     {tab === "releases" && <DataTable columns={columns} emptyLabel={world.release.state === "unconfigured" ? "This wipe has no release pointer yet" : "Release data is unavailable"} label={selectedWipe ? `Releases for Wipe #${selectedWipe.number}` : "Release pointers"} rowKey={(row) => row.name} rows={releases} />}

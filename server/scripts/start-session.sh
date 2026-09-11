@@ -140,8 +140,8 @@ if [[ -n "${release_bucket}" ]]; then
   }
   if pointer_output="$("${SCRIPT_DIR}/read-release-pointer.sh" "${world_name}" "${WORLD_GENERATION_ID}")"; then
     desired_release="$(awk -F= '$1 == "desired_release" { print $2 }' <<<"${pointer_output}")"
-    payload_dir="${SERVER_DIR}/releases/${desired_release}"
-    "${SCRIPT_DIR}/download-release.sh" "${desired_release}" "${payload_dir}" >&2
+    payload_dir="${SERVER_DIR}/releases/${GAME_ID}/${WORLD_PROFILE_ID}/${desired_release}"
+    "${SCRIPT_DIR}/download-release.sh" "${GAME_ID}" "${WORLD_PROFILE_ID}" "${desired_release}" "${payload_dir}" >&2
     if [[ "${WORLD_STORAGE_LAYOUT}" == "generation" ]]; then
       "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" \
         "${SPAWNPOINT_WORLD_MODS_DIRECTORY}" >&2

@@ -22,6 +22,7 @@ export type CatalogWorld = Readonly<{
     repository: string;
     commit: string;
     profileDigest: string;
+    releases: readonly string[];
     buildStatus: "unbuilt" | "building" | "ready" | "failed";
     latestRelease: string | null;
   }>;
@@ -91,6 +92,7 @@ export function catalogWithPresets(
           repository: preset.repository,
           commit: preset.commit,
           profileDigest: preset.profileDigest,
+          releases: preset.releases,
           buildStatus: preset.buildStatus,
           latestRelease: preset.latestRelease,
         },
@@ -114,6 +116,7 @@ export function catalogWithPresets(
             repository: record.preset.repository,
             commit: record.preset.commit,
             profileDigest: record.preset.profileDigest,
+            releases: [record.currentGeneration.release],
             buildStatus: "ready" as const,
             latestRelease: record.currentGeneration.release,
           } : {
@@ -121,6 +124,7 @@ export function catalogWithPresets(
             repository: current.repository,
             commit: current.commit,
             profileDigest: current.profileDigest,
+            releases: current.releases,
             buildStatus: current.buildStatus,
             latestRelease: current.latestRelease,
           },

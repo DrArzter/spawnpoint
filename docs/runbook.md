@@ -243,19 +243,19 @@ pack remain recovery tools, not a way to define a preset.
 ### The client pack
 
 Players get it from either surface: **Download** beside the active release on the panel's Releases screen, or `/pack`
-in the bot. Both presign `packs/<release>.zip` for one hour, and both prefer the **active** release over a desired
+in the bot. Both presign `releases/<game>/<preset>/<release>/client.zip` for one hour, and both prefer the **active** release over a desired
 one — a desired release has not been through a start, so its pack would fit a world nobody is playing yet.
 
 The panel route needs no new permission: `connection.read` covers it, on the reasoning that whoever may learn where
 to connect may have the files needed to connect. The link is opened and never stored, since it expires.
 
-`/pack` presigns `packs/<active release>.zip` for one hour. The pack is published by
+`/pack` presigns the active preset-scoped `client.zip` for one hour. The pack is published by
 `server/scripts/upload-release.sh`, which every publisher goes through — the workstation cut, the CodeBuild builder
 and an import — so a release published from now on has one. Releases 1.0 and 1.1 were published before that was
 true, and the bot answers `no published pack yet` for them until the gap is filled:
 
 ```bash
-scripts/publish-pack.sh 1.1
+scripts/publish-pack.sh minecraft main 1.1
 ```
 
 It downloads the release's verified payload and republishes it; the manifest gate refuses to change an existing

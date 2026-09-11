@@ -61,7 +61,7 @@ export function newWorldRecord(
   createdAt: string,
 ): WorldRecord {
   if (
-    preset.buildStatus !== "ready" || preset.latestRelease === null ||
+    preset.buildStatus !== "ready" || !preset.releases.includes(identity.release) ||
     !ID.test(identity.worldId) || identity.displayName.length < 1 || identity.displayName.length > 80 ||
     !RELEASE.test(identity.release) || Number.isNaN(Date.parse(createdAt))
   ) throw new Error("invalid_world_creation");
@@ -114,7 +114,7 @@ export function regenerateWorldRecord(
 ): WorldRecord {
   if (record.status !== "active") throw new Error("world_archived");
   if (preset.gameId !== record.gameId || preset.id !== record.preset.id) throw new Error("preset_mismatch");
-  if (preset.buildStatus !== "ready" || preset.latestRelease === null || !RELEASE.test(release) || Number.isNaN(Date.parse(createdAt))) {
+  if (preset.buildStatus !== "ready" || !preset.releases.includes(release) || !RELEASE.test(release) || Number.isNaN(Date.parse(createdAt))) {
     throw new Error("preset_release_not_ready");
   }
   return {

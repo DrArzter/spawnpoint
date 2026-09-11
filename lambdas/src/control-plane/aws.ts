@@ -14,6 +14,7 @@ import { ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sd
 import { randomUUID } from "node:crypto";
 
 import type { BackupObject } from "./backups.ts";
+import { clientPackKey } from "./release-artifacts.ts";
 import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts";
 import { gameCatalog } from "./catalog.ts";
 import { type ReleaseState } from "./release-state.ts";
@@ -299,9 +300,9 @@ export async function worldLifecycleExecution(
 // The pack a player installs: the same object the bot serves, presigned for an
 // hour. A missing object is a normal answer — releases published before packs
 // were part of publication have none — so it is reported, not thrown.
-export async function packDownloadUrl(release: string): Promise<string | null> {
+export async function packDownloadUrl(gameId: string, presetId: string, release: string): Promise<string | null> {
   const bucket = requiredEnv("RELEASE_BUCKET");
-  const key = `packs/${release}.zip`;
+  const key = clientPackKey(gameId, presetId, release);
   try {
     await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
   } catch {

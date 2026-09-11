@@ -98,6 +98,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0039](0039-git-presets-instantiate-world-generations.md) | Git presets instantiate recoverable world generations | **Superseded** by [0040](0040-reusable-presets-and-world-wipes.md) | cross-cutting |
 | [0040](0040-reusable-presets-and-world-wipes.md) | Reusable presets create worlds whose wipes own release state | Accepted | cross-cutting |
 | [0041](0041-evaluate-spt-profile-backed-adapter.md) | Evaluate SPT as a profile-backed adapter without distributing EFT | Proposed | later |
+| [0042](0042-preset-scoped-release-identity.md) | Release identity and storage are scoped by preset | Accepted | cross-cutting |
 
 ## Decisions still to record
 

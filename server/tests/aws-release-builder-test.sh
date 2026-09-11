@@ -102,12 +102,12 @@ builder_output="$(
     "${builder}"
 )"
 grep -qx 'result=release_ready' <<<"${builder_output}"
-manifest="${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/4.0/manifest.json"
+manifest="${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/minecraft/main/4.0/manifest.json"
 jq -e \
   --arg commit "${config_commit}" \
   '.release == "4.0" and .source_profile.id == "main" and .source_profile.commit == $commit and (.server.mods | length) == 1' \
   "${manifest}" >/dev/null
-[[ -f "${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/4.0/mods/example-1.0.jar" ]]
+[[ -f "${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/minecraft/main/4.0/mods/example-1.0.jar" ]]
 
 # --- the bundle is self-contained: everything the packaged scripts reach for
 #     is packaged too. A missing file here fails only in CodeBuild, where it is
@@ -175,13 +175,13 @@ factorio_output="$(
 )"
 grep -qx 'result=release_ready' <<<"${factorio_output}"
 grep -qx 'game=factorio' <<<"${factorio_output}"
-factorio_manifest="${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/5.0/manifest.json"
+factorio_manifest="${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/factorio/factorio-vanilla/5.0/manifest.json"
 jq -e '
   .game == "factorio"
   and .loader == {type: "factorio", version: "2.0.77"}
   and (.server.mods | length) == 1
 ' "${factorio_manifest}" >/dev/null
-[[ -f "${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/5.0/mods/graftorio2_0.4.20.zip" ]]
+[[ -f "${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/factorio/factorio-vanilla/5.0/mods/graftorio2_0.4.20.zip" ]]
 
 # the CurseForge key is a minecraft requirement, enforced once the profile is
 # known rather than for every game

@@ -57,17 +57,17 @@ grep -qx 'result=preset_catalog_ready' <<<"${output}"
 grep -qx 'presets=2' <<<"${output}"
 catalog="${FAKE_S3_ROOT}/spawnpoint-test-releases/presets/factorio/catalog.json"
 jq -e --arg commit "${commit}" '
-  .schema_version == 1 and .game == "factorio" and .source.commit == $commit
+  .schema_version == 2 and .game == "factorio" and .source.commit == $commit
   and ([.presets[].id] | sort) == ["factorio-vanilla", "space-age"]
-  and all(.presets[]; .build_status == "unbuilt" and .latest_release == null and (.profile_digest | length == 64))
+  and all(.presets[]; .build_status == "unbuilt" and .releases == [] and .latest_release == null and (.profile_digest | length == 64))
 ' "${catalog}" >/dev/null
 
-jq '(.presets[] | select(.id == "factorio-vanilla")) |= (.build_status = "ready" | .latest_release = "1.0")' \
+jq '(.presets[] | select(.id == "factorio-vanilla")) |= (.build_status = "ready" | .releases = ["1.0"] | .latest_release = "1.0")' \
   "${catalog}" >"${catalog}.updated"
 mv -- "${catalog}.updated" "${catalog}"
 run_builder >/dev/null
 jq -e '
-  (.presets[] | select(.id == "factorio-vanilla") | .build_status == "ready" and .latest_release == "1.0")
+  (.presets[] | select(.id == "factorio-vanilla") | .build_status == "ready" and .releases == ["1.0"] and .latest_release == "1.0")
   and (.presets[] | select(.id == "space-age") | .build_status == "unbuilt")
 ' "${catalog}" >/dev/null
 

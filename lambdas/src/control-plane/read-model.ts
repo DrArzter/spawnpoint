@@ -53,6 +53,7 @@ export type ControlPlaneSnapshot = Readonly<{
       repository: string;
       commit: string;
       profileDigest: string;
+      releases: readonly string[];
       buildStatus: "unbuilt" | "building" | "ready" | "failed";
       latestRelease: string | null;
     }>>;
@@ -145,6 +146,7 @@ export async function readControlPlaneSnapshot(
         repository: preset.repository,
         commit: preset.commit,
         profileDigest: preset.profileDigest,
+        releases: preset.releases,
         buildStatus: preset.buildStatus,
         latestRelease: preset.latestRelease,
       })),

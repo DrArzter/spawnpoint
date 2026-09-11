@@ -10,7 +10,7 @@ import {
 const preset: PresetObservation = {
   id: "creative", displayName: "Creative", gameId: "minecraft",
   repository: "https://github.com/DrArzter/config", commit: "a".repeat(40), profileDigest: "b".repeat(64),
-  buildStatus: "ready", latestRelease: "42.7",
+  buildStatus: "ready", releases: ["42.7"], latestRelease: "42.7",
 };
 const identity = { worldId: "minecraft-creative-a1b2c3d4", displayName: "Rostik's world", release: "42.7" };
 
@@ -43,7 +43,7 @@ test("registry parsing fails closed", () => {
 
 test("regeneration closes the old generation and never overwrites it", () => {
   const record = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
-  const next = regenerateWorldRecord(record, { ...preset, latestRelease: "43.1" }, "43.1", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "2026-09-08T10:00:00.000Z");
+  const next = regenerateWorldRecord(record, { ...preset, releases: ["42.7", "43.1"], latestRelease: "43.1" }, "43.1", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "2026-09-08T10:00:00.000Z");
 
   assert.equal(next.currentGeneration.id, "gen-aaaaaaaabbbbccccddddeeeeeeeeeeee");
   assert.equal(next.currentGeneration.release, "43.1");

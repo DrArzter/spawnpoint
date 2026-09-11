@@ -6,7 +6,7 @@ import { catalogWithPresets, gameCatalog } from "../src/control-plane/catalog.ts
 import { newWorldRecord } from "../src/control-plane/world-registry.ts";
 
 const document = {
-  schema_version: 1,
+  schema_version: 2,
   game: "factorio",
   source: {
     repository: "https://github.com/DrArzter/my-docker-factorio-server-config",
@@ -17,6 +17,7 @@ const document = {
     display_name: "Factorio vanilla 2.0",
     profile_digest: "1".repeat(64),
     build_status: "ready",
+    releases: ["1.0"],
     latest_release: "1.0",
   }],
 };
@@ -29,6 +30,7 @@ test("parses a versioned per-game preset catalog", () => {
     repository: document.source.repository,
     commit: document.source.commit,
     profileDigest: "1".repeat(64),
+    releases: ["1.0"],
     buildStatus: "ready",
     latestRelease: "1.0",
   }]);
@@ -37,7 +39,7 @@ test("parses a versioned per-game preset catalog", () => {
 test("a ready preset remains reusable after several worlds are materialized", () => {
   const preset = parsePresetCatalog({
     ...document,
-    presets: [{ id: "space-age", display_name: "Space Age", profile_digest: "2".repeat(64), build_status: "ready", latest_release: "2.0" }],
+    presets: [{ id: "space-age", display_name: "Space Age", profile_digest: "2".repeat(64), build_status: "ready", releases: ["2.0"], latest_release: "2.0" }],
   }, "factorio")![0]!;
   const empty = catalogWithPresets([preset], gameCatalog).find((game) => game.id === "factorio")!;
   assert.deepEqual(empty.worlds, []);
@@ -64,6 +66,8 @@ test("rejects a catalog for another game, duplicate ids, and ready presets witho
   assert.equal(parsePresetCatalog(document, "minecraft"), null);
   assert.equal(parsePresetCatalog({ ...document, presets: [document.presets[0], document.presets[0]] }, "factorio"), null);
   assert.equal(parsePresetCatalog({ ...document, presets: [{ ...document.presets[0], latest_release: null }] }, "factorio"), null);
+  assert.equal(parsePresetCatalog({ ...document, presets: [{ ...document.presets[0], releases: [] }] }, "factorio"), null);
+  assert.equal(parsePresetCatalog({ ...document, presets: [{ ...document.presets[0], releases: ["1.0", "1.0"] }] }, "factorio"), null);
 });
 
 test("exposes preset build readiness without projecting presets into worlds", () => {
@@ -71,7 +75,7 @@ test("exposes preset build readiness without projecting presets into worlds", ()
     ...document,
     presets: [
       document.presets[0],
-      { id: "space-age", display_name: "Space Age", profile_digest: "2".repeat(64), build_status: "unbuilt", latest_release: null },
+      { id: "space-age", display_name: "Space Age", profile_digest: "2".repeat(64), build_status: "unbuilt", releases: [], latest_release: null },
     ],
   }, "factorio")!;
   const catalog = catalogWithPresets(parsed, gameCatalog);

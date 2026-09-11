@@ -136,8 +136,6 @@ data "aws_iam_policy_document" "release_builder" {
     ]
     resources = [
       "${data.aws_s3_bucket.releases.arn}/releases/*",
-      # The client pack is published alongside every release now.
-      "${data.aws_s3_bucket.releases.arn}/packs/*",
       "${data.aws_s3_bucket.releases.arn}/presets/*",
     ]
   }

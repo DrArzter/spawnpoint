@@ -182,6 +182,9 @@ ln -s -- "${REPOSITORY_ROOT}/server/tests/fake-aws" "${fixture}/bin/aws"
 export PATH="${fixture}/bin:${PATH}"
 export FAKE_S3_ROOT="${fixture}/fake-s3"
 export RELEASE_BUCKET="spawnpoint-test-releases"
+export RELEASE_PROFILE_ID="adapter-test"
+export RELEASE_PROFILE_REPOSITORY="https://github.com/example/config"
+export RELEASE_PROFILE_COMMIT="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 mkdir -p -- "${fixture}/factorio-pack/mods"
 printf 'factorio mod zip bytes\n' >"${fixture}/factorio-pack/mods/example-mod_1.0.0.zip"
@@ -209,7 +212,7 @@ RELEASE_GAME=factorio "${SCRIPTS}/build-release-manifest.sh" \
   9.1 2.0.55 factorio "${fixture}/empty/mods" "${fixture}/empty/manifest.json" >/dev/null
 RELEASE_SOURCE_DIR="${fixture}/empty" \
   "${SCRIPTS}/upload-release.sh" "${fixture}/empty/manifest.json" >/dev/null
-download_output="$("${SCRIPTS}/download-release.sh" 9.1 "${fixture}/cache/9.1")"
+download_output="$("${SCRIPTS}/download-release.sh" factorio adapter-test 9.1 "${fixture}/cache/9.1")"
 grep -qx 'downloaded=0' <<<"${download_output}"
 [[ -f "${fixture}/cache/9.1/manifest.json" ]]
 
@@ -217,8 +220,8 @@ RELEASE_GAME=zomboid "${SCRIPTS}/build-release-manifest.sh" \
   9.2 42.20 42.20 "${fixture}/empty/mods" "${fixture}/empty/zomboid-manifest.json" >/dev/null
 RELEASE_SOURCE_DIR="${fixture}/empty" \
   "${SCRIPTS}/upload-release.sh" "${fixture}/empty/zomboid-manifest.json" >/dev/null
-[[ -f "${FAKE_S3_ROOT}/${RELEASE_BUCKET}/releases/9.2/manifest.json" ]]
-[[ -f "${FAKE_S3_ROOT}/${RELEASE_BUCKET}/packs/9.2.zip" ]]
+[[ -f "${FAKE_S3_ROOT}/${RELEASE_BUCKET}/releases/zomboid/adapter-test/9.2/manifest.json" ]]
+[[ -f "${FAKE_S3_ROOT}/${RELEASE_BUCKET}/releases/zomboid/adapter-test/9.2/client.zip" ]]
 
 expect_failure "an unknown RELEASE_GAME" \
   env RELEASE_GAME=quake "${SCRIPTS}/build-release-manifest.sh" \

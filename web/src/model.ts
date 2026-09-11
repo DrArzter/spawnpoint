@@ -14,6 +14,7 @@ export type Preset = {
   repository: string;
   commit: string;
   profileDigest: string;
+  releases: readonly string[];
   buildStatus: "unbuilt" | "building" | "ready" | "failed";
   latestRelease: string | null;
 };
@@ -39,6 +40,7 @@ export type World = {
     repository: string;
     commit: string;
     profileDigest: string;
+    releases: readonly string[];
     buildStatus: "unbuilt" | "building" | "ready" | "failed";
     latestRelease: string | null;
   };

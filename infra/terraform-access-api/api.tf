@@ -72,7 +72,7 @@ data "aws_iam_policy_document" "access_api" {
       "${data.aws_s3_bucket.releases.arn}/presets/*",
       # Presigning a pack link signs this same permission, so the panel can hand
       # a player the files without ever holding a credential.
-      "${data.aws_s3_bucket.releases.arn}/packs/*",
+      "${data.aws_s3_bucket.releases.arn}/releases/*",
     ]
   }
 

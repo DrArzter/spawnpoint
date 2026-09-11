@@ -16,7 +16,7 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Host**: A compute machine capable of running a session. A host is not permanently owned by a world; a session temporarily binds one world to one host. _Avoid_: Server or instance when the domain concept, rather than the AWS resource, is meant.
 
-**Release**: An immutable, content-verified build of a preset containing the exact server configuration and mod versions, identified by a version.
+**Release**: An immutable, content-verified build of one preset containing the exact server configuration and mod versions. Its canonical identity is the preset plus a version unique within that preset, such as `industrial@2.1`; a bare version is meaningful only inside an already selected preset.
 
 **Backup**: A recoverable point-in-time snapshot of one world generation, associated with the release that produced it. Restoring a backup creates a new generation from that saved state; it does not turn the backup into a world or release.
 

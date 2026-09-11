@@ -21,7 +21,7 @@ cat >"${FAKE_S3_ROOT}/${RELEASE_BUCKET}/worlds/legacy/release.json" <<'JSON'
 {"schema_version":1,"world":"legacy","desired_release":"1.2","active_release":"1.1","updated_at":"2026-09-01T00:00:00Z","updated_by":"import","source":"import-world"}
 JSON
 cat >"${FAKE_S3_ROOT}/${RELEASE_BUCKET}/presets/minecraft/catalog.json" <<'JSON'
-{"schema_version":1,"game":"minecraft","source":{"repository":"https://github.com/example/config","commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"presets":[{"id":"industrial","display_name":"Industrial","profile_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","build_status":"ready","latest_release":"1.3"}]}
+{"schema_version":2,"game":"minecraft","source":{"repository":"https://github.com/example/config","commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"presets":[{"id":"industrial","display_name":"Industrial","profile_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","build_status":"ready","releases":["1.1","1.2","1.3"],"latest_release":"1.3"}]}
 JSON
 
 tool="${REPOSITORY_ROOT}/scripts/migrate-world-state.sh"

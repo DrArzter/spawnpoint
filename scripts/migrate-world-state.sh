@@ -82,11 +82,12 @@ get_object "presets/${game}/catalog.json" "${preset_catalog}" || {
   printf 'error: preset catalog not found for game: %s\n' "${game}" >&2
   exit 1
 }
-preset="$(jq -ce --arg game "${game}" --arg preset "${preset_id}" '
-  select(.schema_version == 1 and .game == $game) |
+preset="$(jq -ce --arg game "${game}" --arg preset "${preset_id}" \
+  --arg release "$(jq -r '.desired_release' "${legacy}")" '
+  select(.schema_version == 2 and .game == $game) |
   .source as $source |
   .presets[] | select(.id == $preset) |
-  select(.build_status == "ready") |
+  select(.build_status == "ready" and (.releases | index($release) != null)) |
   . + {repository: $source.repository, commit: $source.commit}
 ' "${preset_catalog}")" || {
   printf 'error: ready preset not found: %s/%s\n' "${game}" "${preset_id}" >&2

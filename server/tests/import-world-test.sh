@@ -28,6 +28,9 @@ export PATH="${fixture}/bin:${PATH}"
 export FAKE_S3_ROOT="${fixture}/fake-s3"
 export BACKUP_BUCKET="spawnpoint-test-backups"
 export RELEASE_BUCKET="spawnpoint-test-releases"
+export RELEASE_PROFILE_ID="imported"
+export RELEASE_PROFILE_REPOSITORY="https://github.com/example/config"
+export RELEASE_PROFILE_COMMIT="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 # --- fixture: a world and the mods it runs on ---
 mkdir -p -- "${fixture}/data/world/region" "${fixture}/pack/mods"
@@ -47,10 +50,10 @@ grep -qx 'desired_release=1.0' <<<"${import_output}"
 
 # Everything the import claims to have created exists in the fake bucket layout.
 release_root="${FAKE_S3_ROOT}/${RELEASE_BUCKET}"
-[[ -f "${release_root}/releases/1.0/manifest.json" ]]
-[[ -f "${release_root}/releases/1.0/mods/alpha.jar" ]]
-[[ -f "${release_root}/releases/1.0/mods/beta.jar" ]]
-cmp -- "${fixture}/pack/mods/alpha.jar" "${release_root}/releases/1.0/mods/alpha.jar"
+[[ -f "${release_root}/releases/minecraft/imported/1.0/manifest.json" ]]
+[[ -f "${release_root}/releases/minecraft/imported/1.0/mods/alpha.jar" ]]
+[[ -f "${release_root}/releases/minecraft/imported/1.0/mods/beta.jar" ]]
+cmp -- "${fixture}/pack/mods/alpha.jar" "${release_root}/releases/minecraft/imported/1.0/mods/alpha.jar"
 archive_key="$(awk -F= '$1 == "archive_key" { print $2 }' <<<"${import_output}")"
 [[ -f "${FAKE_S3_ROOT}/${BACKUP_BUCKET}/${archive_key}" ]]
 
@@ -105,8 +108,8 @@ factorio_output="$(
 grep -qx 'result=imported' <<<"${factorio_output}"
 grep -qx 'game=factorio' <<<"${factorio_output}"
 jq -e '.game == "factorio" and .loader.type == "factorio"' \
-  "${release_root}/releases/3.0/manifest.json" >/dev/null
-[[ -f "${release_root}/releases/3.0/mods/alien-biomes_0.6.8.zip" ]]
+  "${release_root}/releases/factorio/imported/3.0/manifest.json" >/dev/null
+[[ -f "${release_root}/releases/factorio/imported/3.0/mods/alien-biomes_0.6.8.zip" ]]
 [[ -f "${release_root}/worlds/factorio/release.json" ]]
 factorio_archive_key="$(awk -F= '$1 == "archive_key" { print $2 }' <<<"${factorio_output}")"
 [[ -f "${FAKE_S3_ROOT}/${BACKUP_BUCKET}/${factorio_archive_key}" ]]

@@ -33,6 +33,9 @@ export FAKE_CF_ROOT="${fixture}/fake-cf"
 export RELEASE_BUCKET="spawnpoint-test-releases"
 export CF_API_KEY="test-key"
 export CF_API_BASE="https://api.fake"
+export RELEASE_PROFILE_ID="manual-cut"
+export RELEASE_PROFILE_REPOSITORY="https://github.com/example/config"
+export RELEASE_PROFILE_COMMIT="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 # --- CurseForge fixtures: two mods, pinned files, one download blob each ---
 mkdir -p -- "${FAKE_CF_ROOT}/blobs"
@@ -111,14 +114,14 @@ grep -qx 'result=cut' <<<"${cut_output}"
 grep -qx 'mods=2' <<<"${cut_output}"
 grep -qx 'upload=uploaded' <<<"${cut_output}"
 release_root="${FAKE_S3_ROOT}/${RELEASE_BUCKET}"
-[[ -f "${release_root}/releases/2.0/manifest.json" ]]
-[[ -f "${release_root}/releases/2.0/mods/alpha-1.2.3.jar" ]]
-jq -e '.server.mods | length == 2' "${release_root}/releases/2.0/manifest.json" >/dev/null
+[[ -f "${release_root}/releases/minecraft/manual-cut/2.0/manifest.json" ]]
+[[ -f "${release_root}/releases/minecraft/manual-cut/2.0/mods/alpha-1.2.3.jar" ]]
+jq -e '.server.mods | length == 2' "${release_root}/releases/minecraft/manual-cut/2.0/manifest.json" >/dev/null
 
 # The client pack rides along: same payload as a zip, with the wholesale-replace
-# instruction inside, immutable under packs/<release>.zip.
+# instruction inside, immutable under the preset-scoped release prefix.
 grep -qx 'pack=uploaded' <<<"${cut_output}"
-pack="${release_root}/packs/2.0.zip"
+pack="${release_root}/releases/minecraft/manual-cut/2.0/client.zip"
 [[ -f "${pack}" ]]
 listing="$(unzip -l "${pack}")"
 grep -q 'alpha-1.2.3.jar' <<<"${listing}"
@@ -145,8 +148,8 @@ vanilla_upload="$(RELEASE_SOURCE_DIR="${fixture}/vanilla" \
   "${SCRIPTS}/upload-release.sh" "${fixture}/vanilla/manifest.json")"
 grep -qx 'result=uploaded' <<<"${vanilla_upload}"
 jq -e '.release == "3.0" and .server.mods == []' \
-  "${release_root}/releases/3.0/manifest.json" >/dev/null
-[[ -z "$(find "${release_root}/releases/3.0" -path '*/mods/*.jar' -print -quit)" ]]
+  "${release_root}/releases/minecraft/manual-cut/3.0/manifest.json" >/dev/null
+[[ -z "$(find "${release_root}/releases/minecraft/manual-cut/3.0" -path '*/mods/*.jar' -print -quit)" ]]
 
 # AWS CLI shorthand treats square brackets as syntax. Real mod filenames may
 # contain them, so release metadata is passed as JSON and must remain opaque.
@@ -159,6 +162,6 @@ special_upload="$(RELEASE_SOURCE_DIR="${fixture}/special" \
   "${SCRIPTS}/upload-release.sh" "${fixture}/special/manifest.json")"
 grep -qx 'result=uploaded' <<<"${special_upload}"
 cmp -- "${fixture}/special/mods/${special_mod}" \
-  "${release_root}/releases/3.1/mods/${special_mod}"
+  "${release_root}/releases/minecraft/manual-cut/3.1/mods/${special_mod}"
 
 printf 'cut-release-test: ok\n'

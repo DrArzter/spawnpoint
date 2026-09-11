@@ -5,6 +5,7 @@ export type PresetObservation = Readonly<{
   repository: string;
   commit: string;
   profileDigest: string;
+  releases: readonly string[];
   latestRelease: string | null;
   buildStatus: "unbuilt" | "building" | "ready" | "failed";
 }>;
@@ -26,7 +27,7 @@ function object(value: unknown): ObjectValue | null {
 // into worlds somebody can start.
 export function parsePresetCatalog(value: unknown, expectedGameId: string): readonly PresetObservation[] | null {
   const root = object(value);
-  if (root === null || root.schema_version !== 1 || root.game !== expectedGameId) return null;
+  if (root === null || root.schema_version !== 2 || root.game !== expectedGameId) return null;
   const source = object(root.source);
   if (source === null || typeof source.repository !== "string" || !source.repository.startsWith("https://github.com/")) return null;
   if (typeof source.commit !== "string" || !COMMIT.test(source.commit)) return null;
@@ -43,7 +44,11 @@ export function parsePresetCatalog(value: unknown, expectedGameId: string): read
     if (status !== "unbuilt" && status !== "building" && status !== "ready" && status !== "failed") return null;
     const latestRelease = preset.latest_release;
     if (latestRelease !== null && (typeof latestRelease !== "string" || !RELEASE.test(latestRelease))) return null;
-    if (status === "ready" && latestRelease === null) return null;
+    if (!Array.isArray(preset.releases) || !preset.releases.every((release) => typeof release === "string" && RELEASE.test(release))) return null;
+    const releases = preset.releases as string[];
+    if (new Set(releases).size !== releases.length) return null;
+    if (status === "ready" && (latestRelease === null || !releases.includes(latestRelease))) return null;
+    if (status !== "ready" && latestRelease !== null && !releases.includes(latestRelease)) return null;
 
     ids.add(preset.id);
     result.push({
@@ -53,6 +58,7 @@ export function parsePresetCatalog(value: unknown, expectedGameId: string): read
       repository: source.repository,
       commit: source.commit,
       profileDigest: preset.profile_digest,
+      releases,
       latestRelease,
       buildStatus: status,
     });

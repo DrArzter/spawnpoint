@@ -25,6 +25,8 @@ Environment:
   AWS_REGION         defaults to eu-central-1
   RELEASE_BUCKET     defaults to spawnpoint-releases-<account-id>
   RELEASE_CHANGELOG  recorded in the manifest; defaults to "Cut from <list>"
+  RELEASE_PROFILE_ID, RELEASE_PROFILE_REPOSITORY and RELEASE_PROFILE_COMMIT
+                     required release provenance; use the preset and exact Git revision
 EOF
 }
 
@@ -51,6 +53,12 @@ done
   printf 'error: CF_API_KEY is required\n' >&2
   exit 1
 }
+for variable in RELEASE_PROFILE_ID RELEASE_PROFILE_REPOSITORY RELEASE_PROFILE_COMMIT; do
+  [[ -n "${!variable:-}" ]] || {
+    printf 'error: %s is required\n' "${variable}" >&2
+    exit 1
+  }
+done
 
 mod_list="$(realpath -e -- "${mod_list}")" || exit 1
 [[ "${release}" =~ ^[0-9]+\.[0-9]+$ ]] || {

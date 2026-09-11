@@ -9,6 +9,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { buildStartInput, buildWatchdogInput } from "../../domain/telegram-bot.ts";
 import { connectPortForWorld } from "../../control-plane/catalog.ts";
+import { clientPackKey } from "../../control-plane/release-artifacts.ts";
 import { S3ReleaseStateStore } from "../../control-plane/s3-release-state-store.ts";
 import { S3WorldRepository } from "../../control-plane/s3-world-repository.ts";
 
@@ -42,7 +43,7 @@ export async function parameter(name: string, ttlSeconds = Infinity): Promise<st
   return value;
 }
 
-export type Pointer = Readonly<{ desired_release: string | null; active_release: string | null }>;
+export type Pointer = Readonly<{ game: string; preset: string; desired_release: string | null; active_release: string | null }>;
 
 export async function readPointer(): Promise<Pointer | null> {
   try {
@@ -55,6 +56,8 @@ export async function readPointer(): Promise<Pointer | null> {
     });
     if (release === null) return null;
     return {
+      game: world.record.gameId,
+      preset: world.record.preset.id,
       desired_release: release.state.desiredRelease,
       active_release: release.state.activeRelease,
     };
@@ -118,8 +121,8 @@ export async function startSession(requestedBy: string): Promise<string> {
   return operationId;
 }
 
-export async function packUrl(release: string): Promise<string | null> {
-  const key = `packs/${release}.zip`;
+export async function packUrl(game: string, preset: string, release: string): Promise<string | null> {
+  const key = clientPackKey(game, preset, release);
   try {
     await s3.send(new HeadObjectCommand({ Bucket: env("RELEASE_BUCKET"), Key: key }));
   } catch {

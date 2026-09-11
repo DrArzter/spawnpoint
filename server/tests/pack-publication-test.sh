@@ -19,6 +19,9 @@ ln -s -- "${REPOSITORY_ROOT}/server/tests/fake-aws" "${fixture}/bin/aws"
 export PATH="${fixture}/bin:${PATH}"
 export FAKE_S3_ROOT="${fixture}/fake-s3"
 export RELEASE_BUCKET="spawnpoint-test-releases"
+export RELEASE_PROFILE_ID="test-preset"
+export RELEASE_PROFILE_REPOSITORY="https://github.com/example/config"
+export RELEASE_PROFILE_COMMIT="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 release_root="${FAKE_S3_ROOT}/${RELEASE_BUCKET}"
 
 # --- minecraft: publishing a release publishes its pack ---
@@ -29,9 +32,9 @@ printf 'jar two\n' >"${fixture}/mc/mods/beta-2.0.jar"
   "${fixture}/mc/mods" "${fixture}/mc/manifest.json" >/dev/null
 output="$(RELEASE_SOURCE_DIR="${fixture}/mc" "${SCRIPTS}/upload-release.sh" "${fixture}/mc/manifest.json")"
 grep -qx 'pack=uploaded' <<<"${output}"
-grep -qx 'pack_key=packs/7.0.zip' <<<"${output}"
+grep -qx 'pack_key=releases/minecraft/test-preset/7.0/client.zip' <<<"${output}"
 
-pack="${release_root}/packs/7.0.zip"
+pack="${release_root}/releases/minecraft/test-preset/7.0/client.zip"
 [[ -f "${pack}" ]]
 listing="$(unzip -l "${pack}")"
 grep -q 'alpha-1.0.jar' <<<"${listing}"
@@ -64,7 +67,7 @@ factorio_output="$(
   RELEASE_SOURCE_DIR="${fixture}/factorio" "${SCRIPTS}/upload-release.sh" "${fixture}/factorio/manifest.json"
 )"
 grep -qx 'pack=uploaded' <<<"${factorio_output}"
-factorio_pack="${release_root}/packs/7.1.zip"
+factorio_pack="${release_root}/releases/factorio/test-preset/7.1/client.zip"
 [[ -f "${factorio_pack}" ]]
 grep -q 'alien-biomes_0.6.8.zip' <<<"$(unzip -l "${factorio_pack}")"
 factorio_notes="$(unzip -p "${factorio_pack}" INSTALL.txt)"
@@ -98,7 +101,7 @@ if nozip_output="$(
   exit 1
 fi
 grep -q 'zip' <<<"${nozip_output}"
-[[ ! -e "${release_root}/releases/7.2/manifest.json" ]]
-[[ ! -e "${release_root}/releases/7.2/mods/gamma-1.0.jar" ]]
+[[ ! -e "${release_root}/releases/minecraft/test-preset/7.2/manifest.json" ]]
+[[ ! -e "${release_root}/releases/minecraft/test-preset/7.2/mods/gamma-1.0.jar" ]]
 
 printf 'pack-publication-test: ok\n'

@@ -12,7 +12,7 @@ export async function packCommand(ctx: Context, mode: RenderMode = "reply"): Pro
     await render(ctx, replies.packMissing("unknown"), packKeyboard(), mode);
     return;
   }
-  const url = await packUrl(release);
+  const url = await packUrl(pointer!.game, pointer!.preset, release);
   await render(
     ctx,
     url === null ? replies.packMissing(release) : replies.pack(release),

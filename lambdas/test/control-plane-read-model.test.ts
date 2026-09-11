@@ -62,12 +62,12 @@ test("each world's address carries its own game's port, and only for callers all
       {
         id: "factorio-vanilla", displayName: "Factorio vanilla", gameId: "factorio",
         repository: "https://github.com/example/factorio", commit: "1".repeat(40), profileDigest: "2".repeat(64),
-        buildStatus: "ready", latestRelease: "1.0",
+        buildStatus: "ready", releases: ["1.0"], latestRelease: "1.0",
       },
       {
         id: "zomboid-vanilla", displayName: "Project Zomboid vanilla", gameId: "zomboid",
         repository: "https://github.com/example/zomboid", commit: "3".repeat(40), profileDigest: "4".repeat(64),
-        buildStatus: "ready", latestRelease: "1.0",
+        buildStatus: "ready", releases: ["1.0"], latestRelease: "1.0",
       },
     ],
   };

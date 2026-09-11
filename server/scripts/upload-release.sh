@@ -7,7 +7,7 @@
 #
 # The pack lives here rather than in one caller because every publisher needs
 # it: the workstation cut, the CodeBuild builder and an import all converge on
-# this script, and the bot's /pack serves whatever this leaves in packs/.
+# this script, and the bot's /pack serves the preset-scoped client.zip.
 
 set -Eeuo pipefail
 
@@ -37,7 +37,9 @@ source_dir="$(realpath -e -- "${RELEASE_SOURCE_DIR:-$(dirname -- "${manifest}")}
 # The same shape rules reconcile-release.sh enforces before trusting a manifest.
 jq -e '
   .schema_version == 1 and
+  (.game | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
   (.release | type == "string" and test("^[0-9]+\\.[0-9]+$")) and
+  (.source_profile.id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
   (.server.mods | type == "array") and
   all(.server.mods[];
     (.file | type == "string" and test("^[^/\\\\]+\\.(jar|zip)$")) and
@@ -50,11 +52,13 @@ jq -e '
 release="$(jq -r '.release' "${manifest}")"
 mods_count="$(jq -r '.server.mods | length' "${manifest}")"
 game="$(jq -r '.game // "minecraft"' "${manifest}")"
-pack_key="packs/${release}.zip"
+preset_id="$(jq -r '.source_profile.id' "${manifest}")"
+release_prefix="releases/${game}/${preset_id}/${release}"
+pack_key="${release_prefix}/client.zip"
 # Checked here rather than at pack time: a missing zip must fail before the
 # payload is uploaded, so a run cannot leave a published release with no pack.
 require_command zip
-manifest_key="releases/${release}/manifest.json"
+manifest_key="${release_prefix}/manifest.json"
 manifest_digest="$(sha256sum -- "${manifest}" | awk '{print $1}')"
 
 head_release_object() {
@@ -75,8 +79,10 @@ upload_release_object() {
   metadata="$(jq -cn \
     --arg sha256 "${digest}" \
     --arg release "${release}" \
+    --arg game "${game}" \
+    --arg preset "${preset_id}" \
     --arg file "${filename}" \
-    '{sha256: $sha256, release: $release, file: $file}')"
+    '{sha256: $sha256, game: $game, preset: $preset, release: $release, file: $file}')"
 
   s3_cli put-object \
     --bucket "${RELEASE_BUCKET}" \
@@ -210,7 +216,7 @@ while IFS=$'\t' read -r filename expected_sha expected_bytes; do
   actual_sha="${actual_sha%% *}"
   [[ "${actual_sha}" == "${expected_sha}" ]] || die "SHA-256 mismatch for ${filename}"
 
-  upload_release_object "releases/${release}/mods/${filename}" "${source_file}" "${expected_sha}" "${filename}"
+  upload_release_object "${release_prefix}/mods/${filename}" "${source_file}" "${expected_sha}" "${filename}"
 done < <(jq -r '.server.mods[] | [.file, .sha256, (.bytes | tostring)] | @tsv' "${manifest}")
 
 upload_release_object "${manifest_key}" "${manifest}" "${manifest_digest}" "manifest.json"

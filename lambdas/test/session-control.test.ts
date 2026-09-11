@@ -13,7 +13,7 @@ test("any world in the catalog can execute, because the machines take a world id
   const factorioPreset = {
     id: "factorio-vanilla", displayName: "Factorio vanilla", gameId: "factorio",
     repository: "https://github.com/example/factorio", commit: "1".repeat(40), profileDigest: "2".repeat(64),
-    buildStatus: "ready", latestRelease: "1.0",
+    buildStatus: "ready", releases: ["1.0"], latestRelease: "1.0",
   } as const;
   const world = newWorldRecord(
     factorioPreset,

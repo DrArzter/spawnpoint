@@ -29,7 +29,7 @@ ability to verify one:
 
 ## Build the client pack unless the game genuinely cannot use one
 
-Publication builds `packs/<release>.zip` from the release's own mod files and the game's own install notes
+Publication builds `releases/<game>/<preset>/<release>/client.zip` from the release's own mod files and the game's own install notes
 (`upload-release.sh`). Automatic in-game delivery — Factorio's mod sync, Zomboid's Workshop download — is the normal
 path, not a guarantee: a client that cannot reach the upstream source still needs the exact files, and the release
 already holds them, so the pack costs one zip.

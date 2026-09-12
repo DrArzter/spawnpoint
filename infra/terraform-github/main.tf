@@ -192,6 +192,7 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "ssm:GetParameter",
       "states:Describe*",
       "states:List*",
+      "states:ValidateStateMachineDefinition",
       "sts:GetCallerIdentity",
     ]
     resources = ["*"]
@@ -416,6 +417,7 @@ data "aws_iam_policy_document" "github_plan_iam" {
       "sns:List*",
       "states:Describe*",
       "states:List*",
+      "states:ValidateStateMachineDefinition",
       "sts:GetCallerIdentity",
     ]
     resources = ["*"]

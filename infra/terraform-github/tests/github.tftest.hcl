@@ -63,6 +63,11 @@ run "plan_role_is_owner_reviewed_and_separate_from_deploy" {
     condition     = aws_iam_role.github_plan.name != aws_iam_role.github_deploy.name
     error_message = "Pull request plans and production deployment must never share an IAM role."
   }
+
+  assert {
+    condition     = anytrue([for statement in data.aws_iam_policy_document.github_plan_iam.statement : contains(statement.actions, "states:ValidateStateMachineDefinition")])
+    error_message = "The provider validates a state-machine definition during plan; without this action every pull request that touches a workflow fails its required check."
+  }
 }
 
 run "deployment_role_trusts_only_the_production_environment" {
@@ -71,6 +76,11 @@ run "deployment_role_trusts_only_the_production_environment" {
   assert {
     condition     = local.deploy_subject == "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production"
     error_message = "Production deploys must use the immutable Spawnpoint repository and owner ids plus the production environment."
+  }
+
+  assert {
+    condition     = anytrue([for statement in data.aws_iam_policy_document.github_deploy_iam.statement : contains(statement.actions, "states:ValidateStateMachineDefinition")])
+    error_message = "An apply plans first; the deploy identity needs the same validation action as the plan identity."
   }
 
   assert {

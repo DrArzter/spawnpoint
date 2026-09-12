@@ -3,6 +3,7 @@ data "aws_caller_identity" "current" {}
 locals {
   github_subjects = var.github_subjects
   deploy_subject  = "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production"
+  plan_subject    = "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production-plan"
 
   build_release_state_machine_arn  = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-build-release"
   build_release_execution_arn      = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:execution:spawnpoint-build-release:*"
@@ -326,4 +327,110 @@ resource "aws_iam_role_policy" "github_deploy_iam" {
   name   = "spawnpoint-github-deploy-iam"
   role   = aws_iam_role.github_deploy.id
   policy = data.aws_iam_policy_document.github_deploy_iam.json
+}
+
+data "aws_iam_policy_document" "github_plan_assume_role" {
+  statement {
+    sid     = "OnlyOwnerReviewedPullRequestPlans"
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github_actions.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = [local.plan_subject]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_plan" {
+  name                 = "spawnpoint-github-plan"
+  description          = "Reads Spawnpoint production state for owner-reviewed pull request plans; it cannot apply or lock."
+  assume_role_policy   = data.aws_iam_policy_document.github_plan_assume_role.json
+  max_session_duration = 3600
+
+  tags = {
+    Name    = "spawnpoint-github-plan"
+    Purpose = "pull-request-terraform-plan"
+  }
+}
+
+data "aws_iam_policy_document" "github_plan_iam" {
+  statement {
+    sid    = "ReadProductionStateWithoutLockWrites"
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:ListBucket",
+    ]
+    resources = [
+      "arn:aws:s3:::spawnpoint-tfstate-${data.aws_caller_identity.current.account_id}",
+      "arn:aws:s3:::spawnpoint-tfstate-${data.aws_caller_identity.current.account_id}/spawnpoint/*",
+    ]
+  }
+
+  statement {
+    sid    = "ReadExistingInfrastructureOnly"
+    effect = "Allow"
+    actions = [
+      "apigateway:GET",
+      "budgets:Describe*",
+      "ce:Get*",
+      "ce:List*",
+      "cloudfront:Get*",
+      "cloudfront:List*",
+      "cloudwatch:Describe*",
+      "cloudwatch:List*",
+      "codebuild:BatchGet*",
+      "codebuild:List*",
+      "dynamodb:Describe*",
+      "dynamodb:List*",
+      "ec2:Describe*",
+      "events:Describe*",
+      "events:List*",
+      "iam:Get*",
+      "iam:List*",
+      "lambda:Get*",
+      "lambda:List*",
+      "logs:Describe*",
+      "logs:List*",
+      "s3:GetAccelerateConfiguration",
+      "s3:GetBucket*",
+      "s3:GetEncryptionConfiguration",
+      "s3:GetLifecycleConfiguration",
+      "s3:GetReplicationConfiguration",
+      "s3:ListAllMyBuckets",
+      "s3:ListBucket",
+      "sns:Get*",
+      "sns:List*",
+      "states:Describe*",
+      "states:List*",
+      "sts:GetCallerIdentity",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "ReadOnlyAmazonLinuxAmiParameter"
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter"]
+    resources = ["arn:aws:ssm:${var.aws_region}::parameter/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"]
+  }
+}
+
+resource "aws_iam_role_policy" "github_plan_iam" {
+  name   = "spawnpoint-github-plan-read-only"
+  role   = aws_iam_role.github_plan.id
+  policy = data.aws_iam_policy_document.github_plan_iam.json
 }

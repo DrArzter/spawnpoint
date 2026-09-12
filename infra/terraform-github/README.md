@@ -1,6 +1,6 @@
 # GitHub Actions identity
 
-This Terraform root owns two deliberately separate workflow identities. The release role is trusted by
+This Terraform root owns three deliberately separate workflow identities. The release role is trusted by
 `DrArzter/my-docker-minecraft-server-config` on `main` and may start the fixed
 `spawnpoint-build-release` Standard Workflow and inspect only that workflow's executions. It cannot invoke CodeBuild,
 read the CurseForge key, write S3 objects, start EC2, send SSM commands or promote a release.
@@ -10,6 +10,11 @@ Its inline policy enumerates the read/create/update operations used by the curre
 management to `spawnpoint-*` identities, and permits deletion only for Terraform state locks and obsolete static web
 assets. It has no broad AWS managed policy. An explicit deny prevents the role from changing itself. Production
 Terraform additionally refuses every plan containing an infrastructure delete or replacement.
+
+The plan role trusts only the immutable Spawnpoint repository identity and its owner-reviewed `production-plan`
+environment. It can read Terraform state and infrastructure metadata, but cannot write a state lock, mutate AWS, or
+apply a plan. Pull requests use it only after an owner approves the environment gate; the resulting required check
+reports action counts and fails on deletes or replacements without printing the state into the job summary.
 
 This root is never auto-applied: the deployment identity cannot be allowed to edit its own trust or permissions.
 It remains separate from `../terraform`, so replacing the disposable host cannot remove the account-level OIDC
@@ -64,6 +69,14 @@ gh variable set AWS_DEPLOY_ROLE_ARN \
   --env production \
   --body "$(terraform output -raw github_deploy_role_arn)"
 ```
+
+Create a separate, owner-reviewed `production-plan` environment for pull requests and set
+`AWS_PLAN_ROLE_ARN` there from `github_plan_role_arn`. Put the same two `TF_VAR_*` secrets in this environment.
+Keeping plan and deploy identities separate means reviewed PR code can inspect a production diff but can never apply
+it; unreviewed PR code receives neither the state-reading role nor the Terraform inputs.
+
+Protect `main` with one approving review, stale-review dismissal, last-pusher separation, and the required
+`scripts/check.sh` plus `Terraform production plan` status checks. Enforce the rule for administrators too.
 
 The environment also needs `TF_VAR_ALERT_EMAIL` and `TF_VAR_BOOTSTRAP_OWNER_TELEGRAM_ID` as environment secrets
 for the two Terraform roots that declare those sensitive inputs.

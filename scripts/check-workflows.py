@@ -80,11 +80,34 @@ def check_deploy_workflow(path: Path, text: str) -> list[str]:
     return problems
 
 
+def check_plan_workflow(text: str) -> list[str]:
+    problems: list[str] = []
+    scopes = permission_scopes(text)
+    expected = {"contents": "read", "id-token": "write"}
+    if scopes != expected:
+        problems.append(f"plan permissions must be {expected}, found {scopes}")
+    for required in (
+        "pull_request:",
+        "branches: [main]",
+        "environment: production-plan",
+        "scripts/terraform-plan-safe.sh",
+        "AWS_PLAN_ROLE_ARN",
+    ):
+        if required not in text:
+            problems.append(f"pull request plan gate is missing {required!r}")
+    for forbidden in ("terraform apply", "AWS_DEPLOY_ROLE_ARN", "push:", "workflow_run:"):
+        if forbidden in text:
+            problems.append(f"pull request plan contains forbidden production capability {forbidden!r}")
+    return problems
+
+
 def check(path: Path) -> list[str]:
     text = path.read_text()
     problems = check_action_pins(text)
     if path.name == "check.yml":
         problems.extend(check_test_workflow(text))
+    elif path.name == "terraform-plan.yml":
+        problems.extend(check_plan_workflow(text))
     elif path.name.startswith("deploy-"):
         problems.extend(check_deploy_workflow(path, text))
     else:

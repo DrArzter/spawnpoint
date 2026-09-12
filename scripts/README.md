@@ -20,6 +20,7 @@ Available:
 | `deploy-lambdas.sh` | Build every Lambda bundle and update only functions whose archive hash changed |
 | `terraform-init-ci.sh` | Initialise one remote-state root from its committed backend key and the current AWS account |
 | `terraform-apply-safe.sh` | Plan and apply one root, refusing deletes and replacements |
+| `terraform-plan-safe.sh` | Plan one changed root read-only for a pull request and refuse deletes or replacements |
 | `deployment_plan.py` | Convert a tested Git diff into web, Lambda and exact Terraform deploy units |
 
 Planned:

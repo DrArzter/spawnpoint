@@ -41,12 +41,19 @@ class DeploymentPlanTest(unittest.TestCase):
     def test_bootstrap_change_requires_manual_review(self) -> None:
         plan = make_plan(["infra/terraform-bootstrap/main.tf"])
         self.assertFalse(plan["infrastructure"])
+        self.assertEqual(plan["terraform_plan_roots"], [])
         self.assertTrue(plan["manual_review"])
 
     def test_deployment_identity_change_requires_manual_review(self) -> None:
         plan = make_plan(["infra/terraform-github/main.tf"])
         self.assertFalse(plan["infrastructure"])
+        self.assertEqual(plan["terraform_plan_roots"], ["infra/terraform-github"])
         self.assertTrue(plan["manual_review"])
+
+    def test_regular_terraform_root_is_both_planned_and_deployed(self) -> None:
+        plan = make_plan(["infra/terraform-storage/storage.tf"])
+        self.assertEqual(plan["terraform_roots"], ["infra/terraform-storage"])
+        self.assertEqual(plan["terraform_plan_roots"], ["infra/terraform-storage"])
 
 
 if __name__ == "__main__":

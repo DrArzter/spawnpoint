@@ -20,6 +20,11 @@ TERRAFORM_ROOTS = (
     "infra/terraform-web",
 )
 
+# This root is deliberately review-and-apply only: the production deployment
+# identity must never be able to rewrite its own trust policy.  A PR still has
+# to prove that it produces a valid, non-destructive plan.
+PLAN_ONLY_TERRAFORM_ROOTS = ("infra/terraform-github",)
+
 WORKFLOW_ROOTS = {
     "workflows/start-server.asl.json": "infra/terraform",
     "workflows/stop-server.asl.json": "infra/terraform",
@@ -50,6 +55,7 @@ def make_plan(paths: list[str]) -> dict[str, object]:
     normalized = {Path(path).as_posix().removeprefix("./") for path in paths if path}
     deploy_all = "__all_production_units__" in normalized
     roots: set[str] = set(TERRAFORM_ROOTS if deploy_all else ())
+    plan_roots: set[str] = set((*TERRAFORM_ROOTS, *PLAN_ONLY_TERRAFORM_ROOTS) if deploy_all else ())
     manual: list[str] = []
     web = deploy_all
     lambdas = deploy_all
@@ -66,12 +72,14 @@ def make_plan(paths: list[str]) -> dict[str, object]:
             manual.append("terraform-bootstrap uses local bootstrap state and is never auto-applied")
             continue
         if path.startswith("infra/terraform-github/"):
+            plan_roots.add("infra/terraform-github")
             manual.append("the GitHub deployment identity cannot auto-modify its own trust or permissions")
             continue
 
         matched_root = next((root for root in TERRAFORM_ROOTS if path.startswith(f"{root}/")), None)
         if matched_root is not None:
             roots.add(matched_root)
+            plan_roots.add(matched_root)
             if matched_root in {"infra/terraform-web", "infra/terraform-access-api"}:
                 web = True
             continue
@@ -79,27 +87,34 @@ def make_plan(paths: list[str]) -> dict[str, object]:
         workflow_root = WORKFLOW_ROOTS.get(path)
         if workflow_root is not None:
             roots.add(workflow_root)
+            plan_roots.add(workflow_root)
             continue
         if path.startswith("workflows/"):
             roots.update(("infra/terraform", "infra/terraform-operations", "infra/terraform-releases", "infra/terraform-access-api"))
+            plan_roots.update(("infra/terraform", "infra/terraform-operations", "infra/terraform-releases", "infra/terraform-access-api"))
 
         if path.startswith("server/"):
             roots.update(("infra/terraform", "infra/terraform-releases"))
+            plan_roots.update(("infra/terraform", "infra/terraform-releases"))
             if path == "server/user-data.sh":
                 manual.append("host user-data changes require a reviewed EC2 replacement or an explicit live-host rollout")
 
         if path in {"scripts/aws-release-builder.sh", "scripts/aws-preset-catalog-builder.sh", "scripts/_config-source.sh"}:
             roots.add("infra/terraform-releases")
+            plan_roots.add("infra/terraform-releases")
 
         if path.startswith("infra/") and matched_root is None and not path.startswith("infra/terraform-bootstrap/"):
             roots.update(TERRAFORM_ROOTS)
+            plan_roots.update((*TERRAFORM_ROOTS, *PLAN_ONLY_TERRAFORM_ROOTS))
 
     ordered_roots = [root for root in TERRAFORM_ROOTS if root in roots]
+    ordered_plan_roots = [root for root in (*TERRAFORM_ROOTS, *PLAN_ONLY_TERRAFORM_ROOTS) if root in plan_roots]
     return {
         "web": web,
         "lambdas": lambdas,
         "infrastructure": bool(ordered_roots),
         "terraform_roots": ordered_roots,
+        "terraform_plan_roots": ordered_plan_roots,
         "manual_review": sorted(set(manual)),
         "changed_paths": sorted(normalized),
     }

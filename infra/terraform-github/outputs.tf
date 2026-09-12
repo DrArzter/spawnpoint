@@ -8,6 +8,11 @@ output "github_deploy_role_arn" {
   value       = aws_iam_role.github_deploy.arn
 }
 
+output "github_plan_role_arn" {
+  description = "Set this as AWS_PLAN_ROLE_ARN in the owner-reviewed production-plan environment."
+  value       = aws_iam_role.github_plan.arn
+}
+
 output "build_release_state_machine_arn" {
   description = "Set this as the AWS_BUILD_RELEASE_STATE_MACHINE_ARN GitHub repository variable."
   value       = local.build_release_state_machine_arn

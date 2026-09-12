@@ -1,0 +1,84 @@
+name: Terraform plan
+
+# The production-plan environment is owner-reviewed. Its OIDC role can only
+# read the existing infrastructure and state; this workflow never applies.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-plan-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Terraform production plan
+    environment: production-plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      AWS_REGION: eu-central-1
+      TF_IN_AUTOMATION: "true"
+      TF_VAR_aws_profile: ""
+      TF_VAR_alert_email: ${{ secrets.TF_VAR_ALERT_EMAIL }}
+      TF_VAR_bootstrap_owner_telegram_id: ${{ secrets.TF_VAR_BOOTSTRAP_OWNER_TELEGRAM_ID }}
+
+    steps:
+      - name: Check out the pull request commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Select affected Terraform roots
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 scripts/deployment_plan.py "${BASE_SHA}" "${HEAD_SHA}" > pull-request-plan.json
+          echo "roots=$(jq -c '.terraform_plan_roots' pull-request-plan.json)" >> "${GITHUB_OUTPUT}"
+
+      - name: Assume the read-only production plan role
+        if: steps.changes.outputs.roots != '[]'
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          role-session-name: spawnpoint-pr-plan-${{ github.event.pull_request.number }}
+
+      - name: Install Terraform
+        if: steps.changes.outputs.roots != '[]'
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Build Lambda bundles consumed by Terraform
+        if: steps.changes.outputs.roots != '[]'
+        run: |
+          npm ci
+          npm run build
+        working-directory: lambdas
+
+      - name: Plan affected roots and reject destructive changes
+        if: steps.changes.outputs.roots != '[]'
+        env:
+          TERRAFORM_ROOTS: ${{ steps.changes.outputs.roots }}
+        run: |
+          {
+            echo "## Production Terraform plan"
+            echo
+            jq -r '.[]' <<<"${TERRAFORM_ROOTS}" | while IFS= read -r root; do
+              result="$(scripts/terraform-plan-safe.sh "${root}")"
+              echo "- \`${result}\`"
+            done
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Record that no production Terraform roots changed
+        if: steps.changes.outputs.roots == '[]'
+        run: echo "No production Terraform roots changed." >> "${GITHUB_STEP_SUMMARY}"

@@ -35,6 +35,34 @@ mock_provider "aws" {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
     }
   }
+
+  override_data {
+    target = data.aws_iam_policy_document.github_plan_assume_role
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.github_plan_iam
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+}
+
+run "plan_role_is_owner_reviewed_and_separate_from_deploy" {
+  command = plan
+
+  assert {
+    condition     = local.plan_subject == "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production-plan"
+    error_message = "Pull request plans must use the immutable Spawnpoint repository identity and the production-plan environment."
+  }
+
+  assert {
+    condition     = aws_iam_role.github_plan.name != aws_iam_role.github_deploy.name
+    error_message = "Pull request plans and production deployment must never share an IAM role."
+  }
 }
 
 run "deployment_role_trusts_only_the_production_environment" {

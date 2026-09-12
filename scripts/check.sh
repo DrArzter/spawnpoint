@@ -46,6 +46,10 @@ check_workflows() {
   python3 scripts/check-workflows.py
 }
 
+check_deployment_plan() {
+  python3 -m unittest discover -s scripts/tests -p '*_test.py'
+}
+
 check_node() {
   (cd lambdas && npm test)
 }
@@ -106,6 +110,7 @@ check_terraform() {
 step "markdown links" check_links
 step "shellcheck" check_shell
 step "workflow hygiene" check_workflows
+step "deployment change classifier" check_deployment_plan
 step "node tests (lambdas)" check_node
 step "production build (mini app)" check_web
 step "lambda bundles" check_lambda_bundles

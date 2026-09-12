@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Check out the commit under test
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       # The node tests run TypeScript directly, which needs a runtime that
       # strips types without a flag.
@@ -50,3 +52,16 @@ jobs:
       # server suite and the Terraform roots need.
       - name: Run every check
         run: scripts/check.sh
+
+      - name: Classify production changes
+        if: github.event_name == 'push'
+        run: python3 scripts/deployment_plan.py "${{ github.event.before }}" "${{ github.sha }}" > production-deployment-plan.json
+
+      - name: Publish the tested deployment plan
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-deployment-plan
+          path: production-deployment-plan.json
+          if-no-files-found: error
+          retention-days: 7

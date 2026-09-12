@@ -1,7 +1,7 @@
 # scripts
 
-Local helpers for the owner, run from a laptop with AWS credentials. Deliberately separate from
-[`lambdas/`](../lambdas/README.md): these are for the person who maintains the system, not for the automation.
+Owner and deployment helpers. Interactive commands run from a laptop; the idempotent deployment helpers are shared
+with GitHub Actions so production does not maintain a second implementation.
 
 Available:
 
@@ -16,6 +16,11 @@ Available:
 | `start-server.sh` | Start or join the M2 Standard Workflow and optionally follow it until Minecraft is ready |
 | `status-server.sh` | Read-only EC2, workflow, storage, latest-backup and live private-endpoint status |
 | `stop-server.sh` | Save, back up and stop through the M2 Standard Workflow; refuses while players are online |
+| `deploy-web.sh` | Build and publish the static panel; skips upload when the built `index.html` is unchanged |
+| `deploy-lambdas.sh` | Build every Lambda bundle and update only functions whose archive hash changed |
+| `terraform-init-ci.sh` | Initialise one remote-state root from its committed backend key and the current AWS account |
+| `terraform-apply-safe.sh` | Plan and apply one root, refusing deletes and replacements |
+| `deployment_plan.py` | Convert a tested Git diff into web, Lambda and exact Terraform deploy units |
 
 Planned:
 

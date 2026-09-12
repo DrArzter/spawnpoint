@@ -1,0 +1,86 @@
+name: Deploy production
+
+on:
+  workflow_run:
+    workflows: [Check]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-24.04
+    outputs:
+      infrastructure: ${{ steps.read.outputs.infrastructure }}
+      lambdas: ${{ steps.read.outputs.lambdas }}
+      manual_review: ${{ steps.read.outputs.manual_review }}
+      terraform_roots: ${{ steps.read.outputs.terraform_roots }}
+      web: ${{ steps.read.outputs.web }}
+    steps:
+      - name: Download the plan produced by the successful check
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: production-deployment-plan
+          path: .production
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Read deployment units
+        id: read
+        run: |
+          plan=.production/production-deployment-plan.json
+          jq . "${plan}"
+          if jq -e '.manual_review | length > 0' "${plan}" >/dev/null; then
+            jq -r '.manual_review[] | "::warning::Manual review required: \(.)"' "${plan}"
+          fi
+          echo "infrastructure=$(jq -r '.infrastructure' "${plan}")" >> "${GITHUB_OUTPUT}"
+          echo "lambdas=$(jq -r '.lambdas' "${plan}")" >> "${GITHUB_OUTPUT}"
+          echo "manual_review=$(jq -c '.manual_review' "${plan}")" >> "${GITHUB_OUTPUT}"
+          echo "terraform_roots=$(jq -c '.terraform_roots' "${plan}")" >> "${GITHUB_OUTPUT}"
+          echo "web=$(jq -r '.web' "${plan}")" >> "${GITHUB_OUTPUT}"
+
+  manual-review:
+    needs: plan
+    if: needs.plan.outputs.manual_review != '[]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Keep manual production work visible
+        env:
+          MANUAL_REVIEW: ${{ needs.plan.outputs.manual_review }}
+        run: |
+          jq -r '.[] | "manual review required: \(.)"' <<<"${MANUAL_REVIEW}" >&2
+          exit 1
+
+  infrastructure:
+    needs: plan
+    if: needs.plan.outputs.infrastructure == 'true'
+    uses: ./.github/workflows/deploy-infrastructure.yml
+    with:
+      ref: ${{ github.event.workflow_run.head_sha }}
+      roots: ${{ needs.plan.outputs.terraform_roots }}
+    secrets: inherit
+
+  lambdas:
+    needs: [plan, infrastructure]
+    if: always() && needs.plan.result == 'success' && (needs.infrastructure.result == 'success' || needs.infrastructure.result == 'skipped') && needs.plan.outputs.lambdas == 'true'
+    uses: ./.github/workflows/deploy-lambdas.yml
+    with:
+      ref: ${{ github.event.workflow_run.head_sha }}
+    secrets: inherit
+
+  web:
+    needs: [plan, infrastructure, lambdas]
+    if: always() && needs.plan.result == 'success' && (needs.infrastructure.result == 'success' || needs.infrastructure.result == 'skipped') && (needs.lambdas.result == 'success' || needs.lambdas.result == 'skipped') && needs.plan.outputs.web == 'true'
+    uses: ./.github/workflows/deploy-web.yml
+    with:
+      ref: ${{ github.event.workflow_run.head_sha }}
+    secrets: inherit

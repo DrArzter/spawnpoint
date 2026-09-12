@@ -1,13 +1,19 @@
 # GitHub Actions identity
 
-This Terraform root gives exactly one workflow identity to
-`DrArzter/my-docker-minecraft-server-config` on `main`. The workflow may start the fixed
+This Terraform root owns two deliberately separate workflow identities. The release role is trusted by
+`DrArzter/my-docker-minecraft-server-config` on `main` and may start the fixed
 `spawnpoint-build-release` Standard Workflow and inspect only that workflow's executions. It cannot invoke CodeBuild,
 read the CurseForge key, write S3 objects, start EC2, send SSM commands or promote a release.
 
-It is separate from `../terraform`: replacing or destroying the disposable game host must not remove the account-level
-GitHub OIDC provider. The root owns the provider, one role and one inline policy. GitHub receives temporary STS
-credentials; there are no AWS access keys to store or rotate.
+The deployment role trusts only the immutable Spawnpoint repository identity and its `production` environment.
+Its inline policy enumerates the read/create/update operations used by the current Terraform resources, limits IAM
+management to `spawnpoint-*` identities, and permits deletion only for Terraform state locks and obsolete static web
+assets. It has no broad AWS managed policy. An explicit deny prevents the role from changing itself. Production
+Terraform additionally refuses every plan containing an infrastructure delete or replacement.
+
+This root is never auto-applied: the deployment identity cannot be allowed to edit its own trust or permissions.
+It remains separate from `../terraform`, so replacing the disposable host cannot remove the account-level OIDC
+provider. GitHub receives temporary STS credentials; there are no AWS access keys to store or rotate.
 
 ## Order
 
@@ -27,8 +33,7 @@ terraform show github.tfplan
 terraform apply github.tfplan
 ```
 
-The expected first plan is three resources: one `aws_iam_openid_connect_provider`, one `aws_iam_role`, and one
-`aws_iam_role_policy`. Applying this root does not run a build and does not create paid compute.
+Review this root manually before every apply. Applying it does not run a build and does not create paid compute.
 
 After apply, copy the workflow outputs into GitHub repository **variables** (not secrets):
 
@@ -49,6 +54,19 @@ gh variable set AWS_RELEASE_BUCKET \
   --repo DrArzter/my-docker-minecraft-server-config \
   --body "$(terraform output -raw release_bucket_name)"
 ```
+
+For this repository, create the `production` environment and configure the deployment role:
+
+```bash
+gh api --method PUT repos/DrArzter/spawnpoint/environments/production
+gh variable set AWS_DEPLOY_ROLE_ARN \
+  --repo DrArzter/spawnpoint \
+  --env production \
+  --body "$(terraform output -raw github_deploy_role_arn)"
+```
+
+The environment also needs `TF_VAR_ALERT_EMAIL` and `TF_VAR_BOOTSTRAP_OWNER_TELEGRAM_ID` as environment secrets
+for the two Terraform roots that declare those sensitive inputs.
 
 The workflow uploads a content-addressed snapshot of the selected Git commit to the release bucket. This lets the
 same pipeline consume public or private config repositories without a long-lived GitHub credential in CodeBuild.

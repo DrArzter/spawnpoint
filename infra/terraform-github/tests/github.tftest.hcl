@@ -21,6 +21,35 @@ mock_provider "aws" {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
     }
   }
+
+  override_data {
+    target = data.aws_iam_policy_document.github_deploy_assume_role
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.github_deploy_iam
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+}
+
+run "deployment_role_trusts_only_the_production_environment" {
+  command = plan
+
+  assert {
+    condition     = local.deploy_subject == "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production"
+    error_message = "Production deploys must use the immutable Spawnpoint repository and owner ids plus the production environment."
+  }
+
+  assert {
+    condition     = aws_iam_role.github_deploy.max_session_duration == 3600
+    error_message = "The production deployment role does not need a session longer than one hour."
+  }
+
 }
 
 run "trusts_only_the_config_repositories_main_branches" {

@@ -4,7 +4,7 @@ set -Eeuo pipefail
 
 REPOSITORY_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 TERRAFORM_BIN="${TERRAFORM_BIN:-terraform}"
-AWS_PROFILE_NAME="${AWS_PROFILE_NAME:-spawnpoint}"
+AWS_PROFILE_NAME="${AWS_PROFILE_NAME-spawnpoint}"
 AWS_REGION_NAME="${AWS_REGION_NAME:-eu-central-1}"
 WEB_ROOT="${REPOSITORY_ROOT}/web"
 TERRAFORM_ROOT="${REPOSITORY_ROOT}/infra/terraform-web"
@@ -22,6 +22,11 @@ if [[ -z "${VITE_TELEGRAM_BOT_USERNAME:-}" ]]; then
   VITE_TELEGRAM_BOT_USERNAME="$(terraform_output_if_available telegram_bot_username)"
 fi
 export VITE_ACCESS_API_URL VITE_TELEGRAM_BOT_USERNAME
+
+aws_profile_args=()
+if [[ -n "${AWS_PROFILE_NAME}" ]]; then
+  aws_profile_args=(--profile "${AWS_PROFILE_NAME}")
+fi
 
 if [[ -z "${VITE_ACCESS_API_URL}" || -z "${VITE_TELEGRAM_BOT_USERNAME}" ]]; then
   printf 'error: access API is not applied; refusing to publish a panel without authentication\n' >&2
@@ -43,16 +48,23 @@ if [[ -z "${bucket_name}" || -z "${mini_app_url}" ]]; then
   [[ -n "${mini_app_url}" ]] || mini_app_url="$(${TERRAFORM_BIN} -chdir="${TERRAFORM_ROOT}" output -raw mini_app_url)"
 fi
 
+if aws s3 cp "s3://${bucket_name}/index.html" - \
+  --region "${AWS_REGION_NAME}" "${aws_profile_args[@]}" 2>/dev/null |
+  cmp -s - "${WEB_ROOT}/dist/index.html"; then
+  printf 'result=unchanged\nurl=%s\n' "${mini_app_url}"
+  exit 0
+fi
+
 aws s3 sync "${WEB_ROOT}/dist/assets" "s3://${bucket_name}/assets" \
   --delete \
   --cache-control 'public,max-age=31536000,immutable' \
-  --profile "${AWS_PROFILE_NAME}" \
+  "${aws_profile_args[@]}" \
   --region "${AWS_REGION_NAME}"
 
 aws s3 cp "${WEB_ROOT}/dist/index.html" "s3://${bucket_name}/index.html" \
   --content-type 'text/html; charset=utf-8' \
   --cache-control 'no-cache' \
-  --profile "${AWS_PROFILE_NAME}" \
+  "${aws_profile_args[@]}" \
   --region "${AWS_REGION_NAME}"
 
 printf 'result=deployed\nurl=%s\n' "${mini_app_url}"

@@ -2,12 +2,12 @@
 
 This isolated Terraform root owns only the command bot: its IAM role, Lambda,
 Function URL and URL permissions. It discovers the existing host, release
-bucket and V1 lifecycle workflows without owning or modifying them. Therefore a
+bucket and Lifecycle V2 workflows without owning or modifying them. Therefore a
 bot plan cannot replace EC2, detach EBS or alter a state machine.
 
 The Lambda is invoked only by Telegram webhooks; no bot compute runs between
-messages. `/start` only opens the menu, `/server_start` starts the established
-V1 start and watchdog workflows, `/status` is read-only, and `/pack` returns a
+messages. `/start` only opens the menu, `/server_start` starts the Lifecycle V2
+start, which registers the session's watchdog itself; `/status` is read-only, and `/pack` returns a
 short-lived presigned S3 link when one exists. `/network` gives the ZeroTier join
 command, while `/address` gives the stable Minecraft and session-scoped Grafana
 addresses. Telegram's webhook secret gates the public Function URL, then the

@@ -94,6 +94,11 @@ milestone where that is cheap to discover.
 **Done when:** a full session runs start to finish without console access, the instance stops itself
 afterwards, and a forced Spot interruption is survived with the world intact.
 
+**Status 2026-09-12: done, except the Spot items, which are deferred with
+[ADR-0032](adr/0032-on-demand-single-instance.md).** Start, idle stop and the running-hours alarm were accepted on
+2026-08-26; session control was re-based on Lifecycle V2 on 2026-09-11 — fenced sessions, one watchdog per session
+([docs/lifecycle-v2-rollout.md](lifecycle-v2-rollout.md)).
+
 **Measure and record the cold start.** [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md) assumes one
 to three minutes is tolerable. If it is not, revisit before building the surfaces on top.
 
@@ -122,6 +127,12 @@ release rolls itself back without help.
 The health check is the hard part of this milestone, not the file syncing. See
 [ADR-0009](adr/0009-s3-as-mod-source-of-truth.md).
 
+**Status 2026-09-12: in progress.** Releases are built in AWS from Git presets and stored per preset
+([ADR-0042](adr/0042-preset-scoped-release-identity.md)); promotion on Lifecycle V2 round-tripped in production on
+2026-09-11. The deliberate bad-release rollback drill has not been run, and the proposals of
+[ADR-0028](adr/0028-update-proposals.md) and the previews of [ADR-0029](adr/0029-preview-environments.md) are not
+started.
+
 ## M4 — One bot, one allow-list
 
 **Goal:** the people who play can start the server and get the pack, without the owner.
@@ -143,6 +154,13 @@ pack.
 That is an afternoon or two, against several weeks for the version that was designed. The ADRs for the larger version
 stay in the repository as proposals, because the reasoning in them is sound and the analysis was the point — they are
 just not on the critical path.
+
+**Status 2026-09-12: the larger version was built after all, by a shorter route.** The Telegram bot, the Mini App and
+browser panel, Telegram-only sign-in ([ADR-0037](adr/0037-telegram-only-browser-identity.md)), Owner approval with
+roles ([ADR-0036](adr/0036-observed-visitors-and-owner-approved-access.md)) and notification subscriptions are
+deployed; authorisation is the DynamoDB access directory, not a Parameter Store list. A client pack rides with every
+release. Not built: Discord, the self-serve link code of ADR-0019, the derived whitelist of ADR-0022, the pack site of
+ADR-0013.
 
 ## M5 — Observability and guardrails
 
@@ -180,18 +198,23 @@ This is deliberately last. Every mechanism it needs — immutable releases, poin
 backups — is built by M3, so M6 adds a dimension rather than new machinery. Doing it earlier would mean building
 that dimension into machinery that does not exist yet.
 
+**Status 2026-09-12: in progress, by a different route than planned.** Worlds are created from reusable Git presets,
+each with its own wipes and backups ([ADR-0040](adr/0040-reusable-presets-and-world-wipes.md)); the Factorio and
+Project Zomboid adapters exist ([ADR-0034](adr/0034-per-game-adapter.md)); the panel starts any world while the bot
+operates one configured world. Content-addressed mod storage is not done.
+
 ## Afterwards, if the project earns it
 
 Not committed to. Recorded so they are not confused with the plan. The first four are the M4 material that was cut, in
 the order they would be worth adding.
 
-- Web control panel, with Cognito and Google sign-in. See [ADR-0012](adr/0012-web-control-panel.md), [ADR-0018](adr/0018-identity-and-sign-in.md).
+- ~~Web control panel, with Cognito and Google sign-in.~~ Built, with Telegram instead of Cognito. See [ADR-0012](adr/0012-web-control-panel.md), [ADR-0037](adr/0037-telegram-only-browser-identity.md).
 - Account linking by one-time code, once there is a panel identity to link to. See [ADR-0019](adr/0019-account-linking.md).
-- Sign-in to the panel from a linked chat account. See [ADR-0021](adr/0021-sign-in-from-linked-chat-account.md).
+- ~~Sign-in to the panel from a linked chat account.~~ Built as Telegram sign-in; ADR-0021 is superseded by [ADR-0037](adr/0037-telegram-only-browser-identity.md).
 - The second chat platform, and a whitelist derived from the link table. See [ADR-0016](adr/0016-chat-integrations.md), [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
 - A proper pack site with changelogs and version history. See [ADR-0013](adr/0013-modpack-distribution.md).
 
-- `terraform plan` in CI, with OIDC and no long-lived keys.
+- ~~`terraform plan` in CI, with OIDC and no long-lived keys.~~ Done 2026-09-12, and further: production is deployed from reviewed pull requests. See [ADR-0043](adr/0043-deploy-production-from-reviewed-pull-requests.md).
 - Minecraft whitelist derived from the link table, rather than maintained twice. See
   [ADR-0019](adr/0019-account-linking.md).
 - SES, if email sign-in or a branded sender is ever wanted. See [ADR-0020](adr/0020-email-channel.md).

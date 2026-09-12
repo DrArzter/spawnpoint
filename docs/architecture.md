@@ -1,14 +1,16 @@
 # Architecture
 
-Describes the intended design of the whole system, so most of it reads in the future tense. Some is now built —
-the on-demand game host, its storage, backups with a tested restore, and durable start and stop workflows. Most is not
-— the bots, the panel, the identity broker, the release pipeline. The [README](../README.md) separates those two; this
-document does not, because its subject is the design rather than the current build. Where a decision is still open, the
-ADR that owns it is linked.
+Describes the intended design of the whole system, so much of it reads in the future tense. Most of it is now built —
+the on-demand game host, its storage, backups with a tested restore, Lifecycle V2 start and stop, the Telegram bot and
+Mini App, Telegram identity with Owner approval, the release pipeline and promotion, worlds with their wipes. What is
+not: the Discord surface, update proposals, preview environments, the derived whitelist. The [README](../README.md)
+separates those two; this document does not, because its subject is the design rather than the current build. Where a
+decision is still open, the ADR that owns it is linked.
 
-Two things have settled since this was written on 2026-08-11, and the text below reflects them: the server runs
-**on-demand**, not on Spot ([ADR-0032](adr/0032-on-demand-single-instance.md)), and it is reachable only over a
-**ZeroTier overlay** ([ADR-0024](adr/0024-connectivity-modes.md)), not a public DNS name.
+Three things have settled since this was written on 2026-08-11, and the text below reflects them: the server runs
+**on-demand**, not on Spot ([ADR-0032](adr/0032-on-demand-single-instance.md)); it is reachable only over a
+**ZeroTier overlay** ([ADR-0024](adr/0024-connectivity-modes.md)), not a public DNS name; and browser identity is
+**Telegram only** ([ADR-0037](adr/0037-telegram-only-browser-identity.md)), not a Cognito broker with Google.
 
 ## Components
 
@@ -18,11 +20,11 @@ Two things have settled since this was written on 2026-08-11, and the text below
 | Data volume | EBS, survives the instance | The world, the mod directory, configs |
 | Control-plane API | API Gateway + Lambda | The only thing allowed to change state. Owns every rule |
 | Operation orchestration | Step Functions, Standard workflows | Runs the long operations. The execution **is** the operation state, so there is no table for it. See [ADR-0025](adr/0025-step-functions-for-long-operations.md) |
-| Lifecycle automation | Step Functions + Lambda + EventBridge | Idle check, interruption handler, post-session backup |
-| Release store | S3, versioned | Immutable release artefacts; desired and active release state are separate |
+| Lifecycle automation | Step Functions + Lambda + DynamoDB | Lifecycle V2: a fenced lease and session record per server, one watchdog execution per session, and the verified stop it invokes. The interruption handler exists only if Spot is ever adopted |
+| Release store | S3, versioned | Immutable release artefacts per preset; world records and, per wipe, separate desired and active release state |
 | Backup store | S3, versioned, lifecycle rules | World archives |
-| Event bus | SNS | One topic. Every notable event is published to it |
-| Chat adapters | Lambda per platform | Format events for Discord and Telegram; receive commands |
+| Events | EventBridge + SNS | Step Functions publishes execution status changes to EventBridge by itself; alarms and the budget publish to the `spawnpoint-alert` SNS topic |
+| Chat adapters | Lambda per platform | Telegram today: a webhook command bot and a notifier fed by execution events. Discord is designed, not built |
 | Identity | Access Lambda + DynamoDB | Verifies signed Telegram browser/Mini App identity and issues a short-lived Spawnpoint session; roles grant access separately. See [ADR-0037](adr/0037-telegram-only-browser-identity.md) |
 | Access directory | DynamoDB | Maps Telegram, game and network accounts to an internal identity, role and direct grants. The bot and panel read the same authority |
 | Web panel and pack site | S3 + CloudFront | Static. Panel is a client of the API; packs are files |
@@ -87,7 +89,8 @@ Notes
 
 ## Flow 2 — Idle stop
 
-1. A scheduled rule invokes the idle check every few minutes, but only while the instance is running.
+1. A watchdog execution, launched with the session, probes the player count every few minutes for as long as the
+   session lasts. Nothing is scheduled, and nothing runs between sessions.
 2. The check reads the player count. A failed read counts as "not empty", never as empty.
 3. After N consecutive empty readings, the stop sequence runs: save the world, confirm the save, stop the
    container, archive the world to S3, verify the archive, stop the instance.
@@ -128,7 +131,8 @@ sequenceDiagram
 
 The weakest link is the health check. A modded server that is loading slowly and one that has hung look
 identical for the first few minutes, so the timeout has to come from a measured normal start time, and there
-must be an explicit "still starting" state. See [ADR-0009](adr/0009-s3-as-mod-source-of-truth.md).
+must be an explicit "still starting" state. The pointer mechanics moved to [ADR-0030](adr/0030-desired-and-active-release.md);
+the health-check question itself is still open.
 
 ## Flow 4 — Spot interruption
 
@@ -160,9 +164,9 @@ every component here would have needed a permanent one.
 | Telegram bot | **Webhook**, not long polling. Telegram POSTs to the endpoint |
 | Control-plane API | API Gateway in front of Lambda. One handler per operation |
 | Long operations | Step Functions state machines. A `Wait` state costs nothing while waiting, unlike a Lambda polling in a loop — which is why this row belongs here rather than in the table below. See [ADR-0025](adr/0025-step-functions-for-long-operations.md) |
-| Release pipeline | A state machine triggered by a write to the live pointer. Idle otherwise |
-| Idle watchdog | An EventBridge schedule, not a daemon — and the rule is enabled only while the instance is running |
-| Interruption handler | An EventBridge rule on the Spot notice. Nothing polls for it |
+| Release pipeline | Standard Workflows started explicitly — a GitHub Action for a build, an owner or the panel for a promotion. Idle otherwise |
+| Idle watchdog | A Step Functions execution per session, launched by the start and ending with the stop. Its `Wait` states cost nothing |
+| Interruption handler | An EventBridge rule on the Spot notice, only if Spot is ever adopted. Nothing polls for it |
 | Identity | Login verification runs only on Lambda requests; there is no continuously billed identity service |
 | Link and token state | DynamoDB in **on-demand** capacity mode |
 | The game server itself | Started on request, stopped when idle. See [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md) |
@@ -171,8 +175,8 @@ Two of those rows are also traps, and are decisions rather than details:
 
 - **DynamoDB must stay in on-demand mode.** Provisioned capacity is billed continuously, which would quietly
   reintroduce exactly what this section exists to prevent.
-- **The idle-check schedule is enabled and disabled with the instance.** A rule firing every few minutes forever is
-  cheap, but it is a process-shaped thing pretending not to be one, and switching it off with the server is free.
+- **The watchdog lives exactly as long as its session.** A rule firing every few minutes forever would be cheap, but
+  it is a process-shaped thing pretending not to be one; one execution per session, started and ended with it, is free.
 
 ### Billed continuously anyway — and it is all storage
 
@@ -226,9 +230,9 @@ nothing before the acknowledgement except verifying the signature. See [ADR-0016
 | Host access | SSM Session Manager and Run Command only. No key pair on the instance |
 | Instance permissions | Instance profile scoped to the two buckets it needs, and nothing else |
 | Lambda permissions | Per-function roles. SSM send limited to instances carrying the project tag |
-| Who may act | Two roles: player may start and read, owner may promote and restore. Being linked is what makes a chat account authorised at all |
+| Who may act | Four built-in roles — viewer, player, operator, owner — plus direct grants on one identity. A Telegram account is authorised only once an Owner has approved it into an identity. See [ADR-0036](adr/0036-observed-visitors-and-owner-approved-access.md) |
 | Identity | The access Lambda verifies Telegram Login Widget signatures and Mini App `initData`. The webhook secret authenticates bot transport; both surfaces then resolve the same Telegram account in the access directory. See [ADR-0037](adr/0037-telegram-only-browser-identity.md) |
-| Account linking | One-time code, generated in the panel, redeemed in the bot. Linking grants no privilege and never changes a role. See [ADR-0019](adr/0019-account-linking.md) |
+| Account linking | Today an Owner records a player's game and network accounts in the profile. The self-serve one-time code of [ADR-0019](adr/0019-account-linking.md) is designed, not built. Linking grants no privilege and never changes a role |
 | Browser sign-in | Telegram Login Widget redirects signed user data to the panel, which exchanges it for a 12-hour Spawnpoint session. Authentication creates at most a Visitor/access candidate; Owner approval creates the identity and role |
 | Secrets | Bot tokens and RCON password in SSM Parameter Store, encrypted. Never in Terraform state or the repository |
 | Public surfaces | Pack site and panel are public; the API requires identity on every request |
@@ -263,12 +267,12 @@ nothing before the acknowledgement except verifying the signature. See [ADR-0016
 Collected from the ADRs, in rough order of how much they would change the design.
 
 1. ~~**Region.**~~ **Settled: `eu-central-1`.** Players are in Poland, Ukraine and western Russia. [ADR-0002](adr/0002-host-on-aws.md), [docs/measurements.md](measurements.md)
-2. **Cold start on the real instance.** Locally about 90 seconds; the end-to-end EC2 figure — boot, reconcile, health — is still wanted, and the whole on-demand model rests on it being tolerable. [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md)
-3. **Health check for a modded start.** The weakest part of the release pipeline. [ADR-0009](adr/0009-s3-as-mod-source-of-truth.md)
+2. ~~**Cold start on the real instance.**~~ **Measured:** on 2026-08-26 the host reached Minecraft healthy 96 seconds into the session command, on release 1.1; EC2 boot and SSM registration come before that. Tolerable, and the whole on-demand model rests on it staying so. [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md), [docs/runbook.md](runbook.md)
+3. **Health check for a modded start.** The weakest part of the release pipeline, and still open: the gate today is the host's readiness contract behind the SSM command timeout. [ADR-0030](adr/0030-desired-and-active-release.md)
 4. **Whether the surfaces read execution state directly or through a flattened API view**, so they do not depend on
    Step Functions' own vocabulary. [ADR-0025](adr/0025-step-functions-for-long-operations.md)
 5. **Content-addressed mod storage** versus per-release copies. [ADR-0008](adr/0008-versioned-mod-releases.md)
 6. **Pack format**, and whether to reuse `packwiz` for the export. [ADR-0013](adr/0013-modpack-distribution.md)
-7. **Whether anybody refuses a Google account for first contact.** It is the only route that *creates* an
-   identity; after that, a linked chat account signs in. Email sign-in with SES is the fallback if somebody will
-   not use it at all. [ADR-0018](adr/0018-identity-and-sign-in.md), [ADR-0021](adr/0021-sign-in-from-linked-chat-account.md), [ADR-0020](adr/0020-email-channel.md)
+7. ~~**Whether anybody refuses a Google account for first contact.**~~ **Settled: Google is gone.** Telegram is the
+   only browser identity, and an Owner approves the first contact. [ADR-0037](adr/0037-telegram-only-browser-identity.md),
+   [ADR-0036](adr/0036-observed-visitors-and-owner-approved-access.md)

@@ -1,9 +1,8 @@
 name: Check
 
 # Every local rung of the evidence ladder, on the same command a developer runs.
-# This workflow deliberately holds no cloud identity: `contents: read` and no
-# OIDC, so it can read the repository and create nothing. The AWS acceptance
-# rung stays where it belongs, in the runbook, performed by an owner.
+# This workflow deliberately holds no cloud identity or secrets. It can update
+# its own pull-request summary comment, but create nothing outside GitHub.
 
 on:
   push:
@@ -12,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: check-${{ github.ref }}
@@ -51,7 +51,47 @@ jobs:
       # Docker is preinstalled on the runner, which is what the containerised
       # server suite and the Terraform roots need.
       - name: Run every check
-        run: scripts/check.sh
+        id: checks
+        run: |
+          set +e
+          scripts/check.sh 2>&1 | tee check-output.log
+          exit_code="${PIPESTATUS[0]}"
+          set -e
+          echo "exit_code=${exit_code}" >> "${GITHUB_OUTPUT}"
+
+      - name: Publish the test result on the pull request
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EXIT_CODE: ${{ steps.checks.outputs.exit_code }}
+        run: |
+          passed="$(grep -c '^ok  ' check-output.log 2>/dev/null || true)"
+          failed="$(grep -c '^FAIL ' check-output.log 2>/dev/null || true)"
+          if [[ "${EXIT_CODE:-1}" == "0" ]]; then
+            heading="## Tests ✅"
+          else
+            heading="## Tests ❌"
+          fi
+          {
+            echo '<!-- spawnpoint-tests-summary -->'
+            echo "${heading}"
+            echo
+            echo "**${passed} passed · ${failed} failed**"
+            if (( failed > 0 )); then
+              echo
+              echo "Failed steps:"
+              grep '^FAIL ' check-output.log | sed 's/^FAIL /- `/' | sed 's/$/`/'
+            fi
+            echo
+            echo "[Open the complete workflow log](${RUN_URL})"
+          } > check-comment.md
+          scripts/upsert-pr-comment.sh '<!-- spawnpoint-tests-summary -->' check-comment.md
+
+      - name: Enforce the test result
+        if: steps.checks.outputs.exit_code != '0'
+        run: exit 1
 
       - name: Classify production changes
         if: github.event_name == 'push'

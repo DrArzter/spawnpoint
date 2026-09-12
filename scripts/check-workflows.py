@@ -42,8 +42,9 @@ def check_action_pins(text: str) -> list[str]:
 def check_test_workflow(text: str) -> list[str]:
     problems: list[str] = []
     scopes = permission_scopes(text)
-    if scopes != {"contents": "read"}:
-        problems.append(f"check permissions must be exactly contents: read, found {scopes}")
+    expected = {"contents": "read", "pull-requests": "write"}
+    if scopes != expected:
+        problems.append(f"check permissions must be {expected}, found {scopes}")
     for forbidden, reason in (
         ("id-token", "OIDC would give the check a cloud identity"),
         ("aws-actions/", "an AWS action means cloud credentials"),
@@ -53,6 +54,8 @@ def check_test_workflow(text: str) -> list[str]:
             problems.append(f"{forbidden} is present — {reason}")
     if "scripts/check.sh" not in text:
         problems.append("does not run scripts/check.sh, so it cannot be the same ladder a developer runs")
+    if "scripts/upsert-pr-comment.sh" not in text or "spawnpoint-tests-summary" not in text:
+        problems.append("does not publish a stable pull request test summary")
     for duplicated in DUPLICATED:
         if duplicated in text:
             problems.append(f"runs {duplicated!r} directly instead of through scripts/check.sh")
@@ -83,7 +86,7 @@ def check_deploy_workflow(path: Path, text: str) -> list[str]:
 def check_plan_workflow(text: str) -> list[str]:
     problems: list[str] = []
     scopes = permission_scopes(text)
-    expected = {"contents": "read", "id-token": "write"}
+    expected = {"contents": "read", "id-token": "write", "pull-requests": "write"}
     if scopes != expected:
         problems.append(f"plan permissions must be {expected}, found {scopes}")
     for required in (
@@ -92,6 +95,8 @@ def check_plan_workflow(text: str) -> list[str]:
         "environment: production-plan",
         "scripts/terraform-plan-safe.sh",
         "AWS_PLAN_ROLE_ARN",
+        "scripts/upsert-pr-comment.sh",
+        "spawnpoint-terraform-summary",
     ):
         if required not in text:
             problems.append(f"pull request plan gate is missing {required!r}")

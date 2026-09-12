@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  pull-requests: write
 
 concurrency:
   group: terraform-plan-${{ github.event.pull_request.number }}
@@ -66,19 +67,73 @@ jobs:
         working-directory: lambdas
 
       - name: Plan affected roots and reject destructive changes
+        id: terraform
         if: steps.changes.outputs.roots != '[]'
         env:
           TERRAFORM_ROOTS: ${{ steps.changes.outputs.roots }}
         run: |
-          {
-            echo "## Production Terraform plan"
-            echo
-            jq -r '.[]' <<<"${TERRAFORM_ROOTS}" | while IFS= read -r root; do
-              result="$(scripts/terraform-plan-safe.sh "${root}")"
-              echo "- \`${result}\`"
-            done
-          } >> "${GITHUB_STEP_SUMMARY}"
+          : > terraform-plan-results.txt
+          failed=0
+          while IFS= read -r root; do
+            if result="$(scripts/terraform-plan-safe.sh "${root}")"; then
+              printf '%s\n' "${result}" >> terraform-plan-results.txt
+            else
+              printf '%s\n' "${result}" >> terraform-plan-results.txt
+              failed=1
+            fi
+          done < <(jq -r '.[]' <<<"${TERRAFORM_ROOTS}")
+          exit "${failed}"
 
       - name: Record that no production Terraform roots changed
         if: steps.changes.outputs.roots == '[]'
         run: echo "No production Terraform roots changed." >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Publish the Terraform result on the pull request
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ROOTS: ${{ steps.changes.outputs.roots }}
+          PLAN_OUTCOME: ${{ steps.terraform.outcome }}
+        run: |
+          if [[ "${ROOTS}" == "[]" ]]; then
+            heading="## Terraform plan ✅"
+          elif [[ "${PLAN_OUTCOME}" == "success" ]]; then
+            heading="## Terraform plan ✅"
+          else
+            heading="## Terraform plan ❌"
+          fi
+          {
+            echo '<!-- spawnpoint-terraform-summary -->'
+            echo "${heading}"
+            echo
+            if [[ "${ROOTS}" == "[]" ]]; then
+              echo "No production Terraform roots changed."
+            elif [[ -s terraform-plan-results.txt ]]; then
+              echo '| Root | Add | Change | Delete | Read | Result |'
+              echo '| --- | ---: | ---: | ---: | ---: | --- |'
+              while IFS= read -r line; do
+                root=""; add=0; change=0; delete=0; read=0; result=error
+                for field in ${line}; do
+                  key="${field%%=*}"
+                  value="${field#*=}"
+                  case "${key}" in
+                    root) root="${value}" ;;
+                    add) add="${value}" ;;
+                    change) change="${value}" ;;
+                    delete) delete="${value}" ;;
+                    read) read="${value}" ;;
+                    result) result="${value}" ;;
+                  esac
+                done
+                echo "| \`${root}\` | ${add} | ${change} | ${delete} | ${read} | ${result} |"
+              done < terraform-plan-results.txt
+            else
+              echo "The plan stopped before a resource summary was available. Open the workflow log for the failing step."
+            fi
+            echo
+            echo "Deletes and replacements fail this required check. [Open the complete workflow log](${RUN_URL})"
+          } > terraform-comment.md
+          cp terraform-comment.md "${GITHUB_STEP_SUMMARY}"
+          scripts/upsert-pr-comment.sh '<!-- spawnpoint-terraform-summary -->' terraform-comment.md

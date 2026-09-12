@@ -77,6 +77,8 @@ it; unreviewed PR code receives neither the state-reading role nor the Terraform
 
 Protect `main` with one approving review, stale-review dismissal, last-pusher separation, and the required
 `scripts/check.sh` plus `Terraform production plan` status checks. Enforce the rule for administrators too.
+The checks maintain separate marker-owned PR comments: tests report passed and failed rungs, while Terraform reports
+per-root add/change/delete/read counts. Reruns update those comments instead of creating notification noise.
 
 The environment also needs `TF_VAR_ALERT_EMAIL` and `TF_VAR_BOOTSTRAP_OWNER_TELEGRAM_ID` as environment secrets
 for the two Terraform roots that declare those sensitive inputs.

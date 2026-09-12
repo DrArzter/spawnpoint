@@ -33,6 +33,13 @@ class DeploymentSecurityTest(unittest.TestCase):
         self.assertIn('-lock=false', script)
         self.assertIn('index("delete")', script)
         self.assertIn("pull request plan refused", script)
+        self.assertIn("result=destructive", script)
+
+    def test_pull_request_comments_only_update_the_actions_bot_own_marker(self) -> None:
+        script = (REPOSITORY / "scripts/upsert-pr-comment.sh").read_text()
+        self.assertIn('user.login == "github-actions[bot]"', script)
+        self.assertIn("contains($marker)", script)
+        self.assertIn("issues/comments/${comment_id}", script)
 
 
 if __name__ == "__main__":

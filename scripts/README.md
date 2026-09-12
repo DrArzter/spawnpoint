@@ -22,6 +22,7 @@ Available:
 | `terraform-apply-safe.sh` | Plan and apply one root, refusing deletes and replacements |
 | `terraform-plan-safe.sh` | Plan one changed root read-only for a pull request and refuse deletes or replacements |
 | `deployment_plan.py` | Convert a tested Git diff into web, Lambda and exact Terraform deploy units |
+| `upsert-pr-comment.sh` | Create or update one marker-owned GitHub Actions summary comment on a pull request |
 
 Planned:
 

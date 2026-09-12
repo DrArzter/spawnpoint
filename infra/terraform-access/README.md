@@ -8,4 +8,4 @@ terraform plan -out=access.tfplan
 terraform apply access.tfplan
 ```
 
-The first deployed slice stores only observed Telegram access candidates. Identity approval and the authenticated control-plane API are added on top of the same table.
+The table holds observed Telegram access candidates, approved identities with their roles and direct grants, notification subscriptions and invitation delivery claims. The access API in [`../terraform-access-api`](../terraform-access-api/) and the bot in [`../terraform-bot`](../terraform-bot/) read the same authority.

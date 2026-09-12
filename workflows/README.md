@@ -55,8 +55,10 @@ session-level facts around that operation:
 
 If start/watchdog launch and compensation both fail, the record deliberately remains `stopping` and the execution fails as
 `Spawnpoint.V2StartCompensationFailed`; claiming `stopped` without a verified backup and EC2 stop would corrupt the
-control plane's evidence. The definition is not wired into Terraform yet. Its input requires distinct `operationId`
-and `sessionId` values; operation history and session identity are related, but not interchangeable.
+control plane's evidence. The definition is deployed from `infra/terraform-operations` and has carried production
+traffic since the 2026-09-11 cutover ([docs/lifecycle-v2-rollout.md](../docs/lifecycle-v2-rollout.md)). Its input
+requires distinct `operationId` and `sessionId` values; operation history and session identity are related, but not
+interchangeable.
 
 `stop-server-v2.asl.json.tftpl` provides the matching session-level stop contract. It first returns `already_stopped`
 without a write for a closed server and rejects a stale session before it can acquire a lease. Otherwise it acquires a fenced lease for the
@@ -80,9 +82,9 @@ stuck lifecycle state.
 
 ## Idle watchdog
 
-`idle-watchdog.asl.json` is the sensor in front of that stop. One execution exists per session — started by
-`scripts/start-server.sh` alongside the session, so there is no schedule to enable and disable and nothing runs
-between sessions ([ADR-0006](../docs/adr/0006-on-demand-start-and-idle-shutdown.md),
+`idle-watchdog.asl.json` is the V1 sensor in front of that stop; since the 2026-09-11 cutover the V2 start launches
+`idle-watchdog-v2` itself. One execution exists per session — started with the session, so there is no schedule to
+enable and disable and nothing runs between sessions ([ADR-0006](../docs/adr/0006-on-demand-start-and-idle-shutdown.md),
 [ADR-0025](../docs/adr/0025-step-functions-for-long-operations.md)). The loop: wait, confirm the host is still
 running, probe `idle-probe.sh` over SSM, and count.
 
@@ -109,34 +111,41 @@ failure ends loudly. A stale watchdog fails its coordinator mutation before it c
 
 ## Promote release
 
-`promote-release.asl.json` implements [ADR-0030](../docs/adr/0030-desired-and-active-release.md) by composing the
-machines above instead of duplicating them. The insight that makes it small: **boot-time reconciliation turned the
-pointer into the single control surface**, so promotion is pointer writes around a verified stop and start, and
-rollback is the same mechanism in reverse.
+`promote-release.asl.json` implements [ADR-0030](../docs/adr/0030-desired-and-active-release.md) by composing Lifecycle
+V2 instead of duplicating it. The insight that makes it small: **boot-time reconciliation turned the wipe's release
+pointer into the single control surface**, so promotion is pointer writes around a fenced, verified stop and start, and
+rollback is the same mechanism in reverse. Since 2026-09-11 the pointer writes are one Lambda, `spawnpoint-release-state`,
+whose transitions — prepare, commit, restore, rollback — are pure TypeScript in
+`lambdas/src/control-plane/release-state-transitions.ts`, written with optimistic concurrency on the S3 object's ETag.
+The machine never builds a pointer document itself.
 
-1. Read and validate the world's pointer; an already-active release ends idempotently.
-2. Verify the target release is published (its manifest exists).
-3. **Write desired.** From here every path must leave the pointer telling the truth.
-4. Running host → the verified stop (a refusal — players online — restores the pointer and fails as
-   `PromotionRefused`; nothing changed). Stopped host → straight to start.
-5. The existing start machine runs synchronously: the host reconciles to desired and the health gate proves it.
-6. Success → **commit active**. Failure → flip the pointer to the previous active and start again — the host
-   reconciles *back* by the same boot-time mechanism — ending `rolled_back`, or `RollbackFailed` if that start
-   fails too. A world whose active is null has nowhere to roll back to and fails as `PromotionFailedNoRollback`.
-7. A host that was running gets its watchdog relaunched (fire-and-forget; its failure never fails a finished
-   promotion). A host that was stopped is stopped again after the commit, so promotion never leaves a paid
-   surprise behind.
+1. Verify the target release is published for this game and preset (its manifest exists).
+2. **Prepare**: write desired for the world's current wipe; an already-active release ends idempotently. From here
+   every path must leave the pointer telling the truth.
+3. Read the authoritative lifecycle record. Ready with an active session → the fenced V2 stop of *that* session (a
+   refusal — players online — restores the pointer and fails as `PromotionRefused`; nothing changed). Fully stopped →
+   straight to start. Anything else → restore the pointer and fail as `LifecycleUnavailable`.
+4. The V2 start runs synchronously with a fresh session identity: the host reconciles to desired, the health gate
+   proves it, and V2 registers the watchdog — promotion has no watchdog bypass and no watchdogless success.
+5. Success → **commit active**. Failure → **rollback**: flip the pointer to the previous active and start again in a
+   second fresh session — the host reconciles *back* by the same boot-time mechanism — ending `rolled_back`, or
+   `RollbackFailed` if that start fails too. A wipe whose active is null has nowhere to roll back to and fails as
+   `PromotionFailedNoRollback`.
+6. A host that was stopped is stopped again after the commit or the rollback, so promotion never leaves a paid surprise
+   behind; a host that was running stays running with its new session.
 
-Every bad ending is a distinct `Spawnpoint.*` error, because "failed" without "where" is midnight archaeology.
-Pointer documents are built as objects and passed directly to the S3 SDK integration, which serialises the blob.
-Applying `States.JsonToString` here would double-encode the object as a JSON string. Nested Step Functions execution
-inputs are different: those integrations explicitly require a string, so their `States.JsonToString` calls remain.
+Every bad ending is a distinct `Spawnpoint.*` error, because "failed" without "where" is midnight archaeology. Nested
+execution inputs are passed as objects to `states:startExecution.sync:2`, which serialises them. The interleaving gap
+this section used to record — a promotion racing a watchdog stop — is serialised by the fenced lease: both hold the
+server's lease while they mutate lifecycle state, and a stale session cannot ([docs/lifecycle-v2-rollout.md](../docs/lifecycle-v2-rollout.md),
+invariants 1–3 and 8). The production acceptance of 2026-09-11 is recorded there.
 
-**Known gap, deliberate:** nothing prevents a concurrent promotion and watchdog stop from interleaving. Single-flight
-is ADR-0025's open question; until it lands, promote when the session is quiet — the stop machine's player check is
-the guard that matters.
+## The probe contract — resolved 2026-08-27
 
-## A forward note on the probe contract
+**Done before cutover**, in the shape this note asked for: `check-session-activity.sh` offers `PROBE_FORMAT=json`, and
+the V2 watchdog reads `States.StringToJson(...).playersOnline` from the whole of stdout, so there is no position and no
+order to depend on ([docs/lifecycle-v2-rollout.md](../docs/lifecycle-v2-rollout.md)). The note stays as written, because
+the trap it describes is the general one.
 
 `check-session-activity.sh` speaks `key=value` lines, and the V2 watchdog extracts `players_online` with string
 intrinsics **by line position** — `ArrayGetItem(StringSplit(stdout, '\n'), 3)`, the fourth line.

@@ -278,6 +278,9 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "iam:AddRoleToInstanceProfile",
       "iam:CreateInstanceProfile",
       "iam:CreateRole",
+      "iam:DeleteRole",
+      "iam:DeleteRolePolicy",
+      "iam:DetachRolePolicy",
       "iam:PassRole",
       "iam:PutRolePolicy",
       "iam:TagInstanceProfile",
@@ -314,6 +317,49 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "arn:aws:s3:::spawnpoint-web-${data.aws_caller_identity.current.account_id}/assets/*",
       "arn:aws:s3:::spawnpoint-web-${data.aws_caller_identity.current.account_id}/index.html",
     ]
+  }
+
+  # The one opening in the no-delete rule, and exactly as wide as the allow-list
+  # in scripts/_terraform-destroy-allow.sh: control-plane wiring Terraform
+  # recreates from the repository. Nothing here can reach the host, its volume,
+  # a bucket, a table, the OIDC trust, the distribution, a Function URL or the
+  # guardrails, so a wrong line in a destroy-allowed.txt stops at IAM.
+  statement {
+    sid    = "DestroyOnlyAllowListedWiring"
+    effect = "Allow"
+    actions = [
+      "apigateway:DELETE",
+      "cloudwatch:DeleteAlarms",
+      "codebuild:DeleteProject",
+      "events:DeleteRule",
+      "events:RemoveTargets",
+      "lambda:RemovePermission",
+      "logs:DeleteLogGroup",
+      "sns:Unsubscribe",
+      "states:DeleteStateMachine",
+    ]
+    resources = [
+      "arn:aws:apigateway:${var.aws_region}::/apis/*/integrations/*",
+      "arn:aws:apigateway:${var.aws_region}::/apis/*/routes/*",
+      "arn:aws:cloudwatch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alarm:spawnpoint-*",
+      "arn:aws:codebuild:${var.aws_region}:${data.aws_caller_identity.current.account_id}:project/spawnpoint-*",
+      "arn:aws:events:${var.aws_region}:${data.aws_caller_identity.current.account_id}:rule/spawnpoint-*",
+      "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:spawnpoint-*",
+      "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:*spawnpoint*",
+      "arn:aws:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:spawnpoint-*",
+      "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-*",
+    ]
+  }
+
+  statement {
+    sid    = "NeverDestroyGitHubIdentities"
+    effect = "Deny"
+    actions = [
+      "iam:DeleteRole",
+      "iam:DeleteRolePolicy",
+      "iam:DetachRolePolicy",
+    ]
+    resources = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/spawnpoint-github-*"]
   }
 
   statement {

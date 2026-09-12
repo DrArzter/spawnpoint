@@ -3,6 +3,8 @@
 - Status: Accepted
 - Date: 2026-09-12 — records a decision already implemented in `ea546ee` and `b6cd30b`, written down after the fact so
   the placeholder in [the index](README.md#decisions-still-to-record) stops describing it as open
+- Amended by: [ADR-0044](0044-apply-github-identities-behind-an-owner-gate.md) — the GitHub identities root is applied
+  by a gated identity job rather than by hand
 - Relates: [ADR-0011](0011-terraform-for-infrastructure.md) (Terraform owns resources),
   [ADR-0028](0028-update-proposals.md) (GitHub as a thin OIDC client of AWS), [ADR-0025](0025-step-functions-for-long-operations.md)
 

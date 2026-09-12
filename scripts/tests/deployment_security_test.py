@@ -48,6 +48,7 @@ class DeploymentSecurityTest(unittest.TestCase):
         self.assertIn("role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}", manual_job)
         self.assertNotIn("AWS_DEPLOY_ROLE_ARN", manual_job)
         self.assertIn("manual_unverified", manual_job)
+        self.assertNotIn("run: jq -r", manual_job)
 
     def test_pull_request_comments_only_update_the_actions_bot_own_marker(self) -> None:
         script = (REPOSITORY / "scripts/upsert-pr-comment.sh").read_text()

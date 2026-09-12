@@ -349,6 +349,46 @@ Independent acceptance found EC2 `stopped`, no running start/stop/watchdog/promo
 Terraform plan with `No changes`. Release `1.1` is therefore active because it passed health, not merely because it was
 requested.
 
+## Deliberate bad-release rollback acceptance
+
+On 2026-09-13 (2026-09-12 UTC), release `9.99` was published solely as a rollback drill. Its immutable manifest was
+written last at `releases/minecraft/main/9.99/manifest.json` with S3 VersionId
+`PQb7CQScqeDWOTF1wHmOb0HvqJgAzU8d`; it named one payload,
+`missing-for-rollback-drill.jar`, whose object was deliberately absent. A preflight `HeadObject` returned `404` for
+that payload while active release `1.1`, the stopped host and an empty promotion queue established a clean origin.
+
+The production command was:
+
+```bash
+AWS_PROFILE=spawnpoint scripts/promote-release.sh world 9.99
+```
+
+Execution `promote-20260912T232003Z` ran for about **5m16s** and completed Step Functions `SUCCEEDED` with the expected
+business result:
+
+```text
+status=rolled_back
+server=stopped
+worldId=world
+activeRelease=1.1
+failedRelease=9.99
+```
+
+The target start failed closed as `Spawnpoint.SessionStartFailed`. Execution history then entered
+`Write Rollback Desired`, started the previous release in a distinct fenced session, stopped that recovery session and
+ended in `Rolled Back`. The recovery stop produced and verified this backup:
+
+```text
+S3 key: worlds/world/archives/world-gen-5ef02ba44b4796544786716f89d2e10b-20260912T232428Z-b095abf673c56aefec2d10b3c39d3cd304370b5545aca065890dad96de38105a.tar.zst
+SHA-256: b095abf673c56aefec2d10b3c39d3cd304370b5545aca065890dad96de38105a
+Bytes: 419,352,531
+```
+
+Independent post-checks found the release pointer still at `desired_release=active_release=1.1` with VersionId
+`N4TTHnekWWVkgerKdX0BirtzYQED1gUk`, EC2 `stopped`, and no running promotion execution. The deliberately broken
+manifest remains immutable evidence; the missing payload remains absent. Automatic rollback from a failed release is
+therefore acceptance-tested without operator repair.
+
 ## Idle-watchdog acceptance
 
 The first production-timing watchdog drill started from clean state: active release `1.1`, EC2 stopped and no running

@@ -127,11 +127,11 @@ release rolls itself back without help.
 The health check is the hard part of this milestone, not the file syncing. See
 [ADR-0009](adr/0009-s3-as-mod-source-of-truth.md).
 
-**Status 2026-09-12: in progress.** Releases are built in AWS from Git presets and stored per preset
+**Status 2026-09-13: in progress.** Releases are built in AWS from Git presets and stored per preset
 ([ADR-0042](adr/0042-preset-scoped-release-identity.md)); promotion on Lifecycle V2 round-tripped in production on
-2026-09-11. The deliberate bad-release rollback drill has not been run, and the proposals of
-[ADR-0028](adr/0028-update-proposals.md) and the previews of [ADR-0029](adr/0029-preview-environments.md) are not
-started.
+2026-09-11. A deliberately incomplete release `9.99` rolled itself back to `1.1` without operator repair on
+2026-09-13, satisfying the rollback acceptance criterion. The proposals of [ADR-0028](adr/0028-update-proposals.md)
+and the previews of [ADR-0029](adr/0029-preview-environments.md) are not started.
 
 ## M4 — One bot, one allow-list
 

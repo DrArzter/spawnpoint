@@ -1,8 +1,9 @@
 # Lifecycle V2 rollout
 
-Lifecycle V2 is built beside the working M2 start/stop workflows. Until the explicit cutover, production owner
-commands continue to resolve `spawnpoint-start-server` and `spawnpoint-stop-server`; incomplete V2 resources receive no
-traffic. Every phase below is independently committable and leaves the existing server startable.
+Lifecycle V2 was built beside the working M2 start/stop workflows and **cut over on 2026-09-11** — see *Current
+phase* below. Until then, production owner commands resolved `spawnpoint-start-server` and `spawnpoint-stop-server` and
+incomplete V2 resources received no traffic; every phase was independently committable and left the existing server
+startable. V1 remains deployed as the private host adapter that V2 composes.
 
 ## State ownership
 
@@ -97,7 +98,7 @@ record before touching the host, stops the exact active session, and gives targe
 identities. Lifecycle V2 start owns watchdog registration, so promotion has no watchdog bypass or watchdogless success
 path.
 
-## Phase 8 acceptance: V2 release promotion
+## Promotion on V2: production acceptance
 
 Production promotion moved to Lifecycle V2 on 2026-09-11 in commit `3e3adb1`. The saved operations plan contained
 exactly two in-place updates — the promotion role policy and state-machine definition — and no additions or

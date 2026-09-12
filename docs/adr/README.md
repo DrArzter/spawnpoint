@@ -26,14 +26,17 @@ collected eleven before it was accepted.
 
 ## Start here — most of this is not blocking
 
-Thirty-four records is a wall, and a wall is not a plan. Read the two or three that cover what you are building now.
+Forty-three records is a wall, and a wall is not a plan. Read the two or three that cover what you are building now.
 
 | To do this | You need |
 | --- | --- |
 | ~~Session zero and M0~~ | **Done.** [docs/aws-m0-command-log.md](../aws-m0-command-log.md) records what was actually run |
 | ~~M1~~ | **Done.** [0011](0011-terraform-for-infrastructure.md), [0010](0010-world-persistence-and-backups.md), [0007](0007-ssm-instead-of-ssh.md) |
-| **M2** — finish on-demand: idle watchdog, running-hours alarm | [0006](0006-on-demand-start-and-idle-shutdown.md), [0025](0025-step-functions-for-long-operations.md), [0032](0032-on-demand-single-instance.md) |
-| M3 — releases and the pipeline | [0008](0008-versioned-mod-releases.md), [0030](0030-desired-and-active-release.md), then [0028](0028-update-proposals.md) and [0029](0029-preview-environments.md) |
+| ~~M2~~ | **Done**, and re-based on Lifecycle V2 on 2026-09-11 — [docs/lifecycle-v2-rollout.md](../lifecycle-v2-rollout.md). The decisions: [0006](0006-on-demand-start-and-idle-shutdown.md), [0025](0025-step-functions-for-long-operations.md), [0032](0032-on-demand-single-instance.md) |
+| M3 — releases and the pipeline | [0008](0008-versioned-mod-releases.md), [0030](0030-desired-and-active-release.md), [0042](0042-preset-scoped-release-identity.md); then [0028](0028-update-proposals.md) and [0029](0029-preview-environments.md), still proposed |
+| M4 — surfaces and identity | Built on [0037](0037-telegram-only-browser-identity.md), [0036](0036-observed-visitors-and-owner-approved-access.md) and [0012](0012-web-control-panel.md); [0016](0016-chat-integrations.md) stays open for Discord |
+| Worlds, wipes, presets and games | [0040](0040-reusable-presets-and-world-wipes.md), [0034](0034-per-game-adapter.md), [0033](0033-connectivity-as-a-strategy.md) |
+| Deploying a change to production | [0043](0043-deploy-production-from-reviewed-pull-requests.md) |
 | Everything else | Later. Read when the milestone arrives |
 
 M0 was built on **mode C**, not the mode A this table used to name: the security group ended up with no inbound rules
@@ -89,39 +92,35 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0030](0030-desired-and-active-release.md) | Separate desired release from confirmed active release | Accepted | M3 |
 | [0031](0031-first-class-local-control-plane.md) | First-class local control plane with shared ASL, Lambda and host contracts | Accepted | M1–M5 |
 | [0032](0032-on-demand-single-instance.md) | Run the game server on one on-demand EC2 instance | Accepted, supersedes [0004](0004-ec2-spot-for-the-game-server.md) | M0 |
-| [0033](0033-connectivity-as-a-strategy.md) | Connectivity is a strategy behind one interface, constrained by the game's auth model | Proposed, amends [0024](0024-connectivity-modes.md) | M2 |
+| [0033](0033-connectivity-as-a-strategy.md) | Connectivity is a strategy behind one interface, constrained by the game's auth model | Accepted, amends [0024](0024-connectivity-modes.md) | M2 |
 | [0034](0034-per-game-adapter.md) | A game is a module: data plus functions, minecraft the byte-identical default | Accepted | cross-cutting |
 | [0035](0035-bootstrap-first-owner.md) | Bootstrap the first Owner through one verified Google identity | Superseded by [0037](0037-telegram-only-browser-identity.md) | M4 |
-| [0036](0036-observed-visitors-and-owner-approved-access.md) | Observe visitors, but let an Owner grant access | Proposed | M4 |
+| [0036](0036-observed-visitors-and-owner-approved-access.md) | Observe visitors, but let an Owner grant access | Accepted | M4 |
 | [0037](0037-telegram-only-browser-identity.md) | Telegram-only browser identity through signed Widget and Mini App payloads | Accepted | M4 |
 | [0038](0038-invitation-delivery-claim.md) | Claim an invitation once before Telegram delivery | Accepted | M4 |
 | [0039](0039-git-presets-instantiate-world-generations.md) | Git presets instantiate recoverable world generations | **Superseded** by [0040](0040-reusable-presets-and-world-wipes.md) | cross-cutting |
 | [0040](0040-reusable-presets-and-world-wipes.md) | Reusable presets create worlds whose wipes own release state | Accepted | cross-cutting |
 | [0041](0041-evaluate-spt-profile-backed-adapter.md) | Evaluate SPT as a profile-backed adapter without distributing EFT | Proposed | later |
 | [0042](0042-preset-scoped-release-identity.md) | Release identity and storage are scoped by preset | Accepted | cross-cutting |
+| [0043](0043-deploy-production-from-reviewed-pull-requests.md) | Deploy production from reviewed pull requests through OIDC roles | Accepted | cross-cutting |
 
 ## Decisions still to record
 
 Placeholders, so they are not forgotten. Deliberately unnumbered: a number is assigned when the ADR is
 written, so the numbering stays chronological and nothing has to be renumbered when plans change.
 
-- **CI for infrastructure.** Half answered on 2026-08-31: `.github/workflows/check.yml` runs `scripts/check.sh` on
-  every push and pull request, which covers every rung that needs no credentials — links, shellcheck, the node tests,
-  the containerised server suite, the mini app's build, and `fmt` plus `test` across all eleven Terraform roots. It
-  holds `contents: read` and nothing else, and `scripts/check-workflows.py` fails the build if that changes, if an
-  action stops being pinned to a commit, or if the workflow starts keeping its own copy of the rungs instead of
-  calling the script.
-  What remains is the half with an identity attached: whether `terraform plan` runs against real state. The mechanism
-  is already answered by [ADR-0028](0028-update-proposals.md) — GitHub assumes an AWS role through OIDC with no
-  stored keys — and a Terraform role would be the same mechanism with wider permissions, which is precisely why it
-  stays a separate decision.
+- ~~**CI for infrastructure.**~~ Recorded as [ADR-0043](0043-deploy-production-from-reviewed-pull-requests.md) on
+  2026-09-12. The credential-free half landed on 2026-08-31 — `check.yml` runs `scripts/check.sh` with `contents: read`
+  and a hygiene check keeps it that way. The half with an identity attached landed on 2026-09-12: a pull request
+  receives a read-only production plan through an owner-gated OIDC role, and a passing `Check` on `main` deploys the
+  changed units through a separate deploy role that refuses deletes and replacements.
 - **In-game verification of a Minecraft binding.** Only if a real conflict occurs, or when in-game events start
   naming people. Deferred deliberately in [ADR-0022](0022-minecraft-account-as-linked-identity.md).
 - **Cost guardrail response.** Leaning answered by [docs/costs.md](../costs.md): **act, not merely notify.** A Budgets
   action that stops instances and denies expensive APIs, because against an egress or loop runaway a notification
   arrives after the money is spent. Needs the current Budgets action capabilities verified before it becomes an ADR.
-- **Retiring a world.** Archived to cold storage and removed, or kept indefinitely. Needed before the first
-  abandoned pack, not after. See [ADR-0023](0023-multiple-worlds.md).
+- ~~**Retiring a world.**~~ Answered by [ADR-0040](0040-reusable-presets-and-world-wipes.md): archiving keeps the
+  record and every backup; purging an archived world removes all of it behind a typed confirmation, permanently.
 - **Concurrent worlds on separate hosts.** Lifting ADR-0023's one-active-at-a-time to one instance per active world.
   Most of the design is ready by construction — per-world pointers and backup lineages, instance-parametric state
   machines, per-server lease semantics in Lifecycle V2, per-host watchdog economics. The mechanical seams, named so

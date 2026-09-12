@@ -1,31 +1,42 @@
 # Spawnpoint
 
-A self-built control plane for one modded Minecraft server on AWS. It starts the server when somebody
-asks for it, stops it when the last player leaves, treats the mod set as a versioned artefact, and hands
-every player the matching client pack.
+A self-built control plane for private game servers on AWS — one modded Minecraft world today, with Factorio and
+Project Zomboid adapters behind the same lifecycle. It starts a world's server when somebody asks for it, stops it
+when the last player leaves, treats the mod set as a versioned release, and hands every player the matching client
+pack.
 
 The name is a working title.
 
-> **Status: running on AWS.** M0 and M1 are done. The server is live on EC2, reachable only inside the overlay, rebuilt
-> from Terraform, and its world has been restored from an S3 archive in a real drill rather than a thought experiment.
-> M2's start, stop and idle-watchdog path is acceptance-tested on active release `1.1`: a normal start launched the
-> session watchdog, three confirmed empty checks produced a verified backup, and EC2 stopped automatically.
+> **Status: running on AWS, operated from Telegram.** M0 and M1 are done. The server is live on EC2, reachable only
+> inside the overlay, rebuilt from Terraform, and its world has been restored from an S3 archive in a real drill rather
+> than a thought experiment. M2's start, stop and idle-watchdog path was acceptance-tested on release `1.1`, and on
+> 2026-09-11 session control and release promotion cut over to Lifecycle V2 — fenced sessions, one watchdog per
+> session, promotion proven end to end in both directions. Players start the server from the Telegram bot or the Mini
+> App; an Owner approves who they are. Production is deployed by GitHub Actions from reviewed pull requests.
 >
 > The two tables below separate what runs from what is only designed. Command-by-command records of what was actually
 > executed, with verification and rollback beside each change: [M0](docs/aws-m0-command-log.md),
-> [M1](docs/aws-m1-command-log.md), [M2](docs/aws-m2-command-log.md), [M3](docs/aws-m3-command-log.md).
+> [M1](docs/aws-m1-command-log.md), [M2](docs/aws-m2-command-log.md), [M3](docs/aws-m3-command-log.md),
+> [bot](docs/aws-bot-command-log.md), [access](docs/aws-access-command-log.md), [web](docs/aws-web-command-log.md).
+> The V2 cutover and the promotion drills are recorded in [docs/lifecycle-v2-rollout.md](docs/lifecycle-v2-rollout.md).
 
 ## What runs today
 
 | Capability | Detail |
 | --- | --- |
-| A server with no inbound ports | The security group has no inbound rules at all. The game is reachable only inside the ZeroTier overlay, and SSM reaches the host over its outbound connection. See [ADR-0024](docs/adr/0024-connectivity-modes.md) and [ADR-0007](docs/adr/0007-ssm-instead-of-ssh.md) |
-| Rebuilt from Terraform | Three roots: the state bucket, the storage that outlives the host, and the host itself. Buckets live in separate state, so an ordinary host teardown cannot take the backups with it |
-| Backups that were actually restored | The world is archived to S3 and verified after upload. On 2026-08-13 an archive was downloaded by the instance role, restored onto a fresh volume, reconciled against release `1.0`, and a player joined the recovered world |
-| Start and stop as durable operations | Step Functions Standard. Stop rechecks the player count, flushes the world, stops every session container, verifies an immutable backup, and only then stops the instance |
-| Session watchdog and release promotion | Separate Standard Workflows. Promotion `1.0 → 1.1` passed its health-gated deploy; the production-timing watchdog then observed three empty checks, backed up and stopped EC2 automatically |
+| A server with no inbound ports | The security group has no inbound rules at all. The game is reachable only inside the ZeroTier overlay, and SSM reaches the host over its outbound connection. A world may opt into a public address per [ADR-0033](docs/adr/0033-connectivity-as-a-strategy.md), which opens exactly that game's port. See [ADR-0024](docs/adr/0024-connectivity-modes.md) and [ADR-0007](docs/adr/0007-ssm-instead-of-ssh.md) |
+| Rebuilt from Terraform | Eleven isolated roots — state bucket, guardrails, the storage that outlives the host, the host, releases, operations, access, access API, bot, web and the GitHub identities. Buckets live in separate state, so an ordinary host teardown cannot take the backups with it |
+| Backups that were actually restored | The world is archived to S3 and verified after upload. On 2026-08-13 an archive was downloaded by the instance role, restored onto a fresh volume, reconciled against release `1.0`, and a player joined the recovered world. Every backup now names the wipe and release that produced it |
+| Start and stop as durable operations | Step Functions Standard, composed by Lifecycle V2 since 2026-09-11: a fenced lease, one explicit session identity, and a verified stop that rechecks the player count, flushes the world, stops every session container and verifies an immutable backup before the instance stops. See [docs/lifecycle-v2-rollout.md](docs/lifecycle-v2-rollout.md) |
+| Session watchdog and release promotion | One watchdog per session, launched by the V2 start; three confirmed empty checks produce a verified backup and stop EC2. Promotion is pointer writes around a fenced V2 stop and start: `1.1 → 34246388450.1 → 1.1` round-tripped in production on 2026-09-11, each leg health-gated and archived |
 | An immutable bootstrap release | Release `1.0`: 111 JARs, pinned and hashed, retained as the hand-cut baseline |
-| AWS-built release candidates | GitHub OIDC triggers a Standard Workflow and ephemeral CodeBuild job. Release `1.1` was resolved, hashed and published manifest-last without starting the game host |
+| AWS-built releases from Git presets | A preset is authored in its game's configuration repository; GitHub OIDC triggers a Standard Workflow and an ephemeral CodeBuild job that resolves, hashes and publishes the release manifest-last, per preset ([ADR-0042](docs/adr/0042-preset-scoped-release-identity.md)). A catalog builder publishes which presets are ready. Release `1.1` was the first, built without starting the game host |
+| Telegram bot and Mini App | A webhook bot on Lambda — `/server_start`, `/status`, `/address`, `/network`, `/pack`, an inline menu — and a static React Mini App behind CloudFront, both thin clients of the same access API. Deployed 2026-08-27 to 29. See [ADR-0012](docs/adr/0012-web-control-panel.md), [ADR-0016](docs/adr/0016-chat-integrations.md) and [ADR-0037](docs/adr/0037-telegram-only-browser-identity.md) |
+| Identity, roles and approval | The access API verifies a Telegram Login Widget signature or Mini App `initData`. A signed-in stranger is a Visitor who sees coarse status only; an Owner approves the observed account and assigns viewer, player, operator or owner. See [ADR-0036](docs/adr/0036-observed-visitors-and-owner-approved-access.md) |
+| Worlds, wipes and backups as operations | Create a world from a ready preset release; archive it, start a new wipe, restore a backup into a new wipe, or purge an archived world. Each is a guarded Standard Workflow that stops and backs up an active session first. See [ADR-0040](docs/adr/0040-reusable-presets-and-world-wipes.md) |
+| Chat notifications | Step Functions execution events reach a notifier Lambda: start requested, ready, stopped, promoted, rolled back, failed stop. Guardrail alerts on `spawnpoint-alert` arrive in the same chat. Players choose their own subscriptions in the panel |
+| Production deployed from pull requests | `Check` must pass on `main`; then GitHub Actions classifies the tested diff and assumes an OIDC role to apply only the changed Terraform roots, Lambda bundles and web build, refusing any plan with a delete or replacement. Pull requests get a read-only production plan. See [ADR-0043](docs/adr/0043-deploy-production-from-reviewed-pull-requests.md) |
+| Running-hours alarm and budget | `spawnpoint-running-hours` fires after ten consecutive running hours; it and the $20 budget publish to `spawnpoint-alert`, which reaches email and the Telegram notifier |
 | Per-session observability | Prometheus and Grafana come up with the session and go down with it. Prometheus binds to loopback; Grafana is reachable only inside the overlay |
 
 ## What is designed, not built
@@ -35,16 +46,14 @@ player-facing feature yet. Read the roadmap for the order.
 
 | Capability | Detail |
 | --- | --- |
-| Player-facing start control | The owner can start a session without the AWS console, and the accepted watchdog stops it automatically; the remaining work is exposing start/status/pack safely to players |
-| Updates you approve, not updates that happen | A scheduled check resolves every mod, diffs by hash, and opens a pull request. Five changed mods with changelogs is a decision; a server that updated itself is an incident |
-| Preview environments per proposal | A pull request boots a throwaway server on a copy of the real world. Join it and look at your base before approving. A few cents a run |
-| Matching client pack | Every release generates a launcher-importable pack, published at a stable URL |
-| One API, several surfaces | Web panel, Discord bot, Telegram bot and CLI are all clients of the same control-plane API |
-| Sign in with an account you have | Signed Telegram browser or Mini App login. No passwords stored, anywhere |
-| Approve people, not IDs in config | A Telegram login creates a Visitor; an Owner reviews it and assigns a role in the panel |
-| Whitelist that maintains itself | The Minecraft identity is a third link, and `whitelist.json` is generated from the link table. Remove someone once, and they lose the panel, the bots and the game |
-| Several worlds, one at a time | Each pack is a world with its own release line, save data and backups. Start the one you want; the others cost only storage |
-| Chat notifications | "X requested the server", "server ready", "release 1.4 promoted", "backup failed" |
+| Updates you approve, not updates that happen | A scheduled check resolves every mod, diffs by hash, and opens a pull request. Five changed mods with changelogs is a decision; a server that updated itself is an incident. [ADR-0028](docs/adr/0028-update-proposals.md), proposed |
+| Preview environments per proposal | A pull request boots a throwaway server on a copy of the real world. Join it and look at your base before approving. [ADR-0029](docs/adr/0029-preview-environments.md), proposed |
+| A pack site with history | Every release published today carries its `client.zip`, presigned from the panel and `/pack`. The stable public URL, changelog and version history of [ADR-0013](docs/adr/0013-modpack-distribution.md) are not built |
+| Discord as a second surface | Telegram is deployed; Discord has not been attempted, which is why [ADR-0016](docs/adr/0016-chat-integrations.md) stays open |
+| Self-serve account linking | An Owner edits a player's linked game and network accounts in the profile today. The one-time `/link` code of [ADR-0019](docs/adr/0019-account-linking.md) is not built |
+| Whitelist that maintains itself | The Minecraft identity is a third link, and `whitelist.json` is generated from the link table. Remove someone once, and they lose the panel, the bots and the game. [ADR-0022](docs/adr/0022-minecraft-account-as-linked-identity.md), proposed |
+| A world picker in the bot | The panel starts any world; the bot still operates the one world it is configured for |
+| Concurrent worlds on separate hosts | One world is active at a time. The seams are named in the [ADR index](docs/adr/README.md#decisions-still-to-record) |
 
 ## Why it exists
 
@@ -85,7 +94,7 @@ See [ADR-0003](docs/adr/0003-build-not-reuse.md) and [docs/prior-art.md](docs/pr
 flowchart LR
     subgraph Surfaces
         WEB[Web panel]
-        DIS[Discord bot]
+        DIS[Discord bot<br/>designed, not built]
         TG[Telegram bot]
         CLI[Owner CLI]
     end
@@ -93,13 +102,14 @@ flowchart LR
     subgraph ControlPlane["Control plane"]
         API[API Gateway + Lambda<br/>start, status, releases, backups]
         SFN[Step Functions Standard<br/>durable operations]
-        BUS[SNS: events]
+        BUS[EventBridge: execution events<br/>SNS: alerts]
     end
 
     subgraph Data
         REL[(S3: immutable releases<br/>desired + active state)]
         BAK[(S3: world backups)]
         SITE[(S3 + CloudFront<br/>panel and packs)]
+        DDB[(DynamoDB: access directory,<br/>Lifecycle V2 record)]
     end
 
     subgraph Runtime
@@ -114,6 +124,8 @@ flowchart LR
     TG --> API
     CLI --> API
     API --> SFN
+    API --> DDB
+    SFN --> DDB
     SFN -->|SSM Run Command| EC2
     SFN -->|start / stop| EC2
     REL -->|promote| SFN
@@ -134,10 +146,10 @@ Four flows carry the whole design:
 
 | Flow | Trigger | What happens |
 | --- | --- | --- |
-| Start | Explicit request from a surface, with an identity | Operation created → instance started → connection string published → mods reconciled against the desired release → health check → active committed → "ready" announced |
-| Stop | No players for N consecutive checks | World saved → archived to S3 → instance stopped → session length announced |
-| Release | A deployment operation writes the desired release | Announce → save and stop container → sync mods → start → health check → commit active, or roll back |
-| Restore | The volume is lost, or a release ate content | Newest verified archive downloaded by the instance role → restored onto a fresh volume → release reconciled → health check → play |
+| Start | Explicit request from a surface, with an identity | Operation created → fenced session begun → instance started → mods reconciled against the wipe's desired release → health check → address published → "ready" announced → watchdog registered |
+| Stop | No players for N consecutive checks, or a request | Players rechecked → world saved → archived to S3 and verified → instance stopped → session closed and announced |
+| Release | A promotion writes the wipe's desired release | Verify the release exists → fenced stop → start → health check and watchdog registration → commit active, or roll back by the same mechanism in reverse |
+| Restore | The volume is lost, or a release ate content | A chosen verified backup becomes a new wipe of the same world: the closed lineage is kept, the backup's own release is the new wipe's desired release, and the host expands it on the next start |
 
 A fifth flow, handling a Spot two-minute notice, is designed but **not in use**: the project runs on-demand while
 [ADR-0027](docs/adr/0027-spot-request-shape.md) stays deferred.
@@ -148,22 +160,25 @@ Full description, including failure modes: [docs/architecture.md](docs/architect
 
 ```
 docs/                       Architecture, roadmap, costs, runbook, measurements, AWS checklist,
-                            and a command log per milestone
+                            the Lifecycle V2 rollout, and a command log per milestone and per surface
 docs/adr/                   Architecture decision records — start here
 infra/terraform-bootstrap/  The state bucket, created before a state backend can exist
 infra/terraform-guardrails/ Budget, alert topic and anomaly detection — applied before anything that can spend
 infra/terraform-storage/    Buckets that outlive the host, kept in their own state on purpose
-infra/terraform/            The host and everything disposable
-infra/terraform-releases/   Inert CodeBuild release builder and its Standard Workflow
-infra/terraform-operations/ Idle-session and release-deployment workflow compositions
-infra/terraform-github/     GitHub OIDC identity that may trigger only the AWS release builder
-infra/terraform-web/        Private S3 + CloudFront hosting for the Telegram Mini App
+infra/terraform/            The host and everything disposable, the V1 host machines, Lifecycle V2 state and coordinator
+infra/terraform-releases/   Inert CodeBuild release builder, the preset catalog publisher and their Standard Workflows
+infra/terraform-operations/ Lifecycle V2 start, stop and watchdog, promotion, and the release-state Lambda
+infra/terraform-access/     The DynamoDB access directory: identities, roles, subscriptions, invitations
+infra/terraform-access-api/ Telegram sign-in, the session-protected HTTP API and the world-lifecycle workflow
+infra/terraform-bot/        The Telegram command bot and the notifier
+infra/terraform-web/        Private S3 + CloudFront hosting for the Mini App and browser panel
+infra/terraform-github/     GitHub OIDC identities: release trigger, production deploy, read-only plan
 lambdas/                    Control-plane handlers and the shared domain code
 workflows/                  Step Functions ASL definitions for long-running operations
-server/                     Compose files, on-instance scripts, tests, observability, release contents
-scripts/                    Owner-side helpers: start, stop, audit the account bootstrap
+server/                     Compose files, game modules, on-instance scripts, tests, observability
+scripts/                    Owner-side helpers, and the deployment helpers GitHub Actions shares
 local/                      The local control-plane environment of ADR-0031
-web/                        React/Vite Telegram Mini App — read-only preview deployed
+web/                        React/Vite Mini App and browser panel — deployed
 ```
 
 ## Checking your work
@@ -182,10 +197,18 @@ The same command runs in CI on every push and pull request. That workflow holds 
 identity — a check that could create resources would no longer be only a check — and a hygiene check fails the build
 if it ever gains one, unpins an action, or starts keeping its own copy of the rungs.
 
+Deployment is a separate workflow with an identity. After `Check` passes on `main`, `Deploy production` classifies
+the tested diff into Terraform roots, Lambda bundles and the web build, assumes the OIDC deploy role, and applies only
+those units — refusing any plan that contains a delete or a replacement. A pull request receives a read-only
+production plan through a second, owner-gated role. See
+[ADR-0043](docs/adr/0043-deploy-production-from-reviewed-pull-requests.md) and
+[infra/terraform-github/README.md](infra/terraform-github/README.md).
+
 ## Decisions
 
-Thirty-four records, each with the alternatives that were rejected and why. Three have been superseded and one was
-rejected the same day it was written, which is the process working rather than failing — as is
+Forty-three records, each with the alternatives that were rejected and why. Seven have been superseded, one was
+rejected the same day it was written and one is deferred, which is the process working rather than failing — as is
+[ADR-0040](docs/adr/0040-reusable-presets-and-world-wipes.md) replacing ADR-0039 four days after it, or
 [ADR-0032](docs/adr/0032-on-demand-single-instance.md) replacing ADR-0004 rather than editing it a ninth time.
 
 Measurements deliberately do **not** live in these files. They live in
@@ -205,18 +228,17 @@ which are allowed to change. The reason is written up in [docs/adr/README.md](do
 | [0009](docs/adr/0009-s3-as-mod-source-of-truth.md) | S3 holds releases; promotion deploys | Superseded by 0030 |
 | [0010](docs/adr/0010-world-persistence-and-backups.md) | World on persistent EBS, backups to S3 | Accepted |
 | [0011](docs/adr/0011-terraform-for-infrastructure.md) | Terraform for infrastructure | Accepted |
-| [0012](docs/adr/0012-web-control-panel.md) | One control-plane API; the panel is one client | Proposed |
+| [0012](docs/adr/0012-web-control-panel.md) | One control-plane API; the panel is one client | Accepted — implemented |
 | [0013](docs/adr/0013-modpack-distribution.md) | Client pack from S3 and CloudFront | Proposed |
 | [0014](docs/adr/0014-no-kubernetes.md) | Do not use Kubernetes | Accepted |
 | [0015](docs/adr/0015-observability-and-alerting.md) | Session Grafana/Prometheus; CloudWatch signals and durable alarms | Accepted |
-| [0016](docs/adr/0016-chat-integrations.md) | Discord and Telegram as control surfaces | Proposed |
+| [0016](docs/adr/0016-chat-integrations.md) | Discord and Telegram as control surfaces | Proposed — Telegram deployed, Discord untried |
 | [0017](docs/adr/0017-stable-server-address.md) | Stable hostname in Route 53 | Superseded by 0024 |
 | [0018](docs/adr/0018-identity-and-sign-in.md) | Cognito broker; earlier Google-first design | Superseded by 0037 |
 | [0019](docs/adr/0019-account-linking.md) | Link chat accounts with a one-time code | Proposed |
-| [0020](docs/adr/0020-email-channel.md) | SNS email for alerts; SES deferred | Accepted |
-| [0021](docs/adr/0021-sign-in-from-linked-chat-account.md) | Chat sign-in, but only into a linked account | Proposed |
+| [0021](docs/adr/0021-sign-in-from-linked-chat-account.md) | Chat sign-in, but only into a linked account | Superseded by 0037 |
 | [0022](docs/adr/0022-minecraft-account-as-linked-identity.md) | Minecraft identity is a link; whitelist derived; `online-mode=false` | Proposed |
-| [0023](docs/adr/0023-multiple-worlds.md) | Several worlds, one active at a time | Proposed |
+| [0023](docs/adr/0023-multiple-worlds.md) | Several worlds, one active at a time | Accepted |
 | [0024](docs/adr/0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Accepted |
 | [0025](docs/adr/0025-step-functions-for-long-operations.md) | Step Functions for long operations; Lambda for the rest | Accepted |
 | [0026](docs/adr/0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | Rejected |
@@ -226,8 +248,17 @@ which are allowed to change. The reason is written up in [docs/adr/README.md](do
 | [0030](docs/adr/0030-desired-and-active-release.md) | Desired release is separate from confirmed active release | Accepted |
 | [0031](docs/adr/0031-first-class-local-control-plane.md) | First-class local control plane with shared ASL, Lambda and host contracts | Accepted |
 | [0032](docs/adr/0032-on-demand-single-instance.md) | Run the game server on one on-demand EC2 instance | Accepted |
-| [0033](docs/adr/0033-connectivity-as-a-strategy.md) | Connectivity is a strategy behind one interface, constrained by the game's auth model | Proposed |
+| [0033](docs/adr/0033-connectivity-as-a-strategy.md) | Connectivity is a strategy behind one interface, constrained by the game's auth model | Accepted |
 | [0034](docs/adr/0034-per-game-adapter.md) | A game is a module: data plus functions, minecraft the byte-identical default | Accepted |
+| [0035](docs/adr/0035-bootstrap-first-owner.md) | Bootstrap the first Owner through one verified Google identity | Superseded by 0037 |
+| [0036](docs/adr/0036-observed-visitors-and-owner-approved-access.md) | Observe visitors, but let an Owner grant access | Accepted |
+| [0037](docs/adr/0037-telegram-only-browser-identity.md) | Telegram is the default and only browser identity provider | Accepted |
+| [0038](docs/adr/0038-invitation-delivery-claim.md) | Claim an invitation once before Telegram delivery | Accepted |
+| [0039](docs/adr/0039-git-presets-instantiate-world-generations.md) | Git presets instantiate recoverable world generations | Superseded by 0040 |
+| [0040](docs/adr/0040-reusable-presets-and-world-wipes.md) | Reusable presets create worlds whose wipes own release state | Accepted |
+| [0041](docs/adr/0041-evaluate-spt-profile-backed-adapter.md) | Evaluate SPT as a profile-backed adapter without distributing EFT | Proposed |
+| [0042](docs/adr/0042-preset-scoped-release-identity.md) | Release identity and storage are scoped by preset | Accepted |
+| [0043](docs/adr/0043-deploy-production-from-reviewed-pull-requests.md) | Deploy production from reviewed pull requests through OIDC roles | Accepted |
 
 Index, template and the decisions still to make: [docs/adr/README.md](docs/adr/README.md).
 
@@ -248,11 +279,11 @@ $129 a month. That is why a stop that silently fails is treated as an incident.
 | --- | --- | --- |
 | M0 | A playable server, built by hand, deliberately throwaway | **Done** 2026-08-13 |
 | M1 | The same thing rebuilt in Terraform, with backups and a tested restore | **Done** 2026-08-13 |
-| M2 | On-demand start and idle stop, over a stable overlay address | **Accepted on demand** 2026-08-26 — start, health, three empty checks, verified backup and automatic EC2 stop; Spot remains deliberately deferred |
-| M3 | Versioned mod releases and the deployment pipeline | **In progress** — AWS built `1.1`, health-gated promotion `1.0 → 1.1` passed; a deliberate bad-release rollback drill remains |
-| M4 | Telegram bot, shared identity/role authorization and client pack distribution | **In progress** |
-| M5 | Observability, alerting and cost guardrails | Session Grafana already runs; the durable alarms do not |
-| M6 | Several worlds — vanilla-plus, techno, magic, techno-magic — one active at a time | |
+| M2 | On-demand start and idle stop, over a stable overlay address | **Done** 2026-08-26, re-based on Lifecycle V2 2026-09-11 — fenced sessions, one watchdog per session; Spot remains deliberately deferred |
+| M3 | Versioned mod releases and the deployment pipeline | **In progress** — releases are built in AWS per preset, and promotion round-tripped on V2 in production on 2026-09-11; a deliberate bad-release rollback drill and the update proposals of ADR-0028 remain |
+| M4 | Telegram bot, shared identity/role authorization and client pack distribution | **Largely done** — bot, Mini App, Telegram sign-in, Owner approval and roles are deployed; a pack rides with every new release; the stable pack site of ADR-0013 is not built |
+| M5 | Observability, alerting and cost guardrails | Session Grafana runs; the running-hours alarm and the budget publish to `spawnpoint-alert`, reaching email and Telegram. The remaining ADR-0015 signals, the forced-alarm tests and the first monthly cost check are not done |
+| M6 | Several worlds, one active at a time | **In progress** — worlds are created from reusable presets, each with its own wipes and backups (ADR-0040); Factorio and Zomboid adapters exist; the bot still operates one configured world |
 
 Definition of done per milestone: [docs/roadmap.md](docs/roadmap.md).
 
@@ -260,13 +291,15 @@ Definition of done per milestone: [docs/roadmap.md](docs/roadmap.md).
 
 | Term | Meaning here |
 | --- | --- |
-| Release | An immutable, versioned mod set plus configs and loader versions |
-| Desired release | The release the control plane is trying to make true for a world |
-| Active release | The last release that started and passed the full health check for a world |
+| Preset | A versioned declaration in a game's Git configuration repository: a reusable mod and server-configuration template, built into releases and used to create worlds |
+| Release | An immutable, content-verified build of one preset, identified as `preset@version` |
+| Desired release | The release the control plane is trying to make true for a world's open wipe |
+| Active release | The last release that started and passed the full health check for that wipe |
 | Client pack | The launcher-importable artefact generated from a release |
 | Operation | A long-running action with observable state: start, promote, restore |
 | Link | The record joining a chat or Minecraft identity to one internal identity. Being linked is being authorised, and it is also the sign-in route |
-| World | A named playable thing: its release line, its save data and its backup lineage together |
+| World | A named playable instance created from a preset, with its own wipes and backup history |
+| Wipe | The player-facing name for a world generation: one save lineage, created from a release, carrying its own desired and active release |
 | Connectivity mode | How players reach the server: raw address, DNS, or overlay network |
 | Cold start | Time from a start request to the server accepting connections |
 | Idle watchdog | The check that stops the instance when nobody is online |

@@ -13,9 +13,9 @@ Available:
 | `operations.sh` | Show recent start/stop Step Functions executions |
 | `players.sh` | Ask the running server for its current player list through SSM and RCON |
 | `session.sh` | Command dispatcher and interactive menu for the local operator toolbox |
-| `start-server.sh` | Start or join the M2 Standard Workflow and optionally follow it until Minecraft is ready |
+| `start-server.sh` | Start or join the Lifecycle V2 start for a named world, and optionally follow it until the game is ready |
 | `status-server.sh` | Read-only EC2, workflow, storage, latest-backup and live private-endpoint status |
-| `stop-server.sh` | Save, back up and stop through the M2 Standard Workflow; refuses while players are online |
+| `stop-server.sh` | Save, back up and stop the exact active session through Lifecycle V2; refuses while players are online |
 | `deploy-web.sh` | Build and publish the static panel; skips upload when the built `index.html` is unchanged |
 | `deploy-lambdas.sh` | Build every Lambda bundle and update only functions whose archive hash changed |
 | `terraform-init-ci.sh` | Initialise one remote-state root from its committed backend key and the current AWS account |
@@ -24,14 +24,20 @@ Available:
 | `_terraform-destroy-allow.sh` | The judgement both safe scripts share: which destroys a root's `destroy-allowed.txt` permits, and which types may be listed at all |
 | `deployment_plan.py` | Convert a tested Git diff into web, Lambda and exact Terraform deploy units |
 | `upsert-pr-comment.sh` | Create or update one marker-owned GitHub Actions summary comment on a pull request |
+| `terraform-verify-applied.sh` | Prove a manually applied root has a zero-change read-only plan, for the production workflow |
+| `promote-release.sh` | Promote one world's current wipe to a published release through Lifecycle V2, and follow the operation |
+| `cut-release.sh` | Manual bootstrap and diagnostic release cut from a working mod set; the supported path is the AWS builder |
+| `import-world.sh` | Bring an existing world and its exact mods in: manifest → release → archive → upload → pointer |
+| `publish-pack.sh` | Backfill the client pack for a release published before packs rode with publication |
+| `migrate-world-state.sh` | Adopt a legacy world-scoped release pointer into the world and wipe model; dry-run by default |
+| `migrate-preset-catalog.sh`, `migrate-release-layout.sh` | One-time migrations to the preset-scoped catalog and release layout of [ADR-0042](../docs/adr/0042-preset-scoped-release-identity.md) |
+| `aws-release-builder.sh`, `aws-preset-catalog-builder.sh`, `_config-source.sh` | What CodeBuild runs: stage the exact Git snapshot, resolve, hash, publish |
+| `check.sh`, `check-links.py`, `check-workflows.py` | The local evidence ladder and its hygiene checks; `check.sh` is the command CI runs |
 
 Planned:
 
 | Script | Purpose |
 | --- | --- |
-| `cut-release.sh` | Build a release from a working mod set: hashes, manifest, upload. See [ADR-0008](../docs/adr/0008-versioned-mod-releases.md) |
-| `promote.sh` | Request a desired release, and follow the resulting deployment operation |
-| `restore-world.sh` | Restore a world archive into a new volume or path, never over the live world |
 | `cost.sh` | Month-to-date cost by service, for the monthly check in the [runbook](../docs/runbook.md#monthly-cost-check) |
 
 ## Allowing a destroy
@@ -77,5 +83,6 @@ their private ZeroTier addresses; an unreachable probe does not change or restar
 the instance. `backups.sh` and `operations.sh` read AWS APIs directly. Run `session.sh` without arguments for a menu,
 or use it as a dispatcher, for example `session.sh logs --lines 200`.
 
-**Status:** the account-bootstrap audit and minimal M2 start/stop triggers exist. `cut-release.sh` arrives in M3, the
-rest as needed.
+**Status:** owner start, stop, status and promotion, world import and the migration tools, the builders CodeBuild
+runs, and the deployment helpers GitHub Actions shares all exist. Restoring a world is `server/scripts/restore-world.sh`
+from an owner workstation ([runbook](../docs/runbook.md#restore-the-world)); `cost.sh` is the one planned script left.

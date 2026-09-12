@@ -161,11 +161,16 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   assert {
     condition = alltrue([
       contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/archive"),
-      contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/regenerate"),
+      contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/wipe"),
       contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/restore"),
       contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/purge"),
     ])
-    error_message = "Materialized worlds need explicit archive, regenerate, restore and purge routes."
+    error_message = "Materialized worlds need explicit archive, wipe, restore and purge routes."
+  }
+
+  assert {
+    condition     = !contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/regenerate")
+    error_message = "The player-facing name is wipe (ADR-0040); an alias route is surface nobody calls."
   }
 
   assert {

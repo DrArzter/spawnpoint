@@ -1,6 +1,7 @@
 # ADR-0036 — Observe visitors, but let an Owner grant access
 
-- Status: Proposed
+- Status: Accepted — 2026-09-12. Visitors, access candidates, Owner approval and the four built-in roles are the deployed
+  access model for the bot and the panel
 - Date: 2026-08-28
 - Milestone: M4
 - Amends: [ADR-0018](0018-identity-and-sign-in.md), [ADR-0019](0019-account-linking.md), and [ADR-0021](0021-sign-in-from-linked-chat-account.md)

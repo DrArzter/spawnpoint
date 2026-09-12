@@ -1,4 +1,4 @@
-export type Page = "dashboard" | "metrics" | "console" | "storage" | "access" | "profile";
+export type Page = "worlds" | "metrics" | "console" | "releases" | "access" | "profile";
 export type AccessTab = "users" | "roles" | "notifications";
 export type ServerState = "stopped" | "starting" | "running" | "stopping" | "unknown";
 

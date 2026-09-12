@@ -242,7 +242,7 @@ pack remain recovery tools, not a way to define a preset.
 
 ### The client pack
 
-Players get it from either surface: **Download** beside the active release on the panel's Releases screen, or `/pack`
+Players get it from either surface: **Download** beside the active release on the world's Releases tab in the panel, or `/pack`
 in the bot. Both presign `releases/<game>/<preset>/<release>/client.zip` for one hour, and both prefer the **active** release over a desired
 one — a desired release has not been through a start, so its pack would fit a world nobody is playing yet.
 
@@ -300,7 +300,7 @@ Workshop has no versions to resolve and this image exposes no variable for a mod
 
 ### Seeing what a restore could choose
 
-The panel's Releases screen has a Backups tab: the newest verified archives for the world, with the size, the time
+The world's page in the panel has a Backups tab: the newest verified archives for the world, with the size, the time
 they were stored and the head of the SHA-256 the key is addressed by. `backup.read` is the permission.
 
 **What "verified" means here is exactly what a listing can prove**: the key carries a well-formed digest, which

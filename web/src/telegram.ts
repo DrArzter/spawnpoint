@@ -119,12 +119,14 @@ export function openInBrowser(): void {
 export function applyTheme(theme: Theme): void {
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#11151b" : "#f6f8fc");
+  // The app bar colour, so the Telegram chrome continues the bar.
+  const bar = theme === "dark" ? "#202124" : "#ffffff";
+  const canvas = theme === "dark" ? "#202124" : "#f8f9fa";
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", bar);
   const app = window.Telegram?.WebApp;
   if (!app?.initData) return;
-  const background = theme === "dark" ? "#11151b" : "#f6f8fc";
-  app.setHeaderColor(theme === "dark" ? "#171c24" : "#f0f3f9");
-  app.setBackgroundColor(background);
+  app.setHeaderColor(bar);
+  app.setBackgroundColor(canvas);
 }
 
 export function initializeTelegram(): void {

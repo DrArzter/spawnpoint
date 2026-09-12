@@ -46,6 +46,10 @@ usercache.json
 server.properties
 eula.txt
 
+# --- Design review captures (impeccable) ---
+web/.impeccable/review/
+web/.impeccable/build/
+
 # --- Build output ---
 dist/
 build/

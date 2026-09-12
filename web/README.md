@@ -10,12 +10,16 @@ What a person sees is decided by their role, not by the client:
 
 | Screen | Permission | What is there |
 | --- | --- | --- |
-| Overview | `status.read` | Host state, the selected world's connection address, active and desired release, running operations, Start and Stop |
+| Worlds | `status.read` | The scoped game's session state and compute host, then every save as a row: availability, preset and release, current wipe, connection address with copy, Start and Stop. A save opens into its own page: Details, Wipes, Backups with **Restore** (`backup.read`, `backup.restore`), Releases with the client pack download (`connection.read`); **New wipe**, **Archive** and the typed-confirmation **Delete forever** sit in its actions menu (`world.manage`) |
 | Metrics | `metrics.read` | Session metrics where the backend has them; an honest unavailable state otherwise |
 | Console | `console.use` | An RCON console where the backend has it; an honest unavailable state otherwise |
-| Releases | `release.read` | Per preset: the release history and **Create save** from a ready release; per world: its wipes, its verified backups with **Restore**, **New wipe**, **Archive**, the typed-confirmation **Delete forever**, and the client pack download |
+| Releases | `release.read` | Per preset: build status, release history, source commit and **Create save** from a ready release (`world.manage`); the release pointer of every save |
 | Access | `access.read`, `access.manage` | Visitors waiting for approval, identities and their roles, notification subscriptions, the one-time Owner bootstrap |
-| Profile | any signed-in identity | Display details and linked game and network accounts, edited by an Owner |
+| Profile | any signed-in identity | Display details from Telegram and the identity's linked game and network accounts, read-only until linking flows exist |
+
+The game is the console's scope: the picker in the app bar re-scopes Worlds, Metrics, Console and Releases, and the
+hash carries it (`#/worlds/<game>`, `#/worlds/<game>/<world>`, `#/releases/<game>`), so a reload and a shared link land
+on the same screen. `#/overview` stays an alias of `#/worlds`.
 
 Constraints, unchanged:
 
@@ -65,7 +69,7 @@ Framework not yet chosen, and worth correcting one assumption in advance: **Reac
 2026-08-27, and the assumption to correct stands: a React app builds to plain static files and needs no server, so it
 works behind CloudFront like any other. What is excluded is server-side rendering and anything wanting a Node process —
 a framework *mode*, not React itself. The shared primitives live in `src/components/ui`; a screen never invents its own
-table or button ([DESIGN.md](DESIGN.md)).
+table, button or dialog ([DESIGN.md](DESIGN.md)).
 
 ## What the panel is actually for
 
@@ -97,7 +101,8 @@ Develop locally and build:
 ```bash
 cd web
 npm install
-npm run dev      # local preview; src/preview.ts supplies data when no API is configured
+npm run dev      # dev server; open http://127.0.0.1:5173/?preview to run on the fixtures in src/preview.ts
+                 # (dev server only; add &latency=800 to slow the fake calls)
 npm run build    # static files in web/dist
 ```
 

@@ -75,7 +75,7 @@ class DeploymentSecurityTest(unittest.TestCase):
         self.assertIn("pending-manual-apply", script)
 
         workflow = (REPOSITORY / ".github/workflows/deploy-production.yml").read_text()
-        manual_job = workflow.split("  manual-review:", 1)[1].split("\n  infrastructure:", 1)[0]
+        manual_job = workflow.split("  manual-review:", 1)[1].split("\n  identity:", 1)[0]
         self.assertIn("environment: production-plan", manual_job)
         self.assertIn("role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}", manual_job)
         self.assertNotIn("AWS_DEPLOY_ROLE_ARN", manual_job)
@@ -88,9 +88,13 @@ class DeploymentSecurityTest(unittest.TestCase):
     def test_github_identities_are_applied_only_by_the_gated_identity_job(self) -> None:
         workflow = (REPOSITORY / ".github/workflows/deploy-production.yml").read_text()
         identity_job = workflow.split("\n  identity:\n", 1)[1].split("\n  infrastructure:", 1)[0]
+        self.assertIn("if: needs.plan.result == 'success'", identity_job)
         self.assertIn("environment: production-identity", identity_job)
         self.assertIn("role-to-assume: ${{ vars.AWS_IDENTITY_ROLE_ARN }}", identity_job)
         self.assertIn("scripts/terraform-apply-safe.sh infra/terraform-github", identity_job)
+        self.assertIn("ref: main", identity_job)
+        self.assertNotIn("ref: ${{ github.event.workflow_run.head_sha }}", identity_job)
+        self.assertIn('git rev-parse HEAD)', identity_job)
         for forbidden in ("AWS_DEPLOY_ROLE_ARN", "AWS_PLAN_ROLE_ARN"):
             self.assertNotIn(forbidden, identity_job)
         after_identity = workflow.split("\n  infrastructure:", 1)[1]

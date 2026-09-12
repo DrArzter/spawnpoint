@@ -1,26 +1,38 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { ActiveSession, AuthState, endSession, loadControlPlane, requestAccess, requestCreateWorld, requestPackDownload, requestSessionOperation, requestWorldLifecycle, restoreAuth, telegramBotUsername, telegramLoginRedirectUrl } from "./auth";
-import { AccessScreen } from "./screens/AccessScreen";
-import { Avatar } from "./components/Avatar";
+import { ActiveSession, AuthState, endSession, loadControlPlane, requestCreateWorld, requestPackDownload, requestSessionOperation, requestWorldLifecycle, restoreAuth } from "./auth";
+import { InvitationSheet } from "./components/InvitationSheet";
 import { Button } from "./components/ui/Button";
-import { EmptyState, LoadingState, PageHeader } from "./components/ui/Page";
+import { Dialog, Sheet } from "./components/ui/Dialog";
+import { SelectField, TextField } from "./components/ui/Fields";
+import { SnackbarProvider, useSnackbar } from "./components/ui/Snackbar";
+import { sessionStatus } from "./components/ui/Status";
+import { IconName } from "./icons";
+import { formatDateTime } from "./lib/format";
+import { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, World } from "./model";
+import { previewEnabled } from "./preview";
+import { routeHash } from "./routing";
+import { AccessScreen } from "./screens/AccessScreen";
+import { AuthScreen, BootScreen } from "./screens/AuthScreen";
 import { ConsoleScreen } from "./screens/ConsoleScreen";
-import { DashboardScreen } from "./screens/DashboardScreen";
 import { MetricsScreen } from "./screens/MetricsScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
-import { StorageScreen } from "./screens/StorageScreen";
-import { Icon, IconName } from "./Icon";
-import { AccessTab, ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Role, ServerState } from "./model";
-import { ensureRoute, pushRoute, readRoute } from "./routing";
-import { applyTheme, getThemePreference, initializeTelegram, persistThemePreference, resolveTheme, subscribeToSystemTheme, Theme, ThemePreference, ViewerProfile } from "./telegram";
+import { ReleasesScreen } from "./screens/ReleasesScreen";
+import { WorldScreen } from "./screens/WorldScreen";
+import { WorldsScreen } from "./screens/WorldsScreen";
+import { Confirmation, Pending, SessionAction, WorldActionKind } from "./shell/actions";
+import { AppBar } from "./shell/AppBar";
+import { useMediaQuery, useRoute, useStoredState, useTheme } from "./shell/hooks";
+import { NavDrawer, NavItem } from "./shell/NavDrawer";
+import { ScopeDialog } from "./shell/ScopeDialog";
+import { initializeTelegram, ViewerProfile } from "./telegram";
 
 const navigation: readonly { id: Page; label: string; icon: IconName; permission: string }[] = [
-  { id: "dashboard", label: "Overview", icon: "dashboard", permission: "status.read" },
-  { id: "metrics", label: "Metrics", icon: "metrics", permission: "metrics.read" },
-  { id: "console", label: "Console", icon: "console", permission: "console.use" },
-  { id: "storage", label: "Releases", icon: "storage", permission: "release.read" },
-  { id: "access", label: "Access", icon: "access", permission: "access.read" },
+  { id: "worlds", label: "Worlds", icon: "public", permission: "status.read" },
+  { id: "metrics", label: "Metrics", icon: "bar_chart", permission: "metrics.read" },
+  { id: "console", label: "Console", icon: "terminal", permission: "console.use" },
+  { id: "releases", label: "Releases", icon: "inventory", permission: "release.read" },
+  { id: "access", label: "Access", icon: "group", permission: "access.read" },
 ];
 
 export function App() {
@@ -35,307 +47,331 @@ export function App() {
   }, []);
 
   if (auth.status !== "authenticated" || auth.session.state !== "active") {
-    return <AuthBoundary auth={auth} onChange={setAuth} />;
+    return <AuthScreen auth={auth} onChange={setAuth} />;
   }
-  return <AuthenticatedApp session={auth.session} />;
-}
-
-function AuthBoundary({ auth, onChange }: { auth: AuthState; onChange: (state: AuthState) => void }) {
-  const [requesting, setRequesting] = useState(false);
-  const [requestError, setRequestError] = useState("");
-  const visitor = auth.status === "authenticated" && auth.session.state === "visitor" ? auth.session : null;
-  const requested = visitor?.candidate.status === "REQUESTED" || requesting;
-
-  async function sendRequest() {
-    setRequestError("");
-    try {
-      await requestAccess();
-      setRequesting(true);
-    } catch (error) {
-      setRequestError(error instanceof Error ? error.message : "The access request could not be sent.");
-    }
-  }
-
-  return <main className="auth-shell">
-    <section className="auth-panel" aria-busy={auth.status === "loading"}>
-      <div className="auth-brand"><span>S</span><strong>Spawnpoint</strong></div>
-      {auth.status === "loading" && <><div className="auth-copy"><h1>Checking your session</h1><p>One moment while we verify your account.</p></div><div className="auth-progress" /></>}
-      {auth.status === "signed-out" && <><div className="auth-copy"><h1>Sign in</h1><p>Continue with Telegram to access Spawnpoint.</p></div><TelegramLoginButton /></>}
-      {auth.status === "unconfigured" && <div className="auth-copy"><h1>Authentication is not configured</h1><p>This deployment is missing its access API or Telegram bot username.</p></div>}
-      {auth.status === "error" && <><div className="auth-copy"><h1>Could not sign in</h1><p>{auth.message}</p></div><Button onClick={() => onChange({ status: "signed-out" })} variant="primary">Try again</Button></>}
-      {visitor && <><Avatar name={visitor.candidate.displayName} photoUrl={visitor.candidate.photoUrl ?? undefined} size="large" /><div className="auth-copy"><h1>{requested ? "Access requested" : "Request access"}</h1><p>{requested ? "An owner will review your request. You can close this page." : "Your Telegram account is verified but does not have access yet."}</p></div>{!requested && <Button disabled={requesting} onClick={() => void sendRequest()} variant="primary">Request access</Button>}{requestError && <p className="auth-error" role="alert">{requestError}</p>}<small>Telegram ID {visitor.candidate.telegramId}{visitor.candidate.username ? ` · @${visitor.candidate.username}` : ""}</small></>}
-    </section>
-  </main>;
-}
-
-function TelegramLoginButton() {
-  const host = useRef<HTMLDivElement>(null);
-  const [widgetFailed, setWidgetFailed] = useState(false);
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    const container = host.current;
-    if (container === null) return;
-    const script = document.createElement("script");
-    script.async = true;
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.dataset.telegramLogin = telegramBotUsername;
-    script.dataset.size = "large";
-    script.dataset.radius = "6";
-    script.dataset.userpic = "false";
-    script.dataset.authUrl = telegramLoginRedirectUrl();
-    script.onerror = () => setWidgetFailed(true);
-    container.replaceChildren(script);
-    return () => container.replaceChildren();
-  }, [attempt]);
-
-  return <div className="telegram-login-options">
-    {!widgetFailed && <div className="telegram-login" ref={host} />}
-    {widgetFailed && <div className="auth-login-error" role="alert"><p>Telegram sign-in could not load.</p><Button onClick={() => { setWidgetFailed(false); setAttempt((value) => value + 1); }} variant="secondary">Try again</Button></div>}
-  </div>;
+  return <SnackbarProvider><ConsoleShell session={auth.session} /></SnackbarProvider>;
 }
 
 type ControlPlaneState =
-  | { status: "loading"; snapshot: null; error: "" }
+  | { status: "loading"; snapshot: ControlPlaneSnapshot | null; error: "" }
   | { status: "ready"; snapshot: ControlPlaneSnapshot; error: "" }
-  | { status: "error"; snapshot: null; error: string };
+  | { status: "error"; snapshot: ControlPlaneSnapshot | null; error: string };
 
-function AuthenticatedApp({ session }: { session: ActiveSession }) {
-  const [route, setRoute] = useState(readRoute);
-  const { accessTab } = route;
-  const granted = useMemo(() => new Set([...(session.role?.permissions ?? []), ...session.identity.directGrants]), [session]);
-  const visibleNavigation = useMemo(() => navigation.filter((item) => granted.has(item.permission)), [granted]);
-  const page = route.page === "profile" || visibleNavigation.some((item) => item.id === route.page) ? route.page : "dashboard";
+function ConsoleShell({ session }: { session: ActiveSession }) {
+  const notify = useSnackbar();
+  const [route, navigate] = useRoute();
+  const { theme, cycle: cycleTheme, label: themeLabel } = useTheme();
+  const mobile = useMediaQuery("(max-width: 959px)");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  // The drawer collapses to an icon rail on narrow desktops until the person
+  // chooses; a stored choice wins on every width above the phone breakpoint.
+  const [railChoice, setRailChoice] = useStoredState<"true" | "false" | "auto">("spawnpoint.rail", "auto");
+  const narrowDesktop = useMediaQuery("(min-width: 960px) and (max-width: 1279px)");
+  const rail = railChoice === "auto" ? narrowDesktop : railChoice === "true";
+  const [storedGame, setStoredGame] = useStoredState<string>("spawnpoint.scope", "");
+  const [scopeOpen, setScopeOpen] = useState(false);
   const [controlPlane, setControlPlane] = useState<ControlPlaneState>({ status: "loading", snapshot: null, error: "" });
-  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
-  const [gameId, setGameId] = useState<string | null>(null);
-  const [presetId, setPresetId] = useState<string | null>(null);
-  const [worldId, setWorldId] = useState<string | null>(null);
-  const [wipeId, setWipeId] = useState<string | null>(null);
-  const [themePreference, setThemePreference] = useState<ThemePreference>(getThemePreference);
-  const [theme, setTheme] = useState<Theme>(() => resolveTheme(getThemePreference()));
-  const [picker, setPicker] = useState<"game" | "preset" | "world" | "wipe" | null>(null);
-  const [operationRequest, setOperationRequest] = useState<{ state: "idle" | "pending" | "success" | "error"; message: string }>({ state: "idle", message: "" });
-  const [storageRequest, setStorageRequest] = useState<{ state: "idle" | "pending" | "success" | "error"; message: string }>({ state: "idle", message: "" });
-  const [lifecycleRequest, setLifecycleRequest] = useState<{ state: "idle" | "pending" | "success" | "error"; message: string }>({ state: "idle", message: "" });
+  const [booted, setBooted] = useState(false);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const [invite, setInvite] = useState<{ game: Game; world: World } | null>(null);
+  const [creating, setCreating] = useState<{ game: Game; preset: Preset | null } | null>(null);
+
+  const granted = useMemo(() => new Set([...(session.role?.permissions ?? []), ...session.identity.directGrants]), [session]);
+  const snapshot = controlPlane.snapshot;
+  const games = snapshot?.games ?? [];
+  const game = games.find((item) => item.id === route.gameId) ?? games.find((item) => item.id === storedGame) ?? games[0];
+  const world = route.page === "worlds" && route.worldId ? game?.worlds.find((item) => item.id === route.worldId) : undefined;
+  const serverState = deriveServerState(game, snapshot);
+  const scoped = (page: Page) => routeHash({ page, accessTab: route.accessTab, gameId: game?.id ?? null, worldId: null });
+  const navItems: NavItem[] = navigation.filter((item) => granted.has(item.permission)).map((item) => ({ id: item.id, label: item.label, icon: item.icon, href: scoped(item.id) }));
+  const page: Page = route.page === "profile" || navItems.some((item) => item.id === route.page) ? route.page : "worlds";
+
   const [members, setMembers] = useState<Member[]>(() => [{
     id: session.identity.id,
     name: session.identity.displayName,
     roleId: session.identity.roleId,
     links: [{ id: "viewer-telegram", kind: "telegram", value: session.profile.telegramId, verified: true }],
   }]);
-  const [roles, setRoles] = useState<Role[]>(() => session.role ? [{
-    id: session.role.id,
-    name: session.role.name,
-    description: "Current signed-in role",
-    permissions: session.role.permissions,
-    system: true,
-  }] : []);
-  const [viewer] = useState<ViewerProfile>({
+  const [roles, setRoles] = useState<Role[]>(() => session.role ? [{ id: session.role.id, name: session.role.name, description: "Current signed-in role", permissions: session.role.permissions, system: true }] : []);
+  const viewer: ViewerProfile = {
     displayName: session.identity.displayName,
     inTelegram: Boolean(window.Telegram?.WebApp.initData),
     ...(session.profile.username ? { username: session.profile.username } : {}),
     ...(session.profile.photoUrl ? { photoUrl: session.profile.photoUrl } : {}),
     telegramId: session.profile.telegramId,
-  });
+  };
+  const currentMember = members.find((member) => member.id === session.identity.id) ?? members[0]!;
   const bootstrap: OwnerBootstrap = session.bootstrap.state === "claimed"
-    ? { state: "claimed", telegramId: session.bootstrap.telegramId, ownerId: session.bootstrap.ownerId, claimedAt: new Date(session.bootstrap.claimedAt).toLocaleString() }
+    ? { state: "claimed", telegramId: session.bootstrap.telegramId, ownerId: session.bootstrap.ownerId, claimedAt: formatDateTime(session.bootstrap.claimedAt) }
     : { state: "unclaimed", telegramId: session.profile.telegramId };
 
   useEffect(() => initializeTelegram(), []);
-  useEffect(() => {
-    let active = true;
-    loadControlPlane()
-      .then((snapshot) => { if (active) { setControlPlane({ status: "ready", snapshot, error: "" }); setInitialLoadComplete(true); } })
-      .catch((error: unknown) => { if (active) { setControlPlane({ status: "error", snapshot: null, error: error instanceof Error ? error.message : "The control-plane state could not be loaded." }); setInitialLoadComplete(true); } });
-    return () => { active = false; };
-  }, []);
-  useEffect(() => {
-    ensureRoute();
-    const handleRouteChange = () => setRoute(readRoute());
-    window.addEventListener("hashchange", handleRouteChange);
-    return () => window.removeEventListener("hashchange", handleRouteChange);
-  }, []);
-  useEffect(() => {
-    persistThemePreference(themePreference);
-    setTheme(resolveTheme(themePreference));
-    if (themePreference === "system") return subscribeToSystemTheme(setTheme);
-  }, [themePreference]);
-  useEffect(() => applyTheme(theme), [theme]);
-  const snapshot = controlPlane.snapshot;
-  const games = snapshot?.games ?? [];
-  const game = games.find((item) => item.id === gameId) ?? games[0];
-  const preset = game?.presets.find((item) => item.id === presetId) ?? game?.presets[0];
-  const presetWorlds = preset ? game?.worlds.filter((item) => item.preset?.id === preset.id || item.profileId === preset.id) ?? [] : game?.worlds ?? [];
-  const world = presetWorlds.find((item) => item.id === worldId) ?? presetWorlds[0];
-  const currentWipe = world?.wipes.find((wipe) => wipe.state === "current") ?? world?.wipes.at(-1);
-  const selectedWipe = world?.wipes.find((wipe) => wipe.id === wipeId) ?? currentWipe;
-  const serverState = deriveServerState(game, snapshot);
-  const currentMember = members.find((member) => member.id === session.identity.id) ?? members[0];
 
+  async function refresh(silent = false) {
+    if (!silent) setPending({ kind: "refresh" });
+    setControlPlane((current) => (silent || current.snapshot ? { status: "loading", snapshot: current.snapshot, error: "" } : { status: "loading", snapshot: null, error: "" }));
+    try {
+      const next = await loadControlPlane();
+      setControlPlane({ status: "ready", snapshot: next, error: "" });
+    } catch (error) {
+      setControlPlane((current) => ({ status: "error", snapshot: current.snapshot, error: error instanceof Error ? error.message : "The control-plane state could not be loaded." }));
+    } finally {
+      setBooted(true);
+      if (!silent) setPending((current) => (current?.kind === "refresh" ? null : current));
+    }
+  }
+
+  useEffect(() => { void refresh(true); }, []);
+
+  // Poll while an operation runs, so the table and the state settle on their own.
   useEffect(() => {
     if (!snapshot?.operations.length) return;
     const timer = window.setInterval(() => {
-      loadControlPlane()
-        .then((next) => setControlPlane({ status: "ready", snapshot: next, error: "" }))
-        .catch(() => undefined);
+      loadControlPlane().then((next) => setControlPlane({ status: "ready", snapshot: next, error: "" })).catch(() => undefined);
     }, 5000);
     return () => window.clearInterval(timer);
   }, [snapshot?.operations.length]);
 
+  // Keep the scope in the hash and remember it for the next visit.
   useEffect(() => {
     if (!game) return;
-    if (gameId !== game.id) setGameId(game.id);
-    const nextPreset = game.presets.find((item) => item.id === presetId) ?? game.presets[0];
-    if (nextPreset && presetId !== nextPreset.id) setPresetId(nextPreset.id);
-    const candidates = nextPreset ? game.worlds.filter((item) => item.preset?.id === nextPreset.id || item.profileId === nextPreset.id) : game.worlds;
-    const nextWorld = candidates.find((item) => item.id === worldId) ?? candidates[0];
-    if (nextWorld && worldId !== nextWorld.id) setWorldId(nextWorld.id);
-    if (!nextWorld && worldId !== null) setWorldId(null);
-  }, [game, gameId, presetId, worldId]);
-  useEffect(() => setStorageRequest({ state: "idle", message: "" }), [game?.id, world?.id]);
-  useEffect(() => setLifecycleRequest({ state: "idle", message: "" }), [game?.id, world?.id]);
-  useEffect(() => setWipeId(currentWipe?.id ?? null), [world?.id]);
+    setStoredGame(game.id);
+    if (route.page !== "access" && route.page !== "profile" && route.gameId !== game.id) navigate({ gameId: game.id, worldId: route.worldId }, { replace: true });
+  }, [game?.id, route.page, route.gameId]);
 
-  async function refreshControlPlane() {
-    setControlPlane({ status: "loading", snapshot: null, error: "" });
+  useEffect(() => { setDrawerOpen(false); }, [route.page, route.worldId, route.gameId, mobile]);
+
+  function selectGame(gameId: string) {
+    setScopeOpen(false);
+    navigate({ gameId, worldId: null });
+  }
+
+  function requestSession(target: Game, targetWorld: World, action: SessionAction) {
+    setConfirmation({ kind: "session", action, game: target, world: targetWorld });
+  }
+
+  function requestWorldAction(target: Game, targetWorld: World, action: WorldActionKind, backup?: { key: string; name: string }) {
+    if (action === "archive") setConfirmation({ kind: "archive", game: target, world: targetWorld });
+    if (action === "wipe") setConfirmation({ kind: "wipe", game: target, world: targetWorld, preset: target.presets.find((preset) => preset.id === (targetWorld.preset?.id ?? targetWorld.profileId)) ?? null });
+    if (action === "purge") setConfirmation({ kind: "purge", game: target, world: targetWorld });
+    if (action === "restore" && backup) setConfirmation({ kind: "restore", game: target, world: targetWorld, backupKey: backup.key, backupName: backup.name });
+  }
+
+  async function runSession(target: Game, targetWorld: World, action: SessionAction) {
+    setPending({ kind: "session", worldId: targetWorld.id, action });
     try {
-      setControlPlane({ status: "ready", snapshot: await loadControlPlane(), error: "" });
+      const result = await requestSessionOperation(target.id, targetWorld.id, action);
+      notify({ tone: "success", message: result.result === "already_stopped" ? "The host is already stopped." : `${action === "start" ? "Start" : "Stop"} of ${targetWorld.displayName} accepted${result.operationId ? ` · ${result.operationId}` : ""}.` });
+      await refresh(true);
     } catch (error) {
-      setControlPlane({ status: "error", snapshot: null, error: error instanceof Error ? error.message : "The control-plane state could not be loaded." });
+      notify({ tone: "error", message: error instanceof Error ? error.message : `The ${action} request failed.` });
+    } finally {
+      setPending(null);
     }
   }
 
-  async function runSessionOperation(action: "start" | "stop") {
-    if (!game || !world) return;
-    setOperationRequest({ state: "pending", message: action === "start" ? "Requesting session start…" : "Requesting safe stop…" });
+  async function runLifecycle(target: Game, targetWorld: World, action: WorldActionKind, backupKey?: string, release?: string) {
+    setPending({ kind: "lifecycle", worldId: targetWorld.id, action });
     try {
-      const result = await requestSessionOperation(game.id, world.id, action);
-      setOperationRequest({ state: "success", message: result.result === "already_stopped" ? "The host is already stopped." : `${action === "start" ? "Start" : "Stop"} accepted${result.operationId ? ` · ${result.operationId}` : ""}.` });
-      await refreshControlPlane();
+      const result = await requestWorldLifecycle(target.id, targetWorld.id, action === "wipe" ? "regenerate" : action, backupKey, release);
+      notify({ tone: "success", message: `${lifecycleLabel(action)} of ${targetWorld.displayName} accepted · ${result.operationId}.` });
+      await refresh(true);
+      if (action === "purge") navigate({ page: "worlds", gameId: target.id, worldId: null });
     } catch (error) {
-      setOperationRequest({ state: "error", message: error instanceof Error ? error.message : `The ${action} request failed.` });
+      notify({ tone: "error", message: error instanceof Error ? error.message : `The ${action} request failed.` });
+    } finally {
+      setPending(null);
     }
   }
 
-  async function downloadPack() {
-    if (!game || !world) return;
-    // Open during the click's user-activation window; waiting for the API first
-    // makes otherwise valid downloads look like unsolicited pop-ups.
+  async function downloadPack(target: Game, targetWorld: World) {
+    // Open during the click's user-activation window; waiting for the API
+    // first makes valid downloads look like unsolicited pop-ups.
     const downloadWindow = window.open("about:blank", "_blank");
     if (downloadWindow !== null) downloadWindow.opener = null;
-    setStorageRequest({ state: "pending", message: "Preparing the pack link…" });
+    setPending({ kind: "pack", worldId: targetWorld.id });
     try {
-      const { release, url } = await requestPackDownload(game.id, world.id);
-      // The link is presigned for an hour and never kept: a stale one would be
-      // a broken download later rather than a working one.
+      const { release, url } = await requestPackDownload(target.id, targetWorld.id);
+      // The link is presigned for an hour and never kept.
       if (downloadWindow !== null) downloadWindow.location.replace(url);
       else window.location.assign(url);
-      setStorageRequest({ state: "success", message: `Pack for release ${release} is downloading.` });
+      notify({ tone: "success", message: `Pack for release ${release} is downloading.` });
     } catch (error) {
       downloadWindow?.close();
-      setStorageRequest({ state: "error", message: error instanceof Error ? error.message : "The pack link failed." });
+      notify({ tone: "error", message: error instanceof Error ? error.message : "The pack link failed." });
+    } finally {
+      setPending(null);
     }
   }
 
-  async function runWorldLifecycle(action: "archive" | "regenerate" | "restore" | "purge", backupKey?: string, release?: string) {
-    if (!game || !world) return;
-    if (action === "regenerate" || action === "restore") setWipeId(null);
-    setLifecycleRequest({ state: "pending", message: `Requesting ${action}…` });
+  async function createWorld(target: Game, preset: Preset, displayName: string, release: string) {
+    setPending({ kind: "create" });
     try {
-      const result = await requestWorldLifecycle(game.id, world.id, action, backupKey, release);
-      setLifecycleRequest({ state: "success", message: `${action[0]!.toUpperCase()}${action.slice(1)} accepted · ${result.operationId}.` });
-      await refreshControlPlane();
+      const created = await requestCreateWorld(target.id, preset.id, displayName, release);
+      notify({ tone: "success", message: `${created.displayName} was created from ${preset.displayName} ${release}.` });
+      setCreating(null);
+      await refresh(true);
+      navigate({ page: "worlds", gameId: target.id, worldId: created.id });
     } catch (error) {
-      setLifecycleRequest({ state: "error", message: error instanceof Error ? error.message : `The ${action} request failed.` });
+      notify({ tone: "error", message: error instanceof Error ? error.message : "The save could not be created." });
+    } finally {
+      setPending(null);
     }
   }
 
-  async function createWorld(displayName: string, release: string) {
-    if (!game || !preset || !preset.releases.includes(release)) throw new Error("Choose an available release.");
-    const created = await requestCreateWorld(game.id, preset.id, displayName, release);
-    await refreshControlPlane();
-    setWorldId(created.id);
-  }
+  if (!booted) return <BootScreen description="Reading games, worlds and the current AWS state." title="Preparing the console" />;
 
-  function selectGame(id: string) {
-    const next = games.find((item) => item.id === id);
-    if (!next) return;
-    setGameId(next.id);
-    const nextPreset = next.presets[0];
-    setPresetId(nextPreset?.id ?? null);
-    setWorldId(nextPreset ? next.worlds.find((item) => item.preset?.id === nextPreset.id || item.profileId === nextPreset.id)?.id ?? null : next.worlds[0]?.id ?? null);
-  }
-
-  function toggleTheme() {
-    setThemePreference((current) => current === "system" ? (theme === "dark" ? "light" : "dark") : "system");
-  }
-
-  function navigate(nextPage: Page, nextAccessTab: AccessTab = accessTab) {
-    const nextRoute = { page: nextPage, accessTab: nextAccessTab };
-    setRoute(nextRoute);
-    pushRoute(nextRoute);
-  }
-
-  const themeLabel = themePreference === "system" ? `System theme · ${theme}` : `${themePreference[0].toUpperCase()}${themePreference.slice(1)} theme`;
-
-  if (!initialLoadComplete) return <PanelLoadingScreen />;
+  const listStatus = controlPlane.status === "loading" && controlPlane.snapshot === null ? "loading" : controlPlane.status === "error" ? "error" : "ready";
 
   return (
-    <div className="console-shell">
-      <aside className="side-nav">
-        <button aria-label="Open my profile" className={`product-mark ${page === "profile" ? "active" : ""}`} onClick={() => navigate("profile")} type="button"><Avatar name={viewer.displayName} photoUrl={viewer.photoUrl} /><strong>Spawnpoint</strong></button>
-        <nav aria-label="Main navigation">
-          {visibleNavigation.map((item) => (
-            <button className={page === item.id ? "active" : ""} key={item.id} onClick={() => navigate(item.id)} type="button">
-              <Icon name={item.icon} /><span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
-        <div className="nav-footer">
-          <button aria-label={`${themeLabel}. Change theme`} className="theme-toggle" onClick={toggleTheme} title={`${themeLabel}. Click to ${themePreference === "system" ? `use ${theme === "light" ? "dark" : "light"}` : "follow the system"}`} type="button"><Icon name={theme === "light" ? "moon" : "sun"} /><span>{themeLabel}</span></button>
-          <button className="identity" onClick={() => navigate("profile")} type="button"><Avatar name={currentMember.name} photoUrl={viewer.photoUrl} /><div><strong>{currentMember.name}</strong><small>{session.role?.name ?? "No role"} · View profile</small></div></button>
-        </div>
-      </aside>
+    <div className="shell" data-drawer-open={mobile && drawerOpen ? "true" : undefined} data-rail={!mobile && rail ? "true" : undefined}>
+      <AppBar
+        game={game}
+        onMenu={() => (mobile ? setDrawerOpen((open) => !open) : setRailChoice(rail ? "false" : "true"))}
+        onProfile={() => navigate({ page: "profile" })}
+        onScope={() => setScopeOpen(true)}
+        onTheme={cycleTheme}
+        preview={previewEnabled}
+        scopeDisabled={games.length === 0}
+        theme={theme}
+        themeLabel={themeLabel}
+        viewerName={viewer.displayName}
+        viewerPhoto={viewer.photoUrl}
+      />
+      <div className="shell-body">
+        <NavDrawer
+          current={page}
+          footer={snapshot ? { label: "Control plane observed", value: formatDateTime(snapshot.observedAt) } : undefined}
+          items={[...navItems, { id: "profile", label: "Profile", icon: "person", href: "#/profile" }]}
+          onNavigate={() => setDrawerOpen(false)}
+        />
+        <div aria-hidden="true" className="drawer-scrim" onClick={() => setDrawerOpen(false)} />
+        <main className="main" id="main">
+          {page === "worlds" && game && world && <WorldScreen game={game} granted={granted} onDownloadPack={(target, targetWorld) => void downloadPack(target, targetWorld)} onInvite={(target, targetWorld) => setInvite({ game: target, world: targetWorld })} onRefresh={() => void refresh()} onSessionAction={requestSession} onWorldAction={requestWorldAction} pending={pending} serverState={serverState} snapshot={snapshot} world={world} />}
+          {page === "worlds" && !(game && world) && <WorldsScreen error={controlPlane.error} game={game} granted={granted} onCreateSave={(target) => setCreating({ game: target, preset: target.presets.find((preset) => preset.buildStatus === "ready") ?? null })} onDownloadPack={(target, targetWorld) => void downloadPack(target, targetWorld)} onInvite={(target, targetWorld) => setInvite({ game: target, world: targetWorld })} onRefresh={() => void refresh()} onSessionAction={requestSession} onWorldAction={requestWorldAction} pending={pending} serverState={serverState} snapshot={snapshot} status={listStatus} />}
+          {page === "metrics" && <MetricsScreen game={game} serverState={serverState} />}
+          {page === "console" && <ConsoleScreen game={game} serverState={serverState} />}
+          {page === "releases" && <ReleasesScreen game={game} granted={granted} loading={listStatus === "loading"} onCreateSave={(target, preset) => setCreating({ game: target, preset })} pending={pending} />}
+          {page === "access" && <AccessScreen bootstrap={bootstrap} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate({ page: "access", accessTab: tab })} roles={roles} tab={route.accessTab} />}
+          {page === "profile" && <ProfileScreen member={currentMember} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
+        </main>
+      </div>
 
-      <main className="workspace">
-        <header className="context-bar">
-          <button aria-label="Open my profile" className="mobile-brand" onClick={() => navigate("profile")} type="button"><Avatar name={viewer.displayName} photoUrl={viewer.photoUrl} size="small" /><strong>Spawnpoint</strong></button>
-          <div className="context-breadcrumbs" aria-label="Selected game, preset, save and wipe">
-            <span>Games</span><Icon name="arrow" size={14} />
-            <div className="crumb-menu"><button aria-expanded={picker === "game"} disabled={!game} onClick={() => setPicker(picker === "game" ? null : "game")} type="button">{game?.displayName ?? "Loading…"}<Icon name="down" size={14} /></button>{picker === "game" && game && <div className="picker-menu">{games.map((item) => <button className={item.id === game.id ? "selected" : ""} key={item.id} onClick={() => { selectGame(item.id); setPicker(null); }} type="button"><span>{item.code}</span><div><strong>{item.displayName}</strong><small>{item.presets.length} presets · {item.worlds.length} saves</small></div></button>)}</div>}</div>
-            {preset && <><Icon name="arrow" size={14} /><div className="crumb-menu"><button aria-expanded={picker === "preset"} onClick={() => setPicker(picker === "preset" ? null : "preset")} type="button">{preset.displayName}<Icon name="down" size={14} /></button>{picker === "preset" && game && <div className="picker-menu world-picker">{game.presets.map((item) => <button className={item.id === preset.id ? "selected" : ""} key={item.id} onClick={() => { setPresetId(item.id); setWorldId(game.worlds.find((candidate) => candidate.preset?.id === item.id || candidate.profileId === item.id)?.id ?? null); setPicker(null); }} type="button"><div><strong>{item.displayName}</strong><small>{item.latestRelease ? `Latest release ${item.latestRelease}` : item.buildStatus}</small></div></button>)}</div>}</div></>}
-            {world && <><Icon name="arrow" size={14} /><div className="crumb-menu"><button aria-expanded={picker === "world"} onClick={() => setPicker(picker === "world" ? null : "world")} type="button">{world.displayName}<Icon name="down" size={14} /></button>{picker === "world" && <div className="picker-menu world-picker">{presetWorlds.map((item) => <button className={item.id === world.id ? "selected" : ""} key={item.id} onClick={() => { setWorldId(item.id); setPicker(null); }} type="button"><div><strong>{item.displayName}</strong><small>{item.materialization === "archived" ? "Archived" : item.release.activeRelease ? `Release ${item.release.activeRelease}` : "Not started"}</small></div></button>)}</div>}</div></>}
-            {selectedWipe && <><Icon name="arrow" size={14} /><div className="crumb-menu"><button aria-expanded={picker === "wipe"} onClick={() => setPicker(picker === "wipe" ? null : "wipe")} type="button">Wipe #{selectedWipe.number}<Icon name="down" size={14} /></button>{picker === "wipe" && world && <div className="picker-menu world-picker">{[...world.wipes].reverse().map((wipe) => <button className={wipe.id === selectedWipe.id ? "selected" : ""} key={wipe.id} onClick={() => { setWipeId(wipe.id); setPicker(null); }} type="button"><div><strong>Wipe #{wipe.number}</strong><small>{wipe.state === "current" ? `Current · release ${world.release.activeRelease ?? wipe.originRelease}` : `Closed · release ${wipe.originRelease}`}</small></div></button>)}</div>}</div></>}
-          </div>
-          <div className="top-actions"><button aria-label={`${themeLabel}. Change theme`} className="header-theme-toggle" onClick={toggleTheme} title={themeLabel} type="button"><Icon name={theme === "light" ? "moon" : "sun"} /></button><span className={`top-status ${serverState}`}><i />{serverState}</span></div>
-        </header>
-
-        <div className="page-content">
-          {controlPlane.status === "loading" && <LoadingState label="Refreshing games, worlds and current AWS state" />}
-          {controlPlane.status !== "loading" && page === "dashboard" && game && world && <DashboardScreen canInvite={granted.has("invitation.send")} canStart={granted.has("session.start")} canStop={granted.has("session.stop")} error={controlPlane.error} game={game} hosts={snapshot?.hosts ?? []} loadState={controlPlane.status} onOperation={(action) => void runSessionOperation(action)} onRetry={() => void refreshControlPlane()} operationRequest={operationRequest} operations={snapshot?.operations ?? []} serverState={serverState} world={world} />}
-          {controlPlane.status !== "loading" && page === "dashboard" && (!game || !world) && <ControlPlaneUnavailable state={controlPlane} onRetry={() => void refreshControlPlane()} />}
-          {controlPlane.status !== "loading" && page === "metrics" && <MetricsScreen serverState={serverState} />}
-          {controlPlane.status !== "loading" && page === "console" && <ConsoleScreen serverState={serverState} />}
-          {controlPlane.status !== "loading" && page === "storage" && game && (preset || world) && <StorageScreen canManageWorld={granted.has("world.manage")} canReadBackups={granted.has("backup.read")} canRestoreBackup={granted.has("backup.restore")} gameId={game.id} lifecycleRequest={lifecycleRequest} onCreateWorld={createWorld} onDownloadPack={granted.has("connection.read") && world ? () => void downloadPack() : undefined} onSelectWipe={setWipeId} onWorldAction={(action, backupKey, release) => void runWorldLifecycle(action, backupKey, release)} packRequest={storageRequest} preset={preset} selectedWipeId={selectedWipe?.id} world={world} />}
-          {controlPlane.status !== "loading" && page === "access" && <AccessScreen bootstrap={bootstrap} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate("access", tab)} roles={roles} tab={accessTab} />}
-          {controlPlane.status !== "loading" && page === "profile" && currentMember && <ProfileScreen member={currentMember} onChange={(next) => setMembers((current) => current.map((member) => member.id === next.id ? next : member))} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
-        </div>
-      </main>
-
-      <nav className="bottom-nav" aria-label="Mobile navigation">
-        {visibleNavigation.map((item) => <button className={page === item.id ? "active" : ""} key={item.id} onClick={() => navigate(item.id)} type="button"><Icon name={item.icon} /><span>{item.label}</span></button>)}
-      </nav>
+      <ScopeDialog currentId={game?.id ?? null} games={games} onClose={() => setScopeOpen(false)} onSelect={selectGame} open={scopeOpen} statusOf={(item) => sessionStatus(deriveServerState(item, snapshot))} />
+      {invite && <InvitationSheet game={invite.game} onClose={() => setInvite(null)} open world={invite.world} />}
+      {creating && <CreateSaveSheet busy={pending?.kind === "create"} game={creating.game} initialPreset={creating.preset} onClose={() => setCreating(null)} onCreate={(preset, name, release) => void createWorld(creating.game, preset, name, release)} />}
+      <ConfirmationDialog
+        confirmation={confirmation}
+        onClose={() => setConfirmation(null)}
+        onConfirm={(item, extra) => {
+          setConfirmation(null);
+          if (item.kind === "session") void runSession(item.game, item.world, item.action);
+          if (item.kind === "archive") void runLifecycle(item.game, item.world, "archive");
+          if (item.kind === "wipe") void runLifecycle(item.game, item.world, "wipe", undefined, extra);
+          if (item.kind === "restore") void runLifecycle(item.game, item.world, "restore", item.backupKey);
+          if (item.kind === "purge") void runLifecycle(item.game, item.world, "purge");
+        }}
+      />
     </div>
   );
 }
 
-function PanelLoadingScreen() {
-  return <main aria-busy="true" aria-live="polite" className="panel-loading-screen" role="status">
-    <div className="panel-loading-brand" aria-hidden="true"><span>S</span><strong>Spawnpoint</strong></div>
-    <div className="panel-loading-indicator" aria-hidden="true"><i /><i /><i /></div>
-    <div className="panel-loading-copy"><h1>Preparing your panel</h1><p>Reading games, worlds and current AWS state.</p></div>
-  </main>;
+function ConfirmationDialog({ confirmation, onClose, onConfirm }: { confirmation: Confirmation | null; onClose: () => void; onConfirm: (confirmation: Confirmation, extra?: string) => void }) {
+  const [typed, setTyped] = useState("");
+  const [release, setRelease] = useState("");
+  useEffect(() => {
+    setTyped("");
+    setRelease(confirmation?.kind === "wipe" ? confirmation.preset?.latestRelease ?? "" : "");
+  }, [confirmation]);
+  if (confirmation === null) return <Dialog onClose={onClose} open={false} title="" />;
+
+  const { world, game } = confirmation;
+  const title = confirmation.kind === "session"
+    ? confirmation.action === "start" ? "Start a billed AWS session?" : "Save, back up and stop this session?"
+    : confirmation.kind === "archive" ? `Archive ${world.displayName}?`
+      : confirmation.kind === "wipe" ? `Start a new wipe of ${world.displayName}?`
+        : confirmation.kind === "purge" ? `Permanently delete ${world.displayName}?`
+          : `Restore ${confirmation.backupName}?`;
+  const description = confirmation.kind === "session"
+    ? confirmation.action === "start"
+      ? world.materialization === "not_created"
+        ? `Spawnpoint will create ${world.displayName} from its ready preset, open wipe #1 and boot the shared host for ${game.displayName}. The first start may take several minutes, and the host is billed while it runs.`
+        : `Spawnpoint will boot the shared host and start ${world.displayName}. ${game.displayName} may take several minutes to become healthy, and the host is billed while it runs.`
+      : "Spawnpoint refuses while players are online, then saves the world, takes a verified backup and stops the host."
+    : confirmation.kind === "archive"
+      ? "Spawnpoint will safely stop and back up an active session, then hide this world from session control. Its wipes and backups stay intact."
+      : confirmation.kind === "wipe"
+        ? `Spawnpoint will safely stop and back up the current wipe, close it, and open an empty wipe from the selected ${confirmation.preset?.displayName ?? "preset"} release.`
+        : confirmation.kind === "purge"
+          ? "This deletes the world registry, the release pointer and every version of every S3 backup. It cannot be undone from the console."
+          : `Spawnpoint will safely stop and back up the current wipe, then restore ${confirmation.backupName} as a new wipe.`;
+  const destructive = confirmation.kind === "purge" || confirmation.kind === "wipe" || confirmation.kind === "restore" || (confirmation.kind === "session" && confirmation.action === "stop");
+  const confirmLabel = confirmation.kind === "session" ? (confirmation.action === "start" ? "Start session" : "Stop session") : confirmation.kind === "archive" ? "Archive world" : confirmation.kind === "wipe" ? "Start new wipe" : confirmation.kind === "purge" ? "Delete forever" : "Restore backup";
+  const blocked = (confirmation.kind === "purge" && typed !== world.id) || (confirmation.kind === "wipe" && !(confirmation.preset?.releases.includes(release) ?? false));
+
+  return (
+    <Dialog
+      actions={<>
+        <Button onClick={onClose} variant="text">Cancel</Button>
+        <Button disabled={blocked} onClick={() => onConfirm(confirmation, confirmation.kind === "wipe" ? release : undefined)} variant={destructive ? "danger" : "filled"}>{confirmLabel}</Button>
+      </>}
+      dismissOnBackdrop={false}
+      onClose={onClose}
+      open
+      title={title}
+    >
+      <p>{description}</p>
+      {confirmation.kind === "wipe" && confirmation.preset && (
+        <SelectField label="Release for the new wipe" onChange={(event) => setRelease(event.target.value)} value={release}>
+          <option disabled value="">Choose a release</option>
+          {[...confirmation.preset.releases].reverse().map((version) => <option key={version} value={version}>{version}{version === confirmation.preset?.latestRelease ? " (latest)" : ""}</option>)}
+        </SelectField>
+      )}
+      {confirmation.kind === "purge" && <>
+        <p className="confirm-note">Type <code>{world.id}</code> to confirm.</p>
+        <TextField autoComplete="off" data-autofocus label="World ID" mono onChange={(event) => setTyped(event.target.value)} placeholder={world.id} value={typed} />
+      </>}
+    </Dialog>
+  );
+}
+
+function CreateSaveSheet({ game, initialPreset, busy, onClose, onCreate }: { game: Game; initialPreset: Preset | null; busy: boolean; onClose: () => void; onCreate: (preset: Preset, name: string, release: string) => void }) {
+  const readyPresets = game.presets.filter((preset) => preset.buildStatus === "ready");
+  const [presetId, setPresetId] = useState(initialPreset?.id ?? readyPresets[0]?.id ?? "");
+  const preset = game.presets.find((item) => item.id === presetId) ?? null;
+  const [name, setName] = useState("");
+  const [release, setRelease] = useState(preset?.latestRelease ?? "");
+  useEffect(() => setRelease(preset?.latestRelease ?? ""), [preset?.id, preset?.latestRelease]);
+  const valid = preset !== null && preset.buildStatus === "ready" && preset.releases.includes(release) && name.trim().length > 0 && name.trim().length <= 80;
+
+  return (
+    <Sheet
+      description={`A new save opens wipe #1 from an immutable ${game.displayName} release.`}
+      footer={<>
+        <p>{preset ? `${preset.displayName} · ${preset.releases.length} releases` : "Choose a preset"}</p>
+        <Button disabled={!valid} icon="add" loading={busy} onClick={() => { if (preset) onCreate(preset, name.trim(), release); }} variant="filled">Create save</Button>
+      </>}
+      onClose={onClose}
+      open
+      title="Create save"
+    >
+      <form className="page" onSubmit={(event) => { event.preventDefault(); if (preset && valid) onCreate(preset, name.trim(), release); }}>
+        <SelectField hint={readyPresets.length === 0 ? "No preset of this game has a ready release." : undefined} label="Preset" onChange={(event) => setPresetId(event.target.value)} value={presetId}>
+          {game.presets.map((item) => <option disabled={item.buildStatus !== "ready"} key={item.id} value={item.id}>{item.displayName}{item.buildStatus !== "ready" ? ` (${item.buildStatus})` : ""}</option>)}
+        </SelectField>
+        <TextField autoComplete="off" data-autofocus hint="1 to 80 characters. Shown in the worlds list and in Telegram." label="Name" maxLength={80} onChange={(event) => setName(event.target.value)} placeholder="For example, Rail world" value={name} />
+        <SelectField disabled={!preset} label="Release" onChange={(event) => setRelease(event.target.value)} value={release}>
+          <option disabled value="">Choose a release</option>
+          {preset && [...preset.releases].reverse().map((version) => <option key={version} value={version}>{version}{version === preset.latestRelease ? " (latest)" : ""}</option>)}
+        </SelectField>
+      </form>
+    </Sheet>
+  );
+}
+
+function lifecycleLabel(action: WorldActionKind): string {
+  return action === "wipe" ? "New wipe" : action === "archive" ? "Archive" : action === "restore" ? "Restore" : "Delete";
 }
 
 function deriveServerState(game: Game | undefined, snapshot: ControlPlaneSnapshot | null): ServerState {
@@ -350,8 +386,4 @@ function deriveServerState(game: Game | undefined, snapshot: ControlPlaneSnapsho
   if (hostStates.some((state) => state === "stopping")) return "stopping";
   if (hostStates.some((state) => state === "running")) return "unknown";
   return hostStates.length > 0 ? "stopped" : "unknown";
-}
-
-function ControlPlaneUnavailable({ state, onRetry }: { state: ControlPlaneState; onRetry: () => void }) {
-  return <><PageHeader description="Games, worlds and current AWS state" title="Overview" /><EmptyState action={state.status === "error" && <Button onClick={onRetry}>Try again</Button>} busy={state.status === "loading"} description={state.status === "error" ? state.error : "Reading games, worlds, hosts and running operations."} icon="dashboard" title={state.status === "loading" ? "Loading control-plane state" : "Control-plane state unavailable"} /></>;
 }

@@ -1,0 +1,532 @@
+/* App shell: sticky app bar, navigation drawer, content pane. */
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: var(--canvas);
+}
+
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--bar-height);
+  padding: 0 8px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--outline);
+}
+
+.appbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 8px 0 4px;
+  border-radius: var(--radius-pill);
+  color: var(--ink);
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.appbar-brand:hover {
+  background: var(--surface-hover);
+}
+
+.appbar-brand strong {
+  font-family: var(--font-title);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 24px;
+}
+
+.mark {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: var(--on-primary);
+  flex: none;
+}
+
+.mark svg {
+  display: block;
+}
+
+.appbar-divider {
+  width: 1px;
+  height: 24px;
+  margin: 0 8px;
+  background: var(--outline);
+  flex: none;
+}
+
+.appbar-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  max-width: 320px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.appbar-scope:hover {
+  background: var(--surface-hover);
+}
+
+.appbar-scope:disabled {
+  color: var(--ink-disabled);
+}
+
+.appbar-scope > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.appbar-scope .icon:first-child {
+  color: var(--ink-secondary);
+}
+
+.appbar-spacer {
+  flex: 1;
+}
+
+.appbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.appbar-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.appbar-avatar:hover {
+  background: var(--surface-hover);
+}
+
+.shell-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.drawer {
+  position: sticky;
+  top: var(--bar-height);
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: var(--drawer-width);
+  height: calc(100dvh - var(--bar-height));
+  overflow: hidden auto;
+  background: var(--surface);
+  border-right: 1px solid var(--outline);
+  transition: transform var(--dur) var(--ease);
+}
+
+.drawer nav {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+}
+
+.drawer-section {
+  padding: 12px 20px 4px;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 20px;
+  color: var(--ink);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.drawer-item .icon {
+  color: var(--ink-secondary);
+}
+
+.drawer-item:hover {
+  background: var(--surface-hover);
+}
+
+.drawer-item[aria-current="page"] {
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+
+.drawer-item[aria-current="page"] .icon {
+  color: var(--on-primary-container);
+}
+
+.drawer-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.drawer hr {
+  margin: 6px 12px;
+  border: 0;
+  border-top: 1px solid var(--outline);
+}
+
+.drawer-footer {
+  margin-top: auto;
+  padding: 12px 20px 16px;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.drawer-footer strong {
+  display: block;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.drawer-scrim {
+  display: none;
+}
+
+.shell[data-rail="true"] .drawer {
+  width: var(--rail-width);
+}
+
+.shell[data-rail="true"] .drawer-item {
+  width: 48px;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  border-radius: 50%;
+  height: 48px;
+  margin: 0 auto;
+}
+
+.shell[data-rail="true"] .drawer-item span,
+.shell[data-rail="true"] .drawer-section,
+.shell[data-rail="true"] .drawer-footer {
+  display: none;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  padding: var(--gutter) var(--gutter) 96px;
+}
+
+.page {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.page > .page-header {
+  margin-bottom: 4px;
+}
+
+/* Mobile: the drawer becomes a modal panel behind the menu button. */
+@media (max-width: 959px) {
+  .appbar-brand strong {
+    font-size: 18px;
+  }
+
+  .appbar-divider {
+    display: none;
+  }
+
+  .appbar-scope {
+    max-width: 44vw;
+    padding: 0 6px 0 8px;
+  }
+
+  .appbar {
+    gap: 0;
+  }
+
+  .drawer {
+    position: fixed;
+    top: var(--bar-height);
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    width: min(var(--drawer-width), 85vw);
+    height: auto;
+    transform: translateX(-100%);
+    box-shadow: none;
+  }
+
+  .shell[data-drawer-open="true"] .drawer {
+    transform: translateX(0);
+    box-shadow: var(--shadow-3);
+  }
+
+  .shell[data-rail="true"] .drawer {
+    width: min(var(--drawer-width), 85vw);
+  }
+
+  .shell[data-rail="true"] .drawer-item {
+    width: auto;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 0 12px;
+    border-radius: 20px;
+    height: 40px;
+    margin: 0;
+  }
+
+  .shell[data-rail="true"] .drawer-item span,
+  .shell[data-rail="true"] .drawer-section,
+  .shell[data-rail="true"] .drawer-footer {
+    display: initial;
+  }
+
+  .shell[data-rail="true"] .drawer-footer {
+    display: block;
+  }
+
+  .drawer-scrim {
+    display: block;
+    position: fixed;
+    inset: var(--bar-height) 0 0 0;
+    z-index: 35;
+    background: var(--scrim);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--dur) var(--ease);
+  }
+
+  .shell[data-drawer-open="true"] .drawer-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .main {
+    padding-bottom: 88px;
+  }
+}
+
+/* Scope dialog: the game picker. */
+.scope-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.scope-search {
+  margin: 4px 0 8px;
+}
+
+.scope-list {
+  display: grid;
+  gap: 2px;
+  margin: 0 -8px;
+}
+
+.scope-row {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px;
+  border-radius: var(--radius-card);
+  color: var(--ink);
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.scope-row:hover {
+  background: var(--surface-hover);
+}
+
+.scope-row[aria-selected="true"] {
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+
+.scope-row .scope-code {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--surface-variant);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.scope-row[aria-selected="true"] .scope-code {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.scope-row strong {
+  display: block;
+  font-weight: 500;
+}
+
+.scope-row small {
+  display: block;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.scope-row[aria-selected="true"] small {
+  color: inherit;
+}
+
+.scope-empty {
+  padding: 24px 12px;
+  color: var(--ink-secondary);
+  text-align: center;
+}
+
+/* Full-page states before the shell exists. */
+.boot {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 24px;
+  background: var(--canvas);
+}
+
+.boot-card {
+  display: grid;
+  gap: 20px;
+  justify-items: center;
+  width: min(440px, 100%);
+  padding: 40px 32px 32px;
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  background: var(--surface);
+  text-align: center;
+}
+
+.boot-card .mark {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+}
+
+.boot-brand {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+
+.boot-brand strong {
+  font-family: var(--font-title);
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.boot-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.boot-copy h1 {
+  font-size: 24px;
+  line-height: 32px;
+}
+
+.boot-copy p {
+  color: var(--ink-secondary);
+  max-width: 36ch;
+}
+
+.boot-card small {
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.boot-error {
+  color: var(--error-ink);
+}
+
+.boot-progress {
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--primary-container);
+}
+
+.boot-progress::after {
+  content: "";
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--primary);
+  animation: boot-slide 1.4s var(--ease) infinite;
+}
+
+@keyframes boot-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(260%);
+  }
+}
+
+.telegram-login {
+  display: grid;
+  justify-items: center;
+  min-height: 40px;
+}
+
+.telegram-login iframe {
+  display: block;
+}
+
+/* Phones: the mark stands for the brand, the scope chip keeps its name. */
+@media (max-width: 599px) {
+  .appbar-brand {
+    gap: 0;
+    padding: 0 4px;
+  }
+
+  .appbar-brand strong {
+    display: none;
+  }
+
+  .appbar-scope {
+    max-width: 46vw;
+  }
+
+  .appbar-actions {
+    gap: 0;
+  }
+}

@@ -36,7 +36,7 @@ The panel is opened from Telegram on a phone and as a persistent browser tab on 
 
 ## Brand Commitments
 
-The product name is Spawnpoint. Its established voice is direct, operational and calm. The interface may draw on the familiarity and information discipline of Google Cloud, but must remain recognizably its own product rather than copying AWS or GCP chrome.
+The product name is Spawnpoint. Its established voice is direct, operational and calm. Standing visual preference recorded by the owner on 2026-09-12: the panel is built in the Google Cloud console grammar, played straight at that console's craft level: an app bar with a scope picker, a navigation drawer, resource lists that open into resource pages, Material status iconography and data tables. Spawnpoint stays recognisable through its mark, its names and its game-specific content, not through invented chrome. AWS chrome is not a reference.
 
 ## Evidence on Hand
 

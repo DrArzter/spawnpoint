@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-13T00:00:00Z",
+  "title": "Design System: Spawnpoint Console",
+  "extensions": {
+    "colorMeta": {
+      "canvas": { "role": "neutral", "displayName": "Canvas Grey", "canonical": "#f8f9fa", "tonalRamp": ["#202124", "#303134", "#3c4043", "#5f6368", "#80868b", "#dadce0", "#f1f3f4", "#f8f9fa"] },
+      "surface": { "role": "neutral", "displayName": "Surface White", "canonical": "#ffffff", "tonalRamp": ["#202124", "#2d2e31", "#3c4043", "#5f6368", "#9aa0a6", "#dadce0", "#f1f3f4", "#ffffff"] },
+      "surface-variant": { "role": "neutral", "displayName": "Surface Variant", "canonical": "#f1f3f4", "tonalRamp": ["#3c4043", "#5f6368", "#80868b", "#9aa0a6", "#bdc1c6", "#dadce0", "#e8eaed", "#f1f3f4"] },
+      "outline": { "role": "neutral", "displayName": "Hairline Outline", "canonical": "#dadce0", "tonalRamp": ["#202124", "#3c4043", "#5f6368", "#80868b", "#9aa0a6", "#bdc1c6", "#dadce0", "#f1f3f4"] },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#202124", "tonalRamp": ["#202124", "#3c4043", "#5f6368", "#80868b", "#9aa0a6", "#bdc1c6", "#dadce0", "#e8eaed"] },
+      "ink-secondary": { "role": "neutral", "displayName": "Ink Secondary", "canonical": "#5f6368", "tonalRamp": ["#3c4043", "#5f6368", "#80868b", "#9aa0a6", "#bdc1c6", "#dadce0", "#e8eaed", "#f1f3f4"] },
+      "primary": { "role": "primary", "displayName": "Google Blue", "canonical": "#1a73e8", "tonalRamp": ["#0d47a1", "#1557b0", "#185abc", "#1967d2", "#1a73e8", "#4285f4", "#8ab4f8", "#d2e3fc"] },
+      "success": { "role": "status", "displayName": "Success Green", "canonical": "#1e8e3e", "tonalRamp": ["#0d3d1a", "#137333", "#188038", "#1e8e3e", "#34a853", "#5bb974", "#81c995", "#e6f4ea"] },
+      "warning": { "role": "status", "displayName": "Warning Amber", "canonical": "#f9ab00", "tonalRamp": ["#7a5600", "#b06000", "#e37400", "#f9ab00", "#fbbc04", "#fcc934", "#fdd663", "#fef7e0"] },
+      "error": { "role": "status", "displayName": "Error Red", "canonical": "#d93025", "tonalRamp": ["#5c0a06", "#93160f", "#c5221f", "#d93025", "#ea4335", "#ee675c", "#f28b82", "#fce8e6"] },
+      "info": { "role": "status", "displayName": "Info Blue", "canonical": "#1a73e8", "tonalRamp": ["#0d47a1", "#1557b0", "#185abc", "#1967d2", "#1a73e8", "#4285f4", "#8ab4f8", "#e8f0fe"] }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Title", "purpose": "Page, dialog and sheet titles; Google Sans Flex 400/500 only." },
+      "body": { "displayName": "Body", "purpose": "Default UI copy and details values, Roboto 400." },
+      "label": { "displayName": "Label", "purpose": "Field labels, table headers, drawer sections, chip text." },
+      "mono": { "displayName": "Mono/Data", "purpose": "IDs, addresses, checksums, timestamps, terminal grammar." }
+    },
+    "shadows": [
+      { "name": "shadow-1", "value": "0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15)", "purpose": "Filled-button hover, switch thumb resting shadow." },
+      { "name": "shadow-3", "value": "0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)", "purpose": "Menu popover, dialog, sheet, snackbar, and the open mobile drawer." }
+    ],
+    "motion": [
+      { "name": "ease", "value": "cubic-bezier(0.2, 0, 0, 1)", "purpose": "Default easing for all transitions and entrance animations." },
+      { "name": "dur", "value": "180ms", "purpose": "Standard transition/entrance duration (menu, dialog, sheet, snackbar, drawer)." },
+      { "name": "dur-fast", "value": "120ms", "purpose": "Hover/press state transitions." }
+    ],
+    "breakpoints": [
+      { "name": "phone", "value": "max-width: 959px" },
+      { "name": "auto-rail", "value": "960px to 1279px" },
+      { "name": "table-stack", "value": "container max-width: 599px" },
+      { "name": "coarse-pointer", "value": "(pointer: coarse)" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Filled Button",
+      "kind": "button",
+      "refersTo": "button-filled",
+      "description": "Primary committing action (Start, Create save).",
+      "html": "<button class=\"ds-btn ds-btn-filled\">Start</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 16px; border: 1px solid transparent; border-radius: 4px; font-size: 14px; font-weight: 500; line-height: 20px; letter-spacing: 0.0107em; } .ds-btn-filled { background: #1a73e8; color: #fff; transition: background 120ms cubic-bezier(0.2,0,0,1), box-shadow 120ms cubic-bezier(0.2,0,0,1); } .ds-btn-filled:hover { background: #1967d2; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15); } .ds-btn-filled:focus-visible { outline: 2px solid #1a73e8; outline-offset: 2px; } .ds-btn-filled:active { background: #185abc; box-shadow: none; }"
+    },
+    {
+      "name": "Outlined Button",
+      "kind": "button",
+      "refersTo": "button-outlined",
+      "description": "Secondary action (Refresh, Stop).",
+      "html": "<button class=\"ds-btn ds-btn-outlined\">Refresh</button>",
+      "css": ".ds-btn-outlined { height: 36px; padding: 0 16px; border: 1px solid #dadce0; border-radius: 4px; background: #fff; color: #1967d2; font-size: 14px; font-weight: 500; transition: background 120ms cubic-bezier(0.2,0,0,1); } .ds-btn-outlined:hover { background: rgba(26,115,232,0.08); } .ds-btn-outlined:focus-visible { outline: 2px solid #1a73e8; outline-offset: 2px; }"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Labelled text input with a 40px control height.",
+      "html": "<label class=\"ds-field\"><span>World name</span><input placeholder=\"survival-01\" type=\"text\" /></label>",
+      "css": ".ds-field { display: grid; gap: 6px; } .ds-field span { color: #5f6368; font-size: 12px; font-weight: 500; } .ds-field input { min-height: 40px; padding: 0 12px; border: 1px solid #80868b; border-radius: 4px; background: #fff; color: #202124; font-size: 14px; } .ds-field input:hover { border-color: #202124; } .ds-field input:focus-visible { outline: none; border-color: #1a73e8; box-shadow: inset 0 0 0 1px #1a73e8; }"
+    },
+    {
+      "name": "Status (ok)",
+      "kind": "custom",
+      "refersTo": "status",
+      "description": "Icon-plus-label status; colour never carries meaning alone.",
+      "html": "<span class=\"ds-status\"><svg class=\"ds-status-icon\" fill=\"#1e8e3e\" height=\"20\" viewBox=\"0 0 24 24\" width=\"20\"><path d=\"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z\"/></svg><span>Online</span></span>",
+      "css": ".ds-status { display: inline-flex; align-items: center; gap: 8px; color: #202124; font-size: 14px; } .ds-status-icon { flex: none; vertical-align: middle; }"
+    },
+    {
+      "name": "Chip (tonal)",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Pill-shaped tag for counts, roles and filters.",
+      "html": "<span class=\"ds-chip\">Owner</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; background: #f1f3f4; color: #202124; font-size: 12px; font-weight: 500; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat, hairline-bordered container for grouped content.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-header\"><h2>Session</h2></div><div class=\"ds-card-body\">Content</div></div>",
+      "css": ".ds-card { border: 1px solid #dadce0; border-radius: 8px; background: #fff; } .ds-card-header { padding: 16px 20px 12px; } .ds-card-header h2 { margin: 0; font-family: 'Google Sans Flex', 'Google Sans', Roboto, sans-serif; font-size: 16px; font-weight: 500; } .ds-card-body { padding: 4px 20px 20px; }"
+    },
+    {
+      "name": "Navigation Drawer Item",
+      "kind": "nav",
+      "refersTo": "drawer-item",
+      "description": "256px drawer row; active item gets a primary-container fill.",
+      "html": "<a aria-current=\"page\" class=\"ds-drawer-item\" href=\"#\">Worlds</a>",
+      "css": ".ds-drawer-item { display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 12px; border-radius: 20px; color: #202124; font-weight: 500; text-decoration: none; transition: background 120ms cubic-bezier(0.2,0,0,1); } .ds-drawer-item:hover { background: rgba(60,64,67,0.06); } .ds-drawer-item[aria-current='page'] { background: #e8f0fe; color: #1967d2; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Hosting Panel",
+    "overview": "Spawnpoint is played straight in the Google Cloud console grammar: an app bar carrying a scope chip, a navigation drawer, a worlds list that opens into a world page, and every fact placed on a labelled detail row. It is a resource console, not a game dashboard — it refuses neon stat cards around a giant Start button, and it refuses the discarded incumbent's single-world command surface behind a breadcrumb picker. Depth is conveyed by hairline borders and tonal fills, not by neumorphic or offset shadows; the one reserved shadow is functional, not decorative, and appears only on temporary top-layer surfaces (menu, dialog, sheet, snackbar). The content pane has no max width by design: it fills wide and 4K viewports the way the real Cloud console's resource tables do. Density comes from a 48px table row rhythm, an underline-tab pattern, and status rows that never rely on colour alone.",
+    "keyCharacteristics": [
+      "White app bar and drawer over a Grey-50 canvas, hairline borders throughout.",
+      "Google Blue reserved for actions, links and selection only — never decoration.",
+      "Status is always an icon plus a label; unlit states (Archived, Not created) are drawn on purpose, not left blank.",
+      "Flat surfaces at rest; one shadow vocabulary for transient top-layer chrome only.",
+      "No content-pane max-width: tables and detail pages fill the viewport."
+    ],
+    "rules": [
+      { "name": "The Icon-Plus-Label Rule", "body": "Every status (ok, progress, off, unknown, ready, error, warning, info, archived, absent, pending) pairs a Material filled glyph with a text label. Colour alone never carries meaning.", "section": "colors" },
+      { "name": "The Drawn Unlit State Rule", "body": "Archived (do_not_disturb_on) and Not created (add_circle_outline) are designed ghost states with their own icon and secondary-ink colour, not a blank table cell.", "section": "colors" },
+      { "name": "The Three-Face Rule", "body": "Titles are Google Sans Flex, everything functional is Roboto, everything precise is Roboto Mono. No component borrows a fourth face or a system display font.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Persistent surfaces (app bar, drawer, cards, tables, banners) are flat with a hairline border. Shadow appears only on menu, dialog, sheet and snackbar.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do pair every status with a Material filled icon and a label (ok, progress, off, unknown, ready, error, warning, info, archived, absent, pending) — never colour alone.",
+      "Do draw unlit states (Archived, Not created, no address) as their own icon-and-label state, not an empty cell.",
+      "Do keep the content pane unconstrained in width; it is a resource console, not a centred marketing column.",
+      "Do reserve shadow for menu, dialog, sheet and snackbar; every other surface stays flat with a hairline border.",
+      "Do use Google Sans Flex only for titles; Roboto for everything functional; Roboto Mono for anything precise or comparable."
+    ],
+    "donts": [
+      "Don't use Google Blue as a background fill outside containers, selection and controls — it marks action and state, not decoration.",
+      "Don't add a shadow to a persistent surface (card, table, app bar, drawer) to fake depth; use the hairline border and tonal fill instead.",
+      "Don't cap the content pane's width; the 4K and wide-viewport case is a design target, not an overflow to hide.",
+      "Don't introduce a kicker/eyebrow label, a hard-offset neobrutalist shadow, or a system display face; none exist in the build and none should be added."
+    ]
+  }
+}

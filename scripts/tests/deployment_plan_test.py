@@ -49,13 +49,22 @@ class DeploymentPlanTest(unittest.TestCase):
         plan = make_plan(["infra/terraform-bootstrap/main.tf"])
         self.assertFalse(plan["infrastructure"])
         self.assertEqual(plan["terraform_plan_roots"], [])
+        self.assertEqual(plan["manual_terraform_roots"], [])
         self.assertTrue(plan["manual_review"])
+        self.assertTrue(plan["manual_unverified"])
 
     def test_deployment_identity_change_requires_manual_review(self) -> None:
         plan = make_plan(["infra/terraform-github/main.tf"])
         self.assertFalse(plan["infrastructure"])
         self.assertEqual(plan["terraform_plan_roots"], ["infra/terraform-github"])
+        self.assertEqual(plan["manual_terraform_roots"], ["infra/terraform-github"])
         self.assertTrue(plan["manual_review"])
+        self.assertEqual(plan["manual_unverified"], [])
+
+    def test_host_bootstrap_payload_cannot_be_verified_by_the_deployment_role(self) -> None:
+        plan = make_plan(["server/user-data.sh"])
+        self.assertTrue(plan["manual_unverified"])
+        self.assertEqual(plan["manual_terraform_roots"], [])
 
     def test_regular_terraform_root_is_both_planned_and_deployed(self) -> None:
         plan = make_plan(["infra/terraform-storage/storage.tf"])

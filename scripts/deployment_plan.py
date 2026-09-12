@@ -59,6 +59,8 @@ class Selection:
     roots: set[str] = field(default_factory=set)
     plan_roots: set[str] = field(default_factory=set)
     manual: list[str] = field(default_factory=list)
+    manual_roots: set[str] = field(default_factory=set)
+    manual_unverified: list[str] = field(default_factory=list)
     web: bool = False
     lambdas: bool = False
 
@@ -100,10 +102,13 @@ def terraform_root(path: str) -> str | None:
 
 def select_terraform_path(path: str, selected: Selection) -> bool:
     if path.startswith(f"{TF_BOOTSTRAP}/"):
-        selected.manual.append("terraform-bootstrap uses local bootstrap state and is never auto-applied")
+        reason = "terraform-bootstrap uses local bootstrap state and is never auto-applied"
+        selected.manual.append(reason)
+        selected.manual_unverified.append(reason)
         return True
     if path.startswith(f"{TF_GITHUB}/"):
         selected.plan_roots.add(TF_GITHUB)
+        selected.manual_roots.add(TF_GITHUB)
         selected.manual.append("the GitHub deployment identity cannot auto-modify its own trust or permissions")
         return True
     root = terraform_root(path)
@@ -129,9 +134,9 @@ def select_other_path(path: str, selected: Selection) -> None:
     if path.startswith("server/"):
         selected.add_roots((TF_CORE, TF_RELEASES))
         if path == "server/user-data.sh":
-            selected.manual.append(
-                "host user-data changes require a reviewed EC2 replacement or an explicit live-host rollout"
-            )
+            reason = "host user-data changes require a reviewed EC2 replacement or an explicit live-host rollout"
+            selected.manual.append(reason)
+            selected.manual_unverified.append(reason)
     if path in RELEASE_SCRIPTS:
         selected.add_root(TF_RELEASES)
     if path.startswith("infra/"):
@@ -157,7 +162,9 @@ def make_plan(paths: list[str]) -> dict[str, object]:
         lambdas=deploy_all,
     )
     if deploy_all:
-        selected.manual.append("the previous commit is unavailable; refusing to infer a production diff")
+        reason = "the previous commit is unavailable; refusing to infer a production diff"
+        selected.manual.append(reason)
+        selected.manual_unverified.append(reason)
     for path in normalized:
         select_path(path, selected)
 
@@ -170,6 +177,8 @@ def make_plan(paths: list[str]) -> dict[str, object]:
         "terraform_roots": ordered_roots,
         "terraform_plan_roots": ordered_plan_roots,
         "manual_review": sorted(set(selected.manual)),
+        "manual_terraform_roots": [root for root in PLAN_ONLY_TERRAFORM_ROOTS if root in selected.manual_roots],
+        "manual_unverified": sorted(set(selected.manual_unverified)),
         "changed_paths": sorted(normalized),
     }
 

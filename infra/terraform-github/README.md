@@ -17,8 +17,10 @@ apply a plan. Pull requests use it only after an owner approves the environment 
 reports action counts and fails on deletes or replacements without printing the state into the job summary.
 
 This root is never auto-applied: the deployment identity cannot be allowed to edit its own trust or permissions.
-It remains separate from `../terraform`, so replacing the disposable host cannot remove the account-level OIDC
-provider. GitHub receives temporary STS credentials; there are no AWS access keys to store or rotate.
+After an owner applies it, the production workflow assumes the separate read-only plan identity and requires a fresh
+zero-change plan before it considers the manual step complete. It remains separate from `../terraform`, so replacing
+the disposable host cannot remove the account-level OIDC provider. GitHub receives temporary STS credentials; there
+are no AWS access keys to store or rotate.
 
 ## Order
 

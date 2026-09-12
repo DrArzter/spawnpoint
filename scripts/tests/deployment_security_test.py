@@ -35,6 +35,20 @@ class DeploymentSecurityTest(unittest.TestCase):
         self.assertIn("pull request plan refused", script)
         self.assertIn("result=destructive", script)
 
+    def test_manual_root_verification_requires_an_empty_read_only_plan(self) -> None:
+        script = (REPOSITORY / "scripts/terraform-verify-applied.sh").read_text()
+        self.assertNotIn('terraform -chdir="${root_path}" apply', script)
+        self.assertIn('-lock=false', script)
+        self.assertIn('actions != ["no-op"]', script)
+        self.assertIn("pending-manual-apply", script)
+
+        workflow = (REPOSITORY / ".github/workflows/deploy-production.yml").read_text()
+        manual_job = workflow.split("  manual-review:", 1)[1].split("\n  infrastructure:", 1)[0]
+        self.assertIn("environment: production-plan", manual_job)
+        self.assertIn("role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}", manual_job)
+        self.assertNotIn("AWS_DEPLOY_ROLE_ARN", manual_job)
+        self.assertIn("manual_unverified", manual_job)
+
     def test_pull_request_comments_only_update_the_actions_bot_own_marker(self) -> None:
         script = (REPOSITORY / "scripts/upsert-pr-comment.sh").read_text()
         self.assertIn('user.login == "github-actions[bot]"', script)

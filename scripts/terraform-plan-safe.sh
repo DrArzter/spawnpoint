@@ -8,7 +8,7 @@ root_path="${repository_root}/${root}"
 plan_file="${root_path}/pull-request.tfplan"
 plan_json_file="${root_path}/pull-request.tfplan.json"
 
-"${repository_root}/scripts/terraform-init-ci.sh" "${root}"
+"${repository_root}/scripts/terraform-init-ci.sh" "${root}" >/dev/null
 if ! terraform -chdir="${root_path}" plan -input=false -lock=false -out="${plan_file}" >/dev/null; then
   printf 'root=%s add=0 change=0 delete=0 read=0 result=error\n' "${root}"
   exit 1

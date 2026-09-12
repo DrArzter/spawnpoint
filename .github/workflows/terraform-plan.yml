@@ -114,6 +114,7 @@ jobs:
               echo '| Root | Add | Change | Delete | Read | Result |'
               echo '| --- | ---: | ---: | ---: | ---: | --- |'
               while IFS= read -r line; do
+                [[ "${line}" == root=* ]] || continue
                 root=""; add=0; change=0; delete=0; read=0; result=error
                 for field in ${line}; do
                   key="${field%%=*}"

@@ -39,7 +39,8 @@ separate OIDC identities owned by `infra/terraform-github`.**
 roots changed (a workflow definition maps to the root that renders it; a `server/` change re-plans the host and release
 roots), whether Lambda bundles or the web build changed, and what needs a human. `Deploy production` runs when that
 `Check` succeeds, downloads the plan, and applies in order: infrastructure, then Lambdas, then web. Terraform applies go
-through `scripts/terraform-apply-safe.sh`, which **refuses any plan containing a delete or a replacement**; Lambdas
+through `scripts/terraform-apply-safe.sh`, which **refuses any delete or replacement the root's `destroy-allowed.txt`
+does not name** (see below); Lambdas
 through `scripts/deploy-lambdas.sh`, which updates only functions whose bundle hash changed; the web build through
 `scripts/deploy-web.sh`, which skips an unchanged `index.html`.
 
@@ -52,7 +53,8 @@ commit — fails the workflow rather than being assumed done.
 
 **A pull request receives a read-only production plan.** `terraform-plan.yml` runs in the `production-plan`
 environment, so an owner approves the gate before any pull-request code holds the state-reading role or the Terraform
-inputs. It plans only the affected roots through `scripts/terraform-plan-safe.sh`, fails on deletes or replacements, and
+inputs. It plans only the affected roots through `scripts/terraform-plan-safe.sh`, fails on deletes or replacements the root
+does not allow-list, and
 reports per-root add/change/delete/read counts in one marker-owned comment; `Check` reports the passed and failed rungs
 in another. Reruns update those comments instead of adding noise.
 
@@ -85,8 +87,13 @@ secrets; the CurseForge key never leaves Parameter Store; there are no AWS acces
   but does not reach the instance; the host copy is refreshed by an explicit SSM step, and any change to a host-side
   contract must land there before the machine that depends on it is applied. The runbook records the order per
   contract; this pipeline does not enforce it.
-- A refused delete or replacement is the right default and also a wall: an intentional replacement — a new instance
-  type, a renamed resource — is an owner apply from a workstation, recorded in a command log, not a merge.
+- A refused delete or replacement is the right default and also a wall. The wall has one door, for control-plane wiring
+  only: the root names the exact resource address in its `destroy-allowed.txt`, in the same pull request, and the deploy
+  identity holds exactly the delete actions those thirteen types need — see *Allowing a destroy* in
+  [scripts/README.md](../../scripts/README.md#allowing-a-destroy). Anything that carries state or is registered outside
+  the account — the host, its volume, the buckets, the tables, the OIDC trust, the distribution, the bot's Function URL,
+  the guardrails, the GitHub identities — can be listed by nobody and deleted by no pipeline run; that is still an owner
+  apply from a workstation, recorded in a command log, not a merge.
 
 ## Alternatives considered
 

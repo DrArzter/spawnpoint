@@ -137,43 +137,9 @@ jobs:
       id-token: write
     needs: plan
     if: needs.plan.result == 'success' && needs.plan.outputs.identity == 'true'
-    environment: production-identity
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    env:
-      AWS_REGION: eu-central-1
-      TF_IN_AUTOMATION: "true"
-      TF_VAR_aws_profile: ""
-    steps:
-      - name: Check out the tested commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: main
-
-      - name: Verify main still names the tested commit
-        env:
-          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
-        run: |
-          [[ "$(git rev-parse HEAD)" == "${TESTED_SHA}" ]] || {
-            echo "main advanced after this Check run; refusing to execute an older production revision" >&2
-            exit 1
-          }
-
-      - name: Assume the identity-admin role
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
-        with:
-          aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ vars.AWS_IDENTITY_ROLE_ARN }}
-          role-session-name: spawnpoint-identity
-
-      - name: Install Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with:
-          terraform_version: 1.15.8
-          terraform_wrapper: false
-
-      - name: Apply the GitHub identities without destructive actions
-        run: scripts/terraform-apply-safe.sh infra/terraform-github
+    uses: ./.github/workflows/deploy-identity.yml
+    with:
+      tested_sha: ${{ github.event.workflow_run.head_sha }}
 
   infrastructure:
     permissions:

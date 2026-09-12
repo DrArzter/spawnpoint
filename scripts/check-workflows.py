@@ -62,28 +62,38 @@ def check_test_workflow(text: str) -> list[str]:
     return problems
 
 
-def check_deploy_workflow(path: Path, text: str) -> list[str]:
+def check_production_gate(text: str) -> list[str]:
     problems: list[str] = []
-    scopes = permission_scopes(text)
+    required_fragments = (
+        "workflow_run:",
+        "workflows: [Check]",
+        "github.event.workflow_run.conclusion == 'success'",
+        "      actions: read\n      contents: read",
+        "      contents: read\n      id-token: write",
+    )
+    for required in required_fragments:
+        if required not in text:
+            problems.append(f"production gate is missing {required!r}")
+    return problems
+
+
+def check_deploy_unit(text: str) -> list[str]:
+    problems: list[str] = []
     expected = {"contents": "read", "id-token": "write"}
-    if path.name == "deploy-production.yml":
-        expected = {}
-        for required in ("workflow_run:", "workflows: [Check]", "github.event.workflow_run.conclusion == 'success'"):
-            if required not in text:
-                problems.append(f"production gate is missing {required!r}")
-        for required_permissions in (
-            "      actions: read\n      contents: read",
-            "      contents: read\n      id-token: write",
-        ):
-            if required_permissions not in text:
-                problems.append(f"production jobs are missing least-privilege permissions {required_permissions!r}")
-    else:
-        if "workflow_call:" not in text:
-            problems.append("a deploy unit must be callable only by the production gate")
-        if "environment:" not in text or "production" not in text:
-            problems.append("a cloud deploy unit must use the production environment")
+    scopes = permission_scopes(text)
     if scopes != expected:
         problems.append(f"deploy permissions must be {expected}, found {scopes}")
+    if "workflow_call:" not in text:
+        problems.append("a deploy unit must be callable only by the production gate")
+    if "environment:" not in text or "production" not in text:
+        problems.append("a cloud deploy unit must use the production environment")
+    return problems
+
+
+def check_deploy_workflow(path: Path, text: str) -> list[str]:
+    problems = check_production_gate(text) if path.name == "deploy-production.yml" else check_deploy_unit(text)
+    if path.name == "deploy-production.yml" and permission_scopes(text):
+        problems.append("the production gate must grant permissions per job, not at workflow level")
     if "pull_request:" in text or "push:" in text:
         problems.append("deploy workflow bypasses the successful Check workflow_run gate")
     return problems

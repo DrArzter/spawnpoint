@@ -23,6 +23,8 @@ jobs:
       infrastructure: ${{ steps.read.outputs.infrastructure }}
       lambdas: ${{ steps.read.outputs.lambdas }}
       manual_review: ${{ steps.read.outputs.manual_review }}
+      manual_terraform_roots: ${{ steps.read.outputs.manual_terraform_roots }}
+      manual_unverified: ${{ steps.read.outputs.manual_unverified }}
       terraform_roots: ${{ steps.read.outputs.terraform_roots }}
       web: ${{ steps.read.outputs.web }}
     steps:
@@ -45,20 +47,73 @@ jobs:
           echo "infrastructure=$(jq -r '.infrastructure' "${plan}")" >> "${GITHUB_OUTPUT}"
           echo "lambdas=$(jq -r '.lambdas' "${plan}")" >> "${GITHUB_OUTPUT}"
           echo "manual_review=$(jq -c '.manual_review' "${plan}")" >> "${GITHUB_OUTPUT}"
+          echo "manual_terraform_roots=$(jq -c '.manual_terraform_roots' "${plan}")" >> "${GITHUB_OUTPUT}"
+          echo "manual_unverified=$(jq -c '.manual_unverified' "${plan}")" >> "${GITHUB_OUTPUT}"
           echo "terraform_roots=$(jq -c '.terraform_roots' "${plan}")" >> "${GITHUB_OUTPUT}"
           echo "web=$(jq -r '.web' "${plan}")" >> "${GITHUB_OUTPUT}"
 
   manual-review:
-    permissions: {}
+    permissions:
+      contents: read
+      id-token: write
     needs: plan
     if: needs.plan.outputs.manual_review != '[]'
+    environment: production-plan
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      AWS_REGION: eu-central-1
+      TF_IN_AUTOMATION: "true"
+      TF_VAR_aws_profile: ""
     steps:
-      - name: Keep manual production work visible
+      - name: Check out the tested commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Report required manual work
         env:
           MANUAL_REVIEW: ${{ needs.plan.outputs.manual_review }}
+        run: jq -r '.[] | "::notice::Manual production work: \(.)"' <<<"${MANUAL_REVIEW}"
+
+      - name: Assume the read-only production plan role
+        if: needs.plan.outputs.manual_terraform_roots != '[]'
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          role-session-name: spawnpoint-manual-verification
+
+      - name: Install Terraform
+        if: needs.plan.outputs.manual_terraform_roots != '[]'
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Verify manually managed Terraform roots are applied
+        if: needs.plan.outputs.manual_terraform_roots != '[]'
+        env:
+          TERRAFORM_ROOTS: ${{ needs.plan.outputs.manual_terraform_roots }}
         run: |
-          jq -r '.[] | "manual review required: \(.)"' <<<"${MANUAL_REVIEW}" >&2
+          : > manual-verification-results.txt
+          failed=0
+          while IFS= read -r root; do
+            if result="$(scripts/terraform-verify-applied.sh "${root}")"; then
+              printf '%s\n' "${result}" | tee -a manual-verification-results.txt
+            else
+              printf '%s\n' "${result}" | tee -a manual-verification-results.txt
+              failed=1
+            fi
+          done < <(jq -r '.[]' <<<"${TERRAFORM_ROOTS}")
+          exit "${failed}"
+
+      - name: Refuse manual work that cannot be verified automatically
+        if: needs.plan.outputs.manual_unverified != '[]'
+        env:
+          MANUAL_UNVERIFIED: ${{ needs.plan.outputs.manual_unverified }}
+        run: |
+          jq -r '.[] | "manual verification unavailable: \(.)"' <<<"${MANUAL_UNVERIFIED}" >&2
           exit 1
 
   infrastructure:

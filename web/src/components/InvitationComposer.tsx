@@ -9,7 +9,7 @@ import {
 } from "../auth";
 import type { Game, World } from "../model";
 import { Button } from "./ui/Button";
-import { EmptyState, Notice, SectionHeader, Surface, StatusBadge } from "./ui/Page";
+import { EmptyState, LoadingState, Notice, SectionHeader, Surface, StatusBadge } from "./ui/Page";
 
 type Audience = "broadcast" | "direct";
 
@@ -85,7 +85,7 @@ export function InvitationComposer({ game, world, onClose }: { game: Game; world
       <div className="invite-detail">
         {audience === "broadcast" ? <div className="broadcast-summary"><strong>One message, no manual selection</strong><p>The invitation reaches configured group chats and people who opted into broadcast invitations. Your own private chat is excluded.</p></div> : <div className="recipient-picker">
           <div className="recipient-tools"><label><span>Find a player</span><input autoComplete="off" onChange={(event) => setQuery(event.target.value)} placeholder="Search by display name" type="search" value={query} /></label><span>{selectedCount} selected</span></div>
-          {recipientState === "loading" && <EmptyState busy description="Reading approved identities and their Telegram delivery settings." title="Loading players" />}
+          {recipientState === "loading" && <LoadingState label="Loading approved players" variant="list" />}
           {recipientState === "error" && <Notice action={<Button onClick={() => window.location.reload()} variant="ghost">Reload panel</Button>} title="Players could not be loaded" tone="danger" />}
           {recipientState === "ready" && recipients.length === 0 && <EmptyState description="Approve another player before sending a direct invitation." title="No other approved players yet" />}
           {recipientState === "ready" && recipients.length > 0 && <div className="recipient-list" role="group" aria-label="Players">
@@ -108,7 +108,7 @@ export function InvitationComposer({ game, world, onClose }: { game: Game; world
 
 function InvitationHistory({ history, state, onRefresh }: { history: InvitationSummary[]; state: "loading" | "ready" | "error"; onRefresh: () => void }) {
   return <section className="invite-history" aria-labelledby="invite-history-title"><header><div><h3 id="invite-history-title">Recent invitations</h3><p>Your last attempts for this world</p></div><Button disabled={state === "loading"} onClick={onRefresh} variant="ghost">Refresh</Button></header>
-    {state === "loading" && <div className="history-state" role="status">Reading delivery results…</div>}
+    {state === "loading" && <LoadingState label="Loading recent invitation delivery results" variant="list" />}
     {state === "error" && <div className="history-state error" role="alert">Delivery history could not be loaded.</div>}
     {state === "ready" && history.length === 0 && <div className="history-state">No invitations sent yet.</div>}
     {state === "ready" && history.length > 0 && <ol>{history.slice(0, 3).map((item) => <li key={item.id}><StatusBadge label={statusLabel(item.status)} tone={statusTone(item.status)} /><span>{item.audience === "broadcast" ? "Everyone" : `${item.recipientCount ?? 0} selected`}</span><span>{deliveryDetail(item)}</span><time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time></li>)}</ol>}

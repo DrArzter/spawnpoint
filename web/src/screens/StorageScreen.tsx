@@ -5,7 +5,7 @@ import { DataColumn, DataTable } from "../components/ui/DataTable";
 import { Tabs } from "../components/ui/Tabs";
 import type { Preset, Wipe, World } from "../model";
 import { loadBackups, type BackupInventory } from "../auth";
-import { EmptyState, Notice, PageHeader, RetryState, Surface } from "../components/ui/Page";
+import { EmptyState, LoadingState, Notice, PageHeader, RetryState, Surface } from "../components/ui/Page";
 
 type ReleaseRow = { name: string; status: string; downloadable: boolean };
 
@@ -217,10 +217,11 @@ function WorldStorageScreen({ world, preset, gameId, canReadBackups, canManageWo
     {tab === "wipes" && <DataTable columns={wipeColumns} emptyLabel="No wipe history is available for this save" label="Wipe history" rowKey={(row) => row.id} rows={[...world.wipes].reverse()} />}
     {tab === "backups" && !canReadBackups && <EmptyState description="Ask an owner for the backup.read permission." icon="storage" title="Your role cannot read backups" />}
     {tab === "backups" && canReadBackups && backupError !== null && <RetryState description={backupError} onRetry={() => setBackupRevision((current) => current + 1)} title="The inventory is unavailable" />}
-    {tab === "backups" && canReadBackups && backupError === null && <>
+    {tab === "backups" && canReadBackups && backupError === null && backups === null && <LoadingState label="Loading the backup inventory" variant="table" />}
+    {tab === "backups" && canReadBackups && backupError === null && backups !== null && <>
       <DataTable
         columns={backupColumns}
-        emptyLabel={backups === null ? "Reading the inventory…" : selectedWipe ? `Wipe #${selectedWipe.number} has no verified backups yet` : "This save has no verified backups yet"}
+        emptyLabel={selectedWipe ? `Wipe #${selectedWipe.number} has no verified backups yet` : "This save has no verified backups yet"}
         label={selectedWipe ? `Verified backups for Wipe #${selectedWipe.number}` : "Verified backups"}
         rowKey={(row) => row.key}
         rows={visibleBackups}

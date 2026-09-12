@@ -3,6 +3,12 @@ import type { ControlPlaneSnapshot } from "./model";
 
 export const previewEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).has("preview");
 
+export async function waitForPreviewLatency(): Promise<void> {
+  if (!previewEnabled) return;
+  const requested = Number(new URLSearchParams(window.location.search).get("latency"));
+  if (Number.isFinite(requested) && requested > 0) await new Promise((resolve) => window.setTimeout(resolve, Math.min(requested, 5000)));
+}
+
 export const previewSession: ActiveSession = {
   state: "active",
   identity: { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [] },

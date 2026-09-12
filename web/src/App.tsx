@@ -4,7 +4,7 @@ import { ActiveSession, AuthState, endSession, loadControlPlane, requestAccess, 
 import { AccessScreen } from "./screens/AccessScreen";
 import { Avatar } from "./components/Avatar";
 import { Button } from "./components/ui/Button";
-import { EmptyState, PageHeader } from "./components/ui/Page";
+import { EmptyState, LoadingState, PageHeader } from "./components/ui/Page";
 import { ConsoleScreen } from "./screens/ConsoleScreen";
 import { DashboardScreen } from "./screens/DashboardScreen";
 import { MetricsScreen } from "./screens/MetricsScreen";
@@ -107,6 +107,7 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
   const visibleNavigation = useMemo(() => navigation.filter((item) => granted.has(item.permission)), [granted]);
   const page = route.page === "profile" || visibleNavigation.some((item) => item.id === route.page) ? route.page : "dashboard";
   const [controlPlane, setControlPlane] = useState<ControlPlaneState>({ status: "loading", snapshot: null, error: "" });
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [gameId, setGameId] = useState<string | null>(null);
   const [presetId, setPresetId] = useState<string | null>(null);
   const [worldId, setWorldId] = useState<string | null>(null);
@@ -145,8 +146,8 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
   useEffect(() => {
     let active = true;
     loadControlPlane()
-      .then((snapshot) => { if (active) setControlPlane({ status: "ready", snapshot, error: "" }); })
-      .catch((error: unknown) => { if (active) setControlPlane({ status: "error", snapshot: null, error: error instanceof Error ? error.message : "The control-plane state could not be loaded." }); });
+      .then((snapshot) => { if (active) { setControlPlane({ status: "ready", snapshot, error: "" }); setInitialLoadComplete(true); } })
+      .catch((error: unknown) => { if (active) { setControlPlane({ status: "error", snapshot: null, error: error instanceof Error ? error.message : "The control-plane state could not be loaded." }); setInitialLoadComplete(true); } });
     return () => { active = false; };
   }, []);
   useEffect(() => {
@@ -278,6 +279,8 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
 
   const themeLabel = themePreference === "system" ? `System theme · ${theme}` : `${themePreference[0].toUpperCase()}${themePreference.slice(1)} theme`;
 
+  if (!initialLoadComplete) return <PanelLoadingScreen />;
+
   return (
     <div className="console-shell">
       <aside className="side-nav">
@@ -309,13 +312,14 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
         </header>
 
         <div className="page-content">
-          {page === "dashboard" && game && world && <DashboardScreen canInvite={granted.has("invitation.send")} canStart={granted.has("session.start")} canStop={granted.has("session.stop")} error={controlPlane.error} game={game} hosts={snapshot?.hosts ?? []} loadState={controlPlane.status} onOperation={(action) => void runSessionOperation(action)} onRetry={() => void refreshControlPlane()} operationRequest={operationRequest} operations={snapshot?.operations ?? []} serverState={serverState} world={world} />}
-          {page === "dashboard" && (!game || !world) && <ControlPlaneUnavailable state={controlPlane} onRetry={() => void refreshControlPlane()} />}
-          {page === "metrics" && <MetricsScreen serverState={serverState} />}
-          {page === "console" && <ConsoleScreen serverState={serverState} />}
-          {page === "storage" && game && (preset || world) && <StorageScreen canManageWorld={granted.has("world.manage")} canReadBackups={granted.has("backup.read")} canRestoreBackup={granted.has("backup.restore")} gameId={game.id} lifecycleRequest={lifecycleRequest} onCreateWorld={createWorld} onDownloadPack={granted.has("connection.read") && world ? () => void downloadPack() : undefined} onSelectWipe={setWipeId} onWorldAction={(action, backupKey, release) => void runWorldLifecycle(action, backupKey, release)} packRequest={storageRequest} preset={preset} selectedWipeId={selectedWipe?.id} world={world} />}
-          {page === "access" && <AccessScreen bootstrap={bootstrap} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate("access", tab)} roles={roles} tab={accessTab} />}
-          {page === "profile" && currentMember && <ProfileScreen member={currentMember} onChange={(next) => setMembers((current) => current.map((member) => member.id === next.id ? next : member))} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
+          {controlPlane.status === "loading" && <LoadingState label="Refreshing games, worlds and current AWS state" />}
+          {controlPlane.status !== "loading" && page === "dashboard" && game && world && <DashboardScreen canInvite={granted.has("invitation.send")} canStart={granted.has("session.start")} canStop={granted.has("session.stop")} error={controlPlane.error} game={game} hosts={snapshot?.hosts ?? []} loadState={controlPlane.status} onOperation={(action) => void runSessionOperation(action)} onRetry={() => void refreshControlPlane()} operationRequest={operationRequest} operations={snapshot?.operations ?? []} serverState={serverState} world={world} />}
+          {controlPlane.status !== "loading" && page === "dashboard" && (!game || !world) && <ControlPlaneUnavailable state={controlPlane} onRetry={() => void refreshControlPlane()} />}
+          {controlPlane.status !== "loading" && page === "metrics" && <MetricsScreen serverState={serverState} />}
+          {controlPlane.status !== "loading" && page === "console" && <ConsoleScreen serverState={serverState} />}
+          {controlPlane.status !== "loading" && page === "storage" && game && (preset || world) && <StorageScreen canManageWorld={granted.has("world.manage")} canReadBackups={granted.has("backup.read")} canRestoreBackup={granted.has("backup.restore")} gameId={game.id} lifecycleRequest={lifecycleRequest} onCreateWorld={createWorld} onDownloadPack={granted.has("connection.read") && world ? () => void downloadPack() : undefined} onSelectWipe={setWipeId} onWorldAction={(action, backupKey, release) => void runWorldLifecycle(action, backupKey, release)} packRequest={storageRequest} preset={preset} selectedWipeId={selectedWipe?.id} world={world} />}
+          {controlPlane.status !== "loading" && page === "access" && <AccessScreen bootstrap={bootstrap} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate("access", tab)} roles={roles} tab={accessTab} />}
+          {controlPlane.status !== "loading" && page === "profile" && currentMember && <ProfileScreen member={currentMember} onChange={(next) => setMembers((current) => current.map((member) => member.id === next.id ? next : member))} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
         </div>
       </main>
 
@@ -324,6 +328,14 @@ function AuthenticatedApp({ session }: { session: ActiveSession }) {
       </nav>
     </div>
   );
+}
+
+function PanelLoadingScreen() {
+  return <main aria-busy="true" aria-live="polite" className="panel-loading-screen" role="status">
+    <div className="panel-loading-brand" aria-hidden="true"><span>S</span><strong>Spawnpoint</strong></div>
+    <div className="panel-loading-indicator" aria-hidden="true"><i /><i /><i /></div>
+    <div className="panel-loading-copy"><h1>Preparing your panel</h1><p>Reading games, worlds and current AWS state.</p></div>
+  </main>;
 }
 
 function deriveServerState(game: Game | undefined, snapshot: ControlPlaneSnapshot | null): ServerState {

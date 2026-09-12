@@ -1,5 +1,5 @@
 import type { ControlPlaneSnapshot } from "./model";
-import { previewCandidates, previewEnabled, previewIdentities, previewInvitations, previewRecipients, previewRoles, previewSession, previewSnapshot, previewSubscriptions } from "./preview";
+import { previewCandidates, previewEnabled, previewIdentities, previewInvitations, previewRecipients, previewRoles, previewSession, previewSnapshot, previewSubscriptions, waitForPreviewLatency } from "./preview";
 
 export type ActiveSession = Readonly<{
   state: "active";
@@ -180,7 +180,7 @@ export async function requestAccess(): Promise<void> {
 }
 
 export async function loadAccessCandidates(): Promise<AccessCandidate[]> {
-  if (previewEnabled) return previewCandidates;
+  if (previewEnabled) { await waitForPreviewLatency(); return previewCandidates; }
   const response = await authorizedFetch("/access/candidates");
   if (!response.ok) throw new Error("Access requests could not be loaded.");
   const body = await response.json() as { candidates: AccessCandidate[] };
@@ -188,7 +188,7 @@ export async function loadAccessCandidates(): Promise<AccessCandidate[]> {
 }
 
 export async function loadControlPlane(): Promise<ControlPlaneSnapshot> {
-  if (previewEnabled) return previewSnapshot;
+  if (previewEnabled) { await waitForPreviewLatency(); return previewSnapshot; }
   const response = await authorizedFetch("/control-plane");
   if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot view server status." : "The control-plane state could not be loaded.");
   return response.json() as Promise<ControlPlaneSnapshot>;
@@ -243,14 +243,14 @@ export async function loadBackups(gameId: string, worldId: string): Promise<Back
   const previewGenerationIds = gameId === "minecraft" && worldId === "minecraft-rostik-12345678"
     ? [`gen-${"2".repeat(32)}`, `gen-${"1".repeat(32)}`]
     : [`generation-${worldId}-01`, `generation-${worldId}-01`];
-  if (previewEnabled) return {
+  if (previewEnabled) { await waitForPreviewLatency(); return {
     entries: [
       { key: `worlds/${worldId}/archives/preview-a`, archiveName: `${worldId}-20260829T173200Z.tar.zst`, checksum: "8b4e3a7d24c09ea61de95cdb613cfb9bea802cff4cb67f2ed0a910832d96f231", generationId: previewGenerationIds[0]!, sizeBytes: 184549376, storedAt: "2026-08-29T17:32:00.000Z" },
       { key: `worlds/${worldId}/archives/preview-b`, archiveName: `${worldId}-20260827T221500Z.tar.zst`, checksum: "294c47d3cbd1d52ed7117338b0e44a28d5ae53b9b0ad9f563172c8b4fbfd19cc", generationId: previewGenerationIds[1]!, sizeBytes: 178257920, storedAt: "2026-08-27T22:15:00.000Z" },
     ],
     unverified: 1,
     truncated: false,
-  };
+  }; }
   const response = await authorizedFetch(
     `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/backups`,
   );
@@ -313,7 +313,7 @@ export async function requestSessionOperation(gameId: string, worldId: string, a
 }
 
 export async function loadInvitationRecipients(): Promise<InvitationRecipient[]> {
-  if (previewEnabled) return previewRecipients;
+  if (previewEnabled) { await waitForPreviewLatency(); return previewRecipients; }
   const response = await authorizedFetch("/invitations/recipients");
   if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot invite players." : "Players could not be loaded.");
   const body = await response.json() as { recipients: InvitationRecipient[] };
@@ -321,7 +321,7 @@ export async function loadInvitationRecipients(): Promise<InvitationRecipient[]>
 }
 
 export async function loadInvitationHistory(gameId: string, worldId: string): Promise<InvitationSummary[]> {
-  if (previewEnabled) return previewInvitations;
+  if (previewEnabled) { await waitForPreviewLatency(); return previewInvitations; }
   const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/invitations`);
   if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot view invitation history." : "Invitation history could not be loaded.");
   const body = await response.json() as { invitations: InvitationSummary[] };
@@ -365,7 +365,7 @@ export async function dismissAccessCandidate(telegramId: string): Promise<void> 
 }
 
 export async function loadAccessIdentities(): Promise<AccessIdentity[]> {
-  if (previewEnabled) return previewIdentities;
+  if (previewEnabled) { await waitForPreviewLatency(); return previewIdentities; }
   const response = await authorizedFetch("/access/identities");
   if (!response.ok) throw new Error("Users could not be loaded.");
   const body = await response.json() as { identities: AccessIdentity[] };
@@ -373,7 +373,7 @@ export async function loadAccessIdentities(): Promise<AccessIdentity[]> {
 }
 
 export async function loadAccessRoles(): Promise<AccessRole[]> {
-  if (previewEnabled) return previewRoles;
+  if (previewEnabled) { await waitForPreviewLatency(); return previewRoles; }
   const response = await authorizedFetch("/access/roles");
   if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot view access roles." : "Roles could not be loaded.");
   const body = await response.json() as { roles: AccessRole[] };
@@ -381,7 +381,7 @@ export async function loadAccessRoles(): Promise<AccessRole[]> {
 }
 
 export async function loadSubscriptions(): Promise<SubscriptionState> {
-  if (previewEnabled) return previewSubscriptions;
+  if (previewEnabled) { await waitForPreviewLatency(); return previewSubscriptions; }
   const response = await authorizedFetch("/me/subscriptions");
   if (!response.ok) throw new Error("Your notification subscriptions could not be loaded.");
   const body = await response.json() as { subscriptions: SubscriptionState };

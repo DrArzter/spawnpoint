@@ -24,6 +24,24 @@ export function EmptyState({ title, description, icon, action, busy = false }: {
   return <div aria-busy={busy} className="ui-empty"><span className="ui-empty-icon" aria-hidden="true">{icon && <Icon name={icon} />}</span><div><strong>{title}</strong><p>{description}</p></div>{action}</div>;
 }
 
+export function LoadingState({ label, variant = "page" }: { label: string; variant?: "page" | "table" | "settings" | "list" }) {
+  const rows = variant === "list" ? 3 : 4;
+  return <div aria-busy="true" aria-live="polite" className={`ui-loading ui-loading-${variant}`} role="status">
+    <span className="visually-hidden">{label}</span>
+    {variant === "page" && <>
+      <div aria-hidden="true" className="ui-loading-heading"><i /><i /></div>
+      <div aria-hidden="true" className="ui-loading-feature"><span /><div><i /><i /></div><b /></div>
+      <div aria-hidden="true" className="ui-loading-stats">{Array.from({ length: 4 }, (_, index) => <span key={index}><i /><b /><i /></span>)}</div>
+      <div aria-hidden="true" className="ui-loading-section-title"><i /><i /></div>
+    </>}
+    {variant === "settings" && <div aria-hidden="true" className="ui-loading-section-title"><i /><i /></div>}
+    {variant !== "page" && <div aria-hidden="true" className="ui-loading-bar" />}
+    <div aria-hidden="true" className="ui-loading-rows">
+      {Array.from({ length: rows }, (_, index) => <span key={index}><i /><i /><i /></span>)}
+    </div>
+  </div>;
+}
+
 export function Notice({ title, description, tone = "info", action }: { title: string; description?: string; tone?: "info" | "success" | "warning" | "danger"; action?: ReactNode }) {
   return <div className={`ui-notice ui-notice-${tone}`} role={tone === "danger" ? "alert" : "status"}><div><strong>{title}</strong>{description && <p>{description}</p>}</div>{action}</div>;
 }

@@ -5,7 +5,7 @@ import { LinkedAccountsEditor } from "../components/LinkedAccountsEditor";
 import { Button } from "../components/ui/Button";
 import { DataColumn, DataTable } from "../components/ui/DataTable";
 import { Tabs } from "../components/ui/Tabs";
-import { EmptyState, PageHeader, RetryState, SectionHeader, StatusBadge, Switch } from "../components/ui/Page";
+import { EmptyState, LoadingState, PageHeader, RetryState, SectionHeader, StatusBadge, Switch } from "../components/ui/Page";
 import { Icon } from "../Icon";
 import { AccessTab, Game, Member, OwnerBootstrap, Role } from "../model";
 
@@ -130,7 +130,7 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
     </section>
     <section className="access-requests">
       <SectionHeader actions={<StatusBadge label={`${candidates.length} waiting`} tone={candidates.length > 0 ? "info" : "neutral"} />} description="Signing in proves the Telegram account. Approval creates a Spawnpoint identity and assigns its first role." title="Telegram access requests" />
-      {candidateState === "loading" && <EmptyState busy description="Reading Telegram accounts that requested access." icon="access" title="Loading access requests" />}
+      {candidateState === "loading" && <LoadingState label="Loading Telegram access requests" variant="list" />}
       {candidateState === "ready" && candidates.length === 0 && <EmptyState description="New requests will appear here after a visitor signs in and asks for access." icon="access" title="Nobody is waiting for review" />}
       {candidates.map((candidate) => <article key={candidate.platformUserId}>
         <Avatar name={candidate.displayName} photoUrl={candidate.photoUrl ?? undefined} />
@@ -153,7 +153,7 @@ function Roles({ roles, state, error, onRetry }: { roles: Role[]; state: "loadin
   ];
   return <div className="roles-layout">
     {state === "error" && <RetryState description={error} onRetry={onRetry} title="Roles could not be loaded" />}
-    <DataTable columns={columns} emptyLabel={state === "loading" ? "Loading roles…" : "No roles are configured."} label="Roles and permissions" rowKey={(role) => role.id} rows={roles} />
+    {state === "loading" ? <LoadingState label="Loading roles and permissions" variant="table" /> : <DataTable columns={columns} emptyLabel="No roles are configured." label="Roles and permissions" rowKey={(role) => role.id} rows={roles} />}
   </div>;
 }
 
@@ -203,8 +203,10 @@ function Notifications({ games }: { games: readonly Game[] }) {
   return <div className="notification-settings">
     <div className="preference-intro"><div><h2>Your subscriptions</h2><p>These preferences are stored for your Spawnpoint identity and survive reloads.</p></div><span aria-live="polite" role="status">{status}</span></div>
     {state === "error" && <RetryState description={error} onRetry={() => void reload()} title="Subscriptions are unavailable" />}
-    <section><SectionHeader description="Choose event types independently for each game." title="Server events" /><DataTable columns={columns} label="Server event subscriptions" rowKey={(game) => game.id} rows={games} /></section>
-    <section><SectionHeader description="Choose whether other players may notify you." title="Game invitations" /><Switch checked={Boolean(subscriptions["invitation.broadcast"])} disabled={controlsDisabled} label="Invitations sent to everyone" note="A player invited everyone to join a game" onChange={() => void toggle("invitation.broadcast")} /><Switch checked={Boolean(subscriptions["invitation.direct"])} disabled={controlsDisabled} label="Invitations sent directly to me" note="A player invited only selected people" onChange={() => void toggle("invitation.direct")} /></section>
-    <section className="delivery-row"><div><h2>Delivery channel</h2><p>Telegram is linked and receives the notification categories enabled above.</p></div><StatusBadge label="Linked" tone="success" /></section>
+    {state === "loading" ? <LoadingState label="Loading notification preferences" variant="settings" /> : <>
+      <section><SectionHeader description="Choose event types independently for each game." title="Server events" /><DataTable columns={columns} label="Server event subscriptions" rowKey={(game) => game.id} rows={games} /></section>
+      <section><SectionHeader description="Choose whether other players may notify you." title="Game invitations" /><Switch checked={Boolean(subscriptions["invitation.broadcast"])} disabled={controlsDisabled} label="Invitations sent to everyone" note="A player invited everyone to join a game" onChange={() => void toggle("invitation.broadcast")} /><Switch checked={Boolean(subscriptions["invitation.direct"])} disabled={controlsDisabled} label="Invitations sent directly to me" note="A player invited only selected people" onChange={() => void toggle("invitation.direct")} /></section>
+      <section className="delivery-row"><div><h2>Delivery channel</h2><p>Telegram is linked and receives the notification categories enabled above.</p></div><StatusBadge label="Linked" tone="success" /></section>
+    </>}
   </div>;
 }

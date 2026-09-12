@@ -1,0 +1,3 @@
+# The alias of the wipe route: nothing calls it, the panel calls /wipe (ADR-0040).
+# Remove this entry in the next change to this root once the destroy has been applied.
+aws_apigatewayv2_route.access["POST /games/{gameId}/worlds/{worldId}/regenerate"]

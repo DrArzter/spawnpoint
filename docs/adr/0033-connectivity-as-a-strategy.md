@@ -1,6 +1,7 @@
 # ADR-0033 — Connectivity is a strategy behind one interface, constrained by the game's auth model
 
-- Status: Proposed
+- Status: Accepted — 2026-09-12. Both the overlay and the raw strategy run behind the interface, and the gate-versus-auth
+  invariant is enforced by the host's catalog validator and by a `check` block in `infra/terraform`
 - Date: 2026-08-14
 - Revised: 2026-08-27 — the invariant gained its operator override: it refuses the silent combination, never a
   declared one

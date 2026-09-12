@@ -84,6 +84,35 @@ run "deployment_role_trusts_only_the_production_environment" {
   }
 
   assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      statement.sid == "DestroyOnlyAllowListedWiring" && !contains(statement.resources, "*")
+    ])
+    error_message = "The pipeline may destroy only allow-listable wiring, and only on spawnpoint-scoped resources."
+  }
+
+  assert {
+    condition = alltrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      coalesce(statement.effect, "Allow") != "Allow" || length(setintersection(toset(statement.actions), toset([
+        "ec2:TerminateInstances", "ec2:DeleteVolume", "s3:DeleteBucket", "dynamodb:DeleteTable",
+        "iam:DeleteOpenIDConnectProvider", "cloudfront:DeleteDistribution", "lambda:DeleteFunction",
+        "lambda:DeleteFunctionUrlConfig", "budgets:DeleteBudget", "sns:DeleteTopic",
+      ]))) == 0
+    ])
+    error_message = "The host, its volume, the buckets, the tables, the OIDC trust, the distribution, the bot URL and the guardrails stay undeletable by the pipeline."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      coalesce(statement.effect, "Allow") == "Deny" && contains(statement.actions, "iam:DeleteRole") &&
+      alltrue([for resource in statement.resources : endswith(resource, ":role/spawnpoint-github-*")])
+    ])
+    error_message = "The deploy identity must never be able to delete the GitHub identities, its own included."
+  }
+
+  assert {
     condition     = aws_iam_role.github_deploy.max_session_duration == 3600
     error_message = "The production deployment role does not need a session longer than one hour."
   }

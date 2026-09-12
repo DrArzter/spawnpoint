@@ -81,6 +81,9 @@ class DeploymentSecurityTest(unittest.TestCase):
         self.assertNotIn("AWS_DEPLOY_ROLE_ARN", manual_job)
         self.assertIn("manual_unverified", manual_job)
         self.assertNotIn("run: jq -r", manual_job)
+        self.assertIn("ref: main", manual_job)
+        self.assertNotIn("ref: ${{ github.event.workflow_run.head_sha }}", manual_job)
+        self.assertIn('git rev-parse HEAD)', manual_job)
 
     def test_github_identities_are_applied_only_by_the_gated_identity_job(self) -> None:
         workflow = (REPOSITORY / ".github/workflows/deploy-production.yml").read_text()

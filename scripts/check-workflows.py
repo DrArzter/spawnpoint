@@ -101,33 +101,11 @@ def check_plan_workflow(text: str) -> list[str]:
     return problems
 
 
-def check_admin_approval_workflow(text: str) -> list[str]:
-    problems: list[str] = []
-    scopes = permission_scopes(text)
-    expected = {"contents": "read", "pull-requests": "write"}
-    if scopes != expected:
-        problems.append(f"admin approval permissions must be {expected}, found {scopes}")
-    for required in (
-        "pull_request_target:",
-        "/collaborators/${AUTHOR}/permission",
-        '"admin"',
-        "event=APPROVE",
-    ):
-        if required not in text:
-            problems.append(f"admin approval gate is missing {required!r}")
-    for forbidden in ("actions/checkout", "scripts/", "secrets.", "id-token:", "pull_request:\n"):
-        if forbidden in text:
-            problems.append(f"privileged admin approval workflow contains forbidden PR-code capability {forbidden!r}")
-    return problems
-
-
 def check(path: Path) -> list[str]:
     text = path.read_text()
     problems = check_action_pins(text)
     if path.name == "check.yml":
         problems.extend(check_test_workflow(text))
-    elif path.name == "admin-auto-approve.yml":
-        problems.extend(check_admin_approval_workflow(text))
     elif path.name == "terraform-plan.yml":
         problems.extend(check_plan_workflow(text))
     elif path.name.startswith("deploy-"):

@@ -74,7 +74,8 @@ jobs:
       - name: Report required manual work
         env:
           MANUAL_REVIEW: ${{ needs.plan.outputs.manual_review }}
-        run: jq -r '.[] | "::notice::Manual production work: \(.)"' <<<"${MANUAL_REVIEW}"
+        run: |
+          jq -r '.[] | "::notice::Manual production work: \(.)"' <<<"${MANUAL_REVIEW}"
 
       - name: Assume the read-only production plan role
         if: needs.plan.outputs.manual_terraform_roots != '[]'

@@ -20,6 +20,7 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-24.04
     outputs:
+      identity: ${{ steps.read.outputs.identity }}
       infrastructure: ${{ steps.read.outputs.infrastructure }}
       lambdas: ${{ steps.read.outputs.lambdas }}
       manual_review: ${{ steps.read.outputs.manual_review }}
@@ -44,6 +45,7 @@ jobs:
           if jq -e '.manual_review | length > 0' "${plan}" >/dev/null; then
             jq -r '.manual_review[] | "::warning::Manual review required: \(.)"' "${plan}"
           fi
+          echo "identity=$(jq -r '.identity' "${plan}")" >> "${GITHUB_OUTPUT}"
           echo "infrastructure=$(jq -r '.infrastructure' "${plan}")" >> "${GITHUB_OUTPUT}"
           echo "lambdas=$(jq -r '.lambdas' "${plan}")" >> "${GITHUB_OUTPUT}"
           echo "manual_review=$(jq -c '.manual_review' "${plan}")" >> "${GITHUB_OUTPUT}"
@@ -117,12 +119,50 @@ jobs:
           jq -r '.[] | "manual verification unavailable: \(.)"' <<<"${MANUAL_UNVERIFIED}" >&2
           exit 1
 
-  infrastructure:
+  # The GitHub identities are applied by their own gated identity, never by
+  # the deploy identity, and before anything that may depend on the new
+  # permissions. See ADR-0044.
+  identity:
     permissions:
       contents: read
       id-token: write
     needs: plan
-    if: needs.plan.outputs.infrastructure == 'true'
+    if: needs.plan.outputs.identity == 'true'
+    environment: production-identity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      AWS_REGION: eu-central-1
+      TF_IN_AUTOMATION: "true"
+      TF_VAR_aws_profile: ""
+    steps:
+      - name: Check out the tested commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Assume the identity-admin role
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_IDENTITY_ROLE_ARN }}
+          role-session-name: spawnpoint-identity
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Apply the GitHub identities without destructive actions
+        run: scripts/terraform-apply-safe.sh infra/terraform-github
+
+  infrastructure:
+    permissions:
+      contents: read
+      id-token: write
+    needs: [plan, identity]
+    if: always() && needs.plan.result == 'success' && (needs.identity.result == 'success' || needs.identity.result == 'skipped') && needs.plan.outputs.infrastructure == 'true'
     uses: ./.github/workflows/deploy-infrastructure.yml
     with:
       ref: ${{ github.event.workflow_run.head_sha }}
@@ -133,8 +173,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    needs: [plan, infrastructure]
-    if: always() && needs.plan.result == 'success' && (needs.infrastructure.result == 'success' || needs.infrastructure.result == 'skipped') && needs.plan.outputs.lambdas == 'true'
+    needs: [plan, identity, infrastructure]
+    if: always() && needs.plan.result == 'success' && (needs.identity.result == 'success' || needs.identity.result == 'skipped') && (needs.infrastructure.result == 'success' || needs.infrastructure.result == 'skipped') && needs.plan.outputs.lambdas == 'true'
     uses: ./.github/workflows/deploy-lambdas.yml
     with:
       ref: ${{ github.event.workflow_run.head_sha }}
@@ -144,8 +184,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    needs: [plan, infrastructure, lambdas]
-    if: always() && needs.plan.result == 'success' && (needs.infrastructure.result == 'success' || needs.infrastructure.result == 'skipped') && (needs.lambdas.result == 'success' || needs.lambdas.result == 'skipped') && needs.plan.outputs.web == 'true'
+    needs: [plan, identity, infrastructure, lambdas]
+    if: always() && needs.plan.result == 'success' && (needs.identity.result == 'success' || needs.identity.result == 'skipped') && (needs.infrastructure.result == 'success' || needs.infrastructure.result == 'skipped') && (needs.lambdas.result == 'success' || needs.lambdas.result == 'skipped') && needs.plan.outputs.web == 'true'
     uses: ./.github/workflows/deploy-web.yml
     with:
       ref: ${{ github.event.workflow_run.head_sha }}

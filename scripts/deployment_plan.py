@@ -16,6 +16,7 @@ TF_OPERATIONS = "infra/terraform-operations"
 TF_ACCESS_API = "infra/terraform-access-api"
 TF_WEB = "infra/terraform-web"
 TF_GITHUB = "infra/terraform-github"
+TF_IDENTITY_ADMIN = "infra/terraform-identity-admin"
 TF_BOOTSTRAP = "infra/terraform-bootstrap"
 
 TERRAFORM_ROOTS = (
@@ -29,7 +30,7 @@ TERRAFORM_ROOTS = (
     TF_ACCESS_API,
     TF_WEB,
 )
-PLAN_ONLY_TERRAFORM_ROOTS = (TF_GITHUB,)
+PLAN_ONLY_TERRAFORM_ROOTS = (TF_GITHUB, TF_IDENTITY_ADMIN)
 ALL_PLAN_ROOTS = (*TERRAFORM_ROOTS, *PLAN_ONLY_TERRAFORM_ROOTS)
 ALL_WORKFLOW_ROOTS = (TF_CORE, TF_OPERATIONS, TF_RELEASES, TF_ACCESS_API)
 
@@ -63,6 +64,7 @@ class Selection:
     manual_unverified: list[str] = field(default_factory=list)
     web: bool = False
     lambdas: bool = False
+    identity: bool = False
 
     def add_root(self, root: str) -> None:
         self.roots.add(root)
@@ -106,10 +108,15 @@ def select_terraform_path(path: str, selected: Selection) -> bool:
         selected.manual.append(reason)
         selected.manual_unverified.append(reason)
         return True
+    if path.startswith(f"{TF_IDENTITY_ADMIN}/"):
+        selected.plan_roots.add(TF_IDENTITY_ADMIN)
+        selected.manual_roots.add(TF_IDENTITY_ADMIN)
+        selected.manual.append("the identity anchor is applied by hand; no pipeline identity may change the role that changes the identities")
+        return True
     if path.startswith(f"{TF_GITHUB}/"):
+        # Applied by the gated identity job, never by the deploy identity.
         selected.plan_roots.add(TF_GITHUB)
-        selected.manual_roots.add(TF_GITHUB)
-        selected.manual.append("the GitHub deployment identity cannot auto-modify its own trust or permissions")
+        selected.identity = True
         return True
     root = terraform_root(path)
     if root is None:
@@ -180,6 +187,7 @@ def make_plan(paths: list[str]) -> dict[str, object]:
         "web": selected.web,
         "lambdas": selected.lambdas,
         "infrastructure": bool(ordered_roots),
+        "identity": selected.identity,
         "terraform_roots": ordered_roots,
         "terraform_plan_roots": ordered_plan_roots,
         "manual_review": sorted(set(selected.manual)),

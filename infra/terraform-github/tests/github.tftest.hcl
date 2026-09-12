@@ -63,6 +63,20 @@ run "plan_role_is_owner_reviewed_and_separate_from_deploy" {
     condition     = aws_iam_role.github_plan.name != aws_iam_role.github_deploy.name
     error_message = "Pull request plans and production deployment must never share an IAM role."
   }
+
+  assert {
+    condition     = anytrue([for statement in data.aws_iam_policy_document.github_plan_iam.statement : contains(statement.actions, "states:ValidateStateMachineDefinition")])
+    error_message = "The provider validates a state-machine definition during plan; without this action every pull request that touches a workflow fails its required check."
+  }
+
+  assert {
+    condition = alltrue([
+      for statement in data.aws_iam_policy_document.github_plan_iam.statement :
+      !contains(statement.actions, "s3:GetObject") ||
+      alltrue([for resource in statement.resources : can(regex("^arn:aws:s3:::spawnpoint-(tfstate-[0-9]+(/spawnpoint/\\*)?|releases-[0-9]+/control-plane/\\*)$", resource))])
+    ])
+    error_message = "The plan identity may read objects only from the Terraform state prefix and the Terraform-managed control-plane bundles, never a release, world or preset payload."
+  }
 }
 
 run "deployment_role_trusts_only_the_production_environment" {
@@ -71,6 +85,40 @@ run "deployment_role_trusts_only_the_production_environment" {
   assert {
     condition     = local.deploy_subject == "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production"
     error_message = "Production deploys must use the immutable Spawnpoint repository and owner ids plus the production environment."
+  }
+
+  assert {
+    condition     = anytrue([for statement in data.aws_iam_policy_document.github_deploy_iam.statement : contains(statement.actions, "states:ValidateStateMachineDefinition")])
+    error_message = "An apply plans first; the deploy identity needs the same validation action as the plan identity."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      statement.sid == "DestroyOnlyAllowListedWiring" && !contains(statement.resources, "*")
+    ])
+    error_message = "The pipeline may destroy only allow-listable wiring, and only on spawnpoint-scoped resources."
+  }
+
+  assert {
+    condition = alltrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      coalesce(statement.effect, "Allow") != "Allow" || length(setintersection(toset(statement.actions), toset([
+        "ec2:TerminateInstances", "ec2:DeleteVolume", "s3:DeleteBucket", "dynamodb:DeleteTable",
+        "iam:DeleteOpenIDConnectProvider", "cloudfront:DeleteDistribution", "lambda:DeleteFunction",
+        "lambda:DeleteFunctionUrlConfig", "budgets:DeleteBudget", "sns:DeleteTopic",
+      ]))) == 0
+    ])
+    error_message = "The host, its volume, the buckets, the tables, the OIDC trust, the distribution, the bot URL and the guardrails stay undeletable by the pipeline."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      coalesce(statement.effect, "Allow") == "Deny" && contains(statement.actions, "iam:DeleteRole") &&
+      alltrue([for resource in statement.resources : endswith(resource, ":role/spawnpoint-github-*")])
+    ])
+    error_message = "The deploy identity must never be able to delete the GitHub identities, its own included."
   }
 
   assert {

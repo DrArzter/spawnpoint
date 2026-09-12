@@ -115,7 +115,7 @@ jobs:
               echo '| --- | ---: | ---: | ---: | ---: | --- |'
               while IFS= read -r line; do
                 [[ "${line}" == root=* ]] || continue
-                root=""; add=0; change=0; delete=0; read=0; result=error
+                root=""; add=0; change=0; delete=0; read=0; allowed=0; stale=0; result=error
                 for field in ${line}; do
                   key="${field%%=*}"
                   value="${field#*=}"
@@ -125,16 +125,21 @@ jobs:
                     change) change="${value}" ;;
                     delete) delete="${value}" ;;
                     read) read="${value}" ;;
+                    allowed) allowed="${value}" ;;
+                    stale) stale="${value}" ;;
                     result) result="${value}" ;;
                   esac
                 done
-                echo "| \`${root}\` | ${add} | ${change} | ${delete} | ${read} | ${result} |"
+                detail=""
+                if (( allowed > 0 )); then detail=" (${allowed} allow-listed)"; fi
+                if (( stale > 0 )); then detail="${detail} (${stale} stale)"; fi
+                echo "| \`${root}\` | ${add} | ${change} | ${delete} | ${read} | ${result}${detail} |"
               done < terraform-plan-results.txt
             else
               echo "The plan stopped before a resource summary was available. Open the workflow log for the failing step."
             fi
             echo
-            echo "Deletes and replacements fail this required check. [Open the complete workflow log](${RUN_URL})"
+            echo "A delete or replacement fails this required check unless the root's destroy-allowed.txt names its exact address and the type is one the pipeline may destroy. [Open the complete workflow log](${RUN_URL})"
           } > terraform-comment.md
           cp terraform-comment.md "${GITHUB_STEP_SUMMARY}"
           scripts/upsert-pr-comment.sh '<!-- spawnpoint-terraform-summary -->' terraform-comment.md

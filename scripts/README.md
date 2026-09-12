@@ -19,8 +19,9 @@ Available:
 | `deploy-web.sh` | Build and publish the static panel; skips upload when the built `index.html` is unchanged |
 | `deploy-lambdas.sh` | Build every Lambda bundle and update only functions whose archive hash changed |
 | `terraform-init-ci.sh` | Initialise one remote-state root from its committed backend key and the current AWS account |
-| `terraform-apply-safe.sh` | Plan and apply one root, refusing deletes and replacements |
-| `terraform-plan-safe.sh` | Plan one changed root read-only for a pull request and refuse deletes or replacements |
+| `terraform-apply-safe.sh` | Plan and apply one root; a delete or replacement runs only if the root's `destroy-allowed.txt` names its exact address |
+| `terraform-plan-safe.sh` | Plan one changed root read-only for a pull request; a delete or replacement fails the check unless allow-listed the same way |
+| `_terraform-destroy-allow.sh` | The judgement both safe scripts share: which destroys a root's `destroy-allowed.txt` permits, and which types may be listed at all |
 | `deployment_plan.py` | Convert a tested Git diff into web, Lambda and exact Terraform deploy units |
 | `upsert-pr-comment.sh` | Create or update one marker-owned GitHub Actions summary comment on a pull request |
 | `terraform-verify-applied.sh` | Prove a manually applied root has a zero-change read-only plan, for the production workflow |
@@ -38,6 +39,27 @@ Planned:
 | Script | Purpose |
 | --- | --- |
 | `cost.sh` | Month-to-date cost by service, for the monthly check in the [runbook](../docs/runbook.md#monthly-cost-check) |
+
+## Allowing a destroy
+
+The production pipeline refuses every Terraform delete and replacement. Its one opening is a file in the root,
+`infra/<root>/destroy-allowed.txt`, naming the exact resource address to destroy — one per line, `#` comments allowed:
+
+```text
+# the alias of the wipe route, ADR-0040
+aws_apigatewayv2_route.access["POST /games/{gameId}/worlds/{worldId}/regenerate"]
+```
+
+The line travels in the same pull request as the removal, so the destroy is something a reviewer reads in the diff.
+The plan check reports it as `allowed`; the apply after merge makes the same judgement against the live state. An
+entry the plan no longer destroys is reported as `stale` and should be removed in the next change to that root.
+
+Only control-plane wiring may be listed — API routes and integrations, Lambda permissions, `spawnpoint-*` roles and
+policies, log groups, alarms, event rules and targets, state machines, the CodeBuild project, SNS subscriptions. The
+list lives in `_terraform-destroy-allow.sh`, and the deploy identity in `infra/terraform-github` holds exactly those
+delete actions. The host, its volume, the buckets, the tables, the OIDC trust, the CloudFront distribution, the bot's
+Function URL and the guardrails can be listed by nobody and deleted by no pipeline run; destroying one of those is an
+owner apply from a workstation, recorded in a command log.
 
 Rules:
 

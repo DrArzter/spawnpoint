@@ -57,7 +57,7 @@ jobs:
       contents: read
       id-token: write
     needs: plan
-    if: needs.plan.outputs.manual_review != '[]'
+    if: needs.plan.result == 'success' && needs.plan.outputs.manual_review != '[]'
     environment: production-plan
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -69,7 +69,16 @@ jobs:
       - name: Check out the tested commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: main
+
+      - name: Verify main still names the tested commit
+        env:
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          [[ "$(git rev-parse HEAD)" == "${TESTED_SHA}" ]] || {
+            echo "main advanced after this Check run; refusing to execute an older production revision" >&2
+            exit 1
+          }
 
       - name: Report required manual work
         env:

@@ -7,14 +7,20 @@ read the CurseForge key, write S3 objects, start EC2, send SSM commands or promo
 
 The deployment role trusts only the immutable Spawnpoint repository identity and its `production` environment.
 Its inline policy enumerates the read/create/update operations used by the current Terraform resources, limits IAM
-management to `spawnpoint-*` identities, and permits deletion only for Terraform state locks and obsolete static web
-assets. It has no broad AWS managed policy. An explicit deny prevents the role from changing itself. Production
-Terraform additionally refuses every plan containing an infrastructure delete or replacement.
+management to `spawnpoint-*` identities, and permits deletion only for Terraform state locks, obsolete static web
+assets, and the control-plane wiring a root may allow-list — API routes and integrations, Lambda permissions,
+`spawnpoint-*` roles and policies, log groups, alarms, event rules, state machines, the CodeBuild project and SNS
+subscriptions; never the host, its volume, a bucket, a table, the OIDC provider, the distribution, a Function URL or
+the guardrails, and never a `spawnpoint-github-*` identity. It has no broad AWS managed policy. An explicit deny
+prevents the role from changing itself. Production Terraform additionally refuses every plan containing a delete or
+replacement unless the root's `destroy-allowed.txt` names the exact address — see
+[scripts/README.md](../../scripts/README.md#allowing-a-destroy).
 
 The plan role trusts only the immutable Spawnpoint repository identity and its owner-reviewed `production-plan`
 environment. It can read Terraform state and infrastructure metadata, but cannot write a state lock, mutate AWS, or
 apply a plan. Pull requests use it only after an owner approves the environment gate; the resulting required check
-reports action counts and fails on deletes or replacements without printing the state into the job summary.
+reports action counts and fails on deletes or replacements the root does not allow-list, without printing the state
+into the job summary.
 
 This root is never auto-applied: the deployment identity cannot be allowed to edit its own trust or permissions.
 After an owner applies it, the production workflow assumes the separate read-only plan identity and requires a fresh

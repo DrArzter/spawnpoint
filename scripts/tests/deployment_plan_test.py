@@ -19,6 +19,14 @@ class DeploymentPlanTest(unittest.TestCase):
         self.assertFalse(plan["lambdas"])
         self.assertFalse(plan["infrastructure"])
 
+    def test_readme_under_a_deployable_directory_deploys_and_plans_nothing(self) -> None:
+        plan = make_plan(["infra/terraform/README.md", "web/README.md", "lambdas/README.md", "server/README.md"])
+        self.assertFalse(plan["web"])
+        self.assertFalse(plan["lambdas"])
+        self.assertEqual(plan["terraform_roots"], [])
+        self.assertEqual(plan["terraform_plan_roots"], [])
+        self.assertEqual(plan["manual_review"], [])
+
     def test_web_change_deploys_only_web(self) -> None:
         plan = make_plan(["web/src/App.tsx"])
         self.assertTrue(plan["web"])

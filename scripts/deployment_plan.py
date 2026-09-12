@@ -145,6 +145,9 @@ def select_other_path(path: str, selected: Selection) -> None:
 
 
 def select_path(path: str, selected: Selection) -> None:
+    # Prose deploys nothing: a README under a root is not that root.
+    if path.endswith(".md"):
+        return
     selected.web |= path.startswith("web/") or path == "scripts/deploy-web.sh"
     selected.lambdas |= path.startswith("lambdas/") or path == "scripts/deploy-lambdas.sh"
     if select_terraform_path(path, selected) or select_workflow_path(path, selected):

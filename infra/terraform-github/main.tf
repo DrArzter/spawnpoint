@@ -363,6 +363,13 @@ data "aws_iam_policy_document" "github_deploy_iam" {
   }
 
   statement {
+    sid       = "NeverMutateTheIdentityAdmin"
+    effect    = "Deny"
+    actions   = ["iam:*"]
+    resources = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/spawnpoint-github-identity-admin"]
+  }
+
+  statement {
     sid       = "NeverMutateOwnDeploymentIdentity"
     effect    = "Deny"
     actions   = ["iam:*"]

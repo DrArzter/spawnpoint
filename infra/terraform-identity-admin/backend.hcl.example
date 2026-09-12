@@ -1,0 +1,4 @@
+bucket  = "spawnpoint-tfstate-<account-id>"
+key     = "spawnpoint/identity-admin.tfstate"
+region  = "eu-central-1"
+profile = "spawnpoint"

@@ -2,6 +2,23 @@
 
 set -Eeuo pipefail
 
+# SESSION_FORMAT=json makes the summary one JSON document on stdout and moves
+# everything else to stderr, so a machine can States.StringToJson the whole of
+# stdout with no position and no order to depend on — the key=value trap in
+# workflows/README.md. The default stays the key=value stream people read.
+session_format="${SESSION_FORMAT:-text}"
+case "${session_format}" in
+  text | json) ;;
+  *)
+    printf 'error: SESSION_FORMAT must be text or json, not %s\n' "${session_format}" >&2
+    exit 1
+    ;;
+esac
+exec 3>&1
+if [[ "${session_format}" == "json" ]]; then
+  exec 1>&2
+fi
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
@@ -167,15 +184,39 @@ if declare -F game_prepare_session >/dev/null; then
 fi
 
 "${SCRIPT_DIR}/start.sh"
-if [[ -n "${network_id}" ]]; then
-  printf 'zerotier_network=%s\n' "${network_id,,}"
+
+# The summary is what the machine carries back to whoever asked. The address in
+# it is composed, never configured: the strategy answers with the host part and
+# the game with the port. A single configured string used to carry Minecraft's
+# port for every game — and a caller-supplied address could never be right for
+# a strategy whose address does not exist before the instance starts.
+if [[ "${session_format}" == "json" ]]; then
+  jq -cn \
+    --arg connectivity "${session_connectivity}" \
+    --arg connection_host "${connection_host}" \
+    --arg connection_address "${connection_host}:${GAME_CONNECT_PORT}" \
+    --arg world "${world_name}" \
+    --arg reconcile "${reconcile_status}" \
+    --arg desired_release "${desired_release}" \
+    --arg zerotier_network "${network_id,,}" \
+    '{
+      connectivity: $connectivity,
+      connection_host: $connection_host,
+      connection_address: $connection_address,
+      world: $world,
+      reconcile: $reconcile,
+      desired_release: (if $desired_release == "null" then null else $desired_release end)
+    } + (if $zerotier_network == "" then {} else {zerotier_network: $zerotier_network} end)' >&3
+else
+  {
+    if [[ -n "${network_id}" ]]; then
+      printf 'zerotier_network=%s\n' "${network_id,,}"
+    fi
+    printf 'connectivity=%s\n' "${session_connectivity}"
+    printf 'connection_host=%s\n' "${connection_host}"
+    printf 'connection_address=%s\n' "${connection_host}:${GAME_CONNECT_PORT}"
+    printf 'world=%s\n' "${world_name}"
+    printf 'reconcile=%s\n' "${reconcile_status}"
+    printf 'desired_release=%s\n' "${desired_release}"
+  } >&3
 fi
-# The address is composed, never configured: the strategy answers with the host
-# part and the game answers with the port. A single configured string used to
-# carry Minecraft's port for every game.
-printf 'connectivity=%s\n' "${session_connectivity}"
-printf 'connection_host=%s\n' "${connection_host}"
-printf 'connection_address=%s\n' "${connection_host}:${GAME_CONNECT_PORT}"
-printf 'world=%s\n' "${world_name}"
-printf 'reconcile=%s\n' "${reconcile_status}"
-printf 'desired_release=%s\n' "${desired_release}"

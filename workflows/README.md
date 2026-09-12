@@ -26,11 +26,20 @@ promotion.
 3. wait for the SSM agent to be Online;
 4. send the constant, non-user-controlled host command `start-session.sh`;
 5. poll the SSM invocation until it succeeds or reaches a terminal failure;
-6. return `ready` only after the host script has verified ZeroTier and Minecraft health.
+6. return `ready` only after the host script has verified its connectivity strategy and the game's own readiness,
+   carrying back the address the host reported.
 
 The operation input supplies poll intervals so local integration can run with short waits while production uses sane
-intervals. Poll limits make every loop bounded. `instanceId` and `connectionAddress` are supplied by the trusted
-control-plane trigger; the Step Functions IAM role is still scoped to the one Terraform host.
+intervals. Poll limits make every loop bounded. `instanceId` and `worldId` are supplied by the trusted control-plane
+trigger; the Step Functions IAM role is still scoped to the one Terraform host.
+
+**The address is the host's answer, never an input.** `start-session.sh` runs with `SESSION_FORMAT=json`, so its
+stdout is exactly one JSON document — the session summary — and `Read Session Summary` parses the whole of it with
+`States.StringToJson`. `Ready` carries `connectionAddress`, `connectionHost` and `connectivity` from that summary.
+Until ADR-0033's raw strategy the address was a request field echoed back as the result, which was right only while
+every world used the overlay: a public address does not exist before the instance starts, so nobody can supply it.
+Callers therefore send no address at all, and every surface that shows one — the panel, the bot, the notifier —
+either reads this output or composes it from the live host the same way the host does.
 
 The SSM command deliberately contains no interpolated execution input. ZeroTier network identity and expected address
 come from the root-owned, mode-`0600` host `.env`; this prevents a crafted operation input from becoming shell syntax.
@@ -165,3 +174,7 @@ The fix at cutover is not a smarter split: it is for the probe to offer a JSON d
 `States.StringToJson` on the whole of stdout, so there is no position and no order to depend on. Recorded here, with
 the tftest and the node test that assert the current expression, so the implementer inherits the warning rather than
 the incident.
+
+The start machine already works this way: `SESSION_FORMAT=json` makes the session summary the only thing on the host
+script's stdout — everything else moves to stderr — and `Read Session Summary` parses it whole. The same shape is
+waiting for the probe.

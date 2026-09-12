@@ -67,11 +67,21 @@ class DeploymentPlanTest(unittest.TestCase):
         self.assertTrue(plan["manual_review"])
         self.assertTrue(plan["manual_unverified"])
 
-    def test_deployment_identity_change_requires_manual_review(self) -> None:
+    def test_github_identity_change_is_applied_by_the_gated_identity_job(self) -> None:
         plan = make_plan(["infra/terraform-github/main.tf"])
+        self.assertTrue(plan["identity"])
         self.assertFalse(plan["infrastructure"])
+        self.assertEqual(plan["terraform_roots"], [])
         self.assertEqual(plan["terraform_plan_roots"], ["infra/terraform-github"])
-        self.assertEqual(plan["manual_terraform_roots"], ["infra/terraform-github"])
+        self.assertEqual(plan["manual_terraform_roots"], [])
+        self.assertEqual(plan["manual_review"], [])
+
+    def test_identity_anchor_change_requires_a_hand_apply(self) -> None:
+        plan = make_plan(["infra/terraform-identity-admin/main.tf"])
+        self.assertFalse(plan["identity"])
+        self.assertFalse(plan["infrastructure"])
+        self.assertEqual(plan["terraform_plan_roots"], ["infra/terraform-identity-admin"])
+        self.assertEqual(plan["manual_terraform_roots"], ["infra/terraform-identity-admin"])
         self.assertTrue(plan["manual_review"])
         self.assertEqual(plan["manual_unverified"], [])
 

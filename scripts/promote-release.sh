@@ -4,7 +4,6 @@ set -Eeuo pipefail
 
 profile="${AWS_PROFILE:-spawnpoint}"
 region="${AWS_REGION:-eu-central-1}"
-connection_host="${SPAWNPOINT_CONNECTION_HOST:-172.29.23.24}"
 repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
 usage() {
@@ -101,7 +100,7 @@ connect_port="$(connect_port_for_game "${game_id}")"
 
 operation_id="promote-$(date -u +%Y%m%dT%H%M%SZ)"
 input="$(
-  jq -cn --arg operation_id "${operation_id}" --arg world "${world}" --arg generation_id "${generation_id}" --arg game_id "${game_id}" --arg preset_id "${preset_id}" --arg release "${release}" --arg instance_id "${instance_id}" --arg release_bucket "${release_bucket}" --arg connection_address "${connection_host}:${connect_port}" '{
+  jq -cn --arg operation_id "${operation_id}" --arg world "${world}" --arg generation_id "${generation_id}" --arg game_id "${game_id}" --arg preset_id "${preset_id}" --arg release "${release}" --arg instance_id "${instance_id}" --arg release_bucket "${release_bucket}" '{
       operationId: $operation_id,
       serverId: $game_id,
       worldId: $world,
@@ -111,7 +110,6 @@ input="$(
       release: $release,
       instanceId: $instance_id,
       releaseBucket: $release_bucket,
-      connectionAddress: $connection_address,
       leaseTtlSeconds: 1800,
       watchdogRegistrationLeaseTtlSeconds: 60,
       watchdogStopLeaseTtlSeconds: 1800,

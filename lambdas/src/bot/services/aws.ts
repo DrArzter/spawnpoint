@@ -9,7 +9,6 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "node:crypto";
 
 import { buildLifecycleStartInput } from "../../domain/telegram-bot.ts";
-import { connectPortForWorld } from "../../control-plane/catalog.ts";
 import { clientPackKey } from "../../control-plane/release-artifacts.ts";
 import { S3ReleaseStateStore } from "../../control-plane/s3-release-state-store.ts";
 import { S3WorldRepository } from "../../control-plane/s3-world-repository.ts";
@@ -19,9 +18,6 @@ export const env = (name: string): string => {
   if (!value) throw new Error(`missing environment variable: ${name}`);
   return value;
 };
-
-export const connectionAddress = (worldId = env("WORLD_ID")): string =>
-  `${env("CONNECTION_HOST")}:${connectPortForWorld(worldId)}`;
 
 const region = env("AWS_REGION");
 const sfn = new SFNClient({ region });
@@ -67,9 +63,16 @@ export async function readPointer(): Promise<Pointer | null> {
   }
 }
 
-export async function instanceState(): Promise<string> {
+// State and the public address come from the same observation: a public
+// world's address is whatever the running instance holds, and nothing stores it.
+export async function describeHost(): Promise<Readonly<{ state: string; publicIp: string | null }>> {
   const described = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [env("INSTANCE_ID")] }));
-  return described.Reservations?.[0]?.Instances?.[0]?.State?.Name ?? "unknown";
+  const instance = described.Reservations?.[0]?.Instances?.[0];
+  return { state: instance?.State?.Name ?? "unknown", publicIp: instance?.PublicIpAddress ?? null };
+}
+
+export async function instanceState(): Promise<string> {
+  return (await describeHost()).state;
 }
 
 export async function startIsRunning(): Promise<boolean> {
@@ -101,7 +104,6 @@ export async function startSession(requestedBy: string): Promise<string> {
           // configured for rather than relying on a machine default, which no
           // longer exists.
           worldId: env("WORLD_ID"),
-          connectionAddress: connectionAddress(),
           requestedBy,
         }),
       ),

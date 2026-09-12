@@ -80,7 +80,6 @@
           "operationId.$": "$.request.operationId",
           "instanceId.$": "$.request.instanceId",
           "worldId.$": "$.request.worldId",
-          "connectionAddress.$": "$.request.connectionAddress",
           "timing.$": "$.request.startTiming"
         }
       },
@@ -174,7 +173,8 @@
         "sessionId.$": "$.request.sessionId",
         "serverId.$": "$.request.serverId",
         "status": "ready",
-        "connectionAddress.$": "$.request.connectionAddress",
+        "connectivity.$": "$.hostStart.Output.connectivity",
+        "connectionAddress.$": "$.hostStart.Output.connectionAddress",
         "hostStart.$": "$.hostStart.Output"
       },
       "End": true

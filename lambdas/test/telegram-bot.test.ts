@@ -181,7 +181,6 @@ test("the start input builder reproduces the committed example verbatim", async 
     operationId: example.operationId,
     instanceId: example.instanceId,
     worldId: example.worldId,
-    connectionAddress: example.connectionAddress,
   });
   assert.deepEqual(built, example);
 });
@@ -216,7 +215,6 @@ test("the Lifecycle V2 builders reproduce their committed examples verbatim", as
     sessionId: start.sessionId,
     instanceId: start.instanceId,
     worldId: start.worldId,
-    connectionAddress: start.connectionAddress,
   }), start);
 
   const stopUrl = new URL("../../workflows/stop-server-v2.input.example.json", import.meta.url);
@@ -237,7 +235,6 @@ test("a requester is attributed when present, and the examples stay the ownerles
     operationId: example.operationId,
     instanceId: example.instanceId,
     worldId: example.worldId,
-    connectionAddress: example.connectionAddress,
     requestedBy: "telegram:111",
   });
   assert.equal(attributed.requestedBy, "telegram:111");
@@ -355,6 +352,14 @@ test("replies carry what the player actually needs", () => {
     connectionAddress: "172.29.23.24:25565",
   });
   assert.doesNotMatch(stopped, /172\.29\.23\.24/, "no address for a stopped server");
+
+  // A public world has no standing address: the card says so instead of
+  // printing the overlay's, and the running status says what to do.
+  const perSession = replies.address({ connectionAddress: null, panelAddress: "http://172.29.23.24:3000" });
+  assert.match(perSession, /issued per session/);
+  assert.doesNotMatch(perSession, /Minecraft: <code>/);
+  const unpublished = replies.status({ instanceState: "running", desiredRelease: null, activeRelease: null, connectionAddress: null });
+  assert.match(unpublished, /not published yet/);
 
   const visitorStatus = replies.publicStatus("running");
   assert.match(visitorStatus, /RUNNING/);

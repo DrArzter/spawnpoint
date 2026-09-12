@@ -1,5 +1,5 @@
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
-import { catalogWithPresets, gameCatalog, type CatalogGame } from "./catalog.ts";
+import { catalogWithPresets, gameCatalog, type CatalogGame, worldAddress } from "./catalog.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
 import type { WorldRecord } from "./world-registry.ts";
 
@@ -115,12 +115,6 @@ export async function readControlPlaneSnapshot(
   ]);
   const effectiveCatalog = catalogWithPresets(presets, catalog, worldRecords);
   const recordByWorld = new Map(worldRecords.map((record) => [record.worldId, record]));
-  const worldConnectionHost = (connectivity: string): string | null => {
-    if (connectionHost === null) return null;
-    if (connectivity !== "raw") return connectionHost;
-    const running = hosts.find((host) => host.state === "running" && host.publicIp !== null);
-    return running?.publicIp ?? null;
-  };
   const worlds = effectiveCatalog.flatMap((game) => game.worlds);
   const [hosts, operations, lifecycles, pointers] = await Promise.all([
     sources.listHosts(),
@@ -131,6 +125,9 @@ export async function readControlPlaneSnapshot(
       recordByWorld.get(world.id)?.currentGeneration.id ?? null,
     ))),
   ]);
+  // Ephemeral by design: the address a public world publishes is whatever the
+  // running instance holds right now, and nothing between sessions.
+  const hostPublicIp = hosts.find((host) => host.state === "running" && host.publicIp !== null)?.publicIp ?? null;
   const pointerByWorld = new Map(worlds.map((world, index) => [world.id, pointers[index]!]));
 
   return {
@@ -178,9 +175,7 @@ export async function readControlPlaneSnapshot(
           // world uses the configured address; a public one uses whatever
           // address the instance holds right now, which is nothing at all while
           // it is stopped.
-          connectionAddress: worldConnectionHost(world.connectivity) === null
-            ? null
-            : `${worldConnectionHost(world.connectivity)}:${game.connectPort}`,
+          connectionAddress: worldAddress(world.id, { connectionHost, publicIp: hostPublicIp }, effectiveCatalog),
           release: options.includeDesiredRelease ? release : { ...release, desiredRelease: null },
         };
       }),

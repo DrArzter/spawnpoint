@@ -56,6 +56,7 @@ run "state_bucket_is_private_versioned_and_encrypted" {
       "spawnpoint/storage.tfstate.tflock",
       "spawnpoint/guardrails.tfstate.tflock",
       "spawnpoint/github-oidc.tfstate.tflock",
+      "spawnpoint/identity-admin.tfstate.tflock",
       "spawnpoint/release-pipeline.tfstate.tflock",
       "spawnpoint/operations.tfstate.tflock",
     ])

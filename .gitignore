@@ -67,3 +67,6 @@ venv/
 .vscode/
 *.swp
 *~
+
+# Per-root backend configuration names the account's state bucket; the committed shape is backend.hcl.example.
+infra/*/backend.hcl

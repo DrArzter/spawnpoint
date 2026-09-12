@@ -22,15 +22,18 @@ apply a plan. Pull requests use it only after an owner approves the environment 
 reports action counts and fails on deletes or replacements the root does not allow-list, without printing the state
 into the job summary.
 
-This root is never auto-applied: the deployment identity cannot be allowed to edit its own trust or permissions.
-After an owner applies it, the production workflow assumes the separate read-only plan identity and requires a fresh
-zero-change plan before it considers the manual step complete. It remains separate from `../terraform`, so replacing
-the disposable host cannot remove the account-level OIDC provider. GitHub receives temporary STS credentials; there
-are no AWS access keys to store or rotate.
+This root is applied by the pipeline's `identity` job and by nothing else in the pipeline: the deployment identity
+cannot be allowed to edit its own trust or permissions, so a fourth identity does it. `spawnpoint-github-identity-admin`
+is defined in [`../terraform-identity-admin`](../terraform-identity-admin/) — applied by hand, unable to change itself,
+unreachable by the deployment identity — trusted only by the owner-reviewed `production-identity` environment, and able
+to change nothing but the GitHub identities and the OIDC provider, never to delete one. A change here is planned
+read-only in the pull request and applied after merge only once the owner approves that gate. It remains separate from
+`../terraform`, so replacing the disposable host cannot remove the account-level OIDC provider. GitHub receives
+temporary STS credentials; there are no AWS access keys to store or rotate.
 
 ## Order
 
-`bootstrap` → `guardrails` → `storage` → `releases` → **`github`**.
+`bootstrap` → `guardrails` → `storage` → `releases` → `identity-admin` → **`github`**.
 
 The role policy can be planned before the state machine exists, but applying it after the release-pipeline root makes
 the first workflow run immediately useful. It has no dependency on the game-host root.
@@ -46,7 +49,9 @@ terraform show github.tfplan
 terraform apply github.tfplan
 ```
 
-Review this root manually before every apply. Applying it does not run a build and does not create paid compute.
+Those are the hand path, kept for the first apply and for recovery. Normally this root is reviewed in its pull request
+and applied by the `identity` job after the owner approves the `production-identity` gate. Applying it does not run a
+build and does not create paid compute.
 
 After apply, copy the workflow outputs into GitHub repository **variables** (not secrets):
 
@@ -82,6 +87,10 @@ Create a separate, owner-reviewed `production-plan` environment for pull request
 `AWS_PLAN_ROLE_ARN` there from `github_plan_role_arn`. Put the same two `TF_VAR_*` secrets in this environment.
 Keeping plan and deploy identities separate means reviewed PR code can inspect a production diff but can never apply
 it; unreviewed PR code receives neither the state-reading role nor the Terraform inputs.
+
+Create a third, owner-reviewed `production-identity` environment and set `AWS_IDENTITY_ROLE_ARN` there from the
+output of [`../terraform-identity-admin`](../terraform-identity-admin/). The `identity` job of `Deploy production`
+assumes that role to apply this root after a merge; the deploy identity never can.
 
 Protect `main` with one approving review, stale-review dismissal, last-pusher separation, and the required
 `scripts/check.sh` plus `Terraform production plan` status checks. Enforce the rule for administrators too.

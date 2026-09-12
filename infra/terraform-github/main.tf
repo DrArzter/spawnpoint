@@ -427,6 +427,17 @@ data "aws_iam_policy_document" "github_plan_iam" {
     ]
   }
 
+  # Terraform refreshes the release builder's source bundle — an aws_s3_object
+  # under control-plane/ in the releases bucket — on every plan of that root.
+  # Reading that prefix is the whole of the plan identity's object access: no
+  # releases/*, worlds/*, or presets/* payloads, and never a write.
+  statement {
+    sid       = "ReadTerraformManagedControlPlaneObjects"
+    effect    = "Allow"
+    actions   = ["s3:GetObject", "s3:GetObjectTagging"]
+    resources = ["arn:aws:s3:::spawnpoint-releases-${data.aws_caller_identity.current.account_id}/control-plane/*"]
+  }
+
   statement {
     sid    = "ReadExistingInfrastructureOnly"
     effect = "Allow"

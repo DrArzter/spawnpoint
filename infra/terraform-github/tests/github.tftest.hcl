@@ -68,6 +68,15 @@ run "plan_role_is_owner_reviewed_and_separate_from_deploy" {
     condition     = anytrue([for statement in data.aws_iam_policy_document.github_plan_iam.statement : contains(statement.actions, "states:ValidateStateMachineDefinition")])
     error_message = "The provider validates a state-machine definition during plan; without this action every pull request that touches a workflow fails its required check."
   }
+
+  assert {
+    condition = alltrue([
+      for statement in data.aws_iam_policy_document.github_plan_iam.statement :
+      !contains(statement.actions, "s3:GetObject") ||
+      alltrue([for resource in statement.resources : can(regex("^arn:aws:s3:::spawnpoint-(tfstate-[0-9]+(/spawnpoint/\\*)?|releases-[0-9]+/control-plane/\\*)$", resource))])
+    ])
+    error_message = "The plan identity may read objects only from the Terraform state prefix and the Terraform-managed control-plane bundles, never a release, world or preset payload."
+  }
 }
 
 run "deployment_role_trusts_only_the_production_environment" {

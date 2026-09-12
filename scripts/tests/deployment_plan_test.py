@@ -27,6 +27,12 @@ class DeploymentPlanTest(unittest.TestCase):
         self.assertEqual(plan["terraform_plan_roots"], [])
         self.assertEqual(plan["manual_review"], [])
 
+    def test_server_test_change_deploys_and_plans_nothing(self) -> None:
+        plan = make_plan(["server/tests/terraform-safety-test.sh", "server/tests/fake-aws"])
+        self.assertEqual(plan["terraform_roots"], [])
+        self.assertEqual(plan["terraform_plan_roots"], [])
+        self.assertEqual(plan["manual_review"], [])
+
     def test_web_change_deploys_only_web(self) -> None:
         plan = make_plan(["web/src/App.tsx"])
         self.assertTrue(plan["web"])

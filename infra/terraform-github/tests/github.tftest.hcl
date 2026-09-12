@@ -122,6 +122,15 @@ run "deployment_role_trusts_only_the_production_environment" {
   }
 
   assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      coalesce(statement.effect, "Allow") == "Deny" && contains(statement.actions, "iam:*") &&
+      alltrue([for resource in statement.resources : endswith(resource, ":role/spawnpoint-github-identity-admin")])
+    ])
+    error_message = "The deploy identity must never reach the identity anchor that applies this root; that is the loop the anchor closes."
+  }
+
+  assert {
     condition     = aws_iam_role.github_deploy.max_session_duration == 3600
     error_message = "The production deployment role does not need a session longer than one hour."
   }

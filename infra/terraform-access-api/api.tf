@@ -191,7 +191,6 @@ locals {
     "GET /games/{gameId}/worlds/{worldId}/backups",
     "POST /games/{gameId}/presets/{presetId}/worlds",
     "POST /games/{gameId}/worlds/{worldId}/archive",
-    "POST /games/{gameId}/worlds/{worldId}/regenerate",
     "POST /games/{gameId}/worlds/{worldId}/wipe",
     "POST /games/{gameId}/worlds/{worldId}/restore",
     "POST /games/{gameId}/worlds/{worldId}/purge",

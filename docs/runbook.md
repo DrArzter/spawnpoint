@@ -130,8 +130,8 @@ a second game beside a running one is memory nobody has measured ([ADR-0023](adr
 world active at a time), so a start against a running host answers `host_already_running`. Stop the active world
 first; the host-idle gate then decides whether the instance sleeps.
 
-The React control panel is deployed separately; its exact infrastructure,
-upload and acceptance commands are recorded in
+After a successful `Check` run on `main`, the production workflow deploys the React control panel only when its
+inputs changed. Its exact infrastructure, manual fallback upload and acceptance commands are recorded in
 [`aws-web-command-log.md`](aws-web-command-log.md). The bot offers both
 `Open panel` for Telegram's embedded Mini App and `Open panel in browser` as a
 normal HTTPS link. Telegram Desktop on

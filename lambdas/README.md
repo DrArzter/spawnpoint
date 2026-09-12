@@ -1,7 +1,7 @@
 # lambdas
 
-Every piece of code that is not the game server and not the panel. Four groups, kept separate because they
-fail for different reasons and have different permissions.
+Every piece of code that is not the game server and not the panel. Six functions in five groups, kept separate
+because they fail for different reasons and have different permissions.
 
 **Lambda is not the orchestrator.** The long operations — start, idle stop, release promotion, world switch — are Step
 Functions state machines, and the functions here are their steps. The rule: **if it must answer now, it is a Lambda; if
@@ -12,11 +12,11 @@ anything a Lambda would only wrap is a direct service integration instead. See
 
 | Group | Functions | Notes |
 | --- | --- | --- |
-| Control plane | start, status, releases, promote, backups, restore, logs, link, unlink | Authorises requests, enforces single-flight operation rules and starts Step Functions executions. See [ADR-0012](../docs/adr/0012-web-control-panel.md), [ADR-0019](../docs/adr/0019-account-linking.md) and [ADR-0025](../docs/adr/0025-step-functions-for-long-operations.md) |
-| Lifecycle | idle check, post-session backup, and a Spot interruption handler only if [ADR-0027](../docs/adr/0027-spot-request-shape.md) is un-deferred | Scheduled or event-driven. No public surface |
-| Pipeline | release validation, health interpretation, client pack build | Domain tasks invoked by a promotion workflow. Host reconciliation runs through SSM. See [ADR-0025](../docs/adr/0025-step-functions-for-long-operations.md) and [ADR-0030](../docs/adr/0030-desired-and-active-release.md) |
-| Adapters | Discord interactions, Telegram webhook, event fan-out to both | Verify every request. Never trust the identity in the payload unverified. See [ADR-0016](../docs/adr/0016-chat-integrations.md) |
-| Auth | Access API with signed Telegram and Spawnpoint sessions | Verifies Login Widget or Mini App identity, then resolves the same identity and permissions used by the bot. See [ADR-0037](../docs/adr/0037-telegram-only-browser-identity.md) |
+| Access API | `spawnpoint-access-api` | Telegram sign-in and sessions, the control-plane read model, session control, world creation and lifecycle requests, access management, invitations, subscriptions. One HTTP API, permission-checked per route; the gate order is pinned by a test. See [ADR-0012](../docs/adr/0012-web-control-panel.md), [ADR-0036](../docs/adr/0036-observed-visitors-and-owner-approved-access.md), [ADR-0037](../docs/adr/0037-telegram-only-browser-identity.md) |
+| Lifecycle V2 | `spawnpoint-lifecycle-coordinator-v2` | Conditional DynamoDB transitions for the fenced session record — leases, sessions, watchdog observations. The rules are pure domain code in `src/domain/lifecycle.ts` |
+| Release state | `spawnpoint-release-state` | Prepare, commit, restore and rollback of a wipe's desired/active pointer, with ETag-guarded S3 writes; the promotion machine's only writer. See [ADR-0030](../docs/adr/0030-desired-and-active-release.md) |
+| World lifecycle | `spawnpoint-world-lifecycle` | Archive, new wipe, restore into a new wipe, and the guarded permanent purge — the mutation step of the world-lifecycle workflow. See [ADR-0040](../docs/adr/0040-reusable-presets-and-world-wipes.md) |
+| Telegram | `spawnpoint-telegram-bot`, `spawnpoint-notifier` | The webhook command bot, and the notifier that turns execution events and alerts into messages with per-identity subscriptions. Discord is designed, not built. See [ADR-0016](../docs/adr/0016-chat-integrations.md) |
 
 Rules that apply to all of them:
 
@@ -41,8 +41,8 @@ no deletion permission.
 
 The Lifecycle V2 coordination model is likewise pure domain code. It defines session identity, desired versus observed
 server state, an expiring lease with a monotonically increasing fencing token, single-watchdog ownership and
-conservative idle observations. It is not connected to AWS or the working V1 workflows yet; the additive rollout and
-cutover boundary are documented in [`docs/lifecycle-v2-rollout.md`](../docs/lifecycle-v2-rollout.md).
+conservative idle observations. It has carried production sessions since the 2026-09-11 cutover; the rollout and its acceptance are documented
+in [`docs/lifecycle-v2-rollout.md`](../docs/lifecycle-v2-rollout.md).
 
 Run all checks from this directory. The repository currently exercises them with Node 26:
 
@@ -75,7 +75,7 @@ The layout is the aiogram shape, mapped onto this project's boundary rule — do
 src/domain/telegram-bot.ts   input builders, notification target parsing, reply wording
 src/bot/bot.ts               composition root: middleware order, command registry, bot.catch
 src/bot/middleware/auth.ts   per-command permission gate backed by the shared access directory
-src/bot/commands/*.ts        start / status / pack, thin ctx glue
+src/bot/commands/*.ts        start / status / address / network / pack / access, thin ctx glue
 src/bot/services/aws.ts      the AWS port: every SDK call, and the Parameter Store cache
 src/bot/handler.ts           cold-start wiring and grammY's aws-lambda-async webhook callback
 ```
@@ -99,10 +99,10 @@ storm. Secrets come from Parameter Store; authorization comes from the DynamoDB 
   role reads exactly two parameters and can do nothing else. The same function is subscribed to the guardrails
   topic, so the budget, cost anomalies and the running-hours alarm reach the chat too (`src/domain/alerts.ts`); an
   alert must never be lost to a parse error, so unrecognised formats are delivered raw, never thrown.
-- **Callbacks and dialogs**: grammY keyboards plus the first FSM state — a DynamoDB row behind a storage port, which
-  [ADR-0031](../docs/adr/0031-first-class-local-control-plane.md) requires for the local environment anyway.
+- ~~**Callbacks and dialogs**~~ **Built**: inline keyboards edit one card in place, and the two-step start confirmation
+  is the first dialog. A DynamoDB-backed FSM has not been needed.
 - **A second platform** (Discord, [ADR-0016](../docs/adr/0016-chat-integrations.md)): the command cores stay per-platform thin over shared services and domain; the adapter move, same as everywhere else in this design.
 
-**Status:** backup-retention, Lifecycle V2 coordination, Telegram bot, notifications and alert handling exist and are
-tested. The V2 coordinator is deployable but remains inert until separate V2 workflow roles receive invoke permission;
-V1 continues to use direct EC2/SSM integrations. The bot and notifier are active M4 surfaces on `nodejs22.x`.
+**Status:** all six functions are deployed. The V2 coordinator has served production since the 2026-09-11 cutover;
+the V1 machines keep their direct EC2/SSM integrations as V2's private host adapter. The bot, notifier, access API,
+world-lifecycle and release-state functions run on `nodejs22.x`, the coordinator on `nodejs24.x`.

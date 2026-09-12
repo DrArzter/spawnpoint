@@ -1,33 +1,43 @@
 # web
 
-The static site on S3 behind CloudFront. Two things, one distribution:
+The static site on S3 behind CloudFront — `https://dwk99t8cin0cf.cloudfront.net/`. One React/Vite build serves two
+entry points: Telegram's embedded **Mini App**, which authenticates with the signed `initData` Telegram supplies, and an
+ordinary **browser panel**, which signs in through Telegram's Login Widget. Both exchange that proof for a short-lived
+Spawnpoint session at the access API and hold no AWS credential of their own. See
+[ADR-0037](../docs/adr/0037-telegram-only-browser-identity.md) and [ADR-0012](../docs/adr/0012-web-control-panel.md).
 
-**Control panel** — a client of the control-plane API, with no rules of its own. Server status and player
-count, a Start button, release history with changelogs, backup list, and the owner-only actions. Browser sign-in
-uses Telegram's signed Login Widget; the Mini App verifies `initData`. See
-[ADR-0037](../docs/adr/0037-telegram-only-browser-identity.md).
+What a person sees is decided by their role, not by the client:
 
-**Account page** — "Connect Telegram" and "Connect Discord". Shows a one-time code to send to the bot, lists
-linked accounts, and allows unlinking. The code is displayed here only and never sent through chat. Once
-linked, a bot-issued link signs the same identity in, so this page is also what enables chat sign-in. See
-[ADR-0019](../docs/adr/0019-account-linking.md) and [ADR-0021](../docs/adr/0021-sign-in-from-linked-chat-account.md).
+| Screen | Permission | What is there |
+| --- | --- | --- |
+| Overview | `status.read` | Host state, the selected world's connection address, active and desired release, running operations, Start and Stop |
+| Metrics | `metrics.read` | Session metrics where the backend has them; an honest unavailable state otherwise |
+| Console | `console.use` | An RCON console where the backend has it; an honest unavailable state otherwise |
+| Releases | `release.read` | Per preset: the release history and **Create save** from a ready release; per world: its wipes, its verified backups with **Restore**, **New wipe**, **Archive**, the typed-confirmation **Delete forever**, and the client pack download |
+| Access | `access.read`, `access.manage` | Visitors waiting for approval, identities and their roles, notification subscriptions, the one-time Owner bootstrap |
+| Profile | any signed-in identity | Display details and linked game and network accounts, edited by an Owner |
 
-**Pack downloads** — the current client pack at a stable URL, previous versions kept, plus the changelog and
-the server hostname. Public: nothing here is secret, and a login to download a pack is friction for no gain.
-See [ADR-0013](../docs/adr/0013-modpack-distribution.md).
-
-Constraints:
+Constraints, unchanged:
 
 - Static only. No server-side rendering, and nothing that needs a process running.
 - The bucket stays private; CloudFront serves it.
-- Show the hostname, never a raw IP address — addresses here expire. See [ADR-0017](../docs/adr/0017-stable-server-address.md).
+- Addresses are composed, never configured: the strategy's host part plus the game's port, read from the control
+  plane. A public world has no address between sessions and the panel shows none
+  ([ADR-0033](../docs/adr/0033-connectivity-as-a-strategy.md)); ADR-0017's "show the hostname" rule went with it.
 - Slow actions are operations with state. The UI polls and shows progress; it never blocks on a request.
-- Published pack URLs are immutable. A new pack is a new version, never an overwrite.
+- No control may imply data or an action the backend does not provide. See [PRODUCT.md](PRODUCT.md) and
+  [DESIGN.md](DESIGN.md).
+- Published pack URLs are presigned and short-lived; a new pack is a new release, never an overwrite.
 
-**Nothing here is on the critical path.** M4 was cut to one bot and a pack file behind bot-issued links, and the panel
-moved to "afterwards, if the project earns it". See [docs/roadmap.md](../docs/roadmap.md).
+**Status 2026-09-12: deployed.** The M4 cut that moved the panel to "afterwards" was reversed in practice: the Mini App
+and browser panel went live on 2026-08-27 to 29 ([docs/aws-web-command-log.md](../docs/aws-web-command-log.md)) and
+grew into the surface above. Designed here but not built: the self-serve one-time link code
+([ADR-0019](../docs/adr/0019-account-linking.md)), a Discord account page, and a public pack site with history
+([ADR-0013](../docs/adr/0013-modpack-distribution.md)).
 
 ## The panel story, re-tiered (2026-08-17)
+
+> Kept as the reasoning of the day. Tier 3 is what was built; tiers 1 and 2 were not needed.
 
 The expensive panel was the *public* one; the tiers below get the value without the cost, in order of arrival:
 
@@ -51,22 +61,16 @@ metrics matter (MSPT for Minecraft, UPS for Factorio), which files are worth a l
 blocks do not apply** (no pack block for Zomboid — the Workshop distributes; no whitelist block for Steam-auth games).
 A game's page shows what that game cares about, never Minecraft's page with blanks.
 
-Framework not yet chosen, and worth correcting one assumption in advance: **React is not excluded by anything in this
-design.** A React app builds to plain static files and needs no server, so it works behind CloudFront exactly like any
-other. What is excluded is server-side rendering and anything wanting a Node process — that is a framework *mode*, not
-React itself.
-
-When the panel is actually built, the shortlist, in order:
-
-| Option | Why |
-| --- | --- |
-| No framework | Four screens — status, a start button, a release list, a backup list. Plain HTML with a little JavaScript genuinely covers it, and it is the honest starting point |
-| Preact | React's API in a few kilobytes, near drop-in. The closest thing to React that is not React |
-| Solid | JSX and React-like ergonomics with signals instead of a virtual DOM. A different mental model, and a better one for a page that mostly polls an operation |
-
-Decide when a screen actually hurts, not before.
+Framework not yet chosen, and worth correcting one assumption in advance: **React with Vite was chosen** on
+2026-08-27, and the assumption to correct stands: a React app builds to plain static files and needs no server, so it
+works behind CloudFront like any other. What is excluded is server-side rendering and anything wanting a Node process —
+a framework *mode*, not React itself. The shared primitives live in `src/components/ui`; a screen never invents its own
+table or button ([DESIGN.md](DESIGN.md)).
 
 ## What the panel is actually for
+
+> Status 2026-09-12: the backup list with restore, status, and access management are all built, in that order; the
+> release review stays in Git.
 
 Noted so it is not re-derived later. The admin jobs are not equally suited to a web page, and sorting them changes both
 what gets built and when.
@@ -84,25 +88,20 @@ first 80%. [ADR-0029](../docs/adr/0029-preview-environments.md) took that job as
 and the approval are all in the pull request — so the earliest useful screen is now the backup list, which is the only
 row above that a page genuinely beats chat at.
 
-So the order, when it comes: backup list → status → anything else.
+That order was followed.
 
-## Telegram Mini App preview
+## Developing and deploying
 
-The first panel slice is a read-only React/Vite Mini App shell. It deliberately
-uses mock data and has no AWS action wired, so visual work cannot accidentally
-start a billed session:
+Develop locally and build:
 
 ```bash
 cd web
 npm install
-npm run dev
+npm run dev      # local preview; src/preview.ts supplies data when no API is configured
+npm run build    # static files in web/dist
 ```
 
-Open the printed localhost URL in a browser. Inside Telegram it reads the
-client's theme through the official `telegram-web-app.js` bridge. `npm run
-build` produces static files in `web/dist`, suitable for the eventual private
-S3 + CloudFront site.
-
-Next slices: validate Telegram `initData` in the backend, expose a read-only
-status endpoint, deploy the static build, then add the bot's `web_app` button.
-No mutating action is connected before authenticated status works end to end.
+Inside Telegram the app reads the client's theme through the official `telegram-web-app.js` bridge. Production is
+deployed by `Deploy production` after a passing `Check` on `main` whenever `web/` or `scripts/deploy-web.sh` changed
+([ADR-0043](../docs/adr/0043-deploy-production-from-reviewed-pull-requests.md)); `scripts/deploy-web.sh` also runs from
+an owner workstation and skips the upload when the built `index.html` is unchanged.

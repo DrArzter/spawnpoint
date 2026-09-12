@@ -46,7 +46,7 @@ jobs:
 
       - name: Build Lambda bundles consumed by Terraform
         run: |
-          npm ci
+          npm ci --ignore-scripts
           npm run build
         working-directory: lambdas
 

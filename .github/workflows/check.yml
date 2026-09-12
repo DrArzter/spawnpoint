@@ -41,11 +41,11 @@ jobs:
             web/package-lock.json
 
       - name: Install the lambdas' dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
         working-directory: lambdas
 
       - name: Install the mini app's dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
         working-directory: web
 
       # Docker is preinstalled on the runner, which is what the containerised

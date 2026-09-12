@@ -62,7 +62,7 @@ jobs:
       - name: Build Lambda bundles consumed by Terraform
         if: steps.changes.outputs.roots != '[]'
         run: |
-          npm ci
+          npm ci --ignore-scripts
           npm run build
         working-directory: lambdas
 

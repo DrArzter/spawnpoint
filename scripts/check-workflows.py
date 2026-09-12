@@ -21,7 +21,7 @@ def permission_scopes(text: str) -> dict[str, str]:
         return {}
     scopes: dict[str, str] = {}
     for line in lines[start:]:
-        match = re.fullmatch(r"  ([\w-]+):\s*(\S+)", line)
+        match = re.fullmatch(r" {2}([\w-]+):\s*(\S+)", line)
         if match is None:
             break
         scopes[match.group(1)] = match.group(2)
@@ -67,10 +67,16 @@ def check_deploy_workflow(path: Path, text: str) -> list[str]:
     scopes = permission_scopes(text)
     expected = {"contents": "read", "id-token": "write"}
     if path.name == "deploy-production.yml":
-        expected["actions"] = "read"
+        expected = {}
         for required in ("workflow_run:", "workflows: [Check]", "github.event.workflow_run.conclusion == 'success'"):
             if required not in text:
                 problems.append(f"production gate is missing {required!r}")
+        for required_permissions in (
+            "      actions: read\n      contents: read",
+            "      contents: read\n      id-token: write",
+        ):
+            if required_permissions not in text:
+                problems.append(f"production jobs are missing least-privilege permissions {required_permissions!r}")
     else:
         if "workflow_call:" not in text:
             problems.append("a deploy unit must be callable only by the production gate")

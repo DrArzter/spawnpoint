@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import unittest
 
-from scripts.deployment_plan import make_plan
+from scripts.deployment_plan import make_plan, validated_revision
 
 
 class DeploymentPlanTest(unittest.TestCase):
+    def test_git_revisions_accept_only_full_lowercase_object_ids(self) -> None:
+        revision = "a" * 40
+        self.assertEqual(validated_revision(revision), revision)
+        for invalid in ("main", "--output=/tmp/leak", "A" * 40, "a" * 39):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                validated_revision(invalid)
+
     def test_documentation_change_deploys_nothing(self) -> None:
         plan = make_plan(["docs/roadmap.md"])
         self.assertFalse(plan["web"])

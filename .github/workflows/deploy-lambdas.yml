@@ -32,7 +32,7 @@ jobs:
           cache-dependency-path: lambdas/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
         working-directory: lambdas
 
       - name: Assume the production deployment role

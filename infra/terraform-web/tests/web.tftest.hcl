@@ -9,6 +9,14 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_route53_zone.primary
+    values = {
+      zone_id = "Z00000000000000000000"
+      name    = "spawnpoint.example.dev."
+    }
+  }
+
+  override_data {
     target = data.aws_cloudfront_cache_policy.caching_optimized
     values = {
       id = "managed-cache-policy"
@@ -28,10 +36,26 @@ mock_provider "aws" {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
     }
   }
+
+  override_resource {
+    target = aws_cloudfront_distribution.site
+    values = {
+      domain_name    = "distribution.cloudfront.net"
+      hosted_zone_id = "ZCLOUDFRONT"
+    }
+  }
+}
+
+mock_provider "aws" {
+  alias = "us_east_1"
 }
 
 run "private_origin_and_https_edge" {
   command = plan
+
+  variables {
+    domain_name = "spawnpoint.example.dev"
+  }
 
   assert {
     condition = alltrue([
@@ -56,5 +80,29 @@ run "private_origin_and_https_edge" {
   assert {
     condition     = aws_cloudfront_distribution.site.price_class == "PriceClass_100"
     error_message = "The preview stays on the smallest CloudFront edge footprint."
+  }
+
+  assert {
+    condition     = aws_cloudfront_distribution.site.aliases == toset(["spawnpoint.example.dev"])
+    error_message = "CloudFront must serve the externally configured panel hostname."
+  }
+
+  assert {
+    condition = (
+      aws_cloudfront_distribution.site.viewer_certificate[0].cloudfront_default_certificate == null &&
+      aws_cloudfront_distribution.site.viewer_certificate[0].minimum_protocol_version == "TLSv1.2_2021" &&
+      aws_cloudfront_distribution.site.viewer_certificate[0].ssl_support_method == "sni-only"
+    )
+    error_message = "The custom hostname must use the validated ACM certificate and modern viewer TLS."
+  }
+
+  assert {
+    condition = (
+      aws_route53_record.site_ipv4.name == "spawnpoint.example.dev" &&
+      aws_route53_record.site_ipv6.name == "spawnpoint.example.dev" &&
+      aws_route53_record.site_ipv4.alias[0].zone_id == "ZCLOUDFRONT" &&
+      aws_route53_record.site_ipv6.alias[0].zone_id == "ZCLOUDFRONT"
+    )
+    error_message = "Both IP families must alias the panel hostname to the distribution without a hosted-zone constant."
   }
 }

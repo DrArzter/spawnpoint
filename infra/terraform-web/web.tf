@@ -3,6 +3,43 @@ locals {
   origin_id   = "spawnpoint-web-s3"
 }
 
+resource "aws_acm_certificate" "site" {
+  provider          = aws.us_east_1
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  options {
+    certificate_transparency_logging_preference = "ENABLED"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name    = var.domain_name
+    Purpose = "cloudfront-viewer-certificate"
+  }
+}
+
+locals {
+  certificate_validation = one(aws_acm_certificate.site.domain_validation_options)
+}
+
+resource "aws_route53_record" "site_certificate_validation" {
+  zone_id = data.aws_route53_zone.primary.zone_id
+  name    = local.certificate_validation.resource_record_name
+  type    = local.certificate_validation.resource_record_type
+  records = [local.certificate_validation.resource_record_value]
+  ttl     = 300
+}
+
+resource "aws_acm_certificate_validation" "site" {
+  provider                = aws.us_east_1
+  certificate_arn         = aws_acm_certificate.site.arn
+  validation_record_fqdns = [aws_route53_record.site_certificate_validation.fqdn]
+}
+
 resource "aws_s3_bucket" "site" {
   bucket = local.bucket_name
 
@@ -58,6 +95,7 @@ resource "aws_cloudfront_distribution" "site" {
   comment             = "Spawnpoint Telegram Mini App"
   price_class         = "PriceClass_100"
   http_version        = "http2and3"
+  aliases             = [var.domain_name]
 
   origin {
     domain_name              = aws_s3_bucket.site.bucket_regional_domain_name
@@ -96,12 +134,38 @@ resource "aws_cloudfront_distribution" "site" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = aws_acm_certificate_validation.site.certificate_arn
+    minimum_protocol_version = "TLSv1.2_2021"
+    ssl_support_method       = "sni-only"
   }
 
   tags = {
     Name    = "spawnpoint-web"
     Purpose = "telegram-mini-app"
+  }
+}
+
+resource "aws_route53_record" "site_ipv4" {
+  zone_id = data.aws_route53_zone.primary.zone_id
+  name    = var.domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.site.domain_name
+    zone_id                = aws_cloudfront_distribution.site.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "site_ipv6" {
+  zone_id = data.aws_route53_zone.primary.zone_id
+  name    = var.domain_name
+  type    = "AAAA"
+
+  alias {
+    name                   = aws_cloudfront_distribution.site.domain_name
+    zone_id                = aws_cloudfront_distribution.site.hosted_zone_id
+    evaluate_target_health = false
   }
 }
 

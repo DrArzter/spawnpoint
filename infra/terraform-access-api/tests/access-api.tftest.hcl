@@ -92,11 +92,21 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   variables {
     bootstrap_owner_telegram_id = "1780660807"
     telegram_bot_username       = "drarzterbot"
+    panel_url                   = "https://spawnpoint.example.dev/"
+    legacy_panel_url            = "https://legacy.example.dev/"
   }
 
   assert {
     condition     = contains(local.access_routes, "POST /auth/telegram")
     error_message = "The browser must have one endpoint that exchanges a verified Telegram login for a Spawnpoint session."
+  }
+
+  assert {
+    condition = toset(aws_apigatewayv2_api.access.cors_configuration[0].allow_origins) == toset([
+      "https://spawnpoint.example.dev",
+      "https://legacy.example.dev",
+    ])
+    error_message = "The hostname migration must accept both configured panel origins without embedding either in code."
   }
 
   assert {

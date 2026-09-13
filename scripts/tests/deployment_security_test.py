@@ -64,6 +64,7 @@ class DeploymentSecurityTest(unittest.TestCase):
             '"ec2:TerminateInstances"', '"ec2:DeleteVolume"', '"s3:DeleteBucket"', '"dynamodb:DeleteTable"',
             '"iam:DeleteOpenIDConnectProvider"', '"cloudfront:DeleteDistribution"', '"lambda:DeleteFunction"',
             '"lambda:DeleteFunctionUrlConfig"', '"budgets:DeleteBudget"', '"sns:DeleteTopic"',
+            '"acm:DeleteCertificate"',
         ):
             self.assertNotIn(never_granted, terraform)
 

@@ -164,6 +164,9 @@ data "aws_iam_policy_document" "github_deploy_iam" {
     effect = "Allow"
     actions = [
       "apigateway:GET",
+      "acm:DescribeCertificate",
+      "acm:ListCertificates",
+      "acm:ListTagsForCertificate",
       "budgets:Describe*",
       "ce:Get*",
       "ce:List*",
@@ -207,6 +210,8 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "apigateway:PATCH",
       "apigateway:POST",
       "apigateway:PUT",
+      "acm:AddTagsToCertificate",
+      "acm:RequestCertificate",
       "budgets:ModifyBudget",
       "ce:CreateAnomalyMonitor",
       "ce:CreateAnomalySubscription",
@@ -455,6 +460,9 @@ data "aws_iam_policy_document" "github_plan_iam" {
     effect = "Allow"
     actions = [
       "apigateway:GET",
+      "acm:DescribeCertificate",
+      "acm:ListCertificates",
+      "acm:ListTagsForCertificate",
       "budgets:Describe*",
       "ce:Get*",
       "ce:List*",

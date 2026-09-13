@@ -10,5 +10,15 @@ output "distribution_id" {
 
 output "mini_app_url" {
   description = "Public HTTPS URL opened by Telegram."
+  value       = "https://${var.domain_name}/"
+}
+
+output "cloudfront_url" {
+  description = "Provider hostname retained as a migration and diagnostic path."
   value       = "https://${aws_cloudfront_distribution.site.domain_name}/"
+}
+
+output "certificate_arn" {
+  description = "Issued us-east-1 ACM certificate attached to CloudFront."
+  value       = aws_acm_certificate_validation.site.certificate_arn
 }

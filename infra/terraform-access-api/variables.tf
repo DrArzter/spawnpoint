@@ -13,7 +13,23 @@ variable "aws_profile" {
 variable "panel_url" {
   description = "HTTPS origin hosting the Telegram Login Widget and calling the access API."
   type        = string
-  default     = "https://dwk99t8cin0cf.cloudfront.net/"
+
+  validation {
+    condition     = can(regex("^https://[^/]+/?$", var.panel_url))
+    error_message = "panel_url must be one HTTPS origin with no path, query or fragment."
+  }
+}
+
+variable "legacy_panel_url" {
+  description = "Optional previous panel origin kept temporarily during a zero-downtime hostname migration."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.legacy_panel_url == null || can(regex("^https://[^/]+/?$", var.legacy_panel_url))
+    error_message = "legacy_panel_url must be null or one HTTPS origin with no path, query or fragment."
+  }
 }
 
 variable "bootstrap_owner_telegram_id" {

@@ -110,9 +110,12 @@ data "aws_iam_policy_document" "access_api" {
   }
 
   statement {
-    sid       = "VerifyTelegramLogin"
-    actions   = ["ssm:GetParameter"]
-    resources = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.bot_token_parameter}"]
+    sid     = "ReadAuthenticationSecrets"
+    actions = ["ssm:GetParameter"]
+    resources = [
+      "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.bot_token_parameter}",
+      "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.session_signing_secret_parameter}",
+    ]
   }
 }
 
@@ -139,15 +142,17 @@ resource "aws_lambda_function" "access_api" {
 
   environment {
     variables = {
-      ACCESS_TABLE_NAME           = data.aws_dynamodb_table.access.name
-      BOOTSTRAP_OWNER_TELEGRAM_ID = trimspace(var.bootstrap_owner_telegram_id)
-      BOT_TOKEN_PARAMETER         = var.bot_token_parameter
-      TELEGRAM_OIDC_CLIENT_ID     = var.telegram_oidc_client_id
-      LIFECYCLE_TABLE_NAME        = data.aws_dynamodb_table.lifecycle.name
-      OPERATION_STATE_MACHINES    = jsonencode(local.operation_state_machines)
-      RELEASE_BUCKET              = data.aws_s3_bucket.releases.id
-      BACKUP_BUCKET               = data.aws_s3_bucket.backups.id
-      CONNECTION_HOST             = var.connection_host
+      ACCESS_TABLE_NAME                = data.aws_dynamodb_table.access.name
+      BOOTSTRAP_OWNER_TELEGRAM_ID      = trimspace(var.bootstrap_owner_telegram_id)
+      BOT_TOKEN_PARAMETER              = var.bot_token_parameter
+      SESSION_SIGNING_SECRET_PARAMETER = var.session_signing_secret_parameter
+      TELEGRAM_OIDC_CLIENT_ID          = var.telegram_oidc_client_id
+      LIFECYCLE_TABLE_NAME             = data.aws_dynamodb_table.lifecycle.name
+      OPERATION_STATE_MACHINES         = jsonencode(local.operation_state_machines)
+      RELEASE_BUCKET                   = data.aws_s3_bucket.releases.id
+      BACKUP_BUCKET                    = data.aws_s3_bucket.backups.id
+      CONNECTION_HOST                  = var.connection_host
+      REFRESH_COOKIE_SAME_SITE         = local.custom_api_domain_enabled ? "Strict" : "None"
     }
   }
 
@@ -163,9 +168,10 @@ resource "aws_apigatewayv2_api" "access" {
       trimsuffix(var.panel_url, "/"),
       var.legacy_panel_url == null ? null : trimsuffix(var.legacy_panel_url, "/"),
     ]))
-    allow_headers = ["authorization", "content-type"]
-    allow_methods = ["GET", "POST", "PUT", "OPTIONS"]
-    max_age       = 3600
+    allow_headers     = ["authorization", "content-type"]
+    allow_methods     = ["GET", "POST", "PUT", "OPTIONS"]
+    allow_credentials = true
+    max_age           = 3600
   }
 }
 
@@ -180,6 +186,8 @@ resource "aws_apigatewayv2_integration" "access_api" {
 locals {
   access_routes = toset([
     "POST /auth/telegram",
+    "POST /auth/refresh",
+    "POST /auth/logout",
     "GET /session",
     "GET /me",
     "GET /control-plane",
@@ -228,4 +236,60 @@ resource "aws_lambda_permission" "access_api" {
   function_name = aws_lambda_function.access_api.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.access.execution_arn}/*/*"
+}
+
+resource "aws_acm_certificate" "access_api" {
+  count             = local.custom_api_domain_enabled ? 1 : 0
+  domain_name       = var.api_domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "access_api_certificate_validation" {
+  count   = local.custom_api_domain_enabled ? 1 : 0
+  zone_id = data.aws_route53_zone.api[0].zone_id
+  name    = tolist(aws_acm_certificate.access_api[0].domain_validation_options)[0].resource_record_name
+  type    = tolist(aws_acm_certificate.access_api[0].domain_validation_options)[0].resource_record_type
+  records = [tolist(aws_acm_certificate.access_api[0].domain_validation_options)[0].resource_record_value]
+  ttl     = 60
+}
+
+resource "aws_acm_certificate_validation" "access_api" {
+  count                   = local.custom_api_domain_enabled ? 1 : 0
+  certificate_arn         = aws_acm_certificate.access_api[0].arn
+  validation_record_fqdns = [aws_route53_record.access_api_certificate_validation[0].fqdn]
+}
+
+resource "aws_apigatewayv2_domain_name" "access_api" {
+  count       = local.custom_api_domain_enabled ? 1 : 0
+  domain_name = var.api_domain_name
+
+  domain_name_configuration {
+    certificate_arn = aws_acm_certificate_validation.access_api[0].certificate_arn
+    endpoint_type   = "REGIONAL"
+    security_policy = "TLS_1_2"
+  }
+}
+
+resource "aws_apigatewayv2_api_mapping" "access_api" {
+  count       = local.custom_api_domain_enabled ? 1 : 0
+  api_id      = aws_apigatewayv2_api.access.id
+  domain_name = aws_apigatewayv2_domain_name.access_api[0].id
+  stage       = aws_apigatewayv2_stage.default.id
+}
+
+resource "aws_route53_record" "access_api" {
+  count   = local.custom_api_domain_enabled ? 1 : 0
+  zone_id = data.aws_route53_zone.api[0].zone_id
+  name    = var.api_domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.access_api[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.access_api[0].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
 }

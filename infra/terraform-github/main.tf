@@ -232,6 +232,7 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "dynamodb:TagResource",
       "dynamodb:UpdateContinuousBackups",
       "dynamodb:UpdateTable",
+      "dynamodb:UpdateTimeToLive",
       "ec2:AssociateRouteTable",
       "ec2:AttachVolume",
       "ec2:CreateInternetGateway",

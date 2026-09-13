@@ -34,6 +34,8 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Identity**: One person authorised to use Spawnpoint, independent of the chat, game and network accounts through which that person is recognised.
 
+**Login session**: A revocable period in which a browser may continue acting as one previously verified external account without repeating sign-in. It is distinct from a gameplay Session. _Avoid_: Browser session, auth token.
+
 **Visitor**: A platform-authenticated person who has reached a Spawnpoint surface but has not been approved as an identity. A visitor may see only explicitly public, non-sensitive information.
 
 **Access candidate**: A visitor whose external account has been observed and is waiting for an Owner to approve or dismiss access. It is not an identity and carries no role or operational permission.

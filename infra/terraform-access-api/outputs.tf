@@ -1,6 +1,6 @@
 output "api_url" {
   description = "Telegram-session-protected access-management API base URL."
-  value       = aws_apigatewayv2_api.access.api_endpoint
+  value       = local.custom_api_domain_enabled ? "https://${var.api_domain_name}" : aws_apigatewayv2_api.access.api_endpoint
 }
 
 output "telegram_oidc_client_id" {

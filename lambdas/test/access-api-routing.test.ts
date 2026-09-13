@@ -6,6 +6,7 @@ import test from "node:test";
 // imported after a fixture environment exists. Nothing here calls AWS.
 process.env.ACCESS_TABLE_NAME ??= "spawnpoint-access-test";
 process.env.BOT_TOKEN_PARAMETER ??= "/spawnpoint/bot/token";
+process.env.SESSION_SIGNING_SECRET_PARAMETER ??= "/spawnpoint/auth/session-signing-secret";
 const { routes } = await import("../src/handlers/access-api.ts");
 
 // Authority used to be positional: the handler resolved a session, then an
@@ -19,6 +20,8 @@ const { routes } = await import("../src/handlers/access-api.ts");
 // each is safe. A route may only appear here on purpose.
 const WITHOUT_PERMISSION = new Map<string, string>([
   ["POST /auth/telegram", "login itself: it is what produces a session"],
+  ["POST /auth/refresh", "rotates the caller's HttpOnly refresh credential"],
+  ["POST /auth/logout", "revokes the caller's HttpOnly refresh credential"],
   ["GET /session", "reports the caller's own session and bootstrap state"],
   ["POST /access/request", "how somebody with no access asks for it"],
   ["GET /me", "the caller's own identity and role"],

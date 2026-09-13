@@ -1,6 +1,6 @@
 # ADR-0037 — Telegram is the default and only browser identity provider
 
-- Status: Accepted
+- Status: Superseded by [ADR-0045](0045-provider-neutral-login-sessions.md)
 - Date: 2026-08-28
 - Supersedes: [ADR-0018](0018-identity-and-sign-in.md), [ADR-0021](0021-sign-in-from-linked-chat-account.md), and [ADR-0035](0035-bootstrap-first-owner.md)
 

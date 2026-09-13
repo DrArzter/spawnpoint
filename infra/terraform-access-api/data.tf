@@ -1,5 +1,11 @@
 data "aws_caller_identity" "current" {}
 
+data "aws_route53_zone" "api" {
+  count        = local.custom_api_domain_enabled ? 1 : 0
+  name         = var.dns_zone_name
+  private_zone = false
+}
+
 data "aws_dynamodb_table" "access" {
   name = "spawnpoint-access"
 }
@@ -17,8 +23,9 @@ data "aws_s3_bucket" "releases" {
 }
 
 locals {
-  stop_state_machine_arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-stop-server-v2"
-  world_lifecycle_arn    = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-world-lifecycle"
+  custom_api_domain_enabled = var.api_domain_name != null && var.api_domain_name != ""
+  stop_state_machine_arn    = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-stop-server-v2"
+  world_lifecycle_arn       = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-world-lifecycle"
   operation_state_machines = [
     { type = "start", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-start-server-v2" },
     { type = "stop", arn = local.stop_state_machine_arn },

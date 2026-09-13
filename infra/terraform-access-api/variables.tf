@@ -32,6 +32,46 @@ variable "legacy_panel_url" {
   }
 }
 
+variable "api_domain_name" {
+  description = "Optional HTTPS hostname for the access API. Set together with dns_zone_name; null keeps the execute-api endpoint for self-hosting."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.api_domain_name == null || var.api_domain_name == "" || can(regex("^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$", var.api_domain_name))
+    error_message = "api_domain_name must be null or a hostname without scheme, path, query or fragment."
+  }
+}
+
+variable "dns_zone_name" {
+  description = "Optional existing Route53 public zone containing api_domain_name. Set together with api_domain_name."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.dns_zone_name == null || var.dns_zone_name == "" || can(regex("^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$", var.dns_zone_name))
+    error_message = "dns_zone_name must be null or a DNS zone name without scheme or path."
+  }
+}
+
+check "custom_api_domain_configuration" {
+  assert {
+    condition     = (var.api_domain_name != null && var.api_domain_name != "") == (var.dns_zone_name != null && var.dns_zone_name != "")
+    error_message = "api_domain_name and dns_zone_name must either both be set or both be null."
+  }
+
+  assert {
+    condition = (
+      var.api_domain_name == null || var.api_domain_name == "" ||
+      var.dns_zone_name == null || var.dns_zone_name == "" ||
+      var.api_domain_name == var.dns_zone_name || endswith(var.api_domain_name, ".${var.dns_zone_name}")
+    )
+    error_message = "api_domain_name must be inside dns_zone_name."
+  }
+}
+
 variable "bootstrap_owner_telegram_id" {
   description = "Exact Telegram user id allowed to atomically claim the first Owner."
   type        = string
@@ -58,6 +98,11 @@ variable "bot_token_parameter" {
   description = "Existing SecureString parameter containing the Telegram bot token used to verify login signatures."
   type        = string
   default     = "/spawnpoint/bot/token"
+}
+
+variable "session_signing_secret_parameter" {
+  description = "Existing SecureString parameter containing the provider-neutral Spawnpoint access-token signing secret."
+  type        = string
 }
 
 variable "connection_host" {

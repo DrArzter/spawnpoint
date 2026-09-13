@@ -7,6 +7,11 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_route53_zone.api
+    values = { zone_id = "Z123456789" }
+  }
+
+  override_data {
     target = data.aws_dynamodb_table.access
     values = {
       name = "spawnpoint-access"
@@ -94,6 +99,9 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
     telegram_oidc_client_id     = "8521897198"
     panel_url                   = "https://spawnpoint.example.dev/"
     legacy_panel_url            = "https://legacy.example.dev/"
+    api_domain_name             = "api.spawnpoint.example.dev"
+    dns_zone_name               = "example.dev"
+    session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
   }
 
   assert {
@@ -102,11 +110,31 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition     = contains(local.access_routes, "POST /auth/refresh") && contains(local.access_routes, "POST /auth/logout")
+    error_message = "Persistent browser login requires explicit refresh and logout endpoints."
+  }
+
+  assert {
     condition = toset(aws_apigatewayv2_api.access.cors_configuration[0].allow_origins) == toset([
       "https://spawnpoint.example.dev",
       "https://legacy.example.dev",
     ])
     error_message = "The hostname migration must accept both configured panel origins without embedding either in code."
+  }
+
+  assert {
+    condition     = aws_apigatewayv2_api.access.cors_configuration[0].allow_credentials
+    error_message = "The browser must be allowed to send the HttpOnly refresh cookie to the API."
+  }
+
+  assert {
+    condition     = output.api_url == "https://api.spawnpoint.example.dev"
+    error_message = "The web deployment must consume the repository-configured API hostname."
+  }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.REFRESH_COOKIE_SAME_SITE == "Strict"
+    error_message = "A same-site custom API hostname must use a Strict refresh cookie."
   }
 
   assert {
@@ -155,6 +183,11 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.SESSION_SIGNING_SECRET_PARAMETER == "/spawnpoint/auth/session-signing-secret"
+    error_message = "Spawnpoint access tokens must use their own provider-neutral signing secret."
+  }
+
+  assert {
     condition     = aws_lambda_function.access_api.environment[0].variables.TELEGRAM_OIDC_CLIENT_ID == "8521897198"
     error_message = "The OIDC verifier must receive the externally configured public BotFather client ID."
   }
@@ -191,5 +224,25 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   assert {
     condition     = aws_sfn_state_machine.world_lifecycle.type == "STANDARD"
     error_message = "World mutations must be durable workflows because a verified stop may take minutes."
+  }
+}
+
+run "self_hosted_api_keeps_the_generated_endpoint_optional" {
+  command = plan
+
+  variables {
+    bootstrap_owner_telegram_id       = "1780660807"
+    panel_url                         = "https://panel.example.dev/"
+    session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
+  }
+
+  assert {
+    condition     = length(aws_acm_certificate.access_api) == 0 && length(aws_apigatewayv2_domain_name.access_api) == 0
+    error_message = "A self-hosted installation must not need a domain or certificate."
+  }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.REFRESH_COOKIE_SAME_SITE == "None"
+    error_message = "The generated cross-site API endpoint needs a Secure SameSite=None refresh cookie."
   }
 }

@@ -109,6 +109,11 @@ run "deployment_role_trusts_only_the_production_environment" {
   }
 
   assert {
+    condition     = anytrue([for statement in data.aws_iam_policy_document.github_deploy_iam.statement : contains(statement.actions, "dynamodb:UpdateTimeToLive")])
+    error_message = "The deploy identity must be able to enable expiry cleanup for login-session records."
+  }
+
+  assert {
     condition = anytrue([
       for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
       statement.sid == "DestroyOnlyAllowListedWiring" && !contains(statement.resources, "*")

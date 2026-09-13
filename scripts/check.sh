@@ -43,7 +43,7 @@ check_shell() {
     cd /repo
     shellcheck -x -S warning \
       server/scripts/*.sh server/games/_dispatch.sh server/games/*/game.sh \
-      scripts/*.sh server/tests/*.sh server/user-data.sh'
+      scripts/*.sh scripts/config-sources/*.sh server/tests/*.sh server/user-data.sh'
 }
 
 check_workflows() {

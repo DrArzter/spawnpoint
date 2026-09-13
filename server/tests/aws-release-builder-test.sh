@@ -36,6 +36,8 @@ expect_failure "unsafe profile id" env "${base_env[@]}" PROFILE_ID=../main "${bu
 expect_failure "invalid release" env "${base_env[@]}" RELEASE=latest "${builder}"
 expect_failure "untrusted config repository" env "${base_env[@]}" \
   CONFIG_REPOSITORY_URL=https://github.com/example/untrusted.git "${builder}"
+expect_failure "unsupported preset source adapter" env "${base_env[@]}" \
+  CONFIG_SOURCE_KIND=manual-upload "${builder}"
 # With one authoring repository per game, an absent URL must refuse rather than
 # silently pick a game.
 expect_failure "no config repository named" \
@@ -102,6 +104,8 @@ builder_output="$(
     "${builder}"
 )"
 grep -qx 'result=release_ready' <<<"${builder_output}"
+grep -qx 'source_kind=github-snapshot' <<<"${builder_output}"
+grep -qx "source_revision=${config_commit}" <<<"${builder_output}"
 manifest="${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/minecraft/main/4.0/manifest.json"
 jq -e \
   --arg commit "${config_commit}" \
@@ -114,6 +118,10 @@ jq -e \
 #     most expensive to discover. ---
 packaged="$(grep -oE 'filename = "[^"]+"' "${repository_root}/infra/terraform-releases/release-builder.tf" |
   sed -E 's/^filename = "(.*)"$/\1/')"
+grep -Fxq 'scripts/config-sources/github-snapshot.sh' <<<"${packaged}" || {
+  printf 'error: the release bundle does not package the enabled preset source adapter\n' >&2
+  exit 1
+}
 while IFS= read -r entry; do
   [[ "${entry}" == *.sh && -f "${repository_root}/${entry}" ]] || continue
   while IFS= read -r reference; do

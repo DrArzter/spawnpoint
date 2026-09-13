@@ -19,7 +19,9 @@ import {
   verifyAccessToken,
   type LoginPrincipal,
 } from "../access/login-session.ts";
-import { verifyLoginWidget, verifyMiniAppInitData, verifyOidcIdToken, verifySessionToken, type TelegramProfile } from "../access/telegram-auth.ts";
+import { authenticateWith, type LoginProvider } from "../access/login-provider.ts";
+import { verifySessionToken } from "../access/telegram-auth.ts";
+import { createTelegramLoginProvider, telegramPrincipal } from "../access/telegram-login-provider.ts";
 import { defaultSubscriptions, validateSubscriptions } from "../access/subscriptions.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../domain/access-events.ts";
 import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
@@ -113,16 +115,6 @@ async function caller(event: Event): Promise<Caller | null> {
   if (current !== undefined) return current;
   const legacy = verifySessionToken(match[1]!, await botToken());
   return legacy === null ? null : telegramPrincipal(legacy);
-}
-
-function telegramPrincipal(profile: TelegramProfile): LoginPrincipal {
-  return {
-    provider: "telegram",
-    subject: profile.telegramId,
-    displayName: profile.displayName,
-    username: profile.username,
-    photoUrl: profile.photoUrl,
-  };
 }
 
 function accountKey(principal: LoginPrincipal): string {
@@ -751,19 +743,20 @@ async function logoutLoginSession(event: Event): Promise<Response> {
   return responseWithCookie(204, null, expiredRefreshCookie(refreshCookieSameSite));
 }
 
-async function authenticate(event: Event): Promise<Response> {
-  let parsed: { idToken?: unknown; login?: unknown; initData?: unknown };
-  try { parsed = event.body ? JSON.parse(event.body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
-  const token = await botToken();
-  const profile = typeof parsed.idToken === "string" && telegramOidcClientId !== ""
-    ? await verifyOidcIdToken(parsed.idToken, telegramOidcClientId)
-    : typeof parsed.initData === "string"
-    ? verifyMiniAppInitData(parsed.initData, token)
-    : parsed.login !== null && typeof parsed.login === "object"
-      ? verifyLoginWidget(parsed.login as Record<string, unknown>, token)
-      : null;
-  if (profile === null) return response(401, { error: "invalid_or_expired_telegram_login" });
-  return createLoginSession(telegramPrincipal(profile), await sessionSigningSecret());
+async function authenticate(provider: LoginProvider, event: Event): Promise<Response> {
+  let attempt: Readonly<Record<string, unknown>>;
+  try {
+    const parsed = event.body ? JSON.parse(event.body) as unknown : {};
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return response(400, { error: "invalid_json" });
+    }
+    attempt = parsed as Readonly<Record<string, unknown>>;
+  } catch {
+    return response(400, { error: "invalid_json" });
+  }
+  const principal = await authenticateWith(provider, attempt);
+  if (principal === null) return response(401, { error: `invalid_or_expired_${provider.id}_login` });
+  return createLoginSession(principal, await sessionSigningSecret());
 }
 
 // The files a player needs to join, for the release the world is actually
@@ -831,7 +824,10 @@ const permissionRoute = (permission: Permission, handle: Handler<Identity>): Rou
 const parameter = (event: Event, name: string): string => event.pathParameters?.[name] ?? "";
 
 export const routes: Readonly<Record<string, Route>> = {
-  "POST /auth/telegram": publicRoute((event) => authenticate(event)),
+  "POST /auth/telegram": publicRoute((event) => authenticate(
+    createTelegramLoginProvider({ oidcClientId: telegramOidcClientId, botToken }),
+    event,
+  )),
   "POST /auth/refresh": publicRoute((event) => refreshLoginSession(event)),
   "POST /auth/logout": publicRoute((event) => logoutLoginSession(event)),
 

@@ -78,6 +78,14 @@ run "plan_role_is_owner_reviewed_and_separate_from_deploy" {
   }
 
   assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_plan_iam.statement :
+      contains(statement.actions, "acm:DescribeCertificate") && contains(statement.actions, "acm:ListTagsForCertificate")
+    ])
+    error_message = "The plan identity must be able to refresh the CloudFront certificate without changing it."
+  }
+
+  assert {
     condition = alltrue([
       for statement in data.aws_iam_policy_document.github_plan_iam.statement :
       !contains(statement.actions, "s3:GetObject") ||
@@ -126,6 +134,20 @@ run "deployment_role_trusts_only_the_production_environment" {
       !contains(statement.actions, "route53:DeleteHostedZone")
     ])
     error_message = "The production pipeline must never delete the authoritative public DNS zone."
+  }
+
+  assert {
+    condition = (
+      anytrue([
+        for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+        contains(statement.actions, "acm:RequestCertificate") && contains(statement.actions, "acm:AddTagsToCertificate")
+      ]) &&
+      alltrue([
+        for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+        !contains(statement.actions, "acm:DeleteCertificate")
+      ])
+    )
+    error_message = "The deploy identity may issue the panel certificate but must not delete certificates."
   }
 
   assert {

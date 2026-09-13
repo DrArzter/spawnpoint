@@ -24,6 +24,7 @@ jobs:
       TF_IN_AUTOMATION: "true"
       TF_VAR_aws_profile: ""
       TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_domain_name: ${{ vars.SPAWNPOINT_DOMAIN }}
     steps:
       - name: Check out the tested commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

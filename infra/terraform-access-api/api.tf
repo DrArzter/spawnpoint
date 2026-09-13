@@ -158,7 +158,10 @@ resource "aws_apigatewayv2_api" "access" {
   protocol_type = "HTTP"
 
   cors_configuration {
-    allow_origins = [trimsuffix(var.panel_url, "/")]
+    allow_origins = distinct(compact([
+      trimsuffix(var.panel_url, "/"),
+      var.legacy_panel_url == null ? null : trimsuffix(var.legacy_panel_url, "/"),
+    ]))
     allow_headers = ["authorization", "content-type"]
     allow_methods = ["GET", "POST", "PUT", "OPTIONS"]
     max_age       = 3600

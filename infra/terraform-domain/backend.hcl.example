@@ -1,0 +1,6 @@
+bucket       = "replace-with-state-bucket"
+key          = "spawnpoint/domain.tfstate"
+region       = "replace-with-region"
+profile      = "replace-with-profile"
+encrypt      = true
+use_lockfile = true

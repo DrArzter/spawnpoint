@@ -20,9 +20,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
-      AWS_REGION: eu-central-1
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       TF_IN_AUTOMATION: "true"
       TF_VAR_aws_profile: ""
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_domain_name: ${{ vars.SPAWNPOINT_DOMAIN }}
       TF_VAR_alert_email: ${{ secrets.TF_VAR_ALERT_EMAIL }}
       TF_VAR_bootstrap_owner_telegram_id: ${{ secrets.TF_VAR_BOOTSTRAP_OWNER_TELEGRAM_ID }}
     steps:

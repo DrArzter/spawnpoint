@@ -4,8 +4,8 @@ set -Eeuo pipefail
 
 REPOSITORY_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 TERRAFORM_BIN="${TERRAFORM_BIN:-terraform}"
-AWS_PROFILE_NAME="${AWS_PROFILE_NAME-spawnpoint}"
-AWS_REGION_NAME="${AWS_REGION_NAME:-eu-central-1}"
+AWS_PROFILE_NAME="${AWS_PROFILE_NAME-${AWS_PROFILE:-}}"
+AWS_REGION="${AWS_REGION:?set AWS_REGION in the environment}"
 WEB_ROOT="${REPOSITORY_ROOT}/web"
 TERRAFORM_ROOT="${REPOSITORY_ROOT}/infra/terraform-web"
 ACCESS_TERRAFORM_ROOT="${REPOSITORY_ROOT}/infra/terraform-access-api"
@@ -49,7 +49,7 @@ if [[ -z "${bucket_name}" || -z "${mini_app_url}" ]]; then
 fi
 
 if aws s3 cp "s3://${bucket_name}/index.html" - \
-  --region "${AWS_REGION_NAME}" "${aws_profile_args[@]}" 2>/dev/null |
+  --region "${AWS_REGION}" "${aws_profile_args[@]}" 2>/dev/null |
   cmp -s - "${WEB_ROOT}/dist/index.html"; then
   printf 'result=unchanged\nurl=%s\n' "${mini_app_url}"
   exit 0
@@ -59,12 +59,12 @@ aws s3 sync "${WEB_ROOT}/dist/assets" "s3://${bucket_name}/assets" \
   --delete \
   --cache-control 'public,max-age=31536000,immutable' \
   "${aws_profile_args[@]}" \
-  --region "${AWS_REGION_NAME}"
+  --region "${AWS_REGION}"
 
 aws s3 cp "${WEB_ROOT}/dist/index.html" "s3://${bucket_name}/index.html" \
   --content-type 'text/html; charset=utf-8' \
   --cache-control 'no-cache' \
   "${aws_profile_args[@]}" \
-  --region "${AWS_REGION_NAME}"
+  --region "${AWS_REGION}"
 
 printf 'result=deployed\nurl=%s\n' "${mini_app_url}"

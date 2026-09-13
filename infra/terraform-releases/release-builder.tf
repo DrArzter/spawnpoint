@@ -30,6 +30,11 @@ data "archive_file" "release_builder_source" {
   }
 
   source {
+    content  = file("${path.module}/../../scripts/config-sources/github-snapshot.sh")
+    filename = "scripts/config-sources/github-snapshot.sh"
+  }
+
+  source {
     content  = file("${path.module}/../../server/scripts/_common.sh")
     filename = "server/scripts/_common.sh"
   }
@@ -202,6 +207,13 @@ resource "aws_codebuild_project" "release_builder" {
     environment_variable {
       name  = "RELEASE_BUCKET"
       value = data.aws_s3_bucket.releases.id
+    }
+
+    # The current installation enables one adapter. Future sources add another
+    # adapter without changing the shared catalog or release builders.
+    environment_variable {
+      name  = "CONFIG_SOURCE_KIND"
+      value = "github-snapshot"
     }
 
     # One authoring repository per game, so the caller names it. The builder's

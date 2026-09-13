@@ -55,9 +55,14 @@ fi
 output="$(run_builder)"
 grep -qx 'result=preset_catalog_ready' <<<"${output}"
 grep -qx 'presets=2' <<<"${output}"
+grep -qx 'source_kind=github-snapshot' <<<"${output}"
+grep -qx "source_revision=${commit}" <<<"${output}"
 catalog="${FAKE_S3_ROOT}/spawnpoint-test-releases/presets/factorio/catalog.json"
 jq -e --arg commit "${commit}" '
-  .schema_version == 2 and .game == "factorio" and .source.commit == $commit
+  .schema_version == 2 and .game == "factorio"
+  and .source.kind == "github-snapshot"
+  and .source.origin == "https://github.com/DrArzter/my-docker-factorio-server-config"
+  and .source.revision == $commit and .source.commit == $commit
   and ([.presets[].id] | sort) == ["factorio-vanilla", "space-age"]
   and all(.presets[]; .build_status == "unbuilt" and .releases == [] and .latest_release == null and (.profile_digest | length == 64))
 ' "${catalog}" >/dev/null

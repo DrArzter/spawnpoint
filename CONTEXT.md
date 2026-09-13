@@ -6,7 +6,11 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Game**: A server runtime family such as Minecraft or Factorio. A game may have many worlds.
 
-**Preset**: A versioned declaration in a game's configuration repository describing a reusable mod and server-configuration template. A preset is authoring input, not a world, save, or deployable release. One preset may produce many releases and may be used to create many worlds. _Avoid_: Pack or uploaded archive when the Git declaration is meant.
+**Preset**: A versioned declaration from a preset source describing a reusable mod and server-configuration template. A preset is authoring input, not a world, save, preset snapshot or deployable release. One preset may produce many releases and may be used to create many worlds. _Avoid_: Pack or uploaded archive when the declaration is meant.
+
+**Preset source**: An external authoring origin from which Spawnpoint can obtain a versioned preset snapshot. GitHub is one preset source, not part of the preset's identity. _Avoid_: Configuration repository when the source need not be Git.
+
+**Preset snapshot**: An inert, content-verified tree materialized by a preset-source adapter for cataloging and release construction. It contains authoring input and provenance, not executable build logic or a finished release. _Avoid_: Checkout when the source need not be Git.
 
 **World**: A named, persistent playable instance created from a preset, with its own generations and backup history. Several independent worlds may use the same preset. A world does not have one release for its entire lifetime; each generation carries its own release state.
 

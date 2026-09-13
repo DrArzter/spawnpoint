@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 
-# CodeBuild entrypoint for projecting one configuration repository into the
-# control-plane preset catalog. The checkout is data: no script from it is
-# executed. Exact commits make every visible preset traceable to Git.
+# CodeBuild entrypoint for projecting one verified preset snapshot into the
+# control-plane catalog. The snapshot is data: no script from it is executed.
 
 set -Eeuo pipefail
 
@@ -10,30 +9,10 @@ repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/_config-source.sh
 source "${repository_root}/scripts/_config-source.sh"
 
-for variable in CONFIG_COMMIT CONFIG_SOURCE_KEY CONFIG_SOURCE_SHA256 RELEASE_BUCKET CONFIG_REPOSITORY_URL; do
-  [[ -n "${!variable:-}" && "${!variable}" != "REQUIRED_BY_CALLER" ]] || {
-    printf 'error: %s is required\n' "${variable}" >&2
-    exit 1
-  }
-done
-
-[[ "${CONFIG_COMMIT}" =~ ^[0-9a-f]{40}$ ]] || {
-  printf 'error: CONFIG_COMMIT must be a full lowercase Git SHA\n' >&2
+[[ -n "${RELEASE_BUCKET:-}" && "${RELEASE_BUCKET}" != "REQUIRED_BY_CALLER" ]] || {
+  printf 'error: RELEASE_BUCKET is required\n' >&2
   exit 1
 }
-
-case "${CONFIG_REPOSITORY_URL}" in
-  https://github.com/DrArzter/my-docker-minecraft-server-config | \
-  https://github.com/DrArzter/my-docker-minecraft-server-config.git | \
-  https://github.com/DrArzter/my-docker-factorio-server-config | \
-  https://github.com/DrArzter/my-docker-factorio-server-config.git | \
-  https://github.com/DrArzter/my-docker-zomboid-server-config | \
-  https://github.com/DrArzter/my-docker-zomboid-server-config.git) ;;
-  *)
-    printf 'error: untrusted CONFIG_REPOSITORY_URL: %s\n' "${CONFIG_REPOSITORY_URL}" >&2
-    exit 1
-    ;;
-esac
 
 for command in awk aws find grep jq sha256sum sort tar; do
   command -v "${command}" >/dev/null 2>&1 || {
@@ -50,6 +29,8 @@ trap cleanup EXIT
 
 materialize_config_source "${workspace}"
 checkout="${CONFIG_CHECKOUT}"
+source_origin="${CONFIG_SOURCE_ORIGIN}"
+source_revision="${CONFIG_SOURCE_REVISION}"
 
 mapfile -t profiles < <(find "${checkout}/profiles" -mindepth 2 -maxdepth 2 -type f -name profile.json -print | sort)
 [[ "${#profiles[@]}" -gt 0 ]] || {
@@ -96,9 +77,10 @@ done
 catalog="${workspace}/catalog.json"
 jq -s \
   --arg game "${game}" \
-  --arg repository "${CONFIG_REPOSITORY_URL%.git}" \
-  --arg commit "${CONFIG_COMMIT}" \
-  '{schema_version: 2, game: $game, source: {repository: $repository, commit: $commit}, presets: .}' \
+  --arg kind "${CONFIG_SOURCE_KIND}" \
+  --arg origin "${source_origin}" \
+  --arg revision "${source_revision}" \
+  '{schema_version: 2, game: $game, source: {kind: $kind, origin: $origin, revision: $revision, repository: $origin, commit: $revision}, presets: .}' \
   "${entries}" >"${catalog}"
 
 # Preserve a successful build for an unchanged profile. A repository commit
@@ -130,6 +112,8 @@ aws s3api put-object \
 
 printf 'result=preset_catalog_ready\n'
 printf 'game=%s\n' "${game}"
-printf 'config_commit=%s\n' "${CONFIG_COMMIT}"
+printf 'source_kind=%s\n' "${CONFIG_SOURCE_KIND}"
+printf 'source_revision=%s\n' "${source_revision}"
+printf 'config_commit=%s\n' "${source_revision}"
 printf 'presets=%s\n' "${#profiles[@]}"
 printf 'catalog_key=%s\n' "${catalog_key}"

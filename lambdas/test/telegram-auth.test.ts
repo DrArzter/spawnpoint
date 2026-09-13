@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { createHash, createHmac, generateKeyPairSync, sign } from "node:crypto";
 import test from "node:test";
 
+import { authenticateWith } from "../src/access/login-provider.ts";
 import { issueSessionToken, legacySessionLifetimeSeconds, verifyLoginWidget, verifyMiniAppInitData, verifyOidcIdToken, verifySessionToken } from "../src/access/telegram-auth.ts";
+import { createTelegramLoginProvider } from "../src/access/telegram-login-provider.ts";
 
 const botToken = "123456789:test-bot-token-kept-in-ssm";
 const now = 1_800_000_000;
@@ -45,6 +47,45 @@ test("verifies a fresh Telegram Login Widget payload", () => {
   });
   assert.equal(verifyLoginWidget(widgetPayload({ auth_date: String(now - 601) }), botToken, now), null);
   assert.equal(verifyLoginWidget({ ...widgetPayload(), username: "attacker" }, botToken, now), null);
+});
+
+test("the Telegram adapter produces a provider-neutral principal", async () => {
+  let botTokenReads = 0;
+  const provider = createTelegramLoginProvider({
+    oidcClientId: "",
+    nowSeconds: () => now,
+    botToken: async () => {
+      botTokenReads += 1;
+      return botToken;
+    },
+  });
+
+  assert.deepEqual(await authenticateWith(provider, { login: widgetPayload() }), {
+    provider: "telegram",
+    subject: "1780660807",
+    displayName: "DrArzter",
+    username: "drarzter",
+    photoUrl: null,
+  });
+  assert.equal(botTokenReads, 1);
+  assert.equal(await authenticateWith(provider, { password: "not-a-telegram-credential" }), null);
+  assert.equal(botTokenReads, 1, "irrelevant attempts must not fetch a provider secret");
+});
+
+test("the login port rejects an adapter that crosses provider boundaries", async () => {
+  await assert.rejects(
+    authenticateWith({
+      id: "telegram",
+      authenticate: async () => ({
+        provider: "discord",
+        subject: "123",
+        displayName: "Mismatch",
+        username: null,
+        photoUrl: null,
+      }),
+    }, {}),
+    /returned principal for discord/,
+  );
 });
 
 test("verifies Telegram Mini App initData with the WebAppData key derivation", () => {

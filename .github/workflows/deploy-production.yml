@@ -92,7 +92,7 @@ jobs:
 
       - name: Assume the read-only production plan role
         if: needs.plan.outputs.manual_terraform_roots != '[]'
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}

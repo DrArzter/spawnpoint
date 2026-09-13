@@ -19,6 +19,10 @@ Secrets live in SSM; identities and roles live in the shared DynamoDB access tab
 - `/spawnpoint/bot/webhook-secret` (`SecureString`)
 - `/spawnpoint/bot/chat-ids` (`String`, reserved for the later notifier)
 
+Set `mini_app_url` explicitly to the public HTTPS endpoint for this installation. The hosted pipeline reads it from the
+`SPAWNPOINT_MINI_APP_URL` repository variable; self-hosted deployments may use their custom domain, generated CloudFront
+URL or another public HTTPS endpoint.
+
 Build and verify before planning:
 
 ```bash
@@ -29,7 +33,7 @@ npm run build
 
 cd ../infra/terraform-bot
 terraform init -backend-config=backend.hcl
-terraform plan -out=bot.tfplan
+terraform plan -var='mini_app_url=https://spawnpoint.example.dev/' -out=bot.tfplan
 terraform show bot.tfplan
 terraform apply bot.tfplan
 ```

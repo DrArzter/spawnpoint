@@ -1,6 +1,7 @@
 # web
 
-The static site on S3 behind CloudFront — `https://dwk99t8cin0cf.cloudfront.net/`. One React/Vite build serves two
+The static site on S3 behind CloudFront is published at `https://spawnpoint.drarzter.dev/`; the provider hostname remains
+available temporarily as a migration and diagnostic path. One React/Vite build serves two
 entry points: Telegram's embedded **Mini App**, which authenticates with the signed `initData` Telegram supplies, and an
 ordinary **browser panel**, which signs in through Telegram's Login Widget. Both exchange that proof for a short-lived
 Spawnpoint session at the access API and hold no AWS credential of their own. See

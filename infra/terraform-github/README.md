@@ -103,9 +103,10 @@ per-root add/change/delete/read counts. Reruns update those comments instead of 
 The environment also needs `TF_VAR_ALERT_EMAIL` and `TF_VAR_BOOTSTRAP_OWNER_TELEGRAM_ID` as environment secrets
 for the two Terraform roots that declare those sensitive inputs.
 
-Repository variables hold shared, non-secret deployment configuration: `AWS_REGION`, `TF_STATE_BUCKET` and
-`SPAWNPOINT_DOMAIN`. Reusable workflows project them into the AWS SDK, Terraform backend and `TF_VAR_*` interfaces; a
-root must not duplicate their production values as defaults.
+Repository variables hold shared, non-secret deployment configuration: `AWS_REGION`, `TF_STATE_BUCKET`,
+`SPAWNPOINT_DOMAIN`, `SPAWNPOINT_MINI_APP_URL`, `SPAWNPOINT_LEGACY_PANEL_URL` and `TELEGRAM_OIDC_CLIENT_ID`. Reusable
+workflows project them into the AWS SDK, Terraform backend and `TF_VAR_*` interfaces; a root must not duplicate their
+production values as defaults.
 
 The workflow uploads a content-addressed snapshot of the selected Git commit to the release bucket. This lets the
 same pipeline consume public or private config repositories without a long-lived GitHub credential in CodeBuild.

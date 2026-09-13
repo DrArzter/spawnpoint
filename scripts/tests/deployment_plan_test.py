@@ -95,6 +95,11 @@ class DeploymentPlanTest(unittest.TestCase):
         self.assertEqual(plan["terraform_roots"], ["infra/terraform-storage"])
         self.assertEqual(plan["terraform_plan_roots"], ["infra/terraform-storage"])
 
+    def test_domain_root_is_planned_and_deployed_before_service_roots(self) -> None:
+        plan = make_plan(["infra/terraform-web/web.tf", "infra/terraform-domain/domain.tf"])
+        self.assertEqual(plan["terraform_roots"], ["infra/terraform-domain", "infra/terraform-web"])
+        self.assertEqual(plan["terraform_plan_roots"], ["infra/terraform-domain", "infra/terraform-web"])
+
 
 if __name__ == "__main__":
     unittest.main()

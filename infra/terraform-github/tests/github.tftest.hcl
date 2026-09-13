@@ -70,6 +70,14 @@ run "plan_role_is_owner_reviewed_and_separate_from_deploy" {
   }
 
   assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_plan_iam.statement :
+      contains(statement.actions, "route53:Get*") && contains(statement.actions, "route53:List*")
+    ])
+    error_message = "The plan identity must be able to refresh public DNS without changing it."
+  }
+
+  assert {
     condition = alltrue([
       for statement in data.aws_iam_policy_document.github_plan_iam.statement :
       !contains(statement.actions, "s3:GetObject") ||
@@ -110,6 +118,14 @@ run "deployment_role_trusts_only_the_production_environment" {
       ]))) == 0
     ])
     error_message = "The host, its volume, the buckets, the tables, the OIDC trust, the distribution, the bot URL and the guardrails stay undeletable by the pipeline."
+  }
+
+  assert {
+    condition = alltrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      !contains(statement.actions, "route53:DeleteHostedZone")
+    ])
+    error_message = "The production pipeline must never delete the authoritative public DNS zone."
   }
 
   assert {

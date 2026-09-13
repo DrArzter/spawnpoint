@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 TF_CORE = "infra/terraform"
+TF_DOMAIN = "infra/terraform-domain"
 TF_RELEASES = "infra/terraform-releases"
 TF_OPERATIONS = "infra/terraform-operations"
 TF_ACCESS_API = "infra/terraform-access-api"
@@ -22,6 +23,7 @@ TF_BOOTSTRAP = "infra/terraform-bootstrap"
 TERRAFORM_ROOTS = (
     "infra/terraform-guardrails",
     "infra/terraform-storage",
+    TF_DOMAIN,
     TF_CORE,
     TF_RELEASES,
     TF_OPERATIONS,

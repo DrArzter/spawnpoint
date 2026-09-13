@@ -16,6 +16,9 @@ prevents the role from changing itself. Production Terraform additionally refuse
 replacement unless the root's `destroy-allowed.txt` names the exact address — see
 [scripts/README.md](../../scripts/README.md#allowing-a-destroy).
 
+The role may create the delegated Spawnpoint Route 53 zone and change records inside managed zones, but it cannot
+delete a hosted zone. The parent domain and its registration remain at Namecheap and outside AWS identity entirely.
+
 The plan role trusts only the immutable Spawnpoint repository identity and its owner-reviewed `production-plan`
 environment. It can read Terraform state and infrastructure metadata, but cannot write a state lock, mutate AWS, or
 apply a plan. Pull requests use it only after an owner approves the environment gate; the resulting required check
@@ -99,6 +102,10 @@ per-root add/change/delete/read counts. Reruns update those comments instead of 
 
 The environment also needs `TF_VAR_ALERT_EMAIL` and `TF_VAR_BOOTSTRAP_OWNER_TELEGRAM_ID` as environment secrets
 for the two Terraform roots that declare those sensitive inputs.
+
+Repository variables hold shared, non-secret deployment configuration: `AWS_REGION`, `TF_STATE_BUCKET` and
+`SPAWNPOINT_DOMAIN`. Reusable workflows project them into the AWS SDK, Terraform backend and `TF_VAR_*` interfaces; a
+root must not duplicate their production values as defaults.
 
 The workflow uploads a content-addressed snapshot of the selected Git commit to the release bucket. This lets the
 same pipeline consume public or private config repositories without a long-lived GitHub credential in CodeBuild.

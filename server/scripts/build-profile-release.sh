@@ -98,6 +98,7 @@ else
 fi
 
 game_version="$(jq -r --arg field "${PROFILE_VERSION_FIELD}" '.[$field]' "${profile}")"
+runtime_image="$(jq -r '.runtime.image // empty' "${profile}")"
 # Every game's manifest carries its version in the minecraft_version field
 # (the recorded wart in ADR-0034), and a game that is its own loader repeats
 # the engine version there rather than inventing a second vocabulary.
@@ -111,6 +112,7 @@ RELEASE_GAME="${game}" \
 RELEASE_PROFILE_ID="${profile_id}" \
 RELEASE_PROFILE_REPOSITORY="${profile_repository}" \
 RELEASE_PROFILE_COMMIT="${profile_commit}" \
+RELEASE_RUNTIME_IMAGE="${runtime_image}" \
   "${SCRIPT_DIR}/build-release-manifest.sh" \
     "${release}" \
     "${game_version}" \

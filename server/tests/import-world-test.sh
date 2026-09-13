@@ -102,7 +102,8 @@ mkdir -p -- "${fixture}/fdata/saves" "${fixture}/fpack/mods"
 printf 'save bytes\n' >"${fixture}/fdata/saves/spawnpoint.zip"
 printf 'mod zip bytes\n' >"${fixture}/fpack/mods/alien-biomes_0.6.8.zip"
 factorio_output="$(
-  "${REPOSITORY_ROOT}/scripts/import-world.sh" \
+  RELEASE_RUNTIME_IMAGE=registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+    "${REPOSITORY_ROOT}/scripts/import-world.sh" \
     "${fixture}/fdata" factorio "${fixture}/fpack/mods" 3.0 2.0.77 2.0.77 factorio
 )"
 grep -qx 'result=imported' <<<"${factorio_output}"

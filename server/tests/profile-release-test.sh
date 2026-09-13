@@ -88,7 +88,7 @@ mkdir -p -- "${factorio_repo}/profiles/factorio-modded/extras" "${fixture}/facto
 git -C "${factorio_repo}" init --quiet
 git -C "${factorio_repo}" remote add origin https://github.com/example/factorio-config.git
 cat >"${factorio_repo}/profiles/factorio-modded/profile.json" <<'EOF'
-{"schema_version":1,"game":"factorio","id":"factorio-modded","factorio_version":"2.0.77","loader":{"type":"factorio","version":null},"mods":{"source":"extras/mod-pins.txt"}}
+{"schema_version":1,"game":"factorio","id":"factorio-modded","factorio_version":"2.0.77","runtime":{"image":"registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"loader":{"type":"factorio","version":null},"mods":{"source":"extras/mod-pins.txt"}}
 EOF
 printf 'graftorio2:0.4.20\n' >"${factorio_repo}/profiles/factorio-modded/extras/mod-pins.txt"
 git -C "${factorio_repo}" add profiles
@@ -111,6 +111,7 @@ jq -e \
   --arg commit "${factorio_commit}" '
     .game == "factorio"
     and .minecraft_version == "2.0.77"
+    and .runtime.image == "registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     and .loader == {type: "factorio", version: "2.0.77"}
     and .source_profile == {
       id: "factorio-modded",
@@ -119,7 +120,15 @@ jq -e \
     }
     and (.server.mods | length) == 1
     and .server.mods[0].file == "graftorio2_0.4.20.zip"
-  ' "${factorio_manifest}" >/dev/null
+' "${factorio_manifest}" >/dev/null
+
+jq 'del(.runtime)' "${factorio_repo}/profiles/factorio-modded/profile.json" >"${fixture}/factorio-without-runtime.json"
+cp -- "${fixture}/factorio-without-runtime.json" "${factorio_repo}/profiles/factorio-modded/profile.json"
+git -C "${factorio_repo}" add profiles
+git -C "${factorio_repo}" -c user.name=Spawnpoint-Test -c user.email=spawnpoint@example.invalid commit --quiet -m 'missing runtime image'
+expect_failure "a factorio profile without an immutable runtime image" \
+  "${scripts}/build-profile-release.sh" \
+    "${factorio_repo}/profiles/factorio-modded" 2.1 "${fixture}/factorio-mods" "${fixture}/factorio-no-runtime.json"
 
 # A vanilla Zomboid preset is a first-class empty immutable release. Workshop
 # resolution is not implied by this path and will get its own resolver tests.

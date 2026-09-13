@@ -19,6 +19,7 @@ fi
 # shellcheck source=../games/_dispatch.sh
 source "${SERVER_DIR}/games/_dispatch.sh"
 resolve_game
+prepare_game_runtime
 export SERVER_COMPOSE_SERVICE="${SERVER_COMPOSE_SERVICE:-${GAME_COMPOSE_SERVICE}}"
 
 # shellcheck source=_common.sh

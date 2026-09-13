@@ -51,6 +51,11 @@ jq -e '
   (.game | type == "string") and
   (.release | type == "string") and
   (.source_profile.id | type == "string") and
+  (if .game == "factorio"
+    then (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$"))
+    else ((has("runtime") | not) or
+      (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$")))
+  end) and
   (.server.mods | type == "array") and
   all(.server.mods[];
     (.file | type == "string" and test("^[^/\\\\]+\\.(jar|zip)$")) and

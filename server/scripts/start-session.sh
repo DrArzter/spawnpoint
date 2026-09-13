@@ -168,6 +168,9 @@ if [[ -n "${release_bucket}" ]]; then
       "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" \
         "${SPAWNPOINT_WORLD_MODS_DIRECTORY:-${SERVER_DIR}/games/${GAME_ID}/data/mods}" >&2
     fi
+    if declare -F game_prepare_runtime >/dev/null; then
+      game_prepare_runtime "${payload_dir}/manifest.json"
+    fi
     reconcile_status="applied"
   elif [[ $? -eq 3 ]]; then
     reconcile_status="skipped_no_pointer"

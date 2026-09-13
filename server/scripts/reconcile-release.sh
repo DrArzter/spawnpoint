@@ -48,6 +48,11 @@ if ! jq -e '
   (((.game // "minecraft") == "minecraft" and .loader.type == "forge") or
    ((.game // "minecraft") == "factorio" and .loader.type == "factorio")) and
   (.loader.version | type == "string" and length > 0) and
+  (if (.game // "minecraft") == "factorio"
+    then (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$"))
+    else ((has("runtime") | not) or
+      (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$")))
+  end) and
   (.created_at | type == "string" and length > 0) and
   (.created_by | type == "string" and length > 0) and
   (.changelog | type == "string") and

@@ -35,6 +35,8 @@ Environment:
   IMPORT_ACTOR       recorded in the manifest and pointer; defaults to import
   RELEASE_PROFILE_ID, RELEASE_PROFILE_REPOSITORY and RELEASE_PROFILE_COMMIT
                      required release provenance; use the imported world's preset and exact Git revision
+  RELEASE_RUNTIME_IMAGE
+                     required for games whose runtime is selected by the release; use a digest-addressed image
 EOF
 }
 

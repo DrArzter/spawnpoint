@@ -52,6 +52,7 @@ run "bot_is_an_isolated_webhook" {
 
   variables {
     enable_notifications = false
+    mini_app_url          = "https://spawnpoint.example.dev/"
   }
 
   assert {
@@ -96,6 +97,11 @@ run "bot_is_an_isolated_webhook" {
   assert {
     condition     = aws_lambda_function.bot.environment[0].variables["BOT_TOKEN_PARAMETER"] == "/spawnpoint/bot/token"
     error_message = "Secrets stay in Parameter Store and are referenced only by name."
+  }
+
+  assert {
+    condition     = aws_lambda_function.bot.environment[0].variables["MINI_APP_URL"] == "https://spawnpoint.example.dev/"
+    error_message = "The bot must publish the explicitly configured Mini App URL."
   }
 
   assert {

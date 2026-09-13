@@ -173,7 +173,7 @@ mkdir -p -- "${config}/profiles/factorio-modded/extras"
 git -C "${config}" init --quiet
 git -C "${config}" remote add origin https://github.com/example/factorio-config.git
 cat >"${config}/profiles/factorio-modded/profile.json" <<'EOF'
-{"schema_version":1,"game":"factorio","id":"factorio-modded","factorio_version":"2.0.77","loader":{"type":"factorio","version":null},"mods":{"source":"extras/mod-pins.txt"}}
+{"schema_version":1,"game":"factorio","id":"factorio-modded","factorio_version":"2.0.77","runtime":{"image":"registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"loader":{"type":"factorio","version":null},"mods":{"source":"extras/mod-pins.txt"}}
 EOF
 cp -- "${fixture}/factorio.list" "${config}/profiles/factorio-modded/extras/mod-pins.txt"
 git -C "${config}" add profiles

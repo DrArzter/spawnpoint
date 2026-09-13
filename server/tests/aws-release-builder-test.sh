@@ -144,7 +144,7 @@ factorio_config="${fixture}/factorio-config"
 mkdir -p -- "${factorio_config}/profiles/factorio-vanilla/extras"
 git -C "${factorio_config}" init --quiet
 cat >"${factorio_config}/profiles/factorio-vanilla/profile.json" <<'EOF'
-{"schema_version":1,"game":"factorio","id":"factorio-vanilla","factorio_version":"2.0.77","loader":{"type":"factorio","version":null},"mods":{"source":"extras/mod-pins.txt"}}
+{"schema_version":1,"game":"factorio","id":"factorio-vanilla","factorio_version":"2.0.77","runtime":{"image":"registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"loader":{"type":"factorio","version":null},"mods":{"source":"extras/mod-pins.txt"}}
 EOF
 printf 'graftorio2:0.4.20\n' >"${factorio_config}/profiles/factorio-vanilla/extras/mod-pins.txt"
 git -C "${factorio_config}" add profiles
@@ -187,6 +187,7 @@ factorio_manifest="${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/factorio/fa
 jq -e '
   .game == "factorio"
   and .loader == {type: "factorio", version: "2.0.77"}
+  and .runtime.image == "registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   and (.server.mods | length) == 1
 ' "${factorio_manifest}" >/dev/null
 [[ -f "${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/factorio/factorio-vanilla/5.0/mods/graftorio2_0.4.20.zip" ]]

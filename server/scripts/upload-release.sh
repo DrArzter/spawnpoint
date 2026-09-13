@@ -40,6 +40,11 @@ jq -e '
   (.game | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
   (.release | type == "string" and test("^[0-9]+\\.[0-9]+$")) and
   (.source_profile.id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
+  (if .game == "factorio"
+    then (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$"))
+    else ((has("runtime") | not) or
+      (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$")))
+  end) and
   (.server.mods | type == "array") and
   all(.server.mods[];
     (.file | type == "string" and test("^[^/\\\\]+\\.(jar|zip)$")) and
@@ -183,7 +188,7 @@ publish_pack() {
 # created_at and the changelog are descriptive, and two imports of the same
 # pack legitimately differ there (see server/releases/README.md).
 canonical_manifest() {
-  jq -S '{game: (.game // "minecraft"), release, minecraft_version, loader, server}' "$1"
+  jq -S '{game: (.game // "minecraft"), release, minecraft_version, loader, runtime, server}' "$1"
 }
 
 if head_release_object "${manifest_key}" >/dev/null 2>&1; then

@@ -31,6 +31,7 @@ aws_region="${AWS_REGION:-$(read_env_value AWS_REGION)}"
 # shellcheck source=../games/_dispatch.sh
 source "${SERVER_DIR}/games/_dispatch.sh"
 resolve_game
+prepare_game_runtime
 
 if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
   export SERVER_DATA_DIR="${WORLD_DATA_DIRECTORY}"

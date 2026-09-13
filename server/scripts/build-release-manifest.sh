@@ -11,6 +11,8 @@ Environment:
   RELEASE_CHANGELOG   Short release description (default: Baseline release)
   RELEASE_PROFILE_ID, RELEASE_PROFILE_REPOSITORY, RELEASE_PROFILE_COMMIT
                       Optional all-or-nothing provenance for a source profile
+  RELEASE_RUNTIME_IMAGE
+                      Optional immutable container reference selected by the profile
 EOF
 }
 
@@ -51,6 +53,7 @@ esac
 profile_id="${RELEASE_PROFILE_ID:-}"
 profile_repository="${RELEASE_PROFILE_REPOSITORY:-}"
 profile_commit="${RELEASE_PROFILE_COMMIT:-}"
+runtime_image="${RELEASE_RUNTIME_IMAGE:-}"
 
 command -v jq >/dev/null 2>&1 || {
   printf 'error: required command not found: jq\n' >&2
@@ -85,6 +88,14 @@ if (( profile_fields == 3 )); then
     printf 'error: source profile commit must be a full lowercase Git SHA\n' >&2
     exit 1
   }
+fi
+if [[ -n "${runtime_image}" && ! "${runtime_image}" =~ ^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$ ]]; then
+  printf 'error: runtime image must be a digest-addressed container reference\n' >&2
+  exit 1
+fi
+if [[ "${release_game}" == "factorio" && -z "${runtime_image}" ]]; then
+  printf 'error: factorio releases require RELEASE_RUNTIME_IMAGE\n' >&2
+  exit 1
 fi
 [[ ! -e "${output_manifest}" && ! -L "${output_manifest}" ]] || {
   printf 'error: immutable release manifest already exists: %s\n' "${output_manifest}" >&2
@@ -130,6 +141,7 @@ jq -s \
   --arg profile_id "${profile_id}" \
   --arg profile_repository "${profile_repository}" \
   --arg profile_commit "${profile_commit}" \
+  --arg runtime_image "${runtime_image}" \
   '({
     schema_version: 1,
     game: $game,
@@ -140,7 +152,9 @@ jq -s \
     created_by: $created_by,
     changelog: $changelog,
     server: {mods: .}
-  } + if $profile_id == "" then {} else {
+  } + if $runtime_image == "" then {} else {
+    runtime: {image: $runtime_image}
+  } end + if $profile_id == "" then {} else {
     source_profile: {
       id: $profile_id,
       repository: $profile_repository,

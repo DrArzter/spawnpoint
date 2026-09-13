@@ -27,6 +27,7 @@ profile_game_facts() {
       PROFILE_LOADER_VERSIONED=true
       PROFILE_MOD_EXTENSION="jar"
       PROFILE_RESOLVER="curseforge"
+      PROFILE_RUNTIME_IMAGE_REQUIRED=false
       ;;
     factorio)
       PROFILE_VERSION_FIELD="factorio_version"
@@ -36,6 +37,7 @@ profile_game_facts() {
       PROFILE_LOADER_VERSIONED=false
       PROFILE_MOD_EXTENSION="zip"
       PROFILE_RESOLVER="factorio-portal"
+      PROFILE_RUNTIME_IMAGE_REQUIRED=true
       ;;
     zomboid)
       PROFILE_VERSION_FIELD="zomboid_build"
@@ -45,6 +47,7 @@ profile_game_facts() {
       # separate future adapter, but the release shape already has a safe axis.
       PROFILE_MOD_EXTENSION="zip"
       PROFILE_RESOLVER="zomboid-workshop"
+      PROFILE_RUNTIME_IMAGE_REQUIRED=false
       ;;
     *)
       printf 'error: unsupported profile game: %s\n' "${game}" >&2
@@ -59,7 +62,8 @@ validate_profile_metadata() {
   jq -e \
     --arg version_field "${PROFILE_VERSION_FIELD}" \
     --arg loader_type "${PROFILE_LOADER_TYPE}" \
-    --argjson loader_versioned "${PROFILE_LOADER_VERSIONED}" '
+    --argjson loader_versioned "${PROFILE_LOADER_VERSIONED}" \
+    --argjson runtime_image_required "${PROFILE_RUNTIME_IMAGE_REQUIRED}" '
     .schema_version == 1 and
     (.id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
     (.[$version_field] | type == "string" and length > 0) and
@@ -67,6 +71,11 @@ validate_profile_metadata() {
     (if $loader_versioned
       then (.loader.version | type == "string" and length > 0)
       else .loader.version == null
+    end) and
+    (if $runtime_image_required
+      then (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$"))
+      else ((has("runtime") | not) or
+        (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$")))
     end) and
     (.mods.source == null or (.mods.source | type == "string" and length > 0))
   ' "${profile}" >/dev/null || {

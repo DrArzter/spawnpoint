@@ -28,6 +28,40 @@ FACTORIO_DATA_DIR="${FACTORIO_DATA_DIR:-${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${FAC
 FACTORIO_RCON_HOST="${FACTORIO_RCON_HOST:-127.0.0.1}"
 FACTORIO_RCON_PORT="${FACTORIO_RCON_PORT:-27015}"
 
+# The preset release, not Spawnpoint, selects the immutable container image
+# that opens this save. Version metadata still has to agree with itself; the
+# digest-addressed image is carried independently as runtime.image.
+game_prepare_runtime() {
+  local manifest="$1" version loader_version image
+  version="$(jq -r 'select(.game == "factorio") | .minecraft_version // empty' "${manifest}")"
+  loader_version="$(jq -r 'select(.loader.type == "factorio") | .loader.version // empty' "${manifest}")"
+  image="$(jq -r '.runtime.image // empty' "${manifest}")"
+  [[ "${version}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ && "${loader_version}" == "${version}" ]] || {
+    printf 'error: factorio release does not select one valid engine version: %s\n' "${manifest}" >&2
+    return 1
+  }
+  [[ "${image}" =~ ^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$ ]] || {
+    printf 'error: factorio release does not select a digest-addressed runtime image: %s\n' "${manifest}" >&2
+    return 1
+  }
+  export SPAWNPOINT_GAME_IMAGE="${image}"
+}
+
+# Stop, status and idle probes are separate SSM commands. Recover the selected
+# engine from the reconciled manifest instead of relying on process-local state
+# left by start-session.sh.
+game_prepare_installed_runtime() {
+  [[ -n "${SPAWNPOINT_GAME_IMAGE:-}" ]] && return 0
+  local mods_dir manifest
+  mods_dir="${SPAWNPOINT_WORLD_MODS_DIRECTORY:-${FACTORIO_DATA_DIR}/mods}"
+  manifest="${mods_dir}/.spawnpoint-release.json"
+  [[ -f "${manifest}" && ! -L "${manifest}" ]] || {
+    printf 'error: installed Factorio release manifest not found: %s\n' "${manifest}" >&2
+    return 1
+  }
+  game_prepare_runtime "${manifest}"
+}
+
 game_query_players_raw() {
   local password_file="${FACTORIO_DATA_DIR}/config/rconpw"
   [[ -s "${password_file}" ]] || {

@@ -21,6 +21,8 @@
 #   game_parse_player_count    parser: raw on stdin -> integer on stdout
 #   game_save_paths            print NUL-separated paths under the data dir to archive
 #   game_save_sentinel         succeed only if the data dir holds a real save
+#   game_prepare_runtime       optional: derive runtime inputs from a verified release manifest
+#   game_prepare_installed_runtime optional: restore those inputs for later lifecycle commands
 #   game_prepare_session       optional: last-mile files before the container starts
 #
 # shellcheck shell=bash
@@ -55,5 +57,14 @@ resolve_game() {
     load_game "${WORLD_GAME}"
   else
     load_game "${SPAWNPOINT_GAME:-minecraft}"
+  fi
+}
+
+# Lifecycle commands are separate processes. Let a game reconstruct any
+# Compose inputs derived from the installed release before they source the
+# shared Docker helpers. Games without such inputs have nothing to do.
+prepare_game_runtime() {
+  if declare -F game_prepare_installed_runtime >/dev/null; then
+    game_prepare_installed_runtime
   fi
 }

@@ -189,14 +189,38 @@ export RELEASE_PROFILE_COMMIT="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 mkdir -p -- "${fixture}/factorio-pack/mods"
 printf 'factorio mod zip bytes\n' >"${fixture}/factorio-pack/mods/example-mod_1.0.0.zip"
 printf 'a jar has no business here\n' >"${fixture}/factorio-pack/mods/stray.jar"
-RELEASE_GAME=factorio "${SCRIPTS}/build-release-manifest.sh" \
-  9.0 2.0.55 factorio "${fixture}/factorio-pack/mods" "${fixture}/factorio-pack/manifest.json" >/dev/null
+RELEASE_GAME=factorio \
+RELEASE_RUNTIME_IMAGE=registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  "${SCRIPTS}/build-release-manifest.sh" \
+  9.0 2.0.55 2.0.55 "${fixture}/factorio-pack/mods" "${fixture}/factorio-pack/manifest.json" >/dev/null
 jq -e '
   .game == "factorio" and
+  .runtime.image == "registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and
   .loader.type == "factorio" and
   (.server.mods | length == 1) and
   .server.mods[0].file == "example-mod_1.0.0.zip"
 ' "${fixture}/factorio-pack/manifest.json" >/dev/null
+
+# The runtime image is selected from the same verified manifest as the mods;
+# a mismatched loader version cannot silently boot a different engine.
+(
+  source "${GAMES}/factorio/game.sh"
+  game_prepare_runtime "${fixture}/factorio-pack/manifest.json"
+  [[ "${SPAWNPOINT_GAME_IMAGE}" == "registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ]]
+)
+mkdir -p -- "${fixture}/factorio-installed"
+cp -- "${fixture}/factorio-pack/manifest.json" "${fixture}/factorio-installed/.spawnpoint-release.json"
+(
+  unset SPAWNPOINT_GAME_IMAGE
+  export SPAWNPOINT_WORLD_MODS_DIRECTORY="${fixture}/factorio-installed"
+  source "${GAMES}/factorio/game.sh"
+  source "${GAMES}/_dispatch.sh"
+  prepare_game_runtime
+  [[ "${SPAWNPOINT_GAME_IMAGE}" == "registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ]]
+)
+jq '.loader.version = "2.0.54"' "${fixture}/factorio-pack/manifest.json" >"${fixture}/factorio-pack/mismatched-manifest.json"
+expect_failure "a factorio runtime whose manifest disagrees with its loader" \
+  bash -c "source '${GAMES}/factorio/game.sh'; game_prepare_runtime '${fixture}/factorio-pack/mismatched-manifest.json'"
 
 RELEASE_SOURCE_DIR="${fixture}/factorio-pack" \
   "${SCRIPTS}/upload-release.sh" "${fixture}/factorio-pack/manifest.json" >/dev/null
@@ -208,8 +232,10 @@ grep -qx 'result=reconciled' <<<"${reconcile_output}"
 cmp -- "${fixture}/factorio-pack/mods/example-mod_1.0.0.zip" "${fixture}/factorio-live/mods/example-mod_1.0.0.zip"
 
 mkdir -p -- "${fixture}/empty/mods"
-RELEASE_GAME=factorio "${SCRIPTS}/build-release-manifest.sh" \
-  9.1 2.0.55 factorio "${fixture}/empty/mods" "${fixture}/empty/manifest.json" >/dev/null
+RELEASE_GAME=factorio \
+RELEASE_RUNTIME_IMAGE=registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  "${SCRIPTS}/build-release-manifest.sh" \
+  9.1 2.0.55 2.0.55 "${fixture}/empty/mods" "${fixture}/empty/manifest.json" >/dev/null
 RELEASE_SOURCE_DIR="${fixture}/empty" \
   "${SCRIPTS}/upload-release.sh" "${fixture}/empty/manifest.json" >/dev/null
 download_output="$("${SCRIPTS}/download-release.sh" factorio adapter-test 9.1 "${fixture}/cache/9.1")"

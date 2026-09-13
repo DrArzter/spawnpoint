@@ -20,6 +20,7 @@ render_game() {
   done
   CF_API_KEY=unused \
   RCON_PASSWORD=unused \
+  SPAWNPOINT_GAME_IMAGE=registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
   GRAFANA_ADMIN_PASSWORD=unused \
   PROMETHEUS_BIND_ADDRESS=127.0.0.1 \
   GRAFANA_BIND_ADDRESS=0.0.0.0 \
@@ -57,6 +58,7 @@ jq -e '
   (.services | has("prometheus")) and (.services | has("grafana"))
   and (.services | has("node-exporter")) and (.services | has("cadvisor"))
   and (.services | has("factorio"))
+  and .services.factorio.image == "registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   and (.services | has("minecraft-exporter") | not)
   and (.services | has("mc") | not)
   and ([.services.prometheus.volumes[].target] | index("/etc/prometheus/scrape/minecraft.yml") == null)

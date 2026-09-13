@@ -1,10 +1,10 @@
 # Factorio session: the first non-Minecraft tenant. Same lifecycle, same host,
 # selected per world by the catalog's game field (ADR-0023: one world active
-# at a time). The image follows ADR-0005's rule — reused packaging, and
-# `stable` moves, so pin a digest before this world's first AWS session.
+# at a time). The image follows ADR-0005's rule — reused packaging — while the
+# verified release manifest selects the immutable image for this session.
 services:
   factorio:
-    image: factoriotools/factorio:stable
+    image: "${SPAWNPOINT_GAME_IMAGE:?a verified Factorio release must select the runtime image}"
     ports:
       # The game speaks UDP; players arrive over the overlay, so the port is
       # never public (mode C, ADR-0024).

@@ -61,7 +61,9 @@ grep -qx 'pack=uploaded' <<<"${backfill}"
 #     that cannot reach the portal still needs the exact files ---
 mkdir -p -- "${fixture}/factorio/mods"
 printf 'zip bytes\n' >"${fixture}/factorio/mods/alien-biomes_0.6.8.zip"
-RELEASE_GAME=factorio "${SCRIPTS}/build-release-manifest.sh" 7.1 2.0.77 2.0.77 \
+RELEASE_GAME=factorio \
+RELEASE_RUNTIME_IMAGE=registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  "${SCRIPTS}/build-release-manifest.sh" 7.1 2.0.77 2.0.77 \
   "${fixture}/factorio/mods" "${fixture}/factorio/manifest.json" >/dev/null
 factorio_output="$(
   RELEASE_SOURCE_DIR="${fixture}/factorio" "${SCRIPTS}/upload-release.sh" "${fixture}/factorio/manifest.json"

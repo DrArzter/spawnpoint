@@ -1,8 +1,8 @@
 name: Check
 
-# Every local rung of the evidence ladder, on the same command a developer runs.
-# This workflow deliberately holds no cloud identity or secrets. It can update
-# its own pull-request summary comment, but create nothing outside GitHub.
+# The local ladder remains one command. CI runs its independent groups in
+# parallel, then preserves one stable required check for branch protection and
+# the production workflow_run gate.
 
 on:
   push:
@@ -11,26 +11,41 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
   group: check-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: scripts/check.sh
+  static:
+    name: Static checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-
+    timeout-minutes: 10
+    outputs:
+      terraform-roots: ${{ steps.roots.outputs.value }}
     steps:
       - name: Check out the commit under test
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      # The node tests run TypeScript directly, which needs a runtime that
-      # strips types without a flag.
+      - name: Discover Terraform roots
+        id: roots
+        run: |
+          roots="$(find infra -mindepth 1 -maxdepth 1 -type d -exec sh -c 'ls "$1"/*.tf >/dev/null 2>&1' _ {} \; -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')"
+          echo "value=${roots}" >> "${GITHUB_OUTPUT}"
+
+      - name: Run static shard
+        run: scripts/check.sh static
+
+  app:
+    name: Lambda and web checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the commit under test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Use Node 24
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -40,24 +55,94 @@ jobs:
             lambdas/package-lock.json
             web/package-lock.json
 
-      - name: Install the lambdas' dependencies
+      - name: Install the lambdas dependencies
         run: npm ci --ignore-scripts
         working-directory: lambdas
 
-      - name: Install the mini app's dependencies
+      - name: Install the mini app dependencies
         run: npm ci --ignore-scripts
         working-directory: web
 
-      # Docker is preinstalled on the runner, which is what the containerised
-      # server suite and the Terraform roots need.
-      - name: Run every check
+      - name: Run application shard
+        run: scripts/check.sh app
+
+      - name: Share Lambda bundles with Terraform shards
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: lambda-bundles
+          path: lambdas/dist
+          if-no-files-found: error
+          retention-days: 1
+
+  server:
+    name: Server checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the commit under test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run server shard
+        run: scripts/check.sh server
+
+  terraform:
+    name: Terraform (${{ matrix.root }})
+    needs: [static, app]
+    strategy:
+      fail-fast: false
+      matrix:
+        root: ${{ fromJSON(needs.static.outputs.terraform-roots) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the commit under test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Restore Lambda bundles
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v8.0.1
+        with:
+          name: lambda-bundles
+          path: lambdas/dist
+
+      - name: Run one Terraform root
+        run: scripts/check.sh terraform-root "${{ matrix.root }}"
+
+  check:
+    name: scripts/check.sh
+    if: always()
+    needs: [static, app, server, terraform]
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out the commit under test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Aggregate shard results
         id: checks
+        env:
+          STATIC_RESULT: ${{ needs.static.result }}
+          APP_RESULT: ${{ needs.app.result }}
+          SERVER_RESULT: ${{ needs.server.result }}
+          TERRAFORM_RESULT: ${{ needs.terraform.result }}
         run: |
-          set +e
-          scripts/check.sh 2>&1 | tee check-output.log
-          exit_code="${PIPESTATUS[0]}"
-          set -e
-          echo "exit_code=${exit_code}" >> "${GITHUB_OUTPUT}"
+          failed=0
+          : > check-output.log
+          for pair in "static:${STATIC_RESULT}" "app:${APP_RESULT}" "server:${SERVER_RESULT}" "terraform:${TERRAFORM_RESULT}"; do
+            name="${pair%%:*}"
+            result="${pair#*:}"
+            if [[ "${result}" == "success" ]]; then
+              echo "ok  ${name}" | tee -a check-output.log
+            else
+              echo "FAIL ${name} (${result})" | tee -a check-output.log
+              failed=1
+            fi
+          done
+          echo "exit_code=${failed}" >> "${GITHUB_OUTPUT}"
 
       - name: Publish the test result on the pull request
         if: always() && github.event_name == 'pull_request'
@@ -78,10 +163,10 @@ jobs:
             echo '<!-- spawnpoint-tests-summary -->'
             echo "${heading}"
             echo
-            echo "**${passed} passed · ${failed} failed**"
+            echo "**${passed} shards passed · ${failed} failed**"
             if (( failed > 0 )); then
               echo
-              echo "Failed steps:"
+              echo "Failed shards:"
               grep '^FAIL ' check-output.log | sed 's/^FAIL /- `/' | sed 's/$/`/'
             fi
             echo

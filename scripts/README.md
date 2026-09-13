@@ -32,7 +32,7 @@ Available:
 | `migrate-world-state.sh` | Adopt a legacy world-scoped release pointer into the world and wipe model; dry-run by default |
 | `migrate-preset-catalog.sh`, `migrate-release-layout.sh` | One-time migrations to the preset-scoped catalog and release layout of [ADR-0042](../docs/adr/0042-preset-scoped-release-identity.md) |
 | `aws-release-builder.sh`, `aws-preset-catalog-builder.sh`, `_config-source.sh` | What CodeBuild runs: stage the exact Git snapshot, resolve, hash, publish |
-| `check.sh`, `check-links.py`, `check-workflows.py` | The local evidence ladder and its hygiene checks; `check.sh` is the command CI runs |
+| `check.sh`, `check-links.py`, `check-workflows.py` | The local evidence ladder and its hygiene checks; CI runs its named shards in parallel and keeps one aggregate gate |
 
 Planned:
 

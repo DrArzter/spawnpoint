@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
-import { AuthState, requestAccess, telegramBotUsername, telegramLoginRedirectUrl } from "../auth";
+import { AuthState, exchangeTelegramOidc, requestAccess, telegramOidcClientId } from "../auth";
 import { Avatar } from "../components/Avatar";
 import { Button } from "../components/ui/Button";
 import { SpawnpointMark } from "../shell/AppBar";
+import type { TelegramLoginResult } from "../telegram";
 
 export function AuthScreen({ auth, onChange }: { auth: AuthState; onChange: (state: AuthState) => void }) {
   const [requesting, setRequesting] = useState(false);
@@ -31,9 +32,9 @@ export function AuthScreen({ auth, onChange }: { auth: AuthState; onChange: (sta
         </>}
         {auth.status === "signed-out" && <>
           <div className="boot-copy"><h1>Sign in</h1><p>Continue with Telegram. Spawnpoint keeps no password and no AWS credential in the browser.</p></div>
-          <TelegramLoginButton />
+          <TelegramLoginButton onChange={onChange} />
         </>}
-        {auth.status === "unconfigured" && <div className="boot-copy"><h1>Sign-in is not configured</h1><p>This deployment is missing its access API URL or Telegram bot username.</p></div>}
+        {auth.status === "unconfigured" && <div className="boot-copy"><h1>Sign-in is not configured</h1><p>This deployment is missing its access API URL or Telegram OIDC Client ID.</p></div>}
         {auth.status === "error" && <>
           <div className="boot-copy"><h1>Could not sign in</h1><p className="boot-error">{auth.message}</p></div>
           <Button onClick={() => onChange({ status: "signed-out" })} variant="filled">Try again</Button>
@@ -53,33 +54,54 @@ export function AuthScreen({ auth, onChange }: { auth: AuthState; onChange: (sta
   );
 }
 
-function TelegramLoginButton() {
-  const host = useRef<HTMLDivElement>(null);
-  const [widgetFailed, setWidgetFailed] = useState(false);
+function TelegramLoginButton({ onChange }: { onChange: (state: AuthState) => void }) {
+  const mounted = useRef(true);
+  const [sdkReady, setSdkReady] = useState(false);
+  const [loginError, setLoginError] = useState("");
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    const container = host.current;
-    if (container === null) return;
+    mounted.current = true;
+    const clientId = Number(telegramOidcClientId);
+    if (!Number.isSafeInteger(clientId) || clientId <= 0) {
+      setLoginError("Telegram OIDC is missing its Client ID.");
+      return;
+    }
+
+    const complete = (result: TelegramLoginResult) => {
+      if (typeof result.id_token !== "string") {
+        if (mounted.current) setLoginError(result.error || "Telegram did not return an identity token.");
+        return;
+      }
+      onChange({ status: "loading" });
+      void exchangeTelegramOidc(result.id_token).then(onChange);
+    };
     const script = document.createElement("script");
     script.async = true;
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.dataset.telegramLogin = telegramBotUsername;
-    script.dataset.size = "large";
-    script.dataset.radius = "4";
-    script.dataset.userpic = "false";
-    script.dataset.authUrl = telegramLoginRedirectUrl();
-    script.onerror = () => setWidgetFailed(true);
-    container.replaceChildren(script);
-    return () => container.replaceChildren();
-  }, [attempt]);
+    script.src = "https://oauth.telegram.org/js/telegram-login.js?6";
+    script.onload = () => {
+      window.Telegram?.Login?.init({ client_id: clientId }, complete);
+      if (mounted.current) setSdkReady(window.Telegram?.Login !== undefined);
+    };
+    script.onerror = () => { if (mounted.current) setLoginError("Telegram sign-in could not load."); };
+    document.head.append(script);
+    return () => {
+      mounted.current = false;
+      script.remove();
+    };
+  }, [attempt, onChange]);
+
+  function openLogin() {
+    setLoginError("");
+    window.Telegram?.Login?.open();
+  }
 
   return (
     <div className="telegram-login">
-      {!widgetFailed && <div ref={host} />}
-      {widgetFailed && <div className="boot-copy" role="alert">
-        <p className="boot-error">Telegram sign-in could not load.</p>
-        <Button onClick={() => { setWidgetFailed(false); setAttempt((value) => value + 1); }}>Try again</Button>
+      {!loginError && <Button disabled={!sdkReady} onClick={openLogin} variant="filled">Continue with Telegram</Button>}
+      {loginError && <div className="boot-copy" role="alert">
+        <p className="boot-error">{loginError}</p>
+        <Button onClick={() => { setLoginError(""); setSdkReady(false); setAttempt((value) => value + 1); }}>Try again</Button>
       </div>}
     </div>
   );

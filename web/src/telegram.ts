@@ -37,6 +37,16 @@ type TelegramWebApp = {
   offEvent(event: "themeChanged", callback: () => void): void;
 };
 
+export type TelegramLoginResult = Readonly<{
+  id_token?: string;
+  error?: string;
+}>;
+
+type TelegramLogin = {
+  init(options: { client_id: number; request_access?: string[] }, callback: (result: TelegramLoginResult) => void): void;
+  open(callback?: (result: TelegramLoginResult) => void): void;
+};
+
 export type Theme = "light" | "dark";
 export type ThemePreference = Theme | "system";
 export type ViewerProfile = {
@@ -49,7 +59,7 @@ export type ViewerProfile = {
 
 declare global {
   interface Window {
-    Telegram?: { WebApp: TelegramWebApp };
+    Telegram?: { WebApp: TelegramWebApp; Login?: TelegramLogin };
   }
 }
 

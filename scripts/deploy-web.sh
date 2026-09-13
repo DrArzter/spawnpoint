@@ -18,17 +18,17 @@ terraform_output_if_available() {
 if [[ -z "${VITE_ACCESS_API_URL:-}" ]]; then
   VITE_ACCESS_API_URL="$(terraform_output_if_available api_url)"
 fi
-if [[ -z "${VITE_TELEGRAM_BOT_USERNAME:-}" ]]; then
-  VITE_TELEGRAM_BOT_USERNAME="$(terraform_output_if_available telegram_bot_username)"
+if [[ -z "${VITE_TELEGRAM_OIDC_CLIENT_ID:-}" ]]; then
+  VITE_TELEGRAM_OIDC_CLIENT_ID="$(terraform_output_if_available telegram_oidc_client_id)"
 fi
-export VITE_ACCESS_API_URL VITE_TELEGRAM_BOT_USERNAME
+export VITE_ACCESS_API_URL VITE_TELEGRAM_OIDC_CLIENT_ID
 
 aws_profile_args=()
 if [[ -n "${AWS_PROFILE_NAME}" ]]; then
   aws_profile_args=(--profile "${AWS_PROFILE_NAME}")
 fi
 
-if [[ -z "${VITE_ACCESS_API_URL}" || -z "${VITE_TELEGRAM_BOT_USERNAME}" ]]; then
+if [[ -z "${VITE_ACCESS_API_URL}" || -z "${VITE_TELEGRAM_OIDC_CLIENT_ID}" ]]; then
   printf 'error: access API is not applied; refusing to publish a panel without authentication\n' >&2
   exit 1
 fi

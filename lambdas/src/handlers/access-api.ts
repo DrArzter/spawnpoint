@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 
 import { builtInRoles, hasPermission, isBuiltInRoleId, permissions, type Identity, type Permission } from "../access/domain.ts";
 import { directInvitationReadiness } from "../access/invitation-readiness.ts";
-import { issueSessionToken, verifyLoginWidget, verifyMiniAppInitData, verifySessionToken, type TelegramProfile } from "../access/telegram-auth.ts";
+import { issueSessionToken, verifyLoginWidget, verifyMiniAppInitData, verifyOidcIdToken, verifySessionToken, type TelegramProfile } from "../access/telegram-auth.ts";
 import { defaultSubscriptions, validateSubscriptions } from "../access/subscriptions.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../domain/access-events.ts";
 import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
@@ -43,6 +43,7 @@ const bootstrapOwnerTelegramId = (process.env.BOOTSTRAP_OWNER_TELEGRAM_ID ?? "")
 const configuredBotTokenParameter = process.env.BOT_TOKEN_PARAMETER;
 if (!configuredBotTokenParameter) throw new Error("missing environment variable: BOT_TOKEN_PARAMETER");
 const botTokenParameter: string = configuredBotTokenParameter;
+const telegramOidcClientId = (process.env.TELEGRAM_OIDC_CLIENT_ID ?? "").trim();
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const events = new EventBridgeClient({});
 const ssm = new SSMClient({});
@@ -564,10 +565,12 @@ async function dismiss(identity: Identity, telegramId: string): Promise<Response
 }
 
 async function authenticate(event: Event): Promise<Response> {
-  let parsed: { login?: unknown; initData?: unknown };
+  let parsed: { idToken?: unknown; login?: unknown; initData?: unknown };
   try { parsed = event.body ? JSON.parse(event.body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
   const token = await botToken();
-  const profile = typeof parsed.initData === "string"
+  const profile = typeof parsed.idToken === "string" && telegramOidcClientId !== ""
+    ? await verifyOidcIdToken(parsed.idToken, telegramOidcClientId)
+    : typeof parsed.initData === "string"
     ? verifyMiniAppInitData(parsed.initData, token)
     : parsed.login !== null && typeof parsed.login === "object"
       ? verifyLoginWidget(parsed.login as Record<string, unknown>, token)

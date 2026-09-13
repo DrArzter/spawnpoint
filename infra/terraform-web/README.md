@@ -2,8 +2,8 @@
 
 This isolated root owns the static panel hosting attached to the public domain:
 one private S3 bucket, one CloudFront Origin Access Control, one distribution,
-its `us-east-1` ACM viewer certificate and the Route 53 validation plus A/AAAA
-alias records. The delegated hosted zone itself remains in `terraform-domain`,
+its popup-compatible response headers policy, its `us-east-1` ACM viewer
+certificate and the Route 53 validation plus A/AAAA alias records. The delegated hosted zone itself remains in `terraform-domain`,
 so removing a web surface cannot remove authoritative DNS. This root cannot
 start EC2 or modify lifecycle workflows; there is no WAF or always-running
 process.
@@ -27,3 +27,8 @@ provider is deliberately fixed to that AWS edge-service region while the S3
 origin stays in `aws_region`. The hostname itself has no default and comes from
 the caller. DNS validation renews automatically while its Terraform-managed
 CNAME remains in the delegated zone.
+
+The response headers preserve the existing security policy and explicitly set
+`Cross-Origin-Opener-Policy: same-origin-allow-popups`; Telegram's OIDC library
+uses a popup and cannot return its result when the opener is isolated with
+`same-origin`.

@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { createHash, createHmac } from "node:crypto";
+import { createHash, createHmac, generateKeyPairSync, sign } from "node:crypto";
 import test from "node:test";
 
-import { issueSessionToken, verifyLoginWidget, verifyMiniAppInitData, verifySessionToken } from "../src/access/telegram-auth.ts";
+import { issueSessionToken, verifyLoginWidget, verifyMiniAppInitData, verifyOidcIdToken, verifySessionToken } from "../src/access/telegram-auth.ts";
 
 const botToken = "123456789:test-bot-token-kept-in-ssm";
 const now = 1_800_000_000;
+const oidcClientId = "8521897198";
 
 function widgetPayload(overrides: Record<string, string> = {}): Record<string, string> {
   const values = {
@@ -50,6 +51,41 @@ test("verifies Telegram Mini App initData with the WebAppData key derivation", (
   assert.equal(verifyMiniAppInitData(miniAppInitData(), botToken, now)?.telegramId, "1780660807");
   assert.equal(verifyMiniAppInitData(miniAppInitData(true), botToken, now)?.telegramId, "1780660807");
   assert.equal(verifyMiniAppInitData(`${miniAppInitData()}x`, botToken, now), null);
+});
+
+test("verifies a Telegram OIDC ID token against JWKS and its claims", async () => {
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const kid = "telegram-test-key";
+  const publicJwk = { ...publicKey.export({ format: "jwk" }), kid, alg: "RS256", use: "sig" };
+  const token = (overrides: Record<string, unknown> = {}) => {
+    const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT", kid })).toString("base64url");
+    const claims = Buffer.from(JSON.stringify({
+      iss: "https://oauth.telegram.org",
+      aud: oidcClientId,
+      sub: "telegram:1780660807",
+      id: 1780660807,
+      name: "DrArzter",
+      preferred_username: "drarzter",
+      picture: "https://telegram.example/avatar.jpg",
+      iat: now,
+      exp: now + 3600,
+      ...overrides,
+    })).toString("base64url");
+    const signature = sign("RSA-SHA256", Buffer.from(`${header}.${claims}`), privateKey).toString("base64url");
+    return `${header}.${claims}.${signature}`;
+  };
+  const fetchJwks = async () => ({ ok: true, json: async () => ({ keys: [publicJwk] }) });
+
+  assert.deepEqual(await verifyOidcIdToken(token(), oidcClientId, now, fetchJwks), {
+    telegramId: "1780660807",
+    displayName: "DrArzter",
+    username: "drarzter",
+    photoUrl: "https://telegram.example/avatar.jpg",
+  });
+  assert.equal(await verifyOidcIdToken(token({ aud: "another-client" }), oidcClientId, now, fetchJwks), null);
+  assert.equal(await verifyOidcIdToken(token({ iss: "https://attacker.example" }), oidcClientId, now, fetchJwks), null);
+  assert.equal(await verifyOidcIdToken(token({ exp: now - 1 }), oidcClientId, now, fetchJwks), null);
+  assert.equal(await verifyOidcIdToken(`${token()}x`, oidcClientId, now, fetchJwks), null);
 });
 
 test("issues a signed, expiring Spawnpoint browser session", () => {

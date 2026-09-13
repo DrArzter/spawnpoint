@@ -43,14 +43,14 @@ variable "bootstrap_owner_telegram_id" {
   }
 }
 
-variable "telegram_bot_username" {
-  description = "Bot username registered for Web Login in BotFather, without the leading @."
+variable "telegram_oidc_client_id" {
+  description = "Public Telegram Login OIDC client ID issued by BotFather; empty keeps browser OIDC disabled for self-hosted deployments."
   type        = string
-  default     = "drarzterbot"
+  default     = ""
 
   validation {
-    condition     = can(regex("^[A-Za-z][A-Za-z0-9_]{3,30}bot$", var.telegram_bot_username))
-    error_message = "telegram_bot_username must be a valid Telegram bot username without @."
+    condition     = var.telegram_oidc_client_id == "" || can(regex("^[1-9][0-9]+$", var.telegram_oidc_client_id))
+    error_message = "telegram_oidc_client_id must be empty or the numeric Client ID issued by BotFather."
   }
 }
 

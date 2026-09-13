@@ -193,9 +193,11 @@ scripts/check.sh
 
 `scripts/check.sh fast` skips the Terraform containers, the slowest rung.
 
-The same command runs in CI on every push and pull request. That workflow holds `contents: read` and no cloud
-identity — a check that could create resources would no longer be only a check — and a hygiene check fails the build
-if it ever gains one, unpins an action, or starts keeping its own copy of the rungs.
+CI runs the same script in independent static, application and server shards, plus one discovered matrix job per
+Terraform root, on every push and pull request. One `scripts/check.sh` aggregate remains the stable required check.
+The workflow holds `contents: read` and no cloud identity — a check that could create resources would no longer be
+only a check — and a hygiene check fails the build if it ever gains one, unpins an action, or starts keeping its own
+copy of the rungs.
 
 Deployment is a separate workflow with an identity. After `Check` passes on `main`, `Deploy production` classifies
 the tested diff into Terraform roots, Lambda bundles and the web build, assumes the OIDC deploy role, and applies only

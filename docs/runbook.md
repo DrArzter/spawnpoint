@@ -456,6 +456,12 @@ Release `1.1` also completed the first promotion drill on 2026-08-26: boot recon
 passed health, the workflow committed it active, then produced a verified backup and returned the originally stopped
 EC2 to `stopped`. The two fail-closed defects found before that acceptance are recorded in the same command log.
 
+Automatic rollback was acceptance-tested on 2026-09-13 with deliberately incomplete release `9.99`. The target start
+failed, the workflow restored release `1.1` in a separate fenced session, verified it, backed up the world and returned
+the originally stopped EC2 to `stopped`. Execution `promote-20260912T232003Z` completed `SUCCEEDED` with
+`status=rolled_back`; no operator repair was required. The manifest is retained as evidence and must never be promoted
+outside a rollback drill.
+
 One-time secret setup, without putting the key value in shell history:
 
 ```bash

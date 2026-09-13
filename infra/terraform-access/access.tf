@@ -37,6 +37,11 @@ resource "aws_dynamodb_table" "access" {
     enabled = true
   }
 
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+
   server_side_encryption {
     enabled = true
   }

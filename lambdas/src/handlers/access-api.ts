@@ -6,7 +6,20 @@ import { randomUUID } from "node:crypto";
 
 import { builtInRoles, hasPermission, isBuiltInRoleId, permissions, type Identity, type Permission } from "../access/domain.ts";
 import { directInvitationReadiness } from "../access/invitation-readiness.ts";
-import { issueSessionToken, verifyLoginWidget, verifyMiniAppInitData, verifyOidcIdToken, verifySessionToken, type TelegramProfile } from "../access/telegram-auth.ts";
+import {
+  accessTokenLifetimeSeconds,
+  equalRefreshHashes,
+  expiredRefreshCookie,
+  issueAccessToken,
+  issueRefreshCredential,
+  parseRefreshCredential,
+  refreshCookie,
+  refreshCookieName,
+  refreshSessionLifetimeSeconds,
+  verifyAccessToken,
+  type LoginPrincipal,
+} from "../access/login-session.ts";
+import { verifyLoginWidget, verifyMiniAppInitData, verifyOidcIdToken, verifySessionToken, type TelegramProfile } from "../access/telegram-auth.ts";
 import { defaultSubscriptions, validateSubscriptions } from "../access/subscriptions.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../domain/access-events.ts";
 import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
@@ -31,11 +44,12 @@ type Event = Readonly<{
   rawPath?: string;
   pathParameters?: Record<string, string | undefined>;
   headers?: Record<string, string | undefined>;
+  cookies?: string[];
   body?: string;
 }>;
-type Response = Readonly<{ statusCode: number; headers: Record<string, string>; body: string }>;
+type Response = Readonly<{ statusCode: number; headers: Record<string, string>; body: string; cookies?: string[] }>;
 type Item = Record<string, unknown>;
-type Caller = TelegramProfile;
+type Caller = LoginPrincipal;
 
 const tableName = process.env.ACCESS_TABLE_NAME;
 if (!tableName) throw new Error("missing environment variable: ACCESS_TABLE_NAME");
@@ -43,14 +57,34 @@ const bootstrapOwnerTelegramId = (process.env.BOOTSTRAP_OWNER_TELEGRAM_ID ?? "")
 const configuredBotTokenParameter = process.env.BOT_TOKEN_PARAMETER;
 if (!configuredBotTokenParameter) throw new Error("missing environment variable: BOT_TOKEN_PARAMETER");
 const botTokenParameter: string = configuredBotTokenParameter;
+const configuredSessionSigningSecretParameter = process.env.SESSION_SIGNING_SECRET_PARAMETER;
+if (!configuredSessionSigningSecretParameter) throw new Error("missing environment variable: SESSION_SIGNING_SECRET_PARAMETER");
+const sessionSigningSecretParameter: string = configuredSessionSigningSecretParameter;
 const telegramOidcClientId = (process.env.TELEGRAM_OIDC_CLIENT_ID ?? "").trim();
+const refreshCookieSameSite: "Strict" | "None" = process.env.REFRESH_COOKIE_SAME_SITE === "None" ? "None" : "Strict";
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const events = new EventBridgeClient({});
 const ssm = new SSMClient({});
 let botTokenPromise: Promise<string> | undefined;
+let sessionSigningSecretPromise: Promise<string> | undefined;
 
 function response(statusCode: number, body: unknown): Response {
   return { statusCode, headers: { "content-type": "application/json; charset=utf-8" }, body: body === null ? "" : JSON.stringify(body) };
+}
+
+function responseWithCookie(statusCode: number, body: unknown, cookie: string): Response {
+  return { ...response(statusCode, body), cookies: [cookie] };
+}
+
+function requestCookie(event: Event, name: string): string | null {
+  const values = event.cookies ?? Object.entries(event.headers ?? {})
+    .filter(([key]) => key.toLowerCase() === "cookie")
+    .flatMap(([, value]) => value?.split(";") ?? []);
+  for (const value of values) {
+    const [cookieName, ...parts] = value.trim().split("=");
+    if (cookieName === name) return parts.join("=");
+  }
+  return null;
 }
 
 function botToken(): Promise<string> {
@@ -62,10 +96,41 @@ function botToken(): Promise<string> {
   return botTokenPromise;
 }
 
+function sessionSigningSecret(): Promise<string> {
+  sessionSigningSecretPromise ??= ssm.send(new GetParameterCommand({ Name: sessionSigningSecretParameter, WithDecryption: true })).then((result) => {
+    const value = result.Parameter?.Value;
+    if (!value) throw new Error("Session signing secret parameter is empty");
+    return value;
+  });
+  return sessionSigningSecretPromise;
+}
+
 async function caller(event: Event): Promise<Caller | null> {
   const authorization = Object.entries(event.headers ?? {}).find(([key]) => key.toLowerCase() === "authorization")?.[1] ?? "";
   const match = /^Bearer ([A-Za-z0-9._-]+)$/.exec(authorization);
-  return match === null ? null : verifySessionToken(match[1]!, await botToken());
+  if (match === null) return null;
+  const current = verifyAccessToken(match[1]!, await sessionSigningSecret())?.principal;
+  if (current !== undefined) return current;
+  const legacy = verifySessionToken(match[1]!, await botToken());
+  return legacy === null ? null : telegramPrincipal(legacy);
+}
+
+function telegramPrincipal(profile: TelegramProfile): LoginPrincipal {
+  return {
+    provider: "telegram",
+    subject: profile.telegramId,
+    displayName: profile.displayName,
+    username: profile.username,
+    photoUrl: profile.photoUrl,
+  };
+}
+
+function accountKey(principal: LoginPrincipal): string {
+  // Preserve existing Telegram account keys while other providers join through
+  // the provider-neutral login/session boundary.
+  return principal.provider === "telegram"
+    ? `TELEGRAM#${principal.subject}`
+    : `ACCOUNT#${principal.provider}#${principal.subject}`;
 }
 
 function identityFromItem(item: Item): Identity {
@@ -81,7 +146,7 @@ async function observe(account: Caller): Promise<Item> {
   const now = new Date().toISOString();
   const updated = await document.send(new UpdateCommand({
     TableName: tableName,
-    Key: { pk: `TELEGRAM#${account.telegramId}`, sk: "ACCOUNT" },
+    Key: { pk: accountKey(account), sk: "ACCOUNT" },
     UpdateExpression: [
       "SET platform = :platform", "platform_user_id = :platformUserId", "display_name = :displayName",
       "username = :username", "photo_url = :photoUrl", "first_seen_at = if_not_exists(first_seen_at, :now)",
@@ -90,7 +155,7 @@ async function observe(account: Caller): Promise<Item> {
     ].join(", "),
     ExpressionAttributeNames: { "#status": "status" },
     ExpressionAttributeValues: {
-      ":platform": "telegram", ":platformUserId": account.telegramId,
+      ":platform": account.provider, ":platformUserId": account.subject,
       ":displayName": account.displayName,
       ":username": account.username,
       ":photoUrl": account.photoUrl,
@@ -101,9 +166,9 @@ async function observe(account: Caller): Promise<Item> {
   return updated.Attributes ?? {};
 }
 
-async function resolveIdentity(telegramId: string, accountItem?: Item): Promise<Identity | null> {
+async function resolveIdentity(principal: Caller, accountItem?: Item): Promise<Identity | null> {
   const account = accountItem ?? (await document.send(new GetCommand({
-    TableName: tableName, Key: { pk: `TELEGRAM#${telegramId}`, sk: "ACCOUNT" },
+    TableName: tableName, Key: { pk: accountKey(principal), sk: "ACCOUNT" },
   }))).Item;
   const identityId = account?.identity_id;
   if (typeof identityId !== "string") return null;
@@ -114,21 +179,21 @@ async function resolveIdentity(telegramId: string, accountItem?: Item): Promise<
 }
 
 async function bootstrapOwner(account: Caller): Promise<Identity | null> {
-  if (account.telegramId !== bootstrapOwnerTelegramId) return null;
+  if (account.provider !== "telegram" || account.subject !== bootstrapOwnerTelegramId) return null;
   const identityId = randomUUID();
   const now = new Date().toISOString();
   const name = account.displayName;
   try {
     await document.send(new TransactWriteCommand({ TransactItems: [
       { Put: { TableName: tableName, Item: {
-        pk: "SYSTEM", sk: "BOOTSTRAP", status: "CLAIMED", identity_id: identityId, telegram_id: account.telegramId, claimed_at: now,
+        pk: "SYSTEM", sk: "BOOTSTRAP", status: "CLAIMED", identity_id: identityId, telegram_id: account.subject, claimed_at: now,
       }, ConditionExpression: "attribute_not_exists(pk)" } },
       { Put: { TableName: tableName, Item: {
         pk: `IDENTITY#${identityId}`, sk: "PROFILE", identity_id: identityId, display_name: name,
         role_id: "owner", direct_grants: [], status: "ACTIVE", created_at: now,
         created_by: "bootstrap", gsi1pk: "IDENTITY#ACTIVE", gsi1sk: name.toLowerCase(),
       }, ConditionExpression: "attribute_not_exists(pk)" } },
-      { Update: { TableName: tableName, Key: { pk: `TELEGRAM#${account.telegramId}`, sk: "ACCOUNT" },
+      { Update: { TableName: tableName, Key: { pk: accountKey(account), sk: "ACCOUNT" },
         UpdateExpression: "SET identity_id = :identityId, #status = :approved, gsi1pk = :linked, gsi1sk = :now, approved_at = :now, approved_by = :bootstrap",
         ConditionExpression: "attribute_exists(pk) AND attribute_not_exists(identity_id)",
         ExpressionAttributeNames: { "#status": "status" },
@@ -140,7 +205,7 @@ async function bootstrapOwner(account: Caller): Promise<Identity | null> {
     ] }));
     return { id: identityId, displayName: name, roleId: "owner", directGrants: [] };
   } catch (error) {
-    const existing = await resolveIdentity(account.telegramId);
+    const existing = await resolveIdentity(account);
     if (existing !== null) return existing;
     console.error("owner_bootstrap_failed", {
       errorName: error instanceof Error ? error.name : "UnknownError",
@@ -157,18 +222,18 @@ function requirePermission(identity: Identity, permission: Permission): Response
 
 async function session(account: Caller): Promise<Response> {
   const observed = await observe(account);
-  const identity = await resolveIdentity(account.telegramId, observed) ?? await bootstrapOwner(account);
+  const identity = await resolveIdentity(account, observed) ?? await bootstrapOwner(account);
   if (identity !== null) {
     const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
     const bootstrap = await document.send(new GetCommand({ TableName: tableName, Key: { pk: "SYSTEM", sk: "BOOTSTRAP" } }));
     return response(200, { state: "active", identity, role, profile: {
-      telegramId: account.telegramId, username: observed.username ?? null, photoUrl: observed.photo_url ?? null,
+      telegramId: account.subject, username: observed.username ?? null, photoUrl: observed.photo_url ?? null,
     }, bootstrap: bootstrap.Item === undefined ? { state: "unclaimed" } : {
       state: "claimed", ownerId: bootstrap.Item.identity_id, telegramId: bootstrap.Item.telegram_id, claimedAt: bootstrap.Item.claimed_at,
     } });
   }
   return response(200, { state: "visitor", candidate: {
-    telegramId: account.telegramId, displayName: observed.display_name, username: observed.username ?? null,
+    telegramId: account.subject, displayName: observed.display_name, username: observed.username ?? null,
     photoUrl: observed.photo_url ?? null, status: observed.status ?? "OBSERVED",
   } });
 }
@@ -178,14 +243,14 @@ async function requestAccess(account: Caller): Promise<Response> {
   try {
     await document.send(new UpdateCommand({
       TableName: tableName,
-      Key: { pk: `TELEGRAM#${account.telegramId}`, sk: "ACCOUNT" },
+      Key: { pk: accountKey(account), sk: "ACCOUNT" },
       UpdateExpression: "SET #status = :requested, gsi1pk = :candidateIndex, requested_at = if_not_exists(requested_at, :now), gsi1sk = :now",
       ConditionExpression: "attribute_exists(pk) AND attribute_not_exists(identity_id)",
       ExpressionAttributeNames: { "#status": "status" },
       ExpressionAttributeValues: { ":requested": "REQUESTED", ":candidateIndex": "CANDIDATE#REQUESTED", ":now": now },
     }));
   } catch {
-    if (await resolveIdentity(account.telegramId) !== null) return response(409, { error: "already_approved" });
+    if (await resolveIdentity(account) !== null) return response(409, { error: "already_approved" });
     throw new Error("access candidate is unavailable");
   }
   return response(202, { state: "requested" });
@@ -564,6 +629,128 @@ async function dismiss(identity: Identity, telegramId: string): Promise<Response
   return response(204, null);
 }
 
+function loginSessionKey(loginSessionId: string): Record<string, string> {
+  return { pk: `LOGIN_SESSION#${loginSessionId}`, sk: "REFRESH" };
+}
+
+function principalFromLoginSession(item: Item): LoginPrincipal | null {
+  if (
+    typeof item.provider !== "string" ||
+    typeof item.subject !== "string" ||
+    typeof item.display_name !== "string"
+  ) return null;
+  return {
+    provider: item.provider,
+    subject: item.subject,
+    displayName: item.display_name,
+    username: typeof item.username === "string" ? item.username : null,
+    photoUrl: typeof item.photo_url === "string" ? item.photo_url : null,
+  };
+}
+
+async function createLoginSession(principal: LoginPrincipal, signingSecret: string): Promise<Response> {
+  const credential = issueRefreshCredential();
+  const createdAt = new Date().toISOString();
+  const expiresAt = Math.floor(Date.now() / 1000) + refreshSessionLifetimeSeconds;
+  await document.send(new PutCommand({
+    TableName: tableName,
+    Item: {
+      ...loginSessionKey(credential.loginSessionId),
+      entity_type: "LOGIN_SESSION",
+      status: "ACTIVE",
+      provider: principal.provider,
+      subject: principal.subject,
+      display_name: principal.displayName,
+      username: principal.username,
+      photo_url: principal.photoUrl,
+      token_hash: credential.tokenHash,
+      created_at: createdAt,
+      expires_at: expiresAt,
+      ttl: expiresAt,
+      gsi1pk: `ACCOUNT#${principal.provider}#${principal.subject}`,
+      gsi1sk: `LOGIN_SESSION#${createdAt}#${credential.loginSessionId}`,
+    },
+    ConditionExpression: "attribute_not_exists(pk)",
+  }));
+  return responseWithCookie(200, {
+    accessToken: issueAccessToken(principal, credential.loginSessionId, signingSecret),
+    expiresIn: accessTokenLifetimeSeconds,
+  }, refreshCookie(credential.token, refreshCookieSameSite));
+}
+
+async function refreshLoginSession(event: Event): Promise<Response> {
+  const cookie = requestCookie(event, refreshCookieName);
+  const supplied = cookie === null ? null : parseRefreshCredential(cookie);
+  if (supplied === null) return response(401, { error: "invalid_or_expired_refresh_session" });
+
+  const result = await document.send(new GetCommand({
+    TableName: tableName,
+    Key: loginSessionKey(supplied.loginSessionId),
+    ConsistentRead: true,
+  }));
+  const item = result.Item;
+  const now = Math.floor(Date.now() / 1000);
+  const principal = item === undefined ? null : principalFromLoginSession(item);
+  if (
+    item === undefined || item.status !== "ACTIVE" ||
+    typeof item.expires_at !== "number" || item.expires_at <= now ||
+    typeof item.token_hash !== "string" || !equalRefreshHashes(item.token_hash, supplied.tokenHash) ||
+    principal === null
+  ) return response(401, { error: "invalid_or_expired_refresh_session" });
+
+  const rotated = issueRefreshCredential(supplied.loginSessionId);
+  try {
+    await document.send(new UpdateCommand({
+      TableName: tableName,
+      Key: loginSessionKey(supplied.loginSessionId),
+      UpdateExpression: "SET token_hash = :nextHash, last_refreshed_at = :now",
+      ConditionExpression: "#status = :active AND token_hash = :previousHash AND expires_at > :nowEpoch",
+      ExpressionAttributeNames: { "#status": "status" },
+      ExpressionAttributeValues: {
+        ":active": "ACTIVE",
+        ":previousHash": supplied.tokenHash,
+        ":nextHash": rotated.tokenHash,
+        ":now": new Date().toISOString(),
+        ":nowEpoch": now,
+      },
+    }));
+  } catch {
+    // Another tab may have rotated the shared cookie first. The client may retry
+    // once with the newest cookie; do not revoke the whole login session here.
+    return response(401, { error: "refresh_credential_rotated" });
+  }
+  const signingSecret = await sessionSigningSecret();
+  return responseWithCookie(200, {
+    accessToken: issueAccessToken(principal, supplied.loginSessionId, signingSecret),
+    expiresIn: accessTokenLifetimeSeconds,
+  }, refreshCookie(rotated.token, refreshCookieSameSite));
+}
+
+async function logoutLoginSession(event: Event): Promise<Response> {
+  const cookie = requestCookie(event, refreshCookieName);
+  const supplied = cookie === null ? null : parseRefreshCredential(cookie);
+  if (supplied !== null) {
+    try {
+      await document.send(new UpdateCommand({
+        TableName: tableName,
+        Key: loginSessionKey(supplied.loginSessionId),
+        UpdateExpression: "SET #status = :revoked, revoked_at = :now",
+        ConditionExpression: "#status = :active AND token_hash = :tokenHash",
+        ExpressionAttributeNames: { "#status": "status" },
+        ExpressionAttributeValues: {
+          ":active": "ACTIVE",
+          ":revoked": "REVOKED",
+          ":tokenHash": supplied.tokenHash,
+          ":now": new Date().toISOString(),
+        },
+      }));
+    } catch {
+      // Logout is idempotent and never reveals whether a credential existed.
+    }
+  }
+  return responseWithCookie(204, null, expiredRefreshCookie(refreshCookieSameSite));
+}
+
 async function authenticate(event: Event): Promise<Response> {
   let parsed: { idToken?: unknown; login?: unknown; initData?: unknown };
   try { parsed = event.body ? JSON.parse(event.body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
@@ -576,7 +763,7 @@ async function authenticate(event: Event): Promise<Response> {
       ? verifyLoginWidget(parsed.login as Record<string, unknown>, token)
       : null;
   if (profile === null) return response(401, { error: "invalid_or_expired_telegram_login" });
-  return response(200, { sessionToken: issueSessionToken(profile, token), expiresIn: 12 * 60 * 60 });
+  return createLoginSession(telegramPrincipal(profile), await sessionSigningSecret());
 }
 
 // The files a player needs to join, for the release the world is actually
@@ -645,6 +832,8 @@ const parameter = (event: Event, name: string): string => event.pathParameters?.
 
 export const routes: Readonly<Record<string, Route>> = {
   "POST /auth/telegram": publicRoute((event) => authenticate(event)),
+  "POST /auth/refresh": publicRoute((event) => refreshLoginSession(event)),
+  "POST /auth/logout": publicRoute((event) => logoutLoginSession(event)),
 
   "GET /session": sessionRoute((account) => session(account)),
   "POST /access/request": sessionRoute(async (account) => {
@@ -719,7 +908,7 @@ export async function handler(event: Event): Promise<Response> {
   if (account === null) return response(401, { error: "invalid_or_expired_session" });
   if (route.access.kind === "session") return call(account);
 
-  const identity = await resolveIdentity(account.telegramId);
+  const identity = await resolveIdentity(account);
   if (identity === null) return response(403, { error: "access_not_granted" });
   if (route.access.kind === "identity") return call(identity);
 

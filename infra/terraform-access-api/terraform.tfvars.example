@@ -6,3 +6,4 @@ telegram_oidc_client_id = "8521897198"
 # The SecureString is created by the bot setup and is read only at runtime.
 # Never put the bot token itself in Terraform variables or state.
 bot_token_parameter = "/spawnpoint/bot/token"
+session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"

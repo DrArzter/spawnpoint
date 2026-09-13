@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash, createHmac, generateKeyPairSync, sign } from "node:crypto";
 import test from "node:test";
 
-import { issueSessionToken, verifyLoginWidget, verifyMiniAppInitData, verifyOidcIdToken, verifySessionToken } from "../src/access/telegram-auth.ts";
+import { issueSessionToken, legacySessionLifetimeSeconds, verifyLoginWidget, verifyMiniAppInitData, verifyOidcIdToken, verifySessionToken } from "../src/access/telegram-auth.ts";
 
 const botToken = "123456789:test-bot-token-kept-in-ssm";
 const now = 1_800_000_000;
@@ -93,6 +93,7 @@ test("issues a signed, expiring Spawnpoint browser session", () => {
   assert.ok(profile);
   const token = issueSessionToken(profile, botToken, now);
   assert.deepEqual(verifySessionToken(token, botToken, now + 60), profile);
-  assert.equal(verifySessionToken(token, botToken, now + 12 * 60 * 60 + 1), null);
+  assert.deepEqual(verifySessionToken(token, botToken, now + legacySessionLifetimeSeconds - 1), profile);
+  assert.equal(verifySessionToken(token, botToken, now + legacySessionLifetimeSeconds), null);
   assert.equal(verifySessionToken(`${token}x`, botToken, now + 60), null);
 });

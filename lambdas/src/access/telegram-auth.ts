@@ -10,7 +10,7 @@ export type TelegramProfile = Readonly<{
 type TelegramLoginPayload = Readonly<Record<string, unknown>>;
 
 const loginKeys = ["id", "first_name", "last_name", "username", "photo_url", "auth_date"] as const;
-const sessionLifetimeSeconds = 12 * 60 * 60;
+export const legacySessionLifetimeSeconds = 12 * 60 * 60;
 const loginFreshnessSeconds = 10 * 60;
 const telegramOidcIssuer = "https://oauth.telegram.org";
 const telegramJwksUrl = `${telegramOidcIssuer}/.well-known/jwks.json`;
@@ -171,7 +171,7 @@ export function issueSessionToken(profile: TelegramProfile, botToken: string, no
     username: profile.username,
     picture: profile.photoUrl,
     iat: nowSeconds,
-    exp: nowSeconds + sessionLifetimeSeconds,
+    exp: nowSeconds + legacySessionLifetimeSeconds,
     nonce: randomBytes(12).toString("base64url"),
   }));
   const signature = createHmac("sha256", sessionKey(botToken)).update(payload).digest("base64url");
@@ -187,7 +187,7 @@ export function verifySessionToken(token: string, botToken: string, nowSeconds =
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
   try {
     const value = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Record<string, unknown>;
-    if (value.v !== 1 || typeof value.exp !== "number" || typeof value.iat !== "number" || value.exp < nowSeconds || value.iat > nowSeconds + 30) return null;
+    if (value.v !== 1 || typeof value.exp !== "number" || typeof value.iat !== "number" || value.exp <= nowSeconds || value.iat > nowSeconds + 30) return null;
     return profileFromValues({
       id: typeof value.sub === "string" ? value.sub : "",
       first_name: typeof value.name === "string" ? value.name : "",

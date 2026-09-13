@@ -68,20 +68,19 @@ export type AuthState =
   | { status: "authenticated"; session: SpawnpointSession }
   | { status: "error"; message: string };
 
-const TOKEN_KEY = "spawnpoint.auth.session";
+const LEGACY_TOKEN_KEY = "spawnpoint.auth.session";
 const apiUrl = (import.meta.env.VITE_ACCESS_API_URL ?? "").replace(/\/$/, "");
 export const telegramOidcClientId = (import.meta.env.VITE_TELEGRAM_OIDC_CLIENT_ID ?? "").trim();
+let accessToken: string | null = null;
+let refreshPromise: Promise<string | null> | null = null;
 
 export function authConfigured(): boolean {
   return apiUrl !== "" && (Boolean(window.Telegram?.WebApp.initData) || /^[1-9][0-9]+$/.test(telegramOidcClientId));
 }
 
-function readToken(): string | null {
-  return window.sessionStorage.getItem(TOKEN_KEY);
-}
-
-function saveToken(token: string): void {
-  window.sessionStorage.setItem(TOKEN_KEY, token);
+function clearLegacyTokens(): void {
+  window.localStorage.removeItem(LEGACY_TOKEN_KEY);
+  window.sessionStorage.removeItem(LEGACY_TOKEN_KEY);
 }
 
 function clearLoginQuery(): void {
@@ -102,18 +101,20 @@ async function exchangeTelegram(body: { idToken: string } | { login: Record<stri
   const response = await fetch(`${apiUrl}/auth/telegram`, {
     method: "POST",
     headers: { "content-type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error("Telegram could not verify this sign-in. Please start again.");
-  const result = await response.json() as { sessionToken?: unknown };
-  if (typeof result.sessionToken !== "string") throw new Error("Spawnpoint did not create a valid session.");
-  return result.sessionToken;
+  const result = await response.json() as { accessToken?: unknown };
+  if (typeof result.accessToken !== "string") throw new Error("Spawnpoint did not create a valid session.");
+  return result.accessToken;
 }
 
 export async function exchangeTelegramOidc(idToken: string): Promise<AuthState> {
   try {
     const token = await exchangeTelegram({ idToken });
-    saveToken(token);
+    accessToken = token;
+    clearLegacyTokens();
     return { status: "authenticated", session: await loadSession(token) };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Telegram OIDC sign-in failed." };
@@ -121,9 +122,37 @@ export async function exchangeTelegramOidc(idToken: string): Promise<AuthState> 
 }
 
 async function loadSession(token: string): Promise<SpawnpointSession> {
-  const response = await fetch(`${apiUrl}/session`, { headers: { authorization: `Bearer ${token}` } });
+  const response = await fetch(`${apiUrl}/session`, {
+    headers: { authorization: `Bearer ${token}` },
+    credentials: "include",
+  });
   if (!response.ok) throw new Error("Your Spawnpoint session expired.");
   return response.json() as Promise<SpawnpointSession>;
+}
+
+async function requestRefresh(): Promise<string | null> {
+  const response = await fetch(`${apiUrl}/auth/refresh`, { method: "POST", credentials: "include" });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { error?: unknown } | null;
+    if (body?.error === "refresh_credential_rotated") {
+      const retry = await fetch(`${apiUrl}/auth/refresh`, { method: "POST", credentials: "include" });
+      if (retry.ok) {
+        const retried = await retry.json() as { accessToken?: unknown };
+        return typeof retried.accessToken === "string" ? retried.accessToken : null;
+      }
+    }
+    return null;
+  }
+  const result = await response.json() as { accessToken?: unknown };
+  return typeof result.accessToken === "string" ? result.accessToken : null;
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  refreshPromise ??= requestRefresh().then((token) => {
+    accessToken = token;
+    return token;
+  }).finally(() => { refreshPromise = null; });
+  return refreshPromise;
 }
 
 export async function restoreAuth(): Promise<AuthState> {
@@ -133,7 +162,8 @@ export async function restoreAuth(): Promise<AuthState> {
   if (login !== null) {
     try {
       const token = await exchangeTelegram({ login });
-      saveToken(token);
+      accessToken = token;
+      clearLegacyTokens();
       clearLoginQuery();
       return { status: "authenticated", session: await loadSession(token) };
     } catch (error) {
@@ -141,42 +171,55 @@ export async function restoreAuth(): Promise<AuthState> {
       return { status: "error", message: error instanceof Error ? error.message : "Telegram sign-in failed." };
     }
   }
+  clearLegacyTokens();
+  const refreshed = await refreshAccessToken();
+  if (refreshed !== null) {
+    try {
+      return { status: "authenticated", session: await loadSession(refreshed) };
+    } catch {
+      accessToken = null;
+    }
+  }
   const initData = window.Telegram?.WebApp.initData;
   if (initData) {
     try {
       const token = await exchangeTelegram({ initData });
-      saveToken(token);
+      accessToken = token;
       return { status: "authenticated", session: await loadSession(token) };
     } catch (error) {
       return { status: "error", message: error instanceof Error ? error.message : "Telegram Mini App sign-in failed." };
     }
   }
-  const token = readToken();
-  if (token === null) return { status: "signed-out" };
-  try {
-    return { status: "authenticated", session: await loadSession(token) };
-  } catch {
-    signOut();
-    return { status: "signed-out" };
-  }
+  return { status: "signed-out" };
 }
 
 export function signOut(): void {
-  window.sessionStorage.removeItem(TOKEN_KEY);
+  accessToken = null;
+  clearLegacyTokens();
 }
 
-export function endSession(): void {
+export async function endSession(): Promise<void> {
   signOut();
-  window.location.assign(`${window.location.pathname}#/overview`);
+  try {
+    await fetch(`${apiUrl}/auth/logout`, { method: "POST", credentials: "include" });
+  } finally {
+    window.location.assign(`${window.location.pathname}#/overview`);
+  }
 }
 
 async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const token = readToken();
+  const token = accessToken ?? await refreshAccessToken();
   if (token === null) throw new Error("Your sign-in session expired.");
-  return fetch(`${apiUrl}${path}`, {
+  const send = (bearer: string) => fetch(`${apiUrl}${path}`, {
     ...init,
-    headers: { ...init.headers, authorization: `Bearer ${token}` },
+    credentials: "include",
+    headers: { ...init.headers, authorization: `Bearer ${bearer}` },
   });
+  const first = await send(token);
+  if (first.status !== 401) return first;
+  accessToken = null;
+  const refreshed = await refreshAccessToken();
+  return refreshed === null ? first : send(refreshed);
 }
 
 export async function requestAccess(): Promise<void> {

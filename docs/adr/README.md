@@ -34,7 +34,7 @@ Forty-three records is a wall, and a wall is not a plan. Read the two or three t
 | ~~M1~~ | **Done.** [0011](0011-terraform-for-infrastructure.md), [0010](0010-world-persistence-and-backups.md), [0007](0007-ssm-instead-of-ssh.md) |
 | ~~M2~~ | **Done**, and re-based on Lifecycle V2 on 2026-09-11 — [docs/lifecycle-v2-rollout.md](../lifecycle-v2-rollout.md). The decisions: [0006](0006-on-demand-start-and-idle-shutdown.md), [0025](0025-step-functions-for-long-operations.md), [0032](0032-on-demand-single-instance.md) |
 | M3 — releases and the pipeline | [0008](0008-versioned-mod-releases.md), [0030](0030-desired-and-active-release.md), [0042](0042-preset-scoped-release-identity.md); then [0028](0028-update-proposals.md) and [0029](0029-preview-environments.md), still proposed |
-| M4 — surfaces and identity | Built on [0037](0037-telegram-only-browser-identity.md), [0036](0036-observed-visitors-and-owner-approved-access.md) and [0012](0012-web-control-panel.md); [0016](0016-chat-integrations.md) stays open for Discord |
+| M4 — surfaces and identity | Built on [0045](0045-provider-neutral-login-sessions.md), [0036](0036-observed-visitors-and-owner-approved-access.md) and [0012](0012-web-control-panel.md); [0016](0016-chat-integrations.md) stays open for Discord |
 | Worlds, wipes, presets and games | [0040](0040-reusable-presets-and-world-wipes.md), [0034](0034-per-game-adapter.md), [0033](0033-connectivity-as-a-strategy.md) |
 | Deploying a change to production | [0043](0043-deploy-production-from-reviewed-pull-requests.md), [0044](0044-apply-github-identities-behind-an-owner-gate.md) |
 | Everything else | Later. Read when the milestone arrives |
@@ -96,7 +96,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0034](0034-per-game-adapter.md) | A game is a module: data plus functions, minecraft the byte-identical default | Accepted | cross-cutting |
 | [0035](0035-bootstrap-first-owner.md) | Bootstrap the first Owner through one verified Google identity | Superseded by [0037](0037-telegram-only-browser-identity.md) | M4 |
 | [0036](0036-observed-visitors-and-owner-approved-access.md) | Observe visitors, but let an Owner grant access | Accepted | M4 |
-| [0037](0037-telegram-only-browser-identity.md) | Telegram-only browser identity through signed Widget and Mini App payloads | Accepted | M4 |
+| [0037](0037-telegram-only-browser-identity.md) | Telegram-only browser identity through signed Widget and Mini App payloads | **Superseded** by [0045](0045-provider-neutral-login-sessions.md) | M4 |
 | [0038](0038-invitation-delivery-claim.md) | Claim an invitation once before Telegram delivery | Accepted | M4 |
 | [0039](0039-git-presets-instantiate-world-generations.md) | Git presets instantiate recoverable world generations | **Superseded** by [0040](0040-reusable-presets-and-world-wipes.md) | cross-cutting |
 | [0040](0040-reusable-presets-and-world-wipes.md) | Reusable presets create worlds whose wipes own release state | Accepted | cross-cutting |
@@ -104,6 +104,8 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0042](0042-preset-scoped-release-identity.md) | Release identity and storage are scoped by preset | Accepted | cross-cutting |
 | [0043](0043-deploy-production-from-reviewed-pull-requests.md) | Deploy production from reviewed pull requests through OIDC roles | Accepted, amended by [0044](0044-apply-github-identities-behind-an-owner-gate.md) | cross-cutting |
 | [0044](0044-apply-github-identities-behind-an-owner-gate.md) | Apply the GitHub identities from the pipeline, behind an owner gate | Accepted | cross-cutting |
+| [0045](0045-provider-neutral-login-sessions.md) | Keep login sessions independent of identity providers | Accepted | M4 |
+| [0046](0046-keep-dynamodb-until-relational-needs-arrive.md) | Keep DynamoDB until relational needs arrive | Accepted | cross-cutting |
 
 ## Decisions still to record
 

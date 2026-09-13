@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 import sys
+import textwrap
 from pathlib import Path
 
 WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
@@ -28,6 +29,16 @@ def permission_scopes(text: str) -> dict[str, str]:
     return scopes
 
 
+def job_permission_scopes(text: str, job_name: str) -> dict[str, str]:
+    match = re.search(
+        rf"(?ms)^  {re.escape(job_name)}:\n(.*?)(?=^  [\w-]+:\n|\Z)",
+        text,
+    )
+    if match is None:
+        return {}
+    return permission_scopes(textwrap.dedent(match.group(1)))
+
+
 def check_action_pins(text: str) -> list[str]:
     problems: list[str] = []
     for line in text.splitlines():
@@ -42,9 +53,17 @@ def check_action_pins(text: str) -> list[str]:
 def check_test_workflow(text: str) -> list[str]:
     problems: list[str] = []
     scopes = permission_scopes(text)
-    expected = {"contents": "read", "pull-requests": "write"}
+    expected = {"contents": "read"}
     if scopes != expected:
         problems.append(f"check permissions must be {expected}, found {scopes}")
+    aggregate_scopes = job_permission_scopes(text, "check")
+    expected_aggregate = {"contents": "read", "pull-requests": "write"}
+    if aggregate_scopes != expected_aggregate:
+        problems.append(
+            f"aggregate check permissions must be {expected_aggregate}, found {aggregate_scopes}"
+        )
+    if text.count("pull-requests: write") != 1:
+        problems.append("pull request write access must be granted only to the aggregate check job")
     for forbidden, reason in (
         ("id-token", "OIDC would give the check a cloud identity"),
         ("aws-actions/", "an AWS action means cloud credentials"),

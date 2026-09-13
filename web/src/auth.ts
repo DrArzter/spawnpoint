@@ -70,14 +70,10 @@ export type AuthState =
 
 const TOKEN_KEY = "spawnpoint.auth.session";
 const apiUrl = (import.meta.env.VITE_ACCESS_API_URL ?? "").replace(/\/$/, "");
-export const telegramBotUsername = (import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? "").replace(/^@/, "");
+export const telegramOidcClientId = (import.meta.env.VITE_TELEGRAM_OIDC_CLIENT_ID ?? "").trim();
 
 export function authConfigured(): boolean {
-  return apiUrl !== "" && /^[A-Za-z][A-Za-z0-9_]{3,30}bot$/.test(telegramBotUsername);
-}
-
-export function telegramLoginRedirectUrl(): string {
-  return `${window.location.origin}${window.location.pathname}`;
+  return apiUrl !== "" && (Boolean(window.Telegram?.WebApp.initData) || /^[1-9][0-9]+$/.test(telegramOidcClientId));
 }
 
 function readToken(): string | null {
@@ -102,7 +98,7 @@ function loginPayloadFromQuery(): Record<string, string> | null {
   }));
 }
 
-async function exchangeTelegram(body: { login: Record<string, string> } | { initData: string }): Promise<string> {
+async function exchangeTelegram(body: { idToken: string } | { login: Record<string, string> } | { initData: string }): Promise<string> {
   const response = await fetch(`${apiUrl}/auth/telegram`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -112,6 +108,16 @@ async function exchangeTelegram(body: { login: Record<string, string> } | { init
   const result = await response.json() as { sessionToken?: unknown };
   if (typeof result.sessionToken !== "string") throw new Error("Spawnpoint did not create a valid session.");
   return result.sessionToken;
+}
+
+export async function exchangeTelegramOidc(idToken: string): Promise<AuthState> {
+  try {
+    const token = await exchangeTelegram({ idToken });
+    saveToken(token);
+    return { status: "authenticated", session: await loadSession(token) };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Telegram OIDC sign-in failed." };
+  }
 }
 
 async function loadSession(token: string): Promise<SpawnpointSession> {

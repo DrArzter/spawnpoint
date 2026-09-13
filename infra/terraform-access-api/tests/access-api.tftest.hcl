@@ -91,7 +91,7 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
 
   variables {
     bootstrap_owner_telegram_id = "1780660807"
-    telegram_bot_username       = "drarzterbot"
+    telegram_oidc_client_id     = "8521897198"
     panel_url                   = "https://spawnpoint.example.dev/"
     legacy_panel_url            = "https://legacy.example.dev/"
   }
@@ -152,6 +152,11 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   assert {
     condition     = aws_lambda_function.access_api.environment[0].variables.BOT_TOKEN_PARAMETER == "/spawnpoint/bot/token"
     error_message = "The verifier must read the existing bot token from SecureString rather than Terraform state."
+  }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.TELEGRAM_OIDC_CLIENT_ID == "8521897198"
+    error_message = "The OIDC verifier must receive the externally configured public BotFather client ID."
   }
 
   assert {

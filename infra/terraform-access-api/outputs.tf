@@ -3,7 +3,7 @@ output "api_url" {
   value       = aws_apigatewayv2_api.access.api_endpoint
 }
 
-output "telegram_bot_username" {
-  description = "Bot username embedded by the web build in the official Telegram Login Widget."
-  value       = var.telegram_bot_username
+output "telegram_oidc_client_id" {
+  description = "Public BotFather Client ID consumed by the browser Telegram Login library."
+  value       = var.telegram_oidc_client_id
 }

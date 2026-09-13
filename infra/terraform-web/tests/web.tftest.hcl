@@ -24,13 +24,6 @@ mock_provider "aws" {
   }
 
   override_data {
-    target = data.aws_cloudfront_response_headers_policy.security_headers
-    values = {
-      id = "managed-security-headers"
-    }
-  }
-
-  override_data {
     target = data.aws_iam_policy_document.site
     values = {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
@@ -42,6 +35,13 @@ mock_provider "aws" {
     values = {
       domain_name    = "distribution.cloudfront.net"
       hosted_zone_id = "ZCLOUDFRONT"
+    }
+  }
+
+  override_resource {
+    target = aws_cloudfront_response_headers_policy.site
+    values = {
+      id = "spawnpoint-response-headers"
     }
   }
 }
@@ -80,6 +80,15 @@ run "private_origin_and_https_edge" {
   assert {
     condition     = aws_cloudfront_distribution.site.price_class == "PriceClass_100"
     error_message = "The preview stays on the smallest CloudFront edge footprint."
+  }
+
+  assert {
+    condition = (
+      aws_cloudfront_distribution.site.default_cache_behavior[0].response_headers_policy_id == aws_cloudfront_response_headers_policy.site.id &&
+      one(aws_cloudfront_response_headers_policy.site.custom_headers_config[0].items).header == "Cross-Origin-Opener-Policy" &&
+      one(aws_cloudfront_response_headers_policy.site.custom_headers_config[0].items).value == "same-origin-allow-popups"
+    )
+    error_message = "Telegram Login popups require a permissive opener policy without dropping the site's security policy."
   }
 
   assert {

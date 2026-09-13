@@ -153,6 +153,14 @@ run "deployment_role_trusts_only_the_production_environment" {
   assert {
     condition = anytrue([
       for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      contains(statement.actions, "cloudfront:CreateResponseHeadersPolicy") && contains(statement.actions, "cloudfront:UpdateResponseHeadersPolicy")
+    ])
+    error_message = "The deploy identity must manage the panel's popup-compatible response headers policy."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
       coalesce(statement.effect, "Allow") == "Deny" && contains(statement.actions, "iam:DeleteRole") &&
       alltrue([for resource in statement.resources : endswith(resource, ":role/spawnpoint-github-*")])
     ])

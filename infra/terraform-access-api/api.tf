@@ -142,6 +142,7 @@ resource "aws_lambda_function" "access_api" {
       ACCESS_TABLE_NAME           = data.aws_dynamodb_table.access.name
       BOOTSTRAP_OWNER_TELEGRAM_ID = trimspace(var.bootstrap_owner_telegram_id)
       BOT_TOKEN_PARAMETER         = var.bot_token_parameter
+      TELEGRAM_OIDC_CLIENT_ID     = var.telegram_oidc_client_id
       LIFECYCLE_TABLE_NAME        = data.aws_dynamodb_table.lifecycle.name
       OPERATION_STATE_MACHINES    = jsonencode(local.operation_state_machines)
       RELEASE_BUCKET              = data.aws_s3_bucket.releases.id

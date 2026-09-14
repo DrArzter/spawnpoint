@@ -106,6 +106,8 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0044](0044-apply-github-identities-behind-an-owner-gate.md) | Apply the GitHub identities from the pipeline, behind an owner gate | Accepted | cross-cutting |
 | [0045](0045-provider-neutral-login-sessions.md) | Keep login sessions independent of identity providers | Accepted | M4 |
 | [0046](0046-keep-dynamodb-until-relational-needs-arrive.md) | Keep DynamoDB until relational needs arrive | Accepted | cross-cutting |
+| [0047](0047-normalize-preset-sources-before-building.md) | Normalize preset sources before building | Accepted | cross-cutting |
+| [0048](0048-one-instance-per-active-world.md) | One instance per active world, created for the session | Proposed | later |
 
 ## Decisions still to record
 
@@ -124,28 +126,17 @@ written, so the numbering stays chronological and nothing has to be renumbered w
   arrives after the money is spent. Needs the current Budgets action capabilities verified before it becomes an ADR.
 - ~~**Retiring a world.**~~ Answered by [ADR-0040](0040-reusable-presets-and-world-wipes.md): archiving keeps the
   record and every backup; purging an archived world removes all of it behind a typed confirmation, permanently.
-- **Concurrent worlds on separate hosts.** Lifting ADR-0023's one-active-at-a-time to one instance per active world.
-  Most of the design is ready by construction — per-world pointers and backup lineages, instance-parametric state
-  machines, per-server lease semantics in Lifecycle V2, per-host watchdog economics. The mechanical seams, named so
-  they do not rot in a conversation: the host Terraform root holds exactly one instance (a `for_each` over the
-  catalog, with `moved` blocks protecting the live host), workflow IAM scopes mutations to one instance ARN (a list
-  or a tag condition), the V2 lifecycle table is a single item (key by instance), the bot's single `INSTANCE_ID`
-  becomes a world argument with catalog lookup, notifications must start naming the world, and the connection address
-  becomes a catalog field. The one external ceiling: ZeroTier's ten free device slots — each concurrent host eats
-  one, which is where [ADR-0033](0033-connectivity-as-a-strategy.md)'s non-gating strategies for Steam-auth games
-  earn their place. **The same-host variant is the deeper change and the cheaper bill**: several servers on one
-  instance breaks the load-bearing equation `session == instance lifetime` that ADR-0006, ADR-0032 and the stop
-  machine are built on — idle stop must split into a world level (compose-stop that game) and a host level
-  (StopInstances only when every world is idle, a last-one-out refcount the V2 lease model is the right foundation
-  for), and the invariant gains a middle state, "somebody plays something". In exchange: one ZeroTier slot regardless
-  of server count and one instance bill. **Hardware is a dial, never the argument** — the instance type is already a
-  variable, and sizing for neighbours is a catalog value; what must be ready is the *code*, and its topology
-  assumptions live in exactly three places: the unconditional `StopInstances` after a session stop, the single V2
-  lifecycle item, and instance resolution as a singleton. The first seam is already cut: the catalog carries a
-  per-world `host` (data, defaulting to the one host that exists), and `check-host-activity.sh` answers "may this
-  host sleep once I stop?" — trivially idle today, a Choice state at V2 cutover tomorrow. Trigger for either form:
-  two groups wanting different worlds on the same evening; the same-host form is the one to evaluate first when it
-  fires.
+- ~~**Concurrent worlds on separate hosts.**~~ Recorded as [ADR-0048](0048-one-instance-per-active-world.md) on
+  2026-09-14: one instance per active world, created for the session and terminated with it, world data restored from
+  S3 rather than held on a per-world volume, and the address supplied per world by the strategy of
+  [ADR-0033](0033-connectivity-as-a-strategy.md), which is what lifts the overlay's ten-device ceiling. Capacity stays
+  data, so no placement algorithm is written. **The same-host variant stays open**, and remains the cheaper bill and
+  the deeper change; ADR-0048 carries forward the two obstacles that were about to be rediscovered, the RCON port both
+  Factorio and Project Zomboid bind today and the `SRV` asymmetry between the games. It also widens ADR-0006's recorded
+  waiting budget from three minutes to ten, on the owner's ruling that a group will wait if waiting is what keeps the
+  bill at nothing, and makes an always-ready world a per-world policy with its cost attached. One correction to what this
+  placeholder claimed: the catalog carries a per-world `connectivity`, not a per-world `host`, so that seam is not cut
+  yet.
 - **Distribution model, if this is ever handed to other people.** "Clone the repo, authorise a browser, one command,
   a server in minutes" mixes two incompatible shapes: repo-clone needs credentials on the operator's own machine
   (`aws sso login` or a profile), while browser-authorise is the console / CloudFormation "Launch Stack" model. A

@@ -13,6 +13,12 @@ export function isLandingHash(hash: string = window.location.hash): boolean {
   return path === "" || path === "welcome";
 }
 
+// The bare root is the one address a signed-in arrival is redirected away from.
+// `#/welcome` is the front door on purpose, so it always renders.
+export function isRootHash(hash: string = window.location.hash): boolean {
+  return (hash.replace(/^#\/?/, "").split("/")[0] ?? "") === "";
+}
+
 const pageByPath: Record<string, Page> = {
   overview: "worlds",
   worlds: "worlds",

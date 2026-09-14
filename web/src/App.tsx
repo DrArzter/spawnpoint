@@ -7,11 +7,11 @@ import { Dialog, Sheet } from "./components/ui/Dialog";
 import { SelectField, TextField } from "./components/ui/Fields";
 import { SnackbarProvider, useSnackbar } from "./components/ui/Snackbar";
 import { sessionStatus } from "./components/ui/Status";
+import { demoEnabled, leaveDemo, resetDemo } from "./demo";
 import { IconName } from "./icons";
 import { formatDateTime } from "./lib/format";
 import { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, World } from "./model";
-import { demoEnabled, leaveDemo, resetDemo } from "./demo";
-import { isLandingHash, routeHash } from "./routing";
+import { isLandingHash, isRootHash, routeHash } from "./routing";
 import { AccessScreen } from "./screens/AccessScreen";
 import { AuthScreen, BootScreen } from "./screens/AuthScreen";
 import { ConsoleScreen } from "./screens/ConsoleScreen";
@@ -43,7 +43,18 @@ export function App() {
   useEffect(() => {
     let active = true;
     restoreAuth()
-      .then((state) => { if (active) setAuth(state); })
+      .then((state) => {
+        if (!active) return;
+        setAuth(state);
+        // Arriving at the bare root with a session already in hand means the
+        // console, not the front door: the Mini App opens that way every time,
+        // and so does a browser that still holds its refresh cookie. The front
+        // door keeps its own address at `#/welcome`.
+        if (state.status === "authenticated" && state.session.state === "active" && isRootHash()) {
+          window.history.replaceState(null, "", "#/worlds");
+          setAtLanding(false);
+        }
+      })
       .catch((error: unknown) => { if (active) setAuth({ status: "error", message: error instanceof Error ? error.message : "Sign-in failed." }); });
     return () => { active = false; };
   }, []);

@@ -25,6 +25,7 @@ export type LifecycleRecord = Readonly<{
   desiredState: DesiredServerState;
   observedState: ObservedServerState;
   activeSessionId: string | null;
+  activeWorldId: string | null;
   fencingToken: number;
   lease: Lease | null;
   idle: IdleState | null;
@@ -95,6 +96,7 @@ export function initialLifecycleRecord(
     desiredState: "stopped",
     observedState: "stopped",
     activeSessionId: null,
+    activeWorldId: null,
     fencingToken: 0,
     lease: null,
     idle: null,
@@ -175,13 +177,16 @@ export function beginSession(
   record: LifecycleRecord,
   ownership: LeaseOwnership,
   sessionId: string,
+  worldId: string,
   nowEpochSeconds: number,
 ): LifecycleRecord {
   requireOwnership(record, ownership, nowEpochSeconds);
   requireId("sessionId", sessionId);
+  requireId("worldId", worldId);
 
   if (
     record.activeSessionId === sessionId &&
+    record.activeWorldId === worldId &&
     record.desiredState === "running" &&
     record.observedState === "starting"
   ) {
@@ -190,7 +195,8 @@ export function beginSession(
   if (
     record.desiredState !== "stopped" ||
     record.observedState !== "stopped" ||
-    record.activeSessionId !== null
+    record.activeSessionId !== null ||
+    record.activeWorldId != null
   ) {
     throw new LifecycleConflict("a new session can begin only from fully stopped state");
   }
@@ -200,6 +206,7 @@ export function beginSession(
     desiredState: "running",
     observedState: "starting",
     activeSessionId: sessionId,
+    activeWorldId: worldId,
     idle: null,
     updatedAtEpochSeconds: nowEpochSeconds,
   };
@@ -361,6 +368,7 @@ export function markStopped(
     ...record,
     observedState: "stopped",
     activeSessionId: null,
+    activeWorldId: null,
     idle: null,
     updatedAtEpochSeconds: nowEpochSeconds,
   };

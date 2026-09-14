@@ -12,16 +12,18 @@ import { Icon } from "../icons";
 import { formatBytes, formatDate, formatDateTime, formatTime, repositoryName, shortCommit, shortDigest } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Operation, ServerState, Wipe, World } from "../model";
 import { routeHash } from "../routing";
+import type { SharedHostSession } from "../session";
 import { Pending, pendingFor, SessionAction, WorldActionKind } from "../shell/actions";
-import { releaseSummary, sessionControlHint } from "./WorldsScreen";
+import { releaseSummary, sessionActionForWorld, sessionControlAvailability, SharedHostNotice } from "./WorldsScreen";
 
 type Tab = "details" | "wipes" | "backups" | "releases";
 
-export function WorldScreen({ game, world, snapshot, serverState, granted, pending, onRefresh, onSessionAction, onWorldAction, onInvite, onDownloadPack }: {
+export function WorldScreen({ game, world, snapshot, serverState, sharedSession, granted, pending, onRefresh, onSessionAction, onWorldAction, onInvite, onDownloadPack }: {
   game: Game;
   world: World;
   snapshot: ControlPlaneSnapshot | null;
   serverState: ServerState;
+  sharedSession: SharedHostSession;
   granted: ReadonlySet<string>;
   pending: Pending | null;
   onRefresh: () => void;
@@ -36,9 +38,10 @@ export function WorldScreen({ game, world, snapshot, serverState, granted, pendi
 
   const rowPending = pendingFor(pending, world.id);
   const busy = rowPending !== null;
-  const transitioning = serverState === "starting" || serverState === "stopping";
-  const action: SessionAction = serverState === "running" ? "stop" : "start";
+  const controlBusy = pending?.kind === "session" || pending?.kind === "lifecycle";
+  const action: SessionAction = sessionActionForWorld(world, game, sharedSession);
   const permitted = granted.has(action === "start" ? "session.start" : "session.stop");
+  const sessionControl = sessionControlAvailability(world, game, sharedSession, permitted, controlBusy || busy);
   const canManage = granted.has("world.manage");
   const preset = game.presets.find((item) => item.id === (world.preset?.id ?? world.profileId));
   const currentWipe = world.wipes.find((wipe) => wipe.state === "current") ?? world.wipes.at(-1);
@@ -94,11 +97,12 @@ export function WorldScreen({ game, world, snapshot, serverState, granted, pendi
           {granted.has("invitation.send") && <Button icon="send" onClick={() => onInvite(game, world)} variant="outlined">Invite players</Button>}
           <span className="action-group">
             <Button
-              disabled={!world.sessionControlAvailable || !permitted || transitioning || busy}
+              aria-label={`${action === "stop" ? "Stop" : "Start"} ${world.displayName}. ${sessionControl.hint}`}
+              disabled={sessionControl.disabled}
               icon={action === "stop" ? "stop" : "play_arrow"}
               loading={rowPending?.kind === "session"}
               onClick={() => onSessionAction(game, world, action)}
-              title={sessionControlHint(world, action, permitted, transitioning)}
+              title={sessionControl.hint}
               variant={action === "stop" ? "danger" : "filled"}
             >
               {action === "stop" ? "Stop" : "Start"}
@@ -112,6 +116,7 @@ export function WorldScreen({ game, world, snapshot, serverState, granted, pendi
       />
       {world.materialization === "archived" && <Banner description="Restore one of its backups to open a new wipe, or delete it permanently from the actions menu." title="This world is archived" tone="warning" />}
       {rowPending?.kind === "lifecycle" && <Banner description={`Spawnpoint is requesting ${rowPending.action === "wipe" ? "a new wipe" : rowPending.action}. The operation appears in the table below once accepted.`} title="World operation in progress" tone="info" />}
+      <SharedHostNotice busy={controlBusy} session={sharedSession} />
 
       <div className="world-tabs">
         <Tabs label="World sections" onChange={setTab} options={tabs} value={tab} />

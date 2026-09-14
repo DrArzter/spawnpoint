@@ -20,7 +20,7 @@ export const previewSession: ActiveSession = {
 export const previewSnapshot: ControlPlaneSnapshot = {
   observedAt: "2026-08-29T18:40:00.000Z",
   games: [
-    { id: "minecraft", code: "MC", displayName: "Minecraft", lifecycle: { schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "session-42", updatedAtEpochSeconds: 1788028800 }, presets: [
+    { id: "minecraft", code: "MC", displayName: "Minecraft", lifecycle: { schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "session-42", activeWorldId: "minecraft-rostik-12345678", updatedAtEpochSeconds: 1788028800 }, presets: [
       { id: "industrial", displayName: "Industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "a".repeat(40), profileDigest: "b".repeat(64), releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3" },
     ], worlds: [
       { id: "minecraft-rostik-12345678", displayName: "Rostik", profileId: "industrial", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: { id: "industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "a".repeat(40), profileDigest: "b".repeat(64), releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3" }, wipes: [
@@ -29,11 +29,11 @@ export const previewSnapshot: ControlPlaneSnapshot = {
       ], connectionAddress: "172.29.23.24:25565", release: { state: "available", generationId: `gen-${"2".repeat(32)}`, activeRelease: "1.2", desiredRelease: "1.2" } },
       { id: "vanilla", displayName: "Vanilla", profileId: "minecraft-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: false, connectivity: "zerotier", materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:25565", release: { state: "available", generationId: null, activeRelease: "1.21", desiredRelease: "1.21" } },
     ] },
-    { id: "factorio", code: "FA", displayName: "Factorio", lifecycle: { schemaVersion: 1, serverId: "factorio", desiredState: "stopped", observedState: "stopped", activeSessionId: null, updatedAtEpochSeconds: 1788024000 }, presets: [], worlds: [
+    { id: "factorio", code: "FA", displayName: "Factorio", lifecycle: { schemaVersion: 1, serverId: "factorio", desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, updatedAtEpochSeconds: 1788024000 }, presets: [], worlds: [
       { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:34197", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },
       { id: "factorio-archive", displayName: "Archived rail world", profileId: "factorio-rail", sessionControlAvailable: false, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "archived", preset: null, wipes: [], connectionAddress: null, release: { state: "available", generationId: null, activeRelease: "1.0", desiredRelease: "1.0" } },
     ] },
-    { id: "zomboid", code: "PZ", displayName: "Project Zomboid", lifecycle: { schemaVersion: 1, serverId: "zomboid", desiredState: "stopped", observedState: "stopped", activeSessionId: null, updatedAtEpochSeconds: 1788024000 }, presets: [], worlds: [
+    { id: "zomboid", code: "PZ", displayName: "Project Zomboid", lifecycle: { schemaVersion: 1, serverId: "zomboid", desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, updatedAtEpochSeconds: 1788024000 }, presets: [], worlds: [
       { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:16261", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },
     ] },
   ],

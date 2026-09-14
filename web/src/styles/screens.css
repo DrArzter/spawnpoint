@@ -135,6 +135,9 @@
 }
 
 .preset-source a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
   font-weight: 500;
 }
 
@@ -307,6 +310,12 @@
   font-weight: 500;
 }
 
+.terminal-bar .icon-btn {
+  flex: none;
+  margin-left: auto;
+  color: var(--term-muted);
+}
+
 .terminal-bar .terminal-status {
   display: inline-flex;
   align-items: center;
@@ -322,11 +331,6 @@
 
 .terminal-bar .terminal-status.online .icon {
   color: #81c995;
-}
-
-.terminal-bar .icon-btn {
-  margin-left: auto;
-  color: var(--term-muted);
 }
 
 .terminal-bar .icon-btn:hover {
@@ -438,26 +442,31 @@
 }
 
 /* Preview badge in the app bar */
-.preview-badge {
+.demo-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
-  padding: 0 8px;
+  height: 32px;
+  padding: 0 8px 0 10px;
   border-radius: var(--radius-control);
   background: var(--warning-container);
   color: var(--warning-ink);
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.demo-badge:hover {
+  background: color-mix(in srgb, var(--warning-container) 84%, var(--ink));
 }
 
 @media (max-width: 599px) {
-  .preview-badge span {
+  .demo-badge span {
     display: none;
   }
 
-  .preview-badge {
+  .demo-badge {
     padding: 0 6px;
   }
 }

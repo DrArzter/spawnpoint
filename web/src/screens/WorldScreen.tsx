@@ -149,6 +149,7 @@ export function WorldScreen({ game, world, snapshot, serverState, sharedSession,
           gameId={game.id}
           onFilter={setWipeFilter}
           onRestore={(entry) => onWorldAction(game, world, "restore", { key: entry.key, name: entry.archiveName })}
+          settled={`${world.wipes.length}:${operations.length}`}
           world={world}
         />}
 
@@ -158,7 +159,7 @@ export function WorldScreen({ game, world, snapshot, serverState, sharedSession,
   );
 }
 
-function WipesTab({ world, onShowBackups }: { world: World; onShowBackups: (wipe: Wipe) => void }) {
+function WipesTab({ world, onShowBackups }: Readonly<{ world: World; onShowBackups: (wipe: Wipe) => void }>) {
   const columns: Column<Wipe>[] = [
     { id: "wipe", label: "Wipe", width: "120px", render: (wipe) => <strong className="num">#{wipe.number}</strong> },
     { id: "status", label: "Status", width: "140px", render: (wipe) => wipe.state === "current" ? <Chip tone="primary">Current</Chip> : <Chip tone="tonal">Closed</Chip> },
@@ -174,9 +175,11 @@ function WipesTab({ world, onShowBackups }: { world: World; onShowBackups: (wipe
   );
 }
 
-function BackupsTab({ world, gameId, canRead, canRestore, busy, filter, onFilter, onRestore }: {
+function BackupsTab({ world, gameId, canRead, canRestore, busy, filter, onFilter, onRestore, settled }: {
   world: World;
   gameId: string;
+  /** Changes when a wipe lands or an operation finishes, so the listing refetches. */
+  settled: string;
   canRead: boolean;
   canRestore: boolean;
   busy: boolean;
@@ -188,18 +191,20 @@ function BackupsTab({ world, gameId, canRead, canRestore, busy, filter, onFilter
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
 
-  // Loaded when the tab opens: an inventory is a listing per world and nobody
-  // pays for it while reading details.
+  useEffect(() => setInventory(null), [gameId, world.id]);
+
+  // Loaded when the tab opens, and again once an operation settles: a stop, a
+  // wipe and a restore each leave a new archive behind. An inventory is a
+  // listing per world, so nobody pays for it while reading other tabs.
   useEffect(() => {
     if (!canRead) return;
     let current = true;
-    setInventory(null);
     setError(null);
     loadBackups(gameId, world.id)
       .then((result) => { if (current) setInventory(result); })
       .catch((cause: unknown) => { if (current) setError(cause instanceof Error ? cause.message : "The backup inventory is unavailable."); });
     return () => { current = false; };
-  }, [canRead, gameId, world.id, revision]);
+  }, [canRead, gameId, world.id, revision, settled]);
 
   const entries = useMemo(() => (inventory?.entries ?? []).filter((entry) => filter === null || entry.generationId === filter), [inventory, filter]);
   const wipeNumber = (generationId: string | null) => world.wipes.find((wipe) => wipe.id === generationId)?.number;

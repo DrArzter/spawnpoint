@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 
 import { Icon, IconName } from "../../icons";
 import { cx } from "../../lib/cx";
+import { Avatar } from "../Avatar";
 import { IconButton } from "./Button";
 
 export type MenuItem = {
@@ -17,13 +18,15 @@ export type MenuItem = {
 
 // Overflow menu in the top layer (popover API), so table scroll containers
 // never clip it; positioned from the trigger's rectangle on open.
-export function Menu({ label, icon = "more_vert", items, align = "end", size = "medium" }: {
+export function Menu({ label, icon = "more_vert", items, align = "end", size = "medium", avatar, chip }: Readonly<{
   label: string;
   icon?: IconName;
   items: readonly (MenuItem | "separator")[];
   align?: "start" | "end";
   size?: "small" | "medium";
-}) {
+  avatar?: { name: string; photoUrl?: string | null };
+  chip?: { label: string; icon: IconName; className: string };
+}>) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -79,7 +82,9 @@ export function Menu({ label, icon = "more_vert", items, align = "end", size = "
 
   return (
     <>
-      <IconButton aria-controls={id} aria-expanded={open} aria-haspopup="menu" icon={icon} label={label} onClick={() => (open ? hide() : show())} ref={trigger} size={size} />
+      {avatar && <button aria-controls={id} aria-expanded={open} aria-haspopup="menu" aria-label={label} className="appbar-avatar" onClick={() => (open ? hide() : show())} ref={trigger} title={label} type="button"><Avatar name={avatar.name} photoUrl={avatar.photoUrl} /></button>}
+      {chip && <button aria-controls={id} aria-expanded={open} aria-haspopup="menu" className={chip.className} onClick={() => (open ? hide() : show())} ref={trigger} title={label} type="button"><Icon name={chip.icon} size={14} /><span>{chip.label}</span><Icon name="expand_more" size={14} /></button>}
+      {!avatar && !chip && <IconButton aria-controls={id} aria-expanded={open} aria-haspopup="menu" icon={icon} label={label} onClick={() => (open ? hide() : show())} ref={trigger} size={size} />}
       <div className="menu" data-open={open || undefined} id={id} onKeyDown={onKeyDown} popover="auto" ref={panel} role="menu">
         {items.map((item, index) => item === "separator" ? <hr key={`separator-${index}`} /> : (
           <button

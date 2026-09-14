@@ -1,23 +1,26 @@
 import { Avatar } from "../components/Avatar";
 import { IconButton } from "../components/ui/Button";
+import { Menu } from "../components/ui/Menu";
 import { Icon } from "../icons";
 import type { Game } from "../model";
 import type { Theme } from "../telegram";
 
-export function SpawnpointMark({ size = 32 }: { size?: number }) {
-  // The mark: a spawn point seen from above, a ring with a settled centre.
+export function SpawnpointMark({ size = 32 }: Readonly<{ size?: number }>) {
+  // The mark: one block seen from above, the spawn point set on its top face.
   return (
     <span aria-hidden="true" className="mark" style={{ width: size, height: size, borderRadius: size / 4 }}>
-      <svg fill="none" height={size * 0.62} viewBox="0 0 24 24" width={size * 0.62}>
-        <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="2" />
-        <circle cx="12" cy="12" fill="currentColor" r="3.2" />
-        <path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+      <svg fill="currentColor" height={size * 0.72} viewBox="0 0 24 24" width={size * 0.72}>
+        <path d="M12 3 20.5 7.9v8.2L12 21l-8.5-4.9V7.9L12 3Z" opacity="0.32" />
+        <path d="M12 3l8.5 4.9L12 12.8 3.5 7.9 12 3Z" />
+        <path d="M3.5 7.9 12 12.8V21l-8.5-4.9V7.9Z" opacity="0.78" />
+        <path d="M20.5 7.9 12 12.8V21l8.5-4.9V7.9Z" opacity="0.5" />
+        <circle cx="12" cy="7.9" fill="var(--primary)" r="2.2" />
       </svg>
     </span>
   );
 }
 
-export function AppBar({ game, onMenu, onScope, scopeDisabled, theme, themeLabel, onTheme, viewerName, viewerPhoto, onProfile, preview }: {
+export function AppBar({ game, onMenu, onScope, scopeDisabled, theme, themeLabel, onTheme, viewerName, viewerPhoto, onProfile, demo, onDemoReset, onDemoLeave }: Readonly<{
   game: Game | undefined;
   onMenu: () => void;
   onScope: () => void;
@@ -28,8 +31,10 @@ export function AppBar({ game, onMenu, onScope, scopeDisabled, theme, themeLabel
   viewerName: string;
   viewerPhoto?: string | null;
   onProfile: () => void;
-  preview: boolean;
-}) {
+  demo: boolean;
+  onDemoReset: () => void;
+  onDemoLeave: () => void;
+}>) {
   return (
     <header className="appbar">
       <IconButton icon="menu" label="Toggle navigation" onClick={onMenu} />
@@ -45,7 +50,18 @@ export function AppBar({ game, onMenu, onScope, scopeDisabled, theme, themeLabel
       </button>
       <span className="appbar-spacer" />
       <div className="appbar-actions">
-        {preview && <span className="preview-badge" title="Fixture data from src/preview.ts, no backend calls"><Icon name="warning" size={14} /><span>Preview data</span></span>}
+        {demo && (
+          <Menu
+            chip={{ label: "Demo data", icon: "warning", className: "demo-badge" }}
+            items={[
+              { id: "about", label: "Everything here is in memory", detail: "No AWS call leaves this tab", icon: "info", disabled: true, onSelect: () => undefined },
+              "separator",
+              { id: "reset", label: "Reset the demo", detail: "Back to the starting state", icon: "refresh", onSelect: onDemoReset },
+              { id: "leave", label: "Leave the demo", icon: "logout", onSelect: onDemoLeave },
+            ]}
+            label="Demo data: in-memory, nothing reaches AWS"
+          />
+        )}
         <IconButton icon={theme === "dark" ? "light_mode" : "dark_mode"} label={`${themeLabel}. Change theme`} onClick={onTheme} />
         <button aria-label="Open my profile" className="appbar-avatar" onClick={onProfile} title={viewerName} type="button">
           <Avatar name={viewerName} photoUrl={viewerPhoto} />

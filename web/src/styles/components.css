@@ -475,7 +475,7 @@ button.chip[aria-pressed="true"] {
   padding: 0 6px;
   border-radius: var(--radius-pill);
   background: var(--surface-variant);
-  color: var(--ink-secondary);
+  color: var(--ink);
   font-size: 12px;
 }
 
@@ -553,6 +553,9 @@ button.chip[aria-pressed="true"] {
 }
 
 .table .row-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
   color: var(--primary-ink);
   font-weight: 500;
   text-decoration: none;
@@ -721,6 +724,7 @@ button.chip[aria-pressed="true"] {
   padding: 16px 0 4px;
   font-size: 14px;
   font-weight: 500;
+  line-height: 20px;
   color: var(--ink);
 }
 
@@ -1488,7 +1492,15 @@ button.chip[aria-pressed="true"] {
   .icon-btn,
   .inline-select,
   .tab,
-  .menu-item {
+  .menu-item,
+  .demo-badge {
+    min-height: 44px;
+  }
+
+  .table .row-link,
+  .preset-source a,
+  .breadcrumb a,
+  .breadcrumb button {
     min-height: 44px;
   }
 

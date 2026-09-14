@@ -4,38 +4,244 @@
   "title": "Design System: Spawnpoint Console",
   "extensions": {
     "colorMeta": {
-      "canvas": { "role": "neutral", "displayName": "Canvas Grey", "canonical": "#f8f9fa", "tonalRamp": ["#202124", "#303134", "#3c4043", "#5f6368", "#80868b", "#dadce0", "#f1f3f4", "#f8f9fa"] },
-      "surface": { "role": "neutral", "displayName": "Surface White", "canonical": "#ffffff", "tonalRamp": ["#202124", "#2d2e31", "#3c4043", "#5f6368", "#9aa0a6", "#dadce0", "#f1f3f4", "#ffffff"] },
-      "surface-variant": { "role": "neutral", "displayName": "Surface Variant", "canonical": "#f1f3f4", "tonalRamp": ["#3c4043", "#5f6368", "#80868b", "#9aa0a6", "#bdc1c6", "#dadce0", "#e8eaed", "#f1f3f4"] },
-      "outline": { "role": "neutral", "displayName": "Hairline Outline", "canonical": "#dadce0", "tonalRamp": ["#202124", "#3c4043", "#5f6368", "#80868b", "#9aa0a6", "#bdc1c6", "#dadce0", "#f1f3f4"] },
-      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#202124", "tonalRamp": ["#202124", "#3c4043", "#5f6368", "#80868b", "#9aa0a6", "#bdc1c6", "#dadce0", "#e8eaed"] },
-      "ink-secondary": { "role": "neutral", "displayName": "Ink Secondary", "canonical": "#5f6368", "tonalRamp": ["#3c4043", "#5f6368", "#80868b", "#9aa0a6", "#bdc1c6", "#dadce0", "#e8eaed", "#f1f3f4"] },
-      "primary": { "role": "primary", "displayName": "Google Blue", "canonical": "#1a73e8", "tonalRamp": ["#0d47a1", "#1557b0", "#185abc", "#1967d2", "#1a73e8", "#4285f4", "#8ab4f8", "#d2e3fc"] },
-      "success": { "role": "status", "displayName": "Success Green", "canonical": "#1e8e3e", "tonalRamp": ["#0d3d1a", "#137333", "#188038", "#1e8e3e", "#34a853", "#5bb974", "#81c995", "#e6f4ea"] },
-      "warning": { "role": "status", "displayName": "Warning Amber", "canonical": "#f9ab00", "tonalRamp": ["#7a5600", "#b06000", "#e37400", "#f9ab00", "#fbbc04", "#fcc934", "#fdd663", "#fef7e0"] },
-      "error": { "role": "status", "displayName": "Error Red", "canonical": "#d93025", "tonalRamp": ["#5c0a06", "#93160f", "#c5221f", "#d93025", "#ea4335", "#ee675c", "#f28b82", "#fce8e6"] },
-      "info": { "role": "status", "displayName": "Info Blue", "canonical": "#1a73e8", "tonalRamp": ["#0d47a1", "#1557b0", "#185abc", "#1967d2", "#1a73e8", "#4285f4", "#8ab4f8", "#e8f0fe"] }
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Canvas Grey",
+        "canonical": "#f8f9fa",
+        "tonalRamp": [
+          "#202124",
+          "#303134",
+          "#3c4043",
+          "#5f6368",
+          "#80868b",
+          "#dadce0",
+          "#f1f3f4",
+          "#f8f9fa"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#202124",
+          "#2d2e31",
+          "#3c4043",
+          "#5f6368",
+          "#9aa0a6",
+          "#dadce0",
+          "#f1f3f4",
+          "#ffffff"
+        ]
+      },
+      "surface-variant": {
+        "role": "neutral",
+        "displayName": "Surface Variant",
+        "canonical": "#f1f3f4",
+        "tonalRamp": [
+          "#3c4043",
+          "#5f6368",
+          "#80868b",
+          "#9aa0a6",
+          "#bdc1c6",
+          "#dadce0",
+          "#e8eaed",
+          "#f1f3f4"
+        ]
+      },
+      "outline": {
+        "role": "neutral",
+        "displayName": "Hairline Outline",
+        "canonical": "#dadce0",
+        "tonalRamp": [
+          "#202124",
+          "#3c4043",
+          "#5f6368",
+          "#80868b",
+          "#9aa0a6",
+          "#bdc1c6",
+          "#dadce0",
+          "#f1f3f4"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#202124",
+        "tonalRamp": [
+          "#202124",
+          "#3c4043",
+          "#5f6368",
+          "#80868b",
+          "#9aa0a6",
+          "#bdc1c6",
+          "#dadce0",
+          "#e8eaed"
+        ]
+      },
+      "ink-secondary": {
+        "role": "neutral",
+        "displayName": "Ink Secondary",
+        "canonical": "#5f6368",
+        "tonalRamp": [
+          "#3c4043",
+          "#5f6368",
+          "#80868b",
+          "#9aa0a6",
+          "#bdc1c6",
+          "#dadce0",
+          "#e8eaed",
+          "#f1f3f4"
+        ]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Google Blue",
+        "canonical": "#1a73e8",
+        "tonalRamp": [
+          "#0d47a1",
+          "#1557b0",
+          "#185abc",
+          "#1967d2",
+          "#1a73e8",
+          "#4285f4",
+          "#8ab4f8",
+          "#d2e3fc"
+        ]
+      },
+      "success": {
+        "role": "status",
+        "displayName": "Success Green",
+        "canonical": "#1e8e3e",
+        "tonalRamp": [
+          "#0d3d1a",
+          "#137333",
+          "#188038",
+          "#1e8e3e",
+          "#34a853",
+          "#5bb974",
+          "#81c995",
+          "#e6f4ea"
+        ]
+      },
+      "warning": {
+        "role": "status",
+        "displayName": "Warning Amber",
+        "canonical": "#f9ab00",
+        "tonalRamp": [
+          "#7a5600",
+          "#b06000",
+          "#e37400",
+          "#f9ab00",
+          "#fbbc04",
+          "#fcc934",
+          "#fdd663",
+          "#fef7e0"
+        ]
+      },
+      "error": {
+        "role": "status",
+        "displayName": "Error Red",
+        "canonical": "#d93025",
+        "tonalRamp": [
+          "#5c0a06",
+          "#93160f",
+          "#c5221f",
+          "#d93025",
+          "#ea4335",
+          "#ee675c",
+          "#f28b82",
+          "#fce8e6"
+        ]
+      },
+      "info": {
+        "role": "status",
+        "displayName": "Info Blue",
+        "canonical": "#1a73e8",
+        "tonalRamp": [
+          "#0d47a1",
+          "#1557b0",
+          "#185abc",
+          "#1967d2",
+          "#1a73e8",
+          "#4285f4",
+          "#8ab4f8",
+          "#e8f0fe"
+        ]
+      }
     },
     "typographyMeta": {
-      "title": { "displayName": "Title", "purpose": "Page, dialog and sheet titles; Google Sans Flex 400/500 only." },
-      "body": { "displayName": "Body", "purpose": "Default UI copy and details values, Roboto 400." },
-      "label": { "displayName": "Label", "purpose": "Field labels, table headers, drawer sections, chip text." },
-      "mono": { "displayName": "Mono/Data", "purpose": "IDs, addresses, checksums, timestamps, terminal grammar." }
+      "title": {
+        "displayName": "Title",
+        "purpose": "Page, dialog and sheet titles; Google Sans Flex 400/500 only."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default UI copy and details values, Roboto 400."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels, table headers, drawer sections, chip text."
+      },
+      "mono": {
+        "displayName": "Mono/Data",
+        "purpose": "IDs, addresses, checksums, timestamps, terminal grammar."
+      },
+      "display-hero": {
+        "displayName": "Display (front door)",
+        "purpose": "The landing page's single headline, Google Sans Flex 400 at 44/52 desktop and 32/40 on phones; never used inside the console."
+      }
     },
     "shadows": [
-      { "name": "shadow-1", "value": "0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15)", "purpose": "Filled-button hover, switch thumb resting shadow." },
-      { "name": "shadow-3", "value": "0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)", "purpose": "Menu popover, dialog, sheet, snackbar, and the open mobile drawer." }
+      {
+        "name": "shadow-1",
+        "value": "0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15)",
+        "purpose": "Filled-button hover, switch thumb resting shadow."
+      },
+      {
+        "name": "shadow-3",
+        "value": "0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)",
+        "purpose": "Menu popover, dialog, sheet, snackbar, and the open mobile drawer."
+      }
     ],
     "motion": [
-      { "name": "ease", "value": "cubic-bezier(0.2, 0, 0, 1)", "purpose": "Default easing for all transitions and entrance animations." },
-      { "name": "dur", "value": "180ms", "purpose": "Standard transition/entrance duration (menu, dialog, sheet, snackbar, drawer)." },
-      { "name": "dur-fast", "value": "120ms", "purpose": "Hover/press state transitions." }
+      {
+        "name": "ease",
+        "value": "cubic-bezier(0.2, 0, 0, 1)",
+        "purpose": "Default easing for all transitions and entrance animations."
+      },
+      {
+        "name": "dur",
+        "value": "180ms",
+        "purpose": "Standard transition/entrance duration (menu, dialog, sheet, snackbar, drawer)."
+      },
+      {
+        "name": "dur-fast",
+        "value": "120ms",
+        "purpose": "Hover/press state transitions."
+      }
     ],
     "breakpoints": [
-      { "name": "phone", "value": "max-width: 959px" },
-      { "name": "auto-rail", "value": "960px to 1279px" },
-      { "name": "table-stack", "value": "container max-width: 599px" },
-      { "name": "coarse-pointer", "value": "(pointer: coarse)" }
+      {
+        "name": "phone",
+        "value": "max-width: 959px"
+      },
+      {
+        "name": "auto-rail",
+        "value": "960px to 1279px"
+      },
+      {
+        "name": "table-stack",
+        "value": "container max-width: 599px"
+      },
+      {
+        "name": "coarse-pointer",
+        "value": "(pointer: coarse)"
+      },
+      {
+        "name": "landing-measure",
+        "value": "min(1120px, 100% - 2 * gutter) centred column, front door only"
+      }
     ]
   },
   "components": [
@@ -107,10 +313,26 @@
       "No content-pane max-width: tables and detail pages fill the viewport."
     ],
     "rules": [
-      { "name": "The Icon-Plus-Label Rule", "body": "Every status (ok, progress, off, unknown, ready, error, warning, info, archived, absent, pending) pairs a Material filled glyph with a text label. Colour alone never carries meaning.", "section": "colors" },
-      { "name": "The Drawn Unlit State Rule", "body": "Archived (do_not_disturb_on) and Not created (add_circle_outline) are designed ghost states with their own icon and secondary-ink colour, not a blank table cell.", "section": "colors" },
-      { "name": "The Three-Face Rule", "body": "Titles are Google Sans Flex, everything functional is Roboto, everything precise is Roboto Mono. No component borrows a fourth face or a system display font.", "section": "typography" },
-      { "name": "The Flat-By-Default Rule", "body": "Persistent surfaces (app bar, drawer, cards, tables, banners) are flat with a hairline border. Shadow appears only on menu, dialog, sheet and snackbar.", "section": "elevation" }
+      {
+        "name": "The Icon-Plus-Label Rule",
+        "body": "Every status (ok, progress, off, unknown, ready, error, warning, info, archived, absent, pending) pairs a Material filled glyph with a text label. Colour alone never carries meaning.",
+        "section": "colors"
+      },
+      {
+        "name": "The Drawn Unlit State Rule",
+        "body": "Archived (do_not_disturb_on) and Not created (add_circle_outline) are designed ghost states with their own icon and secondary-ink colour, not a blank table cell.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three-Face Rule",
+        "body": "Titles are Google Sans Flex, everything functional is Roboto, everything precise is Roboto Mono. No component borrows a fourth face or a system display font.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Persistent surfaces (app bar, drawer, cards, tables, banners) are flat with a hairline border. Shadow appears only on menu, dialog, sheet and snackbar.",
+        "section": "elevation"
+      }
     ],
     "dos": [
       "Do pair every status with a Material filled icon and a label (ok, progress, off, unknown, ready, error, warning, info, archived, absent, pending) — never colour alone.",

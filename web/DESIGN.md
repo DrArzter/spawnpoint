@@ -18,6 +18,17 @@ colors:
   error: "#d93025"
   info: "#1a73e8"
 typography:
+  display-hero:
+    fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
+    fontSize: "44px"
+    fontWeight: 400
+    lineHeight: "52px"
+    letterSpacing: "-0.01em"
+  display-hero-phone:
+    fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
+    fontSize: "32px"
+    fontWeight: 400
+    lineHeight: "40px"
   display:
     fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
     fontSize: "28px"
@@ -48,11 +59,26 @@ typography:
     fontSize: "16px"
     fontWeight: 500
     lineHeight: "24px"
+  app-bar-title:
+    fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
+    fontSize: "20px"
+    fontWeight: 500
+    lineHeight: "24px"
+  group-title:
+    fontFamily: "Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
+    fontSize: "14px"
+    fontWeight: 500
+    lineHeight: "20px"
   body:
     fontFamily: "Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
     fontSize: "14px"
     fontWeight: 400
     lineHeight: "20px"
+  body-reading:
+    fontFamily: "Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
+    fontSize: "14px"
+    fontWeight: 400
+    lineHeight: "22px"
   label:
     fontFamily: "Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
     fontSize: "13px"
@@ -159,7 +185,7 @@ The palette is a light, hairline-bordered neutral field with a single blue accen
 
 ### Status roles (paired with Material icon + label, never colour alone)
 - **Success** (`#1e8e3e`; `#81c995` dark): ok / running.
-- **Warning** (`#f9ab00`; `#fdd663` dark): warning, preview badge.
+- **Warning** (`#f9ab00`; `#fdd663` dark): warning, the demo-mode badge in the app bar. Warning text on the warning container is a darker ink (`#9e5200`), chosen so 12px labels clear 4.5:1.
 - **Error** (`#d93025`; `#f28b82` dark): error, destructive actions.
 - **Info** (`#1a73e8`; `#8ab4f8` dark): info banners — shares the primary hue by design.
 - **Unlit** (ink-secondary): off, unknown, ready, archived, absent, pending statuses render in secondary ink with a dedicated Material glyph — never as empty text.
@@ -180,10 +206,11 @@ All three load from Google Fonts in `index.html`; system sans/monospace stacks a
 **Character:** Google Sans Flex carries page and dialog titles at a calm, unweighted 400; Roboto carries every control, label and body line; Roboto Mono marks anything that must be compared or copied precisely — IDs, addresses, checksums, timestamps.
 
 ### Hierarchy
+- **Display, front door only** (Google Sans Flex 400, 44px/52px, tracking -0.01em; 32px/40px under 960px): the single headline of the landing page (`.landing-copy h1`). No console page uses it.
 - **Title** (Google Sans Flex 400, 24px/32px `h1`; 500 at 20px/28px for sheet headers; 22px/28px for dialog headers): page and world titles.
 - **Headline** (Google Sans Flex 400, 18px/24px `h2`): card and section headers, empty-state headline.
-- **Subtitle** (Roboto 500, 16px/24px `h3`): card-header and details-group titles.
-- **Body** (Roboto 400, 14px/20px): default body copy, details values, dialog content (max 60–80ch).
+- **Subtitle** (Roboto 500, 16px/24px `h3`): card-header titles. Detail-group titles inside a card step down to 14px/20px, and the app-bar wordmark is Google Sans Flex 500 at 20px/24px (18px under 960px, hidden under 600px).
+- **Body** (Roboto 400, 14px/20px): default body copy, details values, dialog content (max 60–80ch). The one variant is 14px/22px for running paragraphs in a measured column (`.landing-facts dd`), where 20px sets too tight.
 - **Label** (Roboto 500, 12–13px): field labels, table headers, drawer section labels, chip text.
 - **Mono/Data** (Roboto Mono 400/500, 12–13px, tabular-nums): IDs, addresses, checksums, terminal grammar, world-name subtitles.
 
@@ -195,6 +222,8 @@ All three load from Google Fonts in `index.html`; system sans/monospace stacks a
 The shell is app bar (sticky, 64px; 56px under 959px) over a body split into drawer and content pane. The drawer is 256px wide and full height; between 960px and 1279px it collapses to a 72px icon rail (`data-rail`) until the user chooses to pin it open; under 959px it becomes a fixed modal panel behind a scrim, triggered by the menu button, with the icon-rail state expanding back to a labelled 256px list inside the modal.
 
 The content pane (`.main`) has **no max-width**: it fills the available viewport by design, from a narrow phone to a 4K desktop, matching the real Cloud console's resource-table pages. Page gutter is 24px (16px under 959px).
+
+The front door (`#/`, `LandingScreen`) is the one surface with a measure: its content sits in a centred `min(1120px, 100% - 2 * gutter)` column under the same app bar, with the sign-in button or the signed-in avatar menu at the bar's right and no drawer. Its product shot (`.shot`) is a still of the console built from the console's own status, card and avatar components, captioned as example data; nothing inside it is interactive.
 
 Tables run a 48px row rhythm with hairline rules between rows. Below 600px, each `.table-wrap` (a `container-type: inline-size` container) switches its table to a stacked record layout: the header row hides, each cell becomes a label/value pair from `data-label`, and the action row moves to the end of the stack. This is a container query, not a page media query — it fires per-table regardless of viewport.
 
@@ -251,7 +280,7 @@ Controls (buttons, fields, chips' pill, inline selects) use a 4px radius. Cards,
 - **Table:** 48px header and body rows, hairline rules, hover tint, row-actions column right-aligned and width-collapsed; below 600px width (container query) collapses to stacked label/value records per row with the action row last.
 
 ### Menu (popover)
-Fixed-position popover with `::backdrop` transparent, 4px radius, `shadow-3`, 8px vertical padding, 40px-min-height items with a leading secondary-ink icon; entrance is a 180ms fade/scale-up from the anchor.
+Fixed-position popover with `::backdrop` transparent, 4px radius, `shadow-3`, 8px vertical padding, 40px-min-height items with a leading secondary-ink icon; entrance is a 180ms fade/scale-up from the anchor. Three triggers share it: the overflow icon button, the app-bar avatar, and a tonal badge (the demo-mode chip) that carries a label and a chevron.
 
 ### Dialog and Sheet
 - **Dialog:** native `<dialog>`, 520px max width, 12px radius, `shadow-3`, scrim backdrop, 24px body padding, actions right-aligned.

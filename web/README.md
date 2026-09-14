@@ -7,6 +7,19 @@ ordinary **browser panel**, which signs in through Telegram's Login Widget. Both
 Spawnpoint session at the access API and hold no AWS credential of their own. See
 [ADR-0037](../docs/adr/0037-telegram-only-browser-identity.md) and [ADR-0012](../docs/adr/0012-web-control-panel.md).
 
+The bare root (`#/`) is the front door: a landing page in the console's own chrome that explains what Spawnpoint does,
+shows a still of the Worlds page with example data, and carries **Sign in with Telegram** in the app bar plus a link
+into the demo. Who sees what depends on the address and the session:
+
+| Arriving at | With no session | With a session |
+| --- | --- | --- |
+| `#/` | The front door | Redirected to `#/worlds`, because a person holding a session asked for the console. This is how the Telegram Mini App opens every time, and how a browser that still holds its refresh cookie opens |
+| `#/welcome` | The front door | The front door, on purpose. This is the address to send someone, and the one a signed-in person uses to read it again |
+| Any console hash | The front door, with the hash left alone | The console |
+
+A sign-in started on the front door ends in `#/worlds`. A signed-in person sees their avatar in the app bar instead of
+the sign-in button, with Open the console, Profile and Sign out.
+
 What a person sees is decided by their role, not by the client:
 
 | Screen | Permission | What is there |
@@ -102,10 +115,20 @@ Develop locally and build:
 ```bash
 cd web
 npm install
-npm run dev      # dev server; open http://127.0.0.1:5173/?preview to run on the fixtures in src/preview.ts
-                 # (dev server only; add &latency=800 to slow the fake calls)
+npm run dev      # dev server; open http://127.0.0.1:5173/?demo to run the console on the in-memory
+                 # control plane in src/demo/ (?preview is the old name and still works;
+                 # add &latency=800 to slow the fake calls)
 npm run build    # static files in web/dist
 ```
+
+### Demo mode
+
+`?demo` runs the whole console against an in-memory control plane (`src/demo/`) instead of the access API. It works in a
+production build as well as in dev, because the front door links to it: no token, no AWS call and no data that outlives
+the tab. Starting and stopping a session, wiping, restoring, archiving, purging, creating a save, approving a Telegram
+account and sending an invitation all change the state the console then reads back, and the transitions take a few
+seconds so the operations table, the status rows and the polling behave the way they do against the real API. The app bar
+carries a Demo data menu that resets the state or leaves the mode. Reloading the tab also resets it.
 
 Inside Telegram the app reads the client's theme through the official `telegram-web-app.js` bridge. Production is
 deployed by `Deploy production` after a passing `Check` on `main` whenever `web/` or `scripts/deploy-web.sh` changed

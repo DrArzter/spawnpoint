@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ActiveSession, AuthState, endSession, loadControlPlane, requestCreateWorld, requestPackDownload, requestSessionOperation, requestWorldLifecycle, restoreAuth } from "./auth";
 import { InvitationSheet } from "./components/InvitationSheet";
@@ -7,15 +7,16 @@ import { Dialog, Sheet } from "./components/ui/Dialog";
 import { SelectField, TextField } from "./components/ui/Fields";
 import { SnackbarProvider, useSnackbar } from "./components/ui/Snackbar";
 import { sessionStatus } from "./components/ui/Status";
+import { demoEnabled, leaveDemo, resetDemo } from "./demo";
 import { IconName } from "./icons";
 import { formatDateTime } from "./lib/format";
 import { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, World } from "./model";
-import { previewEnabled } from "./preview";
-import { routeHash } from "./routing";
+import { isLandingHash, isRootHash, routeHash } from "./routing";
 import { deriveSharedHostSession } from "./session";
 import { AccessScreen } from "./screens/AccessScreen";
 import { AuthScreen, BootScreen } from "./screens/AuthScreen";
 import { ConsoleScreen } from "./screens/ConsoleScreen";
+import { LandingScreen } from "./screens/LandingScreen";
 import { MetricsScreen } from "./screens/MetricsScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
 import { ReleasesScreen } from "./screens/ReleasesScreen";
@@ -38,18 +39,43 @@ const navigation: readonly { id: Page; label: string; icon: IconName; permission
 
 export function App() {
   const [auth, setAuth] = useState<AuthState>({ status: "loading" });
+  const [atLanding, setAtLanding] = useState(() => isLandingHash());
 
   useEffect(() => {
     let active = true;
     restoreAuth()
-      .then((state) => { if (active) setAuth(state); })
+      .then((state) => {
+        if (!active) return;
+        setAuth(state);
+        // Arriving at the bare root with a session already in hand means the
+        // console, not the front door: the Mini App opens that way every time,
+        // and so does a browser that still holds its refresh cookie. The front
+        // door keeps its own address at `#/welcome`.
+        if (state.status === "authenticated" && state.session.state === "active" && isRootHash()) {
+          window.history.replaceState(null, "", "#/worlds");
+          setAtLanding(false);
+        }
+      })
       .catch((error: unknown) => { if (active) setAuth({ status: "error", message: error instanceof Error ? error.message : "Sign-in failed." }); });
     return () => { active = false; };
   }, []);
 
-  if (auth.status !== "authenticated" || auth.session.state !== "active") {
-    return <AuthScreen auth={auth} onChange={setAuth} />;
-  }
+  useEffect(() => {
+    const onChange = () => setAtLanding(isLandingHash());
+    window.addEventListener("hashchange", onChange);
+    return () => window.removeEventListener("hashchange", onChange);
+  }, []);
+
+  // A sign-in started on the front door ends in the console.
+  const handleAuth = useCallback((state: AuthState) => {
+    setAuth(state);
+    if (state.status === "authenticated" && state.session.state === "active" && isLandingHash()) window.location.hash = "#/worlds";
+  }, []);
+
+  if (atLanding) return <LandingScreen auth={auth} onChange={handleAuth} />;
+  if (auth.status === "loading") return <BootScreen description="Verifying your Telegram sign-in with the access API." title="Checking your session" />;
+  if (auth.status !== "authenticated") return <LandingScreen auth={auth} onChange={handleAuth} />;
+  if (auth.session.state !== "active") return <AuthScreen auth={auth} onChange={handleAuth} />;
   return <SnackbarProvider><ConsoleShell session={auth.session} /></SnackbarProvider>;
 }
 
@@ -234,7 +260,9 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
         onProfile={() => navigate({ page: "profile" })}
         onScope={() => setScopeOpen(true)}
         onTheme={cycleTheme}
-        preview={previewEnabled}
+        demo={demoEnabled}
+        onDemoLeave={leaveDemo}
+        onDemoReset={() => { resetDemo(); void refresh(true); notify({ tone: "info", message: "The demo is back at its starting state." }); }}
         scopeDisabled={games.length === 0}
         theme={theme}
         themeLabel={themeLabel}

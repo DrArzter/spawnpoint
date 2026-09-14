@@ -1,14 +1,7 @@
 // Roll 100+ probes up into findings, each with the routes and widths that show it.
 import { readFileSync } from "node:fs";
 
-const reports = new Map([
-  ["light", new URL("../../audit-light.json", import.meta.url)],
-  ["dark", new URL("../../audit-dark.json", import.meta.url)],
-]);
-const reportName = process.argv[2] ?? "light";
-const report = reports.get(reportName);
-if (!report) throw new Error("Report must be either 'light' or 'dark'.");
-const probes = JSON.parse(readFileSync(report, "utf8"));
+const probes = JSON.parse(readFileSync(new URL("../../audit-light.json", import.meta.url), "utf8"));
 // The steps DESIGN.md records. Keep this in step with its typography block.
 const RAMP = new Set(["44/52", "32/40", "28/36", "24/32", "22/28", "20/28", "20/24", "18/24", "16/24", "14/22", "14/20", "13/18", "13/20", "12/16"]);
 const RADII = new Set(["0px", "2px", "3px", "4px", "8px", "10px", "12px", "20px", "999px", "50%"]);

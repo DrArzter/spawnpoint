@@ -22,8 +22,7 @@ Run it against a dev server or a preview deployment:
 npm run dev                      # in one terminal
 npm run audit:ui                 # light theme, writes audit-light.json
 npm run audit:ui -- http://localhost:5173 audit-dark.json dark
-node tools/ui-audit/summarise.mjs light
-node tools/ui-audit/summarise.mjs dark
+node tools/ui-audit/summarise.mjs
 ```
 
 Read the output as evidence, not as a verdict. These results are expected and were judged, not overlooked:

@@ -37,7 +37,7 @@ import {
   worldLifecycleExecution,
 } from "../control-plane/aws.ts";
 import { readControlPlaneSnapshot } from "../control-plane/read-model.ts";
-import { packRelease, planSessionOperation, worldLifecycleNeedsStop, type SessionAction } from "../control-plane/session-control.ts";
+import { packRelease, planSessionOperation, stoppedHostRecoverySession, worldLifecycleNeedsStop, type SessionAction } from "../control-plane/session-control.ts";
 import { worldIdForName } from "../control-plane/world-registry.ts";
 
 type Event = Readonly<{
@@ -272,19 +272,22 @@ async function controlSession(identity: Identity, action: SessionAction, gameId:
   const effectiveCatalog = catalogWithPresets(presets, gameCatalog, worldRecords);
   const plan = planSessionOperation(gameId, worldId, action, hosts, operations, effectiveCatalog);
   if (plan.kind === "reject") return response(plan.reason === "unknown_world" ? 404 : 409, { error: plan.reason });
-  if (plan.kind === "noop") return response(200, { result: plan.reason });
+  const recoverySessionId = action === "stop" ? stoppedHostRecoverySession(worldId, hosts, lifecycle) : null;
+  if (plan.kind === "noop" && recoverySessionId === null) return response(200, { result: plan.reason });
   const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
   const requestedBy = `identity:${identity.id}`;
+  const host = plan.kind === "execute" ? plan.host : hosts[0]!;
   if (action === "start") {
     // No address in the request: the host's session summary answers with it
     // and the machine carries it back (ADR-0033).
-    await startSessionExecution(operationId, plan.host.providerRef, requestedBy, gameId, worldId);
+    await startSessionExecution(operationId, host.providerRef, requestedBy, gameId, worldId);
   }
   else {
-    if (lifecycle?.activeSessionId === null || lifecycle?.activeSessionId === undefined) {
+    const activeSessionId = recoverySessionId ?? lifecycle?.activeSessionId;
+    if (activeSessionId === null || activeSessionId === undefined) {
       return response(409, { error: "active_session_unavailable" });
     }
-    await stopSessionExecution(operationId, plan.host.providerRef, requestedBy, gameId, lifecycle.activeSessionId, worldId);
+    await stopSessionExecution(operationId, host.providerRef, requestedBy, gameId, activeSessionId, worldId);
   }
   return response(202, { result: "requested", operationId });
 }

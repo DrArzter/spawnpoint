@@ -66,6 +66,14 @@ game_query_players_raw() {
     "players"
 }
 
+game_save() {
+  # This image owns the safe-save protocol: on SIGTERM it sends `save`, then
+  # `quit`, and waits for the server. `stop.sh` performs that graceful Compose
+  # stop immediately after this hook returns, before the archive is created.
+  printf 'save_deferred=graceful_shutdown\n'
+  return 0
+}
+
 # "Players connected (N):" followed by one "-name" line per player.
 #
 # The exact wording is not documented anywhere authoritative, so the parser

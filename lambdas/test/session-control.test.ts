@@ -3,7 +3,8 @@ import test from "node:test";
 
 import type { HostObservation, OperationObservation } from "../src/control-plane/read-model.ts";
 import { catalogWithPresets } from "../src/control-plane/catalog.ts";
-import { packRelease, planSessionOperation, worldLifecycleNeedsStop } from "../src/control-plane/session-control.ts";
+import { packRelease, planSessionOperation, stoppedHostRecoverySession, worldLifecycleNeedsStop } from "../src/control-plane/session-control.ts";
+import type { LifecycleRecord } from "../src/domain/lifecycle.ts";
 import { newWorldRecord } from "../src/control-plane/world-registry.ts";
 
 const host = (state: HostObservation["state"]): HostObservation => ({ id: "host", name: "Host", state, providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: null });
@@ -62,6 +63,18 @@ test("stop is idempotent and transitional host states are rejected", () => {
   assert.deepEqual(planSessionOperation("minecraft", "world", "stop", [host("stopped")], []), { kind: "noop", reason: "already_stopped" });
   assert.equal(planSessionOperation("minecraft", "world", "stop", [host("running")], []).kind, "execute");
   assert.deepEqual(planSessionOperation("minecraft", "world", "start", [host("stopping")], []), { kind: "reject", reason: "host_transitioning" });
+});
+
+test("a manually stopped host can reconcile its stranded stopping session", () => {
+  const lifecycle: LifecycleRecord = {
+    schemaVersion: 1, serverId: "factorio", desiredState: "stopped", observedState: "stopping",
+    activeSessionId: "session-1", activeWorldId: "factory", fencingToken: 2, lease: null, idle: null,
+    updatedAtEpochSeconds: 1,
+  };
+  assert.equal(stoppedHostRecoverySession("factory", [host("stopped")], lifecycle), "session-1");
+  assert.equal(stoppedHostRecoverySession("another-world", [host("stopped")], lifecycle), null);
+  assert.equal(stoppedHostRecoverySession("factory", [host("running")], lifecycle), null);
+  assert.equal(stoppedHostRecoverySession("factory", [host("stopped")], { ...lifecycle, observedState: "ready" }), null);
 });
 
 test("a player is handed the pack for the release the world is running", () => {

@@ -51,7 +51,8 @@ failure costs a few minutes of instance time. A wrong count in the other directi
 
 ## The rest of the checklist
 
-- `game_save_paths`, `game_save_sentinel` and `game_archive_sentinel_regex` describe **this** game's save. A borrowed
+- `game_save` flushes the live game using its own protocol. `game_save_paths`, `game_save_sentinel` and
+  `game_archive_sentinel_regex` describe **this** game's save. A borrowed
   sentinel passes tests and loses worlds.
 - The player probe's `key=value` output never varies by game; only what produces the values does.
 - Reuse packaging rather than building an image ([ADR-0005](../../docs/adr/0005-containerised-game-server.md)), pin

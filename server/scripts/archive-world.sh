@@ -3,6 +3,11 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SERVER_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+# shellcheck source=../games/_dispatch.sh
+source "${SERVER_ROOT}/games/_dispatch.sh"
+resolve_game
+configure_game_compose
 # shellcheck source=_common.sh
 source "${SCRIPT_DIR}/_common.sh"
 
@@ -17,19 +22,15 @@ if [[ -n "${WORLD_GENERATION_ID:-}" ]]; then
 fi
 archive="${1:-${backup_dir}/${world_name}${generation_segment}-${timestamp}.tar.zst}"
 
-# shellcheck source=../games/_dispatch.sh
-source "$(cd -- "${SCRIPT_DIR}/.." && pwd)/games/_dispatch.sh"
-resolve_game
-
 [[ -d "${data_dir}" ]] || die "data directory does not exist: ${data_dir}"
 game_save_sentinel "${data_dir}" "${world_name}" || die "no recognisable ${GAME_ID} save found in ${data_dir}"
 
 # A fixture or restored copy outside the live data directory is safe to archive while
-# the server runs. The live data directory is not: its caller must stop Minecraft first.
+# the server runs. The live data directory is not: its caller must stop the game first.
 if [[ "$(realpath -m -- "${data_dir}")" == "$(realpath -m -- "${SERVER_DIR}/data")" ]]; then
   state="$(container_state)"
   if [[ "${state}" == "running" ]]; then
-    die "Minecraft is running; save and stop it before archiving the live world"
+    die "the game is running; save and stop it before archiving the live world"
   fi
 fi
 

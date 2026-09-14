@@ -22,6 +22,17 @@ game_query_players_raw() {
   rcon list
 }
 
+game_save() {
+  local save_result
+  rcon save-off >/dev/null
+  if ! save_result="$(rcon save-all flush)"; then
+    rcon save-on >/dev/null || printf 'warning: failed to re-enable Minecraft autosave\n' >&2
+    return 1
+  fi
+  rcon save-on >/dev/null || printf 'warning: failed to re-enable Minecraft autosave\n' >&2
+  printf '%s\n' "${save_result}"
+}
+
 # Readiness, extracted verbatim from start.sh: the pinned image carries a Docker
 # health check, and where one exists both it and a working control path are
 # required.

@@ -62,7 +62,8 @@ game_prepare_installed_runtime() {
   game_prepare_runtime "${manifest}"
 }
 
-game_query_players_raw() {
+factorio_rcon() {
+  local command="$1"
   local password_file="${FACTORIO_DATA_DIR}/config/rconpw"
   [[ -s "${password_file}" ]] || {
     printf 'error: factorio rcon password file not found: %s\n' "${password_file}" >&2
@@ -71,7 +72,19 @@ game_query_players_raw() {
   python3 "${FACTORIO_GAME_DIR}/rcon-client.py" \
     "${FACTORIO_RCON_HOST}" "${FACTORIO_RCON_PORT}" \
     "$(head -n1 -- "${password_file}")" \
-    "/players online"
+    "${command}"
+}
+
+game_query_players_raw() {
+  factorio_rcon "/players online" || return $?
+  return 0
+}
+
+game_save() {
+  # Factorio's multiplayer command flushes the active save without changing
+  # its name and without using achievement-disabling Lua console commands.
+  factorio_rcon "/server-save" || return $?
+  return 0
 }
 
 # Readiness: the image ships no health check, so the control path is the whole

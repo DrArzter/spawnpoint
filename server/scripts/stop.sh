@@ -3,13 +3,19 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SERVER_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+# shellcheck source=../games/_dispatch.sh
+source "${SERVER_DIR}/games/_dispatch.sh"
+resolve_game
+prepare_game_runtime
+configure_game_compose
 # shellcheck source=_common.sh
 source "${SCRIPT_DIR}/_common.sh"
 
 state="$(container_state)"
 
 if [[ "${state}" == "absent" ]] || [[ "${state}" == "exited" ]]; then
-  # Observability is session-scoped. Do not leave it running if Minecraft was
+  # Observability is session-scoped. Do not leave it running if the game was
   # stopped independently or never created.
   compose stop >/dev/null
   printf 'result=already_stopped\n'
@@ -17,7 +23,7 @@ if [[ "${state}" == "absent" ]] || [[ "${state}" == "exited" ]]; then
 fi
 
 if [[ "${state}" != "running" ]]; then
-  die "Minecraft container is in unexpected state: ${state}"
+  die "game container is in unexpected state: ${state}"
 fi
 
 "${SCRIPT_DIR}/save-world.sh"

@@ -32,6 +32,7 @@ aws_region="${AWS_REGION:-$(read_env_value AWS_REGION)}"
 source "${SERVER_DIR}/games/_dispatch.sh"
 resolve_game
 prepare_game_runtime
+configure_game_compose
 
 if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
   export SERVER_DATA_DIR="${WORLD_DATA_DIRECTORY}"
@@ -43,29 +44,20 @@ if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
 fi
 
 export SERVER_PROJECT_DIRECTORY="${SERVER_DIR}"
-if [[ -z "${SERVER_COMPOSE_FILES:-}" ]]; then
-  compose_files=""
-  IFS=':' read -r -a game_compose <<<"${GAME_COMPOSE_FILES}"
-  for compose_file in "${game_compose[@]}"; do
-    compose_files="${compose_files:+${compose_files}:}${SERVER_DIR}/${compose_file}"
-  done
-  export SERVER_COMPOSE_FILES="${compose_files}"
-fi
-export SERVER_COMPOSE_SERVICE="${SERVER_COMPOSE_SERVICE:-${GAME_COMPOSE_SERVICE}}"
 
 # shellcheck source=_common.sh
 source "${SCRIPT_DIR}/_common.sh"
 
 state="$(container_state)"
 if [[ "${state}" == "absent" || "${state}" == "exited" ]]; then
-  # Make the whole session invariant true even if Minecraft was stopped by a
+  # Make the whole session invariant true even if the game was stopped by a
   # previous attempt while an exporter remained alive.
   compose stop >/dev/null
   printf 'result=already_stopped\n'
   exit 0
 fi
 [[ "${state}" == "running" ]] || {
-  printf 'error: Minecraft container is in unexpected state: %s\n' "${state}" >&2
+  printf 'error: game container is in unexpected state: %s\n' "${state}" >&2
   exit 1
 }
 

@@ -19,6 +19,7 @@
 #                              game actually serves
 #   game_query_players_raw     transport: print the raw player query response
 #   game_parse_player_count    parser: raw on stdin -> integer on stdout
+#   game_save                  flush the running game to durable storage
 #   game_save_paths            print NUL-separated paths under the data dir to archive
 #   game_save_sentinel         succeed only if the data dir holds a real save
 #   game_prepare_runtime       optional: derive runtime inputs from a verified release manifest
@@ -67,4 +68,22 @@ prepare_game_runtime() {
   if declare -F game_prepare_installed_runtime >/dev/null; then
     game_prepare_installed_runtime
   fi
+}
+
+# Bind the selected module to the shared Docker helpers. Every lifecycle entry
+# point calls this after resolve_game, so a fresh SSM process cannot silently
+# fall back to Minecraft's Compose files for another game.
+configure_game_compose() {
+  local server_dir compose_files compose_file
+  server_dir="$(cd -- "${GAMES_DIR}/.." && pwd)"
+  if [[ -z "${SERVER_COMPOSE_FILES:-}" && -z "${SERVER_COMPOSE_FILE:-}" ]]; then
+    compose_files=""
+    IFS=':' read -r -a game_compose <<<"${GAME_COMPOSE_FILES}"
+    for compose_file in "${game_compose[@]}"; do
+      compose_files="${compose_files:+${compose_files}:}${server_dir}/${compose_file}"
+    done
+    export SERVER_COMPOSE_FILES="${compose_files}"
+  fi
+  export SERVER_COMPOSE_SERVICE="${SERVER_COMPOSE_SERVICE:-${GAME_COMPOSE_SERVICE}}"
+  return 0
 }

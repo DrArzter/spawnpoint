@@ -47,6 +47,7 @@ source "${SERVER_DIR}/games/_dispatch.sh"
 # shellcheck source=_connectivity.sh
 source "${SCRIPT_DIR}/_connectivity.sh"
 resolve_game
+configure_game_compose
 
 if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
   export RELEASE_BUCKET="${RELEASE_BUCKET:-$(read_env_value RELEASE_BUCKET)}"
@@ -130,15 +131,6 @@ case "${session_connectivity}" in
 esac
 
 export SERVER_PROJECT_DIRECTORY="${SERVER_DIR}"
-if [[ -z "${SERVER_COMPOSE_FILES:-}" ]]; then
-  compose_files=""
-  IFS=':' read -r -a game_compose <<<"${GAME_COMPOSE_FILES}"
-  for compose_file in "${game_compose[@]}"; do
-    compose_files="${compose_files:+${compose_files}:}${SERVER_DIR}/${compose_file}"
-  done
-  export SERVER_COMPOSE_FILES="${compose_files}"
-fi
-export SERVER_COMPOSE_SERVICE="${SERVER_COMPOSE_SERVICE:-${GAME_COMPOSE_SERVICE}}"
 
 # Boot-time reconciliation (ADR-0030): make the mod directory match the
 # desired release of this world's exact wipe before the game starts.

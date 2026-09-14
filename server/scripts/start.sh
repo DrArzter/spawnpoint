@@ -8,7 +8,7 @@ SERVER_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 source "${SERVER_DIR}/games/_dispatch.sh"
 resolve_game
 prepare_game_runtime
-export SERVER_COMPOSE_SERVICE="${SERVER_COMPOSE_SERVICE:-${GAME_COMPOSE_SERVICE}}"
+configure_game_compose
 # shellcheck source=_common.sh
 source "${SCRIPT_DIR}/_common.sh"
 

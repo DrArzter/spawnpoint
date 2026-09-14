@@ -1,7 +1,21 @@
 import type { HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 import { gameCatalog, type CatalogGame, type CatalogWorld } from "./catalog.ts";
+import type { LifecycleRecord } from "../domain/lifecycle.ts";
 
 export type SessionAction = "start" | "stop";
+
+export function stoppedHostRecoverySession(
+  worldId: string,
+  hosts: readonly HostObservation[],
+  lifecycle: LifecycleRecord | null,
+): string | null {
+  if (
+    hosts.length !== 1 || hosts[0]?.state !== "stopped" ||
+    lifecycle?.desiredState !== "stopped" || lifecycle.observedState !== "stopping" ||
+    lifecycle.activeWorldId !== worldId
+  ) return null;
+  return lifecycle.activeSessionId;
+}
 
 export function worldLifecycleNeedsStop(worldStatus: "active" | "archived", hostState: HostObservation["state"]): boolean {
   return worldStatus === "active" && hostState === "running";

@@ -5,11 +5,6 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
-export SERVER_PROJECT_DIRECTORY="${SERVER_PROJECT_DIRECTORY:-${SERVER_DIR}}"
-if [[ -z "${SERVER_COMPOSE_FILES:-}" && -z "${SERVER_COMPOSE_FILE:-}" ]]; then
-  export SERVER_COMPOSE_FILES="${SERVER_DIR}/compose.yaml:${SERVER_DIR}/compose.release.yaml"
-fi
-
 # The game supplies the transport and the parser; the contract to the watchdog
 # never varies by game. Two output shapes, same fields: key=value lines for a
 # human reading an SSM invocation, and a single JSON document when
@@ -20,7 +15,8 @@ fi
 source "${SERVER_DIR}/games/_dispatch.sh"
 resolve_game
 prepare_game_runtime
-export SERVER_COMPOSE_SERVICE="${SERVER_COMPOSE_SERVICE:-${GAME_COMPOSE_SERVICE}}"
+configure_game_compose
+export SERVER_PROJECT_DIRECTORY="${SERVER_PROJECT_DIRECTORY:-${SERVER_DIR}}"
 
 # shellcheck source=_common.sh
 source "${SCRIPT_DIR}/_common.sh"

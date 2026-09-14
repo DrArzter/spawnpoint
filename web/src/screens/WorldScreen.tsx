@@ -12,7 +12,7 @@ import { Icon } from "../icons";
 import { formatBytes, formatDate, formatDateTime, formatTime, repositoryName, shortCommit, shortDigest } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Operation, ServerState, Wipe, World } from "../model";
 import { routeHash } from "../routing";
-import type { SharedHostSession } from "../session";
+import { worldOwnsSharedSession, type SharedHostSession } from "../session";
 import { Pending, pendingFor, SessionAction, WorldActionKind } from "../shell/actions";
 import { releaseSummary, sessionActionForWorld, sessionControlAvailability, SharedHostNotice } from "./WorldsScreen";
 
@@ -132,7 +132,7 @@ export function WorldScreen({ game, world, snapshot, serverState, sharedSession,
   return (
     <div className="page">
       <PageHeader
-        actions={<WorldHeaderActions action={action} canInvite={granted.has("invitation.send")} game={game} menu={menu} onInvite={onInvite} onRefresh={onRefresh} onSessionAction={onSessionAction} refreshing={pending?.kind === "refresh"} rowPending={rowPending} sessionControl={sessionControl} world={world} />}
+        actions={<WorldHeaderActions action={action} canInvite={granted.has("invitation.send")} game={game} menu={menu} onInvite={onInvite} onRefresh={onRefresh} onSessionAction={onSessionAction} recovery={worldOwnsSharedSession(sharedSession, game, world) && sharedSession.recoveryAvailable} refreshing={pending?.kind === "refresh"} rowPending={rowPending} sessionControl={sessionControl} world={world} />}
         breadcrumb={[{ label: "Worlds", href: routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: null }) }]}
         status={<Status kind={availability.kind} label={availability.label} />}
         title={world.displayName}
@@ -148,7 +148,7 @@ export function WorldScreen({ game, world, snapshot, serverState, sharedSession,
   );
 }
 
-function WorldHeaderActions({ action, canInvite, game, menu, onInvite, onRefresh, onSessionAction, refreshing, rowPending, sessionControl, world }: Readonly<{
+function WorldHeaderActions({ action, canInvite, game, menu, onInvite, onRefresh, onSessionAction, recovery, refreshing, rowPending, sessionControl, world }: Readonly<{
   action: SessionAction;
   canInvite: boolean;
   game: Game;
@@ -156,17 +156,18 @@ function WorldHeaderActions({ action, canInvite, game, menu, onInvite, onRefresh
   onInvite: WorldScreenProps["onInvite"];
   onRefresh: () => void;
   onSessionAction: WorldScreenProps["onSessionAction"];
+  recovery: boolean;
   refreshing: boolean;
   rowPending: Pending | null;
   sessionControl: ReturnType<typeof sessionControlAvailability>;
   world: World;
 }>) {
-  const actionLabel = action === "stop" ? "Stop" : "Start";
+  const actionLabel = recovery ? "Reconcile" : action === "stop" ? "Stop" : "Start";
   return <div className="world-actions">
     <Button icon="refresh" loading={refreshing} onClick={onRefresh} variant="outlined">Refresh</Button>
     {canInvite && <Button icon="send" onClick={() => onInvite(game, world)} variant="outlined">Invite players</Button>}
     <span className="action-group">
-      <Button aria-label={`${actionLabel} ${world.displayName}. ${sessionControl.hint}`} disabled={sessionControl.disabled} icon={action === "stop" ? "stop" : "play_arrow"} loading={rowPending?.kind === "session"} onClick={() => onSessionAction(game, world, action)} title={sessionControl.hint} variant={action === "stop" ? "danger" : "filled"}>{actionLabel}</Button>
+      <Button aria-label={`${actionLabel} ${world.displayName}. ${sessionControl.hint}`} disabled={sessionControl.disabled} icon={recovery ? "sync" : action === "stop" ? "stop" : "play_arrow"} loading={rowPending?.kind === "session"} onClick={() => onSessionAction(game, world, action)} title={sessionControl.hint} variant={recovery ? "outlined" : action === "stop" ? "danger" : "filled"}>{actionLabel}</Button>
       {menu.length > 0 && <Menu items={menu} label={`More actions for ${world.displayName}`} />}
     </span>
   </div>;

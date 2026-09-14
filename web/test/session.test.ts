@@ -60,4 +60,19 @@ test("a stopped host with no active lifecycle is available", () => {
   const session = deriveSharedHostSession(snapshot({ games: [], hosts: [{ id: "host", name: "Shared host", state: "stopped" }] }));
   assert.equal(session.state, "stopped");
   assert.equal(session.operationRunning, false);
+  assert.equal(session.recoveryAvailable, false);
+});
+
+test("a manually stopped host exposes recovery for its stranded stopping session", () => {
+  const strandedGame: Game = {
+    ...activeGame,
+    lifecycle: { ...activeGame.lifecycle!, desiredState: "stopped", observedState: "stopping" },
+  };
+  const session = deriveSharedHostSession(snapshot({
+    games: [strandedGame],
+    hosts: [{ id: "host", name: "Shared host", state: "stopped" }],
+  }));
+  assert.equal(session.state, "stopping");
+  assert.equal(session.recoveryAvailable, true);
+  assert.equal(session.activeWorld?.id, "world-a");
 });

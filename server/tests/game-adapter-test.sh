@@ -130,12 +130,76 @@ response="$(python3 "${GAMES}/factorio/rcon-client.py" 127.0.0.1 "${rcon_port}" 
 [[ "${response}" == "Online players (0):" ]]
 wait "${fake_rcon_pid}"
 
+# Saving is part of the adapter too. The old shared script accidentally sent
+# Minecraft's save-all command to every game, which made Factorio stop fail
+# before its backup and left the EC2 instance running by design.
+python3 - "$fixture" <<'SAVE_RCON' &
+import socket, struct, sys
+
+def packet(req_id, ptype, body):
+    payload = struct.pack("<ii", req_id, ptype) + body + b"\x00\x00"
+    return struct.pack("<i", len(payload)) + payload
+
+def read(conn):
+    length = struct.unpack("<i", conn.recv(4))[0]
+    data = b""
+    while len(data) < length:
+        data += conn.recv(length - len(data))
+    req_id, ptype = struct.unpack("<ii", data[:8])
+    return req_id, ptype, data[8:-2]
+
+server = socket.socket()
+server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server.bind(("127.0.0.1", 0))
+server.listen(1)
+open(sys.argv[1] + "/save-rcon-port", "w").write(str(server.getsockname()[1]))
+conn, _addr = server.accept()
+req_id, _ptype, body = read(conn)
+assert body == b"correct-password", body
+conn.sendall(packet(req_id, 2, b""))
+req_id, _ptype, body = read(conn)
+open(sys.argv[1] + "/save-rcon-command", "wb").write(body)
+conn.sendall(packet(req_id, 0, b"Saving finished"))
+conn.close()
+server.close()
+SAVE_RCON
+save_rcon_pid=$!
+for _ in $(seq 1 50); do
+  [[ -s "${fixture}/save-rcon-port" ]] && break
+  sleep 0.1
+done
+mkdir -p -- "${fixture}/factorio-save/config"
+printf 'correct-password\n' >"${fixture}/factorio-save/config/rconpw"
+(
+  export FACTORIO_DATA_DIR="${fixture}/factorio-save"
+  export FACTORIO_RCON_PORT
+  FACTORIO_RCON_PORT="$(cat "${fixture}/save-rcon-port")"
+  source "${GAMES}/factorio/game.sh"
+  [[ "$(game_save)" == "Saving finished" ]]
+)
+wait "${save_rcon_pid}"
+[[ "$(cat "${fixture}/save-rcon-command")" == "/server-save" ]]
+
+(
+  : >"${fixture}/minecraft-save-commands"
+  source "${GAMES}/minecraft/game.sh"
+  rcon() {
+    printf '%s\n' "$*" >>"${fixture}/minecraft-save-commands"
+    [[ "$*" != "save-all flush" ]] || printf 'Saved the game\n'
+  }
+  [[ "$(game_save)" == "Saved the game" ]]
+  diff -u <(printf 'save-off\nsave-all flush\nsave-on\n') "${fixture}/minecraft-save-commands"
+)
+
 # --- dispatch: the catalog names the game, absence means minecraft ---
 cat >"${fixture}/catalog.json" <<'EOF'
 {"schema_version":1,"profile_source":{"repository":"https://example.invalid/profiles","commit":"0000000000000000000000000000000000000000"},"worlds":[{"id":"factorio","display_name":"Factorio test","profile_id":"factorio-vanilla","game":"factorio"}]}
 EOF
 output="$(WORLD_ID=factorio SPAWNPOINT_WORLD_CATALOG="${fixture}/catalog.json" bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; printf '%s %s %s\n' \"\${GAME_ID}\" \"\${GAME_COMPOSE_SERVICE}\" \"\${GAME_MOD_EXTENSION}\"")"
 [[ "${output}" == "factorio factorio zip" ]]
+output="$(WORLD_ID=factorio SPAWNPOINT_WORLD_CATALOG="${fixture}/catalog.json" bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; configure_game_compose; printf '%s\n%s\n' \"\${SERVER_COMPOSE_SERVICE}\" \"\${SERVER_COMPOSE_FILES}\"")"
+[[ "${output}" == "factorio
+${REPOSITORY_ROOT}/server/observability/compose.yaml:${REPOSITORY_ROOT}/server/games/factorio/compose.yaml" ]]
 output="$(WORLD_ID=world bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; printf '%s\n' \"\${GAME_ID}\"")"
 [[ "${output}" == "minecraft" ]]
 output="$(bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; printf '%s\n' \"\${GAME_ID}\"")"

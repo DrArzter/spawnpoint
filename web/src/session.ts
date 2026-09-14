@@ -5,6 +5,7 @@ export type SharedHostSession = Readonly<{
   activeGame: Game | null;
   activeWorld: World | null;
   operationRunning: boolean;
+  recoveryAvailable: boolean;
 }>;
 
 export function deriveSharedHostSession(snapshot: ControlPlaneSnapshot | null): SharedHostSession {
@@ -13,19 +14,21 @@ export function deriveSharedHostSession(snapshot: ControlPlaneSnapshot | null): 
   const activeGames = (snapshot?.games ?? []).filter((game) => game.lifecycle?.activeSessionId != null);
   const activeGame = activeGames.length === 1 ? activeGames[0]! : null;
   const activeWorld = findActiveWorld(activeGame);
+  const hostStates = snapshot?.hosts.map((host) => host.state) ?? [];
+  const recoveryAvailable = operations.length === 0 && hostStates.length === 1 && hostStates[0] === "stopped" &&
+    activeGame?.lifecycle?.desiredState === "stopped" && activeGame.lifecycle.observedState === "stopping";
 
-  if (operation?.type === "start") return { state: "starting", activeGame, activeWorld, operationRunning: true };
-  if (operation?.type === "stop") return { state: "stopping", activeGame, activeWorld, operationRunning: true };
+  if (operation?.type === "start") return { state: "starting", activeGame, activeWorld, operationRunning: true, recoveryAvailable: false };
+  if (operation?.type === "stop") return { state: "stopping", activeGame, activeWorld, operationRunning: true, recoveryAvailable: false };
 
   const observed = activeGame?.lifecycle?.observedState;
-  if (observed === "ready") return { state: "running", activeGame, activeWorld, operationRunning: operations.length > 0 };
+  if (observed === "ready") return { state: "running", activeGame, activeWorld, operationRunning: operations.length > 0, recoveryAvailable };
   if (observed === "starting" || observed === "stopping") {
-    return { state: observed, activeGame, activeWorld, operationRunning: operations.length > 0 };
+    return { state: observed, activeGame, activeWorld, operationRunning: operations.length > 0, recoveryAvailable };
   }
 
-  const hostStates = snapshot?.hosts.map((host) => host.state) ?? [];
   const state = deriveHostState(hostStates, activeWorld);
-  return { state, activeGame, activeWorld, operationRunning: operations.length > 0 };
+  return { state, activeGame, activeWorld, operationRunning: operations.length > 0, recoveryAvailable };
 }
 
 function findActiveWorld(activeGame: Game | null): World | null {

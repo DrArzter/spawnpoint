@@ -36,10 +36,11 @@ export function LandingScreen({ auth, onChange }: { auth: AuthState; onChange: (
             <Menu
               avatar={{ name: session.identity.displayName, photoUrl: session.profile.photoUrl }}
               items={[
+                ...(demoEnabled ? [{ id: "demo", label: "Demo session", detail: "In memory, nothing reaches AWS", icon: "warning" as const, disabled: true, onSelect: () => undefined }, "separator" as const] : []),
                 { id: "console", label: "Open the console", detail: session.role?.name ?? undefined, icon: "public", onSelect: () => { window.location.hash = CONSOLE_HASH; } },
                 { id: "profile", label: "Profile", icon: "person", onSelect: () => { window.location.hash = "#/profile"; } },
                 "separator",
-                { id: "signout", label: "Sign out", icon: "logout", onSelect: () => void endSession() },
+                { id: "signout", label: demoEnabled ? "Leave the demo" : "Sign out", icon: "logout", onSelect: () => void endSession() },
               ]}
               label={`${session.identity.displayName}: account menu`}
             />

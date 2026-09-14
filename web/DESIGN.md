@@ -59,11 +59,26 @@ typography:
     fontSize: "16px"
     fontWeight: 500
     lineHeight: "24px"
+  app-bar-title:
+    fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
+    fontSize: "20px"
+    fontWeight: 500
+    lineHeight: "24px"
+  group-title:
+    fontFamily: "Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
+    fontSize: "14px"
+    fontWeight: 500
+    lineHeight: "20px"
   body:
     fontFamily: "Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
     fontSize: "14px"
     fontWeight: 400
     lineHeight: "20px"
+  body-reading:
+    fontFamily: "Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
+    fontSize: "14px"
+    fontWeight: 400
+    lineHeight: "22px"
   label:
     fontFamily: "Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
     fontSize: "13px"
@@ -170,7 +185,7 @@ The palette is a light, hairline-bordered neutral field with a single blue accen
 
 ### Status roles (paired with Material icon + label, never colour alone)
 - **Success** (`#1e8e3e`; `#81c995` dark): ok / running.
-- **Warning** (`#f9ab00`; `#fdd663` dark): warning, the demo-mode badge in the app bar.
+- **Warning** (`#f9ab00`; `#fdd663` dark): warning, the demo-mode badge in the app bar. Warning text on the warning container is a darker ink (`#9e5200`), chosen so 12px labels clear 4.5:1.
 - **Error** (`#d93025`; `#f28b82` dark): error, destructive actions.
 - **Info** (`#1a73e8`; `#8ab4f8` dark): info banners — shares the primary hue by design.
 - **Unlit** (ink-secondary): off, unknown, ready, archived, absent, pending statuses render in secondary ink with a dedicated Material glyph — never as empty text.
@@ -194,8 +209,8 @@ All three load from Google Fonts in `index.html`; system sans/monospace stacks a
 - **Display, front door only** (Google Sans Flex 400, 44px/52px, tracking -0.01em; 32px/40px under 960px): the single headline of the landing page (`.landing-copy h1`). No console page uses it.
 - **Title** (Google Sans Flex 400, 24px/32px `h1`; 500 at 20px/28px for sheet headers; 22px/28px for dialog headers): page and world titles.
 - **Headline** (Google Sans Flex 400, 18px/24px `h2`): card and section headers, empty-state headline.
-- **Subtitle** (Roboto 500, 16px/24px `h3`): card-header and details-group titles.
-- **Body** (Roboto 400, 14px/20px): default body copy, details values, dialog content (max 60–80ch).
+- **Subtitle** (Roboto 500, 16px/24px `h3`): card-header titles. Detail-group titles inside a card step down to 14px/20px, and the app-bar wordmark is Google Sans Flex 500 at 20px/24px (18px under 960px, hidden under 600px).
+- **Body** (Roboto 400, 14px/20px): default body copy, details values, dialog content (max 60–80ch). The one variant is 14px/22px for running paragraphs in a measured column (`.landing-facts dd`), where 20px sets too tight.
 - **Label** (Roboto 500, 12–13px): field labels, table headers, drawer section labels, chip text.
 - **Mono/Data** (Roboto Mono 400/500, 12–13px, tabular-nums): IDs, addresses, checksums, terminal grammar, world-name subtitles.
 

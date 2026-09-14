@@ -135,6 +135,9 @@
 }
 
 .preset-source a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
   font-weight: 500;
 }
 
@@ -307,6 +310,10 @@
   font-weight: 500;
 }
 
+.terminal-bar .icon-btn {
+  flex: none;
+}
+
 .terminal-bar .terminal-status {
   display: inline-flex;
   align-items: center;
@@ -442,7 +449,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
+  height: 32px;
   padding: 0 8px 0 10px;
   border-radius: var(--radius-control);
   background: var(--warning-container);

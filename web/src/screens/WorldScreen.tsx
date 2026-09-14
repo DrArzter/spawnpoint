@@ -175,7 +175,7 @@ function WipesTab({ world, onShowBackups }: Readonly<{ world: World; onShowBacku
   );
 }
 
-function BackupsTab({ world, gameId, canRead, canRestore, busy, filter, onFilter, onRestore, settled }: {
+function BackupsTab({ world, gameId, canRead, canRestore, busy, filter, onFilter, onRestore, settled }: Readonly<{
   world: World;
   gameId: string;
   /** Changes when a wipe lands or an operation finishes, so the listing refetches. */
@@ -186,7 +186,7 @@ function BackupsTab({ world, gameId, canRead, canRestore, busy, filter, onFilter
   filter: string | null;
   onFilter: (wipeId: string | null) => void;
   onRestore: (entry: BackupInventory["entries"][number]) => void;
-}) {
+}>) {
   const [inventory, setInventory] = useState<BackupInventory | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);

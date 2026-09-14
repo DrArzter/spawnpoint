@@ -5,13 +5,15 @@ import type { Game } from "../model";
 import type { Theme } from "../telegram";
 
 export function SpawnpointMark({ size = 32 }: { size?: number }) {
-  // The mark: a spawn point seen from above, a ring with a settled centre.
+  // The mark: one block seen from above, the spawn point set on its top face.
   return (
     <span aria-hidden="true" className="mark" style={{ width: size, height: size, borderRadius: size / 4 }}>
-      <svg fill="none" height={size * 0.62} viewBox="0 0 24 24" width={size * 0.62}>
-        <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="2" />
-        <circle cx="12" cy="12" fill="currentColor" r="3.2" />
-        <path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+      <svg fill="currentColor" height={size * 0.72} viewBox="0 0 24 24" width={size * 0.72}>
+        <path d="M12 3 20.5 7.9v8.2L12 21l-8.5-4.9V7.9L12 3Z" opacity="0.32" />
+        <path d="M12 3l8.5 4.9L12 12.8 3.5 7.9 12 3Z" />
+        <path d="M3.5 7.9 12 12.8V21l-8.5-4.9V7.9Z" opacity="0.78" />
+        <path d="M20.5 7.9 12 12.8V21l8.5-4.9V7.9Z" opacity="0.5" />
+        <circle cx="12" cy="7.9" fill="var(--primary)" r="2.2" />
       </svg>
     </span>
   );

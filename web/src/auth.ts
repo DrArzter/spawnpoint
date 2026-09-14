@@ -203,7 +203,7 @@ export async function endSession(): Promise<void> {
   try {
     await fetch(`${apiUrl}/auth/logout`, { method: "POST", credentials: "include" });
   } finally {
-    window.location.assign(`${window.location.pathname}#/overview`);
+    window.location.assign(`${window.location.pathname}#/`);
   }
 }
 

@@ -5,6 +5,14 @@ import { AccessTab, Page } from "./model";
 // "worlds" so links from the bot and older bookmarks keep working.
 export type AppRoute = Readonly<{ page: Page; accessTab: AccessTab; gameId: string | null; worldId: string | null }>;
 
+export const LANDING_HASH = "#/";
+
+// The front door lives at the bare root; every other hash is the console.
+export function isLandingHash(hash: string = window.location.hash): boolean {
+  const path = hash.replace(/^#\/?/, "").split("/")[0] ?? "";
+  return path === "" || path === "welcome";
+}
+
 const pageByPath: Record<string, Page> = {
   overview: "worlds",
   worlds: "worlds",

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ActiveSession, AuthState, endSession, loadControlPlane, requestCreateWorld, requestPackDownload, requestSessionOperation, requestWorldLifecycle, restoreAuth } from "./auth";
 import { InvitationSheet } from "./components/InvitationSheet";
@@ -11,10 +11,11 @@ import { IconName } from "./icons";
 import { formatDateTime } from "./lib/format";
 import { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, World } from "./model";
 import { previewEnabled } from "./preview";
-import { routeHash } from "./routing";
+import { isLandingHash, routeHash } from "./routing";
 import { AccessScreen } from "./screens/AccessScreen";
 import { AuthScreen, BootScreen } from "./screens/AuthScreen";
 import { ConsoleScreen } from "./screens/ConsoleScreen";
+import { LandingScreen } from "./screens/LandingScreen";
 import { MetricsScreen } from "./screens/MetricsScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
 import { ReleasesScreen } from "./screens/ReleasesScreen";
@@ -37,6 +38,7 @@ const navigation: readonly { id: Page; label: string; icon: IconName; permission
 
 export function App() {
   const [auth, setAuth] = useState<AuthState>({ status: "loading" });
+  const [atLanding, setAtLanding] = useState(() => isLandingHash());
 
   useEffect(() => {
     let active = true;
@@ -46,9 +48,22 @@ export function App() {
     return () => { active = false; };
   }, []);
 
-  if (auth.status !== "authenticated" || auth.session.state !== "active") {
-    return <AuthScreen auth={auth} onChange={setAuth} />;
-  }
+  useEffect(() => {
+    const onChange = () => setAtLanding(isLandingHash());
+    window.addEventListener("hashchange", onChange);
+    return () => window.removeEventListener("hashchange", onChange);
+  }, []);
+
+  // A sign-in started on the front door ends in the console.
+  const handleAuth = useCallback((state: AuthState) => {
+    setAuth(state);
+    if (state.status === "authenticated" && state.session.state === "active" && isLandingHash()) window.location.hash = "#/worlds";
+  }, []);
+
+  if (atLanding) return <LandingScreen auth={auth} onChange={handleAuth} />;
+  if (auth.status === "loading") return <BootScreen description="Verifying your Telegram sign-in with the access API." title="Checking your session" />;
+  if (auth.status !== "authenticated") return <LandingScreen auth={auth} onChange={handleAuth} />;
+  if (auth.session.state !== "active") return <AuthScreen auth={auth} onChange={handleAuth} />;
   return <SnackbarProvider><ConsoleShell session={auth.session} /></SnackbarProvider>;
 }
 

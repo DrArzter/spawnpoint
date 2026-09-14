@@ -7,6 +7,11 @@ ordinary **browser panel**, which signs in through Telegram's Login Widget. Both
 Spawnpoint session at the access API and hold no AWS credential of their own. See
 [ADR-0037](../docs/adr/0037-telegram-only-browser-identity.md) and [ADR-0012](../docs/adr/0012-web-control-panel.md).
 
+The bare root (`#/`) is the front door: a landing page in the console's own chrome that explains what Spawnpoint does,
+shows a still of the Worlds page with example data, and carries **Sign in with Telegram** in the app bar. A signed-in
+person sees their avatar there instead, with Open the console, Profile and Sign out; a sign-in started on the front door
+ends in `#/worlds`. Every other hash is the console, and a signed-out visitor on a console hash is shown the front door.
+
 What a person sees is decided by their role, not by the client:
 
 | Screen | Permission | What is there |

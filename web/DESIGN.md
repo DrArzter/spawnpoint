@@ -18,6 +18,17 @@ colors:
   error: "#d93025"
   info: "#1a73e8"
 typography:
+  display-hero:
+    fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
+    fontSize: "44px"
+    fontWeight: 400
+    lineHeight: "52px"
+    letterSpacing: "-0.01em"
+  display-hero-phone:
+    fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
+    fontSize: "32px"
+    fontWeight: 400
+    lineHeight: "40px"
   display:
     fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
     fontSize: "28px"
@@ -180,6 +191,7 @@ All three load from Google Fonts in `index.html`; system sans/monospace stacks a
 **Character:** Google Sans Flex carries page and dialog titles at a calm, unweighted 400; Roboto carries every control, label and body line; Roboto Mono marks anything that must be compared or copied precisely — IDs, addresses, checksums, timestamps.
 
 ### Hierarchy
+- **Display, front door only** (Google Sans Flex 400, 44px/52px, tracking -0.01em; 32px/40px under 960px): the single headline of the landing page (`.landing-copy h1`). No console page uses it.
 - **Title** (Google Sans Flex 400, 24px/32px `h1`; 500 at 20px/28px for sheet headers; 22px/28px for dialog headers): page and world titles.
 - **Headline** (Google Sans Flex 400, 18px/24px `h2`): card and section headers, empty-state headline.
 - **Subtitle** (Roboto 500, 16px/24px `h3`): card-header and details-group titles.
@@ -195,6 +207,8 @@ All three load from Google Fonts in `index.html`; system sans/monospace stacks a
 The shell is app bar (sticky, 64px; 56px under 959px) over a body split into drawer and content pane. The drawer is 256px wide and full height; between 960px and 1279px it collapses to a 72px icon rail (`data-rail`) until the user chooses to pin it open; under 959px it becomes a fixed modal panel behind a scrim, triggered by the menu button, with the icon-rail state expanding back to a labelled 256px list inside the modal.
 
 The content pane (`.main`) has **no max-width**: it fills the available viewport by design, from a narrow phone to a 4K desktop, matching the real Cloud console's resource-table pages. Page gutter is 24px (16px under 959px).
+
+The front door (`#/`, `LandingScreen`) is the one surface with a measure: its content sits in a centred `min(1120px, 100% - 2 * gutter)` column under the same app bar, with the sign-in button or the signed-in avatar menu at the bar's right and no drawer. Its product shot (`.shot`) is a still of the console built from the console's own status, card and avatar components, captioned as example data; nothing inside it is interactive.
 
 Tables run a 48px row rhythm with hairline rules between rows. Below 600px, each `.table-wrap` (a `container-type: inline-size` container) switches its table to a stacked record layout: the header row hides, each cell becomes a label/value pair from `data-label`, and the action row moves to the end of the stack. This is a container query, not a page media query — it fires per-table regardless of viewport.
 

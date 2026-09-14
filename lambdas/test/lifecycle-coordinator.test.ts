@@ -58,6 +58,7 @@ test("coordinator persists a complete session through optimistic conditional wri
     serverId: "minecraft",
     ownership: acquired.ownership,
     sessionId: "session-1",
+    worldId: "world-1",
   });
   await coordinate({
     action: "markSessionReady",
@@ -154,6 +155,7 @@ test("coordinator cancels a player-race stop without changing session identity",
     serverId: "minecraft",
     ownership: acquired.ownership,
     sessionId: "session-1",
+    worldId: "world-1",
   });
   await coordinate({
     action: "markSessionReady",

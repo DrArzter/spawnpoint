@@ -53,6 +53,7 @@ export type Lifecycle = {
   desiredState: "stopped" | "running";
   observedState: "stopped" | "starting" | "ready" | "stopping" | "unknown";
   activeSessionId: string | null;
+  activeWorldId: string | null;
   updatedAtEpochSeconds: number;
 };
 export type Game = { id: string; code: string; displayName: string; lifecycle: Lifecycle | null; presets: readonly Preset[]; worlds: readonly World[] };

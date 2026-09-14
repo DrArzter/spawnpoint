@@ -170,7 +170,7 @@ The palette is a light, hairline-bordered neutral field with a single blue accen
 
 ### Status roles (paired with Material icon + label, never colour alone)
 - **Success** (`#1e8e3e`; `#81c995` dark): ok / running.
-- **Warning** (`#f9ab00`; `#fdd663` dark): warning, preview badge.
+- **Warning** (`#f9ab00`; `#fdd663` dark): warning, the demo-mode badge in the app bar.
 - **Error** (`#d93025`; `#f28b82` dark): error, destructive actions.
 - **Info** (`#1a73e8`; `#8ab4f8` dark): info banners — shares the primary hue by design.
 - **Unlit** (ink-secondary): off, unknown, ready, archived, absent, pending statuses render in secondary ink with a dedicated Material glyph — never as empty text.
@@ -265,7 +265,7 @@ Controls (buttons, fields, chips' pill, inline selects) use a 4px radius. Cards,
 - **Table:** 48px header and body rows, hairline rules, hover tint, row-actions column right-aligned and width-collapsed; below 600px width (container query) collapses to stacked label/value records per row with the action row last.
 
 ### Menu (popover)
-Fixed-position popover with `::backdrop` transparent, 4px radius, `shadow-3`, 8px vertical padding, 40px-min-height items with a leading secondary-ink icon; entrance is a 180ms fade/scale-up from the anchor.
+Fixed-position popover with `::backdrop` transparent, 4px radius, `shadow-3`, 8px vertical padding, 40px-min-height items with a leading secondary-ink icon; entrance is a 180ms fade/scale-up from the anchor. Three triggers share it: the overflow icon button, the app-bar avatar, and a tonal badge (the demo-mode chip) that carries a label and a chevron.
 
 ### Dialog and Sheet
 - **Dialog:** native `<dialog>`, 520px max width, 12px radius, `shadow-3`, scrim backdrop, 24px body padding, actions right-aligned.

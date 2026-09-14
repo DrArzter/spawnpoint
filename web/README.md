@@ -107,10 +107,20 @@ Develop locally and build:
 ```bash
 cd web
 npm install
-npm run dev      # dev server; open http://127.0.0.1:5173/?preview to run on the fixtures in src/preview.ts
-                 # (dev server only; add &latency=800 to slow the fake calls)
+npm run dev      # dev server; open http://127.0.0.1:5173/?demo to run the console on the in-memory
+                 # control plane in src/demo/ (?preview is the old name and still works;
+                 # add &latency=800 to slow the fake calls)
 npm run build    # static files in web/dist
 ```
+
+### Demo mode
+
+`?demo` runs the whole console against an in-memory control plane (`src/demo/`) instead of the access API. It works in a
+production build as well as in dev, because the front door links to it: no token, no AWS call and no data that outlives
+the tab. Starting and stopping a session, wiping, restoring, archiving, purging, creating a save, approving a Telegram
+account and sending an invitation all change the state the console then reads back, and the transitions take a few
+seconds so the operations table, the status rows and the polling behave the way they do against the real API. The app bar
+carries a Demo data menu that resets the state or leaves the mode. Reloading the tab also resets it.
 
 Inside Telegram the app reads the client's theme through the official `telegram-web-app.js` bridge. Production is
 deployed by `Deploy production` after a passing `Check` on `main` whenever `web/` or `scripts/deploy-web.sh` changed

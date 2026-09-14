@@ -6,6 +6,7 @@ import { Chip } from "../components/ui/Chip";
 import { Menu } from "../components/ui/Menu";
 import { Status } from "../components/ui/Status";
 import { Banner } from "../components/ui/Surfaces";
+import { demoEnabled, demoUrl } from "../demo";
 import { Icon, IconName } from "../icons";
 import { SpawnpointMark } from "../shell/AppBar";
 import { useTheme } from "../shell/hooks";
@@ -69,6 +70,7 @@ export function LandingScreen({ auth, onChange }: { auth: AuthState; onChange: (
             </p>
             <div className="landing-links">
               {session && <a className="landing-link" href={CONSOLE_HASH}>Open the console<Icon name="chevron_right" size={18} /></a>}
+              {!demoEnabled && <a className="landing-link" href={demoUrl()}>Try the demo<Icon name="chevron_right" size={18} /></a>}
               <a className="landing-link" href="#what-the-console-does">What the console does<Icon name="chevron_right" size={18} /></a>
             </div>
             {auth.status === "error" && <Banner actions={<Button onClick={() => onChange({ status: "signed-out" })} variant="text">Dismiss</Button>} description={auth.message} title="Sign-in did not complete" tone="error" />}

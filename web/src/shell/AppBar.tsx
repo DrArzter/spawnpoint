@@ -1,5 +1,6 @@
 import { Avatar } from "../components/Avatar";
 import { IconButton } from "../components/ui/Button";
+import { Menu } from "../components/ui/Menu";
 import { Icon } from "../icons";
 import type { Game } from "../model";
 import type { Theme } from "../telegram";
@@ -19,7 +20,7 @@ export function SpawnpointMark({ size = 32 }: { size?: number }) {
   );
 }
 
-export function AppBar({ game, onMenu, onScope, scopeDisabled, theme, themeLabel, onTheme, viewerName, viewerPhoto, onProfile, preview }: {
+export function AppBar({ game, onMenu, onScope, scopeDisabled, theme, themeLabel, onTheme, viewerName, viewerPhoto, onProfile, demo, onDemoReset, onDemoLeave }: {
   game: Game | undefined;
   onMenu: () => void;
   onScope: () => void;
@@ -30,7 +31,9 @@ export function AppBar({ game, onMenu, onScope, scopeDisabled, theme, themeLabel
   viewerName: string;
   viewerPhoto?: string | null;
   onProfile: () => void;
-  preview: boolean;
+  demo: boolean;
+  onDemoReset: () => void;
+  onDemoLeave: () => void;
 }) {
   return (
     <header className="appbar">
@@ -47,7 +50,18 @@ export function AppBar({ game, onMenu, onScope, scopeDisabled, theme, themeLabel
       </button>
       <span className="appbar-spacer" />
       <div className="appbar-actions">
-        {preview && <span className="preview-badge" title="Fixture data from src/preview.ts, no backend calls"><Icon name="warning" size={14} /><span>Preview data</span></span>}
+        {demo && (
+          <Menu
+            chip={{ label: "Demo data", icon: "warning", className: "demo-badge" }}
+            items={[
+              { id: "about", label: "Everything here is in memory", detail: "No AWS call leaves this tab", icon: "info", disabled: true, onSelect: () => undefined },
+              "separator",
+              { id: "reset", label: "Reset the demo", detail: "Back to the starting state", icon: "refresh", onSelect: onDemoReset },
+              { id: "leave", label: "Leave the demo", icon: "logout", onSelect: onDemoLeave },
+            ]}
+            label="Demo data: in-memory, nothing reaches AWS"
+          />
+        )}
         <IconButton icon={theme === "dark" ? "light_mode" : "dark_mode"} label={`${themeLabel}. Change theme`} onClick={onTheme} />
         <button aria-label="Open my profile" className="appbar-avatar" onClick={onProfile} title={viewerName} type="button">
           <Avatar name={viewerName} photoUrl={viewerPhoto} />

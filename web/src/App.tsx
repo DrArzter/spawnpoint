@@ -10,7 +10,7 @@ import { sessionStatus } from "./components/ui/Status";
 import { IconName } from "./icons";
 import { formatDateTime } from "./lib/format";
 import { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, World } from "./model";
-import { previewEnabled } from "./preview";
+import { demoEnabled, leaveDemo, resetDemo } from "./demo";
 import { isLandingHash, routeHash } from "./routing";
 import { AccessScreen } from "./screens/AccessScreen";
 import { AuthScreen, BootScreen } from "./screens/AuthScreen";
@@ -247,7 +247,9 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
         onProfile={() => navigate({ page: "profile" })}
         onScope={() => setScopeOpen(true)}
         onTheme={cycleTheme}
-        preview={previewEnabled}
+        demo={demoEnabled}
+        onDemoLeave={leaveDemo}
+        onDemoReset={() => { resetDemo(); void refresh(true); notify({ tone: "info", message: "The demo is back at its starting state." }); }}
         scopeDisabled={games.length === 0}
         theme={theme}
         themeLabel={themeLabel}

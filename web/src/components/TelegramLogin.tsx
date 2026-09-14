@@ -6,7 +6,7 @@ import { Button } from "./ui/Button";
 
 // The one sign-in control: loads Telegram's OIDC SDK once, opens its popup,
 // and hands the resulting token to the access API.
-export function TelegramLoginButton({ onChange, className, label = "Continue with Telegram" }: { onChange: (state: AuthState) => void; className?: string; label?: string }) {
+export function TelegramLoginButton({ onChange, className, label = "Continue with Telegram" }: Readonly<{ onChange: (state: AuthState) => void; className?: string; label?: string }>) {
   const mounted = useRef(true);
   const [sdkReady, setSdkReady] = useState(false);
   const [loginError, setLoginError] = useState("");

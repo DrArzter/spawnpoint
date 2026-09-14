@@ -312,6 +312,8 @@
 
 .terminal-bar .icon-btn {
   flex: none;
+  margin-left: auto;
+  color: var(--term-muted);
 }
 
 .terminal-bar .terminal-status {
@@ -329,11 +331,6 @@
 
 .terminal-bar .terminal-status.online .icon {
   color: #81c995;
-}
-
-.terminal-bar .icon-btn {
-  margin-left: auto;
-  color: var(--term-muted);
 }
 
 .terminal-bar .icon-btn:hover {

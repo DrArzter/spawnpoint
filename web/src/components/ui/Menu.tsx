@@ -18,7 +18,7 @@ export type MenuItem = {
 
 // Overflow menu in the top layer (popover API), so table scroll containers
 // never clip it; positioned from the trigger's rectangle on open.
-export function Menu({ label, icon = "more_vert", items, align = "end", size = "medium", avatar, chip }: {
+export function Menu({ label, icon = "more_vert", items, align = "end", size = "medium", avatar, chip }: Readonly<{
   label: string;
   icon?: IconName;
   items: readonly (MenuItem | "separator")[];
@@ -26,7 +26,7 @@ export function Menu({ label, icon = "more_vert", items, align = "end", size = "
   size?: "small" | "medium";
   avatar?: { name: string; photoUrl?: string | null };
   chip?: { label: string; icon: IconName; className: string };
-}) {
+}>) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);

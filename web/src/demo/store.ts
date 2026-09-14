@@ -202,11 +202,12 @@ export function worldLifecycle(gameId: string, worldId: string, action: "archive
     archive(gameId, next);
     current.counter += 1;
     const generationId = newGeneration(current.counter * 13);
-    const origin = action === "regenerate"
-      ? release ?? next.release.activeRelease ?? "1.0"
-      : (current.backups[worldKey(gameId, worldId)] ?? []).find((entry) => entry.key === backupKey)?.generationId
-        ? next.wipes.find((wipe) => wipe.id === (current.backups[worldKey(gameId, worldId)] ?? []).find((entry) => entry.key === backupKey)?.generationId)?.originRelease ?? next.release.activeRelease ?? "1.0"
-        : next.release.activeRelease ?? "1.0";
+    let origin = release ?? next.release.activeRelease ?? "1.0";
+    if (action === "restore") {
+      const backup = (current.backups[worldKey(gameId, worldId)] ?? []).find((entry) => entry.key === backupKey);
+      const sourceWipe = backup?.generationId ? next.wipes.find((wipe) => wipe.id === backup.generationId) : undefined;
+      origin = sourceWipe?.originRelease ?? next.release.activeRelease ?? "1.0";
+    }
     const open = next.wipes.find((wipe) => wipe.state === "current");
     if (open) {
       open.state = "closed";
@@ -359,8 +360,12 @@ export function sendInvitation(gameId: string, worldId: string, audience: "broad
     const stored = list?.find((item) => item.id === id);
     if (!list || !stored) return;
     const delivered = audience === "broadcast" ? targets : recipientIds.filter((recipientId) => (state.delivery[recipientId] ?? "ready") === "ready").length;
+    let status: InvitationSummary["status"] = "PARTIAL";
+    if (targets === 0) status = "NO_RECIPIENTS";
+    else if (delivered === targets) status = "DELIVERED";
+    else if (delivered === 0) status = "FAILED";
     state.invitations[key] = list.map((item) => item.id === id
-      ? { ...item, status: targets === 0 ? "NO_RECIPIENTS" : delivered === targets ? "DELIVERED" : delivered === 0 ? "FAILED" : "PARTIAL", successCount: delivered, failureCount: targets - delivered }
+      ? { ...item, status, successCount: delivered, failureCount: targets - delivered }
       : item);
   }, DELIVERY_MS);
 }

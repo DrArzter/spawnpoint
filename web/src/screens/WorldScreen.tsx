@@ -159,7 +159,7 @@ export function WorldScreen({ game, world, snapshot, serverState, sharedSession,
   );
 }
 
-function WipesTab({ world, onShowBackups }: { world: World; onShowBackups: (wipe: Wipe) => void }) {
+function WipesTab({ world, onShowBackups }: Readonly<{ world: World; onShowBackups: (wipe: Wipe) => void }>) {
   const columns: Column<Wipe>[] = [
     { id: "wipe", label: "Wipe", width: "120px", render: (wipe) => <strong className="num">#{wipe.number}</strong> },
     { id: "status", label: "Status", width: "140px", render: (wipe) => wipe.state === "current" ? <Chip tone="primary">Current</Chip> : <Chip tone="tonal">Closed</Chip> },

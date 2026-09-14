@@ -5,7 +5,7 @@ import { Icon } from "../icons";
 import type { Game } from "../model";
 import type { Theme } from "../telegram";
 
-export function SpawnpointMark({ size = 32 }: { size?: number }) {
+export function SpawnpointMark({ size = 32 }: Readonly<{ size?: number }>) {
   // The mark: one block seen from above, the spawn point set on its top face.
   return (
     <span aria-hidden="true" className="mark" style={{ width: size, height: size, borderRadius: size / 4 }}>
@@ -20,7 +20,7 @@ export function SpawnpointMark({ size = 32 }: { size?: number }) {
   );
 }
 
-export function AppBar({ game, onMenu, onScope, scopeDisabled, theme, themeLabel, onTheme, viewerName, viewerPhoto, onProfile, demo, onDemoReset, onDemoLeave }: {
+export function AppBar({ game, onMenu, onScope, scopeDisabled, theme, themeLabel, onTheme, viewerName, viewerPhoto, onProfile, demo, onDemoReset, onDemoLeave }: Readonly<{
   game: Game | undefined;
   onMenu: () => void;
   onScope: () => void;
@@ -34,7 +34,7 @@ export function AppBar({ game, onMenu, onScope, scopeDisabled, theme, themeLabel
   demo: boolean;
   onDemoReset: () => void;
   onDemoLeave: () => void;
-}) {
+}>) {
   return (
     <header className="appbar">
       <IconButton icon="menu" label="Toggle navigation" onClick={onMenu} />

@@ -57,7 +57,7 @@ for (const [sel, e] of group(flat("shadows"), (r) => r.sel).slice(0, 10)) {
 const fonts = new Map();
 for (const p of probes) for (const [key, value] of Object.entries(p.fonts ?? {})) {
   const [size, line, weight] = key.split("/");
-  const short = `${parseFloat(size)}/${parseFloat(line)}`;
+  const short = `${Number.parseFloat(size)}/${Number.parseFloat(line)}`;
   const entry = fonts.get(`${short}/${weight}`) ?? { count: 0, samples: new Set(), onRamp: RAMP.has(short) };
   entry.count += value.count;
   for (const sample of value.samples) entry.samples.add(sample);
@@ -97,4 +97,5 @@ const families = new Map();
 for (const p of probes) for (const [key, value] of Object.entries(p.fontFamilies ?? {})) {
   families.set(key, (families.get(key) ?? 0) + value.count);
 }
-console.log(`\n## 10. Font faces in use: ${[...families].map(([k, v]) => `${k} (${v})`).join(", ")}`);
+const familySummary = [...families].map(([family, count]) => `${family} (${count})`).join(", ");
+console.log(`\n## 10. Font faces in use: ${familySummary}`);

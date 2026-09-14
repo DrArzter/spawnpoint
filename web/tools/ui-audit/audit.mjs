@@ -1,6 +1,7 @@
 // Runtime UI audit: every route at every breakpoint, probed in the page.
 // node audit.mjs <baseUrl> <out.json> [light|dark]
 import { spawn } from "node:child_process";
+import { randomInt } from "node:crypto";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -34,9 +35,9 @@ const VIEWPORTS = [
   [1920, 1080, false],
 ];
 
-const PROBE = `(() => {
+const PROBE = String.raw`(() => {
   const toRgb = (value) => {
-    const m = String(value).match(/rgba?\\(([^)]+)\\)/);
+    const m = String(value).match(/rgba?\(([^)]+)\)/);
     if (!m) return null;
     const parts = m[1].split(",").map((p) => parseFloat(p.trim()));
     return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 };
@@ -51,7 +52,7 @@ const PROBE = `(() => {
     const bits = [];
     let node = el;
     for (let i = 0; node && i < 4; i += 1) {
-      const cls = typeof node.className === "string" && node.className ? "." + node.className.trim().split(/\\s+/).slice(0, 3).join(".") : "";
+      const cls = typeof node.className === "string" && node.className ? "." + node.className.trim().split(/\s+/).slice(0, 3).join(".") : "";
       bits.unshift(node.tagName.toLowerCase() + cls);
       node = node.parentElement;
     }
@@ -158,7 +159,7 @@ const PROBE = `(() => {
 
 const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const profile = mkdtempSync(join(process.env.SCRATCH ?? tmpdir(), "audit-"));
-const port = 9600 + Math.floor(Math.random() * 300);
+const port = randomInt(9600, 9900);
 const proc = spawn(chrome, [
   "--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
   "--no-first-run", "--hide-scrollbars", "about:blank",

@@ -15,7 +15,7 @@ const CONSOLE_HASH = "#/worlds";
 
 // The front door: the console's own chrome, the console itself as the proof.
 // Signing in lives in the app bar; a signed-in person sees their avatar there.
-export function LandingScreen({ auth, onChange }: { auth: AuthState; onChange: (state: AuthState) => void }) {
+export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; onChange: (state: AuthState) => void }>) {
   const { theme, cycle, label } = useTheme();
   const configured = authConfigured();
   const session = auth.status === "authenticated" && auth.session.state === "active" ? auth.session : null;
@@ -115,7 +115,7 @@ export function LandingScreen({ auth, onChange }: { auth: AuthState; onChange: (
   );
 }
 
-function Fact({ icon, title, children }: { icon: IconName; title: string; children: React.ReactNode }) {
+function Fact({ icon, title, children }: Readonly<{ icon: IconName; title: string; children: React.ReactNode }>) {
   return (
     <div>
       <dt><Icon name={icon} size={20} />{title}</dt>

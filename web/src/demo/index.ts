@@ -1,7 +1,6 @@
-import { demoSession } from "./data";
 import { resetDemoState } from "./store";
 
-export { demoSession };
+export { demoSession } from "./data";
 export * as demo from "./store";
 
 const FLAG_KEY = "spawnpoint.demo";

@@ -18,7 +18,7 @@ import { releaseSummary, sessionActionForWorld, sessionControlAvailability, Shar
 
 type Tab = "details" | "wipes" | "backups" | "releases";
 
-export function WorldScreen({ game, world, snapshot, serverState, sharedSession, granted, pending, onRefresh, onSessionAction, onWorldAction, onInvite, onDownloadPack }: {
+type WorldScreenProps = Readonly<{
   game: Game;
   world: World;
   snapshot: ControlPlaneSnapshot | null;
@@ -31,7 +31,77 @@ export function WorldScreen({ game, world, snapshot, serverState, sharedSession,
   onWorldAction: (game: Game, world: World, action: WorldActionKind, backup?: { key: string; name: string }) => void;
   onInvite: (game: Game, world: World) => void;
   onDownloadPack: (game: Game, world: World) => void;
-}) {
+}>;
+
+type WorldMenuOptions = Readonly<{
+  game: Game;
+  world: World;
+  granted: ReadonlySet<string>;
+  busy: boolean;
+  canManage: boolean;
+  preset: Game["presets"][number] | undefined;
+  onWorldAction: WorldScreenProps["onWorldAction"];
+  onDownloadPack: WorldScreenProps["onDownloadPack"];
+}>;
+
+function buildWorldMenu({ game, world, granted, busy, canManage, preset, onWorldAction, onDownloadPack }: WorldMenuOptions): (MenuItem | "separator")[] {
+  const menu: (MenuItem | "separator")[] = [];
+  if (granted.has("connection.read")) menu.push({ id: "pack", label: "Download client pack", icon: "download", disabled: !world.release.activeRelease || busy, title: world.release.activeRelease ? `Pack for release ${world.release.activeRelease}` : "Available once a release is active", onSelect: () => onDownloadPack(game, world) });
+  if (!canManage || !world.worldLifecycleAvailable) return menu;
+
+  if (menu.length > 0) menu.push("separator");
+  if (world.materialization === "existing") {
+    menu.push({ id: "wipe", label: "Start a new wipe", detail: preset?.latestRelease ? `From ${preset.displayName} ${preset.latestRelease}` : "Needs a built release", icon: "history", disabled: busy || !preset?.latestRelease, onSelect: () => onWorldAction(game, world, "wipe") });
+    menu.push({ id: "archive", label: "Archive this world", detail: "Stops, backs up, hides from session control", icon: "archive", disabled: busy, onSelect: () => onWorldAction(game, world, "archive") });
+  }
+  if (world.materialization === "archived") menu.push({ id: "purge", label: "Delete permanently", detail: "Registry, pointer and every backup", icon: "delete_forever", danger: true, disabled: busy, onSelect: () => onWorldAction(game, world, "purge") });
+  return menu;
+}
+
+function buildWorldTabs(world: World, canReadReleases: boolean): { id: Tab; label: string; count?: number }[] {
+  const tabs: { id: Tab; label: string; count?: number }[] = [{ id: "details", label: "Details" }];
+  if (world.worldLifecycleAvailable) tabs.push({ id: "wipes", label: "Wipes", count: world.wipes.length });
+  tabs.push({ id: "backups", label: "Backups" });
+  if (canReadReleases) tabs.push({ id: "releases", label: "Releases" });
+  return tabs;
+}
+
+function buildSessionDetails(game: Game, snapshot: ControlPlaneSnapshot | null, serverState: ServerState): DetailItem[] {
+  const host = snapshot?.hosts[0];
+  const session = sessionStatus(serverState);
+  const hostLocation = host?.availabilityZone ? ` in ${host.availabilityZone}` : "";
+  return [
+    { label: "Session", value: <Status kind={session.kind} label={session.label} />, hint: `${game.displayName} runs one session at a time on the shared host` },
+    { label: "Desired and observed", value: <span className="pair"><strong>{game.lifecycle?.desiredState ?? "unknown"}</strong><Icon name="chevron_right" size={16} /><strong>{game.lifecycle?.observedState ?? "unknown"}</strong></span>, hint: game.lifecycle ? `Lifecycle updated ${formatDateTime(game.lifecycle.updatedAtEpochSeconds)}` : "No lifecycle record for this game" },
+    { label: "Compute host", value: host ? <Status kind={hostStatus(host.state).kind} label={`${host.name} · ${hostStatus(host.state).label.toLowerCase()}`} /> : <Ghost>No host available</Ghost>, hint: host?.instanceType ? `${host.instanceType}${hostLocation}` : undefined },
+    { label: "Last observed", value: formatDateTime(snapshot?.observedAt) },
+  ];
+}
+
+function buildWorldDetails(world: World, preset: Game["presets"][number] | undefined, currentWipe: Wipe | undefined, serverState: ServerState): DetailItem[] {
+  const hasRelease = Boolean(world.release.activeRelease || world.release.desiredRelease);
+  const release = hasRelease
+    ? <span className="pair"><span>Active <strong>{world.release.activeRelease ?? "none"}</strong></span><Icon name="chevron_right" size={16} /><span>Desired <strong>{world.release.desiredRelease ?? "none"}</strong></span></span>
+    : <Ghost>{releaseSummary(world)}</Ghost>;
+  const emptyWipeLabel = world.worldLifecycleAvailable ? "No wipes yet" : "Not tracked";
+  const currentWipeValue = currentWipe ? <span>#{currentWipe.number}</span> : <Ghost>{emptyWipeLabel}</Ghost>;
+  return [
+    { label: "World ID", value: world.id, mono: true, copy: world.id },
+    { label: "Availability", value: <Status kind={worldStatus(world).kind} label={worldStatus(world).label} />, hint: world.worldLifecycleAvailable ? "Wipe-managed world" : "Legacy world without wipe management" },
+    { label: "Preset", value: preset ? <span>{preset.displayName}</span> : <span>{world.profileId}</span>, hint: world.preset ? <span className="mono">{repositoryName(world.preset.repository)} @ {shortCommit(world.preset.commit)}</span> : "Not built from a Git preset" },
+    { label: "Release", value: release, hint: `Pointer ${world.release.state}` },
+    { label: "Current wipe", value: currentWipeValue, hint: currentWipe ? `Opened ${formatDate(currentWipe.createdAt)} on release ${currentWipe.originRelease}` : undefined },
+    { label: "Connectivity", value: world.connectivity === "zerotier" ? "ZeroTier network" : "Public address" },
+    { label: "Address", value: world.connectionAddress ? <code>{world.connectionAddress}</code> : <Ghost>{missingAddressLabel(world, serverState)}</Ghost>, copy: world.connectionAddress ?? undefined, hint: world.connectionAddress ? "The host part plus the game port, read from the control plane" : undefined },
+  ];
+}
+
+function missingAddressLabel(world: World, serverState: ServerState): string {
+  if (world.materialization !== "existing") return "No address";
+  return serverState === "running" ? "No address yet" : "Assigned while online";
+}
+
+export function WorldScreen({ game, world, snapshot, serverState, sharedSession, granted, pending, onRefresh, onSessionAction, onWorldAction, onInvite, onDownloadPack }: WorldScreenProps) {
   const [tab, setTab] = useState<Tab>("details");
   const [wipeFilter, setWipeFilter] = useState<string | null>(null);
   useEffect(() => { setTab("details"); setWipeFilter(null); }, [world.id]);
@@ -45,42 +115,12 @@ export function WorldScreen({ game, world, snapshot, serverState, sharedSession,
   const canManage = granted.has("world.manage");
   const preset = game.presets.find((item) => item.id === (world.preset?.id ?? world.profileId));
   const currentWipe = world.wipes.find((wipe) => wipe.state === "current") ?? world.wipes.at(-1);
-  const host = snapshot?.hosts[0];
-  const session = sessionStatus(serverState);
   const availability = worldStatus(world);
   const operations = snapshot?.operations ?? [];
-
-  const menu: (MenuItem | "separator")[] = [];
-  if (granted.has("connection.read")) menu.push({ id: "pack", label: "Download client pack", icon: "download", disabled: !world.release.activeRelease || busy, title: world.release.activeRelease ? `Pack for release ${world.release.activeRelease}` : "Available once a release is active", onSelect: () => onDownloadPack(game, world) });
-  if (canManage && world.worldLifecycleAvailable) {
-    if (menu.length > 0) menu.push("separator");
-    if (world.materialization === "existing") {
-      menu.push({ id: "wipe", label: "Start a new wipe", detail: preset?.latestRelease ? `From ${preset.displayName} ${preset.latestRelease}` : "Needs a built release", icon: "history", disabled: busy || !preset?.latestRelease, onSelect: () => onWorldAction(game, world, "wipe") });
-      menu.push({ id: "archive", label: "Archive this world", detail: "Stops, backs up, hides from session control", icon: "archive", disabled: busy, onSelect: () => onWorldAction(game, world, "archive") });
-    }
-    if (world.materialization === "archived") menu.push({ id: "purge", label: "Delete permanently", detail: "Registry, pointer and every backup", icon: "delete_forever", danger: true, disabled: busy, onSelect: () => onWorldAction(game, world, "purge") });
-  }
-
-  const tabs: { id: Tab; label: string; count?: number }[] = [{ id: "details", label: "Details" }];
-  if (world.worldLifecycleAvailable) tabs.push({ id: "wipes", label: "Wipes", count: world.wipes.length });
-  tabs.push({ id: "backups", label: "Backups" });
-  if (granted.has("release.read")) tabs.push({ id: "releases", label: "Releases" });
-
-  const sessionDetails: DetailItem[] = [
-    { label: "Session", value: <Status kind={session.kind} label={session.label} />, hint: `${game.displayName} runs one session at a time on the shared host` },
-    { label: "Desired and observed", value: <span className="pair"><strong>{game.lifecycle?.desiredState ?? "unknown"}</strong><Icon name="chevron_right" size={16} /><strong>{game.lifecycle?.observedState ?? "unknown"}</strong></span>, hint: game.lifecycle ? `Lifecycle updated ${formatDateTime(game.lifecycle.updatedAtEpochSeconds)}` : "No lifecycle record for this game" },
-    { label: "Compute host", value: host ? <Status kind={hostStatus(host.state).kind} label={`${host.name} · ${hostStatus(host.state).label.toLowerCase()}`} /> : <Ghost>No host available</Ghost>, hint: host?.instanceType ? `${host.instanceType}${host.availabilityZone ? ` in ${host.availabilityZone}` : ""}` : undefined },
-    { label: "Last observed", value: formatDateTime(snapshot?.observedAt) },
-  ];
-  const worldDetails: DetailItem[] = [
-    { label: "World ID", value: world.id, mono: true, copy: world.id },
-    { label: "Availability", value: <Status kind={availability.kind} label={availability.label} />, hint: world.worldLifecycleAvailable ? "Wipe-managed world" : "Legacy world without wipe management" },
-    { label: "Preset", value: preset ? <span>{preset.displayName}</span> : <span>{world.profileId}</span>, hint: world.preset ? <span className="mono">{repositoryName(world.preset.repository)} @ {shortCommit(world.preset.commit)}</span> : "Not built from a Git preset" },
-    { label: "Release", value: world.release.activeRelease || world.release.desiredRelease ? <span className="pair"><span>Active <strong>{world.release.activeRelease ?? "none"}</strong></span><Icon name="chevron_right" size={16} /><span>Desired <strong>{world.release.desiredRelease ?? "none"}</strong></span></span> : <Ghost>{releaseSummary(world)}</Ghost>, hint: `Pointer ${world.release.state}` },
-    { label: "Current wipe", value: currentWipe ? <span>#{currentWipe.number}</span> : <Ghost>{world.worldLifecycleAvailable ? "No wipes yet" : "Not tracked"}</Ghost>, hint: currentWipe ? `Opened ${formatDate(currentWipe.createdAt)} on release ${currentWipe.originRelease}` : undefined },
-    { label: "Connectivity", value: world.connectivity === "zerotier" ? "ZeroTier network" : "Public address" },
-    { label: "Address", value: world.connectionAddress ? <code>{world.connectionAddress}</code> : <Ghost>{world.materialization !== "existing" ? "No address" : serverState === "running" ? "No address yet" : "Assigned while online"}</Ghost>, copy: world.connectionAddress ?? undefined, hint: world.connectionAddress ? "The host part plus the game port, read from the control plane" : undefined },
-  ];
+  const menu = buildWorldMenu({ game, world, granted, busy, canManage, preset, onWorldAction, onDownloadPack });
+  const tabs = buildWorldTabs(world, granted.has("release.read"));
+  const sessionDetails = buildSessionDetails(game, snapshot, serverState);
+  const worldDetails = buildWorldDetails(world, preset, currentWipe, serverState);
 
   const operationColumns: Column<Operation>[] = [
     { id: "operation", label: "Operation", render: (operation) => <strong>{operationLabel(operation.type)}</strong> },
@@ -92,71 +132,87 @@ export function WorldScreen({ game, world, snapshot, serverState, sharedSession,
   return (
     <div className="page">
       <PageHeader
-        actions={<div className="world-actions">
-          <Button icon="refresh" loading={pending?.kind === "refresh"} onClick={onRefresh} variant="outlined">Refresh</Button>
-          {granted.has("invitation.send") && <Button icon="send" onClick={() => onInvite(game, world)} variant="outlined">Invite players</Button>}
-          <span className="action-group">
-            <Button
-              aria-label={`${action === "stop" ? "Stop" : "Start"} ${world.displayName}. ${sessionControl.hint}`}
-              disabled={sessionControl.disabled}
-              icon={action === "stop" ? "stop" : "play_arrow"}
-              loading={rowPending?.kind === "session"}
-              onClick={() => onSessionAction(game, world, action)}
-              title={sessionControl.hint}
-              variant={action === "stop" ? "danger" : "filled"}
-            >
-              {action === "stop" ? "Stop" : "Start"}
-            </Button>
-            {menu.length > 0 && <Menu items={menu} label={`More actions for ${world.displayName}`} />}
-          </span>
-        </div>}
+        actions={<WorldHeaderActions action={action} canInvite={granted.has("invitation.send")} game={game} menu={menu} onInvite={onInvite} onRefresh={onRefresh} onSessionAction={onSessionAction} refreshing={pending?.kind === "refresh"} rowPending={rowPending} sessionControl={sessionControl} world={world} />}
         breadcrumb={[{ label: "Worlds", href: routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: null }) }]}
         status={<Status kind={availability.kind} label={availability.label} />}
         title={world.displayName}
       />
-      {world.materialization === "archived" && <Banner description="Restore one of its backups to open a new wipe, or delete it permanently from the actions menu." title="This world is archived" tone="warning" />}
-      {rowPending?.kind === "lifecycle" && <Banner description={`Spawnpoint is requesting ${rowPending.action === "wipe" ? "a new wipe" : rowPending.action}. The operation appears in the table below once accepted.`} title="World operation in progress" tone="info" />}
+      <WorldNotices rowPending={rowPending} world={world} />
       <SharedHostNotice busy={controlBusy} session={sharedSession} />
 
       <div className="world-tabs">
         <Tabs label="World sections" onChange={setTab} options={tabs} value={tab} />
-
-        {tab === "details" && <>
-          <Card>
-            <div className="details-columns">
-              <DetailsGroup items={sessionDetails} title="Session" />
-              <DetailsGroup items={worldDetails} title="World" />
-            </div>
-          </Card>
-          <Card description="Step Functions executions affecting the control plane right now." flush title="Operations">
-            <DataTable
-              columns={operationColumns}
-              empty={<EmptyState description="Completed executions will be listed after the operations API exposes history. Spawnpoint shows only what it observes." icon="sync" title="No operation in progress" />}
-              label="Running operations"
-              rowKey={(operation) => `${operation.type}-${operation.id}`}
-              rows={operations}
-            />
-          </Card>
-        </>}
-
-        {tab === "wipes" && <WipesTab onShowBackups={(wipe) => { setWipeFilter(wipe.id); setTab("backups"); }} world={world} />}
-
-        {tab === "backups" && <BackupsTab
-          busy={busy}
-          canRead={granted.has("backup.read")}
-          canRestore={granted.has("backup.restore")}
-          filter={wipeFilter}
-          gameId={game.id}
-          onFilter={setWipeFilter}
-          onRestore={(entry) => onWorldAction(game, world, "restore", { key: entry.key, name: entry.archiveName })}
-          settled={`${world.wipes.length}:${operations.length}`}
-          world={world}
-        />}
-
-        {tab === "releases" && <ReleasesTab busy={busy} canDownload={granted.has("connection.read")} onDownload={() => onDownloadPack(game, world)} world={world} />}
+        <WorldTabContent busy={busy} game={game} granted={granted} onDownloadPack={onDownloadPack} onWorldAction={onWorldAction} operationColumns={operationColumns} operations={operations} sessionDetails={sessionDetails} setTab={setTab} setWipeFilter={setWipeFilter} tab={tab} wipeFilter={wipeFilter} world={world} worldDetails={worldDetails} />
       </div>
     </div>
   );
+}
+
+function WorldHeaderActions({ action, canInvite, game, menu, onInvite, onRefresh, onSessionAction, refreshing, rowPending, sessionControl, world }: Readonly<{
+  action: SessionAction;
+  canInvite: boolean;
+  game: Game;
+  menu: readonly (MenuItem | "separator")[];
+  onInvite: WorldScreenProps["onInvite"];
+  onRefresh: () => void;
+  onSessionAction: WorldScreenProps["onSessionAction"];
+  refreshing: boolean;
+  rowPending: Pending | null;
+  sessionControl: ReturnType<typeof sessionControlAvailability>;
+  world: World;
+}>) {
+  const actionLabel = action === "stop" ? "Stop" : "Start";
+  return <div className="world-actions">
+    <Button icon="refresh" loading={refreshing} onClick={onRefresh} variant="outlined">Refresh</Button>
+    {canInvite && <Button icon="send" onClick={() => onInvite(game, world)} variant="outlined">Invite players</Button>}
+    <span className="action-group">
+      <Button aria-label={`${actionLabel} ${world.displayName}. ${sessionControl.hint}`} disabled={sessionControl.disabled} icon={action === "stop" ? "stop" : "play_arrow"} loading={rowPending?.kind === "session"} onClick={() => onSessionAction(game, world, action)} title={sessionControl.hint} variant={action === "stop" ? "danger" : "filled"}>{actionLabel}</Button>
+      {menu.length > 0 && <Menu items={menu} label={`More actions for ${world.displayName}`} />}
+    </span>
+  </div>;
+}
+
+function WorldNotices({ rowPending, world }: Readonly<{ rowPending: Pending | null; world: World }>) {
+  const operation = pendingWorldOperationLabel(rowPending);
+  return <>
+    {world.materialization === "archived" && <Banner description="Restore one of its backups to open a new wipe, or delete it permanently from the actions menu." title="This world is archived" tone="warning" />}
+    {operation && <Banner description={`Spawnpoint is requesting ${operation}. The operation appears in the table below once accepted.`} title="World operation in progress" tone="info" />}
+  </>;
+}
+
+function pendingWorldOperationLabel(pending: Pending | null): string | null {
+  if (pending?.kind !== "lifecycle") return null;
+  if (pending.action === "wipe") return "a new wipe";
+  return pending.action;
+}
+
+function WorldTabContent({ busy, game, granted, onDownloadPack, onWorldAction, operationColumns, operations, sessionDetails, setTab, setWipeFilter, tab, wipeFilter, world, worldDetails }: Readonly<{
+  busy: boolean;
+  game: Game;
+  granted: ReadonlySet<string>;
+  onDownloadPack: WorldScreenProps["onDownloadPack"];
+  onWorldAction: WorldScreenProps["onWorldAction"];
+  operationColumns: readonly Column<Operation>[];
+  operations: readonly Operation[];
+  sessionDetails: readonly DetailItem[];
+  setTab: (tab: Tab) => void;
+  setWipeFilter: (wipeId: string | null) => void;
+  tab: Tab;
+  wipeFilter: string | null;
+  world: World;
+  worldDetails: readonly DetailItem[];
+}>) {
+  return <>
+    {tab === "details" && <>
+      <Card><div className="details-columns"><DetailsGroup items={sessionDetails} title="Session" /><DetailsGroup items={worldDetails} title="World" /></div></Card>
+      <Card description="Step Functions executions affecting the control plane right now." flush title="Operations">
+        <DataTable columns={operationColumns} empty={<EmptyState description="Completed executions will be listed after the operations API exposes history. Spawnpoint shows only what it observes." icon="sync" title="No operation in progress" />} label="Running operations" rowKey={(operation) => `${operation.type}-${operation.id}`} rows={operations} />
+      </Card>
+    </>}
+    {tab === "wipes" && <WipesTab onShowBackups={(wipe) => { setWipeFilter(wipe.id); setTab("backups"); }} world={world} />}
+    {tab === "backups" && <BackupsTab busy={busy} canRead={granted.has("backup.read")} canRestore={granted.has("backup.restore")} filter={wipeFilter} gameId={game.id} onFilter={setWipeFilter} onRestore={(entry) => onWorldAction(game, world, "restore", { key: entry.key, name: entry.archiveName })} settled={`${world.wipes.length}:${operations.length}`} world={world} />}
+    {tab === "releases" && <ReleasesTab busy={busy} canDownload={granted.has("connection.read")} onDownload={() => onDownloadPack(game, world)} world={world} />}
+  </>;
 }
 
 function WipesTab({ world, onShowBackups }: Readonly<{ world: World; onShowBackups: (wipe: Wipe) => void }>) {
@@ -175,7 +231,7 @@ function WipesTab({ world, onShowBackups }: Readonly<{ world: World; onShowBacku
   );
 }
 
-function BackupsTab({ world, gameId, canRead, canRestore, busy, filter, onFilter, onRestore, settled }: {
+function BackupsTab({ world, gameId, canRead, canRestore, busy, filter, onFilter, onRestore, settled }: Readonly<{
   world: World;
   gameId: string;
   /** Changes when a wipe lands or an operation finishes, so the listing refetches. */
@@ -186,7 +242,7 @@ function BackupsTab({ world, gameId, canRead, canRestore, busy, filter, onFilter
   filter: string | null;
   onFilter: (wipeId: string | null) => void;
   onRestore: (entry: BackupInventory["entries"][number]) => void;
-}) {
+}>) {
   const [inventory, setInventory] = useState<BackupInventory | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);

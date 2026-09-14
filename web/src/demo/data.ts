@@ -9,8 +9,6 @@ export type Mutable<T> = {
 
 export type DemoState = {
   snapshot: Mutable<ControlPlaneSnapshot>;
-  /** Which world each game's session is running, outside the wire model. */
-  activeWorld: Record<string, string | null>;
   roles: AccessRole[];
   identities: Mutable<AccessIdentity>[];
   candidates: Mutable<AccessCandidate>[];
@@ -44,7 +42,7 @@ export function initialState(): DemoState {
           id: "minecraft",
           code: "MC",
           displayName: "Minecraft",
-          lifecycle: { schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "session-42", updatedAtEpochSeconds: Math.floor(Date.now() / 1000) },
+          lifecycle: { schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "session-42", activeWorldId: "minecraft-rostik-12345678", updatedAtEpochSeconds: Math.floor(Date.now() / 1000) },
           presets: [
             { id: "industrial", displayName: "Industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "a".repeat(40), profileDigest: "b".repeat(64), releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3" },
             { id: "skyblock", displayName: "Skyblock", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "c".repeat(40), profileDigest: "d".repeat(64), releases: [], buildStatus: "building", latestRelease: null },
@@ -85,7 +83,7 @@ export function initialState(): DemoState {
           id: "factorio",
           code: "FA",
           displayName: "Factorio",
-          lifecycle: { schemaVersion: 1, serverId: "factorio", desiredState: "stopped", observedState: "stopped", activeSessionId: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000) },
+          lifecycle: { schemaVersion: 1, serverId: "factorio", desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000) },
           presets: [],
           worlds: [
             { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:34197", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },
@@ -96,7 +94,7 @@ export function initialState(): DemoState {
           id: "zomboid",
           code: "PZ",
           displayName: "Project Zomboid",
-          lifecycle: { schemaVersion: 1, serverId: "zomboid", desiredState: "stopped", observedState: "stopped", activeSessionId: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000) },
+          lifecycle: { schemaVersion: 1, serverId: "zomboid", desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000) },
           presets: [],
           worlds: [
             { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "not_created", preset: null, wipes: [], connectionAddress: "172.29.23.24:16261", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },
@@ -104,7 +102,6 @@ export function initialState(): DemoState {
         },
       ],
     },
-    activeWorld: { minecraft: "minecraft-rostik-12345678", factorio: null, zomboid: null },
     roles: [
       { id: "viewer", name: "Viewer", description: "Can see public server status and request access to play.", permissions: ["status.read"], system: true },
       { id: "player", name: "Player", description: "Can view the server and control a game session.", permissions: ["status.read", "connection.read", "invitation.send", "session.start"], system: true },

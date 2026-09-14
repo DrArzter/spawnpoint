@@ -21,7 +21,7 @@ const NOW = 1_786_665_600;
 
 function readySession() {
   const acquired = acquireLease(initialLifecycleRecord("minecraft", NOW), "start-op", NOW, 300);
-  const starting = beginSession(acquired.record, acquired.ownership, "session-1", NOW + 1);
+  const starting = beginSession(acquired.record, acquired.ownership, "session-1", "world-1", NOW + 1);
   const ready = markSessionReady(starting, acquired.ownership, "session-1", NOW + 2);
   return { record: ready, ownership: acquired.ownership };
 }
@@ -46,7 +46,7 @@ test("an expired lease can be taken over only with a higher fencing token", () =
   assert.equal(first.ownership.fencingToken, 1);
   assert.equal(replacement.ownership.fencingToken, 2);
   assert.throws(
-    () => beginSession(replacement.record, first.ownership, "stale-session", NOW + 11),
+    () => beginSession(replacement.record, first.ownership, "stale-session", "world-old", NOW + 11),
     LifecycleConflict,
   );
 });
@@ -66,10 +66,11 @@ test("an expired owner cannot renew or release itself back into authority", () =
 
 test("session transitions require the current lease and exact session id", () => {
   const acquired = acquireLease(initialLifecycleRecord("minecraft", NOW), "start-op", NOW, 300);
-  const starting = beginSession(acquired.record, acquired.ownership, "session-1", NOW + 1);
+  const starting = beginSession(acquired.record, acquired.ownership, "session-1", "world-1", NOW + 1);
 
   assert.equal(starting.desiredState, "running");
   assert.equal(starting.observedState, "starting");
+  assert.equal(starting.activeWorldId, "world-1");
   assert.throws(
     () => markSessionReady(starting, acquired.ownership, "session-old", NOW + 2),
     LifecycleConflict,
@@ -144,7 +145,7 @@ test("a stale watchdog cannot observe or stop a newer session", () => {
   record = releaseLease(record, first.ownership, NOW + 6);
 
   const second = acquireLease(record, "start-op-2", NOW + 7, 300);
-  record = beginSession(second.record, second.ownership, "session-2", NOW + 8);
+  record = beginSession(second.record, second.ownership, "session-2", "world-2", NOW + 8);
   record = markSessionReady(record, second.ownership, "session-2", NOW + 9);
   record = registerWatchdog(record, second.ownership, "session-2", "watchdog-2", NOW + 10);
 
@@ -169,6 +170,7 @@ test("stop holds the lease until the exact session is durably stopped", () => {
   const stopped = markStopped(stopping, ready.ownership, "session-1", NOW + 5);
   assert.equal(stopped.observedState, "stopped");
   assert.equal(stopped.activeSessionId, null);
+  assert.equal(stopped.activeWorldId, null);
   assert.equal(stopped.idle, null);
 });
 

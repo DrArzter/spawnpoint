@@ -219,6 +219,15 @@ run "lifecycle_v2_workflows_are_additive_standard_and_session_scoped" {
   }
 
   assert {
+    condition = alltrue([
+      data.aws_iam_policy_document.lifecycle_v2_start.statement[4].actions == toset(["ec2:StopInstances"]),
+      data.aws_iam_policy_document.lifecycle_v2_start.statement[4].resources == toset(["arn:aws:ec2:eu-central-1:123456789012:instance/i-00000000000000000"]),
+      data.aws_iam_policy_document.lifecycle_v2_start.statement[5].actions == toset(["ec2:DescribeInstances"]),
+    ])
+    error_message = "Only the V2 start failure safeguard may stop the exact configured host and poll its state."
+  }
+
+  assert {
     condition = strcontains(templatefile("${path.module}/../../workflows/idle-watchdog-v2.asl.json.tftpl", {
       coordinator_function_arn  = local.lifecycle_v2_coordinator_arn
       stop_v2_state_machine_arn = local.lifecycle_v2_stop_arn

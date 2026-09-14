@@ -12,6 +12,7 @@ import { IconName } from "./icons";
 import { formatDateTime } from "./lib/format";
 import { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, World } from "./model";
 import { isLandingHash, isRootHash, routeHash } from "./routing";
+import { deriveSharedHostSession } from "./session";
 import { AccessScreen } from "./screens/AccessScreen";
 import { AuthScreen, BootScreen } from "./screens/AuthScreen";
 import { ConsoleScreen } from "./screens/ConsoleScreen";
@@ -109,6 +110,7 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
   const game = games.find((item) => item.id === route.gameId) ?? games.find((item) => item.id === storedGame) ?? games[0];
   const world = route.page === "worlds" && route.worldId ? game?.worlds.find((item) => item.id === route.worldId) : undefined;
   const serverState = deriveServerState(game, snapshot);
+  const sharedSession = deriveSharedHostSession(snapshot);
   const scoped = (page: Page) => routeHash({ page, accessTab: route.accessTab, gameId: game?.id ?? null, worldId: null });
   const navItems: NavItem[] = navigation.filter((item) => granted.has(item.permission)).map((item) => ({ id: item.id, label: item.label, icon: item.icon, href: scoped(item.id) }));
   const page: Page = route.page === "profile" || navItems.some((item) => item.id === route.page) ? route.page : "worlds";
@@ -276,8 +278,8 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
         />
         <div aria-hidden="true" className="drawer-scrim" onClick={() => setDrawerOpen(false)} />
         <main className="main" id="main">
-          {page === "worlds" && game && world && <WorldScreen game={game} granted={granted} onDownloadPack={(target, targetWorld) => void downloadPack(target, targetWorld)} onInvite={(target, targetWorld) => setInvite({ game: target, world: targetWorld })} onRefresh={() => void refresh()} onSessionAction={requestSession} onWorldAction={requestWorldAction} pending={pending} serverState={serverState} snapshot={snapshot} world={world} />}
-          {page === "worlds" && !(game && world) && <WorldsScreen error={controlPlane.error} game={game} granted={granted} onCreateSave={(target) => setCreating({ game: target, preset: target.presets.find((preset) => preset.buildStatus === "ready") ?? null })} onDownloadPack={(target, targetWorld) => void downloadPack(target, targetWorld)} onInvite={(target, targetWorld) => setInvite({ game: target, world: targetWorld })} onRefresh={() => void refresh()} onSessionAction={requestSession} onWorldAction={requestWorldAction} pending={pending} serverState={serverState} snapshot={snapshot} status={listStatus} />}
+          {page === "worlds" && game && world && <WorldScreen game={game} granted={granted} onDownloadPack={(target, targetWorld) => void downloadPack(target, targetWorld)} onInvite={(target, targetWorld) => setInvite({ game: target, world: targetWorld })} onRefresh={() => void refresh()} onSessionAction={requestSession} onWorldAction={requestWorldAction} pending={pending} serverState={serverState} sharedSession={sharedSession} snapshot={snapshot} world={world} />}
+          {page === "worlds" && !(game && world) && <WorldsScreen error={controlPlane.error} game={game} granted={granted} onCreateSave={(target) => setCreating({ game: target, preset: target.presets.find((preset) => preset.buildStatus === "ready") ?? null })} onDownloadPack={(target, targetWorld) => void downloadPack(target, targetWorld)} onInvite={(target, targetWorld) => setInvite({ game: target, world: targetWorld })} onRefresh={() => void refresh()} onSessionAction={requestSession} onWorldAction={requestWorldAction} pending={pending} serverState={serverState} sharedSession={sharedSession} snapshot={snapshot} status={listStatus} />}
           {page === "metrics" && <MetricsScreen game={game} serverState={serverState} />}
           {page === "console" && <ConsoleScreen game={game} serverState={serverState} />}
           {page === "releases" && <ReleasesScreen game={game} granted={granted} loading={listStatus === "loading"} onCreateSave={(target, preset) => setCreating({ game: target, preset })} pending={pending} />}

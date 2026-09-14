@@ -7,7 +7,9 @@
       "Type": "Pass",
       "Parameters": {
         "request.$": "$",
-        "coordination": {}
+        "coordination": {
+          "forcedStopPolls": 0
+        }
       },
       "Next": "Initialize Lifecycle"
     },
@@ -64,7 +66,8 @@
           "action": "beginSession",
           "serverId.$": "$.request.serverId",
           "ownership.$": "$.coordination.lease.ownership",
-          "sessionId.$": "$.request.sessionId"
+          "sessionId.$": "$.request.sessionId",
+          "worldId.$": "$.request.worldId"
         }
       },
       "ResultPath": null,
@@ -212,10 +215,109 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.stopFailure",
-          "Next": "Start Compensation Failed"
+          "Next": "Force Stop Failed Start Host"
         }
       ],
       "Next": "Mark Compensated Session Stopped"
+    },
+    "Force Stop Failed Start Host": {
+      "Type": "Task",
+      "Comment": "The verified stop could not run because the game never became healthy enough to save or probe. Stop the billed host as the final cost-safety boundary; the persistent volume remains attached for recovery.",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:stopInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.instanceId)"
+      },
+      "ResultPath": "$.coordination.forcedStopRequest",
+      "Catch": [{
+        "ErrorEquals": ["States.ALL"],
+        "ResultPath": "$.forcedStopFailure",
+        "Next": "Start Compensation Failed"
+      }],
+      "Next": "Wait Before Forced Stop Poll"
+    },
+    "Wait Before Forced Stop Poll": {
+      "Type": "Wait",
+      "SecondsPath": "$.request.stopTiming.instancePollSeconds",
+      "Next": "Describe Forced Stop Host"
+    },
+    "Describe Forced Stop Host": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.instanceId)"
+      },
+      "ResultPath": "$.coordination.forcedStopInstance",
+      "Catch": [{
+        "ErrorEquals": ["States.ALL"],
+        "ResultPath": "$.forcedStopFailure",
+        "Next": "Start Compensation Failed"
+      }],
+      "Next": "Forced Stop Host Stopped"
+    },
+    "Forced Stop Host Stopped": {
+      "Type": "Choice",
+      "Choices": [{
+        "Variable": "$.coordination.forcedStopInstance.Reservations[0].Instances[0].State.Name",
+        "StringEquals": "stopped",
+        "Next": "Mark Forced Session Stopped"
+      }],
+      "Default": "Increment Forced Stop Poll"
+    },
+    "Increment Forced Stop Poll": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$.request",
+        "coordination": {
+          "lease.$": "$.coordination.lease",
+          "forcedStopPolls.$": "States.MathAdd($.coordination.forcedStopPolls, 1)"
+        },
+        "startFailure.$": "$.startFailure",
+        "stopFailure.$": "$.stopFailure"
+      },
+      "Next": "Forced Stop Poll Limit Reached"
+    },
+    "Forced Stop Poll Limit Reached": {
+      "Type": "Choice",
+      "Choices": [{
+        "Variable": "$.coordination.forcedStopPolls",
+        "NumericGreaterThanEqualsPath": "$.request.stopTiming.maxInstancePolls",
+        "Next": "Start Compensation Failed"
+      }],
+      "Default": "Wait Before Forced Stop Poll"
+    },
+    "Mark Forced Session Stopped": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "markStopped",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Release Forced Compensation Lease"
+    },
+    "Release Forced Compensation Lease": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "releaseLease",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Start Failed Host Forced Stopped"
+    },
+    "Start Failed Host Forced Stopped": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.V2StartFailedHostForcedStopped",
+      "Cause": "The host start and verified stop both failed; EC2 was forcibly stopped and its persistent volume was retained for recovery."
     },
     "Mark Compensated Session Stopped": {
       "Type": "Task",
@@ -254,7 +356,7 @@
     "Start Compensation Failed": {
       "Type": "Fail",
       "Error": "Spawnpoint.V2StartCompensationFailed",
-      "Cause": "Both host start and its verified stop compensation failed; lifecycle remains stopping for explicit recovery."
+      "Cause": "Host start, verified stop compensation and the final EC2 stop safeguard did not all complete; lifecycle remains stopping for explicit recovery and the running-hours alarm remains the backstop."
     }
   }
 }

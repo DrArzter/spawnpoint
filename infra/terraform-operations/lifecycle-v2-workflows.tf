@@ -65,6 +65,18 @@ data "aws_iam_policy_document" "lifecycle_v2_start" {
     actions   = ["events:PutRule", "events:PutTargets", "events:DescribeRule"]
     resources = [local.lifecycle_v2_sync_events_arn]
   }
+
+  statement {
+    sid       = "ForceStopOnlyFailedStartHost"
+    actions   = ["ec2:StopInstances"]
+    resources = [data.aws_instance.game_host.arn]
+  }
+
+  statement {
+    sid       = "ObserveForcedStop"
+    actions   = ["ec2:DescribeInstances"]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_role_policy" "lifecycle_v2_start" {

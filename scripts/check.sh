@@ -59,7 +59,7 @@ check_node() {
 }
 
 check_web() {
-  (cd web && npm run build)
+  (cd web && npm test && npm run build)
 }
 
 # The bot, notifier and access-api roots archive lambdas/dist/*, so a Terraform

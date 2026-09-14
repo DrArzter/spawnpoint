@@ -102,11 +102,11 @@ export function startSession(gameId: string, worldId: string): { result: "reques
   requireIdle();
   const target = world(gameId, worldId);
   if (!target.sessionControlAvailable) throw new Error("This world is not connected to a session workflow yet.");
-  const busy = state.snapshot.games.find((item) => item.id !== gameId && (item.lifecycle?.observedState === "ready" || item.lifecycle?.observedState === "starting"));
-  if (busy) throw new Error(`The shared host already runs ${busy.displayName}. Stop that session first.`);
   const lifecycle = game(gameId).lifecycle;
   if (!lifecycle) throw new Error("This game has no session workflow.");
-  if (lifecycle.observedState === "ready" && state.activeWorld[gameId] === worldId) throw new Error("This world is already running.");
+  const busy = state.snapshot.games.find((item) => item.lifecycle?.observedState !== "stopped");
+  if (busy?.id === gameId && lifecycle.activeWorldId === worldId) throw new Error("This world is already running.");
+  if (busy) throw new Error(`The shared host already runs ${busy.displayName}. Stop that session first.`);
 
   if (target.materialization === "not_created") {
     target.materialization = "existing";
@@ -119,8 +119,8 @@ export function startSession(gameId: string, worldId: string): { result: "reques
   lifecycle.desiredState = "running";
   lifecycle.observedState = "starting";
   lifecycle.activeSessionId = `session-${state.counter + 100}`;
+  lifecycle.activeWorldId = worldId;
   lifecycle.updatedAtEpochSeconds = Math.floor(Date.now() / 1000);
-  state.activeWorld[gameId] = worldId;
   host().state = "pending";
 
   const operationId = schedule("start", START_MS, (current) => {
@@ -154,6 +154,7 @@ export function stopSession(gameId: string, worldId: string): { result: "request
     if (next) {
       next.observedState = "stopped";
       next.activeSessionId = null;
+      next.activeWorldId = null;
       next.updatedAtEpochSeconds = Math.floor(Date.now() / 1000);
     }
     const box = current.snapshot.hosts[0];
@@ -161,7 +162,6 @@ export function stopSession(gameId: string, worldId: string): { result: "request
       box.state = "stopped";
       box.launchedAt = null;
     }
-    current.activeWorld[gameId] = null;
     archive(gameId, target);
   });
   return { result: "requested", operationId };
@@ -187,7 +187,8 @@ export function worldLifecycle(gameId: string, worldId: string, action: "archive
       next.materialization = "archived";
       next.sessionControlAvailable = false;
       next.connectionAddress = null;
-      if (current.activeWorld[gameId] === worldId) current.activeWorld[gameId] = null;
+      const lifecycle = owner.lifecycle;
+      if (lifecycle?.activeWorldId === worldId) lifecycle.activeWorldId = null;
       return;
     }
     if (action === "purge") {

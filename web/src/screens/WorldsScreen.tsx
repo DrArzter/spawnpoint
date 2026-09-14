@@ -10,6 +10,8 @@ import { Icon } from "../icons";
 import { formatDate, formatDateTime, plural } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, ServerState, World } from "../model";
 import { routeHash } from "../routing";
+import { sharedSessionOwnerLabel, worldOwnsSharedSession } from "../session";
+import type { SharedHostSession } from "../session";
 import { Pending, pendingFor, SessionAction, WorldActionKind } from "../shell/actions";
 
 export type WorldsScreenProps = {
@@ -18,6 +20,7 @@ export type WorldsScreenProps = {
   status: "loading" | "ready" | "error";
   error: string;
   serverState: ServerState;
+  sharedSession: SharedHostSession;
   granted: ReadonlySet<string>;
   pending: Pending | null;
   onRefresh: () => void;
@@ -28,11 +31,11 @@ export type WorldsScreenProps = {
   onCreateSave: (game: Game) => void;
 };
 
-export function WorldsScreen({ game, snapshot, status, error, serverState, granted, pending, onRefresh, onSessionAction, onWorldAction, onInvite, onDownloadPack, onCreateSave }: WorldsScreenProps) {
+export function WorldsScreen({ game, snapshot, status, error, serverState, sharedSession, granted, pending, onRefresh, onSessionAction, onWorldAction, onInvite, onDownloadPack, onCreateSave }: WorldsScreenProps) {
   const loading = status === "loading";
   const host = snapshot?.hosts[0];
   const session = sessionStatus(serverState);
-  const transitioning = serverState === "starting" || serverState === "stopping";
+  const controlBusy = pending?.kind === "session" || pending?.kind === "lifecycle";
   const canManage = granted.has("world.manage");
   const readyPreset = game?.presets.some((preset) => preset.buildStatus === "ready") ?? false;
 
@@ -49,7 +52,7 @@ export function WorldsScreen({ game, snapshot, status, error, serverState, grant
   }
 
   const columns: Column<World>[] = [
-    { id: "status", label: "Status", width: "130px", render: (world) => { const state = worldStatus(world); return <Status kind={state.kind} label={state.label} />; } },
+    { id: "status", label: "Status", width: "130px", render: (world) => { const state = worldOwnsSharedSession(sharedSession, game!, world) && sharedSession.state === "running" ? sessionStatus("running") : worldStatus(world); return <Status kind={state.kind} label={state.label} />; } },
     {
       id: "name",
       label: "Name",
@@ -93,7 +96,7 @@ export function WorldsScreen({ game, snapshot, status, error, serverState, grant
       id: "actions",
       label: "Actions",
       actions: true,
-      render: (world) => game ? <RowActions game={game} granted={granted} onDownloadPack={onDownloadPack} onInvite={onInvite} onSessionAction={onSessionAction} onWorldAction={onWorldAction} pending={pendingFor(pending, world.id)} serverState={serverState} transitioning={transitioning} world={world} /> : null,
+      render: (world) => game ? <RowActions controlBusy={controlBusy} game={game} granted={granted} onDownloadPack={onDownloadPack} onInvite={onInvite} onSessionAction={onSessionAction} onWorldAction={onWorldAction} pending={pendingFor(pending, world.id)} sharedSession={sharedSession} world={world} /> : null,
     },
   ];
 
@@ -108,6 +111,7 @@ export function WorldsScreen({ game, snapshot, status, error, serverState, grant
         title="Worlds"
       />
       {status === "error" && <Banner actions={<Button onClick={onRefresh} variant="text">Try again</Button>} description={error} title="Current state could not be loaded" tone="error" />}
+      <SharedHostNotice busy={controlBusy} session={sharedSession} />
 
       <Card as="section" className="session-card-wrap" flush>
         <div aria-busy={loading} className="session-card">
@@ -162,35 +166,45 @@ export function releaseSummary(world: World): string {
   return "Release unavailable";
 }
 
-export function sessionControlHint(world: World, action: SessionAction, permitted: boolean, transitioning: boolean): string {
+export function sessionControlAvailability(world: World, game: Game, sharedSession: SharedHostSession, permitted: boolean, controlBusy: boolean): { action: SessionAction; disabled: boolean; hint: string } {
+  const action = sessionActionForWorld(world, game, sharedSession);
   if (!world.sessionControlAvailable) {
-    if (world.materialization === "archived") return "This world is archived. Restore a backup to open a new wipe.";
-    if (world.materialization === "not_created") return "This preset needs a successful release build before its first start.";
-    return "This world is not connected to a session workflow yet.";
+    if (world.materialization === "archived") return { action, disabled: true, hint: "This world is archived. Restore a backup to open a new wipe." };
+    if (world.materialization === "not_created") return { action, disabled: true, hint: "This preset needs a successful release build before its first start." };
+    return { action, disabled: true, hint: "This world is not connected to a session workflow yet." };
   }
-  if (!permitted) return `Your role cannot ${action} sessions.`;
-  if (transitioning) return "A control-plane operation is already in progress.";
-  return action === "start" ? "Start a billed session on the shared host" : "Save, back up and stop the session";
+  if (!permitted) return { action, disabled: true, hint: `Your role cannot ${action} sessions.` };
+  if (controlBusy || sharedSession.operationRunning) return { action, disabled: true, hint: "A control-plane operation is already in progress." };
+  if (sharedSession.state === "starting" || sharedSession.state === "stopping") return { action, disabled: true, hint: `The shared host is ${sharedSession.state}.` };
+  if (sharedSession.state === "unknown") return { action, disabled: true, hint: "Spawnpoint cannot confirm that the shared host is free. Refresh before trying again." };
+  if (action === "start" && sharedSession.state === "running") {
+    const owner = sharedSessionOwnerLabel(sharedSession);
+    return { action, disabled: true, hint: owner ? `${owner} is using the shared host. Stop that session first.` : "Another session is using the shared host. Stop it first." };
+  }
+  return { action, disabled: false, hint: action === "start" ? "Start a billed session on the shared host" : "Save, back up and stop this session" };
 }
 
-export function RowActions({ game, world, serverState, granted, pending, transitioning, onSessionAction, onWorldAction, onInvite, onDownloadPack, compact = true }: {
+export function sessionActionForWorld(world: World, game: Game, sharedSession: SharedHostSession): SessionAction {
+  return worldOwnsSharedSession(sharedSession, game, world) && sharedSession.state !== "stopped" ? "stop" : "start";
+}
+
+export function RowActions({ game, world, sharedSession, granted, pending, controlBusy, onSessionAction, onWorldAction, onInvite, onDownloadPack, compact = true }: {
   game: Game;
   world: World;
-  serverState: ServerState;
+  sharedSession: SharedHostSession;
   granted: ReadonlySet<string>;
   pending: Pending | null;
-  transitioning: boolean;
+  controlBusy: boolean;
   onSessionAction: (game: Game, world: World, action: SessionAction) => void;
   onWorldAction: (game: Game, world: World, action: Exclude<WorldActionKind, "restore">) => void;
   onInvite: (game: Game, world: World) => void;
   onDownloadPack: (game: Game, world: World) => void;
   compact?: boolean;
 }) {
-  const action: SessionAction = serverState === "running" ? "stop" : "start";
+  const action = sessionActionForWorld(world, game, sharedSession);
   const permitted = granted.has(action === "start" ? "session.start" : "session.stop");
   const busy = pending !== null;
-  const disabled = !world.sessionControlAvailable || !permitted || transitioning || busy;
-  const hint = sessionControlHint(world, action, permitted, transitioning);
+  const availability = sessionControlAvailability(world, game, sharedSession, permitted, controlBusy || busy);
   const canManage = granted.has("world.manage");
   const items: (MenuItem | "separator")[] = [
     { id: "details", label: "View details", icon: "chevron_right", onSelect: () => { window.location.hash = routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: world.id }); } },
@@ -208,12 +222,13 @@ export function RowActions({ game, world, serverState, granted, pending, transit
   return (
     <>
       <Button
-        disabled={disabled}
+        aria-label={`${action === "stop" ? "Stop" : "Start"} ${world.displayName}. ${availability.hint}`}
+        disabled={availability.disabled}
         icon={action === "stop" ? "stop" : "play_arrow"}
         loading={pending?.kind === "session"}
         onClick={() => onSessionAction(game, world, action)}
         size={compact ? "small" : "medium"}
-        title={hint}
+        title={availability.hint}
         variant={action === "stop" ? "danger-text" : compact ? "text" : "filled"}
       >
         {action === "stop" ? "Stop" : "Start"}
@@ -221,4 +236,18 @@ export function RowActions({ game, world, serverState, granted, pending, transit
       <Menu items={items} label={`More actions for ${world.displayName}`} size={compact ? "small" : "medium"} />
     </>
   );
+}
+
+export function SharedHostNotice({ session, busy }: { session: SharedHostSession; busy: boolean }) {
+  const owner = sharedSessionOwnerLabel(session);
+  if (busy || session.operationRunning || session.state === "starting" || session.state === "stopping") {
+    return <Banner description={owner ? `${owner} owns the current session. Session controls stay locked until the operation finishes.` : "Session controls stay locked until the current operation finishes."} title="Shared host operation in progress" tone="info" />;
+  }
+  if (session.state === "running") {
+    return <Banner description={owner ? `${owner} is running. Stop that session before starting another world.` : "A session is running, but its world is not reported. Session starts stay locked for safety."} title="Shared host is occupied" tone="info" />;
+  }
+  if (session.state === "unknown") {
+    return <Banner description="Spawnpoint cannot prove that the shared host is free. Refresh the control-plane state before starting a world." title="Shared host availability is unknown" tone="warning" />;
+  }
+  return null;
 }

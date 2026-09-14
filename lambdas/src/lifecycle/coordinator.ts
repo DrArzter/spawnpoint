@@ -39,7 +39,7 @@ export type CoordinatorInput =
   | (BaseInput & Readonly<{ action: "acquireLease"; operationId: string; ttlSeconds: number }>)
   | (BaseInput & Readonly<{ action: "renewLease"; ownership: LeaseOwnership; ttlSeconds: number }>)
   | (BaseInput & Readonly<{ action: "releaseLease"; ownership: LeaseOwnership }>)
-  | (BaseInput & Readonly<{ action: "beginSession"; ownership: LeaseOwnership; sessionId: string }>)
+  | (BaseInput & Readonly<{ action: "beginSession"; ownership: LeaseOwnership; sessionId: string; worldId: string }>)
   | (BaseInput & Readonly<{ action: "markSessionReady"; ownership: LeaseOwnership; sessionId: string }>)
   | (BaseInput &
       Readonly<{
@@ -147,7 +147,7 @@ export function createLifecycleCoordinator(
     }
     if (input.action === "beginSession") {
       return mutate(input.serverId, (record, now) => ({
-        record: beginSession(record, input.ownership, input.sessionId, now),
+        record: beginSession(record, input.ownership, input.sessionId, input.worldId, now),
       }));
     }
     if (input.action === "markSessionReady") {

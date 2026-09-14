@@ -89,6 +89,29 @@ test("a failed V1 start is durably stopped before lifecycle is cleared", async (
   assert.equal(state(definition, "Start Failed And Compensated").Type, "Fail");
 });
 
+test("a failed verified compensation force-stops the billed host with a bounded poll", async () => {
+  const definition = await loadDefinition();
+
+  assert.equal(state(definition, "Stop Accepted V1").Catch?.[0]?.Next, "Force Stop Failed Start Host");
+  assert.equal(state(definition, "Force Stop Failed Start Host").Resource, "arn:aws:states:::aws-sdk:ec2:stopInstances");
+  assert.deepEqual(state(definition, "Force Stop Failed Start Host").Parameters, {
+    "InstanceIds.$": "States.Array($.request.instanceId)",
+  });
+  assert.equal(state(definition, "Describe Forced Stop Host").Resource, "arn:aws:states:::aws-sdk:ec2:describeInstances");
+  assert.equal(state(definition, "Forced Stop Host Stopped").Default, "Increment Forced Stop Poll");
+  assert.equal(state(definition, "Increment Forced Stop Poll").Next, "Forced Stop Poll Limit Reached");
+  assert.equal(state(definition, "Forced Stop Poll Limit Reached").Default, "Wait Before Forced Stop Poll");
+  assert.equal(state(definition, "Mark Forced Session Stopped").Next, "Release Forced Compensation Lease");
+  assert.equal(state(definition, "Release Forced Compensation Lease").Next, "Start Failed Host Forced Stopped");
+  assert.equal(state(definition, "Start Failed Host Forced Stopped").Type, "Fail");
+});
+
+test("the lifecycle records which world owns the active shared-host session", async () => {
+  const definition = await loadDefinition();
+  const payload = state(definition, "Begin Session").Parameters?.Payload as Record<string, unknown>;
+  assert.equal(payload["worldId.$"], "$.request.worldId");
+});
+
 test("V2 passes the host's address through instead of echoing the request's", async () => {
   const definition = await loadDefinition();
   const parameters = (name: string): Record<string, any> => (state(definition, name) as Record<string, any>).Parameters;

@@ -14,7 +14,7 @@ import { sharedSessionOwnerLabel, worldOwnsSharedSession } from "../session";
 import type { SharedHostSession } from "../session";
 import { Pending, pendingFor, SessionAction, WorldActionKind } from "../shell/actions";
 
-export type WorldsScreenProps = {
+export type WorldsScreenProps = Readonly<{
   game: Game | undefined;
   snapshot: ControlPlaneSnapshot | null;
   status: "loading" | "ready" | "error";
@@ -29,7 +29,7 @@ export type WorldsScreenProps = {
   onInvite: (game: Game, world: World) => void;
   onDownloadPack: (game: Game, world: World) => void;
   onCreateSave: (game: Game) => void;
-};
+}>;
 
 export function WorldsScreen({ game, snapshot, status, error, serverState, sharedSession, granted, pending, onRefresh, onSessionAction, onWorldAction, onInvite, onDownloadPack, onCreateSave }: WorldsScreenProps) {
   const loading = status === "loading";
@@ -40,15 +40,7 @@ export function WorldsScreen({ game, snapshot, status, error, serverState, share
   const readyPreset = game?.presets.some((preset) => preset.buildStatus === "ready") ?? false;
 
   if (!loading && !game) {
-    return (
-      <div className="page">
-        <PageHeader title="Worlds" />
-        {status === "error" && <Banner actions={<Button onClick={onRefresh} variant="text">Try again</Button>} description={error} title="Current state could not be loaded" tone="error" />}
-        <Card flush>
-          <EmptyState description={status === "error" ? "Spawnpoint could not read games, worlds and the compute host." : "The control plane lists no games yet. Games and their presets are declared in Git."} icon="public" title="No games to show" />
-        </Card>
-      </div>
-    );
+    return <WorldsUnavailable error={error} failed={status === "error"} onRefresh={onRefresh} />;
   }
 
   const columns: Column<World>[] = [
@@ -103,35 +95,14 @@ export function WorldsScreen({ game, snapshot, status, error, serverState, share
   return (
     <div className="page">
       <PageHeader
-        actions={<>
-          <Button icon="refresh" loading={pending?.kind === "refresh"} onClick={onRefresh} variant="outlined">Refresh</Button>
-          {game && canManage && readyPreset && <Button icon="add" onClick={() => onCreateSave(game)} variant="filled">Create save</Button>}
-        </>}
+        actions={<WorldsHeaderActions canCreate={canManage && readyPreset} game={game} loading={pending?.kind === "refresh"} onCreateSave={onCreateSave} onRefresh={onRefresh} />}
         description={game ? `${plural(game.worlds.length, "save")} across ${plural(game.presets.length, "preset")}. One shared compute host runs one session at a time.` : undefined}
         title="Worlds"
       />
       {status === "error" && <Banner actions={<Button onClick={onRefresh} variant="text">Try again</Button>} description={error} title="Current state could not be loaded" tone="error" />}
       <SharedHostNotice busy={controlBusy} session={sharedSession} />
 
-      <Card as="section" className="session-card-wrap" flush>
-        <div aria-busy={loading} className="session-card">
-          <div className="session-state">
-            {loading ? <Skeleton height={28} width="60%" /> : <Status kind={session.kind} label={`${game?.displayName ?? "Session"} ${session.label.toLowerCase()}`} size="large" />}
-            <div className="pairs">
-              {loading ? <><Skeleton width="70%" /><Skeleton width="50%" /></> : <>
-                <span>Desired <strong>{game?.lifecycle?.desiredState ?? "unknown"}</strong> <Icon name="chevron_right" size={16} /> observed <strong>{game?.lifecycle?.observedState ?? "unknown"}</strong></span>
-                <span>Last observed <strong>{formatDateTime(snapshot?.observedAt)}</strong></span>
-              </>}
-            </div>
-          </div>
-          <dl className="session-facts">
-            <Fact label="Compute host" loading={loading}>{host ? <Status kind={hostStatus(host.state).kind} label={`${host.name} · ${hostStatus(host.state).label.toLowerCase()}`} /> : <Ghost>No host available</Ghost>}</Fact>
-            <Fact label="Instance type" loading={loading} mono>{host?.instanceType ?? <Ghost>Not reported</Ghost>}</Fact>
-            <Fact label="Zone" loading={loading} mono>{host?.availabilityZone ?? <Ghost>Not reported</Ghost>}</Fact>
-            <Fact label="Launched" loading={loading}>{host?.launchedAt ? formatDateTime(host.launchedAt) : <Ghost>Not running</Ghost>}</Fact>
-          </dl>
-        </div>
-      </Card>
+      <SessionOverview game={game} host={host} loading={loading} observedAt={snapshot?.observedAt} session={session} />
 
       <Card flush title={game ? `Worlds of ${game.displayName}` : "Worlds"}>
         <DataTable
@@ -148,7 +119,63 @@ export function WorldsScreen({ game, snapshot, status, error, serverState, share
   );
 }
 
-function Fact({ label, children, loading, mono = false }: { label: string; children: ReactNode; loading: boolean; mono?: boolean }) {
+function WorldsUnavailable({ error, failed, onRefresh }: Readonly<{ error: string; failed: boolean; onRefresh: () => void }>) {
+  const description = failed
+    ? "Spawnpoint could not read games, worlds and the compute host."
+    : "The control plane lists no games yet. Games and their presets are declared in Git.";
+  return (
+    <div className="page">
+      <PageHeader title="Worlds" />
+      {failed && <Banner actions={<Button onClick={onRefresh} variant="text">Try again</Button>} description={error} title="Current state could not be loaded" tone="error" />}
+      <Card flush><EmptyState description={description} icon="public" title="No games to show" /></Card>
+    </div>
+  );
+}
+
+function WorldsHeaderActions({ canCreate, game, loading, onCreateSave, onRefresh }: Readonly<{
+  canCreate: boolean;
+  game: Game | undefined;
+  loading: boolean;
+  onCreateSave: (game: Game) => void;
+  onRefresh: () => void;
+}>) {
+  return <>
+    <Button icon="refresh" loading={loading} onClick={onRefresh} variant="outlined">Refresh</Button>
+    {canCreate && game && <Button icon="add" onClick={() => onCreateSave(game)} variant="filled">Create save</Button>}
+  </>;
+}
+
+function SessionOverview({ game, host, loading, observedAt, session }: Readonly<{
+  game: Game | undefined;
+  host: ControlPlaneSnapshot["hosts"][number] | undefined;
+  loading: boolean;
+  observedAt: string | undefined;
+  session: ReturnType<typeof sessionStatus>;
+}>) {
+  return (
+    <Card as="section" className="session-card-wrap" flush>
+      <div aria-busy={loading} className="session-card">
+        <div className="session-state">
+          {loading ? <Skeleton height={28} width="60%" /> : <Status kind={session.kind} label={`${game?.displayName ?? "Session"} ${session.label.toLowerCase()}`} size="large" />}
+          <div className="pairs">
+            {loading ? <><Skeleton width="70%" /><Skeleton width="50%" /></> : <>
+              <span>Desired <strong>{game?.lifecycle?.desiredState ?? "unknown"}</strong> <Icon name="chevron_right" size={16} /> observed <strong>{game?.lifecycle?.observedState ?? "unknown"}</strong></span>
+              <span>Last observed <strong>{formatDateTime(observedAt)}</strong></span>
+            </>}
+          </div>
+        </div>
+        <dl className="session-facts">
+          <Fact label="Compute host" loading={loading}>{host ? <Status kind={hostStatus(host.state).kind} label={`${host.name} · ${hostStatus(host.state).label.toLowerCase()}`} /> : <Ghost>No host available</Ghost>}</Fact>
+          <Fact label="Instance type" loading={loading} mono>{host?.instanceType ?? <Ghost>Not reported</Ghost>}</Fact>
+          <Fact label="Zone" loading={loading} mono>{host?.availabilityZone ?? <Ghost>Not reported</Ghost>}</Fact>
+          <Fact label="Launched" loading={loading}>{host?.launchedAt ? formatDateTime(host.launchedAt) : <Ghost>Not running</Ghost>}</Fact>
+        </dl>
+      </div>
+    </Card>
+  );
+}
+
+function Fact({ label, children, loading, mono = false }: Readonly<{ label: string; children: ReactNode; loading: boolean; mono?: boolean }>) {
   return (
     <div className="fact">
       <dt>{label}</dt>
@@ -188,7 +215,40 @@ export function sessionActionForWorld(world: World, game: Game, sharedSession: S
   return worldOwnsSharedSession(sharedSession, game, world) && sharedSession.state !== "stopped" ? "stop" : "start";
 }
 
-export function RowActions({ game, world, sharedSession, granted, pending, controlBusy, onSessionAction, onWorldAction, onInvite, onDownloadPack, compact = true }: {
+type RowActionItemsOptions = Readonly<{
+  game: Game;
+  world: World;
+  granted: ReadonlySet<string>;
+  busy: boolean;
+  onWorldAction: (game: Game, world: World, action: Exclude<WorldActionKind, "restore">) => void;
+  onInvite: (game: Game, world: World) => void;
+  onDownloadPack: (game: Game, world: World) => void;
+}>;
+
+function rowActionItems({ game, world, granted, busy, onWorldAction, onInvite, onDownloadPack }: RowActionItemsOptions): (MenuItem | "separator")[] {
+  const items: (MenuItem | "separator")[] = [
+    { id: "details", label: "View details", icon: "chevron_right", onSelect: () => { window.location.hash = routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: world.id }); } },
+  ];
+  if (granted.has("invitation.send")) items.push({ id: "invite", label: "Invite players", icon: "send", onSelect: () => onInvite(game, world) });
+  if (granted.has("connection.read")) items.push({ id: "pack", label: "Download client pack", icon: "download", disabled: !world.release.activeRelease || busy, title: world.release.activeRelease ? `Pack for release ${world.release.activeRelease}` : "Available once a release is active", onSelect: () => onDownloadPack(game, world) });
+  if (!granted.has("world.manage") || !world.worldLifecycleAvailable) return items;
+
+  items.push("separator");
+  appendWorldLifecycleActions(items, game, world, busy, onWorldAction);
+  return items;
+}
+
+function appendWorldLifecycleActions(items: (MenuItem | "separator")[], game: Game, world: World, busy: boolean, onWorldAction: RowActionItemsOptions["onWorldAction"]): void {
+  if (world.materialization === "existing") {
+    const presetId = world.preset?.id ?? world.profileId;
+    const hasRelease = game.presets.some((preset) => preset.id === presetId && preset.latestRelease);
+    items.push({ id: "wipe", label: "Start a new wipe", icon: "history", disabled: busy || !hasRelease, onSelect: () => onWorldAction(game, world, "wipe") });
+    items.push({ id: "archive", label: "Archive", icon: "archive", disabled: busy, onSelect: () => onWorldAction(game, world, "archive") });
+  }
+  if (world.materialization === "archived") items.push({ id: "purge", label: "Delete permanently", icon: "delete_forever", danger: true, disabled: busy, onSelect: () => onWorldAction(game, world, "purge") });
+}
+
+export function RowActions({ game, world, sharedSession, granted, pending, controlBusy, onSessionAction, onWorldAction, onInvite, onDownloadPack, compact = true }: Readonly<{
   game: Game;
   world: World;
   sharedSession: SharedHostSession;
@@ -200,25 +260,12 @@ export function RowActions({ game, world, sharedSession, granted, pending, contr
   onInvite: (game: Game, world: World) => void;
   onDownloadPack: (game: Game, world: World) => void;
   compact?: boolean;
-}) {
+}>) {
   const action = sessionActionForWorld(world, game, sharedSession);
   const permitted = granted.has(action === "start" ? "session.start" : "session.stop");
   const busy = pending !== null;
   const availability = sessionControlAvailability(world, game, sharedSession, permitted, controlBusy || busy);
-  const canManage = granted.has("world.manage");
-  const items: (MenuItem | "separator")[] = [
-    { id: "details", label: "View details", icon: "chevron_right", onSelect: () => { window.location.hash = routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: world.id }); } },
-  ];
-  if (granted.has("invitation.send")) items.push({ id: "invite", label: "Invite players", icon: "send", onSelect: () => onInvite(game, world) });
-  if (granted.has("connection.read")) items.push({ id: "pack", label: "Download client pack", icon: "download", disabled: !world.release.activeRelease || busy, title: world.release.activeRelease ? `Pack for release ${world.release.activeRelease}` : "Available once a release is active", onSelect: () => onDownloadPack(game, world) });
-  if (canManage && world.worldLifecycleAvailable) {
-    items.push("separator");
-    if (world.materialization === "existing") {
-      items.push({ id: "wipe", label: "Start a new wipe", icon: "history", disabled: busy || !game.presets.some((preset) => preset.id === (world.preset?.id ?? world.profileId) && preset.latestRelease), onSelect: () => onWorldAction(game, world, "wipe") });
-      items.push({ id: "archive", label: "Archive", icon: "archive", disabled: busy, onSelect: () => onWorldAction(game, world, "archive") });
-    }
-    if (world.materialization === "archived") items.push({ id: "purge", label: "Delete permanently", icon: "delete_forever", danger: true, disabled: busy, onSelect: () => onWorldAction(game, world, "purge") });
-  }
+  const items = rowActionItems({ game, world, granted, busy, onWorldAction, onInvite, onDownloadPack });
   return (
     <>
       <Button
@@ -238,7 +285,7 @@ export function RowActions({ game, world, sharedSession, granted, pending, contr
   );
 }
 
-export function SharedHostNotice({ session, busy }: { session: SharedHostSession; busy: boolean }) {
+export function SharedHostNotice({ session, busy }: Readonly<{ session: SharedHostSession; busy: boolean }>) {
   const owner = sharedSessionOwnerLabel(session);
   if (busy || session.operationRunning || session.state === "starting" || session.state === "stopping") {
     return <Banner description={owner ? `${owner} owns the current session. Session controls stay locked until the operation finishes.` : "Session controls stay locked until the current operation finishes."} title="Shared host operation in progress" tone="info" />;

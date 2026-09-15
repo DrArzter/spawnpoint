@@ -1,13 +1,13 @@
 import { demoApi, demoEnabled } from "./demo";
 import type { SpawnpointApi, SubscriptionState } from "./api/contract";
-import { liveApi, liveAuthConfigured, telegramOidcClientId } from "./api/live";
+import { liveApi, liveAuthConfigured } from "./api/live";
 
 export type {
   AccessCandidate, AccessIdentity, AccessRole, ActiveSession, AuthState, BackupEntry, BackupInventory,
   InvitationRecipient, InvitationSummary, SessionOperation, SpawnpointApi, SpawnpointSession,
   SubscriptionState, VisitorSession, WorldLifecycleAction,
 } from "./api/contract";
-export { telegramOidcClientId };
+export { telegramOidcClientId } from "./api/live";
 
 // One switch, in one place. Everything below is the shipped panel calling the
 // shipped contract; the demo differs in what answers, never in what is asked

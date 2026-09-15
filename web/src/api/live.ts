@@ -12,7 +12,7 @@ let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
 
 export function liveAuthConfigured(): boolean {
-  return apiUrl !== "" && (Boolean(window.Telegram?.WebApp.initData) || /^[1-9][0-9]+$/.test(telegramOidcClientId));
+  return apiUrl !== "" && (Boolean(window.Telegram?.WebApp.initData) || /^[1-9]\d+$/.test(telegramOidcClientId));
 }
 
 function clearLegacyTokens(): void {
@@ -96,42 +96,66 @@ async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Re
   return refreshed === null ? first : send(refreshed);
 }
 
+function authError(error: unknown, fallback: string): AuthState {
+  return { status: "error", message: error instanceof Error ? error.message : fallback };
+}
+
+async function restoreLogin(login: Record<string, string>): Promise<AuthState> {
+  try {
+    const token = await exchangeTelegram({ login });
+    accessToken = token;
+    clearLegacyTokens();
+    return { status: "authenticated", session: await loadSession(token) };
+  } catch (error) {
+    return authError(error, "Telegram sign-in failed.");
+  } finally {
+    clearLoginQuery();
+  }
+}
+
+async function restoreRefreshCredential(): Promise<AuthState | null> {
+  const refreshed = await refreshAccessToken();
+  if (refreshed === null) return null;
+  try {
+    return { status: "authenticated", session: await loadSession(refreshed) };
+  } catch {
+    accessToken = null;
+    return null;
+  }
+}
+
+async function restoreMiniApp(initData: string): Promise<AuthState> {
+  try {
+    const token = await exchangeTelegram({ initData });
+    accessToken = token;
+    return { status: "authenticated", session: await loadSession(token) };
+  } catch (error) {
+    return authError(error, "Telegram Mini App sign-in failed.");
+  }
+}
+
+function worldLifecyclePayload(
+  action: WorldLifecycleAction,
+  worldId: string,
+  backupKey?: string,
+  release?: string,
+): Record<string, string | undefined> {
+  if (action === "restore") return { backupKey };
+  if (action === "purge") return { confirmation: worldId };
+  if (action === "regenerate") return { release };
+  return {};
+}
+
 export const liveApi: SpawnpointApi = {
   async restoreSession(): Promise<AuthState> {
     if (!liveAuthConfigured()) return { status: "unconfigured" };
     const login = loginPayloadFromQuery();
-    if (login !== null) {
-      try {
-        const token = await exchangeTelegram({ login });
-        accessToken = token;
-        clearLegacyTokens();
-        clearLoginQuery();
-        return { status: "authenticated", session: await loadSession(token) };
-      } catch (error) {
-        clearLoginQuery();
-        return { status: "error", message: error instanceof Error ? error.message : "Telegram sign-in failed." };
-      }
-    }
+    if (login !== null) return restoreLogin(login);
     clearLegacyTokens();
-    const refreshed = await refreshAccessToken();
-    if (refreshed !== null) {
-      try {
-        return { status: "authenticated", session: await loadSession(refreshed) };
-      } catch {
-        accessToken = null;
-      }
-    }
+    const restored = await restoreRefreshCredential();
+    if (restored !== null) return restored;
     const initData = window.Telegram?.WebApp.initData;
-    if (initData) {
-      try {
-        const token = await exchangeTelegram({ initData });
-        accessToken = token;
-        return { status: "authenticated", session: await loadSession(token) };
-      } catch (error) {
-        return { status: "error", message: error instanceof Error ? error.message : "Telegram Mini App sign-in failed." };
-      }
-    }
-    return { status: "signed-out" };
+    return initData ? restoreMiniApp(initData) : { status: "signed-out" };
   },
 
   async exchangeTelegramOidc(idToken: string): Promise<AuthState> {
@@ -233,7 +257,7 @@ export const liveApi: SpawnpointApi = {
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(action === "restore" ? { backupKey } : action === "purge" ? { confirmation: worldId } : action === "regenerate" ? { release } : {}),
+        body: JSON.stringify(worldLifecyclePayload(action, worldId, backupKey, release)),
       },
     );
     const body = await response.json() as { error?: string; result?: "requested"; operationId?: string };

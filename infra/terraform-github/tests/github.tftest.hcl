@@ -116,6 +116,19 @@ run "deployment_role_trusts_only_the_production_environment" {
   assert {
     condition = anytrue([
       for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      statement.sid == "TagOnlyApiGatewayApisAndStages" &&
+      toset(statement.actions) == toset(["apigateway:TagResource", "apigateway:UntagResource"]) &&
+      alltrue([
+        for resource in statement.resources :
+        can(regex("^arn:aws:apigateway:[^:]+::/apis/\\*(/stages(/\\*)?)?$", resource))
+      ])
+    ])
+    error_message = "The deploy identity must manage API Gateway tags only on APIs and their stages."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
       statement.sid == "DestroyOnlyAllowListedWiring" && !contains(statement.resources, "*")
     ])
     error_message = "The pipeline may destroy only allow-listable wiring, and only on spawnpoint-scoped resources."

@@ -13,10 +13,6 @@ data "aws_s3_bucket" "releases" {
   bucket = local.release_bucket_name
 }
 
-data "aws_dynamodb_table" "control_plane_view" {
-  name = "spawnpoint-control-plane-view"
-}
-
 data "aws_dynamodb_table" "lifecycle" {
   name = "spawnpoint-lifecycle-v2"
 }

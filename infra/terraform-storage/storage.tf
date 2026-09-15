@@ -4,7 +4,7 @@ locals {
 }
 
 resource "aws_dynamodb_table" "control_plane_view" {
-  name         = "spawnpoint-control-plane-view"
+  name         = var.control_plane_view_table_name
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "pk"
   range_key    = "sk"
@@ -39,7 +39,7 @@ resource "aws_dynamodb_table" "control_plane_view" {
   }
 
   tags = {
-    Name    = "spawnpoint-control-plane-view"
+    Name    = var.control_plane_view_table_name
     Purpose = "bounded-event-history-and-read-projection"
   }
 }

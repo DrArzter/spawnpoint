@@ -14,10 +14,6 @@ data "aws_dynamodb_table" "lifecycle" {
   name = "spawnpoint-lifecycle-v2"
 }
 
-data "aws_dynamodb_table" "control_plane_view" {
-  name = "spawnpoint-control-plane-view"
-}
-
 data "aws_s3_bucket" "backups" {
   bucket = "spawnpoint-backups-${data.aws_caller_identity.current.account_id}"
 }
@@ -27,9 +23,10 @@ data "aws_s3_bucket" "releases" {
 }
 
 locals {
-  custom_api_domain_enabled = var.api_domain_name != null && var.api_domain_name != ""
-  stop_state_machine_arn    = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-stop-server-v2"
-  world_lifecycle_arn       = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-world-lifecycle"
+  custom_api_domain_enabled    = var.api_domain_name != null && var.api_domain_name != ""
+  stop_state_machine_arn       = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-stop-server-v2"
+  world_lifecycle_arn          = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-world-lifecycle"
+  control_plane_view_table_arn = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.control_plane_view_table_name}"
   operation_state_machines = [
     { type = "start", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-start-server-v2" },
     { type = "stop", arn = local.stop_state_machine_arn },

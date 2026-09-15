@@ -14,3 +14,14 @@ variable "aws_profile" {
   type        = string
   default     = "spawnpoint"
 }
+
+variable "control_plane_view_table_name" {
+  description = "DynamoDB table holding the rebuildable dashboard projection produced by this root."
+  type        = string
+  default     = "spawnpoint-control-plane-view"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_.-]{3,255}$", var.control_plane_view_table_name))
+    error_message = "control_plane_view_table_name must be a valid DynamoDB table name."
+  }
+}

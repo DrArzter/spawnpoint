@@ -2,6 +2,7 @@ locals {
   control_plane_projector_arn    = "arn:aws:lambda:${var.aws_region}:${local.account_id}:function:spawnpoint-control-plane-projector"
   control_plane_reconcile_arn    = "arn:aws:states:${var.aws_region}:${local.account_id}:stateMachine:spawnpoint-control-plane-reconcile-stopped"
   control_plane_stopped_rule_arn = "arn:aws:events:${var.aws_region}:${local.account_id}:rule/spawnpoint-control-plane-stopped-reconcile"
+  control_plane_view_table_arn   = "arn:aws:dynamodb:${var.aws_region}:${local.account_id}:table/${var.control_plane_view_table_name}"
   promote_release_arn            = "arn:aws:states:${var.aws_region}:${local.account_id}:stateMachine:spawnpoint-promote-release"
   control_plane_operation_machines = [
     { type = "start", arn = local.lifecycle_v2_start_arn },
@@ -42,7 +43,7 @@ data "aws_iam_policy_document" "control_plane_projector" {
   statement {
     sid       = "WriteControlPlaneProjection"
     actions   = ["dynamodb:PutItem"]
-    resources = [data.aws_dynamodb_table.control_plane_view.arn]
+    resources = [local.control_plane_view_table_arn]
   }
 
   statement {
@@ -93,7 +94,7 @@ resource "aws_lambda_function" "control_plane_projector" {
 
   environment {
     variables = {
-      CONTROL_PLANE_VIEW_TABLE = data.aws_dynamodb_table.control_plane_view.name
+      CONTROL_PLANE_VIEW_TABLE = var.control_plane_view_table_name
       LIFECYCLE_TABLE_NAME     = data.aws_dynamodb_table.lifecycle.name
       OPERATION_STATE_MACHINES = jsonencode(local.control_plane_operation_machines)
     }

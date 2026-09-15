@@ -46,7 +46,7 @@ data "aws_iam_policy_document" "access_api" {
   statement {
     sid       = "ReadControlPlaneView"
     actions   = ["dynamodb:GetItem"]
-    resources = [data.aws_dynamodb_table.control_plane_view.arn]
+    resources = [local.control_plane_view_table_arn]
   }
 
   statement {
@@ -154,7 +154,7 @@ resource "aws_lambda_function" "access_api" {
       SESSION_SIGNING_SECRET_PARAMETER = var.session_signing_secret_parameter
       TELEGRAM_OIDC_CLIENT_ID          = var.telegram_oidc_client_id
       LIFECYCLE_TABLE_NAME             = data.aws_dynamodb_table.lifecycle.name
-      CONTROL_PLANE_VIEW_TABLE         = data.aws_dynamodb_table.control_plane_view.name
+      CONTROL_PLANE_VIEW_TABLE         = var.control_plane_view_table_name
       OPERATION_STATE_MACHINES         = jsonencode(local.operation_state_machines)
       RELEASE_BUCKET                   = data.aws_s3_bucket.releases.id
       BACKUP_BUCKET                    = data.aws_s3_bucket.backups.id

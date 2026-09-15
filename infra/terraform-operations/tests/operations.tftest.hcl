@@ -25,14 +25,6 @@ mock_provider "aws" {
   }
 
   override_data {
-    target = data.aws_dynamodb_table.control_plane_view
-    values = {
-      name = "spawnpoint-control-plane-view"
-      arn  = "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-control-plane-view"
-    }
-  }
-
-  override_data {
     target = data.aws_dynamodb_table.lifecycle
     values = {
       name = "spawnpoint-lifecycle-v2"

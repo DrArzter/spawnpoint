@@ -284,6 +284,24 @@ data "aws_iam_policy_document" "github_deploy_iam" {
     resources = ["*"]
   }
 
+  # API Gateway evaluates tags supplied while a stage is created as a
+  # separate TagResource call against the API's stage collection. Keep that
+  # permission out of the broad create/update statement and scoped to APIs and
+  # their stages in the production region.
+  statement {
+    sid    = "TagOnlyApiGatewayApisAndStages"
+    effect = "Allow"
+    actions = [
+      "apigateway:TagResource",
+      "apigateway:UntagResource",
+    ]
+    resources = [
+      "arn:aws:apigateway:${var.aws_region}::/apis/*",
+      "arn:aws:apigateway:${var.aws_region}::/apis/*/stages",
+      "arn:aws:apigateway:${var.aws_region}::/apis/*/stages/*",
+    ]
+  }
+
   statement {
     sid    = "ManageOnlySpawnpointIdentities"
     effect = "Allow"

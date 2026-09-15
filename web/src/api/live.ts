@@ -11,6 +11,61 @@ export const telegramOidcClientId = (import.meta.env.VITE_TELEGRAM_OIDC_CLIENT_I
 let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
 
+function controlPlaneSubscription(onInvalidated: () => void): () => void {
+  let closed = false;
+  let socket: WebSocket | null = null;
+  let reconnectTimer: number | null = null;
+  let reconnectAttempt = 0;
+
+  const scheduleReconnect = () => {
+    if (closed || reconnectTimer !== null) return;
+    const delay = Math.min(30_000, 1_000 * (2 ** reconnectAttempt));
+    reconnectAttempt += 1;
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = null;
+      void connect();
+    }, delay);
+  };
+
+  const connect = async () => {
+    try {
+      const response = await authorizedFetch("/control-plane/subscriptions", { method: "POST" });
+      if (!response.ok) throw new Error("Control-plane subscription was rejected.");
+      const body = await response.json() as { url?: unknown; ticket?: unknown };
+      if (typeof body.url !== "string" || !body.url.startsWith("wss://") || typeof body.ticket !== "string") {
+        throw new Error("Control-plane subscription was invalid.");
+      }
+      const url = new URL(body.url);
+      url.searchParams.set("ticket", body.ticket);
+      if (closed) return;
+      socket = new WebSocket(url);
+      socket.addEventListener("open", () => {
+        reconnectAttempt = 0;
+        onInvalidated();
+      });
+      socket.addEventListener("message", (message) => {
+        try {
+          const value = JSON.parse(String(message.data)) as { type?: unknown };
+          if (value.type === "control-plane-invalidated") onInvalidated();
+        } catch {
+          // The socket carries hints, never authority. Ignore malformed hints.
+        }
+      });
+      socket.addEventListener("close", scheduleReconnect);
+      socket.addEventListener("error", () => socket?.close());
+    } catch {
+      scheduleReconnect();
+    }
+  };
+
+  void connect();
+  return () => {
+    closed = true;
+    if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+    socket?.close();
+  };
+}
+
 export function liveAuthConfigured(): boolean {
   return apiUrl !== "" && (Boolean(window.Telegram?.WebApp.initData) || /^[1-9]\d+$/.test(telegramOidcClientId));
 }
@@ -232,6 +287,10 @@ export const liveApi: SpawnpointApi = {
     const response = await authorizedFetch("/control-plane");
     if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot view server status." : "The control-plane state could not be loaded.");
     return response.json() as Promise<ControlPlaneSnapshot>;
+  },
+
+  subscribeControlPlane(onInvalidated: () => void): () => void {
+    return controlPlaneSubscription(onInvalidated);
   },
 
   async requestSessionOperation(gameId: string, worldId: string, action: SessionOperation) {

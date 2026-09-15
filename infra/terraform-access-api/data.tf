@@ -52,6 +52,12 @@ data "archive_file" "access_api" {
   output_path = "${path.module}/../../lambdas/dist/access-api.zip"
 }
 
+data "archive_file" "control_plane_subscriptions" {
+  type        = "zip"
+  source_dir  = "${path.module}/../../lambdas/dist/control-plane-subscriptions"
+  output_path = "${path.module}/../../lambdas/dist/control-plane-subscriptions.zip"
+}
+
 data "archive_file" "world_lifecycle" {
   type        = "zip"
   source_dir  = "${path.module}/../../lambdas/dist/world-lifecycle"

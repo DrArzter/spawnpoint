@@ -70,6 +70,12 @@ data "aws_iam_policy_document" "control_plane_projector" {
     actions   = ["states:StartExecution"]
     resources = [local.lifecycle_v2_stop_arn]
   }
+
+  statement {
+    sid       = "PublishProjectionInvalidations"
+    actions   = ["events:PutEvents"]
+    resources = ["arn:aws:events:${var.aws_region}:${local.account_id}:event-bus/default"]
+  }
 }
 
 resource "aws_iam_role_policy" "control_plane_projector" {

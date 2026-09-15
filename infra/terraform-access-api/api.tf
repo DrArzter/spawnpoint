@@ -44,8 +44,8 @@ data "aws_iam_policy_document" "access_api" {
   }
 
   statement {
-    sid       = "ReadControlPlaneView"
-    actions   = ["dynamodb:GetItem"]
+    sid       = "ReadControlPlaneViewAndIssueSubscriptionTickets"
+    actions   = ["dynamodb:GetItem", "dynamodb:PutItem"]
     resources = [local.control_plane_view_table_arn]
   }
 
@@ -155,6 +155,7 @@ resource "aws_lambda_function" "access_api" {
       TELEGRAM_OIDC_CLIENT_ID          = var.telegram_oidc_client_id
       LIFECYCLE_TABLE_NAME             = data.aws_dynamodb_table.lifecycle.name
       CONTROL_PLANE_VIEW_TABLE         = var.control_plane_view_table_name
+      CONTROL_PLANE_WEBSOCKET_URL      = "wss://${aws_apigatewayv2_api.control_plane.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.control_plane.name}"
       OPERATION_STATE_MACHINES         = jsonencode(local.operation_state_machines)
       RELEASE_BUCKET                   = data.aws_s3_bucket.releases.id
       BACKUP_BUCKET                    = data.aws_s3_bucket.backups.id
@@ -198,6 +199,7 @@ locals {
     "GET /session",
     "GET /me",
     "GET /control-plane",
+    "POST /control-plane/subscriptions",
     "GET /access/roles",
     "GET /me/subscriptions",
     "PUT /me/subscriptions",

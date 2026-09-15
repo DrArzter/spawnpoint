@@ -169,7 +169,7 @@ every component here would have needed a permanent one.
 | Interruption handler | An EventBridge rule on the Spot notice, only if Spot is ever adopted. Nothing polls for it |
 | Identity | Login verification runs only on Lambda requests; there is no continuously billed identity service |
 | Link and token state | DynamoDB in **on-demand** capacity mode |
-| Control-plane view | EventBridge invokes a Lambda only when provider state changes; one-shot Step Functions waits retry reconciliation after a stopped host or failed operation outlives its lease, with no permanent schedule |
+| Control-plane view | EventBridge invokes a projector only when provider state changes; it writes DynamoDB, emits a sanitized invalidation to ticket-protected WebSockets, and one-shot Step Functions retries reconciliation after a stopped host or failed operation outlives its lease |
 | The game server itself | Started on request, stopped when idle. See [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md) |
 
 Two of those rows are also traps, and are decisions rather than details:

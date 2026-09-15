@@ -1,4 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 
 import { awsControlPlaneSources, stopSessionExecution } from "../control-plane/aws.ts";
@@ -11,6 +12,7 @@ if (!viewTable) throw new Error("CONTROL_PLANE_VIEW_TABLE is required");
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
 });
+const events = new EventBridgeClient({});
 
 function conditionalFailure(error: unknown): boolean {
   return error instanceof Error && error.name === "ConditionalCheckFailedException";
@@ -31,11 +33,13 @@ async function recordEvent(event: ControlPlaneEvent, nowEpochSeconds: number): P
 async function writeProjection(eventId: string, observedAtEpochMilliseconds: number): Promise<{
   hosts: Awaited<ReturnType<typeof awsControlPlaneSources.listHosts>>;
   operations: Awaited<ReturnType<typeof awsControlPlaneSources.listRunningOperations>>;
+  written: boolean;
 }> {
   const [hosts, operations] = await Promise.all([
     awsControlPlaneSources.listHosts(),
     awsControlPlaneSources.listRunningOperations(),
   ]);
+  let written = true;
   try {
     await document.send(new PutCommand({
       TableName: viewTable,
@@ -54,8 +58,23 @@ async function writeProjection(eventId: string, observedAtEpochMilliseconds: num
     }));
   } catch (error) {
     if (!conditionalFailure(error)) throw error;
+    written = false;
   }
-  return { hosts, operations };
+  return { hosts, operations, written };
+}
+
+async function publishProjectionInvalidation(
+  eventId: string,
+  observedAtEpochMilliseconds: number,
+): Promise<void> {
+  const published = await events.send(new PutEventsCommand({ Entries: [{
+    Source: "spawnpoint.control-plane",
+    DetailType: "Projection Updated",
+    Detail: JSON.stringify({ schemaVersion: 1, sourceEventId: eventId, observedAtEpochMilliseconds }),
+  }] }));
+  if ((published.FailedEntryCount ?? 0) > 0) {
+    throw new Error(published.Entries?.[0]?.ErrorMessage ?? "EventBridge rejected projection invalidation");
+  }
 }
 
 async function reconcileStoppedHost(
@@ -87,6 +106,7 @@ export async function handler(event: ControlPlaneEvent): Promise<void> {
   const observedAtEpochMilliseconds = Date.now();
   const nowEpochSeconds = Math.floor(observedAtEpochMilliseconds / 1000);
   await recordEvent(event, nowEpochSeconds);
-  const { hosts, operations } = await writeProjection(event.id, observedAtEpochMilliseconds);
+  const { hosts, operations, written } = await writeProjection(event.id, observedAtEpochMilliseconds);
+  if (written) await publishProjectionInvalidation(event.id, observedAtEpochMilliseconds);
   await reconcileStoppedHost(event.id, hosts, operations, nowEpochSeconds);
 }

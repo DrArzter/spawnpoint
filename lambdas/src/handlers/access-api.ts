@@ -39,6 +39,7 @@ import {
 } from "../control-plane/aws.ts";
 import { readControlPlaneSnapshot } from "../control-plane/read-model.ts";
 import { packRelease, planSessionOperation, stoppedHostRecoverySession, worldLifecycleNeedsStop, type SessionAction } from "../control-plane/session-control.ts";
+import { issueSubscriptionTicket, subscriptionTicketItem, subscriptionTicketLifetimeSeconds } from "../control-plane/subscriptions.ts";
 import { worldIdForName } from "../control-plane/world-registry.ts";
 
 type Event = Readonly<{
@@ -64,6 +65,10 @@ const configuredSessionSigningSecretParameter = process.env.SESSION_SIGNING_SECR
 if (!configuredSessionSigningSecretParameter) throw new Error("missing environment variable: SESSION_SIGNING_SECRET_PARAMETER");
 const sessionSigningSecretParameter: string = configuredSessionSigningSecretParameter;
 const telegramOidcClientId = (process.env.TELEGRAM_OIDC_CLIENT_ID ?? "").trim();
+const controlPlaneViewTable = process.env.CONTROL_PLANE_VIEW_TABLE;
+if (!controlPlaneViewTable) throw new Error("missing environment variable: CONTROL_PLANE_VIEW_TABLE");
+const controlPlaneWebSocketUrl = process.env.CONTROL_PLANE_WEBSOCKET_URL;
+if (!controlPlaneWebSocketUrl) throw new Error("missing environment variable: CONTROL_PLANE_WEBSOCKET_URL");
 const refreshCookieSameSite: "Strict" | "None" = process.env.REFRESH_COOKIE_SAME_SITE === "None" ? "None" : "Strict";
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const events = new EventBridgeClient({});
@@ -260,6 +265,21 @@ async function controlPlane(identity: Identity): Promise<Response> {
     connectionHost: can("connection.read") ? process.env.CONNECTION_HOST ?? null : null,
   });
   return response(200, snapshot);
+}
+
+async function createControlPlaneSubscription(identity: Identity): Promise<Response> {
+  const ticket = issueSubscriptionTicket();
+  const nowEpochSeconds = Math.floor(Date.now() / 1000);
+  await document.send(new PutCommand({
+    TableName: controlPlaneViewTable,
+    Item: subscriptionTicketItem(ticket, identity.id, nowEpochSeconds),
+    ConditionExpression: "attribute_not_exists(pk) AND attribute_not_exists(sk)",
+  }));
+  return response(201, {
+    url: controlPlaneWebSocketUrl,
+    ticket,
+    expiresInSeconds: subscriptionTicketLifetimeSeconds,
+  });
 }
 
 async function controlSession(identity: Identity, action: SessionAction, gameId: string, worldId: string): Promise<Response> {
@@ -846,6 +866,7 @@ export const routes: Readonly<Record<string, Route>> = {
   "PUT /me/subscriptions": identityRoute((identity, event) => updateSubscriptions(identity, event.body)),
 
   "GET /control-plane": permissionRoute("status.read", (identity) => controlPlane(identity)),
+  "POST /control-plane/subscriptions": permissionRoute("status.read", (identity) => createControlPlaneSubscription(identity)),
   "GET /access/roles": permissionRoute("access.read", (identity) => roles(identity)),
   "GET /invitations/recipients": permissionRoute("invitation.send", (identity) => invitationRecipients(identity)),
 

@@ -178,9 +178,11 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   assert {
     condition = (
       aws_apigatewayv2_api.control_plane.protocol_type == "WEBSOCKET" &&
-      local.control_plane_websocket_routes == toset(["$connect", "$disconnect", "$default"])
+      local.control_plane_websocket_routes == toset(["$connect", "$disconnect", "$default"]) &&
+      length(aws_apigatewayv2_stage.control_plane.access_log_settings) == 1 &&
+      !strcontains(aws_apigatewayv2_stage.control_plane.access_log_settings[0].format, "query")
     )
-    error_message = "The dashboard push surface must be a bounded WebSocket API, not provider polling."
+    error_message = "The dashboard push surface must be a bounded, auditable WebSocket API that never logs its one-time ticket."
   }
 
   assert {

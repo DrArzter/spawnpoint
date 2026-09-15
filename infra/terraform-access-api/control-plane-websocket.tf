@@ -9,6 +9,11 @@ resource "aws_cloudwatch_log_group" "control_plane_subscriptions" {
   retention_in_days = 14
 }
 
+resource "aws_cloudwatch_log_group" "control_plane_websocket_access" {
+  name              = "/aws/apigateway/spawnpoint-control-plane-subscriptions"
+  retention_in_days = 14
+}
+
 resource "aws_iam_role" "control_plane_subscriptions" {
   name               = "spawnpoint-control-plane-subscriptions"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
@@ -88,6 +93,19 @@ resource "aws_apigatewayv2_stage" "control_plane" {
   api_id      = aws_apigatewayv2_api.control_plane.id
   name        = "live"
   auto_deploy = true
+
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.control_plane_websocket_access.arn
+    format = jsonencode({
+      requestId               = "$context.requestId"
+      connectionId            = "$context.connectionId"
+      sourceIp                = "$context.identity.sourceIp"
+      requestTime             = "$context.requestTime"
+      routeKey                = "$context.routeKey"
+      status                  = "$context.status"
+      integrationErrorMessage = "$context.integrationErrorMessage"
+    })
+  }
 }
 
 resource "aws_lambda_permission" "control_plane_subscriptions_websocket" {

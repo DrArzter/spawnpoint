@@ -32,6 +32,7 @@ export type OperationObservation = Readonly<{
 }>;
 
 export type ControlPlaneSources = Readonly<{
+  readObservedAt?: () => Promise<Date | null>;
   listHosts: () => Promise<readonly HostObservation[]>;
   readLifecycle: (serverId: string) => Promise<LifecycleRecord | null>;
   readReleasePointer: (worldId: string, generationId: string | null) => Promise<ReleasePointerObservation>;
@@ -116,7 +117,8 @@ export async function readControlPlaneSnapshot(
   const effectiveCatalog = catalogWithPresets(presets, catalog, worldRecords);
   const recordByWorld = new Map(worldRecords.map((record) => [record.worldId, record]));
   const worlds = effectiveCatalog.flatMap((game) => game.worlds);
-  const [hosts, operations, lifecycles, pointers] = await Promise.all([
+  const [observedAt, hosts, operations, lifecycles, pointers] = await Promise.all([
+    sources.readObservedAt?.() ?? Promise.resolve(null),
     sources.listHosts(),
     sources.listRunningOperations(),
     Promise.all(effectiveCatalog.map((game) => sources.readLifecycle(game.id))),
@@ -131,7 +133,7 @@ export async function readControlPlaneSnapshot(
   const pointerByWorld = new Map(worlds.map((world, index) => [world.id, pointers[index]!]));
 
   return {
-    observedAt: now().toISOString(),
+    observedAt: (observedAt ?? now()).toISOString(),
     games: effectiveCatalog.map((game, gameIndex) => ({
       id: game.id,
       code: game.code,

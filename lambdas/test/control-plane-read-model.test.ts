@@ -17,6 +17,18 @@ const sources: ControlPlaneSources = {
   listRunningOperations: async () => [{ id: "start-1", type: "start", status: "running", startedAt: "2026-08-29T00:00:00.000Z", providerRef: "arn:execution" }],
 };
 
+test("retains the supplied projection observation timestamp", async () => {
+  const observedAt = new Date("2026-08-29T00:58:00.000Z");
+  const snapshot = await readControlPlaneSnapshot(
+    { ...sources, readObservedAt: async () => observedAt },
+    { includeInfrastructure: true, includeDesiredRelease: true },
+    undefined,
+    () => new Date("2026-08-29T01:00:00.000Z"),
+  );
+
+  assert.equal(snapshot.observedAt, observedAt.toISOString());
+});
+
 test("builds a multi-host read model without binding stopped worlds to instances", async () => {
   const snapshot = await readControlPlaneSnapshot(sources, { includeInfrastructure: true, includeDesiredRelease: true }, undefined, () => new Date("2026-08-29T01:00:00.000Z"));
   assert.equal(snapshot.hosts.length, 2);

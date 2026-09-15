@@ -95,12 +95,12 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   command = plan
 
   variables {
-    bootstrap_owner_telegram_id = "1780660807"
-    telegram_oidc_client_id     = "8521897198"
-    panel_url                   = "https://spawnpoint.example.dev/"
-    legacy_panel_url            = "https://legacy.example.dev/"
-    api_domain_name             = "api.spawnpoint.example.dev"
-    dns_zone_name               = "example.dev"
+    bootstrap_owner_telegram_id      = "1780660807"
+    telegram_oidc_client_id          = "8521897198"
+    panel_url                        = "https://spawnpoint.example.dev/"
+    legacy_panel_url                 = "https://legacy.example.dev/"
+    api_domain_name                  = "api.spawnpoint.example.dev"
+    dns_zone_name                    = "example.dev"
     session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
   }
 
@@ -173,6 +173,11 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.CONTROL_PLANE_VIEW_TABLE == "spawnpoint-control-plane-view"
+    error_message = "Dashboard reads must use the event-driven DynamoDB projection when it is fresh."
+  }
+
+  assert {
     condition     = strcontains(aws_lambda_function.access_api.environment[0].variables.OPERATION_STATE_MACHINES, "spawnpoint-start-server-v2") && strcontains(aws_lambda_function.access_api.environment[0].variables.OPERATION_STATE_MACHINES, "spawnpoint-stop-server-v2")
     error_message = "Panel session controls must use the fenced Lifecycle V2 wrappers."
   }
@@ -231,8 +236,8 @@ run "self_hosted_api_keeps_the_generated_endpoint_optional" {
   command = plan
 
   variables {
-    bootstrap_owner_telegram_id       = "1780660807"
-    panel_url                         = "https://panel.example.dev/"
+    bootstrap_owner_telegram_id      = "1780660807"
+    panel_url                        = "https://panel.example.dev/"
     session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
   }
 

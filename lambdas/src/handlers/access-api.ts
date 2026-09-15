@@ -29,6 +29,7 @@ import { catalogWithPresets, gameCatalog } from "../control-plane/catalog.ts";
 import { backupInventory } from "../control-plane/backups.ts";
 import {
   awsControlPlaneSources,
+  dashboardControlPlaneSources,
   listWorldBackups,
   materializePresetWorld,
   packDownloadUrl,
@@ -251,7 +252,7 @@ async function requestAccess(account: Caller): Promise<Response> {
 async function controlPlane(identity: Identity): Promise<Response> {
   const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : undefined;
   const can = (permission: Permission) => role !== undefined && hasPermission(identity, role, permission);
-  const snapshot = await readControlPlaneSnapshot(awsControlPlaneSources, {
+  const snapshot = await readControlPlaneSnapshot(dashboardControlPlaneSources(), {
     includeInfrastructure: can("access.manage"),
     includeDesiredRelease: can("release.read"),
     // The host part of every address; the game's port completes it. Withheld

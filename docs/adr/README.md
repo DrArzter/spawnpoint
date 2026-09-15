@@ -108,6 +108,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0046](0046-keep-dynamodb-until-relational-needs-arrive.md) | Keep DynamoDB until relational needs arrive | Accepted | cross-cutting |
 | [0047](0047-normalize-preset-sources-before-building.md) | Normalize preset sources before building | Accepted | cross-cutting |
 | [0048](0048-one-instance-per-active-world.md) | One instance per active world, created for the session | Proposed | later |
+| [0049](0049-project-control-plane-events-into-dynamodb.md) | Project control-plane events into DynamoDB for user-facing surfaces | Accepted | cross-cutting |
 
 ## Decisions still to record
 

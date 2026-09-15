@@ -25,6 +25,14 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_dynamodb_table.lifecycle
+    values = {
+      name = "spawnpoint-lifecycle-v2"
+      arn  = "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-lifecycle-v2"
+    }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.idle_watchdog_assume_role
     values = {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
@@ -97,6 +105,56 @@ mock_provider "aws" {
   override_data {
     target = data.aws_iam_policy_document.lifecycle_v2_watchdog
     values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.control_plane_projector_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.control_plane_projector
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.control_plane_reconcile_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.control_plane_reconcile
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.control_plane_reconcile_events_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.control_plane_reconcile_events
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+}
+
+mock_provider "archive" {
+  override_during = plan
+
+  override_data {
+    target = data.archive_file.control_plane_projector
+    values = {
+      output_path         = "control-plane-projector.zip"
+      output_base64sha256 = "test"
+    }
+  }
+
+  override_data {
+    target = data.archive_file.release_state
+    values = {
+      output_path         = "release-state.zip"
+      output_base64sha256 = "test"
+    }
   }
 }
 
@@ -233,5 +291,48 @@ run "lifecycle_v2_workflows_are_additive_standard_and_session_scoped" {
       stop_v2_state_machine_arn = local.lifecycle_v2_stop_arn
     }), "recordPlayerObservation")
     error_message = "V2 watchdog must persist observations through the coordinator."
+  }
+}
+
+run "control_plane_projection_is_event_driven_scoped_and_recoverable" {
+  command = plan
+
+  assert {
+    condition = jsondecode(aws_cloudwatch_event_rule.control_plane_host_state.event_pattern).detail["instance-id"] == [
+      "i-00000000000000000"
+    ]
+    error_message = "Host projection events must be scoped to the configured shared instance."
+  }
+
+  assert {
+    condition = toset(jsondecode(aws_cloudwatch_event_rule.control_plane_execution_state.event_pattern).detail.stateMachineArn) == toset([
+      for machine in local.control_plane_operation_machines : machine.arn
+    ])
+    error_message = "Operation projection events must cover only the supported control-plane workflows."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_lambda_function.control_plane_projector.environment[0].variables.CONTROL_PLANE_VIEW_TABLE == "spawnpoint-control-plane-view",
+      aws_lambda_function.control_plane_projector.environment[0].variables.LIFECYCLE_TABLE_NAME == "spawnpoint-lifecycle-v2",
+    ])
+    error_message = "The projector must use the dedicated view and established lifecycle tables."
+  }
+
+  assert {
+    condition = alltrue([
+      jsondecode(aws_sfn_state_machine.control_plane_reconcile.definition).States.WaitBeyondLease.Seconds == 1860,
+      jsondecode(aws_sfn_state_machine.control_plane_reconcile.definition).States.RefreshProjection.Parameters.FunctionName == local.control_plane_projector_arn,
+    ])
+    error_message = "A stopped host must receive exactly one delayed reconciliation after the longest lifecycle lease."
+  }
+
+  assert {
+    condition = alltrue([
+      data.aws_iam_policy_document.control_plane_projector.statement[0].resources == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-control-plane-view"]),
+      data.aws_iam_policy_document.control_plane_projector.statement[1].resources == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-lifecycle-v2"]),
+      data.aws_iam_policy_document.control_plane_projector.statement[4].resources == toset([local.lifecycle_v2_stop_arn]),
+    ])
+    error_message = "The projector may update only its view, read lifecycle, and recover through the fenced stop adapter."
   }
 }

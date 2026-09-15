@@ -21,6 +21,7 @@ import { type ReleaseState } from "./release-state.ts";
 import { S3ReleaseStateStore } from "./s3-release-state-store.ts";
 import { S3WorldRepository } from "./s3-world-repository.ts";
 import { newWorldRecord, type WorldRecord } from "./world-registry.ts";
+import { parseDynamicProjection } from "./dynamic-projection.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildLifecycleStartInput, buildLifecycleStopInput, buildStopInput } from "../domain/telegram-bot.ts";
@@ -170,6 +171,36 @@ export const awsControlPlaneSources: ControlPlaneSources = {
   listPresets,
   listWorldRecords,
 };
+
+async function readDynamicProjection() {
+  const tableName = process.env.CONTROL_PLANE_VIEW_TABLE;
+  if (!tableName) return null;
+  try {
+    const response = await document.send(new GetCommand({
+      TableName: tableName,
+      Key: { pk: "PROJECTION#CONTROL_PLANE", sk: "DYNAMIC" },
+    }));
+    return parseDynamicProjection(response.Item, Date.now());
+  } catch (error) {
+    console.error("control_plane_projection_read_failed", {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    });
+    return null;
+  }
+}
+
+export function dashboardControlPlaneSources(): ControlPlaneSources {
+  const projection = readDynamicProjection();
+  return {
+    ...awsControlPlaneSources,
+    readObservedAt: async () => {
+      const value = await projection;
+      return value === null ? null : new Date(value.observedAtEpochMilliseconds);
+    },
+    listHosts: async () => (await projection)?.hosts ?? listHosts(),
+    listRunningOperations: async () => (await projection)?.operations ?? listRunningOperations(),
+  };
+}
 
 function preconditionFailed(error: unknown): boolean {
   return error instanceof Error && (error.name === "PreconditionFailed" || error.name === "ConditionalRequestConflict");

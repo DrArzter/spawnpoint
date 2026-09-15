@@ -3,6 +3,47 @@ locals {
   release_bucket_name = "spawnpoint-releases-${data.aws_caller_identity.current.account_id}"
 }
 
+resource "aws_dynamodb_table" "control_plane_view" {
+  name         = var.control_plane_view_table_name
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  deletion_protection_enabled = true
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = {
+    Name    = var.control_plane_view_table_name
+    Purpose = "bounded-event-history-and-read-projection"
+  }
+}
+
 resource "aws_s3_bucket" "backups" {
   bucket = local.backup_bucket_name
 

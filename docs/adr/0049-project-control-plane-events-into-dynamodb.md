@@ -29,9 +29,13 @@ The view is an optimization and an eventual-consistency boundary, not event sour
 stale, the API falls back to the existing live reads. Step Functions executions remain operations; DynamoDB stores
 only their read projection and bounded event history.
 
-An externally stopped host also starts a one-shot deferred reconciliation execution. It waits beyond the longest stop
-lease, re-reads EC2, Step Functions and the exact Lifecycle V2 session, and may invoke the existing fenced stop only
-for that still-stranded session. There is no forever schedule and no direct `stopped` write from an unordered event.
+An externally stopped host also starts a one-shot deferred reconciliation execution. Relevant terminal operation events
+start the same safety net, covering a lifecycle write that fails after EC2 has already emitted its final state change.
+The reconciliation waits beyond the longest lease, re-reads EC2, Step Functions and the exact Lifecycle V2 session,
+and may invoke the existing fenced stop only for that still-stranded session. A lease-free stopped host is reconciled
+immediately. This applies to any exact active session contradicted by a stopped host, including a host stopped outside
+Spawnpoint while its lifecycle still says `ready`; no player-facing repair command is required. There is no forever
+schedule and no direct `stopped` write from an unordered event.
 
 The first delivery retains the panel's five-second polling during visible operations. A later change may add an
 authenticated WebSocket that carries only projection invalidations; clients will still fetch permission-filtered data

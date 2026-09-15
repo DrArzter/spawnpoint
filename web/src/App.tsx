@@ -151,14 +151,15 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
 
   useEffect(() => { void refresh(true); }, []);
 
-  // Poll while an operation runs, so the table and the state settle on their own.
+  // Poll while an operation or automatic reconciliation runs, so the table and
+  // lifecycle state settle without asking a player to repair control-plane drift.
   useEffect(() => {
-    if (!snapshot?.operations.length) return;
+    if (!snapshot?.operations.length && !sharedSession.recoveryPending) return;
     const timer = window.setInterval(() => {
       loadControlPlane().then((next) => setControlPlane({ status: "ready", snapshot: next, error: "" })).catch(() => undefined);
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [snapshot?.operations.length]);
+  }, [snapshot?.operations.length, sharedSession.recoveryPending]);
 
   // Keep the scope in the hash and remember it for the next visit.
   useEffect(() => {

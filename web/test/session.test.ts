@@ -60,10 +60,20 @@ test("a stopped host with no active lifecycle is available", () => {
   const session = deriveSharedHostSession(snapshot({ games: [], hosts: [{ id: "host", name: "Shared host", state: "stopped" }] }));
   assert.equal(session.state, "stopped");
   assert.equal(session.operationRunning, false);
-  assert.equal(session.recoveryAvailable, false);
+  assert.equal(session.recoveryPending, false);
 });
 
-test("a manually stopped host exposes recovery for its stranded stopping session", () => {
+test("ambiguous active lifecycle records fail closed while automatic recovery refuses to guess", () => {
+  const second = { ...activeGame, id: "factorio", lifecycle: { ...activeGame.lifecycle!, serverId: "factorio" } };
+  const session = deriveSharedHostSession(snapshot({
+    games: [activeGame, second],
+    hosts: [{ id: "host", name: "Shared host", state: "stopped" }],
+  }));
+  assert.equal(session.state, "unknown");
+  assert.equal(session.recoveryPending, false);
+});
+
+test("a manually stopped host enters automatic recovery for its stranded stopping session", () => {
   const strandedGame: Game = {
     ...activeGame,
     lifecycle: { ...activeGame.lifecycle!, desiredState: "stopped", observedState: "stopping" },
@@ -73,6 +83,14 @@ test("a manually stopped host exposes recovery for its stranded stopping session
     hosts: [{ id: "host", name: "Shared host", state: "stopped" }],
   }));
   assert.equal(session.state, "stopping");
-  assert.equal(session.recoveryAvailable, true);
+  assert.equal(session.recoveryPending, true);
   assert.equal(session.activeWorld?.id, "world-a");
+});
+
+test("a manually stopped ready session also enters automatic recovery", () => {
+  const session = deriveSharedHostSession(snapshot({
+    hosts: [{ id: "host", name: "Shared host", state: "stopped" }],
+  }));
+  assert.equal(session.state, "stopping");
+  assert.equal(session.recoveryPending, true);
 });

@@ -48,4 +48,19 @@ test("only one expired stranded session on an observed stopped host can recover"
   });
   assert.equal(recoveryTarget([host], [], [stranded], 99), null);
   assert.equal(recoveryTarget([host], [], [stranded, { ...stranded, serverId: "minecraft" }], 101), null);
+  assert.equal(recoveryTarget([host], [{ id: "active", type: "start", status: "running", startedAt: "2026-09-15T00:00:00.000Z", providerRef: "arn:execution" }], [stranded], 101), null);
+  assert.equal(recoveryTarget([host], [], [{ ...stranded, observedState: "stopped", activeSessionId: null, activeWorldId: null }], 101), null);
+});
+
+test("a manually stopped ready session is reconciled without a special UI command", () => {
+  const ready = {
+    ...initialLifecycleRecord("factorio", 1),
+    desiredState: "running" as const,
+    observedState: "ready" as const,
+    activeSessionId: "session-1",
+    activeWorldId: "factorio-test",
+  };
+  assert.deepEqual(recoveryTarget([host], [], [ready], 101), {
+    serverId: "factorio", sessionId: "session-1", worldId: "factorio-test", instanceId: "i-123",
+  });
 });

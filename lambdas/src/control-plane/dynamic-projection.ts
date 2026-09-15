@@ -135,7 +135,7 @@ export function recoveryTarget(
 ): RecoveryTarget | null {
   if (hosts.length !== 1 || hosts[0]?.state !== "stopped" || operations.length !== 0) return null;
   const candidates = lifecycles.filter((record) =>
-    record.desiredState === "stopped" && record.observedState === "stopping" &&
+    record.observedState !== "stopped" &&
     record.activeSessionId !== null && record.activeWorldId !== null &&
     (record.lease === null || record.lease.expiresAtEpochSeconds <= nowEpochSeconds));
   if (candidates.length !== 1) return null;

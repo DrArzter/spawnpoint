@@ -313,6 +313,14 @@ run "control_plane_projection_is_event_driven_scoped_and_recoverable" {
 
   assert {
     condition = alltrue([
+      toset(jsondecode(aws_cloudwatch_event_rule.control_plane_terminal_reconcile.event_pattern).detail.stateMachineArn) == toset([for machine in local.control_plane_operation_machines : machine.arn]),
+      toset(jsondecode(aws_cloudwatch_event_rule.control_plane_terminal_reconcile.event_pattern).detail.status) == toset(["FAILED", "TIMED_OUT", "ABORTED"]),
+    ])
+    error_message = "Every terminal supported operation must schedule the same one-shot reconciliation safety net."
+  }
+
+  assert {
+    condition = alltrue([
       aws_lambda_function.control_plane_projector.environment[0].variables.CONTROL_PLANE_VIEW_TABLE == "spawnpoint-control-plane-view",
       aws_lambda_function.control_plane_projector.environment[0].variables.LIFECYCLE_TABLE_NAME == "spawnpoint-lifecycle-v2",
     ])

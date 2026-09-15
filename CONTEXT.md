@@ -34,6 +34,10 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Operation**: One durable attempt to change or observe lifecycle state, with its own identity, status and failure history. The operation is separate from the desired and active release values it may change.
 
+**Control-plane event**: An immutable fact that Spawnpoint accepted a command or observed a lifecycle change. It records what happened; it is not a command, desired state or permission to perform another change.
+
+**Control-plane view**: A rebuildable, eventually consistent picture of current hosts, operations and worlds for user-facing surfaces. It may inform people, but it is never authoritative enough to approve or drive a lifecycle transition. _Avoid_: Dashboard state, source of truth.
+
 **Session**: One identified period in which a world is being started on a host, is ready for players, or is being stopped. A new start receives a new session identity so work left over from an earlier session cannot stop or modify it.
 
 **Identity**: One person authorised to use Spawnpoint, independent of the chat, game and network accounts through which that person is recognised.

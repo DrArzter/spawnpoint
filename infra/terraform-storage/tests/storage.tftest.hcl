@@ -63,4 +63,16 @@ run "persistent_storage_is_private_versioned_and_recoverable" {
     ])
     error_message = "Deleted backup versions need a bounded 30-day recovery window."
   }
+
+  assert {
+    condition = alltrue([
+      aws_dynamodb_table.control_plane_view.billing_mode == "PAY_PER_REQUEST",
+      aws_dynamodb_table.control_plane_view.deletion_protection_enabled,
+      aws_dynamodb_table.control_plane_view.point_in_time_recovery[0].enabled,
+      aws_dynamodb_table.control_plane_view.server_side_encryption[0].enabled,
+      aws_dynamodb_table.control_plane_view.ttl[0].attribute_name == "expires_at",
+      aws_dynamodb_table.control_plane_view.ttl[0].enabled,
+    ])
+    error_message = "The control-plane view must be durable, encrypted, on-demand and able to expire bounded event history."
+  }
 }

@@ -26,6 +26,7 @@ type LambdaDefinition = Readonly<{
   // Lambda's code paths; the notifier imports services/aws.ts for its `env`
   // and `parameter` helpers alone.
   ignore?: readonly string[];
+  required?: readonly string[];
 }>;
 
 const lambdas: readonly LambdaDefinition[] = [
@@ -37,6 +38,15 @@ const lambdas: readonly LambdaDefinition[] = [
     ignore: ["lambdas/src/bot/services/aws.ts"],
   },
   { name: "access api", entry: "lambdas/src/handlers/access-api.ts", terraform: "infra/terraform-access-api/api.tf" },
+  {
+    name: "control-plane projector",
+    entry: "lambdas/src/handlers/control-plane-projector.ts",
+    terraform: "infra/terraform-operations/control-plane-projector.tf",
+    // The shared AWS adapter contains lazy methods for the access API too.
+    // The projector imports only its dynamic-state and fenced-stop ports.
+    ignore: ["lambdas/src/control-plane/aws.ts"],
+    required: ["CONTROL_PLANE_VIEW_TABLE", "LIFECYCLE_TABLE_NAME", "OPERATION_STATE_MACHINES"],
+  },
 ];
 
 // A read with a fallback — `process.env.X ?? "default"` — is a choice the code
@@ -96,6 +106,7 @@ for (const lambda of lambdas) {
     const ignore = new Set((lambda.ignore ?? []).map((file) => resolve(root, file)));
     for (const file of ignore) assert.ok(sources.has(file), `${file} is not on the import graph; drop it from ignore`);
     const missing = missingEnvironment(sources, provided, ignore);
+    for (const name of lambda.required ?? []) assert.ok(provided.has(name), `${lambda.terraform} must provide ${name}`);
     assert.deepEqual(
       [...missing.entries()].map(([name, files]) => `${name} <- ${files.map((f) => f.slice(root.length + 1)).join(", ")}`),
       [],

@@ -23,7 +23,7 @@ Three things have settled since this was written on 2026-08-11, and the text bel
 | Lifecycle automation | Step Functions + Lambda + DynamoDB | Lifecycle V2: a fenced lease and session record per server, one watchdog execution per session, and the verified stop it invokes. The interruption handler exists only if Spot is ever adopted |
 | Release store | S3, versioned | Immutable release artefacts per preset; world records and, per wipe, separate desired and active release state |
 | Backup store | S3, versioned, lifecycle rules | World archives |
-| Events | EventBridge + SNS | Step Functions publishes execution status changes to EventBridge by itself; alarms and the budget publish to the `spawnpoint-alert` SNS topic |
+| Events | EventBridge + SNS | Step Functions and EC2 publish lifecycle observations; a projector records bounded event history and a current control-plane view. Alarms and the budget publish to the `spawnpoint-alert` SNS topic |
 | Chat adapters | Lambda per platform | Telegram today: a webhook command bot and a notifier fed by execution events. Discord is designed, not built |
 | Identity | Access Lambda + DynamoDB | Verifies signed Telegram browser/Mini App identity and issues a short-lived Spawnpoint session; roles grant access separately. See [ADR-0037](adr/0037-telegram-only-browser-identity.md) |
 | Access directory | DynamoDB | Maps Telegram, game and network accounts to an internal identity, role and direct grants. The bot and panel read the same authority |
@@ -169,6 +169,7 @@ every component here would have needed a permanent one.
 | Interruption handler | An EventBridge rule on the Spot notice, only if Spot is ever adopted. Nothing polls for it |
 | Identity | Login verification runs only on Lambda requests; there is no continuously billed identity service |
 | Link and token state | DynamoDB in **on-demand** capacity mode |
+| Control-plane view | EventBridge invokes a Lambda only when provider state changes; a one-shot Step Functions wait retries reconciliation after a stopped host's lease, with no permanent schedule |
 | The game server itself | Started on request, stopped when idle. See [ADR-0006](adr/0006-on-demand-start-and-idle-shutdown.md) |
 
 Two of those rows are also traps, and are decisions rather than details:

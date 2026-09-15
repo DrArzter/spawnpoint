@@ -15,6 +15,7 @@ functions=(
   "access-api:spawnpoint-access-api"
   "world-lifecycle:spawnpoint-world-lifecycle"
   "release-state:spawnpoint-release-state"
+  "control-plane-projector:spawnpoint-control-plane-projector"
   "bot:spawnpoint-telegram-bot"
   "notifier:spawnpoint-notifier"
 )

@@ -7,6 +7,8 @@ import test from "node:test";
 process.env.ACCESS_TABLE_NAME ??= "spawnpoint-access-test";
 process.env.BOT_TOKEN_PARAMETER ??= "/spawnpoint/bot/token";
 process.env.SESSION_SIGNING_SECRET_PARAMETER ??= "/spawnpoint/auth/session-signing-secret";
+process.env.CONTROL_PLANE_VIEW_TABLE ??= "spawnpoint-control-plane-view-test";
+process.env.CONTROL_PLANE_WEBSOCKET_URL ??= "wss://socket.example.test/live";
 const { routes } = await import("../src/handlers/access-api.ts");
 
 // Authority used to be positional: the handler resolved a session, then an

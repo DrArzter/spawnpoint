@@ -60,6 +60,11 @@ export const demoApi: SpawnpointApi = {
     return store.snapshot();
   },
 
+  subscribeControlPlane(onInvalidated) {
+    const timer = window.setInterval(onInvalidated, 1_000);
+    return () => window.clearInterval(timer);
+  },
+
   async requestSessionOperation(gameId: string, worldId: string, action) {
     await demoLatency();
     return action === "start" ? store.startSession(gameId, worldId) : store.stopSession(gameId, worldId);

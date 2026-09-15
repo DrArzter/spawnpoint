@@ -1,9 +1,10 @@
 locals {
-  control_plane_projector_arn    = "arn:aws:lambda:${var.aws_region}:${local.account_id}:function:spawnpoint-control-plane-projector"
-  control_plane_reconcile_arn    = "arn:aws:states:${var.aws_region}:${local.account_id}:stateMachine:spawnpoint-control-plane-reconcile-stopped"
-  control_plane_stopped_rule_arn = "arn:aws:events:${var.aws_region}:${local.account_id}:rule/spawnpoint-control-plane-stopped-reconcile"
-  control_plane_view_table_arn   = "arn:aws:dynamodb:${var.aws_region}:${local.account_id}:table/${var.control_plane_view_table_name}"
-  promote_release_arn            = "arn:aws:states:${var.aws_region}:${local.account_id}:stateMachine:spawnpoint-promote-release"
+  control_plane_projector_arn     = "arn:aws:lambda:${var.aws_region}:${local.account_id}:function:spawnpoint-control-plane-projector"
+  control_plane_reconcile_arn     = "arn:aws:states:${var.aws_region}:${local.account_id}:stateMachine:spawnpoint-control-plane-reconcile-stopped"
+  control_plane_stopped_rule_arn  = "arn:aws:events:${var.aws_region}:${local.account_id}:rule/spawnpoint-control-plane-stopped-reconcile"
+  control_plane_terminal_rule_arn = "arn:aws:events:${var.aws_region}:${local.account_id}:rule/spawnpoint-control-plane-terminal-reconcile"
+  control_plane_view_table_arn    = "arn:aws:dynamodb:${var.aws_region}:${local.account_id}:table/${var.control_plane_view_table_name}"
+  promote_release_arn             = "arn:aws:states:${var.aws_region}:${local.account_id}:stateMachine:spawnpoint-promote-release"
   control_plane_operation_machines = [
     { type = "start", arn = local.lifecycle_v2_start_arn },
     { type = "stop", arn = local.lifecycle_v2_stop_arn },
@@ -68,6 +69,12 @@ data "aws_iam_policy_document" "control_plane_projector" {
     sid       = "RecoverOnlyThroughFencedStop"
     actions   = ["states:StartExecution"]
     resources = [local.lifecycle_v2_stop_arn]
+  }
+
+  statement {
+    sid       = "PublishProjectionInvalidations"
+    actions   = ["events:PutEvents"]
+    resources = ["arn:aws:events:${var.aws_region}:${local.account_id}:event-bus/default"]
   }
 }
 
@@ -257,7 +264,7 @@ data "aws_iam_policy_document" "control_plane_reconcile_events_assume" {
     condition {
       test     = "ArnEquals"
       variable = "aws:SourceArn"
-      values   = [local.control_plane_stopped_rule_arn]
+      values   = [local.control_plane_stopped_rule_arn, local.control_plane_terminal_rule_arn]
     }
   }
 }
@@ -295,6 +302,30 @@ resource "aws_cloudwatch_event_rule" "control_plane_stopped_reconcile" {
 
 resource "aws_cloudwatch_event_target" "control_plane_stopped_reconcile" {
   rule     = aws_cloudwatch_event_rule.control_plane_stopped_reconcile.name
+  arn      = aws_sfn_state_machine.control_plane_reconcile.arn
+  role_arn = aws_iam_role.control_plane_reconcile_events.arn
+
+  depends_on = [aws_iam_role_policy.control_plane_reconcile_events]
+}
+
+# A terminal workflow can fail after the host's final EC2 event was already
+# delivered. Schedule the same one-shot check from that independent signal so
+# a failed lifecycle write cannot require a dashboard repair button.
+resource "aws_cloudwatch_event_rule" "control_plane_terminal_reconcile" {
+  name        = "spawnpoint-control-plane-terminal-reconcile"
+  description = "Schedule one delayed reconciliation after a supported operation completes."
+  event_pattern = jsonencode({
+    source        = ["aws.states"]
+    "detail-type" = ["Step Functions Execution Status Change"]
+    detail = {
+      stateMachineArn = [for machine in local.control_plane_operation_machines : machine.arn]
+      status          = ["FAILED", "TIMED_OUT", "ABORTED"]
+    }
+  })
+}
+
+resource "aws_cloudwatch_event_target" "control_plane_terminal_reconcile" {
+  rule     = aws_cloudwatch_event_rule.control_plane_terminal_reconcile.name
   arn      = aws_sfn_state_machine.control_plane_reconcile.arn
   role_arn = aws_iam_role.control_plane_reconcile_events.arn
 

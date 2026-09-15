@@ -110,6 +110,8 @@ export type SpawnpointApi = Readonly<{
   updateIdentityRole(identityId: string, roleId: string): Promise<void>;
 
   loadControlPlane(): Promise<ControlPlaneSnapshot>;
+  /** Subscribe to invalidations only; the caller still reloads its permission-filtered snapshot. */
+  subscribeControlPlane(onInvalidated: () => void): () => void;
   requestSessionOperation(gameId: string, worldId: string, action: SessionOperation): Promise<{ result: "requested" | "already_stopped"; operationId?: string }>;
   requestWorldLifecycle(gameId: string, worldId: string, action: WorldLifecycleAction, backupKey?: string, release?: string): Promise<{ result: "requested"; operationId: string }>;
   requestCreateWorld(gameId: string, presetId: string, displayName: string, release: string): Promise<{ id: string; displayName: string }>;

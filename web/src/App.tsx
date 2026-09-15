@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { ActiveSession, AuthState, endSession, loadControlPlane, requestCreateWorld, requestPackDownload, requestSessionOperation, requestWorldLifecycle, restoreAuth } from "./auth";
+import { ActiveSession, AuthState, endSession, loadControlPlane, requestCreateWorld, requestPackDownload, requestSessionOperation, requestWorldLifecycle, restoreAuth, subscribeControlPlane } from "./auth";
 import { InvitationSheet } from "./components/InvitationSheet";
 import { Button } from "./components/ui/Button";
 import { Dialog, Sheet } from "./components/ui/Dialog";
@@ -151,14 +151,13 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
 
   useEffect(() => { void refresh(true); }, []);
 
-  // Poll while an operation runs, so the table and the state settle on their own.
+  // EventBridge updates the projection and the socket carries only an
+  // invalidation. Permission-filtered state still comes from the HTTP API.
   useEffect(() => {
-    if (!snapshot?.operations.length) return;
-    const timer = window.setInterval(() => {
+    return subscribeControlPlane(() => {
       loadControlPlane().then((next) => setControlPlane({ status: "ready", snapshot: next, error: "" })).catch(() => undefined);
-    }, 5000);
-    return () => window.clearInterval(timer);
-  }, [snapshot?.operations.length]);
+    });
+  }, []);
 
   // Keep the scope in the hash and remember it for the next visit.
   useEffect(() => {

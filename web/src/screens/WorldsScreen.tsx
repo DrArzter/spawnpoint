@@ -202,7 +202,7 @@ export function sessionControlAvailability(world: World, game: Game, sharedSessi
   }
   if (!permitted) return { action, disabled: true, hint: `Your role cannot ${action} sessions.` };
   if (controlBusy || sharedSession.operationRunning) return { action, disabled: true, hint: "A control-plane operation is already in progress." };
-  if (action === "stop" && sharedSession.recoveryAvailable) return { action, disabled: false, hint: "Reconcile the stopped compute host with its stranded session record." };
+  if (sharedSession.recoveryPending) return { action, disabled: true, hint: "Spawnpoint is reconciling the stopped host automatically." };
   if (sharedSession.state === "starting" || sharedSession.state === "stopping") return { action, disabled: true, hint: `The shared host is ${sharedSession.state}.` };
   if (sharedSession.state === "unknown") return { action, disabled: true, hint: "Spawnpoint cannot confirm that the shared host is free. Refresh before trying again." };
   if (action === "start" && sharedSession.state === "running") {
@@ -266,15 +266,14 @@ export function RowActions({ game, world, sharedSession, granted, pending, contr
   const permitted = granted.has(action === "start" ? "session.start" : "session.stop");
   const busy = pending !== null;
   const availability = sessionControlAvailability(world, game, sharedSession, permitted, controlBusy || busy);
-  const recovery = worldOwnsSharedSession(sharedSession, game, world) && sharedSession.recoveryAvailable;
-  const actionLabel = recovery ? "Reconcile" : action === "stop" ? "Stop" : "Start";
+  const actionLabel = action === "stop" ? "Stop" : "Start";
   const items = rowActionItems({ game, world, granted, busy, onWorldAction, onInvite, onDownloadPack });
   return (
     <>
       <Button
         aria-label={`${actionLabel} ${world.displayName}. ${availability.hint}`}
         disabled={availability.disabled}
-        icon={recovery ? "sync" : action === "stop" ? "stop" : "play_arrow"}
+        icon={action === "stop" ? "stop" : "play_arrow"}
         loading={pending?.kind === "session"}
         onClick={() => onSessionAction(game, world, action)}
         size={compact ? "small" : "medium"}
@@ -290,8 +289,8 @@ export function RowActions({ game, world, sharedSession, granted, pending, contr
 
 export function SharedHostNotice({ session, busy }: Readonly<{ session: SharedHostSession; busy: boolean }>) {
   const owner = sharedSessionOwnerLabel(session);
-  if (session.recoveryAvailable) {
-    return <Banner description={owner ? `${owner} still owns a stale session record, although the compute host is stopped. Reconcile that world before starting another session.` : "The compute host is stopped, but its stale session record still needs reconciliation."} title="Stopped host needs reconciliation" tone="warning" />;
+  if (session.recoveryPending) {
+    return <Banner description={owner ? `${owner} still owns the recorded session, although the compute host is stopped. Spawnpoint is reconciling it automatically; session controls remain locked until it finishes.` : "The compute host is stopped and Spawnpoint is reconciling its session record automatically."} title="Automatic recovery in progress" tone="info" />;
   }
   if (busy || session.operationRunning || session.state === "starting" || session.state === "stopping") {
     return <Banner description={owner ? `${owner} owns the current session. Session controls stay locked until the operation finishes.` : "Session controls stay locked until the current operation finishes."} title="Shared host operation in progress" tone="info" />;

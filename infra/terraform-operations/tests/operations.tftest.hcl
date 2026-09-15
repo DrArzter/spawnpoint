@@ -313,6 +313,14 @@ run "control_plane_projection_is_event_driven_scoped_and_recoverable" {
 
   assert {
     condition = alltrue([
+      toset(jsondecode(aws_cloudwatch_event_rule.control_plane_terminal_reconcile.event_pattern).detail.stateMachineArn) == toset([for machine in local.control_plane_operation_machines : machine.arn]),
+      toset(jsondecode(aws_cloudwatch_event_rule.control_plane_terminal_reconcile.event_pattern).detail.status) == toset(["FAILED", "TIMED_OUT", "ABORTED"]),
+    ])
+    error_message = "Every terminal supported operation must schedule the same one-shot reconciliation safety net."
+  }
+
+  assert {
+    condition = alltrue([
       aws_lambda_function.control_plane_projector.environment[0].variables.CONTROL_PLANE_VIEW_TABLE == "spawnpoint-control-plane-view",
       aws_lambda_function.control_plane_projector.environment[0].variables.LIFECYCLE_TABLE_NAME == "spawnpoint-lifecycle-v2",
     ])
@@ -332,7 +340,9 @@ run "control_plane_projection_is_event_driven_scoped_and_recoverable" {
       data.aws_iam_policy_document.control_plane_projector.statement[0].resources == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-control-plane-view"]),
       data.aws_iam_policy_document.control_plane_projector.statement[1].resources == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-lifecycle-v2"]),
       data.aws_iam_policy_document.control_plane_projector.statement[4].resources == toset([local.lifecycle_v2_stop_arn]),
+      data.aws_iam_policy_document.control_plane_projector.statement[5].actions == toset(["events:PutEvents"]),
+      data.aws_iam_policy_document.control_plane_projector.statement[5].resources == toset(["arn:aws:events:eu-central-1:123456789012:event-bus/default"]),
     ])
-    error_message = "The projector may update only its view, read lifecycle, and recover through the fenced stop adapter."
+    error_message = "The projector may update only its view, read lifecycle, recover through the fenced stop adapter and publish sanitized invalidations."
   }
 }

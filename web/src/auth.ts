@@ -30,6 +30,7 @@ export const loadAccessRoles = () => api.loadAccessRoles();
 export const updateIdentityRole = (identityId: string, roleId: string) => api.updateIdentityRole(identityId, roleId);
 
 export const loadControlPlane = () => api.loadControlPlane();
+export const subscribeControlPlane = (onInvalidated: () => void) => api.subscribeControlPlane(onInvalidated);
 export const requestSessionOperation = (gameId: string, worldId: string, action: "start" | "stop") => api.requestSessionOperation(gameId, worldId, action);
 export const requestWorldLifecycle = (gameId: string, worldId: string, action: "archive" | "regenerate" | "restore" | "purge", backupKey?: string, release?: string) => api.requestWorldLifecycle(gameId, worldId, action, backupKey, release);
 export const requestCreateWorld = (gameId: string, presetId: string, displayName: string, release: string) => api.requestCreateWorld(gameId, presetId, displayName, release);

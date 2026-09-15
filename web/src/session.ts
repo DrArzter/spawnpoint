@@ -5,30 +5,33 @@ export type SharedHostSession = Readonly<{
   activeGame: Game | null;
   activeWorld: World | null;
   operationRunning: boolean;
-  recoveryAvailable: boolean;
+  recoveryPending: boolean;
 }>;
 
 export function deriveSharedHostSession(snapshot: ControlPlaneSnapshot | null): SharedHostSession {
   const operations = snapshot?.operations ?? [];
   const operation = operations[0];
   const activeGames = (snapshot?.games ?? []).filter((game) => game.lifecycle?.activeSessionId != null);
+  const activeSessionAmbiguous = activeGames.length > 1;
   const activeGame = activeGames.length === 1 ? activeGames[0]! : null;
   const activeWorld = findActiveWorld(activeGame);
   const hostStates = snapshot?.hosts.map((host) => host.state) ?? [];
-  const recoveryAvailable = operations.length === 0 && hostStates.length === 1 && hostStates[0] === "stopped" &&
-    activeGame?.lifecycle?.desiredState === "stopped" && activeGame.lifecycle.observedState === "stopping";
+  const recoveryPending = hostStates.length === 1 && hostStates[0] === "stopped" &&
+    activeGame?.lifecycle?.activeSessionId != null && activeGame.lifecycle.observedState !== "stopped";
 
-  if (operation?.type === "start") return { state: "starting", activeGame, activeWorld, operationRunning: true, recoveryAvailable: false };
-  if (operation?.type === "stop") return { state: "stopping", activeGame, activeWorld, operationRunning: true, recoveryAvailable: false };
+  if (operation?.type === "start") return { state: "starting", activeGame, activeWorld, operationRunning: true, recoveryPending: false };
+  if (operation?.type === "stop") return { state: "stopping", activeGame, activeWorld, operationRunning: true, recoveryPending: false };
+  if (activeSessionAmbiguous) return { state: "unknown", activeGame: null, activeWorld: null, operationRunning: operations.length > 0, recoveryPending: false };
+  if (recoveryPending) return { state: "stopping", activeGame, activeWorld, operationRunning: operations.length > 0, recoveryPending: true };
 
   const observed = activeGame?.lifecycle?.observedState;
-  if (observed === "ready") return { state: "running", activeGame, activeWorld, operationRunning: operations.length > 0, recoveryAvailable };
+  if (observed === "ready") return { state: "running", activeGame, activeWorld, operationRunning: operations.length > 0, recoveryPending };
   if (observed === "starting" || observed === "stopping") {
-    return { state: observed, activeGame, activeWorld, operationRunning: operations.length > 0, recoveryAvailable };
+    return { state: observed, activeGame, activeWorld, operationRunning: operations.length > 0, recoveryPending };
   }
 
   const state = deriveHostState(hostStates, activeWorld);
-  return { state, activeGame, activeWorld, operationRunning: operations.length > 0, recoveryAvailable };
+  return { state, activeGame, activeWorld, operationRunning: operations.length > 0, recoveryPending };
 }
 
 function findActiveWorld(activeGame: Game | null): World | null {

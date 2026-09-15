@@ -43,7 +43,8 @@ Constraints, unchanged:
 - Addresses are composed, never configured: the strategy's host part plus the game's port, read from the control
   plane. A public world has no address between sessions and the panel shows none
   ([ADR-0033](../docs/adr/0033-connectivity-as-a-strategy.md)); ADR-0017's "show the hostname" rule went with it.
-- Slow actions are operations with state. The UI polls and shows progress; it never blocks on a request.
+- Slow actions are operations with state. EventBridge projection invalidations wake the UI through a ticket-protected
+  WebSocket; the UI then reloads its permission-filtered snapshot and never blocks on the original request.
 - No control may imply data or an action the backend does not provide. See [PRODUCT.md](PRODUCT.md) and
   [DESIGN.md](DESIGN.md).
 - Published pack URLs are presigned and short-lived; a new pack is a new release, never an overwrite.
@@ -128,7 +129,8 @@ npm run build    # static files in web/dist
 production build as well as in dev, because the front door links to it: no token, no AWS call and no data that outlives
 the tab. Starting and stopping a session, wiping, restoring, archiving, purging, creating a save, approving a Telegram
 account and sending an invitation all change the state the console then reads back, and the transitions take a few
-seconds so the operations table, the status rows and the polling behave the way they do against the real API.
+seconds so the operations table and status rows behave the way they do against the real API. The demo transport emits
+local invalidations because it has no AWS event bus.
 
 **The mode picks a transport and nothing else.** `src/api/contract.ts` states what the panel asks of a backend;
 `src/api/live.ts` and `src/demo/api.ts` both implement it, and `src/auth.ts` chooses between them in one expression.

@@ -54,6 +54,11 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.control_plane_subscriptions
+    values = { json = "{}" }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.world_lifecycle
     values = { json = "{}" }
   }
@@ -77,6 +82,14 @@ mock_provider "archive" {
     target = data.archive_file.access_api
     values = {
       output_path         = "access-api.zip"
+      output_base64sha256 = "test"
+    }
+  }
+
+  override_data {
+    target = data.archive_file.control_plane_subscriptions
+    values = {
+      output_path         = "control-plane-subscriptions.zip"
       output_base64sha256 = "test"
     }
   }
@@ -155,6 +168,37 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   assert {
     condition     = contains(local.access_routes, "GET /control-plane")
     error_message = "Approved identities need one read-only control-plane snapshot endpoint."
+  }
+
+  assert {
+    condition     = contains(local.access_routes, "POST /control-plane/subscriptions")
+    error_message = "Approved status readers need a short-lived ticket for projection invalidations."
+  }
+
+  assert {
+    condition = (
+      aws_apigatewayv2_api.control_plane.protocol_type == "WEBSOCKET" &&
+      local.control_plane_websocket_routes == toset(["$connect", "$disconnect", "$default"]) &&
+      length(aws_apigatewayv2_stage.control_plane.access_log_settings) == 1 &&
+      !strcontains(aws_apigatewayv2_stage.control_plane.access_log_settings[0].format, "query")
+    )
+    error_message = "The dashboard push surface must be a bounded, auditable WebSocket API that never logs its one-time ticket."
+  }
+
+  assert {
+    condition = (
+      aws_lambda_function.control_plane_subscriptions.environment[0].variables.CONTROL_PLANE_VIEW_TABLE == "spawnpoint-control-plane-view" &&
+      contains(keys(aws_lambda_function.control_plane_subscriptions.environment[0].variables), "CONTROL_PLANE_WEBSOCKET_CALLBACK_URL")
+    )
+    error_message = "The subscription adapter must receive its table and callback endpoint from Terraform."
+  }
+
+  assert {
+    condition = (
+      jsondecode(aws_cloudwatch_event_rule.control_plane_projection_updated.event_pattern).source == ["spawnpoint.control-plane"] &&
+      jsondecode(aws_cloudwatch_event_rule.control_plane_projection_updated.event_pattern)["detail-type"] == ["Projection Updated"]
+    )
+    error_message = "Only normalized projection invalidations may reach browser subscriptions."
   }
 
   assert {

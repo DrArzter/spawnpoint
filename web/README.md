@@ -14,6 +14,7 @@ into the demo. Who sees what depends on the address and the session:
 | Arriving at | With no session | With a session |
 | --- | --- | --- |
 | `#/` | The front door | Redirected to `#/worlds`, because a person holding a session asked for the console. This is how the Telegram Mini App opens every time, and how a browser that still holds its refresh cookie opens |
+| `#/welcome` after signing out | The front door, reached by a full reload so the tab keeps nothing from the session | The same, if the session outlived the request meant to end it |
 | `#/welcome` | The front door | The front door, on purpose. This is the address to send someone, and the one a signed-in person uses to read it again |
 | Any console hash | The front door, with the hash left alone | The console |
 
@@ -123,12 +124,21 @@ npm run build    # static files in web/dist
 
 ### Demo mode
 
-`?demo` runs the whole console against an in-memory control plane (`src/demo/`) instead of the access API. It works in a
+`?demo` answers every call from an in-memory control plane (`src/demo/`) instead of the access API. It works in a
 production build as well as in dev, because the front door links to it: no token, no AWS call and no data that outlives
 the tab. Starting and stopping a session, wiping, restoring, archiving, purging, creating a save, approving a Telegram
 account and sending an invitation all change the state the console then reads back, and the transitions take a few
-seconds so the operations table, the status rows and the polling behave the way they do against the real API. The app bar
-carries a Demo data menu that resets the state or leaves the mode. Reloading the tab also resets it.
+seconds so the operations table, the status rows and the polling behave the way they do against the real API.
+
+**The mode picks a transport and nothing else.** `src/api/contract.ts` states what the panel asks of a backend;
+`src/api/live.ts` and `src/demo/api.ts` both implement it, and `src/auth.ts` chooses between them in one expression.
+Above that line there is no branch on the mode: the same screens, the same errors, the same sign-out and the same
+navigation run in both. A demo session says so in its own data (`ActiveSession.demo`), which is what puts the Demo data
+badge in the bar, and signing out is the ordinary sign-out. Reloading the tab resets the demo, because its state is the
+module's.
+
+This matters more than it looks. The first version branched on the mode inside the sign-out, so leaving the demo
+reloaded the page and signing out of the real panel did not. The demo passed while the shipped path was broken.
 
 Inside Telegram the app reads the client's theme through the official `telegram-web-app.js` bridge. Production is
 deployed by `Deploy production` after a passing `Check` on `main` whenever `web/` or `scripts/deploy-web.sh` changed

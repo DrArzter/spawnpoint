@@ -1492,8 +1492,7 @@ button.chip[aria-pressed="true"] {
   .icon-btn,
   .inline-select,
   .tab,
-  .menu-item,
-  .demo-badge {
+  .menu-item {
     min-height: 44px;
   }
 

@@ -13,10 +13,6 @@ const LIFECYCLE_MS = 6000;
 const ARCHIVE_MS = 4000;
 const DELIVERY_MS = 3000;
 
-export function resetDemoState(): void {
-  state = initialState();
-}
-
 const iso = () => new Date().toISOString();
 const worldKey = (gameId: string, worldId: string) => `${gameId}/${worldId}`;
 

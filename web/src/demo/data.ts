@@ -23,6 +23,7 @@ export type DemoState = {
 
 export const demoSession: ActiveSession = {
   state: "active",
+  demo: true,
   identity: { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [] },
   role: { id: "owner", name: "Owner", permissions: ["status.read", "connection.read", "session.start", "session.stop", "invitation.send", "metrics.read", "console.use", "release.read", "release.promote", "backup.read", "backup.restore", "world.manage", "access.read", "access.manage"] },
   profile: { telegramId: "1780660807", username: "drarzter", photoUrl: null },

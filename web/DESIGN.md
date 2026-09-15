@@ -280,7 +280,7 @@ Controls (buttons, fields, chips' pill, inline selects) use a 4px radius. Cards,
 - **Table:** 48px header and body rows, hairline rules, hover tint, row-actions column right-aligned and width-collapsed; below 600px width (container query) collapses to stacked label/value records per row with the action row last.
 
 ### Menu (popover)
-Fixed-position popover with `::backdrop` transparent, 4px radius, `shadow-3`, 8px vertical padding, 40px-min-height items with a leading secondary-ink icon; entrance is a 180ms fade/scale-up from the anchor. Three triggers share it: the overflow icon button, the app-bar avatar, and a tonal badge (the demo-mode chip) that carries a label and a chevron.
+Fixed-position popover with `::backdrop` transparent, 4px radius, `shadow-3`, 8px vertical padding, 40px-min-height items with a leading secondary-ink icon; entrance is a 180ms fade/scale-up from the anchor. Two triggers share it: the overflow icon button and the app-bar avatar.
 
 ### Dialog and Sheet
 - **Dialog:** native `<dialog>`, 520px max width, 12px radius, `shadow-3`, scrim backdrop, 24px body padding, actions right-aligned.

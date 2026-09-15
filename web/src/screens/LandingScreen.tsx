@@ -6,9 +6,9 @@ import { Chip } from "../components/ui/Chip";
 import { Menu } from "../components/ui/Menu";
 import { Status } from "../components/ui/Status";
 import { Banner } from "../components/ui/Surfaces";
-import { demoEnabled, demoUrl } from "../demo";
+import { demoUrl } from "../demo";
 import { Icon, IconName } from "../icons";
-import { SpawnpointMark } from "../shell/AppBar";
+import { DemoBadge, SpawnpointMark } from "../shell/AppBar";
 import { useTheme } from "../shell/hooks";
 
 const CONSOLE_HASH = "#/worlds";
@@ -30,17 +30,17 @@ export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; on
         </a>
         <span className="appbar-spacer" />
         <div className="appbar-actions">
+          {session?.demo === true && <DemoBadge />}
           <IconButton icon={theme === "dark" ? "light_mode" : "dark_mode"} label={`${label}. Change theme`} onClick={cycle} />
           {auth.status === "loading" && <span aria-hidden="true" className="avatar landing-avatar-pending" />}
           {session && (
             <Menu
               avatar={{ name: session.identity.displayName, photoUrl: session.profile.photoUrl }}
               items={[
-                ...(demoEnabled ? [{ id: "demo", label: "Demo session", detail: "In memory, nothing reaches AWS", icon: "warning" as const, disabled: true, onSelect: () => undefined }, "separator" as const] : []),
                 { id: "console", label: "Open the console", detail: session.role?.name ?? undefined, icon: "public", onSelect: () => { window.location.hash = CONSOLE_HASH; } },
                 { id: "profile", label: "Profile", icon: "person", onSelect: () => { window.location.hash = "#/profile"; } },
                 "separator",
-                { id: "signout", label: demoEnabled ? "Leave the demo" : "Sign out", icon: "logout", onSelect: () => void endSession() },
+                { id: "signout", label: "Sign out", icon: "logout", onSelect: () => void endSession() },
               ]}
               label={`${session.identity.displayName}: account menu`}
             />
@@ -71,7 +71,7 @@ export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; on
             </p>
             <div className="landing-links">
               {session && <a className="landing-link" href={CONSOLE_HASH}>Open the console<Icon name="chevron_right" size={18} /></a>}
-              {!demoEnabled && <a className="landing-link" href={demoUrl()}>Try the demo<Icon name="chevron_right" size={18} /></a>}
+              <a className="landing-link" href={demoUrl()}>Try the demo<Icon name="chevron_right" size={18} /></a>
               <a className="landing-link" href="#what-the-console-does">What the console does<Icon name="chevron_right" size={18} /></a>
             </div>
             {auth.status === "error" && <Banner actions={<Button onClick={() => onChange({ status: "signed-out" })} variant="text">Dismiss</Button>} description={auth.message} title="Sign-in did not complete" tone="error" />}

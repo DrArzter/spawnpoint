@@ -7,7 +7,6 @@ import { Dialog, Sheet } from "./components/ui/Dialog";
 import { SelectField, TextField } from "./components/ui/Fields";
 import { SnackbarProvider, useSnackbar } from "./components/ui/Snackbar";
 import { sessionStatus } from "./components/ui/Status";
-import { demoEnabled, leaveDemo, resetDemo } from "./demo";
 import { IconName } from "./icons";
 import { formatDateTime } from "./lib/format";
 import { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, World } from "./model";
@@ -260,9 +259,7 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
         onProfile={() => navigate({ page: "profile" })}
         onScope={() => setScopeOpen(true)}
         onTheme={cycleTheme}
-        demo={demoEnabled}
-        onDemoLeave={leaveDemo}
-        onDemoReset={() => { resetDemo(); void refresh(true); notify({ tone: "info", message: "The demo is back at its starting state." }); }}
+        demo={session.demo === true}
         scopeDisabled={games.length === 0}
         theme={theme}
         themeLabel={themeLabel}

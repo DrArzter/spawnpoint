@@ -39,6 +39,10 @@ const navigation: readonly { id: Page; label: string; icon: IconName; permission
 export function App() {
   const [auth, setAuth] = useState<AuthState>({ status: "loading" });
   const [atLanding, setAtLanding] = useState(() => isLandingHash());
+  // A session that resolves in a blink should not flash a card that says it is
+  // being checked. Nothing renders for a moment; the card appears only if the
+  // answer is actually taking time.
+  const [bootVisible, setBootVisible] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -60,6 +64,11 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => setBootVisible(true), 200);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
     const onChange = () => setAtLanding(isLandingHash());
     window.addEventListener("hashchange", onChange);
     return () => window.removeEventListener("hashchange", onChange);
@@ -71,8 +80,13 @@ export function App() {
     if (state.status === "authenticated" && state.session.state === "active" && isLandingHash()) window.location.hash = "#/worlds";
   }, []);
 
+  // The session is settled before anything else is drawn. Deciding later is what
+  // made the front door appear first and then rearrange itself: a sign-in button
+  // arriving from nowhere, or a jump into the console a beat after landing.
+  if (auth.status === "loading") {
+    return bootVisible ? <BootScreen description="Confirming who you are with the access API." title="Checking your session" /> : null;
+  }
   if (atLanding) return <LandingScreen auth={auth} onChange={handleAuth} />;
-  if (auth.status === "loading") return <BootScreen description="Verifying your Telegram sign-in with the access API." title="Checking your session" />;
   if (auth.status !== "authenticated") return <LandingScreen auth={auth} onChange={handleAuth} />;
   if (auth.session.state !== "active") return <AuthScreen auth={auth} onChange={handleAuth} />;
   return <SnackbarProvider><ConsoleShell session={auth.session} /></SnackbarProvider>;

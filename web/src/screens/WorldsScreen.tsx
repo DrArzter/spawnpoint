@@ -2,16 +2,19 @@ import type { ReactNode } from "react";
 
 import { Button } from "../components/ui/Button";
 import { Column, DataTable } from "../components/ui/DataTable";
+import { Ellipsis } from "../components/ui/Ellipsis";
 import { Menu, MenuItem } from "../components/ui/Menu";
 import { Skeleton } from "../components/ui/Skeleton";
+import { Timestamp } from "../components/ui/Timestamp";
+import { Tooltip } from "../components/ui/Tooltip";
 import { hostStatus, sessionStatus, Status, worldStatus } from "../components/ui/Status";
-import { Banner, Card, CopyButton, EmptyState, Ghost, PageHeader } from "../components/ui/Surfaces";
+import { Banner, Card, CopyButton, EmptyState, Ghost } from "../components/ui/Surfaces";
 import { Icon } from "../icons";
 import { formatDate, formatDateTime, plural } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, ServerState, World } from "../model";
 import { routeHash } from "../routing";
-import { sharedSessionOwnerLabel, worldOwnsSharedSession } from "../session";
-import type { SharedHostSession } from "../session";
+import { playersOnline, sessionReason, sharedSessionOwnerLabel, worldOwnsSharedSession } from "../session";
+import type { SessionReason, SharedHostSession } from "../session";
 import { Pending, pendingFor, SessionAction, WorldActionKind } from "../shell/actions";
 
 export type WorldsScreenProps = Readonly<{
@@ -24,14 +27,13 @@ export type WorldsScreenProps = Readonly<{
   granted: ReadonlySet<string>;
   pending: Pending | null;
   onRefresh: () => void;
-  onSessionAction: (game: Game, world: World, action: SessionAction) => void;
   onWorldAction: (game: Game, world: World, action: Exclude<WorldActionKind, "restore">) => void;
   onInvite: (game: Game, world: World) => void;
   onDownloadPack: (game: Game, world: World) => void;
-  onCreateSave: (game: Game) => void;
+  onCreateWorld: (game: Game) => void;
 }>;
 
-export function WorldsScreen({ game, snapshot, status, error, serverState, sharedSession, granted, pending, onRefresh, onSessionAction, onWorldAction, onInvite, onDownloadPack, onCreateSave }: WorldsScreenProps) {
+export function WorldsScreen({ game, snapshot, status, error, serverState, sharedSession, granted, pending, onRefresh, onWorldAction, onInvite, onDownloadPack, onCreateWorld }: WorldsScreenProps) {
   const loading = status === "loading";
   const host = snapshot?.hosts[0];
   const session = sessionStatus(serverState);
@@ -44,20 +46,22 @@ export function WorldsScreen({ game, snapshot, status, error, serverState, share
   }
 
   const columns: Column<World>[] = [
-    { id: "status", label: "Status", width: "130px", render: (world) => { const state = worldOwnsSharedSession(sharedSession, game!, world) && sharedSession.state === "running" ? sessionStatus("running") : worldStatus(world); return <Status kind={state.kind} label={state.label} />; } },
+    { id: "status", label: "Status", width: "15%", render: (world) => { const state = worldOwnsSharedSession(sharedSession, game!, world) && sharedSession.state === "running" ? sessionStatus("running") : worldStatus(world); return <Status kind={state.kind} label={state.label} />; } },
     {
       id: "name",
       label: "Name",
-      render: (world) => (
-        <span className="world-name">
-          <a className="row-link" href={routeHash({ page: "worlds", accessTab: "users", gameId: game?.id ?? null, worldId: world.id })}>{world.displayName}</a>
-          <small>{world.id}</small>
-        </span>
-      ),
+      // Shares are declared, because auto layout hands the width to whichever
+      // cell wraps first: a date breaking into three lines was taking it from
+      // the name, which then truncated to four characters.
+      width: "24%",
+      // The identifier is not here. It says nothing a reader of this list is
+      // asking, and it is on the world's own page, next to a copy button.
+      render: (world) => <a className="row-link" href={routeHash({ page: "worlds", accessTab: "users", gameId: game?.id ?? null, worldId: world.id })}>{world.displayName}</a>,
     },
     {
       id: "release",
       label: "Preset and release",
+      width: "20%",
       render: (world) => {
         const preset = game?.presets.find((item) => item.id === world.preset?.id || item.id === world.profileId);
         return (
@@ -71,43 +75,54 @@ export function WorldsScreen({ game, snapshot, status, error, serverState, share
     {
       id: "wipe",
       label: "Wipe",
-      width: "170px",
+      width: "16%",
       render: (world) => {
         const wipe = world.wipes.find((item) => item.state === "current") ?? world.wipes.at(-1);
-        return wipe ? <span><strong className="num">#{wipe.number}</strong><small>Opened {formatDate(wipe.createdAt)}</small></span> : <Ghost>{world.worldLifecycleAvailable ? "No wipes yet" : "Legacy world"}</Ghost>;
+        return wipe
+          ? <span title="A wipe is one generation of this world. Starting a new one keeps every backup of the old one."><strong className="num">#{wipe.number}</strong><small className="nowrap">Opened {formatDate(wipe.createdAt)}</small></span>
+          : <Ghost>{world.worldLifecycleAvailable ? "No wipes yet" : "Legacy world"}</Ghost>;
       },
     },
     {
       id: "address",
       label: "Address",
+      // An address is copied, not read character by character, so it gives up
+      // width before the table has to scroll.
+      truncate: true,
+      width: "25%",
       render: (world) => world.connectionAddress
-        ? <span><span className="copy-value"><code>{world.connectionAddress}</code><CopyButton label={`Copy the address of ${world.displayName}`} value={world.connectionAddress} /></span><small>{world.connectivity === "zerotier" ? "ZeroTier network" : "Public address"}</small></span>
+        ? <ConnectionAddress address={world.connectionAddress} connectivity={world.connectivity} copyLabel={`Copy the address of ${world.displayName}`} />
         : <Ghost>{world.materialization !== "existing" ? "No address" : serverState === "running" ? "No address yet" : "Assigned while online"}</Ghost>,
     },
     {
       id: "actions",
       label: "Actions",
       actions: true,
-      render: (world) => game ? <RowActions controlBusy={controlBusy} game={game} granted={granted} onDownloadPack={onDownloadPack} onInvite={onInvite} onSessionAction={onSessionAction} onWorldAction={onWorldAction} pending={pendingFor(pending, world.id)} sharedSession={sharedSession} world={world} /> : null,
+      // Starting and stopping is not here. It spends money on a host the whole
+      // group shares, and the list cannot show why it is refused; the world
+      // page can, so the decision is made there.
+      render: (world) => game
+        ? <Menu items={rowActionItems({ game, world, granted, busy: pendingFor(pending, world.id) !== null, onWorldAction, onInvite, onDownloadPack })} label={`More actions for ${world.displayName}`} size="small" />
+        : null,
     },
   ];
 
   return (
     <div className="page">
-      <PageHeader
-        actions={<WorldsHeaderActions canCreate={canManage && readyPreset} game={game} loading={pending?.kind === "refresh"} onCreateSave={onCreateSave} onRefresh={onRefresh} />}
-        description={game ? `${plural(game.worlds.length, "save")} across ${plural(game.presets.length, "preset")}. One shared compute host runs one session at a time.` : undefined}
-        title="Worlds"
-      />
+      <h1 className="visually-hidden">Worlds</h1>
       {status === "error" && <Banner actions={<Button onClick={onRefresh} variant="text">Try again</Button>} description={error} title="Current state could not be loaded" tone="error" />}
       <SharedHostNotice busy={controlBusy} session={sharedSession} />
 
-      <SessionOverview game={game} host={host} loading={loading} observedAt={snapshot?.observedAt} session={session} />
+      <SessionOverview game={game} host={host} loading={loading} observedAt={snapshot?.observedAt} players={playersOnline(game)} reason={sessionReason(sharedSession, game)} session={session} />
 
-      <Card flush title={game ? `Worlds of ${game.displayName}` : "Worlds"}>
+      <Card
+        actions={<WorldsHeaderActions canCreate={canManage && readyPreset} game={game} loading={pending?.kind === "refresh"} onCreateWorld={onCreateWorld} onRefresh={onRefresh} />}
+        flush
+        title={game ? `Worlds of ${game.displayName}` : "Worlds"}
+      >
         <DataTable
           columns={columns}
-          empty={<EmptyState description={canManage && readyPreset ? "Create the first save from a ready preset." : "Saves appear here once a preset has a ready release and a save is created."} icon="public" title="No saves in this game" />}
+          empty={<EmptyState description={canManage && readyPreset ? "Create the first world from a ready preset." : "Worlds appear here once a preset has a ready release and a world is created."} icon="public" title="No worlds in this game" />}
           label={game ? `Worlds of ${game.displayName}` : "Worlds"}
           loading={loading}
           loadingRows={3}
@@ -125,32 +140,34 @@ function WorldsUnavailable({ error, failed, onRefresh }: Readonly<{ error: strin
     : "The control plane lists no games yet. Games and their presets are declared in Git.";
   return (
     <div className="page">
-      <PageHeader title="Worlds" />
+      <h1 className="visually-hidden">Worlds</h1>
       {failed && <Banner actions={<Button onClick={onRefresh} variant="text">Try again</Button>} description={error} title="Current state could not be loaded" tone="error" />}
       <Card flush><EmptyState description={description} icon="public" title="No games to show" /></Card>
     </div>
   );
 }
 
-function WorldsHeaderActions({ canCreate, game, loading, onCreateSave, onRefresh }: Readonly<{
+function WorldsHeaderActions({ canCreate, game, loading, onCreateWorld, onRefresh }: Readonly<{
   canCreate: boolean;
   game: Game | undefined;
   loading: boolean;
-  onCreateSave: (game: Game) => void;
+  onCreateWorld: (game: Game) => void;
   onRefresh: () => void;
 }>) {
   return <>
     <Button icon="refresh" loading={loading} onClick={onRefresh} variant="outlined">Refresh</Button>
-    {canCreate && game && <Button icon="add" onClick={() => onCreateSave(game)} variant="filled">Create save</Button>}
+    {canCreate && game && <Button icon="add" onClick={() => onCreateWorld(game)} variant="filled">Create world</Button>}
   </>;
 }
 
-function SessionOverview({ game, host, loading, observedAt, session }: Readonly<{
+function SessionOverview({ game, host, loading, observedAt, session, reason, players }: Readonly<{
   game: Game | undefined;
   host: ControlPlaneSnapshot["hosts"][number] | undefined;
   loading: boolean;
   observedAt: string | undefined;
   session: ReturnType<typeof sessionStatus>;
+  reason: SessionReason;
+  players: number | null;
 }>) {
   return (
     <Card as="section" className="session-card-wrap" flush>
@@ -159,7 +176,11 @@ function SessionOverview({ game, host, loading, observedAt, session }: Readonly<
           {loading ? <Skeleton height={28} width="60%" /> : <Status kind={session.kind} label={`${game?.displayName ?? "Session"} ${session.label.toLowerCase()}`} size="large" />}
           <div className="pairs">
             {loading ? <><Skeleton width="70%" /><Skeleton width="50%" /></> : <>
-              <span>Desired <strong>{game?.lifecycle?.desiredState ?? "unknown"}</strong> <Icon name="chevron_right" size={16} /> observed <strong>{game?.lifecycle?.observedState ?? "unknown"}</strong></span>
+              <span className={reason.attention ? "session-reason session-reason-attention" : "session-reason"}>
+                {reason.text}
+                <Tooltip text={reason.detail}><Icon name="help" size={14} /></Tooltip>
+              </span>
+              {players !== null && <span><strong>{plural(players, "player")}</strong> online</span>}
               <span>Last observed <strong>{formatDateTime(observedAt)}</strong></span>
             </>}
           </div>
@@ -168,7 +189,7 @@ function SessionOverview({ game, host, loading, observedAt, session }: Readonly<
           <Fact label="Compute host" loading={loading}>{host ? <Status kind={hostStatus(host.state).kind} label={`${host.name} · ${hostStatus(host.state).label.toLowerCase()}`} /> : <Ghost>No host available</Ghost>}</Fact>
           <Fact label="Instance type" loading={loading} mono>{host?.instanceType ?? <Ghost>Not reported</Ghost>}</Fact>
           <Fact label="Zone" loading={loading} mono>{host?.availabilityZone ?? <Ghost>Not reported</Ghost>}</Fact>
-          <Fact label="Launched" loading={loading}>{host?.launchedAt ? formatDateTime(host.launchedAt) : <Ghost>Not running</Ghost>}</Fact>
+          <Fact label="Launched" loading={loading}>{host?.launchedAt ? <Timestamp value={host.launchedAt} /> : <Ghost>Not running</Ghost>}</Fact>
         </dl>
       </div>
     </Card>
@@ -249,41 +270,22 @@ function appendWorldLifecycleActions(items: (MenuItem | "separator")[], game: Ga
   if (world.materialization === "archived") items.push({ id: "purge", label: "Delete permanently", icon: "delete_forever", danger: true, disabled: busy, onSelect: () => onWorldAction(game, world, "purge") });
 }
 
-export function RowActions({ game, world, sharedSession, granted, pending, controlBusy, onSessionAction, onWorldAction, onInvite, onDownloadPack, compact = true }: Readonly<{
-  game: Game;
-  world: World;
-  sharedSession: SharedHostSession;
-  granted: ReadonlySet<string>;
-  pending: Pending | null;
-  controlBusy: boolean;
-  onSessionAction: (game: Game, world: World, action: SessionAction) => void;
-  onWorldAction: (game: Game, world: World, action: Exclude<WorldActionKind, "restore">) => void;
-  onInvite: (game: Game, world: World) => void;
-  onDownloadPack: (game: Game, world: World) => void;
-  compact?: boolean;
-}>) {
-  const action = sessionActionForWorld(world, game, sharedSession);
-  const permitted = granted.has(action === "start" ? "session.start" : "session.stop");
-  const busy = pending !== null;
-  const availability = sessionControlAvailability(world, game, sharedSession, permitted, controlBusy || busy);
-  const actionLabel = action === "stop" ? "Stop" : "Start";
-  const items = rowActionItems({ game, world, granted, busy, onWorldAction, onInvite, onDownloadPack });
+// The network an address belongs to is a property of the address, so it rides
+// in front of it as one icon instead of a caption under every row.
+export function ConnectionAddress({ address, connectivity, copyLabel }: Readonly<{ address: string; connectivity: World["connectivity"]; copyLabel?: string }>) {
+  const zerotier = connectivity === "zerotier";
+  const network = zerotier
+    ? "ZeroTier network. Reachable only from a device that joined the overlay."
+    : "Public address. Reachable from the internet.";
   return (
-    <>
-      <Button
-        aria-label={`${actionLabel} ${world.displayName}. ${availability.hint}`}
-        disabled={availability.disabled}
-        icon={action === "stop" ? "stop" : "play_arrow"}
-        loading={pending?.kind === "session"}
-        onClick={() => onSessionAction(game, world, action)}
-        size={compact ? "small" : "medium"}
-        title={availability.hint}
-        variant={action === "stop" ? "danger-text" : compact ? "text" : "filled"}
-      >
-        {actionLabel}
-      </Button>
-      <Menu items={items} label={`More actions for ${world.displayName}`} size={compact ? "small" : "medium"} />
-    </>
+    <span className="copy-value">
+      <Tooltip className="address-network" text={network}>
+        <Icon name={zerotier ? "dns" : "public"} size={16} />
+        <span className="visually-hidden">{network}</span>
+      </Tooltip>
+      <Ellipsis mono tail={18} value={address} />
+      {copyLabel && <CopyButton label={copyLabel} value={address} />}
+    </span>
   );
 }
 

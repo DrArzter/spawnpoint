@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { loadInvitationHistory, loadInvitationRecipients, sendInvitation, type InvitationRecipient, type InvitationSummary } from "../auth";
-import { formatDateTime } from "../lib/format";
+import { Timestamp } from "./ui/Timestamp";
 import type { Game, World } from "../model";
 import { Avatar } from "./Avatar";
 import { Button } from "./ui/Button";
@@ -150,7 +150,7 @@ export function InvitationSheet({ game, world, open, onClose }: { game: Game; wo
                 <Status kind={statusKind(item.status)} label={statusLabel(item.status)} />
                 <span>{item.audience === "broadcast" ? <Chip tone="tonal">Everyone</Chip> : <Chip tone="tonal">{item.recipientCount ?? 0} selected</Chip>}</span>
                 <span className="secondary history-detail">{deliveryDetail(item)}</span>
-                <time className="secondary num" dateTime={item.createdAt}>{formatDateTime(item.createdAt)}</time>
+                <Timestamp className="secondary" value={item.createdAt} />
               </li>
             ))}
           </ul>

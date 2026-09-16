@@ -1,5 +1,5 @@
 import { Button, IconButton } from "../components/ui/Button";
-import { Banner, PageHeader } from "../components/ui/Surfaces";
+import { NotConnected } from "../components/ui/Surfaces";
 import { Icon } from "../icons";
 import type { Game, ServerState } from "../model";
 
@@ -9,8 +9,8 @@ export function ConsoleScreen({ game, serverState }: { game: Game | undefined; s
   const online = serverState === "running";
   return (
     <div className="page">
-      <PageHeader description="RCON commands run with your Spawnpoint identity and are recorded against it." title="Console" />
-      <Banner description="Commands will be accepted here once the authenticated RCON API is deployed. The terminal shows the session it would attach to." title="The RCON gateway is not connected yet" tone="info" />
+      <h1 className="visually-hidden">Console</h1>
+      <NotConnected description="The terminal below shows the session it would attach to." inline title="The RCON gateway is not connected yet." />
       <section aria-label="RCON terminal" className="terminal">
         <header className="terminal-bar">
           <Icon name="terminal" size={18} />

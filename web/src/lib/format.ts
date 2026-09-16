@@ -23,6 +23,23 @@ export function formatDate(value: string | number | null | undefined, fallback =
   return parsed ? date.format(parsed) : fallback;
 }
 
+const dateNoYear = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+
+// A timestamp read in a column is two things that must each stay whole: the day
+// and the clock. Split here so the view can decide where a line may break, and
+// drop the year while it is the current one — `full` keeps what was dropped.
+export function formatStamp(value: string | number | null | undefined): Readonly<{ iso: string; date: string; time: string; full: string }> | null {
+  const parsed = parse(value);
+  if (parsed === null) return null;
+  const thisYear = parsed.getFullYear() === new Date().getFullYear();
+  return {
+    iso: parsed.toISOString(),
+    date: thisYear ? dateNoYear.format(parsed) : date.format(parsed),
+    time: time.format(parsed),
+    full: dateTime.format(parsed),
+  };
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GiB`;
   if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
@@ -36,6 +53,14 @@ export function shortDigest(value: string, length = 12): string {
 
 export function shortCommit(value: string): string {
   return value.slice(0, 7);
+}
+
+// A preset is identified by a repository and the commit that was built, and the
+// commit is the half worth following: the repository root shows whatever is
+// there today, which is not what this build came from.
+export function commitUrl(repository: string, commit: string): string {
+  const base = repository.replace(/\.git$/, "").replace(/\/$/, "");
+  return /^https?:\/\/(www\.)?github\.com\//.test(base) ? `${base}/commit/${commit}` : base;
 }
 
 export function repositoryName(url: string): string {

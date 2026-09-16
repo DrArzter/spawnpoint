@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, Ref } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 
 import { Icon, IconName, ProgressRing } from "../../icons";
 import { cx } from "../../lib/cx";
@@ -44,4 +44,12 @@ export function IconButton({ label, icon, size = "medium", className, ref, type 
       <Icon name={icon} size={size === "small" ? 18 : 22} />
     </button>
   );
+}
+
+// Several actions side by side, with the one rule that was missing: when the
+// width runs out they stop lining up on the right and share the full width
+// evenly. Only buttons stretch — a chip or a status line in the same row keeps
+// its own size, because it is not an action.
+export function ActionRow({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cx("btn-row", className)}>{children}</div>;
 }

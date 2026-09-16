@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import type { InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes } from "react";
 
 import { Icon } from "../../icons";
 import { cx } from "../../lib/cx";
@@ -27,7 +27,7 @@ export function InlineSelect({ className, children, ...props }: SelectHTMLAttrib
   return <select className={cx("inline-select", className)} {...props}>{children}</select>;
 }
 
-export function SearchField({ label, className, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string }) {
+export function SearchField({ label, className, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string; ref?: Ref<HTMLInputElement> }) {
   return (
     <div className={cx("search", className)}>
       <Icon name="search" size={20} />

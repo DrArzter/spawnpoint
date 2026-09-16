@@ -158,6 +158,19 @@
   gap: 8px;
 }
 
+/* Where a row of actions no longer fits side by side, it takes the width it has
+   and divides it evenly rather than huddling in a corner. Buttons only: a chip
+   or a status line sharing the row is not an action and keeps its size. */
+@media (max-width: 599px) {
+  .btn-row {
+    width: 100%;
+  }
+
+  .btn-row > .btn {
+    flex: 1;
+  }
+}
+
 /* Progress ring */
 .ring {
   animation: ring-turn 1s linear infinite;
@@ -321,9 +334,10 @@ button.chip[aria-pressed="true"] {
 
 .card-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px 16px;
   padding: 16px 20px 12px;
 }
 
@@ -348,6 +362,11 @@ button.chip[aria-pressed="true"] {
   padding: 0;
 }
 
+/* A flush card still needs somewhere to put a control that is not a row. */
+.card-actions {
+  padding: 8px 12px;
+}
+
 .card-footer {
   display: flex;
   align-items: center;
@@ -369,6 +388,7 @@ button.chip[aria-pressed="true"] {
   display: flex;
   align-items: center;
   gap: 2px;
+  margin-left: -4px;
   color: var(--ink-secondary);
   font-size: 14px;
 }
@@ -392,24 +412,81 @@ button.chip[aria-pressed="true"] {
   text-decoration: none;
 }
 
+/* A phone spends its title row on the name, the state and the one action, so
+   the way back keeps its tap target and loses its label. The name stays for
+   anybody reading the page rather than looking at it. */
+@media (max-width: 599px) {
+  .breadcrumb a {
+    width: 40px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  .crumb-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* The name takes the free space and everything else gathers at the right. With
+   space-between the row spread all four children evenly, which parked the
+   overflow menu a column away from the action it belongs beside. */
 .page-title-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px 24px;
+  gap: 12px;
 }
 
 .page-title {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 8px 16px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
+/* Actions and the overflow travel together: either they fit beside the name or
+   they take a line, never one without the other. */
+.page-controls {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.page-controls .icon-btn {
+  flex: none;
+}
+
+/* Below the compact step they always take a line, and a line they own is a line
+   they fill — the same rule every other action row follows. */
+@media (max-width: 599px) {
+  .page-controls {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .page-controls .btn-row {
+    flex: 1;
+  }
+}
+
+/* Cut with an ellipsis rather than broken mid-word: "Rostik" became "Ros / tik"
+   when the row ran short. */
 .page-title h1 {
-  overflow-wrap: anywhere;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .page-title .status {
@@ -516,6 +593,40 @@ button.chip[aria-pressed="true"] {
   height: var(--row-height);
 }
 
+/* A long value that is copied rather than read gives up its width first: the
+   cell refuses to grow, and the value inside it ends in an ellipsis. Only while
+   the table is a table — the stacked layout below has a whole line for it. */
+@media (min-width: 600px) {
+  .table td.cell-truncate {
+    max-width: 0;
+  }
+
+  .table td.cell-truncate .copy-value {
+    max-width: 100%;
+  }
+
+    .table td.cell-truncate code {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .table td.cell-truncate .ellipsis {
+    overflow: visible;
+  }
+}
+
+/* A column worth reading when there is room, and never worth the actions
+   column scrolling out of reach. */
+@media (max-width: 1199px) {
+  .table col.cell-secondary,
+  .table th.cell-secondary,
+  .table td.cell-secondary {
+    display: none;
+  }
+}
+
 .table tbody tr:last-child td {
   border-bottom: 0;
 }
@@ -545,6 +656,13 @@ button.chip[aria-pressed="true"] {
 
 .table .cell-actions > * {
   vertical-align: middle;
+}
+
+/* The cell shrinks to its content, so a wrapping action row makes itself narrow
+   and tall instead of wide and short. In a table row, actions stay on one line
+   and the column takes the width they need. */
+.table .cell-actions .btn-row {
+  flex-wrap: nowrap;
 }
 
 .table strong {
@@ -609,7 +727,9 @@ button.chip[aria-pressed="true"] {
     display: block;
   }
 
+  /* Each row is a card here, and its menu is placed against this corner. */
   .table tr {
+    position: relative;
     padding: 12px 16px;
     border-bottom: 1px solid var(--outline);
   }
@@ -618,40 +738,93 @@ button.chip[aria-pressed="true"] {
     border-bottom: 0;
   }
 
+  /* Label against the left rail, value against the right. Both packed into the
+     first third left the rest of the card empty, and a pair with a gap between
+     its halves reads as one line where two columns of ragged text do not. */
   .table td {
     display: grid;
-    grid-template-columns: minmax(96px, 36%) 1fr;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
     gap: 12px;
     height: auto;
     min-height: 32px;
     padding: 4px 0;
     border: 0;
-    align-items: center;
+    align-items: baseline;
+    justify-items: end;
+    text-align: right;
   }
 
   .table td::before {
     content: attr(data-label);
+    justify-self: start;
     color: var(--ink-secondary);
     font-size: 12px;
     font-weight: 500;
+    text-align: left;
   }
 
+  /* A row's action in the stacked layout follows the same rule as any action
+     row: the width it has, divided evenly, rather than a corner of a line. */
   .table td.cell-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 4px;
+    gap: 8px;
     width: auto;
     padding-top: 8px;
-    text-align: right;
+  }
+
+  /* Only a button with a label divides the width. An icon button is square by
+     definition, and stretching one turns it into a grey lozenge across the
+     whole card. */
+  .table td.cell-actions > .btn,
+  .table td.cell-actions > .btn-row > .btn {
+    flex: 1;
+  }
+
+  .table td.cell-actions > .btn-row {
+    flex: 1;
+  }
+
+  .table td.cell-actions .icon-btn {
+    flex: none;
+  }
+
+  .table td.cell-actions .btn-text {
+    border: 1px solid var(--outline);
+  }
+
+  /* A menu with no label is not an action row. Left at the bottom it sat alone
+     against a band of empty width; in the card's corner it is where a card's
+     own menu is. Anything with a label keeps the last line and the full width. */
+  .table td.cell-actions:not(:has(.btn)) {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    padding: 0;
+  }
+
+  /* Only the first line gives way to the menu. A column of its own took the
+     width from every value in the card and left none of them at its edge.
+     Asked on the row, this test would nest one :has() inside another, which is
+     not a selector — so the table is asked instead. */
+  .table:has(td.cell-actions > .icon-btn) tbody td:first-child {
+    padding-right: 44px;
+  }
+
+  /* An empty table has no row to label, so its cell is not a label and a value.
+     Left in the pair, the state sat in the value column, off to one side. */
+  .table td.table-empty {
+    display: block;
+    padding: 0;
+    text-align: center;
+  }
+
+  .table td.table-empty::before {
+    content: none;
   }
 
   .table td.cell-actions::before {
     display: none;
-  }
-
-  .table .cell-end,
-  .table .cell-num {
-    text-align: left;
   }
 
   .table tbody tr:hover td {
@@ -686,8 +859,61 @@ button.chip[aria-pressed="true"] {
   border-bottom: 0;
 }
 
+.details-flush .details-row {
+  align-items: center;
+  min-height: var(--row-height);
+  padding: 8px 16px;
+}
+
 .details dt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   color: var(--ink-secondary);
+}
+
+.explain-mark {
+  flex: none;
+  color: var(--outline-strong);
+}
+
+.explain-mark:hover,
+.explain-mark:focus-visible {
+  color: var(--ink-secondary);
+}
+
+/* Tooltip: the dark chip Material puts against a light surface. Placed against
+   the viewport, so it is never clipped by a table's own scroll box. */
+.tip-anchor {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-control);
+  cursor: help;
+}
+
+.tip-anchor:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.tip {
+  position: fixed;
+  z-index: 60;
+  max-width: 264px;
+  padding: 6px 8px;
+  transform: translate(-50%, calc(-100% - 8px));
+  border-radius: var(--radius-control);
+  background: var(--snack-bg);
+  color: var(--snack-ink);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+  text-wrap: pretty;
+  pointer-events: none;
+}
+
+.tip-below {
+  transform: translate(-50%, 8px);
 }
 
 .details dd {
@@ -714,6 +940,14 @@ button.chip[aria-pressed="true"] {
   font-size: 13px;
 }
 
+/* The copy button keeps its tap target but stops setting the height of the line
+   it sits on: a row with one was pushing its value below its own label. The
+   overflow falls inside the row's padding, so the negative margin is whatever
+   takes the button back to the 20px line — and the button grows on touch. */
+.details .value-row .icon-btn-small {
+  margin-block: -6px;
+}
+
 .details-columns {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
@@ -738,20 +972,36 @@ button.chip[aria-pressed="true"] {
   color: var(--ink-secondary);
 }
 
+/* The same card grammar a stacked table row uses: the label against the left
+   rail, the value against the right. Stacked one above the other, these left
+   the right half of every row empty and read as a second kind of list on a
+   screen that already had one. */
 @media (max-width: 599px) {
   .details {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    column-gap: 12px;
   }
 
-  .details-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 2px;
+  .details-row,
+  .details-flush .details-row {
+    align-items: baseline;
     padding: 8px 0;
   }
 
   .details dt {
     font-size: 12px;
     line-height: 16px;
+  }
+
+  .details dd {
+    justify-self: end;
+    text-align: right;
+  }
+
+  /* A value and its hint share one edge. The hint is often the longer of the
+     two, and it was the one setting where the value sat. */
+  .details .value-row {
+    justify-content: flex-end;
   }
 }
 
@@ -877,6 +1127,15 @@ button.chip[aria-pressed="true"] {
   outline: none;
   border-color: var(--primary);
   box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.search input:disabled {
+  border-color: var(--outline);
+  color: var(--ink-disabled);
+}
+
+.search:has(input:disabled) .icon {
+  color: var(--ink-disabled);
 }
 
 /* Switch */
@@ -1060,6 +1319,7 @@ button.chip[aria-pressed="true"] {
 
 .dialog {
   width: min(520px, calc(100vw - 32px));
+  max-width: none;
   max-height: calc(100dvh - 32px);
   border-radius: 12px;
 }
@@ -1097,6 +1357,9 @@ button.chip[aria-pressed="true"] {
   inset: 0 0 0 auto;
   width: min(480px, 100vw);
   height: 100dvh;
+  /* A <dialog> is capped at `calc(100% - 34px)` by the browser, which left the
+     sheet 34px short of the edge it is docked to on a phone. */
+  max-width: none;
   max-height: none;
   margin: 0;
   border-radius: 0;
@@ -1187,6 +1450,29 @@ button.chip[aria-pressed="true"] {
     padding-left: 16px;
     padding-right: 16px;
   }
+}
+
+/* "Part of this is not connected", said in a line. The boxed form of the same
+   notice claims the whole screen is missing, which is a different report. */
+.not-connected {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 2px 0 10px;
+  color: var(--ink-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  text-wrap: pretty;
+}
+
+.not-connected .icon {
+  flex: none;
+  margin-top: 1px;
+}
+
+.not-connected strong {
+  color: var(--ink);
+  font-weight: 500;
 }
 
 /* Banner */
@@ -1455,6 +1741,97 @@ button.chip[aria-pressed="true"] {
   overflow-wrap: anywhere;
 }
 
+/* The value gives up width; the button that copies it does not. In a truncating
+   cell the button was being squeezed to 18px, which is a target nobody can hit. */
+.copy-value .icon-btn {
+  flex: none;
+}
+
+/* Which network an address lives on: one icon in front of it, named on hover
+   and to a reader, instead of a caption under every address. */
+.address-network {
+  flex: none;
+  margin-right: 6px;
+  color: var(--ink-secondary);
+}
+
+/* Sparkline: one line at constant weight, no axes, no grid. The scale row under
+   it carries the two labels a reader needs — where the window starts and ends. */
+.spark {
+  width: 100%;
+  height: 40px;
+}
+
+.spark-floor {
+  stroke: var(--outline);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.spark-line {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.spark-row {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+}
+
+.spark-head,
+.scale {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.spark-head strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* A long identifier keeps its tail: the head is allowed to shrink and ellipsise,
+   the tail never does. Pure layout, so it re-cuts itself as the column resizes. */
+.ellipsis {
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ellipsis-head {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.ellipsis-tail {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* Timestamp: the day and the clock each stay whole, and a narrow column breaks
+   between them rather than inside either. */
+.timestamp {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+}
+
+.timestamp > span {
+  white-space: nowrap;
+}
+
 /* Filter bar */
 .filter-bar {
   display: flex;
@@ -1475,6 +1852,30 @@ button.chip[aria-pressed="true"] {
   flex: 1;
 }
 
+/* A search box reads as one field, so the bar gives it room and keeps the
+   count beside it rather than under it. */
+.filter-search {
+  flex: 1 1 220px;
+  max-width: 420px;
+}
+
+.filter-summary {
+  white-space: nowrap;
+}
+
+/* Inside a sheet the content is spaced already: the field alone, no bar. */
+.filter-bar-plain {
+  padding: 0;
+  border-bottom: 0;
+}
+
+/* In a narrow sheet the field keeps its own line, so the count and Clear stay
+   together on the next one instead of the field squeezing them apart. */
+.filter-bar-plain .filter-search {
+  flex: 1 0 100%;
+  max-width: none;
+}
+
 /* Touch targets: phones and narrow webviews first, then any coarse pointer */
 @media (max-width: 959px) {
   .icon-btn-small {
@@ -1482,8 +1883,17 @@ button.chip[aria-pressed="true"] {
     height: 40px;
   }
 
+  .details .value-row .icon-btn-small {
+    margin-block: -10px;
+  }
+
   .btn-small {
     min-height: 40px;
+  }
+
+  button.chip {
+    height: 36px;
+    padding: 0 14px;
   }
 }
 

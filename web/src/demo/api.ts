@@ -1,4 +1,5 @@
 import type { AuthState, SpawnpointApi } from "../api/contract";
+import type { MetricRange } from "../api/contract";
 import { demoSession } from "./data";
 import { clearDemoFlag, demoLatency } from "./flag";
 import * as store from "./store";
@@ -88,6 +89,11 @@ export const demoApi: SpawnpointApi = {
   async loadBackups(gameId: string, worldId: string) {
     await demoLatency();
     return store.backups(gameId, worldId);
+  },
+
+  async loadHostMetrics(instanceId: string, range: MetricRange) {
+    await demoLatency();
+    return store.hostMetrics(instanceId, range);
   },
 
   async loadInvitationRecipients() {

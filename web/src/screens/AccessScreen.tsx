@@ -1,20 +1,23 @@
 import { useEffect, useState } from "react";
 
+import type { ApiFailureKind } from "../api/contract";
+import { failureKind } from "../api/contract";
 import { AccessCandidate, approveAccessCandidate, dismissAccessCandidate, loadAccessCandidates, loadAccessIdentities, loadAccessRoles, loadSubscriptions, SubscriptionState, updateIdentityRole, updateSubscriptions } from "../auth";
 import { Avatar } from "../components/Avatar";
-import { LinkedAccounts, providerLabel } from "../components/LinkedAccounts";
-import { Button } from "../components/ui/Button";
-import { Chip } from "../components/ui/Chip";
+import { LinkedAccounts } from "../components/LinkedAccounts";
+import { ActionRow, Button } from "../components/ui/Button";
 import { Column, DataTable } from "../components/ui/DataTable";
 import { Sheet } from "../components/ui/Dialog";
 import { InlineSelect, Switch } from "../components/ui/Fields";
+import { FilterBar, NoMatches, useFilter } from "../components/ui/Filter";
 import { SkeletonRows } from "../components/ui/Skeleton";
 import { useSnackbar } from "../components/ui/Snackbar";
 import { Status } from "../components/ui/Status";
-import { Banner, Card, Details, EmptyState, PageHeader } from "../components/ui/Surfaces";
+import { Banner, Card, Details, EmptyState, Ghost, NotConnected } from "../components/ui/Surfaces";
 import { Tabs } from "../components/ui/Tabs";
 import { Icon } from "../icons";
-import { formatDateTime } from "../lib/format";
+import { formatDateTime, plural } from "../lib/format";
+import { describePermission } from "../lib/permissions";
 import type { AccessTab, Game, LinkKind, Member, OwnerBootstrap, Role } from "../model";
 
 const linkKinds: readonly LinkKind[] = ["telegram", "discord", "minecraft", "factorio", "steam", "zerotier"];
@@ -31,6 +34,7 @@ export function AccessScreen({ bootstrap, games, members, roles, tab, onMembersC
 }) {
   const [roleState, setRoleState] = useState<"loading" | "ready" | "error">("loading");
   const [roleError, setRoleError] = useState("");
+  const [roleKind, setRoleKind] = useState<ApiFailureKind>("failed");
 
   async function loadRoles() {
     setRoleState("loading");
@@ -40,6 +44,7 @@ export function AccessScreen({ bootstrap, games, members, roles, tab, onMembersC
       setRoleState("ready");
     } catch (error) {
       setRoleError(error instanceof Error ? error.message : "Roles could not be loaded.");
+      setRoleKind(failureKind(error));
       setRoleState("error");
     }
   }
@@ -48,11 +53,11 @@ export function AccessScreen({ bootstrap, games, members, roles, tab, onMembersC
 
   return (
     <div className="page">
-      <PageHeader description="Who may open Spawnpoint, which role they hold, and which Telegram notifications reach you." title="Access" />
+      <h1 className="visually-hidden">Access</h1>
       <Tabs label="Access sections" onChange={onTabChange} options={[{ id: "users", label: "Users", icon: "group" }, { id: "roles", label: "Roles", icon: "admin_panel_settings", count: roles.length || undefined }, { id: "notifications", label: "My notifications", icon: "notifications" }]} value={tab} />
       <div aria-live="polite" role="tabpanel">
         {tab === "users" && <Users bootstrap={bootstrap} members={members} onChange={onMembersChange} roles={roles} rolesLoading={roleState === "loading"} />}
-        {tab === "roles" && <Roles error={roleError} onRetry={() => void loadRoles()} roles={roles} state={roleState} />}
+        {tab === "roles" && <Roles error={roleError} failure={roleKind} onRetry={() => void loadRoles()} roles={roles} state={roleState} />}
         {tab === "notifications" && <Notifications games={games} />}
       </div>
     </div>
@@ -130,12 +135,56 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
     }
   }
 
-  const columns: Column<Member>[] = [
-    { id: "user", label: "User", render: (member) => <span className="user-cell"><Avatar name={member.name} /><span><strong>{member.name}</strong><small className="mono">{member.id}</small></span></span> },
-    { id: "links", label: "Linked accounts", render: (member) => member.links.length > 0 ? <span className="chip-row">{member.links.map((link) => <Chip icon={link.verified ? "verified" : "pending"} key={link.id} tone="tonal">{providerLabel(link.kind)}</Chip>)}</span> : <span className="ghost">None</span> },
+  const candidateColumns: Column<AccessCandidate>[] = [
+    {
+      id: "user",
+      label: "User",
+      render: (candidate) => (
+        <span className="user-cell">
+          <Avatar name={candidate.displayName} photoUrl={candidate.photoUrl} />
+          <span>
+            <strong>{candidate.displayName}</strong>
+            <small>{candidate.username ? `@${candidate.username} · ` : ""}{candidate.status === "REQUESTED" ? "Requested access " : "Signed in "}{formatDateTime(candidate.status === "REQUESTED" ? candidate.requestedAt : candidate.lastSeenAt)}</small>
+          </span>
+        </span>
+      ),
+    },
     {
       id: "role",
       label: "Role",
+      align: "end",
+      width: "180px",
+      render: (candidate) => (
+        <InlineSelect aria-label={`Role for ${candidate.displayName}`} disabled={rolesLoading || roles.length === 0} onChange={(event) => setCandidateRoles((current) => ({ ...current, [candidate.platformUserId]: event.target.value }))} value={candidateRoles[candidate.platformUserId] ?? "viewer"}>
+          {roles.length === 0 && <option value="viewer">Loading roles…</option>}
+          {roles.filter((role) => role.id !== "owner").map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
+        </InlineSelect>
+      ),
+    },
+    {
+      id: "actions",
+      label: "Actions",
+      actions: true,
+      render: (candidate) => (
+        <ActionRow>
+          <Button disabled={working === candidate.platformUserId} onClick={() => void dismiss(candidate)} size="small" variant="outlined">Dismiss</Button>
+          <Button disabled={rolesLoading || roles.length === 0} loading={working === candidate.platformUserId} onClick={() => void approve(candidate)} size="small" variant="filled">Approve</Button>
+        </ActionRow>
+      ),
+    },
+  ];
+
+  const columns: Column<Member>[] = [
+    // The identity id is not shown. It is an internal handle, and a table is
+    // read to tell one person from another, which their name already does.
+    { id: "user", label: "User", render: (member) => <span className="user-cell"><Avatar name={member.name} /><strong>{member.name}</strong></span> },
+    {
+      id: "role",
+      label: "Role",
+      // Right-aligned against the actions beside it, so the control that changes
+      // a role sits next to the one that opens their accounts rather than
+      // stranded in the middle of the row.
+      align: "end",
       width: "180px",
       render: (member) => (
         <InlineSelect aria-label={`Role for ${member.name}`} disabled={rolesLoading || roles.length === 0 || working === member.id} onChange={(event) => void changeRole(member, event.target.value)} value={member.roleId}>
@@ -151,48 +200,40 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
     <div className="page">
       {state === "error" && <Banner description={error} title="Access requests could not be loaded" tone="error" />}
 
-      <Card
-        actions={<Chip tone={candidates.length > 0 ? "warning" : "tonal"}>{candidates.length} waiting</Chip>}
-        description="Signing in proves the Telegram account. Approval creates a Spawnpoint identity and assigns its first role."
-        flush
-        title="Access requests"
-      >
-        {state === "loading" && <SkeletonRows label="Loading access requests" rows={2} />}
-        {state === "ready" && candidates.length === 0 && <EmptyState description="A visitor appears here after signing in and asking for access." icon="person_add" title="Nobody is waiting for review" />}
-        {state === "ready" && candidates.map((candidate) => (
-          <div className="request-row" key={candidate.platformUserId}>
-            <Avatar name={candidate.displayName} photoUrl={candidate.photoUrl} size="large" className="avatar-request" />
-            <span>
-              <strong>{candidate.displayName}</strong>
-              <small>{candidate.username ? `@${candidate.username} · ` : ""}{candidate.status === "REQUESTED" ? `Requested access ${formatDateTime(candidate.requestedAt)}` : `Signed in ${formatDateTime(candidate.lastSeenAt)}`}</small>
-            </span>
-            <InlineSelect aria-label={`Role for ${candidate.displayName}`} disabled={rolesLoading || roles.length === 0} onChange={(event) => setCandidateRoles((current) => ({ ...current, [candidate.platformUserId]: event.target.value }))} value={candidateRoles[candidate.platformUserId] ?? "viewer"}>
-              {roles.length === 0 && <option value="viewer">Loading roles…</option>}
-              {roles.filter((role) => role.id !== "owner").map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
-            </InlineSelect>
-            <div className="btn-row">
-              <Button disabled={working === candidate.platformUserId} onClick={() => void dismiss(candidate)} variant="text">Dismiss</Button>
-              <Button disabled={rolesLoading || roles.length === 0} loading={working === candidate.platformUserId} onClick={() => void approve(candidate)} variant="filled">Approve</Button>
-            </div>
-          </div>
-        ))}
+      {/* The same shape as Identities, because it is the same thing: people and
+          what may be done about them. A second rhythm on one screen made two
+          lists of the same rows look like two different kinds of object. */}
+      <Card flush title="Access requests">
+        <DataTable
+          columns={candidateColumns}
+          hideHeader
+          empty={<EmptyState description="A visitor appears here after signing in and asking for access." icon="person_add" title="Nobody is waiting for review" />}
+          label="Access requests"
+          loading={state === "loading"}
+          loadingRows={2}
+          rowKey={(candidate) => candidate.platformUserId}
+          rows={candidates}
+        />
       </Card>
 
-      <Card description="Every identity holds one role. Direct grants, when present, add single permissions on top." flush title="Identities">
-        <DataTable columns={columns} label="Identities and roles" loading={state === "loading"} rowKey={(member) => member.id} rows={members} />
+      <Card flush title="Identities">
+        <DataTable columns={columns} hideHeader label="Identities and roles" loading={state === "loading"} rowKey={(member) => member.id} rows={members} />
       </Card>
 
       <Card
         actions={<Status kind={bootstrap.state === "claimed" ? "ok" : "warning"} label={bootstrap.state === "claimed" ? "Complete" : "Action required"} />}
-        description={bootstrap.state === "claimed" ? `${owner?.name ?? "The owner"} claimed the one-time setup with a verified Telegram account.` : `Sign in with the configured Telegram account (${bootstrap.telegramId}) to create the first Owner.`}
+        description={bootstrap.state === "claimed" ? undefined : `Sign in with the configured account (${bootstrap.telegramId}) to create the first Owner.`}
+        flush
         title="Initial owner"
       >
-        <Details items={[
+        <Details flush items={[
           { label: "Telegram ID", value: bootstrap.telegramId, mono: true },
           { label: "Role", value: "Owner" },
           ...(bootstrap.state === "claimed" ? [{ label: "Claimed", value: bootstrap.claimedAt }] : []),
         ]} label="Initial owner" />
-        <Button aria-expanded={showBootstrap} icon={showBootstrap ? "expand_less" : "expand_more"} onClick={() => setShowBootstrap((value) => !value)} size="small" variant="text">{showBootstrap ? "Hide setup steps" : "How the first Owner is set"}</Button>
+        <div className="card-actions">
+          <Button aria-expanded={showBootstrap} icon={showBootstrap ? "expand_less" : "expand_more"} onClick={() => setShowBootstrap((value) => !value)} size="small" variant="text">{showBootstrap ? "Hide setup steps" : "How the first Owner is set"}</Button>
+        </div>
         {showBootstrap && (
           <ol className="owner-steps">
             <li>Set the initial Owner Telegram ID in the deployment configuration.</li>
@@ -204,35 +245,86 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
       </Card>
 
       <Sheet description={managed ? `${managed.name} · ${roles.find((role) => role.id === managed.roleId)?.name ?? managed.roleId}` : undefined} onClose={() => setManaging(null)} open={managed !== undefined} title="Linked accounts">
-        {managed && <LinkedAccounts member={managed} />}
+        {managed && <LinkedAccounts bare member={managed} />}
       </Sheet>
     </div>
   );
 }
 
-function Roles({ roles, state, error, onRetry }: { roles: Role[]; state: "loading" | "ready" | "error"; error: string; onRetry: () => void }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
+function Roles({ roles, state, error, failure, onRetry }: { roles: Role[]; state: "loading" | "ready" | "error"; error: string; failure: ApiFailureKind; onRetry: () => void }) {
+  // Permissions open beside the table rather than inside it. Expanding a row
+  // pushed every row below it down, and the taller the directory the further
+  // the page jumped under the pointer that opened it.
+  const [reading, setReading] = useState<string | null>(null);
+  const role = roles.find((item) => item.id === reading);
+  const filter = useFilter(roles, (item) => [item.name, item.description]);
   const columns: Column<Role>[] = [
     { id: "role", label: "Role", width: "160px", render: (role) => <strong>{role.name}</strong> },
-    { id: "description", label: "Description", render: (role) => role.description },
+    { id: "description", label: "Description", width: "50%", render: (role) => role.description },
     {
       id: "permissions",
       label: "Permissions",
       render: (role) => (
-        <span>
-          <button aria-expanded={expanded === role.id} className="row-link" onClick={() => setExpanded(expanded === role.id ? null : role.id)} type="button">{role.permissions.length} permissions <Icon name={expanded === role.id ? "expand_less" : "expand_more"} size={16} /></button>
-          {expanded === role.id && <span className="chip-row" style={{ marginTop: 8 }}>{role.permissions.map((permission) => <Chip key={permission} tone="tonal"><code>{permission}</code></Chip>)}</span>}
-        </span>
+        <button className="row-link" onClick={() => setReading(role.id)} type="button">
+          {plural(role.permissions.length, "permission")}
+          <Icon name="chevron_right" size={16} />
+        </button>
       ),
     },
-    { id: "type", label: "Type", width: "120px", render: (role) => role.system ? <Chip tone="tonal">Built-in</Chip> : <Chip tone="primary">Custom</Chip> },
   ];
   return (
     <div className="page">
-      {state === "error" && <Banner actions={<Button onClick={onRetry} variant="text">Try again</Button>} description={error} title="Roles could not be loaded" tone="error" />}
-      <Card description="Roles are defined in the access directory. Assign them on the Users tab; there is no role editor in the panel." flush title="Roles and permissions">
-        <DataTable columns={columns} empty={<EmptyState description="The access directory returned no roles." icon="admin_panel_settings" title="No roles" />} label="Roles and permissions" loading={state === "loading"} rowKey={(role) => role.id} rows={roles} />
-      </Card>
+      {/* A directory that has no route yet is not a fault, and no retry reaches
+          it. Anything else keeps the banner and the retry it always had. */}
+      {state === "error" && failure === "unavailable" && <Card flush><NotConnected description="Roles and their permissions appear here once the access directory is reachable." title="The access directory is not connected yet" /></Card>}
+      {state === "error" && failure !== "unavailable" && <Banner actions={failure === "forbidden" ? undefined : <Button onClick={onRetry} variant="text">Try again</Button>} description={error} title={failure === "forbidden" ? "Your role cannot read this" : "Roles could not be loaded"} tone="error" />}
+      {state !== "error" && <Card flush>
+        <FilterBar disabled={state !== "ready"} filter={filter} label="Search roles" noun="roles" placeholder="Search by role or description" />
+        <DataTable
+          columns={columns}
+          empty={filter.active
+            ? <NoMatches filter={filter} icon="admin_panel_settings" noun="roles" />
+            : <EmptyState description="The access directory returned no roles." icon="admin_panel_settings" title="No roles" />}
+          label="Roles and permissions"
+          loading={state === "loading"}
+          rowKey={(role) => role.id}
+          rows={filter.rows}
+        />
+      </Card>}
+
+      <Sheet
+        description={role ? `${role.system ? "Built-in role" : "Custom role"} · ${plural(role.permissions.length, "permission")}` : undefined}
+        onClose={() => setReading(null)}
+        open={role !== undefined}
+        title={role?.name ?? "Role"}
+      >
+        {role && <RolePermissions key={role.id} role={role} />}
+      </Sheet>
+    </div>
+  );
+}
+
+// A long role is hard to read line by line, so it gets the same search the
+// directory has. Three permissions are quicker to scan than to search.
+const SEARCHABLE_PERMISSIONS = 3;
+
+function RolePermissions({ role }: { role: Role }) {
+  const permissions = [...role.permissions].sort((a, b) => a.localeCompare(b));
+  const filter = useFilter(permissions, (permission) => [permission, describePermission(permission)]);
+  return (
+    <div className="page">
+      <p className="secondary">{role.description}</p>
+      {permissions.length > SEARCHABLE_PERMISSIONS && <FilterBar filter={filter} label="Search permissions" noun="permissions" placeholder="Search by permission or description" plain />}
+      {filter.rows.length === 0
+        ? <NoMatches filter={filter} icon="admin_panel_settings" noun="permissions" />
+        : <dl className="details">
+          {filter.rows.map((permission) => (
+            <div className="details-row" key={permission}>
+              <dt><code>{permission}</code></dt>
+              <dd>{describePermission(permission) ?? <Ghost>No description recorded for this permission.</Ghost>}</dd>
+            </div>
+          ))}
+        </dl>}
     </div>
   );
 }
@@ -276,17 +368,17 @@ function Notifications({ games }: { games: readonly Game[] }) {
   const disabled = state === "loading" || state === "saving";
   const columns: Column<Game>[] = [
     { id: "game", label: "Game", render: (game) => <strong>{game.displayName}</strong> },
-    { id: "started", label: "Session started", width: "180px", render: (game) => <label className="switch"><input aria-label={`${game.displayName} started`} checked={Boolean(subscriptions[`${game.id}.started`])} disabled={disabled} onChange={() => void toggle(`${game.id}.started`)} type="checkbox" /><span aria-hidden="true" className="switch-track" /></label> },
-    { id: "stopped", label: "Session stopped", width: "180px", render: (game) => <label className="switch"><input aria-label={`${game.displayName} stopped`} checked={Boolean(subscriptions[`${game.id}.stopped`])} disabled={disabled} onChange={() => void toggle(`${game.id}.stopped`)} type="checkbox" /><span aria-hidden="true" className="switch-track" /></label> },
+    { id: "started", label: "Session started", align: "end", width: "150px", render: (game) => <label className="switch"><input aria-label={`${game.displayName} started`} checked={Boolean(subscriptions[`${game.id}.started`])} disabled={disabled} onChange={() => void toggle(`${game.id}.started`)} type="checkbox" /><span aria-hidden="true" className="switch-track" /></label> },
+    { id: "stopped", label: "Session stopped", align: "end", width: "150px", render: (game) => <label className="switch"><input aria-label={`${game.displayName} stopped`} checked={Boolean(subscriptions[`${game.id}.stopped`])} disabled={disabled} onChange={() => void toggle(`${game.id}.stopped`)} type="checkbox" /><span aria-hidden="true" className="switch-track" /></label> },
   ];
 
   return (
     <div className="page notification-groups">
       {state === "error" && <Banner actions={<Button onClick={() => void reload()} variant="text">Try again</Button>} description={error} title="Subscriptions are unavailable" tone="error" />}
-      <Card actions={<span aria-live="polite" className="secondary" role="status">{state === "saving" ? "Saving…" : state === "ready" ? "Saved to your identity" : ""}</span>} description="Choose event types independently for each game. Preferences are stored with your Spawnpoint identity." flush title="Server events">
+      <Card actions={<span aria-live="polite" className="secondary" role="status">{state === "saving" ? "Saving…" : state === "ready" ? "Saved to your identity" : ""}</span>} flush title="Server events">
         <DataTable columns={columns} label="Server event subscriptions" loading={state === "loading"} rowKey={(game) => game.id} rows={games} />
       </Card>
-      <Card description="Whether other players may notify you." title="Game invitations">
+      <Card title="Game invitations">
         {state === "loading" ? <SkeletonRows label="Loading invitation preferences" rows={2} /> : <>
           <Switch checked={Boolean(subscriptions["invitation.broadcast"])} disabled={disabled} label="Invitations sent to everyone" note="A player invited everyone to join a game" onChange={() => void toggle("invitation.broadcast")} />
           <Switch checked={Boolean(subscriptions["invitation.direct"])} disabled={disabled} label="Invitations sent directly to me" note="A player invited only selected people" onChange={() => void toggle("invitation.direct")} />

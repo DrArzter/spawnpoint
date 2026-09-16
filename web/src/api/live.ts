@@ -1,8 +1,9 @@
 import type { ControlPlaneSnapshot } from "../model";
 import type {
-  AccessCandidate, AccessIdentity, AccessRole, AuthState, BackupInventory, InvitationRecipient,
+  AccessCandidate, AccessIdentity, AccessRole, AuthState, BackupInventory, HostMetrics, InvitationRecipient, MetricRange,
   InvitationSummary, SessionOperation, SpawnpointApi, SpawnpointSession, SubscriptionState, WorldLifecycleAction,
 } from "./contract";
+import { apiFailure } from "./contract";
 
 const LEGACY_TOKEN_KEY = "spawnpoint.auth.session";
 const apiUrl = (import.meta.env.VITE_ACCESS_API_URL ?? "").replace(/\/$/, "");
@@ -108,7 +109,10 @@ async function loadSession(token: string): Promise<SpawnpointSession> {
     credentials: "include",
   });
   if (!response.ok) throw new Error("Your Spawnpoint session expired.");
-  return response.json() as Promise<SpawnpointSession>;
+  const parsed = await response.json() as SpawnpointSession & { capabilities?: readonly string[] };
+  // An API that does not answer with capabilities is one that predates them, so
+  // it advertises none and every gated screen reads as not connected yet.
+  return parsed.state === "active" ? { ...parsed, capabilities: parsed.capabilities ?? [] } : parsed;
 }
 
 async function requestRefresh(): Promise<string | null> {
@@ -234,12 +238,12 @@ export const liveApi: SpawnpointApi = {
 
   async requestAccess(): Promise<void> {
     const response = await authorizedFetch("/access/request", { method: "POST" });
-    if (!response.ok) throw new Error("The access request could not be sent.");
+    if (!response.ok) throw await apiFailure(response, "The access request could not be sent.");
   },
 
   async loadAccessCandidates(): Promise<AccessCandidate[]> {
     const response = await authorizedFetch("/access/candidates");
-    if (!response.ok) throw new Error("Access requests could not be loaded.");
+    if (!response.ok) throw await apiFailure(response, "Access requests could not be loaded.");
     const body = await response.json() as { candidates: AccessCandidate[] };
     return body.candidates;
   },
@@ -250,26 +254,26 @@ export const liveApi: SpawnpointApi = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ roleId }),
     });
-    if (!response.ok) throw new Error("This Telegram account could not be approved.");
+    if (!response.ok) throw await apiFailure(response, "This Telegram account could not be approved.");
     const body = await response.json() as { identity: { id: string; displayName: string; roleId: string } };
     return body.identity;
   },
 
   async dismissAccessCandidate(telegramId: string): Promise<void> {
     const response = await authorizedFetch(`/access/candidates/${telegramId}/dismiss`, { method: "POST" });
-    if (!response.ok) throw new Error("This Telegram account could not be dismissed.");
+    if (!response.ok) throw await apiFailure(response, "This Telegram account could not be dismissed.");
   },
 
   async loadAccessIdentities(): Promise<AccessIdentity[]> {
     const response = await authorizedFetch("/access/identities");
-    if (!response.ok) throw new Error("Users could not be loaded.");
+    if (!response.ok) throw await apiFailure(response, "Users could not be loaded.");
     const body = await response.json() as { identities: AccessIdentity[] };
     return body.identities;
   },
 
   async loadAccessRoles(): Promise<AccessRole[]> {
     const response = await authorizedFetch("/access/roles");
-    if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot view access roles." : "Roles could not be loaded.");
+    if (!response.ok) throw await apiFailure(response, response.status === 403 ? "Your role cannot view access roles." : "Roles could not be loaded.");
     const body = await response.json() as { roles: AccessRole[] };
     return body.roles;
   },
@@ -280,12 +284,12 @@ export const liveApi: SpawnpointApi = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ roleId }),
     });
-    if (!response.ok) throw new Error(response.status === 409 ? "You cannot change your own Owner role." : "The role could not be changed.");
+    if (!response.ok) throw await apiFailure(response, response.status === 409 ? "You cannot change your own Owner role." : "The role could not be changed.");
   },
 
   async loadControlPlane(): Promise<ControlPlaneSnapshot> {
     const response = await authorizedFetch("/control-plane");
-    if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot view server status." : "The control-plane state could not be loaded.");
+    if (!response.ok) throw await apiFailure(response, response.status === 403 ? "Your role cannot view server status." : "The control-plane state could not be loaded.");
     return response.json() as Promise<ControlPlaneSnapshot>;
   },
 
@@ -371,27 +375,35 @@ export const liveApi: SpawnpointApi = {
     return { release: body.release, url: body.url };
   },
 
+  async loadHostMetrics(instanceId: string, range: MetricRange): Promise<HostMetrics> {
+    const response = await authorizedFetch(`/hosts/${encodeURIComponent(instanceId)}/metrics?range=${range}`);
+    if (!response.ok) throw await apiFailure(response, response.status === 403 ? "Your role cannot read metrics." : "Host metrics could not be loaded.");
+    return await response.json() as HostMetrics;
+  },
+
   async loadBackups(gameId: string, worldId: string): Promise<BackupInventory> {
     const response = await authorizedFetch(
       `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/backups`,
     );
     const body = await response.json() as { error?: string } & Partial<BackupInventory>;
     if (!response.ok || body.entries === undefined) {
-      throw new Error(body.error === "forbidden" ? "Your role cannot read backups." : "The backup inventory is unavailable.");
+      // The body is already read here, so the classifier is handed it rather
+      // than reaching for a response that can only be consumed once.
+      throw await apiFailure(response, body.error === "forbidden" ? "Your role cannot read backups." : "The backup inventory is unavailable.", body);
     }
     return { entries: body.entries, unverified: body.unverified ?? 0, truncated: body.truncated ?? false };
   },
 
   async loadInvitationRecipients(): Promise<InvitationRecipient[]> {
     const response = await authorizedFetch("/invitations/recipients");
-    if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot invite players." : "Players could not be loaded.");
+    if (!response.ok) throw await apiFailure(response, response.status === 403 ? "Your role cannot invite players." : "Players could not be loaded.");
     const body = await response.json() as { recipients: InvitationRecipient[] };
     return body.recipients;
   },
 
   async loadInvitationHistory(gameId: string, worldId: string): Promise<InvitationSummary[]> {
     const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/invitations`);
-    if (!response.ok) throw new Error(response.status === 403 ? "Your role cannot view invitation history." : "Invitation history could not be loaded.");
+    if (!response.ok) throw await apiFailure(response, response.status === 403 ? "Your role cannot view invitation history." : "Invitation history could not be loaded.");
     const body = await response.json() as { invitations: InvitationSummary[] };
     return body.invitations;
   },
@@ -415,7 +427,7 @@ export const liveApi: SpawnpointApi = {
 
   async loadSubscriptions(): Promise<SubscriptionState> {
     const response = await authorizedFetch("/me/subscriptions");
-    if (!response.ok) throw new Error("Your notification subscriptions could not be loaded.");
+    if (!response.ok) throw await apiFailure(response, "Your notification subscriptions could not be loaded.");
     const body = await response.json() as { subscriptions: SubscriptionState };
     return body.subscriptions;
   },
@@ -426,7 +438,7 @@ export const liveApi: SpawnpointApi = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ subscriptions }),
     });
-    if (!response.ok) throw new Error("Your notification subscriptions could not be saved.");
+    if (!response.ok) throw await apiFailure(response, "Your notification subscriptions could not be saved.");
     const body = await response.json() as { subscriptions: SubscriptionState };
     return body.subscriptions;
   },

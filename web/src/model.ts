@@ -55,6 +55,8 @@ export type Lifecycle = {
   activeSessionId: string | null;
   activeWorldId: string | null;
   updatedAtEpochSeconds: number;
+  /** Present while a watchdog is registered for the session. */
+  idle: { playersOnline: number | null; consecutiveEmpty: number; lastObservedAtEpochSeconds: number | null } | null;
 };
 export type Game = { id: string; code: string; displayName: string; lifecycle: Lifecycle | null; presets: readonly Preset[]; worlds: readonly World[] };
 export type Host = {
@@ -69,6 +71,8 @@ export type Host = {
 };
 export type Operation = { id: string; type: "start" | "stop" | "promote" | "world"; status: "running"; startedAt: string; providerRef?: string };
 export type ControlPlaneSnapshot = { observedAt: string; games: readonly Game[]; hosts: readonly Host[]; operations: readonly Operation[] };
+
+export type WorldTab = "details" | "wipes" | "backups" | "releases";
 
 export type Role = { id: string; name: string; description: string; permissions: string[]; system?: boolean };
 export type LinkKind = "telegram" | "discord" | "minecraft" | "factorio" | "steam" | "zerotier";

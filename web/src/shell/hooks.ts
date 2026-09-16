@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AppRoute, ensureRoute, pushRoute, readRoute, replaceRoute } from "../routing";
 import { applyTheme, getThemePreference, persistThemePreference, resolveTheme, subscribeToSystemTheme, Theme, ThemePreference } from "../telegram";
@@ -68,4 +68,45 @@ export function useStoredState<T extends string>(key: string, initial: T): [T, (
     }
   }, [key]);
   return [value, update];
+}
+
+// Two guards on a loading card, from opposite sides. It waits before appearing,
+// so an answer that arrives in a blink shows nothing at all; once it has
+// appeared it stays long enough to be read, so it never flickers past. A card
+// that continues one already on screen skips the wait and only keeps the floor.
+export const BOOT_DELAY_MS = 200;
+export const BOOT_MINIMUM_MS = 450;
+
+export function useBootCard(continues = false): { visible: boolean; publish: (settle: () => void) => void } {
+  const [visible, setVisible] = useState(continues);
+  const shownAt = useRef<number | null>(continues ? Date.now() : null);
+  const timer = useRef<number | null>(null);
+  const live = useRef(true);
+
+  useEffect(() => {
+    live.current = true;
+    if (!continues) {
+      timer.current = window.setTimeout(() => {
+        shownAt.current = Date.now();
+        setVisible(true);
+      }, BOOT_DELAY_MS);
+    }
+    return () => {
+      live.current = false;
+      if (timer.current !== null) window.clearTimeout(timer.current);
+    };
+  }, [continues]);
+
+  const publish = useCallback((settle: () => void) => {
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+    const since = shownAt.current;
+    const remaining = since === null ? 0 : Math.max(0, BOOT_MINIMUM_MS - (Date.now() - since));
+    if (remaining === 0) settle();
+    else window.setTimeout(() => { if (live.current) settle(); }, remaining);
+  }, []);
+
+  return { visible, publish };
 }

@@ -8,7 +8,7 @@ import { SelectField, TextField } from "./components/ui/Fields";
 import { SnackbarProvider, useSnackbar } from "./components/ui/Snackbar";
 import { sessionStatus } from "./components/ui/Status";
 import { IconName } from "./icons";
-import { formatDateTime } from "./lib/format";
+import { formatDateTime, plural } from "./lib/format";
 import { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, World } from "./model";
 import { isLandingHash, isRootHash, routeHash } from "./routing";
 import { deriveSharedHostSession } from "./session";
@@ -23,12 +23,15 @@ import { WorldScreen } from "./screens/WorldScreen";
 import { WorldsScreen } from "./screens/WorldsScreen";
 import { Confirmation, Pending, SessionAction, WorldActionKind } from "./shell/actions";
 import { AppBar } from "./shell/AppBar";
-import { useMediaQuery, useRoute, useStoredState, useTheme } from "./shell/hooks";
+import { useBootCard, useMediaQuery, useRoute, useStoredState, useTheme } from "./shell/hooks";
 import { NavDrawer, NavItem } from "./shell/NavDrawer";
 import { ScopeDialog } from "./shell/ScopeDialog";
 import { initializeTelegram, ViewerProfile } from "./telegram";
 
-const navigation: readonly { id: Page; label: string; icon: IconName; permission: string }[] = [
+// A screen is offered when the role may use it and the deployment routes it.
+// `capability` is absent where a screen needs nothing from the API it does not
+// already get from the control-plane snapshot.
+const navigation: readonly { id: Page; label: string; icon: IconName; permission: string; capability?: string }[] = [
   { id: "worlds", label: "Worlds", icon: "public", permission: "status.read" },
   { id: "metrics", label: "Metrics", icon: "bar_chart", permission: "metrics.read" },
   { id: "console", label: "Console", icon: "terminal", permission: "console.use" },
@@ -39,11 +42,12 @@ const navigation: readonly { id: Page; label: string; icon: IconName; permission
 export function App() {
   const [auth, setAuth] = useState<AuthState>({ status: "loading" });
   const [atLanding, setAtLanding] = useState(() => isLandingHash());
+  const { visible: bootVisible, publish } = useBootCard();
 
   useEffect(() => {
     let active = true;
     restoreAuth()
-      .then((state) => {
+      .then((state) => publish(() => {
         if (!active) return;
         setAuth(state);
         // Arriving at the bare root with a session already in hand means the
@@ -54,8 +58,11 @@ export function App() {
           window.history.replaceState(null, "", "#/worlds");
           setAtLanding(false);
         }
-      })
-      .catch((error: unknown) => { if (active) setAuth({ status: "error", message: error instanceof Error ? error.message : "Sign-in failed." }); });
+      }))
+      .catch((error: unknown) => publish(() => {
+        if (!active) return;
+        setAuth({ status: "error", message: error instanceof Error ? error.message : "Sign-in failed." });
+      }));
     return () => { active = false; };
   }, []);
 
@@ -71,11 +78,16 @@ export function App() {
     if (state.status === "authenticated" && state.session.state === "active" && isLandingHash()) window.location.hash = "#/worlds";
   }, []);
 
+  // The session is settled before anything else is drawn. Deciding later is what
+  // made the front door appear first and then rearrange itself: a sign-in button
+  // arriving from nowhere, or a jump into the console a beat after landing.
+  if (auth.status === "loading") {
+    return bootVisible ? <BootScreen description="Confirming who you are with the access API." title="Checking your session" /> : null;
+  }
   if (atLanding) return <LandingScreen auth={auth} onChange={handleAuth} />;
-  if (auth.status === "loading") return <BootScreen description="Verifying your Telegram sign-in with the access API." title="Checking your session" />;
   if (auth.status !== "authenticated") return <LandingScreen auth={auth} onChange={handleAuth} />;
   if (auth.session.state !== "active") return <AuthScreen auth={auth} onChange={handleAuth} />;
-  return <SnackbarProvider><ConsoleShell session={auth.session} /></SnackbarProvider>;
+  return <SnackbarProvider><ConsoleShell continuesBootCard={bootVisible} session={auth.session} /></SnackbarProvider>;
 }
 
 type ControlPlaneState =
@@ -83,7 +95,7 @@ type ControlPlaneState =
   | { status: "ready"; snapshot: ControlPlaneSnapshot; error: "" }
   | { status: "error"; snapshot: ControlPlaneSnapshot | null; error: string };
 
-function ConsoleShell({ session }: { session: ActiveSession }) {
+function ConsoleShell({ session, continuesBootCard }: { session: ActiveSession; continuesBootCard: boolean }) {
   const notify = useSnackbar();
   const [route, navigate] = useRoute();
   const { theme, cycle: cycleTheme, label: themeLabel } = useTheme();
@@ -92,12 +104,13 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
   // The drawer collapses to an icon rail on narrow desktops until the person
   // chooses; a stored choice wins on every width above the phone breakpoint.
   const [railChoice, setRailChoice] = useStoredState<"true" | "false" | "auto">("spawnpoint.rail", "auto");
-  const narrowDesktop = useMediaQuery("(min-width: 960px) and (max-width: 1279px)");
+  const narrowDesktop = useMediaQuery("(min-width: 960px) and (max-width: 1199px)");
   const rail = railChoice === "auto" ? narrowDesktop : railChoice === "true";
   const [storedGame, setStoredGame] = useStoredState<string>("spawnpoint.scope", "");
   const [scopeOpen, setScopeOpen] = useState(false);
   const [controlPlane, setControlPlane] = useState<ControlPlaneState>({ status: "loading", snapshot: null, error: "" });
   const [booted, setBooted] = useState(false);
+  const { visible: shellBootVisible, publish: publishShell } = useBootCard(continuesBootCard);
   const [pending, setPending] = useState<Pending | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [invite, setInvite] = useState<{ game: Game; world: World } | null>(null);
@@ -111,7 +124,10 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
   const serverState = deriveServerState(game, snapshot);
   const sharedSession = deriveSharedHostSession(snapshot);
   const scoped = (page: Page) => routeHash({ page, accessTab: route.accessTab, gameId: game?.id ?? null, worldId: null });
-  const navItems: NavItem[] = navigation.filter((item) => granted.has(item.permission)).map((item) => ({ id: item.id, label: item.label, icon: item.icon, href: scoped(item.id) }));
+  const capabilities = useMemo(() => new Set(session.capabilities), [session]);
+  const navItems: NavItem[] = navigation
+    .filter((item) => granted.has(item.permission) && (item.capability === undefined || capabilities.has(item.capability)))
+    .map((item) => ({ id: item.id, label: item.label, icon: item.icon, href: scoped(item.id) }));
   const page: Page = route.page === "profile" || navItems.some((item) => item.id === route.page) ? route.page : "worlds";
 
   const [members, setMembers] = useState<Member[]>(() => [{
@@ -144,7 +160,7 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
     } catch (error) {
       setControlPlane((current) => ({ status: "error", snapshot: current.snapshot, error: error instanceof Error ? error.message : "The control-plane state could not be loaded." }));
     } finally {
-      setBooted(true);
+      publishShell(() => setBooted(true));
       if (!silent) setPending((current) => (current?.kind === "refresh" ? null : current));
     }
   }
@@ -167,6 +183,13 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
   }, [game?.id, route.page, route.gameId]);
 
   useEffect(() => { setDrawerOpen(false); }, [route.page, route.worldId, route.gameId, mobile]);
+  // Escape closes what overlays the page, the drawer included.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setDrawerOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawerOpen]);
 
   function selectGame(gameId: string) {
     setScopeOpen(false);
@@ -188,7 +211,7 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
     setPending({ kind: "session", worldId: targetWorld.id, action });
     try {
       const result = await requestSessionOperation(target.id, targetWorld.id, action);
-      notify({ tone: "success", message: result.result === "already_stopped" ? "The host is already stopped." : `${action === "start" ? "Start" : "Stop"} of ${targetWorld.displayName} accepted${result.operationId ? ` · ${result.operationId}` : ""}.` });
+      notify({ tone: "success", message: result.result === "already_stopped" ? "The host is already stopped." : `${action === "start" ? "Start" : "Stop"} of ${targetWorld.displayName} accepted. It appears in Operations while it runs.` });
       await refresh(true);
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : `The ${action} request failed.` });
@@ -201,7 +224,7 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
     setPending({ kind: "lifecycle", worldId: targetWorld.id, action });
     try {
       const result = await requestWorldLifecycle(target.id, targetWorld.id, action === "wipe" ? "regenerate" : action, backupKey, release);
-      notify({ tone: "success", message: `${lifecycleLabel(action)} of ${targetWorld.displayName} accepted · ${result.operationId}.` });
+      notify({ tone: "success", message: `${lifecycleLabel(action)} of ${targetWorld.displayName} accepted. It appears in Operations while it runs.` });
       await refresh(true);
       if (action === "purge") navigate({ page: "worlds", gameId: target.id, worldId: null });
     } catch (error) {
@@ -240,13 +263,13 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
       await refresh(true);
       navigate({ page: "worlds", gameId: target.id, worldId: created.id });
     } catch (error) {
-      notify({ tone: "error", message: error instanceof Error ? error.message : "The save could not be created." });
+      notify({ tone: "error", message: error instanceof Error ? error.message : "The world could not be created." });
     } finally {
       setPending(null);
     }
   }
 
-  if (!booted) return <BootScreen description="Reading games, worlds and the current AWS state." title="Preparing the console" />;
+  if (!booted) return shellBootVisible ? <BootScreen description="Reading games, worlds and the current AWS state." title="Preparing the console" /> : null;
 
   const listStatus = controlPlane.status === "loading" && controlPlane.snapshot === null ? "loading" : controlPlane.status === "error" ? "error" : "ready";
 
@@ -272,13 +295,15 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
           items={[...navItems, { id: "profile", label: "Profile", icon: "person", href: "#/profile" }]}
           onNavigate={() => setDrawerOpen(false)}
         />
-        <div aria-hidden="true" className="drawer-scrim" onClick={() => setDrawerOpen(false)} />
+        {/* Pointer-down, not click: a tap that moves a hair produces no click at
+            all, so the drawer ignored half the taps meant to dismiss it. */}
+        <div aria-hidden="true" className="drawer-scrim" onPointerDown={() => setDrawerOpen(false)} />
         <main className="main" id="main">
-          {page === "worlds" && game && world && <WorldScreen game={game} granted={granted} onDownloadPack={(target, targetWorld) => void downloadPack(target, targetWorld)} onInvite={(target, targetWorld) => setInvite({ game: target, world: targetWorld })} onRefresh={() => void refresh()} onSessionAction={requestSession} onWorldAction={requestWorldAction} pending={pending} serverState={serverState} sharedSession={sharedSession} snapshot={snapshot} world={world} />}
-          {page === "worlds" && !(game && world) && <WorldsScreen error={controlPlane.error} game={game} granted={granted} onCreateSave={(target) => setCreating({ game: target, preset: target.presets.find((preset) => preset.buildStatus === "ready") ?? null })} onDownloadPack={(target, targetWorld) => void downloadPack(target, targetWorld)} onInvite={(target, targetWorld) => setInvite({ game: target, world: targetWorld })} onRefresh={() => void refresh()} onSessionAction={requestSession} onWorldAction={requestWorldAction} pending={pending} serverState={serverState} sharedSession={sharedSession} snapshot={snapshot} status={listStatus} />}
-          {page === "metrics" && <MetricsScreen game={game} serverState={serverState} />}
+          {page === "worlds" && game && world && <WorldScreen game={game} granted={granted} onTabChange={(worldTab) => navigate({ worldTab })} onDownloadPack={(target, targetWorld) => void downloadPack(target, targetWorld)} onInvite={(target, targetWorld) => setInvite({ game: target, world: targetWorld })} onRefresh={() => void refresh()} onSessionAction={requestSession} onWorldAction={requestWorldAction} pending={pending} serverState={serverState} sharedSession={sharedSession} snapshot={snapshot} tab={route.worldTab} world={world} />}
+          {page === "worlds" && !(game && world) && <WorldsScreen error={controlPlane.error} game={game} granted={granted} onCreateWorld={(target) => setCreating({ game: target, preset: target.presets.find((preset) => preset.buildStatus === "ready") ?? null })} onDownloadPack={(target, targetWorld) => void downloadPack(target, targetWorld)} onInvite={(target, targetWorld) => setInvite({ game: target, world: targetWorld })} onRefresh={() => void refresh()} onWorldAction={requestWorldAction} pending={pending} serverState={serverState} sharedSession={sharedSession} snapshot={snapshot} status={listStatus} />}
+          {page === "metrics" && <MetricsScreen game={game} serverState={serverState} snapshot={snapshot} />}
           {page === "console" && <ConsoleScreen game={game} serverState={serverState} />}
-          {page === "releases" && <ReleasesScreen game={game} granted={granted} loading={listStatus === "loading"} onCreateSave={(target, preset) => setCreating({ game: target, preset })} pending={pending} />}
+          {page === "releases" && <ReleasesScreen game={game} granted={granted} loading={listStatus === "loading"} onCreateWorld={(target, preset) => setCreating({ game: target, preset })} pending={pending} />}
           {page === "access" && <AccessScreen bootstrap={bootstrap} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate({ page: "access", accessTab: tab })} roles={roles} tab={route.accessTab} />}
           {page === "profile" && <ProfileScreen member={currentMember} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
         </main>
@@ -286,7 +311,7 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
 
       <ScopeDialog currentId={game?.id ?? null} games={games} onClose={() => setScopeOpen(false)} onSelect={selectGame} open={scopeOpen} statusOf={(item) => sessionStatus(deriveServerState(item, snapshot))} />
       {invite && <InvitationSheet game={invite.game} onClose={() => setInvite(null)} open world={invite.world} />}
-      {creating && <CreateSaveSheet busy={pending?.kind === "create"} game={creating.game} initialPreset={creating.preset} onClose={() => setCreating(null)} onCreate={(preset, name, release) => void createWorld(creating.game, preset, name, release)} />}
+      {creating && <CreateWorldSheet busy={pending?.kind === "create"} game={creating.game} initialPreset={creating.preset} onClose={() => setCreating(null)} onCreate={(preset, name, release) => void createWorld(creating.game, preset, name, release)} />}
       <ConfirmationDialog
         confirmation={confirmation}
         onClose={() => setConfirmation(null)}
@@ -362,7 +387,7 @@ function ConfirmationDialog({ confirmation, onClose, onConfirm }: { confirmation
   );
 }
 
-function CreateSaveSheet({ game, initialPreset, busy, onClose, onCreate }: { game: Game; initialPreset: Preset | null; busy: boolean; onClose: () => void; onCreate: (preset: Preset, name: string, release: string) => void }) {
+function CreateWorldSheet({ game, initialPreset, busy, onClose, onCreate }: { game: Game; initialPreset: Preset | null; busy: boolean; onClose: () => void; onCreate: (preset: Preset, name: string, release: string) => void }) {
   const readyPresets = game.presets.filter((preset) => preset.buildStatus === "ready");
   const [presetId, setPresetId] = useState(initialPreset?.id ?? readyPresets[0]?.id ?? "");
   const preset = game.presets.find((item) => item.id === presetId) ?? null;
@@ -373,14 +398,14 @@ function CreateSaveSheet({ game, initialPreset, busy, onClose, onCreate }: { gam
 
   return (
     <Sheet
-      description={`A new save opens wipe #1 from an immutable ${game.displayName} release.`}
+      description={`A new world opens wipe #1 from an immutable ${game.displayName} release.`}
       footer={<>
-        <p>{preset ? `${preset.displayName} · ${preset.releases.length} releases` : "Choose a preset"}</p>
-        <Button disabled={!valid} icon="add" loading={busy} onClick={() => { if (preset) onCreate(preset, name.trim(), release); }} variant="filled">Create save</Button>
+        <p>{preset ? `${preset.displayName} · ${plural(preset.releases.length, "release")}` : "Choose a preset"}</p>
+        <Button disabled={!valid} icon="add" loading={busy} onClick={() => { if (preset) onCreate(preset, name.trim(), release); }} variant="filled">Create world</Button>
       </>}
       onClose={onClose}
       open
-      title="Create save"
+      title="Create world"
     >
       <form className="page" onSubmit={(event) => { event.preventDefault(); if (preset && valid) onCreate(preset, name.trim(), release); }}>
         <SelectField hint={readyPresets.length === 0 ? "No preset of this game has a ready release." : undefined} label="Preset" onChange={(event) => setPresetId(event.target.value)} value={presetId}>

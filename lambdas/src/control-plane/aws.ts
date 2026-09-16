@@ -1,4 +1,5 @@
 import { DescribeInstancesCommand, EC2Client, type Instance } from "@aws-sdk/client-ec2";
+import { CloudWatchClient, GetMetricDataCommand } from "@aws-sdk/client-cloudwatch";
 import {
   GetObjectCommand,
   HeadObjectCommand,
@@ -25,7 +26,7 @@ import { parseDynamicProjection } from "./dynamic-projection.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildLifecycleStartInput, buildLifecycleStopInput, buildStopInput } from "../domain/telegram-bot.ts";
-import type { ControlPlaneSources, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
+import type { ControlPlaneSources, HostMetrics, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 
 type MachineType = OperationObservation["type"];
 type OperationMachine = Readonly<{ type: MachineType; arn: string }>;
@@ -56,6 +57,7 @@ function operationMachines(): readonly OperationMachine[] {
 
 const ec2 = new EC2Client({});
 const s3 = new S3Client({});
+const cloudwatch = new CloudWatchClient({});
 const sfn = new SFNClient({});
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -140,6 +142,70 @@ async function listPresets(): Promise<readonly PresetObservation[]> {
   return groups.flat();
 }
 
+// The manifest is the only record of what a release contains. It is small, it
+// is immutable once written, and it is read fresh: a cached answer here would
+// be a claim about bytes somebody may be about to install.
+async function readReleaseManifest(gameId: string, presetId: string, version: string): Promise<unknown | null> {
+  try {
+    const response = await s3.send(new GetObjectCommand({
+      Bucket: requiredEnv("RELEASE_BUCKET"),
+      Key: `releases/${gameId}/${presetId}/${version}/manifest.json`,
+    }));
+    const body = await response.Body?.transformToString();
+    return body ? JSON.parse(body) : null;
+  } catch (error) {
+    if (error instanceof NoSuchKey || (error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound"))) return null;
+    console.error("release_manifest_read_failed", { gameId, presetId, errorName: error instanceof Error ? error.name : "UnknownError" });
+    throw error;
+  }
+}
+
+// Basic EC2 monitoring publishes these free at five-minute grain, which is the
+// grain a reader of "was it busy last night" actually needs. A gap is kept as a
+// null rather than dropped: an instance that was stopped has no datapoints, and
+// that absence is the most informative thing on the chart.
+const HOST_SERIES = [
+  { id: "cpu", label: "CPU", unit: "percent", metric: "CPUUtilization", statistic: "Average" },
+  { id: "networkIn", label: "Network in", unit: "bytes", metric: "NetworkIn", statistic: "Sum" },
+  { id: "networkOut", label: "Network out", unit: "bytes", metric: "NetworkOut", statistic: "Sum" },
+] as const;
+
+async function readHostMetrics(instanceId: string, hours: number): Promise<HostMetrics> {
+  const end = new Date();
+  const start = new Date(end.getTime() - hours * 3_600_000);
+  const period = hours <= 6 ? 300 : hours <= 48 ? 900 : 3600;
+  const response = await cloudwatch.send(new GetMetricDataCommand({
+    StartTime: start,
+    EndTime: end,
+    ScanBy: "TimestampAscending",
+    MetricDataQueries: HOST_SERIES.map((series) => ({
+      Id: series.id,
+      MetricStat: {
+        Metric: { Namespace: "AWS/EC2", MetricName: series.metric, Dimensions: [{ Name: "InstanceId", Value: instanceId }] },
+        Period: period,
+        Stat: series.statistic,
+      },
+    })),
+  }));
+  const byId = new Map((response.MetricDataResults ?? []).map((result) => [result.Id, result]));
+  return {
+    startedAt: start.toISOString(),
+    endedAt: end.toISOString(),
+    periodSeconds: period,
+    series: HOST_SERIES.map((series) => {
+      const result = byId.get(series.id);
+      const timestamps = result?.Timestamps ?? [];
+      const values = result?.Values ?? [];
+      return {
+        id: series.id,
+        label: series.label,
+        unit: series.unit,
+        points: timestamps.map((at, index) => ({ at: at.toISOString(), value: values[index] ?? null })),
+      };
+    }),
+  };
+}
+
 async function listWorldRecords(): Promise<readonly WorldRecord[]> {
   return new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET")).list();
 }
@@ -169,6 +235,8 @@ export const awsControlPlaneSources: ControlPlaneSources = {
   readReleasePointer,
   listRunningOperations,
   listPresets,
+  readReleaseManifest,
+  readHostMetrics,
   listWorldRecords,
 };
 

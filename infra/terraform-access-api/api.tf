@@ -70,6 +70,14 @@ data "aws_iam_policy_document" "access_api" {
     }
   }
 
+  # GetMetricData takes no resource, so the grant is the action and nothing else.
+  # It reads what CloudWatch already publishes for free about the instance.
+  statement {
+    sid       = "ReadHostMetrics"
+    actions   = ["cloudwatch:GetMetricData"]
+    resources = ["*"]
+  }
+
   statement {
     sid     = "ReadWorldReleasePointersAndPacks"
     actions = ["s3:GetObject"]
@@ -210,6 +218,8 @@ locals {
     "GET /games/{gameId}/worlds/{worldId}/invitations",
     "GET /games/{gameId}/worlds/{worldId}/pack",
     "GET /games/{gameId}/worlds/{worldId}/backups",
+    "GET /hosts/{instanceId}/metrics",
+    "GET /games/{gameId}/presets/{presetId}/releases/{version}",
     "POST /games/{gameId}/presets/{presetId}/worlds",
     "POST /games/{gameId}/worlds/{worldId}/archive",
     "POST /games/{gameId}/worlds/{worldId}/wipe",

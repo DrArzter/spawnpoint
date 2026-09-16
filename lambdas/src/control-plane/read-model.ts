@@ -31,6 +31,10 @@ export type OperationObservation = Readonly<{
   providerRef: string;
 }>;
 
+export type HostMetricPoint = Readonly<{ at: string; value: number | null }>;
+export type HostMetricSeries = Readonly<{ id: string; label: string; unit: string; points: readonly HostMetricPoint[] }>;
+export type HostMetrics = Readonly<{ startedAt: string; endedAt: string; periodSeconds: number; series: readonly HostMetricSeries[] }>;
+
 export type ControlPlaneSources = Readonly<{
   readObservedAt?: () => Promise<Date | null>;
   listHosts: () => Promise<readonly HostObservation[]>;
@@ -38,6 +42,8 @@ export type ControlPlaneSources = Readonly<{
   readReleasePointer: (worldId: string, generationId: string | null) => Promise<ReleasePointerObservation>;
   listRunningOperations: () => Promise<readonly OperationObservation[]>;
   listPresets?: () => Promise<readonly PresetObservation[]>;
+  readReleaseManifest?: (gameId: string, presetId: string, version: string) => Promise<unknown | null>;
+  readHostMetrics?: (instanceId: string, hours: number) => Promise<HostMetrics>;
   listWorldRecords?: () => Promise<readonly WorldRecord[]>;
 }>;
 

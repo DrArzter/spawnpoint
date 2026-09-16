@@ -23,7 +23,7 @@ import { WorldScreen } from "./screens/WorldScreen";
 import { WorldsScreen } from "./screens/WorldsScreen";
 import { Confirmation, Pending, SessionAction, WorldActionKind } from "./shell/actions";
 import { AppBar } from "./shell/AppBar";
-import { useMediaQuery, useRoute, useStoredState, useTheme } from "./shell/hooks";
+import { useBootCard, useMediaQuery, useRoute, useStoredState, useTheme } from "./shell/hooks";
 import { NavDrawer, NavItem } from "./shell/NavDrawer";
 import { ScopeDialog } from "./shell/ScopeDialog";
 import { initializeTelegram, ViewerProfile } from "./telegram";
@@ -39,15 +39,12 @@ const navigation: readonly { id: Page; label: string; icon: IconName; permission
 export function App() {
   const [auth, setAuth] = useState<AuthState>({ status: "loading" });
   const [atLanding, setAtLanding] = useState(() => isLandingHash());
-  // A session that resolves in a blink should not flash a card that says it is
-  // being checked. Nothing renders for a moment; the card appears only if the
-  // answer is actually taking time.
-  const [bootVisible, setBootVisible] = useState(false);
+  const { visible: bootVisible, publish } = useBootCard();
 
   useEffect(() => {
     let active = true;
     restoreAuth()
-      .then((state) => {
+      .then((state) => publish(() => {
         if (!active) return;
         setAuth(state);
         // Arriving at the bare root with a session already in hand means the
@@ -58,14 +55,12 @@ export function App() {
           window.history.replaceState(null, "", "#/worlds");
           setAtLanding(false);
         }
-      })
-      .catch((error: unknown) => { if (active) setAuth({ status: "error", message: error instanceof Error ? error.message : "Sign-in failed." }); });
+      }))
+      .catch((error: unknown) => publish(() => {
+        if (!active) return;
+        setAuth({ status: "error", message: error instanceof Error ? error.message : "Sign-in failed." });
+      }));
     return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setBootVisible(true), 200);
-    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -89,7 +84,7 @@ export function App() {
   if (atLanding) return <LandingScreen auth={auth} onChange={handleAuth} />;
   if (auth.status !== "authenticated") return <LandingScreen auth={auth} onChange={handleAuth} />;
   if (auth.session.state !== "active") return <AuthScreen auth={auth} onChange={handleAuth} />;
-  return <SnackbarProvider><ConsoleShell session={auth.session} /></SnackbarProvider>;
+  return <SnackbarProvider><ConsoleShell continuesBootCard={bootVisible} session={auth.session} /></SnackbarProvider>;
 }
 
 type ControlPlaneState =
@@ -97,7 +92,7 @@ type ControlPlaneState =
   | { status: "ready"; snapshot: ControlPlaneSnapshot; error: "" }
   | { status: "error"; snapshot: ControlPlaneSnapshot | null; error: string };
 
-function ConsoleShell({ session }: { session: ActiveSession }) {
+function ConsoleShell({ session, continuesBootCard }: { session: ActiveSession; continuesBootCard: boolean }) {
   const notify = useSnackbar();
   const [route, navigate] = useRoute();
   const { theme, cycle: cycleTheme, label: themeLabel } = useTheme();
@@ -112,6 +107,7 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
   const [scopeOpen, setScopeOpen] = useState(false);
   const [controlPlane, setControlPlane] = useState<ControlPlaneState>({ status: "loading", snapshot: null, error: "" });
   const [booted, setBooted] = useState(false);
+  const { visible: shellBootVisible, publish: publishShell } = useBootCard(continuesBootCard);
   const [pending, setPending] = useState<Pending | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [invite, setInvite] = useState<{ game: Game; world: World } | null>(null);
@@ -158,7 +154,7 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
     } catch (error) {
       setControlPlane((current) => ({ status: "error", snapshot: current.snapshot, error: error instanceof Error ? error.message : "The control-plane state could not be loaded." }));
     } finally {
-      setBooted(true);
+      publishShell(() => setBooted(true));
       if (!silent) setPending((current) => (current?.kind === "refresh" ? null : current));
     }
   }
@@ -260,7 +256,7 @@ function ConsoleShell({ session }: { session: ActiveSession }) {
     }
   }
 
-  if (!booted) return <BootScreen description="Reading games, worlds and the current AWS state." title="Preparing the console" />;
+  if (!booted) return shellBootVisible ? <BootScreen description="Reading games, worlds and the current AWS state." title="Preparing the console" /> : null;
 
   const listStatus = controlPlane.status === "loading" && controlPlane.snapshot === null ? "loading" : controlPlane.status === "error" ? "error" : "ready";
 

@@ -18,8 +18,11 @@ export function Tabs<T extends string>({ label, options, value, onChange }: {
     event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("[role=tab]")[next]?.focus();
   }
 
+  // Scrolls sideways on a narrow screen by design — Material's own tab
+  // behaviour, where the half-visible next tab is the affordance. The marker
+  // tells the audit this scroller is deliberate.
   return (
-    <div aria-label={label} className="tabs" role="tablist">
+    <div aria-label={label} className="tabs" data-scroll="expected" role="tablist">
       {options.map((option, index) => (
         <button
           aria-selected={value === option.id}

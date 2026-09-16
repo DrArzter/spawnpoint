@@ -229,6 +229,24 @@ Tables run a 48px row rhythm with hairline rules between rows. Below 600px, each
 
 Touch targets grow twice: under 959px `.icon-btn-small` and `.btn-small` gain height; under any coarse pointer (`@media (pointer: coarse)`), buttons, icon buttons, inline selects, tabs and menu items step up to a 44px minimum (fields to 44px with 16px font, to avoid iOS zoom).
 
+### Breakpoints
+Four steps, and no others. Every one-off breakpoint invented for a single component is invisible to the next person,
+who then invents a fifth — which is how this panel ended up with 599, 719, 959, 1099 and 1279 in play at once.
+
+| Step | Range | What changes |
+| --- | --- | --- |
+| **Compact** | `max-width: 599px` | Tables become stacked cards, actions take the full width and divide it evenly, dialogs dock to the bottom edge |
+| **Medium** | `max-width: 839px` | Rows with a control and a decision on them stack: the access request, anything laid out as label-control-action |
+| **Shell** | `max-width: 959px` | The navigation drawer stops holding a column and overlays with a scrim; touch targets grow; type in fields reaches 16px so iOS stops zooming |
+| **Large** | `max-width: 1199px` | Columns that are worth reading but never worth the actions column scrolling away are dropped; the drawer defaults to its rail |
+
+The shell step is 959 rather than 839 because it is where the drawer's column stops paying for itself, and it is
+matched in JavaScript — `useMediaQuery("(max-width: 959px)")` — so the layout and the behaviour cannot disagree. Any
+media query in the stylesheets must use one of these four numbers.
+
+**The audit probes both sides of every step** (`web/tools/ui-audit`), because a rule that fires one pixel early is
+invisible to a list of round numbers.
+
 ## Elevation & Depth
 
 Surfaces are flat at rest: cards, tables and the app bar carry a hairline border, never a shadow. Depth is reserved for transient top-layer chrome only — the popover menu, the native `<dialog>`, the right-docked sheet and the snackbar each carry one of two shadow tokens. Buttons and switches use a small `shadow-1` only on hover/thumb, never at rest.
@@ -292,11 +310,50 @@ Fixed bottom-left host (bottom-full-width on phones), dark-on-light-theme invert
 ### Terminal (signature component)
 A committed terminal grammar on the world Console tab: dark surface regardless of theme (`--term-bg`/`--term-ink`), header bar with an online/offline status dot, monospace output with muted/amber/blue line roles, a blinking block cursor, and an input row with quick-command chips. This is the one place the console departs from the light Material surface, by design, to read as a real shell.
 
+### A header earns its place
+A column heading is worth a line when the column would otherwise be ambiguous — `Status`, `Wipe`, `Stored`, `Size`.
+It is noise above a column that says what it is: a person with an avatar, a select already showing `Owner`, a pair of
+buttons. Those tables pass `hideHeader`, which keeps the row in the markup for anybody reading the table aloud and
+stops it taking a line on screen.
+
+The same test applies to a card's description. If it restates the columns beneath it, delete it; keep it only for a
+fact that appears nowhere else — that nothing here is overwritten, that a pack link expires in an hour, that these
+fields are read-only because an Owner manages them.
+
+### Three kinds of nothing
+A screen with nothing on it is saying one of three different things, and they must not look alike.
+
+| The reader sees | It means | How it is drawn |
+| --- | --- | --- |
+| **Empty** | The feature works. There is nothing to show yet. | `EmptyState`, with the icon of the thing that is missing — a backup, a world, a role — and a sentence about what would put something here |
+| **Waiting on a condition** | The feature works. Something has to happen first. | `EmptyState` with the same domain icon, plus the action that satisfies the condition where one exists |
+| **Not connected** | The feature does not exist in this deployment yet. | `NotConnected`, which draws the closed sign `do_not_disturb_on` and offers no retry, because nothing the reader does today will make it answer |
+
+An empty state wears **the icon of its own feature**, the same one the rail or the tab carries, so the screen still says
+where you are when it has nothing to say: `public` for worlds, `inventory` for presets and releases, `backup` for
+backups, `history` for wipes, `admin_panel_settings` for roles, `person_add` for access requests, `group` for players,
+`link` for linked accounts, `sync` for operations.
+
+Two icons are deliberately not the feature's, because they report something other than emptiness. `lock` says *your role
+may not*. `do_not_disturb_on` says *this is not open yet*. Reaching for the wrong one tells somebody to go and ask for a
+permission that would not help them — and giving a closed feature its own icon would blur it back into an empty one,
+which is the distinction this section exists to draw.
+
+`NotConnected` has two shapes, and the choice is about **how much is missing**, not about where it sits. The full
+state — big sign, heading, sentence — is for a whole page or feature that is absent: there is nothing else to look at.
+`inline` draws a strip, for a feature that works while one part of it does not: the links are all there and listed, only
+adding and removing them is unbuilt. Using the full state for a missing part writes "nothing here" over something that
+is plainly there.
+
+Which of the three applies is not a judgement made in the screen. `unavailable` from the transport means not connected;
+anything else that yields no rows is an empty state. See [ADR-0053](../docs/adr/0053-tell-not-built-apart-from-broken.md).
+
 ## Do's and Don'ts
 
 ### Do:
 - **Do** pair every status with a Material filled icon and a label (`ok`, `progress`, `off`, `unknown`, `ready`, `error`, `warning`, `info`, `archived`, `absent`, `pending`) — never colour alone.
 - **Do** draw unlit states (Archived, Not created, no address) as their own icon-and-label state, not an empty cell.
+- **Do** tell "nothing yet" apart from "not built yet": an empty state carries the icon of what is missing, a closed feature carries `do_not_disturb_on`.
 - **Do** keep the content pane unconstrained in width; it is a resource console, not a centred marketing column.
 - **Do** reserve shadow for menu, dialog, sheet and snackbar; every other surface stays flat with a hairline border.
 - **Do** use Google Sans Flex only for titles; Roboto for everything functional; Roboto Mono for anything precise or comparable.

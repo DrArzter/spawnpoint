@@ -72,27 +72,6 @@
   }
 }
 
-.world-name {
-  display: grid;
-  gap: 0;
-}
-
-.world-name small {
-  max-width: 100%;
-  overflow: hidden;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@container (max-width: 599px) {
-  .world-name small {
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-}
-
 /* World page */
 .world-actions {
   display: flex;
@@ -105,6 +84,19 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+/* Once the header wraps, its actions follow the rule every other action row
+   follows: take the width, divide it, and leave the icon button square. */
+@media (max-width: 599px) {
+  .world-actions,
+  .world-actions .action-group {
+    width: 100%;
+  }
+
+  .world-actions .action-group .btn {
+    flex: 1;
+  }
 }
 
 .world-tabs {
@@ -129,61 +121,34 @@
 }
 
 /* Releases */
+/* A link in a table row is still a target. 24px was the floor, which is not the
+   same as being comfortable; 40 where a finger is doing the pointing. */
 .preset-source {
-  display: grid;
-  gap: 0;
-}
-
-.preset-source a {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  gap: 6px;
+  min-height: 32px;
   font-weight: 500;
+  white-space: nowrap;
+}
+
+.preset-source .icon {
+  color: var(--ink-secondary);
+}
+
+@media (max-width: 959px) {
+  .preset-source {
+    min-height: 40px;
+  }
 }
 
 .release-list {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
 }
 
 /* Access */
-.request-row {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto auto;
-  gap: 16px;
-  align-items: center;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--outline);
-}
-
-.request-row:last-child {
-  border-bottom: 0;
-}
-
-.request-row strong {
-  display: block;
-  font-weight: 500;
-}
-
-.request-row small {
-  display: block;
-  color: var(--ink-secondary);
-  font-size: 12px;
-  line-height: 16px;
-}
-
-@media (max-width: 719px) {
-  .request-row {
-    grid-template-columns: 40px minmax(0, 1fr);
-  }
-
-  .request-row > .inline-select,
-  .request-row > .btn-row {
-    grid-column: 2;
-  }
-}
-
 .user-cell {
   display: flex;
   align-items: center;
@@ -242,6 +207,22 @@
   margin-left: auto;
 }
 
+.linked-group + .linked-group {
+  margin-top: 20px;
+}
+
+.linked-group h3 {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.linked-group p {
+  margin-bottom: 4px;
+  color: var(--ink-secondary);
+  font-size: 13px;
+  line-height: 18px;
+}
+
 .linked-list {
   display: grid;
 }
@@ -275,6 +256,14 @@
   font-weight: 500;
 }
 
+/* The handle sits beside the platform it belongs to, at the weight of an aside. */
+.linked-row .handle {
+  margin-left: 8px;
+  color: var(--ink-secondary);
+  font-size: 13px;
+  font-weight: 400;
+}
+
 .linked-row code {
   color: var(--ink-secondary);
 }
@@ -283,7 +272,7 @@
 .terminal {
   display: flex;
   flex-direction: column;
-  min-height: 480px;
+  min-height: 260px;
   overflow: hidden;
   border: 1px solid var(--term-outline);
   border-radius: var(--radius-card);
@@ -522,6 +511,26 @@
   gap: 8px;
 }
 
+/* The one sentence that replaced the desired/observed pair, with its raw words
+   a hover away. */
+.session-reason {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.session-reason .icon {
+  color: var(--outline-strong);
+}
+
+.session-reason-attention {
+  color: var(--warning-ink);
+}
+
+.session-reason-attention .icon {
+  color: currentcolor;
+}
+
 .recipients-summary {
   font-size: 13px;
 }
@@ -634,8 +643,21 @@
   flex-basis: 100%;
 }
 
-.avatar-request {
-  width: 40px;
-  height: 40px;
-  font-size: 14px;
+@media (max-width: 599px) {
+  .history-list li {
+    display: grid;
+    grid-template-areas: "status audience time" "detail detail detail";
+    grid-template-columns: auto auto 1fr;
+    column-gap: 8px;
+  }
+
+  .history-list li > .status { grid-area: status; }
+  .history-list li > span:nth-child(2) { grid-area: audience; }
+  .history-list .history-detail { grid-area: detail; }
+
+  .history-list li time {
+    grid-area: time;
+    margin-left: 0;
+    text-align: right;
+  }
 }

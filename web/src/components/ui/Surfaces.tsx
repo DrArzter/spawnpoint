@@ -2,8 +2,9 @@ import type { ReactNode } from "react";
 
 import { Icon, IconName } from "../../icons";
 import { cx } from "../../lib/cx";
-import { IconButton } from "./Button";
+import { ActionRow, IconButton } from "./Button";
 import { useSnackbar } from "./Snackbar";
+import { Tooltip } from "./Tooltip";
 
 export function Card({ children, className, title, description, actions, footer, flush = false, as = "section", labelledBy }: {
   children?: ReactNode;
@@ -25,7 +26,7 @@ export function Card({ children, className, title, description, actions, footer,
             {title && <h2 id={labelledBy}>{title}</h2>}
             {description && <p>{description}</p>}
           </div>
-          {actions && <div className="btn-row">{actions}</div>}
+          {actions && <ActionRow>{actions}</ActionRow>}
         </header>
       )}
       {children !== undefined && <div className={cx("card-body", flush && "card-body-flush")}>{children}</div>}
@@ -36,31 +37,45 @@ export function Card({ children, className, title, description, actions, footer,
 
 export type Crumb = { label: string; href: string };
 
-export function PageHeader({ title, description, status, actions, breadcrumb }: {
+export function PageHeader({ title, description, status, actions, overflow, breadcrumb }: {
   title: ReactNode;
   description?: ReactNode;
   status?: ReactNode;
   actions?: ReactNode;
+  /**
+   * The overflow menu, at the far right of the title row. It belongs with the
+   * name and the state rather than with the decision: when the row wraps, the
+   * action takes a line of its own and this stays where it was.
+   */
+  overflow?: ReactNode;
   breadcrumb?: readonly Crumb[];
 }) {
   return (
     <header className="page-header">
-      {breadcrumb && breadcrumb.length > 0 && (
-        <nav aria-label="Breadcrumb" className="breadcrumb">
-          {breadcrumb.map((crumb) => (
-            <a href={crumb.href} key={crumb.href}>
-              <Icon name="chevron_left" size={18} />
-              {crumb.label}
-            </a>
-          ))}
-        </nav>
-      )}
+      {/* Two groups, each unbreakable: who this is, and what can be done about
+          it. Four independent children wrapped one at a time and left orphans —
+          a lone menu on its own line, a state under the name. */}
       <div className="page-title-row">
         <div className="page-title">
+          {breadcrumb && breadcrumb.length > 0 && (
+            <nav aria-label="Breadcrumb" className="breadcrumb">
+              {breadcrumb.map((crumb) => (
+                <a href={crumb.href} key={crumb.href}>
+                  <Icon name="chevron_left" size={18} />
+                  <span className="crumb-label">{crumb.label}</span>
+                </a>
+              ))}
+            </nav>
+          )}
           <h1>{title}</h1>
           {status}
         </div>
-        {actions && <div className="btn-row">{actions}</div>}
+        {(actions || overflow) && (
+          <div className="page-controls">
+            {actions && <ActionRow>{actions}</ActionRow>}
+            {overflow}
+          </div>
+        )}
       </div>
       {description && <p className="page-description">{description}</p>}
     </header>
@@ -90,21 +105,45 @@ export function EmptyState({ icon, title, description, actions }: { icon: IconNa
       <span aria-hidden="true" className="empty-icon"><Icon name={icon} size={28} /></span>
       <strong>{title}</strong>
       {description && <p>{description}</p>}
-      {actions && <div className="btn-row">{actions}</div>}
+      {actions && <ActionRow>{actions}</ActionRow>}
     </div>
   );
 }
 
-export type DetailItem = { label: string; value: ReactNode; hint?: ReactNode; copy?: string; mono?: boolean };
+// `hint` carries a fact worth reading every time, such as a date. `explain`
+// carries what the row means, which is worth reading once: it hides behind the
+// label rather than adding a second line to every row.
+// What a screen shows when the API has no route for it yet. It is not an error
+// and offers no retry: nothing the reader can do will make it answer today.
+//
+// `inline` is the form for a screen that still has something to show — a strip
+// above the content. The full state is for a container that would otherwise be
+// empty, and putting it above content reads as "nothing here" over something.
+export function NotConnected({ title, description, inline = false }: { title: ReactNode; description: ReactNode; inline?: boolean }) {
+  if (inline) return <Banner description={description} title={title} tone="info" />;
+  // Not the three dots: they read as something in progress, which is the one
+  // thing that is not happening. A closed sign says it plainly — the door is
+  // shut, not that you may not pass, which is what `lock` says elsewhere.
+  return <EmptyState description={description} icon="do_not_disturb_on" title={title} />;
+}
+
+export type DetailItem = { label: string; value: ReactNode; hint?: ReactNode; explain?: string; copy?: string; mono?: boolean };
 
 // Label and value at constant scale, a hairline between rows: the detail
 // list every resource page is read from.
-export function Details({ items, label }: { items: readonly DetailItem[]; label?: string }) {
+// `flush` makes a detail list keep the rhythm of a table in the same card: the
+// same left edge, the same row height. Without it a page of tables and one list
+// reads as two grids that nearly line up, which is worse than two that plainly
+// do not.
+export function Details({ items, label, flush = false }: { items: readonly DetailItem[]; label?: string; flush?: boolean }) {
   return (
-    <dl aria-label={label} className="details">
+    <dl aria-label={label} className={cx("details", flush && "details-flush")}>
       {items.map((item) => (
         <div className="details-row" key={item.label}>
-          <dt>{item.label}</dt>
+          <dt>
+            {item.label}
+            {item.explain && <Tooltip className="explain-mark" text={item.explain}><Icon name="help" size={14} /></Tooltip>}
+          </dt>
           <dd>
             <span className="value-row">
               {item.mono && typeof item.value === "string" ? <code>{item.value}</code> : item.value}

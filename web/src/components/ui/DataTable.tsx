@@ -10,9 +10,15 @@ export type Column<Row> = {
   width?: string;
   align?: "start" | "end" | "num";
   actions?: boolean;
+  // Dropped where the table would otherwise push its actions off the screen.
+  // The column a reader came for must never be the one that scrolls away.
+  secondary?: boolean;
+  // Cut with an ellipsis rather than allowed to set the table's width. For a
+  // value that is copied rather than read, such as a file name.
+  truncate?: boolean;
 };
 
-export function DataTable<Row>({ columns, rows, rowKey, label, empty = "No items", loading = false, loadingRows = 3, selectedKey, className }: {
+export function DataTable<Row>({ columns, rows, rowKey, label, empty = "No items", loading = false, loadingRows = 3, selectedKey, className, hideHeader = false }: {
   columns: readonly Column<Row>[];
   rows: readonly Row[];
   rowKey: (row: Row) => string;
@@ -22,14 +28,20 @@ export function DataTable<Row>({ columns, rows, rowKey, label, empty = "No items
   loadingRows?: number;
   selectedKey?: string | null;
   className?: string;
+  /**
+   * For a table whose columns say what they are: a person, a labelled control,
+   * an action. The row stays in the markup so the table is still navigable by
+   * column for anybody reading it aloud — it just stops taking a line.
+   */
+  hideHeader?: boolean;
 }) {
-  const cellClass = (column: Column<Row>) => cx(column.actions && "cell-actions", column.align === "end" && "cell-end", column.align === "num" && "cell-num");
+  const cellClass = (column: Column<Row>) => cx(column.actions && "cell-actions", column.align === "end" && "cell-end", column.align === "num" && "cell-num", column.secondary && "cell-secondary", column.truncate && "cell-truncate");
   return (
     <div className={cx("table-wrap", className)}>
       <table aria-busy={loading || undefined} aria-label={label} className="table">
-        <colgroup>{columns.map((column) => <col key={column.id} style={column.width ? { width: column.width } : undefined} />)}</colgroup>
-        <thead>
-          <tr>{columns.map((column) => <th className={cellClass(column)} key={column.id} scope="col">{column.actions ? <span className="visually-hidden">{column.label}</span> : column.label}</th>)}</tr>
+        <colgroup>{columns.map((column) => <col className={cx(column.secondary && "cell-secondary")} key={column.id} style={column.width ? { width: column.width } : undefined} />)}</colgroup>
+        <thead className={cx(hideHeader && "visually-hidden")}>
+          <tr>{columns.map((column) => <th className={cellClass(column)} key={column.id} scope="col">{column.actions || hideHeader ? <span className="visually-hidden">{column.label}</span> : column.label}</th>)}</tr>
         </thead>
         <tbody>
           {loading && Array.from({ length: loadingRows }, (_, index) => (

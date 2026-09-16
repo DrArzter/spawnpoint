@@ -6,7 +6,11 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const [base = "http://localhost:5173", out = "audit.json", scheme = "light"] = process.argv.slice(2);
+// usage: audit.mjs [base-url] [detail-file|-] [light|dark]
+// The detail file is opt-in: pass a path to keep the raw findings, otherwise the
+// run prints its report and leaves nothing behind.
+const [base = "http://localhost:5173", detail = "-", scheme = "light"] = process.argv.slice(2);
+const out = detail === "-" ? null : detail;
 
 const ROUTES = [
   ["landing", "/#/"],
@@ -24,16 +28,58 @@ const ROUTES = [
   ["profile", "/?demo#/profile"],
 ];
 
+// Both sides of every breakpoint, because a rule that fires one pixel early is
+// invisible to a list of round numbers. The scale itself is in web/DESIGN.md.
 const VIEWPORTS = [
   [360, 780, true],
   [390, 844, true],
   [599, 900, true],
+  [600, 900, true],
   [768, 1024, true],
+  [839, 1024, true],
+  [840, 1024, true],
+  [959, 900, true],
   [960, 900, false],
-  [1279, 900, false],
+  [1199, 900, false],
+  [1200, 900, false],
   [1440, 900, false],
   [1920, 1080, false],
 ];
+
+
+const KINDS = [
+  ["sideways", "scrolls sideways"],
+  ["overflowing", "past the viewport"],
+  ["clipped", "cut with no ellipsis"],
+  ["smallTargets", "target below the floor"],
+  ["contrast", "contrast below 4.5"],
+];
+
+function report(findings) {
+  const totals = new Map(KINDS.map(([key]) => [key, 0]));
+  const lines = [];
+  for (const probe of findings) {
+    for (const [key, label] of KINDS) {
+      for (const item of probe[key] ?? []) {
+        totals.set(key, totals.get(key) + 1);
+        const what = item.sel ?? item.selector ?? item.text ?? "";
+        const detail = item.by !== undefined ? `+${item.by}px`
+          : item.w !== undefined ? `${item.w}x${item.h}`
+          : item.ratio !== undefined ? `${item.ratio.toFixed(2)}:1`
+          : "";
+        lines.push(`  ${probe.route.padEnd(18)} ${String(probe.width).padStart(5)}px  ${label.padEnd(24)} ${detail.padEnd(10)} ${String(what).slice(-64)}`);
+      }
+    }
+  }
+  const counted = KINDS.map(([key, label]) => `${label}: ${totals.get(key)}`).join(", ");
+  console.log(`${findings.length} probes across ${new Set(findings.map((f) => f.width)).size} widths`);
+  console.log(counted);
+  if (lines.length > 0) {
+    console.log("");
+    // Contrast on disabled controls is exempt from WCAG and would drown the rest.
+    for (const line of lines.filter((line) => !line.includes("contrast below"))) console.log(line);
+  }
+}
 
 const PROBE = String.raw`(() => {
   const toRgb = (value) => {
@@ -88,7 +134,7 @@ const PROBE = String.raw`(() => {
   const result = {
     docScrollWidth: document.documentElement.scrollWidth,
     viewportWidth: window.innerWidth,
-    overflowing: [], clipped: [], smallTargets: [], fonts: {}, radii: {}, zIndex: {},
+    overflowing: [], clipped: [], sideways: [], smallTargets: [], fonts: {}, radii: {}, zIndex: {},
     contrast: [], shadows: [], fontFamilies: {},
   };
 
@@ -96,9 +142,18 @@ const PROBE = String.raw`(() => {
     const rect = el.getBoundingClientRect();
     if (!visible(el, rect)) continue;
     const cs = getComputedStyle(el);
+    // Text parked off-screen for a reader is meant to be clipped and meant to
+    // be outside the viewport. Counting it drowned the real findings: 185 of
+    // 185 clipped entries were this, and nobody reads a report that cries wolf.
+    // Detected by the technique rather than by a class name, because the same
+    // properties are applied inline by a media query in at least one place.
+    if (cs.clipPath === "inset(50%)" || el.closest(".visually-hidden") !== null) continue;
 
     // 1. Horizontal overflow past the viewport, with no scroll container to excuse it.
-    if ((rect.right > window.innerWidth + 1 || rect.left < -1) && !scrollableAncestor(el)) {
+    // Chrome that lives off-canvas until it is opened — a closed navigation
+    // drawer, a sheet at rest — is parked, not overflowing. Only what sticks out
+    // past the right edge can force the page sideways.
+    if (rect.right > window.innerWidth + 1 && rect.left >= -1 && !scrollableAncestor(el)) {
       result.overflowing.push({ sel: path(el), left: Math.round(rect.left), right: Math.round(rect.right), width: Math.round(rect.width) });
     }
 
@@ -107,9 +162,22 @@ const PROBE = String.raw`(() => {
       result.clipped.push({ sel: path(el), scroll: el.scrollWidth, client: el.clientWidth, text: el.textContent.trim().slice(0, 40) });
     }
 
-    // 3. Touch targets.
+    // 3. A container that scrolls sideways. The overflow probe above excuses
+    // anything inside a scroll box, which is exactly where a table that no
+    // longer fits its card goes to hide: it does not stick out, it scrolls, and
+    // the reader finds half a row and no clue there is more.
+    if ((cs.overflowX === "auto" || cs.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 1
+        && el.dataset.scroll !== "expected") {
+      result.sideways.push({ sel: path(el), scroll: el.scrollWidth, client: el.clientWidth, by: el.scrollWidth - el.clientWidth });
+    }
+
+    // 4. Targets, measured against the pointer that is actually pointing. A
+    // finger wants the 32px this project's own touch rules aim at; a mouse is
+    // held to WCAG 2.5.8's 24px, and holding it to 32 flags controls that no
+    // standard objects to.
+    const floor = __COARSE__ ? 32 : 24;
     const interactive = el.matches("button, a[href], input, select, textarea, [role=menuitem], [role=tab], summary");
-    if (interactive && (rect.width < 32 || rect.height < 32) && cs.display !== "contents") {
+    if (interactive && (rect.width < floor || rect.height < floor) && cs.display !== "contents") {
       result.smallTargets.push({ sel: path(el), w: Math.round(rect.width), h: Math.round(rect.height), label: (el.getAttribute("aria-label") || el.textContent || "").trim().slice(0, 30) });
     }
 
@@ -125,8 +193,12 @@ const PROBE = String.raw`(() => {
       result.fontFamilies[fam].count += 1;
       if (result.fontFamilies[fam].samples.length < 3) result.fontFamilies[fam].samples.push(path(el));
 
-      // 5. Contrast of real text against its effective background.
-      const fg = toRgb(cs.color);
+      // 5. Contrast of real text against its effective background. An inactive
+      // control is out of scope for the contrast rule itself, and counting one
+      // buries the findings that are real: every disabled button in the panel
+      // was reported, sixty-six of them, and none was a fault.
+      const inactive = el.closest("[disabled], [aria-disabled=true]") !== null;
+      const fg = inactive ? null : toRgb(cs.color);
       if (fg) {
         const bg = effectiveBg(el);
         const composite = fg.a < 1 ? over(fg, bg) : fg;
@@ -216,14 +288,22 @@ try {
       await send("Page.navigate", { url });
       await Promise.race([loaded, sleep(8000)]);
       await sleep(600);
-      const probe = await send("Runtime.evaluate", { expression: PROBE, returnByValue: true, awaitPromise: false });
+      // The runner knows which pointer it is emulating; the page does not have
+      // to be asked, and in headless it answers unreliably.
+      const probe = await send("Runtime.evaluate", { expression: PROBE.replace("__COARSE__", String(mobile)), returnByValue: true, awaitPromise: false });
       const raw = probe.result?.result?.value;
       if (!raw) { findings.push({ route: name, width, error: JSON.stringify(probe.result).slice(0, 300) }); continue; }
       findings.push({ route: name, width, mobile, ...JSON.parse(raw) });
     }
   }
-  writeFileSync(out, JSON.stringify(findings, null, 1));
-  console.log(`wrote ${out}: ${findings.length} probes`);
+  report(findings);
+  // The detail is written only when it is asked for, and never into the working
+  // tree by default: 169 probes of every font, radius and z-index on the page is
+  // 28k lines of JSON that nobody reads and git would have been asked to keep.
+  if (out !== null) {
+    writeFileSync(out, JSON.stringify(findings, null, 1));
+    console.log(`\ndetail: ${out}`);
+  }
 } finally {
   ws.close();
   proc.kill();

@@ -4,9 +4,10 @@ import { liveApi, liveAuthConfigured } from "./api/live";
 
 export type {
   AccessCandidate, AccessIdentity, AccessRole, ActiveSession, AuthState, BackupEntry, BackupInventory,
-  InvitationRecipient, InvitationSummary, SessionOperation, SpawnpointApi, SpawnpointSession,
-  SubscriptionState, VisitorSession, WorldLifecycleAction,
+  HostMetrics, HostMetricSeries, InvitationRecipient, InvitationSummary, MetricRange, SessionOperation,
+  SpawnpointApi, SpawnpointSession, SubscriptionState, VisitorSession, WorldLifecycleAction,
 } from "./api/contract";
+import type { MetricRange } from "./api/contract";
 export { telegramOidcClientId } from "./api/live";
 
 // One switch, in one place. Everything below is the shipped panel calling the
@@ -36,6 +37,7 @@ export const requestWorldLifecycle = (gameId: string, worldId: string, action: "
 export const requestCreateWorld = (gameId: string, presetId: string, displayName: string, release: string) => api.requestCreateWorld(gameId, presetId, displayName, release);
 export const requestPackDownload = (gameId: string, worldId: string) => api.requestPackDownload(gameId, worldId);
 export const loadBackups = (gameId: string, worldId: string) => api.loadBackups(gameId, worldId);
+export const loadHostMetrics = (instanceId: string, range: MetricRange) => api.loadHostMetrics(instanceId, range);
 
 export const loadInvitationRecipients = () => api.loadInvitationRecipients();
 export const loadInvitationHistory = (gameId: string, worldId: string) => api.loadInvitationHistory(gameId, worldId);

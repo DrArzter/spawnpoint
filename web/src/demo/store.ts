@@ -1,4 +1,5 @@
 import type { AccessCandidate, AccessIdentity, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
+import type { HostMetrics, MetricRange } from "../api/contract";
 import type { ControlPlaneSnapshot, Preset, World } from "../model";
 import { DemoState, initialState, Mutable } from "./data";
 
@@ -249,6 +250,41 @@ export function backups(gameId: string, worldId: string): BackupInventory {
   settle();
   const entries = state.backups[worldKey(gameId, worldId)] ?? [];
   return { entries, unverified: entries.length > 2 ? 1 : 0, truncated: false };
+}
+
+// A plausible evening: quiet, a session that starts, load while people play,
+// then nothing — the gap is the point, because a stopped host reports nothing.
+export function hostMetrics(instanceId: string, range: MetricRange): HostMetrics {
+  settle();
+  const hours = range === "6h" ? 6 : range === "24h" ? 24 : 168;
+  const period = hours <= 6 ? 300 : hours <= 48 ? 900 : 3600;
+  const end = Date.now();
+  const count = Math.floor((hours * 3600) / period);
+  const series = [
+    { id: "cpu", label: "CPU", unit: "percent", peak: 62 },
+    { id: "networkIn", label: "Network in", unit: "bytes", peak: 4_800_000 },
+    { id: "networkOut", label: "Network out", unit: "bytes", peak: 9_200_000 },
+  ];
+  return {
+    range,
+    startedAt: new Date(end - hours * 3_600_000).toISOString(),
+    endedAt: new Date(end).toISOString(),
+    periodSeconds: period,
+    series: series.map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      unit: entry.unit,
+      points: Array.from({ length: count }, (_, index) => {
+        const at = new Date(end - (count - index) * period * 1000).toISOString();
+        const through = index / Math.max(count - 1, 1);
+        // Stopped for the first third of the window: no host, no datapoints.
+        if (through < 0.34) return { at, value: null };
+        const ramp = Math.min(1, (through - 0.34) / 0.12);
+        const wave = 0.55 + 0.45 * Math.sin(index / 3.7) * Math.cos(index / 11.3);
+        return { at, value: Math.round(entry.peak * ramp * wave * 100) / 100 };
+      }),
+    })),
+  };
 }
 
 export function packLink(gameId: string, worldId: string): { release: string; url: string } {

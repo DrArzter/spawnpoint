@@ -1,10 +1,34 @@
 import type { ControlPlaneSnapshot } from "../model";
 
+/**
+ * Why a call did not succeed, which decides what the panel may offer next.
+ * `unavailable` means the API has no such route yet — a retry cannot help, and
+ * the screen says so calmly. `forbidden` means the role is short a permission.
+ * `failed` is everything else and keeps the retry it has always had.
+ */
+export type ApiFailureKind = "unavailable" | "forbidden" | "failed";
+
+export class ApiError extends Error {
+  readonly kind: ApiFailureKind;
+
+  constructor(kind: ApiFailureKind, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.kind = kind;
+  }
+}
+
+export function failureKind(error: unknown): ApiFailureKind {
+  return error instanceof ApiError ? error.kind : "failed";
+}
+
 export type ActiveSession = Readonly<{
   state: "active";
   /** Set by a transport whose data is not real, so the panel can say so without asking which mode it is in. */
   demo?: boolean;
   identity: { id: string; displayName: string; roleId: string; directGrants: string[] };
+  /** What this deployment routes. A screen whose capability is absent is not offered at all. */
+  capabilities: readonly string[];
   role: { id: string; name: string; permissions: string[] } | null;
   profile: { telegramId: string; username: string | null; photoUrl: string | null };
   bootstrap: { state: "unclaimed" } | { state: "claimed"; ownerId: string; telegramId: string; claimedAt: string };
@@ -20,6 +44,20 @@ export type VisitorSession = Readonly<{
     status: "OBSERVED" | "REQUESTED" | "DISMISSED";
   };
 }>;
+
+// The API denies by default and answers anything it does not route with its own
+// `not_found`; a missing resource answers with a code of its own. So a route
+// that was never deployed and a world that was never created stay apart, and
+// only the first is something a retry cannot fix.
+export async function apiFailure(response: Response, message: string, parsed?: Readonly<{ error?: unknown }> | null): Promise<ApiError> {
+  if (response.status === 403) return new ApiError("forbidden", message);
+  if (response.status === 501) return new ApiError("unavailable", message);
+  if (response.status === 404) {
+    const body = parsed ?? await response.json().catch(() => null) as Readonly<{ error?: unknown }> | null;
+    if (body?.error === "not_found") return new ApiError("unavailable", message);
+  }
+  return new ApiError("failed", message);
+}
 
 export type SpawnpointSession = ActiveSession | VisitorSession;
 
@@ -80,6 +118,11 @@ export type BackupEntry = {
 
 export type BackupInventory = { entries: BackupEntry[]; unverified: number; truncated: boolean };
 
+export type MetricRange = "6h" | "24h" | "7d";
+export type HostMetricPoint = Readonly<{ at: string; value: number | null }>;
+export type HostMetricSeries = Readonly<{ id: string; label: string; unit: string; points: readonly HostMetricPoint[] }>;
+export type HostMetrics = Readonly<{ range: MetricRange; startedAt: string; endedAt: string; periodSeconds: number; series: readonly HostMetricSeries[] }>;
+
 export type AuthState =
   | { status: "loading" }
   | { status: "signed-out" }
@@ -117,6 +160,7 @@ export type SpawnpointApi = Readonly<{
   requestCreateWorld(gameId: string, presetId: string, displayName: string, release: string): Promise<{ id: string; displayName: string }>;
   requestPackDownload(gameId: string, worldId: string): Promise<{ release: string; url: string }>;
   loadBackups(gameId: string, worldId: string): Promise<BackupInventory>;
+  loadHostMetrics(instanceId: string, range: MetricRange): Promise<HostMetrics>;
 
   loadInvitationRecipients(): Promise<InvitationRecipient[]>;
   loadInvitationHistory(gameId: string, worldId: string): Promise<InvitationSummary[]>;

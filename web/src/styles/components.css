@@ -1060,6 +1060,7 @@ button.chip[aria-pressed="true"] {
 
 .dialog {
   width: min(520px, calc(100vw - 32px));
+  max-width: none;
   max-height: calc(100dvh - 32px);
   border-radius: 12px;
 }
@@ -1097,6 +1098,9 @@ button.chip[aria-pressed="true"] {
   inset: 0 0 0 auto;
   width: min(480px, 100vw);
   height: 100dvh;
+  /* A <dialog> is capped at `calc(100% - 34px)` by the browser, which left the
+     sheet 34px short of the edge it is docked to on a phone. */
+  max-width: none;
   max-height: none;
   margin: 0;
   border-radius: 0;

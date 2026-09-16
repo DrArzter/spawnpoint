@@ -3,6 +3,7 @@ import { LinkedAccounts } from "../components/LinkedAccounts";
 import { Button } from "../components/ui/Button";
 import { Chip } from "../components/ui/Chip";
 import { Card, Details } from "../components/ui/Surfaces";
+import { plural } from "../lib/format";
 import type { Member, Role } from "../model";
 import { openInBrowser, ViewerProfile } from "../telegram";
 
@@ -27,7 +28,7 @@ export function ProfileScreen({ member, role, viewer, onSignOut }: { member: Mem
           { label: "Telegram user ID", value: viewer.telegramId ?? "Unknown", mono: true, copy: viewer.telegramId },
           { label: "Username", value: viewer.username ? `@${viewer.username}` : "Not set" },
           { label: "Profile photo", value: viewer.photoUrl ? "Provided by Telegram" : "Initials" },
-          { label: "Role", value: role?.name ?? "No role", hint: role ? `${role.permissions.length} permissions` : undefined },
+          { label: "Role", value: role?.name ?? "No role", hint: role ? plural(role.permissions.length, "permission") : undefined },
           { label: "Identity ID", value: member.id, mono: true, copy: member.id },
         ]} label="Identity details" />
       </Card>

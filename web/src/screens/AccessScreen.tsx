@@ -14,7 +14,7 @@ import { Status } from "../components/ui/Status";
 import { Banner, Card, Details, EmptyState, PageHeader } from "../components/ui/Surfaces";
 import { Tabs } from "../components/ui/Tabs";
 import { Icon } from "../icons";
-import { formatDateTime } from "../lib/format";
+import { formatDateTime, plural } from "../lib/format";
 import type { AccessTab, Game, LinkKind, Member, OwnerBootstrap, Role } from "../model";
 
 const linkKinds: readonly LinkKind[] = ["telegram", "discord", "minecraft", "factorio", "steam", "zerotier"];
@@ -220,7 +220,7 @@ function Roles({ roles, state, error, onRetry }: { roles: Role[]; state: "loadin
       label: "Permissions",
       render: (role) => (
         <span>
-          <button aria-expanded={expanded === role.id} className="row-link" onClick={() => setExpanded(expanded === role.id ? null : role.id)} type="button">{role.permissions.length} permissions <Icon name={expanded === role.id ? "expand_less" : "expand_more"} size={16} /></button>
+          <button aria-expanded={expanded === role.id} className="row-link" onClick={() => setExpanded(expanded === role.id ? null : role.id)} type="button">{plural(role.permissions.length, "permission")} <Icon name={expanded === role.id ? "expand_less" : "expand_more"} size={16} /></button>
           {expanded === role.id && <span className="chip-row" style={{ marginTop: 8 }}>{role.permissions.map((permission) => <Chip key={permission} tone="tonal"><code>{permission}</code></Chip>)}</span>}
         </span>
       ),

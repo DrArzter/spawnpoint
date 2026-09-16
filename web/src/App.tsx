@@ -8,7 +8,7 @@ import { SelectField, TextField } from "./components/ui/Fields";
 import { SnackbarProvider, useSnackbar } from "./components/ui/Snackbar";
 import { sessionStatus } from "./components/ui/Status";
 import { IconName } from "./icons";
-import { formatDateTime } from "./lib/format";
+import { formatDateTime, plural } from "./lib/format";
 import { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, World } from "./model";
 import { isLandingHash, isRootHash, routeHash } from "./routing";
 import { deriveSharedHostSession } from "./session";
@@ -385,7 +385,7 @@ function CreateSaveSheet({ game, initialPreset, busy, onClose, onCreate }: { gam
     <Sheet
       description={`A new save opens wipe #1 from an immutable ${game.displayName} release.`}
       footer={<>
-        <p>{preset ? `${preset.displayName} · ${preset.releases.length} releases` : "Choose a preset"}</p>
+        <p>{preset ? `${preset.displayName} · ${plural(preset.releases.length, "release")}` : "Choose a preset"}</p>
         <Button disabled={!valid} icon="add" loading={busy} onClick={() => { if (preset) onCreate(preset, name.trim(), release); }} variant="filled">Create save</Button>
       </>}
       onClose={onClose}

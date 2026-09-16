@@ -166,8 +166,17 @@
     width: 100%;
   }
 
-  .btn-row > .btn {
+  .btn-row > .btn,
+  .btn-row > .tip-anchor {
     flex: 1;
+  }
+
+  /* A disabled button is wrapped in a tip anchor, because a disabled control
+     answers no hover and cannot be focused, and the reason it is disabled still
+     has to be reachable. The wrapper has to lay out as the button would, or the
+     button changes size at the one moment it gets wrapped. */
+  .tip-anchor > .btn {
+    width: 100%;
   }
 }
 
@@ -777,7 +786,9 @@ button.chip[aria-pressed="true"] {
      definition, and stretching one turns it into a grey lozenge across the
      whole card. */
   .table td.cell-actions > .btn,
-  .table td.cell-actions > .btn-row > .btn {
+  .table td.cell-actions > .tip-anchor,
+  .table td.cell-actions > .btn-row > .btn,
+  .table td.cell-actions > .btn-row > .tip-anchor {
     flex: 1;
   }
 

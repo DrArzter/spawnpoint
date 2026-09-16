@@ -1,5 +1,6 @@
 import { Avatar } from "../components/Avatar";
 import { IconButton } from "../components/ui/Button";
+import { Tooltip } from "../components/ui/Tooltip";
 import { Icon } from "../icons";
 import type { Game } from "../model";
 import type { Theme } from "../telegram";
@@ -23,10 +24,12 @@ export function SpawnpointMark({ size = 32 }: Readonly<{ size?: number }>) {
 // so no screen has to ask which mode the panel is running in.
 export function DemoBadge() {
   return (
-    <span className="demo-badge" title="Demo data. It lives in this tab, and nothing reaches AWS.">
-      <Icon name="warning" size={14} />
-      <span>Demo data</span>
-    </span>
+    <Tooltip text="Demo data. It lives in this tab, and nothing reaches AWS.">
+      <span className="demo-badge">
+        <Icon name="warning" size={14} />
+        <span>Demo data</span>
+      </span>
+    </Tooltip>
   );
 }
 

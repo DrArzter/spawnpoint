@@ -83,7 +83,7 @@ export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; on
           <h2 id="what-the-console-does-title">What the console does</h2>
           <dl className="landing-facts">
             <Fact icon="public" title="Games and worlds">
-              Every game has its own presets and saves. Pick the game, pick the world, read where to connect and who is online.
+              Every game has its own presets and worlds. Pick the game, pick the world, read where to connect and who is online.
             </Fact>
             <Fact icon="play_arrow" title="One host, started on demand">
               One shared AWS host runs one session at a time. Start boots it with the world you chose; Stop refuses while players are online, then saves, backs up and powers the host down. Desired state sits next to observed state, so you always see what is really running.

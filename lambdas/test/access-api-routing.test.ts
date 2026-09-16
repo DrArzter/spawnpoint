@@ -9,7 +9,7 @@ process.env.BOT_TOKEN_PARAMETER ??= "/spawnpoint/bot/token";
 process.env.SESSION_SIGNING_SECRET_PARAMETER ??= "/spawnpoint/auth/session-signing-secret";
 process.env.CONTROL_PLANE_VIEW_TABLE ??= "spawnpoint-control-plane-view-test";
 process.env.CONTROL_PLANE_WEBSOCKET_URL ??= "wss://socket.example.test/live";
-const { routes } = await import("../src/handlers/access-api.ts");
+const { routes, deployedCapabilities } = await import("../src/handlers/access-api.ts");
 
 // Authority used to be positional: the handler resolved a session, then an
 // identity, then crossed one access.manage gate, and a route inherited whatever
@@ -101,4 +101,28 @@ test("permanent world deletion is owner-level world management", () => {
   assert.deepEqual(routes["POST /games/{gameId}/worlds/{worldId}/purge"]?.access, {
     kind: "permission", permission: "world.manage",
   });
+});
+
+// A capability names a route. If the route is renamed or removed and the
+// capability is not, the panel would keep offering a screen that cannot load —
+// which is the failure this whole mechanism exists to prevent.
+test("every advertised capability names a route this API serves", () => {
+  const advertised = deployedCapabilities();
+  assert.ok(advertised.length > 0, "a deployment that routes anything advertises something");
+  for (const name of advertised) {
+    assert.equal(typeof name, "string");
+  }
+});
+
+test("a capability is advertised only while its route exists", async () => {
+  const deployed = await deployedRouteKeys();
+  const source = await readFile(new URL("../src/handlers/access-api.ts", import.meta.url), "utf8");
+  const block = source.slice(source.indexOf("const capabilityRoutes"), source.indexOf("};", source.indexOf("const capabilityRoutes")));
+  const named = [...block.matchAll(/"((?:GET|POST|PUT|DELETE) [^"]+)"/g)].map((match) => match[1]!);
+  assert.ok(named.length >= 5, "expected to read the capability map");
+  for (const routeKey of named) {
+    assert.ok(deployed.has(routeKey), `capability points at ${routeKey}, which is not deployed`);
+    assert.ok(Object.hasOwn(routes, routeKey), `capability points at ${routeKey}, which the handler does not declare`);
+  }
+  assert.equal(deployedCapabilities().length, named.length, "every mapped capability should be advertised by this build");
 });

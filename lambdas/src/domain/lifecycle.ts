@@ -17,6 +17,13 @@ export type IdleState = Readonly<{
   consecutiveEmpty: number;
   lastObservationId: string | null;
   lastObservedAtEpochSeconds: number | null;
+  /**
+   * The count behind `consecutiveEmpty`, kept rather than reduced away. The
+   * watchdog reads it to decide whether to stop; it is also the one number a
+   * player most wants from a game server, and nothing else in the system knows
+   * it. `null` is a read that failed, which is not the same as nobody online.
+   */
+  playersOnline: number | null;
 }>;
 
 export type LifecycleRecord = Readonly<{
@@ -249,6 +256,7 @@ export function registerWatchdog(
     idle: {
       watchdogExecutionId,
       consecutiveEmpty: 0,
+      playersOnline: null,
       lastObservationId: null,
       lastObservedAtEpochSeconds: null,
     },
@@ -286,6 +294,7 @@ export function recordPlayerObservation(
       ...record.idle,
       consecutiveEmpty:
         playersOnline === 0 ? record.idle.consecutiveEmpty + 1 : 0,
+      playersOnline,
       lastObservationId: observationId,
       lastObservedAtEpochSeconds: nowEpochSeconds,
     },

@@ -38,6 +38,8 @@ import {
   worldLifecycleExecution,
 } from "../control-plane/aws.ts";
 import { readControlPlaneSnapshot } from "../control-plane/read-model.ts";
+import type { ControlPlaneSources } from "../control-plane/read-model.ts";
+import type { WorldRecord } from "../control-plane/world-registry.ts";
 import { packRelease, planSessionOperation, stoppedHostRecoverySession, worldLifecycleNeedsStop, type SessionAction } from "../control-plane/session-control.ts";
 import { issueSubscriptionTicket, subscriptionTicketItem, subscriptionTicketLifetimeSeconds } from "../control-plane/subscriptions.ts";
 import { worldIdForName } from "../control-plane/world-registry.ts";
@@ -47,6 +49,7 @@ type Event = Readonly<{
   routeKey?: string;
   rawPath?: string;
   pathParameters?: Record<string, string | undefined>;
+  queryStringParameters?: Record<string, string | undefined>;
   headers?: Record<string, string | undefined>;
   cookies?: string[];
   body?: string;
@@ -218,13 +221,50 @@ function requirePermission(identity: Identity, permission: Permission): Response
   return role !== undefined && hasPermission(identity, role, permission) ? null : response(403, { error: "forbidden" });
 }
 
+// What this deployment can do, named once and derived from what it actually
+// routes. A panel screen may exist before its route does, and asking afterwards
+// only tells the reader they wasted the journey; this tells them beforehand.
+//
+// The names are the contract. The route keys are the truth, and
+// `access-api-routing.test.ts` already proves that the table below and the
+// deployed API describe the same routes, so a capability cannot claim something
+// API Gateway does not serve.
+const METRIC_RANGES: Readonly<Record<string, number>> = { "6h": 6, "24h": 24, "7d": 168 };
+
+// Host metrics come from CloudWatch rather than from the host, so they answer
+// for a window the host did not survive: an instance that was stopped all night
+// has no datapoints, and that gap is the answer to "was it running".
+async function hostMetrics(instanceId: string, range: string): Promise<Response> {
+  if (!/^i-[0-9a-f]{8,32}$/.test(instanceId)) return response(400, { error: "invalid_instance_id" });
+  const hours = METRIC_RANGES[range];
+  if (hours === undefined) return response(400, { error: "invalid_range" });
+  if (awsControlPlaneSources.readHostMetrics === undefined) return response(501, { error: "metrics_unavailable" });
+  return response(200, { range, ...await awsControlPlaneSources.readHostMetrics(instanceId, hours) });
+}
+
+const capabilityRoutes: Readonly<Record<string, string>> = {
+  releaseManifest: "GET /games/{gameId}/presets/{presetId}/releases/{version}",
+  hostMetrics: "GET /hosts/{instanceId}/metrics",
+  invitations: "POST /games/{gameId}/worlds/{worldId}/invitations",
+  clientPacks: "GET /games/{gameId}/worlds/{worldId}/pack",
+  backups: "GET /games/{gameId}/worlds/{worldId}/backups",
+  worldLifecycle: "POST /games/{gameId}/worlds/{worldId}/wipe",
+  accessManagement: "GET /access/identities",
+};
+
+export function deployedCapabilities(): readonly string[] {
+  return Object.entries(capabilityRoutes)
+    .filter(([, routeKey]) => Object.hasOwn(routes, routeKey))
+    .map(([name]) => name);
+}
+
 async function session(account: Caller): Promise<Response> {
   const observed = await observe(account);
   const identity = await resolveIdentity(account, observed) ?? await bootstrapOwner(account);
   if (identity !== null) {
     const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
     const bootstrap = await document.send(new GetCommand({ TableName: tableName, Key: { pk: "SYSTEM", sk: "BOOTSTRAP" } }));
-    return response(200, { state: "active", identity, role, profile: {
+    return response(200, { state: "active", identity, role, capabilities: deployedCapabilities(), profile: {
       telegramId: account.subject, username: observed.username ?? null, photoUrl: observed.photo_url ?? null,
     }, bootstrap: bootstrap.Item === undefined ? { state: "unclaimed" } : {
       state: "claimed", ownerId: bootstrap.Item.identity_id, telegramId: bootstrap.Item.telegram_id, claimedAt: bootstrap.Item.claimed_at,
@@ -347,6 +387,26 @@ async function createWorld(identity: Identity, gameId: string, presetId: string,
   });
 }
 
+// A backup carries the generation it was taken from, and that generation names
+// the release it ran. Restoring reinstates the pair, so a release that is no
+// longer in the store makes the restored generation unstartable — and today the
+// refusal would arrive at the next start, from reconciliation, with the world
+// already repointed. It is checked here, where somebody is still looking at the
+// button they pressed. See ADR-0052.
+export async function restorableRelease(
+  record: WorldRecord,
+  backupKey: string,
+  readManifest: ControlPlaneSources["readReleaseManifest"],
+): Promise<"ok" | "unknown_generation" | "release_missing"> {
+  const generationId = /-(gen-[0-9a-f]{32})-/.exec(backupKey)?.[1];
+  if (generationId === undefined) return "unknown_generation";
+  const generation = [record.currentGeneration, ...record.previousGenerations].find((candidate) => candidate.id === generationId);
+  if (generation === undefined) return "unknown_generation";
+  if (readManifest === undefined) return "ok";
+  const manifest = await readManifest(record.gameId, record.preset.id, generation.release);
+  return manifest === null ? "release_missing" : "ok";
+}
+
 async function controlWorldLifecycle(
   identity: Identity,
   action: "archive" | "regenerate" | "restore" | "purge",
@@ -374,6 +434,10 @@ async function controlWorldLifecycle(
   const record = worldRecords.find((candidate) => candidate.gameId === gameId && candidate.worldId === worldId);
   if (record === undefined) return response(404, { error: "unknown_materialized_world" });
   if (action === "purge" && record.status !== "archived") return response(409, { error: "world_not_archived" });
+  if (action === "restore" && backupKey !== undefined) {
+    const restorable = await restorableRelease(record, backupKey, awsControlPlaneSources.readReleaseManifest);
+    if (restorable !== "ok") return response(409, { error: restorable });
+  }
   if (operations.length > 0) return response(409, { error: "operation_in_progress" });
   if (hosts.length !== 1) return response(409, { error: "host_not_unique" });
   const host = hosts[0]!;
@@ -414,6 +478,41 @@ async function updateSubscriptions(identity: Identity, body: string | undefined)
     pk: `IDENTITY#${identity.id}`, sk: "SUBSCRIPTIONS", subscriptions: next, updated_at: new Date().toISOString(),
   } }));
   return response(200, { subscriptions: next });
+}
+
+const RELEASE_ID = /^[a-z0-9][a-z0-9-]*$/;
+const RELEASE_VERSION = /^[0-9]+\.[0-9]+$/;
+
+// What a release contains, which until now lived only in S3 and in the mods
+// directory of whichever host last installed it. Shaped rather than echoed: the
+// manifest is a build artifact, and this is an API.
+async function releaseManifest(gameId: string, presetId: string, version: string): Promise<Response> {
+  if (!RELEASE_ID.test(gameId) || !RELEASE_ID.test(presetId) || !RELEASE_VERSION.test(version)) {
+    return response(400, { error: "invalid_release_reference" });
+  }
+  const manifest = await awsControlPlaneSources.readReleaseManifest?.(gameId, presetId, version) ?? null;
+  if (manifest === null || typeof manifest !== "object") return response(404, { error: "unknown_release" });
+  const value = manifest as Record<string, unknown>;
+  const server = value.server as { mods?: unknown } | undefined;
+  const loader = value.loader as { type?: unknown; version?: unknown } | undefined;
+  const runtime = value.runtime as { image?: unknown } | undefined;
+  const profile = value.source_profile as { id?: unknown; repository?: unknown; commit?: unknown } | undefined;
+  const mods = Array.isArray(server?.mods) ? server.mods : [];
+  return response(200, {
+    gameId,
+    presetId,
+    release: typeof value.release === "string" ? value.release : version,
+    gameVersion: typeof value.minecraft_version === "string" ? value.minecraft_version : null,
+    loader: loader ? { type: String(loader.type ?? ""), version: String(loader.version ?? "") } : null,
+    createdAt: typeof value.created_at === "string" ? value.created_at : null,
+    changelog: typeof value.changelog === "string" && value.changelog !== "" ? value.changelog : null,
+    runtimeImage: typeof runtime?.image === "string" ? runtime.image : null,
+    source: profile ? { presetId: String(profile.id ?? ""), repository: String(profile.repository ?? ""), commit: String(profile.commit ?? "") } : null,
+    mods: mods.map((entry) => {
+      const mod = entry as Record<string, unknown>;
+      return { file: String(mod.file ?? ""), sha256: String(mod.sha256 ?? ""), bytes: Number(mod.bytes ?? 0) };
+    }),
+  });
 }
 
 async function candidates(): Promise<Response> {
@@ -868,6 +967,10 @@ export const routes: Readonly<Record<string, Route>> = {
   "GET /control-plane": permissionRoute("status.read", (identity) => controlPlane(identity)),
   "POST /control-plane/subscriptions": permissionRoute("status.read", (identity) => createControlPlaneSubscription(identity)),
   "GET /access/roles": permissionRoute("access.read", (identity) => roles(identity)),
+  "GET /hosts/{instanceId}/metrics": permissionRoute("metrics.read", (_identity, event) =>
+    hostMetrics(parameter(event, "instanceId"), event.queryStringParameters?.range ?? "24h")),
+  "GET /games/{gameId}/presets/{presetId}/releases/{version}": permissionRoute("release.read", (_identity, event) =>
+    releaseManifest(parameter(event, "gameId"), parameter(event, "presetId"), parameter(event, "version"))),
   "GET /invitations/recipients": permissionRoute("invitation.send", (identity) => invitationRecipients(identity)),
 
   "POST /games/{gameId}/presets/{presetId}/worlds": permissionRoute("world.manage", (identity, event) =>

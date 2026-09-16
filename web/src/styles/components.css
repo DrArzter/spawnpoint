@@ -972,20 +972,36 @@ button.chip[aria-pressed="true"] {
   color: var(--ink-secondary);
 }
 
+/* The same card grammar a stacked table row uses: the label against the left
+   rail, the value against the right. Stacked one above the other, these left
+   the right half of every row empty and read as a second kind of list on a
+   screen that already had one. */
 @media (max-width: 599px) {
   .details {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    column-gap: 12px;
   }
 
-  .details-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 2px;
+  .details-row,
+  .details-flush .details-row {
+    align-items: baseline;
     padding: 8px 0;
   }
 
   .details dt {
     font-size: 12px;
     line-height: 16px;
+  }
+
+  .details dd {
+    justify-self: end;
+    text-align: right;
+  }
+
+  /* A value and its hint share one edge. The hint is often the longer of the
+     two, and it was the one setting where the value sat. */
+  .details .value-row {
+    justify-content: flex-end;
   }
 }
 
@@ -1434,6 +1450,29 @@ button.chip[aria-pressed="true"] {
     padding-left: 16px;
     padding-right: 16px;
   }
+}
+
+/* "Part of this is not connected", said in a line. The boxed form of the same
+   notice claims the whole screen is missing, which is a different report. */
+.not-connected {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 2px 0 10px;
+  color: var(--ink-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  text-wrap: pretty;
+}
+
+.not-connected .icon {
+  flex: none;
+  margin-top: 1px;
+}
+
+.not-connected strong {
+  color: var(--ink);
+  font-weight: 500;
 }
 
 /* Banner */

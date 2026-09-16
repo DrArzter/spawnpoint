@@ -11,10 +11,12 @@ import { Card, EmptyState, NotConnected } from "./ui/Surfaces";
 // network, and the grouping says which.
 type LinkPurpose = "sign-in" | "game" | "network";
 
-const purposes: readonly { id: LinkPurpose; title: string; description: string }[] = [
-  { id: "sign-in", title: "Sign-in", description: "Proves who you are when you open Spawnpoint." },
-  { id: "game", title: "Game identity", description: "Names you inside a game. The whitelist is derived from this, as bookkeeping rather than as a control." },
-  { id: "network", title: "Network", description: "Admits one device to the overlay the worlds are reachable on." },
+// The heading is the whole of it. Each one carried a sentence restating what
+// its own title already says, above a list of one or two rows.
+const purposes: readonly { id: LinkPurpose; title: string }[] = [
+  { id: "sign-in", title: "Sign-in" },
+  { id: "game", title: "Game identity" },
+  { id: "network", title: "Network" },
 ];
 
 const providers: Record<LinkKind, { label: string; icon: IconName; purpose: LinkPurpose }> = {
@@ -40,7 +42,7 @@ export function LinkedAccounts({ member, handles, bare = false }: { member: Memb
     : ({ children }: { children: ReactNode }) => <Card title="Linked accounts">{children}</Card>;
   return (
     <Frame>
-      <NotConnected description="Existing links come from Spawnpoint. Adding and removing accounts arrives with the verification flows." inline title="Link management is not connected yet" />
+      <NotConnected description="Existing links come from Spawnpoint." inline title="Adding and removing accounts is not connected yet." />
       {member.links.length === 0 && <EmptyState description="Links appear once their verification flow exists." icon="link" title="No linked accounts" />}
       {purposes.map((purpose) => {
         const links = member.links.filter((link) => providers[link.kind].purpose === purpose.id);
@@ -48,7 +50,6 @@ export function LinkedAccounts({ member, handles, bare = false }: { member: Memb
         return (
           <section className="linked-group" key={purpose.id}>
             <h3>{purpose.title}</h3>
-            <p>{purpose.description}</p>
             <ul className="linked-list">
               {links.map((link) => (
                 <li className="linked-row" key={link.id}>

@@ -10,7 +10,7 @@ export function ConsoleScreen({ game, serverState }: { game: Game | undefined; s
   return (
     <div className="page">
       <h1 className="visually-hidden">Console</h1>
-      <NotConnected description="Commands are accepted here once the authenticated RCON API is deployed, and each one is recorded against the Spawnpoint identity that ran it. The terminal below shows the session it would attach to." inline title="The RCON gateway is not connected yet" />
+      <NotConnected description="The terminal below shows the session it would attach to." inline title="The RCON gateway is not connected yet." />
       <section aria-label="RCON terminal" className="terminal">
         <header className="terminal-bar">
           <Icon name="terminal" size={18} />

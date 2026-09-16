@@ -22,7 +22,7 @@ export function ProfileScreen({ member, role, viewer, onSignOut }: { member: Mem
           <Button icon="logout" onClick={onSignOut} variant="text">Sign out</Button>
         </ActionRow>
       </header>
-      <Card description="Display details come from the account you signed in with. An Owner manages roles and links." title="Identity">
+      <Card title="Identity">
         <Details items={[
           { label: "Display name", value: member.name },
           { label: "Profile photo", value: viewer.photoUrl ? <Avatar name={member.name} photoUrl={viewer.photoUrl} /> : <Ghost>Not set</Ghost> },

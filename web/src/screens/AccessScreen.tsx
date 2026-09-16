@@ -175,7 +175,9 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
   ];
 
   const columns: Column<Member>[] = [
-    { id: "user", label: "User", render: (member) => <span className="user-cell"><Avatar name={member.name} /><span><strong>{member.name}</strong><small className="mono">{member.id}</small></span></span> },
+    // The identity id is not shown. It is an internal handle, and a table is
+    // read to tell one person from another, which their name already does.
+    { id: "user", label: "User", render: (member) => <span className="user-cell"><Avatar name={member.name} /><strong>{member.name}</strong></span> },
     {
       id: "role",
       label: "Role",

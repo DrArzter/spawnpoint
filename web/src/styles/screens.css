@@ -155,6 +155,14 @@
   gap: 12px;
 }
 
+/* The stacked card is a spec sheet, and a portrait in it only breaks the rail
+   every other value is aligned to. */
+@container (max-width: 599px) {
+  .user-cell .avatar {
+    display: none;
+  }
+}
+
 .owner-steps {
   display: grid;
   gap: 8px;
@@ -214,13 +222,6 @@
 .linked-group h3 {
   font-size: 14px;
   font-weight: 500;
-}
-
-.linked-group p {
-  margin-bottom: 4px;
-  color: var(--ink-secondary);
-  font-size: 13px;
-  line-height: 18px;
 }
 
 .linked-list {

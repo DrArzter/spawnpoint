@@ -217,6 +217,9 @@ Measurements deliberately do **not** live in these files. They live in
 [docs/measurements.md](docs/measurements.md), [docs/costs.md](docs/costs.md) and [docs/runbook.md](docs/runbook.md),
 which are allowed to change. The reason is written up in [docs/adr/README.md](docs/adr/README.md).
 
+Vocabulary does not live in them either. One word per thing, and what each one means, is
+[docs/glossary.md](docs/glossary.md).
+
 | ADR | Decision | Status |
 | --- | --- | --- |
 | [0001](docs/adr/0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |

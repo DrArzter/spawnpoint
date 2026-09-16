@@ -95,7 +95,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0033](0033-connectivity-as-a-strategy.md) | Connectivity is a strategy behind one interface, constrained by the game's auth model | Accepted, amends [0024](0024-connectivity-modes.md) | M2 |
 | [0034](0034-per-game-adapter.md) | A game is a module: data plus functions, minecraft the byte-identical default | Accepted | cross-cutting |
 | [0035](0035-bootstrap-first-owner.md) | Bootstrap the first Owner through one verified Google identity | Superseded by [0037](0037-telegram-only-browser-identity.md) | M4 |
-| [0036](0036-observed-visitors-and-owner-approved-access.md) | Observe visitors, but let an Owner grant access | Accepted | M4 |
+| [0036](0036-observed-visitors-and-owner-approved-access.md) | Observe visitors, but let an Owner grant access | Accepted, amended by [0050](0050-default-role-on-sign-in-and-elevation-requests.md) | M4 |
 | [0037](0037-telegram-only-browser-identity.md) | Telegram-only browser identity through signed Widget and Mini App payloads | **Superseded** by [0045](0045-provider-neutral-login-sessions.md) | M4 |
 | [0038](0038-invitation-delivery-claim.md) | Claim an invitation once before Telegram delivery | Accepted | M4 |
 | [0039](0039-git-presets-instantiate-world-generations.md) | Git presets instantiate recoverable world generations | **Superseded** by [0040](0040-reusable-presets-and-world-wipes.md) | cross-cutting |
@@ -109,6 +109,10 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0047](0047-normalize-preset-sources-before-building.md) | Normalize preset sources before building | Accepted | cross-cutting |
 | [0048](0048-one-instance-per-active-world.md) | One instance per active world, created for the session | Proposed | later |
 | [0049](0049-project-control-plane-events-into-dynamodb.md) | Project control-plane events into DynamoDB for user-facing surfaces | Accepted | cross-cutting |
+| [0050](0050-default-role-on-sign-in-and-elevation-requests.md) | Grant the default role on sign-in, and let people ask for more | Proposed | M4 |
+| [0051](0051-restart-a-session-without-releasing-the-host.md) | Restart a session without releasing the host | Proposed | M4 |
+| [0052](0052-keep-a-release-while-a-generation-names-it.md) | Keep a release while a generation names it, and check before restoring | Proposed | M4 |
+| [0053](0053-tell-not-built-apart-from-broken.md) | Tell "not built yet" apart from "broken", in the transport | Proposed | M4 |
 
 ## Decisions still to record
 

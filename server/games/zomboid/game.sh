@@ -79,6 +79,13 @@ game_query_players_raw() {
     "players"
 }
 
+# Project Zomboid exposes no tick or frame time over RCON; the acceptance
+# records it as unmeasured rather than guessing from something else.
+game_tick_time_ms() {
+  printf 'error: Project Zomboid reports no tick time over RCON\n' >&2
+  return 2
+}
+
 game_save() {
   # This image owns the safe-save protocol: on SIGTERM it sends `save`, then
   # `quit`, and waits for the server. `stop.sh` performs that graceful Compose

@@ -74,6 +74,20 @@ game_save_sentinel() {
   [[ -f "${data_dir}/${world_name}/level.dat" ]]
 }
 
+# Milliseconds per tick, as Forge reports it over RCON ("Overall: Mean tick
+# time: 4.123 ms. Mean TPS: 20.000"). The acceptance of ADR-0054 compares this
+# figure for a world alone against the same world beside a neighbour.
+game_tick_time_ms() {
+  local response tick_ms
+  response="$(rcon forge tps)" || return 1
+  tick_ms="$(sed -nE 's/^Overall: Mean tick time: ([0-9]+(\.[0-9]+)?) ms.*$/\1/p' <<<"${response}" | head -n1)"
+  [[ -n "${tick_ms}" ]] || {
+    printf 'error: forge tps did not report a mean tick time: %s\n' "$(tr '\n' ';' <<<"${response}")" >&2
+    return 1
+  }
+  printf '%s\n' "${tick_ms}"
+}
+
 # What a verified archive must contain to count as a save of this game.
 game_archive_sentinel_regex() {
   local world_name="$1"

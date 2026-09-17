@@ -90,6 +90,31 @@ game_query_players_raw() {
   return 0
 }
 
+# Milliseconds per tick from two readings of the tick counter. Factorio has no
+# server-side UPS query, so this asks Lua for game.tick — a console command that
+# disables achievements on the save, which is why it runs only when the caller
+# says so. Sixty ticks a second is a healthy server: 16.667 ms.
+FACTORIO_TICK_SAMPLE_SECONDS="${FACTORIO_TICK_SAMPLE_SECONDS:-10}"
+game_tick_time_ms() {
+  [[ "${SPAWNPOINT_ACCEPT_ACHIEVEMENT_LOSS:-}" == "1" ]] || {
+    printf 'error: measuring Factorio tick time runs a Lua command, which disables achievements on this save; set SPAWNPOINT_ACCEPT_ACHIEVEMENT_LOSS=1 to accept that\n' >&2
+    return 2
+  }
+  local first second
+  first="$(factorio_rcon "/silent-command rcon.print(game.tick)")" || return 1
+  sleep "${FACTORIO_TICK_SAMPLE_SECONDS}"
+  second="$(factorio_rcon "/silent-command rcon.print(game.tick)")" || return 1
+  [[ "${first}" =~ ^[0-9]+$ && "${second}" =~ ^[0-9]+$ ]] || {
+    printf 'error: game.tick did not read as a number: %s / %s\n' "${first}" "${second}" >&2
+    return 1
+  }
+  (( second > first )) || {
+    printf 'error: the tick counter did not advance (%s -> %s); the game is paused\n' "${first}" "${second}" >&2
+    return 1
+  }
+  awk -v seconds="${FACTORIO_TICK_SAMPLE_SECONDS}" -v ticks="$((second - first))" 'BEGIN { printf "%.3f\n", 1000 * seconds / ticks }'
+}
+
 game_save() {
   # Factorio's multiplayer command flushes the active save without changing
   # its name and without using achievement-disabling Lua console commands.

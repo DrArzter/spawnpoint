@@ -45,17 +45,17 @@ a default that still says "one host per world" until the acceptance run says oth
 | 7 — two-level stop | A host record carries its provenance: `configured` is Terraform's instance, whose drain decision is always to stop and which the V1 stop already stops when idle; `launched` is a host created for a session. A stop that empties a launched host starts `spawnpoint-drain-host-v2` for it: wait the grace period, ask the coordinator, then move the record conditionally and only afterwards terminate or stop the machine; an empty host kept as headroom is asked again, a bounded number of times. Its IAM may stop or terminate only what carries `ManagedBy=spawnpoint-fleet`. The alarm on a drain that gave up is the `Spawnpoint.DrainKeptTooLong` failure, not yet a CloudWatch alarm | Nothing, until a host is launched: the configured host never enters the drain. **Landed** |
 | 8 — the address with a port | The host already composes the session's address with its slot's port (phase 4); now the start carries that answer into the lifecycle record (`activeSessionAddress`, set by `markSessionReady`, cleared when the session stops), and the panel's read model shows the observed address for a ready session before the one it composes for a stopped world — still only to a caller allowed an address. A public world, whose security group opens the game's own port only, and a game that names its own ports to clients (Project Zomboid) are pinned to slot zero by the coordinator, so their address is the one they show today. No `SRV`: no Route 53 strategy exists on the host yet, and the overlay has no `SRV`, so every player sees `host:port` | Slot zero shows the port it shows today. The bot composes the configured world's address as before, which is right for the world it operates. **Landed** |
 | 9 — observability per host | One tier per host, the Compose project `spawnpoint-observability` (`observability/compose.host.yaml` over `observability/compose.yaml`), brought up by the first placed session's start through `ensure-host-observability.sh` and left running while the host runs. Its Prometheus finds every session's exporter through the Docker socket by three `spawnpoint.scrape*` labels, over a network created outside both projects; a game takes part with `GAME_HOST_OBSERVABILITY_COMPOSE_FILE`. Every placed session, slot zero included, runs without a tier of its own; an unplaced session carries the tier inside its project, as before. The Minecraft dashboard gains a World variable and the host overview groups by project. A tier that will not come up is reported and the session starts unscraped | An unplaced session is unchanged. A placed session's Grafana is the host's, at the host's overlay address on port 3000. **Landed** |
-| 10 — acceptance | `placement: shared` on the owner's environment: Factorio beside the modded world on one host, tick time recorded for both, a stop of one leaving the other running, a restart inside the grace period reusing the host, a drain terminating a host after both leave | Failures are on a setting one revert restores |
-| 11 — cutover | Default `placement: shared`, `fit` policy | One setting reverts to `single` |
+| 10 — acceptance | On the owner's environment: Factorio beside the modded world on one host, tick time recorded for both alone and together, a stop of one leaving the other running, a restart inside the grace period reusing the host, a drain terminating a launched host after both leave. `scripts/acceptance-capacity-allocation.sh` drives each step and reads the figures from execution histories, host records and `server/scripts/measure-tick.sh`; `report` renders them. The harness asks for `shared` per start, so the deployed setting stays `single` while it runs | Failures are on a setting one revert restores. **Tooling landed; the run needs the owner's AWS** |
+| 11 — cutover | `placement = "shared"` on the access-api root (`infra/terraform-access-api`), one line in its `terraform.tfvars`; `launch = "enabled"` only after the Parameter Store keys of the runbook exist. The defaults in `variables.tf` stay `single` and `disabled` until the phase-10 report is in the repository, so a merge of this work changes nothing by itself | One setting reverts to `single` |
 | 12 — launching a host | Behind `SPAWNPOINT_LAUNCH` (`disabled` by default): a start whose placement answers "launch" creates an instant EC2 Fleet from the `spawnpoint-fleet-host` template with the footprint's `InstanceRequirements`, the allowed families and `lowest-price`; records what EC2 answered as a `launched` host; reserves it; and terminates it at once if it cannot be recorded or reserved. The template names no instance type. The host bootstraps itself: the base user-data, then a checkout of this repository at the commit its `AppCommit` tag names, a `.env` rendered from Parameter Store under `/spawnpoint/host/env`, and an overlay join it authorises itself with the Central token under `/spawnpoint/host/zerotier-central-token`. A legacy world is bound to the configured host and is refused rather than launched for. Headroom is a Terraform setting on the drain (`headroom_mib`), zero by default; Spot per ADR-0027 and Fargate stay later | `disabled`: as before. `enabled`: **unverified against AWS** — the Fleet request, the bootstrap and the Central call were written from the API references and never run; phase 10 is where they are |
 
 ## Current phase
 
-Phases 1 to 9 and 12 landed on 2026-09-17, all behind settings that default to what runs today. What has never run
-against AWS, and must before `launch` is enabled: the `CreateFleet` request as the start builds it, the fleet host's
-bootstrap end to end, the Central API authorisation, and the host tier's discovery through the Docker socket on a
-real host. Phase 10 (acceptance, which is where the unverified parts are exercised) is next; phase 11 is the owner's
-decision after it.
+Phases 1 to 9 and 12 landed on 2026-09-17, all behind settings that default to what runs today, and the tooling of
+phase 10 with them. What has never run against AWS, and must before `launch` is enabled: the `CreateFleet` request as
+the start builds it, the fleet host's bootstrap end to end, the Central API authorisation, and the host tier's
+discovery through the Docker socket on a real host. The phase-10 run itself needs the owner's environment; phase 11 is
+one setting once its report is in.
 
 Two limits of what `shared` can do today, both outside this rollout and both worth knowing before it is switched on:
 
@@ -77,3 +77,32 @@ Two limits of what `shared` can do today, both outside this rollout and both wor
 - The start of a second session on a host that is already up, from request to `ready`.
 - The drain: the minute the last session released, the minute the host terminated, and that nothing was billed after.
 - The first `SRV` join and the first `host:port` join, one each, by a player who was not told which they were using.
+  No `SRV` join exists until a Route 53 strategy does; the report says so and records `host:port` joins.
+
+## How the run goes
+
+Every command below appends to `acceptance/capacity-allocation/events.jsonl` and reads its figures from AWS, never from
+the operator; `report` renders the file into the document that closes this phase. A Factorio world created from a
+preset is the second tenant, because the two legacy worlds are bound to the configured host and share one Minecraft
+lifecycle record.
+
+```bash
+scripts/acceptance-capacity-allocation.sh start --world world            # the modded world, alone
+scripts/acceptance-capacity-allocation.sh tick  --world world            # with players on: the alone figure
+scripts/acceptance-capacity-allocation.sh start --world <factorio-world> --game factorio # lands beside it: seconds to ready
+scripts/acceptance-capacity-allocation.sh tick  --world world            # both with players on: the co-tenant figures
+scripts/acceptance-capacity-allocation.sh tick  --world <factorio-world>
+scripts/acceptance-capacity-allocation.sh join  --world <factorio-world> --kind host-port --player <name>
+scripts/acceptance-capacity-allocation.sh stop  --world <factorio-world> # the modded world keeps running
+scripts/acceptance-capacity-allocation.sh start --world <factorio-world> --game factorio # inside the grace period: the same host
+scripts/acceptance-capacity-allocation.sh stop  --world <factorio-world>
+scripts/acceptance-capacity-allocation.sh stop  --world world
+scripts/acceptance-capacity-allocation.sh report --out docs/acceptance/capacity-allocation-$(date -u +%F).md
+```
+
+A drain needs a launched host, which needs `launch = "enabled"` and a world that is not bound to the configured host:
+with the Parameter Store keys in place, `start --world <factorio-world> --launch enabled` while the configured host is
+full (or stopped), with `--game factorio` for a world the host catalog does not list, launches one; `drain --host <its instance id>` after its stop waits for the record to move and reads
+the grace and termination minutes from the drain execution. Factorio's tick reading runs a Lua command, which disables
+achievements on that save; the harness says so with `SPAWNPOINT_ACCEPT_ACHIEVEMENT_LOSS=1` and the acceptance world
+should be one nobody plays for achievements.

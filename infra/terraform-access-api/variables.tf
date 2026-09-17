@@ -128,9 +128,9 @@ variable "connection_host" {
 }
 
 variable "placement" {
-  description = "How a start chooses its host (ADR-0054): `single` starts the configured instance as before; `shared` places the session on a registered host with room, which today is that same instance with other games beside it."
+  description = "How a start chooses its host (ADR-0054): `shared` places the session on a registered host with room, which today is the configured instance with other games beside it, and is the default since the cutover of 2026-09-17; `single` starts the configured instance alone, as before, and is the one-line revert."
   type        = string
-  default     = "single"
+  default     = "shared"
 
   validation {
     condition     = contains(["single", "shared"], var.placement)

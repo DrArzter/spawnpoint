@@ -14,6 +14,62 @@ resource "aws_cloudwatch_log_group" "control_plane_websocket_access" {
   retention_in_days = 14
 }
 
+data "aws_iam_policy_document" "api_gateway_cloudwatch_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["apigateway.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "api_gateway_cloudwatch" {
+  name               = "spawnpoint-apigateway-cloudwatch"
+  assume_role_policy = data.aws_iam_policy_document.api_gateway_cloudwatch_assume.json
+}
+
+data "aws_iam_policy_document" "api_gateway_cloudwatch" {
+  statement {
+    sid = "DiscoverSpawnpointLogStreams"
+    actions = [
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "WriteSpawnpointApiGatewayAccessLogs"
+    actions = [
+      "logs:CreateLogStream",
+      "logs:FilterLogEvents",
+      "logs:GetLogEvents",
+      "logs:PutLogEvents",
+    ]
+    resources = [
+      aws_cloudwatch_log_group.control_plane_websocket_access.arn,
+      "${aws_cloudwatch_log_group.control_plane_websocket_access.arn}:*",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "api_gateway_cloudwatch" {
+  name   = "spawnpoint-apigateway-cloudwatch"
+  role   = aws_iam_role.api_gateway_cloudwatch.id
+  policy = data.aws_iam_policy_document.api_gateway_cloudwatch.json
+}
+
+# Access logging is rejected until this regional, account-level API Gateway
+# setting names a CloudWatch role. Terraform owns it here alongside the only
+# API Gateway access-log destination in Spawnpoint.
+resource "aws_api_gateway_account" "current" {
+  cloudwatch_role_arn = aws_iam_role.api_gateway_cloudwatch.arn
+
+  depends_on = [aws_iam_role_policy.api_gateway_cloudwatch]
+}
+
 resource "aws_iam_role" "control_plane_subscriptions" {
   name               = "spawnpoint-control-plane-subscriptions"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
@@ -106,6 +162,8 @@ resource "aws_apigatewayv2_stage" "control_plane" {
       integrationErrorMessage = "$context.integrationErrorMessage"
     })
   }
+
+  depends_on = [aws_api_gateway_account.current]
 }
 
 resource "aws_lambda_permission" "control_plane_subscriptions_websocket" {

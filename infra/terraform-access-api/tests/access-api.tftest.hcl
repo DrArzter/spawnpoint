@@ -59,6 +59,26 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.api_gateway_cloudwatch_assume
+    values = { json = "{}" }
+  }
+
+  # The account setting names the role by ARN, which a mocked role only has
+  # after apply; a fixed one lets the plan-time run see the link.
+  override_resource {
+    target = aws_iam_role.api_gateway_cloudwatch
+    values = {
+      arn = "arn:aws:iam::123456789012:role/spawnpoint-apigateway-cloudwatch"
+      id  = "spawnpoint-apigateway-cloudwatch"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.api_gateway_cloudwatch
+    values = { json = "{}" }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.world_lifecycle
     values = { json = "{}" }
   }
@@ -183,6 +203,14 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
       !strcontains(aws_apigatewayv2_stage.control_plane.access_log_settings[0].format, "query")
     )
     error_message = "The dashboard push surface must be a bounded, auditable WebSocket API that never logs its one-time ticket."
+  }
+
+  assert {
+    condition = (
+      aws_api_gateway_account.current.cloudwatch_role_arn == aws_iam_role.api_gateway_cloudwatch.arn &&
+      aws_iam_role_policy.api_gateway_cloudwatch.role == aws_iam_role.api_gateway_cloudwatch.id
+    )
+    error_message = "API Gateway must receive its account-level CloudWatch role before the logged WebSocket stage is created."
   }
 
   assert {

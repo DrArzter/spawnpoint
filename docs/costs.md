@@ -122,12 +122,65 @@ placeholders that have since been replaced with real figures.
 
 ### With several worlds
 
-Only one world runs at a time, so **compute does not change at all** — four worlds cost the same to play as one. And at
-a few hundred megabytes each, their save data and backups add cents, not dollars. Mod storage grows sub-linearly
-because binaries are content-addressed and shared between packs.
+Under [ADR-0023](adr/0023-multiple-worlds.md) one world ran at a time, so several packs cost nothing extra to play.
+[ADR-0048](adr/0048-one-instance-per-active-world.md) lets two worlds run on the same evening on two hosts, and
+[ADR-0054](adr/0054-place-a-session-on-a-host-with-room.md) lets a second world take a host that has room. This section
+shows what each of those costs for one evening, so the choice between them is arithmetic rather than taste.
 
-So several packs are, to a first approximation, free. The on-demand design is what makes that true: their cost would
-have been compute, and compute is only billed while playing. See [ADR-0023](adr/0023-multiple-worlds.md).
+**The control plane never sees a price.** A launch states the footprint's requirements — minimum memory, minimum
+cores, the allowed families — and EC2 Fleet answers with the cheapest instance that meets them at that moment. The
+table below is therefore not a catalogue the code reads; it is what this replay uses to stand in for EC2's answer.
+`m7i-flex.large` is the verified rate above. The others are us-east-1 list prices scaled by the ratio that rate implies
+(about 1.2) — the pricing API needs credentials this checkout did not have on 2026-09-17 — and they change what the
+replay says, never what the code does.
+
+| What EC2 could answer with | vCPU | Memory | $/hour | Estimate? |
+| --- | --- | --- | --- | --- |
+| `m7i-flex.large` | 2 | 8 GiB | 0.1147 | verified 2026-08-13 |
+| `r7i.large` | 2 | 16 GiB | ~0.159 | estimate; `r8i-flex.large` was read at 0.1592 |
+| `r7i.xlarge` | 4 | 32 GiB | ~0.317 | estimate |
+| `r7i.2xlarge` | 8 | 64 GiB | ~0.634 | estimate |
+
+**Footprints** are the unit of placement: the container's hard limit, not the heap. The modded Minecraft figure is the
+measurement in [docs/measurements.md](measurements.md); the others are placeholders for the catalog to replace.
+
+| World | Memory | Core weight |
+| --- | --- | --- |
+| Modded Minecraft (4 GiB heap) | 6 GiB | 1 |
+| Vanilla Minecraft | 3 GiB | 0.5 |
+| Factorio | 2 GiB | 0.5 |
+| Project Zomboid | 6 GiB | 1 |
+
+**One evening, four settings.** Produced by `lambdas/prototype/placement-evening.ts` on 2026-09-17, which replays
+scripted evenings through the real placement module. Every host is billed from launch to the end of a ten-minute
+drain, including the public address. A 1 GiB system reserve is kept off every host. The last figure in each cell is
+the share of starts that landed on a host already up, and so skipped provisioning and the image pull.
+
+| Evening | One host per world (ADR-0048) | Reuse, else launch what fits (ADR-0054 default) | The same, 8 GiB headroom | The same, 16 GiB headroom |
+| --- | --- | --- | --- | --- |
+| One modded world, three hours | 1 host, $0.38 | 1 host, **$0.38** | 2 hosts, $0.42 | 2 hosts, $0.45 |
+| Modded + Factorio + vanilla, overlapping | 3 hosts, $0.96 | 2 hosts, **$0.76**, 33 % warm | 2 hosts, $0.98, 67 % warm | 2 hosts, $1.56, 67 % warm |
+| Three modded worlds, overlapping | 3 hosts, $0.90 | 3 hosts, $0.90 | 3 hosts, $1.12, 33 % warm | 2 hosts, $1.56, 67 % warm |
+| Stop, then restart six minutes later | 2 hosts, $0.39 | 1 host, **$0.38**, 50 % warm | 3 hosts, $0.46, 50 % warm | 3 hosts, $0.53, 50 % warm |
+| Six small servers over an evening | 6 hosts, $1.86 | 2 hosts, **$0.94**, 67 % warm | 2 hosts, $1.26, 83 % warm | 2 hosts, $2.00, 83 % warm |
+| Forty servers for many groups, one evening | 40 hosts, $12.81 | 18 hosts, **$7.80**, 55 % warm | 17 hosts, $8.10, 63 % warm | 10 hosts, $8.22, 80 % warm |
+| Two hundred servers, one evening | 200 hosts, $61.31 | 67 hosts, **$37.94**, 67 % warm | 67 hosts, $38.03, 67 % warm | 62 hosts, $38.26, 70 % warm |
+
+What the table says:
+
+- **Reuse is the saving, at every size.** Launching only what the footprint needs and reusing what is up never costs
+  more than one host per world, costs exactly the same on a one-world evening, and takes about two fifths off an
+  evening of many small servers — for one group and for a fleet alike.
+- **Packing modded worlds does not pay.** Three 6 GiB footprints would fit one 32 GiB host, but that host costs more
+  than the three small ones EC2 answers a 7 GiB request with; on an evening of modded worlds the default and
+  one-per-world are the same bill. This is EC2's arithmetic at launch time, not a policy anyone chose.
+- **Headroom is a purchase, and the table prices it.** Keeping 16 GiB free on a busy fleet evening moves 80 % of
+  starts onto a host already up for about five percent more; on a one-world evening it is a second machine that
+  nobody used. That is exactly why it is a setting with a default of zero.
+- **The drain costs ten minutes of a host per evening**, about two cents on the small shape. The restart row shows
+  what it buys: a stop followed by a start reuses the machine instead of paying for a second.
+- **Re-run the replay when the estimates are replaced by API prices.** It changes the numbers in this table; it
+  changes nothing in the control plane, which asks EC2 the same question either way.
 
 ## What makes it much worse
 

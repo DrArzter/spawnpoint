@@ -267,8 +267,8 @@ run "lifecycle_v2_coordinator_is_small_scoped_and_not_wired_to_v1" {
   }
 
   assert {
-    condition     = toset(local.lifecycle_coordinator_table_actions) == toset(["dynamodb:GetItem", "dynamodb:PutItem"])
-    error_message = "Coordinator table permissions must remain limited to optimistic-CAS reads and writes."
+    condition     = toset(local.lifecycle_coordinator_table_actions) == toset(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Scan"])
+    error_message = "Coordinator table permissions must remain limited to optimistic-CAS reads and writes, plus the filtered scan that lists host records."
   }
 
   assert {

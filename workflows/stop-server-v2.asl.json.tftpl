@@ -127,6 +127,31 @@
         }
       },
       "ResultPath": null,
+      "Next": "Release Placement"
+    },
+    "Release Placement": {
+      "Type": "Task",
+      "Comment": "Placement bookkeeping (ADR-0054, phase 5): the session's reservation leaves the host record. Releasing what was never reserved is not a failure, and nothing acts on the drain that follows yet.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "releasePlacement",
+          "hostId.$": "$.request.instanceId",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultSelector": {
+        "released.$": "$.Payload.released"
+      },
+      "ResultPath": "$.placementRelease",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Release Stop Lease"
+        }
+      ],
       "Next": "Release Stop Lease"
     },
     "Release Stop Lease": {

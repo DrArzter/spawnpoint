@@ -30,28 +30,26 @@ resource "aws_iam_role" "api_gateway_cloudwatch" {
   assume_role_policy = data.aws_iam_policy_document.api_gateway_cloudwatch_assume.json
 }
 
+# The permissions of AmazonAPIGatewayPushToCloudWatchLogs, inline. API Gateway
+# validates the role against that policy's shape when the account setting is
+# written: a policy scoped to one log group was refused at UpdateAccount with
+# "The role ARN does not have required permissions configured" (the deploy of
+# 2026-09-17), so the wildcard is what the service demands, not a shortcut. The
+# deploy identity may attach only the Lambda logging policy to a role, which is
+# why this is inline rather than the managed policy itself.
 data "aws_iam_policy_document" "api_gateway_cloudwatch" {
   statement {
-    sid = "DiscoverSpawnpointLogStreams"
+    sid = "PushApiGatewayLogsToCloudWatch"
     actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
       "logs:DescribeLogGroups",
       "logs:DescribeLogStreams",
-    ]
-    resources = ["*"]
-  }
-
-  statement {
-    sid = "WriteSpawnpointApiGatewayAccessLogs"
-    actions = [
-      "logs:CreateLogStream",
       "logs:FilterLogEvents",
       "logs:GetLogEvents",
       "logs:PutLogEvents",
     ]
-    resources = [
-      aws_cloudwatch_log_group.control_plane_websocket_access.arn,
-      "${aws_cloudwatch_log_group.control_plane_websocket_access.arn}:*",
-    ]
+    resources = ["*"]
   }
 }
 

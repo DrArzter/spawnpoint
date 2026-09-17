@@ -8,6 +8,7 @@ import { Button } from "./ui/Button";
 import { Chip } from "./ui/Chip";
 import { Sheet } from "./ui/Dialog";
 import { SearchField } from "./ui/Fields";
+import { NoMatches } from "./ui/Filter";
 import { SkeletonRows } from "./ui/Skeleton";
 import { useSnackbar } from "./ui/Snackbar";
 import { Status, StatusKind } from "./ui/Status";
@@ -111,11 +112,12 @@ export function InvitationSheet({ game, world, open, onClose }: { game: Game; wo
       {audience === "direct" && (
         <section aria-label="Players" className="recipients">
           <SearchField autoComplete="off" label="Find a player" onChange={(event) => setQuery(event.target.value)} placeholder="Search by display name" value={query} />
-          <p className="secondary recipients-summary">{needle ? `${visible.length} matches` : `${reachable} reachable of ${recipients.length}`}{selected.size > 0 && <> · <button className="link-button" onClick={() => setSelected(new Set())} type="button">Clear selection</button></>}</p>
+          <p className="secondary recipients-summary">{needle ? `${visible.length} matches` : `${reachable} reachable of ${recipients.length}`}{selected.size > 0 && <Button onClick={() => setSelected(new Set())} size="small" variant="text">Clear selection</Button>}</p>
           {recipientState === "loading" && <SkeletonRows label="Loading approved players" rows={3} />}
           {recipientState === "error" && <Banner actions={<Button onClick={() => window.location.reload()} variant="text">Reload</Button>} title="Players could not be loaded" tone="error" />}
           {recipientState === "ready" && recipients.length === 0 && <EmptyState description="Approve another player in Access before sending a direct invitation." icon="group" title="No other approved players" />}
-          {recipientState === "ready" && recipients.length > 0 && (
+          {recipientState === "ready" && recipients.length > 0 && visible.length === 0 && <NoMatches filter={{ query, clear: () => setQuery("") }} icon="group" noun="players" />}
+          {recipientState === "ready" && visible.length > 0 && (
             <ul className="recipient-list">
               {visible.map((recipient) => {
                 const ready = recipient.delivery === "ready";
@@ -129,7 +131,6 @@ export function InvitationSheet({ game, world, open, onClose }: { game: Game; wo
                   </li>
                 );
               })}
-              {visible.length === 0 && <li className="secondary recipients-none">No players match “{query.trim()}”.</li>}
             </ul>
           )}
         </section>

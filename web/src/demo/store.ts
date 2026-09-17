@@ -1,4 +1,4 @@
-import type { AccessCandidate, AccessIdentity, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
+import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
 import type { HostMetrics, MetricRange } from "../api/contract";
 import type { ControlPlaneSnapshot, Preset, World } from "../model";
 import { DemoState, initialState, Mutable } from "./data";
@@ -354,6 +354,15 @@ export function subscriptions(): SubscriptionState {
 export function setSubscriptions(next: SubscriptionState): SubscriptionState {
   state.subscriptions = { ...state.subscriptions, ...next };
   return state.subscriptions;
+}
+
+export function appearance(): AppearancePreference {
+  return state.appearance;
+}
+
+export function setAppearance(next: AppearancePreference): AppearancePreference {
+  state.appearance = next;
+  return state.appearance;
 }
 
 export function recipients(): InvitationRecipient[] {

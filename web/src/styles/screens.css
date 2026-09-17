@@ -195,32 +195,13 @@
 }
 
 /* Profile */
-.profile-hero {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 16px 20px;
-}
-
-.profile-hero h1 {
-  font-size: 28px;
-  line-height: 36px;
-}
-
-.profile-hero p {
-  color: var(--ink-secondary);
-}
-
-.profile-hero .btn-row {
-  margin-left: auto;
-}
-
 .linked-group + .linked-group {
   margin-top: 20px;
 }
 
 .linked-group h3 {
   font-size: 14px;
+  line-height: 20px;
   font-weight: 500;
 }
 
@@ -306,21 +287,23 @@
   color: var(--term-muted);
 }
 
+/* The shared Status, recoloured for the one dark surface: the terminal keeps
+   its own inks whatever the theme, so the panel's status colours cannot be
+   trusted to read against it. */
 .terminal-bar .terminal-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   margin-left: 8px;
   color: var(--term-muted);
   font-size: 12px;
+  line-height: 16px;
 }
 
-.terminal-bar .terminal-status .icon {
+.terminal-bar .terminal-status .icon,
+.terminal-bar .terminal-status .ring {
   color: var(--term-muted);
 }
 
-.terminal-bar .terminal-status.online .icon {
-  color: #81c995;
+.terminal-bar .terminal-status.status-ok .icon {
+  color: var(--term-green);
 }
 
 .terminal-bar .icon-btn:hover {
@@ -442,6 +425,7 @@
   background: var(--warning-container);
   color: var(--warning-ink);
   font-size: 12px;
+  line-height: 16px;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -536,15 +520,6 @@
   font-size: 13px;
 }
 
-.link-button {
-  color: var(--primary-ink);
-  font-weight: 500;
-}
-
-.link-button:hover {
-  text-decoration: underline;
-}
-
 .recipient-list {
   display: grid;
   max-height: 320px;
@@ -597,11 +572,6 @@
 
 .recipient-unavailable strong {
   color: var(--ink-secondary);
-}
-
-.recipients-none {
-  padding: 16px;
-  text-align: center;
 }
 
 .invite-history {
@@ -661,4 +631,86 @@
     margin-left: 0;
     text-align: right;
   }
+}
+
+/* Appearance: two groups, each a label and its controls. The swatches are a
+   starting point, so they sit under the field rather than replacing it. */
+.appearance { display: grid; gap: 24px; }
+.appearance-group { display: grid; gap: 8px; }
+
+.appearance-label {
+  color: var(--ink-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.accent-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.accent-row .field { width: 160px; }
+
+/* The native colour input is a system dialog with a browser's own chrome; the
+   well is what makes it look like the rest of the console. */
+.accent-well {
+  position: relative;
+  display: block;
+  width: var(--control-height);
+  height: var(--control-height);
+  overflow: hidden;
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.accent-well input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+/* The control draws its swatch inside its own padding, which shows as a pale
+   band above and below the colour. Only the shadow parts can remove it. */
+.accent-well input::-webkit-color-swatch-wrapper { padding: 0; }
+.accent-well input::-webkit-color-swatch { border: 0; border-radius: 0; }
+.accent-well input::-moz-color-swatch { border: 0; border-radius: 0; }
+
+.accent-well:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--outline);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.swatch[aria-pressed="true"] {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.swatch:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.appearance-note {
+  max-width: 72ch;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  text-wrap: pretty;
+}
+
+.appearance-note code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+@media (pointer: coarse) {
+  .swatch { width: 44px; height: 44px; }
 }

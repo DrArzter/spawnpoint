@@ -1,9 +1,9 @@
 import { demoApi, demoEnabled } from "./demo";
-import type { SpawnpointApi, SubscriptionState } from "./api/contract";
+import type { AppearancePreference, SpawnpointApi, SubscriptionState } from "./api/contract";
 import { liveApi, liveAuthConfigured } from "./api/live";
 
 export type {
-  AccessCandidate, AccessIdentity, AccessRole, ActiveSession, AuthState, BackupEntry, BackupInventory,
+  AccessCandidate, AccessIdentity, AccessRole, ActiveSession, AppearancePreference, AuthState, BackupEntry, BackupInventory,
   HostMetrics, HostMetricSeries, InvitationRecipient, InvitationSummary, MetricRange, SessionOperation,
   SpawnpointApi, SpawnpointSession, SubscriptionState, VisitorSession, WorldLifecycleAction,
 } from "./api/contract";
@@ -45,6 +45,9 @@ export const sendInvitation = (gameId: string, worldId: string, audience: "broad
 
 export const loadSubscriptions = () => api.loadSubscriptions();
 export const updateSubscriptions = (subscriptions: SubscriptionState) => api.updateSubscriptions(subscriptions);
+
+export const loadAppearance = () => api.loadAppearance();
+export const updateAppearance = (appearance: AppearancePreference) => api.updateAppearance(appearance);
 
 // The front door has its own address so a sign-out lands there even if the
 // session outlives the request that was meant to end it.

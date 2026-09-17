@@ -69,7 +69,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 36px;
+  height: var(--control-height);
   max-width: 320px;
   padding: 0 8px 0 10px;
   border: 1px solid var(--outline);
@@ -161,7 +161,7 @@
   gap: 12px;
   height: 40px;
   padding: 0 12px;
-  border-radius: 20px;
+  border-radius: var(--radius-nav);
   color: var(--ink);
   font-weight: 500;
   white-space: nowrap;
@@ -296,7 +296,7 @@
     justify-content: flex-start;
     gap: 12px;
     padding: 0 12px;
-    border-radius: 20px;
+    border-radius: var(--radius-nav);
     height: 40px;
     margin: 0;
   }
@@ -403,12 +403,6 @@
   color: inherit;
 }
 
-.scope-empty {
-  padding: 24px 12px;
-  color: var(--ink-secondary);
-  text-align: center;
-}
-
 /* Full-page states before the shell exists. */
 .boot {
   display: grid;
@@ -425,7 +419,7 @@
   width: min(440px, 100%);
   padding: 40px 32px 32px;
   border: 1px solid var(--outline);
-  border-radius: 12px;
+  border-radius: var(--radius-dialog);
   background: var(--surface);
   text-align: center;
 }
@@ -433,7 +427,7 @@
 .boot-card .mark {
   width: 48px;
   height: 48px;
-  border-radius: 12px;
+  border-radius: var(--radius-dialog);
 }
 
 .boot-brand {
@@ -477,7 +471,7 @@
   width: 100%;
   height: 4px;
   overflow: hidden;
-  border-radius: 2px;
+  border-radius: var(--radius-indicator);
   background: var(--primary-container);
 }
 
@@ -486,7 +480,7 @@
   display: block;
   width: 40%;
   height: 100%;
-  border-radius: 2px;
+  border-radius: var(--radius-indicator);
   background: var(--primary);
   animation: boot-slide 1.4s var(--ease) infinite;
 }

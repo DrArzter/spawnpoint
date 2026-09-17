@@ -206,6 +206,7 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
       <Card flush title="Access requests">
         <DataTable
           columns={candidateColumns}
+          decision
           hideHeader
           empty={<EmptyState description="A visitor appears here after signing in and asking for access." icon="person_add" title="Nobody is waiting for review" />}
           label="Access requests"
@@ -217,7 +218,7 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
       </Card>
 
       <Card flush title="Identities">
-        <DataTable columns={columns} hideHeader label="Identities and roles" loading={state === "loading"} rowKey={(member) => member.id} rows={members} />
+        <DataTable columns={columns} decision hideHeader label="Identities and roles" loading={state === "loading"} rowKey={(member) => member.id} rows={members} />
       </Card>
 
       <Card
@@ -368,15 +369,15 @@ function Notifications({ games }: { games: readonly Game[] }) {
   const disabled = state === "loading" || state === "saving";
   const columns: Column<Game>[] = [
     { id: "game", label: "Game", render: (game) => <strong>{game.displayName}</strong> },
-    { id: "started", label: "Session started", align: "end", width: "150px", render: (game) => <label className="switch"><input aria-label={`${game.displayName} started`} checked={Boolean(subscriptions[`${game.id}.started`])} disabled={disabled} onChange={() => void toggle(`${game.id}.started`)} type="checkbox" /><span aria-hidden="true" className="switch-track" /></label> },
-    { id: "stopped", label: "Session stopped", align: "end", width: "150px", render: (game) => <label className="switch"><input aria-label={`${game.displayName} stopped`} checked={Boolean(subscriptions[`${game.id}.stopped`])} disabled={disabled} onChange={() => void toggle(`${game.id}.stopped`)} type="checkbox" /><span aria-hidden="true" className="switch-track" /></label> },
+    { id: "started", label: "Session started", align: "end", width: "150px", render: (game) => <Switch checked={Boolean(subscriptions[`${game.id}.started`])} disabled={disabled} label={`${game.displayName} started`} labelHidden onChange={() => void toggle(`${game.id}.started`)} /> },
+    { id: "stopped", label: "Session stopped", align: "end", width: "150px", render: (game) => <Switch checked={Boolean(subscriptions[`${game.id}.stopped`])} disabled={disabled} label={`${game.displayName} stopped`} labelHidden onChange={() => void toggle(`${game.id}.stopped`)} /> },
   ];
 
   return (
     <div className="page notification-groups">
       {state === "error" && <Banner actions={<Button onClick={() => void reload()} variant="text">Try again</Button>} description={error} title="Subscriptions are unavailable" tone="error" />}
-      <Card actions={<span aria-live="polite" className="secondary" role="status">{state === "saving" ? "Saving…" : state === "ready" ? "Saved to your identity" : ""}</span>} flush title="Server events">
-        <DataTable columns={columns} label="Server event subscriptions" loading={state === "loading"} rowKey={(game) => game.id} rows={games} />
+      <Card actions={<span aria-live="polite" className="secondary" role="status">{state === "saving" ? "Saving…" : state === "ready" ? "Saved to your identity" : ""}</span>} flush title="Session events">
+        <DataTable columns={columns} label="Session event subscriptions" loading={state === "loading"} rowKey={(game) => game.id} rows={games} />
       </Card>
       <Card title="Game invitations">
         {state === "loading" ? <SkeletonRows label="Loading invitation preferences" rows={2} /> : <>

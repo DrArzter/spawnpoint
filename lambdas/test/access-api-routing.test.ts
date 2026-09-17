@@ -29,6 +29,8 @@ const WITHOUT_PERMISSION = new Map<string, string>([
   ["GET /me", "the caller's own identity and role"],
   ["GET /me/subscriptions", "the caller's own notification choices"],
   ["PUT /me/subscriptions", "the caller's own notification choices"],
+  ["GET /me/appearance", "the caller's own theme and accent"],
+  ["PUT /me/appearance", "the caller's own theme and accent"],
 ]);
 
 async function deployedRouteKeys(): Promise<Set<string>> {

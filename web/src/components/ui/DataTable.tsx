@@ -18,7 +18,7 @@ export type Column<Row> = {
   truncate?: boolean;
 };
 
-export function DataTable<Row>({ columns, rows, rowKey, label, empty = "No items", loading = false, loadingRows = 3, selectedKey, className, hideHeader = false }: {
+export function DataTable<Row>({ columns, rows, rowKey, label, empty = "No items", loading = false, loadingRows = 3, selectedKey, className, hideHeader = false, decision = false }: {
   columns: readonly Column<Row>[];
   rows: readonly Row[];
   rowKey: (row: Row) => string;
@@ -34,10 +34,17 @@ export function DataTable<Row>({ columns, rows, rowKey, label, empty = "No items
    * column for anybody reading it aloud — it just stops taking a line.
    */
   hideHeader?: boolean;
+  /**
+   * For a row laid out as person, control, decision. On the Medium step the
+   * person keeps the first line and the control and the decision share the
+   * second, so neither is squeezed against the other while the row is still
+   * too wide to stack into a record.
+   */
+  decision?: boolean;
 }) {
   const cellClass = (column: Column<Row>) => cx(column.actions && "cell-actions", column.align === "end" && "cell-end", column.align === "num" && "cell-num", column.secondary && "cell-secondary", column.truncate && "cell-truncate");
   return (
-    <div className={cx("table-wrap", className)}>
+    <div className={cx("table-wrap", decision && "table-decision", className)}>
       <table aria-busy={loading || undefined} aria-label={label} className="table">
         <colgroup>{columns.map((column) => <col className={cx(column.secondary && "cell-secondary")} key={column.id} style={column.width ? { width: column.width } : undefined} />)}</colgroup>
         <thead className={cx(hideHeader && "visually-hidden")}>

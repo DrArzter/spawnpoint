@@ -37,11 +37,19 @@ export function Card({ children, className, title, description, actions, footer,
 
 export type Crumb = { label: string; href: string };
 
-export function PageHeader({ title, description, status, actions, overflow, breadcrumb }: {
+export function PageHeader({ title, description, status, actions, overflow, breadcrumb, leading, subtitle }: {
   title: ReactNode;
   description?: ReactNode;
   status?: ReactNode;
   actions?: ReactNode;
+  /** What stands for the resource before its name: a person's avatar. */
+  leading?: ReactNode;
+  /**
+   * The second line of the name itself — a handle under a person — as opposed
+   * to `description`, which is a sentence about the page and sits under the
+   * whole title row.
+   */
+  subtitle?: ReactNode;
   /**
    * The overflow menu, at the far right of the title row. It belongs with the
    * name and the state rather than with the decision: when the row wraps, the
@@ -56,6 +64,7 @@ export function PageHeader({ title, description, status, actions, overflow, brea
           it. Four independent children wrapped one at a time and left orphans —
           a lone menu on its own line, a state under the name. */}
       <div className="page-title-row">
+        {leading && <div className="page-leading">{leading}</div>}
         <div className="page-title">
           {breadcrumb && breadcrumb.length > 0 && (
             <nav aria-label="Breadcrumb" className="breadcrumb">
@@ -67,7 +76,7 @@ export function PageHeader({ title, description, status, actions, overflow, brea
               ))}
             </nav>
           )}
-          <h1>{title}</h1>
+          {subtitle ? <div className="page-name"><h1>{title}</h1><p className="page-subtitle">{subtitle}</p></div> : <h1>{title}</h1>}
           {status}
         </div>
         {(actions || overflow) && (
@@ -160,10 +169,14 @@ export function Details({ items, label, flush = false }: { items: readonly Detai
   );
 }
 
-export function DetailsGroup({ title, items }: { title: string; items: readonly DetailItem[] }) {
+// `level` is the heading level the group sits at. Two groups straight under a
+// page title are its sections, so they take h2; groups inside a titled card
+// take h3 under it. The outline has to step one level at a time either way.
+export function DetailsGroup({ title, items, level = 3 }: { title: string; items: readonly DetailItem[]; level?: 2 | 3 }) {
+  const Heading = level === 2 ? "h2" : "h3";
   return (
     <section className="details-group">
-      <h3>{title}</h3>
+      <Heading>{title}</Heading>
       <Details items={items} label={title} />
     </section>
   );

@@ -212,7 +212,7 @@
 }
 
 .status-ok .icon {
-  color: var(--success);
+  color: var(--success-ink);
 }
 
 .status-progress .ring {
@@ -229,11 +229,11 @@
 }
 
 .status-error .icon {
-  color: var(--error);
+  color: var(--error-ink);
 }
 
 .status-warning .icon {
-  color: var(--warning);
+  color: var(--warning-ink);
 }
 
 .status-info .icon {
@@ -357,6 +357,7 @@ button.chip[aria-pressed="true"] {
 }
 
 .card-header p {
+  max-width: 72ch;
   margin-top: 2px;
   color: var(--ink-secondary);
   font-size: 13px;
@@ -462,6 +463,12 @@ button.chip[aria-pressed="true"] {
   min-width: 0;
 }
 
+/* The avatar before a person's name: it keeps its size while the name gives way. */
+.page-leading {
+  flex: none;
+  display: inline-flex;
+}
+
 /* Actions and the overflow travel together: either they fit beside the name or
    they take a line, never one without the other. */
 .page-controls {
@@ -498,6 +505,18 @@ button.chip[aria-pressed="true"] {
   text-overflow: ellipsis;
 }
 
+/* Name over handle, as one column, so the status beside them centres on the pair. */
+.page-name {
+  display: grid;
+  min-width: 0;
+}
+
+.page-subtitle {
+  color: var(--ink-secondary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
 .page-title .status {
   font-size: 14px;
 }
@@ -525,7 +544,7 @@ button.chip[aria-pressed="true"] {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 48px;
+  height: var(--row-height);
   padding: 0 16px;
   color: var(--ink-secondary);
   font-weight: 500;
@@ -549,7 +568,7 @@ button.chip[aria-pressed="true"] {
   bottom: -1px;
   left: 0;
   height: 3px;
-  border-radius: 3px 3px 0 0;
+  border-radius: var(--radius-tab-indicator) var(--radius-tab-indicator) 0 0;
   background: var(--primary);
 }
 
@@ -563,6 +582,7 @@ button.chip[aria-pressed="true"] {
   background: var(--surface-variant);
   color: var(--ink);
   font-size: 12px;
+  line-height: 16px;
 }
 
 .tab[aria-selected="true"] .count {
@@ -591,7 +611,7 @@ button.chip[aria-pressed="true"] {
 }
 
 .table th {
-  height: 48px;
+  height: var(--row-height);
   color: var(--ink-secondary);
   font-weight: 500;
   white-space: nowrap;
@@ -722,6 +742,62 @@ button.chip[aria-pressed="true"] {
 
 .table-skeleton td {
   height: var(--row-height);
+}
+
+/* Medium: a row that carries a person, a control and a decision is still too
+   wide to fold into a record, and too narrow for the three to share a line
+   without the person's second line wrapping. The person keeps the first line;
+   the control and the decision share the second, packed against the end. The
+   header goes: a person, a select showing its value and a pair of buttons
+   already say what they are. */
+@container (min-width: 600px) and (max-width: 839px) {
+  .table-decision .table,
+  .table-decision .table tbody {
+    display: block;
+  }
+
+  .table-decision .table thead,
+  .table-decision .table colgroup {
+    display: none;
+  }
+
+  .table-decision .table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    column-gap: 16px;
+    padding: 8px 16px 12px;
+    border-bottom: 1px solid var(--outline);
+  }
+
+  .table-decision .table tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .table-decision .table tbody tr:hover {
+    background: var(--surface-hover);
+  }
+
+  .table-decision .table tbody td {
+    display: block;
+    height: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .table-decision .table tbody td:first-child {
+    grid-column: 1 / -1;
+    padding: 4px 0 8px;
+  }
+
+  .table-decision .table tbody td:nth-child(2) {
+    grid-column: 2;
+  }
+
+  .table-decision .table tbody td:nth-child(3) {
+    grid-column: 3;
+  }
 }
 
 @container (max-width: 599px) {
@@ -1171,7 +1247,7 @@ button.chip[aria-pressed="true"] {
   flex: none;
   width: 36px;
   height: 20px;
-  border-radius: 10px;
+  border-radius: var(--radius-switch);
   background: var(--outline-strong);
   transition: background var(--dur-fast) var(--ease);
 }
@@ -1297,7 +1373,7 @@ button.chip[aria-pressed="true"] {
 }
 
 .menu-item-danger .icon {
-  color: var(--error);
+  color: var(--error-ink);
 }
 
 .menu-item small {
@@ -1332,7 +1408,7 @@ button.chip[aria-pressed="true"] {
   width: min(520px, calc(100vw - 32px));
   max-width: none;
   max-height: calc(100dvh - 32px);
-  border-radius: 12px;
+  border-radius: var(--radius-dialog);
 }
 
 .dialog-body {
@@ -1413,6 +1489,7 @@ button.chip[aria-pressed="true"] {
 .sheet-header h2 {
   font-size: 20px;
   line-height: 28px;
+  font-weight: 500;
   padding-top: 6px;
 }
 
@@ -1469,6 +1546,7 @@ button.chip[aria-pressed="true"] {
   display: flex;
   align-items: flex-start;
   gap: 8px;
+  max-width: 72ch;
   padding: 2px 0 10px;
   color: var(--ink-secondary);
   font-size: 13px;
@@ -1550,7 +1628,7 @@ button.chip[aria-pressed="true"] {
 }
 
 .banner-error .icon {
-  color: var(--error);
+  color: var(--error-ink);
 }
 
 .banner-success {
@@ -1559,7 +1637,7 @@ button.chip[aria-pressed="true"] {
 }
 
 .banner-success .icon {
-  color: var(--success);
+  color: var(--success-ink);
 }
 
 @media (max-width: 599px) {
@@ -1732,12 +1810,14 @@ button.chip[aria-pressed="true"] {
   width: 24px;
   height: 24px;
   font-size: 12px;
+  line-height: 16px;
 }
 
 .avatar-large {
   width: 64px;
   height: 64px;
   font-size: 24px;
+  line-height: 32px;
 }
 
 /* Copy affordance */
@@ -1790,7 +1870,15 @@ button.chip[aria-pressed="true"] {
 .spark-row {
   display: grid;
   gap: 4px;
+  max-width: 960px;
   padding: 12px 0;
+}
+
+/* A line with no axes carries its shape in its slope. Stretched across a
+   2560px pane the slope goes, so the chart stops at a width it can be read
+   at, and the scale under it stops with it. */
+.scale {
+  max-width: 960px;
 }
 
 .spark-head,
@@ -1807,6 +1895,7 @@ button.chip[aria-pressed="true"] {
 .spark-head strong {
   color: var(--ink);
   font-size: 14px;
+  line-height: 20px;
   font-weight: 500;
 }
 

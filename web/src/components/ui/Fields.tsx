@@ -36,7 +36,17 @@ export function SearchField({ label, className, ...props }: InputHTMLAttributes<
   );
 }
 
-export function Switch({ checked, disabled = false, label, note, onChange }: { checked: boolean; disabled?: boolean; label: string; note?: string; onChange: () => void }) {
+// `labelHidden` is for a cell whose column header already names the setting:
+// the label still reaches a screen reader, it just stops taking the width.
+export function Switch({ checked, disabled = false, label, note, onChange, labelHidden = false }: { checked: boolean; disabled?: boolean; label: string; note?: string; onChange: () => void; labelHidden?: boolean }) {
+  if (labelHidden) {
+    return (
+      <label className="switch">
+        <input aria-label={label} checked={checked} disabled={disabled} onChange={onChange} type="checkbox" />
+        <span aria-hidden="true" className="switch-track" />
+      </label>
+    );
+  }
   return (
     <div className="switch-row">
       <span>

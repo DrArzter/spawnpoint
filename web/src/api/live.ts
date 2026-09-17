@@ -1,6 +1,6 @@
 import type { ControlPlaneSnapshot } from "../model";
 import type {
-  AccessCandidate, AccessIdentity, AccessRole, AuthState, BackupInventory, HostMetrics, InvitationRecipient, MetricRange,
+  AccessCandidate, AccessIdentity, AccessRole, AppearancePreference, AuthState, BackupInventory, HostMetrics, InvitationRecipient, MetricRange,
   InvitationSummary, SessionOperation, SpawnpointApi, SpawnpointSession, SubscriptionState, WorldLifecycleAction,
 } from "./contract";
 import { apiFailure } from "./contract";
@@ -441,5 +441,23 @@ export const liveApi: SpawnpointApi = {
     if (!response.ok) throw await apiFailure(response, "Your notification subscriptions could not be saved.");
     const body = await response.json() as { subscriptions: SubscriptionState };
     return body.subscriptions;
+  },
+
+  async loadAppearance(): Promise<AppearancePreference> {
+    const response = await authorizedFetch("/me/appearance");
+    if (!response.ok) throw await apiFailure(response, "Your appearance settings could not be loaded.");
+    const body = await response.json() as { appearance: AppearancePreference };
+    return body.appearance;
+  },
+
+  async updateAppearance(appearance: AppearancePreference): Promise<AppearancePreference> {
+    const response = await authorizedFetch("/me/appearance", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ appearance }),
+    });
+    if (!response.ok) throw await apiFailure(response, "Your appearance settings could not be saved.");
+    const body = await response.json() as { appearance: AppearancePreference };
+    return body.appearance;
   },
 };

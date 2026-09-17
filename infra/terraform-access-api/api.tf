@@ -211,6 +211,8 @@ locals {
     "GET /access/roles",
     "GET /me/subscriptions",
     "PUT /me/subscriptions",
+    "GET /me/appearance",
+    "PUT /me/appearance",
     "GET /invitations/recipients",
     "POST /games/{gameId}/worlds/{worldId}/start",
     "POST /games/{gameId}/worlds/{worldId}/stop",

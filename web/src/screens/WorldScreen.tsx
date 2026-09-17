@@ -92,6 +92,9 @@ function buildSessionDetails(game: Game, world: World, sharedSession: SharedHost
       explain: `${game.displayName} runs one session at a time on the shared host. ${reason.detail}`,
     },
     { label: "Compute host", value: host ? <Status kind={hostStatus(host.state).kind} label={`${host.name} · ${hostStatus(host.state).label.toLowerCase()}`} /> : <Ghost>No host available</Ghost>, hint: host?.instanceType ? `${host.instanceType}${hostLocation}` : undefined },
+    // The same fact the Worlds page shows for the host: a reader who came from
+    // there must not lose it on the way in.
+    ...(host ? [{ label: "Launched", value: host.launchedAt ? <Timestamp value={host.launchedAt} /> : <Ghost>Not running</Ghost> }] : []),
     // Only meaningful while a watchdog is probing a ready session, which is
     // exactly when somebody is asking.
     ...(players === null ? [] : [{ label: "Players online", value: <strong className="num">{players}</strong>, hint: idleAt === null ? undefined : <>Counted <Timestamp value={idleAt} /></> }]),
@@ -273,7 +276,7 @@ function WorldTabContent({ busy, game, granted, onDownloadPack, onWorldAction, o
 }>) {
   return <>
     {tab === "details" && <>
-      <Card><div className="details-columns"><DetailsGroup items={sessionDetails} title="Session" /><DetailsGroup items={worldDetails} title="World" /></div></Card>
+      <Card><div className="details-columns"><DetailsGroup items={sessionDetails} level={2} title="Session" /><DetailsGroup items={worldDetails} level={2} title="World" /></div></Card>
       <Card flush title="Operations">
         <DataTable columns={operationColumns} empty={<EmptyState description="Completed executions will be listed after the operations API exposes history. Spawnpoint shows only what it observes." icon="sync" title="No operation in progress" />} label="Running operations" rowKey={(operation) => `${operation.type}-${operation.id}`} rows={operations} />
       </Card>

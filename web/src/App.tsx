@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { ActiveSession, AuthState, endSession, loadControlPlane, requestCreateWorld, requestPackDownload, requestSessionOperation, requestWorldLifecycle, restoreAuth, subscribeControlPlane } from "./auth";
+import { ActiveSession, AuthState, endSession, loadAppearance, loadControlPlane, requestCreateWorld, requestPackDownload, requestSessionOperation, requestWorldLifecycle, restoreAuth, subscribeControlPlane } from "./auth";
 import { InvitationSheet } from "./components/InvitationSheet";
 import { Button } from "./components/ui/Button";
 import { Dialog, Sheet } from "./components/ui/Dialog";
@@ -23,7 +23,7 @@ import { WorldScreen } from "./screens/WorldScreen";
 import { WorldsScreen } from "./screens/WorldsScreen";
 import { Confirmation, Pending, SessionAction, WorldActionKind } from "./shell/actions";
 import { AppBar } from "./shell/AppBar";
-import { useBootCard, useMediaQuery, useRoute, useStoredState, useTheme } from "./shell/hooks";
+import { useBootCard, useMediaQuery, useRoute, useStoredState, useAppearance } from "./shell/hooks";
 import { NavDrawer, NavItem } from "./shell/NavDrawer";
 import { ScopeDialog } from "./shell/ScopeDialog";
 import { initializeTelegram, ViewerProfile } from "./telegram";
@@ -98,7 +98,8 @@ type ControlPlaneState =
 function ConsoleShell({ session, continuesBootCard }: { session: ActiveSession; continuesBootCard: boolean }) {
   const notify = useSnackbar();
   const [route, navigate] = useRoute();
-  const { theme, cycle: cycleTheme, label: themeLabel } = useTheme();
+  const appearance = useAppearance();
+  const { theme, cycle: cycleTheme, label: themeLabel, adopt: adoptAppearance } = appearance;
   const mobile = useMediaQuery("(max-width: 959px)");
   const [drawerOpen, setDrawerOpen] = useState(false);
   // The drawer collapses to an icon rail on narrow desktops until the person
@@ -166,6 +167,16 @@ function ConsoleShell({ session, continuesBootCard }: { session: ActiveSession; 
   }
 
   useEffect(() => { void refresh(true); }, []);
+
+  // The browser painted from its own cache; the identity's choice outranks it.
+  // A failure here is silent on purpose: a palette is not worth a banner.
+  useEffect(() => {
+    let cancelled = false;
+    loadAppearance()
+      .then((stored) => { if (!cancelled) adoptAppearance(stored); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [adoptAppearance]);
 
   // EventBridge updates the projection and the socket carries only an
   // invalidation. Permission-filtered state still comes from the HTTP API.
@@ -305,7 +316,7 @@ function ConsoleShell({ session, continuesBootCard }: { session: ActiveSession; 
           {page === "console" && <ConsoleScreen game={game} serverState={serverState} />}
           {page === "releases" && <ReleasesScreen game={game} granted={granted} loading={listStatus === "loading"} onCreateWorld={(target, preset) => setCreating({ game: target, preset })} pending={pending} />}
           {page === "access" && <AccessScreen bootstrap={bootstrap} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate({ page: "access", accessTab: tab })} roles={roles} tab={route.accessTab} />}
-          {page === "profile" && <ProfileScreen member={currentMember} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
+          {page === "profile" && <ProfileScreen appearance={appearance} member={currentMember} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
         </main>
       </div>
 

@@ -1,5 +1,6 @@
-import type { AccessCandidate, AccessIdentity, AccessRole, ActiveSession, BackupEntry, InvitationSummary, SubscriptionState } from "../auth";
+import type { AccessCandidate, AccessIdentity, AccessRole, ActiveSession, AppearancePreference, BackupEntry, InvitationSummary, SubscriptionState } from "../auth";
 import type { ControlPlaneSnapshot } from "../model";
+import { DEFAULT_ACCENT } from "../styles/accent";
 
 // The demo mutates its own control plane, so every record it holds is mutable
 // while the app keeps reading the real read-only domain types.
@@ -14,6 +15,7 @@ export type DemoState = {
   candidates: Mutable<AccessCandidate>[];
   delivery: Record<string, "ready" | "notifications_off" | "bot_unavailable">;
   subscriptions: SubscriptionState;
+  appearance: AppearancePreference;
   invitations: Record<string, InvitationSummary[]>;
   backups: Record<string, BackupEntry[]>;
   /** Effects that land when their time passes; read calls settle them. */
@@ -126,6 +128,7 @@ export function initialState(): DemoState {
       "minecraft.started": true, "minecraft.stopped": true, "factorio.started": true, "factorio.stopped": false,
       "invitation.broadcast": true, "invitation.direct": true,
     },
+    appearance: { theme: "system", accent: DEFAULT_ACCENT },
     invitations: {
       "minecraft/minecraft-rostik-12345678": [
         { id: "invite-1", audience: "broadcast", status: "DELIVERED", recipientCount: null, targetCount: 2, successCount: 2, failureCount: 0, createdAt: "2026-09-14T17:55:00.000Z" },

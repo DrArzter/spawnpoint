@@ -64,6 +64,7 @@ declare global {
 }
 
 const THEME_STORAGE_KEY = "spawnpoint.theme";
+const ACCENT_STORAGE_KEY = "spawnpoint.accent";
 
 function systemTheme(): Theme {
   const app = window.Telegram?.WebApp;
@@ -90,6 +91,28 @@ export function persistThemePreference(preference: ThemePreference): void {
     window.localStorage.setItem(THEME_STORAGE_KEY, preference);
   } catch {
     // The active theme still works for this session when storage is blocked.
+  }
+}
+
+/**
+ * The accent is stored against the identity, but it is also kept here: the
+ * panel paints before the session answers, and a colour that arrives a second
+ * late is a flash of the wrong palette on every load.
+ */
+export function getStoredAccent(): string | null {
+  try {
+    const stored = window.localStorage.getItem(ACCENT_STORAGE_KEY);
+    return stored !== null && /^#[0-9a-f]{6}$/i.test(stored) ? stored.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function persistAccent(accent: string): void {
+  try {
+    window.localStorage.setItem(ACCENT_STORAGE_KEY, accent);
+  } catch {
+    // The chosen colour still applies for this session when storage is blocked.
   }
 }
 
@@ -130,8 +153,8 @@ export function applyTheme(theme: Theme): void {
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme;
   // The app bar colour, so the Telegram chrome continues the bar.
-  const bar = theme === "dark" ? "#202124" : "#ffffff";
-  const canvas = theme === "dark" ? "#202124" : "#f8f9fa";
+  const bar = theme === "dark" ? "#222222" : "#ffffff";
+  const canvas = theme === "dark" ? "#222222" : "#f1f1f1";
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", bar);
   const app = window.Telegram?.WebApp;
   if (!app?.initData) return;

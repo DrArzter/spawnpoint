@@ -120,4 +120,14 @@ export const demoApi: SpawnpointApi = {
     await demoLatency();
     return store.setSubscriptions(subscriptions);
   },
+
+  async loadAppearance() {
+    await demoLatency();
+    return store.appearance();
+  },
+
+  async updateAppearance(appearance) {
+    await demoLatency();
+    return store.setAppearance(appearance);
+  },
 };

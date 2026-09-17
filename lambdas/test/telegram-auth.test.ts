@@ -66,6 +66,7 @@ test("the Telegram adapter produces a provider-neutral principal", async () => {
     displayName: "DrArzter",
     username: "drarzter",
     photoUrl: null,
+    email: null,
   });
   assert.equal(botTokenReads, 1);
   assert.equal(await authenticateWith(provider, { password: "not-a-telegram-credential" }), null);
@@ -82,6 +83,7 @@ test("the login port rejects an adapter that crosses provider boundaries", async
         displayName: "Mismatch",
         username: null,
         photoUrl: null,
+        email: null,
       }),
     }, {}),
     /returned principal for discord/,

@@ -52,7 +52,10 @@ export type ThemePreference = Theme | "system";
 export type ViewerProfile = {
   displayName: string;
   inTelegram: boolean;
+  /** Which account the session was signed in through. */
+  provider?: "telegram" | "password";
   username?: string;
+  email?: string;
   photoUrl?: string;
   telegramId?: string;
 };

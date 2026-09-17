@@ -14,7 +14,7 @@ export function ProfileScreen({ member, role, viewer, onSignOut }: { member: Mem
         <Avatar name={member.name} photoUrl={viewer.photoUrl} size="large" />
         <div>
           <h1>{member.name}</h1>
-          <p>{viewer.username ? `@${viewer.username}` : "Spawnpoint identity"}</p>
+          <p>{viewer.username ? `@${viewer.username}` : viewer.email ?? "Spawnpoint identity"}</p>
         </div>
         <Chip icon="admin_panel_settings" tone="primary">{role?.name ?? "No role"}</Chip>
         <ActionRow>
@@ -27,6 +27,8 @@ export function ProfileScreen({ member, role, viewer, onSignOut }: { member: Mem
           { label: "Display name", value: member.name },
           { label: "Profile photo", value: viewer.photoUrl ? <Avatar name={member.name} photoUrl={viewer.photoUrl} /> : <Ghost>Not set</Ghost> },
           { label: "Role", value: role?.name ?? "No role", hint: role ? plural(role.permissions.length, "permission") : undefined },
+          { label: "Signed in with", value: viewer.provider === "password" ? "Email and password" : "Telegram" },
+          ...(viewer.email ? [{ label: "Email", value: viewer.email, copy: viewer.email, explain: "Your sign-in name. Nothing is sent to it yet, so it is listed as unverified." }] : []),
           {
             label: "Identity ID",
             value: member.id,

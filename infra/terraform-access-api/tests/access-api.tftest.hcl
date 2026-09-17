@@ -217,8 +217,8 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
-    condition     = aws_lambda_function.access_api.environment[0].variables.SPAWNPOINT_PLACEMENT == "single"
-    error_message = "Placement (ADR-0054) must default to single, the behaviour that runs today; shared is a deliberate setting."
+    condition     = aws_lambda_function.access_api.environment[0].variables.SPAWNPOINT_PLACEMENT == "shared"
+    error_message = "Placement (ADR-0054) defaults to shared since the phase-11 cutover; single is the deliberate revert, set in tfvars."
   }
 
   assert {

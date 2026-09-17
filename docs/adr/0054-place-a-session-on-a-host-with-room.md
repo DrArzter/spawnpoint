@@ -1,6 +1,7 @@
 # ADR-0054 — Place a session on a host with room, or launch one that fits
 
-- Status: Proposed
+- Status: Accepted — the default placement since 2026-09-17 (`placement = "shared"` on the access-api root); launching
+  a host stays behind `launch`, which is `disabled` until the runbook's Parameter Store keys exist
 - Date: 2026-09-17
 - Milestone: later — after [ADR-0048](0048-one-instance-per-active-world.md)'s trigger has fired at least once
 - Amends: [ADR-0048](0048-one-instance-per-active-world.md), which keeps the host created for the session, S3 as the

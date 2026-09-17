@@ -105,7 +105,9 @@ function storeWith(credentials: readonly PasswordCredential[]): PasswordCredenti
       recorded.lookups.push(email);
       return credentials.find((credential) => credential.email === email) ?? null;
     },
-    async recordFailure(email, guard) { recorded.failures.push({ email, guard }); },
+    async recordFailure(email, guard, attemptedAt) {
+      recorded.failures.push({ email, guard: afterFailedSignIn(guard, attemptedAt) });
+    },
     async recordSuccess(email) { recorded.successes.push(email); },
   };
 }

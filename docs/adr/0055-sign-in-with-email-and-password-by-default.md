@@ -58,8 +58,10 @@ one. A taken address is refused as such: on the registration path a person is as
 alternative is a form that silently does nothing.
 
 **A deployment says which ways in it offers.** `GET /auth/providers` is public and lists the adapters the deployment
-routes. Email and password is a deployment switch, `password_login_enabled`, on by default; off, its routes answer as
-if they had never been deployed, so the panel reads them as not connected rather than broken
+routes. Email and password login is a deployment switch, `password_login_enabled`, on by default; off, its routes answer as
+if they had never been deployed. Anonymous registration is a separate switch, `password_registration_enabled`, off by
+default. Closing registration never locks out credentials already created. The provider response lists both sign-in
+adapters and adapters accepting self-registration, so the panel offers only actions that lead somewhere
 ([ADR-0053](0053-tell-not-built-apart-from-broken.md)). Telegram's button is drawn only when the API offers Telegram
 and the build knows the public client id.
 
@@ -93,8 +95,8 @@ bootstrap card, the visitor card — now reads the provider first.
   one through. Today the way back is the owner deleting the credential and the person registering again.
 - An unverified address is a claim. A person can register any address they like; nothing is sent to it, so nothing
   is spoofed, but the owner reviewing the queue sees a claim and must know it is one.
-- Open registration is a public endpoint that does one scrypt per call. Abuse costs Lambda time and fills the queue
-  with junk. It grants nothing, and it is not rate-limited by anything but API Gateway's stage.
+- When deliberately opened, registration is a public endpoint that does one scrypt per call. Abuse costs Lambda time
+  and fills the queue with junk. It grants nothing, but an open window still needs a bounded duration or invitation flow.
 - Under ADR-0050 a fresh sign-in would be worth the default role. That decision rests on the friction of handing over
   a personal account deterring casual arrivals; a form has no such friction. Open registration and a default role
   cannot both stand as written.
@@ -104,8 +106,12 @@ bootstrap card, the visitor card — now reads the provider first.
 
 - Approval is the gate, so registration widens nothing an anonymous person can do. This is why it can be public at
   all.
-- The switch is per deployment. If abuse appears, stage throttling in `infra/terraform-access-api` bounds it without a
-  domain change; an invitation code at registration is the next step and is ADR-0019's mechanism.
+- Registration is closed by default and independent from password login. A deployment opens a deliberate registration
+  window without stranding existing password users; an invitation code is the next step and is ADR-0019's mechanism.
+- API Gateway throttles the two public scrypt routes independently from ordinary panel reads, so a login flood cannot
+  consume the access API at the account-wide service limit.
+- Failed-sign-in guards use a conditional DynamoDB update and retry from a consistent read. Concurrent Lambda
+  invocations cannot collapse several failures into one stored count.
 - The decoy hash and the uniform refusal keep an address's existence private on the login path, which is the path an
   attacker uses.
 - ADR-0050 must decide registration before it lands: an invitation code, or a default role that self-registered

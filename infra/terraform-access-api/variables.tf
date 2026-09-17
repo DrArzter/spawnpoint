@@ -106,9 +106,37 @@ variable "telegram_oidc_client_id" {
 }
 
 variable "password_login_enabled" {
-  description = "Offer email-and-password sign-in with self-registration beside Telegram (ADR-0055). Off, the password routes answer as if they were not deployed."
+  description = "Offer sign-in for existing email-and-password credentials beside Telegram (ADR-0055)."
   type        = bool
   default     = true
+}
+
+variable "password_registration_enabled" {
+  description = "Allow anonymous visitors to create email-and-password credentials. Keep off except during an intentional registration window or behind an invitation flow."
+  type        = bool
+  default     = false
+}
+
+variable "password_auth_throttling_burst_limit" {
+  description = "Short burst allowed separately on each public password-auth route."
+  type        = number
+  default     = 5
+
+  validation {
+    condition     = var.password_auth_throttling_burst_limit >= 1 && floor(var.password_auth_throttling_burst_limit) == var.password_auth_throttling_burst_limit
+    error_message = "password_auth_throttling_burst_limit must be a positive integer."
+  }
+}
+
+variable "password_auth_throttling_rate_limit" {
+  description = "Steady requests per second allowed separately on each public password-auth route."
+  type        = number
+  default     = 2
+
+  validation {
+    condition     = var.password_auth_throttling_rate_limit > 0
+    error_message = "password_auth_throttling_rate_limit must be positive."
+  }
 }
 
 variable "bot_token_parameter" {

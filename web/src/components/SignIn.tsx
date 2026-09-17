@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 
-import { AuthState, loadLoginProviders, LoginProviderId, registerWithPassword, signInWithPassword, telegramOidcClientId } from "../auth";
+import { AuthState, loadLoginOptions, LoginOptions, registerWithPassword, signInWithPassword, telegramOidcClientId } from "../auth";
 import { DISPLAY_NAME_MAXIMUM_LENGTH, PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../lib/signin";
 import { TelegramLoginButton } from "./TelegramLogin";
 import { Button } from "./ui/Button";
@@ -13,7 +13,7 @@ export type SignInMode = "sign-in" | "register";
 // alternative beneath it. One form both creates an account and signs into one;
 // only the fields and the verb change.
 export function SignInPanel({ onChange, initialMode = "sign-in" }: Readonly<{ onChange: (state: AuthState) => void; initialMode?: SignInMode }>) {
-  const [providers, setProviders] = useState<readonly LoginProviderId[] | null>(null);
+  const [options, setOptions] = useState<LoginOptions | null>(null);
   const [mode, setMode] = useState<SignInMode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,14 +23,15 @@ export function SignInPanel({ onChange, initialMode = "sign-in" }: Readonly<{ on
 
   useEffect(() => {
     let active = true;
-    void loadLoginProviders().then((offered) => { if (active) setProviders(offered); });
+    void loadLoginOptions().then((offered) => { if (active) setOptions(offered); });
     return () => { active = false; };
   }, []);
 
-  const registering = mode === "register";
-  const passwordOffered = providers?.includes("password") ?? false;
+  const passwordRegistrationOffered = options?.selfRegistration.includes("password") ?? false;
+  const registering = mode === "register" && passwordRegistrationOffered;
+  const passwordOffered = options?.providers.includes("password") ?? false;
   // Telegram needs both the API to accept it and this build to know the public client id.
-  const telegramOffered = (providers?.includes("telegram") ?? false) && /^[1-9]\d+$/.test(telegramOidcClientId);
+  const telegramOffered = (options?.providers.includes("telegram") ?? false) && /^[1-9]\d+$/.test(telegramOidcClientId);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,7 +53,7 @@ export function SignInPanel({ onChange, initialMode = "sign-in" }: Readonly<{ on
     setError("");
   }
 
-  if (providers === null) return <div aria-busy="true" aria-label="Loading the ways to sign in" className="boot-progress" role="status" />;
+  if (options === null) return <output aria-label="Loading the ways to sign in" className="boot-progress" />;
 
   return (
     <div className="signin">
@@ -75,10 +76,12 @@ export function SignInPanel({ onChange, initialMode = "sign-in" }: Readonly<{ on
           />
           {error && <p className="boot-error" role="alert">{error}</p>}
           <Button className="signin-submit" loading={busy} type="submit" variant="filled">{registering ? "Create account" : "Sign in"}</Button>
-          <p className="signin-switch">
-            <span>{registering ? "Already have an account?" : "New here?"}</span>
-            <Button onClick={() => switchMode(registering ? "sign-in" : "register")} size="small" variant="text">{registering ? "Sign in" : "Create an account"}</Button>
-          </p>
+          {(registering || passwordRegistrationOffered) && (
+            <p className="signin-switch">
+              <span>{registering ? "Already have an account?" : "New here?"}</span>
+              <Button onClick={() => switchMode(registering ? "sign-in" : "register")} size="small" variant="text">{registering ? "Sign in" : "Create an account"}</Button>
+            </p>
+          )}
         </form>
       )}
       {passwordOffered && telegramOffered && <div aria-hidden="true" className="signin-divider"><span>or</span></div>}

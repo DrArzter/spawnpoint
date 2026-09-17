@@ -13,9 +13,9 @@ export const demoApi: SpawnpointApi = {
     return { status: "authenticated", session: demoSession };
   },
 
-  async loadLoginProviders() {
+  async loadLoginOptions() {
     await demoLatency();
-    return ["password" as const, "telegram" as const];
+    return { providers: ["password" as const, "telegram" as const], selfRegistration: ["password" as const] };
   },
 
   async exchangeTelegramOidc(): Promise<AuthState> {

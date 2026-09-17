@@ -168,11 +168,13 @@ aws ssm put-parameter --name /spawnpoint/bot/chat-ids --type String --value '<gr
 ```
 
    A person sends `/start`, signs in to the panel with Telegram and requests access. An Owner approves the observed
-   Telegram account and assigns a role; no Parameter Store edit or deploy is involved. A person without Telegram
-   creates an account with an email and password on the front door instead and lands in the same queue
+   Telegram account and assigns a role; no Parameter Store edit or deploy is involved. To admit a person without
+   Telegram, deliberately open a registration window with `password_registration_enabled = true`, let them create
+   an email-and-password account on the front door, then set it back to `false`. Closing registration does not stop
+   existing password credentials from signing in. The new account lands in the same approval queue
    ([ADR-0055](adr/0055-sign-in-with-email-and-password-by-default.md)); nothing is sent to the address, so treat it
    as a claim. A forgotten password has no reset path yet: delete the `CREDENTIAL#EMAIL#<address>` item from the
-   access table and the person registers again, which the Owner approves as a new account.
+   access table, briefly reopen registration, and approve the replacement as a new account.
 3. Build and apply: `cd lambdas && npm install && npm run build`, then review a saved plan and apply it in
    `infra/terraform-bot`.
 4. Register the webhook, pointing Telegram at the `bot_webhook_url` output with the same secret:

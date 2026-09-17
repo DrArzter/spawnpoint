@@ -159,6 +159,11 @@ export type AuthState =
 
 export type WorldLifecycleAction = "archive" | "regenerate" | "restore" | "purge";
 export type SessionOperation = "start" | "stop";
+export type LoginOptions = Readonly<{
+  providers: readonly LoginProviderId[];
+  /** Providers through which an anonymous visitor may create a credential. */
+  selfRegistration: readonly LoginProviderId[];
+}>;
 
 /**
  * Everything the panel asks of a backend. The live transport and the demo both
@@ -167,8 +172,8 @@ export type SessionOperation = "start" | "stop";
  */
 export type SpawnpointApi = Readonly<{
   restoreSession(): Promise<AuthState>;
-  /** Which ways in the deployment offers; read before there is a session. */
-  loadLoginProviders(): Promise<LoginProviderId[]>;
+  /** Which ways in the deployment offers, and which accept anonymous registration. */
+  loadLoginOptions(): Promise<LoginOptions>;
   exchangeTelegramOidc(idToken: string): Promise<AuthState>;
   /** Both resolve to a session or throw a sentence the form can show beside its fields. */
   signInWithPassword(email: string, password: string): Promise<AuthState>;

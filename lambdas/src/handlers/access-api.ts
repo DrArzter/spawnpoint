@@ -20,7 +20,7 @@ import {
   type LoginPrincipal,
 } from "../access/login-session.ts";
 import { authenticateWith, type LoginProvider } from "../access/login-provider.ts";
-import { hashPassword, normalizeDisplayName, normalizeEmail, validatePassword } from "../access/password-credential.ts";
+import { afterFailedSignIn, hashPassword, normalizeDisplayName, normalizeEmail, signInLocked, validatePassword, type SignInGuard } from "../access/password-credential.ts";
 import {
   createPasswordLoginProvider,
   passwordPrincipal,
@@ -86,6 +86,7 @@ const refreshCookieSameSite: "Strict" | "None" = process.env.REFRESH_COOKIE_SAME
 // its routes answer as if they were never deployed, so the panel reads them as
 // not connected rather than broken.
 const passwordLoginEnabled = (process.env.PASSWORD_LOGIN_ENABLED ?? "false") === "true";
+const passwordRegistrationEnabled = (process.env.PASSWORD_REGISTRATION_ENABLED ?? "false") === "true";
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const events = new EventBridgeClient({});
 const ssm = new SSMClient({});
@@ -597,7 +598,7 @@ async function identities(): Promise<Response> {
       links: (accounts.Items ?? []).filter((account) => typeof account.platform === "string").map((account) => ({
         platform: account.platform,
         value: account.platform_user_id,
-        handle: typeof account.username === "string" ? account.username : typeof account.email === "string" ? account.email : null,
+        handle: accountHandle(account),
         // Telegram vouches for its accounts. An email address is a claim until
         // a message to it has been answered, and nothing sends one yet.
         verified: account.platform !== passwordProviderId,
@@ -605,6 +606,11 @@ async function identities(): Promise<Response> {
     };
   }));
   return response(200, { identities: items });
+}
+
+function accountHandle(account: Item): string | null {
+  if (typeof account.username === "string") return account.username;
+  return typeof account.email === "string" ? account.email : null;
 }
 
 async function invitationRecipients(identity: Identity): Promise<Response> {
@@ -724,18 +730,52 @@ async function updateRole(callerIdentity: Identity, identityId: string, body: st
   return response(200, { identityId, roleId });
 }
 
-async function approve(identity: Identity, platform: string, platformUserId: string, body: string | undefined): Promise<Response> {
+type ApprovalInput = Readonly<{ roleId: keyof typeof builtInRoles; directGrants: Permission[] }>;
+type ApprovalInputResult = Readonly<{ value: ApprovalInput; error: null }> | Readonly<{ value: null; error: Response }>;
+
+function approvalInput(body: string | undefined): ApprovalInputResult {
   let parsed: { roleId?: unknown; directGrants?: unknown };
-  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return { value: null, error: response(400, { error: "invalid_json" }) }; }
   const roleId = typeof parsed.roleId === "string" ? parsed.roleId : "viewer";
-  if (!isBuiltInRoleId(roleId)) return response(400, { error: "unknown_role" });
+  if (!isBuiltInRoleId(roleId)) return { value: null, error: response(400, { error: "unknown_role" }) };
   const requestedGrants = parsed.directGrants;
   const directGrants = Array.isArray(requestedGrants) && requestedGrants.every(
     (permission) => typeof permission === "string" && permissions.includes(permission as Permission),
   ) ? requestedGrants as Permission[] : [];
   if (requestedGrants !== undefined && (!Array.isArray(requestedGrants) || directGrants.length !== requestedGrants.length)) {
-    return response(400, { error: "invalid_direct_grant" });
+    return { value: null, error: response(400, { error: "invalid_direct_grant" }) };
   }
+  return { value: { roleId, directGrants }, error: null };
+}
+
+async function publishAccessApproval(platform: string, candidate: Item, identityId: string, displayName: string, roleId: keyof typeof builtInRoles): Promise<void> {
+  if (platform !== "telegram") return;
+  const telegramChatId = privateTelegramChatId(candidate.direct_chat_id ?? candidate.chat_id);
+  if (telegramChatId === null) return;
+  const detail: AccessApprovedEvent = {
+    telegramChatId,
+    identityId,
+    displayName,
+    roleName: builtInRoles[roleId].name,
+  };
+  try {
+    const published = await events.send(new PutEventsCommand({ Entries: [{
+      Source: "spawnpoint.access",
+      DetailType: "Access Approved",
+      Detail: JSON.stringify(detail),
+    }] }));
+    if ((published.FailedEntryCount ?? 0) > 0) throw new Error(published.Entries?.[0]?.ErrorMessage ?? "EventBridge rejected access approval");
+  } catch (error) {
+    // Approval is already committed. A best-effort notification must not make
+    // the client retry the access mutation and receive a false conflict.
+    console.error("access approval notification was not published", error);
+  }
+}
+
+async function approve(identity: Identity, platform: string, platformUserId: string, body: string | undefined): Promise<Response> {
+  const input = approvalInput(body);
+  if (input.error !== null) return input.error;
+  const { roleId, directGrants } = input.value;
   if (roleId === "owner" || directGrants.length > 0) {
     const forbidden = requirePermission(identity, "access.owner.grant");
     if (forbidden !== null) return forbidden;
@@ -759,28 +799,7 @@ async function approve(identity: Identity, platform: string, platformUserId: str
       ExpressionAttributeValues: { ":identityId": identityId, ":approved": "APPROVED", ":linked": `IDENTITY#${identityId}`, ":now": now, ":by": identity.id },
     } },
   ] }));
-  // Only a Telegram account has a chat the decision can be delivered to.
-  const telegramChatId = platform === "telegram" ? privateTelegramChatId(candidate.Item.direct_chat_id ?? candidate.Item.chat_id) : null;
-  if (telegramChatId !== null) {
-    const detail: AccessApprovedEvent = {
-      telegramChatId,
-      identityId,
-      displayName: name,
-      roleName: builtInRoles[roleId].name,
-    };
-    try {
-      const published = await events.send(new PutEventsCommand({ Entries: [{
-        Source: "spawnpoint.access",
-        DetailType: "Access Approved",
-        Detail: JSON.stringify(detail),
-      }] }));
-      if ((published.FailedEntryCount ?? 0) > 0) throw new Error(published.Entries?.[0]?.ErrorMessage ?? "EventBridge rejected access approval");
-    } catch (error) {
-      // Approval is already committed. A best-effort notification must not make
-      // the client retry the access mutation and receive a false conflict.
-      console.error("access approval notification was not published", error);
-    }
-  }
+  await publishAccessApproval(platform, candidate.Item, identityId, name, roleId);
   return response(201, { identity: { id: identityId, displayName: name, roleId, directGrants } });
 }
 
@@ -982,11 +1001,39 @@ const passwordCredentials: PasswordCredentialStore = {
     const result = await document.send(new GetCommand({ TableName: tableName, Key: credentialKey(email), ConsistentRead: true }));
     return result.Item === undefined ? null : credentialFromItem(result.Item);
   },
-  recordFailure: (email, guard) => updateCredentialGuard(
-    email,
-    "SET failed_sign_ins = :failed, locked_until = :lockedUntil, last_failed_sign_in_at = :now",
-    { ":failed": guard.failedSignIns, ":lockedUntil": guard.lockedUntilEpochSeconds, ":now": new Date().toISOString() },
-  ),
+  async recordFailure(email, observed, nowSeconds) {
+    let current: SignInGuard = observed;
+    // A consistent read alone cannot serialize two Lambdas that both observed
+    // the same count. Compare the count in the write and retry from the latest
+    // credential so every accepted failure advances the guard exactly once.
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const next = afterFailedSignIn(current, nowSeconds);
+      const expectedMissingOrZero = current.failedSignIns === 0;
+      try {
+        await document.send(new UpdateCommand({
+          TableName: tableName,
+          Key: credentialKey(email),
+          UpdateExpression: "SET failed_sign_ins = :failed, locked_until = :lockedUntil, last_failed_sign_in_at = :now",
+          ConditionExpression: expectedMissingOrZero
+            ? "attribute_exists(pk) AND (attribute_not_exists(failed_sign_ins) OR failed_sign_ins = :expected)"
+            : "attribute_exists(pk) AND failed_sign_ins = :expected",
+          ExpressionAttributeValues: {
+            ":expected": current.failedSignIns,
+            ":failed": next.failedSignIns,
+            ":lockedUntil": next.lockedUntilEpochSeconds,
+            ":now": new Date().toISOString(),
+          },
+        }));
+        return;
+      } catch (error) {
+        if (!(error instanceof Error && error.name === "ConditionalCheckFailedException")) throw error;
+      }
+      const latest = await this.find(email);
+      if (latest === null || signInLocked(latest.guard, nowSeconds)) return;
+      current = latest.guard;
+    }
+    throw new Error("password sign-in guard was updated too frequently");
+  },
   recordSuccess: (email) => updateCredentialGuard(
     email,
     "SET failed_sign_ins = :zero, locked_until = :none, last_sign_in_at = :now",
@@ -1037,7 +1084,10 @@ async function registerPassword(event: Event): Promise<Response> {
 // Which ways in this deployment offers, so the panel draws only buttons that
 // lead somewhere. Public by nature: it is read before there is a session.
 function loginProviders(): Response {
-  return response(200, { providers: ["telegram", ...(passwordLoginEnabled ? [passwordProviderId] : [])] });
+  return response(200, {
+    providers: ["telegram", ...(passwordLoginEnabled ? [passwordProviderId] : [])],
+    selfRegistration: passwordLoginEnabled && passwordRegistrationEnabled ? [passwordProviderId] : [],
+  });
 }
 
 const passwordLoginDisabled = (): Response => response(404, { error: "not_found" });
@@ -1124,7 +1174,9 @@ export const routes: Readonly<Record<string, Route>> = {
     event,
   )),
   "POST /auth/password": publicRoute((event) => (passwordLoginEnabled ? authenticate(passwordProvider, event) : passwordLoginDisabled())),
-  "POST /auth/password/register": publicRoute((event) => (passwordLoginEnabled ? registerPassword(event) : passwordLoginDisabled())),
+  "POST /auth/password/register": publicRoute((event) => (
+    passwordLoginEnabled && passwordRegistrationEnabled ? registerPassword(event) : passwordLoginDisabled()
+  )),
   "POST /auth/refresh": publicRoute((event) => refreshLoginSession(event)),
   "POST /auth/logout": publicRoute((event) => logoutLoginSession(event)),
 

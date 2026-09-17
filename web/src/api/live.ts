@@ -2,8 +2,8 @@ import { describeRegistrationFailure, describeSignInFailure, isLoginProviderId }
 import type { ControlPlaneSnapshot } from "../model";
 import type {
   AccessCandidate, AccessIdentity, AccessRole, AccountProfile, AppearancePreference, AuthState, BackupInventory, HostMetrics,
-  InvitationRecipient, InvitationSummary, LoginProviderId, MetricRange, SessionOperation, SpawnpointApi, SpawnpointSession,
-  SubscriptionState, WorldLifecycleAction,
+  InvitationRecipient, InvitationSummary, LoginOptions, LoginProviderId, MetricRange, SessionOperation, SpawnpointApi,
+  SpawnpointSession, SubscriptionState, WorldLifecycleAction,
 } from "./contract";
 import { apiFailure } from "./contract";
 
@@ -255,17 +255,20 @@ export const liveApi: SpawnpointApi = {
     return initData ? restoreMiniApp(initData) : { status: "signed-out" };
   },
 
-  async loadLoginProviders(): Promise<LoginProviderId[]> {
+  async loadLoginOptions(): Promise<LoginOptions> {
     // An API that predates the route offers what it always did. A failed read
     // says nothing about Telegram either way, so it is offered and left to
     // answer for itself.
     try {
       const response = await fetch(`${apiUrl}/auth/providers`, { credentials: "include" });
-      if (!response.ok) return ["telegram"];
-      const body = await response.json() as { providers?: unknown };
-      return Array.isArray(body.providers) ? body.providers.filter(isLoginProviderId) : ["telegram"];
+      if (!response.ok) return { providers: ["telegram"], selfRegistration: [] };
+      const body = await response.json() as { providers?: unknown; selfRegistration?: unknown };
+      return {
+        providers: Array.isArray(body.providers) ? body.providers.filter(isLoginProviderId) : ["telegram"],
+        selfRegistration: Array.isArray(body.selfRegistration) ? body.selfRegistration.filter(isLoginProviderId) : [],
+      };
     } catch {
-      return ["telegram"];
+      return { providers: ["telegram"], selfRegistration: [] };
     }
   },
 

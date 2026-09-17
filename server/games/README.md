@@ -77,6 +77,9 @@ module takes part by:
   `game_archive_sentinel_regex` describe **this** game's save. A borrowed
   sentinel passes tests and loses worlds.
 - The player probe's `key=value` output never varies by game; only what produces the values does.
+- `game_tick_time_ms` prints milliseconds per tick for `scripts/measure-tick.sh`, the reading the acceptance of
+  [ADR-0054](../../docs/adr/0054-place-a-session-on-a-host-with-room.md) compares alone and beside a neighbour;
+  a game that cannot report one exits 2 and says why, as Project Zomboid does.
 - Reuse packaging rather than building an image ([ADR-0005](../../docs/adr/0005-containerised-game-server.md)), pin
   it by digest, keep the game port off the public interface, and keep operator surfaces (RCON, telnet) on localhost.
 - Cover the module in `server/tests/game-adapter-test.sh`: both parsers, the real transport against a fake server,

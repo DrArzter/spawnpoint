@@ -16,6 +16,7 @@ Available:
 | `start-server.sh` | Start or join the Lifecycle V2 start for a named world, and optionally follow it until the game is ready |
 | `status-server.sh` | Read-only EC2, workflow, storage, latest-backup and live private-endpoint status |
 | `stop-server.sh` | Save, back up and stop the exact active session through Lifecycle V2; refuses while players are online |
+| `acceptance-capacity-allocation.sh` | The acceptance run of [ADR-0054](../docs/adr/0054-place-a-session-on-a-host-with-room.md) as commands: `start` a shared placement and read where it landed and when it was ready, `tick` a session's ms/tick on its host, `stop` it, follow a `drain`, record a `join`, and render the `report` the rollout asks for |
 | `deploy-web.sh` | Build and publish the static panel; skips upload when the built `index.html` is unchanged |
 | `deploy-lambdas.sh` | Build every Lambda bundle and update only functions whose archive hash changed |
 | `terraform-init-ci.sh` | Initialise one remote-state root from its committed backend key and the current AWS account |

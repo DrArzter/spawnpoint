@@ -758,6 +758,22 @@ Five minutes, and it is how orphaned resources are found.
 | Volume nearly full | World growth, or log growth? Prune logs first |
 | Budgets threshold | Cost Explorer by service. Look for an always-on resource that should not exist |
 
+## Switching placement on (ADR-0054, phases 10 and 11)
+
+Placement is a setting on the access-api root, read by the API and the bot when they start a session: `placement`
+(`single` by default — the configured instance, as before; `shared` — the session is placed on a host with room) and
+`launch` (`disabled` by default; `enabled` lets a start that nothing has room for create a host). Both are Terraform
+variables with validated values; set them in `infra/terraform-access-api/terraform.tfvars` and deploy that root.
+
+The order is the rollout's: run the acceptance with the setting still `single` — the harness asks for `shared` per
+start — and put its report under `docs/acceptance/`; then `placement = "shared"`; then, once the Parameter Store keys
+below exist and one launch has been watched end to end, `launch = "enabled"`. A revert is the same line back to
+`single`; sessions already running finish as they began, because every host command carries the slot it started with.
+
+Two things `shared` cannot do yet, and should not surprise anyone: two worlds of the same game still take turns (one
+lifecycle record per game), and the legacy worlds run only on the configured host (they are bound to it in the
+catalog).
+
 ## Launched hosts (ADR-0054, phase 12)
 
 A host the control plane launches for a session has no data volume. At first boot it checks this repository out at

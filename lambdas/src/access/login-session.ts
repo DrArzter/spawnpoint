@@ -4,12 +4,16 @@ export const accessTokenLifetimeSeconds = 15 * 60;
 export const refreshSessionLifetimeSeconds = 30 * 24 * 60 * 60;
 export const refreshCookieName = "spawnpoint.refresh";
 
+// What a provider vouches for. `username` is the handle on that provider and
+// `email` the address it verified or was given; either may be absent, and
+// neither is the subject, which is the provider's own stable id.
 export type LoginPrincipal = Readonly<{
   provider: string;
   subject: string;
   displayName: string;
   username: string | null;
   photoUrl: string | null;
+  email: string | null;
 }>;
 
 export type AccessSubject = Readonly<{
@@ -46,6 +50,7 @@ export function issueAccessToken(
     name: principal.displayName,
     username: principal.username,
     picture: principal.photoUrl,
+    email: principal.email,
     iat: nowSeconds,
     exp: nowSeconds + accessTokenLifetimeSeconds,
   });
@@ -83,6 +88,7 @@ export function verifyAccessToken(
         displayName: value.name,
         username: typeof value.username === "string" && value.username !== "" ? value.username : null,
         photoUrl: typeof value.picture === "string" && value.picture !== "" ? value.picture : null,
+        email: typeof value.email === "string" && value.email !== "" ? value.email : null,
       },
     };
   } catch {

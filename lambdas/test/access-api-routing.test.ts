@@ -21,7 +21,10 @@ const { routes, deployedCapabilities } = await import("../src/handlers/access-ap
 // Routes that are deliberately reachable without a permission, with the reason
 // each is safe. A route may only appear here on purpose.
 const WITHOUT_PERMISSION = new Map<string, string>([
+  ["GET /auth/providers", "which ways in this deployment offers; read before any session exists"],
   ["POST /auth/telegram", "login itself: it is what produces a session"],
+  ["POST /auth/password", "login itself: it is what produces a session"],
+  ["POST /auth/password/register", "creates the credential a first login needs; the account it signs in as holds no role"],
   ["POST /auth/refresh", "rotates the caller's HttpOnly refresh credential"],
   ["POST /auth/logout", "revokes the caller's HttpOnly refresh credential"],
   ["GET /session", "reports the caller's own session and bootstrap state"],

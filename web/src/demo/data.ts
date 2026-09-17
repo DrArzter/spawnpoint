@@ -29,7 +29,7 @@ export const demoSession: ActiveSession = {
   // is what keeps a screen fully explorable before its route is written.
   capabilities: ["releaseManifest", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement"],
   role: { id: "owner", name: "Owner", permissions: ["status.read", "connection.read", "session.start", "session.stop", "invitation.send", "metrics.read", "console.use", "release.read", "release.promote", "backup.read", "backup.restore", "world.manage", "access.read", "access.manage"] },
-  profile: { telegramId: "1780660807", username: "drarzter", photoUrl: null },
+  profile: { provider: "telegram", platformUserId: "1780660807", telegramId: "1780660807", username: "drarzter", email: null, photoUrl: null },
   bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "1780660807", claimedAt: "2026-08-28T18:24:00.000Z" },
 };
 
@@ -113,15 +113,17 @@ export function initialState(): DemoState {
       { id: "owner", name: "Owner", description: "Full access to Spawnpoint and its identities.", permissions: [...OWNER_PERMISSIONS], system: true },
     ],
     identities: [
-      { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [], links: [{ platform: "telegram", value: "1780660807", verified: true }, { platform: "minecraft", value: "DrArzter", verified: true }, { platform: "zerotier", value: "b9bc15e2cf", verified: true }] },
-      { id: "identity-alex", displayName: "Alex", roleId: "player", directGrants: [], links: [{ platform: "telegram", value: "128381920", verified: true }] },
-      { id: "identity-mira", displayName: "Mira", roleId: "viewer", directGrants: [], links: [{ platform: "telegram", value: "998120144", verified: true }, { platform: "factorio", value: "Mira", verified: true }] },
+      { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [], links: [{ platform: "telegram", value: "1780660807", handle: "drarzter", verified: true }, { platform: "minecraft", value: "DrArzter", handle: null, verified: true }, { platform: "zerotier", value: "b9bc15e2cf", handle: null, verified: true }] },
+      { id: "identity-alex", displayName: "Alex", roleId: "player", directGrants: [], links: [{ platform: "telegram", value: "128381920", handle: null, verified: true }] },
+      { id: "identity-mira", displayName: "Mira", roleId: "viewer", directGrants: [], links: [{ platform: "telegram", value: "998120144", handle: null, verified: true }, { platform: "factorio", value: "Mira", handle: null, verified: true }] },
+      { id: "identity-kira", displayName: "Kira", roleId: "player", directGrants: [], links: [{ platform: "password", value: "5b1c6e0a-2d4f-4a8e-9c3b-7e6f5d4c3b2a", handle: "kira@example.com", verified: false }] },
     ],
     candidates: [
-      { platformUserId: "771246120", displayName: "Nikita", username: "nikita", photoUrl: null, status: "REQUESTED", firstSeenAt: "2026-09-14T17:20:00.000Z", lastSeenAt: "2026-09-14T18:10:00.000Z", requestedAt: "2026-09-14T18:10:00.000Z" },
-      { platformUserId: "664120993", displayName: "Sasha", username: null, photoUrl: null, status: "OBSERVED", firstSeenAt: "2026-09-13T09:02:00.000Z", lastSeenAt: "2026-09-14T11:41:00.000Z", requestedAt: null },
+      { platform: "telegram", platformUserId: "771246120", displayName: "Nikita", username: "nikita", email: null, photoUrl: null, status: "REQUESTED", firstSeenAt: "2026-09-14T17:20:00.000Z", lastSeenAt: "2026-09-14T18:10:00.000Z", requestedAt: "2026-09-14T18:10:00.000Z" },
+      { platform: "password", platformUserId: "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b", displayName: "Lena", username: null, email: "lena@example.com", photoUrl: null, status: "REQUESTED", firstSeenAt: "2026-09-15T20:05:00.000Z", lastSeenAt: "2026-09-15T20:06:00.000Z", requestedAt: "2026-09-15T20:06:00.000Z" },
+      { platform: "telegram", platformUserId: "664120993", displayName: "Sasha", username: null, email: null, photoUrl: null, status: "OBSERVED", firstSeenAt: "2026-09-13T09:02:00.000Z", lastSeenAt: "2026-09-14T11:41:00.000Z", requestedAt: null },
     ],
-    delivery: { "identity-alex": "ready", "identity-mira": "notifications_off" },
+    delivery: { "identity-alex": "ready", "identity-mira": "notifications_off", "identity-kira": "bot_unavailable" },
     subscriptions: {
       "minecraft.started": true, "minecraft.stopped": true, "factorio.started": true, "factorio.stopped": false,
       "invitation.broadcast": true, "invitation.direct": true,

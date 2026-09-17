@@ -72,10 +72,11 @@ export function App() {
     return () => window.removeEventListener("hashchange", onChange);
   }, []);
 
-  // A sign-in started on the front door ends in the console.
+  // A sign-in started on the front door ends in the console; an account that
+  // holds no role yet lands on the card that asks for one.
   const handleAuth = useCallback((state: AuthState) => {
     setAuth(state);
-    if (state.status === "authenticated" && state.session.state === "active" && isLandingHash()) window.location.hash = "#/worlds";
+    if (state.status === "authenticated" && isLandingHash()) window.location.hash = "#/worlds";
   }, []);
 
   // The session is settled before anything else is drawn. Deciding later is what
@@ -130,19 +131,26 @@ function ConsoleShell({ session, continuesBootCard }: { session: ActiveSession; 
     .map((item) => ({ id: item.id, label: item.label, icon: item.icon, href: scoped(item.id) }));
   const page: Page = route.page === "profile" || navItems.some((item) => item.id === route.page) ? route.page : "worlds";
 
+  // The account the session came through is the one link known before the
+  // directory answers: Telegram's id, or the email a password account signs in
+  // with. An email is a claim until something has been sent to it.
   const [members, setMembers] = useState<Member[]>(() => [{
     id: session.identity.id,
     name: session.identity.displayName,
     roleId: session.identity.roleId,
-    links: [{ id: "viewer-telegram", kind: "telegram", value: session.profile.telegramId, verified: true }],
+    links: session.profile.provider === "password"
+      ? [{ id: "viewer-email", kind: "email", value: session.profile.email ?? session.profile.platformUserId, verified: false }]
+      : [{ id: "viewer-telegram", kind: "telegram", value: session.profile.telegramId ?? session.profile.platformUserId, verified: true }],
   }]);
   const [roles, setRoles] = useState<Role[]>(() => session.role ? [{ id: session.role.id, name: session.role.name, description: "Current signed-in role", permissions: session.role.permissions, system: true }] : []);
   const viewer: ViewerProfile = {
     displayName: session.identity.displayName,
     inTelegram: Boolean(window.Telegram?.WebApp.initData),
+    provider: session.profile.provider === "password" ? "password" : "telegram",
     ...(session.profile.username ? { username: session.profile.username } : {}),
+    ...(session.profile.email ? { email: session.profile.email } : {}),
     ...(session.profile.photoUrl ? { photoUrl: session.profile.photoUrl } : {}),
-    telegramId: session.profile.telegramId,
+    ...(session.profile.telegramId ? { telegramId: session.profile.telegramId } : {}),
   };
   const currentMember = members.find((member) => member.id === session.identity.id) ?? members[0]!;
   const bootstrap: OwnerBootstrap = session.bootstrap.state === "claimed"

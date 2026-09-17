@@ -19,6 +19,7 @@ const principal = {
   displayName: "DrArzter",
   username: "drarzter",
   photoUrl: "https://telegram.example/avatar.jpg",
+  email: null,
 };
 const loginSessionId = "11111111-2222-4333-8444-555555555555";
 const signingSecret = "test-signing-secret";

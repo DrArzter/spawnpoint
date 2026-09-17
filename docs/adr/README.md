@@ -34,7 +34,7 @@ Forty-three records is a wall, and a wall is not a plan. Read the two or three t
 | ~~M1~~ | **Done.** [0011](0011-terraform-for-infrastructure.md), [0010](0010-world-persistence-and-backups.md), [0007](0007-ssm-instead-of-ssh.md) |
 | ~~M2~~ | **Done**, and re-based on Lifecycle V2 on 2026-09-11 — [docs/lifecycle-v2-rollout.md](../lifecycle-v2-rollout.md). The decisions: [0006](0006-on-demand-start-and-idle-shutdown.md), [0025](0025-step-functions-for-long-operations.md), [0032](0032-on-demand-single-instance.md) |
 | M3 — releases and the pipeline | [0008](0008-versioned-mod-releases.md), [0030](0030-desired-and-active-release.md), [0042](0042-preset-scoped-release-identity.md); then [0028](0028-update-proposals.md) and [0029](0029-preview-environments.md), still proposed |
-| M4 — surfaces and identity | Built on [0045](0045-provider-neutral-login-sessions.md), [0036](0036-observed-visitors-and-owner-approved-access.md) and [0012](0012-web-control-panel.md); [0016](0016-chat-integrations.md) stays open for Discord |
+| M4 — surfaces and identity | Built on [0045](0045-provider-neutral-login-sessions.md), [0055](0055-sign-in-with-email-and-password-by-default.md), [0036](0036-observed-visitors-and-owner-approved-access.md) and [0012](0012-web-control-panel.md); [0016](0016-chat-integrations.md) stays open for Discord |
 | Worlds, wipes, presets and games | [0040](0040-reusable-presets-and-world-wipes.md), [0034](0034-per-game-adapter.md), [0033](0033-connectivity-as-a-strategy.md) |
 | Deploying a change to production | [0043](0043-deploy-production-from-reviewed-pull-requests.md), [0044](0044-apply-github-identities-behind-an-owner-gate.md) |
 | Everything else | Later. Read when the milestone arrives |
@@ -113,6 +113,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0051](0051-restart-a-session-without-releasing-the-host.md) | Restart a session without releasing the host | Proposed | M4 |
 | [0052](0052-keep-a-release-while-a-generation-names-it.md) | Keep a release while a generation names it, and check before restoring | Proposed | M4 |
 | [0053](0053-tell-not-built-apart-from-broken.md) | Tell "not built yet" apart from "broken", in the transport | Proposed | M4 |
+| [0055](0055-sign-in-with-email-and-password-by-default.md) | Sign in with email and password by default, and with a provider as an alternative | Accepted — implemented | M4 |
 
 ## Decisions still to record
 

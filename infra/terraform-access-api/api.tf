@@ -161,6 +161,7 @@ resource "aws_lambda_function" "access_api" {
       BOT_TOKEN_PARAMETER              = var.bot_token_parameter
       SESSION_SIGNING_SECRET_PARAMETER = var.session_signing_secret_parameter
       TELEGRAM_OIDC_CLIENT_ID          = var.telegram_oidc_client_id
+      PASSWORD_LOGIN_ENABLED           = var.password_login_enabled ? "true" : "false"
       LIFECYCLE_TABLE_NAME             = data.aws_dynamodb_table.lifecycle.name
       CONTROL_PLANE_VIEW_TABLE         = var.control_plane_view_table_name
       CONTROL_PLANE_WEBSOCKET_URL      = "wss://${aws_apigatewayv2_api.control_plane.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.control_plane.name}"
@@ -201,7 +202,10 @@ resource "aws_apigatewayv2_integration" "access_api" {
 
 locals {
   access_routes = toset([
+    "GET /auth/providers",
     "POST /auth/telegram",
+    "POST /auth/password",
+    "POST /auth/password/register",
     "POST /auth/refresh",
     "POST /auth/logout",
     "GET /session",
@@ -228,8 +232,8 @@ locals {
     "POST /access/request",
     "GET /access/candidates",
     "GET /access/identities",
-    "POST /access/candidates/{telegramId}/approve",
-    "POST /access/candidates/{telegramId}/dismiss",
+    "POST /access/candidates/{platform}/{platformUserId}/approve",
+    "POST /access/candidates/{platform}/{platformUserId}/dismiss",
     "POST /access/identities/{identityId}/role",
   ])
 }

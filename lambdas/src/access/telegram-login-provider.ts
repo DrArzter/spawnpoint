@@ -20,6 +20,7 @@ export function telegramPrincipal(profile: TelegramProfile): LoginPrincipal {
     displayName: profile.displayName,
     username: profile.username,
     photoUrl: profile.photoUrl,
+    email: null,
   };
 }
 

@@ -105,6 +105,12 @@ variable "telegram_oidc_client_id" {
   }
 }
 
+variable "password_login_enabled" {
+  description = "Offer email-and-password sign-in with self-registration beside Telegram (ADR-0055). Off, the password routes answer as if they were not deployed."
+  type        = bool
+  default     = true
+}
+
 variable "bot_token_parameter" {
   description = "Existing SecureString parameter containing the Telegram bot token used to verify login signatures."
   type        = string

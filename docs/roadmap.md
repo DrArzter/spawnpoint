@@ -162,6 +162,11 @@ deployed; authorisation is the DynamoDB access directory, not a Parameter Store 
 release. Not built: Discord, the self-serve link code of ADR-0019, the derived whitelist of ADR-0022, the pack site of
 ADR-0013.
 
+**2026-09-17: email and password is the default way in**, with Telegram as the alternative button; the same form
+registers and signs in, and approval still decides what an account may do
+([ADR-0055](adr/0055-sign-in-with-email-and-password-by-default.md)). Password reset waits for a sender
+([ADR-0020](adr/0020-email-channel.md)).
+
 ## M5 — Observability and guardrails
 
 **Goal:** problems announce themselves, and the bill holds no surprises.

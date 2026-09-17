@@ -141,15 +141,16 @@ replay says, never what the code does.
 | `r7i.xlarge` | 4 | 32 GiB | ~0.317 | estimate |
 | `r7i.2xlarge` | 8 | 64 GiB | ~0.634 | estimate |
 
-**Footprints** are the unit of placement: the container's hard limit, not the heap. The modded Minecraft figure is the
-measurement in [docs/measurements.md](measurements.md); the others are placeholders for the catalog to replace.
+**Footprints** are the unit of placement: the container's hard limit, not the heap. They are the catalog's figures
+(`lambdas/src/control-plane/catalog.ts`, mirrored by the game modules under `server/games/`). The modded Minecraft
+limit sits above the peak measured in [docs/measurements.md](measurements.md), not on it.
 
 | World | Memory | Core weight |
 | --- | --- | --- |
-| Modded Minecraft (4 GiB heap) | 6 GiB | 1 |
+| Modded Minecraft (4 GiB heap, ~6 GiB measured) | 7 GiB | 1 |
 | Vanilla Minecraft | 3 GiB | 0.5 |
 | Factorio | 2 GiB | 0.5 |
-| Project Zomboid | 6 GiB | 1 |
+| Project Zomboid (6 GiB heap) | 8 GiB | 1 |
 
 **One evening, four settings.** Produced by `lambdas/prototype/placement-evening.ts` on 2026-09-17, which replays
 scripted evenings through the real placement module. Every host is billed from launch to the end of a ten-minute
@@ -160,23 +161,23 @@ the share of starts that landed on a host already up, and so skipped provisionin
 | --- | --- | --- | --- | --- |
 | One modded world, three hours | 1 host, $0.38 | 1 host, **$0.38** | 2 hosts, $0.42 | 2 hosts, $0.45 |
 | Modded + Factorio + vanilla, overlapping | 3 hosts, $0.96 | 2 hosts, **$0.76**, 33 % warm | 2 hosts, $0.98, 67 % warm | 2 hosts, $1.56, 67 % warm |
-| Three modded worlds, overlapping | 3 hosts, $0.90 | 3 hosts, $0.90 | 3 hosts, $1.12, 33 % warm | 2 hosts, $1.56, 67 % warm |
+| Two modded worlds and a Zomboid, overlapping | 3 hosts, $0.95 | 3 hosts, $0.95 | 3 hosts, $1.17, 33 % warm | 2 hosts, $1.56, 67 % warm |
 | Stop, then restart six minutes later | 2 hosts, $0.39 | 1 host, **$0.38**, 50 % warm | 3 hosts, $0.46, 50 % warm | 3 hosts, $0.53, 50 % warm |
 | Six small servers over an evening | 6 hosts, $1.86 | 2 hosts, **$0.94**, 67 % warm | 2 hosts, $1.26, 83 % warm | 2 hosts, $2.00, 83 % warm |
-| Forty servers for many groups, one evening | 40 hosts, $12.81 | 18 hosts, **$7.80**, 55 % warm | 17 hosts, $8.10, 63 % warm | 10 hosts, $8.22, 80 % warm |
-| Two hundred servers, one evening | 200 hosts, $61.31 | 67 hosts, **$37.94**, 67 % warm | 67 hosts, $38.03, 67 % warm | 62 hosts, $38.26, 70 % warm |
+| Forty servers for many groups, one evening | 40 hosts, $13.37 | 17 hosts, **$8.12**, 57 % warm | 17 hosts, $8.37, 63 % warm | 10 hosts, $8.26, 80 % warm |
+| Two hundred servers, one evening | 200 hosts, $64.42 | 58 hosts, **$38.03**, 71 % warm | 58 hosts, $38.73, 72 % warm | 53 hosts, $39.19, 75 % warm |
 
 What the table says:
 
 - **Reuse is the saving, at every size.** Launching only what the footprint needs and reusing what is up never costs
   more than one host per world, costs exactly the same on a one-world evening, and takes about two fifths off an
   evening of many small servers — for one group and for a fleet alike.
-- **Packing modded worlds does not pay.** Three 6 GiB footprints would fit one 32 GiB host, but that host costs more
-  than the three small ones EC2 answers a 7 GiB request with; on an evening of modded worlds the default and
+- **Packing modded worlds does not pay.** Three 7–8 GiB footprints would fit one 32 GiB host, but that host costs
+  more than the three small ones EC2 answers an 8 GiB request with; on an evening of modded worlds the default and
   one-per-world are the same bill. This is EC2's arithmetic at launch time, not a policy anyone chose.
 - **Headroom is a purchase, and the table prices it.** Keeping 16 GiB free on a busy fleet evening moves 80 % of
-  starts onto a host already up for about five percent more; on a one-world evening it is a second machine that
-  nobody used. That is exactly why it is a setting with a default of zero.
+  starts onto a host already up for about two percent more, and halves the machines; on a one-world evening it is a
+  second machine that nobody used. That is exactly why it is a setting with a default of zero.
 - **The drain costs ten minutes of a host per evening**, about two cents on the small shape. The restart row shows
   what it buys: a stop followed by a start reuses the machine instead of paying for a second.
 - **Re-run the replay when the estimates are replaced by API prices.** It changes the numbers in this table; it

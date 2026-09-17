@@ -1,7 +1,29 @@
+import { requirementsFor } from "../domain/placement.ts";
+import type { Footprint, LaunchRequirements } from "../domain/placement.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
 import type { WorldRecord } from "./world-registry.ts";
 
 export type CatalogPreset = PresetObservation;
+
+// What a session of each game needs from a host (ADR-0054): the container's
+// hard memory limit — the heap plus the off-heap margin the JVM games carry,
+// never the heap alone — and a core weight. A world may override its game's
+// figure; a game not listed here cannot be placed, which is the point.
+export const gameFootprints: Readonly<Record<string, Footprint>> = {
+  // Measured near 6 GiB of container memory on a 4 GiB heap; the limit leaves
+  // room above the peak rather than sitting on it.
+  minecraft: { memoryMiB: 7 * 1024, cores: 1 },
+  factorio: { memoryMiB: 2 * 1024, cores: 0.5 },
+  // The image defaults to a 6 GiB heap (MEMORY_XMX_GB), and a Java server's
+  // process is larger than its heap.
+  zomboid: { memoryMiB: 8 * 1024, cores: 1 },
+};
+
+// The instance families a launch may draw from, as EC2 Fleet AllowedInstanceTypes
+// patterns: a filter, never a ranking. ADR-0032 chose x86 for single-thread
+// speed and the pool the presets were proven on; burstable and Graviton are out.
+// Which of these a launch becomes is EC2's answer, by price, at launch time.
+export const launchFamilies: readonly string[] = ["m7i-flex.*", "m7i.*", "r7i.*", "r8i-flex.*", "r8i.*", "c7i.*"];
 
 export type CatalogWorld = Readonly<{
   id: string;
@@ -15,6 +37,9 @@ export type CatalogWorld = Readonly<{
   // "zerotier" reaches players through the overlay, "raw" through whatever
   // public address the instance holds for that session.
   connectivity: "zerotier" | "raw";
+  // Overrides the game's footprint, field by field: a vanilla world needs less
+  // than a modded one of the same game.
+  footprint?: Partial<Footprint>;
   materialization?: "existing" | "not_created" | "archived";
   worldLifecycle?: "v1" | null;
   preset?: Readonly<{
@@ -36,6 +61,8 @@ export type CatalogGame = Readonly<{
   // connectivity strategy (ADR-0033); the port belongs to the game, and one
   // configured address string used to carry Minecraft's port for all of them.
   connectPort: number;
+  // Replaces the entry in gameFootprints for this catalog; absent means that entry.
+  footprint?: Footprint;
   presets?: readonly CatalogPreset[];
   worlds: readonly CatalogWorld[];
 }>;
@@ -50,7 +77,7 @@ export const gameCatalog: readonly CatalogGame[] = [
     connectPort: 25565,
     worlds: [
       { id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1", connectivity: "zerotier" },
-      { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge", sessionControl: "v1", connectivity: "zerotier" },
+      { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge", sessionControl: "v1", connectivity: "zerotier", footprint: { memoryMiB: 3 * 1024, cores: 0.5 } },
     ],
   },
   {
@@ -132,6 +159,28 @@ export function catalogWithPresets(
       });
     return { ...game, presets: forGame, worlds: [...existing, ...materialized] };
   });
+}
+
+function gameOf(worldId: string, catalog: readonly CatalogGame[]): CatalogGame {
+  const game = catalog.find((candidate) => candidate.worlds.some((world) => world.id === worldId));
+  if (game === undefined) throw new Error(`unknown world: ${worldId}`);
+  return game;
+}
+
+// The footprint a session of this world is placed with: the world's own fields
+// over its game's. A game with no footprint anywhere is refused here, before
+// a start, rather than placed with a guess.
+export function footprintForWorld(worldId: string, catalog: readonly CatalogGame[] = gameCatalog): Footprint {
+  const game = gameOf(worldId, catalog);
+  const world = game.worlds.find((candidate) => candidate.id === worldId)!;
+  const base = game.footprint ?? gameFootprints[game.id];
+  if (base === undefined) throw new Error(`no footprint for game ${game.id}`);
+  return { memoryMiB: world.footprint?.memoryMiB ?? base.memoryMiB, cores: world.footprint?.cores ?? base.cores };
+}
+
+// What a launch for this world asks EC2 for when no host has room.
+export function launchRequirementsForWorld(worldId: string, catalog: readonly CatalogGame[] = gameCatalog): LaunchRequirements {
+  return requirementsFor(footprintForWorld(worldId, catalog));
 }
 
 // A world id is unique across games in this catalog, and the drift test against

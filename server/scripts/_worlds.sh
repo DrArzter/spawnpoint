@@ -39,6 +39,10 @@ validate_world_catalog() {
       )) and
       ((.connectivity // "zerotier") | IN("zerotier", "raw", "route53")) and
       ((has("auth") | not) or (.auth | IN("none", "game", "external")))
+      and ((has("footprint") | not) or (
+        (.footprint.memory_mib | type == "number" and . == floor and . > 0) and
+        (.footprint.cores | type == "number" and . > 0)
+      ))
       and ((.storage_layout // "legacy") | IN("legacy", "generation"))
       and (if (.storage_layout // "legacy") == "generation" then
         (.generation_id | type == "string" and test("^gen-[0-9a-f]{32}$")) and
@@ -104,6 +108,12 @@ load_world() {
   # means the overlay this deployment runs; absent auth means the game default.
   WORLD_CONNECTIVITY="$(jq -r '.connectivity // "zerotier"' <<<"${match}")"
   WORLD_AUTH="$(jq -r '.auth // empty' <<<"${match}")"
+  # The footprint (ADR-0054) is what a session of this world is placed with and
+  # limited to: the catalog's own figures, else the game module's defaults.
+  WORLD_FOOTPRINT_MEMORY_MIB="$(jq -r '.footprint.memory_mib // empty' <<<"${match}")"
+  WORLD_FOOTPRINT_CORES="$(jq -r '.footprint.cores // empty' <<<"${match}")"
+  [[ -n "${WORLD_FOOTPRINT_MEMORY_MIB}" ]] || WORLD_FOOTPRINT_MEMORY_MIB="$(game_footprint_default "${WORLD_SERVER_DIR}/games" "${WORLD_GAME}" memory_mib)"
+  [[ -n "${WORLD_FOOTPRINT_CORES}" ]] || WORLD_FOOTPRINT_CORES="$(game_footprint_default "${WORLD_SERVER_DIR}/games" "${WORLD_GAME}" cores)"
   # Provenance is per world when it needs to be: authoring repositories are one
   # per game, and bumping the pin for one world must not invalidate another
   # world's prepared marker. The catalog-level profile_source is the default.

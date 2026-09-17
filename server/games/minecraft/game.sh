@@ -17,6 +17,11 @@ GAME_CONNECT_PROTOCOL="tcp"
 # online-mode=false (ADR-0022) authenticates nobody, so minecraft worlds need
 # a gating connectivity unless the catalog declares auth handled (ADR-0033).
 GAME_DEFAULT_AUTH="none"
+# What a session is placed with and limited to (ADR-0054): a 4 GiB heap was
+# measured near 6 GiB of container memory, and the limit sits above the peak,
+# not on it. The container, not the JVM, is what the host counts.
+GAME_FOOTPRINT_MEMORY_MIB="7168"
+GAME_FOOTPRINT_CORES="1"
 
 game_query_players_raw() {
   rcon list

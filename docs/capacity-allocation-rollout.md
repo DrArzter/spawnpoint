@@ -36,7 +36,7 @@ a default that still says "one host per world" until the acceptance run says oth
 | --- | --- | --- |
 | 1 — domain model | `lambdas/src/domain/placement.ts`: footprints, shapes, best-fit placement, reservation with slot, drain decision, `warm` kept host; `lambdas/test/placement.test.ts` | Nothing imports it. **Landed with the ADR** |
 | 2 — the question answered on paper | `lambdas/prototype/placement-evening.ts` replays evenings under three policies; the verdict goes to [docs/costs.md](costs.md) and the prototype is deleted | Nothing changes. **Landed with the ADR** |
-| 3 — footprints as data | Per-game default footprint and per-world override in the catalog; the allowed instance families as a filter; a check that `GetInstanceTypesFromInstanceRequirements` matches at least one type for every footprint. Prices appear nowhere but `docs/costs.md` | Data nobody reads yet |
+| 3 — footprints as data | Per-game default footprint and per-world override in both catalogs (`gameFootprints` and `footprintForWorld` in the panel's; `footprint` per world and `GAME_FOOTPRINT_*` per module on the host, with a drift test between them); the allowed instance families as a filter; `npm run launch-requirements -- --verify` asks EC2 whether every footprint has an answer. Prices appear nowhere but `docs/costs.md` | Data nobody reads yet. **Landed** |
 | 4 — host-side slot contract | Each session is a Compose project named for the world; the adapter reads `SPAWNPOINT_SLOT` and binds the game's own ports on slot zero and its slot's window in the host-wide range otherwise; `check-host-activity.sh` counts projects; `MEMORY` and the cgroup limit are derived from the footprint. Slot zero is byte-identical to today | Every deployed workflow uses slot zero and one project. Nothing observable changes |
 | 5 — host records | The placement item in the lifecycle table, written for the one host that exists today at slot zero, by the start and stop workflows as they run. Read by nobody | A second table item; a saved add-only plan |
 | 6 — placement in start | A `Place Session` step between `Begin Session` and `Start Accepted V1`: read hosts, place, reserve conditionally; on a launch, an EC2 Fleet of type `instant` with the footprint's `InstanceRequirements` and `lowest-price`, the answered instance recorded as the host's shape, then wait for it to answer SSM. Behind a `placement: single \| shared` setting defaulting to `single`, under which it always launches | Identical to today except that EC2, not a variable, names the instance type — and one extra record written |
@@ -49,7 +49,7 @@ a default that still says "one host per world" until the acceptance run says oth
 
 ## Current phase
 
-Phases 1 and 2 landed on 2026-09-17 with the ADR. Phase 3 is next and is data only.
+Phases 1 to 3 landed on 2026-09-17. Phase 4, the host-side slot contract, is next; slot zero stays byte-identical.
 
 ## What the acceptance run must record
 

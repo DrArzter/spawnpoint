@@ -556,7 +556,8 @@
           "action": "markSessionReady",
           "serverId.$": "$.request.serverId",
           "ownership.$": "$.coordination.lease.ownership",
-          "sessionId.$": "$.request.sessionId"
+          "sessionId.$": "$.request.sessionId",
+          "connectionAddress.$": "$.hostStart.Output.connectionAddress"
         }
       },
       "ResultPath": null,

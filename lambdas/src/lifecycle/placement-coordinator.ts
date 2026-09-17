@@ -3,7 +3,7 @@
 // revision. Two starts that race for the last gigabyte both compute a fit;
 // one write lands; the other takes its next candidate.
 
-import { footprintForWorld, gameFootprints, worldHostBinding } from "../control-plane/catalog.ts";
+import { footprintForWorld, gameFootprints, worldHostBinding, worldNeedsSlotZero } from "../control-plane/catalog.ts";
 import {
   PlacementConflict,
   drainDecision,
@@ -136,9 +136,15 @@ export function createPlacementCoordinator(
 
   // One conditional write per candidate; a lost write moves to the next host
   // rather than back to the fleet. Returns null when no candidate took it.
+  // A public world and a game that names its own ports take slot zero only.
+  function pinnedSlot(request: SessionRequest): number | undefined {
+    return worldNeedsSlotZero(request.worldId, request.serverId) ? 0 : undefined;
+  }
+
   async function reserveOnFirst(candidates: readonly VersionedHost[], request: SessionRequest, footprint: Footprint): Promise<PlacementOutcome | null> {
+    const slot = pinnedSlot(request);
     for (const candidate of candidates) {
-      const record = reserve(candidate.record, { sessionId: request.sessionId, worldId: request.worldId, footprint, policy: request.policy ?? "cold" }, nowEpochSeconds());
+      const record = reserve(candidate.record, { sessionId: request.sessionId, worldId: request.worldId, footprint, policy: request.policy ?? "cold", ...(slot === undefined ? {} : { slot }) }, nowEpochSeconds());
       if (await store.compareAndSetHost(candidate.record.hostId, candidate.revision, record)) {
         const held = record.reservations.find((reservation) => reservation.sessionId === request.sessionId)!;
         return { kind: "reuse", hostId: record.hostId, slot: held.slot };
@@ -178,7 +184,7 @@ export function createPlacementCoordinator(
           const already = existingReservation(hosts, input.sessionId);
           if (already) return { placement: already };
           const eligible = binding === "configured" ? hosts.filter((host) => host.record.provenance === "configured") : hosts;
-          const ranked = placementCandidates(eligible.map((host) => host.record), footprint, input.worldId);
+          const ranked = placementCandidates(eligible.map((host) => host.record), footprint, input.worldId, pinnedSlot(input));
           const candidates = ranked.map((record) => eligible.find((host) => host.record.hostId === record.hostId)!);
           if (candidates.length === 0) {
             return { placement: binding === "configured" ? { kind: "refused", reason: "bound_to_configured_host" } : { kind: "launch", requirements: requirementsFor(footprint) } };

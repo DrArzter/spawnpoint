@@ -40,7 +40,7 @@ export type CoordinatorInput =
   | (BaseInput & Readonly<{ action: "renewLease"; ownership: LeaseOwnership; ttlSeconds: number }>)
   | (BaseInput & Readonly<{ action: "releaseLease"; ownership: LeaseOwnership }>)
   | (BaseInput & Readonly<{ action: "beginSession"; ownership: LeaseOwnership; sessionId: string; worldId: string }>)
-  | (BaseInput & Readonly<{ action: "markSessionReady"; ownership: LeaseOwnership; sessionId: string }>)
+  | (BaseInput & Readonly<{ action: "markSessionReady"; ownership: LeaseOwnership; sessionId: string; connectionAddress?: string | null }>)
   | (BaseInput &
       Readonly<{
         action: "registerWatchdog";
@@ -152,7 +152,7 @@ export function createLifecycleCoordinator(
     }
     if (input.action === "markSessionReady") {
       return mutate(input.serverId, (record, now) => ({
-        record: markSessionReady(record, input.ownership, input.sessionId, now),
+        record: markSessionReady(record, input.ownership, input.sessionId, now, input.connectionAddress ?? null),
       }));
     }
     if (input.action === "registerWatchdog") {

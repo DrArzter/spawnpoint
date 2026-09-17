@@ -118,6 +118,12 @@ test("the lifecycle records which world owns the active shared-host session", as
   assert.equal(payload["worldId.$"], "$.request.worldId");
 });
 
+test("the ready mark carries the host's address into the lifecycle record", async () => {
+  const definition = await loadDefinition();
+  const payload = state(definition, "Mark Session Ready").Parameters?.Payload as Record<string, unknown>;
+  assert.equal(payload["connectionAddress.$"], "$.hostStart.Output.connectionAddress");
+});
+
 test("V2 passes the host's address through instead of echoing the request's", async () => {
   const definition = await loadDefinition();
   const parameters = (name: string): Record<string, any> => (state(definition, name) as Record<string, any>).Parameters;

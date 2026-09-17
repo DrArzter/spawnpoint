@@ -1,0 +1,19 @@
+# Minecraft's part of the host tier (ADR-0054, phase 9): its exporter opts in
+# to the host Prometheus's discovery and joins the network that Prometheus
+# scrapes over. Included by the dispatcher for a placed session, in place of
+# compose.minecraft-observability.yaml, which carries the tier inside an
+# unplaced session.
+services:
+  minecraft-exporter:
+    labels:
+      spawnpoint.scrape: "true"
+      spawnpoint.scrape_port: "8080"
+      spawnpoint.scrape_job: "minecraft"
+    networks:
+      default: {}
+      spawnpoint-observability: {}
+
+networks:
+  spawnpoint-observability:
+    name: spawnpoint-observability
+    external: true

@@ -63,8 +63,8 @@
       },
       "targets": [
         {
-          "expr": "minecraft_status_healthy",
-          "legendFormat": "Minecraft",
+          "expr": "minecraft_status_healthy{world=~\"$world\"}",
+          "legendFormat": "{{world}}",
           "refId": "A"
         }
       ],
@@ -105,8 +105,8 @@
       },
       "targets": [
         {
-          "expr": "minecraft_status_players_online_count",
-          "legendFormat": "Online",
+          "expr": "minecraft_status_players_online_count{world=~\"$world\"}",
+          "legendFormat": "{{world}}",
           "refId": "A"
         }
       ],
@@ -146,8 +146,8 @@
       },
       "targets": [
         {
-          "expr": "sum(container_memory_working_set_bytes{container_label_com_docker_compose_service=\"mc\"} and on(id) (time() - container_last_seen{container_label_com_docker_compose_service=\"mc\"} < 30))",
-          "legendFormat": "Minecraft",
+          "expr": "sum by (container_label_com_docker_compose_project) (container_memory_working_set_bytes{container_label_com_docker_compose_service=\"mc\",container_label_com_docker_compose_project=~\"spawnpoint-($world)|server\"} and on(id) (time() - container_last_seen{container_label_com_docker_compose_service=\"mc\",container_label_com_docker_compose_project=~\"spawnpoint-($world)|server\"} < 30))",
+          "legendFormat": "{{container_label_com_docker_compose_project}}",
           "refId": "A"
         }
       ],
@@ -189,8 +189,8 @@
       },
       "targets": [
         {
-          "expr": "100 * sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=\"mc\"}[2m]) and on(id) (time() - container_last_seen{container_label_com_docker_compose_service=\"mc\"} < 30))",
-          "legendFormat": "Minecraft CPU (one core = 100%)",
+          "expr": "100 * sum by (container_label_com_docker_compose_project) (rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=\"mc\",container_label_com_docker_compose_project=~\"spawnpoint-($world)|server\"}[2m]) and on(id) (time() - container_last_seen{container_label_com_docker_compose_service=\"mc\",container_label_com_docker_compose_project=~\"spawnpoint-($world)|server\"} < 30))",
+          "legendFormat": "{{container_label_com_docker_compose_project}}",
           "refId": "A"
         }
       ],
@@ -232,8 +232,8 @@
       },
       "targets": [
         {
-          "expr": "minecraft_status_response_time_seconds",
-          "legendFormat": "Status ping",
+          "expr": "minecraft_status_response_time_seconds{world=~\"$world\"}",
+          "legendFormat": "{{world}}",
           "refId": "A"
         }
       ],
@@ -275,8 +275,8 @@
       },
       "targets": [
         {
-          "expr": "sum(container_memory_working_set_bytes{container_label_com_docker_compose_service=\"mc\"} and on(id) (time() - container_last_seen{container_label_com_docker_compose_service=\"mc\"} < 30))",
-          "legendFormat": "Minecraft",
+          "expr": "sum by (container_label_com_docker_compose_project) (container_memory_working_set_bytes{container_label_com_docker_compose_service=\"mc\",container_label_com_docker_compose_project=~\"spawnpoint-($world)|server\"} and on(id) (time() - container_last_seen{container_label_com_docker_compose_service=\"mc\",container_label_com_docker_compose_project=~\"spawnpoint-($world)|server\"} < 30))",
+          "legendFormat": "{{container_label_com_docker_compose_project}}",
           "refId": "A"
         }
       ],
@@ -291,7 +291,37 @@
     "minecraft"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "name": "world",
+        "label": "World",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(minecraft_status_healthy, world)",
+          "refId": "world"
+        },
+        "definition": "label_values(minecraft_status_healthy, world)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "refresh": 2,
+        "sort": 1,
+        "hide": 0
+      }
+    ]
   },
   "time": {
     "from": "now-3h",
@@ -301,5 +331,6 @@
   "timezone": "browser",
   "title": "Minecraft session",
   "uid": "spawnpoint-minecraft",
-  "version": 2
+  "version": 2,
+  "description": "One Minecraft session per world. On a host with one tier per host (ADR-0054) the World variable picks the session; an unplaced session carries no world label and matches All."
 }

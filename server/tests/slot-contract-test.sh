@@ -68,10 +68,11 @@ grep -Fxq 'footprint=' <<<"${unplaced}"
 grep -Fq "docker=compose --project-directory ${server} -f " <<<"${unplaced}"
 grep -Fvq -- '--project-name' <<<"${unplaced}"
 
-# --- slot zero: the game's own ports and the observability tier, plus what
-#     every placed session gets — a project of its own and its footprint's limit ---
+# --- slot zero: the game's own ports, plus what every placed session gets — a
+#     project of its own, its footprint's limit, and the host tier's overlay in
+#     place of a tier of its own ---
 zero="$(WORLD_ID=world WORLD_FOOTPRINT_MEMORY_MIB=7168 SPAWNPOINT_SLOT=0 files_for minecraft)"
-grep -Fxq "files=${server}/observability/compose.yaml:${server}/compose.yaml:${server}/compose.release.yaml:${server}/compose.minecraft-observability.yaml:${server}/games/minecraft/compose.footprint.yaml" <<<"${zero}"
+grep -Fxq "files=${server}/compose.yaml:${server}/compose.release.yaml:${server}/compose.minecraft-host-observability.yaml:${server}/games/minecraft/compose.footprint.yaml" <<<"${zero}"
 grep -Fxq 'project=spawnpoint-world' <<<"${zero}"
 grep -Fxq 'game_port=25565' <<<"${zero}"
 grep -Fxq 'rcon_port=25575' <<<"${zero}"
@@ -80,9 +81,9 @@ grep -Fxq 'connect_port=25565' <<<"${zero}"
 grep -Fxq 'footprint=7168' <<<"${zero}"
 grep -Fq -- '--project-name spawnpoint-world' <<<"${zero}"
 
-# --- another slot: its window in the host-wide range, no observability tier ---
+# --- another slot: its window in the host-wide range, the same files ---
 third="$(WORLD_ID=magic WORLD_FOOTPRINT_MEMORY_MIB=7168 SPAWNPOINT_SLOT=3 files_for minecraft)"
-grep -Fxq "files=${server}/compose.yaml:${server}/compose.release.yaml:${server}/games/minecraft/compose.footprint.yaml" <<<"${third}"
+grep -Fxq "files=${server}/compose.yaml:${server}/compose.release.yaml:${server}/compose.minecraft-host-observability.yaml:${server}/games/minecraft/compose.footprint.yaml" <<<"${third}"
 grep -Fxq 'project=spawnpoint-magic' <<<"${third}"
 grep -Fxq 'game_port=30030' <<<"${third}"
 grep -Fxq 'rcon_port=30031' <<<"${third}"

@@ -777,6 +777,10 @@ authorise itself without a person clicking in ZeroTier Central, store an API tok
 joins, waits for authorisation, and the start refuses until somebody authorises it. Each launched host spends one of
 the free tier's ten device slots while it exists.
 
+A launched host, like the configured one under `placement = "shared"`, runs one observability tier for every session on
+it; its Grafana answers at the host's own overlay address on port 3000, with the same admin password from `.env`, and
+the Minecraft dashboard's World variable picks the session. Prometheus stays host-local.
+
 `app_commit` on the access-api root names the commit a launched host checks out; `main` follows the branch, and the
 deploy should pin the tested commit. The renderer the bootstrap uses is `server/scripts/render-host-env.sh`; it
 refuses a parameter whose last segment is not an environment name and a value that spans lines.

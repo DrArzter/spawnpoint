@@ -96,10 +96,13 @@ the `127.0.0.1:27015` obstacle ADR-0048 recorded: two Factorio worlds on one hos
 its own Compose project, named for the world, so `check-host-activity.sh` counts projects rather than services.
 
 **The address is the session's, and it carries a port.** ADR-0033's strategy still supplies the host part; the session's
-slot supplies the port. Minecraft's Java client resolves `SRV` records, so the Route 53 strategy publishes one per
-world and a player types a name. The overlay strategy has no `SRV`, and Factorio and Project Zomboid have no `SRV`
-client, so those players see `host:port`, exactly as they see it today for slot zero. The panel and the bot already
-show the address they are given.
+slot supplies the port. The host composes the address when the session is ready and the start records it on the
+lifecycle record, so the panel shows what the host answered rather than what it would compose — and composes only for
+a world with no session. Minecraft's Java client resolves `SRV` records, so a Route 53 strategy, once one exists,
+publishes one per world and a player types a name. The overlay strategy has no `SRV`, and Factorio and Project Zomboid
+have no `SRV` client, so those players see `host:port`, exactly as they see it today for slot zero. A public world is
+pinned to slot zero: its security group opens the game's own port and nothing else, and a slot's window would be a
+port nobody can reach.
 
 **The stop is two decisions, not one.** A session stop is what ADR-0051 built: recheck players, save, archive, verify
 the upload, take the session's containers down, then release its reservation. When the release empties the host, the
@@ -166,7 +169,7 @@ tenancy, billing, support — is a product question this repository does not ans
 - **Two starts may launch two hosts where one would do.** Accepted above; the residue is one drain.
 - **Ports are visible for UDP games and on the overlay.** They are visible today; what changes is that slot one shows a
   port a player has not seen before.
-- **The single-instance assumptions ADR-0048 listed grow one more place**: the Prometheus and Grafana stack is per host
+- **The single-instance assumptions ADR-0048 listed grow one more place**: the Prometheus and Grafana stack is per host, one Compose project that finds every session's exporter through the Docker socket by label,
   and must scrape several sessions.
 
 **Mitigations**

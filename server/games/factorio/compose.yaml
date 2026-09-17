@@ -8,9 +8,10 @@ services:
     ports:
       # The game speaks UDP; players arrive over the overlay, so the port is
       # never public (mode C, ADR-0024).
-      - "34197:34197/udp"
+      # The host port is the session's slot (ADR-0054); the container's is fixed.
+      - "${SPAWNPOINT_GAME_PORT:-34197}:34197/udp"
       # RCON stays host-local: the probe's transport, never a player surface.
-      - "127.0.0.1:27015:27015"
+      - "127.0.0.1:${SPAWNPOINT_RCON_PORT:-27015}:27015"
     volumes:
       - "${SPAWNPOINT_WORLD_DATA_DIRECTORY:-./games/factorio/data}:/factorio"
     environment:

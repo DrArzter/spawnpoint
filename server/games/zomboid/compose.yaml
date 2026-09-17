@@ -8,10 +8,13 @@ services:
     ports:
       # The game speaks UDP on two ports; players arrive over the overlay, so
       # neither is public (ADR-0024 mode C).
-      - "16261:16261/udp"
-      - "16262:16262/udp"
+      # The host ports follow the session's slot (ADR-0054) in form only: this
+      # server tells its clients which port to use next, so it cannot yet run
+      # on a slot other than zero — see GAME_SLOTTABLE in game.sh.
+      - "${SPAWNPOINT_GAME_PORT:-16261}:16261/udp"
+      - "${SPAWNPOINT_GAME_PORT_2:-16262}:16262/udp"
       # RCON stays host-local: the probe's transport, never a player surface.
-      - "127.0.0.1:27015:27015"
+      - "127.0.0.1:${SPAWNPOINT_RCON_PORT:-27015}:27015"
     environment:
       # The image documents no variable for the server name and none for
       # Workshop items, so this world is vanilla until the mod list can be

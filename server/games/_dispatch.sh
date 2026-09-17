@@ -6,7 +6,15 @@
 # A game module is data plus functions, never a daemon:
 #
 #   GAME_ID                    the id it was loaded as
-#   GAME_COMPOSE_FILES         colon list, relative to SERVER_DIR
+#   GAME_COMPOSE_FILES         colon list, relative to SERVER_DIR: what a session
+#                              runs, without the observability tier
+#   GAME_OBSERVABILITY_COMPOSE_FILES
+#                              optional: the game's part of the observability
+#                              tier (its exporter's scrape job, its dashboards),
+#                              laid over observability/compose.yaml
+#   GAME_FOOTPRINT_COMPOSE_FILE
+#                              the overlay that turns the footprint into the
+#                              game container's memory limit (ADR-0054)
 #   GAME_COMPOSE_SERVICE       the compose service holding the game process
 #   GAME_MOD_EXTENSION         what a mod file looks like (jar, zip)
 #   GAME_LOADER_TYPE           what manifests carry as loader.type
@@ -18,6 +26,10 @@
 #   GAME_FOOTPRINT_MEMORY_MIB  what a session is placed with and limited to when
 #   GAME_FOOTPRINT_CORES       the world's catalog entry states nothing (ADR-0054):
 #                              the container's memory, not the heap, and a core weight
+#   GAME_RCON_PORT             the container's RCON port; the host side follows the slot
+#   GAME_SLOTTABLE             true when the game can run on a slot other than zero:
+#                              its client connects to the port the address names and
+#                              the server announces no other. false refuses such a slot
 #   game_ready                 readiness: docker health as $1, succeed when the
 #                              game actually serves
 #   game_query_players_raw     transport: print the raw player query response
@@ -73,16 +85,80 @@ prepare_game_runtime() {
   fi
 }
 
+# The slot is the port allocator (ADR-0054). Slot zero, and an unplaced
+# session, keep the game's own ports; every other slot owns a window of ten
+# ports in one host-wide range: +0 the game port, +1 RCON, +2 onward any
+# further port the game publishes. The same layout is lambdas/src/domain/placement.ts.
+SLOT_PORT_RANGE_START=30000
+SLOT_PORT_WINDOW=10
+SLOT_MAX=256
+
+configure_slot_ports() {
+  local slot="$1" window
+  if (( slot == 0 )); then
+    export SPAWNPOINT_GAME_PORT="${GAME_CONNECT_PORT}"
+    export SPAWNPOINT_RCON_PORT="${GAME_RCON_PORT:-}"
+    unset SPAWNPOINT_GAME_PORT_2
+  else
+    window=$((SLOT_PORT_RANGE_START + slot * SLOT_PORT_WINDOW))
+    export SPAWNPOINT_GAME_PORT="${window}"
+    export SPAWNPOINT_RCON_PORT="$((window + 1))"
+    export SPAWNPOINT_GAME_PORT_2="$((window + 2))"
+  fi
+  # What the summary tells a player: the host side of the game port.
+  export SPAWNPOINT_CONNECT_PORT="${SPAWNPOINT_GAME_PORT}"
+}
+
 # Bind the selected module to the shared Docker helpers. Every lifecycle entry
 # point calls this after resolve_game, so a fresh SSM process cannot silently
 # fall back to Minecraft's Compose files for another game.
+#
+# A placed session (ADR-0054) arrives with SPAWNPOINT_SLOT. It runs as its own
+# Compose project named for its world, on its slot's ports, under its
+# footprint's memory limit; on a slot other than zero it runs without the
+# observability tier until one Prometheus serves the whole host. With no slot
+# the session is what it was before placement existed, byte for byte.
 configure_game_compose() {
-  local server_dir compose_files compose_file
+  local server_dir compose_files compose_file slot
   server_dir="$(cd -- "${GAMES_DIR}/.." && pwd)"
+  slot="${SPAWNPOINT_SLOT:-}"
+  if [[ -n "${slot}" ]]; then
+    [[ "${slot}" =~ ^(0|[1-9][0-9]{0,2})$ ]] && (( slot < SLOT_MAX )) || {
+      printf 'error: SPAWNPOINT_SLOT must be 0..%s, not %s\n' "$((SLOT_MAX - 1))" "${slot}" >&2
+      exit 1
+    }
+    [[ -n "${WORLD_ID:-}" ]] || {
+      printf 'error: a placed session names its world (WORLD_ID)\n' >&2
+      exit 1
+    }
+    if (( slot > 0 )) && [[ "${GAME_SLOTTABLE:-false}" != "true" ]]; then
+      printf 'error: %s cannot run on slot %s: its server names its own ports to clients (GAME_SLOTTABLE)\n' "${GAME_ID}" "${slot}" >&2
+      exit 1
+    fi
+    [[ -n "${WORLD_FOOTPRINT_MEMORY_MIB:-}" ]] || {
+      printf 'error: a placed session carries its footprint (WORLD_FOOTPRINT_MEMORY_MIB)\n' >&2
+      exit 1
+    }
+    export SERVER_COMPOSE_PROJECT="${SERVER_COMPOSE_PROJECT:-spawnpoint-${WORLD_ID}}"
+    export SPAWNPOINT_FOOTPRINT_MEMORY_MIB="${WORLD_FOOTPRINT_MEMORY_MIB}"
+    configure_slot_ports "${slot}"
+  fi
   if [[ -z "${SERVER_COMPOSE_FILES:-}" && -z "${SERVER_COMPOSE_FILE:-}" ]]; then
-    compose_files=""
+    local -a session_files=()
+    if [[ -z "${slot}" || "${slot}" == "0" ]]; then
+      session_files+=("observability/compose.yaml")
+    fi
     IFS=':' read -r -a game_compose <<<"${GAME_COMPOSE_FILES}"
-    for compose_file in "${game_compose[@]}"; do
+    session_files+=("${game_compose[@]}")
+    if [[ -z "${slot}" || "${slot}" == "0" ]] && [[ -n "${GAME_OBSERVABILITY_COMPOSE_FILES:-}" ]]; then
+      IFS=':' read -r -a game_observability <<<"${GAME_OBSERVABILITY_COMPOSE_FILES}"
+      session_files+=("${game_observability[@]}")
+    fi
+    if [[ -n "${slot}" ]]; then
+      session_files+=("${GAME_FOOTPRINT_COMPOSE_FILE:?${GAME_ID} declares no GAME_FOOTPRINT_COMPOSE_FILE}")
+    fi
+    compose_files=""
+    for compose_file in "${session_files[@]}"; do
       compose_files="${compose_files:+${compose_files}:}${server_dir}/${compose_file}"
     done
     export SERVER_COMPOSE_FILES="${compose_files}"

@@ -267,6 +267,11 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.SPAWNPOINT_LAUNCH == "disabled" && aws_lambda_function.access_api.environment[0].variables.SPAWNPOINT_APP_COMMIT == "main"
+    error_message = "Launching hosts (ADR-0054, phase 12) must default to disabled; a launched host checks out the commit the API names."
+  }
+
+  assert {
     condition     = aws_lambda_function.access_api.environment[0].variables.CONTROL_PLANE_VIEW_TABLE == "spawnpoint-control-plane-view"
     error_message = "Dashboard reads must use the event-driven DynamoDB projection when it is fresh."
   }

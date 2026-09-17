@@ -3,7 +3,7 @@
 // revision. Two starts that race for the last gigabyte both compute a fit;
 // one write lands; the other takes its next candidate.
 
-import { footprintForWorld, gameFootprints } from "../control-plane/catalog.ts";
+import { footprintForWorld, gameFootprints, worldHostBinding } from "../control-plane/catalog.ts";
 import {
   PlacementConflict,
   drainDecision,
@@ -18,6 +18,7 @@ import {
   reserve,
   type DrainDecision,
   type Footprint,
+  type HostProvenance,
   type HostRecord,
   type HostShape,
   type LaunchRequirements,
@@ -46,7 +47,7 @@ type SessionRequest = Readonly<{
 }>;
 
 export type PlacementInput =
-  | Readonly<{ action: "registerHost"; hostId: string; shape: HostShape; ready?: boolean }>
+  | Readonly<{ action: "registerHost"; hostId: string; shape: HostShape; ready?: boolean; provenance?: HostProvenance }>
   | Readonly<{ action: "markHostReady"; hostId: string }>
   | Readonly<{ action: "getHost"; hostId: string }>
   | Readonly<{ action: "listHosts" }>
@@ -59,10 +60,14 @@ export type PlacementInput =
 
 export type PlacementOutcome =
   | Readonly<{ kind: "reuse"; hostId: string; slot: number }>
-  | Readonly<{ kind: "launch"; requirements: LaunchRequirements }>;
+  | Readonly<{ kind: "launch"; requirements: LaunchRequirements }>
+  // A world whose save lives on the configured host's volume cannot be placed
+  // anywhere else, and no launch can help it.
+  | Readonly<{ kind: "refused"; reason: "bound_to_configured_host" }>;
 
 export type PlacementOutput = Readonly<{
-  host?: VersionedHost;
+  /** `null` is an answer: the host in question does not exist. */
+  host?: VersionedHost | null;
   hosts?: readonly VersionedHost[];
   /** `null` is an answer: the session is placed nowhere. */
   placement?: PlacementOutcome | null;
@@ -151,7 +156,7 @@ export function createPlacementCoordinator(
           if (current !== null) {
             return { host: input.ready && current.record.state === "provisioning" ? await mutate(hostId, (record, now) => markReady(record, now)) : current };
           }
-          let record = newHost(hostId, input.shape, nowEpochSeconds());
+          let record = newHost(hostId, input.shape, nowEpochSeconds(), input.provenance ?? "configured");
           if (input.ready) record = markReady(record, nowEpochSeconds());
           if (await store.createHost(record)) return { host: { revision: 1, record } };
         }
@@ -167,13 +172,17 @@ export function createPlacementCoordinator(
         requireId("sessionId", input.sessionId);
         requireId("worldId", input.worldId);
         const footprint = resolveFootprint(input);
+        const binding = worldHostBinding(input.worldId);
         for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
           const hosts = await store.listHosts();
           const already = existingReservation(hosts, input.sessionId);
           if (already) return { placement: already };
-          const ranked = placementCandidates(hosts.map((host) => host.record), footprint, input.worldId);
-          const candidates = ranked.map((record) => hosts.find((host) => host.record.hostId === record.hostId)!);
-          if (candidates.length === 0) return { placement: { kind: "launch", requirements: requirementsFor(footprint) } };
+          const eligible = binding === "configured" ? hosts.filter((host) => host.record.provenance === "configured") : hosts;
+          const ranked = placementCandidates(eligible.map((host) => host.record), footprint, input.worldId);
+          const candidates = ranked.map((record) => eligible.find((host) => host.record.hostId === record.hostId)!);
+          if (candidates.length === 0) {
+            return { placement: binding === "configured" ? { kind: "refused", reason: "bound_to_configured_host" } : { kind: "launch", requirements: requirementsFor(footprint) } };
+          }
           const taken = await reserveOnFirst(candidates, input, footprint);
           if (taken) return { placement: taken };
         }
@@ -206,9 +215,9 @@ export function createPlacementCoordinator(
         const sessionId = requireId("sessionId", input.sessionId);
         const found = input.hostId === undefined ? existingReservation(await store.listHosts(), sessionId) : null;
         const hostId = input.hostId ?? (found?.kind === "reuse" ? found.hostId : undefined);
-        if (hostId === undefined) return { released: false };
+        if (hostId === undefined) return { released: false, host: null };
         const current = await store.readHost(hostId);
-        if (current === null) return { released: false };
+        if (current === null) return { released: false, host: null };
         if (!current.record.reservations.some((reservation) => reservation.sessionId === sessionId)) return { released: false, host: current };
         const host = await mutate(hostId, (record, now) => release(record, sessionId, now));
         return { released: true, host };

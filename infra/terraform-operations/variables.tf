@@ -25,3 +25,27 @@ variable "control_plane_view_table_name" {
     error_message = "control_plane_view_table_name must be a valid DynamoDB table name."
   }
 }
+
+variable "launch_families" {
+  description = "The instance families a launched host may be, as EC2 Fleet AllowedInstanceTypes patterns (ADR-0054): a filter, never a ranking. Mirrors launchFamilies in lambdas/src/control-plane/catalog.ts; a test keeps them equal."
+  type        = list(string)
+  default     = ["m7i-flex.*", "m7i.*", "r7i.*", "r8i-flex.*", "r8i.*", "c7i.*"]
+}
+
+variable "drain_grace_seconds" {
+  description = "How long an empty launched host waits for a start to take it back before it is let go (ADR-0054)."
+  type        = number
+  default     = 600
+}
+
+variable "headroom_mib" {
+  description = "Memory the fleet keeps free somewhere while anything runs, so the next start lands on a host already up (ADR-0054). Zero keeps nothing."
+  type        = number
+  default     = 0
+}
+
+variable "drain_max_keep_polls" {
+  description = "How many grace periods a drain may be told to keep waiting — an empty host held for headroom — before the drain gives up loudly. 288 of 600 seconds is two days."
+  type        = number
+  default     = 288
+}

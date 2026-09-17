@@ -56,6 +56,13 @@ export type GamePorts = Readonly<{ game: number; rcon: number }>;
 
 export type SessionPolicy = "cold" | "warm";
 export type HostState = "provisioning" | "ready" | "draining" | "stopped" | "terminating";
+/**
+ * `configured` is the host Terraform declares: its volume, its overlay
+ * identity and the legacy worlds live on it, so a drain stops it and never
+ * terminates it. `launched` is a host the control plane created for a session
+ * from a launch template; it holds nothing that outlives its sessions.
+ */
+export type HostProvenance = "configured" | "launched";
 
 export type Reservation = Readonly<{
   sessionId: string;
@@ -69,6 +76,7 @@ export type HostRecord = Readonly<{
   schemaVersion: 1;
   hostId: string;
   shape: HostShape;
+  provenance: HostProvenance;
   state: HostState;
   reservations: readonly Reservation[];
   drainingSinceEpochSeconds: number | null;
@@ -220,13 +228,14 @@ export function place(hosts: readonly HostRecord[], footprint: Footprint, worldI
   return { kind: "launch", requirements: requirementsFor(footprint) };
 }
 
-export function newHost(hostId: string, shape: HostShape, nowEpochSeconds: number): HostRecord {
+export function newHost(hostId: string, shape: HostShape, nowEpochSeconds: number, provenance: HostProvenance = "configured"): HostRecord {
   requireId("hostId", hostId);
   requireEpoch("nowEpochSeconds", nowEpochSeconds);
   return {
     schemaVersion: 1,
     hostId,
     shape,
+    provenance,
     state: "provisioning",
     reservations: [],
     drainingSinceEpochSeconds: null,
@@ -300,9 +309,10 @@ export function release(host: HostRecord, sessionId: string, nowEpochSeconds: nu
 /**
  * What to do with an empty host. `keep` while a session may still come back
  * inside the grace period, or while the host is the fleet's headroom; after
- * that, `stop` when the last tenant was a warm world and `terminate` otherwise.
- * The caller re-reads the record and applies the transition conditionally,
- * because a start may have landed meanwhile.
+ * that, `stop` for the configured host and for a host whose last tenant was a
+ * warm world, `terminate` for a launched host nobody kept. The caller re-reads
+ * the record and applies the transition conditionally, because a start may
+ * have landed meanwhile.
  */
 export function drainDecision(host: HostRecord, nowEpochSeconds: number, gracePeriodSeconds: number, holdForHeadroom = false): DrainDecision {
   requireEpoch("nowEpochSeconds", nowEpochSeconds);
@@ -310,7 +320,10 @@ export function drainDecision(host: HostRecord, nowEpochSeconds: number, gracePe
   if (holdForHeadroom) return "keep";
   if (host.state !== "draining" || host.reservations.length > 0 || host.drainingSinceEpochSeconds === null) return "keep";
   if (nowEpochSeconds < host.drainingSinceEpochSeconds + gracePeriodSeconds) return "keep";
-  return host.keptWorldId === null ? "terminate" : "stop";
+  if (host.keptWorldId !== null) return "stop";
+  // The configured host is Terraform's, and everything that outlives a session
+  // lives on it. It stops, as it always has; only a launched host is let go.
+  return host.provenance === "configured" ? "stop" : "terminate";
 }
 
 export function markStopped(host: HostRecord, nowEpochSeconds: number): HostRecord {

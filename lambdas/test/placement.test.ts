@@ -71,7 +71,7 @@ test("headroom keeps room free only while something runs, and names what to laun
   // An empty host that is the fleet's headroom is kept past any grace period.
   const emptied = release(reserve(spare, { sessionId: "s9", worldId: "w", footprint: FACTORIO, policy: "cold" }, NOW + 4), "s9", NOW + 5);
   assert.equal(drainDecision(emptied, NOW + 5000, 600, true), "keep");
-  assert.equal(drainDecision(emptied, NOW + 5000, 600, false), "terminate");
+  assert.equal(drainDecision(emptied, NOW + 5000, 600, false), "stop", "a configured host stops; only a launched one is terminated");
 });
 
 test("a host with room is reused rather than a new one launched, and the tightest fit wins", () => {
@@ -152,13 +152,28 @@ test("the last session leaving starts the drain, and a start inside the grace pe
   assert.equal(host.state, "draining");
   assert.equal(host.drainingSinceEpochSeconds, NOW + 200);
   assert.equal(drainDecision(host, NOW + 500, 600), "keep");
-  assert.equal(drainDecision(host, NOW + 800, 600), "terminate");
+  // The configured host is Terraform's: it stops, as it always has, and is never terminated.
+  assert.equal(host.provenance, "configured");
+  assert.equal(drainDecision(host, NOW + 800, 600), "stop");
 
   const revived = reserve(host, { sessionId: "s3", worldId: "techno", footprint: MODDED, policy: "cold" }, NOW + 500);
   assert.equal(revived.state, "ready");
   assert.equal(revived.drainingSinceEpochSeconds, null);
   assert.equal(drainDecision(revived, NOW + 5000, 600), "keep");
   assert.throws(() => markTerminating(revived, NOW + 5000), PlacementConflict);
+});
+
+test("a launched host nobody kept is terminated after its grace period; a launched warm host stops", () => {
+  let launched = markReady(newHost("i-fleet", SHAPES[1]!, NOW, "launched"), NOW + 1);
+  assert.equal(launched.state, "draining", "a launched host nobody has reached yet is on the clock");
+  assert.equal(drainDecision(launched, NOW + 1 + 600, 600), "terminate");
+  launched = reserve(launched, { sessionId: "s1", worldId: "techno", footprint: MODDED, policy: "cold" }, NOW + 2);
+  launched = release(launched, "s1", NOW + 100);
+  assert.equal(drainDecision(launched, NOW + 100 + 600, 600), "terminate");
+  assert.equal(markTerminating(launched, NOW + 800).state, "terminating");
+  let warm = markReady(newHost("i-warm", SHAPES[1]!, NOW, "launched"), NOW + 1);
+  warm = release(reserve(warm, { sessionId: "s2", worldId: "techno", footprint: MODDED, policy: "warm" }, NOW + 2), "s2", NOW + 100);
+  assert.equal(drainDecision(warm, NOW + 100 + 600, 600), "stop");
 });
 
 test("a warm world's host stops instead of terminating, and is a candidate for that world only", () => {
@@ -181,7 +196,7 @@ test("a warm world's host stops instead of terminating, and is a candidate for t
 });
 
 test("every transition moves the version, so a stale writer loses", () => {
-  const created = newHost("i-1", SHAPES[0]!, NOW);
+  const created = newHost("i-1", SHAPES[0]!, NOW, "launched");
   const ready = markReady(created, NOW + 1);
   const placed = reserve(ready, { sessionId: "s1", worldId: "w", footprint: VANILLA, policy: "cold" }, NOW + 2);
   const drained = release(placed, "s1", NOW + 3);

@@ -62,3 +62,13 @@ output "running_hours_alarm_name" {
   description = "Backstop behind the watchdog; alarms to the guardrails topic after too many consecutive running hours."
   value       = aws_cloudwatch_metric_alarm.running_hours.alarm_name
 }
+
+output "fleet_launch_template_id" {
+  description = "The launch template an instant EC2 Fleet uses for a host launched for a session (ADR-0054)."
+  value       = aws_launch_template.fleet_host.id
+}
+
+output "fleet_launch_template_name" {
+  description = "The launch template's stable name, which the operations root looks it up by."
+  value       = aws_launch_template.fleet_host.name
+}

@@ -40,6 +40,10 @@ export type CatalogWorld = Readonly<{
   // Overrides the game's footprint, field by field: a vanilla world needs less
   // than a modded one of the same game.
   footprint?: Partial<Footprint>;
+  // A legacy world's save lives on the configured host's data volume, so only
+  // that host can run it. A world created from a preset lives in S3 between
+  // sessions and may be placed anywhere.
+  hostBinding?: "configured";
   materialization?: "existing" | "not_created" | "archived";
   worldLifecycle?: "v1" | null;
   preset?: Readonly<{
@@ -76,8 +80,8 @@ export const gameCatalog: readonly CatalogGame[] = [
     displayName: "Minecraft",
     connectPort: 25565,
     worlds: [
-      { id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1", connectivity: "zerotier" },
-      { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge", sessionControl: "v1", connectivity: "zerotier", footprint: { memoryMiB: 3 * 1024, cores: 0.5 } },
+      { id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1", connectivity: "zerotier", hostBinding: "configured" },
+      { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge", sessionControl: "v1", connectivity: "zerotier", footprint: { memoryMiB: 3 * 1024, cores: 0.5 }, hostBinding: "configured" },
     ],
   },
   {
@@ -176,6 +180,13 @@ export function footprintForWorld(worldId: string, catalog: readonly CatalogGame
   const base = game.footprint ?? gameFootprints[game.id];
   if (base === undefined) throw new Error(`no footprint for game ${game.id}`);
   return { memoryMiB: world.footprint?.memoryMiB ?? base.memoryMiB, cores: world.footprint?.cores ?? base.cores };
+}
+
+// Whether a world may run only on the configured host. Unknown worlds — those
+// created from presets and living in S3 — carry no binding.
+export function worldHostBinding(worldId: string, catalog: readonly CatalogGame[] = gameCatalog): "configured" | null {
+  const game = catalog.find((candidate) => candidate.worlds.some((world) => world.id === worldId));
+  return game?.worlds.find((candidate) => candidate.id === worldId)?.hostBinding ?? null;
 }
 
 // What a launch for this world asks EC2 for when no host has room.

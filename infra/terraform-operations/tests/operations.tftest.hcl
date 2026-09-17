@@ -33,6 +33,24 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_launch_template.fleet_host
+    values = {
+      id   = "lt-00000000000000000"
+      name = "spawnpoint-fleet-host"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.lifecycle_v2_drain_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.lifecycle_v2_drain
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.idle_watchdog_assume_role
     values = {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
@@ -345,5 +363,40 @@ run "control_plane_projection_is_event_driven_scoped_and_recoverable" {
       data.aws_iam_policy_document.control_plane_projector.statement[5].resources == toset(["arn:aws:events:eu-central-1:123456789012:event-bus/default"]),
     ])
     error_message = "The projector may update only its view, read lifecycle, recover through the fenced stop adapter and publish sanitized invalidations."
+  }
+}
+
+run "launched_hosts_are_placed_drained_and_let_go_by_tag" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      aws_sfn_state_machine.lifecycle_v2_drain.type == "STANDARD",
+      strcontains(aws_sfn_state_machine.lifecycle_v2_drain.definition, "decideDrain"),
+      strcontains(aws_sfn_state_machine.lifecycle_v2_drain.definition, "concludeDrain"),
+      strcontains(aws_sfn_state_machine.lifecycle_v2_drain.definition, "arn:aws:states:::aws-sdk:ec2:terminateInstances"),
+      strcontains(aws_sfn_state_machine.lifecycle_v2_drain.definition, "arn:aws:states:::aws-sdk:ec2:stopInstances"),
+    ])
+    error_message = "The drain machine is a durable Standard workflow that asks the coordinator and then stops or lets a host go."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(aws_sfn_state_machine.lifecycle_v2_start.definition, "arn:aws:states:::aws-sdk:ec2:createFleet"),
+      strcontains(aws_sfn_state_machine.lifecycle_v2_start.definition, "lt-00000000000000000"),
+      strcontains(aws_sfn_state_machine.lifecycle_v2_start.definition, "\"AllowedInstanceTypes\": ${jsonencode(var.launch_families)}"),
+      strcontains(aws_sfn_state_machine.lifecycle_v2_stop.definition, local.lifecycle_v2_drain_arn),
+    ])
+    error_message = "A start launches from the fleet template with the allowed families as a filter, and a stop that empties a launched host starts its drain."
+  }
+
+  assert {
+    condition = alltrue([
+      data.aws_iam_policy_document.lifecycle_v2_start.statement[7].actions == toset(["ec2:CreateFleet", "ec2:RunInstances"]),
+      data.aws_iam_policy_document.lifecycle_v2_start.statement[9].actions == toset(["iam:PassRole"]),
+      data.aws_iam_policy_document.lifecycle_v2_start.statement[10].actions == toset(["ec2:TerminateInstances"]),
+      length(data.aws_iam_policy_document.lifecycle_v2_start.statement[10].condition) == 1,
+    ])
+    error_message = "The start may launch, pass only the host role, and terminate only what carries the fleet tag."
   }
 }

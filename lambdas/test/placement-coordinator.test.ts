@@ -67,7 +67,9 @@ test("registering the host that exists today is idempotent, and it is ready", as
 test("with nothing up, placing asks for a launch; with a host up, it reserves a slot and is idempotent for the session", async () => {
   const fleet = new MemoryFleet();
   const coordinate = coordinator(fleet);
-  const nothing = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "world" });
+  const bound = await coordinate({ action: "placeSession", sessionId: "s0", worldId: "world" });
+  assert.deepEqual(bound.placement, { kind: "refused", reason: "bound_to_configured_host" }, "a legacy world cannot be launched for; its save is on the configured host");
+  const nothing = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "arrived-later", serverId: "minecraft" });
   assert.deepEqual(nothing.placement, { kind: "launch", requirements: { memoryMiB: 7 * 1024 + SYSTEM_RESERVE_MIB, vcpu: 2 } });
 
   await coordinate({ action: "registerHost", hostId: "i-1", shape: SMALL, ready: true });
@@ -78,12 +80,12 @@ test("with nothing up, placing asks for a launch; with a host up, it reserves a 
   assert.equal(fleet.hosts.get("i-1")?.record.reservations.length, 1);
   assert.equal(fleet.hosts.get("i-1")?.record.state, "ready");
 
-  // The small host is full; a second modded world asks for a launch.
-  const second = await coordinate({ action: "placeSession", sessionId: "s2", worldId: "world" });
+  // The small host is full; a second modded preset world asks for a launch.
+  const second = await coordinate({ action: "placeSession", sessionId: "s2", worldId: "arrived-later", serverId: "minecraft" });
   assert.equal(second.placement?.kind, "launch");
-  // A vanilla world does not fit beside it either (7 + 3 > 8 - 1), so it launches too.
+  // The legacy vanilla world does not fit beside it either (7 + 3 > 8 - 1), and being bound it is refused.
   const vanilla = await coordinate({ action: "placeSession", sessionId: "s3", worldId: "vanilla" });
-  assert.equal(vanilla.placement?.kind, "launch");
+  assert.equal(vanilla.placement?.kind, "refused");
 });
 
 test("a lost conditional write falls through to the next candidate instead of failing the start", async () => {
@@ -117,17 +119,22 @@ test("reserving on a named host, releasing, and the drain that follows", async (
   const releasedTwo = await coordinate({ action: "releasePlacement", hostId: "i-1", sessionId: "s2" });
   assert.equal(releasedTwo.host?.record.state, "draining");
   assert.equal((await coordinate({ action: "decideDrain", hostId: "i-1", gracePeriodSeconds: 600 })).drain, "keep");
-  assert.equal((await coordinate({ action: "decideDrain", hostId: "i-1", gracePeriodSeconds: 0 })).drain, "terminate");
+  assert.equal((await coordinate({ action: "decideDrain", hostId: "i-1", gracePeriodSeconds: 0 })).drain, "stop", "the configured host is never terminated");
 
-  const concluded = await coordinate({ action: "concludeDrain", hostId: "i-1", outcome: "terminate" });
+  const launched = await coordinate({ action: "registerHost", hostId: "i-fleet", shape: LARGE, ready: true, provenance: "launched" });
+  assert.equal(launched.host?.record.provenance, "launched");
+  assert.equal((await coordinate({ action: "decideDrain", hostId: "i-fleet", gracePeriodSeconds: 0 })).drain, "terminate");
+  await coordinate({ action: "concludeDrain", hostId: "i-1", outcome: "stop" });
+  assert.equal((await coordinate({ action: "getHost", hostId: "i-1" })).host?.record.state, "stopped");
+  const concluded = await coordinate({ action: "concludeDrain", hostId: "i-fleet", outcome: "terminate" });
   assert.equal(concluded.host?.record.state, "terminating");
-  await assert.rejects(coordinate({ action: "concludeDrain", hostId: "i-1", outcome: "terminate" }), PlacementConflict);
+  await assert.rejects(coordinate({ action: "concludeDrain", hostId: "i-fleet", outcome: "terminate" }), PlacementConflict);
 });
 
 test("releasing what was never reserved is not a failure, so a stop that predates placement still verifies", async () => {
   const fleet = new MemoryFleet();
   const coordinate = coordinator(fleet);
-  assert.deepEqual(await coordinate({ action: "releasePlacement", hostId: "i-none", sessionId: "s1" }), { released: false });
+  assert.deepEqual(await coordinate({ action: "releasePlacement", hostId: "i-none", sessionId: "s1" }), { released: false, host: null });
   await coordinate({ action: "registerHost", hostId: "i-1", shape: SMALL, ready: true });
   const unknownSession = await coordinate({ action: "releasePlacement", hostId: "i-1", sessionId: "s-old" });
   assert.equal(unknownSession.released, false);
@@ -139,7 +146,7 @@ test("an empty host that is the fleet's headroom is kept; without headroom it dr
   const coordinate = coordinator(fleet);
   await coordinate({ action: "registerHost", hostId: "i-busy", shape: SMALL, ready: true });
   await coordinate({ action: "reserveOnHost", hostId: "i-busy", sessionId: "s1", worldId: "world" });
-  await coordinate({ action: "registerHost", hostId: "i-spare", shape: LARGE, ready: true });
+  await coordinate({ action: "registerHost", hostId: "i-spare", shape: LARGE, ready: true, provenance: "launched" });
   assert.equal((await coordinate({ action: "decideDrain", hostId: "i-spare", gracePeriodSeconds: 0, headroomMiB: 8 * 1024 })).drain, "keep");
   assert.equal((await coordinate({ action: "decideDrain", hostId: "i-spare", gracePeriodSeconds: 0 })).drain, "terminate");
   await coordinate({ action: "releasePlacement", hostId: "i-busy", sessionId: "s1" });
@@ -157,5 +164,16 @@ test("a stop finds where its session runs, and can give the slot back knowing on
   const released = await coordinate({ action: "releasePlacement", sessionId: "s2" });
   assert.equal(released.released, true);
   assert.deepEqual(await coordinate({ action: "findPlacement", sessionId: "s2" }), { placement: null });
-  assert.deepEqual(await coordinate({ action: "releasePlacement", sessionId: "s2" }), { released: false });
+  assert.deepEqual(await coordinate({ action: "releasePlacement", sessionId: "s2" }), { released: false, host: null });
+});
+
+test("a legacy world is bound to the configured host: it never lands on a launched one and never asks for a launch", async () => {
+  const fleet = new MemoryFleet();
+  const coordinate = coordinator(fleet);
+  await coordinate({ action: "registerHost", hostId: "i-fleet", shape: LARGE, ready: true, provenance: "launched" });
+  assert.deepEqual((await coordinate({ action: "placeSession", sessionId: "s1", worldId: "world" })).placement, { kind: "refused", reason: "bound_to_configured_host" });
+  // A preset world is free to take the launched host.
+  assert.deepEqual((await coordinate({ action: "placeSession", sessionId: "s2", worldId: "made-later", serverId: "factorio" })).placement, { kind: "reuse", hostId: "i-fleet", slot: 0 });
+  await coordinate({ action: "registerHost", hostId: "i-home", shape: SMALL, ready: true });
+  assert.deepEqual((await coordinate({ action: "placeSession", sessionId: "s1", worldId: "world" })).placement, { kind: "reuse", hostId: "i-home", slot: 0 });
 });

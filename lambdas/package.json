@@ -5,7 +5,8 @@
   "scripts": {
     "build": "bash scripts/build.sh",
     "test": "node --test test/*.test.ts",
-    "typecheck": "tsc --project tsconfig.json"
+    "typecheck": "tsc --project tsconfig.json",
+    "launch-requirements": "node tools/launch-requirements.ts"
   },
   "dependencies": {
     "@aws-sdk/client-apigatewaymanagementapi": "^3.1133.0",

@@ -15,6 +15,9 @@
 #   GAME_DEFAULT_AUTH          this server's auth model: none | game (ADR-0033).
 #                              Default to none — see README.md, "Assume the
 #                              server authenticates nobody"
+#   GAME_FOOTPRINT_MEMORY_MIB  what a session is placed with and limited to when
+#   GAME_FOOTPRINT_CORES       the world's catalog entry states nothing (ADR-0054):
+#                              the container's memory, not the heap, and a core weight
 #   game_ready                 readiness: docker health as $1, succeed when the
 #                              game actually serves
 #   game_query_players_raw     transport: print the raw player query response

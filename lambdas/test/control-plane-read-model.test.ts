@@ -64,6 +64,21 @@ test("the panel's catalog offers exactly the worlds the host catalog resolves", 
   assert.deepEqual([...panelPairs].sort(), [...hostPairs].sort());
 });
 
+test("a footprint the host catalog states is the one the panel places with", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { footprintForWorld } = await import("../src/control-plane/catalog.ts");
+  const url = new URL("../../server/worlds/catalog.json", import.meta.url);
+  const hostCatalog = JSON.parse(await readFile(url, "utf8")) as {
+    worlds: ReadonlyArray<{ id: string; footprint?: { memory_mib: number; cores: number } }>;
+  };
+  // The host reads its own file and the panel its own module; a session limited
+  // to one figure and placed by another would fit on paper and be killed on the box.
+  for (const world of hostCatalog.worlds) {
+    if (!world.footprint) continue;
+    assert.deepEqual(footprintForWorld(world.id), { memoryMiB: world.footprint.memory_mib, cores: world.footprint.cores }, world.id);
+  }
+});
+
 test("each world's address carries its own game's port, and only for callers allowed one", async () => {
   const sources: ControlPlaneSources = {
     listHosts: async () => [],

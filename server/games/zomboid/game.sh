@@ -32,6 +32,11 @@ GAME_CONNECT_PROTOCOL="udp"
 # configuration. A world whose server does verify declares `auth: game`
 # (ADR-0033, and server/games/README.md).
 GAME_DEFAULT_AUTH="none"
+# What a session is placed with and limited to (ADR-0054): the image gives
+# the JVM a 6 GiB heap by default (MEMORY_XMX_GB), and the process is larger
+# than its heap.
+GAME_FOOTPRINT_MEMORY_MIB="8192"
+GAME_FOOTPRINT_CORES="1"
 
 ZOMBOID_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ZOMBOID_DATA_DIR="${ZOMBOID_DATA_DIR:-${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${ZOMBOID_GAME_DIR}/data}}"

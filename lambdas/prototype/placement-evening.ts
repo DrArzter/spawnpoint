@@ -41,13 +41,13 @@ const IPV4_PER_HOUR = 0.005;
 const GRACE_SECONDS = 10 * 60;
 const PROVISION_SECONDS = 4 * 60; // a created host, measured nowhere yet; ADR-0048 estimates four to eight
 
-// Footprints: the measured modded Minecraft (4 GiB heap, ~6 GiB container) and
-// plausible values for the others. The catalog will carry these per world.
+// Footprints: the catalog's figures (control-plane/catalog.ts). The modded
+// Minecraft was measured near 6 GiB on a 4 GiB heap; the limit sits above it.
 const FOOTPRINTS: Record<string, Footprint> = {
-  modded: { memoryMiB: 6 * 1024, cores: 1 },
+  modded: { memoryMiB: 7 * 1024, cores: 1 },
   vanilla: { memoryMiB: 3 * 1024, cores: 0.5 },
   factorio: { memoryMiB: 2 * 1024, cores: 0.5 },
-  zomboid: { memoryMiB: 6 * 1024, cores: 1 },
+  zomboid: { memoryMiB: 8 * 1024, cores: 1 },
 };
 
 type Event = { at: number; kind: "start" | "stop"; world: string; game: keyof typeof FOOTPRINTS };

@@ -9,6 +9,7 @@
 #   GAME_COMPOSE_FILES         colon list, relative to SERVER_DIR: what a session
 #                              runs, without the observability tier
 #   GAME_OBSERVABILITY_COMPOSE_FILES
+#   GAME_HOST_OBSERVABILITY_COMPOSE_FILE
 #                              optional: the game's part of the observability
 #                              tier (its exporter's scrape job, its dashboards),
 #                              laid over observability/compose.yaml
@@ -115,9 +116,10 @@ configure_slot_ports() {
 #
 # A placed session (ADR-0054) arrives with SPAWNPOINT_SLOT. It runs as its own
 # Compose project named for its world, on its slot's ports, under its
-# footprint's memory limit; on a slot other than zero it runs without the
-# observability tier until one Prometheus serves the whole host. With no slot
-# the session is what it was before placement existed, byte for byte.
+# footprint's memory limit, and without the observability tier: the host runs
+# one tier for every session (observability/compose.host.yaml), which finds the
+# game's exporter through GAME_HOST_OBSERVABILITY_COMPOSE_FILE. With no slot the
+# session is what it was before placement existed, byte for byte, tier inside.
 configure_game_compose() {
   local server_dir compose_files compose_file slot
   server_dir="$(cd -- "${GAMES_DIR}/.." && pwd)"
@@ -145,16 +147,19 @@ configure_game_compose() {
   fi
   if [[ -z "${SERVER_COMPOSE_FILES:-}" && -z "${SERVER_COMPOSE_FILE:-}" ]]; then
     local -a session_files=()
-    if [[ -z "${slot}" || "${slot}" == "0" ]]; then
+    if [[ -z "${slot}" ]]; then
       session_files+=("observability/compose.yaml")
     fi
     IFS=':' read -r -a game_compose <<<"${GAME_COMPOSE_FILES}"
     session_files+=("${game_compose[@]}")
-    if [[ -z "${slot}" || "${slot}" == "0" ]] && [[ -n "${GAME_OBSERVABILITY_COMPOSE_FILES:-}" ]]; then
+    if [[ -z "${slot}" ]] && [[ -n "${GAME_OBSERVABILITY_COMPOSE_FILES:-}" ]]; then
       IFS=':' read -r -a game_observability <<<"${GAME_OBSERVABILITY_COMPOSE_FILES}"
       session_files+=("${game_observability[@]}")
     fi
     if [[ -n "${slot}" ]]; then
+      if [[ -n "${GAME_HOST_OBSERVABILITY_COMPOSE_FILE:-}" ]]; then
+        session_files+=("${GAME_HOST_OBSERVABILITY_COMPOSE_FILE}")
+      fi
       session_files+=("${GAME_FOOTPRINT_COMPOSE_FILE:?${GAME_ID} declares no GAME_FOOTPRINT_COMPOSE_FILE}")
     fi
     compose_files=""

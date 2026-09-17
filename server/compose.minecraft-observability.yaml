@@ -1,7 +1,7 @@
-# Minecraft's part of the shared observability tier: its exporter's scrape job
-# and its dashboards. A file of its own so a placed session on a slot other than
-# zero, which runs without the tier until one Prometheus serves the whole host,
-# can leave it out along with observability/compose.yaml (ADR-0054, phase 9).
+# Minecraft's part of the observability tier inside an unplaced session: its
+# exporter's scrape job and its dashboards. A placed session leaves this out
+# along with observability/compose.yaml — the host's own tier scrapes it
+# through compose.minecraft-host-observability.yaml instead (ADR-0054).
 services:
   prometheus:
     volumes:

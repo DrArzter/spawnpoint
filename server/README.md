@@ -63,8 +63,12 @@ Contents:
   byte-identical to the pre-adapter scripts**. Factorio is the first tenant: RCON spoken from the host by
   `games/factorio/rcon-client.py`, password read from the `config/rconpw` the server itself generates, saves archived
   as `saves/*.zip`.
-- `observability/` — provisioned Prometheus configuration and Grafana session dashboard. `mc-monitor`, cAdvisor and
-  node_exporter are declared beside Minecraft in Compose and share its lifetime.
+- `observability/` — provisioned Prometheus configuration and Grafana dashboards. In an unplaced session `mc-monitor`,
+  cAdvisor and node_exporter are declared beside Minecraft in Compose and share its lifetime. A placed session
+  ([ADR-0054](../docs/adr/0054-place-a-session-on-a-host-with-room.md)) runs without them: the host runs one tier for
+  every session, the Compose project `spawnpoint-observability` (`compose.host.yaml` over `compose.yaml`), which
+  `scripts/ensure-host-observability.sh` brings up before the first placed session and whose Prometheus finds each
+  session's exporter through the Docker socket by label (`prometheus.host.yml`).
 
 Planned later: fetch the desired release from S3, and invoke backup/retention from orchestration. The Spot interruption
 notice is handled only if [ADR-0027](../docs/adr/0027-spot-request-shape.md) is un-deferred; the server runs on-demand
@@ -88,8 +92,10 @@ server/scripts/save-world.sh
 server/scripts/stop.sh
 ```
 
-`start.sh` starts the whole Compose project, including session observability. `stop.sh` saves Minecraft first and then
-stops the whole project, so Grafana cannot accidentally become always-on compute. Prometheus and Grafana keep local
+`start.sh` starts the whole Compose project, including session observability for an unplaced session. `stop.sh` saves
+Minecraft first and then stops the whole project, so Grafana cannot accidentally become always-on compute. The host
+tier a placed session is scraped by stays up while the host runs and goes down with the host: a configured host is
+stopped when its last session leaves, a launched one is terminated after its grace period. Prometheus and Grafana keep local
 Docker volumes across an ordinary Compose stop; losing that history with a disposable instance is intentional.
 
 Prometheus remains host-local at `http://127.0.0.1:9090`. Grafana also defaults to loopback, but has its own bind

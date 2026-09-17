@@ -178,6 +178,13 @@ if declare -F game_prepare_session >/dev/null; then
   game_prepare_session
 fi
 
+# A placed session is scraped by the host's own tier, which must exist before
+# the session's exporter can join its network (ADR-0054, phase 9). An unplaced
+# session carries the tier inside its own project, as it always has.
+if [[ -n "${SPAWNPOINT_SLOT:-}" ]]; then
+  "${SCRIPT_DIR}/ensure-host-observability.sh" >&2
+fi
+
 "${SCRIPT_DIR}/start.sh"
 
 # The summary is what the machine carries back to whoever asked. The address in

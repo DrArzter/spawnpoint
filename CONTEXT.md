@@ -18,7 +18,7 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Wipe**: The player-facing name for a world generation and, by extension, the deliberate transition that closes the current generation and starts the next one. Interfaces may say “current wipe”, “wipe history” and “start new wipe”; internal records retain the precise term world generation.
 
-**Host**: A compute machine capable of running one or more sessions at once. A host is not permanently owned by a world; a session temporarily binds one world to one host, and a host exists only while at least one session is on it or its grace period has not ended. _Avoid_: Server or instance when the domain concept, rather than the AWS resource, is meant.
+**Host**: A compute machine capable of running one or more sessions at once. A host is not permanently owned by a world; a session temporarily binds one world to one host. A *configured* host is the one the deployment declares, whose volume holds the legacy worlds and which is stopped, never terminated; a *launched* host is created for a session and exists only while at least one session is on it or its grace period has not ended. _Avoid_: Server or instance when the domain concept, rather than the AWS resource, is meant.
 
 **Footprint**: What one world's session needs from a host: a memory figure that becomes the container's hard limit, and a core weight that bounds how many sessions share the host's cores. Declared per world, defaulting per game. It is the unit of placement; it is not the JVM heap, which is smaller.
 

@@ -8,6 +8,8 @@
   "instanceId": "i-0123456789abcdef0",
   "worldId": "world",
   "placement": "single",
+  "launch": "disabled",
+  "appCommit": "main",
   "startTiming": {
     "instancePollSeconds": 10,
     "ssmPollSeconds": 10,

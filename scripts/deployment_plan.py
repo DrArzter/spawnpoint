@@ -44,6 +44,7 @@ WORKFLOW_ROOTS = {
     "workflows/start-server-v2.asl.json.tftpl": TF_OPERATIONS,
     "workflows/stop-server-v2.asl.json.tftpl": TF_OPERATIONS,
     "workflows/idle-watchdog-v2.asl.json.tftpl": TF_OPERATIONS,
+    "workflows/drain-host-v2.asl.json.tftpl": TF_OPERATIONS,
     "workflows/build-release.asl.json.tftpl": TF_RELEASES,
     "workflows/publish-preset-catalog.asl.json.tftpl": TF_RELEASES,
     "workflows/world-lifecycle.asl.json.tftpl": TF_ACCESS_API,

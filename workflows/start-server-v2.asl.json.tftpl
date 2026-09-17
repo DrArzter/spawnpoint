@@ -191,9 +191,162 @@
           "Variable": "$.placement.placement.kind",
           "StringEquals": "reuse",
           "Next": "Adopt Placement"
+        },
+        {
+          "And": [
+            { "Variable": "$.placement.placement.kind", "StringEquals": "launch" },
+            { "Variable": "$.request.launch", "StringEquals": "enabled" }
+          ],
+          "Next": "Launch Host"
         }
       ],
       "Default": "No Host Has Room"
+    },
+    "Launch Host": {
+      "Type": "Task",
+      "Comment": "ADR-0054, phase 12: an instant Fleet for exactly what the footprint needs. EC2 answers with the cheapest type in the allowed families; no type and no price lives here.",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:createFleet",
+      "Parameters": {
+        "Type": "instant",
+        "LaunchTemplateConfigs": [
+          {
+            "LaunchTemplateSpecification": {
+              "LaunchTemplateId": "${fleet_launch_template_id}",
+              "Version": "$Latest"
+            },
+            "Overrides": [
+              {
+                "InstanceRequirements": {
+                  "MemoryMiB": { "Min.$": "$.placement.placement.requirements.memoryMiB" },
+                  "VCpuCount": { "Min.$": "$.placement.placement.requirements.vcpu" },
+                  "AllowedInstanceTypes": ${allowed_instance_types},
+                  "BurstablePerformance": "excluded"
+                }
+              }
+            ]
+          }
+        ],
+        "TargetCapacitySpecification": {
+          "TotalTargetCapacity": 1,
+          "DefaultTargetCapacityType": "on-demand"
+        },
+        "OnDemandOptions": {
+          "AllocationStrategy": "lowest-price",
+          "SingleInstanceType": true
+        },
+        "TagSpecifications": [
+          {
+            "ResourceType": "instance",
+            "Tags": [
+              { "Key": "AppCommit", "Value.$": "$.request.appCommit" },
+              { "Key": "LaunchedFor", "Value.$": "$.request.sessionId" }
+            ]
+          }
+        ]
+      },
+      "ResultSelector": {
+        "instanceId.$": "$.Instances[0].InstanceIds[0]",
+        "instanceType.$": "$.Instances[0].InstanceType"
+      },
+      "ResultPath": "$.launched",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Placement Unavailable"
+        }
+      ],
+      "Next": "Describe Launched Host Shape"
+    },
+    "Describe Launched Host Shape": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstanceTypes",
+      "Parameters": {
+        "InstanceTypes.$": "States.Array($.launched.instanceType)"
+      },
+      "ResultSelector": {
+        "memoryMiB.$": "$.InstanceTypes[0].MemoryInfo.SizeInMiB",
+        "vcpu.$": "$.InstanceTypes[0].VCpuInfo.DefaultVCpus"
+      },
+      "ResultPath": "$.launched.shape",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Terminate Unreserved Host"
+        }
+      ],
+      "Next": "Register Launched Host"
+    },
+    "Register Launched Host": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "registerHost",
+          "hostId.$": "$.launched.instanceId",
+          "ready": true,
+          "provenance": "launched",
+          "shape": {
+            "instanceType.$": "$.launched.instanceType",
+            "memoryMiB.$": "$.launched.shape.memoryMiB",
+            "vcpu.$": "$.launched.shape.vcpu"
+          }
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Terminate Unreserved Host"
+        }
+      ],
+      "Next": "Reserve On Launched Host"
+    },
+    "Reserve On Launched Host": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "reserveOnHost",
+          "hostId.$": "$.launched.instanceId",
+          "sessionId.$": "$.request.sessionId",
+          "worldId.$": "$.request.worldId",
+          "serverId.$": "$.request.serverId"
+        }
+      },
+      "ResultSelector": {
+        "placement.$": "$.Payload.placement"
+      },
+      "ResultPath": "$.placement",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Terminate Unreserved Host"
+        }
+      ],
+      "Next": "Adopt Placement"
+    },
+    "Terminate Unreserved Host": {
+      "Type": "Task",
+      "Comment": "A host launched for this session that could not be recorded or reserved is let go at once, before it can be billed for an evening nobody knows about.",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:terminateInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.launched.instanceId)"
+      },
+      "ResultPath": "$.unreservedTermination",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.unreservedTerminationFailure",
+          "Next": "Placement Unavailable"
+        }
+      ],
+      "Next": "Placement Unavailable"
     },
     "Adopt Placement": {
       "Type": "Pass",
@@ -206,7 +359,7 @@
     },
     "No Host Has Room": {
       "Type": "Pass",
-      "Comment": "The coordinator answered with what to launch, and launching is not built yet (ADR-0054, phase 12). The session is cancelled cleanly rather than started on a host that has no room for it.",
+      "Comment": "The coordinator answered with what to launch and launching is disabled, or the world is bound to the configured host and that host has no room (ADR-0054). The session is cancelled cleanly rather than started on a host that has no room for it.",
       "Result": { "reason": "no_host_has_room" },
       "ResultPath": "$.placementRefusal",
       "Next": "Begin Cancelling Unplaced Session"
@@ -264,7 +417,7 @@
     "Start Refused Unplaced": {
       "Type": "Fail",
       "Error": "Spawnpoint.SessionUnplaced",
-      "Cause": "No registered host has room for this session and launching one is not built yet, or the placement could not be read. Nothing was started; the session was cancelled and its lease released."
+      "Cause": "No registered host has room for this session and launching one is disabled or failed, or the world is bound to the configured host, or the placement could not be read. Nothing was started; the session was cancelled and its lease released."
     },
     "Start Accepted V1": {
       "Type": "Task",

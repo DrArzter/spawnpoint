@@ -137,3 +137,25 @@ variable "placement" {
     error_message = "placement must be single or shared."
   }
 }
+
+variable "launch" {
+  description = "Whether a session nothing has room for may launch a host from the fleet template (ADR-0054, phase 12). `disabled` refuses and cancels the session; `enabled` creates an instant EC2 Fleet for the footprint's requirements."
+  type        = string
+  default     = "disabled"
+
+  validation {
+    condition     = contains(["disabled", "enabled"], var.launch)
+    error_message = "launch must be disabled or enabled."
+  }
+}
+
+variable "app_commit" {
+  description = "The commit of this repository a launched host checks out into its app directory, carried as the instance's AppCommit tag. `main` follows the branch; the deploy pipeline should pin the tested commit."
+  type        = string
+  default     = "main"
+
+  validation {
+    condition     = can(regex("^([0-9a-f]{40}|[A-Za-z0-9._/-]{1,120})$", var.app_commit))
+    error_message = "app_commit must be a commit hash or a ref name."
+  }
+}

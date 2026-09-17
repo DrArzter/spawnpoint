@@ -1,0 +1,169 @@
+{
+  "Comment": "Lifecycle V2 drain (ADR-0054): the host's half of the two-level stop. Wait out the grace period, ask the coordinator what the fleet needs, then let the host go, stop it, or keep it while it is the fleet's headroom.",
+  "QueryLanguage": "JSONPath",
+  "StartAt": "Initialize",
+  "States": {
+    "Initialize": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$",
+        "polls": { "keep": 0 }
+      },
+      "Next": "Wait Out Grace Period"
+    },
+    "Wait Out Grace Period": {
+      "Type": "Wait",
+      "Seconds": ${grace_period_seconds},
+      "Next": "Decide Drain"
+    },
+    "Decide Drain": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "decideDrain",
+          "hostId.$": "$.request.hostId",
+          "gracePeriodSeconds": ${grace_period_seconds},
+          "headroomMiB": ${headroom_mib}
+        }
+      },
+      "ResultSelector": {
+        "drain.$": "$.Payload.drain",
+        "state.$": "$.Payload.host.record.state"
+      },
+      "ResultPath": "$.decision",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Route Drain"
+    },
+    "Route Drain": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.decision.drain", "StringEquals": "terminate", "Next": "Conclude Termination" },
+        { "Variable": "$.decision.drain", "StringEquals": "stop", "Next": "Conclude Stop" },
+        { "Variable": "$.decision.state", "StringEquals": "ready", "Next": "Host Taken Back" },
+        { "Variable": "$.decision.state", "StringEquals": "terminating", "Next": "Host Already Let Go" },
+        { "Variable": "$.decision.state", "StringEquals": "stopped", "Next": "Host Already Let Go" }
+      ],
+      "Default": "Count Kept Poll"
+    },
+    "Count Kept Poll": {
+      "Type": "Pass",
+      "Comment": "The host is empty and kept: still inside its grace period, or the fleet's only headroom. Wait another period and ask again, a bounded number of times.",
+      "Parameters": {
+        "request.$": "$.request",
+        "polls": { "keep.$": "States.MathAdd($.polls.keep, 1)" }
+      },
+      "Next": "Kept Too Long"
+    },
+    "Kept Too Long": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.polls.keep", "NumericGreaterThanEquals": ${max_keep_polls}, "Next": "Drain Gave Up" }
+      ],
+      "Default": "Wait Out Grace Period"
+    },
+    "Conclude Termination": {
+      "Type": "Task",
+      "Comment": "The record moves first, conditionally, so a start that lands meanwhile wins and this drain steps aside; only then is the machine touched.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "concludeDrain",
+          "hostId.$": "$.request.hostId",
+          "outcome": "terminate"
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.concludeError", "Next": "Host Taken Back" }
+      ],
+      "Next": "Terminate Host"
+    },
+    "Terminate Host": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:terminateInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.hostId)"
+      },
+      "ResultPath": "$.terminated",
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.terminateError", "Next": "Host Not Released" }
+      ],
+      "Next": "Drained"
+    },
+    "Conclude Stop": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "concludeDrain",
+          "hostId.$": "$.request.hostId",
+          "outcome": "stop"
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.concludeError", "Next": "Host Taken Back" }
+      ],
+      "Next": "Stop Host"
+    },
+    "Stop Host": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:stopInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.hostId)"
+      },
+      "ResultPath": "$.stopped",
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.stopError", "Next": "Host Not Released" }
+      ],
+      "Next": "Drained"
+    },
+    "Drained": {
+      "Type": "Pass",
+      "Parameters": {
+        "hostId.$": "$.request.hostId",
+        "status": "drained",
+        "outcome.$": "$.decision.drain"
+      },
+      "End": true
+    },
+    "Host Taken Back": {
+      "Type": "Pass",
+      "Comment": "A start reserved the host during the grace period, or concluded the drain first. Nothing to do: the next stop that empties it starts a new drain.",
+      "Parameters": {
+        "hostId.$": "$.request.hostId",
+        "status": "taken_back"
+      },
+      "End": true
+    },
+    "Host Already Let Go": {
+      "Type": "Pass",
+      "Parameters": {
+        "hostId.$": "$.request.hostId",
+        "status": "already_concluded"
+      },
+      "End": true
+    },
+    "Drain Gave Up": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.DrainKeptTooLong",
+      "Cause": "An empty host was kept for longer than the bounded number of grace periods, most likely as the fleet's only headroom while sessions ran elsewhere the whole time. It is still billed; a person decides."
+    },
+    "Host Not Released": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.HostNotReleased",
+      "Cause": "The drain concluded but EC2 refused to stop or terminate the host. It is recorded as gone and is still billed, which the running-hours alarm is the backstop for."
+    }
+  }
+}

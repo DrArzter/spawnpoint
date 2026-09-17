@@ -57,6 +57,32 @@ data "aws_iam_policy_document" "start_workflow" {
       "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
     ]
   }
+
+  # A host the control plane launched (ADR-0054) carries the fleet tag, and
+  # that tag — never the instance id — is what admits it here.
+  statement {
+    sid       = "StartLaunchedHosts"
+    actions   = ["ec2:StartInstances"]
+    resources = [local.fleet_host_instance_arn_pattern]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:ResourceTag/ManagedBy"
+      values   = ["spawnpoint-fleet"]
+    }
+  }
+
+  statement {
+    sid       = "RunApprovedDocumentOnLaunchedHosts"
+    actions   = ["ssm:SendCommand"]
+    resources = [local.fleet_host_instance_arn_pattern]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ssm:resourceTag/ManagedBy"
+      values   = ["spawnpoint-fleet"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "start_workflow" {
@@ -111,6 +137,30 @@ data "aws_iam_policy_document" "stop_workflow" {
       aws_instance.game_host.arn,
       "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
     ]
+  }
+
+  statement {
+    sid       = "StopLaunchedHosts"
+    actions   = ["ec2:StopInstances"]
+    resources = [local.fleet_host_instance_arn_pattern]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:ResourceTag/ManagedBy"
+      values   = ["spawnpoint-fleet"]
+    }
+  }
+
+  statement {
+    sid       = "RunApprovedDocumentOnLaunchedHosts"
+    actions   = ["ssm:SendCommand"]
+    resources = [local.fleet_host_instance_arn_pattern]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ssm:resourceTag/ManagedBy"
+      values   = ["spawnpoint-fleet"]
+    }
   }
 }
 

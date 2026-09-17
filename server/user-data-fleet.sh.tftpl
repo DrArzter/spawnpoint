@@ -1,0 +1,96 @@
+${base}
+
+# ---------------------------------------------------------------------------
+# Fleet stage (ADR-0054, phase 12). Everything above is the base host, shared
+# with the configured instance. A launched host has no data volume: the app is
+# checked out here at the commit its AppCommit tag names, the runtime
+# environment is rendered from Parameter Store, and the overlay is joined and
+# self-authorised. Worlds arrive from S3 when a session starts.
+# ---------------------------------------------------------------------------
+set -Eeuo pipefail
+
+fleet_log() {
+  printf 'spawnpoint-fleet: %s\n' "$*"
+}
+
+imds_token="$(curl --silent --show-error --fail --request PUT \
+  --header 'X-aws-ec2-metadata-token-ttl-seconds: 300' \
+  http://169.254.169.254/latest/api/token)"
+imds() {
+  curl --silent --show-error --fail --header "X-aws-ec2-metadata-token: $imds_token" "http://169.254.169.254/latest/$1"
+}
+
+region="$(imds meta-data/placement/region)"
+app_commit="$(imds meta-data/tags/instance/AppCommit 2>/dev/null || true)"
+[ -n "$app_commit" ] || app_commit=main
+app_directory=/srv/spawnpoint/app
+
+fleet_log "checking out $app_commit into $app_directory"
+install -d -m 0755 "$app_directory" /srv/spawnpoint/system /srv/spawnpoint/runtime
+if [ ! -d "$app_directory/.git" ]; then
+  git init -q "$app_directory"
+  git -C "$app_directory" remote add origin '${repository_url}'
+fi
+git -C "$app_directory" fetch -q --depth 1 origin "$app_commit"
+git -C "$app_directory" checkout -q --detach FETCH_HEAD
+chmod 0755 "$app_directory"/server/scripts/*.sh "$app_directory"/server/games/*/*.sh 2>/dev/null || true
+
+fleet_log "rendering the runtime environment from ${host_parameter_path}/env"
+env_file="$app_directory/server/.env"
+aws ssm get-parameters-by-path --region "$region" \
+  --path '${host_parameter_path}/env' --recursive --with-decryption --output json \
+  | "$app_directory/server/scripts/render-host-env.sh" >"$env_file.staged"
+chmod 0600 "$env_file.staged"
+mv -f -- "$env_file.staged" "$env_file"
+
+read_env() {
+  awk -F= -v key="$1" '$1 == key { print substr($0, index($0, "=") + 1); found = 1; exit } END { if (!found) exit 1 }' "$env_file"
+}
+
+# The overlay, when this deployment uses one: install, join, then authorise
+# this node through the Central API with the operator's token, so no person
+# has to click for a host that exists for one evening. The assigned address is
+# what the session summary publishes, so it is written where the scripts read
+# it. Without a token the host still joins and waits for a person to authorise
+# it, which the start's own readiness check turns into a plain refusal.
+if network_id="$(read_env ZEROTIER_NETWORK_ID 2>/dev/null)" && [ -n "$network_id" ]; then
+  fleet_log "joining overlay network $network_id"
+  if ! command -v zerotier-cli >/dev/null 2>&1; then
+    installer="$(mktemp /tmp/zerotier-install.XXXXXX)"
+    curl --fail --silent --show-error --location https://install.zerotier.com -o "$installer"
+    bash "$installer"
+    rm -f -- "$installer"
+  fi
+  systemctl enable --now zerotier-one
+  for _ in $(seq 1 30); do zerotier-cli info >/dev/null 2>&1 && break; sleep 1; done
+  zerotier-cli join "$network_id" >/dev/null
+  node_id="$(zerotier-cli info -j | jq -r '.address')"
+  if central_token="$(aws ssm get-parameter --region "$region" --name '${host_parameter_path}/zerotier-central-token' --with-decryption --query Parameter.Value --output text 2>/dev/null)" && [ -n "$central_token" ] && [ "$central_token" != None ]; then
+    fleet_log "authorising node $node_id on $network_id"
+    curl --silent --show-error --fail --request POST \
+      --header "Authorization: token $central_token" \
+      --header 'Content-Type: application/json' \
+      --data '{"config":{"authorized":true},"name":"spawnpoint-fleet-host"}' \
+      "https://api.zerotier.com/api/v1/network/$network_id/member/$node_id" >/dev/null
+  fi
+  assigned=""
+  for _ in $(seq 1 60); do
+    assigned="$(zerotier-cli -j listnetworks | jq -r --arg id "$network_id" \
+      '.[] | select((.nwid | ascii_downcase) == ($id | ascii_downcase) and .status == "OK") | .assignedAddresses[]? | split("/")[0] | select(test("^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+$"))' | head -n1)"
+    [ -n "$assigned" ] && break
+    sleep 2
+  done
+  if [ -n "$assigned" ]; then
+    if grep -q '^ZEROTIER_ADDRESS=' "$env_file"; then
+      sed -i "s|^ZEROTIER_ADDRESS=.*|ZEROTIER_ADDRESS=$assigned|" "$env_file"
+    else
+      printf 'ZEROTIER_ADDRESS=%s\n' "$assigned" >>"$env_file"
+    fi
+    fleet_log "overlay address $assigned"
+  else
+    fleet_log "overlay joined but no address assigned yet; a start will refuse until it is"
+  fi
+fi
+
+printf 'commit=%s\nready_at=%s\n' "$app_commit" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >/etc/spawnpoint-fleet-ready
+fleet_log "fleet host is ready"

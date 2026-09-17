@@ -212,6 +212,9 @@ tenancy, billing, support — is a product question this repository does not ans
 - **Project Zomboid on a slot other than zero.** Its server announces a second UDP port to clients, so a slot's host
   mapping would send them to a port nothing listens on. Rendering `DefaultPort` and `UDPPort` into the server's ini
   from the slot is what lifts it; until then a Zomboid world takes slot zero or its own host.
+- **The fleet host's bootstrap.** A launched host checks this repository out at first boot, renders its runtime
+  environment from Parameter Store and authorises itself on the overlay through the Central API. Written from the
+  references and not yet run against AWS; the acceptance phase of the rollout is where it is.
 - **The allowed families.** ADR-0032 chose x86 and single-thread performance; the requirements can name families
   (`AllowedInstanceTypes`) and generations but cannot say "fast cores" directly, so the list of allowed families is
   the one piece of type knowledge left in data, and it is a filter rather than a ranking.

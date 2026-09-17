@@ -17,6 +17,12 @@ data "aws_dynamodb_table" "lifecycle" {
   name = "spawnpoint-lifecycle-v2"
 }
 
+# The template a start launches a host from (core root, fleet.tf), by its
+# stable name: the operations root never owns compute.
+data "aws_launch_template" "fleet_host" {
+  name = "spawnpoint-fleet-host"
+}
+
 data "aws_instance" "game_host" {
   filter {
     name   = "tag:Name"

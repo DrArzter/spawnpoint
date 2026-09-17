@@ -28,7 +28,9 @@ function state(definition: Definition, name: string): State {
 async function loadDefinition(): Promise<Definition> {
   const url = new URL("../../workflows/start-server-v2.asl.json.tftpl", import.meta.url);
   const template = await readFile(url, "utf8");
-  const rendered = template.replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource");
+  const rendered = template
+    .replaceAll("${allowed_instance_types}", JSON.stringify(["m7i-flex.*", "r7i.*"]))
+    .replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource");
   return JSON.parse(rendered) as Definition;
 }
 
@@ -156,7 +158,7 @@ test("the stop releases the session's reservation after the verified stop, and t
   const definition = JSON.parse(template.replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource")) as Definition;
   assert.equal(state(definition, "Mark Session Stopped").Next, "Release Placement");
   const release = state(definition, "Release Placement");
-  assert.equal(release.Next, "Release Stop Lease");
+  assert.equal(release.Next, "Route Emptied Host");
   assert.equal(release.Catch?.[0]?.Next, "Release Stop Lease");
   const payload = release.Parameters?.Payload as Record<string, unknown>;
   assert.equal(payload.action, "releasePlacement");
@@ -183,6 +185,8 @@ test("the placement mode routes the start: single adopts the configured host, sh
   }
   assert.equal((state(definition, "Place Session").Parameters?.Payload as Record<string, unknown>).action, "placeSession");
   assert.equal(state(definition, "Route Placement").Choices?.[0]?.Next, "Adopt Placement");
+  assert.equal(state(definition, "Route Placement").Choices?.[1]?.Next, "Launch Host");
+  assert.match(JSON.stringify(state(definition, "Route Placement").Choices?.[1]), /\$\.request\.launch/, "launching is a setting, off by default");
   assert.equal(state(definition, "Route Placement").Default, "No Host Has Room");
   assert.deepEqual(state(definition, "Adopt Placement").Parameters, { "hostId.$": "$.placement.placement.hostId", "slot.$": "$.placement.placement.slot" });
   assert.equal(state(definition, "Adopt Placement").Next, "Start Accepted V1");
@@ -213,4 +217,33 @@ test("a session nothing has room for is cancelled cleanly, not started", async (
   assert.equal(state(definition, "Release Unplaced Lease").Next, "Start Refused Unplaced");
   assert.equal(state(definition, "Start Refused Unplaced").Type, "Fail");
   assert.ok(!JSON.stringify(definition.States["No Host Has Room"]).includes("startExecution"), "nothing is started on a host without room");
+});
+
+test("a launch asks EC2 for the footprint's requirements, records what came back, reserves it, and lets it go if it cannot", async () => {
+  const definition = await loadDefinition();
+  const launch = state(definition, "Launch Host") as Record<string, any>;
+  assert.equal(launch.Resource, "arn:aws:states:::aws-sdk:ec2:createFleet");
+  assert.equal(launch.Parameters.Type, "instant");
+  const override = launch.Parameters.LaunchTemplateConfigs[0].Overrides[0].InstanceRequirements;
+  assert.equal(override.MemoryMiB["Min.$"], "$.placement.placement.requirements.memoryMiB");
+  assert.equal(override.VCpuCount["Min.$"], "$.placement.placement.requirements.vcpu");
+  assert.equal(override.BurstablePerformance, "excluded");
+  assert.ok(!("InstanceType" in launch.Parameters.LaunchTemplateConfigs[0].Overrides[0]), "no instance type is named; EC2 answers the requirements");
+  assert.equal(launch.Parameters.OnDemandOptions.AllocationStrategy, "lowest-price");
+  assert.ok(JSON.stringify(launch.Parameters.TagSpecifications).includes("$.request.appCommit"), "the host is told which commit to check out");
+  assert.equal(launch.Catch?.[0]?.Next, "Placement Unavailable");
+  assert.equal(launch.Next, "Describe Launched Host Shape");
+  assert.equal(state(definition, "Describe Launched Host Shape").Next, "Register Launched Host");
+  const register = state(definition, "Register Launched Host").Parameters?.Payload as Record<string, unknown>;
+  assert.equal(register.provenance, "launched");
+  assert.equal(register["hostId.$"], "$.launched.instanceId");
+  assert.equal(state(definition, "Register Launched Host").Next, "Reserve On Launched Host");
+  assert.equal(state(definition, "Reserve On Launched Host").Next, "Adopt Placement");
+  for (const name of ["Describe Launched Host Shape", "Register Launched Host", "Reserve On Launched Host"]) {
+    assert.equal(state(definition, name).Catch?.[0]?.Next, "Terminate Unreserved Host", `${name}: a host nobody recorded is let go at once`);
+  }
+  const terminate = state(definition, "Terminate Unreserved Host") as Record<string, any>;
+  assert.equal(terminate.Resource, "arn:aws:states:::aws-sdk:ec2:terminateInstances");
+  assert.equal(terminate.Parameters["InstanceIds.$"], "States.Array($.launched.instanceId)");
+  assert.equal(terminate.Next, "Placement Unavailable");
 });

@@ -8,4 +8,7 @@ const base = { serverId: "minecraft", operationId: "op-1", sessionId: "session-1
 test("a start names its placement mode, and the default is the one that runs today", () => {
   assert.equal(buildLifecycleStartInput(base).placement, "single");
   assert.equal(buildLifecycleStartInput({ ...base, placement: "shared" }).placement, "shared");
+  assert.equal(buildLifecycleStartInput(base).launch, "disabled");
+  assert.equal(buildLifecycleStartInput(base).appCommit, "main");
+  assert.equal(buildLifecycleStartInput({ ...base, launch: "enabled", appCommit: "a".repeat(40) }).launch, "enabled");
 });

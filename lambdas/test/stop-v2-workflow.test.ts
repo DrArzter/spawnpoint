@@ -85,7 +85,8 @@ test("V2 stop holds one fenced lease across the accepted verified stop", async (
   assert.equal(state(definition, "Stop Accepted V1").Resource, "arn:aws:states:::states:startExecution.sync:2");
   assert.equal(state(definition, "Stop Accepted V1").Next, "Mark Session Stopped");
   assert.equal(state(definition, "Mark Session Stopped").Next, "Release Placement");
-  assert.equal(state(definition, "Release Placement").Next, "Release Stop Lease");
+  assert.equal(state(definition, "Release Placement").Next, "Route Emptied Host");
+  assert.equal(state(definition, "Release Placement").Catch?.[0]?.Next, "Release Stop Lease");
   assert.equal(state(definition, "Release Stop Lease").Next, "Stopped");
 });
 
@@ -116,4 +117,21 @@ test("a player race restores the same session to ready before releasing the leas
   assert.equal(state(definition, "Cancel Refused Stop").Next, "Release Refused Stop Lease");
   assert.equal(state(definition, "Release Refused Stop Lease").Next, "Stop Refused Players Online");
   assert.equal(state(definition, "Stop Refused Players Online").Type, "Fail");
+});
+
+test("a stop that empties a launched host starts its drain; the configured host and a host still in use are left alone", async () => {
+  const definition = await loadDefinition();
+  const route = state(definition, "Route Emptied Host");
+  assert.equal(route.Choices?.[0]?.Next, "Release Stop Lease", "a session placed nowhere leaves no host to drain");
+  assert.equal(route.Default, "Route Emptied Host State");
+  const byState = state(definition, "Route Emptied Host State");
+  assert.equal(byState.Choices?.[0]?.Next, "Start Drain");
+  assert.equal(byState.Default, "Release Stop Lease");
+  assert.match(JSON.stringify(byState.Choices?.[0]), /"draining"/);
+  assert.match(JSON.stringify(byState.Choices?.[0]), /"launched"/);
+  const drain = state(definition, "Start Drain") as Record<string, any>;
+  assert.equal(drain.Resource, "arn:aws:states:::aws-sdk:sfn:startExecution", "the drain outlives the stop; it is not awaited");
+  assert.equal(drain.Parameters.Input["hostId.$"], "$.placementRelease.host.record.hostId");
+  assert.equal(drain.Next, "Release Stop Lease");
+  assert.equal(drain.Catch?.[0]?.Next, "Release Stop Lease", "a drain that cannot start never fails a verified stop");
 });

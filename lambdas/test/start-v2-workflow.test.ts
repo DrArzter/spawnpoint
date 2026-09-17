@@ -64,7 +64,8 @@ test("V2 start owns lifecycle around the accepted V1 host operation", async () =
   assert.equal(definition.QueryLanguage, "JSONPath");
   assert.equal(state(definition, "Acquire Start Lease").Resource, "arn:aws:states:::lambda:invoke");
   assert.equal(state(definition, "Start Accepted V1").Resource, "arn:aws:states:::states:startExecution.sync:2");
-  assert.equal(state(definition, "Start Accepted V1").Next, "Mark Session Ready");
+  assert.equal(state(definition, "Start Accepted V1").Next, "Describe Host");
+  assert.equal(state(definition, "Reserve Slot Zero").Next, "Mark Session Ready");
   assert.equal(state(definition, "Mark Session Ready").Next, "Release Start Lease");
   assert.equal(state(definition, "Release Start Lease").Next, "Start Session Watchdog");
   assert.equal(state(definition, "Start Session Watchdog").Resource, "arn:aws:states:::aws-sdk:sfn:startExecution");
@@ -122,4 +123,40 @@ test("V2 passes the host's address through instead of echoing the request's", as
   assert.equal(ready["connectionAddress.$"], "$.hostStart.Output.connectionAddress");
   assert.equal(ready["connectivity.$"], "$.hostStart.Output.connectivity");
   assert.ok(!JSON.stringify(definition).includes("$.request.connectionAddress"));
+});
+
+test("placement bookkeeping records the host and slot zero, and never fails a start that succeeded", async () => {
+  const definition = await loadDefinition();
+  const chain = ["Describe Host", "Describe Host Shape", "Register Host", "Reserve Slot Zero"];
+  for (const [index, name] of chain.entries()) {
+    const current = state(definition, name);
+    assert.equal(current.Next, chain[index + 1] ?? "Mark Session Ready");
+    // Read by nobody yet (ADR-0054, phase 5): a failure lands the start where it was going anyway.
+    assert.equal(current.Catch?.[0]?.Next, "Mark Session Ready", `${name} fails open`);
+  }
+  assert.equal(state(definition, "Describe Host").Resource, "arn:aws:states:::aws-sdk:ec2:describeInstances");
+  assert.equal(state(definition, "Describe Host Shape").Resource, "arn:aws:states:::aws-sdk:ec2:describeInstanceTypes");
+  const register = state(definition, "Register Host").Parameters?.Payload as Record<string, unknown>;
+  assert.equal(register.action, "registerHost");
+  assert.equal(register["hostId.$"], "$.request.instanceId");
+  assert.equal((register.shape as Record<string, unknown>)["memoryMiB.$"], "$.host.shape.memoryMiB");
+  const reserve = state(definition, "Reserve Slot Zero").Parameters?.Payload as Record<string, unknown>;
+  assert.equal(reserve.action, "reserveOnHost");
+  assert.equal(reserve["sessionId.$"], "$.request.sessionId");
+  assert.equal(reserve["worldId.$"], "$.request.worldId");
+  assert.equal(reserve["serverId.$"], "$.request.serverId");
+});
+
+test("the stop releases the session's reservation after the verified stop, and tolerates one that never existed", async () => {
+  const url = new URL("../../workflows/stop-server-v2.asl.json.tftpl", import.meta.url);
+  const template = await readFile(url, "utf8");
+  const definition = JSON.parse(template.replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource")) as Definition;
+  assert.equal(state(definition, "Mark Session Stopped").Next, "Release Placement");
+  const release = state(definition, "Release Placement");
+  assert.equal(release.Next, "Release Stop Lease");
+  assert.equal(release.Catch?.[0]?.Next, "Release Stop Lease");
+  const payload = release.Parameters?.Payload as Record<string, unknown>;
+  assert.equal(payload.action, "releasePlacement");
+  assert.equal(payload["hostId.$"], "$.request.instanceId");
+  assert.equal(payload["sessionId.$"], "$.request.sessionId");
 });

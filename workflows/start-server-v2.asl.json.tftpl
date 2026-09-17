@@ -94,6 +94,98 @@
           "Next": "Begin Compensating Stop"
         }
       ],
+      "Next": "Describe Host"
+    },
+    "Describe Host": {
+      "Type": "Task",
+      "Comment": "Placement bookkeeping (ADR-0054, phase 5): the host that ran this session is recorded with its shape and the session's reservation on slot zero. Read by nobody yet, so a failure here must never fail a start that has already succeeded.",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.instanceId)"
+      },
+      "ResultSelector": {
+        "instanceType.$": "$.Reservations[0].Instances[0].InstanceType"
+      },
+      "ResultPath": "$.host",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Mark Session Ready"
+        }
+      ],
+      "Next": "Describe Host Shape"
+    },
+    "Describe Host Shape": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstanceTypes",
+      "Parameters": {
+        "InstanceTypes.$": "States.Array($.host.instanceType)"
+      },
+      "ResultSelector": {
+        "memoryMiB.$": "$.InstanceTypes[0].MemoryInfo.SizeInMiB",
+        "vcpu.$": "$.InstanceTypes[0].VCpuInfo.DefaultVCpus"
+      },
+      "ResultPath": "$.host.shape",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Mark Session Ready"
+        }
+      ],
+      "Next": "Register Host"
+    },
+    "Register Host": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "registerHost",
+          "hostId.$": "$.request.instanceId",
+          "ready": true,
+          "shape": {
+            "instanceType.$": "$.host.instanceType",
+            "memoryMiB.$": "$.host.shape.memoryMiB",
+            "vcpu.$": "$.host.shape.vcpu"
+          }
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Mark Session Ready"
+        }
+      ],
+      "Next": "Reserve Slot Zero"
+    },
+    "Reserve Slot Zero": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "reserveOnHost",
+          "hostId.$": "$.request.instanceId",
+          "sessionId.$": "$.request.sessionId",
+          "worldId.$": "$.request.worldId",
+          "serverId.$": "$.request.serverId"
+        }
+      },
+      "ResultSelector": {
+        "placement.$": "$.Payload.placement"
+      },
+      "ResultPath": "$.placement",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Mark Session Ready"
+        }
+      ],
       "Next": "Mark Session Ready"
     },
     "Mark Session Ready": {

@@ -9,14 +9,14 @@ import { Banner } from "../components/ui/Surfaces";
 import { demoUrl } from "../demo";
 import { Icon, IconName } from "../icons";
 import { DemoBadge, SpawnpointMark } from "../shell/AppBar";
-import { useTheme } from "../shell/hooks";
+import { useAppearance } from "../shell/hooks";
 
 const CONSOLE_HASH = "#/worlds";
 
 // The front door: the console's own chrome, the console itself as the proof.
 // Signing in lives in the app bar; a signed-in person sees their avatar there.
 export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; onChange: (state: AuthState) => void }>) {
-  const { theme, cycle, label } = useTheme();
+  const { theme, cycle, label } = useAppearance();
   const configured = authConfigured();
   const session = auth.status === "authenticated" && auth.session.state === "active" ? auth.session : null;
   const visitor = auth.status === "authenticated" && auth.session.state === "visitor" ? auth.session : null;

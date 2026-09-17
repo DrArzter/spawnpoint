@@ -29,7 +29,7 @@ The panel is opened from Telegram on a phone and as a persistent browser tab on 
 - Games contain persistent worlds; sessions temporarily bind a selected world to disposable compute.
 - The interface exposes status, session controls, invitations, metrics, console, releases, backups, identities, roles, notification subscriptions and linked accounts only where the backend has real support.
 - Static CloudFront hosting uses hash routes so reload and browser history preserve navigation.
-- Light, dark and system theme behavior must work in Telegram and ordinary browsers and survive reloads.
+- Light, dark and system theme behaviour must work in Telegram and ordinary browsers and survive reloads.
 - The same interface must remain effective on phones, ordinary desktops and 4K displays.
 - Empty, loading, unavailable, failed and partially delivered states are product states, not decorative placeholders.
 - No control or chart may imply data or an action that the backend does not provide.

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Button } from "../components/ui/Button";
 import { Dialog } from "../components/ui/Dialog";
 import { SearchField } from "../components/ui/Fields";
+import { NoMatches } from "../components/ui/Filter";
 import { Status, StatusDescriptor } from "../components/ui/Status";
 import { plural } from "../lib/format";
 import type { Game } from "../model";
@@ -38,8 +39,8 @@ export function ScopeDialog({ open, onClose, games, currentId, statusOf, onSelec
             </button>
           );
         })}
-        {visible.length === 0 && <p className="scope-empty">No game matches “{query.trim()}”.</p>}
       </div>
+      {visible.length === 0 && <NoMatches filter={{ query, clear: () => setQuery("") }} icon="sports_esports" noun="games" />}
     </Dialog>
   );
 }

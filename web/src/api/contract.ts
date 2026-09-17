@@ -90,6 +90,16 @@ export type AccessRole = Readonly<{
 
 export type SubscriptionState = Record<string, boolean>;
 
+/**
+ * How the console looks for one person. `system` follows the device; the accent
+ * is a hex colour the panel derives its blues from. Stored against the identity
+ * rather than the browser, so a phone and a laptop agree.
+ */
+export type AppearancePreference = Readonly<{
+  theme: "light" | "dark" | "system";
+  accent: string;
+}>;
+
 export type InvitationRecipient = Readonly<{
   id: string;
   displayName: string;
@@ -168,4 +178,7 @@ export type SpawnpointApi = Readonly<{
 
   loadSubscriptions(): Promise<SubscriptionState>;
   updateSubscriptions(subscriptions: SubscriptionState): Promise<SubscriptionState>;
+
+  loadAppearance(): Promise<AppearancePreference>;
+  updateAppearance(appearance: AppearancePreference): Promise<AppearancePreference>;
 }>;

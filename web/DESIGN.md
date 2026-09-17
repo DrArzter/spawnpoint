@@ -177,11 +177,11 @@ The palette is a light, hairline-bordered neutral field with a single blue accen
 - **Google Blue** (`#1a73e8`; `#8ab4f8` in dark): actions, links, selection, focus rings, active drawer item, active tab underline. Confined to controls and state — not used as a page background or card fill.
 
 ### Neutral
-- **Canvas Grey** (`#f8f9fa`; `#202124` in dark): page background, distinct from surface white.
-- **Surface White** (`#ffffff`; `#2d2e31` in dark): app bar, drawer, cards, dialogs, tables.
-- **Surface Variant** (`#f1f3f4`; `#3c4043` in dark): table-group header rows, code chips, empty-state icon well.
-- **Hairline Outline** (`#dadce0`; `#3c4043` in dark): every card border, table rule, divider.
-- **Ink** (`#202124`; `#e8eaed` in dark) / **Ink Secondary** (`#5f6368`; `#9aa0a6` in dark): primary and secondary text, always this pairing — no third grey step.
+- **Canvas Grey** (`#f8f9fa`; `#222222` in dark): page background, distinct from surface white.
+- **Surface White** (`#ffffff`; `#333333` in dark): app bar, drawer, cards, dialogs, tables.
+- **Surface Variant** (`#f1f3f4`; `#3d3d3d` in dark): table-group header rows, code chips, empty-state icon well.
+- **Hairline Outline** (`#dadce0`; `#414141` in dark): every card border, table rule, divider.
+- **Ink** (`#202124`; `#f5f5f5` in dark) / **Ink Secondary** (`#5f6368`; `#aaaaaa` in dark): primary and secondary text, always this pairing — no third grey step.
 
 ### Status roles (paired with Material icon + label, never colour alone)
 - **Success** (`#1e8e3e`; `#81c995` dark): ok / running.
@@ -219,9 +219,16 @@ All three load from Google Fonts in `index.html`; system sans/monospace stacks a
 
 ## Layout
 
-The shell is app bar (sticky, 64px; 56px under 959px) over a body split into drawer and content pane. The drawer is 256px wide and full height; between 960px and 1279px it collapses to a 72px icon rail (`data-rail`) until the user chooses to pin it open; under 959px it becomes a fixed modal panel behind a scrim, triggered by the menu button, with the icon-rail state expanding back to a labelled 256px list inside the modal.
+The shell is app bar (sticky, 64px; 56px under 959px) over a body split into drawer and content pane. The drawer is 256px wide and full height; between 960px and 1199px it collapses to a 72px icon rail (`data-rail`) until the user chooses to pin it open; under 959px it becomes a fixed modal panel behind a scrim, triggered by the menu button, with the icon-rail state expanding back to a labelled 256px list inside the modal.
 
 The content pane (`.main`) has **no max-width**: it fills the available viewport by design, from a narrow phone to a 4K desktop, matching the real Cloud console's resource-table pages. Page gutter is 24px (16px under 959px).
+
+**What fills the pane and what does not.** Tables and detail rows fill it: a row of facts is read across, and a
+wide table shows more of a column, not a longer line. Everything read as running text or as a shape keeps a measure
+whatever the viewport does — a card or page description at `72ch`, a dialog paragraph at `60ch`, the `.not-connected`
+line and the appearance note at `72ch`, a sparkline row and its scale at `960px`. A 4K monitor at its usual 150–200%
+scaling is a 1920–2560px viewport; the audit probes 2560 and 3840 so a measure that is missing shows up as a line that
+runs the width of the screen.
 
 The front door (`#/`, `LandingScreen`) is the one surface with a measure: its content sits in a centred `min(1120px, 100% - 2 * gutter)` column under the same app bar, with the sign-in button or the signed-in avatar menu at the bar's right and no drawer. Its product shot (`.shot`) is a still of the console built from the console's own status, card and avatar components, captioned as example data; nothing inside it is interactive.
 
@@ -236,7 +243,7 @@ who then invents a fifth — which is how this panel ended up with 599, 719, 959
 | Step | Range | What changes |
 | --- | --- | --- |
 | **Compact** | `max-width: 599px` | Tables become stacked cards, actions take the full width and divide it evenly, dialogs dock to the bottom edge |
-| **Medium** | `max-width: 839px` | Rows with a control and a decision on them stack: the access request, anything laid out as label-control-action |
+| **Medium** | `max-width: 839px` | Rows with a control and a decision on them split into two lines: the person keeps the first, the control and the decision share the second, packed against the end. `DataTable decision` opts a table in (the access request); it is a container query on `.table-wrap`, like the Compact stacking, so it fires per table between 600 and 839px of table width |
 | **Shell** | `max-width: 959px` | The navigation drawer stops holding a column and overlays with a scrim; touch targets grow; type in fields reaches 16px so iOS stops zooming |
 | **Large** | `max-width: 1199px` | Columns that are worth reading but never worth the actions column scrolling away are dropped; the drawer defaults to its rail |
 
@@ -279,7 +286,7 @@ Controls (buttons, fields, chips' pill, inline selects) use a 4px radius. Cards,
 
 ### Cards / Containers
 - **Corner Style:** 8px.
-- **Background:** surface white (surface `#2d2e31` dark), hairline border, no shadow.
+- **Background:** surface white (surface `#333333` dark), hairline border, no shadow.
 - **Shadow Strategy:** none at rest — see Elevation & Depth.
 - **Internal Padding:** header 16/20/12px, body 4/20/20px, footer 12/20px with a hairline top rule.
 
@@ -292,10 +299,11 @@ Controls (buttons, fields, chips' pill, inline selects) use a 4px radius. Cards,
 ### Navigation
 - **App bar (64px, 56px mobile):** menu button, mark (32px rounded-square, blue fill), title (Google Sans Flex 500/20px), divider, scope chip (outlined pill-like control naming the active game), spacer, theme toggle, avatar (40px circle).
 - **Drawer (256px):** grouped nav items, 40px pill rows, active item gets `primary-container` fill and `on-primary-container` text; section labels are 12px/500 secondary ink; footer pinned to the bottom.
-- **Icon rail (960–1279px):** same drawer, collapsed to 72px, items become 48px circles, labels/sections/footer hidden until pinned open.
+- **Icon rail (960–1199px):** same drawer, collapsed to 72px, items become 48px circles, labels/sections/footer hidden until pinned open.
 - **Mobile drawer (<960px):** fixed modal panel sliding from the left over a scrim, `shadow-3` while open.
 - **Tabs:** underline pattern — 48px row, secondary ink at rest, blue text plus a 3px blue underline bar when selected; a pill count badge follows the label.
-- **Table:** 48px header and body rows, hairline rules, hover tint, row-actions column right-aligned and width-collapsed; below 600px width (container query) collapses to stacked label/value records per row with the action row last.
+- **Table:** 48px header and body rows, hairline rules, hover tint, row-actions column right-aligned and width-collapsed; below 600px width (container query) collapses to stacked label/value records per row with the action row last. A `decision` table (person, control, decision) takes the Medium step first: between 600 and 839px of table width the person has the first line and the control and decision share the second.
+- **Page header:** breadcrumb, `h1`, status beside the name, actions and the overflow menu in a second unbreakable group; `leading` holds what stands for the resource before its name — a person's 64px avatar on the profile page — and `subtitle` is the name's own second line (a handle, 14px/20px secondary ink), where `description` is a sentence about the page under the whole row. Every console page that shows a title uses it; list pages carry a visually hidden `h1` and let the drawer name the page.
 
 ### Menu (popover)
 Fixed-position popover with `::backdrop` transparent, 4px radius, `shadow-3`, 8px vertical padding, 40px-min-height items with a leading secondary-ink icon; entrance is a 180ms fade/scale-up from the anchor. Two triggers share it: the overflow icon button and the app-bar avatar.

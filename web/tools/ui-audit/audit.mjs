@@ -44,6 +44,10 @@ const VIEWPORTS = [
   [1200, 900, false],
   [1440, 900, false],
   [1920, 1080, false],
+  // A 4K monitor at the usual 150–200% scaling is 1920–2560 CSS px; 3840 is
+  // what 100% scaling gives, kept as the smoke test for the open-ended pane.
+  [2560, 1440, false],
+  [3840, 2160, false],
 ];
 
 

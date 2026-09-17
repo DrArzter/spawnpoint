@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AppRoute, ensureRoute, pushRoute, readRoute, replaceRoute } from "../routing";
-import { applyTheme, getThemePreference, persistThemePreference, resolveTheme, subscribeToSystemTheme, Theme, ThemePreference } from "../telegram";
+import { applyAccent, DEFAULT_ACCENT } from "../styles/accent";
+import { applyTheme, getStoredAccent, getThemePreference, persistAccent, persistThemePreference, resolveTheme, subscribeToSystemTheme, Theme, ThemePreference } from "../telegram";
 
 export function useRoute(): [AppRoute, (patch: Partial<AppRoute>, options?: { replace?: boolean }) => void] {
   const [route, setRoute] = useState(readRoute);
@@ -23,20 +24,43 @@ export function useRoute(): [AppRoute, (patch: Partial<AppRoute>, options?: { re
   return [route, navigate];
 }
 
-export function useTheme() {
+/**
+ * Theme and accent together, because the accent has to be re-derived whenever
+ * the theme changes: the same hue needs different lightness to stay readable on
+ * white and on #333. Local storage paints immediately; the identity's stored
+ * choice overrides it through `adopt` once the session answers.
+ */
+export function useAppearance() {
   const [preference, setPreference] = useState<ThemePreference>(getThemePreference);
+  const [accent, setAccentState] = useState<string>(() => getStoredAccent() ?? DEFAULT_ACCENT);
   const [theme, setTheme] = useState<Theme>(() => resolveTheme(getThemePreference()));
+
   useEffect(() => {
     persistThemePreference(preference);
     setTheme(resolveTheme(preference));
     if (preference === "system") return subscribeToSystemTheme(setTheme);
   }, [preference]);
+
   useEffect(() => applyTheme(theme), [theme]);
+  useEffect(() => { applyAccent(document.documentElement, accent, theme); }, [accent, theme]);
+
+  const setAccent = useCallback((next: string) => {
+    persistAccent(next);
+    setAccentState(next);
+  }, []);
+
+  /** What the control plane holds, which outranks whatever this browser cached. */
+  const adopt = useCallback((remote: { theme: ThemePreference; accent: string }) => {
+    setPreference(remote.theme);
+    setAccent(remote.accent);
+  }, [setAccent]);
+
   const cycle = useCallback(() => {
     setPreference((current) => (current === "system" ? (theme === "dark" ? "light" : "dark") : "system"));
   }, [theme]);
+
   const label = preference === "system" ? `System theme (${theme})` : `${preference === "dark" ? "Dark" : "Light"} theme`;
-  return { preference, theme, cycle, label };
+  return { preference, setPreference, theme, accent, setAccent, adopt, cycle, label };
 }
 
 export function useMediaQuery(query: string): boolean {

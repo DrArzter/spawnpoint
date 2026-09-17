@@ -1,4 +1,5 @@
 import { Button, IconButton } from "../components/ui/Button";
+import { sessionStatus, Status } from "../components/ui/Status";
 import { NotConnected } from "../components/ui/Surfaces";
 import { Icon } from "../icons";
 import type { Game, ServerState } from "../model";
@@ -7,6 +8,7 @@ import type { Game, ServerState } from "../model";
 // reply, a standby cursor. Nothing here pretends a gateway exists.
 export function ConsoleScreen({ game, serverState }: { game: Game | undefined; serverState: ServerState }) {
   const online = serverState === "running";
+  const session = sessionStatus(serverState);
   return (
     <div className="page">
       <h1 className="visually-hidden">Console</h1>
@@ -15,10 +17,7 @@ export function ConsoleScreen({ game, serverState }: { game: Game | undefined; s
         <header className="terminal-bar">
           <Icon name="terminal" size={18} />
           <strong>{game ? `${game.displayName} session` : "Session"}</strong>
-          <span className={`terminal-status${online ? " online" : ""}`}>
-            <Icon name={online ? "check_circle" : "radio_button_unchecked"} size={14} />
-            {online ? "Session online · gateway disconnected" : "No active session"}
-          </span>
+          <Status className="terminal-status" kind={session.kind} label={session.label} />
           <IconButton disabled icon="close" label="Clear output (no output yet)" />
         </header>
         <div aria-live="polite" className="terminal-output" role="log">

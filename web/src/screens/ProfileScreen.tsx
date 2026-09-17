@@ -1,27 +1,34 @@
+import { Appearance } from "../components/Appearance";
 import { Avatar } from "../components/Avatar";
 import { LinkedAccounts } from "../components/LinkedAccounts";
-import { ActionRow, Button } from "../components/ui/Button";
+import { Button } from "../components/ui/Button";
 import { Chip } from "../components/ui/Chip";
-import { Card, Details, Ghost } from "../components/ui/Surfaces";
+import { Card, Details, Ghost, PageHeader } from "../components/ui/Surfaces";
 import { plural } from "../lib/format";
 import type { Member, Role } from "../model";
-import { openInBrowser, ViewerProfile } from "../telegram";
+import { openInBrowser, ThemePreference, ViewerProfile } from "../telegram";
 
-export function ProfileScreen({ member, role, viewer, onSignOut }: { member: Member; role?: Role; viewer: ViewerProfile; onSignOut: () => void }) {
+type AppearanceControls = {
+  preference: ThemePreference;
+  setPreference: (next: ThemePreference) => void;
+  theme: "light" | "dark";
+  accent: string;
+  setAccent: (next: string) => void;
+};
+
+export function ProfileScreen({ appearance, member, role, viewer, onSignOut }: { appearance: AppearanceControls; member: Member; role?: Role; viewer: ViewerProfile; onSignOut: () => void }) {
   return (
     <div className="page">
-      <header className="profile-hero">
-        <Avatar name={member.name} photoUrl={viewer.photoUrl} size="large" />
-        <div>
-          <h1>{member.name}</h1>
-          <p>{viewer.username ? `@${viewer.username}` : "Spawnpoint identity"}</p>
-        </div>
-        <Chip icon="admin_panel_settings" tone="primary">{role?.name ?? "No role"}</Chip>
-        <ActionRow>
+      <PageHeader
+        actions={<>
           {viewer.inTelegram && <Button icon="open_in_new" onClick={openInBrowser} variant="outlined">Open in browser</Button>}
           <Button icon="logout" onClick={onSignOut} variant="text">Sign out</Button>
-        </ActionRow>
-      </header>
+        </>}
+        leading={<Avatar name={member.name} photoUrl={viewer.photoUrl} size="large" />}
+        status={<Chip icon="admin_panel_settings" tone="primary">{role?.name ?? "No role"}</Chip>}
+        subtitle={viewer.username ? `@${viewer.username}` : "Spawnpoint identity"}
+        title={member.name}
+      />
       <Card title="Identity">
         <Details items={[
           { label: "Display name", value: member.name },
@@ -36,6 +43,7 @@ export function ProfileScreen({ member, role, viewer, onSignOut }: { member: Mem
           },
         ]} label="Identity details" />
       </Card>
+      <Appearance appearance={appearance} />
       {/* The account id and the handle describe a linked account, not the
           identity that holds it, so they are read where that account is. */}
       <LinkedAccounts handles={{ telegram: viewer.username }} member={member} />

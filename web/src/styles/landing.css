@@ -120,6 +120,7 @@
   border: 1px solid var(--outline);
   border-radius: var(--radius-control);
   font-size: 12px;
+  line-height: 16px;
   font-weight: 500;
 }
 
@@ -203,6 +204,11 @@
 
 .shot-facts .status {
   font-size: 13px;
+  line-height: 18px;
+}
+
+.shot-facts code {
+  font-size: 12px;
 }
 
 .shot-facts .status .icon {

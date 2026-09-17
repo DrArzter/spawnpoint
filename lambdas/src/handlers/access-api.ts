@@ -22,6 +22,7 @@ import {
 import { authenticateWith, type LoginProvider } from "../access/login-provider.ts";
 import { verifySessionToken } from "../access/telegram-auth.ts";
 import { createTelegramLoginProvider, telegramPrincipal } from "../access/telegram-login-provider.ts";
+import { defaultAppearance, validateAppearance } from "../access/appearance.ts";
 import { defaultSubscriptions, validateSubscriptions } from "../access/subscriptions.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../domain/access-events.ts";
 import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
@@ -478,6 +479,25 @@ async function updateSubscriptions(identity: Identity, body: string | undefined)
     pk: `IDENTITY#${identity.id}`, sk: "SUBSCRIPTIONS", subscriptions: next, updated_at: new Date().toISOString(),
   } }));
   return response(200, { subscriptions: next });
+}
+
+async function appearance(identity: Identity): Promise<Response> {
+  const stored = await document.send(new GetCommand({ TableName: tableName, Key: { pk: `IDENTITY#${identity.id}`, sk: "APPEARANCE" }, ConsistentRead: true }));
+  const found = validateAppearance(stored.Item?.appearance);
+  // A stored value that no longer validates is treated as no value: a palette
+  // is not worth failing a sign-in over.
+  return response(200, { appearance: found ?? defaultAppearance() });
+}
+
+async function updateAppearance(identity: Identity, body: string | undefined): Promise<Response> {
+  let parsed: { appearance?: unknown };
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const next = validateAppearance(parsed.appearance);
+  if (next === null) return response(400, { error: "invalid_appearance" });
+  await document.send(new PutCommand({ TableName: tableName, Item: {
+    pk: `IDENTITY#${identity.id}`, sk: "APPEARANCE", appearance: next, updated_at: new Date().toISOString(),
+  } }));
+  return response(200, { appearance: next });
 }
 
 const RELEASE_ID = /^[a-z0-9][a-z0-9-]*$/;
@@ -963,6 +983,8 @@ export const routes: Readonly<Record<string, Route>> = {
   "GET /me": identityRoute((identity) => me(identity)),
   "GET /me/subscriptions": identityRoute((identity) => subscriptions(identity)),
   "PUT /me/subscriptions": identityRoute((identity, event) => updateSubscriptions(identity, event.body)),
+  "GET /me/appearance": identityRoute((identity) => appearance(identity)),
+  "PUT /me/appearance": identityRoute((identity, event) => updateAppearance(identity, event.body)),
 
   "GET /control-plane": permissionRoute("status.read", (identity) => controlPlane(identity)),
   "POST /control-plane/subscriptions": permissionRoute("status.read", (identity) => createControlPlaneSubscription(identity)),

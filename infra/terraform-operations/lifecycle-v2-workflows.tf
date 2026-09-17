@@ -77,6 +77,14 @@ data "aws_iam_policy_document" "lifecycle_v2_start" {
     actions   = ["ec2:DescribeInstances"]
     resources = ["*"]
   }
+
+  # The host record (ADR-0054) carries what the host turned out to be, read
+  # from the instance type after the session is up.
+  statement {
+    sid       = "DescribeHostShape"
+    actions   = ["ec2:DescribeInstanceTypes"]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_role_policy" "lifecycle_v2_start" {

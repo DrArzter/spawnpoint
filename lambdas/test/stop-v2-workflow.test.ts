@@ -66,7 +66,8 @@ test("V2 stop holds one fenced lease across the accepted verified stop", async (
   assert.equal(state(definition, "Begin Stopping Session").Next, "Stop Accepted V1");
   assert.equal(state(definition, "Stop Accepted V1").Resource, "arn:aws:states:::states:startExecution.sync:2");
   assert.equal(state(definition, "Stop Accepted V1").Next, "Mark Session Stopped");
-  assert.equal(state(definition, "Mark Session Stopped").Next, "Release Stop Lease");
+  assert.equal(state(definition, "Mark Session Stopped").Next, "Release Placement");
+  assert.equal(state(definition, "Release Placement").Next, "Release Stop Lease");
   assert.equal(state(definition, "Release Stop Lease").Next, "Stopped");
 });
 

@@ -281,8 +281,9 @@ run "lifecycle_v2_workflows_are_additive_standard_and_session_scoped" {
       data.aws_iam_policy_document.lifecycle_v2_start.statement[4].actions == toset(["ec2:StopInstances"]),
       data.aws_iam_policy_document.lifecycle_v2_start.statement[4].resources == toset(["arn:aws:ec2:eu-central-1:123456789012:instance/i-00000000000000000"]),
       data.aws_iam_policy_document.lifecycle_v2_start.statement[5].actions == toset(["ec2:DescribeInstances"]),
+      data.aws_iam_policy_document.lifecycle_v2_start.statement[6].actions == toset(["ec2:DescribeInstanceTypes"]),
     ])
-    error_message = "Only the V2 start failure safeguard may stop the exact configured host and poll its state."
+    error_message = "Only the V2 start failure safeguard may stop the exact configured host and poll its state; beyond that the start reads only instance types, for the host record."
   }
 
   assert {

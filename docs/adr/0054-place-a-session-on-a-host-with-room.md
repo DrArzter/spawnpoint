@@ -86,9 +86,11 @@ less a fixed reserve for the system, and the sum of core weights never exceeds i
 weight, not a pin: a tick loop on one core gains nothing from a pin and loses a neighbour's idle time.
 
 **A slot is the port allocator.** Each reservation on a host takes the lowest free slot. Slot zero keeps the game's
-own ports, so a host with one session is byte-identical to today; every other slot owns a window of ten ports in one
-host-wide range, the game port first and RCON second, so two sessions on a host cannot collide whatever games they run
-and however many they are. Nothing else allocates ports and no table records them. The adapter of
+own ports, and a session that arrives with no slot at all runs exactly as it did before this decision; every other
+slot owns a window of ten ports in one host-wide range, the game port first, RCON second, any further port the game
+publishes after, so two sessions on a host cannot collide whatever games they run and however many they are. A game
+whose server tells its clients which port to continue on — Project Zomboid does — cannot yet take a slot other than
+zero, and its module says so rather than letting a start find out. Nothing else allocates ports and no table records them. The adapter of
 [ADR-0034](0034-per-game-adapter.md) reads its slot from the environment and binds accordingly, which is what dissolves
 the `127.0.0.1:27015` obstacle ADR-0048 recorded: two Factorio worlds on one host bind two RCON ports. Each session is
 its own Compose project, named for the world, so `check-host-activity.sh` counts projects rather than services.
@@ -207,6 +209,9 @@ tenancy, billing, support — is a product question this repository does not ans
 - **Which surface tells a player a port**, and how the bot's `/address` shows two worlds on one host.
 - **The system reserve** of one gigabyte and half a core: a guess to be measured against the observability stack and
   the overlay client on a small shape.
+- **Project Zomboid on a slot other than zero.** Its server announces a second UDP port to clients, so a slot's host
+  mapping would send them to a port nothing listens on. Rendering `DefaultPort` and `UDPPort` into the server's ini
+  from the slot is what lifts it; until then a Zomboid world takes slot zero or its own host.
 - **The allowed families.** ADR-0032 chose x86 and single-thread performance; the requirements can name families
   (`AllowedInstanceTypes`) and generations but cannot say "fast cores" directly, so the list of allowed families is
   the one piece of type knowledge left in data, and it is a filter rather than a ranking.

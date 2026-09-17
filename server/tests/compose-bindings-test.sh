@@ -6,25 +6,32 @@ server_directory="$(cd -- "${script_directory}/.." && pwd)"
 
 # The file list is the game module's own, so the test renders what a session
 # actually runs rather than a hand-kept copy of it.
+# The dispatcher assembles the file list a session actually runs, with or
+# without a slot, so the test renders exactly that rather than a hand-kept copy.
 render_game() {
   local game="$1"
-  local files=()
-  local relative
-  # shellcheck source=../games/_dispatch.sh
-  source "${server_directory}/games/_dispatch.sh"
-  load_game "${game}"
-  IFS=':' read -r -a files <<<"${GAME_COMPOSE_FILES}"
-  local args=(--project-directory "${server_directory}")
-  for relative in "${files[@]}"; do
-    args+=(-f "${server_directory}/${relative}")
-  done
-  CF_API_KEY=unused \
-  RCON_PASSWORD=unused \
-  SPAWNPOINT_GAME_IMAGE=registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
-  GRAFANA_ADMIN_PASSWORD=unused \
-  PROMETHEUS_BIND_ADDRESS=127.0.0.1 \
-  GRAFANA_BIND_ADDRESS=0.0.0.0 \
-    docker compose "${args[@]}" config --format json
+  (
+    # shellcheck source=../games/_dispatch.sh
+    source "${server_directory}/games/_dispatch.sh"
+    load_game "${game}"
+    configure_game_compose
+    local files=()
+    local absolute
+    IFS=':' read -r -a files <<<"${SERVER_COMPOSE_FILES}"
+    local args=(--project-directory "${server_directory}")
+    for absolute in "${files[@]}"; do
+      args+=(-f "${absolute}")
+    done
+    CF_API_KEY=unused \
+    RCON_PASSWORD=unused \
+    ZOMBOID_RCON_PASSWORD=unused \
+    ZOMBOID_ADMIN_PASSWORD=unused \
+    SPAWNPOINT_GAME_IMAGE=registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+    GRAFANA_ADMIN_PASSWORD=unused \
+    PROMETHEUS_BIND_ADDRESS=127.0.0.1 \
+    GRAFANA_BIND_ADDRESS=0.0.0.0 \
+      docker compose "${args[@]}" config --format json
+  )
 }
 
 rendered="$(render_game minecraft 2>/dev/null)"
@@ -83,5 +90,31 @@ jq -e '
 jq -e '
   [.services.grafana.volumes[].target] | index("/var/lib/grafana/dashboards/minecraft") == null
 ' >/dev/null <<<"${factorio_rendered}"
+
+# --- a placed session (ADR-0054) ---
+# Slot zero keeps the game's ports and the tier, and takes the footprint's limit.
+zero_rendered="$(WORLD_ID=world WORLD_FOOTPRINT_MEMORY_MIB=7168 SPAWNPOINT_SLOT=0 render_game minecraft 2>/dev/null)"
+jq -e '
+  (.services | has("prometheus")) and (.services | has("minecraft-exporter"))
+  and (.services.mc.ports[0].published == "25565")
+  and (((.services.mc.mem_limit // .services.mc.deploy.resources.limits.memory) | tostring | tonumber) == 7168 * 1024 * 1024)
+' >/dev/null <<<"${zero_rendered}"
+# Another slot publishes its window and runs without the tier; the container's
+# own port and everything else about the game are untouched.
+second_rendered="$(WORLD_ID=magic WORLD_FOOTPRINT_MEMORY_MIB=7168 SPAWNPOINT_SLOT=2 render_game minecraft 2>/dev/null)"
+jq -e '
+  (.services | has("prometheus") | not) and (.services | has("grafana") | not)
+  and (.services | has("node-exporter") | not) and (.services | has("cadvisor") | not)
+  and (.services | has("mc")) and (.services | has("minecraft-exporter"))
+  and (.services.mc.ports[0].published == "30020") and (.services.mc.ports[0].target == 25565)
+  and .services.mc.environment.REMOVE_OLD_MODS == "false"
+  and (((.services.mc.mem_limit // .services.mc.deploy.resources.limits.memory) | tostring | tonumber) == 7168 * 1024 * 1024)
+' >/dev/null <<<"${second_rendered}"
+factorio_slot="$(WORLD_ID=base WORLD_FOOTPRINT_MEMORY_MIB=2048 SPAWNPOINT_SLOT=1 render_game factorio 2>/dev/null)"
+jq -e '
+  ([.services.factorio.ports[] | select(.target == 34197)] | .[0].published == "30010" and .[0].protocol == "udp")
+  and ([.services.factorio.ports[] | select(.target == 27015)] | .[0].published == "30011" and .[0].host_ip == "127.0.0.1")
+  and (((.services.factorio.mem_limit // .services.factorio.deploy.resources.limits.memory) | tostring | tonumber) == 2048 * 1024 * 1024)
+' >/dev/null <<<"${factorio_slot}"
 
 printf 'result=passed\n'

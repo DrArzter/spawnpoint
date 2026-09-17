@@ -23,20 +23,25 @@ cat >"${fixture}/bin/docker" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 args=("$@")
+# A fake container is a file <service> or <service>@<project> holding its
+# state; the second form is a placed session's own Compose project (ADR-0054).
 if [[ "${args[0]}" == "ps" ]]; then
   service=""
   for arg in "${args[@]}"; do
     [[ "${arg}" != label=com.docker.compose.service=* ]] || service="${arg##*=}"
   done
   [[ -n "${service}" ]] || exit 64
-  if [[ -f "${FAKE_STATES_DIR}/${service}" ]]; then
-    printf 'fake-%s\n' "${service}"
-  fi
+  for state_file in "${FAKE_STATES_DIR}/${service}" "${FAKE_STATES_DIR}/${service}@"*; do
+    [[ -f "${state_file}" ]] && printf 'fake-%s\n' "$(basename -- "${state_file}")"
+  done
   exit 0
 fi
 if [[ "${args[0]}" == "inspect" ]]; then
   id="${args[$((${#args[@]} - 1))]}"
-  cat "${FAKE_STATES_DIR}/${id#fake-}"
+  name="${id#fake-}"
+  project=""
+  [[ "${name}" != *@* ]] || project="${name#*@}"
+  printf '%s %s\n' "$(cat "${FAKE_STATES_DIR}/${name}")" "${project}"
   exit 0
 fi
 exit 64
@@ -66,6 +71,28 @@ grep -qx 'host=idle' <<<"${output}"
 printf 'exited\n' >"${FAKE_STATES_DIR}/factorio"
 output="$("${sensor}" mc)"
 grep -qx 'host=idle' <<<"${output}"
+rm -f -- "${FAKE_STATES_DIR}/factorio"
+
+# --- placed sessions (ADR-0054): the asking session is its project and its
+#     service; the same game in another project is a neighbour ---
+printf 'running\n' >"${FAKE_STATES_DIR}/mc@spawnpoint-vanilla"
+output="$(SERVER_COMPOSE_PROJECT=spawnpoint-world "${sensor}" mc)"
+grep -qx 'other_active=1' <<<"${output}"
+grep -qx 'active_services=mc' <<<"${output}"
+grep -qx 'active_projects=spawnpoint-vanilla' <<<"${output}"
+grep -qx 'host=busy' <<<"${output}"
+output="$(SERVER_COMPOSE_PROJECT=spawnpoint-vanilla "${sensor}" mc)"
+grep -qx 'other_active=0' <<<"${output}"
+grep -qx 'host=idle' <<<"${output}"
+# An unplaced session in the default project asking beside a placed one.
+output="$("${sensor}" mc)"
+grep -qx 'host=busy' <<<"${output}"
+# Two projects, two games, one leaving: the other keeps the host awake.
+printf 'running\n' >"${FAKE_STATES_DIR}/factorio@spawnpoint-base"
+output="$(SERVER_COMPOSE_PROJECT=spawnpoint-vanilla "${sensor}" mc)"
+grep -qx 'other_active=1' <<<"${output}"
+grep -qx 'active_projects=spawnpoint-base' <<<"${output}"
+rm -f -- "${FAKE_STATES_DIR}/mc@spawnpoint-vanilla" "${FAKE_STATES_DIR}/factorio@spawnpoint-base"
 
 # --- the gate as the stop path sees it: an exit code, not a line to parse.
 #     stop-session runs the real gate at the end, so its code carries the

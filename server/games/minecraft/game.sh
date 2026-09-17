@@ -7,13 +7,21 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the GAME_* constants are the module's interface, read by _dispatch.sh consumers
 
-GAME_COMPOSE_FILES="observability/compose.yaml:compose.yaml:compose.release.yaml"
+GAME_COMPOSE_FILES="compose.yaml:compose.release.yaml"
+GAME_OBSERVABILITY_COMPOSE_FILES="compose.minecraft-observability.yaml"
+GAME_FOOTPRINT_COMPOSE_FILE="games/minecraft/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="mc"
 GAME_MOD_EXTENSION="jar"
 GAME_LOADER_TYPE="forge"
 # The port a player types after the address the connectivity strategy publishes.
 GAME_CONNECT_PORT="25565"
 GAME_CONNECT_PROTOCOL="tcp"
+# RCON is spoken inside the container (rcon-cli), so no host port is published;
+# the constant names the window layout all the same.
+GAME_RCON_PORT="25575"
+# The client connects to whatever port the address names and the server
+# announces none, so a slot's host port forwards cleanly.
+GAME_SLOTTABLE="true"
 # online-mode=false (ADR-0022) authenticates nobody, so minecraft worlds need
 # a gating connectivity unless the catalog declares auth handled (ADR-0033).
 GAME_DEFAULT_AUTH="none"

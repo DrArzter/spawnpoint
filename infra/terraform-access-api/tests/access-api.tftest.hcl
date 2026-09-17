@@ -63,6 +63,16 @@ mock_provider "aws" {
     values = { json = "{}" }
   }
 
+  # The account setting names the role by ARN, which a mocked role only has
+  # after apply; a fixed one lets the plan-time run see the link.
+  override_resource {
+    target = aws_iam_role.api_gateway_cloudwatch
+    values = {
+      arn = "arn:aws:iam::123456789012:role/spawnpoint-apigateway-cloudwatch"
+      id  = "spawnpoint-apigateway-cloudwatch"
+    }
+  }
+
   override_data {
     target = data.aws_iam_policy_document.api_gateway_cloudwatch
     values = { json = "{}" }

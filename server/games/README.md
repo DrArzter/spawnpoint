@@ -62,8 +62,11 @@ module takes part by:
   the host;
 - shipping `GAME_FOOTPRINT_COMPOSE_FILE`, a two-line overlay that turns `SPAWNPOINT_FOOTPRINT_MEMORY_MIB` into the
   game container's `mem_limit`;
-- keeping its observability part in `GAME_OBSERVABILITY_COMPOSE_FILES`, because a session on a slot other than zero
-  runs without the tier until one Prometheus serves the whole host;
+- keeping its observability part in two files: `GAME_OBSERVABILITY_COMPOSE_FILES` carries the tier inside an unplaced
+  session, as it always has; `GAME_HOST_OBSERVABILITY_COMPOSE_FILE` is what a placed session includes instead — an
+  overlay that puts the `spawnpoint.scrape`, `spawnpoint.scrape_port` and `spawnpoint.scrape_job` labels on the game's
+  exporter and joins it to the `spawnpoint-observability` network, where the host's own tier
+  (`observability/compose.host.yaml`) finds it. A game with no exporter declares neither;
 - declaring `GAME_SLOTTABLE`. `true` means a client connects to the port the address names and the server announces
   no other. Project Zomboid tells its clients to continue on a second port, so it is `false` until its ini can be
   rendered from the slot, and a slot other than zero is refused for it with that reason.

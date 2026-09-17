@@ -52,7 +52,8 @@ export type PlacementInput =
   | Readonly<{ action: "listHosts" }>
   | (Readonly<{ action: "placeSession" }> & SessionRequest)
   | (Readonly<{ action: "reserveOnHost"; hostId: string }> & SessionRequest)
-  | Readonly<{ action: "releasePlacement"; hostId: string; sessionId: string }>
+  | Readonly<{ action: "findPlacement"; sessionId: string }>
+  | Readonly<{ action: "releasePlacement"; hostId?: string; sessionId: string }>
   | Readonly<{ action: "decideDrain"; hostId: string; gracePeriodSeconds: number; headroomMiB?: number }>
   | Readonly<{ action: "concludeDrain"; hostId: string; outcome: "stop" | "terminate" }>;
 
@@ -63,13 +64,14 @@ export type PlacementOutcome =
 export type PlacementOutput = Readonly<{
   host?: VersionedHost;
   hosts?: readonly VersionedHost[];
-  placement?: PlacementOutcome;
+  /** `null` is an answer: the session is placed nowhere. */
+  placement?: PlacementOutcome | null;
   released?: boolean;
   drain?: DrainDecision;
 }>;
 
 const PLACEMENT_ACTIONS: ReadonlySet<string> = new Set([
-  "registerHost", "markHostReady", "getHost", "listHosts", "placeSession", "reserveOnHost", "releasePlacement", "decideDrain", "concludeDrain",
+  "registerHost", "markHostReady", "getHost", "listHosts", "placeSession", "reserveOnHost", "findPlacement", "releasePlacement", "decideDrain", "concludeDrain",
 ]);
 
 export function isPlacementInput(input: Readonly<{ action: string }>): input is PlacementInput {
@@ -191,11 +193,20 @@ export function createPlacementCoordinator(
         }
         throw new PlacementConflict(`host ${hostId} changed repeatedly while reserving`);
       }
+      case "findPlacement": {
+        // Where a session runs, for the stop and the watchdog, which are told a
+        // session and must find its host and slot themselves.
+        const sessionId = requireId("sessionId", input.sessionId);
+        return { placement: existingReservation(await store.listHosts(), sessionId) };
+      }
       case "releasePlacement": {
         // Tolerant on purpose: a session that predates placement, or a host
         // record that never existed, is not a reason to fail a verified stop.
-        const hostId = requireId("hostId", input.hostId);
+        // Given no host, the session's own reservation is found wherever it is.
         const sessionId = requireId("sessionId", input.sessionId);
+        const found = input.hostId === undefined ? existingReservation(await store.listHosts(), sessionId) : null;
+        const hostId = input.hostId ?? (found?.kind === "reuse" ? found.hostId : undefined);
+        if (hostId === undefined) return { released: false };
         const current = await store.readHost(hostId);
         if (current === null) return { released: false };
         if (!current.record.reservations.some((reservation) => reservation.sessionId === sessionId)) return { released: false, host: current };

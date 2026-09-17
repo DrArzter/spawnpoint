@@ -318,25 +318,28 @@ export function roles() {
   return state.roles;
 }
 
-export function approveCandidate(platformUserId: string, roleId: string): { id: string; displayName: string; roleId: string } {
-  const candidate = state.candidates.find((item) => item.platformUserId === platformUserId);
-  if (!candidate) throw new Error("This Telegram account is no longer waiting for a decision.");
+const sameAccount = (platform: string, platformUserId: string) => (item: { platform: string; platformUserId: string }) =>
+  item.platform === platform && item.platformUserId === platformUserId;
+
+export function approveCandidate(platform: string, platformUserId: string, roleId: string): { id: string; displayName: string; roleId: string } {
+  const candidate = state.candidates.find(sameAccount(platform, platformUserId));
+  if (!candidate) throw new Error("This account is no longer waiting for a decision.");
   if (!state.roles.some((role) => role.id === roleId)) throw new Error("This role no longer exists.");
   const identity: Mutable<AccessIdentity> = {
     id: `identity-${platformUserId}`,
     displayName: candidate.displayName,
     roleId,
     directGrants: [],
-    links: [{ platform: "telegram", value: platformUserId, verified: true }],
+    links: [{ platform, value: platformUserId, handle: candidate.username ?? candidate.email, verified: platform !== "password" }],
   };
   state.identities = [...state.identities, identity];
-  state.candidates = state.candidates.filter((item) => item.platformUserId !== platformUserId);
+  state.candidates = state.candidates.filter((item) => !sameAccount(platform, platformUserId)(item));
   state.delivery[identity.id] = "bot_unavailable";
   return { id: identity.id, displayName: identity.displayName, roleId };
 }
 
-export function dismissCandidate(platformUserId: string): void {
-  state.candidates = state.candidates.filter((item) => item.platformUserId !== platformUserId);
+export function dismissCandidate(platform: string, platformUserId: string): void {
+  state.candidates = state.candidates.filter((item) => !sameAccount(platform, platformUserId)(item));
 }
 
 export function setIdentityRole(identityId: string, roleId: string): void {

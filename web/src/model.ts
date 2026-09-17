@@ -75,9 +75,10 @@ export type ControlPlaneSnapshot = { observedAt: string; games: readonly Game[];
 export type WorldTab = "details" | "wipes" | "backups" | "releases";
 
 export type Role = { id: string; name: string; description: string; permissions: string[]; system?: boolean };
-export type LinkKind = "telegram" | "discord" | "minecraft" | "factorio" | "steam" | "zerotier";
+export type LinkKind = "telegram" | "email" | "discord" | "minecraft" | "factorio" | "steam" | "zerotier";
 export type LinkedAccount = { id: string; kind: LinkKind; value: string; verified: boolean };
 export type Member = { id: string; name: string; roleId: string; links: LinkedAccount[] };
 export type OwnerBootstrap =
-  | { state: "unclaimed"; telegramId: string }
+  /** The viewer's own Telegram id, when they have one; the configured account is deployment configuration. */
+  | { state: "unclaimed"; telegramId: string | null }
   | { state: "claimed"; telegramId: string; ownerId: string; claimedAt: string };

@@ -3,13 +3,16 @@
 The static site on S3 behind CloudFront is published at `https://spawnpoint.drarzter.dev/`; the provider hostname remains
 available temporarily as a migration and diagnostic path. One React/Vite build serves two
 entry points: Telegram's embedded **Mini App**, which authenticates with the signed `initData` Telegram supplies, and an
-ordinary **browser panel**, which signs in through Telegram's Login Widget. Both exchange that proof for a short-lived
-Spawnpoint session at the access API and hold no AWS credential of their own. See
-[ADR-0037](../docs/adr/0037-telegram-only-browser-identity.md) and [ADR-0012](../docs/adr/0012-web-control-panel.md).
+ordinary **browser panel**, which signs in with an email and password or through Telegram. Every way in is exchanged
+for the same short-lived Spawnpoint session at the access API, and the panel holds no AWS credential of its own. See
+[ADR-0045](../docs/adr/0045-provider-neutral-login-sessions.md), [ADR-0055](../docs/adr/0055-sign-in-with-email-and-password-by-default.md)
+and [ADR-0012](../docs/adr/0012-web-control-panel.md).
 
 The bare root (`#/`) is the front door: a landing page in the console's own chrome that explains what Spawnpoint does,
-shows a still of the Worlds page with example data, and carries **Sign in with Telegram** in the app bar plus a link
-into the demo. Who sees what depends on the address and the session:
+shows a still of the Worlds page with example data, and carries **Sign in** in the app bar plus a link into the demo.
+Sign in opens one panel: the email-and-password form first, which also creates an account, then every other provider
+the deployment offers as a button beneath it. The API says which those are (`GET /auth/providers`); the panel never
+draws a button that leads nowhere. Who sees what depends on the address and the session:
 
 | Arriving at | With no session | With a session |
 | --- | --- | --- |
@@ -29,8 +32,8 @@ What a person sees is decided by their role, not by the client:
 | Metrics | `metrics.read` | Session metrics where the backend has them; an honest unavailable state otherwise |
 | Console | `console.use` | An RCON console where the backend has it; an honest unavailable state otherwise |
 | Releases | `release.read` | Per preset: build status, release history, source commit and **Create save** from a ready release (`world.manage`); the release pointer of every save |
-| Access | `access.read`, `access.manage` | Visitors waiting for approval, identities and their roles, notification subscriptions, the one-time Owner bootstrap |
-| Profile | any signed-in identity | Display details from Telegram and the identity's linked game and network accounts, read-only until linking flows exist |
+| Access | `access.read`, `access.manage` | Accounts waiting for approval — a Telegram handle or an email, whichever they signed in with — identities and their roles, notification subscriptions, the one-time Owner bootstrap |
+| Profile | any signed-in identity | Display details from the account the session came through, and the identity's linked game and network accounts, read-only until linking flows exist |
 
 The game is the console's scope: the picker in the app bar re-scopes Worlds, Metrics, Console and Releases, and the
 hash carries it (`#/worlds/<game>`, `#/worlds/<game>/<world>`, `#/releases/<game>`), so a reload and a shared link land

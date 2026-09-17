@@ -13,7 +13,24 @@ export const demoApi: SpawnpointApi = {
     return { status: "authenticated", session: demoSession };
   },
 
+  async loadLoginProviders() {
+    await demoLatency();
+    return ["password" as const, "telegram" as const];
+  },
+
   async exchangeTelegramOidc(): Promise<AuthState> {
+    await demoLatency();
+    return { status: "authenticated", session: demoSession };
+  },
+
+  // The demo answers every way in with its one signed-in owner: the point is
+  // to explore the console, not to prove a password.
+  async signInWithPassword(): Promise<AuthState> {
+    await demoLatency();
+    return { status: "authenticated", session: demoSession };
+  },
+
+  async registerWithPassword(): Promise<AuthState> {
     await demoLatency();
     return { status: "authenticated", session: demoSession };
   },
@@ -31,14 +48,14 @@ export const demoApi: SpawnpointApi = {
     return store.candidates();
   },
 
-  async approveAccessCandidate(telegramId: string, roleId: string) {
+  async approveAccessCandidate(platform: string, platformUserId: string, roleId: string) {
     await demoLatency();
-    return store.approveCandidate(telegramId, roleId);
+    return store.approveCandidate(platform, platformUserId, roleId);
   },
 
-  async dismissAccessCandidate(telegramId: string) {
+  async dismissAccessCandidate(platform: string, platformUserId: string) {
     await demoLatency();
-    store.dismissCandidate(telegramId);
+    store.dismissCandidate(platform, platformUserId);
   },
 
   async loadAccessIdentities() {

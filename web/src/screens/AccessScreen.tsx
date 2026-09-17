@@ -20,7 +20,26 @@ import { formatDateTime, plural } from "../lib/format";
 import { describePermission } from "../lib/permissions";
 import type { AccessTab, Game, LinkKind, Member, OwnerBootstrap, Role } from "../model";
 
-const linkKinds: readonly LinkKind[] = ["telegram", "discord", "minecraft", "factorio", "steam", "zerotier"];
+const linkKinds: readonly LinkKind[] = ["telegram", "email", "discord", "minecraft", "factorio", "steam", "zerotier"];
+
+// The platform an account signs in through, as the panel names its links. A
+// password account is known by its email, not by its credential id.
+function linkKindFor(platform: string): LinkKind | null {
+  if (platform === "password") return "email";
+  return (linkKinds as readonly string[]).includes(platform) ? platform as LinkKind : null;
+}
+
+function linkFor(platform: string, value: string, handle: string | null, verified: boolean): Member["links"][number] | null {
+  const kind = linkKindFor(platform);
+  if (kind === null) return null;
+  return { id: `${kind}-${value}`, kind, value: kind === "email" ? handle ?? value : value, verified };
+}
+
+// How a waiting account introduces itself: its Telegram handle, or its email.
+function candidateAccount(candidate: AccessCandidate): string {
+  if (candidate.platform === "password") return candidate.email ?? "Email account";
+  return candidate.username ? `@${candidate.username}` : "Telegram account";
+}
 
 export function AccessScreen({ bootstrap, games, members, roles, tab, onMembersChange, onRolesChange, onTabChange }: {
   bootstrap: OwnerBootstrap;
@@ -86,7 +105,10 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
           id: identity.id,
           name: identity.displayName,
           roleId: identity.roleId,
-          links: identity.links.filter((link) => (linkKinds as readonly string[]).includes(link.platform)).map((link) => ({ id: `${link.platform}-${link.value}`, kind: link.platform as LinkKind, value: link.value, verified: link.verified })),
+          links: identity.links.flatMap((link) => {
+            const mapped = linkFor(link.platform, link.value, link.handle, link.verified);
+            return mapped === null ? [] : [mapped];
+          }),
         })));
         setState("ready");
       })
@@ -111,12 +133,13 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
     const roleId = candidateRoles[candidate.platformUserId] ?? "viewer";
     setWorking(candidate.platformUserId);
     try {
-      const identity = await approveAccessCandidate(candidate.platformUserId, roleId);
+      const identity = await approveAccessCandidate(candidate.platform, candidate.platformUserId, roleId);
       setCandidates((current) => current.filter((item) => item.platformUserId !== candidate.platformUserId));
-      onChange([...members, { id: identity.id, name: identity.displayName, roleId: identity.roleId, links: [{ id: `telegram-${candidate.platformUserId}`, kind: "telegram", value: candidate.platformUserId, verified: true }] }]);
+      const link = linkFor(candidate.platform, candidate.platformUserId, candidate.username ?? candidate.email, candidate.platform !== "password");
+      onChange([...members, { id: identity.id, name: identity.displayName, roleId: identity.roleId, links: link === null ? [] : [link] }]);
       notify({ tone: "success", message: `${identity.displayName} approved as ${roles.find((role) => role.id === identity.roleId)?.name ?? identity.roleId}.` });
     } catch (cause) {
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : "This Telegram account could not be approved." });
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : "This account could not be approved." });
     } finally {
       setWorking(null);
     }
@@ -125,11 +148,11 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
   async function dismiss(candidate: AccessCandidate) {
     setWorking(candidate.platformUserId);
     try {
-      await dismissAccessCandidate(candidate.platformUserId);
+      await dismissAccessCandidate(candidate.platform, candidate.platformUserId);
       setCandidates((current) => current.filter((item) => item.platformUserId !== candidate.platformUserId));
       notify({ message: `${candidate.displayName} dismissed.` });
     } catch (cause) {
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : "This Telegram account could not be dismissed." });
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : "This account could not be dismissed." });
     } finally {
       setWorking(null);
     }
@@ -144,7 +167,7 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
           <Avatar name={candidate.displayName} photoUrl={candidate.photoUrl} />
           <span>
             <strong>{candidate.displayName}</strong>
-            <small>{candidate.username ? `@${candidate.username} · ` : ""}{candidate.status === "REQUESTED" ? "Requested access " : "Signed in "}{formatDateTime(candidate.status === "REQUESTED" ? candidate.requestedAt : candidate.lastSeenAt)}</small>
+            <small>{candidateAccount(candidate)} · {candidate.status === "REQUESTED" ? "Requested access " : "Signed in "}{formatDateTime(candidate.status === "REQUESTED" ? candidate.requestedAt : candidate.lastSeenAt)}</small>
           </span>
         </span>
       ),
@@ -208,11 +231,11 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
           columns={candidateColumns}
           decision
           hideHeader
-          empty={<EmptyState description="A visitor appears here after signing in and asking for access." icon="person_add" title="Nobody is waiting for review" />}
+          empty={<EmptyState description="Somebody appears here after signing in, or creating an account, and asking for access." icon="person_add" title="Nobody is waiting for review" />}
           label="Access requests"
           loading={state === "loading"}
           loadingRows={2}
-          rowKey={(candidate) => candidate.platformUserId}
+          rowKey={(candidate) => `${candidate.platform}-${candidate.platformUserId}`}
           rows={candidates}
         />
       </Card>
@@ -223,12 +246,12 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
 
       <Card
         actions={<Status kind={bootstrap.state === "claimed" ? "ok" : "warning"} label={bootstrap.state === "claimed" ? "Complete" : "Action required"} />}
-        description={bootstrap.state === "claimed" ? undefined : `Sign in with the configured account (${bootstrap.telegramId}) to create the first Owner.`}
+        description={bootstrap.state === "claimed" ? undefined : `Sign in with the configured Telegram account${bootstrap.telegramId ? ` (${bootstrap.telegramId})` : ""} to create the first Owner.`}
         flush
         title="Initial owner"
       >
         <Details flush items={[
-          { label: "Telegram ID", value: bootstrap.telegramId, mono: true },
+          { label: "Telegram ID", value: bootstrap.telegramId ?? "Set in the deployment configuration", mono: bootstrap.telegramId !== null },
           { label: "Role", value: "Owner" },
           ...(bootstrap.state === "claimed" ? [{ label: "Claimed", value: bootstrap.claimedAt }] : []),
         ]} label="Initial owner" />

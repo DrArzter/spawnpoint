@@ -505,6 +505,53 @@
   display: block;
 }
 
+/* Sign-in: the form first, every other provider as an alternative beneath it. */
+.signin {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  text-align: start;
+}
+
+.signin-form {
+  display: grid;
+  gap: 12px;
+}
+
+.signin-submit,
+.signin-alternative .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.signin-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
+.signin-divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.signin-divider::before,
+.signin-divider::after {
+  content: "";
+  height: 1px;
+  background: var(--outline);
+}
+
 /* Phones: the mark stands for the brand, the scope chip keeps its name. */
 @media (max-width: 599px) {
   .appbar-brand {

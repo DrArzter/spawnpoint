@@ -1,7 +1,9 @@
+import { describeRegistrationFailure, describeSignInFailure, isLoginProviderId } from "../lib/signin";
 import type { ControlPlaneSnapshot } from "../model";
 import type {
-  AccessCandidate, AccessIdentity, AccessRole, AppearancePreference, AuthState, BackupInventory, HostMetrics, InvitationRecipient, MetricRange,
-  InvitationSummary, SessionOperation, SpawnpointApi, SpawnpointSession, SubscriptionState, WorldLifecycleAction,
+  AccessCandidate, AccessIdentity, AccessRole, AccountProfile, AppearancePreference, AuthState, BackupInventory, HostMetrics,
+  InvitationRecipient, InvitationSummary, LoginProviderId, MetricRange, SessionOperation, SpawnpointApi, SpawnpointSession,
+  SubscriptionState, WorldLifecycleAction,
 } from "./contract";
 import { apiFailure } from "./contract";
 
@@ -67,8 +69,11 @@ function controlPlaneSubscription(onInvalidated: () => void): () => void {
   };
 }
 
+// The API is the one thing every way in needs. Which providers it offers is
+// its own answer, read by the sign-in panel; Telegram's public client id only
+// decides whether this build can draw Telegram's button.
 export function liveAuthConfigured(): boolean {
-  return apiUrl !== "" && (Boolean(window.Telegram?.WebApp.initData) || /^[1-9]\d+$/.test(telegramOidcClientId));
+  return apiUrl !== "";
 }
 
 function clearLegacyTokens(): void {
@@ -90,17 +95,49 @@ function loginPayloadFromQuery(): Record<string, string> | null {
   }));
 }
 
-async function exchangeTelegram(body: { idToken: string } | { login: Record<string, string> } | { initData: string }): Promise<string> {
-  const response = await fetch(`${apiUrl}/auth/telegram`, {
+type FailureDescription = (status: number, code: string | undefined) => string;
+
+// Every login exchanges a provider's proof for one Spawnpoint session. What
+// differs per provider is the proof and how a refusal is worded.
+async function exchangeLogin(path: string, body: unknown, describeFailure: FailureDescription): Promise<string> {
+  const response = await fetch(`${apiUrl}${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     credentials: "include",
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error("Telegram could not verify this sign-in. Please start again.");
+  if (!response.ok) {
+    const parsed = await response.json().catch(() => null) as { error?: unknown } | null;
+    const code = typeof parsed?.error === "string" ? parsed.error : undefined;
+    throw await apiFailure(response, describeFailure(response.status, code), parsed);
+  }
   const result = await response.json() as { accessToken?: unknown };
   if (typeof result.accessToken !== "string") throw new Error("Spawnpoint did not create a valid session.");
   return result.accessToken;
+}
+
+function exchangeTelegram(body: { idToken: string } | { login: Record<string, string> } | { initData: string }): Promise<string> {
+  return exchangeLogin("/auth/telegram", body, () => "Telegram could not verify this sign-in. Please start again.");
+}
+
+async function sessionFromLogin(path: string, body: unknown, describeFailure: FailureDescription): Promise<AuthState> {
+  const token = await exchangeLogin(path, body, describeFailure);
+  accessToken = token;
+  clearLegacyTokens();
+  return { status: "authenticated", session: await loadSession(token) };
+}
+
+// An API that predates providers describes only a Telegram account.
+function accountProfile(profile: Partial<AccountProfile>): AccountProfile {
+  const telegramId = profile.telegramId ?? null;
+  return {
+    provider: profile.provider ?? "telegram",
+    platformUserId: profile.platformUserId ?? telegramId ?? "",
+    telegramId,
+    username: profile.username ?? null,
+    email: profile.email ?? null,
+    photoUrl: profile.photoUrl ?? null,
+  };
 }
 
 async function loadSession(token: string): Promise<SpawnpointSession> {
@@ -112,7 +149,8 @@ async function loadSession(token: string): Promise<SpawnpointSession> {
   const parsed = await response.json() as SpawnpointSession & { capabilities?: readonly string[] };
   // An API that does not answer with capabilities is one that predates them, so
   // it advertises none and every gated screen reads as not connected yet.
-  return parsed.state === "active" ? { ...parsed, capabilities: parsed.capabilities ?? [] } : parsed;
+  if (parsed.state === "active") return { ...parsed, capabilities: parsed.capabilities ?? [], profile: accountProfile(parsed.profile) };
+  return { ...parsed, candidate: { ...accountProfile(parsed.candidate), displayName: parsed.candidate.displayName, status: parsed.candidate.status } };
 }
 
 async function requestRefresh(): Promise<string | null> {
@@ -217,16 +255,33 @@ export const liveApi: SpawnpointApi = {
     return initData ? restoreMiniApp(initData) : { status: "signed-out" };
   },
 
+  async loadLoginProviders(): Promise<LoginProviderId[]> {
+    // An API that predates the route offers what it always did. A failed read
+    // says nothing about Telegram either way, so it is offered and left to
+    // answer for itself.
+    try {
+      const response = await fetch(`${apiUrl}/auth/providers`, { credentials: "include" });
+      if (!response.ok) return ["telegram"];
+      const body = await response.json() as { providers?: unknown };
+      return Array.isArray(body.providers) ? body.providers.filter(isLoginProviderId) : ["telegram"];
+    } catch {
+      return ["telegram"];
+    }
+  },
+
   async exchangeTelegramOidc(idToken: string): Promise<AuthState> {
     try {
-      const token = await exchangeTelegram({ idToken });
-      accessToken = token;
-      clearLegacyTokens();
-      return { status: "authenticated", session: await loadSession(token) };
+      return await sessionFromLogin("/auth/telegram", { idToken }, () => "Telegram could not verify this sign-in. Please start again.");
     } catch (error) {
       return { status: "error", message: error instanceof Error ? error.message : "Telegram OIDC sign-in failed." };
     }
   },
+
+  signInWithPassword: (email: string, password: string) =>
+    sessionFromLogin("/auth/password", { email, password }, describeSignInFailure),
+
+  registerWithPassword: (email: string, password: string, displayName: string) =>
+    sessionFromLogin("/auth/password/register", { email, password, displayName }, describeRegistrationFailure),
 
   async revokeSession(): Promise<void> {
     accessToken = null;
@@ -248,20 +303,20 @@ export const liveApi: SpawnpointApi = {
     return body.candidates;
   },
 
-  async approveAccessCandidate(telegramId: string, roleId: string) {
-    const response = await authorizedFetch(`/access/candidates/${telegramId}/approve`, {
+  async approveAccessCandidate(platform: string, platformUserId: string, roleId: string) {
+    const response = await authorizedFetch(`/access/candidates/${encodeURIComponent(platform)}/${encodeURIComponent(platformUserId)}/approve`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ roleId }),
     });
-    if (!response.ok) throw await apiFailure(response, "This Telegram account could not be approved.");
+    if (!response.ok) throw await apiFailure(response, "This account could not be approved.");
     const body = await response.json() as { identity: { id: string; displayName: string; roleId: string } };
     return body.identity;
   },
 
-  async dismissAccessCandidate(telegramId: string): Promise<void> {
-    const response = await authorizedFetch(`/access/candidates/${telegramId}/dismiss`, { method: "POST" });
-    if (!response.ok) throw await apiFailure(response, "This Telegram account could not be dismissed.");
+  async dismissAccessCandidate(platform: string, platformUserId: string): Promise<void> {
+    const response = await authorizedFetch(`/access/candidates/${encodeURIComponent(platform)}/${encodeURIComponent(platformUserId)}/dismiss`, { method: "POST" });
+    if (!response.ok) throw await apiFailure(response, "This account could not be dismissed.");
   },
 
   async loadAccessIdentities(): Promise<AccessIdentity[]> {

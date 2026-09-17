@@ -189,7 +189,7 @@ if [[ "${session_format}" == "json" ]]; then
   jq -cn \
     --arg connectivity "${session_connectivity}" \
     --arg connection_host "${connection_host}" \
-    --arg connection_address "${connection_host}:${GAME_CONNECT_PORT}" \
+    --arg connection_address "${connection_host}:${SPAWNPOINT_CONNECT_PORT:-${GAME_CONNECT_PORT}}" \
     --arg world "${world_name}" \
     --arg reconcile "${reconcile_status}" \
     --arg desired_release "${desired_release}" \
@@ -209,7 +209,7 @@ else
     fi
     printf 'connectivity=%s\n' "${session_connectivity}"
     printf 'connection_host=%s\n' "${connection_host}"
-    printf 'connection_address=%s\n' "${connection_host}:${GAME_CONNECT_PORT}"
+    printf 'connection_address=%s\n' "${connection_host}:${SPAWNPOINT_CONNECT_PORT:-${GAME_CONNECT_PORT}}"
     printf 'world=%s\n' "${world_name}"
     printf 'reconcile=%s\n' "${reconcile_status}"
     printf 'desired_release=%s\n' "${desired_release}"

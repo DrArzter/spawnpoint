@@ -1,0 +1,7 @@
+# The footprint's hard limit (ADR-0054): a co-tenant's leak is its own
+# out-of-memory kill and nobody else's. Included for a placed session only,
+# so an unplaced session runs exactly as it did before placement existed.
+services:
+  mc:
+    mem_limit: "${SPAWNPOINT_FOOTPRINT_MEMORY_MIB:?a placed session carries its footprint}m"
+    memswap_limit: "${SPAWNPOINT_FOOTPRINT_MEMORY_MIB}m"

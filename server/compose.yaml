@@ -14,7 +14,9 @@ services:
     tty: true
     stdin_open: true
     ports:
-      - "25565:25565"
+      # The host port is the session's slot (ADR-0054): slot zero, and an
+      # unplaced session, keep the game's own; the container never changes.
+      - "${SPAWNPOINT_GAME_PORT:-25565}:25565"
     environment:
       CF_API_KEY: ${CF_API_KEY}
       EULA: "TRUE"
@@ -64,13 +66,3 @@ services:
       EXPORT_SERVERS: mc:25565
       TIMEOUT: 10s
     restart: "no"
-
-  prometheus:
-    volumes:
-      - ./observability/scrape/minecraft.yml:/etc/prometheus/scrape/minecraft.yml:ro
-    depends_on:
-      - minecraft-exporter
-
-  grafana:
-    volumes:
-      - ./observability/grafana/dashboards/minecraft:/var/lib/grafana/dashboards/minecraft:ro

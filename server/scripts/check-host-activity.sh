@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-# The host-idle sensor: is any game service running on this host, other than
-# the one asking? This is the seam the two-level stop needs — a world-level
-# stop always runs, but StopInstances is only correct when the last session
-# leaves. Today one world runs at a time and the answer is trivially "idle";
-# the seam exists so lifting that assumption changes a Choice state, not the
-# plumbing. Same key=value, fail-closed contract as the session probe:
-# an unreadable host must never be judged idle.
+# The host-idle sensor: is any game session running on this host, other than
+# the one asking? This is the seam the two-level stop needs (ADR-0054) — a
+# session stop always runs, but the host may only drain when the last session
+# leaves. The asking session is its Compose project and service; every other
+# game container that runs, in any project, is a neighbour. Same key=value,
+# fail-closed contract as the session probe: an unreadable host must never be
+# judged idle.
 
 set -Eeuo pipefail
 
@@ -25,20 +25,20 @@ command -v docker >/dev/null 2>&1 || {
 
 other_active=0
 active_services=""
+active_projects=""
+# Every game container on the host, whichever Compose project it belongs to:
+# under ADR-0054 each placed session is its own project, so the asking session
+# is (its project, its service) and everything else that runs is a neighbour.
 for module in "${GAMES_DIR}"/*/game.sh; do
-  service="$(
+  observed="$(
     # shellcheck source=/dev/null
     source "${module}"
-    ids="$(docker ps --all --quiet \
-      --filter "label=com.docker.compose.project=${compose_project}" \
-      --filter "label=com.docker.compose.service=${GAME_COMPOSE_SERVICE}")" || exit 2
-    [[ "$(grep -c . <<<"${ids}")" -le 1 ]] || exit 2
-    if [[ -z "${ids}" ]]; then
-      state="absent"
-    else
-      state="$(docker inspect --format '{{.State.Status}}' "${ids}")" || exit 2
-    fi
-    printf '%s=%s\n' "${GAME_COMPOSE_SERVICE}" "${state}"
+    ids="$(docker ps --all --quiet --filter "label=com.docker.compose.service=${GAME_COMPOSE_SERVICE}")" || exit 2
+    while IFS= read -r id; do
+      [[ -n "${id}" ]] || continue
+      detail="$(docker inspect --format '{{.State.Status}} {{index .Config.Labels "com.docker.compose.project"}}' "${id}")" || exit 2
+      printf '%s %s\n' "${GAME_COMPOSE_SERVICE}" "${detail}"
+    done <<<"${ids}"
   )" || {
     printf 'result=unavailable\n'
     printf 'reason=container_inspection_failed\n'
@@ -46,18 +46,26 @@ for module in "${GAMES_DIR}"/*/game.sh; do
     exit 2
   }
 
-  name="${service%%=*}"
-  state="${service#*=}"
-  [[ "${name}" == "${excluded_service}" ]] && continue
-  if [[ "${state}" == "running" ]]; then
-    other_active=$((other_active + 1))
-    active_services="${active_services:+${active_services},}${name}"
-  fi
+  while read -r name state project; do
+    [[ -n "${name}" ]] || continue
+    # A container that predates project names carries none; it belongs to the
+    # default project, which is what an unplaced session runs as.
+    [[ -n "${project}" ]] || project="${compose_project}"
+    if [[ "${name}" == "${excluded_service}" && "${project}" == "${compose_project}" ]]; then
+      continue
+    fi
+    if [[ "${state}" == "running" ]]; then
+      other_active=$((other_active + 1))
+      active_services="${active_services:+${active_services},}${name}"
+      active_projects="${active_projects:+${active_projects},}${project}"
+    fi
+  done <<<"${observed}"
 done
 
 printf 'result=observed\n'
 printf 'other_active=%s\n' "${other_active}"
 printf 'active_services=%s\n' "${active_services:-none}"
+printf 'active_projects=%s\n' "${active_projects:-none}"
 if (( other_active == 0 )); then
   printf 'host=idle\n'
 else

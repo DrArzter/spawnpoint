@@ -10,13 +10,18 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the GAME_* constants are the module's interface, read by _dispatch.sh consumers
 
-GAME_COMPOSE_FILES="observability/compose.yaml:games/factorio/compose.yaml"
+GAME_COMPOSE_FILES="games/factorio/compose.yaml"
+GAME_FOOTPRINT_COMPOSE_FILE="games/factorio/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="factorio"
 GAME_MOD_EXTENSION="zip"
 GAME_LOADER_TYPE="factorio"
 # The port a player types after the address the connectivity strategy publishes.
 GAME_CONNECT_PORT="34197"
 GAME_CONNECT_PROTOCOL="udp"
+GAME_RCON_PORT="27015"
+# A direct UDP connection to the port the address names; nothing in the
+# protocol tells the client another port.
+GAME_SLOTTABLE="true"
 # Fail closed, and for the same reason the server needs no factorio.com
 # account: a hidden server skips matchmaking entirely, so it also verifies
 # nobody. Identity verification belongs to a visible, credentialed server; a
@@ -30,7 +35,8 @@ GAME_FOOTPRINT_CORES="0.5"
 FACTORIO_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 FACTORIO_DATA_DIR="${FACTORIO_DATA_DIR:-${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${FACTORIO_GAME_DIR}/data}}"
 FACTORIO_RCON_HOST="${FACTORIO_RCON_HOST:-127.0.0.1}"
-FACTORIO_RCON_PORT="${FACTORIO_RCON_PORT:-27015}"
+# The host side of the RCON mapping follows the slot (ADR-0054).
+FACTORIO_RCON_PORT="${FACTORIO_RCON_PORT:-${SPAWNPOINT_RCON_PORT:-27015}}"
 
 # The preset release, not Spawnpoint, selects the immutable container image
 # that opens this save. Version metadata still has to agree with itself; the

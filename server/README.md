@@ -20,9 +20,10 @@ Contents:
   - `check-session-activity.sh` — expose the fail-closed player activity contract used by the future idle watchdog,
   - `idle-probe.sh` — the watchdog's exit-code contract over `players.sh`: 0 empty, 3 occupied, anything else a probe
     failure. The workflow reads the code, never the output,
-  - `check-host-activity.sh` — the host-idle sensor: is any *other* game service running here? Trivially idle while
-    one world runs at a time; the seam the two-level stop needs the day two run on one host (fail-closed: an
-    unreadable host is never judged idle),
+  - `check-host-activity.sh` — the host-idle sensor: is any *other* game session running here, in any Compose
+    project? The asking session is its project and its service; the answer decides whether the host may drain after
+    a session stop ([ADR-0054](../docs/adr/0054-place-a-session-on-a-host-with-room.md)). Fail-closed: an unreadable
+    host is never judged idle,
   - `save-world.sh` — disable autosave, run `save-all flush`, and re-enable autosave even on failure,
   - `stop.sh` — save first, then let Compose perform the graceful container stop,
   - `archive-world.sh` — archive a stopped live world with Zstandard, write SHA-256 and verify the result,

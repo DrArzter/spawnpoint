@@ -27,8 +27,10 @@ a default that still says "one host per world" until the acceptance run says oth
 - A launch asks for the footprint beside the system reserve and nothing more. No instance type and no price appears in
   the control plane or the catalog. One world on one evening costs what it costs under ADR-0048.
 - Headroom is zero unless a deployment sets it, and nothing is kept when nothing runs.
-- Every port a session binds comes from its slot: the game's own ports on slot zero, the slot's window in the
+- Every port a placed session binds comes from its slot: the game's own ports on slot zero, the slot's window in the
   host-wide range otherwise. No other allocator exists, and no two slots on a host share a port whatever games they run.
+- A session with no slot runs exactly as it did before placement existed: the same files, the default project, no
+  memory limit. Cutover is the moment the workflows start passing a slot, and nothing before it.
 
 ## Atomic rollout phases
 
@@ -37,7 +39,7 @@ a default that still says "one host per world" until the acceptance run says oth
 | 1 — domain model | `lambdas/src/domain/placement.ts`: footprints, shapes, best-fit placement, reservation with slot, drain decision, `warm` kept host; `lambdas/test/placement.test.ts` | Nothing imports it. **Landed with the ADR** |
 | 2 — the question answered on paper | `lambdas/prototype/placement-evening.ts` replays evenings under three policies; the verdict goes to [docs/costs.md](costs.md) and the prototype is deleted | Nothing changes. **Landed with the ADR** |
 | 3 — footprints as data | Per-game default footprint and per-world override in both catalogs (`gameFootprints` and `footprintForWorld` in the panel's; `footprint` per world and `GAME_FOOTPRINT_*` per module on the host, with a drift test between them); the allowed instance families as a filter; `npm run launch-requirements -- --verify` asks EC2 whether every footprint has an answer. Prices appear nowhere but `docs/costs.md` | Data nobody reads yet. **Landed** |
-| 4 — host-side slot contract | Each session is a Compose project named for the world; the adapter reads `SPAWNPOINT_SLOT` and binds the game's own ports on slot zero and its slot's window in the host-wide range otherwise; `check-host-activity.sh` counts projects; `MEMORY` and the cgroup limit are derived from the footprint. Slot zero is byte-identical to today | Every deployed workflow uses slot zero and one project. Nothing observable changes |
+| 4 — host-side slot contract | A placed session (`SPAWNPOINT_SLOT`) is a Compose project named for its world, publishes its slot's ports (the game's own on slot zero, a window in the host-wide range otherwise), runs under its footprint's `mem_limit`, and on a slot other than zero leaves the observability tier out; `check-host-activity.sh` counts neighbours across projects. A session with no slot is byte-identical to today. Project Zomboid refuses a slot other than zero until its ini carries the slot's ports | Every deployed workflow starts sessions with no slot. Nothing observable changes. **Landed** |
 | 5 — host records | The placement item in the lifecycle table, written for the one host that exists today at slot zero, by the start and stop workflows as they run. Read by nobody | A second table item; a saved add-only plan |
 | 6 — placement in start | A `Place Session` step between `Begin Session` and `Start Accepted V1`: read hosts, place, reserve conditionally; on a launch, an EC2 Fleet of type `instant` with the footprint's `InstanceRequirements` and `lowest-price`, the answered instance recorded as the host's shape, then wait for it to answer SSM. Behind a `placement: single \| shared` setting defaulting to `single`, under which it always launches | Identical to today except that EC2, not a variable, names the instance type — and one extra record written |
 | 7 — two-level stop | The stop workflow ends with a session-level stop (`keepHost`) plus a release; a new drain machine, started by the release that empties a host, waits the grace period, re-reads and decides; the running-hours alarm covers any tagged host, and a new alarm covers a drain that outlived its period | With `single`, every release empties its host, so every stop is followed by a drain that terminates. Same bill as ADR-0048 plus the grace period |
@@ -49,7 +51,7 @@ a default that still says "one host per world" until the acceptance run says oth
 
 ## Current phase
 
-Phases 1 to 3 landed on 2026-09-17. Phase 4, the host-side slot contract, is next; slot zero stays byte-identical.
+Phases 1 to 4 landed on 2026-09-17. Phase 5, the host record in the lifecycle table, is next.
 
 ## What the acceptance run must record
 

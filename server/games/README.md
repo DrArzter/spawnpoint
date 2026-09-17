@@ -49,6 +49,25 @@ make the parser **self-checking** rather than optimistic: read the count one way
 and refuse unless they agree. A refusal is read as "not idle" by the probe and as a refusal by the stop, so the
 failure costs a few minutes of instance time. A wrong count in the other direction stops a server with people on it.
 
+## Run on a slot, or say why not
+
+A placed session ([ADR-0054](../../docs/adr/0054-place-a-session-on-a-host-with-room.md)) arrives with
+`SPAWNPOINT_SLOT`. The dispatcher gives it a Compose project named for its world, the ports of its slot
+(`SPAWNPOINT_GAME_PORT`, `SPAWNPOINT_RCON_PORT`, `SPAWNPOINT_GAME_PORT_2`) and the memory limit of its footprint; a
+module takes part by:
+
+- publishing its host ports from those variables, defaulting to the game's own so an unplaced session is unchanged —
+  the container side never changes;
+- naming `GAME_RCON_PORT`, and reading the host side of RCON from `SPAWNPOINT_RCON_PORT` where the probe speaks from
+  the host;
+- shipping `GAME_FOOTPRINT_COMPOSE_FILE`, a two-line overlay that turns `SPAWNPOINT_FOOTPRINT_MEMORY_MIB` into the
+  game container's `mem_limit`;
+- keeping its observability part in `GAME_OBSERVABILITY_COMPOSE_FILES`, because a session on a slot other than zero
+  runs without the tier until one Prometheus serves the whole host;
+- declaring `GAME_SLOTTABLE`. `true` means a client connects to the port the address names and the server announces
+  no other. Project Zomboid tells its clients to continue on a second port, so it is `false` until its ini can be
+  rendered from the slot, and a slot other than zero is refused for it with that reason.
+
 ## The rest of the checklist
 
 - `game_save` flushes the live game using its own protocol. `game_save_paths`, `game_save_sentinel` and

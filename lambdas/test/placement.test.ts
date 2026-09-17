@@ -5,6 +5,7 @@ import {
   MAX_SLOTS,
   PlacementConflict,
   SYSTEM_RESERVE_MIB,
+  accepts,
   capacity,
   drainDecision,
   fleetRoomMiB,
@@ -204,4 +205,15 @@ test("every transition moves the version, so a stale writer loses", () => {
   assert.deepEqual([created, ready, placed, drained, gone].map((host) => host.version), [0, 1, 2, 3, 4]);
   assert.equal(gone.state, "terminating");
   assert.throws(() => release(gone, "s1", NOW + 5), PlacementConflict);
+});
+
+test("a pinned slot must be free: a world that needs slot zero waits for it or goes elsewhere", () => {
+  const host = reserve(readyHost("i-1", SHAPES[3]!), { sessionId: "s1", worldId: "a", footprint: FACTORIO, policy: "cold" }, NOW + 2);
+  assert.equal(accepts(host, FACTORIO, "b"), true);
+  assert.equal(accepts(host, FACTORIO, "b", 0), false, "slot zero is taken");
+  assert.throws(() => reserve(host, { sessionId: "s2", worldId: "b", footprint: FACTORIO, policy: "cold", slot: 0 }, NOW + 3), PlacementConflict);
+  const other = reserve(readyHost("i-2", SHAPES[3]!), { sessionId: "s3", worldId: "c", footprint: FACTORIO, policy: "cold", slot: 0 }, NOW + 4);
+  assert.equal(other.reservations[0]?.slot, 0);
+  assert.deepEqual(placementCandidates([host, other], FACTORIO, "d", 0), [], "neither host has slot zero free");
+  assert.deepEqual(place([host, readyHost("i-3", SHAPES[0]!)], FACTORIO, "d", 0), { kind: "reuse", hostId: "i-3" });
 });

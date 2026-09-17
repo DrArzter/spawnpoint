@@ -177,3 +177,22 @@ test("a legacy world is bound to the configured host: it never lands on a launch
   await coordinate({ action: "registerHost", hostId: "i-home", shape: SMALL, ready: true });
   assert.deepEqual((await coordinate({ action: "placeSession", sessionId: "s1", worldId: "world" })).placement, { kind: "reuse", hostId: "i-home", slot: 0 });
 });
+
+test("a Zomboid world and a public world take slot zero only; the second of them on a host asks for a launch", async () => {
+  const fleet = new MemoryFleet();
+  const coordinate = coordinator(fleet);
+  await coordinate({ action: "registerHost", hostId: "i-1", shape: LARGE, ready: true });
+  const pz = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "knox", serverId: "zomboid" });
+  assert.deepEqual(pz.placement, { kind: "reuse", hostId: "i-1", slot: 0 });
+  const factorio = await coordinate({ action: "placeSession", sessionId: "s2", worldId: "base", serverId: "factorio" });
+  assert.deepEqual(factorio.placement, { kind: "reuse", hostId: "i-1", slot: 1 }, "a slottable game takes the next slot beside it");
+  const secondPz = await coordinate({ action: "placeSession", sessionId: "s3", worldId: "louisville", serverId: "zomboid" });
+  assert.equal(secondPz.placement?.kind, "launch", "slot zero is taken, so the second Zomboid needs a host of its own");
+
+  const publicCatalogWorld = { id: "arena", displayName: "Arena", profileId: "p", sessionControl: "v1" as const, connectivity: "raw" as const };
+  const { worldNeedsSlotZero } = await import("../src/control-plane/catalog.ts");
+  assert.equal(worldNeedsSlotZero("arena", undefined, [{ id: "minecraft", code: "MC", displayName: "Minecraft", connectPort: 25565, worlds: [publicCatalogWorld] }]), true);
+  assert.equal(worldNeedsSlotZero("world"), false);
+  assert.equal(worldNeedsSlotZero("knox", "zomboid"), true);
+  assert.equal(worldNeedsSlotZero("base", "factorio"), false);
+});

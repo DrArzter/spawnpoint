@@ -67,6 +67,11 @@ export type CatalogGame = Readonly<{
   connectPort: number;
   // Replaces the entry in gameFootprints for this catalog; absent means that entry.
   footprint?: Footprint;
+  // False for a game whose server tells its clients which port to continue on:
+  // a slot's host mapping would send them to a port nothing listens on, so its
+  // sessions take slot zero, where the ports are the game's own. Mirrors
+  // GAME_SLOTTABLE in the game modules.
+  slottable?: boolean;
   presets?: readonly CatalogPreset[];
   worlds: readonly CatalogWorld[];
 }>;
@@ -96,6 +101,7 @@ export const gameCatalog: readonly CatalogGame[] = [
     code: "PZ",
     displayName: "Project Zomboid",
     connectPort: 16261,
+    slottable: false,
     worlds: [],
   },
 ];
@@ -187,6 +193,18 @@ export function footprintForWorld(worldId: string, catalog: readonly CatalogGame
 export function worldHostBinding(worldId: string, catalog: readonly CatalogGame[] = gameCatalog): "configured" | null {
   const game = catalog.find((candidate) => candidate.worlds.some((world) => world.id === worldId));
   return game?.worlds.find((candidate) => candidate.id === worldId)?.hostBinding ?? null;
+}
+
+// Whether a session of this world must take slot zero: a public world, whose
+// security group opens the game's own port only, and a world of a game that
+// cannot be slotted. `serverId` names the game for a world the static catalog
+// does not know, which was created from a preset and is on the overlay.
+export function worldNeedsSlotZero(worldId: string, serverId?: string, catalog: readonly CatalogGame[] = gameCatalog): boolean {
+  const game = catalog.find((candidate) => candidate.worlds.some((world) => world.id === worldId))
+    ?? (serverId === undefined ? undefined : catalog.find((candidate) => candidate.id === serverId));
+  if (game === undefined) return false;
+  const world = game.worlds.find((candidate) => candidate.id === worldId);
+  return game.slottable === false || world?.connectivity === "raw";
 }
 
 // What a launch for this world asks EC2 for when no host has room.

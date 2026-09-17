@@ -186,9 +186,18 @@ export function holdsHeadroom(hosts: readonly HostRecord[], host: HostRecord, ta
   return others.some((other) => other.reservations.length > 0) && fleetRoomMiB(others) < targetMiB;
 }
 
-/** Whether this host can take the footprint for this world right now. */
-export function accepts(host: HostRecord, footprint: Footprint, worldId: string): boolean {
+function slotFree(host: HostRecord, slot: number | undefined): boolean {
+  return slot === undefined || !host.reservations.some((reservation) => reservation.slot === slot);
+}
+
+/**
+ * Whether this host can take the footprint for this world right now. A pinned
+ * `slot` — zero, for a public world or a game that names its own ports — must
+ * be free as well.
+ */
+export function accepts(host: HostRecord, footprint: Footprint, worldId: string, slot?: number): boolean {
   if (host.reservations.length >= MAX_SLOTS) return false;
+  if (!slotFree(host, slot)) return false;
   if (host.state === "stopped") return host.keptWorldId === worldId && fitsWithin(remaining(host), footprint);
   if (host.state !== "ready" && host.state !== "draining") return false;
   return fitsWithin(remaining(host), footprint);
@@ -201,10 +210,10 @@ export function accepts(host: HostRecord, footprint: Footprint, worldId: string)
  * next one rather than reading the fleet again, which is what keeps many
  * simultaneous starts from queueing on one tight host.
  */
-export function placementCandidates(hosts: readonly HostRecord[], footprint: Footprint, worldId: string): readonly HostRecord[] {
+export function placementCandidates(hosts: readonly HostRecord[], footprint: Footprint, worldId: string, slot?: number): readonly HostRecord[] {
   requireFootprint(footprint);
   requireId("worldId", worldId);
-  const candidates = hosts.filter((host) => accepts(host, footprint, worldId));
+  const candidates = hosts.filter((host) => accepts(host, footprint, worldId, slot));
   const kept = candidates.filter((host) => host.state === "stopped");
   const live = candidates
     .filter((host) => host.state !== "stopped")
@@ -222,8 +231,8 @@ export function placementCandidates(hosts: readonly HostRecord[], footprint: Foo
  * what the footprint needs; which instance that becomes, and at what price, is
  * EC2's answer at launch time. One pass over the hosts, at any fleet size.
  */
-export function place(hosts: readonly HostRecord[], footprint: Footprint, worldId: string): Placement {
-  const [best] = placementCandidates(hosts, footprint, worldId);
+export function place(hosts: readonly HostRecord[], footprint: Footprint, worldId: string, slot?: number): Placement {
+  const [best] = placementCandidates(hosts, footprint, worldId, slot);
   if (best) return { kind: "reuse", hostId: best.hostId };
   return { kind: "launch", requirements: requirementsFor(footprint) };
 }
@@ -266,7 +275,7 @@ export function markReady(host: HostRecord, nowEpochSeconds: number): HostRecord
 
 export function reserve(
   host: HostRecord,
-  request: Readonly<{ sessionId: string; worldId: string; footprint: Footprint; policy: SessionPolicy }>,
+  request: Readonly<{ sessionId: string; worldId: string; footprint: Footprint; policy: SessionPolicy; slot?: number }>,
   nowEpochSeconds: number,
 ): HostRecord {
   requireId("sessionId", request.sessionId);
@@ -275,12 +284,12 @@ export function reserve(
   if (host.reservations.some((reservation) => reservation.sessionId === request.sessionId)) {
     throw new PlacementConflict(`session ${request.sessionId} is already placed on ${host.hostId}`);
   }
-  if (!accepts(host, request.footprint, request.worldId)) {
-    throw new PlacementConflict(`host ${host.hostId} has no room for ${request.worldId}`);
+  if (!accepts(host, request.footprint, request.worldId, request.slot)) {
+    throw new PlacementConflict(`host ${host.hostId} has no room for ${request.worldId}${request.slot === undefined ? "" : ` on slot ${request.slot}`}`);
   }
   const taken = new Set(host.reservations.map((reservation) => reservation.slot));
-  let slot = 0;
-  while (taken.has(slot)) slot += 1;
+  let slot = request.slot ?? 0;
+  if (request.slot === undefined) while (taken.has(slot)) slot += 1;
   const reservation: Reservation = { sessionId: request.sessionId, worldId: request.worldId, slot, footprint: request.footprint, policy: request.policy };
   // A reservation on a draining host cancels the drain: the grace period exists
   // exactly so that a stop followed by a start reuses the machine.

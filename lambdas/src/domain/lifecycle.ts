@@ -33,6 +33,12 @@ export type LifecycleRecord = Readonly<{
   observedState: ObservedServerState;
   activeSessionId: string | null;
   activeWorldId: string | null;
+  /**
+   * What a player types, as the host reported it when the session became
+   * ready (ADR-0033: the address is born on the host). Null until then, and a
+   * record written before this field existed reads as null.
+   */
+  activeSessionAddress?: string | null;
   fencingToken: number;
   lease: Lease | null;
   idle: IdleState | null;
@@ -104,6 +110,7 @@ export function initialLifecycleRecord(
     observedState: "stopped",
     activeSessionId: null,
     activeWorldId: null,
+    activeSessionAddress: null,
     fencingToken: 0,
     lease: null,
     idle: null,
@@ -214,6 +221,7 @@ export function beginSession(
     observedState: "starting",
     activeSessionId: sessionId,
     activeWorldId: worldId,
+    activeSessionAddress: null,
     idle: null,
     updatedAtEpochSeconds: nowEpochSeconds,
   };
@@ -224,14 +232,21 @@ export function markSessionReady(
   ownership: LeaseOwnership,
   sessionId: string,
   nowEpochSeconds: number,
+  connectionAddress: string | null = null,
 ): LifecycleRecord {
   requireOwnership(record, ownership, nowEpochSeconds);
   requireSession(record, sessionId);
-  if (record.observedState === "ready" && record.desiredState === "running") return record;
+  if (connectionAddress !== null && !connectionAddress.trim()) throw new Error("connectionAddress must not be empty");
+  if (record.observedState === "ready" && record.desiredState === "running") {
+    // A repeated mark may bring the address a first one lacked; it never takes one away.
+    return connectionAddress === null || connectionAddress === record.activeSessionAddress
+      ? record
+      : { ...record, activeSessionAddress: connectionAddress, updatedAtEpochSeconds: nowEpochSeconds };
+  }
   if (record.observedState !== "starting" || record.desiredState !== "running") {
     throw new LifecycleConflict("only the starting session can become ready");
   }
-  return { ...record, observedState: "ready", updatedAtEpochSeconds: nowEpochSeconds };
+  return { ...record, observedState: "ready", activeSessionAddress: connectionAddress, updatedAtEpochSeconds: nowEpochSeconds };
 }
 
 export function registerWatchdog(
@@ -378,6 +393,7 @@ export function markStopped(
     observedState: "stopped",
     activeSessionId: null,
     activeWorldId: null,
+    activeSessionAddress: null,
     idle: null,
     updatedAtEpochSeconds: nowEpochSeconds,
   };

@@ -193,3 +193,17 @@ test("a player-race refusal returns the exact stopping session to ready", () => 
   assert.equal(record.idle?.consecutiveEmpty, 0);
   assert.equal(cancelStopping(record, ready.ownership, "session-1", NOW + 7), record);
 });
+
+test("the session's address is the host's answer, kept while the session is ready and cleared when it stops", () => {
+  const acquired = acquireLease(initialLifecycleRecord("minecraft", NOW), "start-op", NOW, 300);
+  const starting = beginSession(acquired.record, acquired.ownership, "session-1", "world-1", NOW + 1);
+  assert.equal(starting.activeSessionAddress, null);
+  const ready = markSessionReady(starting, acquired.ownership, "session-1", NOW + 2, "172.29.23.24:30010");
+  assert.equal(ready.activeSessionAddress, "172.29.23.24:30010");
+  assert.equal(markSessionReady(ready, acquired.ownership, "session-1", NOW + 3), ready, "a repeated mark without an address changes nothing");
+  assert.equal(markSessionReady(ready, acquired.ownership, "session-1", NOW + 3, "172.29.23.24:30010"), ready);
+  const stopping = beginStopping(ready, acquired.ownership, "session-1", NOW + 4);
+  const stopped = markStopped(stopping, acquired.ownership, "session-1", NOW + 5);
+  assert.equal(stopped.activeSessionAddress, null);
+  assert.throws(() => markSessionReady(starting, acquired.ownership, "session-1", NOW + 2, "  "), /connectionAddress/);
+});

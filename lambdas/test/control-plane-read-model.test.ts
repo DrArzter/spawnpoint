@@ -159,3 +159,21 @@ test("a public world's address is the instance's current one, and nothing while 
   assert.equal(whenStopped.get("world"), null, "an ephemeral address does not exist between sessions, so none is shown");
   assert.equal(whenStopped.get("vanilla"), "172.29.23.24:25565", "the overlay address is stable and still shown");
 });
+
+test("a ready session's address is the one the host reported, port and all; a stopped world's is composed", async () => {
+  const { acquireLease, beginSession, markSessionReady } = await import("../src/domain/lifecycle.ts");
+  const acquired = acquireLease(initialLifecycleRecord("minecraft", 100), "op", 100, 300);
+  const ready = markSessionReady(beginSession(acquired.record, acquired.ownership, "s1", "vanilla", 101), acquired.ownership, "s1", 102, "172.29.23.24:30010");
+  const snapshot = await readControlPlaneSnapshot(
+    { ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? ready : null },
+    { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" },
+  );
+  const addresses = new Map(snapshot.games[0]!.worlds.map((world) => [world.id, world.connectionAddress]));
+  assert.equal(addresses.get("vanilla"), "172.29.23.24:30010", "the session on slot one publishes its slot's port");
+  assert.equal(addresses.get("world"), "172.29.23.24:25565", "a world with no session shows where it would be");
+  const withheld = await readControlPlaneSnapshot(
+    { ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? ready : null },
+    { includeInfrastructure: false, includeDesiredRelease: false },
+  );
+  assert.equal(withheld.games[0]!.worlds.find((world) => world.id === "vanilla")?.connectionAddress, null, "a caller who may not read an address reads none, observed or not");
+});

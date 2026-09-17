@@ -30,6 +30,10 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Reservation**: A session's claim on part of a host's capacity, holding a slot. Reservations are recorded on the host and released only after the session's stop has verified its archive. The slot numbers the session's ports.
 
+**Session address**: What a player types to reach a running session — the host part from the world's connectivity strategy, the port from the session's slot — as the host composed it when the session became ready. It is recorded on the lifecycle record for the session's lifetime and never configured. _Avoid_: Connection address as a stored setting.
+
+**Host tier**: The one Prometheus and Grafana a host runs for every session on it, as its own Compose project. It finds a session's exporter by label rather than by name, and outlives any single session. _Avoid_: Session observability for a placed session.
+
 **Drain**: The state of a host with no reservations, waiting out a grace period in which a start may still take it. A drain ends in the host being terminated, or stopped when its last tenant was a `warm` world.
 
 **Headroom**: A deployment's paid choice to keep at least a stated amount of memory free somewhere while anything runs, so the next session lands on a host already up. Zero by default; nothing is kept when nothing runs.

@@ -140,3 +140,15 @@ test("the address is the host's answer, carried by the machine, never echoed fro
   const example = JSON.parse(await readFile(new URL("../../workflows/start-server.input.example.json", import.meta.url), "utf8"));
   assert.ok(!("connectionAddress" in example), "the request carries no address to echo");
 });
+
+test("a placed session's command carries its slot, and a request with no slot runs the command it always ran", async () => {
+  const definition = await loadDefinition();
+  const route = definition.States["Route Session Command"];
+  assert.ok(route);
+  assert.equal(route.Choices?.[0]?.Variable, "$.request.slot");
+  assert.equal(route.Choices?.[0]?.Next, "Start Placed Session Command");
+  assert.equal(route.Default, "Start Session Command");
+  const placed = JSON.stringify(definition.States["Start Placed Session Command"]);
+  assert.match(placed, /States\.Format\('WORLD_ID=\{\} SPAWNPOINT_SLOT=\{\} SESSION_FORMAT=json \/srv\/spawnpoint\/app\/server\/scripts\/start-session\.sh', \$\.request\.worldId, \$\.request\.slot\)/);
+  assert.equal(definition.States["Start Placed Session Command"]?.Next, definition.States["Start Session Command"]?.Next);
+});

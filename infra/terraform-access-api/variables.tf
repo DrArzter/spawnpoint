@@ -126,3 +126,14 @@ variable "connection_host" {
     error_message = "connection_host must be an IPv4 address without a port; the game catalog appends each game's port."
   }
 }
+
+variable "placement" {
+  description = "How a start chooses its host (ADR-0054): `single` starts the configured instance as before; `shared` places the session on a registered host with room, which today is that same instance with other games beside it."
+  type        = string
+  default     = "single"
+
+  validation {
+    condition     = contains(["single", "shared"], var.placement)
+    error_message = "placement must be single or shared."
+  }
+}

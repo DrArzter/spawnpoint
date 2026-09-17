@@ -77,7 +77,7 @@
         {
           "Variable": "$.observed.ssm.InstanceInformationList[0].PingStatus",
           "StringEquals": "Online",
-          "Next": "Stop Session Command"
+          "Next": "Route Stop Command"
         }
       ],
       "Default": "Increment SSM Poll"
@@ -105,6 +105,32 @@
         }
       ],
       "Default": "Wait Before SSM Poll"
+    },
+    "Route Stop Command": {
+      "Type": "Choice",
+      "Comment": "ADR-0054: a placed session is stopped in its own Compose project, which its slot names. A request with no slot runs the command it always ran.",
+      "Choices": [
+        {
+          "Variable": "$.request.slot",
+          "IsPresent": true,
+          "Next": "Stop Placed Session Command"
+        }
+      ],
+      "Default": "Stop Session Command"
+    },
+    "Stop Placed Session Command": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:sendCommand",
+      "Parameters": {
+        "DocumentName": "AWS-RunShellScript",
+        "InstanceIds.$": "States.Array($.request.instanceId)",
+        "Parameters": {
+          "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} SPAWNPOINT_SLOT={} /srv/spawnpoint/app/server/scripts/stop-session.sh', $.request.worldId, $.request.slot))"
+        },
+        "TimeoutSeconds": 900
+      },
+      "ResultPath": "$.observed.command",
+      "Next": "Wait Before Command Poll"
     },
     "Stop Session Command": {
       "Type": "Task",

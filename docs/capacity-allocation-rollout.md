@@ -41,7 +41,7 @@ a default that still says "one host per world" until the acceptance run says oth
 | 3 — footprints as data | Per-game default footprint and per-world override in both catalogs (`gameFootprints` and `footprintForWorld` in the panel's; `footprint` per world and `GAME_FOOTPRINT_*` per module on the host, with a drift test between them); the allowed instance families as a filter; `npm run launch-requirements -- --verify` asks EC2 whether every footprint has an answer. Prices appear nowhere but `docs/costs.md` | Data nobody reads yet. **Landed** |
 | 4 — host-side slot contract | A placed session (`SPAWNPOINT_SLOT`) is a Compose project named for its world, publishes its slot's ports (the game's own on slot zero, a window in the host-wide range otherwise), runs under its footprint's `mem_limit`, and on a slot other than zero leaves the observability tier out; `check-host-activity.sh` counts neighbours across projects. A session with no slot is byte-identical to today. Project Zomboid refuses a slot other than zero until its ini carries the slot's ports | Every deployed workflow starts sessions with no slot. Nothing observable changes. **Landed** |
 | 5 — host records | The placement side of the coordinator: one record per host under a `host#` key in the lifecycle table, `registerHost`, `placeSession`, `reserveOnHost`, `releasePlacement`, `decideDrain`, `concludeDrain`, each a conditional write. The start workflow describes the instance it ran on, registers it with its shape and reserves slot zero for the session; the stop releases the reservation. Every one of those steps fails open into the step the workflow was going to anyway, because nothing reads the records yet | A second kind of item in the table, two IAM statements, and a start or stop that behaves as before when the bookkeeping fails. **Landed** |
-| 6 — placement in start | A `Place Session` step between `Begin Session` and `Start Accepted V1`: read hosts, place, reserve conditionally; on a launch, an EC2 Fleet of type `instant` with the footprint's `InstanceRequirements` and `lowest-price`, the answered instance recorded as the host's shape, then wait for it to answer SSM. Behind a `placement: single \| shared` setting defaulting to `single`, under which it always launches | Identical to today except that EC2, not a variable, names the instance type — and one extra record written |
+| 6 — placement in start | The start carries a `placement` mode from the API's `SPAWNPOINT_PLACEMENT` (`single` by default). Under `shared`, `Begin Session` is followed by registering the configured instance with its shape and asking the coordinator to place the session; a reuse answer names the host and the slot, which every host command carries from then on — the V1 start, the watchdog's probe, the stop, the compensation; a launch answer cancels the session cleanly, because launching is phase 12. The stop finds its session's placement itself, so the world lifecycle's stops and the watchdog's need no change. The V1 machines and the watchdog run the command they always ran when given no slot, so executions begun before this deploy finish as they began. Under `single` nothing changes but the phase-5 bookkeeping | `single`: as before. `shared`: two games on the one configured host, each in its own project and slot; a session nothing has room for is refused and cancelled, never started. **Landed** |
 | 7 — two-level stop | The stop workflow ends with a session-level stop (`keepHost`) plus a release; a new drain machine, started by the release that empties a host, waits the grace period, re-reads and decides; the running-hours alarm covers any tagged host, and a new alarm covers a drain that outlived its period | With `single`, every release empties its host, so every stop is followed by a drain that terminates. Same bill as ADR-0048 plus the grace period |
 | 8 — the address with a port | The strategy of ADR-0033 receives the slot's port; the Route 53 strategy publishes `SRV` for Minecraft; the panel, the bot and `/address` show `host:port` where a name cannot carry it | Slot zero shows the port it shows today |
 | 9 — observability per host | One Prometheus and Grafana per host, scraping every session's exporter by Compose label; dashboards keyed by session | The single-session dashboard keeps working on a one-session host |
@@ -51,8 +51,16 @@ a default that still says "one host per world" until the acceptance run says oth
 
 ## Current phase
 
-Phases 1 to 5 landed on 2026-09-17. Phase 6, placement in the start behind a `placement` setting, is next; it is the
-first phase whose steps are allowed to fail a start.
+Phases 1 to 6 landed on 2026-09-17. Phase 7, the two-level stop with the drain machine, is next.
+
+Two limits of what `shared` can do today, both outside this rollout and both worth knowing before it is switched on:
+
+- **A lifecycle record is one per game (`serverId`), with one active session.** Two worlds of different games share
+  the host; two worlds of the same game still take turns, because the second `beginSession` on the game's record is
+  a conflict. Keying the lifecycle by world is its own change, and not a small one.
+- **The V1 machines may run commands on the configured instance only** (their IAM names its ARN), and launching a
+  host is phase 12, so `shared` places every session on the one instance that exists. That is exactly the case the
+  slot contract was built for — a Factorio beside the modded world — and nothing more yet.
 
 ## What the acceptance run must record
 

@@ -71,7 +71,200 @@
         }
       },
       "ResultPath": null,
+      "Next": "Route Placement Mode"
+    },
+    "Route Placement Mode": {
+      "Type": "Choice",
+      "Comment": "ADR-0054. `single` starts the configured instance as before. `shared` registers that instance and asks the coordinator for a host with room; the answer names the host and the slot every host command carries from here on.",
+      "Choices": [
+        {
+          "Variable": "$.request.placement",
+          "StringEquals": "shared",
+          "Next": "Describe Configured Host"
+        }
+      ],
+      "Default": "Adopt Configured Host"
+    },
+    "Adopt Configured Host": {
+      "Type": "Pass",
+      "Parameters": {
+        "hostId.$": "$.request.instanceId",
+        "slot": ""
+      },
+      "ResultPath": "$.request.placed",
       "Next": "Start Accepted V1"
+    },
+    "Describe Configured Host": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.instanceId)"
+      },
+      "ResultSelector": {
+        "instanceType.$": "$.Reservations[0].Instances[0].InstanceType"
+      },
+      "ResultPath": "$.host",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Placement Unavailable"
+        }
+      ],
+      "Next": "Describe Configured Host Shape"
+    },
+    "Describe Configured Host Shape": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstanceTypes",
+      "Parameters": {
+        "InstanceTypes.$": "States.Array($.host.instanceType)"
+      },
+      "ResultSelector": {
+        "memoryMiB.$": "$.InstanceTypes[0].MemoryInfo.SizeInMiB",
+        "vcpu.$": "$.InstanceTypes[0].VCpuInfo.DefaultVCpus"
+      },
+      "ResultPath": "$.host.shape",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Placement Unavailable"
+        }
+      ],
+      "Next": "Register Configured Host"
+    },
+    "Register Configured Host": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "registerHost",
+          "hostId.$": "$.request.instanceId",
+          "ready": true,
+          "shape": {
+            "instanceType.$": "$.host.instanceType",
+            "memoryMiB.$": "$.host.shape.memoryMiB",
+            "vcpu.$": "$.host.shape.vcpu"
+          }
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Placement Unavailable"
+        }
+      ],
+      "Next": "Place Session"
+    },
+    "Place Session": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "placeSession",
+          "sessionId.$": "$.request.sessionId",
+          "worldId.$": "$.request.worldId",
+          "serverId.$": "$.request.serverId"
+        }
+      },
+      "ResultSelector": {
+        "placement.$": "$.Payload.placement"
+      },
+      "ResultPath": "$.placement",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Placement Unavailable"
+        }
+      ],
+      "Next": "Route Placement"
+    },
+    "Route Placement": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.placement.placement.kind",
+          "StringEquals": "reuse",
+          "Next": "Adopt Placement"
+        }
+      ],
+      "Default": "No Host Has Room"
+    },
+    "Adopt Placement": {
+      "Type": "Pass",
+      "Parameters": {
+        "hostId.$": "$.placement.placement.hostId",
+        "slot.$": "$.placement.placement.slot"
+      },
+      "ResultPath": "$.request.placed",
+      "Next": "Start Accepted V1"
+    },
+    "No Host Has Room": {
+      "Type": "Pass",
+      "Comment": "The coordinator answered with what to launch, and launching is not built yet (ADR-0054, phase 12). The session is cancelled cleanly rather than started on a host that has no room for it.",
+      "Result": { "reason": "no_host_has_room" },
+      "ResultPath": "$.placementRefusal",
+      "Next": "Begin Cancelling Unplaced Session"
+    },
+    "Placement Unavailable": {
+      "Type": "Pass",
+      "Result": { "reason": "placement_unavailable" },
+      "ResultPath": "$.placementRefusal",
+      "Next": "Begin Cancelling Unplaced Session"
+    },
+    "Begin Cancelling Unplaced Session": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "beginStopping",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Mark Unplaced Session Stopped"
+    },
+    "Mark Unplaced Session Stopped": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "markStopped",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Release Unplaced Lease"
+    },
+    "Release Unplaced Lease": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "releaseLease",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership"
+        }
+      },
+      "ResultPath": null,
+      "Next": "Start Refused Unplaced"
+    },
+    "Start Refused Unplaced": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.SessionUnplaced",
+      "Cause": "No registered host has room for this session and launching one is not built yet, or the placement could not be read. Nothing was started; the session was cancelled and its lease released."
     },
     "Start Accepted V1": {
       "Type": "Task",
@@ -81,7 +274,8 @@
         "Name.$": "States.Format('{}-host-start', $.request.operationId)",
         "Input": {
           "operationId.$": "$.request.operationId",
-          "instanceId.$": "$.request.instanceId",
+          "instanceId.$": "$.request.placed.hostId",
+          "slot.$": "$.request.placed.slot",
           "worldId.$": "$.request.worldId",
           "timing.$": "$.request.startTiming"
         }
@@ -91,10 +285,22 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.startFailure",
-          "Next": "Begin Compensating Stop"
+          "Next": "Release Failed Placement"
         }
       ],
-      "Next": "Describe Host"
+      "Next": "Route Bookkeeping"
+    },
+    "Route Bookkeeping": {
+      "Type": "Choice",
+      "Comment": "A placed session already holds its reservation. An unplaced one records the host it ran on and slot zero after the fact, as phase 5 did, and that bookkeeping may fail without failing the start.",
+      "Choices": [
+        {
+          "Variable": "$.request.placement",
+          "StringEquals": "shared",
+          "Next": "Mark Session Ready"
+        }
+      ],
+      "Default": "Describe Host"
     },
     "Describe Host": {
       "Type": "Task",
@@ -229,7 +435,8 @@
           "sessionId.$": "$.request.sessionId",
           "registrationLeaseTtlSeconds.$": "$.request.watchdogRegistrationLeaseTtlSeconds",
           "stopLeaseTtlSeconds.$": "$.request.watchdogStopLeaseTtlSeconds",
-          "instanceId.$": "$.request.instanceId",
+          "instanceId.$": "$.request.placed.hostId",
+          "slot.$": "$.request.placed.slot",
           "worldId.$": "$.request.worldId",
           "timing.$": "$.request.watchdogTiming",
           "stopTiming.$": "$.request.stopTiming"
@@ -259,6 +466,27 @@
         "ownership.$": "$.Payload.ownership"
       },
       "ResultPath": "$.coordination.lease",
+      "Next": "Release Failed Placement"
+    },
+    "Release Failed Placement": {
+      "Type": "Task",
+      "Comment": "A session that will not be ready gives its slot back before the host is stopped. Releasing what was never reserved is not a failure.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "releasePlacement",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Begin Compensating Stop"
+        }
+      ],
       "Next": "Begin Compensating Stop"
     },
     "Ready": {
@@ -297,7 +525,8 @@
         "Name.$": "States.Format('{}-compensate', $.request.operationId)",
         "Input": {
           "operationId.$": "$.request.operationId",
-          "instanceId.$": "$.request.instanceId",
+          "instanceId.$": "$.request.placed.hostId",
+          "slot.$": "$.request.placed.slot",
           "worldId.$": "$.request.worldId",
           "timing.$": "$.request.stopTiming"
         }
@@ -317,7 +546,7 @@
       "Comment": "The verified stop could not run because the game never became healthy enough to save or probe. Stop the billed host as the final cost-safety boundary; the persistent volume remains attached for recovery.",
       "Resource": "arn:aws:states:::aws-sdk:ec2:stopInstances",
       "Parameters": {
-        "InstanceIds.$": "States.Array($.request.instanceId)"
+        "InstanceIds.$": "States.Array($.request.placed.hostId)"
       },
       "ResultPath": "$.coordination.forcedStopRequest",
       "Catch": [{
@@ -336,7 +565,7 @@
       "Type": "Task",
       "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
       "Parameters": {
-        "InstanceIds.$": "States.Array($.request.instanceId)"
+        "InstanceIds.$": "States.Array($.request.placed.hostId)"
       },
       "ResultPath": "$.coordination.forcedStopInstance",
       "Catch": [{

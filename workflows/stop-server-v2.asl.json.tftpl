@@ -89,6 +89,59 @@
         }
       },
       "ResultPath": null,
+      "Next": "Find Placement"
+    },
+    "Find Placement": {
+      "Type": "Task",
+      "Comment": "ADR-0054: a stop is told a session and finds its host and slot itself. A session placed nowhere, or a lookup that fails, stops the requested instance as before.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "findPlacement",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultSelector": {
+        "placement.$": "$.Payload.placement"
+      },
+      "ResultPath": "$.placementLookup",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Adopt Requested Host"
+        }
+      ],
+      "Next": "Route Found Placement"
+    },
+    "Route Found Placement": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.placementLookup.placement",
+          "IsNull": true,
+          "Next": "Adopt Requested Host"
+        }
+      ],
+      "Default": "Adopt Found Placement"
+    },
+    "Adopt Found Placement": {
+      "Type": "Pass",
+      "Parameters": {
+        "hostId.$": "$.placementLookup.placement.hostId",
+        "slot.$": "$.placementLookup.placement.slot"
+      },
+      "ResultPath": "$.request.placed",
+      "Next": "Stop Accepted V1"
+    },
+    "Adopt Requested Host": {
+      "Type": "Pass",
+      "Parameters": {
+        "hostId.$": "$.request.instanceId",
+        "slot": ""
+      },
+      "ResultPath": "$.request.placed",
       "Next": "Stop Accepted V1"
     },
     "Stop Accepted V1": {
@@ -99,7 +152,8 @@
         "Name.$": "States.Format('{}-host-stop', $.request.operationId)",
         "Input": {
           "operationId.$": "$.request.operationId",
-          "instanceId.$": "$.request.instanceId",
+          "instanceId.$": "$.request.placed.hostId",
+          "slot.$": "$.request.placed.slot",
           "worldId.$": "$.request.worldId",
           "timing.$": "$.request.stopTiming"
         }
@@ -137,7 +191,6 @@
         "FunctionName": "${coordinator_function_arn}",
         "Payload": {
           "action": "releasePlacement",
-          "hostId.$": "$.request.instanceId",
           "sessionId.$": "$.request.sessionId"
         }
       },

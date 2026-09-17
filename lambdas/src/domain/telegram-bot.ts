@@ -134,6 +134,8 @@ export function buildStopInput(args: Readonly<{
   };
 }
 
+export type PlacementMode = "single" | "shared";
+
 export function buildLifecycleStartInput(args: Readonly<{
   serverId: string;
   operationId: string;
@@ -141,6 +143,10 @@ export function buildLifecycleStartInput(args: Readonly<{
   instanceId: string;
   worldId: string;
   requestedBy?: string;
+  // ADR-0054: `single` starts the configured instance as before; `shared`
+  // places the session on a registered host with room. The configured
+  // instance is always registered first, so it is always a candidate.
+  placement?: PlacementMode;
 }>) {
   return {
     serverId: args.serverId,
@@ -151,6 +157,7 @@ export function buildLifecycleStartInput(args: Readonly<{
     watchdogStopLeaseTtlSeconds: 1800,
     instanceId: args.instanceId,
     worldId: args.worldId,
+    placement: args.placement ?? "single",
     ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
     startTiming: POLL_TIMING,
     stopTiming: POLL_TIMING,

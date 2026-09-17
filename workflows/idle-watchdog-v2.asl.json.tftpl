@@ -103,10 +103,43 @@
         {
           "Variable": "$.observed.instance.Reservations[0].Instances[0].State.Name",
           "StringEquals": "running",
-          "Next": "Send Structured Probe"
+          "Next": "Route Probe Command"
         }
       ],
       "Default": "Reconcile Externally Stopped Host"
+    },
+    "Route Probe Command": {
+      "Type": "Choice",
+      "Comment": "ADR-0054: a placed session is probed in its own Compose project and on its own RCON port, which its slot names.",
+      "Choices": [
+        {
+          "Variable": "$.request.slot",
+          "IsPresent": true,
+          "Next": "Send Placed Probe"
+        }
+      ],
+      "Default": "Send Structured Probe"
+    },
+    "Send Placed Probe": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:sendCommand",
+      "Parameters": {
+        "DocumentName": "AWS-RunShellScript",
+        "InstanceIds.$": "States.Array($.request.instanceId)",
+        "Parameters": {
+          "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} SPAWNPOINT_SLOT={} PROBE_FORMAT=json /srv/spawnpoint/app/server/scripts/check-session-activity.sh', $.request.worldId, $.request.slot))"
+        },
+        "TimeoutSeconds": 300
+      },
+      "ResultPath": "$.observed.command",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.observed.probeError",
+          "Next": "Record Synthetic Unknown"
+        }
+      ],
+      "Next": "Wait Probe Result"
     },
     "Send Structured Probe": {
       "Type": "Task",

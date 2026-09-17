@@ -145,3 +145,17 @@ test("an empty host that is the fleet's headroom is kept; without headroom it dr
   await coordinate({ action: "releasePlacement", hostId: "i-busy", sessionId: "s1" });
   assert.equal((await coordinate({ action: "decideDrain", hostId: "i-spare", gracePeriodSeconds: 0, headroomMiB: 8 * 1024 })).drain, "terminate", "nothing is kept when nothing runs");
 });
+
+test("a stop finds where its session runs, and can give the slot back knowing only the session", async () => {
+  const fleet = new MemoryFleet();
+  const coordinate = coordinator(fleet);
+  assert.deepEqual(await coordinate({ action: "findPlacement", sessionId: "s1" }), { placement: null });
+  await coordinate({ action: "registerHost", hostId: "i-1", shape: LARGE, ready: true });
+  await coordinate({ action: "reserveOnHost", hostId: "i-1", sessionId: "s1", worldId: "world" });
+  await coordinate({ action: "reserveOnHost", hostId: "i-1", sessionId: "s2", worldId: "vanilla" });
+  assert.deepEqual((await coordinate({ action: "findPlacement", sessionId: "s2" })).placement, { kind: "reuse", hostId: "i-1", slot: 1 });
+  const released = await coordinate({ action: "releasePlacement", sessionId: "s2" });
+  assert.equal(released.released, true);
+  assert.deepEqual(await coordinate({ action: "findPlacement", sessionId: "s2" }), { placement: null });
+  assert.deepEqual(await coordinate({ action: "releasePlacement", sessionId: "s2" }), { released: false });
+});

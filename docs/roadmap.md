@@ -221,6 +221,9 @@ the order they would be worth adding.
 - A test-a-release-before-promoting stage, on a throwaway instance.
 - A rendered world map, published alongside the pack.
 - Implicit DNS wake as a second start trigger, if the cold start proves too visible.
+- Several worlds on one host, placed by footprint, with hosts that drain and terminate when the last session leaves.
+  See [ADR-0054](adr/0054-place-a-session-on-a-host-with-room.md) and
+  [docs/capacity-allocation-rollout.md](capacity-allocation-rollout.md).
 
 ## Working notes
 

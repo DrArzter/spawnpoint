@@ -53,7 +53,7 @@ player-facing feature yet. Read the roadmap for the order.
 | Self-serve account linking | An Owner edits a player's linked game and network accounts in the profile today. The one-time `/link` code of [ADR-0019](docs/adr/0019-account-linking.md) is not built |
 | Whitelist that maintains itself | The Minecraft identity is a third link, and `whitelist.json` is generated from the link table. Remove someone once, and they lose the panel, the bots and the game. [ADR-0022](docs/adr/0022-minecraft-account-as-linked-identity.md), proposed |
 | A world picker in the bot | The panel starts any world; the bot still operates the one world it is configured for |
-| Concurrent worlds on separate hosts | One world is active at a time. The seams are named in the [ADR index](docs/adr/README.md#decisions-still-to-record) |
+| Several worlds at once | One world is active at a time. [ADR-0048](docs/adr/0048-one-instance-per-active-world.md) gives each session its own host; [ADR-0054](docs/adr/0054-place-a-session-on-a-host-with-room.md) places a session on a host with room and launches one that fits when none has; EC2 picks the instance type from the footprint's requirements, so no type or price lives in the code. The placement domain model and its tests exist; the rollout is in [docs/capacity-allocation-rollout.md](docs/capacity-allocation-rollout.md) |
 
 ## Why it exists
 

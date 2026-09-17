@@ -18,7 +18,21 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Wipe**: The player-facing name for a world generation and, by extension, the deliberate transition that closes the current generation and starts the next one. Interfaces may say “current wipe”, “wipe history” and “start new wipe”; internal records retain the precise term world generation.
 
-**Host**: A compute machine capable of running a session. A host is not permanently owned by a world; a session temporarily binds one world to one host. _Avoid_: Server or instance when the domain concept, rather than the AWS resource, is meant.
+**Host**: A compute machine capable of running one or more sessions at once. A host is not permanently owned by a world; a session temporarily binds one world to one host, and a host exists only while at least one session is on it or its grace period has not ended. _Avoid_: Server or instance when the domain concept, rather than the AWS resource, is meant.
+
+**Footprint**: What one world's session needs from a host: a memory figure that becomes the container's hard limit, and a core weight that bounds how many sessions share the host's cores. Declared per world, defaulting per game. It is the unit of placement; it is not the JVM heap, which is smaller.
+
+**Launch requirements**: What a launch asks the cloud for: the footprint beside the system reserve, as minimum memory and minimum cores, within the allowed instance families. Never an instance type and never a price; the cloud answers with the cheapest instance that meets them at that moment.
+
+**Host shape**: What a host turned out to be — the instance type, memory and cores the cloud answered a launch with — recorded on the host. It is read, not chosen. _Avoid_: Instance type when the domain concept is meant.
+
+**Placement**: The decision that binds a starting session to a host: reuse the ready host that would have the least room left, or launch one that meets the footprint's requirements.
+
+**Reservation**: A session's claim on part of a host's capacity, holding a slot. Reservations are recorded on the host and released only after the session's stop has verified its archive. The slot numbers the session's ports.
+
+**Drain**: The state of a host with no reservations, waiting out a grace period in which a start may still take it. A drain ends in the host being terminated, or stopped when its last tenant was a `warm` world.
+
+**Headroom**: A deployment's paid choice to keep at least a stated amount of memory free somewhere while anything runs, so the next session lands on a host already up. Zero by default; nothing is kept when nothing runs.
 
 **Release**: An immutable, content-verified build of one preset containing the exact server configuration and mod versions. Its canonical identity is the preset plus a version unique within that preset, such as `industrial@2.1`; a bare version is meaningful only inside an already selected preset.
 

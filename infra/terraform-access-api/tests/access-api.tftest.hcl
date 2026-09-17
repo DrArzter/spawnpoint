@@ -215,6 +215,23 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
 
   assert {
     condition = (
+      length(data.aws_iam_policy_document.api_gateway_cloudwatch.statement) == 1 &&
+      tolist(data.aws_iam_policy_document.api_gateway_cloudwatch.statement)[0].resources == toset(["*"]) &&
+      tolist(data.aws_iam_policy_document.api_gateway_cloudwatch.statement)[0].actions == toset([
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+        "logs:FilterLogEvents",
+        "logs:GetLogEvents",
+        "logs:PutLogEvents",
+      ])
+    )
+    error_message = "The CloudWatch role must carry exactly the permissions of AmazonAPIGatewayPushToCloudWatchLogs on every resource; API Gateway refuses a narrower policy when the account setting is written."
+  }
+
+  assert {
+    condition = (
       aws_lambda_function.control_plane_subscriptions.environment[0].variables.CONTROL_PLANE_VIEW_TABLE == "spawnpoint-control-plane-view" &&
       contains(keys(aws_lambda_function.control_plane_subscriptions.environment[0].variables), "CONTROL_PLANE_WEBSOCKET_CALLBACK_URL")
     )

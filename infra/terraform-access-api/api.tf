@@ -168,6 +168,7 @@ resource "aws_lambda_function" "access_api" {
       RELEASE_BUCKET                   = data.aws_s3_bucket.releases.id
       BACKUP_BUCKET                    = data.aws_s3_bucket.backups.id
       CONNECTION_HOST                  = var.connection_host
+      SPAWNPOINT_PLACEMENT             = var.placement
       REFRESH_COOKIE_SAME_SITE         = local.custom_api_domain_enabled ? "Strict" : "None"
     }
   }

@@ -84,3 +84,15 @@ test("already stopped is a successful idempotent result", async () => {
   assert.ok(alreadyStopped);
   assert.equal(alreadyStopped.End, true);
 });
+
+test("a placed session is stopped in the project its slot names; a request with no slot runs the command it always ran", async () => {
+  const definition = await loadDefinition();
+  const route = definition.States["Route Stop Command"];
+  assert.ok(route);
+  assert.equal(route.Choices?.[0]?.Variable, "$.request.slot");
+  assert.equal(route.Choices?.[0]?.Next, "Stop Placed Session Command");
+  assert.equal(route.Default, "Stop Session Command");
+  const placed = JSON.stringify(definition.States["Stop Placed Session Command"]);
+  assert.match(placed, /WORLD_ID=\{\} SPAWNPOINT_SLOT=\{\} \/srv\/spawnpoint\/app\/server\/scripts\/stop-session\.sh', \$\.request\.worldId, \$\.request\.slot\)/);
+  assert.equal(definition.States["Stop Placed Session Command"]?.Next, definition.States["Stop Session Command"]?.Next);
+});

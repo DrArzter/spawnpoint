@@ -64,20 +64,23 @@ test("V2 start owns lifecycle around the accepted V1 host operation", async () =
   assert.equal(definition.QueryLanguage, "JSONPath");
   assert.equal(state(definition, "Acquire Start Lease").Resource, "arn:aws:states:::lambda:invoke");
   assert.equal(state(definition, "Start Accepted V1").Resource, "arn:aws:states:::states:startExecution.sync:2");
-  assert.equal(state(definition, "Start Accepted V1").Next, "Describe Host");
+  assert.equal(state(definition, "Start Accepted V1").Next, "Route Bookkeeping");
+  assert.equal(state(definition, "Route Bookkeeping").Default, "Describe Host");
   assert.equal(state(definition, "Reserve Slot Zero").Next, "Mark Session Ready");
   assert.equal(state(definition, "Mark Session Ready").Next, "Release Start Lease");
   assert.equal(state(definition, "Release Start Lease").Next, "Start Session Watchdog");
   assert.equal(state(definition, "Start Session Watchdog").Resource, "arn:aws:states:::aws-sdk:sfn:startExecution");
   assert.equal(state(definition, "Start Session Watchdog").Next, "Ready");
   assert.equal(state(definition, "Start Session Watchdog").Catch?.[0]?.Next, "Acquire Watchdog Compensation Lease");
-  assert.equal(state(definition, "Acquire Watchdog Compensation Lease").Next, "Begin Compensating Stop");
+  assert.equal(state(definition, "Acquire Watchdog Compensation Lease").Next, "Release Failed Placement");
+  assert.equal(state(definition, "Release Failed Placement").Next, "Begin Compensating Stop");
 });
 
 test("a failed V1 start is durably stopped before lifecycle is cleared", async () => {
   const definition = await loadDefinition();
 
-  assert.equal(state(definition, "Start Accepted V1").Catch?.[0]?.Next, "Begin Compensating Stop");
+  assert.equal(state(definition, "Start Accepted V1").Catch?.[0]?.Next, "Release Failed Placement");
+  assert.equal(state(definition, "Release Failed Placement").Catch?.[0]?.Next, "Begin Compensating Stop", "giving a slot back never blocks the compensation");
   assert.equal(state(definition, "Begin Compensating Stop").Next, "Stop Accepted V1");
   assert.equal(state(definition, "Stop Accepted V1").Resource, "arn:aws:states:::states:startExecution.sync:2");
   assert.equal(
@@ -96,7 +99,7 @@ test("a failed verified compensation force-stops the billed host with a bounded 
   assert.equal(state(definition, "Stop Accepted V1").Catch?.[0]?.Next, "Force Stop Failed Start Host");
   assert.equal(state(definition, "Force Stop Failed Start Host").Resource, "arn:aws:states:::aws-sdk:ec2:stopInstances");
   assert.deepEqual(state(definition, "Force Stop Failed Start Host").Parameters, {
-    "InstanceIds.$": "States.Array($.request.instanceId)",
+    "InstanceIds.$": "States.Array($.request.placed.hostId)",
   });
   assert.equal(state(definition, "Describe Forced Stop Host").Resource, "arn:aws:states:::aws-sdk:ec2:describeInstances");
   assert.equal(state(definition, "Forced Stop Host Stopped").Default, "Increment Forced Stop Poll");
@@ -157,6 +160,57 @@ test("the stop releases the session's reservation after the verified stop, and t
   assert.equal(release.Catch?.[0]?.Next, "Release Stop Lease");
   const payload = release.Parameters?.Payload as Record<string, unknown>;
   assert.equal(payload.action, "releasePlacement");
-  assert.equal(payload["hostId.$"], "$.request.instanceId");
   assert.equal(payload["sessionId.$"], "$.request.sessionId");
+  assert.equal("hostId.$" in payload, false, "the reservation is found by session, wherever the session was placed");
+});
+
+test("the placement mode routes the start: single adopts the configured host, shared asks the coordinator", async () => {
+  const definition = await loadDefinition();
+  assert.equal(state(definition, "Begin Session").Next, "Route Placement Mode");
+  const route = state(definition, "Route Placement Mode");
+  assert.equal(route.Choices?.[0]?.Variable, "$.request.placement");
+  assert.equal(route.Choices?.[0]?.Next, "Describe Configured Host");
+  assert.equal(route.Default, "Adopt Configured Host");
+  assert.deepEqual(state(definition, "Adopt Configured Host").Parameters, { "hostId.$": "$.request.instanceId", slot: "" });
+  assert.equal(state(definition, "Adopt Configured Host").Next, "Start Accepted V1");
+
+  // Shared: the configured host is always registered, so it is always a candidate.
+  const chain = ["Describe Configured Host", "Describe Configured Host Shape", "Register Configured Host", "Place Session"];
+  for (const [index, name] of chain.entries()) {
+    const current = state(definition, name);
+    assert.equal(current.Next, chain[index + 1] ?? "Route Placement");
+    assert.equal(current.Catch?.[0]?.Next, "Placement Unavailable", `${name} refuses rather than starting unplaced`);
+  }
+  assert.equal((state(definition, "Place Session").Parameters?.Payload as Record<string, unknown>).action, "placeSession");
+  assert.equal(state(definition, "Route Placement").Choices?.[0]?.Next, "Adopt Placement");
+  assert.equal(state(definition, "Route Placement").Default, "No Host Has Room");
+  assert.deepEqual(state(definition, "Adopt Placement").Parameters, { "hostId.$": "$.placement.placement.hostId", "slot.$": "$.placement.placement.slot" });
+  assert.equal(state(definition, "Adopt Placement").Next, "Start Accepted V1");
+  assert.equal(state(definition, "Route Bookkeeping").Choices?.[0]?.Next, "Mark Session Ready", "a placed session already holds its reservation");
+
+  // Every host command from here on names the placed host and slot.
+  const nested = state(definition, "Start Accepted V1").Parameters?.Input as Record<string, string>;
+  assert.equal(nested["instanceId.$"], "$.request.placed.hostId");
+  assert.equal(nested["slot.$"], "$.request.placed.slot");
+  const watchdog = state(definition, "Start Session Watchdog").Parameters?.Input as Record<string, string>;
+  assert.equal(watchdog["instanceId.$"], "$.request.placed.hostId");
+  assert.equal(watchdog["slot.$"], "$.request.placed.slot");
+  const compensate = state(definition, "Stop Accepted V1").Parameters?.Input as Record<string, string>;
+  assert.equal(compensate["instanceId.$"], "$.request.placed.hostId");
+  assert.equal(compensate["slot.$"], "$.request.placed.slot");
+  assert.ok(!JSON.stringify(definition.States["Describe Forced Stop Host"]).includes("$.request.instanceId"));
+});
+
+test("a session nothing has room for is cancelled cleanly, not started", async () => {
+  const definition = await loadDefinition();
+  for (const name of ["No Host Has Room", "Placement Unavailable"]) {
+    assert.equal(state(definition, name).Next, "Begin Cancelling Unplaced Session");
+  }
+  assert.equal((state(definition, "Begin Cancelling Unplaced Session").Parameters?.Payload as Record<string, unknown>).action, "beginStopping");
+  assert.equal(state(definition, "Begin Cancelling Unplaced Session").Next, "Mark Unplaced Session Stopped");
+  assert.equal((state(definition, "Mark Unplaced Session Stopped").Parameters?.Payload as Record<string, unknown>).action, "markStopped");
+  assert.equal(state(definition, "Mark Unplaced Session Stopped").Next, "Release Unplaced Lease");
+  assert.equal(state(definition, "Release Unplaced Lease").Next, "Start Refused Unplaced");
+  assert.equal(state(definition, "Start Refused Unplaced").Type, "Fail");
+  assert.ok(!JSON.stringify(definition.States["No Host Has Room"]).includes("startExecution"), "nothing is started on a host without room");
 });

@@ -4,7 +4,7 @@ import { liveApi, liveAuthConfigured } from "./api/live";
 
 export type {
   AccessCandidate, AccessIdentity, AccessRole, AccountProfile, ActiveSession, AuthState, BackupEntry, BackupInventory,
-  HostMetrics, HostMetricSeries, InvitationRecipient, InvitationSummary, LoginProviderId, MetricRange, SessionOperation,
+  HostMetrics, HostMetricSeries, InvitationRecipient, InvitationSummary, LoginOptions, LoginProviderId, MetricRange, SessionOperation,
   SpawnpointApi, SpawnpointSession, SubscriptionState, VisitorSession, WorldLifecycleAction,
 } from "./api/contract";
 import type { MetricRange } from "./api/contract";
@@ -20,7 +20,7 @@ export function authConfigured(): boolean {
 }
 
 export const restoreAuth = (): ReturnType<SpawnpointApi["restoreSession"]> => api.restoreSession();
-export const loadLoginProviders = () => api.loadLoginProviders();
+export const loadLoginOptions = () => api.loadLoginOptions();
 export const exchangeTelegramOidc = (idToken: string) => api.exchangeTelegramOidc(idToken);
 export const signInWithPassword = (email: string, password: string) => api.signInWithPassword(email, password);
 export const registerWithPassword = (email: string, password: string, displayName: string) => api.registerWithPassword(email, password, displayName);

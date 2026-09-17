@@ -3,7 +3,6 @@ import { randomBytes } from "node:crypto";
 import type { LoginPrincipal } from "./login-session.ts";
 import type { LoginAttempt, LoginProvider } from "./login-provider.ts";
 import {
-  afterFailedSignIn,
   hashPassword,
   normalizeEmail,
   passwordMaximumLength,
@@ -26,7 +25,8 @@ export type PasswordCredential = Readonly<{
 // table: it asks for one credential and reports what the attempt did to it.
 export type PasswordCredentialStore = Readonly<{
   find(email: string): Promise<PasswordCredential | null>;
-  recordFailure(email: string, guard: SignInGuard): Promise<void>;
+  /** Persist one failed attempt without losing concurrent failures. */
+  recordFailure(email: string, observed: SignInGuard, nowSeconds: number): Promise<void>;
   recordSuccess(email: string): Promise<void>;
 }>;
 
@@ -72,7 +72,7 @@ export function createPasswordLoginProvider(dependencies: PasswordLoginProviderD
         return null;
       }
       if (!await verifyPassword(password, credential.passwordHash)) {
-        await dependencies.credentials.recordFailure(email, afterFailedSignIn(credential.guard, nowSeconds));
+        await dependencies.credentials.recordFailure(email, credential.guard, nowSeconds);
         return null;
       }
       // A clean guard is left alone: a write per sign-in would be a write that

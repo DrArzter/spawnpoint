@@ -90,7 +90,7 @@ export async function hashPassword(password: string): Promise<string> {
 type StoredHash = Readonly<{ parameters: ScryptParameters; salt: Buffer; key: Buffer }>;
 
 function positiveInteger(value: string | undefined, ceiling: number): number | null {
-  if (value === undefined || !/^[1-9][0-9]*$/.test(value)) return null;
+  if (value === undefined || !/^[1-9]\d*$/.test(value)) return null;
   const parsed = Number(value);
   return parsed <= ceiling ? parsed : null;
 }

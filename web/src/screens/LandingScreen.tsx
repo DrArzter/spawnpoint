@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { authConfigured, AuthState, endSession } from "../auth";
+import { authConfigured, AuthState, endSession, loadLoginOptions } from "../auth";
 import { Avatar } from "../components/Avatar";
 import { SignInMode, SignInPanel } from "../components/SignIn";
 import { Button, IconButton } from "../components/ui/Button";
@@ -24,7 +24,17 @@ export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; on
   const session = auth.status === "authenticated" && auth.session.state === "active" ? auth.session : null;
   const visitor = auth.status === "authenticated" && auth.session.state === "visitor" ? auth.session : null;
   const [signIn, setSignIn] = useState<SignInMode | null>(null);
+  const [passwordRegistrationOffered, setPasswordRegistrationOffered] = useState(false);
   const signedOut = !session && !visitor && auth.status !== "loading";
+
+  useEffect(() => {
+    if (!signedOut || !configured) return;
+    let active = true;
+    void loadLoginOptions().then((options) => {
+      if (active) setPasswordRegistrationOffered(options.selfRegistration.includes("password"));
+    });
+    return () => { active = false; };
+  }, [configured, signedOut]);
 
   return (
     <div className="landing-shell">
@@ -80,7 +90,7 @@ export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; on
             </p>
             <div className="landing-links">
               {session && <a className="landing-link" href={CONSOLE_HASH}>Open the console<Icon name="chevron_right" size={18} /></a>}
-              {signedOut && configured && <button className="landing-link" onClick={() => setSignIn("register")} type="button">Create an account<Icon name="chevron_right" size={18} /></button>}
+              {signedOut && configured && passwordRegistrationOffered && <button className="landing-link" onClick={() => setSignIn("register")} type="button">Create an account<Icon name="chevron_right" size={18} /></button>}
               <a className="landing-link" href={demoUrl()}>Try the demo<Icon name="chevron_right" size={18} /></a>
               <a className="landing-link" href="#what-the-console-does">What the console does<Icon name="chevron_right" size={18} /></a>
             </div>

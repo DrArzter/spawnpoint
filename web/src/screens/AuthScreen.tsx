@@ -6,17 +6,21 @@ import { SignInPanel } from "../components/SignIn";
 import { Button } from "../components/ui/Button";
 import { SpawnpointMark } from "../shell/AppBar";
 
+function visitorAccount(auth: AuthState): string {
+  if (auth.status !== "authenticated" || auth.session.state !== "visitor") return "";
+  const candidate = auth.session.candidate;
+  if (candidate.telegramId === null) return candidate.email ?? candidate.platformUserId;
+  const username = candidate.username ? ` · @${candidate.username}` : "";
+  return `Telegram ID ${candidate.telegramId}${username}`;
+}
+
 export function AuthScreen({ auth, onChange }: { auth: AuthState; onChange: (state: AuthState) => void }) {
   const [requesting, setRequesting] = useState(false);
   const [requestError, setRequestError] = useState("");
   const visitor = auth.status === "authenticated" && auth.session.state === "visitor" ? auth.session : null;
   const requested = visitor?.candidate.status === "REQUESTED" || requesting;
   // The account the person is signed in through, in the platform's own terms.
-  const account = visitor === null
-    ? ""
-    : visitor.candidate.telegramId !== null
-      ? `Telegram ID ${visitor.candidate.telegramId}${visitor.candidate.username ? ` · @${visitor.candidate.username}` : ""}`
-      : visitor.candidate.email ?? visitor.candidate.platformUserId;
+  const account = visitorAccount(auth);
 
   async function sendRequest() {
     setRequestError("");

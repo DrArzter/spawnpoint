@@ -41,6 +41,12 @@ function candidateAccount(candidate: AccessCandidate): string {
   return candidate.username ? `@${candidate.username}` : "Telegram account";
 }
 
+function bootstrapDescription(bootstrap: OwnerBootstrap): string | undefined {
+  if (bootstrap.state === "claimed") return undefined;
+  const configuredAccount = bootstrap.telegramId ? ` (${bootstrap.telegramId})` : "";
+  return `Sign in with the configured Telegram account${configuredAccount} to create the first Owner.`;
+}
+
 export function AccessScreen({ bootstrap, games, members, roles, tab, onMembersChange, onRolesChange, onTabChange }: {
   bootstrap: OwnerBootstrap;
   games: readonly Game[];
@@ -245,7 +251,7 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
 
       <Card
         actions={<Status kind={bootstrap.state === "claimed" ? "ok" : "warning"} label={bootstrap.state === "claimed" ? "Complete" : "Action required"} />}
-        description={bootstrap.state === "claimed" ? undefined : `Sign in with the configured Telegram account${bootstrap.telegramId ? ` (${bootstrap.telegramId})` : ""} to create the first Owner.`}
+        description={bootstrapDescription(bootstrap)}
         flush
         title="Initial owner"
       >

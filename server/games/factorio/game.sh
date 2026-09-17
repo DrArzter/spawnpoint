@@ -22,6 +22,10 @@ GAME_CONNECT_PROTOCOL="udp"
 # nobody. Identity verification belongs to a visible, credentialed server; a
 # world that runs one declares `auth: game` in the catalog (ADR-0033).
 GAME_DEFAULT_AUTH="none"
+# What a session is placed with and limited to (ADR-0054). Factorio is a
+# native server: a couple of gigabytes hold a large base.
+GAME_FOOTPRINT_MEMORY_MIB="2048"
+GAME_FOOTPRINT_CORES="0.5"
 
 FACTORIO_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 FACTORIO_DATA_DIR="${FACTORIO_DATA_DIR:-${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${FACTORIO_GAME_DIR}/data}}"

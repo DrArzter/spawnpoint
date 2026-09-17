@@ -32,6 +32,7 @@ Optional per-world fields, each defaulting to the behaviour that predates its ax
 | `connectivity` | `zerotier` | The strategy that publishes the world ([ADR-0033](../../docs/adr/0033-connectivity-as-a-strategy.md)) |
 | `auth` | the game's own model | Declared override: `external` states that authentication is handled outside the game defaults, which lets a non-gating strategy publish the world |
 | `profile_source` | the catalog-level `profile_source` | This world's own authoring repository and pinned commit — authoring lives one repository per game, and a pin bump for one world must not invalidate another world's prepared marker |
+| `footprint` | the game module's `GAME_FOOTPRINT_*` | `{ "memory_mib", "cores" }`: what a session of this world is placed with and limited to ([ADR-0054](../../docs/adr/0054-place-a-session-on-a-host-with-room.md)) — the container's memory, not the heap, and a core weight. The panel's catalog carries the same figures, and a test keeps them equal |
 
 The catalog validator enforces the gate-versus-auth invariant statically: a world with no authentication on a
 non-gating connectivity is not a loadable catalog. An open server is always a diff someone wrote, never a default

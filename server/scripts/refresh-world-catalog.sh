@@ -55,6 +55,9 @@ if ${registry_record}; then
     (.preset.profile_digest | type == "string" and test("^[0-9a-f]{64}$")) and
     (.current_generation.id | type == "string" and test("^gen-[0-9a-f]{32}$")) and
     (.current_generation.release | type == "string" and test("^[0-9]+\\.[0-9]+$")) and
+    ((has("footprint") | not) or (
+      (.footprint.memory_mib | type == "number" and . == floor and . > 0) and
+      (.footprint.cores | type == "number" and . > 0))) and
     ((.current_generation.source // {kind: "preset"}) as $source |
       ($source.kind == "preset") or
       ($source.kind == "backup" and
@@ -79,7 +82,7 @@ if ${registry_record}; then
         checksum: $record[0].current_generation.source.checksum,
         source_generation_id: $record[0].current_generation.source.generation_id
       }
-    } else {} end)
+    } else {} end) + (if $record[0].footprint then {footprint: $record[0].footprint} else {} end)
     ])
   ' "${BASE_CATALOG}" >"${stage}"
 elif jq -e --arg id "${world_id}" 'any(.worlds[]; .id == $id)' "${BASE_CATALOG}" >/dev/null; then

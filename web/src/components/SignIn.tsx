@@ -81,7 +81,7 @@ export function SignInPanel({ onChange, initialMode = "sign-in" }: Readonly<{ on
 
   if (sent !== null) {
     return (
-      <div className="signin signin-sent" role="status">
+      <output className="signin signin-sent">
         <div className="boot-copy">
           <h2>Check your email</h2>
           <p>
@@ -101,7 +101,7 @@ export function SignInPanel({ onChange, initialMode = "sign-in" }: Readonly<{ on
         )}
         {error && <p className="boot-error" role="alert">{error}</p>}
         <Button onClick={() => switchMode("sign-in")} variant="text">Back to sign in</Button>
-      </div>
+      </output>
     );
   }
 

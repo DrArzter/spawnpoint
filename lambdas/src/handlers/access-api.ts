@@ -1,6 +1,14 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge";
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  TransactWriteCommand,
+  UpdateCommand,
+  type TransactWriteCommandInput,
+} from "@aws-sdk/lib-dynamodb";
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { randomUUID } from "node:crypto";
 
@@ -1172,6 +1180,22 @@ async function readEmailAction(event: Event, purpose: EmailActionPurpose): Promi
   return item === null ? response(400, { error: "invalid_or_expired_email_action" }) : { tokenHash, item };
 }
 
+type TransactionItem = NonNullable<TransactWriteCommandInput["TransactItems"]>[number];
+
+function consumeEmailActionUpdate(tokenHash: string, item: Item, now: string): TransactionItem {
+  return { Update: {
+    TableName: tableName,
+    Key: emailActionKey(tokenHash),
+    UpdateExpression: "SET #status = :used, used_at = :now",
+    ConditionExpression: "#status = :pending AND nonce = :nonce AND expires_at > :nowEpoch",
+    ExpressionAttributeNames: { "#status": "status" },
+    ExpressionAttributeValues: {
+      ":used": "USED", ":pending": "PENDING", ":now": now, ":nonce": item.nonce,
+      ":nowEpoch": Math.floor(Date.now() / 1000),
+    },
+  } };
+}
+
 async function verifyEmail(event: Event): Promise<Response> {
   const found = await readEmailAction(event, "verify_email");
   if ("statusCode" in found) return found;
@@ -1180,7 +1204,7 @@ async function verifyEmail(event: Event): Promise<Response> {
   const subject = String(item.subject);
   const credentialResult = await document.send(new GetCommand({ TableName: tableName, Key: credentialKey(email), ConsistentRead: true }));
   const credential = credentialResult.Item === undefined ? null : credentialFromItem(credentialResult.Item);
-  if (credential === null || credential.subject !== subject) return response(400, { error: "invalid_or_expired_email_action" });
+  if (credential?.subject !== subject) return response(400, { error: "invalid_or_expired_email_action" });
   const now = new Date().toISOString();
   try {
     await document.send(new TransactWriteCommand({ TransactItems: [
@@ -1191,17 +1215,7 @@ async function verifyEmail(event: Event): Promise<Response> {
         ConditionExpression: "subject = :subject AND email_verification_nonce = :nonce",
         ExpressionAttributeValues: { ":verified": true, ":now": now, ":subject": subject, ":nonce": item.nonce },
       } },
-      { Update: {
-        TableName: tableName,
-        Key: emailActionKey(tokenHash),
-        UpdateExpression: "SET #status = :used, used_at = :now",
-        ConditionExpression: "#status = :pending AND nonce = :nonce AND expires_at > :nowEpoch",
-        ExpressionAttributeNames: { "#status": "status" },
-        ExpressionAttributeValues: {
-          ":used": "USED", ":pending": "PENDING", ":now": now, ":nonce": item.nonce,
-          ":nowEpoch": Math.floor(Date.now() / 1000),
-        },
-      } },
+      consumeEmailActionUpdate(tokenHash, item, now),
     ] }));
   } catch (error) {
     if (error instanceof Error && error.name === "TransactionCanceledException") {
@@ -1218,7 +1232,7 @@ async function requestPasswordReset(event: Event): Promise<Response> {
   const email = normalizeEmail(objectBody(event)?.email);
   if (email === null) return response(202, { result: "accepted" });
   const credential = await passwordCredentials.find(email);
-  if (credential === null || !credential.emailVerified) return response(202, { result: "accepted" });
+  if (!credential?.emailVerified) return response(202, { result: "accepted" });
   const action = await replaceEmailAction("reset_password", credential);
   await deliverEmailAction("reset_password", action, credential);
   return response(202, { result: "accepted" });
@@ -1264,17 +1278,7 @@ async function resetPassword(event: Event): Promise<Response> {
           ":subject": subject, ":verified": true, ":nonce": item.nonce,
         },
       } },
-      { Update: {
-        TableName: tableName,
-        Key: emailActionKey(tokenHash),
-        UpdateExpression: "SET #status = :used, used_at = :now",
-        ConditionExpression: "#status = :pending AND nonce = :nonce AND expires_at > :nowEpoch",
-        ExpressionAttributeNames: { "#status": "status" },
-        ExpressionAttributeValues: {
-          ":used": "USED", ":pending": "PENDING", ":now": now, ":nonce": item.nonce,
-          ":nowEpoch": Math.floor(Date.now() / 1000),
-        },
-      } },
+      consumeEmailActionUpdate(tokenHash, item, now),
     ] }));
   } catch (error) {
     if (error instanceof Error && error.name === "TransactionCanceledException") {
@@ -1299,8 +1303,8 @@ async function identityAccounts(identity: Identity): Promise<Item[]> {
 async function linkedAccounts(identity: Identity): Promise<Response> {
   const accounts = await identityAccounts(identity);
   const linked = await Promise.all(accounts.map(async (account) => {
-    const provider = String(account.platform ?? "");
-    const subject = String(account.platform_user_id ?? "");
+    const provider = typeof account.platform === "string" ? account.platform : "";
+    const subject = typeof account.platform_user_id === "string" ? account.platform_user_id : "";
     let verified = true;
     if (provider === passwordProviderId && typeof account.email === "string") {
       verified = (await passwordCredentials.find(account.email))?.emailVerified === true;

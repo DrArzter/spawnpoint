@@ -1,6 +1,6 @@
 import { Appearance } from "../components/Appearance";
 import { Avatar } from "../components/Avatar";
-import { LinkedAccounts } from "../components/LinkedAccounts";
+import { LoginAccounts } from "../components/LoginAccounts";
 import { Button } from "../components/ui/Button";
 import { Chip } from "../components/ui/Chip";
 import { Card, Details, Ghost, PageHeader } from "../components/ui/Surfaces";
@@ -25,6 +25,7 @@ type ProfileScreenProps = Readonly<{
 }>;
 
 export function ProfileScreen({ appearance, member, role, viewer, onSignOut }: ProfileScreenProps) {
+  const provider = viewer.provider?.replaceAll(/[-_]/g, " ").replace(/^./, (letter) => letter.toUpperCase()) ?? "Unknown";
   return (
     <div className="page">
       <PageHeader
@@ -42,8 +43,8 @@ export function ProfileScreen({ appearance, member, role, viewer, onSignOut }: P
           { label: "Display name", value: member.name },
           { label: "Profile photo", value: viewer.photoUrl ? <Avatar name={member.name} photoUrl={viewer.photoUrl} /> : <Ghost>Not set</Ghost> },
           { label: "Role", value: role?.name ?? "No role", hint: role ? plural(role.permissions.length, "permission") : undefined },
-          { label: "Signed in with", value: viewer.provider === "password" ? "Email and password" : "Telegram" },
-          ...(viewer.email ? [{ label: "Email", value: viewer.email, copy: viewer.email, explain: "Your sign-in name. Nothing is sent to it yet, so it is listed as unverified." }] : []),
+          { label: "Current sign-in", value: provider },
+          ...(viewer.email ? [{ label: "Session email", value: viewer.email, copy: viewer.email, explain: "The address supplied by the sign-in method used for this session." }] : []),
           {
             label: "Identity ID",
             value: member.id,
@@ -54,9 +55,7 @@ export function ProfileScreen({ appearance, member, role, viewer, onSignOut }: P
         ]} label="Identity details" />
       </Card>
       <Appearance appearance={appearance} />
-      {/* The account id and the handle describe a linked account, not the
-          identity that holds it, so they are read where that account is. */}
-      <LinkedAccounts handles={{ telegram: viewer.username }} member={member} />
+      <LoginAccounts displayName={member.name} />
     </div>
   );
 }

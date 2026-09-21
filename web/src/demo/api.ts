@@ -15,7 +15,7 @@ export const demoApi: SpawnpointApi = {
 
   async loadLoginOptions() {
     await demoLatency();
-    return { providers: ["password" as const, "telegram" as const], selfRegistration: ["password" as const] };
+    return { providers: ["password" as const, "telegram" as const], selfRegistration: ["password" as const], emailActions: true };
   },
 
   async exchangeTelegramOidc(): Promise<AuthState> {
@@ -30,13 +30,49 @@ export const demoApi: SpawnpointApi = {
     return { status: "authenticated", session: demoSession };
   },
 
-  async registerWithPassword(): Promise<AuthState> {
+  async registerWithPassword(email: string) {
+    await demoLatency();
+    return { result: "verification_sent" as const, email };
+  },
+
+  async resendEmailVerification(): Promise<void> {
+    await demoLatency();
+  },
+
+  async verifyEmail(): Promise<AuthState> {
     await demoLatency();
     return { status: "authenticated", session: demoSession };
   },
 
+  async requestPasswordReset(): Promise<void> {
+    await demoLatency();
+  },
+
+  async resetPassword(): Promise<void> {
+    await demoLatency();
+  },
+
   async revokeSession(): Promise<void> {
     clearDemoFlag();
+  },
+
+  async loadLinkedAccounts() {
+    await demoLatency();
+    return {
+      passwordManagementAvailable: true,
+      accounts: [
+        { provider: "telegram", subject: "1780660807", displayName: "DrArzter", username: "drarzter", email: null, photoUrl: null, verified: true },
+        { provider: "password", subject: "demo-password", displayName: "DrArzter", username: null, email: "drarzter@example.dev", photoUrl: null, verified: true },
+      ],
+    };
+  },
+
+  async linkPassword(): Promise<void> {
+    await demoLatency();
+  },
+
+  async changePassword(): Promise<void> {
+    await demoLatency();
   },
 
   async requestAccess(): Promise<void> {

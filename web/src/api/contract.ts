@@ -163,6 +163,22 @@ export type LoginOptions = Readonly<{
   providers: readonly LoginProviderId[];
   /** Providers through which an anonymous visitor may create a credential. */
   selfRegistration: readonly LoginProviderId[];
+  emailActions: boolean;
+}>;
+
+export type LinkedLoginAccount = Readonly<{
+  provider: string;
+  subject: string;
+  displayName: string | null;
+  username: string | null;
+  email: string | null;
+  photoUrl: string | null;
+  verified: boolean;
+}>;
+
+export type LinkedLoginAccounts = Readonly<{
+  accounts: readonly LinkedLoginAccount[];
+  passwordManagementAvailable: boolean;
 }>;
 
 /**
@@ -175,11 +191,19 @@ export type SpawnpointApi = Readonly<{
   /** Which ways in the deployment offers, and which accept anonymous registration. */
   loadLoginOptions(): Promise<LoginOptions>;
   exchangeTelegramOidc(idToken: string): Promise<AuthState>;
-  /** Both resolve to a session or throw a sentence the form can show beside its fields. */
+  /** Resolves to a session or throws a sentence the form can show beside its fields. */
   signInWithPassword(email: string, password: string): Promise<AuthState>;
-  registerWithPassword(email: string, password: string, displayName: string): Promise<AuthState>;
+  registerWithPassword(email: string, password: string, displayName: string): Promise<{ result: "verification_sent"; email: string }>;
+  resendEmailVerification(email: string): Promise<void>;
+  verifyEmail(token: string): Promise<AuthState>;
+  requestPasswordReset(email: string): Promise<void>;
+  resetPassword(token: string, password: string): Promise<void>;
   /** Ends the session at its source. Navigation afterwards is the caller's, and is shared. */
   revokeSession(): Promise<void>;
+
+  loadLinkedAccounts(): Promise<LinkedLoginAccounts>;
+  linkPassword(email: string, password: string, displayName: string): Promise<void>;
+  changePassword(email: string, currentPassword: string, password: string): Promise<void>;
 
   requestAccess(): Promise<void>;
   loadAccessCandidates(): Promise<AccessCandidate[]>;

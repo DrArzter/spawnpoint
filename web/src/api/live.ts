@@ -2,7 +2,7 @@ import { describeRegistrationFailure, describeSignInFailure, isLoginProviderId }
 import type { ControlPlaneSnapshot } from "../model";
 import type {
   AccessCandidate, AccessIdentity, AccessRole, AccountProfile, AppearancePreference, AuthState, BackupInventory, HostMetrics,
-  InvitationRecipient, InvitationSummary, LoginOptions, MetricRange, SessionOperation, SpawnpointApi,
+  InvitationRecipient, InvitationSummary, LinkedLoginAccounts, LoginOptions, MetricRange, SessionOperation, SpawnpointApi,
   SpawnpointSession, SubscriptionState, WorldLifecycleAction,
 } from "./contract";
 import { apiFailure } from "./contract";
@@ -97,15 +97,19 @@ function loginPayloadFromQuery(): Record<string, string> | null {
 
 type FailureDescription = (status: number, code: string | undefined) => string;
 
-// Every login exchanges a provider's proof for one Spawnpoint session. What
-// differs per provider is the proof and how a refusal is worded.
-async function exchangeLogin(path: string, body: unknown, describeFailure: FailureDescription): Promise<string> {
-  const response = await fetch(`${apiUrl}${path}`, {
+function publicPost(path: string, body: unknown): Promise<Response> {
+  return fetch(`${apiUrl}${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     credentials: "include",
     body: JSON.stringify(body),
   });
+}
+
+// Every login exchanges a provider's proof for one Spawnpoint session. What
+// differs per provider is the proof and how a refusal is worded.
+async function exchangeLogin(path: string, body: unknown, describeFailure: FailureDescription): Promise<string> {
+  const response = await publicPost(path, body);
   if (!response.ok) {
     const parsed = await response.json().catch(() => null) as { error?: unknown } | null;
     const code = typeof parsed?.error === "string" ? parsed.error : undefined;
@@ -261,14 +265,15 @@ export const liveApi: SpawnpointApi = {
     // answer for itself.
     try {
       const response = await fetch(`${apiUrl}/auth/providers`, { credentials: "include" });
-      if (!response.ok) return { providers: ["telegram"], selfRegistration: [] };
-      const body = await response.json() as { providers?: unknown; selfRegistration?: unknown };
+      if (!response.ok) return { providers: ["telegram"], selfRegistration: [], emailActions: false };
+      const body = await response.json() as { providers?: unknown; selfRegistration?: unknown; emailActions?: unknown };
       return {
         providers: Array.isArray(body.providers) ? body.providers.filter(isLoginProviderId) : ["telegram"],
         selfRegistration: Array.isArray(body.selfRegistration) ? body.selfRegistration.filter(isLoginProviderId) : [],
+        emailActions: body.emailActions === true,
       };
     } catch {
-      return { providers: ["telegram"], selfRegistration: [] };
+      return { providers: ["telegram"], selfRegistration: [], emailActions: false };
     }
   },
 
@@ -283,8 +288,41 @@ export const liveApi: SpawnpointApi = {
   signInWithPassword: (email: string, password: string) =>
     sessionFromLogin("/auth/password", { email, password }, describeSignInFailure),
 
-  registerWithPassword: (email: string, password: string, displayName: string) =>
-    sessionFromLogin("/auth/password/register", { email, password, displayName }, describeRegistrationFailure),
+  async registerWithPassword(email: string, password: string, displayName: string) {
+    const response = await publicPost("/auth/password/register", { email, password, displayName });
+    const body = await response.json().catch(() => null) as { result?: unknown; email?: unknown; error?: unknown } | null;
+    if (!response.ok) {
+      const code = typeof body?.error === "string" ? body.error : undefined;
+      throw await apiFailure(response, describeRegistrationFailure(response.status, code), body);
+    }
+    if (body?.result !== "verification_sent" || typeof body.email !== "string") throw new Error("Spawnpoint returned an invalid registration response.");
+    return { result: "verification_sent" as const, email: body.email };
+  },
+
+  async resendEmailVerification(email: string): Promise<void> {
+    const response = await publicPost("/auth/email/verification/resend", { email });
+    if (!response.ok) throw await apiFailure(response, "A new verification email could not be sent.");
+  },
+
+  verifyEmail: (token: string) => sessionFromLogin(
+    "/auth/email/verification",
+    { token },
+    () => "This verification link is invalid, expired, or has already been used.",
+  ),
+
+  async requestPasswordReset(email: string): Promise<void> {
+    const response = await publicPost("/auth/password/forgot", { email });
+    if (!response.ok) throw await apiFailure(response, "The reset request could not be sent.");
+  },
+
+  async resetPassword(token: string, password: string): Promise<void> {
+    const response = await publicPost("/auth/password/reset", { token, password });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: unknown } | null;
+      const code = typeof body?.error === "string" ? body.error : undefined;
+      throw await apiFailure(response, describeRegistrationFailure(response.status, code), body);
+    }
+  },
 
   async revokeSession(): Promise<void> {
     accessToken = null;
@@ -292,6 +330,39 @@ export const liveApi: SpawnpointApi = {
     // The cookie is the session; a failure here must not stop the sign-out, so
     // the caller navigates either way.
     await fetch(`${apiUrl}/auth/logout`, { method: "POST", credentials: "include" }).catch(() => undefined);
+  },
+
+  async loadLinkedAccounts(): Promise<LinkedLoginAccounts> {
+    const response = await authorizedFetch("/me/accounts");
+    if (!response.ok) throw await apiFailure(response, "Linked sign-in accounts could not be loaded.");
+    return response.json() as Promise<LinkedLoginAccounts>;
+  },
+
+  async linkPassword(email: string, password: string, displayName: string): Promise<void> {
+    const response = await authorizedFetch("/me/password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password, displayName }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: unknown } | null;
+      const code = typeof body?.error === "string" ? body.error : undefined;
+      throw await apiFailure(response, describeRegistrationFailure(response.status, code), body);
+    }
+  },
+
+  async changePassword(email: string, currentPassword: string, password: string): Promise<void> {
+    const response = await authorizedFetch("/me/password/change", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, currentPassword, password }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: unknown } | null;
+      const code = typeof body?.error === "string" ? body.error : undefined;
+      const message = response.status === 401 ? "The current password is not correct." : describeRegistrationFailure(response.status, code);
+      throw await apiFailure(response, message, body);
+    }
   },
 
   async requestAccess(): Promise<void> {

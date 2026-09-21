@@ -1,6 +1,14 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge";
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  TransactWriteCommand,
+  UpdateCommand,
+  type TransactWriteCommandInput,
+} from "@aws-sdk/lib-dynamodb";
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { randomUUID } from "node:crypto";
 
@@ -20,7 +28,8 @@ import {
   type LoginPrincipal,
 } from "../access/login-session.ts";
 import { authenticateWith, type LoginProvider } from "../access/login-provider.ts";
-import { afterFailedSignIn, hashPassword, normalizeDisplayName, normalizeEmail, signInLocked, validatePassword, type SignInGuard } from "../access/password-credential.ts";
+import { afterFailedSignIn, hashPassword, normalizeDisplayName, normalizeEmail, signInLocked, validatePassword, verifyPassword, type SignInGuard } from "../access/password-credential.ts";
+import { emailActionTokenHash, issueEmailAction, renderEmailAction, type EmailAction, type EmailActionPurpose } from "../access/email-actions.ts";
 import {
   createPasswordLoginProvider,
   passwordPrincipal,
@@ -34,6 +43,8 @@ import { defaultAppearance, validateAppearance } from "../access/appearance.ts";
 import { defaultSubscriptions, validateSubscriptions } from "../access/subscriptions.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../domain/access-events.ts";
 import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
+import type { EmailSender } from "../email/email-sender.ts";
+import { createResendEmailSender } from "../email/resend-email-sender.ts";
 import { catalogWithPresets, gameCatalog } from "../control-plane/catalog.ts";
 import { backupInventory } from "../control-plane/backups.ts";
 import {
@@ -87,11 +98,14 @@ const refreshCookieSameSite: "Strict" | "None" = process.env.REFRESH_COOKIE_SAME
 // not connected rather than broken.
 const passwordLoginEnabled = (process.env.PASSWORD_LOGIN_ENABLED ?? "false") === "true";
 const passwordRegistrationEnabled = (process.env.PASSWORD_REGISTRATION_ENABLED ?? "false") === "true";
+const emailDeliveryProvider = process.env.EMAIL_DELIVERY_PROVIDER ?? "none";
+const panelUrl = (process.env.PANEL_URL ?? "").trim();
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const events = new EventBridgeClient({});
 const ssm = new SSMClient({});
 let botTokenPromise: Promise<string> | undefined;
 let sessionSigningSecretPromise: Promise<string> | undefined;
+let emailSenderPromise: Promise<EmailSender | null> | undefined;
 
 function response(statusCode: number, body: unknown): Response {
   return { statusCode, headers: { "content-type": "application/json; charset=utf-8" }, body: body === null ? "" : JSON.stringify(body) };
@@ -128,6 +142,22 @@ function sessionSigningSecret(): Promise<string> {
     return value;
   });
   return sessionSigningSecretPromise;
+}
+
+function emailSender(): Promise<EmailSender | null> {
+  emailSenderPromise ??= (async () => {
+    if (emailDeliveryProvider === "none") return null;
+    if (emailDeliveryProvider !== "resend") throw new Error(`unsupported email delivery provider: ${emailDeliveryProvider}`);
+    const parameterName = process.env.RESEND_API_KEY_PARAMETER;
+    const from = process.env.EMAIL_FROM;
+    if (!parameterName || !from || !panelUrl) throw new Error("email delivery is incompletely configured");
+    const result = await ssm.send(new GetParameterCommand({ Name: parameterName, WithDecryption: true }));
+    const apiKey = result.Parameter?.Value;
+    if (!apiKey) throw new Error("Resend API key parameter is empty");
+    const replyTo = process.env.EMAIL_REPLY_TO?.trim();
+    return createResendEmailSender({ apiKey, from, ...(replyTo ? { replyTo } : {}) });
+  })();
+  return emailSenderPromise;
 }
 
 async function caller(event: Event): Promise<Caller | null> {
@@ -957,9 +987,9 @@ async function authenticate(provider: LoginProvider, event: Event): Promise<Resp
   return createLoginSession(principal, await sessionSigningSecret());
 }
 
-// Email and password: the way in that needs no other account (ADR-0055). The
-// credential is kept by its normalized address, apart from the account it
-// signs in as; the provider sees one credential at a time and never the table.
+// Email and password is one login adapter among peers. Its credential is kept
+// by normalized address, independently from the Identity it may be linked to;
+// the provider sees one credential at a time and never the table.
 function credentialKey(email: string): Record<string, string> {
   return { pk: `CREDENTIAL#EMAIL#${email}`, sk: "PASSWORD" };
 }
@@ -969,6 +999,7 @@ function credentialFromItem(item: Item): PasswordCredential | null {
   return {
     subject: item.subject,
     email: item.email,
+    emailVerified: item.email_verified === true,
     displayName: typeof item.display_name === "string" ? item.display_name : item.email,
     passwordHash: item.password_hash,
     guard: {
@@ -1043,11 +1074,304 @@ const passwordCredentials: PasswordCredentialStore = {
 
 const passwordProvider = createPasswordLoginProvider({ credentials: passwordCredentials });
 
-// Registration creates the credential a first sign-in needs, and nothing else:
-// the account it signs in as is observed like any other and holds no role
-// until an Owner grants one (ADR-0036). The address is a sign-in name here,
-// not a verified channel; nothing is sent to it.
-async function registerPassword(event: Event): Promise<Response> {
+function emailActionKey(tokenHash: string): Record<string, string> {
+  return { pk: `EMAIL_ACTION#${tokenHash}`, sk: "TOKEN" };
+}
+
+function emailActionItem(
+  purpose: EmailActionPurpose,
+  action: EmailAction,
+  credential: Pick<PasswordCredential, "subject" | "email" | "displayName">,
+  identityId?: string,
+): Item {
+  const createdAt = new Date().toISOString();
+  return {
+    ...emailActionKey(action.tokenHash),
+    entity_type: "EMAIL_ACTION_TOKEN",
+    purpose,
+    nonce: action.nonce,
+    subject: credential.subject,
+    email: credential.email,
+    display_name: credential.displayName,
+    status: "PENDING",
+    created_at: createdAt,
+    expires_at: action.expiresAtEpochSeconds,
+    ttl: action.expiresAtEpochSeconds,
+    ...(identityId === undefined ? {} : { identity_id: identityId }),
+  };
+}
+
+async function deliverEmailAction(
+  purpose: EmailActionPurpose,
+  action: EmailAction,
+  credential: Pick<PasswordCredential, "subject" | "email" | "displayName">,
+): Promise<boolean> {
+  const sender = await emailSender();
+  if (sender === null) return false;
+  await sender.send(renderEmailAction(purpose, { email: credential.email, displayName: credential.displayName, panelUrl, action }));
+  return true;
+}
+
+async function replaceEmailAction(
+  purpose: EmailActionPurpose,
+  credential: PasswordCredential,
+  identityId?: string,
+): Promise<EmailAction> {
+  const action = issueEmailAction(purpose);
+  const nonceField = purpose === "verify_email" ? "email_verification_nonce" : "password_reset_nonce";
+  await document.send(new TransactWriteCommand({ TransactItems: [
+    { Update: {
+      TableName: tableName,
+      Key: credentialKey(credential.email),
+      UpdateExpression: `SET ${nonceField} = :nonce`,
+      ConditionExpression: "subject = :subject",
+      ExpressionAttributeValues: { ":nonce": action.nonce, ":subject": credential.subject },
+    } },
+    { Put: {
+      TableName: tableName,
+      Item: emailActionItem(purpose, action, credential, identityId),
+      ConditionExpression: "attribute_not_exists(pk)",
+    } },
+  ] }));
+  return action;
+}
+
+function emailActionsUnavailable(): Response | null {
+  return emailDeliveryProvider === "none" ? response(404, { error: "not_found" }) : null;
+}
+
+async function resendEmailVerification(event: Event): Promise<Response> {
+  const unavailable = emailActionsUnavailable();
+  if (unavailable !== null) return unavailable;
+  const parsed = objectBody(event);
+  const email = normalizeEmail(parsed?.email);
+  if (email === null) return response(202, { result: "accepted" });
+  const credential = await passwordCredentials.find(email);
+  if (credential === null || credential.emailVerified) return response(202, { result: "accepted" });
+  const account = await document.send(new GetCommand({
+    TableName: tableName,
+    Key: { pk: accountKeyFor(passwordProviderId, credential.subject), sk: "ACCOUNT" },
+    ConsistentRead: true,
+  }));
+  const action = await replaceEmailAction(
+    "verify_email",
+    credential,
+    typeof account.Item?.identity_id === "string" ? account.Item.identity_id : undefined,
+  );
+  await deliverEmailAction("verify_email", action, credential);
+  return response(202, { result: "accepted" });
+}
+
+function actionFromItem(item: Item | undefined, purpose: EmailActionPurpose, nowEpochSeconds: number): Item | null {
+  if (
+    item?.entity_type !== "EMAIL_ACTION_TOKEN" || item.purpose !== purpose || item.status !== "PENDING"
+    || typeof item.nonce !== "string" || typeof item.subject !== "string" || typeof item.email !== "string"
+    || typeof item.expires_at !== "number" || item.expires_at <= nowEpochSeconds
+  ) return null;
+  return item;
+}
+
+async function readEmailAction(event: Event, purpose: EmailActionPurpose): Promise<{ tokenHash: string; item: Item } | Response> {
+  const parsed = objectBody(event);
+  const tokenHash = emailActionTokenHash(typeof parsed?.token === "string" ? parsed.token : "");
+  if (tokenHash === null) return response(400, { error: "invalid_or_expired_email_action" });
+  const result = await document.send(new GetCommand({ TableName: tableName, Key: emailActionKey(tokenHash), ConsistentRead: true }));
+  const item = actionFromItem(result.Item, purpose, Math.floor(Date.now() / 1000));
+  return item === null ? response(400, { error: "invalid_or_expired_email_action" }) : { tokenHash, item };
+}
+
+type TransactionItem = NonNullable<TransactWriteCommandInput["TransactItems"]>[number];
+
+function consumeEmailActionUpdate(tokenHash: string, item: Item, now: string): TransactionItem {
+  return { Update: {
+    TableName: tableName,
+    Key: emailActionKey(tokenHash),
+    UpdateExpression: "SET #status = :used, used_at = :now",
+    ConditionExpression: "#status = :pending AND nonce = :nonce AND expires_at > :nowEpoch",
+    ExpressionAttributeNames: { "#status": "status" },
+    ExpressionAttributeValues: {
+      ":used": "USED", ":pending": "PENDING", ":now": now, ":nonce": item.nonce,
+      ":nowEpoch": Math.floor(Date.now() / 1000),
+    },
+  } };
+}
+
+async function verifyEmail(event: Event): Promise<Response> {
+  const found = await readEmailAction(event, "verify_email");
+  if ("statusCode" in found) return found;
+  const { item, tokenHash } = found;
+  const email = String(item.email);
+  const subject = String(item.subject);
+  const credentialResult = await document.send(new GetCommand({ TableName: tableName, Key: credentialKey(email), ConsistentRead: true }));
+  const credential = credentialResult.Item === undefined ? null : credentialFromItem(credentialResult.Item);
+  if (credential?.subject !== subject) return response(400, { error: "invalid_or_expired_email_action" });
+  const now = new Date().toISOString();
+  try {
+    await document.send(new TransactWriteCommand({ TransactItems: [
+      { Update: {
+        TableName: tableName,
+        Key: credentialKey(email),
+        UpdateExpression: "SET email_verified = :verified, verified_at = :now REMOVE email_verification_nonce",
+        ConditionExpression: "subject = :subject AND email_verification_nonce = :nonce",
+        ExpressionAttributeValues: { ":verified": true, ":now": now, ":subject": subject, ":nonce": item.nonce },
+      } },
+      consumeEmailActionUpdate(tokenHash, item, now),
+    ] }));
+  } catch (error) {
+    if (error instanceof Error && error.name === "TransactionCanceledException") {
+      return response(400, { error: "invalid_or_expired_email_action" });
+    }
+    throw error;
+  }
+  return createLoginSession(passwordPrincipal(credential), await sessionSigningSecret());
+}
+
+async function requestPasswordReset(event: Event): Promise<Response> {
+  const unavailable = emailActionsUnavailable();
+  if (unavailable !== null) return unavailable;
+  const email = normalizeEmail(objectBody(event)?.email);
+  if (email === null) return response(202, { result: "accepted" });
+  const credential = await passwordCredentials.find(email);
+  if (!credential?.emailVerified) return response(202, { result: "accepted" });
+  const action = await replaceEmailAction("reset_password", credential);
+  await deliverEmailAction("reset_password", action, credential);
+  return response(202, { result: "accepted" });
+}
+
+async function revokePasswordLoginSessions(subject: string): Promise<void> {
+  const sessions = await document.send(new QueryCommand({
+    TableName: tableName,
+    IndexName: "gsi1",
+    KeyConditionExpression: "gsi1pk = :account",
+    ExpressionAttributeValues: { ":account": `ACCOUNT#${passwordProviderId}#${subject}` },
+  }));
+  const now = new Date().toISOString();
+  await Promise.all((sessions.Items ?? []).filter((item) => item.entity_type === "LOGIN_SESSION").map((item) => document.send(new UpdateCommand({
+    TableName: tableName,
+    Key: { pk: item.pk, sk: item.sk },
+    UpdateExpression: "SET #status = :revoked, revoked_at = :now",
+    ExpressionAttributeNames: { "#status": "status" },
+    ExpressionAttributeValues: { ":revoked": "REVOKED", ":now": now },
+  }))));
+}
+
+async function resetPassword(event: Event): Promise<Response> {
+  const parsed = objectBody(event);
+  const passwordProblem = validatePassword(parsed?.password);
+  if (passwordProblem !== null) return response(400, { error: `password_${passwordProblem}` });
+  const found = await readEmailAction(event, "reset_password");
+  if ("statusCode" in found) return found;
+  const { item, tokenHash } = found;
+  const email = String(item.email);
+  const subject = String(item.subject);
+  const passwordHash = await hashPassword(parsed!.password as string);
+  const now = new Date().toISOString();
+  try {
+    await document.send(new TransactWriteCommand({ TransactItems: [
+      { Update: {
+        TableName: tableName,
+        Key: credentialKey(email),
+        UpdateExpression: "SET password_hash = :hash, failed_sign_ins = :zero, locked_until = :none, password_changed_at = :now REMOVE password_reset_nonce",
+        ConditionExpression: "subject = :subject AND email_verified = :verified AND password_reset_nonce = :nonce",
+        ExpressionAttributeValues: {
+          ":hash": passwordHash, ":zero": 0, ":none": null, ":now": now,
+          ":subject": subject, ":verified": true, ":nonce": item.nonce,
+        },
+      } },
+      consumeEmailActionUpdate(tokenHash, item, now),
+    ] }));
+  } catch (error) {
+    if (error instanceof Error && error.name === "TransactionCanceledException") {
+      return response(400, { error: "invalid_or_expired_email_action" });
+    }
+    throw error;
+  }
+  await revokePasswordLoginSessions(subject);
+  return response(204, null);
+}
+
+async function identityAccounts(identity: Identity): Promise<Item[]> {
+  const result = await document.send(new QueryCommand({
+    TableName: tableName,
+    IndexName: "gsi1",
+    KeyConditionExpression: "gsi1pk = :identity",
+    ExpressionAttributeValues: { ":identity": `IDENTITY#${identity.id}` },
+  }));
+  return (result.Items ?? []).filter((item) => item.sk === "ACCOUNT");
+}
+
+async function linkedAccounts(identity: Identity): Promise<Response> {
+  const accounts = await identityAccounts(identity);
+  const linked = await Promise.all(accounts.map(async (account) => {
+    const provider = typeof account.platform === "string" ? account.platform : "";
+    const subject = typeof account.platform_user_id === "string" ? account.platform_user_id : "";
+    let verified = true;
+    if (provider === passwordProviderId && typeof account.email === "string") {
+      verified = (await passwordCredentials.find(account.email))?.emailVerified === true;
+    }
+    return {
+      provider,
+      subject,
+      displayName: typeof account.display_name === "string" ? account.display_name : null,
+      username: typeof account.username === "string" ? account.username : null,
+      email: typeof account.email === "string" ? account.email : null,
+      photoUrl: typeof account.photo_url === "string" ? account.photo_url : null,
+      verified,
+    };
+  }));
+  return response(200, {
+    accounts: linked,
+    passwordManagementAvailable: passwordLoginEnabled && emailDeliveryProvider !== "none",
+  });
+}
+
+function passwordCredentialItem(
+  subject: string,
+  email: string,
+  displayName: string,
+  passwordHash: string,
+  action: EmailAction,
+): Item {
+  return {
+    ...credentialKey(email),
+    entity_type: "PASSWORD_CREDENTIAL",
+    subject,
+    email,
+    email_verified: false,
+    email_verification_nonce: action.nonce,
+    display_name: displayName,
+    password_hash: passwordHash,
+    failed_sign_ins: 0,
+    locked_until: null,
+    created_at: new Date().toISOString(),
+  };
+}
+
+function passwordAccountItem(subject: string, email: string, displayName: string, identity: Identity): Item {
+  const now = new Date().toISOString();
+  return {
+    pk: accountKeyFor(passwordProviderId, subject),
+    sk: "ACCOUNT",
+    platform: passwordProviderId,
+    platform_user_id: subject,
+    display_name: displayName,
+    username: null,
+    photo_url: null,
+    email,
+    first_seen_at: now,
+    last_seen_at: now,
+    status: "APPROVED",
+    identity_id: identity.id,
+    approved_at: now,
+    approved_by: identity.id,
+    gsi1pk: `IDENTITY#${identity.id}`,
+    gsi1sk: now,
+  };
+}
+
+type ValidPasswordInput = Readonly<{ email: string; displayName: string; password: string }>;
+
+function validPasswordInput(event: Event): ValidPasswordInput | Response {
   const parsed = objectBody(event);
   if (parsed === null) return response(400, { error: "invalid_json" });
   const email = normalizeEmail(parsed.email);
@@ -1056,29 +1380,125 @@ async function registerPassword(event: Event): Promise<Response> {
   if (passwordProblem !== null) return response(400, { error: `password_${passwordProblem}` });
   const displayName = normalizeDisplayName(parsed.displayName);
   if (displayName === null) return response(400, { error: "invalid_display_name" });
+  return { email, displayName, password: parsed.password as string };
+}
+
+// Registration creates an unlinked credential. Mailbox proof starts its first
+// login session; only then is the account observed and eligible for the normal
+// access-request flow.
+async function registerPassword(event: Event): Promise<Response> {
+  const input = validPasswordInput(event);
+  if ("statusCode" in input) return input;
+  const { email, displayName, password } = input;
   const subject = randomUUID();
+  const action = issueEmailAction("verify_email");
+  const credential = { subject, email, displayName };
   try {
-    await document.send(new PutCommand({
-      TableName: tableName,
-      Item: {
-        ...credentialKey(email),
-        entity_type: "PASSWORD_CREDENTIAL",
-        subject,
-        email,
-        email_verified: false,
-        display_name: displayName,
-        password_hash: await hashPassword(parsed.password as string),
-        failed_sign_ins: 0,
-        locked_until: null,
-        created_at: new Date().toISOString(),
-      },
-      ConditionExpression: "attribute_not_exists(pk)",
-    }));
+    await document.send(new TransactWriteCommand({ TransactItems: [
+      { Put: {
+        TableName: tableName,
+        Item: passwordCredentialItem(subject, email, displayName, await hashPassword(password), action),
+        ConditionExpression: "attribute_not_exists(pk)",
+      } },
+      { Put: {
+        TableName: tableName,
+        Item: emailActionItem("verify_email", action, credential),
+        ConditionExpression: "attribute_not_exists(pk)",
+      } },
+    ] }));
   } catch (error) {
-    if (error instanceof Error && error.name === "ConditionalCheckFailedException") return response(409, { error: "email_already_registered" });
+    if (error instanceof Error && error.name === "TransactionCanceledException") return response(409, { error: "email_already_registered" });
     throw error;
   }
-  return createLoginSession(passwordPrincipal({ subject, email, displayName }), await sessionSigningSecret());
+  await deliverEmailAction("verify_email", action, credential);
+  return response(202, { result: "verification_sent", email });
+}
+
+async function linkPassword(identity: Identity, event: Event): Promise<Response> {
+  const input = validPasswordInput(event);
+  if ("statusCode" in input) return input;
+  const existing = await identityAccounts(identity);
+  if (existing.some((account) => account.platform === passwordProviderId)) {
+    return response(409, { error: "password_account_already_linked" });
+  }
+  const { email, displayName, password } = input;
+  const subject = randomUUID();
+  const action = issueEmailAction("verify_email");
+  const credential = { subject, email, displayName };
+  try {
+    await document.send(new TransactWriteCommand({ TransactItems: [
+      { Put: {
+        TableName: tableName,
+        Item: passwordCredentialItem(subject, email, displayName, await hashPassword(password), action),
+        ConditionExpression: "attribute_not_exists(pk)",
+      } },
+      { Put: {
+        TableName: tableName,
+        Item: passwordAccountItem(subject, email, displayName, identity),
+        ConditionExpression: "attribute_not_exists(pk)",
+      } },
+      { Put: {
+        TableName: tableName,
+        Item: {
+          pk: `IDENTITY#${identity.id}`,
+          sk: `LOGIN_PROVIDER#${passwordProviderId}`,
+          entity_type: "IDENTITY_LOGIN_PROVIDER",
+          provider: passwordProviderId,
+          subject,
+          created_at: new Date().toISOString(),
+        },
+        ConditionExpression: "attribute_not_exists(pk)",
+      } },
+      { Put: {
+        TableName: tableName,
+        Item: emailActionItem("verify_email", action, credential, identity.id),
+        ConditionExpression: "attribute_not_exists(pk)",
+      } },
+    ] }));
+  } catch (error) {
+    if (error instanceof Error && error.name === "TransactionCanceledException") {
+      return response(409, { error: "email_already_registered" });
+    }
+    throw error;
+  }
+  await deliverEmailAction("verify_email", action, credential);
+  return response(202, { result: "verification_sent", email });
+}
+
+async function changePassword(identity: Identity, event: Event): Promise<Response> {
+  const parsed = objectBody(event);
+  if (parsed === null) return response(400, { error: "invalid_json" });
+  const email = normalizeEmail(parsed.email);
+  if (email === null) return response(400, { error: "invalid_email" });
+  if (typeof parsed.currentPassword !== "string") return response(400, { error: "current_password_required" });
+  const passwordProblem = validatePassword(parsed.password);
+  if (passwordProblem !== null) return response(400, { error: `password_${passwordProblem}` });
+  const credential = await passwordCredentials.find(email);
+  if (credential === null || !credential.emailVerified || !await verifyPassword(parsed.currentPassword, credential.passwordHash)) {
+    return response(401, { error: "invalid_current_password" });
+  }
+  const linked = await document.send(new GetCommand({
+    TableName: tableName,
+    Key: { pk: accountKeyFor(passwordProviderId, credential.subject), sk: "ACCOUNT" },
+    ConsistentRead: true,
+  }));
+  if (linked.Item?.identity_id !== identity.id) return response(403, { error: "credential_not_linked" });
+  await document.send(new UpdateCommand({
+    TableName: tableName,
+    Key: credentialKey(email),
+    UpdateExpression: "SET password_hash = :hash, failed_sign_ins = :zero, locked_until = :none, password_changed_at = :now",
+    ConditionExpression: "subject = :subject AND email_verified = :verified",
+    ExpressionAttributeValues: {
+      ":hash": await hashPassword(parsed.password as string),
+      ":zero": 0,
+      ":none": null,
+      ":now": new Date().toISOString(),
+      ":subject": credential.subject,
+      ":verified": true,
+    },
+  }));
+  await revokePasswordLoginSessions(credential.subject);
+  return response(204, null);
 }
 
 // Which ways in this deployment offers, so the panel draws only buttons that
@@ -1086,7 +1506,8 @@ async function registerPassword(event: Event): Promise<Response> {
 function loginProviders(): Response {
   return response(200, {
     providers: ["telegram", ...(passwordLoginEnabled ? [passwordProviderId] : [])],
-    selfRegistration: passwordLoginEnabled && passwordRegistrationEnabled ? [passwordProviderId] : [],
+    selfRegistration: passwordLoginEnabled && passwordRegistrationEnabled && emailDeliveryProvider !== "none" ? [passwordProviderId] : [],
+    emailActions: emailDeliveryProvider !== "none",
   });
 }
 
@@ -1175,8 +1596,14 @@ export const routes: Readonly<Record<string, Route>> = {
   )),
   "POST /auth/password": publicRoute((event) => (passwordLoginEnabled ? authenticate(passwordProvider, event) : passwordLoginDisabled())),
   "POST /auth/password/register": publicRoute((event) => (
-    passwordLoginEnabled && passwordRegistrationEnabled ? registerPassword(event) : passwordLoginDisabled()
+    passwordLoginEnabled && passwordRegistrationEnabled && emailDeliveryProvider !== "none"
+      ? registerPassword(event)
+      : passwordLoginDisabled()
   )),
+  "POST /auth/email/verification": publicRoute((event) => verifyEmail(event)),
+  "POST /auth/email/verification/resend": publicRoute((event) => resendEmailVerification(event)),
+  "POST /auth/password/forgot": publicRoute((event) => requestPasswordReset(event)),
+  "POST /auth/password/reset": publicRoute((event) => resetPassword(event)),
   "POST /auth/refresh": publicRoute((event) => refreshLoginSession(event)),
   "POST /auth/logout": publicRoute((event) => logoutLoginSession(event)),
 
@@ -1187,6 +1614,13 @@ export const routes: Readonly<Record<string, Route>> = {
   }),
 
   "GET /me": identityRoute((identity) => me(identity)),
+  "GET /me/accounts": identityRoute((identity) => linkedAccounts(identity)),
+  "POST /me/password": identityRoute((identity, event) => (
+    passwordLoginEnabled && emailDeliveryProvider !== "none" ? linkPassword(identity, event) : passwordLoginDisabled()
+  )),
+  "POST /me/password/change": identityRoute((identity, event) => (
+    passwordLoginEnabled ? changePassword(identity, event) : passwordLoginDisabled()
+  )),
   "GET /me/subscriptions": identityRoute((identity) => subscriptions(identity)),
   "PUT /me/subscriptions": identityRoute((identity, event) => updateSubscriptions(identity, event.body)),
   "GET /me/appearance": identityRoute((identity) => appearance(identity)),

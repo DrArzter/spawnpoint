@@ -7,6 +7,14 @@ export type AppRoute = Readonly<{ page: Page; accessTab: AccessTab; gameId: stri
 
 export const LANDING_HASH = "#/";
 
+export type EmailActionRoute = Readonly<{ kind: "verify-email" | "reset-password"; token: string }>;
+
+export function readEmailActionRoute(hash: string = window.location.hash): EmailActionRoute | null {
+  const [path = "", query = ""] = hash.replace(/^#\/?/, "").split("?", 2);
+  if (path !== "verify-email" && path !== "reset-password") return null;
+  return { kind: path, token: new URLSearchParams(query).get("token") ?? "" };
+}
+
 // The front door lives at the bare root; every other hash is the console.
 export function isLandingHash(hash: string = window.location.hash): boolean {
   const path = hash.replace(/^#\/?/, "").split("/")[0] ?? "";

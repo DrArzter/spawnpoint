@@ -250,6 +250,87 @@
   color: var(--ink-secondary);
 }
 
+.login-account-list {
+  display: grid;
+}
+
+.login-account-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 16px;
+  min-height: 64px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--outline);
+}
+
+.login-account-row:last-child {
+  border-bottom: 0;
+}
+
+.login-account-row .link-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface-variant);
+  color: var(--ink-secondary);
+}
+
+.login-account-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.login-account-copy strong {
+  font-weight: 500;
+}
+
+.login-account-copy span {
+  overflow: hidden;
+  color: var(--ink-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.login-account-actions {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.account-form {
+  display: grid;
+  gap: 14px;
+  max-width: 520px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--outline);
+}
+
+.account-form h3 {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.account-loading {
+  display: grid;
+  gap: 12px;
+}
+
+@media (max-width: 599px) {
+  .login-account-row {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .login-account-row > .chip {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
 /* Console: the terminal grammar */
 .terminal {
   display: flex;

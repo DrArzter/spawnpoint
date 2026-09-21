@@ -114,7 +114,7 @@ function storeWith(credentials: readonly PasswordCredential[]): PasswordCredenti
 
 test("the provider signs in a registered address with its password and nothing weaker", async () => {
   const passwordHash = await hashPassword("correct horse battery staple");
-  const credential: PasswordCredential = { subject: "3f1b4a3e-6f5d-4b6a-9d0e-1c2b3a4d5e6f", email: "ada@example.com", displayName: "Ada", passwordHash, guard: openGuard };
+  const credential: PasswordCredential = { subject: "3f1b4a3e-6f5d-4b6a-9d0e-1c2b3a4d5e6f", email: "ada@example.com", emailVerified: true, displayName: "Ada", passwordHash, guard: openGuard };
   const store = storeWith([credential]);
   const provider = createPasswordLoginProvider({ credentials: store, nowSeconds: () => now });
 
@@ -141,11 +141,11 @@ test("the provider signs in a registered address with its password and nothing w
 test("a locked credential refuses even the right password, and a success after failures clears the count", async () => {
   const passwordHash = await hashPassword("correct horse battery staple");
   const locked: PasswordCredential = {
-    subject: "s-locked", email: "locked@example.com", displayName: "Locked", passwordHash,
+    subject: "s-locked", email: "locked@example.com", emailVerified: true, displayName: "Locked", passwordHash,
     guard: { failedSignIns: failedSignInsBeforeLock, lockedUntilEpochSeconds: now + 60 },
   };
   const bruised: PasswordCredential = {
-    subject: "s-bruised", email: "bruised@example.com", displayName: "Bruised", passwordHash,
+    subject: "s-bruised", email: "bruised@example.com", emailVerified: true, displayName: "Bruised", passwordHash,
     guard: { failedSignIns: 3, lockedUntilEpochSeconds: null },
   };
   const store = storeWith([locked, bruised]);
@@ -157,6 +157,18 @@ test("a locked credential refuses even the right password, and a success after f
   const principal = await provider.authenticate({ email: "bruised@example.com", password: "correct horse battery staple" });
   assert.equal(principal?.subject, "s-bruised");
   assert.deepEqual(store.recorded.successes, ["bruised@example.com"]);
+});
+
+test("an unverified address cannot sign in even with its correct password", async () => {
+  const passwordHash = await hashPassword("correct horse battery staple");
+  const credential: PasswordCredential = {
+    subject: "s-pending", email: "pending@example.com", emailVerified: false,
+    displayName: "Pending", passwordHash, guard: openGuard,
+  };
+  const store = storeWith([credential]);
+  const provider = createPasswordLoginProvider({ credentials: store, nowSeconds: () => now });
+  assert.equal(await provider.authenticate({ email: credential.email, password: "correct horse battery staple" }), null);
+  assert.deepEqual(store.recorded.failures, [], "verification state is not a failed password guess");
 });
 
 test("the principal names the credential, not the address, as its subject", () => {

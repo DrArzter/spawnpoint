@@ -10,11 +10,12 @@ import { sessionStatus } from "./components/ui/Status";
 import { IconName } from "./icons";
 import { formatDateTime, plural } from "./lib/format";
 import { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, World } from "./model";
-import { isLandingHash, isRootHash, routeHash } from "./routing";
+import { isLandingHash, isRootHash, readEmailActionRoute, routeHash } from "./routing";
 import { deriveSharedHostSession } from "./session";
 import { AccessScreen } from "./screens/AccessScreen";
 import { AuthScreen, BootScreen } from "./screens/AuthScreen";
 import { ConsoleScreen } from "./screens/ConsoleScreen";
+import { EmailActionScreen } from "./screens/EmailActionScreen";
 import { LandingScreen } from "./screens/LandingScreen";
 import { MetricsScreen } from "./screens/MetricsScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
@@ -43,6 +44,7 @@ export function App() {
   const [auth, setAuth] = useState<AuthState>({ status: "loading" });
   const [atLanding, setAtLanding] = useState(() => isLandingHash());
   const { visible: bootVisible, publish } = useBootCard();
+  const emailAction = readEmailActionRoute();
 
   useEffect(() => {
     let active = true;
@@ -82,6 +84,7 @@ export function App() {
   // The session is settled before anything else is drawn. Deciding later is what
   // made the front door appear first and then rearrange itself: a sign-in button
   // arriving from nowhere, or a jump into the console a beat after landing.
+  if (emailAction !== null) return <EmailActionScreen action={emailAction} onAuth={handleAuth} />;
   if (auth.status === "loading") {
     return bootVisible ? <BootScreen description="Confirming who you are with the access API." title="Checking your session" /> : null;
   }
@@ -132,22 +135,17 @@ function ConsoleShell({ session, continuesBootCard }: { session: ActiveSession; 
     .map((item) => ({ id: item.id, label: item.label, icon: item.icon, href: scoped(item.id) }));
   const page: Page = route.page === "profile" || navItems.some((item) => item.id === route.page) ? route.page : "worlds";
 
-  // The account the session came through is the one link known before the
-  // directory answers: Telegram's id, or the email a password account signs in
-  // with. An email is a claim until something has been sent to it.
   const [members, setMembers] = useState<Member[]>(() => [{
     id: session.identity.id,
     name: session.identity.displayName,
     roleId: session.identity.roleId,
-    links: session.profile.provider === "password"
-      ? [{ id: "viewer-email", kind: "email", value: session.profile.email ?? session.profile.platformUserId, verified: false }]
-      : [{ id: "viewer-telegram", kind: "telegram", value: session.profile.telegramId ?? session.profile.platformUserId, verified: true }],
+    links: [],
   }]);
   const [roles, setRoles] = useState<Role[]>(() => session.role ? [{ id: session.role.id, name: session.role.name, description: "Current signed-in role", permissions: session.role.permissions, system: true }] : []);
   const viewer: ViewerProfile = {
     displayName: session.identity.displayName,
     inTelegram: Boolean(window.Telegram?.WebApp.initData),
-    provider: session.profile.provider === "password" ? "password" : "telegram",
+    provider: session.profile.provider,
     ...(session.profile.username ? { username: session.profile.username } : {}),
     ...(session.profile.email ? { email: session.profile.email } : {}),
     ...(session.profile.photoUrl ? { photoUrl: session.profile.photoUrl } : {}),

@@ -4,7 +4,7 @@ import { liveApi, liveAuthConfigured } from "./api/live";
 
 export type {
   AccessCandidate, AccessIdentity, AccessRole, AccountProfile, ActiveSession, AppearancePreference, AuthState, BackupEntry,
-  BackupInventory, HostMetrics, HostMetricSeries, InvitationRecipient, InvitationSummary, LoginOptions, LoginProviderId,
+  BackupInventory, HostMetrics, HostMetricSeries, InvitationRecipient, InvitationSummary, LinkedLoginAccount, LinkedLoginAccounts, LoginOptions, LoginProviderId,
   MetricRange, SessionOperation,
   SpawnpointApi, SpawnpointSession, SubscriptionState, VisitorSession, WorldLifecycleAction,
 } from "./api/contract";
@@ -25,6 +25,13 @@ export const loadLoginOptions = () => api.loadLoginOptions();
 export const exchangeTelegramOidc = (idToken: string) => api.exchangeTelegramOidc(idToken);
 export const signInWithPassword = (email: string, password: string) => api.signInWithPassword(email, password);
 export const registerWithPassword = (email: string, password: string, displayName: string) => api.registerWithPassword(email, password, displayName);
+export const resendEmailVerification = (email: string) => api.resendEmailVerification(email);
+export const verifyEmail = (token: string) => api.verifyEmail(token);
+export const requestPasswordReset = (email: string) => api.requestPasswordReset(email);
+export const resetPassword = (token: string, password: string) => api.resetPassword(token, password);
+export const loadLinkedAccounts = () => api.loadLinkedAccounts();
+export const linkPassword = (email: string, password: string, displayName: string) => api.linkPassword(email, password, displayName);
+export const changePassword = (email: string, currentPassword: string, password: string) => api.changePassword(email, currentPassword, password);
 
 export const requestAccess = () => api.requestAccess();
 export const loadAccessCandidates = () => api.loadAccessCandidates();

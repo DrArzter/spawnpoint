@@ -115,6 +115,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0053](0053-tell-not-built-apart-from-broken.md) | Tell "not built yet" apart from "broken", in the transport | Proposed | M4 |
 | [0054](0054-place-a-session-on-a-host-with-room.md) | Place a session on a host with room, or launch one that fits | Proposed | later |
 | [0055](0055-sign-in-with-email-and-password-by-default.md) | Sign in with email and password by default, and with a provider as an alternative | Accepted — implemented | M4 |
+| [0056](0056-verify-and-link-password-credentials.md) | Verify and link password credentials without making a provider primary | Accepted — implemented; amends [0055](0055-sign-in-with-email-and-password-by-default.md) | M4 |
 
 ## Decisions still to record
 

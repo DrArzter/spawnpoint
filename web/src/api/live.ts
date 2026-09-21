@@ -2,7 +2,7 @@ import { describeRegistrationFailure, describeSignInFailure, isLoginProviderId }
 import type { ControlPlaneSnapshot } from "../model";
 import type {
   AccessCandidate, AccessIdentity, AccessRole, AccountProfile, AppearancePreference, AuthState, BackupInventory, HostMetrics,
-  InvitationRecipient, InvitationSummary, LoginOptions, LoginProviderId, MetricRange, SessionOperation, SpawnpointApi,
+  InvitationRecipient, InvitationSummary, LoginOptions, MetricRange, SessionOperation, SpawnpointApi,
   SpawnpointSession, SubscriptionState, WorldLifecycleAction,
 } from "./contract";
 import { apiFailure } from "./contract";

@@ -396,6 +396,9 @@ function Notifications({ games }: { games: readonly Game[] }) {
   }
 
   const disabled = state === "loading" || state === "saving";
+  let saveStatus = "";
+  if (state === "saving") saveStatus = "Saving…";
+  if (state === "ready") saveStatus = "Saved to your identity";
   const columns: Column<Game>[] = [
     { id: "game", label: "Game", render: (game) => <strong>{game.displayName}</strong> },
     { id: "started", label: "Session started", align: "end", width: "150px", render: (game) => <Switch checked={Boolean(subscriptions[`${game.id}.started`])} disabled={disabled} label={`${game.displayName} started`} labelHidden onChange={() => void toggle(`${game.id}.started`)} /> },
@@ -405,7 +408,7 @@ function Notifications({ games }: { games: readonly Game[] }) {
   return (
     <div className="page notification-groups">
       {state === "error" && <Banner actions={<Button onClick={() => void reload()} variant="text">Try again</Button>} description={error} title="Subscriptions are unavailable" tone="error" />}
-      <Card actions={<span aria-live="polite" className="secondary" role="status">{state === "saving" ? "Saving…" : state === "ready" ? "Saved to your identity" : ""}</span>} flush title="Session events">
+      <Card actions={<span aria-live="polite" className="secondary" role="status">{saveStatus}</span>} flush title="Session events">
         <DataTable columns={columns} label="Session event subscriptions" loading={state === "loading"} rowKey={(game) => game.id} rows={games} />
       </Card>
       <Card title="Game invitations">

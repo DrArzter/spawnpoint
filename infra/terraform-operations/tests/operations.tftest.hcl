@@ -375,7 +375,7 @@ run "launched_hosts_are_placed_drained_and_let_go_by_tag" {
   assert {
     condition = alltrue([
       strcontains(aws_sfn_state_machine.lifecycle_v2_start.definition, "arn:aws:states:::aws-sdk:ec2:createFleet"),
-      strcontains(aws_sfn_state_machine.lifecycle_v2_start.definition, "lt-00000000000000000"),
+      strcontains(aws_sfn_state_machine.lifecycle_v2_start.definition, "\"LaunchTemplateName\": \"spawnpoint-fleet-host\""),
       strcontains(aws_sfn_state_machine.lifecycle_v2_start.definition, "\"AllowedInstanceTypes\": ${jsonencode(var.launch_families)}"),
       strcontains(aws_sfn_state_machine.lifecycle_v2_stop.definition, local.lifecycle_v2_drain_arn),
     ])

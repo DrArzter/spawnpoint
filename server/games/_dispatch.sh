@@ -110,6 +110,7 @@ configure_slot_ports() {
   fi
   # What the summary tells a player: the host side of the game port.
   export SPAWNPOINT_CONNECT_PORT="${SPAWNPOINT_GAME_PORT}"
+  return 0
 }
 
 # Bind the selected module to the shared Docker helpers. Every lifecycle entry

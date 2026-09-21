@@ -109,3 +109,51 @@ run "bot_is_an_isolated_webhook" {
     error_message = "An explicitly isolated bootstrap must deploy only the command bot."
   }
 }
+
+run "resend_is_an_optional_least_privilege_notifier_adapter" {
+  command = plan
+
+  override_data {
+    target = data.aws_iam_policy_document.notifier[0]
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"ssm:GetParameter\",\"Resource\":\"arn:aws:ssm:eu-central-1:123456789012:parameter/spawnpoint/email/resend-api-key\"}]}"
+    }
+  }
+
+  override_data {
+    target = data.aws_sns_topic.alerts[0]
+    values = {
+      arn = "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"
+    }
+  }
+
+  variables {
+    mini_app_url             = "https://spawnpoint.example.dev/"
+    email_delivery_provider  = "resend"
+    email_from               = "Spawnpoint <notifications@example.dev>"
+    email_reply_to           = "owner@example.dev"
+    resend_api_key_parameter = "/spawnpoint/email/resend-api-key"
+  }
+
+  assert {
+    condition = alltrue([
+      for key in [
+        "EMAIL_DELIVERY_PROVIDER",
+        "RESEND_API_KEY_PARAMETER",
+        "EMAIL_FROM",
+        "EMAIL_REPLY_TO",
+      ] : contains(keys(aws_lambda_function.notifier[0].environment[0].variables), key)
+    ])
+    error_message = "The notifier must receive every Resend adapter setting through Terraform."
+  }
+
+  assert {
+    condition     = aws_lambda_function.notifier[0].environment[0].variables["EMAIL_DELIVERY_PROVIDER"] == "resend"
+    error_message = "The selected email adapter must be explicit at runtime."
+  }
+
+  assert {
+    condition     = strcontains(data.aws_iam_policy_document.notifier[0].json, "parameter/spawnpoint/email/resend-api-key")
+    error_message = "The notifier may read only the configured Resend key parameter, not a broad secret path."
+  }
+}

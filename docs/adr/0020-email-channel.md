@@ -1,6 +1,6 @@
-# ADR-0020 — SNS email subscriptions for alerts; no SES until something needs it
+# ADR-0020 — SNS for out-of-band alerts; provider-neutral transactional email
 
-- Status: Accepted
+- Status: Accepted — amended 2026-09-21 when password identities and player invitations created a sending use case
 - Date: 2026-08-11
 - Milestone: M5
 
@@ -28,7 +28,7 @@ any of it; outbound SES is inexpensive at this volume, but "inexpensive" is not 
 
 ## Decision
 
-**Now:** email is an alert channel only, delivered by an SNS email subscription on the same topic the chat
+**Original decision:** email is an alert channel only, delivered by an SNS email subscription on the same topic the chat
 adapters subscribe to. The Budgets alarm and the backup-failure alarm go to it. No SES.
 
 **Not now:** SES. It is deferred, not rejected on principle. It becomes worth adding when one of these is true:
@@ -45,6 +45,25 @@ adapters subscribe to. The Budgets alarm and the backup-failure alarm go to it. 
   addition and not wired into the critical path.
 
 Until then, no mail server, no mail receiving, and no mailbox to maintain.
+
+## Amendment — a transactional sender now has a use case
+
+[ADR-0055](0055-sign-in-with-email-and-password-by-default.md) added email-shaped identities, and game invitations
+already leave the access API as provider-neutral EventBridge events. The trigger this record deliberately named has
+therefore fired. Transactional email is now a delivery port beside Telegram, not a replacement for the alert path.
+
+- Domain code produces a transactional message without naming a vendor. An `EmailSender` adapter carries it.
+- Resend is the first adapter. It uses the documented `POST /emails` API and one stable idempotency key per invitation
+  and recipient, so an EventBridge or Lambda retry cannot send the same message twice during Resend's idempotency
+  window.
+- The adapter is optional and defaults to `none`. A clone with no domain, Resend account or API key keeps Telegram
+  and the rest of Spawnpoint working.
+- A send-only API key is a SecureString in Parameter Store. Terraform and GitHub carry only its parameter name, the
+  selected provider and non-secret sender addresses.
+- Player mail goes only to a verified address belonging to the linked account. A login address that is still an
+  unverified claim is not silently promoted into a notification channel.
+- The existing SNS email subscription remains the independent operational backstop. Resend must not become a
+  dependency of budget, anomaly or backup-failure alerts.
 
 ## Consequences
 
@@ -78,12 +97,13 @@ Until then, no mail server, no mail receiving, and no mailbox to maintain.
 | SES only for alerts | Same alerting outcome as an SNS subscription, with domain verification and a sandbox request on top |
 | Chat only, no email at all | Simplest, and tempting. Rejected because the backstop alarm must not depend on the thing it is watching. A cost alarm that only reaches a broken system is decoration |
 | A self-hosted mail server | Never, for this. Deliverability from a small IP address is a full-time hobby of its own, and it needs an always-on host, which the whole design avoids |
-| A third-party sender (Postmark, Resend, Mailgun) | Better deliverability and much nicer developer experience than SES. Rejected while there is no sending use case at all; reconsider alongside SES if a trigger fires |
+| A third-party sender (Postmark, Resend, Mailgun) | Originally deferred while there was no sending use case. The 2026-09-21 amendment chooses Resend as the first replaceable adapter now that the trigger has fired |
 | SES inbound, to receive mail | No use case. The system has nothing to read email for |
 
 ## Open questions
 
 - Which address the alarms go to, and whether a second person should also be subscribed so alerts survive one
   person's holiday.
-- Whether email sign-in, if it ever happens, uses Cognito's own sending — which has a low cap and is intended
-  for development — or SES from the start. Cognito's built-in sender is the thing to check first.
+- Which proof-of-control flow marks an address verified and whether password reset or owner invitations land first.
+- Whether delivery webhooks should later feed bounce and suppression state back into the access model. Sending does
+  not pretend that API acceptance means inbox delivery.

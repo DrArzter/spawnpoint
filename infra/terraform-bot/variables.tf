@@ -53,3 +53,47 @@ variable "enable_notifications" {
   type        = bool
   default     = true
 }
+
+variable "email_delivery_provider" {
+  description = "Optional transactional email adapter used by the notifier. `none` keeps email out of a self-hosted deployment; `resend` enables the Resend HTTP adapter."
+  type        = string
+  default     = "none"
+
+  validation {
+    condition     = contains(["none", "resend"], var.email_delivery_provider)
+    error_message = "email_delivery_provider must be none or resend."
+  }
+}
+
+variable "resend_api_key_parameter" {
+  description = "SecureString parameter containing a send-only Resend API key. The parameter value is never stored in Terraform or GitHub."
+  type        = string
+  default     = "/spawnpoint/email/resend-api-key"
+
+  validation {
+    condition     = can(regex("^/spawnpoint/email/[A-Za-z0-9_.-]+$", var.resend_api_key_parameter))
+    error_message = "resend_api_key_parameter must stay below /spawnpoint/email/."
+  }
+}
+
+variable "email_from" {
+  description = "Verified sender used for transactional email, for example `Spawnpoint <notifications@example.com>`. Required when an email adapter is enabled."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.email_delivery_provider == "none" || can(regex("^[^\r\n<>]+ <[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+>$", var.email_from))
+    error_message = "email_from must be a display name and email address from a verified sending domain."
+  }
+}
+
+variable "email_reply_to" {
+  description = "Optional reply-to address for transactional email. Empty means replies go to the sender address."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.email_reply_to == "" || can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", var.email_reply_to))
+    error_message = "email_reply_to must be empty or one email address."
+  }
+}

@@ -18,6 +18,13 @@ Secrets live in SSM; identities and roles live in the shared DynamoDB access tab
 - `/spawnpoint/bot/token` (`SecureString`)
 - `/spawnpoint/bot/webhook-secret` (`SecureString`)
 - `/spawnpoint/bot/chat-ids` (`String`, reserved for the later notifier)
+- `/spawnpoint/email/resend-api-key` (`SecureString`, optional send-only key when `email_delivery_provider = "resend"`)
+
+Transactional email is an optional notifier adapter. The default `email_delivery_provider = "none"` keeps a clone
+free of external email dependencies. A Resend deployment additionally sets `email_from` to an address on a verified
+sending domain and may set `email_reply_to`; neither address is a secret. Only the parameter name enters Terraform.
+The notifier sends game invitations to individually verified linked addresses and uses a stable idempotency key per
+invitation and recipient.
 
 Set `mini_app_url` explicitly to the public HTTPS endpoint for this installation. The hosted pipeline reads it from the
 `SPAWNPOINT_MINI_APP_URL` repository variable; self-hosted deployments may use their custom domain, generated CloudFront

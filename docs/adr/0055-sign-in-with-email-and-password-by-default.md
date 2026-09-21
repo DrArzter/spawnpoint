@@ -7,7 +7,7 @@
   that produced it and named email and password as an adapter an installation might add. This is that adapter, and
   the first that is not a chat platform
 - Relates: [ADR-0036](0036-observed-visitors-and-owner-approved-access.md) (approval still decides what an account may
-  do), [ADR-0020](0020-email-channel.md) (no SES, so nothing is sent to an address),
+  do), [ADR-0020](0020-email-channel.md) (transactional email is optional and only verified addresses are deliverable),
   [ADR-0043](0043-deploy-production-from-reviewed-pull-requests.md) (the two routes this replaces are destroyed through
   its allow-list), [ADR-0050](0050-default-role-on-sign-in-and-elevation-requests.md) (which changes what a fresh sign-in
   is worth, and therefore what open registration is worth)
@@ -48,9 +48,9 @@ towards predictable substitutions and neither NCSC nor NIST recommend them. Ten 
 fifteen minutes. A guess against an address nobody registered, or a locked one, is verified against a decoy hash, so
 the time a refusal takes does not say whether the address exists, and every refusal is the same `401`.
 
-**The address is a sign-in name, not a verified channel.** Nothing is sent to it, and the panel lists it as
-unverified wherever it lists links. Verification arrives with a sender — ADR-0020's most likely trigger has now
-fired — and not before.
+**The address begins as a sign-in name, not a verified channel.** Registration does not prove mailbox control, and
+the panel lists it as unverified wherever it lists links. ADR-0020 now supplies a transactional delivery adapter, but
+notifications still require a separate proof-of-control flow to mark the address verified.
 
 **Registration is public and grants nothing.** `POST /auth/password/register` creates the credential and a login
 session in one step. The account it signs in as is observed like any other and holds no role until an Owner grants

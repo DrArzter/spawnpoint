@@ -34,9 +34,18 @@ data "aws_iam_policy_document" "notifier" {
     resources = ["arn:aws:ssm:${var.aws_region}:${local.account_id}:parameter/spawnpoint/bot/*"]
   }
 
+  dynamic "statement" {
+    for_each = var.email_delivery_provider == "resend" ? [1] : []
+    content {
+      sid       = "ReadResendApiKey"
+      actions   = ["ssm:GetParameter"]
+      resources = ["arn:aws:ssm:${var.aws_region}:${local.account_id}:parameter${var.resend_api_key_parameter}"]
+    }
+  }
+
   statement {
     sid     = "ReadNotificationSubscriptions"
-    actions = ["dynamodb:Scan", "dynamodb:Query"]
+    actions = ["dynamodb:GetItem", "dynamodb:Scan", "dynamodb:Query"]
     resources = [
       data.aws_dynamodb_table.access.arn,
       "${data.aws_dynamodb_table.access.arn}/index/gsi1",
@@ -76,10 +85,14 @@ resource "aws_lambda_function" "notifier" {
 
   environment {
     variables = {
-      BOT_TOKEN_PARAMETER = "/spawnpoint/bot/token"
-      CHAT_IDS_PARAMETER  = "/spawnpoint/bot/chat-ids"
-      ACCESS_TABLE_NAME   = data.aws_dynamodb_table.access.name
-      MINI_APP_URL        = var.mini_app_url
+      BOT_TOKEN_PARAMETER      = "/spawnpoint/bot/token"
+      CHAT_IDS_PARAMETER       = "/spawnpoint/bot/chat-ids"
+      ACCESS_TABLE_NAME        = data.aws_dynamodb_table.access.name
+      MINI_APP_URL             = var.mini_app_url
+      EMAIL_DELIVERY_PROVIDER  = var.email_delivery_provider
+      RESEND_API_KEY_PARAMETER = var.resend_api_key_parameter
+      EMAIL_FROM               = var.email_from
+      EMAIL_REPLY_TO           = var.email_reply_to
     }
   }
 }

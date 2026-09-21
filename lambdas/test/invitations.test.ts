@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { invitationDeliveryStatus, parseInvitationEvent, renderInvitation } from "../src/domain/invitations.ts";
+import { invitationDeliveryStatus, parseInvitationEvent, renderInvitation, renderInvitationEmail } from "../src/domain/invitations.ts";
 
 const direct = {
   invitationId: "inv-1",
@@ -26,6 +26,20 @@ test("a broadcast invitation addresses everyone", () => {
   const parsed = parseInvitationEvent({ ...direct, audience: "broadcast", recipientIdentityIds: [] });
   assert.ok(parsed);
   assert.equal(renderInvitation(parsed), "[INVITE] DrArzter invited everyone to play Minecraft — Main modded.");
+});
+
+test("an invitation email is readable in text and escapes user-controlled HTML", () => {
+  const message = renderInvitationEmail({
+    ...direct,
+    audience: "direct" as const,
+    senderDisplayName: "<Owner>",
+    worldName: "Factory & friends",
+  }, "https://spawnpoint.example.dev/");
+  assert.equal(message.subject, "<Owner> invited you to Minecraft");
+  assert.match(message.text, /Open Spawnpoint: https:\/\/spawnpoint\.example\.dev\//);
+  assert.match(message.html, /&lt;Owner&gt;/);
+  assert.match(message.html, /Factory &amp; friends/);
+  assert.doesNotMatch(message.html, /<Owner>/);
 });
 
 test("malformed invitations are rejected", () => {

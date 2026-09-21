@@ -131,6 +131,15 @@ data "aws_iam_policy_document" "access_api" {
       "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.session_signing_secret_parameter}",
     ]
   }
+
+  dynamic "statement" {
+    for_each = var.email_delivery_provider == "resend" ? [1] : []
+    content {
+      sid       = "ReadTransactionalEmailSecret"
+      actions   = ["ssm:GetParameter"]
+      resources = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.resend_api_key_parameter}"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "access_api" {
@@ -163,6 +172,11 @@ resource "aws_lambda_function" "access_api" {
       TELEGRAM_OIDC_CLIENT_ID          = var.telegram_oidc_client_id
       PASSWORD_LOGIN_ENABLED           = var.password_login_enabled ? "true" : "false"
       PASSWORD_REGISTRATION_ENABLED    = var.password_registration_enabled ? "true" : "false"
+      EMAIL_DELIVERY_PROVIDER          = var.email_delivery_provider
+      RESEND_API_KEY_PARAMETER         = var.resend_api_key_parameter
+      EMAIL_FROM                       = var.email_from
+      EMAIL_REPLY_TO                   = var.email_reply_to
+      PANEL_URL                        = trimsuffix(var.panel_url, "/")
       LIFECYCLE_TABLE_NAME             = data.aws_dynamodb_table.lifecycle.name
       CONTROL_PLANE_VIEW_TABLE         = var.control_plane_view_table_name
       CONTROL_PLANE_WEBSOCKET_URL      = "wss://${aws_apigatewayv2_api.control_plane.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.control_plane.name}"
@@ -210,10 +224,17 @@ locals {
     "POST /auth/telegram",
     "POST /auth/password",
     "POST /auth/password/register",
+    "POST /auth/email/verification",
+    "POST /auth/email/verification/resend",
+    "POST /auth/password/forgot",
+    "POST /auth/password/reset",
     "POST /auth/refresh",
     "POST /auth/logout",
     "GET /session",
     "GET /me",
+    "GET /me/accounts",
+    "POST /me/password",
+    "POST /me/password/change",
     "GET /control-plane",
     "POST /control-plane/subscriptions",
     "GET /access/roles",
@@ -264,7 +285,14 @@ resource "aws_apigatewayv2_stage" "default" {
   depends_on = [aws_apigatewayv2_route.access]
 
   dynamic "route_settings" {
-    for_each = toset(["POST /auth/password", "POST /auth/password/register"])
+    for_each = toset([
+      "POST /auth/password",
+      "POST /auth/password/register",
+      "POST /auth/email/verification",
+      "POST /auth/email/verification/resend",
+      "POST /auth/password/forgot",
+      "POST /auth/password/reset",
+    ])
     content {
       route_key              = route_settings.value
       throttling_burst_limit = var.password_auth_throttling_burst_limit

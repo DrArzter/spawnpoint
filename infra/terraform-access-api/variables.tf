@@ -117,6 +117,60 @@ variable "password_registration_enabled" {
   default     = false
 }
 
+variable "email_delivery_provider" {
+  description = "Transactional email adapter used for verification and password recovery. `none` keeps email-dependent flows unavailable for self-hosted deployments."
+  type        = string
+  default     = "none"
+
+  validation {
+    condition     = contains(["none", "resend"], var.email_delivery_provider)
+    error_message = "email_delivery_provider must be none or resend."
+  }
+}
+
+variable "resend_api_key_parameter" {
+  description = "SecureString parameter containing the Resend API key when email_delivery_provider is resend."
+  type        = string
+  default     = "/spawnpoint/email/resend-api-key"
+
+  validation {
+    condition     = can(regex("^/spawnpoint/email/[A-Za-z0-9_.-]+$", var.resend_api_key_parameter))
+    error_message = "resend_api_key_parameter must stay below /spawnpoint/email/."
+  }
+}
+
+variable "email_from" {
+  description = "Verified transactional sender, for example `Spawnpoint <auth@example.dev>`. Required for Resend."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.email_delivery_provider == "none" || can(regex("^[^\r\n<>]+ <[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+>$", var.email_from))
+    error_message = "email_from must be a display name and email address from a verified sending domain."
+  }
+}
+
+variable "email_reply_to" {
+  description = "Optional reply-to address for transactional authentication mail."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.email_reply_to == "" || can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", var.email_reply_to))
+    error_message = "email_reply_to must be empty or one email address."
+  }
+}
+
+check "email_delivery_configuration" {
+  assert {
+    condition = (
+      var.email_delivery_provider == "none" ||
+      (startswith(var.resend_api_key_parameter, "/") && trimspace(var.email_from) != "")
+    )
+    error_message = "Resend delivery requires an absolute resend_api_key_parameter and a non-empty email_from."
+  }
+}
+
 variable "password_auth_throttling_burst_limit" {
   description = "Short burst allowed separately on each public password-auth route."
   type        = number

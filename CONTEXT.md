@@ -62,9 +62,9 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Login session**: A revocable period in which a browser may continue acting as one previously verified external account without repeating sign-in. It is distinct from a gameplay Session. _Avoid_: Browser session, auth token.
 
-**Login provider**: An adapter that verifies one kind of credential and produces a provider-neutral principal for a login session. Telegram and email-and-password are the two built in; a deployment says which it offers. A login provider does not resolve identities and grants no permission. _Avoid_: Identity provider when the credential is one Spawnpoint itself keeps.
+**Login provider**: An adapter that verifies one kind of credential and produces a provider-neutral principal for a login session. A deployment chooses which providers it offers; no provider is part of an identity's type. A login provider does not resolve identities and grants no permission. _Avoid_: Identity provider when the credential is one Spawnpoint itself keeps.
 
-**Password credential**: An email address, a display name and a salted password hash kept by Spawnpoint and signed in through the password login provider. The address is a sign-in name, not a verified channel; the credential's own id, not the address, is the account's subject.
+**Password credential**: A verified email address and salted password hash kept by Spawnpoint as one possible linked account. It may establish a new identity relationship or be added to an existing identity; the credential's own id, not the address, is the account's subject.
 
 **Visitor**: A platform-authenticated person who has reached a Spawnpoint surface but has not been approved as an identity. A visitor may see only explicitly public, non-sensitive information.
 
@@ -80,7 +80,7 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Profile**: The user-facing representation of an identity, including its display details and linked accounts. It is not an authentication authority.
 
-**Linked account**: An external chat, game or network identity, or a password credential, associated with exactly one Spawnpoint identity. _Avoid_: User; one user may have several linked accounts.
+**Linked account**: A credential-bearing account associated with exactly one Spawnpoint identity. Any identity may have several linked accounts from any enabled login providers, and none is primary merely because it was used first. _Avoid_: User; one person may have several linked accounts.
 
 **Subscription**: One identity's opt-in to a category of notifications, optionally scoped to a particular game. Roles do not imply subscriptions.
 

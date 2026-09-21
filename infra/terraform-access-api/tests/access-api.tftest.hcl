@@ -166,12 +166,25 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
     condition = alltrue([
       for route in aws_apigatewayv2_stage.default.route_settings :
       route.throttling_burst_limit == 5 && route.throttling_rate_limit == 2
-      if contains(["POST /auth/password", "POST /auth/password/register"], route.route_key)
+      if startswith(route.route_key, "POST /auth/")
     ]) && length([
       for route in aws_apigatewayv2_stage.default.route_settings : route
-      if contains(["POST /auth/password", "POST /auth/password/register"], route.route_key)
-    ]) == 2
-    error_message = "The two public scrypt routes must have explicit throttles independent from normal panel traffic."
+      if startswith(route.route_key, "POST /auth/")
+    ]) == 6
+    error_message = "Public password and email-action routes must have explicit throttles independent from normal panel traffic."
+  }
+
+  assert {
+    condition = alltrue([
+      contains(local.access_routes, "POST /auth/email/verification"),
+      contains(local.access_routes, "POST /auth/email/verification/resend"),
+      contains(local.access_routes, "POST /auth/password/forgot"),
+      contains(local.access_routes, "POST /auth/password/reset"),
+      contains(local.access_routes, "GET /me/accounts"),
+      contains(local.access_routes, "POST /me/password"),
+      contains(local.access_routes, "POST /me/password/change"),
+    ])
+    error_message = "Verified email, recovery and provider-neutral linked-account management must deploy together."
   }
 
   assert {
@@ -407,10 +420,17 @@ run "registration_can_open_without_changing_password_login" {
     panel_url                         = "https://panel.example.dev/"
     session_signing_secret_parameter  = "/spawnpoint/auth/session-signing-secret"
     password_registration_enabled     = true
+    email_delivery_provider           = "resend"
+    email_from                        = "Spawnpoint <auth@example.dev>"
   }
 
   assert {
     condition     = aws_lambda_function.access_api.environment[0].variables.PASSWORD_LOGIN_ENABLED == "true" && aws_lambda_function.access_api.environment[0].variables.PASSWORD_REGISTRATION_ENABLED == "true"
     error_message = "A deliberate registration window must not change whether existing password credentials can sign in."
+  }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.EMAIL_DELIVERY_PROVIDER == "resend" && aws_lambda_function.access_api.environment[0].variables.EMAIL_FROM == "Spawnpoint <auth@example.dev>"
+    error_message = "Registration must receive its email adapter through deployment configuration, never a code constant."
   }
 }

@@ -8,6 +8,13 @@ password_login_enabled = true
 # Open only for an intentional registration window. Existing credentials can
 # still sign in while this is false.
 password_registration_enabled = false
+# Verification and recovery are optional adapters. `none` keeps a clone usable
+# without a domain or email provider. To enable them, store the key in SSM and
+# pass a sender from a domain already verified by Resend.
+email_delivery_provider   = "none"
+resend_api_key_parameter  = "/spawnpoint/email/resend-api-key"
+email_from                = ""
+email_reply_to            = ""
 # Bound the public scrypt endpoints independently from normal panel traffic.
 password_auth_throttling_burst_limit = 5
 password_auth_throttling_rate_limit  = 2

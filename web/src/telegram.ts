@@ -53,7 +53,7 @@ export type ViewerProfile = {
   displayName: string;
   inTelegram: boolean;
   /** Which account the session was signed in through. */
-  provider?: "telegram" | "password";
+  provider?: string;
   username?: string;
   email?: string;
   photoUrl?: string;

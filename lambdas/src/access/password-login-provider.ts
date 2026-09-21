@@ -16,6 +16,7 @@ export const passwordProviderId = "password";
 export type PasswordCredential = Readonly<{
   subject: string;
   email: string;
+  emailVerified: boolean;
   displayName: string;
   passwordHash: string;
   guard: SignInGuard;
@@ -67,7 +68,7 @@ export function createPasswordLoginProvider(dependencies: PasswordLoginProviderD
       if (email === null || typeof password !== "string" || password.length === 0 || password.length > passwordMaximumLength) return null;
       const nowSeconds = dependencies.nowSeconds?.() ?? Math.floor(Date.now() / 1000);
       const credential = await dependencies.credentials.find(email);
-      if (credential === null || signInLocked(credential.guard, nowSeconds)) {
+      if (credential === null || !credential.emailVerified || signInLocked(credential.guard, nowSeconds)) {
         await verifyPassword(password, await decoy());
         return null;
       }

@@ -1,6 +1,6 @@
 # ADR-0055 — Sign in with email and password by default, and with a provider as an alternative
 
-- Status: Accepted — implemented in the same change, 2026-09-17
+- Status: Accepted — implemented in the same change, 2026-09-17; verification, recovery and linking amended by [ADR-0056](0056-verify-and-link-password-credentials.md)
 - Date: 2026-09-17
 - Milestone: M4
 - Extends: [ADR-0045](0045-provider-neutral-login-sessions.md), which made a login session independent of the provider

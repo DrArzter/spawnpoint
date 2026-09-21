@@ -8,15 +8,23 @@ import { plural } from "../lib/format";
 import type { Member, Role } from "../model";
 import { openInBrowser, ThemePreference, ViewerProfile } from "../telegram";
 
-type AppearanceControls = {
+type AppearanceControls = Readonly<{
   preference: ThemePreference;
   setPreference: (next: ThemePreference) => void;
   theme: "light" | "dark";
   accent: string;
   setAccent: (next: string) => void;
-};
+}>;
 
-export function ProfileScreen({ appearance, member, role, viewer, onSignOut }: { appearance: AppearanceControls; member: Member; role?: Role; viewer: ViewerProfile; onSignOut: () => void }) {
+type ProfileScreenProps = Readonly<{
+  appearance: AppearanceControls;
+  member: Member;
+  role?: Role;
+  viewer: ViewerProfile;
+  onSignOut: () => void;
+}>;
+
+export function ProfileScreen({ appearance, member, role, viewer, onSignOut }: ProfileScreenProps) {
   return (
     <div className="page">
       <PageHeader
@@ -26,7 +34,7 @@ export function ProfileScreen({ appearance, member, role, viewer, onSignOut }: {
         </>}
         leading={<Avatar name={member.name} photoUrl={viewer.photoUrl} size="large" />}
         status={<Chip icon="admin_panel_settings" tone="primary">{role?.name ?? "No role"}</Chip>}
-        subtitle={viewer.username ? `@${viewer.username}` : "Spawnpoint identity"}
+        subtitle={viewer.username ? `@${viewer.username}` : viewer.email ?? "Spawnpoint identity"}
         title={member.name}
       />
       <Card title="Identity">
@@ -34,6 +42,8 @@ export function ProfileScreen({ appearance, member, role, viewer, onSignOut }: {
           { label: "Display name", value: member.name },
           { label: "Profile photo", value: viewer.photoUrl ? <Avatar name={member.name} photoUrl={viewer.photoUrl} /> : <Ghost>Not set</Ghost> },
           { label: "Role", value: role?.name ?? "No role", hint: role ? plural(role.permissions.length, "permission") : undefined },
+          { label: "Signed in with", value: viewer.provider === "password" ? "Email and password" : "Telegram" },
+          ...(viewer.email ? [{ label: "Email", value: viewer.email, copy: viewer.email, explain: "Your sign-in name. Nothing is sent to it yet, so it is listed as unverified." }] : []),
           {
             label: "Identity ID",
             value: member.id,

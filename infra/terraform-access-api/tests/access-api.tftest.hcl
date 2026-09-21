@@ -148,6 +148,38 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition     = contains(local.access_routes, "GET /auth/providers") && contains(local.access_routes, "POST /auth/password") && contains(local.access_routes, "POST /auth/password/register")
+    error_message = "Email-and-password sign-in needs a public provider list, a login endpoint and a registration endpoint (ADR-0055)."
+  }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.PASSWORD_LOGIN_ENABLED == "true"
+    error_message = "Password sign-in for existing credentials is on unless a deployment turns it off."
+  }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.PASSWORD_REGISTRATION_ENABLED == "false"
+    error_message = "Anonymous password registration must stay closed unless a deployment deliberately opens it."
+  }
+
+  assert {
+    condition = alltrue([
+      for route in aws_apigatewayv2_stage.default.route_settings :
+      route.throttling_burst_limit == 5 && route.throttling_rate_limit == 2
+      if contains(["POST /auth/password", "POST /auth/password/register"], route.route_key)
+    ]) && length([
+      for route in aws_apigatewayv2_stage.default.route_settings : route
+      if contains(["POST /auth/password", "POST /auth/password/register"], route.route_key)
+    ]) == 2
+    error_message = "The two public scrypt routes must have explicit throttles independent from normal panel traffic."
+  }
+
+  assert {
+    condition     = contains(local.access_routes, "POST /access/candidates/{platform}/{platformUserId}/approve") && contains(local.access_routes, "POST /access/candidates/{platform}/{platformUserId}/dismiss") && !contains(local.access_routes, "POST /access/candidates/{telegramId}/approve")
+    error_message = "A candidate is approved or dismissed by platform and account id, not by Telegram id alone."
+  }
+
+  assert {
     condition = toset(aws_apigatewayv2_api.access.cors_configuration[0].allow_origins) == toset([
       "https://spawnpoint.example.dev",
       "https://legacy.example.dev",
@@ -348,5 +380,37 @@ run "self_hosted_api_keeps_the_generated_endpoint_optional" {
   assert {
     condition     = aws_lambda_function.access_api.environment[0].variables.REFRESH_COOKIE_SAME_SITE == "None"
     error_message = "The generated cross-site API endpoint needs a Secure SameSite=None refresh cookie."
+  }
+}
+
+run "telegram_only_deployment_switches_password_login_off" {
+  command = plan
+
+  variables {
+    bootstrap_owner_telegram_id      = "1780660807"
+    panel_url                        = "https://panel.example.dev/"
+    session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
+    password_login_enabled           = false
+  }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.PASSWORD_LOGIN_ENABLED == "false"
+    error_message = "A deployment that offers Telegram only must be able to turn the password routes off without a code change."
+  }
+}
+
+run "registration_can_open_without_changing_password_login" {
+  command = plan
+
+  variables {
+    bootstrap_owner_telegram_id       = "1780660807"
+    panel_url                         = "https://panel.example.dev/"
+    session_signing_secret_parameter  = "/spawnpoint/auth/session-signing-secret"
+    password_registration_enabled     = true
+  }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.PASSWORD_LOGIN_ENABLED == "true" && aws_lambda_function.access_api.environment[0].variables.PASSWORD_REGISTRATION_ENABLED == "true"
+    error_message = "A deliberate registration window must not change whether existing password credentials can sign in."
   }
 }

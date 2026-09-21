@@ -3,6 +3,15 @@ bootstrap_owner_telegram_id = "1780660807"
 # Public value from BotFather -> Login Widget after adding the panel's trusted origin.
 telegram_oidc_client_id = "8521897198"
 
+# Email and password beside Telegram (ADR-0055). Set false to offer Telegram only.
+password_login_enabled = true
+# Open only for an intentional registration window. Existing credentials can
+# still sign in while this is false.
+password_registration_enabled = false
+# Bound the public scrypt endpoints independently from normal panel traffic.
+password_auth_throttling_burst_limit = 5
+password_auth_throttling_rate_limit  = 2
+
 # The SecureString is created by the bot setup and is read only at runtime.
 # Never put the bot token itself in Terraform variables or state.
 bot_token_parameter = "/spawnpoint/bot/token"

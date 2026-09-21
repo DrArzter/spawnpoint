@@ -36,6 +36,8 @@ jobs:
       TF_VAR_mini_app_url: ${{ vars.SPAWNPOINT_MINI_APP_URL }}
       TF_VAR_telegram_oidc_client_id: ${{ vars.TELEGRAM_OIDC_CLIENT_ID }}
       TF_VAR_session_signing_secret_parameter: ${{ vars.SESSION_SIGNING_SECRET_PARAMETER }}
+      TF_VAR_password_login_enabled: ${{ vars.PASSWORD_LOGIN_ENABLED }}
+      TF_VAR_password_registration_enabled: ${{ vars.PASSWORD_REGISTRATION_ENABLED }}
       TF_VAR_alert_email: ${{ secrets.TF_VAR_ALERT_EMAIL }}
       TF_VAR_bootstrap_owner_telegram_id: ${{ secrets.TF_VAR_BOOTSTRAP_OWNER_TELEGRAM_ID }}
 

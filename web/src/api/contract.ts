@@ -1,4 +1,7 @@
+import type { LoginProviderId } from "../lib/signin";
 import type { ControlPlaneSnapshot } from "../model";
+
+export type { LoginProviderId } from "../lib/signin";
 
 /**
  * Why a call did not succeed, which decides what the panel may offer next.
@@ -22,6 +25,20 @@ export function failureKind(error: unknown): ApiFailureKind {
   return error instanceof ApiError ? error.kind : "failed";
 }
 
+/**
+ * The account a session was signed in through. `provider` says which platform
+ * vouches for it; the Telegram id stays a named field because the owner
+ * bootstrap reads it, and an email account is described by its address.
+ */
+export type AccountProfile = Readonly<{
+  provider: string;
+  platformUserId: string;
+  telegramId: string | null;
+  username: string | null;
+  email: string | null;
+  photoUrl: string | null;
+}>;
+
 export type ActiveSession = Readonly<{
   state: "active";
   /** Set by a transport whose data is not real, so the panel can say so without asking which mode it is in. */
@@ -30,17 +47,14 @@ export type ActiveSession = Readonly<{
   /** What this deployment routes. A screen whose capability is absent is not offered at all. */
   capabilities: readonly string[];
   role: { id: string; name: string; permissions: string[] } | null;
-  profile: { telegramId: string; username: string | null; photoUrl: string | null };
+  profile: AccountProfile;
   bootstrap: { state: "unclaimed" } | { state: "claimed"; ownerId: string; telegramId: string; claimedAt: string };
 }>;
 
 export type VisitorSession = Readonly<{
   state: "visitor";
-  candidate: {
-    telegramId: string;
+  candidate: AccountProfile & {
     displayName: string;
-    username: string | null;
-    photoUrl: string | null;
     status: "OBSERVED" | "REQUESTED" | "DISMISSED";
   };
 }>;
@@ -62,9 +76,11 @@ export async function apiFailure(response: Response, message: string, parsed?: R
 export type SpawnpointSession = ActiveSession | VisitorSession;
 
 export type AccessCandidate = Readonly<{
+  platform: string;
   platformUserId: string;
   displayName: string;
   username: string | null;
+  email: string | null;
   photoUrl: string | null;
   status: "OBSERVED" | "REQUESTED";
   firstSeenAt: string;
@@ -77,7 +93,8 @@ export type AccessIdentity = Readonly<{
   displayName: string;
   roleId: string;
   directGrants: string[];
-  links: ReadonlyArray<{ platform: string; value: string; verified: boolean }>;
+  /** `handle` is the account's own name where it has one: a Telegram username, an email address. */
+  links: ReadonlyArray<{ platform: string; value: string; handle: string | null; verified: boolean }>;
 }>;
 
 export type AccessRole = Readonly<{
@@ -142,6 +159,11 @@ export type AuthState =
 
 export type WorldLifecycleAction = "archive" | "regenerate" | "restore" | "purge";
 export type SessionOperation = "start" | "stop";
+export type LoginOptions = Readonly<{
+  providers: readonly LoginProviderId[];
+  /** Providers through which an anonymous visitor may create a credential. */
+  selfRegistration: readonly LoginProviderId[];
+}>;
 
 /**
  * Everything the panel asks of a backend. The live transport and the demo both
@@ -150,14 +172,19 @@ export type SessionOperation = "start" | "stop";
  */
 export type SpawnpointApi = Readonly<{
   restoreSession(): Promise<AuthState>;
+  /** Which ways in the deployment offers, and which accept anonymous registration. */
+  loadLoginOptions(): Promise<LoginOptions>;
   exchangeTelegramOidc(idToken: string): Promise<AuthState>;
+  /** Both resolve to a session or throw a sentence the form can show beside its fields. */
+  signInWithPassword(email: string, password: string): Promise<AuthState>;
+  registerWithPassword(email: string, password: string, displayName: string): Promise<AuthState>;
   /** Ends the session at its source. Navigation afterwards is the caller's, and is shared. */
   revokeSession(): Promise<void>;
 
   requestAccess(): Promise<void>;
   loadAccessCandidates(): Promise<AccessCandidate[]>;
-  approveAccessCandidate(telegramId: string, roleId: string): Promise<{ id: string; displayName: string; roleId: string }>;
-  dismissAccessCandidate(telegramId: string): Promise<void>;
+  approveAccessCandidate(platform: string, platformUserId: string, roleId: string): Promise<{ id: string; displayName: string; roleId: string }>;
+  dismissAccessCandidate(platform: string, platformUserId: string): Promise<void>;
   loadAccessIdentities(): Promise<AccessIdentity[]>;
   loadAccessRoles(): Promise<AccessRole[]>;
   updateIdentityRole(identityId: string, roleId: string): Promise<void>;

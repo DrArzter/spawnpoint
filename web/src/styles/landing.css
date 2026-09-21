@@ -82,6 +82,18 @@
   text-decoration: none;
 }
 
+/* The same link drawn as a button, where it acts rather than navigates. */
+button.landing-link {
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+button.landing-link:hover {
+  background: var(--primary-state);
+}
+
 /* Product shot */
 .shot {
   display: grid;

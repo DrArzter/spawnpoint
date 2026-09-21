@@ -3,8 +3,9 @@ import type { AppearancePreference, SpawnpointApi, SubscriptionState } from "./a
 import { liveApi, liveAuthConfigured } from "./api/live";
 
 export type {
-  AccessCandidate, AccessIdentity, AccessRole, ActiveSession, AppearancePreference, AuthState, BackupEntry, BackupInventory,
-  HostMetrics, HostMetricSeries, InvitationRecipient, InvitationSummary, MetricRange, SessionOperation,
+  AccessCandidate, AccessIdentity, AccessRole, AccountProfile, ActiveSession, AppearancePreference, AuthState, BackupEntry,
+  BackupInventory, HostMetrics, HostMetricSeries, InvitationRecipient, InvitationSummary, LoginOptions, LoginProviderId,
+  MetricRange, SessionOperation,
   SpawnpointApi, SpawnpointSession, SubscriptionState, VisitorSession, WorldLifecycleAction,
 } from "./api/contract";
 import type { MetricRange } from "./api/contract";
@@ -20,12 +21,15 @@ export function authConfigured(): boolean {
 }
 
 export const restoreAuth = (): ReturnType<SpawnpointApi["restoreSession"]> => api.restoreSession();
+export const loadLoginOptions = () => api.loadLoginOptions();
 export const exchangeTelegramOidc = (idToken: string) => api.exchangeTelegramOidc(idToken);
+export const signInWithPassword = (email: string, password: string) => api.signInWithPassword(email, password);
+export const registerWithPassword = (email: string, password: string, displayName: string) => api.registerWithPassword(email, password, displayName);
 
 export const requestAccess = () => api.requestAccess();
 export const loadAccessCandidates = () => api.loadAccessCandidates();
-export const approveAccessCandidate = (telegramId: string, roleId: string) => api.approveAccessCandidate(telegramId, roleId);
-export const dismissAccessCandidate = (telegramId: string) => api.dismissAccessCandidate(telegramId);
+export const approveAccessCandidate = (platform: string, platformUserId: string, roleId: string) => api.approveAccessCandidate(platform, platformUserId, roleId);
+export const dismissAccessCandidate = (platform: string, platformUserId: string) => api.dismissAccessCandidate(platform, platformUserId);
 export const loadAccessIdentities = () => api.loadAccessIdentities();
 export const loadAccessRoles = () => api.loadAccessRoles();
 export const updateIdentityRole = (identityId: string, roleId: string) => api.updateIdentityRole(identityId, roleId);

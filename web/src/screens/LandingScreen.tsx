@@ -1,8 +1,11 @@
-import { authConfigured, AuthState, endSession } from "../auth";
+import { useEffect, useState } from "react";
+
+import { authConfigured, AuthState, endSession, loadLoginOptions } from "../auth";
 import { Avatar } from "../components/Avatar";
-import { TelegramLoginButton } from "../components/TelegramLogin";
+import { SignInMode, SignInPanel } from "../components/SignIn";
 import { Button, IconButton } from "../components/ui/Button";
 import { Chip } from "../components/ui/Chip";
+import { Dialog } from "../components/ui/Dialog";
 import { Menu } from "../components/ui/Menu";
 import { Status } from "../components/ui/Status";
 import { Banner } from "../components/ui/Surfaces";
@@ -20,6 +23,18 @@ export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; on
   const configured = authConfigured();
   const session = auth.status === "authenticated" && auth.session.state === "active" ? auth.session : null;
   const visitor = auth.status === "authenticated" && auth.session.state === "visitor" ? auth.session : null;
+  const [signIn, setSignIn] = useState<SignInMode | null>(null);
+  const [passwordRegistrationOffered, setPasswordRegistrationOffered] = useState(false);
+  const signedOut = !session && !visitor && auth.status !== "loading";
+
+  useEffect(() => {
+    if (!signedOut || !configured) return;
+    let active = true;
+    void loadLoginOptions().then((options) => {
+      if (active) setPasswordRegistrationOffered(options.selfRegistration.includes("password"));
+    });
+    return () => { active = false; };
+  }, [configured, signedOut]);
 
   return (
     <div className="landing-shell">
@@ -49,18 +64,22 @@ export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; on
             <Menu
               avatar={{ name: visitor.candidate.displayName, photoUrl: visitor.candidate.photoUrl }}
               items={[
-                { id: "request", label: visitor.candidate.status === "REQUESTED" ? "Access requested" : "Request access", detail: "Signed in with Telegram, no role yet", icon: "person_add", onSelect: () => { window.location.hash = CONSOLE_HASH; } },
+                { id: "request", label: visitor.candidate.status === "REQUESTED" ? "Access requested" : "Request access", detail: `Signed in with ${visitor.candidate.provider === "password" ? "email" : "Telegram"}, no role yet`, icon: "person_add", onSelect: () => { window.location.hash = CONSOLE_HASH; } },
                 "separator",
                 { id: "signout", label: "Sign out", icon: "logout", onSelect: () => void endSession() },
               ]}
               label={`${visitor.candidate.displayName}: account menu`}
             />
           )}
-          {!session && !visitor && auth.status !== "loading" && (configured
-            ? <TelegramLoginButton className="landing-bar-login" label="Sign in with Telegram" onChange={onChange} />
-            : <Button disabled icon="send" title="This deployment has no Telegram OIDC client id" variant="filled">Sign in with Telegram</Button>)}
+          {signedOut && (configured
+            ? <Button icon="login" onClick={() => setSignIn("sign-in")} variant="filled">Sign in</Button>
+            : <Button disabled icon="login" title="This deployment has no access API URL" variant="filled">Sign in</Button>)}
         </div>
       </header>
+
+      <Dialog onClose={() => setSignIn(null)} open={signIn !== null} title={signIn === "register" ? "Create your Spawnpoint account" : "Sign in to Spawnpoint"}>
+        {signIn !== null && <SignInPanel initialMode={signIn} onChange={(state) => { setSignIn(null); onChange(state); }} />}
+      </Dialog>
 
       <main className="landing" id="main">
         <section className="landing-hero">
@@ -71,6 +90,7 @@ export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; on
             </p>
             <div className="landing-links">
               {session && <a className="landing-link" href={CONSOLE_HASH}>Open the console<Icon name="chevron_right" size={18} /></a>}
+              {signedOut && configured && passwordRegistrationOffered && <button className="landing-link" onClick={() => setSignIn("register")} type="button">Create an account<Icon name="chevron_right" size={18} /></button>}
               <a className="landing-link" href={demoUrl()}>Try the demo<Icon name="chevron_right" size={18} /></a>
               <a className="landing-link" href="#what-the-console-does">What the console does<Icon name="chevron_right" size={18} /></a>
             </div>

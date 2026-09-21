@@ -20,6 +20,14 @@ import {
   type LoginPrincipal,
 } from "../access/login-session.ts";
 import { authenticateWith, type LoginProvider } from "../access/login-provider.ts";
+import { afterFailedSignIn, hashPassword, normalizeDisplayName, normalizeEmail, signInLocked, validatePassword, type SignInGuard } from "../access/password-credential.ts";
+import {
+  createPasswordLoginProvider,
+  passwordPrincipal,
+  passwordProviderId,
+  type PasswordCredential,
+  type PasswordCredentialStore,
+} from "../access/password-login-provider.ts";
 import { verifySessionToken } from "../access/telegram-auth.ts";
 import { createTelegramLoginProvider, telegramPrincipal } from "../access/telegram-login-provider.ts";
 import { defaultAppearance, validateAppearance } from "../access/appearance.ts";
@@ -74,6 +82,11 @@ if (!controlPlaneViewTable) throw new Error("missing environment variable: CONTR
 const controlPlaneWebSocketUrl = process.env.CONTROL_PLANE_WEBSOCKET_URL;
 if (!controlPlaneWebSocketUrl) throw new Error("missing environment variable: CONTROL_PLANE_WEBSOCKET_URL");
 const refreshCookieSameSite: "Strict" | "None" = process.env.REFRESH_COOKIE_SAME_SITE === "None" ? "None" : "Strict";
+// A sign-in adapter is an optional capability of a deployment (ADR-0045). Off,
+// its routes answer as if they were never deployed, so the panel reads them as
+// not connected rather than broken.
+const passwordLoginEnabled = (process.env.PASSWORD_LOGIN_ENABLED ?? "false") === "true";
+const passwordRegistrationEnabled = (process.env.PASSWORD_REGISTRATION_ENABLED ?? "false") === "true";
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const events = new EventBridgeClient({});
 const ssm = new SSMClient({});
@@ -127,12 +140,14 @@ async function caller(event: Event): Promise<Caller | null> {
   return legacy === null ? null : telegramPrincipal(legacy);
 }
 
-function accountKey(principal: LoginPrincipal): string {
+function accountKeyFor(platform: string, subject: string): string {
   // Preserve existing Telegram account keys while other providers join through
   // the provider-neutral login/session boundary.
-  return principal.provider === "telegram"
-    ? `TELEGRAM#${principal.subject}`
-    : `ACCOUNT#${principal.provider}#${principal.subject}`;
+  return platform === "telegram" ? `TELEGRAM#${subject}` : `ACCOUNT#${platform}#${subject}`;
+}
+
+function accountKey(principal: LoginPrincipal): string {
+  return accountKeyFor(principal.provider, principal.subject);
 }
 
 function identityFromItem(item: Item): Identity {
@@ -151,7 +166,7 @@ async function observe(account: Caller): Promise<Item> {
     Key: { pk: accountKey(account), sk: "ACCOUNT" },
     UpdateExpression: [
       "SET platform = :platform", "platform_user_id = :platformUserId", "display_name = :displayName",
-      "username = :username", "photo_url = :photoUrl", "first_seen_at = if_not_exists(first_seen_at, :now)",
+      "username = :username", "photo_url = :photoUrl", "email = :email", "first_seen_at = if_not_exists(first_seen_at, :now)",
       "last_seen_at = :now", "#status = if_not_exists(#status, :observed)",
       "gsi1pk = if_not_exists(gsi1pk, :candidateIndex)", "gsi1sk = :now",
     ].join(", "),
@@ -161,6 +176,7 @@ async function observe(account: Caller): Promise<Item> {
       ":displayName": account.displayName,
       ":username": account.username,
       ":photoUrl": account.photoUrl,
+      ":email": account.email,
       ":now": now, ":observed": "OBSERVED", ":candidateIndex": "CANDIDATE#OBSERVED",
     },
     ReturnValues: "ALL_NEW",
@@ -265,16 +281,28 @@ async function session(account: Caller): Promise<Response> {
   if (identity !== null) {
     const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
     const bootstrap = await document.send(new GetCommand({ TableName: tableName, Key: { pk: "SYSTEM", sk: "BOOTSTRAP" } }));
-    return response(200, { state: "active", identity, role, capabilities: deployedCapabilities(), profile: {
-      telegramId: account.subject, username: observed.username ?? null, photoUrl: observed.photo_url ?? null,
-    }, bootstrap: bootstrap.Item === undefined ? { state: "unclaimed" } : {
-      state: "claimed", ownerId: bootstrap.Item.identity_id, telegramId: bootstrap.Item.telegram_id, claimedAt: bootstrap.Item.claimed_at,
-    } });
+    return response(200, { state: "active", identity, role, capabilities: deployedCapabilities(), profile: accountProfile(account, observed),
+      bootstrap: bootstrap.Item === undefined ? { state: "unclaimed" } : {
+        state: "claimed", ownerId: bootstrap.Item.identity_id, telegramId: bootstrap.Item.telegram_id, claimedAt: bootstrap.Item.claimed_at,
+      } });
   }
   return response(200, { state: "visitor", candidate: {
-    telegramId: account.subject, displayName: observed.display_name, username: observed.username ?? null,
-    photoUrl: observed.photo_url ?? null, status: observed.status ?? "OBSERVED",
+    ...accountProfile(account, observed), displayName: observed.display_name, status: observed.status ?? "OBSERVED",
   } });
+}
+
+// The account a session was signed in through, as the panel shows it. The
+// Telegram id stays a named field because the owner bootstrap and the
+// Mini App read it; every other provider is described by its handle or email.
+function accountProfile(account: Caller, observed: Item) {
+  return {
+    provider: account.provider,
+    platformUserId: account.subject,
+    telegramId: account.provider === "telegram" ? account.subject : null,
+    username: typeof observed.username === "string" ? observed.username : null,
+    email: typeof observed.email === "string" ? observed.email : null,
+    photoUrl: typeof observed.photo_url === "string" ? observed.photo_url : null,
+  };
 }
 
 async function requestAccess(account: Caller): Promise<Response> {
@@ -542,7 +570,7 @@ async function candidates(): Promise<Response> {
   }))));
   return response(200, { candidates: pages.flatMap((page) => page.Items ?? []).map((item) => ({
     platform: item.platform, platformUserId: item.platform_user_id, displayName: item.display_name,
-    username: item.username, photoUrl: item.photo_url, status: item.status,
+    username: item.username ?? null, email: item.email ?? null, photoUrl: item.photo_url ?? null, status: item.status,
     firstSeenAt: item.first_seen_at, lastSeenAt: item.last_seen_at, requestedAt: item.requested_at,
   })) });
 }
@@ -570,11 +598,19 @@ async function identities(): Promise<Response> {
       links: (accounts.Items ?? []).filter((account) => typeof account.platform === "string").map((account) => ({
         platform: account.platform,
         value: account.platform_user_id,
-        verified: true,
+        handle: accountHandle(account),
+        // Telegram vouches for its accounts. An email address is a claim until
+        // a message to it has been answered, and nothing sends one yet.
+        verified: account.platform !== passwordProviderId,
       })),
     };
   }));
   return response(200, { identities: items });
+}
+
+function accountHandle(account: Item): string | null {
+  if (typeof account.username === "string") return account.username;
+  return typeof account.email === "string" ? account.email : null;
 }
 
 async function invitationRecipients(identity: Identity): Promise<Response> {
@@ -694,68 +730,83 @@ async function updateRole(callerIdentity: Identity, identityId: string, body: st
   return response(200, { identityId, roleId });
 }
 
-async function approve(identity: Identity, telegramId: string, body: string | undefined): Promise<Response> {
+type ApprovalInput = Readonly<{ roleId: keyof typeof builtInRoles; directGrants: Permission[] }>;
+type ApprovalInputResult = Readonly<{ value: ApprovalInput; error: null }> | Readonly<{ value: null; error: Response }>;
+
+function approvalInput(body: string | undefined): ApprovalInputResult {
   let parsed: { roleId?: unknown; directGrants?: unknown };
-  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return { value: null, error: response(400, { error: "invalid_json" }) }; }
   const roleId = typeof parsed.roleId === "string" ? parsed.roleId : "viewer";
-  if (!isBuiltInRoleId(roleId)) return response(400, { error: "unknown_role" });
+  if (!isBuiltInRoleId(roleId)) return { value: null, error: response(400, { error: "unknown_role" }) };
   const requestedGrants = parsed.directGrants;
   const directGrants = Array.isArray(requestedGrants) && requestedGrants.every(
     (permission) => typeof permission === "string" && permissions.includes(permission as Permission),
   ) ? requestedGrants as Permission[] : [];
   if (requestedGrants !== undefined && (!Array.isArray(requestedGrants) || directGrants.length !== requestedGrants.length)) {
-    return response(400, { error: "invalid_direct_grant" });
+    return { value: null, error: response(400, { error: "invalid_direct_grant" }) };
   }
+  return { value: { roleId, directGrants }, error: null };
+}
+
+async function publishAccessApproval(platform: string, candidate: Item, identityId: string, displayName: string, roleId: keyof typeof builtInRoles): Promise<void> {
+  if (platform !== "telegram") return;
+  const telegramChatId = privateTelegramChatId(candidate.direct_chat_id ?? candidate.chat_id);
+  if (telegramChatId === null) return;
+  const detail: AccessApprovedEvent = {
+    telegramChatId,
+    identityId,
+    displayName,
+    roleName: builtInRoles[roleId].name,
+  };
+  try {
+    const published = await events.send(new PutEventsCommand({ Entries: [{
+      Source: "spawnpoint.access",
+      DetailType: "Access Approved",
+      Detail: JSON.stringify(detail),
+    }] }));
+    if ((published.FailedEntryCount ?? 0) > 0) throw new Error(published.Entries?.[0]?.ErrorMessage ?? "EventBridge rejected access approval");
+  } catch (error) {
+    // Approval is already committed. A best-effort notification must not make
+    // the client retry the access mutation and receive a false conflict.
+    console.error("access approval notification was not published", error);
+  }
+}
+
+async function approve(identity: Identity, platform: string, platformUserId: string, body: string | undefined): Promise<Response> {
+  const input = approvalInput(body);
+  if (input.error !== null) return input.error;
+  const { roleId, directGrants } = input.value;
   if (roleId === "owner" || directGrants.length > 0) {
     const forbidden = requirePermission(identity, "access.owner.grant");
     if (forbidden !== null) return forbidden;
   }
-  const candidate = await document.send(new GetCommand({ TableName: tableName, Key: { pk: `TELEGRAM#${telegramId}`, sk: "ACCOUNT" } }));
+  const account = { pk: accountKeyFor(platform, platformUserId), sk: "ACCOUNT" };
+  const candidate = await document.send(new GetCommand({ TableName: tableName, Key: account }));
   if (candidate.Item === undefined || candidate.Item.identity_id !== undefined) return response(409, { error: "candidate_unavailable" });
   const identityId = randomUUID();
   const now = new Date().toISOString();
-  const name = String(candidate.Item.display_name ?? telegramId);
+  const name = String(candidate.Item.display_name ?? candidate.Item.email ?? platformUserId);
   await document.send(new TransactWriteCommand({ TransactItems: [
     { Put: { TableName: tableName, Item: {
       pk: `IDENTITY#${identityId}`, sk: "PROFILE", identity_id: identityId, display_name: name,
       role_id: roleId, direct_grants: directGrants, status: "ACTIVE", created_at: now,
       created_by: identity.id, gsi1pk: "IDENTITY#ACTIVE", gsi1sk: name.toLowerCase(),
     }, ConditionExpression: "attribute_not_exists(pk)" } },
-    { Update: { TableName: tableName, Key: { pk: `TELEGRAM#${telegramId}`, sk: "ACCOUNT" },
+    { Update: { TableName: tableName, Key: account,
       UpdateExpression: "SET identity_id = :identityId, #status = :approved, gsi1pk = :linked, gsi1sk = :now, approved_at = :now, approved_by = :by",
       ConditionExpression: "attribute_exists(pk) AND attribute_not_exists(identity_id)",
       ExpressionAttributeNames: { "#status": "status" },
       ExpressionAttributeValues: { ":identityId": identityId, ":approved": "APPROVED", ":linked": `IDENTITY#${identityId}`, ":now": now, ":by": identity.id },
     } },
   ] }));
-  const telegramChatId = privateTelegramChatId(candidate.Item.direct_chat_id ?? candidate.Item.chat_id);
-  if (telegramChatId !== null) {
-    const detail: AccessApprovedEvent = {
-      telegramChatId,
-      identityId,
-      displayName: name,
-      roleName: builtInRoles[roleId].name,
-    };
-    try {
-      const published = await events.send(new PutEventsCommand({ Entries: [{
-        Source: "spawnpoint.access",
-        DetailType: "Access Approved",
-        Detail: JSON.stringify(detail),
-      }] }));
-      if ((published.FailedEntryCount ?? 0) > 0) throw new Error(published.Entries?.[0]?.ErrorMessage ?? "EventBridge rejected access approval");
-    } catch (error) {
-      // Approval is already committed. A best-effort notification must not make
-      // the client retry the access mutation and receive a false conflict.
-      console.error("access approval notification was not published", error);
-    }
-  }
+  await publishAccessApproval(platform, candidate.Item, identityId, name, roleId);
   return response(201, { identity: { id: identityId, displayName: name, roleId, directGrants } });
 }
 
-async function dismiss(identity: Identity, telegramId: string): Promise<Response> {
+async function dismiss(identity: Identity, platform: string, platformUserId: string): Promise<Response> {
   const now = new Date().toISOString();
   await document.send(new UpdateCommand({
-    TableName: tableName, Key: { pk: `TELEGRAM#${telegramId}`, sk: "ACCOUNT" },
+    TableName: tableName, Key: { pk: accountKeyFor(platform, platformUserId), sk: "ACCOUNT" },
     UpdateExpression: "SET #status = :dismissed, gsi1pk = :state, gsi1sk = :now, dismissed_at = :now, dismissed_by = :by",
     ConditionExpression: "attribute_exists(pk) AND attribute_not_exists(identity_id)",
     ExpressionAttributeNames: { "#status": "status" },
@@ -780,6 +831,7 @@ function principalFromLoginSession(item: Item): LoginPrincipal | null {
     displayName: item.display_name,
     username: typeof item.username === "string" ? item.username : null,
     photoUrl: typeof item.photo_url === "string" ? item.photo_url : null,
+    email: typeof item.email === "string" ? item.email : null,
   };
 }
 
@@ -798,6 +850,7 @@ async function createLoginSession(principal: LoginPrincipal, signingSecret: stri
       display_name: principal.displayName,
       username: principal.username,
       photo_url: principal.photoUrl,
+      email: principal.email,
       token_hash: credential.tokenHash,
       created_at: createdAt,
       expires_at: expiresAt,
@@ -886,21 +939,158 @@ async function logoutLoginSession(event: Event): Promise<Response> {
   return responseWithCookie(204, null, expiredRefreshCookie(refreshCookieSameSite));
 }
 
-async function authenticate(provider: LoginProvider, event: Event): Promise<Response> {
-  let attempt: Readonly<Record<string, unknown>>;
+function objectBody(event: Event): Readonly<Record<string, unknown>> | null {
   try {
     const parsed = event.body ? JSON.parse(event.body) as unknown : {};
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return response(400, { error: "invalid_json" });
-    }
-    attempt = parsed as Readonly<Record<string, unknown>>;
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return parsed as Readonly<Record<string, unknown>>;
   } catch {
-    return response(400, { error: "invalid_json" });
+    return null;
   }
+}
+
+async function authenticate(provider: LoginProvider, event: Event): Promise<Response> {
+  const attempt = objectBody(event);
+  if (attempt === null) return response(400, { error: "invalid_json" });
   const principal = await authenticateWith(provider, attempt);
   if (principal === null) return response(401, { error: `invalid_or_expired_${provider.id}_login` });
   return createLoginSession(principal, await sessionSigningSecret());
 }
+
+// Email and password: the way in that needs no other account (ADR-0055). The
+// credential is kept by its normalized address, apart from the account it
+// signs in as; the provider sees one credential at a time and never the table.
+function credentialKey(email: string): Record<string, string> {
+  return { pk: `CREDENTIAL#EMAIL#${email}`, sk: "PASSWORD" };
+}
+
+function credentialFromItem(item: Item): PasswordCredential | null {
+  if (typeof item.subject !== "string" || typeof item.email !== "string" || typeof item.password_hash !== "string") return null;
+  return {
+    subject: item.subject,
+    email: item.email,
+    displayName: typeof item.display_name === "string" ? item.display_name : item.email,
+    passwordHash: item.password_hash,
+    guard: {
+      failedSignIns: typeof item.failed_sign_ins === "number" ? item.failed_sign_ins : 0,
+      lockedUntilEpochSeconds: typeof item.locked_until === "number" ? item.locked_until : null,
+    },
+  };
+}
+
+// The guard is bookkeeping about an attempt that has already been judged. A
+// credential deleted between the read and this write must not turn a wrong
+// password into a server error.
+async function updateCredentialGuard(email: string, expression: string, values: Record<string, unknown>): Promise<void> {
+  try {
+    await document.send(new UpdateCommand({
+      TableName: tableName,
+      Key: credentialKey(email),
+      UpdateExpression: expression,
+      ConditionExpression: "attribute_exists(pk)",
+      ExpressionAttributeValues: values,
+    }));
+  } catch (error) {
+    if (!(error instanceof Error && error.name === "ConditionalCheckFailedException")) throw error;
+  }
+}
+
+const passwordCredentials: PasswordCredentialStore = {
+  async find(email) {
+    // Consistent, so a lock written a moment ago is seen by the next attempt.
+    const result = await document.send(new GetCommand({ TableName: tableName, Key: credentialKey(email), ConsistentRead: true }));
+    return result.Item === undefined ? null : credentialFromItem(result.Item);
+  },
+  async recordFailure(email, observed, nowSeconds) {
+    let current: SignInGuard = observed;
+    // A consistent read alone cannot serialize two Lambdas that both observed
+    // the same count. Compare the count in the write and retry from the latest
+    // credential so every accepted failure advances the guard exactly once.
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const next = afterFailedSignIn(current, nowSeconds);
+      const expectedMissingOrZero = current.failedSignIns === 0;
+      try {
+        await document.send(new UpdateCommand({
+          TableName: tableName,
+          Key: credentialKey(email),
+          UpdateExpression: "SET failed_sign_ins = :failed, locked_until = :lockedUntil, last_failed_sign_in_at = :now",
+          ConditionExpression: expectedMissingOrZero
+            ? "attribute_exists(pk) AND (attribute_not_exists(failed_sign_ins) OR failed_sign_ins = :expected)"
+            : "attribute_exists(pk) AND failed_sign_ins = :expected",
+          ExpressionAttributeValues: {
+            ":expected": current.failedSignIns,
+            ":failed": next.failedSignIns,
+            ":lockedUntil": next.lockedUntilEpochSeconds,
+            ":now": new Date().toISOString(),
+          },
+        }));
+        return;
+      } catch (error) {
+        if (!(error instanceof Error && error.name === "ConditionalCheckFailedException")) throw error;
+      }
+      const latest = await this.find(email);
+      if (latest === null || signInLocked(latest.guard, nowSeconds)) return;
+      current = latest.guard;
+    }
+    throw new Error("password sign-in guard was updated too frequently");
+  },
+  recordSuccess: (email) => updateCredentialGuard(
+    email,
+    "SET failed_sign_ins = :zero, locked_until = :none, last_sign_in_at = :now",
+    { ":zero": 0, ":none": null, ":now": new Date().toISOString() },
+  ),
+};
+
+const passwordProvider = createPasswordLoginProvider({ credentials: passwordCredentials });
+
+// Registration creates the credential a first sign-in needs, and nothing else:
+// the account it signs in as is observed like any other and holds no role
+// until an Owner grants one (ADR-0036). The address is a sign-in name here,
+// not a verified channel; nothing is sent to it.
+async function registerPassword(event: Event): Promise<Response> {
+  const parsed = objectBody(event);
+  if (parsed === null) return response(400, { error: "invalid_json" });
+  const email = normalizeEmail(parsed.email);
+  if (email === null) return response(400, { error: "invalid_email" });
+  const passwordProblem = validatePassword(parsed.password);
+  if (passwordProblem !== null) return response(400, { error: `password_${passwordProblem}` });
+  const displayName = normalizeDisplayName(parsed.displayName);
+  if (displayName === null) return response(400, { error: "invalid_display_name" });
+  const subject = randomUUID();
+  try {
+    await document.send(new PutCommand({
+      TableName: tableName,
+      Item: {
+        ...credentialKey(email),
+        entity_type: "PASSWORD_CREDENTIAL",
+        subject,
+        email,
+        email_verified: false,
+        display_name: displayName,
+        password_hash: await hashPassword(parsed.password as string),
+        failed_sign_ins: 0,
+        locked_until: null,
+        created_at: new Date().toISOString(),
+      },
+      ConditionExpression: "attribute_not_exists(pk)",
+    }));
+  } catch (error) {
+    if (error instanceof Error && error.name === "ConditionalCheckFailedException") return response(409, { error: "email_already_registered" });
+    throw error;
+  }
+  return createLoginSession(passwordPrincipal({ subject, email, displayName }), await sessionSigningSecret());
+}
+
+// Which ways in this deployment offers, so the panel draws only buttons that
+// lead somewhere. Public by nature: it is read before there is a session.
+function loginProviders(): Response {
+  return response(200, {
+    providers: ["telegram", ...(passwordLoginEnabled ? [passwordProviderId] : [])],
+    selfRegistration: passwordLoginEnabled && passwordRegistrationEnabled ? [passwordProviderId] : [],
+  });
+}
+
+const passwordLoginDisabled = (): Response => response(404, { error: "not_found" });
 
 // The files a player needs to join, for the release the world is actually
 // running. Whoever may learn where to connect may have what it takes to
@@ -966,10 +1156,26 @@ const permissionRoute = (permission: Permission, handle: Handler<Identity>): Rou
 
 const parameter = (event: Event, name: string): string => event.pathParameters?.[name] ?? "";
 
+// An account is addressed by the platform that vouches for it and that
+// platform's own id: Telegram's numeric user id, a password credential's uuid.
+const PLATFORM_ID = /^[a-z][a-z0-9_-]{1,31}$/;
+const PLATFORM_USER_ID = /^[A-Za-z0-9._:@-]{1,255}$/;
+const withCandidateAddress = (event: Event, handle: (platform: string, platformUserId: string) => Promise<Response>): Promise<Response> | Response => {
+  const platform = parameter(event, "platform");
+  const platformUserId = parameter(event, "platformUserId");
+  if (!PLATFORM_ID.test(platform) || !PLATFORM_USER_ID.test(platformUserId)) return response(400, { error: "invalid_account_address" });
+  return handle(platform, platformUserId);
+};
+
 export const routes: Readonly<Record<string, Route>> = {
+  "GET /auth/providers": publicRoute(() => loginProviders()),
   "POST /auth/telegram": publicRoute((event) => authenticate(
     createTelegramLoginProvider({ oidcClientId: telegramOidcClientId, botToken }),
     event,
+  )),
+  "POST /auth/password": publicRoute((event) => (passwordLoginEnabled ? authenticate(passwordProvider, event) : passwordLoginDisabled())),
+  "POST /auth/password/register": publicRoute((event) => (
+    passwordLoginEnabled && passwordRegistrationEnabled ? registerPassword(event) : passwordLoginDisabled()
   )),
   "POST /auth/refresh": publicRoute((event) => refreshLoginSession(event)),
   "POST /auth/logout": publicRoute((event) => logoutLoginSession(event)),
@@ -1022,16 +1228,10 @@ export const routes: Readonly<Record<string, Route>> = {
 
   "GET /access/candidates": permissionRoute("access.manage", () => candidates()),
   "GET /access/identities": permissionRoute("access.manage", () => identities()),
-  "POST /access/candidates/{telegramId}/approve": permissionRoute("access.manage", (identity, event) => {
-    const telegramId = parameter(event, "telegramId");
-    if (!/^\d+$/.test(telegramId)) return response(400, { error: "invalid_telegram_id" });
-    return approve(identity, telegramId, event.body);
-  }),
-  "POST /access/candidates/{telegramId}/dismiss": permissionRoute("access.manage", (identity, event) => {
-    const telegramId = parameter(event, "telegramId");
-    if (!/^\d+$/.test(telegramId)) return response(400, { error: "invalid_telegram_id" });
-    return dismiss(identity, telegramId);
-  }),
+  "POST /access/candidates/{platform}/{platformUserId}/approve": permissionRoute("access.manage", (identity, event) =>
+    withCandidateAddress(event, (platform, platformUserId) => approve(identity, platform, platformUserId, event.body))),
+  "POST /access/candidates/{platform}/{platformUserId}/dismiss": permissionRoute("access.manage", (identity, event) =>
+    withCandidateAddress(event, (platform, platformUserId) => dismiss(identity, platform, platformUserId))),
   "POST /access/identities/{identityId}/role": permissionRoute("access.manage", (identity, event) => {
     const identityId = parameter(event, "identityId");
     if (!/^[0-9a-f-]{36}$/.test(identityId)) return response(400, { error: "invalid_identity_id" });

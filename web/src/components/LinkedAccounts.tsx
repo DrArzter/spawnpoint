@@ -21,6 +21,7 @@ const purposes: readonly { id: LinkPurpose; title: string }[] = [
 
 const providers: Record<LinkKind, { label: string; icon: IconName; purpose: LinkPurpose }> = {
   telegram: { label: "Telegram", icon: "send", purpose: "sign-in" },
+  email: { label: "Email", icon: "mail", purpose: "sign-in" },
   discord: { label: "Discord", icon: "group", purpose: "sign-in" },
   minecraft: { label: "Minecraft", icon: "public", purpose: "game" },
   factorio: { label: "Factorio", icon: "public", purpose: "game" },

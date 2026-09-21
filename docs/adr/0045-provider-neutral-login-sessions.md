@@ -4,6 +4,8 @@
 - Date: 2026-09-13
 - Milestone: M4
 - Supersedes: [ADR-0037](0037-telegram-only-browser-identity.md)
+- Extended by: [ADR-0055](0055-sign-in-with-email-and-password-by-default.md) — the second adapter, email and
+  password, and the first that is not a chat platform
 
 ## Context
 

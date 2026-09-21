@@ -7,16 +7,30 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the GAME_* constants are the module's interface, read by _dispatch.sh consumers
 
-GAME_COMPOSE_FILES="observability/compose.yaml:compose.yaml:compose.release.yaml"
+GAME_COMPOSE_FILES="compose.yaml:compose.release.yaml"
+GAME_OBSERVABILITY_COMPOSE_FILES="compose.minecraft-observability.yaml"
+GAME_HOST_OBSERVABILITY_COMPOSE_FILE="compose.minecraft-host-observability.yaml"
+GAME_FOOTPRINT_COMPOSE_FILE="games/minecraft/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="mc"
 GAME_MOD_EXTENSION="jar"
 GAME_LOADER_TYPE="forge"
 # The port a player types after the address the connectivity strategy publishes.
 GAME_CONNECT_PORT="25565"
 GAME_CONNECT_PROTOCOL="tcp"
+# RCON is spoken inside the container (rcon-cli), so no host port is published;
+# the constant names the window layout all the same.
+GAME_RCON_PORT="25575"
+# The client connects to whatever port the address names and the server
+# announces none, so a slot's host port forwards cleanly.
+GAME_SLOTTABLE="true"
 # online-mode=false (ADR-0022) authenticates nobody, so minecraft worlds need
 # a gating connectivity unless the catalog declares auth handled (ADR-0033).
 GAME_DEFAULT_AUTH="none"
+# What a session is placed with and limited to (ADR-0054): a 4 GiB heap was
+# measured near 6 GiB of container memory, and the limit sits above the peak,
+# not on it. The container, not the JVM, is what the host counts.
+GAME_FOOTPRINT_MEMORY_MIB="7168"
+GAME_FOOTPRINT_CORES="1"
 
 game_query_players_raw() {
   rcon list
@@ -58,6 +72,20 @@ game_save_paths() {
 game_save_sentinel() {
   local data_dir="$1" world_name="$2"
   [[ -f "${data_dir}/${world_name}/level.dat" ]]
+}
+
+# Milliseconds per tick, as Forge reports it over RCON ("Overall: Mean tick
+# time: 4.123 ms. Mean TPS: 20.000"). The acceptance of ADR-0054 compares this
+# figure for a world alone against the same world beside a neighbour.
+game_tick_time_ms() {
+  local response tick_ms
+  response="$(rcon forge tps)" || return 1
+  tick_ms="$(sed -nE 's/^Overall: Mean tick time: ([0-9]+(\.[0-9]+)?) ms.*$/\1/p' <<<"${response}" | head -n1)"
+  [[ -n "${tick_ms}" ]] || {
+    printf 'error: forge tps did not report a mean tick time: %s\n' "$(tr '\n' ';' <<<"${response}")" >&2
+    return 1
+  }
+  printf '%s\n' "${tick_ms}"
 }
 
 # What a verified archive must contain to count as a save of this game.

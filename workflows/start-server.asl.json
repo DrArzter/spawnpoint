@@ -153,7 +153,7 @@
         {
           "Variable": "$.observed.ssm.InstanceInformationList[0].PingStatus",
           "StringEquals": "Online",
-          "Next": "Start Session Command"
+          "Next": "Route Session Command"
         }
       ],
       "Default": "Increment SSM Poll"
@@ -181,6 +181,32 @@
         }
       ],
       "Default": "Wait Before SSM Poll"
+    },
+    "Route Session Command": {
+      "Type": "Choice",
+      "Comment": "ADR-0054: a placed session carries its slot to the host. A request with no slot — an execution begun before placement existed — runs the command it always ran.",
+      "Choices": [
+        {
+          "Variable": "$.request.slot",
+          "IsPresent": true,
+          "Next": "Start Placed Session Command"
+        }
+      ],
+      "Default": "Start Session Command"
+    },
+    "Start Placed Session Command": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:sendCommand",
+      "Parameters": {
+        "DocumentName": "AWS-RunShellScript",
+        "InstanceIds.$": "States.Array($.request.instanceId)",
+        "Parameters": {
+          "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} SPAWNPOINT_SLOT={} SESSION_FORMAT=json /srv/spawnpoint/app/server/scripts/start-session.sh', $.request.worldId, $.request.slot))"
+        },
+        "TimeoutSeconds": 900
+      },
+      "ResultPath": "$.observed.command",
+      "Next": "Wait Before Command Poll"
     },
     "Start Session Command": {
       "Type": "Task",

@@ -345,6 +345,9 @@ export async function startSessionExecution(
     stateMachineArn: machineArn("start"), name: operationId,
     input: JSON.stringify(buildLifecycleStartInput({
       serverId, operationId, sessionId: `session-${randomUUID()}`, instanceId, worldId, requestedBy,
+      placement: process.env.SPAWNPOINT_PLACEMENT === "shared" ? "shared" : "single",
+      launch: process.env.SPAWNPOINT_LAUNCH === "enabled" ? "enabled" : "disabled",
+      appCommit: process.env.SPAWNPOINT_APP_COMMIT || "main",
     })),
   }));
   if (!started.executionArn) throw new Error("start execution did not return an ARN");

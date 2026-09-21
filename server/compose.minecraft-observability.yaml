@@ -1,0 +1,14 @@
+# Minecraft's part of the observability tier inside an unplaced session: its
+# exporter's scrape job and its dashboards. A placed session leaves this out
+# along with observability/compose.yaml — the host's own tier scrapes it
+# through compose.minecraft-host-observability.yaml instead (ADR-0054).
+services:
+  prometheus:
+    volumes:
+      - ./observability/scrape/minecraft.yml:/etc/prometheus/scrape/minecraft.yml:ro
+    depends_on:
+      - minecraft-exporter
+
+  grafana:
+    volumes:
+      - ./observability/grafana/dashboards/minecraft:/var/lib/grafana/dashboards/minecraft:ro

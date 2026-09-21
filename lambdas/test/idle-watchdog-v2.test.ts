@@ -116,3 +116,15 @@ test("a stale watchdog exits successfully after a newer session owns lifecycle",
   assert.equal(state(definition, "Reconcile Externally Stopped Host").Catch?.[0]?.Next, "Route Reconcile Failure");
   assert.equal(state(definition, "Session Superseded").End, true);
 });
+
+test("a placed session is probed on its slot; a request with no slot is probed as before", async () => {
+  const definition = await loadDefinition();
+  assert.equal(state(definition, "Host Still Running").Choices?.[0]?.Next, "Route Probe Command");
+  const route = state(definition, "Route Probe Command");
+  assert.equal(route.Choices?.[0]?.Next, "Send Placed Probe");
+  assert.equal(route.Default, "Send Structured Probe");
+  const placed = state(definition, "Send Placed Probe");
+  assert.match(JSON.stringify(placed.Parameters), /SPAWNPOINT_SLOT=\{\} PROBE_FORMAT=json/);
+  assert.equal(placed.Next, state(definition, "Send Structured Probe").Next);
+  assert.equal(placed.Catch?.[0]?.Next, state(definition, "Send Structured Probe").Catch?.[0]?.Next);
+});

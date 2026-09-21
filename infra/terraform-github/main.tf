@@ -366,6 +366,7 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "events:RemoveTargets",
       "lambda:RemovePermission",
       "logs:DeleteLogGroup",
+      "s3:DeleteObject",
       "sns:Unsubscribe",
       "states:DeleteStateMachine",
     ]
@@ -377,6 +378,7 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "arn:aws:events:${var.aws_region}:${data.aws_caller_identity.current.account_id}:rule/spawnpoint-*",
       "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:spawnpoint-*",
       "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:*spawnpoint*",
+      "arn:aws:s3:::spawnpoint-releases-${data.aws_caller_identity.current.account_id}/control-plane/release-builder/*",
       "arn:aws:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:spawnpoint-*",
       "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-*",
     ]

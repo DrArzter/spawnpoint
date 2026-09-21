@@ -89,6 +89,13 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.game_host_parameters
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
     target = data.aws_sns_topic.alerts
     values = {
       arn = "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"
@@ -267,8 +274,8 @@ run "lifecycle_v2_coordinator_is_small_scoped_and_not_wired_to_v1" {
   }
 
   assert {
-    condition     = toset(local.lifecycle_coordinator_table_actions) == toset(["dynamodb:GetItem", "dynamodb:PutItem"])
-    error_message = "Coordinator table permissions must remain limited to optimistic-CAS reads and writes."
+    condition     = toset(local.lifecycle_coordinator_table_actions) == toset(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Scan"])
+    error_message = "Coordinator table permissions must remain limited to optimistic-CAS reads and writes, plus the filtered scan that lists host records."
   }
 
   assert {
@@ -308,5 +315,39 @@ run "running_hours_alarm_is_a_presence_alarm_on_the_guardrails_topic" {
   assert {
     condition     = contains(aws_cloudwatch_metric_alarm.running_hours.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert")
     error_message = "The alarm must publish to the guardrails topic, where every alert converges."
+  }
+}
+
+run "fleet_host_is_a_template_that_names_no_type_and_keeps_nothing" {
+  command = plan
+
+  assert {
+    condition     = aws_launch_template.fleet_host.instance_type == null || aws_launch_template.fleet_host.instance_type == ""
+    error_message = "A launched host's type is EC2's answer to the footprint's requirements (ADR-0054); the template must not name one."
+  }
+
+  assert {
+    condition     = aws_launch_template.fleet_host.instance_initiated_shutdown_behavior == "terminate"
+    error_message = "A launched host holds nothing that outlives a session, so a shutdown is a termination, not a parked volume."
+  }
+
+  assert {
+    condition     = aws_launch_template.fleet_host.metadata_options[0].http_tokens == "required" && aws_launch_template.fleet_host.metadata_options[0].instance_metadata_tags == "enabled"
+    error_message = "A launched host requires IMDSv2 and reads its AppCommit from its own tags."
+  }
+
+  assert {
+    condition     = local.fleet_host_tags.ManagedBy == "spawnpoint-fleet" && alltrue([for spec in aws_launch_template.fleet_host.tag_specifications : spec.tags.ManagedBy == "spawnpoint-fleet"])
+    error_message = "Every launched host carries ManagedBy=spawnpoint-fleet, the tag every statement about launched hosts conditions on."
+  }
+
+  assert {
+    condition     = aws_launch_template.fleet_host.iam_instance_profile[0].name == aws_iam_instance_profile.game_host.name && tostring(aws_launch_template.fleet_host.network_interfaces[0].associate_public_ip_address) == "true"
+    error_message = "A launched host is the same kind of host: the game host's profile, the public subnet, an ephemeral address."
+  }
+
+  assert {
+    condition     = aws_instance.game_host.disable_api_termination
+    error_message = "The configured host keeps termination protection whatever the fleet does."
   }
 }

@@ -49,12 +49,37 @@ make the parser **self-checking** rather than optimistic: read the count one way
 and refuse unless they agree. A refusal is read as "not idle" by the probe and as a refusal by the stop, so the
 failure costs a few minutes of instance time. A wrong count in the other direction stops a server with people on it.
 
+## Run on a slot, or say why not
+
+A placed session ([ADR-0054](../../docs/adr/0054-place-a-session-on-a-host-with-room.md)) arrives with
+`SPAWNPOINT_SLOT`. The dispatcher gives it a Compose project named for its world, the ports of its slot
+(`SPAWNPOINT_GAME_PORT`, `SPAWNPOINT_RCON_PORT`, `SPAWNPOINT_GAME_PORT_2`) and the memory limit of its footprint; a
+module takes part by:
+
+- publishing its host ports from those variables, defaulting to the game's own so an unplaced session is unchanged —
+  the container side never changes;
+- naming `GAME_RCON_PORT`, and reading the host side of RCON from `SPAWNPOINT_RCON_PORT` where the probe speaks from
+  the host;
+- shipping `GAME_FOOTPRINT_COMPOSE_FILE`, a two-line overlay that turns `SPAWNPOINT_FOOTPRINT_MEMORY_MIB` into the
+  game container's `mem_limit`;
+- keeping its observability part in two files: `GAME_OBSERVABILITY_COMPOSE_FILES` carries the tier inside an unplaced
+  session, as it always has; `GAME_HOST_OBSERVABILITY_COMPOSE_FILE` is what a placed session includes instead — an
+  overlay that puts the `spawnpoint.scrape`, `spawnpoint.scrape_port` and `spawnpoint.scrape_job` labels on the game's
+  exporter and joins it to the `spawnpoint-observability` network, where the host's own tier
+  (`observability/compose.host.yaml`) finds it. A game with no exporter declares neither;
+- declaring `GAME_SLOTTABLE`. `true` means a client connects to the port the address names and the server announces
+  no other. Project Zomboid tells its clients to continue on a second port, so it is `false` until its ini can be
+  rendered from the slot, and a slot other than zero is refused for it with that reason.
+
 ## The rest of the checklist
 
 - `game_save` flushes the live game using its own protocol. `game_save_paths`, `game_save_sentinel` and
   `game_archive_sentinel_regex` describe **this** game's save. A borrowed
   sentinel passes tests and loses worlds.
 - The player probe's `key=value` output never varies by game; only what produces the values does.
+- `game_tick_time_ms` prints milliseconds per tick for `scripts/measure-tick.sh`, the reading the acceptance of
+  [ADR-0054](../../docs/adr/0054-place-a-session-on-a-host-with-room.md) compares alone and beside a neighbour;
+  a game that cannot report one exits 2 and says why, as Project Zomboid does.
 - Reuse packaging rather than building an image ([ADR-0005](../../docs/adr/0005-containerised-game-server.md)), pin
   it by digest, keep the game port off the public interface, and keep operator surfaces (RCON, telnet) on localhost.
 - Cover the module in `server/tests/game-adapter-test.sh`: both parsers, the real transport against a fake server,

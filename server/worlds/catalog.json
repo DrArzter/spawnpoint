@@ -13,7 +13,11 @@
     {
       "id": "vanilla",
       "display_name": "Vanilla Forge",
-      "profile_id": "vanilla-forge"
+      "profile_id": "vanilla-forge",
+      "footprint": {
+        "memory_mib": 3072,
+        "cores": 0.5
+      }
     }
   ]
 }

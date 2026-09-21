@@ -103,6 +103,11 @@ export type ControlPlaneSnapshot = Readonly<{
   }>>;
 }>;
 
+function observedAddress(lifecycle: LifecycleRecord | null, worldId: string): string | null {
+  if (lifecycle?.activeWorldId !== worldId || lifecycle?.observedState !== "ready") return null;
+  return lifecycle.activeSessionAddress ?? null;
+}
+
 export async function readControlPlaneSnapshot(
   sources: ControlPlaneSources,
   options: Readonly<{
@@ -178,12 +183,14 @@ export async function readControlPlaneSnapshot(
               : null,
             originRelease: generation.release,
           })),
-          // Composed here for the same reason the host composes it: the
-          // strategy owns the host part, the game owns the port. An overlay
-          // world uses the configured address; a public one uses whatever
-          // address the instance holds right now, which is nothing at all while
-          // it is stopped.
-          connectionAddress: worldAddress(world.id, { connectionHost, publicIp: hostPublicIp }, effectiveCatalog),
+          // The address the host reported when this world's session became
+          // ready is the truth: it carries the session's slot and the host it
+          // landed on (ADR-0054). Composed only while nothing is observed — the
+          // strategy's host part plus the game's own port — and withheld
+          // altogether from a caller who may not read one.
+          connectionAddress: connectionHost === null
+            ? null
+            : observedAddress(lifecycles[gameIndex] ?? null, world.id) ?? worldAddress(world.id, { connectionHost, publicIp: hostPublicIp }, effectiveCatalog),
           release: options.includeDesiredRelease ? release : { ...release, desiredRelease: null },
         };
       }),

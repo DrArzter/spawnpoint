@@ -1,0 +1,31 @@
+# The observability tier as one project per host (ADR-0054, phase 9), on top
+# of observability/compose.yaml: `spawnpoint-observability`, brought up by the
+# first placed session and left running while the host runs. Prometheus finds
+# every session's exporter through the Docker socket, by the labels a game's
+# host-observability overlay puts on it, and reaches it over the network both
+# sides join. Grafana carries every game's dashboards, because a host may run
+# any of them.
+#
+# The network is created by ensure-host-observability.sh, not by this project:
+# a session's exporter joins it as external, and neither project's `down` may
+# take it from the other.
+services:
+  prometheus:
+    # The socket is root-owned on the host and the image runs as nobody; a
+    # read-only socket is the whole of what this grants.
+    user: "0"
+    volumes:
+      - ./observability/prometheus.host.yml:/etc/prometheus/prometheus.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      default: {}
+      spawnpoint-observability: {}
+
+  grafana:
+    volumes:
+      - ./observability/grafana/dashboards/minecraft:/var/lib/grafana/dashboards/minecraft:ro
+
+networks:
+  spawnpoint-observability:
+    name: spawnpoint-observability
+    external: true

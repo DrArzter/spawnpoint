@@ -10,23 +10,33 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the GAME_* constants are the module's interface, read by _dispatch.sh consumers
 
-GAME_COMPOSE_FILES="observability/compose.yaml:games/factorio/compose.yaml"
+GAME_COMPOSE_FILES="games/factorio/compose.yaml"
+GAME_FOOTPRINT_COMPOSE_FILE="games/factorio/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="factorio"
 GAME_MOD_EXTENSION="zip"
 GAME_LOADER_TYPE="factorio"
 # The port a player types after the address the connectivity strategy publishes.
 GAME_CONNECT_PORT="34197"
 GAME_CONNECT_PROTOCOL="udp"
+GAME_RCON_PORT="27015"
+# A direct UDP connection to the port the address names; nothing in the
+# protocol tells the client another port.
+GAME_SLOTTABLE="true"
 # Fail closed, and for the same reason the server needs no factorio.com
 # account: a hidden server skips matchmaking entirely, so it also verifies
 # nobody. Identity verification belongs to a visible, credentialed server; a
 # world that runs one declares `auth: game` in the catalog (ADR-0033).
 GAME_DEFAULT_AUTH="none"
+# What a session is placed with and limited to (ADR-0054). Factorio is a
+# native server: a couple of gigabytes hold a large base.
+GAME_FOOTPRINT_MEMORY_MIB="2048"
+GAME_FOOTPRINT_CORES="0.5"
 
 FACTORIO_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 FACTORIO_DATA_DIR="${FACTORIO_DATA_DIR:-${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${FACTORIO_GAME_DIR}/data}}"
 FACTORIO_RCON_HOST="${FACTORIO_RCON_HOST:-127.0.0.1}"
-FACTORIO_RCON_PORT="${FACTORIO_RCON_PORT:-27015}"
+# The host side of the RCON mapping follows the slot (ADR-0054).
+FACTORIO_RCON_PORT="${FACTORIO_RCON_PORT:-${SPAWNPOINT_RCON_PORT:-27015}}"
 
 # The preset release, not Spawnpoint, selects the immutable container image
 # that opens this save. Version metadata still has to agree with itself; the
@@ -78,6 +88,31 @@ factorio_rcon() {
 game_query_players_raw() {
   factorio_rcon "/players online" || return $?
   return 0
+}
+
+# Milliseconds per tick from two readings of the tick counter. Factorio has no
+# server-side UPS query, so this asks Lua for game.tick — a console command that
+# disables achievements on the save, which is why it runs only when the caller
+# says so. Sixty ticks a second is a healthy server: 16.667 ms.
+FACTORIO_TICK_SAMPLE_SECONDS="${FACTORIO_TICK_SAMPLE_SECONDS:-10}"
+game_tick_time_ms() {
+  [[ "${SPAWNPOINT_ACCEPT_ACHIEVEMENT_LOSS:-}" == "1" ]] || {
+    printf 'error: measuring Factorio tick time runs a Lua command, which disables achievements on this save; set SPAWNPOINT_ACCEPT_ACHIEVEMENT_LOSS=1 to accept that\n' >&2
+    return 2
+  }
+  local first second
+  first="$(factorio_rcon "/silent-command rcon.print(game.tick)")" || return 1
+  sleep "${FACTORIO_TICK_SAMPLE_SECONDS}"
+  second="$(factorio_rcon "/silent-command rcon.print(game.tick)")" || return 1
+  [[ "${first}" =~ ^[0-9]+$ && "${second}" =~ ^[0-9]+$ ]] || {
+    printf 'error: game.tick did not read as a number: %s / %s\n' "${first}" "${second}" >&2
+    return 1
+  }
+  (( second > first )) || {
+    printf 'error: the tick counter did not advance (%s -> %s); the game is paused\n' "${first}" "${second}" >&2
+    return 1
+  }
+  awk -v seconds="${FACTORIO_TICK_SAMPLE_SECONDS}" -v ticks="$((second - first))" 'BEGIN { printf "%.3f\n", 1000 * seconds / ticks }'
 }
 
 game_save() {

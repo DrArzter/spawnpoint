@@ -22,6 +22,8 @@ printf 'connectivity=%s\n' "${WORLD_CONNECTIVITY}"
 # Effective auth: the declared override, or the game's own model.
 world_auth="${WORLD_AUTH:-$(game_default_auth "${WORLD_SERVER_DIR}/games" "${WORLD_GAME}")}"
 printf 'auth=%s\n' "${world_auth}"
+printf 'footprint_memory_mib=%s\n' "${WORLD_FOOTPRINT_MEMORY_MIB}"
+printf 'footprint_cores=%s\n' "${WORLD_FOOTPRINT_CORES}"
 printf 'profile_repository=%s\n' "${WORLD_PROFILE_REPOSITORY}"
 printf 'profile_commit=%s\n' "${WORLD_PROFILE_COMMIT}"
 printf 'world_directory=%s\n' "${WORLD_DIRECTORY}"

@@ -89,6 +89,59 @@
         }
       },
       "ResultPath": null,
+      "Next": "Find Placement"
+    },
+    "Find Placement": {
+      "Type": "Task",
+      "Comment": "ADR-0054: a stop is told a session and finds its host and slot itself. A session placed nowhere, or a lookup that fails, stops the requested instance as before.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "findPlacement",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultSelector": {
+        "placement.$": "$.Payload.placement"
+      },
+      "ResultPath": "$.placementLookup",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Adopt Requested Host"
+        }
+      ],
+      "Next": "Route Found Placement"
+    },
+    "Route Found Placement": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.placementLookup.placement",
+          "IsNull": true,
+          "Next": "Adopt Requested Host"
+        }
+      ],
+      "Default": "Adopt Found Placement"
+    },
+    "Adopt Found Placement": {
+      "Type": "Pass",
+      "Parameters": {
+        "hostId.$": "$.placementLookup.placement.hostId",
+        "slot.$": "$.placementLookup.placement.slot"
+      },
+      "ResultPath": "$.request.placed",
+      "Next": "Stop Accepted V1"
+    },
+    "Adopt Requested Host": {
+      "Type": "Pass",
+      "Parameters": {
+        "hostId.$": "$.request.instanceId",
+        "slot": ""
+      },
+      "ResultPath": "$.request.placed",
       "Next": "Stop Accepted V1"
     },
     "Stop Accepted V1": {
@@ -99,7 +152,8 @@
         "Name.$": "States.Format('{}-host-stop', $.request.operationId)",
         "Input": {
           "operationId.$": "$.request.operationId",
-          "instanceId.$": "$.request.instanceId",
+          "instanceId.$": "$.request.placed.hostId",
+          "slot.$": "$.request.placed.slot",
           "worldId.$": "$.request.worldId",
           "timing.$": "$.request.stopTiming"
         }
@@ -127,6 +181,77 @@
         }
       },
       "ResultPath": null,
+      "Next": "Release Placement"
+    },
+    "Release Placement": {
+      "Type": "Task",
+      "Comment": "Placement bookkeeping (ADR-0054, phase 5): the session's reservation leaves the host record. Releasing what was never reserved is not a failure, and nothing acts on the drain that follows yet.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "releasePlacement",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultSelector": {
+        "released.$": "$.Payload.released",
+        "host.$": "$.Payload.host"
+      },
+      "ResultPath": "$.placementRelease",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Release Stop Lease"
+        }
+      ],
+      "Next": "Route Emptied Host"
+    },
+    "Route Emptied Host": {
+      "Type": "Choice",
+      "Comment": "ADR-0054: the host's half of the two-level stop. A launched host this stop emptied gets a drain; the configured host is stopped by the V1 stop as it always was, and a host that still holds sessions is left alone.",
+      "Choices": [
+        {
+          "Variable": "$.placementRelease.host",
+          "IsNull": true,
+          "Next": "Release Stop Lease"
+        }
+      ],
+      "Default": "Route Emptied Host State"
+    },
+    "Route Emptied Host State": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            { "Variable": "$.placementRelease.host.record.state", "StringEquals": "draining" },
+            { "Variable": "$.placementRelease.host.record.provenance", "StringEquals": "launched" }
+          ],
+          "Next": "Start Drain"
+        }
+      ],
+      "Default": "Release Stop Lease"
+    },
+    "Start Drain": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:sfn:startExecution",
+      "Parameters": {
+        "StateMachineArn": "${drain_state_machine_arn}",
+        "Name.$": "States.Format('{}-drain', $.request.operationId)",
+        "Input": {
+          "hostId.$": "$.placementRelease.host.record.hostId",
+          "emptiedBy.$": "$.request.sessionId"
+        }
+      },
+      "ResultPath": "$.drain",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.drainStartFailure",
+          "Next": "Release Stop Lease"
+        }
+      ],
       "Next": "Release Stop Lease"
     },
     "Release Stop Lease": {

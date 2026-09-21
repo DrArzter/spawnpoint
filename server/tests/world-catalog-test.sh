@@ -31,6 +31,23 @@ grep -Fxq 'profile_id=vanilla-forge' <<<"${vanilla_output}"
 expect_failure "unknown world" "${scripts}/world-profile.sh" missing
 expect_failure "invalid world id" "${scripts}/world-profile.sh" '../main'
 
+# The footprint (ADR-0054) is the game module's default unless the catalog
+# states one; a stated one that is not a positive whole number of MiB is not a
+# loadable catalog.
+grep -Fxq 'footprint_memory_mib=7168' <<<"${main_output}"
+grep -Fxq 'footprint_cores=1' <<<"${main_output}"
+grep -Fxq 'footprint_memory_mib=3072' <<<"${vanilla_output}"
+grep -Fxq 'footprint_cores=0.5' <<<"${vanilla_output}"
+mkdir -p -- "${fixture}/catalogs"
+jq '.worlds[0].footprint = {memory_mib: 4096, cores: 0.5}' "${repository_root}/server/worlds/catalog.json" >"${fixture}/catalogs/override.json"
+override_output="$(SPAWNPOINT_WORLD_CATALOG="${fixture}/catalogs/override.json" "${scripts}/world-profile.sh" world)"
+grep -Fxq 'footprint_memory_mib=4096' <<<"${override_output}"
+grep -Fxq 'footprint_cores=0.5' <<<"${override_output}"
+jq '.worlds[0].footprint = {memory_mib: 0, cores: 1}' "${repository_root}/server/worlds/catalog.json" >"${fixture}/catalogs/zero.json"
+expect_failure "zero footprint" env SPAWNPOINT_WORLD_CATALOG="${fixture}/catalogs/zero.json" "${scripts}/world-profile.sh" world
+jq '.worlds[0].footprint = {memory_mib: 6144.5, cores: 1}' "${repository_root}/server/worlds/catalog.json" >"${fixture}/catalogs/fraction.json"
+expect_failure "fractional MiB" env SPAWNPOINT_WORLD_CATALOG="${fixture}/catalogs/fraction.json" "${scripts}/world-profile.sh" world
+
 # A registry record adds one generation-backed world. Once a static world has
 # been migrated, its registry record also takes precedence over the legacy
 # catalog entry so the host cannot keep consulting the old release pointer.
@@ -49,6 +66,21 @@ dynamic_output="$(
 dynamic_catalog="$(awk -F= '$1 == "catalog" { print substr($0, index($0, "=") + 1) }' <<<"${dynamic_output}")"
 dynamic_profile="$(SPAWNPOINT_WORLD_CATALOG="${dynamic_catalog}" "${scripts}/world-profile.sh" minecraft-creative)"
 grep -Fxq 'profile_id=creative' <<<"${dynamic_profile}"
+grep -Fxq 'footprint_memory_mib=7168' <<<"${dynamic_profile}"
+jq '.footprint = {memory_mib: 5120, cores: 1}' "${fixture}/s3/releases/worlds/minecraft-creative/world.json" >"${fixture}/s3/releases/worlds/minecraft-creative/world.sized.json"
+mv -- "${fixture}/s3/releases/worlds/minecraft-creative/world.sized.json" "${fixture}/s3/releases/worlds/minecraft-creative/world.json"
+sized_output="$(
+  PATH="${fixture}/bin:${PATH}" \
+  FAKE_S3_ROOT="${fixture}/s3" \
+  RELEASE_BUCKET=releases \
+  SPAWNPOINT_RUNTIME_DIRECTORY="${fixture}/runtime-sized" \
+    "${scripts}/refresh-world-catalog.sh" minecraft-creative
+)"
+sized_catalog="$(awk -F= '$1 == "catalog" { print substr($0, index($0, "=") + 1) }' <<<"${sized_output}")"
+sized_profile="$(SPAWNPOINT_WORLD_CATALOG="${sized_catalog}" "${scripts}/world-profile.sh" minecraft-creative)"
+grep -Fxq 'footprint_memory_mib=5120' <<<"${sized_profile}"
+jq '.footprint = {memory_mib: 5120, cores: 1} | del(.footprint)' "${fixture}/s3/releases/worlds/minecraft-creative/world.json" >"${fixture}/s3/releases/worlds/minecraft-creative/world.plain.json"
+mv -- "${fixture}/s3/releases/worlds/minecraft-creative/world.plain.json" "${fixture}/s3/releases/worlds/minecraft-creative/world.json"
 grep -Fq '/worlds/minecraft-creative/generations/gen-123456781234123412341234567890ab/data' <<<"${dynamic_profile}"
 SPAWNPOINT_WORLD_CATALOG="${dynamic_catalog}" "${scripts}/prepare-world.sh" minecraft-creative >/dev/null
 jq -e '.generation == {id: "gen-123456781234123412341234567890ab", release: "42.7"}' \

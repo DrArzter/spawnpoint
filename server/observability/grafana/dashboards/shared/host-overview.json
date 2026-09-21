@@ -117,8 +117,8 @@
       },
       "targets": [
         {
-          "expr": "sum by (container_label_com_docker_compose_service) (container_memory_working_set_bytes{container_label_com_docker_compose_service!=\"\"} and on(id) (time() - container_last_seen < 30))",
-          "legendFormat": "{{container_label_com_docker_compose_service}}",
+          "expr": "sum by (container_label_com_docker_compose_project, container_label_com_docker_compose_service) (container_memory_working_set_bytes{container_label_com_docker_compose_service!=\"\"} and on(id) (time() - container_last_seen < 30))",
+          "legendFormat": "{{container_label_com_docker_compose_project}}/{{container_label_com_docker_compose_service}}",
           "refId": "A"
         }
       ],
@@ -153,8 +153,8 @@
       },
       "targets": [
         {
-          "expr": "100 * sum by (container_label_com_docker_compose_service) (rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service!=\"\"}[2m]) and on(id) (time() - container_last_seen < 30))",
-          "legendFormat": "{{container_label_com_docker_compose_service}}",
+          "expr": "100 * sum by (container_label_com_docker_compose_project, container_label_com_docker_compose_service) (rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service!=\"\"}[2m]) and on(id) (time() - container_last_seen < 30))",
+          "legendFormat": "{{container_label_com_docker_compose_project}}/{{container_label_com_docker_compose_service}}",
           "refId": "A"
         }
       ],

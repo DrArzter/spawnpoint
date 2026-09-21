@@ -1,0 +1,3 @@
+# The release-builder source is content-addressed and recreated before the old
+# generated archive is removed. No release or world data uses this prefix.
+aws_s3_object.release_builder_source

@@ -9,6 +9,10 @@ Contents:
 - `user-data.sh` — idempotent first-boot setup for the disposable host: install Docker, a digest-verified pinned
   Compose plugin, and verify SSM. It deliberately does not guess a disk, clone a moving Git branch, handle secrets or
   start the stack.
+- `user-data-fleet.sh.tftpl` — the same base, then what a host launched for a session (ADR-0054) has to do for
+  itself because it has no data volume: check this repository out at the commit its `AppCommit` tag names, render
+  `.env` from Parameter Store with `scripts/render-host-env.sh`, join the overlay and authorise itself with the Central
+  token. Rendered by Terraform into the `spawnpoint-fleet-host` launch template.
 - `scripts/` — invoked by SSM Run Command, not by a human:
   - `prepare-data-volume.sh` — verify an explicitly named block device, optionally format only an empty one, and mount
     it by filesystem UUID,
@@ -20,9 +24,12 @@ Contents:
   - `check-session-activity.sh` — expose the fail-closed player activity contract used by the future idle watchdog,
   - `idle-probe.sh` — the watchdog's exit-code contract over `players.sh`: 0 empty, 3 occupied, anything else a probe
     failure. The workflow reads the code, never the output,
-  - `check-host-activity.sh` — the host-idle sensor: is any *other* game service running here? Trivially idle while
-    one world runs at a time; the seam the two-level stop needs the day two run on one host (fail-closed: an
-    unreadable host is never judged idle),
+  - `render-host-env.sh` — turn `aws ssm get-parameters-by-path` output into the `.env` a launched host runs from; the
+    last segment of each parameter's name is the key, and anything that is not a plain environment name is refused,
+  - `check-host-activity.sh` — the host-idle sensor: is any *other* game session running here, in any Compose
+    project? The asking session is its project and its service; the answer decides whether the host may drain after
+    a session stop ([ADR-0054](../docs/adr/0054-place-a-session-on-a-host-with-room.md)). Fail-closed: an unreadable
+    host is never judged idle,
   - `save-world.sh` — disable autosave, run `save-all flush`, and re-enable autosave even on failure,
   - `stop.sh` — save first, then let Compose perform the graceful container stop,
   - `archive-world.sh` — archive a stopped live world with Zstandard, write SHA-256 and verify the result,
@@ -56,8 +63,12 @@ Contents:
   byte-identical to the pre-adapter scripts**. Factorio is the first tenant: RCON spoken from the host by
   `games/factorio/rcon-client.py`, password read from the `config/rconpw` the server itself generates, saves archived
   as `saves/*.zip`.
-- `observability/` — provisioned Prometheus configuration and Grafana session dashboard. `mc-monitor`, cAdvisor and
-  node_exporter are declared beside Minecraft in Compose and share its lifetime.
+- `observability/` — provisioned Prometheus configuration and Grafana dashboards. In an unplaced session `mc-monitor`,
+  cAdvisor and node_exporter are declared beside Minecraft in Compose and share its lifetime. A placed session
+  ([ADR-0054](../docs/adr/0054-place-a-session-on-a-host-with-room.md)) runs without them: the host runs one tier for
+  every session, the Compose project `spawnpoint-observability` (`compose.host.yaml` over `compose.yaml`), which
+  `scripts/ensure-host-observability.sh` brings up before the first placed session and whose Prometheus finds each
+  session's exporter through the Docker socket by label (`prometheus.host.yml`).
 
 Planned later: fetch the desired release from S3, and invoke backup/retention from orchestration. The Spot interruption
 notice is handled only if [ADR-0027](../docs/adr/0027-spot-request-shape.md) is un-deferred; the server runs on-demand
@@ -81,8 +92,10 @@ server/scripts/save-world.sh
 server/scripts/stop.sh
 ```
 
-`start.sh` starts the whole Compose project, including session observability. `stop.sh` saves Minecraft first and then
-stops the whole project, so Grafana cannot accidentally become always-on compute. Prometheus and Grafana keep local
+`start.sh` starts the whole Compose project, including session observability for an unplaced session. `stop.sh` saves
+Minecraft first and then stops the whole project, so Grafana cannot accidentally become always-on compute. The host
+tier a placed session is scraped by stays up while the host runs and goes down with the host: a configured host is
+stopped when its last session leaves, a launched one is terminated after its grace period. Prometheus and Grafana keep local
 Docker volumes across an ordinary Compose stop; losing that history with a disposable instance is intentional.
 
 Prometheus remains host-local at `http://127.0.0.1:9090`. Grafana also defaults to loopback, but has its own bind

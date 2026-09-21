@@ -3,6 +3,9 @@ locals {
   lifecycle_coordinator_table_actions = [
     "dynamodb:GetItem",
     "dynamodb:PutItem",
+    # Host records (ADR-0054) share the table under a prefixed key; the fleet
+    # is read with a filtered scan until its size earns an index.
+    "dynamodb:Scan",
   ]
 }
 

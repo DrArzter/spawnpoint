@@ -63,10 +63,30 @@ test("V2 stop holds one fenced lease across the accepted verified stop", async (
   assert.equal(state(definition, "Read Lifecycle").Next, "Route Lifecycle");
   assert.equal(state(definition, "Route Lifecycle").Default, "Stale Session");
   assert.equal(state(definition, "Acquire Stop Lease").Next, "Begin Stopping Session");
-  assert.equal(state(definition, "Begin Stopping Session").Next, "Stop Accepted V1");
+  assert.equal(state(definition, "Begin Stopping Session").Next, "Find Placement");
+  // ADR-0054: a stop is told a session and finds its host and slot itself; a
+  // session placed nowhere, or a lookup that fails, stops the requested instance.
+  assert.equal((state(definition, "Find Placement") as Record<string, any>).Parameters.Payload.action, "findPlacement");
+  assert.equal(state(definition, "Find Placement").Next, "Route Found Placement");
+  assert.equal(state(definition, "Find Placement").Catch?.[0]?.Next, "Adopt Requested Host");
+  assert.equal(state(definition, "Route Found Placement").Choices?.[0]?.Next, "Adopt Requested Host");
+  assert.equal(state(definition, "Route Found Placement").Default, "Adopt Found Placement");
+  assert.deepEqual((state(definition, "Adopt Found Placement") as Record<string, any>).Parameters, { "hostId.$": "$.placementLookup.placement.hostId", "slot.$": "$.placementLookup.placement.slot" });
+  assert.deepEqual((state(definition, "Adopt Requested Host") as Record<string, any>).Parameters, { "hostId.$": "$.request.instanceId", slot: "" });
+  assert.equal(state(definition, "Adopt Found Placement").Next, "Stop Accepted V1");
+  assert.equal(state(definition, "Adopt Requested Host").Next, "Stop Accepted V1");
+  const nested = (state(definition, "Stop Accepted V1") as Record<string, any>).Parameters.Input as Record<string, string>;
+  assert.equal(nested["instanceId.$"], "$.request.placed.hostId");
+  assert.equal(nested["slot.$"], "$.request.placed.slot");
+  const release = (state(definition, "Release Placement") as Record<string, any>).Parameters.Payload as Record<string, unknown>;
+  assert.equal(release.action, "releasePlacement");
+  assert.equal(release["sessionId.$"], "$.request.sessionId");
+  assert.equal("hostId.$" in release, false, "the reservation is found by session, wherever it is");
   assert.equal(state(definition, "Stop Accepted V1").Resource, "arn:aws:states:::states:startExecution.sync:2");
   assert.equal(state(definition, "Stop Accepted V1").Next, "Mark Session Stopped");
-  assert.equal(state(definition, "Mark Session Stopped").Next, "Release Stop Lease");
+  assert.equal(state(definition, "Mark Session Stopped").Next, "Release Placement");
+  assert.equal(state(definition, "Release Placement").Next, "Route Emptied Host");
+  assert.equal(state(definition, "Release Placement").Catch?.[0]?.Next, "Release Stop Lease");
   assert.equal(state(definition, "Release Stop Lease").Next, "Stopped");
 });
 
@@ -97,4 +117,21 @@ test("a player race restores the same session to ready before releasing the leas
   assert.equal(state(definition, "Cancel Refused Stop").Next, "Release Refused Stop Lease");
   assert.equal(state(definition, "Release Refused Stop Lease").Next, "Stop Refused Players Online");
   assert.equal(state(definition, "Stop Refused Players Online").Type, "Fail");
+});
+
+test("a stop that empties a launched host starts its drain; the configured host and a host still in use are left alone", async () => {
+  const definition = await loadDefinition();
+  const route = state(definition, "Route Emptied Host");
+  assert.equal(route.Choices?.[0]?.Next, "Release Stop Lease", "a session placed nowhere leaves no host to drain");
+  assert.equal(route.Default, "Route Emptied Host State");
+  const byState = state(definition, "Route Emptied Host State");
+  assert.equal(byState.Choices?.[0]?.Next, "Start Drain");
+  assert.equal(byState.Default, "Release Stop Lease");
+  assert.match(JSON.stringify(byState.Choices?.[0]), /"draining"/);
+  assert.match(JSON.stringify(byState.Choices?.[0]), /"launched"/);
+  const drain = state(definition, "Start Drain") as Record<string, any>;
+  assert.equal(drain.Resource, "arn:aws:states:::aws-sdk:sfn:startExecution", "the drain outlives the stop; it is not awaited");
+  assert.equal(drain.Parameters.Input["hostId.$"], "$.placementRelease.host.record.hostId");
+  assert.equal(drain.Next, "Release Stop Lease");
+  assert.equal(drain.Catch?.[0]?.Next, "Release Stop Lease", "a drain that cannot start never fails a verified stop");
 });

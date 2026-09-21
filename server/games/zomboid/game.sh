@@ -17,7 +17,8 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the GAME_* constants are the module's interface, read by _dispatch.sh consumers
 
-GAME_COMPOSE_FILES="observability/compose.yaml:games/zomboid/compose.yaml"
+GAME_COMPOSE_FILES="games/zomboid/compose.yaml"
+GAME_FOOTPRINT_COMPOSE_FILE="games/zomboid/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="zomboid"
 # No release payload exists for this game, so neither value is ever read by the
 # release scripts; they are set for the contract and left honest.
@@ -26,17 +27,29 @@ GAME_LOADER_TYPE="workshop"
 # The port a player types after the address the connectivity strategy publishes.
   # 16262/udp is opened beside it, but players type only this one.
 GAME_CONNECT_PORT="16261"
+GAME_RCON_PORT="27015"
+# Not yet: the server tells a client to continue on its second port
+# (UDPPort, 16262 by default), which a slot's host mapping would not carry.
+# Rendering DefaultPort and UDPPort into the server's ini from the slot is
+# what lifts this; until then a Zomboid world runs on slot zero only.
+GAME_SLOTTABLE="false"
 GAME_CONNECT_PROTOCOL="udp"
 # Fail closed: the server verifies Steam identities only when it runs in Steam
 # mode with that verification on, and this project has not exercised that
 # configuration. A world whose server does verify declares `auth: game`
 # (ADR-0033, and server/games/README.md).
 GAME_DEFAULT_AUTH="none"
+# What a session is placed with and limited to (ADR-0054): the image gives
+# the JVM a 6 GiB heap by default (MEMORY_XMX_GB), and the process is larger
+# than its heap.
+GAME_FOOTPRINT_MEMORY_MIB="8192"
+GAME_FOOTPRINT_CORES="1"
 
 ZOMBOID_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ZOMBOID_DATA_DIR="${ZOMBOID_DATA_DIR:-${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${ZOMBOID_GAME_DIR}/data}}"
 ZOMBOID_RCON_HOST="${ZOMBOID_RCON_HOST:-127.0.0.1}"
-ZOMBOID_RCON_PORT="${ZOMBOID_RCON_PORT:-27015}"
+# The host side of the RCON mapping follows the slot (ADR-0054).
+ZOMBOID_RCON_PORT="${ZOMBOID_RCON_PORT:-${SPAWNPOINT_RCON_PORT:-27015}}"
 # Unlike factorio, this server does not generate its own password: the image
 # takes RCON_PASSWORD from the environment, so the host's runtime environment is
 # where the probe finds it too. Reading a file the image never writes was a
@@ -64,6 +77,13 @@ game_query_players_raw() {
     "${ZOMBOID_RCON_HOST}" "${ZOMBOID_RCON_PORT}" \
     "${password}" \
     "players"
+}
+
+# Project Zomboid exposes no tick or frame time over RCON; the acceptance
+# records it as unmeasured rather than guessing from something else.
+game_tick_time_ms() {
+  printf 'error: Project Zomboid reports no tick time over RCON\n' >&2
+  return 2
 }
 
 game_save() {

@@ -134,6 +134,9 @@ export function buildStopInput(args: Readonly<{
   };
 }
 
+export type PlacementMode = "single" | "shared";
+export type LaunchMode = "disabled" | "enabled";
+
 export function buildLifecycleStartInput(args: Readonly<{
   serverId: string;
   operationId: string;
@@ -141,6 +144,14 @@ export function buildLifecycleStartInput(args: Readonly<{
   instanceId: string;
   worldId: string;
   requestedBy?: string;
+  // ADR-0054: `single` starts the configured instance as before; `shared`
+  // places the session on a registered host with room. The configured
+  // instance is always registered first, so it is always a candidate.
+  placement?: PlacementMode;
+  // Whether a session nothing has room for may launch a host from the fleet
+  // template, and which commit of this repository that host checks out.
+  launch?: LaunchMode;
+  appCommit?: string;
 }>) {
   return {
     serverId: args.serverId,
@@ -151,6 +162,9 @@ export function buildLifecycleStartInput(args: Readonly<{
     watchdogStopLeaseTtlSeconds: 1800,
     instanceId: args.instanceId,
     worldId: args.worldId,
+    placement: args.placement ?? "single",
+    launch: args.launch ?? "disabled",
+    appCommit: args.appCommit ?? "main",
     ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
     startTiming: POLL_TIMING,
     stopTiming: POLL_TIMING,

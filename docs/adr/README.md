@@ -113,6 +113,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0051](0051-restart-a-session-without-releasing-the-host.md) | Restart a session without releasing the host | Proposed | M4 |
 | [0052](0052-keep-a-release-while-a-generation-names-it.md) | Keep a release while a generation names it, and check before restoring | Proposed | M4 |
 | [0053](0053-tell-not-built-apart-from-broken.md) | Tell "not built yet" apart from "broken", in the transport | Proposed | M4 |
+| [0054](0054-place-a-session-on-a-host-with-room.md) | Place a session on a host with room, or launch one that fits | Proposed | later |
 
 ## Decisions still to record
 
@@ -142,6 +143,12 @@ written, so the numbering stays chronological and nothing has to be renumbered w
   bill at nothing, and makes an always-ready world a per-world policy with its cost attached. One correction to what this
   placeholder claimed: the catalog carries a per-world `connectivity`, not a per-world `host`, so that seam is not cut
   yet.
+  **The same-host variant is now recorded** as [ADR-0054](0054-place-a-session-on-a-host-with-room.md) on 2026-09-17:
+  a start places its session on the ready host that leaves the least room, and launches a host that fits
+  when none has; a world declares a footprint that becomes its container's hard limit; a slot per reservation is the
+  port allocator; the stop becomes two decisions, the session's and the host's, with a grace period between them.
+  ADR-0048's S3 home, waiting budget, `cold`/`warm` policy and verified-archive gate all carry over. The domain module
+  and its tests landed with the ADR; the rollout is in [docs/capacity-allocation-rollout.md](../capacity-allocation-rollout.md).
 - **Distribution model, if this is ever handed to other people.** "Clone the repo, authorise a browser, one command,
   a server in minutes" mixes two incompatible shapes: repo-clone needs credentials on the operator's own machine
   (`aws sso login` or a profile), while browser-authorise is the console / CloudFormation "Launch Stack" model. A

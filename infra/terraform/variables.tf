@@ -60,3 +60,31 @@ variable "running_hours_alarm_hours" {
   }
 }
 
+
+variable "repository_url" {
+  description = "Where a launched host checks this repository out from at first boot (ADR-0054, phase 12). Public, so the host needs no credential to read it."
+  type        = string
+  default     = "https://github.com/DrArzter/spawnpoint.git"
+
+  validation {
+    condition     = startswith(var.repository_url, "https://")
+    error_message = "repository_url must be an https URL."
+  }
+}
+
+variable "host_parameter_path" {
+  description = "Parameter Store path under which a launched host finds its runtime environment (`/env/<KEY>`) and the overlay's Central API token (`/zerotier-central-token`)."
+  type        = string
+  default     = "/spawnpoint/host"
+
+  validation {
+    condition     = can(regex("^/[A-Za-z0-9_./-]*[A-Za-z0-9_.-]$", var.host_parameter_path))
+    error_message = "host_parameter_path must start with a slash and not end with one."
+  }
+}
+
+variable "fleet_root_volume_gib" {
+  description = "Root volume of a launched host, which also holds the release cache and the worlds it restores; sized for a few worlds, not for save data."
+  type        = number
+  default     = 24
+}

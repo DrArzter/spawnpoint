@@ -77,6 +77,60 @@ data "aws_iam_policy_document" "lifecycle_v2_start" {
     actions   = ["ec2:DescribeInstances"]
     resources = ["*"]
   }
+
+  # The host record (ADR-0054) carries what the host turned out to be, read
+  # from the instance type after the session is up.
+  statement {
+    sid       = "DescribeHostShape"
+    actions   = ["ec2:DescribeInstanceTypes"]
+    resources = ["*"]
+  }
+
+  # Launching a host for a session (ADR-0054, phase 12): an instant Fleet from
+  # the fleet template, tagged so every later statement recognises it.
+  statement {
+    sid       = "LaunchFleetHosts"
+    actions   = ["ec2:CreateFleet", "ec2:RunInstances"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "TagWhatItLaunches"
+    actions   = ["ec2:CreateTags"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:CreateAction"
+      values   = ["RunInstances", "CreateFleet"]
+    }
+  }
+
+  statement {
+    sid       = "PassOnlyTheHostRole"
+    actions   = ["iam:PassRole"]
+    resources = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/spawnpoint-game-host"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ec2.amazonaws.com"]
+    }
+  }
+
+  # A host launched for a session that could not be reserved is let go at
+  # once, and only a host carrying the fleet tag can be.
+  statement {
+    sid       = "TerminateOnlyLaunchedHosts"
+    actions   = ["ec2:TerminateInstances"]
+    resources = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:ResourceTag/ManagedBy"
+      values   = ["spawnpoint-fleet"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "lifecycle_v2_start" {
@@ -94,6 +148,8 @@ resource "aws_sfn_state_machine" "lifecycle_v2_start" {
     start_v1_state_machine_arn = local.start_state_machine_arn
     stop_v1_state_machine_arn  = local.stop_state_machine_arn
     watchdog_state_machine_arn = local.lifecycle_v2_watchdog_arn
+    fleet_launch_template_name = "spawnpoint-fleet-host"
+    allowed_instance_types     = jsonencode(var.launch_families)
   })
 
   tags = {
@@ -159,6 +215,13 @@ data "aws_iam_policy_document" "lifecycle_v2_stop" {
     actions   = ["events:PutRule", "events:PutTargets", "events:DescribeRule"]
     resources = [local.lifecycle_v2_sync_events_arn]
   }
+
+  # The stop that empties a launched host starts its drain (ADR-0054).
+  statement {
+    sid       = "StartDrainOfEmptiedHost"
+    actions   = ["states:StartExecution"]
+    resources = [local.lifecycle_v2_drain_arn]
+  }
 }
 
 resource "aws_iam_role_policy" "lifecycle_v2_stop" {
@@ -174,6 +237,7 @@ resource "aws_sfn_state_machine" "lifecycle_v2_stop" {
   definition = templatefile("${path.module}/../../workflows/stop-server-v2.asl.json.tftpl", {
     coordinator_function_arn  = local.lifecycle_v2_coordinator_arn
     stop_v1_state_machine_arn = local.stop_state_machine_arn
+    drain_state_machine_arn   = local.lifecycle_v2_drain_arn
   })
 
   tags = {

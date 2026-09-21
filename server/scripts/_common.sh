@@ -39,6 +39,12 @@ require_command() {
 
 compose() {
   local args=(--project-directory "${SERVER_DIR}")
+  # A placed session is its own Compose project, named for its world, so two
+  # sessions on one host never share a container name or a volume. Unset keeps
+  # Compose's own default, the directory's name, exactly as before.
+  if [[ -n "${SERVER_COMPOSE_PROJECT:-}" ]]; then
+    args+=(--project-name "${SERVER_COMPOSE_PROJECT}")
+  fi
 
   for compose_file in "${COMPOSE_FILES[@]}"; do
     args+=(-f "${compose_file}")

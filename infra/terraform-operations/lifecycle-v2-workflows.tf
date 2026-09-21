@@ -148,7 +148,7 @@ resource "aws_sfn_state_machine" "lifecycle_v2_start" {
     start_v1_state_machine_arn = local.start_state_machine_arn
     stop_v1_state_machine_arn  = local.stop_state_machine_arn
     watchdog_state_machine_arn = local.lifecycle_v2_watchdog_arn
-    fleet_launch_template_id   = data.aws_launch_template.fleet_host.id
+    fleet_launch_template_name = "spawnpoint-fleet-host"
     allowed_instance_types     = jsonencode(var.launch_families)
   })
 

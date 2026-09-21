@@ -56,6 +56,7 @@ class DeploymentSecurityTest(unittest.TestCase):
             "aws_lambda_permission": '"lambda:RemovePermission"',
             "aws_sfn_state_machine": '"states:DeleteStateMachine"',
             "aws_sns_topic_subscription": '"sns:Unsubscribe"',
+            "aws_s3_object": '"s3:DeleteObject"',
         }
         self.assertEqual(sorted(listed_types), sorted(delete_action_for_type))
         for action in set(delete_action_for_type.values()):

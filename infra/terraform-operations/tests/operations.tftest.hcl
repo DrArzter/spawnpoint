@@ -33,14 +33,6 @@ mock_provider "aws" {
   }
 
   override_data {
-    target = data.aws_launch_template.fleet_host
-    values = {
-      id   = "lt-00000000000000000"
-      name = "spawnpoint-fleet-host"
-    }
-  }
-
-  override_data {
     target = data.aws_iam_policy_document.lifecycle_v2_drain_assume
     values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }

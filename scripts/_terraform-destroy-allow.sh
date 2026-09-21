@@ -31,6 +31,7 @@ DESTROY_DELETABLE_TYPES=(
   aws_lambda_permission
   aws_sfn_state_machine
   aws_sns_topic_subscription
+  aws_s3_object
 )
 
 # One address per line. A '#' at the start of a line or after whitespace begins

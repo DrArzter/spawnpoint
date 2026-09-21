@@ -16,7 +16,7 @@ anything a Lambda would only wrap is a direct service integration instead. See
 | Lifecycle V2 | `spawnpoint-lifecycle-coordinator-v2` | Conditional DynamoDB transitions for the fenced session record — leases, sessions, watchdog observations. The rules are pure domain code in `src/domain/lifecycle.ts` |
 | Release state | `spawnpoint-release-state` | Prepare, commit, restore and rollback of a wipe's desired/active pointer, with ETag-guarded S3 writes; the promotion machine's only writer. See [ADR-0030](../docs/adr/0030-desired-and-active-release.md) |
 | World lifecycle | `spawnpoint-world-lifecycle` | Archive, new wipe, restore into a new wipe, and the guarded permanent purge — the mutation step of the world-lifecycle workflow. See [ADR-0040](../docs/adr/0040-reusable-presets-and-world-wipes.md) |
-| Telegram | `spawnpoint-telegram-bot`, `spawnpoint-notifier` | The webhook command bot, and the notifier that turns execution events and alerts into messages with per-identity subscriptions. Discord is designed, not built. See [ADR-0016](../docs/adr/0016-chat-integrations.md) |
+| Notifications | `spawnpoint-telegram-bot`, `spawnpoint-notifier` | The Telegram command bot, and the notifier that turns execution events and alerts into subscribed Telegram messages plus optional verified-address transactional email. Resend is the first replaceable email adapter. See [ADR-0016](../docs/adr/0016-chat-integrations.md), [ADR-0020](../docs/adr/0020-email-channel.md) |
 
 Rules that apply to all of them:
 

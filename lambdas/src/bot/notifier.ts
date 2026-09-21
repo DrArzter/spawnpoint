@@ -4,13 +4,17 @@
 // path. Least privilege by construction: two parameters, the access read model
 // and the Telegram API — no Step Functions, no EC2, no S3.
 
+import { createHash } from "node:crypto";
+
 import { renderAlert } from "../domain/alerts.ts";
 import { parseAccessApprovedEvent, renderAccessApproved } from "../domain/access-events.ts";
-import { invitationDeliveryStatus, parseInvitationEvent, renderInvitation } from "../domain/invitations.ts";
+import { invitationDeliveryStatus, parseInvitationEvent, renderInvitation, renderInvitationEmail, type InvitationEvent } from "../domain/invitations.ts";
 import { notificationSubscriptionKey, parseExecutionEvent, renderNotification } from "../domain/notifications.ts";
 import { parseChatIds } from "../domain/telegram-bot.ts";
+import type { EmailSender } from "../email/email-sender.ts";
+import { createResendEmailSender } from "../email/resend-email-sender.ts";
 import { env, parameter } from "./services/aws.ts";
-import { claimInvitationDelivery, completeInvitationDelivery, subscribedTelegramChatIds } from "./services/subscribers.ts";
+import { claimInvitationDelivery, completeInvitationDelivery, subscribedNotificationTargets, subscribedTelegramChatIds } from "./services/subscribers.ts";
 
 type SnsEvent = Readonly<{
   Records?: ReadonlyArray<{ Sns?: { Subject?: string | null; Message?: string } }>;
@@ -19,6 +23,22 @@ type EventBridgeEvent = Readonly<{ source?: string; "detail-type"?: string; deta
 
 async function configuredChatIds(): Promise<readonly number[]> {
   return parseChatIds(await parameter(env("CHAT_IDS_PARAMETER"), 60));
+}
+
+let configuredEmailSender: Promise<EmailSender | null> | undefined;
+function emailSender(): Promise<EmailSender | null> {
+  configuredEmailSender ??= (async () => {
+    const provider = process.env.EMAIL_DELIVERY_PROVIDER ?? "none";
+    if (provider === "none") return null;
+    if (provider !== "resend") throw new Error(`unsupported email delivery provider: ${provider}`);
+    const replyTo = process.env.EMAIL_REPLY_TO;
+    return createResendEmailSender({
+      apiKey: await parameter(env("RESEND_API_KEY_PARAMETER")),
+      from: env("EMAIL_FROM"),
+      ...(replyTo === undefined ? {} : { replyTo }),
+    });
+  })();
+  return configuredEmailSender;
 }
 
 async function sendToTargets(
@@ -54,6 +74,24 @@ async function sendToTargets(
   if ((options.throwOnTotalFailure ?? true) && failures.length === results.length) {
     throw new Error("every notification target failed");
   }
+  return { targetCount: results.length, successCount: results.length - failures.length };
+}
+
+async function sendInvitationEmails(
+  invitation: InvitationEvent,
+  addresses: readonly string[],
+): Promise<{ targetCount: number; successCount: number }> {
+  const sender = await emailSender();
+  if (sender === null || addresses.length === 0) return { targetCount: 0, successCount: 0 };
+  const message = renderInvitationEmail(invitation, env("MINI_APP_URL"));
+  const results = await Promise.allSettled(addresses.map((address) => sender.send({
+    ...message,
+    to: address,
+    idempotencyKey: `game-invitation/${invitation.invitationId}/${createHash("sha256").update(address).digest("hex").slice(0, 24)}`,
+    tags: [{ name: "category", value: "game_invitation" }],
+  })));
+  const failures = results.filter((result) => result.status === "rejected");
+  for (const failure of failures) console.error((failure as PromiseRejectedResult).reason);
   return { targetCount: results.length, successCount: results.length - failures.length };
 }
 
@@ -93,11 +131,18 @@ export async function handler(event: SnsEvent | EventBridgeEvent): Promise<void>
     if (!await claimInvitationDelivery(invitation.invitationId)) return;
     try {
       const key = invitation.audience === "broadcast" ? "invitation.broadcast" : "invitation.direct";
-      const subscribers = await subscribedTelegramChatIds(key, invitation.audience === "direct"
+      const subscribers = await subscribedNotificationTargets(key, invitation.audience === "direct"
         ? { include: invitation.recipientIdentityIds, exclude: [invitation.senderIdentityId] }
         : { exclude: [invitation.senderIdentityId] });
       const groups = invitation.audience === "broadcast" ? (await configuredChatIds()).filter((chatId) => chatId < 0) : [];
-      const delivery = await sendToTargets(renderInvitation(invitation), [...new Set([...groups, ...subscribers])], { throwOnTotalFailure: false });
+      const [telegram, email] = await Promise.all([
+        sendToTargets(renderInvitation(invitation), [...new Set([...groups, ...subscribers.telegramChatIds])], { throwOnTotalFailure: false }),
+        sendInvitationEmails(invitation, subscribers.emailAddresses),
+      ]);
+      const delivery = {
+        targetCount: telegram.targetCount + email.targetCount,
+        successCount: telegram.successCount + email.successCount,
+      };
       await completeInvitationDelivery(
         invitation.invitationId,
         invitationDeliveryStatus(delivery.targetCount, delivery.successCount),

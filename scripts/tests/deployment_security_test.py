@@ -131,6 +131,18 @@ class DeploymentSecurityTest(unittest.TestCase):
             for flag in expected_flags:
                 self.assertIn(flag, workflow)
 
+    def test_email_adapter_configuration_comes_from_repository_variables(self) -> None:
+        expected_variables = (
+            "TF_VAR_email_delivery_provider: ${{ vars.EMAIL_DELIVERY_PROVIDER }}",
+            "TF_VAR_resend_api_key_parameter: ${{ vars.RESEND_API_KEY_PARAMETER }}",
+            "TF_VAR_email_from: ${{ vars.RESEND_EMAIL_FROM }}",
+            "TF_VAR_email_reply_to: ${{ vars.RESEND_EMAIL_REPLY_TO }}",
+        )
+        for workflow_name in ("deploy-infrastructure.yml", "terraform-plan.yml"):
+            workflow = (REPOSITORY / ".github/workflows" / workflow_name).read_text()
+            for variable in expected_variables:
+                self.assertIn(variable, workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

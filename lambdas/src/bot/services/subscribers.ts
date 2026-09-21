@@ -1,5 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, QueryCommand, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, QueryCommand, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 
 import type { NotificationSubscriptionKey } from "../../domain/notifications.ts";
 import type { InvitationDeliveryStatus } from "../../domain/invitations.ts";
@@ -39,6 +39,23 @@ export function telegramChatIds(items: readonly Item[]): number[] {
   }))];
 }
 
+export function verifiedEmailAddresses(accounts: readonly Item[], credentials: readonly Item[]): string[] {
+  const verifiedBySubject = new Map(credentials.flatMap((credential) => {
+    if (
+      credential.entity_type !== "PASSWORD_CREDENTIAL"
+      || credential.email_verified !== true
+      || typeof credential.subject !== "string"
+      || typeof credential.email !== "string"
+    ) return [];
+    return [[credential.subject, credential.email] as const];
+  }));
+  return [...new Set(accounts.flatMap((account) => {
+    if (account.platform !== "password" || typeof account.platform_user_id !== "string" || typeof account.email !== "string") return [];
+    const verified = verifiedBySubject.get(account.platform_user_id);
+    return verified === account.email ? [verified] : [];
+  }))];
+}
+
 async function subscriptionItems(): Promise<Item[]> {
   const items: Item[] = [];
   let cursor: Key | undefined;
@@ -72,16 +89,44 @@ async function identityAccounts(identityId: string): Promise<Item[]> {
   return items;
 }
 
-export async function subscribedTelegramChatIds(
+async function verifiedCredentials(accounts: readonly Item[]): Promise<Item[]> {
+  const passwordAccounts = accounts.filter((account) => account.platform === "password" && typeof account.email === "string");
+  return Promise.all(passwordAccounts.map(async (account) => {
+    const result = await database().send(new GetCommand({
+      TableName: requiredEnv("ACCESS_TABLE_NAME"),
+      Key: { pk: `CREDENTIAL#EMAIL#${account.email as string}`, sk: "PASSWORD" },
+      ConsistentRead: true,
+    }));
+    return result.Item ?? {};
+  }));
+}
+
+export type NotificationTargets = Readonly<{
+  telegramChatIds: readonly number[];
+  emailAddresses: readonly string[];
+}>;
+
+export async function subscribedNotificationTargets(
   key: NotificationSubscriptionKey,
   options: Readonly<{ include?: readonly string[]; exclude?: readonly string[] }> = {},
-): Promise<number[]> {
+): Promise<NotificationTargets> {
   const included = options.include === undefined ? null : new Set(options.include);
   const excluded = new Set(options.exclude ?? []);
   const identityIds = subscribedIdentityIds(await subscriptionItems(), key)
     .filter((identityId) => (included === null || included.has(identityId)) && !excluded.has(identityId));
-  const accounts = await Promise.all(identityIds.map(identityAccounts));
-  return telegramChatIds(accounts.flat());
+  const accounts = (await Promise.all(identityIds.map(identityAccounts))).flat();
+  const credentials = await verifiedCredentials(accounts);
+  return {
+    telegramChatIds: telegramChatIds(accounts),
+    emailAddresses: verifiedEmailAddresses(accounts, credentials),
+  };
+}
+
+export async function subscribedTelegramChatIds(
+  key: NotificationSubscriptionKey,
+  options: Readonly<{ include?: readonly string[]; exclude?: readonly string[] }> = {},
+): Promise<number[]> {
+  return [...(await subscribedNotificationTargets(key, options)).telegramChatIds];
 }
 
 export async function claimInvitationDelivery(invitationId: string): Promise<boolean> {

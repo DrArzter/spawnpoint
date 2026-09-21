@@ -43,6 +43,34 @@ export function renderInvitation(event: InvitationEvent): string {
   return `[INVITE] ${event.senderDisplayName} invited ${target} to play ${event.gameName} — ${event.worldName}.`;
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+export function renderInvitationEmail(event: InvitationEvent, panelUrl: string): Readonly<{
+  subject: string;
+  text: string;
+  html: string;
+}> {
+  const subject = `${event.senderDisplayName} invited you to ${event.gameName}`;
+  const text = `${renderInvitation({ ...event, audience: "direct" })}\n\nOpen Spawnpoint: ${panelUrl}`;
+  const safeUrl = escapeHtml(panelUrl);
+  return {
+    subject,
+    text,
+    html: [
+      `<p><strong>${escapeHtml(event.senderDisplayName)}</strong> invited you to play `,
+      `<strong>${escapeHtml(event.gameName)} — ${escapeHtml(event.worldName)}</strong>.</p>`,
+      `<p><a href="${safeUrl}">Open Spawnpoint</a></p>`,
+    ].join(""),
+  };
+}
+
 export function invitationDeliveryStatus(targetCount: number, successCount: number): InvitationDeliveryStatus {
   if (targetCount === 0) return "NO_RECIPIENTS";
   if (successCount === targetCount) return "DELIVERED";

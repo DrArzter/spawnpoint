@@ -258,6 +258,11 @@ resource "aws_apigatewayv2_stage" "default" {
   name        = "$default"
   auto_deploy = true
 
+  # API Gateway validates every route_settings key during UpdateStage. Keep
+  # the stage update behind route creation so a new throttled route cannot
+  # race the stage and fail the apply with Route not found.
+  depends_on = [aws_apigatewayv2_route.access]
+
   dynamic "route_settings" {
     for_each = toset(["POST /auth/password", "POST /auth/password/register"])
     content {

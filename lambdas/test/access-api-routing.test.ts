@@ -60,6 +60,17 @@ test("the route table and the deployed API describe the same routes", async () =
   }
 });
 
+test("the API stage waits for routes before applying route settings", async () => {
+  const url = new URL("../../infra/terraform-access-api/api.tf", import.meta.url);
+  const source = await readFile(url, "utf8");
+  const stage = source.slice(
+    source.indexOf('resource "aws_apigatewayv2_stage" "default"'),
+    source.indexOf('resource "aws_lambda_permission" "access_api"'),
+  );
+
+  assert.match(stage, /depends_on\s*=\s*\[aws_apigatewayv2_route\.access\]/);
+});
+
 test("every route needs a permission unless it is deliberately self-scoped", () => {
   for (const [key, route] of Object.entries(routes)) {
     if (route.access.kind === "permission") {

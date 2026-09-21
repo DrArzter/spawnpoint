@@ -379,6 +379,7 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "lambda:RemovePermission",
       "logs:DeleteLogGroup",
       "s3:DeleteObject",
+      "s3:DeleteObjectVersion",
       "sns:Unsubscribe",
       "states:DeleteStateMachine",
     ]

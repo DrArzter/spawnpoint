@@ -147,6 +147,16 @@ run "deployment_role_trusts_only_the_production_environment" {
   }
 
   assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      statement.sid == "DestroyOnlyAllowListedWiring" &&
+      contains(statement.actions, "s3:DeleteObjectVersion") &&
+      contains(statement.resources, "arn:aws:s3:::spawnpoint-releases-${data.aws_caller_identity.current.account_id}/control-plane/release-builder/*")
+    ])
+    error_message = "The deploy identity must be able to prune superseded versions only from the release-builder source prefix."
+  }
+
+  assert {
     condition = alltrue([
       for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
       coalesce(statement.effect, "Allow") != "Allow" || length(setintersection(toset(statement.actions), toset([

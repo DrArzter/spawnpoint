@@ -54,13 +54,15 @@ events_file() {
 }
 
 record_event() {
+  local event="$1"
   mkdir -p -- "${record_dir}"
-  jq -c . <<<"$1" >>"$(events_file)"
-  jq -r 'to_entries[] | "\(.key)=\(.value | tostring)"' <<<"$1"
+  jq -c . <<<"${event}" >>"$(events_file)"
+  jq -r 'to_entries[] | "\(.key)=\(.value | tostring)"' <<<"${event}"
 }
 
 game_for_world() {
-  jq -r --arg id "$1" '.worlds[] | select(.id == $id) | .game // "minecraft"' "${script_dir}/../server/worlds/catalog.json"
+  local world_id="$1"
+  jq -r --arg id "${world_id}" '.worlds[] | select(.id == $id) | .game // "minecraft"' "${script_dir}/../server/worlds/catalog.json"
 }
 
 state_machine_arn() {
@@ -86,7 +88,8 @@ configured_instance_id() {
 }
 
 instance_state() {
-  aws_json ec2 describe-instances --instance-ids "$1" \
+  local instance_id="$1"
+  aws_json ec2 describe-instances --instance-ids "${instance_id}" \
     | jq -r '.Reservations[].Instances[].State.Name // "unknown"' | head -n1
 }
 
@@ -103,7 +106,8 @@ follow_execution() {
 }
 
 execution_history() {
-  aws_json stepfunctions get-execution-history --execution-arn "$1" --max-results 1000 --include-execution-data
+  local execution_arn="$1"
+  aws_json stepfunctions get-execution-history --execution-arn "${execution_arn}" --max-results 1000 --include-execution-data
 }
 
 # The host record, as the coordinator holds it: the same read the machines do.

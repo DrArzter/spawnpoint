@@ -18,7 +18,11 @@ resource "aws_launch_template" "fleet_host" {
   }
 
   network_interfaces {
-    associate_public_ip_address = true
+    # The public subnet has no NAT gateway. A public address is required for
+    # outbound-only SSM, registries and ZeroTier bootstrap; the shared security
+    # group remains the ingress authority and opens only explicitly declared,
+    # authenticated public worlds. Reviewed under ADR-0054.
+    associate_public_ip_address = true # NOSONAR
     subnet_id                   = aws_subnet.public.id
     security_groups             = [aws_security_group.game_host.id]
     delete_on_termination       = true

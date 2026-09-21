@@ -114,7 +114,7 @@ function requireEpoch(name: string, value: number): void {
 
 function requireFootprint(footprint: Footprint): void {
   if (!Number.isSafeInteger(footprint.memoryMiB) || footprint.memoryMiB <= 0) throw new Error("footprint.memoryMiB must be a positive integer");
-  if (!(footprint.cores > 0) || !Number.isFinite(footprint.cores)) throw new Error("footprint.cores must be positive");
+  if (footprint.cores <= 0 || !Number.isFinite(footprint.cores)) throw new Error("footprint.cores must be positive");
 }
 
 export function capacity(shape: HostShape): Footprint {
@@ -285,7 +285,8 @@ export function reserve(
     throw new PlacementConflict(`session ${request.sessionId} is already placed on ${host.hostId}`);
   }
   if (!accepts(host, request.footprint, request.worldId, request.slot)) {
-    throw new PlacementConflict(`host ${host.hostId} has no room for ${request.worldId}${request.slot === undefined ? "" : ` on slot ${request.slot}`}`);
+    const slotDescription = request.slot === undefined ? "" : ` on slot ${request.slot}`;
+    throw new PlacementConflict(`host ${host.hostId} has no room for ${request.worldId}${slotDescription}`);
   }
   const taken = new Set(host.reservations.map((reservation) => reservation.slot));
   let slot = request.slot ?? 0;

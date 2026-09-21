@@ -194,7 +194,8 @@ for (const [name, events] of Object.entries(SCENARIOS)) {
   for (const policy of POLICIES) {
     const sim = run(events, policy);
     const { hosts, hostHours, usd, warmShare } = cost(sim, sessions);
-    console.log(`   ${policy.name.padEnd(38)} ${String(hosts).padStart(5)} ${hostHours.toFixed(2).padStart(10)} ${usd.toFixed(2).padStart(7)} ${`${Math.round(warmShare * 100)}%`.padStart(11)}`);
+    const warmPercentage = `${Math.round(warmShare * 100)}%`;
+    console.log(`   ${policy.name.padEnd(38)} ${String(hosts).padStart(5)} ${hostHours.toFixed(2).padStart(10)} ${usd.toFixed(2).padStart(7)} ${warmPercentage.padStart(11)}`);
     if (verbose) for (const line of sim.log) console.log(`      ${line}`);
   }
 }

@@ -44,7 +44,8 @@ trap 'rm -f -- "${readings}"' EXIT
   source "${games}/factorio/game.sh"
   # The hook reads each answer in a subshell, so the stub counts in a file.
   factorio_rcon() {
-    [[ "$1" == "/silent-command rcon.print(game.tick)" ]] || exit 99
+    local command="$1"
+    [[ "${command}" == "/silent-command rcon.print(game.tick)" ]] || exit 99
     printf 'x' >>"${readings}"
     case "$(wc -c <"${readings}" | tr -d ' ')" in
       1) printf '120000\n' ;;

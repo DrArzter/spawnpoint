@@ -104,146 +104,215 @@ export function resolveFootprint(request: SessionRequest): Footprint {
   }
 }
 
+type CoordinatorContext = Readonly<{
+  store: PlacementStore;
+  nowEpochSeconds: () => number;
+}>;
+
+async function loadRequired(context: CoordinatorContext, hostId: string): Promise<VersionedHost> {
+  const current = await context.store.readHost(hostId);
+  if (current === null) throw new PlacementConflict(`host ${hostId} is not registered`);
+  return current;
+}
+
+async function mutateHost(
+  context: CoordinatorContext,
+  hostId: string,
+  mutation: (record: HostRecord, now: number) => HostRecord,
+): Promise<VersionedHost> {
+  for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
+    const current = await loadRequired(context, hostId);
+    const record = mutation(current.record, context.nowEpochSeconds());
+    if (record === current.record) return current;
+    if (await context.store.compareAndSetHost(hostId, current.revision, record)) {
+      return { revision: current.revision + 1, record };
+    }
+  }
+  throw new PlacementConflict(`host ${hostId} changed repeatedly during conditional write`);
+}
+
+function existingReservation(hosts: readonly VersionedHost[], sessionId: string): PlacementOutcome | null {
+  for (const host of hosts) {
+    const held = host.record.reservations.find((reservation) => reservation.sessionId === sessionId);
+    if (held) return { kind: "reuse", hostId: host.record.hostId, slot: held.slot };
+  }
+  return null;
+}
+
+// A public world and a game that names its own ports take slot zero only.
+function pinnedSlot(request: SessionRequest): number | undefined {
+  return worldNeedsSlotZero(request.worldId, request.serverId) ? 0 : undefined;
+}
+
+// One conditional write per candidate; a lost write moves to the next host
+// rather than back to the fleet. Returns null when no candidate took it.
+async function reserveOnFirst(
+  context: CoordinatorContext,
+  candidates: readonly VersionedHost[],
+  request: SessionRequest,
+  footprint: Footprint,
+): Promise<PlacementOutcome | null> {
+  const slot = pinnedSlot(request);
+  for (const candidate of candidates) {
+    const record = reserve(candidate.record, {
+      sessionId: request.sessionId,
+      worldId: request.worldId,
+      footprint,
+      policy: request.policy ?? "cold",
+      ...(slot === undefined ? {} : { slot }),
+    }, context.nowEpochSeconds());
+    if (await context.store.compareAndSetHost(candidate.record.hostId, candidate.revision, record)) {
+      const held = record.reservations.find((reservation) => reservation.sessionId === request.sessionId);
+      if (held === undefined) throw new PlacementConflict(`session ${request.sessionId} was not reserved`);
+      return { kind: "reuse", hostId: record.hostId, slot: held.slot };
+    }
+  }
+  return null;
+}
+
+async function registerHost(
+  context: CoordinatorContext,
+  input: Extract<PlacementInput, { action: "registerHost" }>,
+): Promise<PlacementOutput> {
+  const hostId = requireId("hostId", input.hostId);
+  for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
+    const current = await context.store.readHost(hostId);
+    if (current !== null) {
+      const host = input.ready && current.record.state === "provisioning"
+        ? await mutateHost(context, hostId, (record, now) => markReady(record, now))
+        : current;
+      return { host };
+    }
+    let record = newHost(hostId, input.shape, context.nowEpochSeconds(), input.provenance ?? "configured");
+    if (input.ready) record = markReady(record, context.nowEpochSeconds());
+    if (await context.store.createHost(record)) return { host: { revision: 1, record } };
+  }
+  throw new PlacementConflict(`host ${hostId} registration did not converge`);
+}
+
+function rankedCandidates(
+  hosts: readonly VersionedHost[],
+  request: SessionRequest,
+  footprint: Footprint,
+): readonly VersionedHost[] {
+  const binding = worldHostBinding(request.worldId);
+  const eligible = binding === "configured"
+    ? hosts.filter((host) => host.record.provenance === "configured")
+    : hosts;
+  const ranked = placementCandidates(
+    eligible.map((host) => host.record),
+    footprint,
+    request.worldId,
+    pinnedSlot(request),
+  );
+  return ranked.map((record) => {
+    const candidate = eligible.find((host) => host.record.hostId === record.hostId);
+    if (candidate === undefined) throw new PlacementConflict(`ranked host ${record.hostId} disappeared`);
+    return candidate;
+  });
+}
+
+function noCandidateOutcome(request: SessionRequest, footprint: Footprint): PlacementOutcome {
+  return worldHostBinding(request.worldId) === "configured"
+    ? { kind: "refused", reason: "bound_to_configured_host" }
+    : { kind: "launch", requirements: requirementsFor(footprint) };
+}
+
+async function placeSession(context: CoordinatorContext, request: SessionRequest): Promise<PlacementOutput> {
+  requireId("sessionId", request.sessionId);
+  requireId("worldId", request.worldId);
+  const footprint = resolveFootprint(request);
+  for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
+    const hosts = await context.store.listHosts();
+    const already = existingReservation(hosts, request.sessionId);
+    if (already) return { placement: already };
+    const candidates = rankedCandidates(hosts, request, footprint);
+    if (candidates.length === 0) return { placement: noCandidateOutcome(request, footprint) };
+    const taken = await reserveOnFirst(context, candidates, request, footprint);
+    if (taken) return { placement: taken };
+  }
+  throw new PlacementConflict("the fleet changed repeatedly while placing");
+}
+
+async function reserveOnHost(
+  context: CoordinatorContext,
+  input: Extract<PlacementInput, { action: "reserveOnHost" }>,
+): Promise<PlacementOutput> {
+  const hostId = requireId("hostId", input.hostId);
+  requireId("sessionId", input.sessionId);
+  requireId("worldId", input.worldId);
+  const footprint = resolveFootprint(input);
+  for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
+    const current = await loadRequired(context, hostId);
+    const already = existingReservation([current], input.sessionId);
+    if (already) return { host: current, placement: already };
+    const taken = await reserveOnFirst(context, [current], input, footprint);
+    if (taken) return { host: await loadRequired(context, hostId), placement: taken };
+  }
+  throw new PlacementConflict(`host ${hostId} changed repeatedly while reserving`);
+}
+
+async function releasePlacement(
+  context: CoordinatorContext,
+  input: Extract<PlacementInput, { action: "releasePlacement" }>,
+): Promise<PlacementOutput> {
+  const sessionId = requireId("sessionId", input.sessionId);
+  const found = input.hostId === undefined
+    ? existingReservation(await context.store.listHosts(), sessionId)
+    : null;
+  const hostId = input.hostId ?? (found?.kind === "reuse" ? found.hostId : undefined);
+  if (hostId === undefined) return { released: false, host: null };
+  const current = await context.store.readHost(hostId);
+  if (current === null) return { released: false, host: null };
+  const holdsSession = current.record.reservations.some((reservation) => reservation.sessionId === sessionId);
+  if (!holdsSession) return { released: false, host: current };
+  const host = await mutateHost(context, hostId, (record, now) => release(record, sessionId, now));
+  return { released: true, host };
+}
+
+async function decideHostDrain(
+  context: CoordinatorContext,
+  input: Extract<PlacementInput, { action: "decideDrain" }>,
+): Promise<PlacementOutput> {
+  const hostId = requireId("hostId", input.hostId);
+  const hosts = await context.store.listHosts();
+  const current = hosts.find((host) => host.record.hostId === hostId)
+    ?? await loadRequired(context, hostId);
+  const hold = holdsHeadroom(
+    hosts.map((host) => host.record),
+    current.record,
+    input.headroomMiB ?? 0,
+  );
+  return {
+    host: current,
+    drain: drainDecision(current.record, context.nowEpochSeconds(), input.gracePeriodSeconds, hold),
+  };
+}
+
+async function coordinate(context: CoordinatorContext, input: PlacementInput): Promise<PlacementOutput> {
+  switch (input.action) {
+    case "registerHost": return registerHost(context, input);
+    case "markHostReady": return { host: await mutateHost(context, requireId("hostId", input.hostId), (record, now) => markReady(record, now)) };
+    case "getHost": return { host: await loadRequired(context, requireId("hostId", input.hostId)) };
+    case "listHosts": return { hosts: await context.store.listHosts() };
+    case "placeSession": return placeSession(context, input);
+    case "reserveOnHost": return reserveOnHost(context, input);
+    case "findPlacement": return { placement: existingReservation(await context.store.listHosts(), requireId("sessionId", input.sessionId)) };
+    case "releasePlacement": return releasePlacement(context, input);
+    case "decideDrain": return decideHostDrain(context, input);
+    case "concludeDrain": {
+      const mutation = input.outcome === "stop" ? markStopped : markTerminating;
+      return { host: await mutateHost(context, requireId("hostId", input.hostId), mutation) };
+    }
+  }
+  const unreachable: never = input;
+  throw new Error(`unsupported placement action: ${JSON.stringify(unreachable)}`);
+}
+
 export function createPlacementCoordinator(
   store: PlacementStore,
   nowEpochSeconds: () => number = () => Math.floor(Date.now() / 1_000),
 ): (input: PlacementInput) => Promise<PlacementOutput> {
-  async function loadRequired(hostId: string): Promise<VersionedHost> {
-    const current = await store.readHost(hostId);
-    if (current === null) throw new PlacementConflict(`host ${hostId} is not registered`);
-    return current;
-  }
-
-  async function mutate(hostId: string, mutation: (record: HostRecord, now: number) => HostRecord): Promise<VersionedHost> {
-    for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
-      const current = await loadRequired(hostId);
-      const record = mutation(current.record, nowEpochSeconds());
-      if (record === current.record) return current;
-      if (await store.compareAndSetHost(hostId, current.revision, record)) {
-        return { revision: current.revision + 1, record };
-      }
-    }
-    throw new PlacementConflict(`host ${hostId} changed repeatedly during conditional write`);
-  }
-
-  function existingReservation(hosts: readonly VersionedHost[], sessionId: string): PlacementOutcome | null {
-    for (const host of hosts) {
-      const held = host.record.reservations.find((reservation) => reservation.sessionId === sessionId);
-      if (held) return { kind: "reuse", hostId: host.record.hostId, slot: held.slot };
-    }
-    return null;
-  }
-
-  // One conditional write per candidate; a lost write moves to the next host
-  // rather than back to the fleet. Returns null when no candidate took it.
-  // A public world and a game that names its own ports take slot zero only.
-  function pinnedSlot(request: SessionRequest): number | undefined {
-    return worldNeedsSlotZero(request.worldId, request.serverId) ? 0 : undefined;
-  }
-
-  async function reserveOnFirst(candidates: readonly VersionedHost[], request: SessionRequest, footprint: Footprint): Promise<PlacementOutcome | null> {
-    const slot = pinnedSlot(request);
-    for (const candidate of candidates) {
-      const record = reserve(candidate.record, { sessionId: request.sessionId, worldId: request.worldId, footprint, policy: request.policy ?? "cold", ...(slot === undefined ? {} : { slot }) }, nowEpochSeconds());
-      if (await store.compareAndSetHost(candidate.record.hostId, candidate.revision, record)) {
-        const held = record.reservations.find((reservation) => reservation.sessionId === request.sessionId)!;
-        return { kind: "reuse", hostId: record.hostId, slot: held.slot };
-      }
-    }
-    return null;
-  }
-
-  return async (input: PlacementInput): Promise<PlacementOutput> => {
-    switch (input.action) {
-      case "registerHost": {
-        const hostId = requireId("hostId", input.hostId);
-        for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
-          const current = await store.readHost(hostId);
-          if (current !== null) {
-            return { host: input.ready && current.record.state === "provisioning" ? await mutate(hostId, (record, now) => markReady(record, now)) : current };
-          }
-          let record = newHost(hostId, input.shape, nowEpochSeconds(), input.provenance ?? "configured");
-          if (input.ready) record = markReady(record, nowEpochSeconds());
-          if (await store.createHost(record)) return { host: { revision: 1, record } };
-        }
-        throw new PlacementConflict(`host ${hostId} registration did not converge`);
-      }
-      case "markHostReady":
-        return { host: await mutate(requireId("hostId", input.hostId), (record, now) => markReady(record, now)) };
-      case "getHost":
-        return { host: await loadRequired(requireId("hostId", input.hostId)) };
-      case "listHosts":
-        return { hosts: await store.listHosts() };
-      case "placeSession": {
-        requireId("sessionId", input.sessionId);
-        requireId("worldId", input.worldId);
-        const footprint = resolveFootprint(input);
-        const binding = worldHostBinding(input.worldId);
-        for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
-          const hosts = await store.listHosts();
-          const already = existingReservation(hosts, input.sessionId);
-          if (already) return { placement: already };
-          const eligible = binding === "configured" ? hosts.filter((host) => host.record.provenance === "configured") : hosts;
-          const ranked = placementCandidates(eligible.map((host) => host.record), footprint, input.worldId, pinnedSlot(input));
-          const candidates = ranked.map((record) => eligible.find((host) => host.record.hostId === record.hostId)!);
-          if (candidates.length === 0) {
-            return { placement: binding === "configured" ? { kind: "refused", reason: "bound_to_configured_host" } : { kind: "launch", requirements: requirementsFor(footprint) } };
-          }
-          const taken = await reserveOnFirst(candidates, input, footprint);
-          if (taken) return { placement: taken };
-        }
-        throw new PlacementConflict("the fleet changed repeatedly while placing");
-      }
-      case "reserveOnHost": {
-        const hostId = requireId("hostId", input.hostId);
-        requireId("sessionId", input.sessionId);
-        requireId("worldId", input.worldId);
-        const footprint = resolveFootprint(input);
-        for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
-          const current = await loadRequired(hostId);
-          const already = existingReservation([current], input.sessionId);
-          if (already) return { host: current, placement: already };
-          const taken = await reserveOnFirst([current], input, footprint);
-          if (taken) return { host: await loadRequired(hostId), placement: taken };
-        }
-        throw new PlacementConflict(`host ${hostId} changed repeatedly while reserving`);
-      }
-      case "findPlacement": {
-        // Where a session runs, for the stop and the watchdog, which are told a
-        // session and must find its host and slot themselves.
-        const sessionId = requireId("sessionId", input.sessionId);
-        return { placement: existingReservation(await store.listHosts(), sessionId) };
-      }
-      case "releasePlacement": {
-        // Tolerant on purpose: a session that predates placement, or a host
-        // record that never existed, is not a reason to fail a verified stop.
-        // Given no host, the session's own reservation is found wherever it is.
-        const sessionId = requireId("sessionId", input.sessionId);
-        const found = input.hostId === undefined ? existingReservation(await store.listHosts(), sessionId) : null;
-        const hostId = input.hostId ?? (found?.kind === "reuse" ? found.hostId : undefined);
-        if (hostId === undefined) return { released: false, host: null };
-        const current = await store.readHost(hostId);
-        if (current === null) return { released: false, host: null };
-        if (!current.record.reservations.some((reservation) => reservation.sessionId === sessionId)) return { released: false, host: current };
-        const host = await mutate(hostId, (record, now) => release(record, sessionId, now));
-        return { released: true, host };
-      }
-      case "decideDrain": {
-        const hostId = requireId("hostId", input.hostId);
-        const hosts = await store.listHosts();
-        const current = hosts.find((host) => host.record.hostId === hostId) ?? await loadRequired(hostId);
-        const hold = holdsHeadroom(hosts.map((host) => host.record), current.record, input.headroomMiB ?? 0);
-        return { host: current, drain: drainDecision(current.record, nowEpochSeconds(), input.gracePeriodSeconds, hold) };
-      }
-      case "concludeDrain": {
-        const hostId = requireId("hostId", input.hostId);
-        const host = await mutate(hostId, (record, now) => input.outcome === "stop" ? markStopped(record, now) : markTerminating(record, now));
-        return { host };
-      }
-      default: {
-        const unreachable: never = input;
-        throw new Error(`unsupported placement action: ${JSON.stringify(unreachable)}`);
-      }
-    }
-  };
+  const context = { store, nowEpochSeconds };
+  return (input) => coordinate(context, input);
 }

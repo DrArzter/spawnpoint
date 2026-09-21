@@ -81,9 +81,11 @@ resolve_game() {
 # Compose inputs derived from the installed release before they source the
 # shared Docker helpers. Games without such inputs have nothing to do.
 prepare_game_runtime() {
+  local status=0
   if declare -F game_prepare_installed_runtime >/dev/null; then
-    game_prepare_installed_runtime
+    game_prepare_installed_runtime || status=$?
   fi
+  return "${status}"
 }
 
 # The slot is the port allocator (ADR-0054). Slot zero, and an unplaced

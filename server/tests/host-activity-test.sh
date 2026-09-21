@@ -49,14 +49,16 @@ STUB
 chmod 0755 "${fixture}/bin/docker"
 
 sensor="${REPOSITORY_ROOT}/server/scripts/check-host-activity.sh"
+readonly RUNNING_STATE='running'
+readonly HOST_IDLE='host=idle'
 
 # Nothing runs anywhere: idle.
 output="$("${sensor}")"
 grep -qx 'other_active=0' <<<"${output}"
-grep -qx 'host=idle' <<<"${output}"
+grep -qx "${HOST_IDLE}" <<<"${output}"
 
 # Factorio runs; minecraft asks "may the host sleep once I stop?" — no.
-printf 'running\n' >"${FAKE_STATES_DIR}/factorio"
+printf '%s\n' "${RUNNING_STATE}" >"${FAKE_STATES_DIR}/factorio"
 output="$("${sensor}" mc)"
 grep -qx 'other_active=1' <<<"${output}"
 grep -qx 'active_services=factorio' <<<"${output}"
@@ -65,17 +67,17 @@ grep -qx 'host=busy' <<<"${output}"
 # The asking world's own service never counts against it.
 output="$("${sensor}" factorio)"
 grep -qx 'other_active=0' <<<"${output}"
-grep -qx 'host=idle' <<<"${output}"
+grep -qx "${HOST_IDLE}" <<<"${output}"
 
 # An exited neighbour is not activity.
 printf 'exited\n' >"${FAKE_STATES_DIR}/factorio"
 output="$("${sensor}" mc)"
-grep -qx 'host=idle' <<<"${output}"
+grep -qx "${HOST_IDLE}" <<<"${output}"
 rm -f -- "${FAKE_STATES_DIR}/factorio"
 
 # --- placed sessions (ADR-0054): the asking session is its project and its
 #     service; the same game in another project is a neighbour ---
-printf 'running\n' >"${FAKE_STATES_DIR}/mc@spawnpoint-vanilla"
+printf '%s\n' "${RUNNING_STATE}" >"${FAKE_STATES_DIR}/mc@spawnpoint-vanilla"
 output="$(SERVER_COMPOSE_PROJECT=spawnpoint-world "${sensor}" mc)"
 grep -qx 'other_active=1' <<<"${output}"
 grep -qx 'active_services=mc' <<<"${output}"
@@ -83,12 +85,12 @@ grep -qx 'active_projects=spawnpoint-vanilla' <<<"${output}"
 grep -qx 'host=busy' <<<"${output}"
 output="$(SERVER_COMPOSE_PROJECT=spawnpoint-vanilla "${sensor}" mc)"
 grep -qx 'other_active=0' <<<"${output}"
-grep -qx 'host=idle' <<<"${output}"
+grep -qx "${HOST_IDLE}" <<<"${output}"
 # An unplaced session in the default project asking beside a placed one.
 output="$("${sensor}" mc)"
 grep -qx 'host=busy' <<<"${output}"
 # Two projects, two games, one leaving: the other keeps the host awake.
-printf 'running\n' >"${FAKE_STATES_DIR}/factorio@spawnpoint-base"
+printf '%s\n' "${RUNNING_STATE}" >"${FAKE_STATES_DIR}/factorio@spawnpoint-base"
 output="$(SERVER_COMPOSE_PROJECT=spawnpoint-vanilla "${sensor}" mc)"
 grep -qx 'other_active=1' <<<"${output}"
 grep -qx 'active_projects=spawnpoint-base' <<<"${output}"
@@ -106,7 +108,7 @@ gate_exit() {
 
 # A readable host answers with 0 whoever asks; the answer itself is the host=
 # line, and only an unreadable sensor is a non-zero exit (fail closed).
-printf 'running\n' >"${FAKE_STATES_DIR}/factorio"
+printf '%s\n' "${RUNNING_STATE}" >"${FAKE_STATES_DIR}/factorio"
 [[ "$(gate_exit mc)" == "0" ]]
 [[ "$(gate_exit factorio)" == "0" ]]
 rm -f -- "${FAKE_STATES_DIR}/factorio"

@@ -104,7 +104,7 @@ export type ControlPlaneSnapshot = Readonly<{
 }>;
 
 function observedAddress(lifecycle: LifecycleRecord | null, worldId: string): string | null {
-  if (lifecycle === null || lifecycle.activeWorldId !== worldId || lifecycle.observedState !== "ready") return null;
+  if (lifecycle?.activeWorldId !== worldId || lifecycle?.observedState !== "ready") return null;
   return lifecycle.activeSessionAddress ?? null;
 }
 

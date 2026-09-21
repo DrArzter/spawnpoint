@@ -116,6 +116,18 @@ run "deployment_role_trusts_only_the_production_environment" {
   assert {
     condition = anytrue([
       for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      alltrue([
+        contains(statement.actions, "ec2:CreateLaunchTemplate"),
+        contains(statement.actions, "ec2:CreateLaunchTemplateVersion"),
+        contains(statement.actions, "ec2:ModifyLaunchTemplate"),
+      ])
+    ])
+    error_message = "The deploy identity must be able to create and revise the fleet host launch template."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
       statement.sid == "TagOnlyApiGatewayApisAndStages" &&
       toset(statement.actions) == toset(["apigateway:TagResource", "apigateway:UntagResource"]) &&
       alltrue([

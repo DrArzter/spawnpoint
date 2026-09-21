@@ -121,6 +121,16 @@ class DeploymentSecurityTest(unittest.TestCase):
         self.assertIn("contains($marker)", script)
         self.assertIn("issues/comments/${comment_id}", script)
 
+    def test_password_authentication_flags_come_from_repository_variables(self) -> None:
+        expected_flags = (
+            "TF_VAR_password_login_enabled: ${{ vars.PASSWORD_LOGIN_ENABLED }}",
+            "TF_VAR_password_registration_enabled: ${{ vars.PASSWORD_REGISTRATION_ENABLED }}",
+        )
+        for workflow_name in ("deploy-infrastructure.yml", "terraform-plan.yml"):
+            workflow = (REPOSITORY / ".github/workflows" / workflow_name).read_text()
+            for flag in expected_flags:
+                self.assertIn(flag, workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

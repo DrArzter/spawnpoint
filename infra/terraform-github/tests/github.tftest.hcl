@@ -191,6 +191,18 @@ run "deployment_role_trusts_only_the_production_environment" {
   assert {
     condition = anytrue([
       for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      statement.sid == "TagOnlyReleaseBuilderSources" &&
+      toset(statement.actions) == toset(["s3:PutObjectTagging"]) &&
+      toset(statement.resources) == toset([
+        "arn:aws:s3:::spawnpoint-releases-${data.aws_caller_identity.current.account_id}/control-plane/release-builder/*",
+      ])
+    ])
+    error_message = "The deploy identity may tag only release-builder source objects in the releases bucket."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
       coalesce(statement.effect, "Allow") == "Deny" && contains(statement.actions, "iam:DeleteRole") &&
       alltrue([for resource in statement.resources : endswith(resource, ":role/spawnpoint-github-*")])
     ])

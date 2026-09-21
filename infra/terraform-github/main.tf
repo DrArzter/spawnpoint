@@ -353,6 +353,15 @@ data "aws_iam_policy_document" "github_deploy_iam" {
     ]
   }
 
+  statement {
+    sid     = "TagOnlyReleaseBuilderSources"
+    effect  = "Allow"
+    actions = ["s3:PutObjectTagging"]
+    resources = [
+      "arn:aws:s3:::spawnpoint-releases-${data.aws_caller_identity.current.account_id}/control-plane/release-builder/*",
+    ]
+  }
+
   # The one opening in the no-delete rule, and exactly as wide as the allow-list
   # in scripts/_terraform-destroy-allow.sh: control-plane wiring Terraform
   # recreates from the repository. Nothing here can reach the host, its volume,

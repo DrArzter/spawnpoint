@@ -13,6 +13,7 @@ const catalog: readonly CatalogGame[] = [{
   worlds: [
     { id: "overlay", displayName: "Overlay", profileId: "main", sessionControl: "v1", connectivity: "zerotier" },
     { id: "public", displayName: "Public", profileId: "main", sessionControl: "v1", connectivity: "raw" },
+    { id: "named", displayName: "Named", profileId: "main", sessionControl: "v1", connectivity: "route53" },
   ],
 }];
 
@@ -24,6 +25,10 @@ test("an overlay world's address is the configured host plus the game's port", (
 test("a public world's address is the instance's current one, and nothing between sessions", () => {
   assert.equal(worldAddress("public", { connectionHost: "172.29.23.24", publicIp: "203.0.113.10" }, catalog), "203.0.113.10:25565");
   assert.equal(worldAddress("public", { connectionHost: "172.29.23.24", publicIp: null }, catalog), null, "an ephemeral address is not remembered");
+});
+
+test("a DNS world has no guessed address outside an observed ready session", () => {
+  assert.equal(worldAddress("named", { connectionHost: "172.29.23.24", publicIp: "203.0.113.10" }, catalog), null);
 });
 
 test("a caller who may not read an address gets none, whatever the strategy", () => {

@@ -48,7 +48,9 @@ if ${registry_record}; then
     .schema_version == 1 and .world_id == $id and
     (.game | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
     (.display_name | type == "string" and length > 0 and length <= 80) and
-    .status == "active" and .connectivity == "zerotier" and .storage_layout == "generation" and
+    .status == "active" and (.connectivity | IN("zerotier", "raw", "route53")) and
+    ((has("auth") | not) or (.auth | IN("game", "external"))) and .storage_layout == "generation" and
+    (.connectivity == "zerotier" or has("auth")) and
     (.preset.id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
     (.preset.repository | type == "string" and startswith("https://github.com/")) and
     (.preset.commit | type == "string" and test("^[0-9a-f]{40}$")) and
@@ -76,7 +78,8 @@ if ${registry_record}; then
       generation_id: $record[0].current_generation.id,
       release: $record[0].current_generation.release,
       profile_source: {repository: $record[0].preset.repository, commit: $record[0].preset.commit}
-    } + (if ($record[0].current_generation.source.kind // "preset") == "backup" then {
+    } + (if $record[0].auth then {auth: $record[0].auth} else {} end)
+      + (if ($record[0].current_generation.source.kind // "preset") == "backup" then {
       restore: {
         backup_key: $record[0].current_generation.source.key,
         checksum: $record[0].current_generation.source.checksum,

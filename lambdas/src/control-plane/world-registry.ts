@@ -18,7 +18,8 @@ export type WorldRecord = Readonly<{
   gameId: string;
   displayName: string;
   status: "active" | "archived";
-  connectivity: "zerotier";
+  connectivity: "zerotier" | "raw" | "route53";
+  auth?: "game" | "external";
   preset: Readonly<{
     id: string;
     repository: string;
@@ -59,7 +60,9 @@ export function newWorldRecord(
   identity: Readonly<{ worldId: string; displayName: string; release: string }>,
   generationUuid: string,
   createdAt: string,
+  access?: Readonly<{ connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"] }>,
 ): WorldRecord {
+  const selectedAccess = access ?? { connectivity: "zerotier" };
   if (
     preset.buildStatus !== "ready" || !preset.releases.includes(identity.release) ||
     !ID.test(identity.worldId) || identity.displayName.length < 1 || identity.displayName.length > 80 ||
@@ -67,12 +70,18 @@ export function newWorldRecord(
   ) throw new Error("invalid_world_creation");
   const generationId = `gen-${generationUuid.replaceAll("-", "")}`;
   if (!GENERATION_ID.test(generationId)) throw new Error("invalid_generation_id");
+  if (
+    !["zerotier", "raw", "route53"].includes(selectedAccess.connectivity) ||
+    (selectedAccess.auth !== undefined && selectedAccess.auth !== "game" && selectedAccess.auth !== "external") ||
+    (selectedAccess.connectivity !== "zerotier" && selectedAccess.auth === undefined)
+  ) throw new Error("invalid_world_connectivity");
   return {
     worldId: identity.worldId,
     gameId: preset.gameId,
     displayName: identity.displayName,
     status: "active",
-    connectivity: "zerotier",
+    connectivity: selectedAccess.connectivity,
+    ...(selectedAccess.auth === undefined ? {} : { auth: selectedAccess.auth }),
     preset: {
       id: preset.id,
       repository: preset.repository,
@@ -200,6 +209,7 @@ export function worldRecordDocument(record: WorldRecord): ObjectValue {
     display_name: record.displayName,
     status: record.status,
     connectivity: record.connectivity,
+    ...(record.auth === undefined ? {} : { auth: record.auth }),
     storage_layout: "generation",
     preset: {
       id: record.preset.id,
@@ -223,7 +233,10 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     typeof root.world_id !== "string" || !ID.test(root.world_id) ||
     typeof root.game !== "string" || !ID.test(root.game) ||
     typeof root.display_name !== "string" || root.display_name.length < 1 || root.display_name.length > 80 ||
-    (root.status !== "active" && root.status !== "archived") || root.connectivity !== "zerotier" ||
+    (root.status !== "active" && root.status !== "archived") ||
+    (root.connectivity !== "zerotier" && root.connectivity !== "raw" && root.connectivity !== "route53") ||
+    (root.auth !== undefined && root.auth !== "game" && root.auth !== "external") ||
+    (root.connectivity !== "zerotier" && root.auth === undefined) ||
     preset === null || typeof preset.id !== "string" || !ID.test(preset.id) ||
     typeof preset.repository !== "string" || !preset.repository.startsWith("https://github.com/") ||
     typeof preset.commit !== "string" || !COMMIT.test(preset.commit) ||
@@ -250,6 +263,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     displayName: root.display_name,
     status: root.status,
     connectivity: root.connectivity,
+    ...(root.auth === undefined ? {} : { auth: root.auth }),
     preset: {
       id: preset.id,
       repository: preset.repository,

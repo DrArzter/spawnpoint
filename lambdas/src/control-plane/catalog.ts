@@ -36,7 +36,7 @@ export type CatalogWorld = Readonly<{
   // Which strategy publishes this world, mirroring server/worlds/catalog.json:
   // "zerotier" reaches players through the overlay, "raw" through whatever
   // public address the instance holds for that session.
-  connectivity: "zerotier" | "raw";
+  connectivity: "zerotier" | "raw" | "route53";
   // Overrides the game's footprint, field by field: a vanilla world needs less
   // than a modded one of the same game.
   footprint?: Partial<Footprint>;
@@ -204,7 +204,7 @@ export function worldNeedsSlotZero(worldId: string, serverId?: string, catalog: 
     ?? (serverId === undefined ? undefined : catalog.find((candidate) => candidate.id === serverId));
   if (game === undefined) return false;
   const world = game.worlds.find((candidate) => candidate.id === worldId);
-  return game.slottable === false || world?.connectivity === "raw";
+  return game.slottable === false || world?.connectivity === "raw" || world?.connectivity === "route53";
 }
 
 // What a launch for this world asks EC2 for when no host has room.
@@ -234,6 +234,9 @@ export function worldAddress(
   const world = game?.worlds.find((candidate) => candidate.id === worldId);
   if (game === undefined || world === undefined) throw new Error(`unknown world: ${worldId}`);
   if (answers.connectionHost === null) return null;
+  // A DNS record exists only for an observed ready session. The generic
+  // deployment connectionHost is not this world's DNS name.
+  if (world.connectivity === "route53") return null;
   const host = world.connectivity === "raw" ? answers.publicIp : answers.connectionHost;
   return host === null ? null : `${host}:${game.connectPort}`;
 }

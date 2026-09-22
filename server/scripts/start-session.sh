@@ -63,15 +63,12 @@ fi
 session_connectivity="${WORLD_CONNECTIVITY:-zerotier}"
 session_auth="${WORLD_AUTH:-${GAME_DEFAULT_AUTH:-none}}"
 assert_connectivity_invariant "${session_auth}" "${session_connectivity}"
-# Refused for what the world is, before any host plumbing is examined: a
-# strategy this host cannot perform is not a missing .env or a missing tool.
-case "${session_connectivity}" in
-  zerotier | raw) ;;
-  *)
-    printf 'error: connectivity strategy %s is not implemented\n' "${session_connectivity}" >&2
-    exit 1
-    ;;
-esac
+load_connectivity "${session_connectivity}"
+enabled_connectivity="${SPAWNPOINT_ENABLED_CONNECTIVITY:-$(read_env_value SPAWNPOINT_ENABLED_CONNECTIVITY 2>/dev/null || true)}"
+if [[ -n "${enabled_connectivity}" && ",${enabled_connectivity}," != *",${session_connectivity},"* ]]; then
+  printf 'error: connectivity strategy %s is not enabled on this host\n' "${session_connectivity}" >&2
+  exit 1
+fi
 
 [[ -f "${runtime_env}" ]] || {
   printf 'error: runtime environment does not exist: %s\n' "${runtime_env}" >&2
@@ -82,53 +79,12 @@ command -v jq >/dev/null 2>&1 || {
   exit 1
 }
 
-# publish(): the strategy answers with the host part of the address, and it is
-# the strategy that decides what "ready to publish" means. The overlay must be
-# joined and assigned before a session starts; a public address only has to
-# exist, because the instance already holds it.
-network_id=""
-case "${session_connectivity}" in
-  zerotier)
-    network_id="${ZEROTIER_NETWORK_ID:-$(read_env_value ZEROTIER_NETWORK_ID)}"
-    connection_host="${ZEROTIER_ADDRESS:-$(read_env_value ZEROTIER_ADDRESS)}"
-
-    [[ "${network_id}" =~ ^[0-9a-fA-F]{16}$ ]] || {
-      printf 'error: expected a 16-character ZeroTier network ID\n' >&2
-      exit 1
-    }
-    [[ "${connection_host}" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || {
-      printf 'error: expected a ZeroTier IPv4 address without a prefix length\n' >&2
-      exit 1
-    }
-    command -v zerotier-cli >/dev/null 2>&1 || {
-      printf 'error: zerotier-cli is not installed\n' >&2
-      exit 1
-    }
-
-    network_json="$(zerotier-cli -j listnetworks)"
-    jq -e \
-      --arg network_id "${network_id,,}" \
-      --arg connection_host "${connection_host}" \
-      'any(.[];
-        (.nwid | ascii_downcase) == $network_id
-        and .status == "OK"
-        and any(.assignedAddresses[]?; split("/")[0] == $connection_host)
-      )' >/dev/null <<<"${network_json}" || {
-        printf 'error: ZeroTier network %s is not ready at %s\n' "${network_id}" "${connection_host}" >&2
-        exit 1
-      }
-    ;;
-  raw)
-    # The address changes with every session, so it is read now rather than
-    # configured. IMDSv2 with hop_limit=1 answers the host itself and refuses a
-    # container, which is the same property that keeps the instance role out of
-    # a compromised game server (ADR-0033).
-    connection_host="$("${SCRIPT_DIR}/read-public-address.sh")" || {
-      printf 'error: this host has no public address to publish\n' >&2
-      exit 1
-    }
-    ;;
-esac
+# The adapter prepares its address before the game starts, but publishes it
+# only after start.sh has proved readiness. A failed start cannot leave DNS
+# pointing at a server that never came up.
+CONNECTIVITY_NETWORK_ID=""
+connectivity_prepare
+connection_host="${CONNECTIVITY_HOST}"
 
 export SERVER_PROJECT_DIRECTORY="${SERVER_DIR}"
 
@@ -186,6 +142,11 @@ if [[ -n "${SPAWNPOINT_SLOT:-}" ]]; then
 fi
 
 "${SCRIPT_DIR}/start.sh"
+if ! connectivity_publish; then
+  printf 'error: could not publish the session address; stopping the game\n' >&2
+  "${SCRIPT_DIR}/stop.sh" || printf 'warning: could not stop game after publication failure\n' >&2
+  exit 1
+fi
 
 # The summary is what the machine carries back to whoever asked. The address in
 # it is composed, never configured: the strategy answers with the host part and
@@ -200,7 +161,7 @@ if [[ "${session_format}" == "json" ]]; then
     --arg world "${world_name}" \
     --arg reconcile "${reconcile_status}" \
     --arg desired_release "${desired_release}" \
-    --arg zerotier_network "${network_id,,}" \
+    --arg zerotier_network "${CONNECTIVITY_NETWORK_ID,,}" \
     '{
       connectivity: $connectivity,
       connection_host: $connection_host,
@@ -211,8 +172,8 @@ if [[ "${session_format}" == "json" ]]; then
     } + (if $zerotier_network == "" then {} else {zerotier_network: $zerotier_network} end)' >&3
 else
   {
-    if [[ -n "${network_id}" ]]; then
-      printf 'zerotier_network=%s\n' "${network_id,,}"
+    if [[ -n "${CONNECTIVITY_NETWORK_ID}" ]]; then
+      printf 'zerotier_network=%s\n' "${CONNECTIVITY_NETWORK_ID,,}"
     fi
     printf 'connectivity=%s\n' "${session_connectivity}"
     printf 'connection_host=%s\n' "${connection_host}"

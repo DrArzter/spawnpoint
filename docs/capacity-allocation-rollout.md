@@ -47,13 +47,13 @@ a default that still says "one host per world" until the acceptance run says oth
 | 9 — observability per host | One tier per host, the Compose project `spawnpoint-observability` (`observability/compose.host.yaml` over `observability/compose.yaml`), brought up by the first placed session's start through `ensure-host-observability.sh` and left running while the host runs. Its Prometheus finds every session's exporter through the Docker socket by three `spawnpoint.scrape*` labels, over a network created outside both projects; a game takes part with `GAME_HOST_OBSERVABILITY_COMPOSE_FILE`. Every placed session, slot zero included, runs without a tier of its own; an unplaced session carries the tier inside its project, as before. The Minecraft dashboard gains a World variable and the host overview groups by project. A tier that will not come up is reported and the session starts unscraped | An unplaced session is unchanged. A placed session's Grafana is the host's, at the host's overlay address on port 3000. **Landed** |
 | 10 — acceptance | On the owner's environment: Factorio beside the modded world on one host, tick time recorded for both alone and together, a stop of one leaving the other running, a restart inside the grace period reusing the host, a drain terminating a launched host after both leave. `scripts/acceptance-capacity-allocation.sh` drives each step and reads the figures from execution histories, host records and `server/scripts/measure-tick.sh`; `report` renders them. The harness asks for `shared` per start, so the deployed setting stays `single` while it runs | Failures are on a setting one revert restores. **Tooling landed; the run needs the owner's AWS** |
 | 11 — cutover | Repository variables feed the access-api root: `SPAWNPOINT_PLACEMENT=shared` includes the configured host, while `fleet` excludes it and gives portable worlds scale-to-zero; `SPAWNPOINT_LAUNCH=enabled` only after the runbook's Parameter Store preflight passes; `SPAWNPOINT_FLEET_HEADROOM_MIB=0` keeps no idle host. Missing variables preserve the `single` / `disabled` / `0` defaults, and every deploy pins launched hosts to its tested commit | One variable reverts to `single` |
-| 12 — launching a host | Behind `SPAWNPOINT_LAUNCH` (`disabled` by default): a start whose placement answers "launch" creates an instant EC2 Fleet from the `spawnpoint-fleet-host` template with the footprint's `InstanceRequirements`, the allowed families and `lowest-price`; records what EC2 answered as a `launched` host; reserves it; and terminates it at once if it cannot be recorded or reserved. The template names no instance type. The host bootstraps itself: the base user-data, then a checkout of this repository at the commit its `AppCommit` tag names, a `.env` rendered from Parameter Store under `/spawnpoint/host/env`, and an overlay join it authorises itself with the Central token under `/spawnpoint/host/zerotier-central-token`. A legacy world is bound to the configured host and is refused rather than launched for. Headroom is a Terraform setting on the drain (`headroom_mib`), zero by default; Spot per ADR-0027 and Fargate stay later | `disabled`: as before. `enabled`: **unverified against AWS** — the Fleet request, the bootstrap and the Central call were written from the API references and never run; phase 10 is where they are |
+| 12 — launching a host | Behind `SPAWNPOINT_LAUNCH` (`disabled` by default): a start whose placement answers "launch" creates an instant EC2 Fleet from the `spawnpoint-fleet-host` template with the footprint's `InstanceRequirements`, the allowed families and `lowest-price`; records what EC2 answered as a `launched` host; reserves it; and terminates it at once if it cannot be recorded or reserved. The template names no instance type. The host bootstraps itself: the base user-data, then a checkout of this repository at the commit its `AppCommit` tag names and a `.env` rendered from Parameter Store under `/spawnpoint/host/env`. The stock fleet enables `raw` and `route53` connectivity, not ZeroTier. A legacy world is bound to the configured host and is refused rather than launched for. Headroom is a Terraform setting on the drain (`headroom_mib`), zero by default; Spot per ADR-0027 and Fargate stay later | `disabled`: as before. `enabled`: **unverified against AWS** — the Fleet request and bootstrap have not been exercised on a disposable host |
 
 ## Current phase
 
 Phases 1 to 9 and 12 landed on 2026-09-17, all behind settings that default to what runs today, and the tooling of
 phase 10 with them. What has never run against AWS, and must before `launch` is enabled: the `CreateFleet` request as
-the start builds it, the fleet host's bootstrap end to end, the Central API authorisation, and the host tier's
+the start builds it, the fleet host's bootstrap end to end, Route 53 publication and retraction, and the host tier's
 discovery through the Docker socket on a real host. The phase-10 run itself needs the owner's environment; phase 11 is
 one setting once its report is in.
 
@@ -65,10 +65,17 @@ Limits of the placement modes today, worth knowing before cutover:
 - **The two legacy worlds live on the configured host's volume.** They are bound to it in the catalog and are never
   launched for; `fleet` refuses them explicitly. A world created from a preset lives in S3 between sessions and may
   land on a launched host. Migrating the legacy data is required before the configured instance can be removed.
-- **A launched host is reached over the overlay it joins at boot**, which spends one of the overlay's ten device
-  slots per host and needs the Central token in Parameter Store to authorise itself; without the token a person
-  authorises it, and the start refuses until then. A world on a non-gating strategy needs `auth: external`, as
-  ADR-0033 requires, before it may leave the overlay.
+- **A launched host uses a public connectivity adapter.** It neither joins nor needs ZeroTier. A world must select
+  `raw` or `route53` and explicitly declare `auth: game` or `auth: external` after the operator configures player
+  authentication. The API refuses a ZeroTier world in fleet mode before launching a paid machine.
+
+For Route 53, set repository variables `SPAWNPOINT_GAME_DNS_ZONE` to an existing public hosted zone (for example
+`spawnpoint.example.com`) and `SPAWNPOINT_GAME_DNS_SUFFIX` to a name inside it (for example
+`games.spawnpoint.example.com`). The host creates `<world-id>.<suffix>` after game readiness and deletes that A
+record after a verified stop and backup. Leaving both variables empty omits the DNS IAM policy and lets `raw` work
+without any domain. A DynamoDB ledger ties each published record to its instance; a stopped or terminated EC2 event
+checks that the same A record still points to that instance's address before deleting it. Never declare public auth
+for a world until its game server actually enforces it.
 
 ## What the acceptance run must record
 

@@ -8,9 +8,17 @@
 # auth in the catalog — "external" for authentication the control plane cannot
 # see, such as a login mod or online-mode=true — is taken at its word.
 #
-# Strategy ids are registered here until the strategies become modules the way
-# games did (ADR-0034); zerotier is the one implemented today, and
-# start-session.sh refuses the others by name rather than by surprise.
+# Each strategy is a module with prepare/publish/retract functions. Loading it
+# never changes the game's module or the host placement policy.
+
+load_connectivity() {
+  local strategy_id="$1" module
+  [[ "${strategy_id}" =~ ^[a-z0-9-]+$ ]] || { printf 'error: invalid connectivity strategy\n' >&2; return 1; }
+  module="${SERVER_DIR}/connectivity/${strategy_id}.sh"
+  [[ -f "${module}" ]] || { printf 'error: connectivity strategy %s is not installed\n' "${strategy_id}" >&2; return 1; }
+  # shellcheck source=/dev/null
+  source "${module}"
+}
 
 connectivity_is_gate() {
   local strategy_id="$1"

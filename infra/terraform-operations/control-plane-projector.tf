@@ -13,6 +13,12 @@ locals {
   ]
 }
 
+data "aws_route53_zone" "game" {
+  count        = var.game_dns_zone_name == "" ? 0 : 1
+  name         = var.game_dns_zone_name
+  private_zone = false
+}
+
 data "archive_file" "control_plane_projector" {
   type        = "zip"
   source_dir  = "${path.module}/../../lambdas/dist/control-plane-projector"
@@ -51,6 +57,50 @@ data "aws_iam_policy_document" "control_plane_projector" {
     sid       = "ReadLifecycleForRecovery"
     actions   = ["dynamodb:GetItem"]
     resources = [data.aws_dynamodb_table.lifecycle.arn]
+  }
+
+  statement {
+    sid       = "CleanTerminalHostDnsLedger"
+    actions   = ["dynamodb:DeleteItem"]
+    resources = [data.aws_dynamodb_table.lifecycle.arn]
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["dns-host#*"]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.game_dns_zone_name == "" ? [] : [1]
+    content {
+      sid       = "ReadGameDnsRecords"
+      actions   = ["route53:ListResourceRecordSets"]
+      resources = ["arn:aws:route53:::hostedzone/${data.aws_route53_zone.game[0].zone_id}"]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.game_dns_zone_name == "" ? [] : [1]
+    content {
+      sid       = "CleanTerminalGameDns"
+      actions   = ["route53:ChangeResourceRecordSets"]
+      resources = ["arn:aws:route53:::hostedzone/${data.aws_route53_zone.game[0].zone_id}"]
+      condition {
+        test     = "ForAllValues:StringLike"
+        variable = "route53:ChangeResourceRecordSetsNormalizedRecordNames"
+        values   = ["*.${var.game_dns_suffix}"]
+      }
+      condition {
+        test     = "ForAllValues:StringEquals"
+        variable = "route53:ChangeResourceRecordSetsRecordTypes"
+        values   = ["A"]
+      }
+      condition {
+        test     = "ForAllValues:StringEquals"
+        variable = "route53:ChangeResourceRecordSetsActions"
+        values   = ["DELETE"]
+      }
+    }
   }
 
   statement {
@@ -103,11 +153,38 @@ resource "aws_lambda_function" "control_plane_projector" {
     variables = {
       CONTROL_PLANE_VIEW_TABLE = var.control_plane_view_table_name
       LIFECYCLE_TABLE_NAME     = data.aws_dynamodb_table.lifecycle.name
+      GAME_DNS_ZONE_ID         = var.game_dns_zone_name == "" ? "" : data.aws_route53_zone.game[0].zone_id
+      GAME_DNS_SUFFIX          = var.game_dns_suffix
       OPERATION_STATE_MACHINES = jsonencode(local.control_plane_operation_machines)
     }
   }
 
   depends_on = [aws_cloudwatch_log_group.control_plane_projector]
+}
+
+resource "aws_cloudwatch_event_rule" "game_dns_terminal_host" {
+  name        = "spawnpoint-game-dns-terminal-host"
+  description = "Remove owned game DNS records after a Fleet instance stops or terminates."
+  event_pattern = jsonencode({
+    source        = ["aws.ec2"]
+    "detail-type" = ["EC2 Instance State-change Notification"]
+    detail = {
+      state = ["stopped", "terminated"]
+    }
+  })
+}
+
+resource "aws_cloudwatch_event_target" "game_dns_terminal_host" {
+  rule = aws_cloudwatch_event_rule.game_dns_terminal_host.name
+  arn  = aws_lambda_function.control_plane_projector.arn
+}
+
+resource "aws_lambda_permission" "game_dns_terminal_host" {
+  statement_id  = "AllowTerminalHostDnsCleanup"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.control_plane_projector.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.game_dns_terminal_host.arn
 }
 
 resource "aws_cloudwatch_event_rule" "control_plane_host_state" {

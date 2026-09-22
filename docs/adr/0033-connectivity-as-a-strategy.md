@@ -1,10 +1,14 @@
 # ADR-0033 — Connectivity is a strategy behind one interface, constrained by the game's auth model
 
-- Status: Accepted — 2026-09-12. Both the overlay and the raw strategy run behind the interface, and the gate-versus-auth
+- Status: Accepted — 2026-09-22. ZeroTier, raw IP and Route 53 are separate host adapters, and the gate-versus-auth
   invariant is enforced by the host's catalog validator and by a `check` block in `infra/terraform`
 - Date: 2026-08-14
 - Revised: 2026-08-27 — the invariant gained its operator override: it refuses the silent combination, never a
   declared one
+- Revised: 2026-09-22 — a world's adapter is independent of placement. The disposable fleet enables public
+  adapters only. ZeroTier stays with persistent hosts: deleting a fleet host's identity would require authorising
+  every replacement and cleaning its predecessor. A future ephemeral-friendly overlay needs its own adapter and
+  membership policy. No provider is mandatory for a self-hosted deployment.
 - Milestone: M2, and the multi-game part later
 - Amends: [ADR-0024](0024-connectivity-modes.md) — keeps its decision that **this project uses ZeroTier**, and turns
   its "one contract, three modes" from a choice made once into an actual interface with an invariant
@@ -199,10 +203,10 @@ correctly, and each is built only when a second game or a zero-setup onboarding 
 | --- | --- | --- |
 | ZeroTier overlay | Implemented; the default for every catalog world | ADR-0024 |
 | Raw public IP | Implemented: security-group ingress derived from the catalog, IMDSv2 address read at session start, address composed per world in the panel and the bot, nothing between sessions | 2026-09-03 |
-| Route 53 | Placeholder; the catalog validator accepts the id, the host refuses it by name | — |
+| Route 53 | Implemented as a session-scoped A record: publish after game readiness, retract after verified stop and backup, and reconcile from an instance-owned ledger on a terminal EC2 event; restricted IAM permission on an optional hosted zone | 2026-09-22 |
 | Tailscale, bring-your-own | Not started | — |
 
-Turning the raw strategy on for a world is two catalog fields, `connectivity: raw` and a declared `auth`, and the
+Turning a public strategy on for a world is two catalog fields, `connectivity: raw` or `route53` and a declared `auth`, and the
 runbook records the rollout order.
 
 ## Alternatives considered

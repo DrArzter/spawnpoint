@@ -20,6 +20,7 @@ trap cleanup EXIT
 mkdir -p -- "${fixture}/server" "${fixture}/bin"
 cp -R -- "${REPOSITORY_ROOT}/server/scripts" "${fixture}/server/scripts"
 cp -R -- "${REPOSITORY_ROOT}/server/games" "${fixture}/server/games"
+cp -R -- "${REPOSITORY_ROOT}/server/connectivity" "${fixture}/server/connectivity"
 cat >"${fixture}/server/scripts/start.sh" <<'STUB'
 #!/usr/bin/env bash
 printf 'container chatter on stdout\n'

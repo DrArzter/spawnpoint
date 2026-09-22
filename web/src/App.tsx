@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { ActiveSession, AuthState, endSession, loadAppearance, loadControlPlane, requestCreateWorld, requestPackDownload, requestSessionOperation, requestWorldLifecycle, restoreAuth, subscribeControlPlane } from "./auth";
+import { ActiveSession, AuthState, endSession, loadAppearance, loadControlPlane, requestCreateWorld, requestPackDownload, requestSessionOperation, requestUpdateWorldSettings, requestWorldLifecycle, restoreAuth, subscribeControlPlane } from "./auth";
 import { InvitationSheet } from "./components/InvitationSheet";
 import { Button } from "./components/ui/Button";
 import { Dialog, Sheet } from "./components/ui/Dialog";
@@ -120,12 +120,16 @@ function ConsoleShell({ session, continuesBootCard }: { session: ActiveSession; 
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [invite, setInvite] = useState<{ game: Game; world: World } | null>(null);
   const [creating, setCreating] = useState<{ game: Game; preset: Preset | null } | null>(null);
+  const [editingWorld, setEditingWorld] = useState<{ game: Game; world: World } | null>(null);
+  const [savingWorldSettings, setSavingWorldSettings] = useState(false);
 
   const granted = useMemo(() => new Set([...(session.role?.permissions ?? []), ...session.identity.directGrants]), [session]);
   const snapshot = controlPlane.snapshot;
   const games = snapshot?.games ?? [];
   const game = games.find((item) => item.id === route.gameId) ?? games.find((item) => item.id === storedGame) ?? games[0];
   const world = route.page === "worlds" && route.worldId ? game?.worlds.find((item) => item.id === route.worldId) : undefined;
+  const fleet = world?.placement === "fleet";
+  const fleetOverview = game?.worlds.find((item) => item.id === game.lifecycle?.activeWorldId)?.placement === "fleet" || (!game?.lifecycle?.activeSessionId && game?.worlds.some((item) => item.placement === "fleet"));
   const serverState = deriveServerState(game, snapshot);
   const sharedSession = deriveSharedHostSession(snapshot);
   const scoped = (page: Page) => routeHash({ page, accessTab: route.accessTab, gameId: game?.id ?? null, worldId: null });
@@ -271,10 +275,10 @@ function ConsoleShell({ session, continuesBootCard }: { session: ActiveSession; 
     }
   }
 
-  async function createWorld(target: Game, preset: Preset, displayName: string, release: string) {
+  async function createWorld(target: Game, preset: Preset, displayName: string, release: string, placement: "configured" | "fleet", connectivity: World["connectivity"], auth?: "game") {
     setPending({ kind: "create" });
     try {
-      const created = await requestCreateWorld(target.id, preset.id, displayName, release);
+      const created = await requestCreateWorld(target.id, preset.id, displayName, release, placement, connectivity, auth);
       notify({ tone: "success", message: `${created.displayName} was created from ${preset.displayName} ${release}.` });
       setCreating(null);
       await refresh(true);
@@ -283,6 +287,20 @@ function ConsoleShell({ session, continuesBootCard }: { session: ActiveSession; 
       notify({ tone: "error", message: error instanceof Error ? error.message : "The world could not be created." });
     } finally {
       setPending(null);
+    }
+  }
+
+  async function saveWorldSettings(target: Game, targetWorld: World, placement: "configured" | "fleet", connectivity: World["connectivity"], auth?: "game") {
+    setSavingWorldSettings(true);
+    try {
+      await requestUpdateWorldSettings(target.id, targetWorld.id, placement, connectivity, auth);
+      notify({ tone: "success", message: `Connection settings for ${targetWorld.displayName} saved.` });
+      setEditingWorld(null);
+      await refresh(true);
+    } catch (error) {
+      notify({ tone: "error", message: error instanceof Error ? error.message : "World settings could not be saved." });
+    } finally {
+      setSavingWorldSettings(false);
     }
   }
 
@@ -316,8 +334,8 @@ function ConsoleShell({ session, continuesBootCard }: { session: ActiveSession; 
             all, so the drawer ignored half the taps meant to dismiss it. */}
         <div aria-hidden="true" className="drawer-scrim" onPointerDown={() => setDrawerOpen(false)} />
         <main className="main" id="main">
-          {page === "worlds" && game && world && <WorldScreen game={game} granted={granted} onTabChange={(worldTab) => navigate({ worldTab })} onDownloadPack={(target, targetWorld) => void downloadPack(target, targetWorld)} onInvite={(target, targetWorld) => setInvite({ game: target, world: targetWorld })} onRefresh={() => void refresh()} onSessionAction={requestSession} onWorldAction={requestWorldAction} pending={pending} serverState={serverState} sharedSession={sharedSession} snapshot={snapshot} tab={route.worldTab} world={world} />}
-          {page === "worlds" && !(game && world) && <WorldsScreen error={controlPlane.error} game={game} granted={granted} onCreateWorld={(target) => setCreating({ game: target, preset: target.presets.find((preset) => preset.buildStatus === "ready") ?? null })} onDownloadPack={(target, targetWorld) => void downloadPack(target, targetWorld)} onInvite={(target, targetWorld) => setInvite({ game: target, world: targetWorld })} onRefresh={() => void refresh()} onWorldAction={requestWorldAction} pending={pending} serverState={serverState} sharedSession={sharedSession} snapshot={snapshot} status={listStatus} />}
+          {page === "worlds" && game && world && <WorldScreen fleet={fleet} game={game} granted={granted} onEditSettings={(target, targetWorld) => setEditingWorld({ game: target, world: targetWorld })} onTabChange={(worldTab) => navigate({ worldTab })} onDownloadPack={(target, targetWorld) => void downloadPack(target, targetWorld)} onInvite={(target, targetWorld) => setInvite({ game: target, world: targetWorld })} onRefresh={() => void refresh()} onSessionAction={requestSession} onWorldAction={requestWorldAction} pending={pending} serverState={serverState} sharedSession={sharedSession} snapshot={snapshot} tab={route.worldTab} world={world} />}
+          {page === "worlds" && !(game && world) && <WorldsScreen error={controlPlane.error} fleet={Boolean(fleetOverview)} game={game} granted={granted} onCreateWorld={(target) => setCreating({ game: target, preset: target.presets.find((preset) => preset.buildStatus === "ready") ?? null })} onDownloadPack={(target, targetWorld) => void downloadPack(target, targetWorld)} onInvite={(target, targetWorld) => setInvite({ game: target, world: targetWorld })} onRefresh={() => void refresh()} onWorldAction={requestWorldAction} pending={pending} serverState={serverState} sharedSession={sharedSession} snapshot={snapshot} status={listStatus} />}
           {page === "metrics" && <MetricsScreen game={game} serverState={serverState} snapshot={snapshot} />}
           {page === "console" && <ConsoleScreen game={game} serverState={serverState} />}
           {page === "releases" && <ReleasesScreen game={game} granted={granted} loading={listStatus === "loading"} onCreateWorld={(target, preset) => setCreating({ game: target, preset })} pending={pending} />}
@@ -328,7 +346,8 @@ function ConsoleShell({ session, continuesBootCard }: { session: ActiveSession; 
 
       <ScopeDialog currentId={game?.id ?? null} games={games} onClose={() => setScopeOpen(false)} onSelect={selectGame} open={scopeOpen} statusOf={(item) => sessionStatus(deriveServerState(item, snapshot))} />
       {invite && <InvitationSheet game={invite.game} onClose={() => setInvite(null)} open world={invite.world} />}
-      {creating && <CreateWorldSheet busy={pending?.kind === "create"} game={creating.game} initialPreset={creating.preset} onClose={() => setCreating(null)} onCreate={(preset, name, release) => void createWorld(creating.game, preset, name, release)} />}
+      {creating && <CreateWorldSheet busy={pending?.kind === "create"} deployment={snapshot?.deployment} game={creating.game} initialPreset={creating.preset} onClose={() => setCreating(null)} onCreate={(preset, name, release, placement, connectivity, auth) => void createWorld(creating.game, preset, name, release, placement, connectivity, auth)} />}
+      {editingWorld && <WorldSettingsSheet busy={savingWorldSettings} deployment={snapshot?.deployment} game={editingWorld.game} onClose={() => setEditingWorld(null)} onSave={(placement, connectivity, auth) => void saveWorldSettings(editingWorld.game, editingWorld.world, placement, connectivity, auth)} world={editingWorld.world} />}
       <ConfirmationDialog
         confirmation={confirmation}
         onClose={() => setConfirmation(null)}
@@ -404,27 +423,58 @@ function ConfirmationDialog({ confirmation, onClose, onConfirm }: { confirmation
   );
 }
 
-function CreateWorldSheet({ game, initialPreset, busy, onClose, onCreate }: { game: Game; initialPreset: Preset | null; busy: boolean; onClose: () => void; onCreate: (preset: Preset, name: string, release: string) => void }) {
+type WorldPlacement = "configured" | "fleet";
+
+function WorldConnectionFields({ deployment, placement, connectivity, onPlacement, onConnectivity }: Readonly<{
+  deployment: ControlPlaneSnapshot["deployment"];
+  placement: WorldPlacement;
+  connectivity: World["connectivity"];
+  onPlacement: (placement: WorldPlacement) => void;
+  onConnectivity: (connectivity: World["connectivity"]) => void;
+}>) {
+  const fleetAvailable = deployment?.launchEnabled === true;
+  return <>
+    <SelectField label="Hosting" hint="Choose where this world's server starts." onChange={(event) => {
+      const next = event.target.value as WorldPlacement;
+      onPlacement(next);
+      onConnectivity(next === "fleet" ? (deployment?.dnsAvailable ? "route53" : "raw") : "zerotier");
+    }} value={placement}>
+      <option value="configured">Persistent host · ZeroTier</option>
+      <option disabled={!fleetAvailable} value="fleet">On-demand fleet · public connection{fleetAvailable ? "" : " (not configured)"}</option>
+    </SelectField>
+    {placement === "fleet" && <SelectField label="Connection" hint="Fleet machines are disposable and never join ZeroTier." onChange={(event) => onConnectivity(event.target.value as World["connectivity"])} value={connectivity}>
+      <option value="raw">Public IP and game port</option>
+      {deployment?.dnsAvailable && <option value="route53">Public DNS</option>}
+    </SelectField>}
+    {placement === "fleet" && <p className="secondary">The game port is public. Set the game's password or allowlist yourself before sharing its address.</p>}
+  </>;
+}
+
+function CreateWorldSheet({ game, initialPreset, deployment, busy, onClose, onCreate }: { game: Game; initialPreset: Preset | null; deployment: ControlPlaneSnapshot["deployment"]; busy: boolean; onClose: () => void; onCreate: (preset: Preset, name: string, release: string, placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game") => void }) {
   const readyPresets = game.presets.filter((preset) => preset.buildStatus === "ready");
+  const [placement, setPlacement] = useState<WorldPlacement>(deployment?.placement === "fleet" && deployment.launchEnabled ? "fleet" : "configured");
   const [presetId, setPresetId] = useState(initialPreset?.id ?? readyPresets[0]?.id ?? "");
   const preset = game.presets.find((item) => item.id === presetId) ?? null;
   const [name, setName] = useState("");
   const [release, setRelease] = useState(preset?.latestRelease ?? "");
+  const [connectivity, setConnectivity] = useState<World["connectivity"]>(placement === "fleet" ? (deployment?.dnsAvailable ? "route53" : "raw") : "zerotier");
   useEffect(() => setRelease(preset?.latestRelease ?? ""), [preset?.id, preset?.latestRelease]);
-  const valid = preset !== null && preset.buildStatus === "ready" && preset.releases.includes(release) && name.trim().length > 0 && name.trim().length <= 80;
+  const networkValid = placement === "fleet" ? deployment?.launchEnabled && (connectivity === "raw" || (connectivity === "route53" && deployment?.dnsAvailable)) : connectivity === "zerotier";
+  const valid = preset !== null && preset.buildStatus === "ready" && preset.releases.includes(release) && name.trim().length > 0 && name.trim().length <= 80 && networkValid;
+  const submit = () => { if (preset && valid) onCreate(preset, name.trim(), release, placement, connectivity, connectivity === "zerotier" ? undefined : "game"); };
 
   return (
     <Sheet
       description={`A new world opens wipe #1 from an immutable ${game.displayName} release.`}
       footer={<>
         <p>{preset ? `${preset.displayName} · ${plural(preset.releases.length, "release")}` : "Choose a preset"}</p>
-        <Button disabled={!valid} icon="add" loading={busy} onClick={() => { if (preset) onCreate(preset, name.trim(), release); }} variant="filled">Create world</Button>
+        <Button disabled={!valid || busy} icon="add" loading={busy} onClick={submit} variant="filled">Create world</Button>
       </>}
       onClose={onClose}
       open
       title="Create world"
     >
-      <form className="page" onSubmit={(event) => { event.preventDefault(); if (preset && valid) onCreate(preset, name.trim(), release); }}>
+      <form className="page" onSubmit={(event) => { event.preventDefault(); submit(); }}>
         <SelectField hint={readyPresets.length === 0 ? "No preset of this game has a ready release." : undefined} label="Preset" onChange={(event) => setPresetId(event.target.value)} value={presetId}>
           {game.presets.map((item) => <option disabled={item.buildStatus !== "ready"} key={item.id} value={item.id}>{item.displayName}{item.buildStatus !== "ready" ? ` (${item.buildStatus})` : ""}</option>)}
         </SelectField>
@@ -433,9 +483,34 @@ function CreateWorldSheet({ game, initialPreset, busy, onClose, onCreate }: { ga
           <option disabled value="">Choose a release</option>
           {preset && [...preset.releases].reverse().map((version) => <option key={version} value={version}>{version}{version === preset.latestRelease ? " (latest)" : ""}</option>)}
         </SelectField>
+        <WorldConnectionFields connectivity={connectivity} deployment={deployment} onConnectivity={setConnectivity} onPlacement={setPlacement} placement={placement} />
       </form>
     </Sheet>
   );
+}
+
+function WorldSettingsSheet({ game, world, deployment, busy, onClose, onSave }: Readonly<{
+  game: Game;
+  world: World;
+  deployment: ControlPlaneSnapshot["deployment"];
+  busy: boolean;
+  onClose: () => void;
+  onSave: (placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game") => void;
+}>) {
+  const [placement, setPlacement] = useState<WorldPlacement>(world.placement ?? (world.connectivity === "zerotier" ? "configured" : "fleet"));
+  const [connectivity, setConnectivity] = useState<World["connectivity"]>(world.connectivity);
+  const valid = placement === "configured" ? connectivity === "zerotier" : deployment?.launchEnabled && (connectivity === "raw" || (connectivity === "route53" && deployment.dnsAvailable));
+  const stopped = game.lifecycle === null || (game.lifecycle.activeSessionId === null && game.lifecycle.observedState === "stopped");
+  return <Sheet
+    description={`Choose how ${world.displayName} is hosted and reached. Changes are allowed only while the world is stopped.`}
+    footer={<><Button disabled={busy} onClick={onClose} variant="text">Cancel</Button><Button disabled={!valid || !stopped || busy} loading={busy} onClick={() => onSave(placement, connectivity, connectivity === "zerotier" ? undefined : "game")} variant="filled">Save settings</Button></>}
+    onClose={onClose}
+    open
+    title={`Hosting · ${game.displayName}`}
+  >
+    {!stopped && <p className="secondary">Stop this game's current session before changing hosting.</p>}
+    <WorldConnectionFields connectivity={connectivity} deployment={deployment} onConnectivity={setConnectivity} onPlacement={setPlacement} placement={placement} />
+  </Sheet>;
 }
 
 function lifecycleLabel(action: WorldActionKind): string {
@@ -443,6 +518,10 @@ function lifecycleLabel(action: WorldActionKind): string {
 }
 
 function deriveServerState(game: Game | undefined, snapshot: ControlPlaneSnapshot | null): ServerState {
+  if (snapshot?.deployment?.placement === "fleet") {
+    const observed = game?.lifecycle?.observedState;
+    return observed === "ready" ? "running" : observed ?? "stopped";
+  }
   const operation = snapshot?.operations[0];
   if (operation?.type === "start") return "starting";
   if (operation?.type === "stop") return "stopping";

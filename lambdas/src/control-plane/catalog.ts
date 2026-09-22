@@ -37,6 +37,7 @@ export type CatalogWorld = Readonly<{
   // "zerotier" reaches players through the overlay, "raw" through whatever
   // public address the instance holds for that session.
   connectivity: "zerotier" | "raw" | "route53";
+  placement?: "configured" | "fleet";
   // Overrides the game's footprint, field by field: a vanilla world needs less
   // than a modded one of the same game.
   footprint?: Partial<Footprint>;
@@ -146,6 +147,7 @@ export function catalogWithPresets(
           profileId: record.preset.id,
           sessionControl: record.status === "active" ? "v1" as const : null,
           connectivity: record.connectivity,
+          placement: record.placement,
           materialization: record.status === "active" ? "existing" as const : "archived" as const,
           worldLifecycle: "v1" as const,
           preset: current === undefined ? {
@@ -197,14 +199,15 @@ export function worldHostBinding(worldId: string, catalog: readonly CatalogGame[
 
 // Whether a session of this world must take slot zero: a public world, whose
 // security group opens the game's own port only, and a world of a game that
-// cannot be slotted. `serverId` names the game for a world the static catalog
-// does not know, which was created from a preset and is on the overlay.
+// cannot be slotted. Worlds created from presets are absent from the static
+// catalog; pin them conservatively because a public fleet world may use that
+// same fixed port. Configured private worlds use the single-host path.
 export function worldNeedsSlotZero(worldId: string, serverId?: string, catalog: readonly CatalogGame[] = gameCatalog): boolean {
   const game = catalog.find((candidate) => candidate.worlds.some((world) => world.id === worldId))
     ?? (serverId === undefined ? undefined : catalog.find((candidate) => candidate.id === serverId));
   if (game === undefined) return false;
   const world = game.worlds.find((candidate) => candidate.id === worldId);
-  return game.slottable === false || world?.connectivity === "raw" || world?.connectivity === "route53";
+  return game.slottable === false || world === undefined || world.connectivity === "raw" || world.connectivity === "route53";
 }
 
 // What a launch for this world asks EC2 for when no host has room.

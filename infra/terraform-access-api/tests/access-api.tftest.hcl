@@ -298,6 +298,11 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition     = contains(local.access_routes, "PUT /games/{gameId}/worlds/{worldId}/settings") && aws_lambda_function.access_api.environment[0].variables.GAME_DNS_SUFFIX == ""
+    error_message = "World connection settings need a routed API, with public DNS unavailable until its suffix is configured."
+  }
+
+  assert {
     condition     = contains(local.access_routes, "GET /access/roles") && contains(local.access_routes, "GET /me/subscriptions") && contains(local.access_routes, "PUT /me/subscriptions")
     error_message = "Roles and personal notification subscriptions must be backed by the access API."
   }

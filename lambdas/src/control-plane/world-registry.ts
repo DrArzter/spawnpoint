@@ -18,6 +18,7 @@ export type WorldRecord = Readonly<{
   gameId: string;
   displayName: string;
   status: "active" | "archived";
+  placement: "configured" | "fleet";
   connectivity: "zerotier" | "raw" | "route53";
   auth?: "game" | "external";
   preset: Readonly<{
@@ -60,9 +61,10 @@ export function newWorldRecord(
   identity: Readonly<{ worldId: string; displayName: string; release: string }>,
   generationUuid: string,
   createdAt: string,
-  access?: Readonly<{ connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"] }>,
+  access?: Readonly<{ placement?: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"] }>,
 ): WorldRecord {
   const selectedAccess = access ?? { connectivity: "zerotier" };
+  const placement = selectedAccess.placement ?? (selectedAccess.connectivity === "zerotier" ? "configured" : "fleet");
   if (
     preset.buildStatus !== "ready" || !preset.releases.includes(identity.release) ||
     !ID.test(identity.worldId) || identity.displayName.length < 1 || identity.displayName.length > 80 ||
@@ -73,13 +75,16 @@ export function newWorldRecord(
   if (
     !["zerotier", "raw", "route53"].includes(selectedAccess.connectivity) ||
     (selectedAccess.auth !== undefined && selectedAccess.auth !== "game" && selectedAccess.auth !== "external") ||
-    (selectedAccess.connectivity !== "zerotier" && selectedAccess.auth === undefined)
+    (selectedAccess.connectivity !== "zerotier" && selectedAccess.auth === undefined) ||
+    (placement === "fleet" && selectedAccess.connectivity === "zerotier") ||
+    (placement === "configured" && selectedAccess.connectivity !== "zerotier")
   ) throw new Error("invalid_world_connectivity");
   return {
     worldId: identity.worldId,
     gameId: preset.gameId,
     displayName: identity.displayName,
     status: "active",
+    placement,
     connectivity: selectedAccess.connectivity,
     ...(selectedAccess.auth === undefined ? {} : { auth: selectedAccess.auth }),
     preset: {
@@ -107,6 +112,22 @@ function closedCurrent(record: WorldRecord, closedAt: string): ClosedWorldGenera
 export function archiveWorldRecord(record: WorldRecord): WorldRecord {
   if (record.status === "archived") return record;
   return { ...record, status: "archived" };
+}
+
+export function withWorldAccess(
+  record: WorldRecord,
+  access: Readonly<{ placement: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"] }>,
+): WorldRecord {
+  if (
+    (access.placement !== "configured" && access.placement !== "fleet") ||
+    (access.connectivity !== "zerotier" && access.connectivity !== "raw" && access.connectivity !== "route53") ||
+    (access.auth !== undefined && access.auth !== "game" && access.auth !== "external") ||
+    (access.connectivity !== "zerotier" && access.auth === undefined) ||
+    (access.placement === "fleet" && access.connectivity === "zerotier") ||
+    (access.placement === "configured" && access.connectivity !== "zerotier")
+  ) throw new Error("invalid_world_connectivity");
+  const { auth: _previousAuth, ...withoutAuth } = record;
+  return { ...withoutAuth, placement: access.placement, connectivity: access.connectivity, ...(access.auth === undefined ? {} : { auth: access.auth }) };
 }
 
 export function purgeGenerationIds(record: WorldRecord): readonly string[] {
@@ -208,6 +229,7 @@ export function worldRecordDocument(record: WorldRecord): ObjectValue {
     game: record.gameId,
     display_name: record.displayName,
     status: record.status,
+    placement: record.placement,
     connectivity: record.connectivity,
     ...(record.auth === undefined ? {} : { auth: record.auth }),
     storage_layout: "generation",
@@ -237,6 +259,9 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     (root.connectivity !== "zerotier" && root.connectivity !== "raw" && root.connectivity !== "route53") ||
     (root.auth !== undefined && root.auth !== "game" && root.auth !== "external") ||
     (root.connectivity !== "zerotier" && root.auth === undefined) ||
+    (root.placement !== undefined && root.placement !== "configured" && root.placement !== "fleet") ||
+    ((root.placement ?? (root.connectivity === "zerotier" ? "configured" : "fleet")) === "fleet" && root.connectivity === "zerotier") ||
+    ((root.placement ?? (root.connectivity === "zerotier" ? "configured" : "fleet")) === "configured" && root.connectivity !== "zerotier") ||
     preset === null || typeof preset.id !== "string" || !ID.test(preset.id) ||
     typeof preset.repository !== "string" || !preset.repository.startsWith("https://github.com/") ||
     typeof preset.commit !== "string" || !COMMIT.test(preset.commit) ||
@@ -262,6 +287,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     gameId: root.game,
     displayName: root.display_name,
     status: root.status,
+    placement: (root.placement ?? (root.connectivity === "zerotier" ? "configured" : "fleet")) as WorldRecord["placement"],
     connectivity: root.connectivity,
     ...(root.auth === undefined ? {} : { auth: root.auth }),
     preset: {

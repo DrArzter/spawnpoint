@@ -226,6 +226,12 @@ variable "placement" {
   }
 }
 
+variable "game_dns_suffix" {
+  description = "Optional Route 53 suffix for public world addresses; empty keeps the DNS choice unavailable in the panel."
+  type        = string
+  default     = ""
+}
+
 variable "launch" {
   description = "Whether a session nothing has room for may launch a host from the fleet template (ADR-0054, phase 12). `disabled` refuses and cancels the session; `enabled` creates an instant EC2 Fleet for the footprint's requirements."
   type        = string

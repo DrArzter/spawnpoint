@@ -21,7 +21,7 @@ import { gameCatalog } from "./catalog.ts";
 import { type ReleaseState } from "./release-state.ts";
 import { S3ReleaseStateStore } from "./s3-release-state-store.ts";
 import { S3WorldRepository } from "./s3-world-repository.ts";
-import { newWorldRecord, type WorldRecord } from "./world-registry.ts";
+import { newWorldRecord, withWorldAccess, type WorldRecord } from "./world-registry.ts";
 import { parseDynamicProjection } from "./dynamic-projection.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
@@ -87,6 +87,7 @@ async function listHosts(): Promise<readonly HostObservation[]> {
       availabilityZone: instance.Placement?.AvailabilityZone ?? null,
       launchedAt: instance.LaunchTime?.toISOString() ?? null,
       publicIp: instance.PublicIpAddress ?? null,
+      provenance: tag(instance, "ManagedBy") === "spawnpoint-fleet" ? "launched" as const : "configured" as const,
     }];
   }).sort((a, b) => a.id.localeCompare(b.id));
 }
@@ -279,7 +280,7 @@ export async function materializePresetWorld(
   identity: Readonly<{ worldId: string; displayName: string; release: string }>,
   generationUuid: string,
   createdAt: string,
-  access?: Readonly<{ connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"] }>,
+  access?: Readonly<{ placement?: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"] }>,
 ): Promise<WorldRecord> {
   const proposed = newWorldRecord(preset, identity, generationUuid, createdAt, access);
   const releaseState: ReleaseState = {
@@ -345,13 +346,14 @@ export async function startSessionExecution(
   requestedBy: string,
   serverId: string,
   worldId: string,
+  placement?: "single" | "shared" | "fleet",
 ): Promise<string> {
   requireWorldId(worldId);
   const started = await sfn.send(new StartExecutionCommand({
     stateMachineArn: machineArn("start"), name: operationId,
     input: JSON.stringify(buildLifecycleStartInput({
       serverId, operationId, sessionId: `session-${randomUUID()}`, instanceId, worldId, requestedBy,
-      placement: configuredPlacement(),
+      placement: placement ?? configuredPlacement(),
       launch: process.env.SPAWNPOINT_LAUNCH === "enabled" ? "enabled" : "disabled",
       appCommit: process.env.SPAWNPOINT_APP_COMMIT || "main",
     })),
@@ -437,4 +439,28 @@ export async function listWorldBackups(worldId: string): Promise<readonly Backup
     storedAt: object.LastModified.toISOString(),
     checksumAlgorithms: object.ChecksumAlgorithm ?? [],
   }] : []);
+}
+
+export async function readWorldRecord(worldId: string): Promise<WorldRecord | null> {
+  return (await new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET")).read(worldId))?.record ?? null;
+}
+
+export async function replaceWorldAccess(
+  gameId: string,
+  worldId: string,
+  access: Readonly<{ placement: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"] }>,
+): Promise<"updated" | "missing" | "conflict"> {
+  const worlds = new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET"));
+  const stored = await worlds.read(worldId);
+  if (!stored || stored.record.gameId !== gameId) return "missing";
+  if (stored.record.status !== "active") return "conflict";
+  const next = withWorldAccess(stored.record, access);
+  if (next.placement === stored.record.placement && next.connectivity === stored.record.connectivity && next.auth === stored.record.auth) return "updated";
+  try {
+    await worlds.replace(next, stored.etag);
+    return "updated";
+  } catch (error) {
+    if (preconditionFailed(error)) return "conflict";
+    throw error;
+  }
 }

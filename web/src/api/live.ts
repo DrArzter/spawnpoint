@@ -493,10 +493,10 @@ export const liveApi: SpawnpointApi = {
     return { result: body.result, operationId: body.operationId };
   },
 
-  async requestCreateWorld(gameId: string, presetId: string, displayName: string, release: string) {
+  async requestCreateWorld(gameId: string, presetId: string, displayName: string, release: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external") {
     const response = await authorizedFetch(
       `/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/worlds`,
-      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ displayName, release }) },
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ displayName, release, placement, connectivity, ...(auth ? { auth } : {}) }) },
     );
     const body = await response.json() as { error?: string; world?: { id: string; displayName: string } };
     if (!response.ok || body.world === undefined) {
@@ -505,10 +505,28 @@ export const liveApi: SpawnpointApi = {
         invalid_world_name: "Enter a name between 1 and 80 characters.",
         preset_release_not_ready: "This preset has no ready release yet.",
         release_not_available: "The selected release is no longer available. Refresh and try again.",
+        invalid_world_connectivity: "This network is not available for the current host mode. Refresh and choose another connection.",
       };
       throw new Error(messages[body.error ?? ""] ?? "The world could not be created.");
     }
     return body.world;
+  },
+
+  async requestUpdateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external") {
+    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/settings`, {
+      method: "PUT", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ placement, connectivity, ...(auth ? { auth } : {}) }),
+    });
+    if (response.ok) return;
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    const messages: Record<string, string> = {
+      forbidden: "Your role cannot change world settings.",
+      world_session_active: "Stop the world and wait for the current operation to finish before changing its host or network.",
+      world_settings_conflict: "The world changed while you were editing. Refresh and try again.",
+      invalid_world_connectivity: "This host and network combination is not available in this deployment.",
+      unknown_world: "This world no longer exists.",
+    };
+    throw new Error(messages[body.error ?? ""] ?? "World settings could not be saved.");
   },
 
   async requestPackDownload(gameId: string, worldId: string) {

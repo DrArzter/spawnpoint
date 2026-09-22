@@ -41,6 +41,7 @@ export function initialState(): DemoState {
   return {
     snapshot: {
       observedAt: new Date().toISOString(),
+      deployment: { placement: "single", launchEnabled: false, dnsAvailable: false },
       operations: [],
       hosts: [{ id: "host-game", name: "Shared game host", state: "running", instanceType: "m7i-flex.large", availabilityZone: "eu-central-1a", launchedAt: "2026-09-14T18:32:00.000Z", publicIp: "203.0.113.42" }],
       games: [

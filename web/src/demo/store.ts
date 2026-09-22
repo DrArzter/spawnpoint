@@ -216,7 +216,7 @@ export function worldLifecycle(gameId: string, worldId: string, action: "archive
   return { result: "requested", operationId };
 }
 
-export function createWorld(gameId: string, presetId: string, displayName: string, release: string): { id: string; displayName: string } {
+export function createWorld(gameId: string, presetId: string, displayName: string, release: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external"): { id: string; displayName: string } {
   settle();
   const owner = game(gameId);
   const preset = owner.presets.find((item) => item.id === presetId) as Preset | undefined;
@@ -235,15 +235,30 @@ export function createWorld(gameId: string, presetId: string, displayName: strin
     profileId: preset.id,
     sessionControlAvailable: true,
     worldLifecycleAvailable: true,
-    connectivity: "zerotier",
+    connectivity,
+    placement,
+    auth: auth ?? null,
     materialization: "existing",
     preset: { id: preset.id, repository: preset.repository, commit: preset.commit, profileDigest: preset.profileDigest, releases: [...preset.releases], buildStatus: preset.buildStatus, latestRelease: preset.latestRelease },
     wipes: [{ id: generationId, number: 1, state: "current", createdAt: iso(), closedAt: null, originRelease: release }],
-    connectionAddress: owner.worlds[0]?.connectionAddress ?? null,
+    connectionAddress: connectivity === "zerotier" ? owner.worlds[0]?.connectionAddress ?? null : null,
     release: { state: "available", generationId, activeRelease: release, desiredRelease: release },
   });
   state.snapshot.observedAt = iso();
   return { id, displayName: displayName.trim() };
+}
+
+export function updateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external"): void {
+  settle();
+  requireIdle();
+  const owner = game(gameId);
+  if (owner.lifecycle?.activeSessionId) throw new Error("Stop the world before changing its settings.");
+  const target = world(gameId, worldId);
+  target.placement = placement;
+  target.connectivity = connectivity;
+  target.auth = auth ?? null;
+  target.connectionAddress = connectivity === "zerotier" ? owner.worlds.find((candidate) => candidate.connectivity === "zerotier" && candidate.id !== worldId)?.connectionAddress ?? null : null;
+  state.snapshot.observedAt = iso();
 }
 
 export function backups(gameId: string, worldId: string): BackupInventory {

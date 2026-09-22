@@ -110,6 +110,45 @@ resource "aws_security_group" "game_host" {
   }
 }
 
+locals {
+  # A public fleet world takes slot zero, so only the game module's own port
+  # is reachable. The host refuses a non-gating adapter without declared auth.
+  fleet_game_ports = {
+    for module in fileset("${path.module}/../../server/games", "*/game.sh") :
+    module => {
+      port     = tonumber(regex("GAME_CONNECT_PORT=\"([0-9]+)\"", file("${path.module}/../../server/games/${module}"))[0])
+      protocol = regex("GAME_CONNECT_PROTOCOL=\"([a-z]+)\"", file("${path.module}/../../server/games/${module}"))[0]
+    }
+  }
+}
+
+resource "aws_security_group" "fleet_host" {
+  name        = "spawnpoint-fleet-host"
+  description = "Public game ports for explicitly authenticated fleet sessions"
+  vpc_id      = aws_vpc.main.id
+
+  dynamic "ingress" {
+    for_each = local.fleet_game_ports
+    content {
+      description = "Game module ${ingress.key}"
+      from_port   = ingress.value.port
+      to_port     = ingress.value.port
+      protocol    = ingress.value.protocol
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
+  egress {
+    description = "Outbound bootstrap and control plane"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "spawnpoint-fleet-host" }
+}
+
 check "public_worlds_declare_their_authentication" {
   # The old rule was "zero ingress", which was the right guarantee while every
   # world used the overlay. The guarantee now is narrower and still absolute:

@@ -390,6 +390,10 @@ async function controlSession(identity: Identity, action: SessionAction, gameId:
     awsControlPlaneSources.readLifecycle(gameId),
   ]);
   const effectiveCatalog = catalogWithPresets(presets, gameCatalog, worldRecords);
+  if (
+    action === "start" && process.env.SPAWNPOINT_PLACEMENT === "fleet" &&
+    worldRecords.some((record) => record.worldId === worldId && record.connectivity === "zerotier")
+  ) return response(409, { error: "connectivity_unavailable_on_fleet" });
   const plan = planSessionOperation(gameId, worldId, action, hosts, operations, effectiveCatalog);
   if (plan.kind === "reject") return response(plan.reason === "unknown_world" ? 404 : 409, { error: plan.reason });
   const recoverySessionId = action === "stop" ? stoppedHostRecoverySession(worldId, hosts, lifecycle) : null;
@@ -413,12 +417,19 @@ async function controlSession(identity: Identity, action: SessionAction, gameId:
 }
 
 async function createWorld(identity: Identity, gameId: string, presetId: string, body: string | undefined): Promise<Response> {
-  let parsed: { displayName?: unknown; release?: unknown };
+  let parsed: { displayName?: unknown; release?: unknown; connectivity?: unknown; auth?: unknown };
   try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
   const displayName = typeof parsed.displayName === "string" ? parsed.displayName.trim() : "";
   const release = typeof parsed.release === "string" ? parsed.release : "";
   if (displayName.length < 1 || displayName.length > 80) return response(400, { error: "invalid_world_name" });
   if (!/^[0-9]+\.[0-9]+$/.test(release)) return response(400, { error: "invalid_release" });
+  const connectivity = parsed.connectivity ?? "zerotier";
+  const auth = parsed.auth;
+  if (
+    (connectivity !== "zerotier" && connectivity !== "raw" && connectivity !== "route53") ||
+    (auth !== undefined && auth !== "game" && auth !== "external") ||
+    (connectivity !== "zerotier" && auth === undefined)
+  ) return response(400, { error: "invalid_world_connectivity" });
   const presets = await (awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]));
   const preset = presets.find((candidate) => candidate.gameId === gameId && candidate.id === presetId);
   if (preset === undefined) return response(404, { error: "unknown_preset" });
@@ -432,6 +443,7 @@ async function createWorld(identity: Identity, gameId: string, presetId: string,
     { worldId, displayName, release },
     randomUUID(),
     createdAt,
+    { connectivity, ...(auth === undefined ? {} : { auth }) },
   );
   return response(201, {
     world: {

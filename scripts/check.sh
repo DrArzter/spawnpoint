@@ -42,7 +42,7 @@ check_shell() {
     apk add -q shellcheck >/dev/null
     cd /repo
     shellcheck -x -S warning \
-      server/scripts/*.sh server/games/_dispatch.sh server/games/*/game.sh \
+      server/scripts/*.sh server/connectivity/*.sh server/games/_dispatch.sh server/games/*/game.sh \
       scripts/*.sh scripts/config-sources/*.sh server/tests/*.sh server/user-data.sh'
 }
 

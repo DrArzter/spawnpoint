@@ -73,13 +73,33 @@ variable "repository_url" {
 }
 
 variable "host_parameter_path" {
-  description = "Parameter Store path under which a launched host finds its runtime environment (`/env/<KEY>`) and the overlay's Central API token (`/zerotier-central-token`)."
+  description = "Parameter Store path under which a launched host finds its runtime environment (`/env/<KEY>`)."
   type        = string
   default     = "/spawnpoint/host"
 
   validation {
     condition     = can(regex("^/[A-Za-z0-9_./-]*[A-Za-z0-9_.-]$", var.host_parameter_path))
     error_message = "host_parameter_path must start with a slash and not end with one."
+  }
+}
+
+variable "game_dns_zone_name" {
+  description = "Optional Route 53 public hosted zone containing game DNS records; empty keeps the DNS adapter disabled."
+  type        = string
+  default     = ""
+}
+
+variable "game_dns_suffix" {
+  description = "Optional DNS suffix for world records, inside game_dns_zone_name (for example games.example.com)."
+  type        = string
+  default     = ""
+
+  validation {
+    condition = (var.game_dns_zone_name == "" && var.game_dns_suffix == "") || (
+      var.game_dns_zone_name != "" && var.game_dns_suffix != "" &&
+      (var.game_dns_suffix == var.game_dns_zone_name || endswith(var.game_dns_suffix, ".${var.game_dns_zone_name}"))
+    )
+    error_message = "Game DNS zone and suffix must be configured together, with the suffix inside the zone."
   }
 }
 

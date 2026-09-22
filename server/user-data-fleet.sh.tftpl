@@ -4,8 +4,9 @@ ${base}
 # Fleet stage (ADR-0054, phase 12). Everything above is the base host, shared
 # with the configured instance. A launched host has no data volume: the app is
 # checked out here at the commit its AppCommit tag names, the runtime
-# environment is rendered from Parameter Store, and the overlay is joined and
-# self-authorised. Worlds arrive from S3 when a session starts.
+# environment is rendered from Parameter Store. Connectivity is selected per
+# world; the stock fleet image enables only public adapters. An overlay fleet
+# needs a separate bounded-membership policy before it can be opted in.
 # ---------------------------------------------------------------------------
 set -Eeuo pipefail
 
@@ -43,54 +44,12 @@ aws ssm get-parameters-by-path --region "$region" \
 chmod 0600 "$env_file.staged"
 mv -f -- "$env_file.staged" "$env_file"
 
-read_env() {
-  awk -F= -v key="$1" '$1 == key { print substr($0, index($0, "=") + 1); found = 1; exit } END { if (!found) exit 1 }' "$env_file"
-}
-
-# The overlay, when this deployment uses one: install, join, then authorise
-# this node through the Central API with the operator's token, so no person
-# has to click for a host that exists for one evening. The assigned address is
-# what the session summary publishes, so it is written where the scripts read
-# it. Without a token the host still joins and waits for a person to authorise
-# it, which the start's own readiness check turns into a plain refusal.
-if network_id="$(read_env ZEROTIER_NETWORK_ID 2>/dev/null)" && [ -n "$network_id" ]; then
-  fleet_log "joining overlay network $network_id"
-  if ! command -v zerotier-cli >/dev/null 2>&1; then
-    installer="$(mktemp /tmp/zerotier-install.XXXXXX)"
-    curl --fail --silent --show-error --location https://install.zerotier.com -o "$installer"
-    bash "$installer"
-    rm -f -- "$installer"
-  fi
-  systemctl enable --now zerotier-one
-  for _ in $(seq 1 30); do zerotier-cli info >/dev/null 2>&1 && break; sleep 1; done
-  zerotier-cli join "$network_id" >/dev/null
-  node_id="$(zerotier-cli info -j | jq -r '.address')"
-  if central_token="$(aws ssm get-parameter --region "$region" --name '${host_parameter_path}/zerotier-central-token' --with-decryption --query Parameter.Value --output text 2>/dev/null)" && [ -n "$central_token" ] && [ "$central_token" != None ]; then
-    fleet_log "authorising node $node_id on $network_id"
-    curl --silent --show-error --fail --request POST \
-      --header "Authorization: token $central_token" \
-      --header 'Content-Type: application/json' \
-      --data '{"config":{"authorized":true},"name":"spawnpoint-fleet-host"}' \
-      "https://api.zerotier.com/api/v1/network/$network_id/member/$node_id" >/dev/null
-  fi
-  assigned=""
-  for _ in $(seq 1 60); do
-    assigned="$(zerotier-cli -j listnetworks | jq -r --arg id "$network_id" \
-      '.[] | select((.nwid | ascii_downcase) == ($id | ascii_downcase) and .status == "OK") | .assignedAddresses[]? | split("/")[0] | select(test("^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+$"))' | head -n1)"
-    [ -n "$assigned" ] && break
-    sleep 2
-  done
-  if [ -n "$assigned" ]; then
-    if grep -q '^ZEROTIER_ADDRESS=' "$env_file"; then
-      sed -i "s|^ZEROTIER_ADDRESS=.*|ZEROTIER_ADDRESS=$assigned|" "$env_file"
-    else
-      printf 'ZEROTIER_ADDRESS=%s\n' "$assigned" >>"$env_file"
-    fi
-    fleet_log "overlay address $assigned"
-  else
-    fleet_log "overlay joined but no address assigned yet; a start will refuse until it is"
-  fi
-fi
+sed -i '/^SPAWNPOINT_ENABLED_CONNECTIVITY=/d; /^SPAWNPOINT_DNS_ZONE_ID=/d; /^SPAWNPOINT_DNS_SUFFIX=/d' "$env_file"
+printf 'SPAWNPOINT_ENABLED_CONNECTIVITY=raw,route53\n' >>"$env_file"
+%{ if game_dns_zone_id != "" ~}
+printf 'SPAWNPOINT_DNS_ZONE_ID=%s\n' '${game_dns_zone_id}' >>"$env_file"
+printf 'SPAWNPOINT_DNS_SUFFIX=%s\n' '${game_dns_suffix}' >>"$env_file"
+%{ endif ~}
 
 printf 'commit=%s\nready_at=%s\n' "$app_commit" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >/etc/spawnpoint-fleet-ready
 fleet_log "fleet host is ready"

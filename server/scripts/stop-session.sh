@@ -33,6 +33,9 @@ source "${SERVER_DIR}/games/_dispatch.sh"
 resolve_game
 prepare_game_runtime
 configure_game_compose
+# shellcheck source=_connectivity.sh
+source "${SCRIPT_DIR}/_connectivity.sh"
+load_connectivity "${WORLD_CONNECTIVITY:-zerotier}"
 
 if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
   export SERVER_DATA_DIR="${WORLD_DATA_DIRECTORY}"
@@ -89,6 +92,10 @@ upload_output="$(
 
 printf '%s\n' "${archive_output}"
 printf '%s\n' "${upload_output}"
+if ! connectivity_retract; then
+  printf 'error: connectivity cleanup failed after backup; refusing final host drain\n' >&2
+  exit 5
+fi
 
 # Last one out turns off the lights. The session this command was asked about is
 # stopped and backed up; whether the *host* may sleep is a separate question,

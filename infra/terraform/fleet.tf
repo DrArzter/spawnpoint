@@ -19,12 +19,11 @@ resource "aws_launch_template" "fleet_host" {
 
   network_interfaces {
     # The public subnet has no NAT gateway. A public address is required for
-    # outbound-only SSM, registries and ZeroTier bootstrap; the shared security
-    # group remains the ingress authority and opens only explicitly declared,
-    # authenticated public worlds. Reviewed under ADR-0054.
+    # Launched hosts use their own ingress policy; the configured host keeps
+    # its legacy security group untouched.
     associate_public_ip_address = true # NOSONAR
     subnet_id                   = aws_subnet.public.id
-    security_groups             = [aws_security_group.game_host.id]
+    security_groups             = [aws_security_group.fleet_host.id]
     delete_on_termination       = true
   }
 
@@ -55,6 +54,8 @@ resource "aws_launch_template" "fleet_host" {
     base                = file("${path.module}/../../server/user-data.sh")
     repository_url      = var.repository_url
     host_parameter_path = var.host_parameter_path
+    game_dns_zone_id    = var.game_dns_zone_name == "" ? "" : data.aws_route53_zone.game[0].zone_id
+    game_dns_suffix     = var.game_dns_suffix
   }))
 
   tag_specifications {
@@ -72,6 +73,12 @@ resource "aws_launch_template" "fleet_host" {
   }
 }
 
+data "aws_route53_zone" "game" {
+  count        = var.game_dns_zone_name == "" ? 0 : 1
+  name         = var.game_dns_zone_name
+  private_zone = false
+}
+
 locals {
   # ManagedBy is the tag every IAM statement about launched hosts conditions on:
   # the machines may start, stop, command and terminate a host that carries it,
@@ -87,8 +94,7 @@ locals {
 
 # A launched host renders its runtime environment from Parameter Store: the
 # same keys the configured host keeps in its .env, one parameter each under
-# <host_parameter_path>/env, plus the overlay's Central API token so the host
-# can authorise its own membership. The AWS-managed SSM key decrypts them.
+# <host_parameter_path>/env. The AWS-managed SSM key decrypts them.
 data "aws_iam_policy_document" "game_host_parameters" {
   statement {
     sid = "ReadHostParameters"
@@ -108,4 +114,35 @@ resource "aws_iam_role_policy" "game_host_parameters" {
   name   = "spawnpoint-game-host-parameters"
   role   = aws_iam_role.game_host.id
   policy = data.aws_iam_policy_document.game_host_parameters.json
+}
+
+data "aws_iam_policy_document" "game_host_dns" {
+  count = var.game_dns_zone_name == "" ? 0 : 1
+
+  statement {
+    actions   = ["route53:ChangeResourceRecordSets"]
+    resources = ["arn:aws:route53:::hostedzone/${data.aws_route53_zone.game[0].zone_id}"]
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "route53:ChangeResourceRecordSetsNormalizedRecordNames"
+      values   = ["*.${var.game_dns_suffix}"]
+    }
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "route53:ChangeResourceRecordSetsRecordTypes"
+      values   = ["A"]
+    }
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "route53:ChangeResourceRecordSetsActions"
+      values   = ["UPSERT", "DELETE"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "game_host_dns" {
+  count  = var.game_dns_zone_name == "" ? 0 : 1
+  name   = "spawnpoint-game-host-dns"
+  role   = aws_iam_role.game_host.id
+  policy = data.aws_iam_policy_document.game_host_dns[0].json
 }

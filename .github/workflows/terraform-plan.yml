@@ -45,6 +45,8 @@ jobs:
       TF_VAR_placement: ${{ vars.SPAWNPOINT_PLACEMENT || 'single' }}
       TF_VAR_launch: ${{ vars.SPAWNPOINT_LAUNCH || 'disabled' }}
       TF_VAR_headroom_mib: ${{ vars.SPAWNPOINT_FLEET_HEADROOM_MIB || '0' }}
+      TF_VAR_game_dns_zone_name: ${{ vars.SPAWNPOINT_GAME_DNS_ZONE || '' }}
+      TF_VAR_game_dns_suffix: ${{ vars.SPAWNPOINT_GAME_DNS_SUFFIX || '' }}
       TF_VAR_app_commit: ${{ github.event.pull_request.head.sha }}
       TF_VAR_alert_email: ${{ secrets.TF_VAR_ALERT_EMAIL }}
       TF_VAR_bootstrap_owner_telegram_id: ${{ secrets.TF_VAR_BOOTSTRAP_OWNER_TELEGRAM_ID }}

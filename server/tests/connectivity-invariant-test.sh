@@ -112,15 +112,16 @@ main_output="$("${SCRIPTS}/world-profile.sh" world)"
 grep -Fxq 'connectivity=zerotier' <<<"${main_output}"
 grep -Fxq 'auth=none' <<<"${main_output}"
 
-# --- the runtime seam: a strategy the catalog accepts but the host cannot
-#     perform is refused by name, before any host plumbing is touched ---
+# --- the runtime seam: Route 53 requires its own configuration, not overlay
+#     configuration, and refuses before any game container starts ---
 write_catalog '{"id": "named", "display_name": "Named", "profile_id": "named", "connectivity": "route53", "auth": "external"}'
-if session_output="$(WORLD_ID=named SPAWNPOINT_WORLD_CATALOG="${fixture}/catalog.json" \
+touch "${fixture}/runtime.env"
+if session_output="$(WORLD_ID=named SERVER_ENV_FILE="${fixture}/runtime.env" SPAWNPOINT_WORLD_CATALOG="${fixture}/catalog.json" \
   "${SCRIPTS}/start-session.sh" 2>&1)"; then
-  printf 'expected failure: start-session on an unimplemented strategy\n' >&2
+  printf 'expected failure: Route 53 without zone configuration\n' >&2
   exit 1
 fi
-grep -q 'connectivity strategy route53 is not implemented' <<<"${session_output}"
+grep -q 'SPAWNPOINT_DNS_ZONE_ID\|invalid Route 53 zone ID' <<<"${session_output}"
 
 # --- the raw strategy: a world reaches players without the overlay ---
 # The address reader is the whole of publish() for raw, so it is exercised

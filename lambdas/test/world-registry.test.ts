@@ -34,11 +34,23 @@ test("an unbuilt preset cannot create a world", () => {
   assert.throws(() => newWorldRecord({ ...preset, buildStatus: "unbuilt", latestRelease: null }, identity, "12345678-1234-1234-1234-1234567890ab", new Date().toISOString()), /invalid_world_creation/);
 });
 
+test("world creation keeps connectivity independent and requires explicit public auth", () => {
+  const args = [preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z"] as const;
+  assert.throws(() => newWorldRecord(...args, { connectivity: "route53" }), /invalid_world_connectivity/);
+  const named = newWorldRecord(...args, { connectivity: "route53", auth: "external" });
+  assert.deepEqual(parseWorldRecord(worldRecordDocument(named)), named);
+});
+
 test("registry parsing fails closed", () => {
   const record = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
   const document = worldRecordDocument(record);
   assert.equal(parseWorldRecord({ ...document, world_id: "../escape" }), null);
   assert.equal(parseWorldRecord({ ...document, storage_layout: "legacy" }), null);
+  assert.deepEqual(parseWorldRecord({ ...document, connectivity: "route53", auth: "external" }), {
+    ...record, connectivity: "route53", auth: "external",
+  });
+  assert.equal(parseWorldRecord({ ...document, connectivity: "route53" }), null);
+  assert.equal(parseWorldRecord({ ...document, connectivity: "route53", auth: "none" }), null);
 });
 
 test("regeneration closes the old generation and never overwrites it", () => {

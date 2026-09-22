@@ -11,11 +11,9 @@ required_parameters=(
   /spawnpoint/host/env/CF_API_KEY
   /spawnpoint/host/env/RCON_PASSWORD
   /spawnpoint/host/env/GRAFANA_ADMIN_PASSWORD
-  /spawnpoint/host/env/ZEROTIER_NETWORK_ID
   /spawnpoint/host/env/BACKUP_BUCKET
   /spawnpoint/host/env/RELEASE_BUCKET
   /spawnpoint/host/env/AWS_REGION
-  /spawnpoint/host/zerotier-central-token
 )
 
 missing=()

@@ -352,11 +352,12 @@ export const liveApi: SpawnpointApi = {
     if (!response.ok) {
       const body = await response.json().catch(() => null) as { error?: unknown } | null;
       const code = typeof body?.error === "string" ? body.error : undefined;
-      const message = code === "account_already_linked"
-        ? "This Telegram account already belongs to another Spawnpoint identity."
-        : code === "provider_already_linked"
-          ? "This Spawnpoint identity already has a Telegram account."
-          : "Telegram could not verify or link this account.";
+      let message = "Telegram could not verify or link this account.";
+      if (code === "account_already_linked") {
+        message = "This Telegram account already belongs to another Spawnpoint identity.";
+      } else if (code === "provider_already_linked") {
+        message = "This Spawnpoint identity already has a Telegram account.";
+      }
       throw await apiFailure(response, message, body);
     }
   },

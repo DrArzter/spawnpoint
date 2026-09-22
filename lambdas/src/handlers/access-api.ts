@@ -1073,6 +1073,14 @@ const passwordCredentials: PasswordCredentialStore = {
 };
 
 const passwordProvider = createPasswordLoginProvider({ credentials: passwordCredentials });
+const telegramProvider = createTelegramLoginProvider({ oidcClientId: telegramOidcClientId, botToken });
+
+// Proof-based providers all link through the same use-case. Password is kept
+// separate because linking it creates a new credential and verifies a mailbox;
+// Telegram, Google and Discord only need to verify a provider-owned proof.
+const proofLinkProviders: ReadonlyMap<string, LoginProvider> = new Map([
+  [telegramProvider.id, telegramProvider],
+]);
 
 function emailActionKey(tokenHash: string): Record<string, string> {
   return { pk: `EMAIL_ACTION#${tokenHash}`, sk: "TOKEN" };
@@ -1321,8 +1329,77 @@ async function linkedAccounts(identity: Identity): Promise<Response> {
   }));
   return response(200, {
     accounts: linked,
+    linkableProviders: [...proofLinkProviders.keys()],
     passwordManagementAvailable: passwordLoginEnabled && emailDeliveryProvider !== "none",
   });
+}
+
+async function linkProofAccount(identity: Identity, provider: LoginProvider, event: Event): Promise<Response> {
+  const attempt = objectBody(event);
+  if (attempt === null) return response(400, { error: "invalid_json" });
+  const principal = await authenticateWith(provider, attempt);
+  if (principal === null) return response(401, { error: `invalid_or_expired_${provider.id}_login` });
+  const existing = await identityAccounts(identity);
+  if (existing.some((account) => account.platform === provider.id)) {
+    return response(409, { error: "provider_already_linked" });
+  }
+
+  const now = new Date().toISOString();
+  try {
+    await document.send(new TransactWriteCommand({ TransactItems: [
+      { Update: {
+        TableName: tableName,
+        Key: { pk: accountKey(principal), sk: "ACCOUNT" },
+        UpdateExpression: [
+          "SET platform = :provider", "platform_user_id = :subject", "display_name = :displayName",
+          "username = :username", "photo_url = :photoUrl", "email = :email",
+          "first_seen_at = if_not_exists(first_seen_at, :now)", "last_seen_at = :now",
+          "identity_id = :identityId", "#status = :linked", "linked_at = :now", "linked_by = :identityId",
+          "gsi1pk = :identityIndex", "gsi1sk = :now",
+        ].join(", "),
+        ConditionExpression: "attribute_not_exists(identity_id)",
+        ExpressionAttributeNames: { "#status": "status" },
+        ExpressionAttributeValues: {
+          ":provider": principal.provider,
+          ":subject": principal.subject,
+          ":displayName": principal.displayName,
+          ":username": principal.username,
+          ":photoUrl": principal.photoUrl,
+          ":email": principal.email,
+          ":now": now,
+          ":identityId": identity.id,
+          ":linked": "LINKED",
+          ":identityIndex": `IDENTITY#${identity.id}`,
+        },
+      } },
+      { Put: {
+        TableName: tableName,
+        Item: {
+          pk: `IDENTITY#${identity.id}`,
+          sk: `LOGIN_PROVIDER#${provider.id}`,
+          entity_type: "IDENTITY_LOGIN_PROVIDER",
+          provider: provider.id,
+          subject: principal.subject,
+          created_at: now,
+        },
+        ConditionExpression: "attribute_not_exists(pk)",
+      } },
+    ] }));
+  } catch (error) {
+    if (error instanceof Error && error.name === "TransactionCanceledException") {
+      return response(409, { error: "account_already_linked" });
+    }
+    throw error;
+  }
+  return response(201, { account: {
+    provider: principal.provider,
+    subject: principal.subject,
+    displayName: principal.displayName,
+    username: principal.username,
+    email: principal.email,
+    photoUrl: principal.photoUrl,
+    verified: true,
+  } });
 }
 
 function passwordCredentialItem(
@@ -1590,10 +1667,7 @@ const withCandidateAddress = (event: Event, handle: (platform: string, platformU
 
 export const routes: Readonly<Record<string, Route>> = {
   "GET /auth/providers": publicRoute(() => loginProviders()),
-  "POST /auth/telegram": publicRoute((event) => authenticate(
-    createTelegramLoginProvider({ oidcClientId: telegramOidcClientId, botToken }),
-    event,
-  )),
+  "POST /auth/telegram": publicRoute((event) => authenticate(telegramProvider, event)),
   "POST /auth/password": publicRoute((event) => (passwordLoginEnabled ? authenticate(passwordProvider, event) : passwordLoginDisabled())),
   "POST /auth/password/register": publicRoute((event) => (
     passwordLoginEnabled && passwordRegistrationEnabled && emailDeliveryProvider !== "none"
@@ -1615,6 +1689,10 @@ export const routes: Readonly<Record<string, Route>> = {
 
   "GET /me": identityRoute((identity) => me(identity)),
   "GET /me/accounts": identityRoute((identity) => linkedAccounts(identity)),
+  "POST /me/accounts/{provider}": identityRoute((identity, event) => {
+    const provider = proofLinkProviders.get(parameter(event, "provider"));
+    return provider === undefined ? response(404, { error: "not_found" }) : linkProofAccount(identity, provider, event);
+  }),
   "POST /me/password": identityRoute((identity, event) => (
     passwordLoginEnabled && emailDeliveryProvider !== "none" ? linkPassword(identity, event) : passwordLoginDisabled()
   )),

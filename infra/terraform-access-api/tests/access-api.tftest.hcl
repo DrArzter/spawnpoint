@@ -181,6 +181,7 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
       contains(local.access_routes, "POST /auth/password/forgot"),
       contains(local.access_routes, "POST /auth/password/reset"),
       contains(local.access_routes, "GET /me/accounts"),
+      contains(local.access_routes, "POST /me/accounts/{provider}"),
       contains(local.access_routes, "POST /me/password"),
       contains(local.access_routes, "POST /me/password/change"),
     ])

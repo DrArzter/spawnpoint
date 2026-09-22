@@ -178,6 +178,8 @@ export type LinkedLoginAccount = Readonly<{
 
 export type LinkedLoginAccounts = Readonly<{
   accounts: readonly LinkedLoginAccount[];
+  /** Proof-based providers that this deployment can add to an existing identity. */
+  linkableProviders: readonly string[];
   passwordManagementAvailable: boolean;
 }>;
 
@@ -202,6 +204,7 @@ export type SpawnpointApi = Readonly<{
   revokeSession(): Promise<void>;
 
   loadLinkedAccounts(): Promise<LinkedLoginAccounts>;
+  linkTelegram(idToken: string): Promise<void>;
   linkPassword(email: string, password: string, displayName: string): Promise<void>;
   changePassword(email: string, currentPassword: string, password: string): Promise<void>;
 

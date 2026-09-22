@@ -35,6 +35,7 @@ const WITHOUT_PERMISSION = new Map<string, string>([
   ["POST /access/request", "how somebody with no access asks for it"],
   ["GET /me", "the caller's own identity and role"],
   ["GET /me/accounts", "the caller's own linked login accounts"],
+  ["POST /me/accounts/{provider}", "verifies and links one provider account to the caller's own identity"],
   ["POST /me/password", "adds a password credential to the caller's own identity"],
   ["POST /me/password/change", "changes a password credential linked to the caller's own identity"],
   ["GET /me/subscriptions", "the caller's own notification choices"],

@@ -4,7 +4,7 @@
   access model for the bot and the panel
 - Date: 2026-08-28
 - Milestone: M4
-- Amended by: [ADR-0050](0050-default-role-on-sign-in-and-elevation-requests.md) — signing in grants the default role, and the queue reviews requests for more rather than requests to enter
+- Amended by: [ADR-0050](0050-default-role-on-sign-in-and-elevation-requests.md) — a provider-neutral Access invitation creates an Identity with the default role, and later review is for privilege elevation rather than entry
 - Amends: [ADR-0018](0018-identity-and-sign-in.md), [ADR-0019](0019-account-linking.md), and [ADR-0021](0021-sign-in-from-linked-chat-account.md)
 
 A verified Telegram webhook tells Spawnpoint which Telegram account sent `/start`, but it does not make that person trusted. Spawnpoint records such an account as an **access candidate** and gives the **visitor** only a deliberately public surface: coarse server state, supported games, and a way to request access. It does not reveal addresses, overlay-network identifiers, player activity, releases, backups, logs, errors, or operations that can spend money.

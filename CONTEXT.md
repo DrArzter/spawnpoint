@@ -80,12 +80,14 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Profile**: The user-facing representation of an identity, including its display details and linked accounts. It is not an authentication authority.
 
-**Linked account**: A credential-bearing account associated with exactly one Spawnpoint identity. Any identity may have several linked accounts from any enabled login providers, and none is primary merely because it was used first. _Avoid_: User; one person may have several linked accounts.
+**Linked account**: A provider account associated with exactly one Spawnpoint identity after that provider proves its stable subject. An identity may have several linked accounts from different enabled login providers, and none is primary merely because it was used first. _Avoid_: User; one person may have several linked accounts.
+
+**Access invitation**: A single-use invitation to join one Spawnpoint deployment by creating an identity with its default role. It is independent of the login provider the recipient chooses. _Avoid_: Game invitation, registration link.
 
 **Subscription**: One identity's opt-in to a category of notifications, optionally scoped to a particular game. Roles do not imply subscriptions.
 
-**Invitation**: A durable request from one identity to play a selected game world, addressed either to specific identities or to every eligible identity. Creation and notification delivery are separate facts: an accepted invitation may still have no reachable recipients.
+**Direct notification**: A targeted message to one or more existing identities about a specific reason, optionally a prompt to play a selected world. It communicates context and an action but grants no access. _Avoid_: Invitation when no right or membership is granted.
 
-**Invitation delivery**: The single claimed attempt to notify the eligible recipients of an invitation. Its outcome records how many targets succeeded or failed; it is not inferred from invitation creation.
+**Notification delivery**: The single claimed attempt to notify eligible recipients. Its outcome records how many targets succeeded or failed; it is not inferred from creating the notification.
 
-**Invitation delivery readiness**: A current indication that an identity has opted into an invitation category and has a reachable notification channel. It helps a sender choose recipients, but is not a delivery guarantee; eligibility is checked again when delivery begins.
+**Notification delivery readiness**: A current indication that an identity has opted into a notification category and has a reachable channel. It helps a sender choose recipients, but is not a delivery guarantee; eligibility is checked again when delivery begins.

@@ -279,7 +279,7 @@ export async function materializePresetWorld(
   identity: Readonly<{ worldId: string; displayName: string; release: string }>,
   generationUuid: string,
   createdAt: string,
-  access: Readonly<{ connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"] }> = { connectivity: "zerotier" },
+  access?: Readonly<{ connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"] }>,
 ): Promise<WorldRecord> {
   const proposed = newWorldRecord(preset, identity, generationUuid, createdAt, access);
   const releaseState: ReleaseState = {

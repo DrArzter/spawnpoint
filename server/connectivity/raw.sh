@@ -7,7 +7,8 @@ connectivity_prepare() {
     printf 'error: this host has no public address to publish\n' >&2
     return 1
   }
+  return 0
 }
 
-connectivity_publish() { :; }
-connectivity_retract() { :; }
+connectivity_publish() { return 0; }
+connectivity_retract() { return 0; }

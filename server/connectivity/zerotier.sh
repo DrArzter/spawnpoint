@@ -10,7 +10,8 @@ connectivity_prepare() {
     --arg id "${CONNECTIVITY_NETWORK_ID,,}" --arg host "${CONNECTIVITY_HOST}" \
     'any(.[]; (.nwid | ascii_downcase) == $id and .status == "OK" and any(.assignedAddresses[]?; split("/")[0] == $host))' \
     >/dev/null || { printf 'error: ZeroTier network is not ready\n' >&2; return 1; }
+  return 0
 }
 
-connectivity_publish() { :; }
-connectivity_retract() { :; }
+connectivity_publish() { return 0; }
+connectivity_retract() { return 0; }

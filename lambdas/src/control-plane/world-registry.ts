@@ -60,8 +60,9 @@ export function newWorldRecord(
   identity: Readonly<{ worldId: string; displayName: string; release: string }>,
   generationUuid: string,
   createdAt: string,
-  access: Readonly<{ connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"] }> = { connectivity: "zerotier" },
+  access?: Readonly<{ connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"] }>,
 ): WorldRecord {
+  const selectedAccess = access ?? { connectivity: "zerotier" };
   if (
     preset.buildStatus !== "ready" || !preset.releases.includes(identity.release) ||
     !ID.test(identity.worldId) || identity.displayName.length < 1 || identity.displayName.length > 80 ||
@@ -70,17 +71,17 @@ export function newWorldRecord(
   const generationId = `gen-${generationUuid.replaceAll("-", "")}`;
   if (!GENERATION_ID.test(generationId)) throw new Error("invalid_generation_id");
   if (
-    !["zerotier", "raw", "route53"].includes(access.connectivity) ||
-    (access.auth !== undefined && access.auth !== "game" && access.auth !== "external") ||
-    (access.connectivity !== "zerotier" && access.auth === undefined)
+    !["zerotier", "raw", "route53"].includes(selectedAccess.connectivity) ||
+    (selectedAccess.auth !== undefined && selectedAccess.auth !== "game" && selectedAccess.auth !== "external") ||
+    (selectedAccess.connectivity !== "zerotier" && selectedAccess.auth === undefined)
   ) throw new Error("invalid_world_connectivity");
   return {
     worldId: identity.worldId,
     gameId: preset.gameId,
     displayName: identity.displayName,
     status: "active",
-    connectivity: access.connectivity,
-    ...(access.auth === undefined ? {} : { auth: access.auth }),
+    connectivity: selectedAccess.connectivity,
+    ...(selectedAccess.auth === undefined ? {} : { auth: selectedAccess.auth }),
     preset: {
       id: preset.id,
       repository: preset.repository,

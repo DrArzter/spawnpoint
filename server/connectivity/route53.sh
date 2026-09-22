@@ -16,12 +16,14 @@ route53_configure() {
 }
 
 route53_ledger_key() {
-  jq -cn --arg host "dns-host#${CONNECTIVITY_INSTANCE_ID}" '{server_id:{S:$host}}'
+  jq -cn --arg host "dns-host#${CONNECTIVITY_INSTANCE_ID}" '{server_id:{S:$host}}' || return 1
+  return 0
 }
 
 route53_ledger_record() {
   jq -cn --arg zone "${CONNECTIVITY_ZONE_ID}" --arg name "${CONNECTIVITY_HOST}." --arg ip "${CONNECTIVITY_PUBLIC_IP}" \
-    '{":record":{M:{zone_id:{S:$zone},name:{S:$name},address:{S:$ip}}}}'
+    '{":record":{M:{zone_id:{S:$zone},name:{S:$name},address:{S:$ip}}}}' || return 1
+  return 0
 }
 
 route53_ledger_publish() {

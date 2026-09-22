@@ -24,6 +24,7 @@ export type WorldsScreenProps = Readonly<{
   error: string;
   serverState: ServerState;
   sharedSession: SharedHostSession;
+  fleet: boolean;
   granted: ReadonlySet<string>;
   pending: Pending | null;
   onRefresh: () => void;
@@ -33,7 +34,7 @@ export type WorldsScreenProps = Readonly<{
   onCreateWorld: (game: Game) => void;
 }>;
 
-export function WorldsScreen({ game, snapshot, status, error, serverState, sharedSession, granted, pending, onRefresh, onWorldAction, onInvite, onDownloadPack, onCreateWorld }: WorldsScreenProps) {
+export function WorldsScreen({ game, snapshot, status, error, serverState, sharedSession, fleet, granted, pending, onRefresh, onWorldAction, onInvite, onDownloadPack, onCreateWorld }: WorldsScreenProps) {
   const loading = status === "loading";
   const host = snapshot?.hosts[0];
   const session = sessionStatus(serverState);
@@ -46,7 +47,7 @@ export function WorldsScreen({ game, snapshot, status, error, serverState, share
   }
 
   const columns: Column<World>[] = [
-    { id: "status", label: "Status", width: "15%", render: (world) => { const state = worldOwnsSharedSession(sharedSession, game!, world) && sharedSession.state === "running" ? sessionStatus("running") : worldStatus(world); return <Status kind={state.kind} label={state.label} />; } },
+    { id: "status", label: "Status", width: "15%", render: (world) => { const active = fleet ? game?.lifecycle?.activeWorldId === world.id && game.lifecycle.observedState === "ready" : worldOwnsSharedSession(sharedSession, game!, world) && sharedSession.state === "running"; const state = active ? sessionStatus("running") : worldStatus(world); return <Status kind={state.kind} label={state.label} />; } },
     {
       id: "name",
       label: "Name",
@@ -111,9 +112,9 @@ export function WorldsScreen({ game, snapshot, status, error, serverState, share
     <div className="page">
       <h1 className="visually-hidden">Worlds</h1>
       {status === "error" && <Banner actions={<Button onClick={onRefresh} variant="text">Try again</Button>} description={error} title="Current state could not be loaded" tone="error" />}
-      <SharedHostNotice busy={controlBusy} session={sharedSession} />
+      {!fleet && <SharedHostNotice busy={controlBusy} session={sharedSession} />}
 
-      <SessionOverview game={game} host={host} loading={loading} observedAt={snapshot?.observedAt} players={playersOnline(game)} reason={sessionReason(sharedSession, game)} session={session} />
+      <SessionOverview fleet={fleet} game={game} host={host} hosts={snapshot?.hosts ?? []} loading={loading} observedAt={snapshot?.observedAt} players={playersOnline(game)} reason={sessionReason(sharedSession, game)} session={session} />
 
       <Card
         actions={<WorldsHeaderActions canCreate={canManage && readyPreset} game={game} loading={pending?.kind === "refresh"} onCreateWorld={onCreateWorld} onRefresh={onRefresh} />}
@@ -160,9 +161,11 @@ function WorldsHeaderActions({ canCreate, game, loading, onCreateWorld, onRefres
   </>;
 }
 
-function SessionOverview({ game, host, loading, observedAt, session, reason, players }: Readonly<{
+function SessionOverview({ game, host, hosts, fleet, loading, observedAt, session, reason, players }: Readonly<{
   game: Game | undefined;
   host: ControlPlaneSnapshot["hosts"][number] | undefined;
+  hosts: ControlPlaneSnapshot["hosts"];
+  fleet: boolean;
   loading: boolean;
   observedAt: string | undefined;
   session: ReturnType<typeof sessionStatus>;
@@ -177,8 +180,8 @@ function SessionOverview({ game, host, loading, observedAt, session, reason, pla
           <div className="pairs">
             {loading ? <><Skeleton width="70%" /><Skeleton width="50%" /></> : <>
               <span className={reason.attention ? "session-reason session-reason-attention" : "session-reason"}>
-                {reason.text}
-                <Tooltip text={reason.detail}><Icon name="help" size={14} /></Tooltip>
+                {fleet ? fleetReason(game) : reason.text}
+                {!fleet && <Tooltip text={reason.detail}><Icon name="help" size={14} /></Tooltip>}
               </span>
               {players !== null && <span><strong>{plural(players, "player")}</strong> online</span>}
               <span>Last observed <strong>{formatDateTime(observedAt)}</strong></span>
@@ -186,14 +189,28 @@ function SessionOverview({ game, host, loading, observedAt, session, reason, pla
           </div>
         </div>
         <dl className="session-facts">
-          <Fact label="Compute host" loading={loading}>{host ? <Status kind={hostStatus(host.state).kind} label={`${host.name} · ${hostStatus(host.state).label.toLowerCase()}`} /> : <Ghost>No host available</Ghost>}</Fact>
-          <Fact label="Instance type" loading={loading} mono>{host?.instanceType ?? <Ghost>Not reported</Ghost>}</Fact>
-          <Fact label="Zone" loading={loading} mono>{host?.availabilityZone ?? <Ghost>Not reported</Ghost>}</Fact>
-          <Fact label="Launched" loading={loading}>{host?.launchedAt ? <Timestamp value={host.launchedAt} /> : <Ghost>Not running</Ghost>}</Fact>
+          {fleet ? <>
+            <Fact label="Fleet hosts" loading={loading}>{hosts.filter((item) => item.provenance === "launched" && item.state === "running").length} running</Fact>
+            <Fact label="Provisioning" loading={loading}>{hosts.filter((item) => item.provenance === "launched" && item.state === "pending").length} hosts</Fact>
+          </> : <>
+            <Fact label="Compute host" loading={loading}>{host ? <Status kind={hostStatus(host.state).kind} label={`${host.name} · ${hostStatus(host.state).label.toLowerCase()}`} /> : <Ghost>No host available</Ghost>}</Fact>
+            <Fact label="Instance type" loading={loading} mono>{host?.instanceType ?? <Ghost>Not reported</Ghost>}</Fact>
+            <Fact label="Zone" loading={loading} mono>{host?.availabilityZone ?? <Ghost>Not reported</Ghost>}</Fact>
+            <Fact label="Launched" loading={loading}>{host?.launchedAt ? <Timestamp value={host.launchedAt} /> : <Ghost>Not running</Ghost>}</Fact>
+          </>}
         </dl>
       </div>
     </Card>
   );
+}
+
+function fleetReason(game: Game | undefined): string {
+  const state = game?.lifecycle?.observedState;
+  if (state === "ready") return "This game's world is running on a fleet host.";
+  if (state === "starting") return "A fleet host is being assigned or the game is starting.";
+  if (state === "stopping") return "The game is saving and its host is draining.";
+  if (state === "unknown") return "Spawnpoint cannot confirm this game's state.";
+  return "No session for this game. Fleet hosts launch on demand.";
 }
 
 function Fact({ label, children, loading, mono = false }: Readonly<{ label: string; children: ReactNode; loading: boolean; mono?: boolean }>) {
@@ -207,15 +224,17 @@ function Fact({ label, children, loading, mono = false }: Readonly<{ label: stri
 
 export function releaseSummary(world: World): string {
   const { activeRelease, desiredRelease, state } = world.release;
+  if (state === "unavailable") return "Build status could not be loaded";
   if (activeRelease && desiredRelease && activeRelease !== desiredRelease) return `Active ${activeRelease} · desired ${desiredRelease}`;
   if (activeRelease) return `Release ${activeRelease}`;
+  if (desiredRelease) return "Ready for first start";
   if (world.materialization === "not_created") return world.preset?.buildStatus === "ready" ? `First start uses ${world.preset.latestRelease ?? "the latest release"}` : `Preset ${world.preset?.buildStatus ?? "unbuilt"}`;
   if (state === "unconfigured") return "No release selected";
-  return "Release unavailable";
+  return "No build selected";
 }
 
-export function sessionControlAvailability(world: World, game: Game, sharedSession: SharedHostSession, permitted: boolean, controlBusy: boolean): { action: SessionAction; disabled: boolean; hint: string } {
-  const action = sessionActionForWorld(world, game, sharedSession);
+export function sessionControlAvailability(world: World, game: Game, sharedSession: SharedHostSession, permitted: boolean, controlBusy: boolean, fleet = false): { action: SessionAction; disabled: boolean; hint: string } {
+  const action = sessionActionForWorld(world, game, sharedSession, fleet);
   if (!world.sessionControlAvailable) {
     if (world.materialization === "archived") return { action, disabled: true, hint: "This world is archived. Restore a backup to open a new wipe." };
     if (world.materialization === "not_created") return { action, disabled: true, hint: "This preset needs a successful release build before its first start." };
@@ -223,6 +242,13 @@ export function sessionControlAvailability(world: World, game: Game, sharedSessi
   }
   if (!permitted) return { action, disabled: true, hint: `Your role cannot ${action} sessions.` };
   if (controlBusy || sharedSession.operationRunning) return { action, disabled: true, hint: "A control-plane operation is already in progress." };
+  if (fleet) {
+    const lifecycle = game.lifecycle;
+    if (world.connectivity === "zerotier") return { action, disabled: true, hint: "Fleet hosts do not join ZeroTier. Choose a public connection while this world is stopped." };
+    if (lifecycle?.observedState === "starting" || lifecycle?.observedState === "stopping" || lifecycle?.observedState === "unknown") return { action, disabled: true, hint: `This game is ${lifecycle.observedState}.` };
+    if (action === "start" && lifecycle?.activeSessionId) return { action, disabled: true, hint: "Another world of this game is already active. Stop it first." };
+    return { action, disabled: false, hint: action === "start" ? "Launch or reuse a billed fleet host" : "Save and back up this session, then drain its host" };
+  }
   if (sharedSession.recoveryPending) return { action, disabled: true, hint: "Spawnpoint is reconciling the stopped host automatically." };
   if (sharedSession.state === "starting" || sharedSession.state === "stopping") return { action, disabled: true, hint: `The shared host is ${sharedSession.state}.` };
   if (sharedSession.state === "unknown") return { action, disabled: true, hint: "Spawnpoint cannot confirm that the shared host is free. Refresh before trying again." };
@@ -233,7 +259,8 @@ export function sessionControlAvailability(world: World, game: Game, sharedSessi
   return { action, disabled: false, hint: action === "start" ? "Start a billed session on the shared host" : "Save, back up and stop this session" };
 }
 
-export function sessionActionForWorld(world: World, game: Game, sharedSession: SharedHostSession): SessionAction {
+export function sessionActionForWorld(world: World, game: Game, sharedSession: SharedHostSession, fleet = false): SessionAction {
+  if (fleet) return game.lifecycle?.activeWorldId === world.id && game.lifecycle.activeSessionId ? "stop" : "start";
   return worldOwnsSharedSession(sharedSession, game, world) && sharedSession.state !== "stopped" ? "stop" : "start";
 }
 

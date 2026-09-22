@@ -160,6 +160,20 @@ test("a public world's address is the instance's current one, and nothing while 
   assert.equal(whenStopped.get("vanilla"), "172.29.23.24:25565", "the overlay address is stable and still shown");
 });
 
+test("a fleet world never borrows another running host's public address", async () => {
+  const fleetCatalog = [{
+    id: "factorio", code: "FA", displayName: "Factorio", connectPort: 34197,
+    worlds: [{ id: "factory", displayName: "Factory", profileId: "vanilla", sessionControl: "v1" as const, connectivity: "raw" as const, placement: "fleet" as const }],
+  }];
+  const snapshot = await readControlPlaneSnapshot({
+    listHosts: async () => [{ id: "configured", name: "Persistent host", state: "running", providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: "203.0.113.10", provenance: "configured" }],
+    listRunningOperations: async () => [],
+    readLifecycle: async () => null,
+    readReleasePointer: async () => ({ state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null }),
+  }, { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" }, fleetCatalog);
+  assert.equal(snapshot.games[0]?.worlds[0]?.connectionAddress, null);
+});
+
 test("a ready session's address is the one the host reported, port and all; a stopped world's is composed", async () => {
   const { acquireLease, beginSession, markSessionReady } = await import("../src/domain/lifecycle.ts");
   const acquired = acquireLease(initialLifecycleRecord("minecraft", 100), "op", 100, 300);

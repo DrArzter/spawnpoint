@@ -23,7 +23,7 @@ export function ReleasesScreen({ game, granted, pending, loading, onCreateWorld 
   const presetColumns: Column<Preset>[] = [
     { id: "preset", label: "Preset", width: "28%", render: (preset) => <strong>{preset.displayName}</strong> },
     { id: "build", label: "Build", width: "16%", render: (preset) => { const status = buildStatus(preset.buildStatus); return <Status kind={status.kind} label={status.label} />; } },
-    { id: "latest", label: "Latest release", width: "16%", render: (preset) => preset.latestRelease ? <code>{preset.latestRelease}</code> : <Ghost>None yet</Ghost> },
+    { id: "latest", label: "Latest build", width: "16%", render: (preset) => preset.latestRelease ? <code title="Immutable build ID, not the game version">{preset.latestRelease}</code> : <Ghost>None yet</Ghost> },
     // The newest few, then a count. A preset accumulates releases forever, and a
     // row that grows with them stops being a row.
     {
@@ -86,9 +86,9 @@ export function ReleasesScreen({ game, granted, pending, loading, onCreateWorld 
   const worldColumns: Column<World>[] = [
     { id: "world", label: "World", width: "28%", render: (world) => <a className="row-link" href={routeHash({ page: "worlds", accessTab: "users", gameId: game?.id ?? null, worldId: world.id })}>{world.displayName}</a> },
     { id: "preset", label: "Preset", width: "24%", render: (world) => game?.presets.find((preset) => preset.id === (world.preset?.id ?? world.profileId))?.displayName ?? world.profileId },
-    { id: "active", label: "Active release", width: "140px", render: (world) => world.release.activeRelease ? <code>{world.release.activeRelease}</code> : <Ghost>None</Ghost> },
-    { id: "desired", label: "Desired release", width: "140px", render: (world) => world.release.desiredRelease ? <code>{world.release.desiredRelease}</code> : <Ghost>None</Ghost> },
-    { id: "pointer", label: "Pointer", render: (world) => <span>{releaseSummary(world)}</span> },
+    { id: "active", label: "Running build", width: "140px", render: (world) => world.release.activeRelease ? <code title="Immutable build ID, not the game version">{world.release.activeRelease}</code> : <Ghost>Not started</Ghost> },
+    { id: "desired", label: "Next build", width: "140px", render: (world) => world.release.desiredRelease ? <code title="Immutable build ID, not the game version">{world.release.desiredRelease}</code> : <Ghost>None selected</Ghost> },
+    { id: "pointer", label: "Status", render: (world) => <span>{releaseSummary(world)}</span> },
   ];
 
   return (

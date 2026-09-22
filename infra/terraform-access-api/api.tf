@@ -187,6 +187,7 @@ resource "aws_lambda_function" "access_api" {
       SPAWNPOINT_PLACEMENT             = var.placement
       SPAWNPOINT_LAUNCH                = var.launch
       SPAWNPOINT_APP_COMMIT            = var.app_commit
+      GAME_DNS_SUFFIX                  = var.game_dns_suffix
       REFRESH_COOKIE_SAME_SITE         = local.custom_api_domain_enabled ? "Strict" : "None"
     }
   }
@@ -253,6 +254,7 @@ locals {
     "GET /hosts/{instanceId}/metrics",
     "GET /games/{gameId}/presets/{presetId}/releases/{version}",
     "POST /games/{gameId}/presets/{presetId}/worlds",
+    "PUT /games/{gameId}/worlds/{worldId}/settings",
     "POST /games/{gameId}/worlds/{worldId}/archive",
     "POST /games/{gameId}/worlds/{worldId}/wipe",
     "POST /games/{gameId}/worlds/{worldId}/restore",

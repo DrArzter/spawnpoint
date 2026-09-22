@@ -221,7 +221,8 @@ export type SpawnpointApi = Readonly<{
   subscribeControlPlane(onInvalidated: () => void): () => void;
   requestSessionOperation(gameId: string, worldId: string, action: SessionOperation): Promise<{ result: "requested" | "already_stopped"; operationId?: string }>;
   requestWorldLifecycle(gameId: string, worldId: string, action: WorldLifecycleAction, backupKey?: string, release?: string): Promise<{ result: "requested"; operationId: string }>;
-  requestCreateWorld(gameId: string, presetId: string, displayName: string, release: string): Promise<{ id: string; displayName: string }>;
+  requestCreateWorld(gameId: string, presetId: string, displayName: string, release: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external"): Promise<{ id: string; displayName: string }>;
+  requestUpdateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external"): Promise<void>;
   requestPackDownload(gameId: string, worldId: string): Promise<{ release: string; url: string }>;
   loadBackups(gameId: string, worldId: string): Promise<BackupInventory>;
   loadHostMetrics(instanceId: string, range: MetricRange): Promise<HostMetrics>;

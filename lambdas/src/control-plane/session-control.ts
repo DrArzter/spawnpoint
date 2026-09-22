@@ -34,6 +34,37 @@ export type SessionPlan =
         | "host_already_running";
     }>;
 
+export type FleetSessionPlan =
+  | Readonly<{ kind: "execute"; world: CatalogWorld }>
+  | Readonly<{ kind: "noop"; reason: "already_stopped" }>
+  | Readonly<{ kind: "reject"; reason: "unknown_world" | "unsupported_world" | "operation_in_progress" | "session_transitioning" | "world_not_active" | "active_session_unavailable" }>;
+
+/** Fleet placement happens inside the start workflow, so zero or many EC2 hosts
+ * are normal here. The lifecycle, not an arbitrary host, owns the stop. */
+export function planFleetSessionOperation(
+  gameId: string,
+  worldId: string,
+  action: SessionAction,
+  operations: readonly OperationObservation[],
+  lifecycle: LifecycleRecord | null,
+  catalog: readonly CatalogGame[] = gameCatalog,
+): FleetSessionPlan {
+  const world = catalog.find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
+  if (!world) return { kind: "reject", reason: "unknown_world" };
+  if (world.sessionControl === null) return { kind: "reject", reason: "unsupported_world" };
+  if (operations.length > 0) return { kind: "reject", reason: "operation_in_progress" };
+  if (action === "start") {
+    if (lifecycle?.activeSessionId || (lifecycle?.observedState !== undefined && lifecycle.observedState !== "stopped")) {
+      return { kind: "reject", reason: "session_transitioning" };
+    }
+    return { kind: "execute", world };
+  }
+  if (lifecycle?.activeSessionId === null || lifecycle === null) return { kind: "noop", reason: "already_stopped" };
+  if (lifecycle.activeWorldId !== worldId) return { kind: "reject", reason: "world_not_active" };
+  if (!lifecycle.activeSessionId) return { kind: "reject", reason: "active_session_unavailable" };
+  return { kind: "execute", world };
+}
+
 export function planSessionOperation(
   gameId: string,
   worldId: string,

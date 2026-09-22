@@ -53,6 +53,8 @@ import {
   listWorldBackups,
   materializePresetWorld,
   packDownloadUrl,
+  readWorldRecord,
+  replaceWorldAccess,
   startSessionExecution,
   stopSessionExecution,
   worldLifecycleExecution,
@@ -60,7 +62,7 @@ import {
 import { readControlPlaneSnapshot } from "../control-plane/read-model.ts";
 import type { ControlPlaneSources } from "../control-plane/read-model.ts";
 import type { WorldRecord } from "../control-plane/world-registry.ts";
-import { packRelease, planSessionOperation, stoppedHostRecoverySession, worldLifecycleNeedsStop, type SessionAction } from "../control-plane/session-control.ts";
+import { packRelease, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, worldLifecycleNeedsStop, type SessionAction, type SessionPlan } from "../control-plane/session-control.ts";
 import { issueSubscriptionTicket, subscriptionTicketItem, subscriptionTicketLifetimeSeconds } from "../control-plane/subscriptions.ts";
 import { worldIdForName } from "../control-plane/world-registry.ts";
 
@@ -363,7 +365,15 @@ async function controlPlane(identity: Identity): Promise<Response> {
     // from a caller who may not read the connection, like any other reference.
     connectionHost: can("connection.read") ? process.env.CONNECTION_HOST ?? null : null,
   });
-  return response(200, snapshot);
+  return response(200, {
+    ...snapshot,
+    deployment: {
+      placement: process.env.SPAWNPOINT_PLACEMENT === "shared" || process.env.SPAWNPOINT_PLACEMENT === "fleet"
+        ? process.env.SPAWNPOINT_PLACEMENT : "single",
+      launchEnabled: process.env.SPAWNPOINT_LAUNCH === "enabled",
+      dnsAvailable: Boolean(process.env.GAME_DNS_SUFFIX),
+    },
+  });
 }
 
 async function createControlPlaneSubscription(identity: Identity): Promise<Response> {
@@ -390,46 +400,70 @@ async function controlSession(identity: Identity, action: SessionAction, gameId:
     awsControlPlaneSources.readLifecycle(gameId),
   ]);
   const effectiveCatalog = catalogWithPresets(presets, gameCatalog, worldRecords);
-  if (
-    action === "start" && process.env.SPAWNPOINT_PLACEMENT === "fleet" &&
-    worldRecords.some((record) => record.worldId === worldId && record.connectivity === "zerotier")
-  ) return response(409, { error: "connectivity_unavailable_on_fleet" });
-  const plan = planSessionOperation(gameId, worldId, action, hosts, operations, effectiveCatalog);
+  const world = effectiveCatalog.find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
+  const fleet = world?.placement === "fleet";
+  if (action === "start" && fleet && process.env.SPAWNPOINT_LAUNCH !== "enabled") return response(409, { error: "fleet_unavailable" });
+  const configuredHosts = hosts.filter((candidate) => candidate.provenance !== "launched");
+  const plan = fleet
+    ? planFleetSessionOperation(gameId, worldId, action, operations, lifecycle, effectiveCatalog)
+    : planSessionOperation(gameId, worldId, action, configuredHosts, operations, effectiveCatalog);
   if (plan.kind === "reject") return response(plan.reason === "unknown_world" ? 404 : 409, { error: plan.reason });
-  const recoverySessionId = action === "stop" ? stoppedHostRecoverySession(worldId, hosts, lifecycle) : null;
+  const recoverySessionId = action === "stop" && !fleet ? stoppedHostRecoverySession(worldId, configuredHosts, lifecycle) : null;
   if (plan.kind === "noop" && recoverySessionId === null) return response(200, { result: plan.reason });
   const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
   const requestedBy = `identity:${identity.id}`;
-  const host = plan.kind === "execute" ? plan.host : hosts[0]!;
+  // The fleet workflow places the session itself. Its legacy instanceId input
+  // is only a fallback for a missing placement, never a host selection.
+  const hostId = fleet
+    ? configuredHosts[0]?.providerRef
+    : plan.kind === "execute" ? (plan as Extract<SessionPlan, { kind: "execute" }>).host.providerRef : configuredHosts[0]?.providerRef;
+  if (!hostId) return response(409, { error: "configured_host_unavailable" });
   if (action === "start") {
     // No address in the request: the host's session summary answers with it
     // and the machine carries it back (ADR-0033).
-    await startSessionExecution(operationId, host.providerRef, requestedBy, gameId, worldId);
+    await startSessionExecution(operationId, hostId, requestedBy, gameId, worldId, fleet ? "fleet" : "single");
   }
   else {
     const activeSessionId = recoverySessionId ?? lifecycle?.activeSessionId;
     if (activeSessionId === null || activeSessionId === undefined) {
       return response(409, { error: "active_session_unavailable" });
     }
-    await stopSessionExecution(operationId, host.providerRef, requestedBy, gameId, activeSessionId, worldId);
+    await stopSessionExecution(operationId, hostId, requestedBy, gameId, activeSessionId, worldId);
   }
   return response(202, { result: "requested", operationId });
 }
 
+type WorldAccess = Readonly<{
+  placement: WorldRecord["placement"];
+  connectivity: WorldRecord["connectivity"];
+  auth?: WorldRecord["auth"];
+}>;
+
+function parseWorldAccess(input: Readonly<{ placement?: unknown; connectivity?: unknown; auth?: unknown }>, useDefaults: boolean): WorldAccess | null {
+  let placement = input.placement;
+  if (placement === undefined && useDefaults) placement = process.env.SPAWNPOINT_PLACEMENT === "fleet" ? "fleet" : "configured";
+  let connectivity = input.connectivity;
+  if (connectivity === undefined && useDefaults) connectivity = placement === "fleet" ? "raw" : "zerotier";
+  const auth = input.auth;
+  if (placement !== "configured" && placement !== "fleet") return null;
+  if (connectivity !== "zerotier" && connectivity !== "raw" && connectivity !== "route53") return null;
+  if (auth !== undefined && auth !== "game" && auth !== "external") return null;
+  if (connectivity !== "zerotier" && auth === undefined) return null;
+  if (placement === "fleet" && (connectivity === "zerotier" || process.env.SPAWNPOINT_LAUNCH !== "enabled")) return null;
+  if (placement === "configured" && connectivity !== "zerotier") return null;
+  if (connectivity === "route53" && !process.env.GAME_DNS_SUFFIX) return null;
+  return { placement, connectivity, ...(auth === undefined ? {} : { auth }) };
+}
+
 async function createWorld(identity: Identity, gameId: string, presetId: string, body: string | undefined): Promise<Response> {
-  let parsed: { displayName?: unknown; release?: unknown; connectivity?: unknown; auth?: unknown };
+  let parsed: { displayName?: unknown; release?: unknown; placement?: unknown; connectivity?: unknown; auth?: unknown };
   try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
   const displayName = typeof parsed.displayName === "string" ? parsed.displayName.trim() : "";
   const release = typeof parsed.release === "string" ? parsed.release : "";
   if (displayName.length < 1 || displayName.length > 80) return response(400, { error: "invalid_world_name" });
   if (!/^[0-9]+\.[0-9]+$/.test(release)) return response(400, { error: "invalid_release" });
-  const connectivity = parsed.connectivity ?? "zerotier";
-  const auth = parsed.auth;
-  if (
-    (connectivity !== "zerotier" && connectivity !== "raw" && connectivity !== "route53") ||
-    (auth !== undefined && auth !== "game" && auth !== "external") ||
-    (connectivity !== "zerotier" && auth === undefined)
-  ) return response(400, { error: "invalid_world_connectivity" });
+  const access = parseWorldAccess(parsed, true);
+  if (access === null) return response(400, { error: "invalid_world_connectivity" });
   const presets = await (awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]));
   const preset = presets.find((candidate) => candidate.gameId === gameId && candidate.id === presetId);
   if (preset === undefined) return response(404, { error: "unknown_preset" });
@@ -443,7 +477,7 @@ async function createWorld(identity: Identity, gameId: string, presetId: string,
     { worldId, displayName, release },
     randomUUID(),
     createdAt,
-    { connectivity, ...(auth === undefined ? {} : { auth }) },
+    access,
   );
   return response(201, {
     world: {
@@ -456,6 +490,24 @@ async function createWorld(identity: Identity, gameId: string, presetId: string,
     },
     createdBy: identity.id,
   });
+}
+
+async function updateWorldSettings(gameId: string, worldId: string, body: string | undefined): Promise<Response> {
+  let parsed: { placement?: unknown; connectivity?: unknown; auth?: unknown };
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const access = parseWorldAccess(parsed, false);
+  if (access === null) return response(400, { error: "invalid_world_connectivity" });
+  const [lifecycle, operations] = await Promise.all([
+    awsControlPlaneSources.readLifecycle(gameId),
+    awsControlPlaneSources.listRunningOperations(),
+  ]);
+  if (operations.length > 0 || (lifecycle && (lifecycle.activeSessionId !== null || lifecycle.observedState !== "stopped"))) {
+    return response(409, { error: "world_session_active" });
+  }
+  const result = await replaceWorldAccess(gameId, worldId, access);
+  if (result === "missing") return response(404, { error: "unknown_world" });
+  if (result === "conflict") return response(409, { error: "world_settings_conflict" });
+  return response(200, { ...access, auth: access.auth ?? null });
 }
 
 // A backup carries the generation it was taken from, and that generation names
@@ -510,13 +562,16 @@ async function controlWorldLifecycle(
     if (restorable !== "ok") return response(409, { error: restorable });
   }
   if (operations.length > 0) return response(409, { error: "operation_in_progress" });
-  if (hosts.length !== 1) return response(409, { error: "host_not_unique" });
-  const host = hosts[0]!;
-  if (host.state === "pending" || host.state === "stopping" || host.state === "unknown") {
+  const configuredHosts = hosts.filter((candidate) => candidate.provenance !== "launched");
+  if (configuredHosts.length !== 1) return response(409, { error: "configured_host_unavailable" });
+  const host = configuredHosts[0]!;
+  if (record.placement !== "fleet" && (host.state === "pending" || host.state === "stopping" || host.state === "unknown")) {
     return response(409, { error: "host_transitioning" });
   }
   const operationId = `panel-world-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
-  const stopRequired = worldLifecycleNeedsStop(record.status, host.state);
+  const stopRequired = record.placement === "fleet"
+    ? record.status === "active" && lifecycle?.activeWorldId === worldId && lifecycle.observedState !== "stopped"
+    : worldLifecycleNeedsStop(record.status, host.state);
   if (stopRequired && !lifecycle?.activeSessionId) return response(409, { error: "active_session_unavailable" });
   await worldLifecycleExecution(
     operationId, host.providerRef, `identity:${identity.id}`, gameId, lifecycle?.activeSessionId ?? "none", worldId, action, backupKey, release,
@@ -1625,8 +1680,11 @@ async function packDownload(gameId: string, worldId: string): Promise<Response> 
 // listing rather than by touching an archive, so this role cannot download a
 // world even though it can say which backups exist.
 async function backups(gameId: string, worldId: string): Promise<Response> {
-  const world = gameCatalog.find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
-  if (world === undefined) return response(404, { error: "unknown_world" });
+  const legacyWorld = gameCatalog.find((game) => game.id === gameId)?.worlds.some((candidate) => candidate.id === worldId);
+  if (!legacyWorld) {
+    const record = await readWorldRecord(worldId);
+    if (record?.gameId !== gameId) return response(404, { error: "unknown_world" });
+  }
   return response(200, backupInventory(await listWorldBackups(worldId)));
 }
 
@@ -1727,6 +1785,8 @@ export const routes: Readonly<Record<string, Route>> = {
 
   "POST /games/{gameId}/presets/{presetId}/worlds": permissionRoute("world.manage", (identity, event) =>
     createWorld(identity, parameter(event, "gameId"), parameter(event, "presetId"), event.body)),
+  "PUT /games/{gameId}/worlds/{worldId}/settings": permissionRoute("world.manage", (_identity, event) =>
+    updateWorldSettings(parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
 
   "POST /games/{gameId}/worlds/{worldId}/start": permissionRoute("session.start", (identity, event) =>
     controlSession(identity, "start", parameter(event, "gameId"), parameter(event, "worldId"))),

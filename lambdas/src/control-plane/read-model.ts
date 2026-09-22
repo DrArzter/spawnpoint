@@ -14,6 +14,8 @@ export type HostObservation = Readonly<{
   // Ephemeral by design: a stopped host has none, and a started one usually has
   // a different address than last time. Which is why nothing stores it.
   publicIp: string | null;
+  /** The persistent Terraform host remains the workflow's fallback reference. */
+  provenance?: "configured" | "launched";
 }>;
 
 export type ReleasePointerObservation = Readonly<{
@@ -71,6 +73,8 @@ export type ControlPlaneSnapshot = Readonly<{
       sessionControlAvailable: boolean;
       connectionAddress: string | null;
       connectivity: string;
+      placement: "configured" | "fleet";
+      auth: "game" | "external" | null;
       materialization: "existing" | "not_created" | "archived";
       worldLifecycleAvailable: boolean;
       preset: CatalogGame["worlds"][number]["preset"] | null;
@@ -170,6 +174,8 @@ export async function readControlPlaneSnapshot(
           profileId: world.profileId,
           sessionControlAvailable: world.sessionControl !== null,
           connectivity: world.connectivity,
+          placement: world.placement ?? "configured",
+          auth: record?.auth ?? null,
           materialization: world.materialization ?? "existing",
           worldLifecycleAvailable: world.worldLifecycle !== null && world.worldLifecycle !== undefined,
           preset: world.preset ?? null,
@@ -190,7 +196,8 @@ export async function readControlPlaneSnapshot(
           // altogether from a caller who may not read one.
           connectionAddress: connectionHost === null
             ? null
-            : observedAddress(lifecycles[gameIndex] ?? null, world.id) ?? worldAddress(world.id, { connectionHost, publicIp: hostPublicIp }, effectiveCatalog),
+            : observedAddress(lifecycles[gameIndex] ?? null, world.id)
+              ?? (world.placement === "fleet" ? null : worldAddress(world.id, { connectionHost, publicIp: hostPublicIp }, effectiveCatalog)),
           release: options.includeDesiredRelease ? release : { ...release, desiredRelease: null },
         };
       }),
@@ -199,6 +206,7 @@ export async function readControlPlaneSnapshot(
       id: host.id,
       name: host.name,
       state: host.state,
+      provenance: host.provenance ?? "configured",
       ...(options.includeInfrastructure ? {
         providerRef: host.providerRef,
         instanceType: host.instanceType,

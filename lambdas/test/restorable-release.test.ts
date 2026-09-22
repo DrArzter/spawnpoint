@@ -16,6 +16,7 @@ const record = {
   gameId: "minecraft",
   displayName: "Rostik",
   status: "active",
+  placement: "configured",
   connectivity: "zerotier",
   preset: { id: "industrial", repository: "https://github.com/x/y", commit: "a".repeat(40), profileDigest: "b".repeat(64) },
   currentGeneration: { id: current, release: "1.3", createdAt: "2026-09-14T00:00:00Z", source: { kind: "preset" } },

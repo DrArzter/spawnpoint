@@ -31,7 +31,9 @@ export type World = {
   displayName: string;
   profileId: string;
   sessionControlAvailable: boolean;
-  connectivity: "zerotier" | "raw";
+  connectivity: "zerotier" | "raw" | "route53";
+  placement?: "configured" | "fleet";
+  auth?: "game" | "external" | null;
   materialization: "existing" | "not_created" | "archived";
   worldLifecycleAvailable: boolean;
   wipes: readonly Wipe[];
@@ -63,6 +65,7 @@ export type Host = {
   id: string;
   name: string;
   state: "pending" | "running" | "stopping" | "stopped" | "unknown";
+  provenance?: "configured" | "launched";
   providerRef?: string;
   instanceType?: string | null;
   availabilityZone?: string | null;
@@ -70,7 +73,13 @@ export type Host = {
   publicIp?: string | null;
 };
 export type Operation = { id: string; type: "start" | "stop" | "promote" | "world"; status: "running"; startedAt: string; providerRef?: string };
-export type ControlPlaneSnapshot = { observedAt: string; games: readonly Game[]; hosts: readonly Host[]; operations: readonly Operation[] };
+export type ControlPlaneSnapshot = {
+  observedAt: string;
+  games: readonly Game[];
+  hosts: readonly Host[];
+  operations: readonly Operation[];
+  deployment?: { placement: "single" | "shared" | "fleet"; launchEnabled: boolean; dnsAvailable: boolean };
+};
 
 export type WorldTab = "details" | "wipes" | "backups" | "releases";
 

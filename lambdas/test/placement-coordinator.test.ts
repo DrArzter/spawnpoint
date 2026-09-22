@@ -105,9 +105,9 @@ test("reserving on a named host, releasing, and the drain that follows", async (
   await coordinate({ action: "registerHost", hostId: "i-1", shape: LARGE, ready: true });
   const one = await coordinate({ action: "reserveOnHost", hostId: "i-1", sessionId: "s1", worldId: "world", serverId: "minecraft" });
   assert.deepEqual(one.placement, { kind: "reuse", hostId: "i-1", slot: 0 });
-  const two = await coordinate({ action: "reserveOnHost", hostId: "i-1", sessionId: "s2", worldId: "made-later", serverId: "factorio" });
+  const two = await coordinate({ action: "reserveOnHost", hostId: "i-1", sessionId: "s2", worldId: "vanilla", serverId: "minecraft" });
   assert.deepEqual(two.placement, { kind: "reuse", hostId: "i-1", slot: 1 });
-  const again = await coordinate({ action: "reserveOnHost", hostId: "i-1", sessionId: "s2", worldId: "made-later", serverId: "factorio" });
+  const again = await coordinate({ action: "reserveOnHost", hostId: "i-1", sessionId: "s2", worldId: "vanilla", serverId: "minecraft" });
   assert.deepEqual(again.placement, two.placement);
   await assert.rejects(coordinate({ action: "reserveOnHost", hostId: "i-9", sessionId: "s3", worldId: "world" }), PlacementConflict);
 
@@ -218,7 +218,7 @@ test("a Zomboid world and a public world take slot zero only; the second of them
   const pz = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "knox", serverId: "zomboid" });
   assert.deepEqual(pz.placement, { kind: "reuse", hostId: "i-1", slot: 0 });
   const factorio = await coordinate({ action: "placeSession", sessionId: "s2", worldId: "base", serverId: "factorio" });
-  assert.deepEqual(factorio.placement, { kind: "reuse", hostId: "i-1", slot: 1 }, "a slottable game takes the next slot beside it");
+  assert.equal(factorio.placement?.kind, "launch", "a dynamic world must reserve the public game port until its connection mode is known");
   const secondPz = await coordinate({ action: "placeSession", sessionId: "s3", worldId: "louisville", serverId: "zomboid" });
   assert.equal(secondPz.placement?.kind, "launch", "slot zero is taken, so the second Zomboid needs a host of its own");
 
@@ -227,5 +227,5 @@ test("a Zomboid world and a public world take slot zero only; the second of them
   assert.equal(worldNeedsSlotZero("arena", undefined, [{ id: "minecraft", code: "MC", displayName: "Minecraft", connectPort: 25565, worlds: [publicCatalogWorld] }]), true);
   assert.equal(worldNeedsSlotZero("world"), false);
   assert.equal(worldNeedsSlotZero("knox", "zomboid"), true);
-  assert.equal(worldNeedsSlotZero("base", "factorio"), false);
+  assert.equal(worldNeedsSlotZero("base", "factorio"), true);
 });

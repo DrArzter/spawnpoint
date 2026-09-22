@@ -4,7 +4,7 @@ import test from "node:test";
 import type { PresetObservation } from "../src/control-plane/preset-catalog.ts";
 import {
   archiveWorldRecord, newWorldRecord, parseWorldRecord, regenerateWorldRecord,
-  purgeGenerationIds, restoreWorldRecord, worldIdForName, worldRecordDocument,
+  purgeGenerationIds, restoreWorldRecord, withWorldAccess, worldIdForName, worldRecordDocument,
 } from "../src/control-plane/world-registry.ts";
 
 const preset: PresetObservation = {
@@ -41,13 +41,23 @@ test("world creation keeps connectivity independent and requires explicit public
   assert.deepEqual(parseWorldRecord(worldRecordDocument(named)), named);
 });
 
+test("hosting and connection can change without changing the world generation", () => {
+  const original = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
+  const fleet = withWorldAccess(original, { placement: "fleet", connectivity: "route53", auth: "game" });
+  assert.equal(fleet.currentGeneration, original.currentGeneration);
+  assert.deepEqual(parseWorldRecord(worldRecordDocument(fleet)), fleet);
+  assert.deepEqual(withWorldAccess(fleet, { placement: "configured", connectivity: "zerotier" }), original);
+  assert.throws(() => withWorldAccess(original, { placement: "fleet", connectivity: "zerotier" }), /invalid_world_connectivity/);
+});
+
 test("registry parsing fails closed", () => {
   const record = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
   const document = worldRecordDocument(record);
   assert.equal(parseWorldRecord({ ...document, world_id: "../escape" }), null);
   assert.equal(parseWorldRecord({ ...document, storage_layout: "legacy" }), null);
-  assert.deepEqual(parseWorldRecord({ ...document, connectivity: "route53", auth: "external" }), {
-    ...record, connectivity: "route53", auth: "external",
+  const { placement: _placement, ...legacyDocument } = document;
+  assert.deepEqual(parseWorldRecord({ ...legacyDocument, connectivity: "route53", auth: "external" }), {
+    ...record, placement: "fleet", connectivity: "route53", auth: "external",
   });
   assert.equal(parseWorldRecord({ ...document, connectivity: "route53" }), null);
   assert.equal(parseWorldRecord({ ...document, connectivity: "route53", auth: "none" }), null);

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { HostObservation, OperationObservation } from "../src/control-plane/read-model.ts";
 import { catalogWithPresets } from "../src/control-plane/catalog.ts";
-import { packRelease, planSessionOperation, stoppedHostRecoverySession, worldLifecycleNeedsStop } from "../src/control-plane/session-control.ts";
+import { packRelease, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, worldLifecycleNeedsStop } from "../src/control-plane/session-control.ts";
 import type { LifecycleRecord } from "../src/domain/lifecycle.ts";
 import { newWorldRecord } from "../src/control-plane/world-registry.ts";
 
@@ -57,6 +57,19 @@ test("global operations and ambiguous hosts fail closed", () => {
   assert.deepEqual(planSessionOperation("minecraft", "world", "start", [host("stopped")], [operation]), { kind: "reject", reason: "operation_in_progress" });
   assert.deepEqual(planSessionOperation("minecraft", "world", "start", [], []), { kind: "reject", reason: "host_not_unique" });
   assert.deepEqual(planSessionOperation("minecraft", "world", "start", [host("stopped"), host("running")], []), { kind: "reject", reason: "host_not_unique" });
+});
+
+test("fleet sessions do not depend on a unique persistent host", () => {
+  assert.equal(planFleetSessionOperation("minecraft", "world", "start", [], null).kind, "execute");
+  const active: LifecycleRecord = {
+    schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready",
+    activeSessionId: "session-1", activeWorldId: "world", fencingToken: 1, lease: null, idle: null,
+    updatedAtEpochSeconds: 1,
+  };
+  assert.deepEqual(planFleetSessionOperation("minecraft", "world", "start", [], active), { kind: "reject", reason: "session_transitioning" });
+  assert.equal(planFleetSessionOperation("minecraft", "world", "stop", [], active).kind, "execute");
+  assert.deepEqual(planFleetSessionOperation("minecraft", "world", "stop", [], { ...active, activeWorldId: "vanilla" }), { kind: "reject", reason: "world_not_active" });
+  assert.deepEqual(planFleetSessionOperation("minecraft", "world", "stop", [], null), { kind: "noop", reason: "already_stopped" });
 });
 
 test("stop is idempotent and transitional host states are rejected", () => {

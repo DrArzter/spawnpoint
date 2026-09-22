@@ -30,6 +30,7 @@ type WorldScreenProps = Readonly<{
   snapshot: ControlPlaneSnapshot | null;
   serverState: ServerState;
   sharedSession: SharedHostSession;
+  fleet: boolean;
   granted: ReadonlySet<string>;
   pending: Pending | null;
   tab: Tab;
@@ -38,6 +39,7 @@ type WorldScreenProps = Readonly<{
   onSessionAction: (game: Game, world: World, action: SessionAction) => void;
   onWorldAction: (game: Game, world: World, action: WorldActionKind, backup?: { key: string; name: string }) => void;
   onInvite: (game: Game, world: World) => void;
+  onEditSettings: (game: Game, world: World) => void;
   onDownloadPack: (game: Game, world: World) => void;
 }>;
 
@@ -50,14 +52,16 @@ type WorldMenuOptions = Readonly<{
   preset: Game["presets"][number] | undefined;
   onWorldAction: WorldScreenProps["onWorldAction"];
   onDownloadPack: WorldScreenProps["onDownloadPack"];
+  onEditSettings: WorldScreenProps["onEditSettings"];
 }>;
 
-function buildWorldMenu({ game, world, granted, busy, canManage, preset, onWorldAction, onDownloadPack }: WorldMenuOptions): (MenuItem | "separator")[] {
+function buildWorldMenu({ game, world, granted, busy, canManage, preset, onWorldAction, onDownloadPack, onEditSettings }: WorldMenuOptions): (MenuItem | "separator")[] {
   const menu: (MenuItem | "separator")[] = [];
   if (granted.has("connection.read")) menu.push({ id: "pack", label: "Download client pack", icon: "download", disabled: !world.release.activeRelease || busy, title: world.release.activeRelease ? `Pack for release ${world.release.activeRelease}` : "Available once a release is active", onSelect: () => onDownloadPack(game, world) });
   if (!canManage || !world.worldLifecycleAvailable) return menu;
 
   if (menu.length > 0) menu.push("separator");
+  if (world.materialization !== "archived") menu.push({ id: "settings", label: "Hosting & connection", icon: "dns", disabled: busy, onSelect: () => onEditSettings(game, world) });
   if (world.materialization === "existing") {
     menu.push({ id: "wipe", label: "Start a new wipe", detail: preset?.latestRelease ? `From ${preset.displayName} ${preset.latestRelease}` : "Needs a built release", icon: "history", disabled: busy || !preset?.latestRelease, onSelect: () => onWorldAction(game, world, "wipe") });
     menu.push({ id: "archive", label: "Archive this world", detail: "Stops, backs up, hides from session control", icon: "archive", disabled: busy, onSelect: () => onWorldAction(game, world, "archive") });
@@ -74,7 +78,7 @@ function buildWorldTabs(world: World, canReadReleases: boolean): { id: Tab; labe
   return tabs;
 }
 
-function buildSessionDetails(game: Game, world: World, sharedSession: SharedHostSession, snapshot: ControlPlaneSnapshot | null, serverState: ServerState): DetailItem[] {
+function buildSessionDetails(game: Game, world: World, sharedSession: SharedHostSession, snapshot: ControlPlaneSnapshot | null, serverState: ServerState, fleet: boolean): DetailItem[] {
   const host = snapshot?.hosts[0];
   const session = sessionStatus(serverState);
   const hostLocation = host?.availabilityZone ? ` in ${host.availabilityZone}` : "";
@@ -88,13 +92,13 @@ function buildSessionDetails(game: Game, world: World, sharedSession: SharedHost
     {
       label: "Session",
       value: <Status kind={session.kind} label={session.label} />,
-      hint: <span className={reason.attention ? "session-reason-attention" : undefined}>{reason.text}</span>,
-      explain: `${game.displayName} runs one session at a time on the shared host. ${reason.detail}`,
+      hint: <span className={!fleet && reason.attention ? "session-reason-attention" : undefined}>{fleet ? game.lifecycle?.activeWorldId === world.id ? "This world owns the current game session." : "This world has no active session." : reason.text}</span>,
+      explain: fleet ? "A fleet host launches when a session needs one and drains after its last session." : `${game.displayName} runs one session at a time on the shared host. ${reason.detail}`,
     },
-    { label: "Compute host", value: host ? <Status kind={hostStatus(host.state).kind} label={`${host.name} · ${hostStatus(host.state).label.toLowerCase()}`} /> : <Ghost>No host available</Ghost>, hint: host?.instanceType ? `${host.instanceType}${hostLocation}` : undefined },
+    ...(fleet ? [{ label: "Fleet", value: `${snapshot?.hosts.filter((item) => item.provenance === "launched" && item.state === "running").length ?? 0} running hosts` }] : [{ label: "Compute host", value: host ? <Status kind={hostStatus(host.state).kind} label={`${host.name} · ${hostStatus(host.state).label.toLowerCase()}`} /> : <Ghost>No host available</Ghost>, hint: host?.instanceType ? `${host.instanceType}${hostLocation}` : undefined }]),
     // The same fact the Worlds page shows for the host: a reader who came from
     // there must not lose it on the way in.
-    ...(host ? [{ label: "Launched", value: host.launchedAt ? <Timestamp value={host.launchedAt} /> : <Ghost>Not running</Ghost> }] : []),
+    ...(!fleet && host ? [{ label: "Launched", value: host.launchedAt ? <Timestamp value={host.launchedAt} /> : <Ghost>Not running</Ghost> }] : []),
     // Only meaningful while a watchdog is probing a ready session, which is
     // exactly when somebody is asking.
     ...(players === null ? [] : [{ label: "Players online", value: <strong className="num">{players}</strong>, hint: idleAt === null ? undefined : <>Counted <Timestamp value={idleAt} /></> }]),
@@ -116,6 +120,8 @@ function buildWorldDetails(world: World, preset: Game["presets"][number] | undef
     { label: "Release", value: release, explain: "The release this world runs, next to the one it is asked to run." },
     { label: "Current wipe", value: currentWipeValue, explain: "One wipe is one generation of this world. A new one keeps every backup of the old one.", hint: currentWipe ? `Opened ${formatDate(currentWipe.createdAt)} · release ${currentWipe.originRelease}` : undefined },
     { label: "Address", value: world.connectionAddress ? <ConnectionAddress address={world.connectionAddress} connectivity={world.connectivity} /> : <Ghost>{missingAddressLabel(world, serverState)}</Ghost>, copy: world.connectionAddress ?? undefined },
+    { label: "Hosting", value: world.placement === "fleet" ? "On-demand fleet" : "Persistent host", hint: world.placement === "fleet" ? "A disposable host is allocated for each session." : "Uses the configured long-lived host." },
+    { label: "Connection", value: world.connectivity === "zerotier" ? "ZeroTier" : world.connectivity === "route53" ? "Public DNS" : "Public IP" },
   ];
 }
 
@@ -124,7 +130,7 @@ function missingAddressLabel(world: World, serverState: ServerState): string {
   return serverState === "running" ? "No address yet" : "Assigned while online";
 }
 
-export function WorldScreen({ game, world, snapshot, serverState, sharedSession, granted, pending, tab, onTabChange, onRefresh, onSessionAction, onWorldAction, onInvite, onDownloadPack }: WorldScreenProps) {
+export function WorldScreen({ game, world, snapshot, serverState, sharedSession, fleet, granted, pending, tab, onTabChange, onRefresh, onSessionAction, onWorldAction, onInvite, onEditSettings, onDownloadPack }: WorldScreenProps) {
   const [wipeFilter, setWipeFilter] = useState<string | null>(null);
   useEffect(() => { setWipeFilter(null); }, [world.id]);
   const setTab = onTabChange;
@@ -132,17 +138,17 @@ export function WorldScreen({ game, world, snapshot, serverState, sharedSession,
   const rowPending = pendingFor(pending, world.id);
   const busy = rowPending !== null;
   const controlBusy = pending?.kind === "session" || pending?.kind === "lifecycle";
-  const action: SessionAction = sessionActionForWorld(world, game, sharedSession);
+  const action: SessionAction = sessionActionForWorld(world, game, sharedSession, fleet);
   const permitted = granted.has(action === "start" ? "session.start" : "session.stop");
-  const sessionControl = sessionControlAvailability(world, game, sharedSession, permitted, controlBusy || busy);
+  const sessionControl = sessionControlAvailability(world, game, sharedSession, permitted, controlBusy || busy, fleet);
   const canManage = granted.has("world.manage");
   const preset = game.presets.find((item) => item.id === (world.preset?.id ?? world.profileId));
   const currentWipe = world.wipes.find((wipe) => wipe.state === "current") ?? world.wipes.at(-1);
   const availability = worldStatus(world);
   const operations = snapshot?.operations ?? [];
-  const menu = buildWorldMenu({ game, world, granted, busy, canManage, preset, onWorldAction, onDownloadPack });
+  const menu = buildWorldMenu({ game, world, granted, busy, canManage, preset, onWorldAction, onDownloadPack, onEditSettings });
   const tabs = buildWorldTabs(world, granted.has("release.read"));
-  const sessionDetails = buildSessionDetails(game, world, sharedSession, snapshot, serverState);
+  const sessionDetails = buildSessionDetails(game, world, sharedSession, snapshot, serverState, fleet);
   const worldDetails = buildWorldDetails(world, preset, currentWipe, serverState);
 
   const operationColumns: Column<Operation>[] = [
@@ -162,7 +168,7 @@ export function WorldScreen({ game, world, snapshot, serverState, sharedSession,
         title={world.displayName}
       />
       <WorldNotices rowPending={rowPending} world={world} />
-      <SharedHostNotice busy={controlBusy} session={sharedSession} />
+      {!fleet && <SharedHostNotice busy={controlBusy} session={sharedSession} />}
 
       <div className="world-tabs">
         <Tabs label="World sections" onChange={setTab} options={tabs} value={tab} />

@@ -128,6 +128,20 @@ run "deployment_role_trusts_only_the_production_environment" {
   assert {
     condition = anytrue([
       for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      statement.sid == "ManageOnlyTaggedSpawnpointSecurityGroupRules" &&
+      toset(statement.actions) == toset([
+        "ec2:AuthorizeSecurityGroupEgress", "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:RevokeSecurityGroupEgress", "ec2:RevokeSecurityGroupIngress",
+      ]) &&
+      toset(statement.resources) == toset(["arn:aws:ec2:eu-central-1:123456789012:security-group/sg-*"]) &&
+      anytrue([for condition in statement.condition : condition.variable == "aws:ResourceTag/Project" && toset(condition.values) == toset(["spawnpoint"])])
+    ])
+    error_message = "The deploy identity may change ingress and egress only on tagged Spawnpoint security groups."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
       statement.sid == "TagOnlyApiGatewayApisAndStages" &&
       toset(statement.actions) == toset(["apigateway:TagResource", "apigateway:UntagResource"]) &&
       alltrue([

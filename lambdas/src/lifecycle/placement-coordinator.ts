@@ -44,6 +44,8 @@ type SessionRequest = Readonly<{
   serverId?: string;
   footprint?: Footprint;
   policy?: SessionPolicy;
+  /** Restrict candidates without changing the placement algorithm. */
+  eligibleProvenance?: HostProvenance;
 }>;
 
 export type PlacementInput =
@@ -196,9 +198,10 @@ function rankedCandidates(
   footprint: Footprint,
 ): readonly VersionedHost[] {
   const binding = worldHostBinding(request.worldId);
-  const eligible = binding === "configured"
-    ? hosts.filter((host) => host.record.provenance === "configured")
-    : hosts;
+  const eligible = hosts.filter((host) => {
+    if (binding === "configured" && host.record.provenance !== "configured") return false;
+    return request.eligibleProvenance === undefined || host.record.provenance === request.eligibleProvenance;
+  });
   const ranked = placementCandidates(
     eligible.map((host) => host.record),
     footprint,

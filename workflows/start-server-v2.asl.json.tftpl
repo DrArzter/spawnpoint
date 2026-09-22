@@ -75,8 +75,13 @@
     },
     "Route Placement Mode": {
       "Type": "Choice",
-      "Comment": "ADR-0054. `single` starts the configured instance as before. `shared` registers that instance and asks the coordinator for a host with room; the answer names the host and the slot every host command carries from here on.",
+      "Comment": "ADR-0054. `single` starts the configured instance. `shared` registers it before placement. `fleet` excludes it and reuses or launches only ephemeral hosts, so portable worlds scale to zero.",
       "Choices": [
+        {
+          "Variable": "$.request.placement",
+          "StringEquals": "fleet",
+          "Next": "Place Fleet Session"
+        },
         {
           "Variable": "$.request.placement",
           "StringEquals": "shared",
@@ -93,6 +98,32 @@
       },
       "ResultPath": "$.request.placed",
       "Next": "Start Accepted V1"
+    },
+    "Place Fleet Session": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "placeSession",
+          "sessionId.$": "$.request.sessionId",
+          "worldId.$": "$.request.worldId",
+          "serverId.$": "$.request.serverId",
+          "eligibleProvenance": "launched"
+        }
+      },
+      "ResultSelector": {
+        "placement.$": "$.Payload.placement"
+      },
+      "ResultPath": "$.placement",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Placement Unavailable"
+        }
+      ],
+      "Next": "Route Placement"
     },
     "Describe Configured Host": {
       "Type": "Task",

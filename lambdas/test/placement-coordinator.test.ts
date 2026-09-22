@@ -178,6 +178,39 @@ test("a legacy world is bound to the configured host: it never lands on a launch
   assert.deepEqual((await coordinate({ action: "placeSession", sessionId: "s1", worldId: "world" })).placement, { kind: "reuse", hostId: "i-home", slot: 0 });
 });
 
+test("fleet-only placement ignores a configured host and launches from zero", async () => {
+  const fleet = new MemoryFleet();
+  const coordinate = coordinator(fleet);
+  await coordinate({ action: "registerHost", hostId: "i-home", shape: LARGE, ready: true });
+
+  const portable = await coordinate({
+    action: "placeSession",
+    sessionId: "s1",
+    worldId: "made-later",
+    serverId: "factorio",
+    eligibleProvenance: "launched",
+  });
+  assert.deepEqual(portable.placement, { kind: "launch", requirements: { memoryMiB: 3 * 1024, vcpu: 1 } });
+
+  await coordinate({ action: "registerHost", hostId: "i-fleet", shape: LARGE, ready: true, provenance: "launched" });
+  const reused = await coordinate({
+    action: "placeSession",
+    sessionId: "s1",
+    worldId: "made-later",
+    serverId: "factorio",
+    eligibleProvenance: "launched",
+  });
+  assert.deepEqual(reused.placement, { kind: "reuse", hostId: "i-fleet", slot: 0 });
+
+  const bound = await coordinate({
+    action: "placeSession",
+    sessionId: "s2",
+    worldId: "world",
+    eligibleProvenance: "launched",
+  });
+  assert.deepEqual(bound.placement, { kind: "refused", reason: "bound_to_configured_host" });
+});
+
 test("a Zomboid world and a public world take slot zero only; the second of them on a host asks for a launch", async () => {
   const fleet = new MemoryFleet();
   const coordinate = coordinator(fleet);

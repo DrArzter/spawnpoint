@@ -26,6 +26,7 @@ session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
 
 # Capacity allocation (ADR-0054). The defaults are what runs today; change
 # them in the rollout's order (docs/capacity-allocation-rollout.md).
-# placement  = "shared"   # after the phase-10 report is in docs/acceptance/
+# placement  = "shared"   # configured host participates in placement
+# placement  = "fleet"    # only launched hosts participate; scale to zero
 # launch     = "enabled"  # after the Parameter Store keys in docs/runbook.md exist
 # app_commit = "<commit>" # what a launched host checks out; pin the tested one

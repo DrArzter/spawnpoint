@@ -172,15 +172,24 @@ test("the stop releases the session's reservation after the verified stop, and t
   assert.equal("hostId.$" in payload, false, "the reservation is found by session, wherever the session was placed");
 });
 
-test("the placement mode routes the start: single adopts the configured host, shared asks the coordinator", async () => {
+test("the placement mode routes the start: single uses the configured host, shared seeds it, and fleet excludes it", async () => {
   const definition = await loadDefinition();
   assert.equal(state(definition, "Begin Session").Next, "Route Placement Mode");
   const route = state(definition, "Route Placement Mode");
   assert.equal(route.Choices?.[0]?.Variable, "$.request.placement");
-  assert.equal(route.Choices?.[0]?.Next, "Describe Configured Host");
+  assert.equal(route.Choices?.[0]?.StringEquals, "fleet");
+  assert.equal(route.Choices?.[0]?.Next, "Place Fleet Session");
+  assert.equal(route.Choices?.[1]?.StringEquals, "shared");
+  assert.equal(route.Choices?.[1]?.Next, "Describe Configured Host");
   assert.equal(route.Default, "Adopt Configured Host");
   assert.deepEqual(state(definition, "Adopt Configured Host").Parameters, { "hostId.$": "$.request.instanceId", slot: "" });
   assert.equal(state(definition, "Adopt Configured Host").Next, "Start Accepted V1");
+
+  const fleetPlacement = state(definition, "Place Fleet Session");
+  assert.equal((fleetPlacement.Parameters?.Payload as Record<string, unknown>).action, "placeSession");
+  assert.equal((fleetPlacement.Parameters?.Payload as Record<string, unknown>).eligibleProvenance, "launched");
+  assert.equal(fleetPlacement.Next, "Route Placement");
+  assert.equal(fleetPlacement.Catch?.[0]?.Next, "Placement Unavailable");
 
   // Shared: the configured host is always registered, so it is always a candidate.
   const chain = ["Describe Configured Host", "Describe Configured Host Shape", "Register Configured Host", "Place Session"];

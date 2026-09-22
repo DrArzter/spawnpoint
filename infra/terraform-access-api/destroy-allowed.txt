@@ -1,4 +1,2 @@
-# ADR-0055: a candidate is addressed by platform and account id, so the two
-# Telegram-only routes are replaced rather than kept as surface nobody calls.
-aws_apigatewayv2_route.access["POST /access/candidates/{telegramId}/approve"]
-aws_apigatewayv2_route.access["POST /access/candidates/{telegramId}/dismiss"]
+# Intentionally empty. Add an exact resource address only for one reviewed
+# destructive deployment, then remove it after that deployment succeeds.

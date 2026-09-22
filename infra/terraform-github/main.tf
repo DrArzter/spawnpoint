@@ -287,6 +287,26 @@ data "aws_iam_policy_document" "github_deploy_iam" {
     resources = ["*"]
   }
 
+  # EC2 creates a default allow-all egress rule with every security group.
+  # Terraform must revoke it before installing the reviewed game-port rules.
+  statement {
+    sid    = "ManageOnlyTaggedSpawnpointSecurityGroupRules"
+    effect = "Allow"
+    actions = [
+      "ec2:AuthorizeSecurityGroupEgress",
+      "ec2:AuthorizeSecurityGroupIngress",
+      "ec2:RevokeSecurityGroupEgress",
+      "ec2:RevokeSecurityGroupIngress",
+    ]
+    resources = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:security-group/sg-*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/Project"
+      values   = ["spawnpoint"]
+    }
+  }
+
   # API Gateway evaluates tags supplied while a stage is created as a
   # separate TagResource call against the API's stage collection. Keep that
   # permission out of the broad create/update statement and scoped to APIs and

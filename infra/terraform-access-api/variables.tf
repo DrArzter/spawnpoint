@@ -216,13 +216,13 @@ variable "connection_host" {
 }
 
 variable "placement" {
-  description = "How a start chooses its host (ADR-0054): `single` starts the configured instance as before; `shared` places the session on a registered host with room, which today is that same instance with other games beside it."
+  description = "How a start chooses its host (ADR-0054): `single` starts the configured instance; `shared` registers it before placement; `fleet` considers only ephemeral launched hosts so portable worlds scale to zero."
   type        = string
   default     = "single"
 
   validation {
-    condition     = contains(["single", "shared"], var.placement)
-    error_message = "placement must be single or shared."
+    condition     = contains(["single", "shared", "fleet"], var.placement)
+    error_message = "placement must be single, shared or fleet."
   }
 }
 

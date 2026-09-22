@@ -333,6 +333,11 @@ function requireWorldId(worldId: string): string {
   return worldId;
 }
 
+function configuredPlacement(): "single" | "shared" | "fleet" {
+  const placement = process.env.SPAWNPOINT_PLACEMENT;
+  return placement === "shared" || placement === "fleet" ? placement : "single";
+}
+
 export async function startSessionExecution(
   operationId: string,
   instanceId: string,
@@ -345,7 +350,7 @@ export async function startSessionExecution(
     stateMachineArn: machineArn("start"), name: operationId,
     input: JSON.stringify(buildLifecycleStartInput({
       serverId, operationId, sessionId: `session-${randomUUID()}`, instanceId, worldId, requestedBy,
-      placement: process.env.SPAWNPOINT_PLACEMENT === "shared" ? "shared" : "single",
+      placement: configuredPlacement(),
       launch: process.env.SPAWNPOINT_LAUNCH === "enabled" ? "enabled" : "disabled",
       appCommit: process.env.SPAWNPOINT_APP_COMMIT || "main",
     })),

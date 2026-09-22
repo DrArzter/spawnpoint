@@ -143,6 +143,22 @@ class DeploymentSecurityTest(unittest.TestCase):
             for variable in expected_variables:
                 self.assertIn(variable, workflow)
 
+    def test_fleet_cutover_configuration_comes_from_repository_variables(self) -> None:
+        common_variables = (
+            "TF_VAR_placement: ${{ vars.SPAWNPOINT_PLACEMENT || 'single' }}",
+            "TF_VAR_launch: ${{ vars.SPAWNPOINT_LAUNCH || 'disabled' }}",
+            "TF_VAR_headroom_mib: ${{ vars.SPAWNPOINT_FLEET_HEADROOM_MIB || '0' }}",
+        )
+        plan = (REPOSITORY / ".github/workflows/terraform-plan.yml").read_text()
+        deploy = (REPOSITORY / ".github/workflows/deploy-infrastructure.yml").read_text()
+        for variable in common_variables:
+            self.assertIn(variable, plan)
+            self.assertIn(variable, deploy)
+        self.assertIn("TF_VAR_app_commit: ${{ github.event.pull_request.head.sha }}", plan)
+        self.assertIn("TF_VAR_app_commit: ${{ inputs.ref }}", deploy)
+        self.assertIn("if: env.TF_VAR_launch == 'enabled'", deploy)
+        self.assertIn("run: scripts/check-fleet-readiness.sh", deploy)
+
 
 if __name__ == "__main__":
     unittest.main()

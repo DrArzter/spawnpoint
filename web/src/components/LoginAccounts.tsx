@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import {
   changePassword,
+  linkTelegram,
   linkPassword,
   loadLinkedAccounts,
   resendEmailVerification,
@@ -10,17 +11,18 @@ import {
 } from "../auth";
 import { Icon, type IconName } from "../icons";
 import { PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../lib/signin";
-import { Button } from "./ui/Button";
+import { ActionRow, Button } from "./ui/Button";
 import { Chip } from "./ui/Chip";
 import { TextField } from "./ui/Fields";
 import { useSnackbar } from "./ui/Snackbar";
 import { Skeleton } from "./ui/Skeleton";
 import { Banner, Card, EmptyState } from "./ui/Surfaces";
+import { TelegramLoginButton } from "./TelegramLogin";
 
 type AccountState =
-  | Readonly<{ status: "loading"; accounts: readonly LinkedLoginAccount[]; passwordManagementAvailable: false }>
-  | Readonly<{ status: "ready"; accounts: readonly LinkedLoginAccount[]; passwordManagementAvailable: boolean }>
-  | Readonly<{ status: "error"; accounts: readonly LinkedLoginAccount[]; passwordManagementAvailable: false; message: string }>;
+  | Readonly<{ status: "loading"; accounts: readonly LinkedLoginAccount[]; linkableProviders: readonly string[]; passwordManagementAvailable: false }>
+  | Readonly<{ status: "ready"; accounts: readonly LinkedLoginAccount[]; linkableProviders: readonly string[]; passwordManagementAvailable: boolean }>
+  | Readonly<{ status: "error"; accounts: readonly LinkedLoginAccount[]; linkableProviders: readonly string[]; passwordManagementAvailable: false; message: string }>;
 
 const providerPresentation: Readonly<Record<string, { label: string; icon: IconName }>> = {
   password: { label: "Email and password", icon: "mail" },
@@ -38,7 +40,7 @@ function presentProvider(provider: string): { label: string; icon: IconName } {
 
 export function LoginAccounts({ displayName }: Readonly<{ displayName: string }>) {
   const notify = useSnackbar();
-  const [state, setState] = useState<AccountState>({ status: "loading", accounts: [], passwordManagementAvailable: false });
+  const [state, setState] = useState<AccountState>({ status: "loading", accounts: [], linkableProviders: [], passwordManagementAvailable: false });
   const [form, setForm] = useState<"add" | "change" | null>(null);
   const [email, setEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -55,6 +57,7 @@ export function LoginAccounts({ displayName }: Readonly<{ displayName: string }>
       setState({
         status: "error",
         accounts: [],
+        linkableProviders: [],
         passwordManagementAvailable: false,
         message: cause instanceof Error ? cause.message : "Linked sign-in methods could not be loaded.",
       });
@@ -64,6 +67,15 @@ export function LoginAccounts({ displayName }: Readonly<{ displayName: string }>
   useEffect(() => { void refresh(); }, []);
 
   const passwordAccount = state.accounts.find((account) => account.provider === "password");
+  const telegramAccount = state.accounts.find((account) => account.provider === "telegram");
+  const canLinkTelegram = state.status === "ready" && telegramAccount === undefined && state.linkableProviders.includes("telegram");
+  const canLinkPassword = state.status === "ready" && passwordAccount === undefined && state.passwordManagementAvailable;
+
+  async function connectTelegram(idToken: string) {
+    await linkTelegram(idToken);
+    notify({ tone: "success", message: "Telegram is now a sign-in method for this identity." });
+    await refresh();
+  }
 
   function openForm(next: "add" | "change", account?: LinkedLoginAccount) {
     setForm(next);
@@ -118,9 +130,10 @@ export function LoginAccounts({ displayName }: Readonly<{ displayName: string }>
 
   return (
     <Card
-      actions={state.status === "ready" && passwordAccount === undefined && state.passwordManagementAvailable
-        ? <Button icon="add" onClick={() => openForm("add")} variant="outlined">Add email and password</Button>
-        : undefined}
+      actions={(canLinkTelegram || canLinkPassword) ? <ActionRow>
+        {canLinkTelegram && <TelegramLoginButton className="telegram-login" label="Add Telegram" onToken={connectTelegram} />}
+        {canLinkPassword && <Button icon="add" onClick={() => openForm("add")} variant="outlined">Add email and password</Button>}
+      </ActionRow> : undefined}
       description="Every method belongs to the same Spawnpoint identity. None becomes primary because it was added first."
       title="Sign-in methods"
     >

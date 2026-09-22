@@ -233,6 +233,7 @@ locals {
     "GET /session",
     "GET /me",
     "GET /me/accounts",
+    "POST /me/accounts/{provider}",
     "POST /me/password",
     "POST /me/password/change",
     "GET /control-plane",

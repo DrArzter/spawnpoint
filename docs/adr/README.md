@@ -78,7 +78,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0016](0016-chat-integrations.md) | Discord and Telegram as control and notification surfaces | Proposed — Telegram deployed, Discord untried | M4 |
 | [0017](0017-stable-server-address.md) | Stable hostname in Route 53, not an Elastic IP | Superseded by [0024](0024-connectivity-modes.md) | M2 |
 | [0018](0018-identity-and-sign-in.md) | Cognito broker; panel sign-in with Google | Superseded by [0037](0037-telegram-only-browser-identity.md) | M4 |
-| [0019](0019-account-linking.md) | Link chat accounts with a one-time code | Proposed | M4 |
+| [0019](0019-account-linking.md) | Link chat accounts with a one-time code | **Superseded** by [0057](0057-link-login-providers-through-the-current-identity.md) | M4 |
 | [0020](0020-email-channel.md) | SNS email for alerts; SES deferred | Accepted | M5 |
 | [0021](0021-sign-in-from-linked-chat-account.md) | Chat sign-in, but only into an already linked account | Superseded by [0037](0037-telegram-only-browser-identity.md) | M4 |
 | [0022](0022-minecraft-account-as-linked-identity.md) | Minecraft account is a linked identity; whitelist derived; `online-mode=false` | Proposed | M4 |
@@ -109,13 +109,14 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0047](0047-normalize-preset-sources-before-building.md) | Normalize preset sources before building | Accepted | cross-cutting |
 | [0048](0048-one-instance-per-active-world.md) | One instance per active world, created for the session | Proposed | later |
 | [0049](0049-project-control-plane-events-into-dynamodb.md) | Project control-plane events into DynamoDB for user-facing surfaces | Accepted | cross-cutting |
-| [0050](0050-default-role-on-sign-in-and-elevation-requests.md) | Grant the default role on sign-in, and let people ask for more | Proposed | M4 |
+| [0050](0050-default-role-on-sign-in-and-elevation-requests.md) | Join as Viewer through any login provider, and ask for more | Proposed | M4 |
 | [0051](0051-restart-a-session-without-releasing-the-host.md) | Restart a session without releasing the host | Proposed | M4 |
 | [0052](0052-keep-a-release-while-a-generation-names-it.md) | Keep a release while a generation names it, and check before restoring | Proposed | M4 |
 | [0053](0053-tell-not-built-apart-from-broken.md) | Tell "not built yet" apart from "broken", in the transport | Proposed | M4 |
 | [0054](0054-place-a-session-on-a-host-with-room.md) | Place a session on a host with room, or launch one that fits | Proposed | later |
 | [0055](0055-sign-in-with-email-and-password-by-default.md) | Sign in with email and password by default, and with a provider as an alternative | Accepted — implemented | M4 |
 | [0056](0056-verify-and-link-password-credentials.md) | Verify and link password credentials without making a provider primary | Accepted — implemented; amends [0055](0055-sign-in-with-email-and-password-by-default.md) | M4 |
+| [0057](0057-link-login-providers-through-the-current-identity.md) | Link login providers through the current Identity | Accepted — implemented | M4 |
 
 ## Decisions still to record
 

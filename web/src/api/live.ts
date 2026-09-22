@@ -335,7 +335,30 @@ export const liveApi: SpawnpointApi = {
   async loadLinkedAccounts(): Promise<LinkedLoginAccounts> {
     const response = await authorizedFetch("/me/accounts");
     if (!response.ok) throw await apiFailure(response, "Linked sign-in accounts could not be loaded.");
-    return response.json() as Promise<LinkedLoginAccounts>;
+    const body = await response.json() as Partial<LinkedLoginAccounts>;
+    return {
+      accounts: body.accounts ?? [],
+      linkableProviders: body.linkableProviders ?? [],
+      passwordManagementAvailable: body.passwordManagementAvailable === true,
+    };
+  },
+
+  async linkTelegram(idToken: string): Promise<void> {
+    const response = await authorizedFetch("/me/accounts/telegram", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ idToken }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: unknown } | null;
+      const code = typeof body?.error === "string" ? body.error : undefined;
+      const message = code === "account_already_linked"
+        ? "This Telegram account already belongs to another Spawnpoint identity."
+        : code === "provider_already_linked"
+          ? "This Spawnpoint identity already has a Telegram account."
+          : "Telegram could not verify or link this account.";
+      throw await apiFailure(response, message, body);
+    }
   },
 
   async linkPassword(email: string, password: string, displayName: string): Promise<void> {

@@ -60,11 +60,16 @@ export const demoApi: SpawnpointApi = {
     await demoLatency();
     return {
       passwordManagementAvailable: true,
+      linkableProviders: ["telegram"],
       accounts: [
         { provider: "telegram", subject: "1780660807", displayName: "DrArzter", username: "drarzter", email: null, photoUrl: null, verified: true },
         { provider: "password", subject: "demo-password", displayName: "DrArzter", username: null, email: "drarzter@example.dev", photoUrl: null, verified: true },
       ],
     };
+  },
+
+  async linkTelegram(): Promise<void> {
+    await demoLatency();
   },
 
   async linkPassword(): Promise<void> {

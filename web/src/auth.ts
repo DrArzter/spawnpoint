@@ -30,6 +30,7 @@ export const verifyEmail = (token: string) => api.verifyEmail(token);
 export const requestPasswordReset = (email: string) => api.requestPasswordReset(email);
 export const resetPassword = (token: string, password: string) => api.resetPassword(token, password);
 export const loadLinkedAccounts = () => api.loadLinkedAccounts();
+export const linkTelegram = (idToken: string) => api.linkTelegram(idToken);
 export const linkPassword = (email: string, password: string, displayName: string) => api.linkPassword(email, password, displayName);
 export const changePassword = (email: string, currentPassword: string, password: string) => api.changePassword(email, currentPassword, password);
 

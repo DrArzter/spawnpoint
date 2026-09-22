@@ -6,9 +6,19 @@ import { Button } from "./ui/Button";
 
 // The one sign-in control: loads Telegram's OIDC SDK once, opens its popup,
 // and hands the resulting token to the access API.
-export function TelegramLoginButton({ onChange, className, label = "Continue with Telegram" }: Readonly<{ onChange: (state: AuthState) => void; className?: string; label?: string }>) {
+export function TelegramLoginButton({ onChange, onToken, className, label = "Continue with Telegram" }: Readonly<{
+  onChange?: (state: AuthState) => void;
+  onToken?: (idToken: string) => Promise<void>;
+  className?: string;
+  label?: string;
+}>) {
   const mounted = useRef(true);
+  const onChangeRef = useRef(onChange);
+  const onTokenRef = useRef(onToken);
+  onChangeRef.current = onChange;
+  onTokenRef.current = onToken;
   const [sdkReady, setSdkReady] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [attempt, setAttempt] = useState(0);
 
@@ -25,8 +35,15 @@ export function TelegramLoginButton({ onChange, className, label = "Continue wit
         if (mounted.current) setLoginError(result.error || "Telegram did not return an identity token.");
         return;
       }
-      onChange({ status: "loading" });
-      void exchangeTelegramOidc(result.id_token).then(onChange);
+      if (onTokenRef.current !== undefined) {
+        setBusy(true);
+        void onTokenRef.current(result.id_token)
+          .catch((cause) => { if (mounted.current) setLoginError(cause instanceof Error ? cause.message : "Telegram could not link this account."); })
+          .finally(() => { if (mounted.current) setBusy(false); });
+      } else if (onChangeRef.current !== undefined) {
+        onChangeRef.current({ status: "loading" });
+        void exchangeTelegramOidc(result.id_token).then((state) => onChangeRef.current?.(state));
+      }
     };
     const script = document.createElement("script");
     script.async = true;
@@ -41,7 +58,7 @@ export function TelegramLoginButton({ onChange, className, label = "Continue wit
       mounted.current = false;
       script.remove();
     };
-  }, [attempt, onChange]);
+  }, [attempt]);
 
   function openLogin() {
     setLoginError("");
@@ -50,7 +67,7 @@ export function TelegramLoginButton({ onChange, className, label = "Continue wit
 
   return (
     <div className={className ?? "telegram-login"}>
-      {!loginError && <Button disabled={!sdkReady} icon="send" onClick={openLogin} variant="filled">{label}</Button>}
+      {!loginError && <Button disabled={!sdkReady} icon="send" loading={busy} onClick={openLogin} variant="filled">{label}</Button>}
       {loginError && <div className="boot-copy" role="alert">
         <p className="boot-error">{loginError}</p>
         <Button onClick={() => { setLoginError(""); setSdkReady(false); setAttempt((value) => value + 1); }}>Try again</Button>

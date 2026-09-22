@@ -1,6 +1,6 @@
 # ADR-0019 — Link chat accounts with a one-time code, rather than federating them as sign-in providers
 
-- Status: Proposed
+- Status: Superseded by [ADR-0057](0057-link-login-providers-through-the-current-identity.md)
 - Date: 2026-08-11
 - Milestone: M4
 - Amends: [ADR-0018](0018-identity-and-sign-in.md), which planned Discord and Telegram as Cognito providers

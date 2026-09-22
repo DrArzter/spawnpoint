@@ -348,13 +348,21 @@ run "control_plane_projection_is_event_driven_scoped_and_recoverable" {
 
   assert {
     condition = alltrue([
-      data.aws_iam_policy_document.control_plane_projector.statement[0].resources == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-control-plane-view"]),
-      data.aws_iam_policy_document.control_plane_projector.statement[1].resources == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-lifecycle-v2"]),
-      data.aws_iam_policy_document.control_plane_projector.statement[4].resources == toset([local.lifecycle_v2_stop_arn]),
-      data.aws_iam_policy_document.control_plane_projector.statement[5].actions == toset(["events:PutEvents"]),
-      data.aws_iam_policy_document.control_plane_projector.statement[5].resources == toset(["arn:aws:events:eu-central-1:123456789012:event-bus/default"]),
+      one([for statement in data.aws_iam_policy_document.control_plane_projector.statement : statement.resources if statement.sid == "WriteControlPlaneProjection"]) == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-control-plane-view"]),
+      one([for statement in data.aws_iam_policy_document.control_plane_projector.statement : statement.resources if statement.sid == "ReadLifecycleForRecovery"]) == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-lifecycle-v2"]),
+      one([for statement in data.aws_iam_policy_document.control_plane_projector.statement : statement.resources if statement.sid == "RecoverOnlyThroughFencedStop"]) == toset([local.lifecycle_v2_stop_arn]),
+      one([for statement in data.aws_iam_policy_document.control_plane_projector.statement : statement.actions if statement.sid == "PublishProjectionInvalidations"]) == toset(["events:PutEvents"]),
+      one([for statement in data.aws_iam_policy_document.control_plane_projector.statement : statement.resources if statement.sid == "PublishProjectionInvalidations"]) == toset(["arn:aws:events:eu-central-1:123456789012:event-bus/default"]),
     ])
     error_message = "The projector may update only its view, read lifecycle, recover through the fenced stop adapter and publish sanitized invalidations."
+  }
+
+  assert {
+    condition = alltrue([
+      toset(jsondecode(aws_cloudwatch_event_rule.game_dns_terminal_host.event_pattern).detail.state) == toset(["stopped", "terminated"]),
+      one([for statement in data.aws_iam_policy_document.control_plane_projector.statement : statement.actions if statement.sid == "CleanTerminalHostDnsLedger"]) == toset(["dynamodb:DeleteItem"]),
+    ])
+    error_message = "Stopped and terminated Fleet hosts must trigger scoped DNS-ledger cleanup."
   }
 }
 

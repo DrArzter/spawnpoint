@@ -73,7 +73,9 @@ For Route 53, set repository variables `SPAWNPOINT_GAME_DNS_ZONE` to an existing
 `spawnpoint.example.com`) and `SPAWNPOINT_GAME_DNS_SUFFIX` to a name inside it (for example
 `games.spawnpoint.example.com`). The host creates `<world-id>.<suffix>` after game readiness and deletes that A
 record after a verified stop and backup. Leaving both variables empty omits the DNS IAM policy and lets `raw` work
-without any domain. Never declare public auth for a world until its game server actually enforces it.
+without any domain. A DynamoDB ledger ties each published record to its instance; a stopped or terminated EC2 event
+checks that the same A record still points to that instance's address before deleting it. Never declare public auth
+for a world until its game server actually enforces it.
 
 ## What the acceptance run must record
 

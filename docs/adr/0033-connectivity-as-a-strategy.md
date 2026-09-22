@@ -203,7 +203,7 @@ correctly, and each is built only when a second game or a zero-setup onboarding 
 | --- | --- | --- |
 | ZeroTier overlay | Implemented; the default for every catalog world | ADR-0024 |
 | Raw public IP | Implemented: security-group ingress derived from the catalog, IMDSv2 address read at session start, address composed per world in the panel and the bot, nothing between sessions | 2026-09-03 |
-| Route 53 | Implemented as a session-scoped A record: publish after game readiness, retract after verified stop and backup, restricted IAM permission on an optional hosted zone | 2026-09-22 |
+| Route 53 | Implemented as a session-scoped A record: publish after game readiness, retract after verified stop and backup, and reconcile from an instance-owned ledger on a terminal EC2 event; restricted IAM permission on an optional hosted zone | 2026-09-22 |
 | Tailscale, bring-your-own | Not started | — |
 
 Turning a public strategy on for a world is two catalog fields, `connectivity: raw` or `route53` and a declared `auth`, and the

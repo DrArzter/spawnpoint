@@ -15,6 +15,26 @@ variable "aws_profile" {
   default     = "spawnpoint"
 }
 
+variable "game_dns_zone_name" {
+  description = "Optional Route 53 public hosted zone containing game DNS records."
+  type        = string
+  default     = ""
+}
+
+variable "game_dns_suffix" {
+  description = "Optional DNS suffix for world records, within game_dns_zone_name."
+  type        = string
+  default     = ""
+
+  validation {
+    condition = (var.game_dns_zone_name == "" && var.game_dns_suffix == "") || (
+      var.game_dns_zone_name != "" && var.game_dns_suffix != "" &&
+      (var.game_dns_suffix == var.game_dns_zone_name || endswith(var.game_dns_suffix, ".${var.game_dns_zone_name}"))
+    )
+    error_message = "Game DNS zone and suffix must be configured together, with the suffix inside the zone."
+  }
+}
+
 variable "control_plane_view_table_name" {
   description = "DynamoDB table holding the rebuildable dashboard projection produced by this root."
   type        = string

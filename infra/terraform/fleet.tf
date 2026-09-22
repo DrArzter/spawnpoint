@@ -56,6 +56,7 @@ resource "aws_launch_template" "fleet_host" {
     host_parameter_path = var.host_parameter_path
     game_dns_zone_id    = var.game_dns_zone_name == "" ? "" : data.aws_route53_zone.game[0].zone_id
     game_dns_suffix     = var.game_dns_suffix
+    dns_ledger_table    = aws_dynamodb_table.lifecycle_v2.name
   }))
 
   tag_specifications {
@@ -145,4 +146,22 @@ resource "aws_iam_role_policy" "game_host_dns" {
   name   = "spawnpoint-game-host-dns"
   role   = aws_iam_role.game_host.id
   policy = data.aws_iam_policy_document.game_host_dns[0].json
+}
+
+data "aws_iam_policy_document" "game_host_dns_ledger" {
+  statement {
+    actions   = ["dynamodb:PutItem", "dynamodb:UpdateItem"]
+    resources = [aws_dynamodb_table.lifecycle_v2.arn]
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["dns-host#*"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "game_host_dns_ledger" {
+  name   = "spawnpoint-game-host-dns-ledger"
+  role   = aws_iam_role.game_host.id
+  policy = data.aws_iam_policy_document.game_host_dns_ledger.json
 }

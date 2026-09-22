@@ -16,6 +16,8 @@ export PATH="${fixture}/bin:${PATH}"
 export ROUTE53_CALLS="${fixture}/calls"
 export SPAWNPOINT_DNS_ZONE_ID=Z123ABC
 export SPAWNPOINT_DNS_SUFFIX=games.spawnpoint.example.com
+export SPAWNPOINT_DNS_LEDGER_TABLE=spawnpoint-lifecycle-v2
+export SPAWNPOINT_INSTANCE_ID=i-0123456789abcdef0
 export WORLD_ID=factorio-test
 # shellcheck disable=SC2034 # Read by the sourced adapter.
 SCRIPT_DIR="${fixture}/scripts"
@@ -27,7 +29,9 @@ connectivity_prepare
 [[ "${CONNECTIVITY_HOST}" == "factorio-test.games.spawnpoint.example.com" ]]
 connectivity_publish
 connectivity_retract
-[[ "$(wc -l <"${ROUTE53_CALLS}")" -eq 2 ]]
+[[ "$(wc -l <"${ROUTE53_CALLS}")" -eq 5 ]]
+grep -Fq 'dynamodb put-item' "${ROUTE53_CALLS}"
+grep -Fq 'dynamodb update-item' "${ROUTE53_CALLS}"
 grep -Fq 'UPSERT' "${ROUTE53_CALLS}"
 grep -Fq 'DELETE' "${ROUTE53_CALLS}"
 grep -Fq '203.0.113.10' "${ROUTE53_CALLS}"

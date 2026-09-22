@@ -44,8 +44,10 @@ aws ssm get-parameters-by-path --region "$region" \
 chmod 0600 "$env_file.staged"
 mv -f -- "$env_file.staged" "$env_file"
 
-sed -i '/^SPAWNPOINT_ENABLED_CONNECTIVITY=/d; /^SPAWNPOINT_DNS_ZONE_ID=/d; /^SPAWNPOINT_DNS_SUFFIX=/d' "$env_file"
+sed -i '/^SPAWNPOINT_ENABLED_CONNECTIVITY=/d; /^SPAWNPOINT_DNS_ZONE_ID=/d; /^SPAWNPOINT_DNS_SUFFIX=/d; /^SPAWNPOINT_DNS_LEDGER_TABLE=/d; /^SPAWNPOINT_INSTANCE_ID=/d' "$env_file"
 printf 'SPAWNPOINT_ENABLED_CONNECTIVITY=raw,route53\n' >>"$env_file"
+printf 'SPAWNPOINT_DNS_LEDGER_TABLE=%s\n' '${dns_ledger_table}' >>"$env_file"
+printf 'SPAWNPOINT_INSTANCE_ID=%s\n' "$(imds meta-data/instance-id)" >>"$env_file"
 %{ if game_dns_zone_id != "" ~}
 printf 'SPAWNPOINT_DNS_ZONE_ID=%s\n' '${game_dns_zone_id}' >>"$env_file"
 printf 'SPAWNPOINT_DNS_SUFFIX=%s\n' '${game_dns_suffix}' >>"$env_file"

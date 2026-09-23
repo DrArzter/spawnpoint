@@ -43,7 +43,8 @@
       },
       "ResultSelector": {
         "drain.$": "$.Payload.drain",
-        "state.$": "$.Payload.host.record.state"
+        "state.$": "$.Payload.host.record.state",
+        "revision.$": "$.Payload.host.revision"
       },
       "ResultPath": "$.decision",
       "Retry": [
@@ -71,7 +72,8 @@
       },
       "ResultSelector": {
         "drain.$": "$.Payload.drain",
-        "state.$": "$.Payload.host.record.state"
+        "state.$": "$.Payload.host.record.state",
+        "revision.$": "$.Payload.host.revision"
       },
       "ResultPath": "$.decision",
       "Retry": [
@@ -120,6 +122,7 @@
         "Payload": {
           "action": "concludeDrain",
           "hostId.$": "$.request.hostId",
+          "expectedRevision.$": "$.decision.revision",
           "outcome": "terminate"
         }
       },
@@ -149,6 +152,7 @@
         "Payload": {
           "action": "concludeDrain",
           "hostId.$": "$.request.hostId",
+          "expectedRevision.$": "$.decision.revision",
           "outcome": "stop"
         }
       },

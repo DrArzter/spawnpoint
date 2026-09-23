@@ -115,6 +115,12 @@ export function renderNotification(event: ExecutionEvent): string | null {
       return `[ALARM] A stop failed (${event.name}) — the world may be unsaved or the backup unverified, and EC2 may still be running.`;
     }
 
+    case "spawnpoint-drain-host-v2": {
+      if (!failed) return null;
+      const hostId = str(event.input, "hostId") ?? "unknown host";
+      return `[ALARM] Fleet drain failed for ${hostId} (${event.name}). EC2 may still be billed; the scheduled Fleet sweep will retry or flag it for review.`;
+    }
+
     case "spawnpoint-promote-release": {
       if (CHILD_NAME.test(event.name)) return null;
       const release = str(event.input, "release");

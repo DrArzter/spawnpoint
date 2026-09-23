@@ -112,6 +112,7 @@ resource "aws_cloudwatch_event_rule" "execution_notifications" {
         local.idle_watchdog_state_machine_arn,
         "arn:aws:states:${var.aws_region}:${local.account_id}:stateMachine:spawnpoint-promote-release",
         "arn:aws:states:${var.aws_region}:${local.account_id}:stateMachine:spawnpoint-build-release",
+        "arn:aws:states:${var.aws_region}:${local.account_id}:stateMachine:spawnpoint-drain-host-v2",
       ]
       status = ["RUNNING", "SUCCEEDED", "FAILED", "TIMED_OUT", "ABORTED"]
     }

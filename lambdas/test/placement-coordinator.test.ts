@@ -64,6 +64,20 @@ test("registering the host that exists today is idempotent, and it is ready", as
   assert.equal(listed.hosts?.length, 1);
 });
 
+test("drain conclusion is fenced to the revision that was decided", async () => {
+  const fleet = new MemoryFleet();
+  const coordinate = coordinator(fleet);
+  await coordinate({ action: "registerHost", hostId: "i-fleet", shape: SMALL, ready: true, provenance: "launched" });
+  const decided = await coordinate({ action: "decideDrain", hostId: "i-fleet", gracePeriodSeconds: 0 });
+  const revision = decided.host?.revision;
+  assert.equal(decided.drain, "terminate");
+  assert.ok(revision !== undefined);
+  await coordinate({ action: "reserveOnHost", hostId: "i-fleet", sessionId: "s1", worldId: "vanilla" });
+  await coordinate({ action: "releasePlacement", hostId: "i-fleet", sessionId: "s1" });
+  await assert.rejects(coordinate({ action: "concludeDrain", hostId: "i-fleet", outcome: "terminate", expectedRevision: revision }), PlacementConflict);
+  assert.equal(fleet.hosts.get("i-fleet")?.record.state, "draining");
+});
+
 test("with nothing up, placing asks for a launch; with a host up, it reserves a slot and is idempotent for the session", async () => {
   const fleet = new MemoryFleet();
   const coordinate = coordinator(fleet);

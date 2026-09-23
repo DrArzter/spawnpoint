@@ -58,7 +58,7 @@ export type PlacementInput =
   | Readonly<{ action: "findPlacement"; sessionId: string }>
   | Readonly<{ action: "releasePlacement"; hostId?: string; sessionId: string }>
   | Readonly<{ action: "decideDrain"; hostId: string; gracePeriodSeconds: number; headroomMiB?: number }>
-  | Readonly<{ action: "concludeDrain"; hostId: string; outcome: "stop" | "terminate" }>;
+  | Readonly<{ action: "concludeDrain"; hostId: string; outcome: "stop" | "terminate"; expectedRevision?: number }>;
 
 export type PlacementOutcome =
   | Readonly<{ kind: "reuse"; hostId: string; slot: number }>
@@ -305,6 +305,16 @@ async function coordinate(context: CoordinatorContext, input: PlacementInput): P
     case "decideDrain": return decideHostDrain(context, input);
     case "concludeDrain": {
       const mutation = input.outcome === "stop" ? markStopped : markTerminating;
+      if (input.expectedRevision !== undefined) {
+        const hostId = requireId("hostId", input.hostId);
+        const current = await loadRequired(context, hostId);
+        if (current.revision !== input.expectedRevision) throw new PlacementConflict(`host ${hostId} changed before drain conclusion`);
+        const record = mutation(current.record, context.nowEpochSeconds());
+        if (!await context.store.compareAndSetHost(hostId, current.revision, record)) {
+          throw new PlacementConflict(`host ${hostId} changed before drain conclusion`);
+        }
+        return { host: { revision: current.revision + 1, record } };
+      }
       return { host: await mutateHost(context, requireId("hostId", input.hostId), mutation) };
     }
   }

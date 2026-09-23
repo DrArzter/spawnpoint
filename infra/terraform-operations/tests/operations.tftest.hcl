@@ -33,12 +33,27 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_sns_topic.fleet_alerts
+    values = { arn = "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert" }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.lifecycle_v2_drain_assume
     values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
 
   override_data {
     target = data.aws_iam_policy_document.lifecycle_v2_drain
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.fleet_sweeper_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.fleet_sweeper
     values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
 
@@ -375,10 +390,24 @@ run "launched_hosts_are_placed_drained_and_let_go_by_tag" {
       aws_sfn_state_machine.lifecycle_v2_drain.type == "STANDARD",
       strcontains(aws_sfn_state_machine.lifecycle_v2_drain.definition, "decideDrain"),
       strcontains(aws_sfn_state_machine.lifecycle_v2_drain.definition, "concludeDrain"),
+      strcontains(aws_sfn_state_machine.lifecycle_v2_drain.definition, "expectedRevision"),
       strcontains(aws_sfn_state_machine.lifecycle_v2_drain.definition, "arn:aws:states:::aws-sdk:ec2:terminateInstances"),
       strcontains(aws_sfn_state_machine.lifecycle_v2_drain.definition, "arn:aws:states:::aws-sdk:ec2:stopInstances"),
     ])
     error_message = "The drain machine is a durable Standard workflow that asks the coordinator and then stops or lets a host go."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_cloudwatch_event_rule.fleet_sweep.schedule_expression == "rate(5 minutes)",
+      aws_cloudwatch_event_target.fleet_sweep.rule == aws_cloudwatch_event_rule.fleet_sweep.name,
+      aws_lambda_function.fleet_sweeper.environment[0].variables["DRAIN_STATE_MACHINE_ARN"] == local.lifecycle_v2_drain_arn,
+      one([for statement in data.aws_iam_policy_document.fleet_sweeper.statement : statement.resources if statement.sid == "RestartFencedDrain"]) == toset([local.lifecycle_v2_drain_arn]),
+      one([for statement in data.aws_iam_policy_document.fleet_sweeper.statement : statement.resources if statement.sid == "ObserveRunningDrains"]) == toset([local.lifecycle_v2_drain_arn]),
+      one([for statement in data.aws_iam_policy_document.fleet_sweeper.statement : statement.actions if statement.sid == "RetryOnlyFleetHosts"]) == toset(["ec2:TerminateInstances"]),
+      length(one([for statement in data.aws_iam_policy_document.fleet_sweeper.statement : statement.condition if statement.sid == "RetryOnlyFleetHosts"])) == 1,
+    ])
+    error_message = "The periodic Fleet backstop must invoke only the fenced drain and terminate only tagged launched hosts."
   }
 
   assert {

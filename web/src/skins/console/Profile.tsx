@@ -84,21 +84,21 @@ function Appearance({ model }: Readonly<{ model: AppearanceModel }>) {
       <div className="appearance">
         <div className="appearance-group">
           <span className="appearance-label" id="appearance-theme">Theme</span>
-          <div aria-labelledby="appearance-theme" className="chip-row" role="group">
+          <fieldset aria-labelledby="appearance-theme" className="chip-row fieldset-plain">
             {THEMES.map((option) => (
               <ChoiceChip icon={option.icon} key={option.id} onClick={() => save({ theme: option.id })} pressed={model.preference === option.id}>{option.label}</ChoiceChip>
             ))}
-          </div>
+          </fieldset>
         </div>
         <div className="appearance-group">
           <span className="appearance-label" id="appearance-accent">Accent</span>
-          <div aria-labelledby="appearance-accent" className="accent-row" role="group">
+          <fieldset aria-labelledby="appearance-accent" className="accent-row fieldset-plain">
             <label className="accent-well">
               <input aria-label="Pick an accent colour" onChange={(event) => commitAccent(event.target.value)} type="color" value={parseHex(draft) ? draft : model.accent} />
             </label>
             <TextField hint={valid ? undefined : "Six hex digits, for example #1a73e8."} label="Hex" mono onChange={(event) => commitAccent(event.target.value)} spellCheck={false} value={draft} />
             <Button disabled={model.accent === DEFAULT_ACCENT} icon="restore" onClick={() => { setDraft(DEFAULT_ACCENT); save({ accent: DEFAULT_ACCENT }); }} variant="text">Reset</Button>
-          </div>
+          </fieldset>
           <div className="swatches">
             {SUGGESTED.map(({ name, colour }) => (
               <button aria-label={`${name} ${colour}`} aria-pressed={model.accent === colour} className="swatch" key={colour} onClick={() => { setDraft(colour); save({ accent: colour }); }} style={{ background: colour }} type="button" />

@@ -13,6 +13,12 @@ import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, WorldP
 
 type Deployment = ControlPlaneSnapshot["deployment"];
 
+// A fleet host never joins ZeroTier; the configured host offers nothing else.
+function defaultConnectivity(placement: WorldPlacement, dnsAvailable: boolean): World["connectivity"] {
+  if (placement === "configured") return "zerotier";
+  return dnsAvailable ? "route53" : "raw";
+}
+
 function useConnectionFields(deployment: Deployment, initial: { placement: WorldPlacement; connectivity: World["connectivity"] }): ConnectionFieldsModel & { valid: boolean; auth: "game" | undefined } {
   const [placement, setPlacement] = useState<WorldPlacement>(initial.placement);
   const [connectivity, setConnectivity] = useState<World["connectivity"]>(initial.connectivity);
@@ -25,7 +31,7 @@ function useConnectionFields(deployment: Deployment, initial: { placement: World
     placement,
     // Changing where a world runs changes how it is reached: a fleet host never
     // joins ZeroTier, the configured host offers nothing else.
-    setPlacement: (next) => { setPlacement(next); setConnectivity(next === "fleet" ? (dnsAvailable ? "route53" : "raw") : "zerotier"); },
+    setPlacement: (next) => { setPlacement(next); setConnectivity(defaultConnectivity(next, dnsAvailable)); },
     fleetAvailable,
     connectivity,
     setConnectivity,
@@ -36,8 +42,8 @@ function useConnectionFields(deployment: Deployment, initial: { placement: World
 }
 
 export function useCreateWorldForm(game: Game, initialPreset: Preset | null, deployment: Deployment, opts: Readonly<{ busy: boolean; onCreate: (preset: Preset, name: string, release: string, placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game") => void; onClose: () => void }>): CreateWorldModel {
-  const readyPresets = game.presets.filter((preset) => preset.buildStatus === "ready");
-  const [presetId, setPresetId] = useState(initialPreset?.id ?? readyPresets[0]?.id ?? "");
+  const firstReady = game.presets.find((preset) => preset.buildStatus === "ready");
+  const [presetId, setPresetId] = useState(initialPreset?.id ?? firstReady?.id ?? "");
   const preset = game.presets.find((item) => item.id === presetId) ?? null;
   const [name, setName] = useState("");
   const [release, setRelease] = useState(preset?.latestRelease ?? "");

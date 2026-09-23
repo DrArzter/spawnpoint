@@ -202,7 +202,7 @@ function Roles({ model }: Readonly<{ model: RolesModel }>) {
       </Card>}
 
       <Sheet
-        description={model.reading ? `${model.reading.system ? "Built-in role" : "Custom role"} · ${plural(model.reading.permissions.length, "permission")}` : undefined}
+        description={model.reading ? roleDescription(model.reading) : undefined}
         closeActionId={model.closeReading.id}
         onClose={model.closeReading.run}
         open={model.reading !== null}
@@ -212,6 +212,11 @@ function Roles({ model }: Readonly<{ model: RolesModel }>) {
       </Sheet>
     </div>
   );
+}
+
+function roleDescription(role: Role): string {
+  const kind = role.system ? "Built-in role" : "Custom role";
+  return `${kind} · ${plural(role.permissions.length, "permission")}`;
 }
 
 // A long role is hard to read line by line, so it gets the same search the

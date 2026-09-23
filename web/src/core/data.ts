@@ -11,7 +11,7 @@ import type { SnackInput } from "../components/ui/Snackbar";
 import type { StatusKind } from "../components/ui/Status";
 import { formatDateTime } from "../lib/format";
 import type { Game, LinkKind, Member, OwnerBootstrap, Role, World } from "../model";
-import { action, type Action } from "./actions";
+import { action } from "./actions";
 import type { BackupsModel, CandidateRow, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, NotificationsModel, RolesModel, UsersModel } from "./models";
 
 /*
@@ -69,9 +69,15 @@ export function useBackups(gameId: string, world: World, opts: Readonly<{ canRea
     restore: (entry) => action("backup.restore", "Restore", () => opts.onRestore(entry), {
       icon: "restore",
       disabled: !world.worldLifecycleAvailable || !opts.canRestore || entry.generationId === null || opts.busy,
-      hint: !world.worldLifecycleAvailable ? "This legacy world is not wipe-managed." : entry.generationId === null ? "This legacy backup is not tied to a wipe." : opts.canRestore ? "Restore into a new wipe" : "Your role cannot restore backups.",
+      hint: restoreHint(world, entry, opts.canRestore),
     }),
   };
+}
+
+function restoreHint(world: World, entry: BackupEntry, canRestore: boolean): string {
+  if (!world.worldLifecycleAvailable) return "This legacy world is not wipe-managed.";
+  if (entry.generationId === null) return "This legacy backup is not tied to a wipe.";
+  return canRestore ? "Restore into a new wipe" : "Your role cannot restore backups.";
 }
 
 // --- metrics -----------------------------------------------------------------
@@ -292,6 +298,11 @@ export function useRoles(onRolesChange: (roles: Role[]) => void): RolesModel & {
 
 // --- access: notifications ------------------------------------------------------
 
+function saveStatusLabel(state: "loading" | "ready" | "saving" | "error"): string {
+  if (state === "saving") return "Saving…";
+  return state === "ready" ? "Saved to your identity" : "";
+}
+
 export function useNotifications(games: readonly Game[], notify: Notify): NotificationsModel {
   const [subscriptions, setSubscriptions] = useState<SubscriptionState>({});
   const [state, setState] = useState<"loading" | "ready" | "saving" | "error">("loading");
@@ -332,7 +343,7 @@ export function useNotifications(games: readonly Game[], notify: Notify): Notifi
     state,
     error,
     retry: state === "error" ? action("notifications.retry", "Try again", () => void reload()) : null,
-    saveStatus: state === "saving" ? "Saving…" : state === "ready" ? "Saved to your identity" : "",
+    saveStatus: saveStatusLabel(state),
     games,
     subscriptions,
     toggle: (id, label) => action(`notifications.${id}`, label, () => void toggle(id), { disabled }),
@@ -371,6 +382,15 @@ function deliveryLabel(recipient: InvitationRecipient): string {
   return "Must open the bot privately first";
 }
 
+function players(count: number): string {
+  return `${count} ${count === 1 ? "player" : "players"}`;
+}
+
+function sendHint(audience: "broadcast" | "direct", selected: number): string {
+  if (audience === "broadcast") return "One Telegram message to group chats and subscribers.";
+  return selected === 0 ? "Choose at least one player." : `${players(selected)} selected.`;
+}
+
 export function useInvitation(game: Game, world: World, opts: Readonly<{ onClose: () => void; notify: Notify }>): InvitationModel {
   const [audience, setAudience] = useState<"broadcast" | "direct">("broadcast");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -383,14 +403,22 @@ export function useInvitation(game: Game, world: World, opts: Readonly<{ onClose
 
   function toggle(recipient: InvitationRecipient) {
     if (recipient.delivery !== "ready") return;
-    setSelected((current) => { const next = new Set(current); if (next.has(recipient.id)) next.delete(recipient.id); else next.add(recipient.id); return next; });
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(recipient.id)) {
+        next.delete(recipient.id);
+      } else {
+        next.add(recipient.id);
+      }
+      return next;
+    });
   }
 
   async function submit() {
     setSending(true);
     try {
       await sendInvitation(game.id, world.id, audience, [...selected]);
-      opts.notify({ tone: "success", message: audience === "broadcast" ? "Invitation accepted for delivery to everyone." : `Invitation accepted for ${selected.size} ${selected.size === 1 ? "player" : "players"}.` });
+      opts.notify({ tone: "success", message: audience === "broadcast" ? "Invitation accepted for delivery to everyone." : `Invitation accepted for ${players(selected.size)}.` });
       setSelected(new Set());
       refreshHistory();
     } catch (error) {
@@ -417,7 +445,7 @@ export function useInvitation(game: Game, world: World, opts: Readonly<{ onClose
       ? asLoading(historyState, refreshHistory, "invitation.history.retry")
       : { status: "ready", value: historyState.value.slice(0, 5).map((item) => ({ id: item.id, status: { kind: invitationStatusKind(item.status), label: invitationStatusLabel(item.status) }, audience: item.audience === "broadcast" ? "Everyone" : `${item.recipientCount ?? 0} selected`, detail: deliveryDetail(item), createdAt: item.createdAt })) },
     refreshHistory: action("invitation.history.refresh", "Refresh", refreshHistory, { icon: "refresh", disabled: historyState.status === "loading" }),
-    send: action("invitation.send", "Send invitation", () => void submit(), { icon: "send", busy: sending, disabled: sending || (audience === "direct" && selected.size === 0), hint: audience === "broadcast" ? "One Telegram message to group chats and subscribers." : selected.size === 0 ? "Choose at least one player." : `${selected.size} ${selected.size === 1 ? "player" : "players"} selected.` }),
+    send: action("invitation.send", "Send invitation", () => void submit(), { icon: "send", busy: sending, disabled: sending || (audience === "direct" && selected.size === 0), hint: sendHint(audience, selected.size) }),
     close: action("sheet.close", "Close panel", opts.onClose),
   };
 }

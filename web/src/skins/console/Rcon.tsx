@@ -31,9 +31,10 @@ export function Rcon({ model }: Readonly<{ model: ConsoleModel }>) {
           <Button disabled icon="keyboard_return" size="small" variant="text">Run</Button>
         </form>
       </section>
-      <div aria-label="Quick commands" className="quick-commands" role="group">
+      <fieldset className="quick-commands fieldset-plain">
+        <legend className="visually-hidden">Quick commands</legend>
         {model.quickCommands.map((command) => <Button disabled key={command} size="small" title="Available once the RCON gateway is connected" variant="outlined"><code>{command}</code></Button>)}
-      </div>
+      </fieldset>
     </div>
   );
 }

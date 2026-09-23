@@ -143,7 +143,7 @@ function releasesModel(console: ConsoleController): ReleasesModel {
       createWorld: game ? action("world.create", "Create world", () => console.requestCreateWorld(game, preset), {
         icon: "add",
         disabled: !canManage || preset.buildStatus !== "ready" || pending?.kind === "create",
-        hint: !canManage ? "Your role cannot create worlds." : preset.buildStatus !== "ready" ? "This preset has no ready release yet." : "Create a world from this preset",
+        hint: createWorldHint(canManage, preset.buildStatus === "ready"),
       }) : null,
     })),
     pointers: (game?.worlds ?? []).map((world) => ({
@@ -153,6 +153,11 @@ function releasesModel(console: ConsoleController): ReleasesModel {
       summary: releaseSummary(world),
     })),
   };
+}
+
+function createWorldHint(canManage: boolean, ready: boolean): string {
+  if (!canManage) return "Your role cannot create worlds.";
+  return ready ? "Create a world from this preset" : "This preset has no ready release yet.";
 }
 
 function AccessPage({ console, skin }: Controlled) {

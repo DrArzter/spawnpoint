@@ -24,6 +24,12 @@ export function Shell({ model, children }: Readonly<{ model: ShellModel; childre
   const current = model.navigation.find((item) => item.current)?.id;
 
   useEffect(() => { setDrawerOpen(false); }, [current, mobile]);
+
+  // On a phone the button opens the drawer; on a desktop it pins or collapses the rail.
+  function toggleNavigation() {
+    if (mobile) setDrawerOpen((open) => !open);
+    else setRailChoice(rail ? "false" : "true");
+  }
   // Escape closes what overlays the page, the drawer included.
   useEffect(() => {
     if (!drawerOpen) return;
@@ -35,7 +41,7 @@ export function Shell({ model, children }: Readonly<{ model: ShellModel; childre
   return (
     <div className="shell" data-drawer-open={mobile && drawerOpen ? "true" : undefined} data-rail={!mobile && rail ? "true" : undefined}>
       <header className="appbar">
-        <IconButton icon="menu" label="Toggle navigation" onClick={() => (mobile ? setDrawerOpen((open) => !open) : setRailChoice(rail ? "false" : "true"))} />
+        <IconButton icon="menu" label="Toggle navigation" onClick={toggleNavigation} />
         <a className="appbar-brand" href="#/worlds">
           <SpawnpointMark />
           <strong>Spawnpoint</strong>
@@ -67,7 +73,7 @@ export function Shell({ model, children }: Readonly<{ model: ShellModel; childre
           </nav>
           {model.observedAt && (
             <div className="drawer-footer">
-              Control plane observed
+              <span>Control plane observed</span>
               <strong>{model.observedAt}</strong>
             </div>
           )}

@@ -47,14 +47,48 @@ export function deriveServerState(game: Game | undefined, snapshot: ControlPlane
   if (observed === "ready") return "running";
   if (observed === "starting" || observed === "stopping" || observed === "stopped" || observed === "unknown") return observed;
   const hostStates = snapshot?.hosts.map((host) => host.state) ?? [];
-  if (hostStates.some((state) => state === "pending")) return "starting";
-  if (hostStates.some((state) => state === "stopping")) return "stopping";
-  if (hostStates.some((state) => state === "running")) return "unknown";
+  if (hostStates.includes("pending")) return "starting";
+  if (hostStates.includes("stopping")) return "stopping";
+  if (hostStates.includes("running")) return "unknown";
   return hostStates.length > 0 ? "stopped" : "unknown";
 }
 
-function lifecycleLabel(action: WorldActionKind): string {
-  return action === "wipe" ? "New wipe" : action === "archive" ? "Archive" : action === "restore" ? "Restore" : "Delete";
+const lifecycleLabels: Record<WorldActionKind, string> = { wipe: "New wipe", archive: "Archive", restore: "Restore", purge: "Delete" };
+
+function lifecycleLabel(kind: WorldActionKind): string {
+  return lifecycleLabels[kind];
+}
+
+function listStatusOf(controlPlane: ControlPlaneState): "loading" | "ready" | "error" {
+  if (controlPlane.status === "loading" && controlPlane.snapshot === null) return "loading";
+  return controlPlane.status === "error" ? "error" : "ready";
+}
+
+function viewerOf(session: ActiveSession): ViewerProfile {
+  return {
+    displayName: session.identity.displayName,
+    inTelegram: Boolean(window.Telegram?.WebApp.initData),
+    provider: session.profile.provider,
+    ...(session.profile.username ? { username: session.profile.username } : {}),
+    ...(session.profile.email ? { email: session.profile.email } : {}),
+    ...(session.profile.photoUrl ? { photoUrl: session.profile.photoUrl } : {}),
+    ...(session.profile.telegramId ? { telegramId: session.profile.telegramId } : {}),
+  };
+}
+
+function bootstrapOf(session: ActiveSession): OwnerBootstrap {
+  return session.bootstrap.state === "claimed"
+    ? { state: "claimed", telegramId: session.bootstrap.telegramId, ownerId: session.bootstrap.ownerId, claimedAt: formatDateTime(session.bootstrap.claimedAt) }
+    : { state: "unclaimed", telegramId: session.profile.telegramId };
+}
+
+// A game whose active world runs on the fleet, or that has only fleet worlds and
+// no session, is read as a fleet game on the Worlds page.
+function fleetOverviewOf(game: Game | undefined): boolean {
+  if (!game) return false;
+  const active = game.worlds.find((item) => item.id === game.lifecycle?.activeWorldId);
+  if (active) return active.placement === "fleet";
+  return !game.lifecycle?.activeSessionId && game.worlds.some((item) => item.placement === "fleet");
 }
 
 export type ConsoleController = Readonly<{
@@ -131,7 +165,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
   const game = games.find((item) => item.id === route.gameId) ?? games.find((item) => item.id === storedGame) ?? games[0];
   const world = route.page === "worlds" && route.worldId ? game?.worlds.find((item) => item.id === route.worldId) : undefined;
   const fleet = world?.placement === "fleet";
-  const fleetOverview = game?.worlds.find((item) => item.id === game.lifecycle?.activeWorldId)?.placement === "fleet" || (!game?.lifecycle?.activeSessionId && game?.worlds.some((item) => item.placement === "fleet")) || false;
+  const fleetOverview = fleetOverviewOf(game);
   const serverState = deriveServerState(game, snapshot);
   const sharedSession = deriveSharedHostSession(snapshot);
   const scoped = (page: Page) => routeHash({ page, accessTab: route.accessTab, gameId: game?.id ?? null, worldId: null });
@@ -142,18 +176,8 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
 
   const [members, setMembers] = useState<Member[]>(() => [{ id: session.identity.id, name: session.identity.displayName, roleId: session.identity.roleId, links: [] }]);
   const [roles, setRoles] = useState<Role[]>(() => (session.role ? [{ id: session.role.id, name: session.role.name, description: "Current signed-in role", permissions: session.role.permissions, system: true }] : []));
-  const viewer: ViewerProfile = {
-    displayName: session.identity.displayName,
-    inTelegram: Boolean(window.Telegram?.WebApp.initData),
-    provider: session.profile.provider,
-    ...(session.profile.username ? { username: session.profile.username } : {}),
-    ...(session.profile.email ? { email: session.profile.email } : {}),
-    ...(session.profile.photoUrl ? { photoUrl: session.profile.photoUrl } : {}),
-    ...(session.profile.telegramId ? { telegramId: session.profile.telegramId } : {}),
-  };
-  const bootstrap: OwnerBootstrap = session.bootstrap.state === "claimed"
-    ? { state: "claimed", telegramId: session.bootstrap.telegramId, ownerId: session.bootstrap.ownerId, claimedAt: formatDateTime(session.bootstrap.claimedAt) }
-    : { state: "unclaimed", telegramId: session.profile.telegramId };
+  const viewer = viewerOf(session);
+  const bootstrap = bootstrapOf(session);
 
   useEffect(() => initializeTelegram(), []);
 
@@ -199,7 +223,8 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     setPending({ kind: "session", worldId: targetWorld.id, action: sessionAction });
     try {
       const result = await requestSessionOperation(target.id, targetWorld.id, sessionAction);
-      notify({ tone: "success", message: result.result === "already_stopped" ? "The host is already stopped." : `${sessionAction === "start" ? "Start" : "Stop"} of ${targetWorld.displayName} accepted. It appears in Operations while it runs.` });
+      const verb = sessionAction === "start" ? "Start" : "Stop";
+      notify({ tone: "success", message: result.result === "already_stopped" ? "The host is already stopped." : `${verb} of ${targetWorld.displayName} accepted. It appears in Operations while it runs.` });
       await refresh(true);
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : `The ${sessionAction} request failed.` });
@@ -322,7 +347,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     viewer,
     granted,
     snapshot,
-    listStatus: controlPlane.status === "loading" && controlPlane.snapshot === null ? "loading" : controlPlane.status === "error" ? "error" : "ready",
+    listStatus: listStatusOf(controlPlane),
     error: controlPlane.error,
     games,
     game,

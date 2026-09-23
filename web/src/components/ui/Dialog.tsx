@@ -30,7 +30,7 @@ function useModal(open: boolean, onClose: () => void) {
   return ref;
 }
 
-export function Dialog({ open, onClose, title, children, actions, className, dismissOnBackdrop = true, brand, closeActionId }: {
+export function Dialog({ open, onClose, title, children, actions, className, dismissOnBackdrop = true, brand, closeActionId }: Readonly<{
   open: boolean;
   closeActionId?: string;
   onClose: () => void;
@@ -45,7 +45,7 @@ export function Dialog({ open, onClose, title, children, actions, className, dis
    * close button with it, because a threshold can be walked away from.
    */
   brand?: ReactNode;
-}) {
+}>) {
   const ref = useModal(open, onClose);
   const titleId = useId();
   return (
@@ -72,7 +72,7 @@ export function Dialog({ open, onClose, title, children, actions, className, dis
   );
 }
 
-export function Sheet({ open, onClose, title, description, children, footer, className, closeActionId }: {
+export function Sheet({ open, onClose, title, description, children, footer, className, closeActionId }: Readonly<{
   open: boolean;
   closeActionId?: string;
   onClose: () => void;
@@ -81,7 +81,7 @@ export function Sheet({ open, onClose, title, description, children, footer, cla
   children?: ReactNode;
   footer?: ReactNode;
   className?: string;
-}) {
+}>) {
   const ref = useModal(open, onClose);
   const titleId = useId();
   return (

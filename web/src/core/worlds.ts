@@ -2,7 +2,7 @@ import { hostStatus, sessionStatus, worldStatus, type StatusDescriptor } from ".
 import { formatDate, repositoryName, shortCommit } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Operation, ServerState, Wipe, World, WorldTab } from "../model";
 import { routeHash } from "../routing";
-import { playersOnline, sessionReason, sharedSessionOwnerLabel, worldOwnsSharedSession, type SharedHostSession } from "../session";
+import { playersOnline, sessionReason, sharedSessionOwnerLabel, worldOwnsSharedSession, type SessionReason, type SharedHostSession } from "../session";
 import type { Pending, SessionAction, WorldActionKind } from "../shell/actions";
 import { pendingFor } from "../shell/actions";
 import { action, type Action } from "./actions";
@@ -30,29 +30,45 @@ export function sessionActionForWorld(world: World, game: Game, sharedSession: S
   return worldOwnsSharedSession(sharedSession, game, world) && sharedSession.state !== "stopped" ? "stop" : "start";
 }
 
-export function sessionControlAvailability(world: World, game: Game, sharedSession: SharedHostSession, permitted: boolean, controlBusy: boolean, fleet = false): { action: SessionAction; disabled: boolean; hint: string } {
-  const action = sessionActionForWorld(world, game, sharedSession, fleet);
-  if (!world.sessionControlAvailable) {
-    if (world.materialization === "archived") return { action, disabled: true, hint: "This world is archived. Restore a backup to open a new wipe." };
-    if (world.materialization === "not_created") return { action, disabled: true, hint: "This preset needs a successful release build before its first start." };
-    return { action, disabled: true, hint: "This world is not connected to a session workflow yet." };
-  }
-  if (!permitted) return { action, disabled: true, hint: `Your role cannot ${action} sessions.` };
-  if (controlBusy || sharedSession.operationRunning) return { action, disabled: true, hint: "A control-plane operation is already in progress." };
-  if (fleet) {
-    const lifecycle = game.lifecycle;
-    if (world.connectivity === "zerotier") return { action, disabled: true, hint: "Fleet hosts do not join ZeroTier. Choose a public connection while this world is stopped." };
-    if (lifecycle?.observedState === "starting" || lifecycle?.observedState === "stopping" || lifecycle?.observedState === "unknown") return { action, disabled: true, hint: `This game is ${lifecycle.observedState}.` };
-    if (action === "start" && lifecycle?.activeSessionId) return { action, disabled: true, hint: "Another world of this game is already active. Stop it first." };
-    return { action, disabled: false, hint: action === "start" ? "Launch or reuse a billed fleet host" : "Save and back up this session, then drain its host" };
-  }
-  if (sharedSession.recoveryPending) return { action, disabled: true, hint: "Spawnpoint is reconciling the stopped host automatically." };
-  if (sharedSession.state === "starting" || sharedSession.state === "stopping") return { action, disabled: true, hint: `The shared host is ${sharedSession.state}.` };
-  if (sharedSession.state === "unknown") return { action, disabled: true, hint: "Spawnpoint cannot confirm that the shared host is free. Refresh before trying again." };
+export type SessionControl = { action: SessionAction; disabled: boolean; hint: string };
+
+// Why a world cannot be started or stopped at all, whatever the host is doing.
+function unavailableReason(world: World): string {
+  if (world.materialization === "archived") return "This world is archived. Restore a backup to open a new wipe.";
+  if (world.materialization === "not_created") return "This preset needs a successful release build before its first start.";
+  return "This world is not connected to a session workflow yet.";
+}
+
+// A fleet world is refused for its own game's state, never for another game's.
+function fleetRefusal(world: World, game: Game, action: SessionAction): string | null {
+  const lifecycle = game.lifecycle;
+  if (world.connectivity === "zerotier") return "Fleet hosts do not join ZeroTier. Choose a public connection while this world is stopped.";
+  if (lifecycle?.observedState === "starting" || lifecycle?.observedState === "stopping" || lifecycle?.observedState === "unknown") return `This game is ${lifecycle.observedState}.`;
+  if (action === "start" && lifecycle?.activeSessionId) return "Another world of this game is already active. Stop it first.";
+  return null;
+}
+
+// The shared host is one machine: whoever holds it decides for everyone.
+function sharedRefusal(sharedSession: SharedHostSession, action: SessionAction): string | null {
+  if (sharedSession.recoveryPending) return "Spawnpoint is reconciling the stopped host automatically.";
+  if (sharedSession.state === "starting" || sharedSession.state === "stopping") return `The shared host is ${sharedSession.state}.`;
+  if (sharedSession.state === "unknown") return "Spawnpoint cannot confirm that the shared host is free. Refresh before trying again.";
   if (action === "start" && sharedSession.state === "running") {
     const owner = sharedSessionOwnerLabel(sharedSession);
-    return { action, disabled: true, hint: owner ? `${owner} is using the shared host. Stop that session first.` : "Another session is using the shared host. Stop it first." };
+    return owner ? `${owner} is using the shared host. Stop that session first.` : "Another session is using the shared host. Stop it first.";
   }
+  return null;
+}
+
+export function sessionControlAvailability(world: World, game: Game, sharedSession: SharedHostSession, permitted: boolean, controlBusy: boolean, fleet = false): SessionControl {
+  const action = sessionActionForWorld(world, game, sharedSession, fleet);
+  const refuse = (hint: string): SessionControl => ({ action, disabled: true, hint });
+  if (!world.sessionControlAvailable) return refuse(unavailableReason(world));
+  if (!permitted) return refuse(`Your role cannot ${action} sessions.`);
+  if (controlBusy || sharedSession.operationRunning) return refuse("A control-plane operation is already in progress.");
+  const refusal = fleet ? fleetRefusal(world, game, action) : sharedRefusal(sharedSession, action);
+  if (refusal !== null) return refuse(refusal);
+  if (fleet) return { action, disabled: false, hint: action === "start" ? "Launch or reuse a billed fleet host" : "Save and back up this session, then drain its host" };
   return { action, disabled: false, hint: action === "start" ? "Start a billed session on the shared host" : "Save, back up and stop this session" };
 }
 
@@ -150,14 +166,17 @@ function packAction(game: Game, world: World, busy: boolean, callbacks: WorldCal
 }
 
 function lifecycleActions(game: Game, world: World, busy: boolean, callbacks: WorldCallbacks): Action[] {
-  const items: Action[] = [];
   const preset = presetOf(game, world);
   if (world.materialization === "existing") {
-    items.push(action("world.wipe", "Start a new wipe", () => callbacks.onWorldAction(game, world, "wipe"), { icon: "history", disabled: busy || !preset?.latestRelease, detail: preset?.latestRelease ? `From ${preset.displayName} ${preset.latestRelease}` : "Needs a built release" }));
-    items.push(action("world.archive", "Archive", () => callbacks.onWorldAction(game, world, "archive"), { icon: "archive", disabled: busy, detail: "Stops, backs up, hides from session control" }));
+    return [
+      action("world.wipe", "Start a new wipe", () => callbacks.onWorldAction(game, world, "wipe"), { icon: "history", disabled: busy || !preset?.latestRelease, detail: preset?.latestRelease ? `From ${preset.displayName} ${preset.latestRelease}` : "Needs a built release" }),
+      action("world.archive", "Archive", () => callbacks.onWorldAction(game, world, "archive"), { icon: "archive", disabled: busy, detail: "Stops, backs up, hides from session control" }),
+    ];
   }
-  if (world.materialization === "archived") items.push(action("world.purge", "Delete permanently", () => callbacks.onWorldAction(game, world, "purge"), { icon: "delete_forever", danger: true, disabled: busy, detail: "Registry, pointer and every backup" }));
-  return items;
+  if (world.materialization === "archived") {
+    return [action("world.purge", "Delete permanently", () => callbacks.onWorldAction(game, world, "purge"), { icon: "delete_forever", danger: true, disabled: busy, detail: "Registry, pointer and every backup" })];
+  }
+  return [];
 }
 
 /** The world page's overflow: what the list has, plus hosting, minus details and invite (which the page shows on its own). */
@@ -200,28 +219,50 @@ export function worldTabs(world: World, canReadReleases: boolean): { id: WorldTa
   return tabs;
 }
 
+type Host = ControlPlaneSnapshot["hosts"][number];
+
+function sessionHint(fleet: boolean, game: Game, world: World, reason: SessionReason): string {
+  if (!fleet) return reason.text;
+  return game.lifecycle?.activeWorldId === world.id ? "This world owns the current game session." : "This world has no active session.";
+}
+
+function hostDetail(host: Host | undefined): Detail {
+  if (!host) return { label: "Compute host", value: { type: "absent", text: "No host available" } };
+  const status = hostStatus(host.state);
+  const zone = host.availabilityZone ? ` in ${host.availabilityZone}` : "";
+  return {
+    label: "Compute host",
+    value: { type: "status", status: { kind: status.kind, label: `${host.name} · ${status.label.toLowerCase()}` } },
+    hint: host.instanceType ? `${host.instanceType}${zone}` : undefined,
+  };
+}
+
+function launchedDetail(host: Host): Detail {
+  return { label: "Launched", value: host.launchedAt ? { type: "time", at: host.launchedAt } : { type: "absent", text: "Not running" } };
+}
+
 export function sessionDetails(game: Game, world: World, sharedSession: SharedHostSession, snapshot: ControlPlaneSnapshot | null, serverState: ServerState, fleet: boolean): Detail[] {
   const host = snapshot?.hosts[0];
-  const session = sessionStatus(serverState);
   const reason = sessionReason(sharedSession, game, world);
   const players = playersOnline(game);
   const idleAt = game.lifecycle?.idle?.lastObservedAtEpochSeconds ?? null;
   const running = snapshot?.hosts.filter((item) => item.provenance === "launched" && item.state === "running").length ?? 0;
-  return [
-    {
-      label: "Session",
-      value: { type: "status", status: session },
-      hint: fleet ? (game.lifecycle?.activeWorldId === world.id ? "This world owns the current game session." : "This world has no active session.") : reason.text,
-      hintAttention: !fleet && reason.attention,
-      explain: fleet ? "A fleet host launches when a session needs one and drains after its last session." : `${game.displayName} runs one session at a time on the shared host. ${reason.detail}`,
-    },
-    fleet
-      ? { label: "Fleet", value: { type: "text", text: `${running} running hosts` } }
-      : { label: "Compute host", value: host ? { type: "status", status: { kind: hostStatus(host.state).kind, label: `${host.name} · ${hostStatus(host.state).label.toLowerCase()}` } } : { type: "absent", text: "No host available" }, hint: host?.instanceType ? `${host.instanceType}${host.availabilityZone ? ` in ${host.availabilityZone}` : ""}` : undefined },
-    ...(!fleet && host ? [{ label: "Launched", value: host.launchedAt ? { type: "time" as const, at: host.launchedAt } : { type: "absent" as const, text: "Not running" } }] : []),
-    ...(players === null ? [] : [{ label: "Players online", value: { type: "number" as const, value: players }, hint: idleAt === null ? undefined : "Counted", hintTime: idleAt }]),
-    { label: "Last observed", value: { type: "time", at: snapshot?.observedAt } },
-  ];
+  const details: Detail[] = [{
+    label: "Session",
+    value: { type: "status", status: sessionStatus(serverState) },
+    hint: sessionHint(fleet, game, world, reason),
+    hintAttention: !fleet && reason.attention,
+    explain: fleet ? "A fleet host launches when a session needs one and drains after its last session." : `${game.displayName} runs one session at a time on the shared host. ${reason.detail}`,
+  }];
+  if (fleet) {
+    details.push({ label: "Fleet", value: { type: "text", text: `${running} running hosts` } });
+  } else {
+    details.push(hostDetail(host));
+    if (host) details.push(launchedDetail(host));
+  }
+  if (players !== null) details.push({ label: "Players online", value: { type: "number", value: players }, hint: idleAt === null ? undefined : "Counted", hintTime: idleAt });
+  details.push({ label: "Last observed", value: { type: "time", at: snapshot?.observedAt } });
+  return details;
 }
 
 export function worldDetails(game: Game, world: World, serverState: ServerState): Detail[] {
@@ -238,12 +279,16 @@ export function worldDetails(game: Game, world: World, serverState: ServerState)
     { label: "Current wipe", value: currentWipe ? { type: "text", text: `#${currentWipe.number}` } : { type: "absent", text: world.worldLifecycleAvailable ? "No wipes yet" : "Not tracked" }, explain: "One wipe is one generation of this world. A new one keeps every backup of the old one.", hint: currentWipe ? `Opened ${formatDate(currentWipe.createdAt)} · release ${currentWipe.originRelease}` : undefined },
     { label: "Address", value: address ? { type: "address", address } : { type: "absent", text: missingAddressLabel(world, serverState) }, copy: world.connectionAddress ?? undefined },
     { label: "Hosting", value: { type: "text", text: world.placement === "fleet" ? "On-demand fleet" : "Persistent host" }, hint: world.placement === "fleet" ? "A disposable host is allocated for each session." : "Uses the configured long-lived host." },
-    { label: "Connection", value: { type: "text", text: world.connectivity === "zerotier" ? "ZeroTier" : world.connectivity === "route53" ? "Public DNS" : "Public IP" } },
+    { label: "Connection", value: { type: "text", text: connectionLabels[world.connectivity] } },
   ];
 }
 
+const connectionLabels: Record<World["connectivity"], string> = { zerotier: "ZeroTier", route53: "Public DNS", raw: "Public IP" };
+
+const operationLabels: Record<Operation["type"], string> = { start: "Starting session", stop: "Stopping session", world: "Updating world", promote: "Promoting release" };
+
 export function operationLabel(type: Operation["type"]): string {
-  return type === "start" ? "Starting session" : type === "stop" ? "Stopping session" : type === "world" ? "Updating world" : "Promoting release";
+  return operationLabels[type];
 }
 
 export function worldNotices(world: World, pending: Pending | null): Notice[] {

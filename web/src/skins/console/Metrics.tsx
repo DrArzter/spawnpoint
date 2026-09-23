@@ -39,9 +39,10 @@ function HostChart({ model }: Readonly<{ model: MetricsModel }>) {
   }
   return (
     <Card
-      actions={<div aria-label="Window" className="chip-row" role="group">
+      actions={<fieldset className="chip-row fieldset-plain">
+        <legend className="visually-hidden">Window</legend>
         {model.ranges.map((option) => <ChoiceChip key={option.id} onClick={() => model.setRange(option.id)} pressed={model.range === option.id}>{option.label}</ChoiceChip>)}
-      </div>}
+      </fieldset>}
       title="Compute host"
     >
       {metrics.status === "error" && <Banner actions={<ActionButton action={metrics.retry} variant="text" />} description={metrics.error} title="Metrics could not be loaded" tone="error" />}

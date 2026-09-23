@@ -14,7 +14,7 @@ import type { BackupsModel, Detail, DetailValue, ReleaseRow, WorldModel } from "
 import { wipeStatus } from "../../core/worlds";
 import { Icon } from "../../icons";
 import { formatBytes, formatTime, shortDigest } from "../../lib/format";
-import type { Operation, Wipe } from "../../model";
+import type { Wipe } from "../../model";
 import { useMediaQuery } from "../../shell/hooks";
 import { ActionButton, menuGroups, menuItems } from "./actions";
 import { ConnectionAddress, Notices } from "./Worlds";
@@ -71,11 +71,22 @@ function detailValue(value: DetailValue): ReactNode {
   }
 }
 
+function detailHint(detail: Detail): ReactNode {
+  if (detail.hintTime !== undefined) return <>{detail.hint} <Timestamp value={detail.hintTime} /></>;
+  if (!detail.hint) return undefined;
+  return <span className={detail.hintAttention ? "session-reason-attention" : undefined}>{detail.hint}</span>;
+}
+
 function detailItem(detail: Detail): DetailItem {
-  const hint = detail.hintTime !== undefined
-    ? <>{detail.hint} <Timestamp value={detail.hintTime} /></>
-    : detail.hint ? <span className={detail.hintAttention ? "session-reason-attention" : undefined}>{detail.hint}</span> : undefined;
-  return { label: detail.label, value: detailValue(detail.value), hint, explain: detail.explain, copy: detail.copy };
+  return { label: detail.label, value: detailValue(detail.value), hint: detailHint(detail), explain: detail.explain, copy: detail.copy };
+}
+
+// What the inventory could not show, in one sentence.
+function partialInventoryDescription(unverified: number, truncated: boolean): string {
+  const parts: string[] = [];
+  if (unverified > 0) parts.push(`${unverified} ${unverified === 1 ? "object" : "objects"} could not be verified and ${unverified === 1 ? "is" : "are"} not shown.`);
+  if (truncated) parts.push("Older backups exist beyond the newest shown.");
+  return parts.join(" ");
 }
 
 const operationColumns: Column<WorldModel["operations"][number]>[] = [
@@ -122,10 +133,11 @@ function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldN
       {model.wipes.length > 0 && (
         <div className="filter-bar">
           <Icon name="filter_list" size={20} />
-          <div aria-label="Filter backups by wipe" className="chip-row" role="group">
+          <fieldset className="chip-row fieldset-plain">
+            <legend className="visually-hidden">Filter backups by wipe</legend>
             <ChoiceChip onClick={() => model.setFilter(null)} pressed={model.filter === null}>All wipes</ChoiceChip>
             {[...model.wipes].reverse().map((wipe) => <ChoiceChip key={wipe.id} onClick={() => model.setFilter(wipe.id)} pressed={model.filter === wipe.id}>Wipe #{wipe.number}</ChoiceChip>)}
-          </div>
+          </fieldset>
         </div>
       )}
       {inventory.status === "error" && inventory.kind === "unavailable" && <NotConnected description="Verified archives appear here once the backup inventory is reachable." title="The backup inventory is not connected yet" />}
@@ -141,7 +153,7 @@ function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldN
       {inventory.status === "ready" && (inventory.value.unverified > 0 || inventory.value.truncated) && (
         <div style={{ padding: "0 16px 16px" }}>
           <Banner
-            description={`${inventory.value.unverified > 0 ? `${inventory.value.unverified} object${inventory.value.unverified === 1 ? "" : "s"} could not be verified and ${inventory.value.unverified === 1 ? "is" : "are"} not shown. ` : ""}${inventory.value.truncated ? "Older backups exist beyond the newest shown." : ""}`}
+            description={partialInventoryDescription(inventory.value.unverified, inventory.value.truncated)}
             title="Inventory is partial"
             tone="warning"
           />
@@ -163,5 +175,3 @@ function ReleasesTab({ rows, state, worldName }: Readonly<{ rows: readonly Relea
     </Card>
   );
 }
-
-export type { Operation };

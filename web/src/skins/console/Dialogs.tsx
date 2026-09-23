@@ -132,9 +132,12 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
   const { game, world } = model;
   const recipients = model.recipients;
   const history = model.history;
+  const address = world.connectionAddress ? ` · ${world.connectionAddress}` : "";
+  const matches = recipients.status === "ready" ? recipients.value.length : 0;
+  const summary = model.query.trim() ? `${matches} matches` : `${model.reachable} reachable`;
   return (
     <Sheet
-      description={`${game.displayName} · ${world.displayName}${world.connectionAddress ? ` · ${world.connectionAddress}` : ""}`}
+      description={`${game.displayName} · ${world.displayName}${address}`}
       footer={<>
         <p>{model.send.hint}</p>
         <ActionButton action={model.send} variant="filled" />
@@ -146,11 +149,11 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
     >
       <fieldset className="audience">
         <legend>Audience</legend>
-        <label className="audience-option">
+        <label aria-label="Everyone" className="audience-option">
           <input checked={model.audience === "broadcast"} name="invite-audience" onChange={() => model.setAudience("broadcast")} type="radio" />
           <span><strong>Everyone</strong><small>Group chats and people subscribed to broadcast invitations. Your own chat is excluded.</small></span>
         </label>
-        <label className="audience-option">
+        <label aria-label="Specific people" className="audience-option">
           <input checked={model.audience === "direct"} name="invite-audience" onChange={() => model.setAudience("direct")} type="radio" />
           <span><strong>Specific people</strong><small>Only the selected people, if they allow direct invitations.</small></span>
         </label>
@@ -160,7 +163,7 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
         <section aria-label="Players" className="recipients">
           <SearchField autoComplete="off" label="Find a player" onChange={(event) => model.setQuery(event.target.value)} placeholder="Search by display name" value={model.query} />
           <p className="secondary recipients-summary">
-            {model.query.trim() ? `${recipients.status === "ready" ? recipients.value.length : 0} matches` : `${model.reachable} reachable`}
+            {summary}
             {model.selectedCount > 0 && <ActionButton action={model.clearSelection} size="small" variant="text" />}
           </p>
           {recipients.status === "loading" && <SkeletonRows label="Loading approved players" rows={3} />}

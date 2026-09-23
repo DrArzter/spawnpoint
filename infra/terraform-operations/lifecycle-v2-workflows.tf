@@ -52,6 +52,12 @@ data "aws_iam_policy_document" "lifecycle_v2_start" {
   }
 
   statement {
+    sid       = "DrainFailedLaunchedStart"
+    actions   = ["states:StartExecution"]
+    resources = [local.lifecycle_v2_drain_arn]
+  }
+
+  statement {
     sid     = "WatchOnlyAcceptedHostOperations"
     actions = ["states:DescribeExecution", "states:StopExecution"]
     resources = [
@@ -160,6 +166,7 @@ resource "aws_sfn_state_machine" "lifecycle_v2_start" {
     start_v1_state_machine_arn = local.start_state_machine_arn
     stop_v1_state_machine_arn  = local.stop_state_machine_arn
     watchdog_state_machine_arn = local.lifecycle_v2_watchdog_arn
+    drain_state_machine_arn    = local.lifecycle_v2_drain_arn
     fleet_launch_template_name = "spawnpoint-fleet-host"
     allowed_instance_types     = jsonencode(var.launch_families)
   })

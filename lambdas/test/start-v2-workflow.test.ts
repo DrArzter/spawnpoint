@@ -74,15 +74,13 @@ test("V2 start owns lifecycle around the accepted V1 host operation", async () =
   assert.equal(state(definition, "Start Session Watchdog").Resource, "arn:aws:states:::aws-sdk:sfn:startExecution");
   assert.equal(state(definition, "Start Session Watchdog").Next, "Ready");
   assert.equal(state(definition, "Start Session Watchdog").Catch?.[0]?.Next, "Acquire Watchdog Compensation Lease");
-  assert.equal(state(definition, "Acquire Watchdog Compensation Lease").Next, "Release Failed Placement");
-  assert.equal(state(definition, "Release Failed Placement").Next, "Begin Compensating Stop");
+  assert.equal(state(definition, "Acquire Watchdog Compensation Lease").Next, "Begin Compensating Stop");
 });
 
 test("a failed V1 start is durably stopped before lifecycle is cleared", async () => {
   const definition = await loadDefinition();
 
-  assert.equal(state(definition, "Start Accepted V1").Catch?.[0]?.Next, "Release Failed Placement");
-  assert.equal(state(definition, "Release Failed Placement").Catch?.[0]?.Next, "Begin Compensating Stop", "giving a slot back never blocks the compensation");
+  assert.equal(state(definition, "Start Accepted V1").Catch?.[0]?.Next, "Begin Compensating Stop");
   assert.equal(state(definition, "Begin Compensating Stop").Next, "Stop Accepted V1");
   assert.equal(state(definition, "Stop Accepted V1").Resource, "arn:aws:states:::states:startExecution.sync:2");
   assert.equal(
@@ -90,8 +88,11 @@ test("a failed V1 start is durably stopped before lifecycle is cleared", async (
     "$.request.worldId",
   );
   assert.equal(state(definition, "Stop Accepted V1").Next, "Mark Compensated Session Stopped");
-  assert.equal(state(definition, "Mark Compensated Session Stopped").Next, "Release Compensating Lease");
-  assert.equal(state(definition, "Release Compensating Lease").Next, "Start Failed And Compensated");
+  assert.equal(state(definition, "Mark Compensated Session Stopped").Next, "Release Compensated Placement", "a failed start must not free its host before the game is stopped");
+  assert.equal(state(definition, "Release Compensated Placement").Next, "Release Compensating Lease");
+  assert.equal(state(definition, "Release Compensating Lease").Next, "Route Compensated Fleet Drain");
+  assert.equal(state(definition, "Route Compensated Fleet Drain").Choices?.[1]?.Next, "Start Compensated Host Drain");
+  assert.equal(state(definition, "Start Compensated Host Drain").Next, "Start Failed And Compensated");
   assert.equal(state(definition, "Start Failed And Compensated").Type, "Fail");
 });
 
@@ -107,9 +108,35 @@ test("a failed verified compensation force-stops the billed host with a bounded 
   assert.equal(state(definition, "Forced Stop Host Stopped").Default, "Increment Forced Stop Poll");
   assert.equal(state(definition, "Increment Forced Stop Poll").Next, "Forced Stop Poll Limit Reached");
   assert.equal(state(definition, "Forced Stop Poll Limit Reached").Default, "Wait Before Forced Stop Poll");
-  assert.equal(state(definition, "Mark Forced Session Stopped").Next, "Release Forced Compensation Lease");
-  assert.equal(state(definition, "Release Forced Compensation Lease").Next, "Start Failed Host Forced Stopped");
+  assert.equal(state(definition, "Mark Forced Session Stopped").Next, "Release Forced Placement");
+  assert.equal(state(definition, "Release Forced Placement").Next, "Release Forced Compensation Lease");
+  assert.equal(state(definition, "Release Forced Compensation Lease").Next, "Route Forced Fleet Drain");
+  assert.equal(state(definition, "Route Forced Fleet Drain").Choices?.[1]?.Next, "Start Forced Host Drain");
+  assert.equal(state(definition, "Start Forced Host Drain").Next, "Start Failed Host Forced Stopped");
   assert.equal(state(definition, "Start Failed Host Forced Stopped").Type, "Fail");
+});
+
+test("a failed Fleet start drains an emptied launched host and never hides a failed handoff", async () => {
+  const definition = await loadDefinition();
+  for (const [release, route, drain] of [
+    ["Release Compensated Placement", "Route Compensated Fleet Drain", "Start Compensated Host Drain"],
+    ["Release Forced Placement", "Route Forced Fleet Drain", "Start Forced Host Drain"],
+  ]) {
+    const payload = state(definition, release).Parameters?.Payload as Record<string, unknown>;
+    assert.equal(payload.action, "releasePlacement");
+    assert.equal(payload["hostId.$"], "$.request.placed.hostId");
+    assert.equal(payload["sessionId.$"], "$.request.sessionId");
+    assert.equal(state(definition, release).Catch?.[0]?.Next, route === "Route Compensated Fleet Drain"
+      ? "Release Compensating Lease" : "Release Forced Compensation Lease");
+    assert.equal(state(definition, route).Choices?.[0]?.Next, "Start Compensation Host Not Drained");
+    assert.match(JSON.stringify(state(definition, route).Choices?.[1]), /draining.*launched/);
+    assert.equal(state(definition, drain).Resource, "arn:aws:states:::aws-sdk:sfn:startExecution");
+    assert.equal(state(definition, drain).Catch?.[0]?.Next, "Start Compensation Host Not Drained");
+    const input = state(definition, drain).Parameters?.Input as Record<string, unknown>;
+    assert.equal(input["hostId.$"], "$.request.placed.hostId");
+    assert.equal(input.immediate, true, "a failed start must not leave a useless Fleet host warm for the normal grace period");
+  }
+  assert.equal(state(definition, "Start Compensation Host Not Drained").Type, "Fail");
 });
 
 test("the lifecycle records which world owns the active shared-host session", async () => {

@@ -9,7 +9,14 @@
         "request.$": "$",
         "polls": { "keep": 0 }
       },
-      "Next": "Wait Out Grace Period"
+      "Next": "Route Drain Urgency"
+    },
+    "Route Drain Urgency": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.request.immediate", "BooleanEquals": true, "Next": "Decide Immediate Drain" }
+      ],
+      "Default": "Wait Out Grace Period"
     },
     "Wait Out Grace Period": {
       "Type": "Wait",
@@ -26,6 +33,34 @@
           "hostId.$": "$.request.hostId",
           "gracePeriodSeconds": ${grace_period_seconds},
           "headroomMiB": ${headroom_mib}
+        }
+      },
+      "ResultSelector": {
+        "drain.$": "$.Payload.drain",
+        "state.$": "$.Payload.host.record.state"
+      },
+      "ResultPath": "$.decision",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Route Drain"
+    },
+    "Decide Immediate Drain": {
+      "Type": "Task",
+      "Comment": "A failed start has no useful session to keep warm. Skip the normal grace and headroom policy, but let the coordinator refuse if another session took the host.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "decideDrain",
+          "hostId.$": "$.request.hostId",
+          "gracePeriodSeconds": 0,
+          "headroomMiB": 0
         }
       },
       "ResultSelector": {

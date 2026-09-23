@@ -386,9 +386,10 @@ run "launched_hosts_are_placed_drained_and_let_go_by_tag" {
       strcontains(aws_sfn_state_machine.lifecycle_v2_start.definition, "arn:aws:states:::aws-sdk:ec2:createFleet"),
       strcontains(aws_sfn_state_machine.lifecycle_v2_start.definition, "\"LaunchTemplateName\": \"spawnpoint-fleet-host\""),
       strcontains(aws_sfn_state_machine.lifecycle_v2_start.definition, "\"AllowedInstanceTypes\": ${jsonencode(var.launch_families)}"),
+      strcontains(aws_sfn_state_machine.lifecycle_v2_start.definition, local.lifecycle_v2_drain_arn),
       strcontains(aws_sfn_state_machine.lifecycle_v2_stop.definition, local.lifecycle_v2_drain_arn),
     ])
-    error_message = "A start launches from the fleet template with the allowed families as a filter, and a stop that empties a launched host starts its drain."
+    error_message = "A start launches from the fleet template with the allowed families as a filter, and either a failed start or a stop that empties a launched host starts its drain."
   }
 
   assert {
@@ -396,6 +397,7 @@ run "launched_hosts_are_placed_drained_and_let_go_by_tag" {
       one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "LaunchFleetHosts"]) == toset(["ec2:CreateFleet", "ec2:RunInstances"]),
       one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "PassOnlyTheHostRole"]) == toset(["iam:PassRole"]),
       one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "TerminateOnlyLaunchedHosts"]) == toset(["ec2:TerminateInstances"]),
+      one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.resources if statement.sid == "DrainFailedLaunchedStart"]) == toset([local.lifecycle_v2_drain_arn]),
       length(one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.condition if statement.sid == "ForceStopOnlyFailedLaunchedHost"])) == 1,
       length(one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.condition if statement.sid == "TerminateOnlyLaunchedHosts"])) == 1,
     ])

@@ -72,7 +72,7 @@ function hostState(value: string | undefined): HostObservation["state"] {
 async function listHosts(): Promise<readonly HostObservation[]> {
   const response = await ec2.send(new DescribeInstancesCommand({ Filters: [
     { Name: "tag:Project", Values: ["spawnpoint"] },
-    { Name: "tag:Purpose", Values: ["minecraft-session-host"] },
+    { Name: "tag:Purpose", Values: ["minecraft-session-host", "game-host"] },
     { Name: "instance-state-name", Values: ["pending", "running", "stopping", "stopped"] },
   ] }));
   return (response.Reservations ?? []).flatMap((reservation) => reservation.Instances ?? []).flatMap((instance) => {

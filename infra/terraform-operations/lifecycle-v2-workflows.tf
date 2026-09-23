@@ -73,6 +73,18 @@ data "aws_iam_policy_document" "lifecycle_v2_start" {
   }
 
   statement {
+    sid       = "ForceStopOnlyFailedLaunchedHost"
+    actions   = ["ec2:StopInstances"]
+    resources = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:ResourceTag/ManagedBy"
+      values   = ["spawnpoint-fleet"]
+    }
+  }
+
+  statement {
     sid       = "ObserveForcedStop"
     actions   = ["ec2:DescribeInstances"]
     resources = ["*"]

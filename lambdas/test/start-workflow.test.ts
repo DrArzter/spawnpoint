@@ -145,10 +145,15 @@ test("a placed session's command carries its slot, and a request with no slot ru
   const definition = await loadDefinition();
   const route = definition.States["Route Session Command"];
   assert.ok(route);
-  assert.equal(route.Choices?.[0]?.Variable, "$.request.slot");
-  assert.equal(route.Choices?.[0]?.Next, "Start Placed Session Command");
+  assert.equal(route.Choices?.[0]?.Next, "Start Fleet Session Command");
+  assert.equal(route.Choices?.[1]?.Variable, "$.request.slot");
+  assert.equal(route.Choices?.[1]?.Next, "Start Placed Session Command");
   assert.equal(route.Default, "Start Session Command");
   const placed = JSON.stringify(definition.States["Start Placed Session Command"]);
   assert.match(placed, /States\.Format\('WORLD_ID=\{\} SPAWNPOINT_SLOT=\{\} SESSION_FORMAT=json \/srv\/spawnpoint\/app\/server\/scripts\/start-session\.sh', \$\.request\.worldId, \$\.request\.slot\)/);
   assert.equal(definition.States["Start Placed Session Command"]?.Next, definition.States["Start Session Command"]?.Next);
+  const fleet = JSON.stringify(definition.States["Start Fleet Session Command"]);
+  assert.match(fleet, /spawnpoint-fleet-ready/);
+  assert.match(fleet, /fleet bootstrap not ready after 300 seconds/);
+  assert.equal(definition.States["Start Fleet Session Command"]?.Next, definition.States["Start Session Command"]?.Next);
 });

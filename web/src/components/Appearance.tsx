@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 
-import { updateAppearance } from "../auth";
 import { deriveAccent, DEFAULT_ACCENT, parseHex } from "../styles/accent";
 import type { ThemePreference } from "../telegram";
 import { Button } from "./ui/Button";
@@ -11,10 +10,10 @@ import { Card } from "./ui/Surfaces";
 
 type Appearance = {
   preference: ThemePreference;
-  setPreference: (next: ThemePreference) => void;
+  setPreference: (next: ThemePreference) => Promise<void>;
   theme: "light" | "dark";
   accent: string;
-  setAccent: (next: string) => void;
+  setAccent: (next: string) => Promise<void>;
 };
 
 const THEMES: readonly { id: ThemePreference; label: string; icon: "brightness_auto" | "light_mode" | "dark_mode" }[] = [
@@ -44,13 +43,13 @@ export function Appearance({ appearance }: { appearance: Appearance }) {
   const derived = useMemo(() => deriveAccent(appearance.accent, appearance.theme), [appearance.accent, appearance.theme]);
 
   function save(next: { theme?: ThemePreference; accent?: string }) {
-    const theme = next.theme ?? appearance.preference;
-    const accent = next.accent ?? appearance.accent;
-    if (next.theme) appearance.setPreference(next.theme);
-    if (next.accent) appearance.setAccent(next.accent);
-    // The panel has already repainted. Storing is what makes the choice follow
-    // the person to another device, so only that failure is worth saying.
-    updateAppearance({ theme, accent }).catch((error: unknown) => {
+    // The panel has already repainted; the setters write through to the account.
+    // Storing is what makes the choice follow the person to another device, so
+    // only that failure is worth saying — and only here, where there is room.
+    const writes: Promise<void>[] = [];
+    if (next.theme) writes.push(appearance.setPreference(next.theme));
+    if (next.accent) writes.push(appearance.setAccent(next.accent));
+    Promise.all(writes).catch((error: unknown) => {
       notify({ tone: "error", message: error instanceof Error ? error.message : "The appearance could not be saved to your profile." });
     });
   }

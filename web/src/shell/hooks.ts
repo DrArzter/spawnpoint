@@ -30,10 +30,38 @@ export function useRoute(): [AppRoute, (patch: Partial<AppRoute>, options?: { re
  * white and on #333. Local storage paints immediately; the identity's stored
  * choice overrides it through `adopt` once the session answers.
  */
-export function useAppearance() {
-  const [preference, setPreference] = useState<ThemePreference>(getThemePreference);
+/** What the control plane is told when the person changes something. */
+export type AppearanceSync = (next: { theme: ThemePreference; accent: string }) => Promise<unknown>;
+
+/**
+ * Theme and accent, painted at once and remembered twice: in this browser, so
+ * the panel has its colours before the session answers, and against the
+ * identity through `sync`, so the same choice meets the person on the next
+ * device. Every setter here writes through — the app bar's toggle used to
+ * change the theme locally and leave the account on the old one, which is a
+ * choice that quietly fails to follow you.
+ *
+ * `sync` is absent where nobody is signed in (the front door) and on `adopt`,
+ * which is the account speaking, not the person.
+ */
+export function useAppearance({ sync }: { sync?: AppearanceSync } = {}) {
+  const [preference, setPreferenceState] = useState<ThemePreference>(getThemePreference);
   const [accent, setAccentState] = useState<string>(() => getStoredAccent() ?? DEFAULT_ACCENT);
   const [theme, setTheme] = useState<Theme>(() => resolveTheme(getThemePreference()));
+  // The latest values, readable inside stable callbacks: the account wants the
+  // whole preference on every write, not the half that changed.
+  const current = useRef({ preference, accent, sync });
+  current.current = { preference, accent, sync };
+
+  const push = useCallback((next: { theme: ThemePreference; accent: string }): Promise<void> => {
+    const send = current.current.sync;
+    return send === undefined ? Promise.resolve() : Promise.resolve(send(next)).then(() => undefined);
+  }, []);
+
+  const setPreference = useCallback((next: ThemePreference): Promise<void> => {
+    setPreferenceState(next);
+    return push({ theme: next, accent: current.current.accent });
+  }, [push]);
 
   useEffect(() => {
     persistThemePreference(preference);
@@ -44,20 +72,26 @@ export function useAppearance() {
   useEffect(() => applyTheme(theme), [theme]);
   useEffect(() => { applyAccent(document.documentElement, accent, theme); }, [accent, theme]);
 
-  const setAccent = useCallback((next: string) => {
+  const setAccent = useCallback((next: string): Promise<void> => {
     persistAccent(next);
     setAccentState(next);
-  }, []);
+    return push({ theme: current.current.preference, accent: next });
+  }, [push]);
 
   /** What the control plane holds, which outranks whatever this browser cached. */
   const adopt = useCallback((remote: { theme: ThemePreference; accent: string }) => {
-    setPreference(remote.theme);
-    setAccent(remote.accent);
-  }, [setAccent]);
+    setPreferenceState(remote.theme);
+    persistAccent(remote.accent);
+    setAccentState(remote.accent);
+  }, []);
 
+  // The bar's one-tap toggle. Its write to the account fails quietly: a palette
+  // that did not travel is not worth a banner over the page somebody is using.
   const cycle = useCallback(() => {
-    setPreference((current) => (current === "system" ? (theme === "dark" ? "light" : "dark") : "system"));
-  }, [theme]);
+    const now = current.current.preference;
+    const next: ThemePreference = now === "system" ? (theme === "dark" ? "light" : "dark") : "system";
+    void setPreference(next).catch(() => undefined);
+  }, [theme, setPreference]);
 
   const label = preference === "system" ? `System theme (${theme})` : `${preference === "dark" ? "Dark" : "Light"} theme`;
   return { preference, setPreference, theme, accent, setAccent, adopt, cycle, label };

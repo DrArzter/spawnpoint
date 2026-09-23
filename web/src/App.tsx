@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { ActiveSession, AuthState, endSession, loadAppearance, loadControlPlane, requestCreateWorld, requestPackDownload, requestSessionOperation, requestUpdateWorldSettings, requestWorldLifecycle, restoreAuth, subscribeControlPlane } from "./auth";
+import { ActiveSession, AuthState, endSession, loadAppearance, loadControlPlane, requestCreateWorld, requestPackDownload, requestSessionOperation, requestUpdateWorldSettings, requestWorldLifecycle, restoreAuth, subscribeControlPlane, updateAppearance } from "./auth";
 import { InvitationSheet } from "./components/InvitationSheet";
 import { Button } from "./components/ui/Button";
 import { Dialog, Sheet } from "./components/ui/Dialog";
@@ -102,7 +102,9 @@ type ControlPlaneState =
 function ConsoleShell({ session, continuesBootCard }: { session: ActiveSession; continuesBootCard: boolean }) {
   const notify = useSnackbar();
   const [route, navigate] = useRoute();
-  const appearance = useAppearance();
+  // The console only exists for a signed-in person, so every change here is
+  // the account's to keep. The front door has no session and syncs nothing.
+  const appearance = useAppearance({ sync: updateAppearance });
   const { theme, cycle: cycleTheme, label: themeLabel, adopt: adoptAppearance } = appearance;
   const mobile = useMediaQuery("(max-width: 959px)");
   const [drawerOpen, setDrawerOpen] = useState(false);

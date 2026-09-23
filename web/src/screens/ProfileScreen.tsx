@@ -9,10 +9,10 @@ import { openInBrowser, ThemePreference, ViewerProfile } from "../telegram";
 
 type AppearanceControls = Readonly<{
   preference: ThemePreference;
-  setPreference: (next: ThemePreference) => void;
+  setPreference: (next: ThemePreference) => Promise<void>;
   theme: "light" | "dark";
   accent: string;
-  setAccent: (next: string) => void;
+  setAccent: (next: string) => Promise<void>;
 }>;
 
 type ProfileScreenProps = Readonly<{

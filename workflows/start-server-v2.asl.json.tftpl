@@ -470,7 +470,7 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.startFailure",
-          "Next": "Release Failed Placement"
+          "Next": "Begin Compensating Stop"
         }
       ],
       "Next": "Route Bookkeeping"
@@ -652,27 +652,6 @@
         "ownership.$": "$.Payload.ownership"
       },
       "ResultPath": "$.coordination.lease",
-      "Next": "Release Failed Placement"
-    },
-    "Release Failed Placement": {
-      "Type": "Task",
-      "Comment": "A session that will not be ready gives its slot back before the host is stopped. Releasing what was never reserved is not a failure.",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "${coordinator_function_arn}",
-        "Payload": {
-          "action": "releasePlacement",
-          "sessionId.$": "$.request.sessionId"
-        }
-      },
-      "ResultPath": null,
-      "Catch": [
-        {
-          "ErrorEquals": ["States.ALL"],
-          "ResultPath": "$.placementFailure",
-          "Next": "Begin Compensating Stop"
-        }
-      ],
       "Next": "Begin Compensating Stop"
     },
     "Ready": {
@@ -805,6 +784,22 @@
         }
       },
       "ResultPath": null,
+      "Next": "Release Forced Placement"
+    },
+    "Release Forced Placement": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "releasePlacement",
+          "hostId.$": "$.request.placed.hostId",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultSelector": { "host.$": "$.Payload.host" },
+      "ResultPath": "$.placementRelease",
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.placementReleaseError", "Next": "Release Forced Compensation Lease" }],
       "Next": "Release Forced Compensation Lease"
     },
     "Release Forced Compensation Lease": {
@@ -819,6 +814,36 @@
         }
       },
       "ResultPath": null,
+      "Next": "Route Forced Fleet Drain"
+    },
+    "Route Forced Fleet Drain": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.placementReleaseError", "IsPresent": true, "Next": "Start Compensation Host Not Drained" },
+        {
+          "And": [
+            { "Variable": "$.placementRelease.host.record.state", "StringEquals": "draining" },
+            { "Variable": "$.placementRelease.host.record.provenance", "StringEquals": "launched" }
+          ],
+          "Next": "Start Forced Host Drain"
+        }
+      ],
+      "Default": "Start Failed Host Forced Stopped"
+    },
+    "Start Forced Host Drain": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:sfn:startExecution",
+      "Parameters": {
+        "StateMachineArn": "${drain_state_machine_arn}",
+        "Name.$": "States.Format('{}-failed-start-drain', $.request.operationId)",
+        "Input": {
+          "hostId.$": "$.request.placed.hostId",
+          "emptiedBy.$": "$.request.sessionId",
+          "immediate": true
+        }
+      },
+      "ResultPath": "$.drain",
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.drainStartFailure", "Next": "Start Compensation Host Not Drained" }],
       "Next": "Start Failed Host Forced Stopped"
     },
     "Start Failed Host Forced Stopped": {
@@ -839,6 +864,22 @@
         }
       },
       "ResultPath": null,
+      "Next": "Release Compensated Placement"
+    },
+    "Release Compensated Placement": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "releasePlacement",
+          "hostId.$": "$.request.placed.hostId",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultSelector": { "host.$": "$.Payload.host" },
+      "ResultPath": "$.placementRelease",
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.placementReleaseError", "Next": "Release Compensating Lease" }],
       "Next": "Release Compensating Lease"
     },
     "Release Compensating Lease": {
@@ -853,6 +894,36 @@
         }
       },
       "ResultPath": null,
+      "Next": "Route Compensated Fleet Drain"
+    },
+    "Route Compensated Fleet Drain": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.placementReleaseError", "IsPresent": true, "Next": "Start Compensation Host Not Drained" },
+        {
+          "And": [
+            { "Variable": "$.placementRelease.host.record.state", "StringEquals": "draining" },
+            { "Variable": "$.placementRelease.host.record.provenance", "StringEquals": "launched" }
+          ],
+          "Next": "Start Compensated Host Drain"
+        }
+      ],
+      "Default": "Start Failed And Compensated"
+    },
+    "Start Compensated Host Drain": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:sfn:startExecution",
+      "Parameters": {
+        "StateMachineArn": "${drain_state_machine_arn}",
+        "Name.$": "States.Format('{}-failed-start-drain', $.request.operationId)",
+        "Input": {
+          "hostId.$": "$.request.placed.hostId",
+          "emptiedBy.$": "$.request.sessionId",
+          "immediate": true
+        }
+      },
+      "ResultPath": "$.drain",
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.drainStartFailure", "Next": "Start Compensation Host Not Drained" }],
       "Next": "Start Failed And Compensated"
     },
     "Start Failed And Compensated": {
@@ -864,6 +935,11 @@
       "Type": "Fail",
       "Error": "Spawnpoint.V2StartCompensationFailed",
       "Cause": "Host start, verified stop compensation and the final EC2 stop safeguard did not all complete; lifecycle remains stopping for explicit recovery and the running-hours alarm remains the backstop."
+    },
+    "Start Compensation Host Not Drained": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.V2StartHostNotDrained",
+      "Cause": "The failed session was stopped, but its host reservation could not be released or the empty launched host could not be drained. The running-hours alarm remains the backstop."
     }
   }
 }

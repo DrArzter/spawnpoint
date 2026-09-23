@@ -58,7 +58,8 @@ test("the drain is a closed, reachable graph", async () => {
 
 test("the drain waits, asks, and moves the record before it touches the machine", async () => {
   const definition = await loadDefinition();
-  assert.equal(state(definition, "Initialize").Next, "Wait Out Grace Period");
+  assert.equal(state(definition, "Initialize").Next, "Route Drain Urgency");
+  assert.equal(state(definition, "Route Drain Urgency").Default, "Wait Out Grace Period");
   assert.equal(state(definition, "Wait Out Grace Period").Next, "Decide Drain");
   assert.equal(state(definition, "Decide Drain").Parameters?.Payload.action, "decideDrain");
   const route = state(definition, "Route Drain");
@@ -79,4 +80,16 @@ test("the drain waits, asks, and moves the record before it touches the machine"
   assert.equal(state(definition, "Stop Host").Resource, "arn:aws:states:::aws-sdk:ec2:stopInstances");
   assert.equal(state(definition, "Host Not Released").Type, "Fail");
   assert.equal(state(definition, "Host Taken Back").End, true);
+});
+
+test("a failed start drains without grace or headroom, while still respecting a new reservation", async () => {
+  const definition = await loadDefinition();
+  const urgent = state(definition, "Route Drain Urgency");
+  assert.equal(urgent.Choices?.[0]?.Variable, "$.request.immediate");
+  assert.equal(urgent.Choices?.[0]?.Next, "Decide Immediate Drain");
+  const decision = state(definition, "Decide Immediate Drain");
+  assert.equal(decision.Parameters?.Payload.gracePeriodSeconds, 0);
+  assert.equal(decision.Parameters?.Payload.headroomMiB, 0);
+  assert.equal(decision.Next, "Route Drain");
+  assert.equal(state(definition, "Route Drain").Choices?.find((choice) => choice.StringEquals === "ready")?.Next, "Host Taken Back");
 });

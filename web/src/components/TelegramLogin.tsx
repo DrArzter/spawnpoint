@@ -6,11 +6,14 @@ import { Button } from "./ui/Button";
 
 // The one sign-in control: loads Telegram's OIDC SDK once, opens its popup,
 // and hands the resulting token to the access API.
-export function TelegramLoginButton({ onChange, onToken, className, label = "Continue with Telegram" }: Readonly<{
+export function TelegramLoginButton({ onChange, onToken, className, label = "Continue with Telegram", variant = "filled" }: Readonly<{
   onChange?: (state: AuthState) => void;
   onToken?: (idToken: string) => Promise<void>;
   className?: string;
   label?: string;
+  // Filled where Telegram is the one way in; outlined where it stands beside a
+  // form, so one surface carries one primary action.
+  variant?: "filled" | "outlined";
 }>) {
   const mounted = useRef(true);
   const onChangeRef = useRef(onChange);
@@ -67,7 +70,7 @@ export function TelegramLoginButton({ onChange, onToken, className, label = "Con
 
   return (
     <div className={className ?? "telegram-login"}>
-      {!loginError && <Button disabled={!sdkReady} icon="send" loading={busy} onClick={openLogin} variant="filled">{label}</Button>}
+      {!loginError && <Button disabled={!sdkReady} icon="send" loading={busy} onClick={openLogin} variant={variant}>{label}</Button>}
       {loginError && <div className="boot-copy" role="alert">
         <p className="boot-error">{loginError}</p>
         <Button onClick={() => { setLoginError(""); setSdkReady(false); setAttempt((value) => value + 1); }}>Try again</Button>

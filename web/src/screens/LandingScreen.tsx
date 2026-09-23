@@ -18,6 +18,13 @@ const CONSOLE_HASH = "#/worlds";
 
 // The front door: the console's own chrome, the console itself as the proof.
 // Signing in lives in the app bar; a signed-in person sees their avatar there.
+// One place names the three modes; the dialog titles itself from it.
+const SIGN_IN_TITLE: Record<SignInMode, string> = {
+  "sign-in": "Sign in",
+  register: "Create your account",
+  forgot: "Reset your password",
+};
+
 export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; onChange: (state: AuthState) => void }>) {
   const { theme, cycle, label } = useAppearance();
   const configured = authConfigured();
@@ -77,8 +84,14 @@ export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; on
         </div>
       </header>
 
-      <Dialog onClose={() => setSignIn(null)} open={signIn !== null} title={signIn === "register" ? "Create your Spawnpoint account" : "Sign in to Spawnpoint"}>
-        {signIn !== null && <SignInPanel initialMode={signIn} onChange={(state) => { setSignIn(null); onChange(state); }} />}
+      <Dialog
+        brand={<><SpawnpointMark size={32} /><strong>Spawnpoint</strong></>}
+        className="signin-dialog"
+        onClose={() => setSignIn(null)}
+        open={signIn !== null}
+        title={SIGN_IN_TITLE[signIn ?? "sign-in"]}
+      >
+        {signIn !== null && <SignInPanel initialMode={signIn} onChange={(state) => { setSignIn(null); onChange(state); }} onModeChange={setSignIn} />}
       </Dialog>
 
       <main className="landing" id="main">

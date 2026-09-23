@@ -518,20 +518,53 @@
   gap: 12px;
 }
 
-.signin-submit,
+/* The alternative fills the width so it reads as a second door, not a link;
+   the form's own action keeps a button's natural width in the actions row. */
 .signin-alternative .btn {
   width: 100%;
   justify-content: center;
 }
 
-.signin-switch {
+.signin-forgot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -6px;
+}
+
+.signin-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  color: var(--ink-secondary);
-  font-size: 13px;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.signin-actions .btn-text {
+  margin-right: auto;
+}
+
+/* The brand row a threshold dialog opens with: mark, name, and the way out. */
+.dialog-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.dialog-brand strong {
+  font-family: var(--font-title);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 24px;
+}
+
+.dialog-brand .icon-btn {
+  margin-left: auto;
+}
+
+.signin-dialog .dialog-body h2 {
+  margin-top: 4px;
 }
 
 .signin-divider {

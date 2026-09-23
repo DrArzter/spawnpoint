@@ -149,7 +149,10 @@ function Invitations({ model }: Readonly<{ model: InvitationsModel }>) {
   return (
     <Card description="Invite someone to the project, not to a particular world. They choose how to sign in and join as a Viewer." title="Invite to Spawnpoint">
       <form className="access-invite-form" onSubmit={(event) => { event.preventDefault(); model.create.run(); }}>
-        {model.emailMode && <TextField autoComplete="email" hint="The invitation is valid only after this address is verified." label="Invite email" onChange={(event) => model.setEmail(event.target.value)} placeholder="person@example.com" required type="email" value={model.email} />}
+        {model.emailMode && <>
+          <TextField aria-describedby="access-invite-email-hint" autoComplete="email" label="Invite email" onChange={(event) => model.setEmail(event.target.value)} placeholder="person@example.com" required type="email" value={model.email} />
+          <p className="access-invite-hint" id="access-invite-email-hint">The invitation is valid only after this address is verified.</p>
+        </>}
         {model.emailMode === false && <p>This deployment has no email delivery. Share the one-time link yourself; the recipient signs in with an enabled provider.</p>}
         <ActionButton action={model.create} type="submit" variant="filled" />
       </form>

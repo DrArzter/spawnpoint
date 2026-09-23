@@ -796,14 +796,24 @@
   .swatch { width: 44px; height: 44px; }
 }
 .access-invite-form {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  column-gap: 1rem;
+  row-gap: 0.25rem;
   align-items: end;
-  gap: 1rem;
-  flex-wrap: wrap;
 }
 
-.access-invite-form .field { flex: 1 1 18rem; }
-.access-invite-form p { flex: 1 1 18rem; margin: 0; }
+.access-invite-form .field,
+.access-invite-form > p:not(.access-invite-hint) { grid-column: 1; grid-row: 1; min-width: 0; }
+.access-invite-form .btn { grid-column: 2; grid-row: 1; }
+.access-invite-form p { margin: 0; }
+.access-invite-form .access-invite-hint {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
 
 .access-invite-link {
   display: flex;
@@ -820,7 +830,8 @@
    one; a button alone on its line takes the width, as every action does at
    this step. */
 @media (max-width: 599px) {
-  .access-invite-form .btn,
+  .access-invite-form { grid-template-columns: minmax(0, 1fr); }
+  .access-invite-form .btn { grid-column: 1; grid-row: 3; width: 100%; }
   .access-invite-link .btn {
     flex: 1 1 100%;
   }

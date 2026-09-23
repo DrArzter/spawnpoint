@@ -7,6 +7,8 @@ import { IconButton } from "./Button";
 
 export type MenuItem = {
   id: string;
+  /** The action this item runs, so a skin's menus satisfy the contract like its buttons. */
+  actionId?: string;
   label: string;
   detail?: string;
   icon?: IconName;
@@ -87,6 +89,7 @@ export function Menu({ label, icon = "more_vert", items, align = "end", size = "
         {items.map((item, index) => item === "separator" ? <hr key={`separator-${index}`} /> : (
           <button
             className={cx("menu-item", item.danger && "menu-item-danger")}
+            data-action={item.actionId}
             disabled={item.disabled}
             key={item.id}
             onClick={() => { hide(); item.onSelect(); }}

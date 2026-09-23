@@ -117,6 +117,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0055](0055-sign-in-with-email-and-password-by-default.md) | Sign in with email and password by default, and with a provider as an alternative | Accepted — implemented | M4 |
 | [0056](0056-verify-and-link-password-credentials.md) | Verify and link password credentials without making a provider primary | Accepted — implemented; amends [0055](0055-sign-in-with-email-and-password-by-default.md) | M4 |
 | [0057](0057-link-login-providers-through-the-current-identity.md) | Link login providers through the current Identity | Accepted — implemented | M4 |
+| [0059](0059-separate-the-console-into-bones-and-skins.md) | Separate the console into bones and skins, and hold every skin to one contract | Accepted — implemented | M4 |
 
 ## Decisions still to record
 

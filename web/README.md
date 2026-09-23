@@ -87,8 +87,11 @@ A game's page shows what that game cares about, never Minecraft's page with blan
 Framework not yet chosen, and worth correcting one assumption in advance: **React with Vite was chosen** on
 2026-08-27, and the assumption to correct stands: a React app builds to plain static files and needs no server, so it
 works behind CloudFront like any other. What is excluded is server-side rendering and anything wanting a Node process —
-a framework *mode*, not React itself. The shared primitives live in `src/components/ui`; a screen never invents its own
-table, button or dialog ([DESIGN.md](DESIGN.md)).
+a framework *mode*, not React itself. Since [ADR-0059](../docs/adr/0059-separate-the-console-into-bones-and-skins.md)
+the console is two layers: the bones in `src/core` decide what is shown and what may be done, and hand each page a
+model of facts and actions; a skin in `src/skins/<id>` draws it. The shipped look is `src/skins/console`; every skin
+must render every action a model carries, which `test/skin-contract.test.ts` checks. The shared primitives live in
+`src/components/ui`; a skin never invents its own table, button or dialog ([DESIGN.md](DESIGN.md)).
 
 ## What the panel is actually for
 

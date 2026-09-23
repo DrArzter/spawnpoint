@@ -1,14 +1,13 @@
-import { Button, IconButton } from "../components/ui/Button";
-import { sessionStatus, Status } from "../components/ui/Status";
-import { NotConnected } from "../components/ui/Surfaces";
-import { Icon } from "../icons";
-import type { Game, ServerState } from "../model";
+import { Button, IconButton } from "../../components/ui/Button";
+import { Status } from "../../components/ui/Status";
+import { NotConnected } from "../../components/ui/Surfaces";
+import type { ConsoleModel } from "../../core/models";
+import { Icon } from "../../icons";
 
 // The console commits to the terminal grammar: typed command, acknowledged
 // reply, a standby cursor. Nothing here pretends a gateway exists.
-export function ConsoleScreen({ game, serverState }: { game: Game | undefined; serverState: ServerState }) {
-  const online = serverState === "running";
-  const session = sessionStatus(serverState);
+export function Rcon({ model }: Readonly<{ model: ConsoleModel }>) {
+  const { game, online, session } = model;
   return (
     <div className="page">
       <h1 className="visually-hidden">Console</h1>
@@ -33,7 +32,7 @@ export function ConsoleScreen({ game, serverState }: { game: Game | undefined; s
         </form>
       </section>
       <div aria-label="Quick commands" className="quick-commands" role="group">
-        {["list", "save-all", "say Server stops in 5 minutes"].map((command) => <Button disabled key={command} size="small" title="Available once the RCON gateway is connected" variant="outlined"><code>{command}</code></Button>)}
+        {model.quickCommands.map((command) => <Button disabled key={command} size="small" title="Available once the RCON gateway is connected" variant="outlined"><code>{command}</code></Button>)}
       </div>
     </div>
   );

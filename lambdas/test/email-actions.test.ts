@@ -46,3 +46,28 @@ test("invitation context survives mailbox verification without changing the sele
   assert.match(message.text, new RegExp(`verify-email\\?token=${action.token}&invite=${invitationToken}`));
   assert.match(message.html, new RegExp(`verify-email\\?token=${action.token}&amp;invite=${invitationToken}`));
 });
+
+test("the branded template carries the mark, one button to the link, and the bare link beneath it", () => {
+  const action = issueEmailAction("reset_password", 1_800_000_000);
+  const message = renderEmailAction("reset_password", {
+    email: "ada@example.com",
+    displayName: "Ada",
+    panelUrl: "https://spawnpoint.example.dev",
+    action,
+  });
+  const url = `https://spawnpoint.example.dev/#/reset-password?token=${action.token}`;
+  // The mark is the panel's own hosted PNG: clients strip SVG, and a data URI
+  // is stripped by the one client most people read in.
+  assert.match(message.html, /src="https:\/\/spawnpoint\.example\.dev\/email\/mark\.png"/);
+  // Exactly two ways to the same place — the button and the bare link — and
+  // nothing else that looks like a link, so nobody is sent somewhere else.
+  assert.equal(message.html.split(`href="${url}"`).length - 1, 2);
+  assert.doesNotMatch(message.html, /href="(?!https:\/\/spawnpoint\.example\.dev\/#\/reset-password)/);
+  assert.match(message.html, /Reset password<\/a>/);
+  assert.match(message.html, /expires in 1 hour/);
+  assert.match(message.text, /expires in 1 hour/);
+  // A trailing slash on the panel URL must not double up.
+  const slashed = renderEmailAction("verify_email", { email: "a@b.c", displayName: "A", panelUrl: "https://spawnpoint.example.dev/", action });
+  assert.match(slashed.html, /src="https:\/\/spawnpoint\.example\.dev\/email\/mark\.png"/);
+  assert.doesNotMatch(slashed.html, /example\.dev\/\/#/);
+});

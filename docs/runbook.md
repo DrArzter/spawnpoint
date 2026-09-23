@@ -99,6 +99,24 @@ immutable checksum-addressed S3 key and verifies the stored metadata before Step
 Never replace this with a direct `aws ec2 stop-instances` during normal operation: that bypasses the save and backup
 contract.
 
+### Fleet host left behind after a stop
+
+`spawnpoint-drain-host-v2` waits for the configured grace period, then checks
+reservations and headroom before releasing a launched host. A failed drain
+execution pages the configured chats. Independently, `spawnpoint-fleet-sweeper`
+runs every five minutes: it inspects only EC2 instances tagged
+`ManagedBy=spawnpoint-fleet`, restarts an overdue drain through the fenced
+workflow if no drain for that host is running, and retries EC2 termination only when the host ledger is already
+`terminating` (a state that cannot accept new reservations). It never deletes an
+unregistered host or a host that still holds a session. An inconsistent host
+causes the `spawnpoint-fleet-sweep-failed` alarm and a message through
+`spawnpoint-alert`; its details are in the sweeper's CloudWatch logs.
+
+If alerted, compare the instance's EC2 state with `host#<instance-id>` in the
+lifecycle table and the drain execution history. Preserve the available host
+logs before any manual termination. Do not stop an instance merely because a
+dashboard world says `stopped`: the host may have another reservation.
+
 ### Idle watchdog
 
 **Deployed and acceptance-tested.** `spawnpoint-idle-watchdog` is a Standard workflow started by

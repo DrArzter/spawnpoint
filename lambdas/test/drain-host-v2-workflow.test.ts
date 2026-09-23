@@ -9,6 +9,7 @@ type State = {
   Default?: string;
   Resource?: string;
   Parameters?: Record<string, any>;
+  ResultSelector?: Record<string, string>;
   Choices?: Array<Record<string, unknown>>;
   Catch?: Array<{ Next: string }>;
 };
@@ -62,6 +63,7 @@ test("the drain waits, asks, and moves the record before it touches the machine"
   assert.equal(state(definition, "Route Drain Urgency").Default, "Wait Out Grace Period");
   assert.equal(state(definition, "Wait Out Grace Period").Next, "Decide Drain");
   assert.equal(state(definition, "Decide Drain").Parameters?.Payload.action, "decideDrain");
+  assert.equal(state(definition, "Decide Drain").ResultSelector?.["revision.$"], "$.Payload.host.revision");
   const route = state(definition, "Route Drain");
   assert.equal(route.Choices?.find((choice) => choice.StringEquals === "terminate")?.Next, "Conclude Termination");
   assert.equal(route.Choices?.find((choice) => choice.StringEquals === "stop")?.Next, "Conclude Stop");
@@ -72,11 +74,13 @@ test("the drain waits, asks, and moves the record before it touches the machine"
 
   // The record moves first, conditionally; a start that lands meanwhile wins.
   assert.equal(state(definition, "Conclude Termination").Parameters?.Payload.outcome, "terminate");
+  assert.equal(state(definition, "Conclude Termination").Parameters?.Payload["expectedRevision.$"], "$.decision.revision");
   assert.equal(state(definition, "Conclude Termination").Next, "Terminate Host");
   assert.equal(state(definition, "Conclude Termination").Catch?.[0]?.Next, "Host Taken Back");
   assert.equal(state(definition, "Terminate Host").Resource, "arn:aws:states:::aws-sdk:ec2:terminateInstances");
   assert.equal(state(definition, "Terminate Host").Catch?.[0]?.Next, "Host Not Released");
   assert.equal(state(definition, "Conclude Stop").Next, "Stop Host");
+  assert.equal(state(definition, "Conclude Stop").Parameters?.Payload["expectedRevision.$"], "$.decision.revision");
   assert.equal(state(definition, "Stop Host").Resource, "arn:aws:states:::aws-sdk:ec2:stopInstances");
   assert.equal(state(definition, "Host Not Released").Type, "Fail");
   assert.equal(state(definition, "Host Taken Back").End, true);

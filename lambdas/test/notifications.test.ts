@@ -94,6 +94,11 @@ test("an unknown host after a verified backup does not claim the world may be un
   assert.doesNotMatch(message, /may be unsaved/);
 });
 
+test("a failed Fleet drain pages the owner with the host id", () => {
+  assert.equal(renderNotification(event("spawnpoint-drain-host-v2", "SUCCEEDED", { input: { hostId: "i-test" } })), null);
+  assert.match(renderNotification(event("spawnpoint-drain-host-v2", "FAILED", { input: { hostId: "i-test" } })) ?? "", /i-test.*still be billed/);
+});
+
 test("promotion narrates its whole arc", () => {
   const input = { release: "1.1" };
   assert.match(

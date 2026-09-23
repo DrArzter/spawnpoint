@@ -27,9 +27,9 @@ export const demoSession: ActiveSession = {
   state: "active",
   demo: true,
   identity: { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [] },
-  // The in-memory transport answers everything, so it can do everything. This
-  // is what keeps a screen fully explorable before its route is written.
-  capabilities: ["releaseManifest", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations"],
+  // Demo capabilities include unfinished prototypes so their screens remain
+  // explorable without advertising those destinations in production.
+  capabilities: ["releaseManifest", "hostMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations"],
   role: { id: "owner", name: "Owner", permissions: ["status.read", "connection.read", "session.start", "session.stop", "invitation.send", "metrics.read", "console.use", "release.read", "release.promote", "backup.read", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite"] },
   profile: { provider: "telegram", platformUserId: "1780660807", telegramId: "1780660807", username: "drarzter", email: null, photoUrl: null },
   bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "1780660807", claimedAt: "2026-08-28T18:24:00.000Z" },

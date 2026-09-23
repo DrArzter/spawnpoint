@@ -12,23 +12,13 @@ import { initializeTelegram, openInBrowser, type ViewerProfile } from "../telegr
 import { action } from "./actions";
 import type { Notify } from "./data";
 import type { AppearanceModel, NavigationItem, ShellModel, WorldPlacement } from "./models";
+import { visibleNavigation } from "./navigation";
 import type { WorldCallbacks } from "./worlds";
 
 /*
  * The console's bones: what is loaded, what is pending, what is open, and
  * what every page may ask for. Nothing here knows how any of it looks.
  */
-
-// A screen is offered when the role may use it and the deployment routes it.
-// `capability` is absent where a screen needs nothing from the API it does not
-// already get from the control-plane snapshot.
-const navigation: readonly { id: Page; label: string; permission: string; capability?: string }[] = [
-  { id: "worlds", label: "Worlds", permission: "status.read" },
-  { id: "metrics", label: "Metrics", permission: "metrics.read" },
-  { id: "console", label: "Console", permission: "console.use" },
-  { id: "releases", label: "Releases", permission: "release.read" },
-  { id: "access", label: "Access", permission: "access.read" },
-];
 
 type ControlPlaneState =
   | { status: "loading"; snapshot: ControlPlaneSnapshot | null; error: "" }
@@ -169,8 +159,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
   const serverState = deriveServerState(game, snapshot);
   const sharedSession = deriveSharedHostSession(snapshot);
   const scoped = (page: Page) => routeHash({ page, accessTab: route.accessTab, gameId: game?.id ?? null, worldId: null });
-  const navItems = navigation
-    .filter((item) => granted.has(item.permission) && (item.capability === undefined || capabilities.has(item.capability)))
+  const navItems = visibleNavigation(granted, capabilities)
     .map((item) => ({ id: item.id, label: item.label, href: scoped(item.id) }));
   const page: Page = route.page === "profile" || navItems.some((item) => item.id === route.page) ? route.page : "worlds";
 

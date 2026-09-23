@@ -85,7 +85,10 @@ test("the drain waits, asks, and moves the record before it touches the machine"
 test("a failed start drains without grace or headroom, while still respecting a new reservation", async () => {
   const definition = await loadDefinition();
   const urgent = state(definition, "Route Drain Urgency");
-  assert.equal(urgent.Choices?.[0]?.Variable, "$.request.immediate");
+  assert.deepEqual(urgent.Choices?.[0]?.And, [
+    { Variable: "$.request.immediate", IsPresent: true },
+    { Variable: "$.request.immediate", BooleanEquals: true },
+  ], "normal stop omits immediate, so test presence before comparing it");
   assert.equal(urgent.Choices?.[0]?.Next, "Decide Immediate Drain");
   const decision = state(definition, "Decide Immediate Drain");
   assert.equal(decision.Parameters?.Payload.gracePeriodSeconds, 0);

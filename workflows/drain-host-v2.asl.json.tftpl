@@ -14,7 +14,13 @@
     "Route Drain Urgency": {
       "Type": "Choice",
       "Choices": [
-        { "Variable": "$.request.immediate", "BooleanEquals": true, "Next": "Decide Immediate Drain" }
+        {
+          "And": [
+            { "Variable": "$.request.immediate", "IsPresent": true },
+            { "Variable": "$.request.immediate", "BooleanEquals": true }
+          ],
+          "Next": "Decide Immediate Drain"
+        }
       ],
       "Default": "Wait Out Grace Period"
     },

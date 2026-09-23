@@ -68,6 +68,11 @@ test("V2 start owns lifecycle around the accepted V1 host operation", async () =
   assert.equal(state(definition, "Start Accepted V1").Resource, "arn:aws:states:::states:startExecution.sync:2");
   assert.equal(state(definition, "Start Accepted V1").Next, "Route Bookkeeping");
   assert.equal(state(definition, "Route Bookkeeping").Default, "Describe Host");
+  assert.deepEqual(
+    state(definition, "Route Bookkeeping").Choices?.map((choice) => [choice.StringEquals, choice.Next]),
+    [["shared", "Mark Session Ready"], ["fleet", "Mark Session Ready"]],
+    "placed sessions must not reserve the unrelated configured host",
+  );
   assert.equal(state(definition, "Reserve Slot Zero").Next, "Mark Session Ready");
   assert.equal(state(definition, "Mark Session Ready").Next, "Release Start Lease");
   assert.equal(state(definition, "Release Start Lease").Next, "Start Session Watchdog");
@@ -235,7 +240,8 @@ test("the placement mode routes the start: single uses the configured host, shar
   assert.equal(state(definition, "Route Placement").Default, "No Host Has Room");
   assert.deepEqual(state(definition, "Adopt Placement").Parameters, { "hostId.$": "$.placement.placement.hostId", "slot.$": "$.placement.placement.slot" });
   assert.equal(state(definition, "Adopt Placement").Next, "Start Accepted V1");
-  assert.equal(state(definition, "Route Bookkeeping").Choices?.[0]?.Next, "Mark Session Ready", "a placed session already holds its reservation");
+  assert.equal(state(definition, "Route Bookkeeping").Choices?.[0]?.Next, "Mark Session Ready", "a shared session already holds its reservation");
+  assert.equal(state(definition, "Route Bookkeeping").Choices?.[1]?.Next, "Mark Session Ready", "a Fleet session already holds its reservation on the launched host");
 
   // Every host command from here on names the placed host and slot.
   const nested = state(definition, "Start Accepted V1").Parameters?.Input as Record<string, string>;

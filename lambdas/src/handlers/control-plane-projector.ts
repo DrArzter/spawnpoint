@@ -4,7 +4,7 @@ import { ChangeResourceRecordSetsCommand, ListResourceRecordSetsCommand, Route53
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 
 import { awsControlPlaneSources, stopSessionExecution } from "../control-plane/aws.ts";
-import { eventJournalItem, recoveryTarget, type ControlPlaneEvent } from "../control-plane/dynamic-projection.ts";
+import { eventJournalItem, hostOwnsSession, recoveryTarget, type ControlPlaneEvent } from "../control-plane/dynamic-projection.ts";
 import { gameCatalog } from "../control-plane/catalog.ts";
 import { dnsLedgerRecords, terminalHostInstanceId, type DnsLedgerRecord } from "../control-plane/dns-ledger.ts";
 
@@ -92,7 +92,16 @@ async function reconcileStoppedHost(
   const lifecycles = (await Promise.all(gameCatalog.map((game) => awsControlPlaneSources.readLifecycle(game.id))))
     .filter((record) => record !== null);
   const target = recoveryTarget(hosts, operations, lifecycles, nowEpochSeconds);
-  if (target === null) return;
+  if (target === null || !lifecycleTable) return;
+  // The projection observes the configured EC2 host, but an active Fleet
+  // session may live elsewhere. Never reconcile it just because that unrelated
+  // configured host is stopped.
+  const placedHost = await document.send(new GetCommand({
+    TableName: lifecycleTable,
+    Key: { server_id: `host#${target.instanceId}` },
+    ConsistentRead: true,
+  }));
+  if (!hostOwnsSession(placedHost.Item?.host, target.instanceId, target.sessionId)) return;
   const operationId = `reconcile-${target.serverId}-${eventId}`.slice(0, 80);
   try {
     await stopSessionExecution(

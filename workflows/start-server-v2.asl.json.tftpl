@@ -477,11 +477,16 @@
     },
     "Route Bookkeeping": {
       "Type": "Choice",
-      "Comment": "A placed session already holds its reservation. An unplaced one records the host it ran on and slot zero after the fact, as phase 5 did, and that bookkeeping may fail without failing the start.",
+      "Comment": "Shared and Fleet sessions already reserved their actual host. Only single mode records the configured host and slot zero after the fact.",
       "Choices": [
         {
           "Variable": "$.request.placement",
           "StringEquals": "shared",
+          "Next": "Mark Session Ready"
+        },
+        {
+          "Variable": "$.request.placement",
+          "StringEquals": "fleet",
           "Next": "Mark Session Ready"
         }
       ],
@@ -489,7 +494,7 @@
     },
     "Describe Host": {
       "Type": "Task",
-      "Comment": "Placement bookkeeping (ADR-0054, phase 5): the host that ran this session is recorded with its shape and the session's reservation on slot zero. Read by nobody yet, so a failure here must never fail a start that has already succeeded.",
+      "Comment": "Single-mode bookkeeping: record the configured host and slot zero. A Fleet session must never reserve this unrelated instance.",
       "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
       "Parameters": {
         "InstanceIds.$": "States.Array($.request.instanceId)"

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { eventJournalItem, parseDynamicProjection, recoveryTarget } from "../src/control-plane/dynamic-projection.ts";
+import { eventJournalItem, hostOwnsSession, parseDynamicProjection, recoveryTarget } from "../src/control-plane/dynamic-projection.ts";
 import { initialLifecycleRecord } from "../src/domain/lifecycle.ts";
 import type { HostObservation } from "../src/control-plane/read-model.ts";
 
@@ -63,4 +63,16 @@ test("a manually stopped ready session is reconciled without a special UI comman
   assert.deepEqual(recoveryTarget([host], [], [ready], 101), {
     serverId: "factorio", sessionId: "session-1", worldId: "factorio-test", instanceId: "i-123",
   });
+});
+
+test("stopped-host recovery requires the exact session to be reserved on that host", () => {
+  const onConfiguredHost = {
+    hostId: "i-123",
+    reservations: [{ sessionId: "session-1" }],
+  };
+  assert.equal(hostOwnsSession(onConfiguredHost, "i-123", "session-1"), true);
+  assert.equal(hostOwnsSession(onConfiguredHost, "i-123", "session-2"), false);
+  assert.equal(hostOwnsSession(onConfiguredHost, "i-fleet", "session-1"), false);
+  assert.equal(hostOwnsSession(null, "i-123", "session-1"), false);
+  assert.equal(hostOwnsSession({ hostId: "i-123", reservations: null }, "i-123", "session-1"), false);
 });

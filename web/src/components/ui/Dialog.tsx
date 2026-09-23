@@ -30,7 +30,7 @@ function useModal(open: boolean, onClose: () => void) {
   return ref;
 }
 
-export function Dialog({ open, onClose, title, children, actions, className, dismissOnBackdrop = true }: {
+export function Dialog({ open, onClose, title, children, actions, className, dismissOnBackdrop = true, brand }: {
   open: boolean;
   onClose: () => void;
   title: ReactNode;
@@ -38,6 +38,12 @@ export function Dialog({ open, onClose, title, children, actions, className, dis
   actions?: ReactNode;
   className?: string;
   dismissOnBackdrop?: boolean;
+  /**
+   * What stands above the title: the mark and the name, for a dialog that is a
+   * threshold rather than a question — sign-in is the one so far. It brings a
+   * close button with it, because a threshold can be walked away from.
+   */
+  brand?: ReactNode;
 }) {
   const ref = useModal(open, onClose);
   const titleId = useId();
@@ -50,6 +56,12 @@ export function Dialog({ open, onClose, title, children, actions, className, dis
     >
       {open && (
         <div className="dialog-body">
+          {brand && (
+            <div className="dialog-brand">
+              {brand}
+              <IconButton icon="close" label="Close" onClick={onClose} size="small" />
+            </div>
+          )}
           <h2 id={titleId}>{title}</h2>
           {children && <div className="dialog-content">{children}</div>}
           {actions && <div className="dialog-actions">{actions}</div>}

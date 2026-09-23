@@ -27,7 +27,14 @@ function submitLabel(registering: boolean, recovering: boolean): string {
 // password form first, then every other provider this deployment offers as an
 // alternative beneath it. One form both creates an account and signs into one;
 // only the fields and the verb change.
-export function SignInPanel({ onChange, initialMode = "sign-in", invitationToken }: Readonly<{ onChange: (state: AuthState) => void; initialMode?: SignInMode; invitationToken?: string }>) {
+export function SignInPanel({ onChange, onModeChange, initialMode = "sign-in", invitationToken }: Readonly<{
+  onChange: (state: AuthState) => void;
+  // The dialog around this panel titles itself by mode, and the mode changes
+  // in here; without this the title says "Sign in" over a registration form.
+  onModeChange?: (mode: SignInMode) => void;
+  initialMode?: SignInMode;
+  invitationToken?: string;
+}>) {
   const [options, setOptions] = useState<LoginOptions | null>(null);
   const [mode, setMode] = useState<SignInMode>(initialMode);
   const [email, setEmail] = useState("");
@@ -75,6 +82,7 @@ export function SignInPanel({ onChange, initialMode = "sign-in", invitationToken
     setMode(next);
     setError("");
     setSent(null);
+    onModeChange?.(next);
   }
 
   if (options === null) return <output aria-label="Loading the ways to sign in" className="boot-progress" />;
@@ -124,24 +132,27 @@ export function SignInPanel({ onChange, initialMode = "sign-in", invitationToken
             type="password"
             value={password}
           />}
-          {error && <p className="boot-error" role="alert">{error}</p>}
-          <Button className="signin-submit" loading={busy} type="submit" variant="filled">
-            {submitLabel(registering, recovering)}
-          </Button>
           {!registering && !recovering && options.emailActions && (
-            <Button onClick={() => switchMode("forgot")} size="small" variant="text">Forgot password?</Button>
+            <div className="signin-forgot">
+              <Button onClick={() => switchMode("forgot")} size="small" variant="text">Forgot password?</Button>
+            </div>
           )}
-          {(registering || passwordRegistrationOffered) && (
-            <p className="signin-switch">
-              <span>{registering ? "Already have an account?" : "New here?"}</span>
-              <Button onClick={() => switchMode(registering ? "sign-in" : "register")} size="small" variant="text">{registering ? "Sign in" : "Create an account"}</Button>
-            </p>
-          )}
-          {recovering && <Button onClick={() => switchMode("sign-in")} size="small" variant="text">Back to sign in</Button>}
+          {error && <p className="boot-error" role="alert">{error}</p>}
+          {/* One row, as every dialog here ends: the way out of this mode on the
+              left, the one filled action on the right. */}
+          <div className="signin-actions">
+            {recovering && <Button onClick={() => switchMode("sign-in")} variant="text">Back to sign in</Button>}
+            {!recovering && (registering || passwordRegistrationOffered) && (
+              <Button onClick={() => switchMode(registering ? "sign-in" : "register")} variant="text">
+                {registering ? "Sign in instead" : "Create an account"}
+              </Button>
+            )}
+            <Button loading={busy} type="submit" variant="filled">{submitLabel(registering, recovering)}</Button>
+          </div>
         </form>
       )}
       {passwordOffered && telegramOffered && <div aria-hidden="true" className="signin-divider"><span>or</span></div>}
-      {telegramOffered && <TelegramLoginButton className="telegram-login signin-alternative" label="Continue with Telegram" onChange={onChange} />}
+      {telegramOffered && <TelegramLoginButton className="telegram-login signin-alternative" label="Continue with Telegram" onChange={onChange} variant={passwordOffered ? "outlined" : "filled"} />}
       {!passwordOffered && !telegramOffered && <p className="boot-error" role="alert">This deployment offers no way to sign in from a browser.</p>}
     </div>
   );

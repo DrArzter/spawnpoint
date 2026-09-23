@@ -147,3 +147,9 @@ export function recoveryTarget(
     instanceId: hosts[0].providerRef,
   };
 }
+
+export function hostOwnsSession(record: unknown, hostId: string, sessionId: string): boolean {
+  const hostRecord = object(record);
+  if (hostRecord?.hostId !== hostId || !Array.isArray(hostRecord.reservations)) return false;
+  return hostRecord.reservations.some((value) => object(value)?.sessionId === sessionId);
+}

@@ -505,6 +505,36 @@
   display: block;
 }
 
+/* Google draws its own button, at the width this box reports; the box keeps the
+   row's height while the skeleton gives way to it. */
+.google-login {
+  display: grid;
+  min-width: 200px;
+  min-height: 40px;
+}
+
+.google-login-slot {
+  display: grid;
+  justify-items: center;
+  min-height: 40px;
+}
+
+.google-login-slot[aria-busy="true"] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Every other door, stacked under the form at one width. Google draws its
+   button no wider than 400px, so the stack stops there and centres, and the
+   two doors stay the same size on every screen. */
+.signin-alternatives {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  max-width: 400px;
+  justify-self: center;
+}
+
 /* Sign-in: the form first, every other provider as an alternative beneath it. */
 .signin {
   display: grid;

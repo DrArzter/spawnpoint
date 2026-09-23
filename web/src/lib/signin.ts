@@ -4,10 +4,17 @@ export const PASSWORD_MINIMUM_LENGTH = 12;
 export const PASSWORD_MAXIMUM_LENGTH = 128;
 export const DISPLAY_NAME_MAXIMUM_LENGTH = 80;
 
-export type LoginProviderId = "telegram" | "password";
+export type LoginProviderId = "telegram" | "google" | "password";
 
 export function isLoginProviderId(value: unknown): value is LoginProviderId {
-  return value === "telegram" || value === "password";
+  return value === "telegram" || value === "google" || value === "password";
+}
+
+// A provider's refusal, in the same voice as the password form's: a route that
+// is not deployed reads as "not offered", every other failure as "start again".
+export function describeProviderSignInFailure(label: string, status: number, code: string | undefined): string {
+  if (status === 404 && code === "not_found") return `${label} sign-in is not offered on this deployment.`;
+  return `${label} could not verify this sign-in. Please start again.`;
 }
 
 // One sentence for a refused sign-in. A wrong email and a wrong password read

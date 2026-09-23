@@ -1,4 +1,4 @@
-import { describeRegistrationFailure, describeSignInFailure, isLoginProviderId } from "../lib/signin";
+import { describeProviderSignInFailure, describeRegistrationFailure, describeSignInFailure, isLoginProviderId } from "../lib/signin";
 import type { ControlPlaneSnapshot } from "../model";
 import type {
   AccessCandidate, AccessIdentity, AccessInvitation, AccessRole, AccountProfile, AppearancePreference, AuthState, BackupInventory, HostMetrics,
@@ -10,6 +10,7 @@ import { apiFailure } from "./contract";
 const LEGACY_TOKEN_KEY = "spawnpoint.auth.session";
 const apiUrl = (import.meta.env.VITE_ACCESS_API_URL ?? "").replace(/\/$/, "");
 export const telegramOidcClientId = (import.meta.env.VITE_TELEGRAM_OIDC_CLIENT_ID ?? "").trim();
+export const googleOidcClientId = (import.meta.env.VITE_GOOGLE_OIDC_CLIENT_ID ?? "").trim();
 
 let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
@@ -121,7 +122,35 @@ async function exchangeLogin(path: string, body: unknown, describeFailure: Failu
 }
 
 function exchangeTelegram(body: { idToken: string } | { login: Record<string, string> } | { initData: string }): Promise<string> {
-  return exchangeLogin("/auth/telegram", body, () => "Telegram could not verify this sign-in. Please start again.");
+  return exchangeLogin("/auth/telegram", body, (status, code) => describeProviderSignInFailure("Telegram", status, code));
+}
+
+// Telegram and Google both end in the browser holding an ID token; from here
+// on they are the same call with a different name on the door.
+async function sessionFromProviderToken(provider: "telegram" | "google", label: string, idToken: string): Promise<AuthState> {
+  try {
+    return await sessionFromLogin(`/auth/${provider}`, { idToken }, (status, code) => describeProviderSignInFailure(label, status, code));
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : `${label} sign-in failed.` };
+  }
+}
+
+async function linkProofAccount(provider: "telegram" | "google", label: string, idToken: string): Promise<void> {
+  const response = await authorizedFetch(`/me/accounts/${provider}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ idToken }),
+  });
+  if (response.ok) return;
+  const body = await response.json().catch(() => null) as { error?: unknown } | null;
+  const code = typeof body?.error === "string" ? body.error : undefined;
+  let message = `${label} could not verify or link this account.`;
+  if (code === "account_already_linked") {
+    message = `This ${label} account already belongs to another Spawnpoint identity.`;
+  } else if (code === "provider_already_linked") {
+    message = `This Spawnpoint identity already has a ${label} account.`;
+  }
+  throw await apiFailure(response, message, body);
 }
 
 async function sessionFromLogin(path: string, body: unknown, describeFailure: FailureDescription): Promise<AuthState> {
@@ -277,13 +306,8 @@ export const liveApi: SpawnpointApi = {
     }
   },
 
-  async exchangeTelegramOidc(idToken: string): Promise<AuthState> {
-    try {
-      return await sessionFromLogin("/auth/telegram", { idToken }, () => "Telegram could not verify this sign-in. Please start again.");
-    } catch (error) {
-      return { status: "error", message: error instanceof Error ? error.message : "Telegram OIDC sign-in failed." };
-    }
-  },
+  exchangeTelegramOidc: (idToken: string) => sessionFromProviderToken("telegram", "Telegram", idToken),
+  exchangeGoogleOidc: (idToken: string) => sessionFromProviderToken("google", "Google", idToken),
 
   signInWithPassword: (email: string, password: string) =>
     sessionFromLogin("/auth/password", { email, password }, describeSignInFailure),
@@ -343,24 +367,8 @@ export const liveApi: SpawnpointApi = {
     };
   },
 
-  async linkTelegram(idToken: string): Promise<void> {
-    const response = await authorizedFetch("/me/accounts/telegram", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ idToken }),
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => null) as { error?: unknown } | null;
-      const code = typeof body?.error === "string" ? body.error : undefined;
-      let message = "Telegram could not verify or link this account.";
-      if (code === "account_already_linked") {
-        message = "This Telegram account already belongs to another Spawnpoint identity.";
-      } else if (code === "provider_already_linked") {
-        message = "This Spawnpoint identity already has a Telegram account.";
-      }
-      throw await apiFailure(response, message, body);
-    }
-  },
+  linkTelegram: (idToken: string) => linkProofAccount("telegram", "Telegram", idToken),
+  linkGoogle: (idToken: string) => linkProofAccount("google", "Google", idToken),
 
   async linkPassword(email: string, password: string, displayName: string): Promise<void> {
     const response = await authorizedFetch("/me/password", {

@@ -3,6 +3,8 @@
 interface ImportMetaEnv {
   readonly VITE_ACCESS_API_URL?: string;
   readonly VITE_TELEGRAM_OIDC_CLIENT_ID?: string;
+  /** Empty in every deployment that has not created a Google OAuth client. */
+  readonly VITE_GOOGLE_OIDC_CLIENT_ID?: string;
 }
 
 interface ImportMeta {

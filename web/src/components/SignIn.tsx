@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import {
   AuthState,
+  googleOidcClientId,
   loadLoginOptions,
   LoginOptions,
   registerWithPassword,
@@ -11,6 +12,7 @@ import {
   telegramOidcClientId,
 } from "../auth";
 import { DISPLAY_NAME_MAXIMUM_LENGTH, PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../lib/signin";
+import { GOOGLE_CLIENT_ID, GoogleLoginButton } from "./GoogleLogin";
 import { TelegramLoginButton } from "./TelegramLogin";
 import { Button } from "./ui/Button";
 import { TextField } from "./ui/Fields";
@@ -54,8 +56,10 @@ export function SignInPanel({ onChange, onModeChange, initialMode = "sign-in", i
   const registering = mode === "register" && passwordRegistrationOffered;
   const recovering = mode === "forgot" && options?.emailActions === true;
   const passwordOffered = options?.providers.includes("password") ?? false;
-  // Telegram needs both the API to accept it and this build to know the public client id.
+  // A provider needs both the API to accept it and this build to know its public client id.
   const telegramOffered = (options?.providers.includes("telegram") ?? false) && /^[1-9]\d+$/.test(telegramOidcClientId);
+  const googleOffered = (options?.providers.includes("google") ?? false) && GOOGLE_CLIENT_ID.test(googleOidcClientId);
+  const alternativesOffered = telegramOffered || googleOffered;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -151,9 +155,14 @@ export function SignInPanel({ onChange, onModeChange, initialMode = "sign-in", i
           </div>
         </form>
       )}
-      {passwordOffered && telegramOffered && <div aria-hidden="true" className="signin-divider"><span>or</span></div>}
-      {telegramOffered && <TelegramLoginButton className="telegram-login signin-alternative" label="Continue with Telegram" onChange={onChange} variant={passwordOffered ? "outlined" : "filled"} />}
-      {!passwordOffered && !telegramOffered && <p className="boot-error" role="alert">This deployment offers no way to sign in from a browser.</p>}
+      {passwordOffered && alternativesOffered && <div aria-hidden="true" className="signin-divider"><span>or</span></div>}
+      {alternativesOffered && (
+        <div className="signin-alternatives">
+          {telegramOffered && <TelegramLoginButton className="telegram-login signin-alternative" label="Continue with Telegram" onChange={onChange} variant={passwordOffered ? "outlined" : "filled"} />}
+          {googleOffered && <GoogleLoginButton className="google-login signin-alternative" onChange={onChange} />}
+        </div>
+      )}
+      {!passwordOffered && !alternativesOffered && <p className="boot-error" role="alert">This deployment offers no way to sign in from a browser.</p>}
     </div>
   );
 }

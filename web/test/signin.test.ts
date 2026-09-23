@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { describeRegistrationFailure, describeSignInFailure, isLoginProviderId, PASSWORD_MINIMUM_LENGTH } from "../src/lib/signin.ts";
+import { describeProviderSignInFailure, describeRegistrationFailure, describeSignInFailure, isLoginProviderId, PASSWORD_MINIMUM_LENGTH } from "../src/lib/signin.ts";
 
 test("a refused sign-in never says which half was wrong", () => {
   const message = describeSignInFailure(401, "invalid_or_expired_password_login");
@@ -22,9 +22,16 @@ test("registration refusals are read back in the reader's language", () => {
   assert.match(describeRegistrationFailure(502, "boom"), /could not be created/);
 });
 
-test("only the two known providers are recognised", () => {
+test("only the known providers are recognised", () => {
   assert.equal(isLoginProviderId("telegram"), true);
+  assert.equal(isLoginProviderId("google"), true);
   assert.equal(isLoginProviderId("password"), true);
-  assert.equal(isLoginProviderId("google"), false);
+  assert.equal(isLoginProviderId("discord"), false);
   assert.equal(isLoginProviderId(1), false);
+});
+
+test("a provider that is not deployed reads as not offered; anything else asks to start again", () => {
+  assert.match(describeProviderSignInFailure("Google", 404, "not_found"), /Google sign-in is not offered/);
+  assert.match(describeProviderSignInFailure("Google", 401, "invalid_or_expired_google_login"), /Google could not verify/);
+  assert.match(describeProviderSignInFailure("Telegram", 500, undefined), /Telegram could not verify/);
 });

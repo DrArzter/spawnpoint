@@ -40,6 +40,7 @@ import {
 } from "../access/password-login-provider.ts";
 import { verifySessionToken } from "../access/telegram-auth.ts";
 import { createTelegramLoginProvider, telegramPrincipal } from "../access/telegram-login-provider.ts";
+import { createGoogleLoginProvider, googleProviderId } from "../access/google-login-provider.ts";
 import { defaultAppearance, validateAppearance } from "../access/appearance.ts";
 import { defaultSubscriptions, validateSubscriptions } from "../access/subscriptions.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../domain/access-events.ts";
@@ -91,6 +92,7 @@ const configuredSessionSigningSecretParameter = process.env.SESSION_SIGNING_SECR
 if (!configuredSessionSigningSecretParameter) throw new Error("missing environment variable: SESSION_SIGNING_SECRET_PARAMETER");
 const sessionSigningSecretParameter: string = configuredSessionSigningSecretParameter;
 const telegramOidcClientId = (process.env.TELEGRAM_OIDC_CLIENT_ID ?? "").trim();
+const googleOidcClientId = (process.env.GOOGLE_OIDC_CLIENT_ID ?? "").trim();
 const controlPlaneViewTable = process.env.CONTROL_PLANE_VIEW_TABLE;
 if (!controlPlaneViewTable) throw new Error("missing environment variable: CONTROL_PLANE_VIEW_TABLE");
 const controlPlaneWebSocketUrl = process.env.CONTROL_PLANE_WEBSOCKET_URL;
@@ -100,6 +102,11 @@ const refreshCookieSameSite: "Strict" | "None" = process.env.REFRESH_COOKIE_SAME
 // its routes answer as if they were never deployed, so the panel reads them as
 // not connected rather than broken.
 const passwordLoginEnabled = (process.env.PASSWORD_LOGIN_ENABLED ?? "false") === "true";
+// A browser provider is on exactly when its public client id exists. Telegram
+// is the default only because the bot that runs the group already has one; the
+// route itself stays, since the Mini App signs in through it with initData.
+const telegramLoginEnabled = telegramOidcClientId !== "";
+const googleLoginEnabled = googleOidcClientId !== "";
 const passwordRegistrationEnabled = (process.env.PASSWORD_REGISTRATION_ENABLED ?? "false") === "true";
 const emailDeliveryProvider = process.env.EMAIL_DELIVERY_PROVIDER ?? "none";
 const panelUrl = (process.env.PANEL_URL ?? "").trim();
@@ -1334,13 +1341,17 @@ const passwordCredentials: PasswordCredentialStore = {
 
 const passwordProvider = createPasswordLoginProvider({ credentials: passwordCredentials });
 const telegramProvider = createTelegramLoginProvider({ oidcClientId: telegramOidcClientId, botToken });
+const googleProvider = createGoogleLoginProvider({ clientId: googleOidcClientId });
 
 // Proof-based providers all link through the same use-case. Password is kept
 // separate because linking it creates a new credential and verifies a mailbox;
 // Telegram, Google and Discord only need to verify a provider-owned proof.
-const proofLinkProviders: ReadonlyMap<string, LoginProvider> = new Map([
-  [telegramProvider.id, telegramProvider],
-]);
+// A provider that is off is not linkable either: the profile offers only what
+// can be signed in with afterwards.
+const proofLinkProviders: ReadonlyMap<string, LoginProvider> = new Map(
+  [...(telegramLoginEnabled ? [telegramProvider] : []), ...(googleLoginEnabled ? [googleProvider] : [])]
+    .map((provider): [string, LoginProvider] => [provider.id, provider]),
+);
 
 function emailActionKey(tokenHash: string): Record<string, string> {
   return { pk: `EMAIL_ACTION#${tokenHash}`, sk: "TOKEN" };
@@ -1859,13 +1870,17 @@ async function changePassword(identity: Identity, event: Event): Promise<Respons
 // lead somewhere. Public by nature: it is read before there is a session.
 function loginProviders(): Response {
   return response(200, {
-    providers: ["telegram", ...(passwordLoginEnabled ? [passwordProviderId] : [])],
+    providers: [
+      ...(telegramLoginEnabled ? [telegramProvider.id] : []),
+      ...(googleLoginEnabled ? [googleProviderId] : []),
+      ...(passwordLoginEnabled ? [passwordProviderId] : []),
+    ],
     selfRegistration: passwordLoginEnabled && passwordRegistrationEnabled && emailDeliveryProvider !== "none" ? [passwordProviderId] : [],
     emailActions: emailDeliveryProvider !== "none",
   });
 }
 
-const passwordLoginDisabled = (): Response => response(404, { error: "not_found" });
+const loginProviderDisabled = (): Response => response(404, { error: "not_found" });
 
 // The files a player needs to join, for the release the world is actually
 // running. Whoever may learn where to connect may have what it takes to
@@ -1948,11 +1963,12 @@ const withCandidateAddress = (event: Event, handle: (platform: string, platformU
 export const routes: Readonly<Record<string, Route>> = {
   "GET /auth/providers": publicRoute(() => loginProviders()),
   "POST /auth/telegram": publicRoute((event) => authenticate(telegramProvider, event)),
-  "POST /auth/password": publicRoute((event) => (passwordLoginEnabled ? authenticate(passwordProvider, event) : passwordLoginDisabled())),
+  "POST /auth/google": publicRoute((event) => (googleLoginEnabled ? authenticate(googleProvider, event) : loginProviderDisabled())),
+  "POST /auth/password": publicRoute((event) => (passwordLoginEnabled ? authenticate(passwordProvider, event) : loginProviderDisabled())),
   "POST /auth/password/register": publicRoute((event) => (
     passwordLoginEnabled && passwordRegistrationEnabled && emailDeliveryProvider !== "none"
       ? registerPassword(event)
-      : passwordLoginDisabled()
+      : loginProviderDisabled()
   )),
   "POST /auth/email/verification": publicRoute((event) => verifyEmail(event)),
   "POST /auth/email/verification/resend": publicRoute((event) => resendEmailVerification(event)),
@@ -1977,10 +1993,10 @@ export const routes: Readonly<Record<string, Route>> = {
     return provider === undefined ? response(404, { error: "not_found" }) : linkProofAccount(identity, provider, event);
   }),
   "POST /me/password": identityRoute((identity, event) => (
-    passwordLoginEnabled && emailDeliveryProvider !== "none" ? linkPassword(identity, event) : passwordLoginDisabled()
+    passwordLoginEnabled && emailDeliveryProvider !== "none" ? linkPassword(identity, event) : loginProviderDisabled()
   )),
   "POST /me/password/change": identityRoute((identity, event) => (
-    passwordLoginEnabled ? changePassword(identity, event) : passwordLoginDisabled()
+    passwordLoginEnabled ? changePassword(identity, event) : loginProviderDisabled()
   )),
   "GET /me/subscriptions": identityRoute((identity) => subscriptions(identity)),
   "PUT /me/subscriptions": identityRoute((identity, event) => updateSubscriptions(identity, event.body)),

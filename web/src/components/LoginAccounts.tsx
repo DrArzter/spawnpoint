@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import {
   changePassword,
+  googleOidcClientId,
+  linkGoogle,
   linkTelegram,
   linkPassword,
   loadLinkedAccounts,
@@ -17,6 +19,7 @@ import { TextField } from "./ui/Fields";
 import { useSnackbar } from "./ui/Snackbar";
 import { Skeleton } from "./ui/Skeleton";
 import { Banner, Card, EmptyState } from "./ui/Surfaces";
+import { GOOGLE_CLIENT_ID, GoogleLoginButton } from "./GoogleLogin";
 import { TelegramLoginButton } from "./TelegramLogin";
 
 type AccountState =
@@ -68,12 +71,20 @@ export function LoginAccounts({ displayName }: Readonly<{ displayName: string }>
 
   const passwordAccount = state.accounts.find((account) => account.provider === "password");
   const telegramAccount = state.accounts.find((account) => account.provider === "telegram");
+  const googleAccount = state.accounts.find((account) => account.provider === "google");
   const canLinkTelegram = state.status === "ready" && telegramAccount === undefined && state.linkableProviders.includes("telegram");
+  const canLinkGoogle = state.status === "ready" && googleAccount === undefined && state.linkableProviders.includes("google") && GOOGLE_CLIENT_ID.test(googleOidcClientId);
   const canLinkPassword = state.status === "ready" && passwordAccount === undefined && state.passwordManagementAvailable;
 
   async function connectTelegram(idToken: string) {
     await linkTelegram(idToken);
     notify({ tone: "success", message: "Telegram is now a sign-in method for this identity." });
+    await refresh();
+  }
+
+  async function connectGoogle(idToken: string) {
+    await linkGoogle(idToken);
+    notify({ tone: "success", message: "Google is now a sign-in method for this identity." });
     await refresh();
   }
 
@@ -130,8 +141,9 @@ export function LoginAccounts({ displayName }: Readonly<{ displayName: string }>
 
   return (
     <Card
-      actions={(canLinkTelegram || canLinkPassword) ? <ActionRow>
+      actions={(canLinkTelegram || canLinkGoogle || canLinkPassword) ? <ActionRow>
         {canLinkTelegram && <TelegramLoginButton className="telegram-login" label="Add Telegram" onToken={connectTelegram} />}
+        {canLinkGoogle && <GoogleLoginButton className="google-login" onToken={connectGoogle} />}
         {canLinkPassword && <Button icon="add" onClick={() => openForm("add")} variant="outlined">Add email and password</Button>}
       </ActionRow> : undefined}
       description="Every method belongs to the same Spawnpoint identity. None becomes primary because it was added first."

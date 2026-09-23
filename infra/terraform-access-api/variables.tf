@@ -105,6 +105,17 @@ variable "telegram_oidc_client_id" {
   }
 }
 
+variable "google_oidc_client_id" {
+  description = "Public Google OAuth client ID (Web application) for Sign in with Google; empty keeps Google sign-in off and its routes undeployed."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.google_oidc_client_id == "" || can(regex("^[A-Za-z0-9-]+\\.apps\\.googleusercontent\\.com$", var.google_oidc_client_id))
+    error_message = "google_oidc_client_id must be empty or a client ID ending in .apps.googleusercontent.com from the Google Cloud console."
+  }
+}
+
 variable "password_login_enabled" {
   description = "Offer sign-in for existing email-and-password credentials beside Telegram (ADR-0055)."
   type        = bool

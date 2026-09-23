@@ -3,6 +3,11 @@ bootstrap_owner_telegram_id = "1780660807"
 # Public value from BotFather -> Login Widget after adding the panel's trusted origin.
 telegram_oidc_client_id = "8521897198"
 
+# Sign in with Google (ADR-0058). Public Web application client ID from the
+# Google Cloud console, with the panel origin under Authorised JavaScript
+# origins. Empty keeps Google off; there is no client secret in this flow.
+google_oidc_client_id = ""
+
 # Email and password beside Telegram (ADR-0055). Set false to offer Telegram only.
 password_login_enabled = true
 # Open only for an intentional registration window. Existing credentials can

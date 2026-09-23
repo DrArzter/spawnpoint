@@ -130,6 +130,7 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   variables {
     bootstrap_owner_telegram_id      = "1780660807"
     telegram_oidc_client_id          = "8521897198"
+    google_oidc_client_id            = "1234567890-abc123def456.apps.googleusercontent.com"
     panel_url                        = "https://spawnpoint.example.dev/"
     legacy_panel_url                 = "https://legacy.example.dev/"
     api_domain_name                  = "api.spawnpoint.example.dev"
@@ -345,6 +346,11 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   assert {
     condition     = aws_lambda_function.access_api.environment[0].variables.TELEGRAM_OIDC_CLIENT_ID == "8521897198"
     error_message = "The OIDC verifier must receive the externally configured public BotFather client ID."
+  }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.GOOGLE_OIDC_CLIENT_ID == "1234567890-abc123def456.apps.googleusercontent.com"
+    error_message = "The OIDC verifier must receive the externally configured public Google client ID."
   }
 
   assert {

@@ -3,7 +3,8 @@
 The static site on S3 behind CloudFront is published at `https://spawnpoint.drarzter.dev/`; the provider hostname remains
 available temporarily as a migration and diagnostic path. One React/Vite build serves two
 entry points: Telegram's embedded **Mini App**, which authenticates with the signed `initData` Telegram supplies, and an
-ordinary **browser panel**, which signs in with an email and password or through Telegram. Every way in is exchanged
+ordinary **browser panel**, which signs in with an email and password, through Telegram or through Google, whichever the
+deployment has configured. Every way in is exchanged
 for the same short-lived Spawnpoint session at the access API, and the panel holds no AWS credential of its own. See
 [ADR-0045](../docs/adr/0045-provider-neutral-login-sessions.md), [ADR-0055](../docs/adr/0055-sign-in-with-email-and-password-by-default.md)
 and [ADR-0012](../docs/adr/0012-web-control-panel.md).

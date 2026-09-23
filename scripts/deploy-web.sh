@@ -21,16 +21,25 @@ fi
 if [[ -z "${VITE_TELEGRAM_OIDC_CLIENT_ID:-}" ]]; then
   VITE_TELEGRAM_OIDC_CLIENT_ID="$(terraform_output_if_available telegram_oidc_client_id)"
 fi
-export VITE_ACCESS_API_URL VITE_TELEGRAM_OIDC_CLIENT_ID
+if [[ -z "${VITE_GOOGLE_OIDC_CLIENT_ID:-}" ]]; then
+  VITE_GOOGLE_OIDC_CLIENT_ID="$(terraform_output_if_available google_oidc_client_id)"
+fi
+export VITE_ACCESS_API_URL VITE_TELEGRAM_OIDC_CLIENT_ID VITE_GOOGLE_OIDC_CLIENT_ID
 
 aws_profile_args=()
 if [[ -n "${AWS_PROFILE_NAME}" ]]; then
   aws_profile_args=(--profile "${AWS_PROFILE_NAME}")
 fi
 
-if [[ -z "${VITE_ACCESS_API_URL}" || -z "${VITE_TELEGRAM_OIDC_CLIENT_ID}" ]]; then
+# The API is the one thing a panel cannot do without. Every browser provider is
+# optional and switched on by its own client id; a build without one simply
+# draws no button for it.
+if [[ -z "${VITE_ACCESS_API_URL}" ]]; then
   printf 'error: access API is not applied; refusing to publish a panel without authentication\n' >&2
   exit 1
+fi
+if [[ -z "${VITE_TELEGRAM_OIDC_CLIENT_ID}" && -z "${VITE_GOOGLE_OIDC_CLIENT_ID}" ]]; then
+  printf 'note: no Telegram or Google client id; the panel will offer only what the API lists\n' >&2
 fi
 
 cd -- "${WEB_ROOT}"

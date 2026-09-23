@@ -1,4 +1,6 @@
-import { createHash, createHmac, createPublicKey, randomBytes, timingSafeEqual, verify } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+
+import { verifyIdToken, type JwksFetcher, type OidcClaims, type OidcIssuer } from "./oidc.ts";
 
 export type TelegramProfile = Readonly<{
   telegramId: string;
@@ -12,13 +14,11 @@ type TelegramLoginPayload = Readonly<Record<string, unknown>>;
 const loginKeys = ["id", "first_name", "last_name", "username", "photo_url", "auth_date"] as const;
 export const legacySessionLifetimeSeconds = 12 * 60 * 60;
 const loginFreshnessSeconds = 10 * 60;
-const telegramOidcIssuer = "https://oauth.telegram.org";
-const telegramJwksUrl = `${telegramOidcIssuer}/.well-known/jwks.json`;
-const jwksLifetimeMilliseconds = 60 * 60 * 1000;
-
-type TelegramJwk = JsonWebKey & Readonly<{ kid?: string; alg?: string; use?: string }>;
-type JwksFetcher = (url: string) => Promise<{ ok: boolean; json(): Promise<unknown> }>;
-let cachedJwks: { expiresAt: number; keys: TelegramJwk[] } | undefined;
+const telegramIssuer: OidcIssuer = {
+  name: "Telegram",
+  issuers: ["https://oauth.telegram.org"],
+  jwksUrl: "https://oauth.telegram.org/.well-known/jwks.json",
+};
 
 function equalHex(expected: string, actual: string): boolean {
   if (!/^[0-9a-f]{64}$/i.test(actual)) return false;
@@ -82,29 +82,7 @@ export function verifyMiniAppInitData(initData: string, botToken: string, nowSec
   }
 }
 
-function decodeJsonPart(encoded: string): Record<string, unknown> | null {
-  try {
-    const decoded = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as unknown;
-    return decoded !== null && typeof decoded === "object" && !Array.isArray(decoded)
-      ? decoded as Record<string, unknown>
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchTelegramJwks(fetcher: JwksFetcher, nowMilliseconds: number, force = false): Promise<TelegramJwk[]> {
-  if (!force && cachedJwks !== undefined && cachedJwks.expiresAt > nowMilliseconds) return cachedJwks.keys;
-  const response = await fetcher(telegramJwksUrl);
-  if (!response.ok) throw new Error("Telegram OIDC keys are unavailable");
-  const document = await response.json() as { keys?: unknown };
-  if (!Array.isArray(document.keys)) throw new Error("Telegram OIDC returned an invalid JWKS document");
-  const keys = document.keys.filter((value): value is TelegramJwk => value !== null && typeof value === "object");
-  cachedJwks = { expiresAt: nowMilliseconds + jwksLifetimeMilliseconds, keys };
-  return keys;
-}
-
-function oidcProfile(claims: Record<string, unknown>): TelegramProfile | null {
+function oidcProfile(claims: OidcClaims): TelegramProfile | null {
   const id = typeof claims.id === "number" && Number.isSafeInteger(claims.id)
     ? String(claims.id)
     : typeof claims.id === "string" ? claims.id : "";
@@ -123,36 +101,10 @@ export async function verifyOidcIdToken(
   nowSeconds = Math.floor(Date.now() / 1000),
   fetcher: JwksFetcher = fetch,
 ): Promise<TelegramProfile | null> {
-  const [encodedHeader, encodedClaims, encodedSignature, extra] = idToken.split(".");
-  if (!encodedHeader || !encodedClaims || !encodedSignature || extra !== undefined || !/^\d+$/.test(clientId)) return null;
-  const header = decodeJsonPart(encodedHeader);
-  const claims = decodeJsonPart(encodedClaims);
-  if (header === null || claims === null || header.alg !== "RS256" || typeof header.kid !== "string") return null;
-
-  const audience = claims.aud;
-  const audienceMatches = audience === clientId || (Array.isArray(audience) && audience.includes(clientId));
-  if (
-    claims.iss !== telegramOidcIssuer || !audienceMatches ||
-    typeof claims.exp !== "number" || claims.exp < nowSeconds ||
-    typeof claims.iat !== "number" || claims.iat > nowSeconds + 30 || nowSeconds - claims.iat > loginFreshnessSeconds
-  ) return null;
-
-  const nowMilliseconds = nowSeconds * 1000;
-  let keys = await fetchTelegramJwks(fetcher, nowMilliseconds);
-  let jwk = keys.find((candidate) => candidate.kid === header.kid && candidate.kty === "RSA");
-  if (jwk === undefined) {
-    keys = await fetchTelegramJwks(fetcher, nowMilliseconds, true);
-    jwk = keys.find((candidate) => candidate.kid === header.kid && candidate.kty === "RSA");
-  }
-  if (jwk === undefined) return null;
-
-  try {
-    const signature = Buffer.from(encodedSignature, "base64url");
-    const valid = verify("RSA-SHA256", Buffer.from(`${encodedHeader}.${encodedClaims}`), createPublicKey({ key: jwk, format: "jwk" }), signature);
-    return valid ? oidcProfile(claims) : null;
-  } catch {
-    return null;
-  }
+  // BotFather hands out numeric client ids; anything else was never Telegram's.
+  if (!/^\d+$/.test(clientId)) return null;
+  const claims = await verifyIdToken(telegramIssuer, idToken, clientId, nowSeconds, fetcher);
+  return claims === null ? null : oidcProfile(claims);
 }
 
 function sessionKey(botToken: string): Buffer {

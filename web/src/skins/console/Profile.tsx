@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import type { LinkedLoginAccount } from "../../api/contract";
 import { Avatar } from "../../components/Avatar";
+import { GoogleLoginButton } from "../../components/GoogleLogin";
 import { TelegramLoginButton } from "../../components/TelegramLogin";
 import { ActionRow, Button } from "../../components/ui/Button";
 import { Chip, ChoiceChip } from "../../components/ui/Chip";
@@ -135,11 +136,12 @@ function accountLine(account: LinkedLoginAccount): string {
 
 function LoginAccounts({ model }: Readonly<{ model: LoginAccountsModel }>) {
   const accounts = model.accounts;
-  const offers = model.connectTelegram !== null || model.addPassword !== null;
+  const offers = model.connectTelegram !== null || model.connectGoogle !== null || model.addPassword !== null;
   return (
     <Card
       actions={offers ? <ActionRow>
         {model.connectTelegram && <TelegramLoginButton className="telegram-login" label="Add Telegram" onToken={model.connectTelegram} />}
+        {model.connectGoogle && <GoogleLoginButton className="google-login" onToken={model.connectGoogle} />}
         {model.addPassword && <ActionButton action={model.addPassword} variant="outlined" />}
       </ActionRow> : undefined}
       description="Every method belongs to the same Spawnpoint identity. None becomes primary because it was added first."

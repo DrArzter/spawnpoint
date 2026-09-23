@@ -272,6 +272,7 @@ export type LoginAccountsModel = Readonly<{
   accounts: Loading<readonly LinkedLoginAccount[]>;
   linkable: readonly string[];
   connectTelegram: ((idToken: string) => Promise<void>) | null;
+  connectGoogle: ((idToken: string) => Promise<void>) | null;
   addPassword: Action | null;
   form: Readonly<{
     kind: "add" | "change";

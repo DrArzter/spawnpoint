@@ -3,13 +3,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, SubscriptionState } from "../api/contract";
 import { failureKind } from "../api/contract";
 import {
-  approveAccessCandidate, changePassword, createAccessInvitation, dismissAccessCandidate, linkPassword, linkTelegram, loadAccessCandidates, loadAccessIdentities, loadAccessInvitations,
+  approveAccessCandidate, changePassword, createAccessInvitation, dismissAccessCandidate, googleOidcClientId, linkGoogle, linkPassword, linkTelegram, loadAccessCandidates, loadAccessIdentities, loadAccessInvitations,
   loadAccessRoles, loadBackups, loadHostMetrics, loadInvitationHistory, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
   sendInvitation, telegramOidcClientId, updateIdentityRole, updateSubscriptions,
 } from "../auth";
 import type { SnackInput } from "../components/ui/Snackbar";
 import type { StatusKind } from "../components/ui/Status";
 import { formatDateTime } from "../lib/format";
+import { GOOGLE_CLIENT_ID } from "../lib/signin";
 import type { Game, LinkKind, Member, OwnerBootstrap, Role, World } from "../model";
 import { action } from "./actions";
 import type { BackupsModel, CandidateRow, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, NotificationsModel, RolesModel, UsersModel } from "./models";
@@ -519,6 +520,7 @@ export function useLoginAccounts(displayName: string, notify: Notify): LoginAcco
     accounts: state.status !== "ready" ? asLoading(state, retry, "accounts.retry") : { status: "ready", value: accounts },
     linkable,
     connectTelegram: ready !== null && !has("telegram") && linkable.includes("telegram") && /^[1-9]\d+$/.test(telegramOidcClientId) ? (idToken) => connect(linkTelegram, "Telegram", idToken) : null,
+    connectGoogle: ready !== null && !has("google") && linkable.includes("google") && GOOGLE_CLIENT_ID.test(googleOidcClientId) ? (idToken) => connect(linkGoogle, "Google", idToken) : null,
     addPassword: ready !== null && passwordAccount === undefined && ready.passwordManagementAvailable ? action("accounts.password.add", "Add email and password", () => openForm("add"), { icon: "add" }) : null,
     form: form === null ? null : {
       kind: form,

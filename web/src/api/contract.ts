@@ -211,6 +211,7 @@ export type SpawnpointApi = Readonly<{
   /** Which ways in the deployment offers, and which accept anonymous registration. */
   loadLoginOptions(): Promise<LoginOptions>;
   exchangeTelegramOidc(idToken: string): Promise<AuthState>;
+  exchangeGoogleOidc(idToken: string): Promise<AuthState>;
   /** Resolves to a session or throws a sentence the form can show beside its fields. */
   signInWithPassword(email: string, password: string): Promise<AuthState>;
   registerWithPassword(email: string, password: string, displayName: string, invitationToken?: string): Promise<{ result: "verification_sent"; email: string }>;
@@ -223,6 +224,7 @@ export type SpawnpointApi = Readonly<{
 
   loadLinkedAccounts(): Promise<LinkedLoginAccounts>;
   linkTelegram(idToken: string): Promise<void>;
+  linkGoogle(idToken: string): Promise<void>;
   linkPassword(email: string, password: string, displayName: string): Promise<void>;
   changePassword(email: string, currentPassword: string, password: string): Promise<void>;
 

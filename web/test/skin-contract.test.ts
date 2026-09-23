@@ -147,6 +147,7 @@ const profile: ProfileModel = {
     accounts: { status: "ready", value: [{ provider: "password", subject: "p", displayName: "DrArzter", username: null, email: "a@example.com", photoUrl: null, verified: true }] },
     linkable: ["telegram"],
     connectTelegram: null,
+    connectGoogle: null,
     addPassword: spy("accounts.password.add", "Add email and password"),
     form: { kind: "add", email: "", setEmail: noop, currentPassword: "", setCurrentPassword: noop, password: "", setPassword: noop, confirmation: "", setConfirmation: noop, error: "", busy: false, submit: spy("accounts.password.submit", "Send verification"), cancel: spy("accounts.password.cancel", "Cancel") },
     rowActions: () => [spy("accounts.password.change", "Change password"), spy("accounts.password.reset", "Send reset link")],

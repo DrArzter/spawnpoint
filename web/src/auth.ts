@@ -9,7 +9,7 @@ export type {
   SpawnpointApi, SpawnpointSession, SubscriptionState, VisitorSession, WorldLifecycleAction,
 } from "./api/contract";
 import type { MetricRange } from "./api/contract";
-export { telegramOidcClientId } from "./api/live";
+export { googleOidcClientId, telegramOidcClientId } from "./api/live";
 
 // One switch, in one place. Everything below is the shipped panel calling the
 // shipped contract; the demo differs in what answers, never in what is asked
@@ -24,6 +24,7 @@ export const restoreAuth = (): ReturnType<SpawnpointApi["restoreSession"]> => ap
 export const switchLogin = (): ReturnType<SpawnpointApi["revokeSession"]> => api.revokeSession();
 export const loadLoginOptions = () => api.loadLoginOptions();
 export const exchangeTelegramOidc = (idToken: string) => api.exchangeTelegramOidc(idToken);
+export const exchangeGoogleOidc = (idToken: string) => api.exchangeGoogleOidc(idToken);
 export const signInWithPassword = (email: string, password: string) => api.signInWithPassword(email, password);
 export const registerWithPassword = (email: string, password: string, displayName: string, invitationToken?: string) => api.registerWithPassword(email, password, displayName, invitationToken);
 export const resendEmailVerification = (email: string, invitationToken?: string) => api.resendEmailVerification(email, invitationToken);
@@ -32,6 +33,7 @@ export const requestPasswordReset = (email: string) => api.requestPasswordReset(
 export const resetPassword = (token: string, password: string) => api.resetPassword(token, password);
 export const loadLinkedAccounts = () => api.loadLinkedAccounts();
 export const linkTelegram = (idToken: string) => api.linkTelegram(idToken);
+export const linkGoogle = (idToken: string) => api.linkGoogle(idToken);
 export const linkPassword = (email: string, password: string, displayName: string) => api.linkPassword(email, password, displayName);
 export const changePassword = (email: string, currentPassword: string, password: string) => api.changePassword(email, currentPassword, password);
 

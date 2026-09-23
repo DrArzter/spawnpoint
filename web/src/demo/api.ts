@@ -17,10 +17,15 @@ export const demoApi: SpawnpointApi = {
 
   async loadLoginOptions() {
     await demoLatency();
-    return { providers: ["password" as const, "telegram" as const], selfRegistration: ["password" as const], emailActions: true };
+    return { providers: ["password" as const, "telegram" as const, "google" as const], selfRegistration: ["password" as const], emailActions: true };
   },
 
   async exchangeTelegramOidc(): Promise<AuthState> {
+    await demoLatency();
+    return { status: "authenticated", session: demoSession };
+  },
+
+  async exchangeGoogleOidc(): Promise<AuthState> {
     await demoLatency();
     return { status: "authenticated", session: demoSession };
   },
@@ -62,7 +67,7 @@ export const demoApi: SpawnpointApi = {
     await demoLatency();
     return {
       passwordManagementAvailable: true,
-      linkableProviders: ["telegram"],
+      linkableProviders: ["telegram", "google"],
       accounts: [
         { provider: "telegram", subject: "1780660807", displayName: "DrArzter", username: "drarzter", email: null, photoUrl: null, verified: true },
         { provider: "password", subject: "demo-password", displayName: "DrArzter", username: null, email: "drarzter@example.dev", photoUrl: null, verified: true },
@@ -71,6 +76,10 @@ export const demoApi: SpawnpointApi = {
   },
 
   async linkTelegram(): Promise<void> {
+    await demoLatency();
+  },
+
+  async linkGoogle(): Promise<void> {
     await demoLatency();
   },
 

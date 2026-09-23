@@ -104,7 +104,8 @@ The environment also needs `TF_VAR_ALERT_EMAIL` and `TF_VAR_BOOTSTRAP_OWNER_TELE
 for the two Terraform roots that declare those sensitive inputs.
 
 Repository variables hold shared, non-secret deployment configuration: `AWS_REGION`, `TF_STATE_BUCKET`,
-`SPAWNPOINT_DOMAIN`, `SPAWNPOINT_MINI_APP_URL`, `SPAWNPOINT_LEGACY_PANEL_URL` and `TELEGRAM_OIDC_CLIENT_ID`. Reusable
+`SPAWNPOINT_DOMAIN`, `SPAWNPOINT_MINI_APP_URL`, `SPAWNPOINT_LEGACY_PANEL_URL`, `TELEGRAM_OIDC_CLIENT_ID` and the optional
+`GOOGLE_OIDC_CLIENT_ID`. Reusable
 workflows project them into the AWS SDK, Terraform backend and `TF_VAR_*` interfaces; a root must not duplicate their
 production values as defaults.
 

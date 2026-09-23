@@ -23,6 +23,7 @@ const { routes, deployedCapabilities } = await import("../src/handlers/access-ap
 const WITHOUT_PERMISSION = new Map<string, string>([
   ["GET /auth/providers", "which ways in this deployment offers; read before any session exists"],
   ["POST /auth/telegram", "login itself: it is what produces a session"],
+  ["POST /auth/google", "login itself: it is what produces a session"],
   ["POST /auth/password", "login itself: it is what produces a session"],
   ["POST /auth/password/register", "creates an unlinked credential and sends mailbox verification; it grants no role"],
   ["POST /auth/email/verification", "one-time mailbox proof that creates the credential's first login session"],

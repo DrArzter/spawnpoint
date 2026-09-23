@@ -35,6 +35,7 @@ jobs:
       TF_VAR_dns_zone_name: ${{ vars.SPAWNPOINT_DOMAIN }}
       TF_VAR_mini_app_url: ${{ vars.SPAWNPOINT_MINI_APP_URL }}
       TF_VAR_telegram_oidc_client_id: ${{ vars.TELEGRAM_OIDC_CLIENT_ID }}
+      TF_VAR_google_oidc_client_id: ${{ vars.GOOGLE_OIDC_CLIENT_ID }}
       TF_VAR_session_signing_secret_parameter: ${{ vars.SESSION_SIGNING_SECRET_PARAMETER }}
       TF_VAR_password_login_enabled: ${{ vars.PASSWORD_LOGIN_ENABLED }}
       TF_VAR_password_registration_enabled: ${{ vars.PASSWORD_REGISTRATION_ENABLED }}

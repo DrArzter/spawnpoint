@@ -170,6 +170,7 @@ resource "aws_lambda_function" "access_api" {
       BOT_TOKEN_PARAMETER              = var.bot_token_parameter
       SESSION_SIGNING_SECRET_PARAMETER = var.session_signing_secret_parameter
       TELEGRAM_OIDC_CLIENT_ID          = var.telegram_oidc_client_id
+      GOOGLE_OIDC_CLIENT_ID            = var.google_oidc_client_id
       PASSWORD_LOGIN_ENABLED           = var.password_login_enabled ? "true" : "false"
       PASSWORD_REGISTRATION_ENABLED    = var.password_registration_enabled ? "true" : "false"
       EMAIL_DELIVERY_PROVIDER          = var.email_delivery_provider
@@ -223,6 +224,7 @@ locals {
   access_routes = toset([
     "GET /auth/providers",
     "POST /auth/telegram",
+    "POST /auth/google",
     "POST /auth/password",
     "POST /auth/password/register",
     "POST /auth/email/verification",

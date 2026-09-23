@@ -27,7 +27,7 @@ function submitLabel(registering: boolean, recovering: boolean): string {
 // password form first, then every other provider this deployment offers as an
 // alternative beneath it. One form both creates an account and signs into one;
 // only the fields and the verb change.
-export function SignInPanel({ onChange, initialMode = "sign-in" }: Readonly<{ onChange: (state: AuthState) => void; initialMode?: SignInMode }>) {
+export function SignInPanel({ onChange, initialMode = "sign-in", invitationToken }: Readonly<{ onChange: (state: AuthState) => void; initialMode?: SignInMode; invitationToken?: string }>) {
   const [options, setOptions] = useState<LoginOptions | null>(null);
   const [mode, setMode] = useState<SignInMode>(initialMode);
   const [email, setEmail] = useState("");
@@ -56,7 +56,7 @@ export function SignInPanel({ onChange, initialMode = "sign-in" }: Readonly<{ on
     setBusy(true);
     try {
       if (registering) {
-        const result = await registerWithPassword(email, password, displayName);
+        const result = await registerWithPassword(email, password, displayName, invitationToken);
         setSent({ kind: "verification", email: result.email });
       } else if (recovering) {
         await requestPasswordReset(email);
@@ -94,7 +94,7 @@ export function SignInPanel({ onChange, initialMode = "sign-in" }: Readonly<{ on
           <Button disabled={busy} onClick={() => {
             setBusy(true);
             setError("");
-            void resendEmailVerification(sent.email)
+            void resendEmailVerification(sent.email, invitationToken)
               .catch((cause) => setError(cause instanceof Error ? cause.message : "A new verification email could not be sent."))
               .finally(() => setBusy(false));
           }} variant="outlined">Send another link</Button>

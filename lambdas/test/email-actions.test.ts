@@ -32,3 +32,17 @@ test("verification mail carries the public link without trusting display text as
   assert.doesNotMatch(message.html, /Ada <Admin>/);
   assert.equal(message.idempotencyKey, `verify_email/${action.nonce}`);
 });
+
+test("invitation context survives mailbox verification without changing the selected login provider", () => {
+  const action = issueEmailAction("verify_email", 1_800_000_000);
+  const invitationToken = "i".repeat(43);
+  const message = renderEmailAction("verify_email", {
+    email: "ada@example.com",
+    displayName: "Ada",
+    panelUrl: "https://spawnpoint.example.dev/",
+    action,
+    invitationToken,
+  });
+  assert.match(message.text, new RegExp(`verify-email\\?token=${action.token}&invite=${invitationToken}`));
+  assert.match(message.html, new RegExp(`verify-email\\?token=${action.token}&amp;invite=${invitationToken}`));
+});

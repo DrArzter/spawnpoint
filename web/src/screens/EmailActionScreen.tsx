@@ -31,7 +31,8 @@ export function EmailActionScreen({ action, onAuth }: Readonly<{ action: EmailAc
       .then((auth) => {
         if (!active) return;
         onAuth(auth);
-        window.location.hash = "#/worlds";
+        const pendingInvite = action.invitationToken ?? window.sessionStorage.getItem("spawnpoint.pending-access-invitation");
+        window.location.hash = pendingInvite ? `#/join?token=${encodeURIComponent(pendingInvite)}` : "#/worlds";
       })
       .catch((error) => {
         if (!active) return;

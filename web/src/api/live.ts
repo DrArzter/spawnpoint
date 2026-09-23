@@ -1,7 +1,7 @@
 import { describeRegistrationFailure, describeSignInFailure, isLoginProviderId } from "../lib/signin";
 import type { ControlPlaneSnapshot } from "../model";
 import type {
-  AccessCandidate, AccessIdentity, AccessRole, AccountProfile, AppearancePreference, AuthState, BackupInventory, HostMetrics,
+  AccessCandidate, AccessIdentity, AccessInvitation, AccessRole, AccountProfile, AppearancePreference, AuthState, BackupInventory, HostMetrics,
   InvitationRecipient, InvitationSummary, LinkedLoginAccounts, LoginOptions, MetricRange, SessionOperation, SpawnpointApi,
   SpawnpointSession, SubscriptionState, WorldLifecycleAction,
 } from "./contract";
@@ -288,8 +288,8 @@ export const liveApi: SpawnpointApi = {
   signInWithPassword: (email: string, password: string) =>
     sessionFromLogin("/auth/password", { email, password }, describeSignInFailure),
 
-  async registerWithPassword(email: string, password: string, displayName: string) {
-    const response = await publicPost("/auth/password/register", { email, password, displayName });
+  async registerWithPassword(email: string, password: string, displayName: string, invitationToken?: string) {
+    const response = await publicPost("/auth/password/register", { email, password, displayName, ...(invitationToken ? { invitationToken } : {}) });
     const body = await response.json().catch(() => null) as { result?: unknown; email?: unknown; error?: unknown } | null;
     if (!response.ok) {
       const code = typeof body?.error === "string" ? body.error : undefined;
@@ -299,8 +299,8 @@ export const liveApi: SpawnpointApi = {
     return { result: "verification_sent" as const, email: body.email };
   },
 
-  async resendEmailVerification(email: string): Promise<void> {
-    const response = await publicPost("/auth/email/verification/resend", { email });
+  async resendEmailVerification(email: string, invitationToken?: string): Promise<void> {
+    const response = await publicPost("/auth/email/verification/resend", { email, ...(invitationToken ? { invitationToken } : {}) });
     if (!response.ok) throw await apiFailure(response, "A new verification email could not be sent.");
   },
 
@@ -392,6 +392,47 @@ export const liveApi: SpawnpointApi = {
   async requestAccess(): Promise<void> {
     const response = await authorizedFetch("/access/request", { method: "POST" });
     if (!response.ok) throw await apiFailure(response, "The access request could not be sent.");
+  },
+
+  async checkAccessInvitation(token: string): Promise<{ valid: boolean; email: string | null }> {
+    const response = await publicPost("/auth/access-invitations/check", { token });
+    if (!response.ok) throw await apiFailure(response, "This invitation could not be checked.");
+    const body = await response.json() as { valid?: unknown; email?: unknown };
+    return { valid: body.valid === true, email: typeof body.email === "string" ? body.email : null };
+  },
+
+  async redeemAccessInvitation(token: string, proof?: string): Promise<void> {
+    const response = await authorizedFetch("/access/invitations/redeem", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, ...(proof ? { proof } : {}) }),
+    });
+    if (!response.ok) throw await apiFailure(response, response.status === 409 ? "This invitation is no longer available, or this account already has access." : "This invitation could not be accepted.");
+  },
+
+  async requestAccessInvitationProof(token: string): Promise<void> {
+    const response = await authorizedFetch("/access/invitations/proof", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token }),
+    });
+    if (!response.ok) throw await apiFailure(response, response.status === 429 ? "A confirmation email was just sent. Wait a minute before trying again." : "The confirmation email could not be sent.");
+  },
+
+  async loadAccessInvitations(): Promise<AccessInvitation[]> {
+    const response = await authorizedFetch("/access/invitations");
+    if (!response.ok) throw await apiFailure(response, "Invitations could not be loaded.");
+    const body = await response.json() as { invitations: AccessInvitation[] };
+    return body.invitations;
+  },
+
+  async createAccessInvitation(email: string | null) {
+    const response = await authorizedFetch("/access/invitations", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(email === null ? {} : { email }),
+    });
+    if (!response.ok) throw await apiFailure(response, "An invitation could not be created.");
+    return response.json() as ReturnType<SpawnpointApi["createAccessInvitation"]>;
+  },
+
+  async revokeAccessInvitation(id: string): Promise<void> {
+    const response = await authorizedFetch(`/access/invitations/${encodeURIComponent(id)}/revoke`, { method: "POST" });
+    if (!response.ok) throw await apiFailure(response, "This invitation could not be revoked.");
   },
 
   async loadAccessCandidates(): Promise<AccessCandidate[]> {

@@ -84,7 +84,7 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Linked account**: A provider account associated with exactly one Spawnpoint identity after that provider proves its stable subject. An identity may have several linked accounts from different enabled login providers, and none is primary merely because it was used first. _Avoid_: User; one person may have several linked accounts.
 
-**Access invitation**: A single-use invitation to join one Spawnpoint deployment by creating an identity with its default role. It is independent of the login provider the recipient chooses. _Avoid_: Game invitation, registration link.
+**Access invitation**: A single-use invitation to join a Spawnpoint deployment with its default role. When email delivery is configured it is addressed to an email and requires proof of that mailbox; in an email-free deployment it is a one-time link redeemed after login through an enabled provider. The invitation never chooses the login provider. _Avoid_: Game invitation, provider-specific registration link.
 
 **Subscription**: One identity's opt-in to a category of notifications, optionally scoped to a particular game. Roles do not imply subscriptions.
 

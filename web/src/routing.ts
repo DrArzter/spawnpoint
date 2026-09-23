@@ -1,4 +1,4 @@
-import { AccessTab, Page, WorldTab } from "./model";
+import type { AccessTab, Page, WorldTab } from "./model";
 
 // Hash routes: #/worlds[/<game>[/<world>[/<tab>]]], #/metrics[/<game>], #/console[/<game>],
 // #/releases[/<game>], #/access/<tab>, #/profile. "overview" stays an alias of
@@ -7,12 +7,22 @@ export type AppRoute = Readonly<{ page: Page; accessTab: AccessTab; gameId: stri
 
 export const LANDING_HASH = "#/";
 
-export type EmailActionRoute = Readonly<{ kind: "verify-email" | "reset-password"; token: string }>;
+export type EmailActionRoute = Readonly<{ kind: "verify-email" | "reset-password"; token: string; invitationToken: string | null }>;
+
+export type AccessInvitationRoute = Readonly<{ token: string; proof: string | null }>;
+
+export function readAccessInvitationRoute(hash: string = window.location.hash): AccessInvitationRoute | null {
+  const [path = "", query = ""] = hash.replace(/^#\/?/, "").split("?", 2);
+  if (path !== "join") return null;
+  const parameters = new URLSearchParams(query);
+  return { token: parameters.get("token") ?? "", proof: parameters.get("proof") };
+}
 
 export function readEmailActionRoute(hash: string = window.location.hash): EmailActionRoute | null {
   const [path = "", query = ""] = hash.replace(/^#\/?/, "").split("?", 2);
   if (path !== "verify-email" && path !== "reset-password") return null;
-  return { kind: path, token: new URLSearchParams(query).get("token") ?? "" };
+  const parameters = new URLSearchParams(query);
+  return { kind: path, token: parameters.get("token") ?? "", invitationToken: parameters.get("invite") };
 }
 
 // The front door lives at the bare root; every other hash is the console.

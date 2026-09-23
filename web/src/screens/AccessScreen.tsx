@@ -16,6 +16,7 @@ import { Status } from "../components/ui/Status";
 import { Banner, Card, Details, EmptyState, Ghost, NotConnected } from "../components/ui/Surfaces";
 import { Tabs } from "../components/ui/Tabs";
 import { Icon } from "../icons";
+import { AccessInvitations } from "./AccessInvitations";
 import { formatDateTime, plural } from "../lib/format";
 import { describePermission } from "../lib/permissions";
 import type { AccessTab, Game, LinkKind, Member, OwnerBootstrap, Role } from "../model";
@@ -47,8 +48,9 @@ function bootstrapDescription(bootstrap: OwnerBootstrap): string | undefined {
   return `Sign in with the configured Telegram account${configuredAccount} to create the first Owner.`;
 }
 
-export function AccessScreen({ bootstrap, games, members, roles, tab, onMembersChange, onRolesChange, onTabChange }: {
+export function AccessScreen({ bootstrap, canInvite, games, members, roles, tab, onMembersChange, onRolesChange, onTabChange }: {
   bootstrap: OwnerBootstrap;
+  canInvite: boolean;
   games: readonly Game[];
   members: Member[];
   roles: Role[];
@@ -81,7 +83,7 @@ export function AccessScreen({ bootstrap, games, members, roles, tab, onMembersC
       <h1 className="visually-hidden">Access</h1>
       <Tabs label="Access sections" onChange={onTabChange} options={[{ id: "users", label: "Users", icon: "group" }, { id: "roles", label: "Roles", icon: "admin_panel_settings", count: roles.length || undefined }, { id: "notifications", label: "My notifications", icon: "notifications" }]} value={tab} />
       <div aria-live="polite" role="tabpanel">
-        {tab === "users" && <Users bootstrap={bootstrap} members={members} onChange={onMembersChange} roles={roles} rolesLoading={roleState === "loading"} />}
+        {tab === "users" && <Users bootstrap={bootstrap} canInvite={canInvite} members={members} onChange={onMembersChange} roles={roles} rolesLoading={roleState === "loading"} />}
         {tab === "roles" && <Roles error={roleError} failure={roleKind} onRetry={() => void loadRoles()} roles={roles} state={roleState} />}
         {tab === "notifications" && <Notifications games={games} />}
       </div>
@@ -89,7 +91,7 @@ export function AccessScreen({ bootstrap, games, members, roles, tab, onMembersC
   );
 }
 
-function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstrap: OwnerBootstrap; members: Member[]; roles: Role[]; rolesLoading: boolean; onChange: (members: Member[]) => void }) {
+function Users({ bootstrap, canInvite, members, roles, rolesLoading, onChange }: { bootstrap: OwnerBootstrap; canInvite: boolean; members: Member[]; roles: Role[]; rolesLoading: boolean; onChange: (members: Member[]) => void }) {
   const notify = useSnackbar();
   const [managing, setManaging] = useState<string | null>(null);
   const [showBootstrap, setShowBootstrap] = useState(false);
@@ -228,6 +230,8 @@ function Users({ bootstrap, members, roles, rolesLoading, onChange }: { bootstra
   return (
     <div className="page">
       {state === "error" && <Banner description={error} title="Access requests could not be loaded" tone="error" />}
+
+      {canInvite && <AccessInvitations />}
 
       {/* The same shape as Identities, because it is the same thing: people and
           what may be done about them. A second rhythm on one screen made two

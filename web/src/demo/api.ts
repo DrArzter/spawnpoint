@@ -1,8 +1,10 @@
-import type { AuthState, SpawnpointApi } from "../api/contract";
+import type { AccessInvitation, AuthState, SpawnpointApi } from "../api/contract";
 import type { MetricRange } from "../api/contract";
 import { demoSession } from "./data";
 import { clearDemoFlag, demoLatency } from "./flag";
 import * as store from "./store";
+
+let accessInvitations: AccessInvitation[] = [];
 
 // The demo is a transport, not a second panel: it implements the same contract
 // the live API does, so every screen, every error path and every navigation is
@@ -82,6 +84,24 @@ export const demoApi: SpawnpointApi = {
 
   async requestAccess(): Promise<void> {
     await demoLatency();
+  },
+
+  async checkAccessInvitation() { await demoLatency(); return { valid: true, email: accessInvitations[0]?.deliveryEmail ?? null }; },
+  async redeemAccessInvitation(): Promise<void> { await demoLatency(); },
+  async requestAccessInvitationProof(): Promise<void> { await demoLatency(); },
+  async loadAccessInvitations() { await demoLatency(); return accessInvitations; },
+  async createAccessInvitation(email: string | null) {
+    await demoLatency();
+    const id = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
+    const delivery = email === null ? "not_requested" as const : "sent" as const;
+    accessInvitations = [{ id, status: "PENDING", createdAt, expiresAt, usedAt: null, delivery, deliveryEmail: email }, ...accessInvitations];
+    return { id, url: `${window.location.origin}/?demo#/join?token=${"d".repeat(43)}`, createdAt, expiresAt, delivery };
+  },
+  async revokeAccessInvitation(id: string): Promise<void> {
+    await demoLatency();
+    accessInvitations = accessInvitations.map((invitation) => invitation.id === id ? { ...invitation, status: "REVOKED" } : invitation);
   },
 
   async loadAccessCandidates() {

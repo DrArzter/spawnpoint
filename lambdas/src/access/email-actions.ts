@@ -43,16 +43,18 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function actionUrl(panelUrl: string, purpose: EmailActionPurpose, token: string): string {
+function actionUrl(panelUrl: string, purpose: EmailActionPurpose, token: string, invitationToken?: string): string {
   const route = purpose === "verify_email" ? "verify-email" : "reset-password";
-  return `${panelUrl.replace(/\/$/, "")}/#/${route}?token=${encodeURIComponent(token)}`;
+  const parameters = new URLSearchParams({ token });
+  if (purpose === "verify_email" && invitationToken) parameters.set("invite", invitationToken);
+  return `${panelUrl.replace(/\/$/, "")}/#/${route}?${parameters.toString()}`;
 }
 
 export function renderEmailAction(
   purpose: EmailActionPurpose,
-  input: Readonly<{ email: string; displayName: string; panelUrl: string; action: EmailAction }>,
+  input: Readonly<{ email: string; displayName: string; panelUrl: string; action: EmailAction; invitationToken?: string }>,
 ): TransactionalEmail {
-  const url = actionUrl(input.panelUrl, purpose, input.action.token);
+  const url = actionUrl(input.panelUrl, purpose, input.action.token, input.invitationToken);
   const verification = purpose === "verify_email";
   const subject = verification ? "Verify your Spawnpoint email" : "Reset your Spawnpoint password";
   const instruction = verification

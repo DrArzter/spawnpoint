@@ -10,12 +10,13 @@ import { sessionStatus } from "./components/ui/Status";
 import { IconName } from "./icons";
 import { formatDateTime, plural } from "./lib/format";
 import { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, World } from "./model";
-import { isLandingHash, isRootHash, readEmailActionRoute, routeHash } from "./routing";
+import { isLandingHash, isRootHash, readAccessInvitationRoute, readEmailActionRoute, routeHash } from "./routing";
 import { deriveSharedHostSession } from "./session";
 import { AccessScreen } from "./screens/AccessScreen";
 import { AuthScreen, BootScreen } from "./screens/AuthScreen";
 import { ConsoleScreen } from "./screens/ConsoleScreen";
 import { EmailActionScreen } from "./screens/EmailActionScreen";
+import { JoinScreen } from "./screens/JoinScreen";
 import { LandingScreen } from "./screens/LandingScreen";
 import { MetricsScreen } from "./screens/MetricsScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
@@ -43,6 +44,7 @@ const navigation: readonly { id: Page; label: string; icon: IconName; permission
 export function App() {
   const [auth, setAuth] = useState<AuthState>({ status: "loading" });
   const [atLanding, setAtLanding] = useState(() => isLandingHash());
+  const [joinToken, setJoinToken] = useState(() => readAccessInvitationRoute());
   const { visible: bootVisible, publish } = useBootCard();
   const emailAction = readEmailActionRoute();
 
@@ -69,7 +71,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const onChange = () => setAtLanding(isLandingHash());
+    const onChange = () => { setAtLanding(isLandingHash()); setJoinToken(readAccessInvitationRoute()); };
     window.addEventListener("hashchange", onChange);
     return () => window.removeEventListener("hashchange", onChange);
   }, []);
@@ -85,6 +87,7 @@ export function App() {
   // made the front door appear first and then rearrange itself: a sign-in button
   // arriving from nowhere, or a jump into the console a beat after landing.
   if (emailAction !== null) return <EmailActionScreen action={emailAction} onAuth={handleAuth} />;
+  if (joinToken !== null) return <JoinScreen auth={auth} onAuth={handleAuth} proof={joinToken.proof} token={joinToken.token} />;
   if (auth.status === "loading") {
     return bootVisible ? <BootScreen description="Confirming who you are with the access API." title="Checking your session" /> : null;
   }
@@ -339,7 +342,7 @@ function ConsoleShell({ session, continuesBootCard }: { session: ActiveSession; 
           {page === "metrics" && <MetricsScreen game={game} serverState={serverState} snapshot={snapshot} />}
           {page === "console" && <ConsoleScreen game={game} serverState={serverState} />}
           {page === "releases" && <ReleasesScreen game={game} granted={granted} loading={listStatus === "loading"} onCreateWorld={(target, preset) => setCreating({ game: target, preset })} pending={pending} />}
-          {page === "access" && <AccessScreen bootstrap={bootstrap} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate({ page: "access", accessTab: tab })} roles={roles} tab={route.accessTab} />}
+          {page === "access" && <AccessScreen bootstrap={bootstrap} canInvite={granted.has("access.invite")} games={games} members={members} onMembersChange={setMembers} onRolesChange={setRoles} onTabChange={(tab) => navigate({ page: "access", accessTab: tab })} roles={roles} tab={route.accessTab} />}
           {page === "profile" && <ProfileScreen appearance={appearance} member={currentMember} onSignOut={endSession} role={roles.find((role) => role.id === currentMember.roleId)} viewer={viewer} />}
         </main>
       </div>

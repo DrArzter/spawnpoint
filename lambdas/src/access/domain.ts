@@ -13,6 +13,7 @@ export const permissions = [
   "world.manage",
   "access.read",
   "access.manage",
+  "access.invite",
   "access.owner.grant",
 ] as const;
 

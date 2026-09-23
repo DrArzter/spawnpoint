@@ -3,9 +3,9 @@ import type { AppearancePreference, SpawnpointApi, SubscriptionState } from "./a
 import { liveApi, liveAuthConfigured } from "./api/live";
 
 export type {
-  AccessCandidate, AccessIdentity, AccessRole, AccountProfile, ActiveSession, AppearancePreference, AuthState, BackupEntry,
+  AccessCandidate, AccessIdentity, AccessInvitation, AccessRole, AccountProfile, ActiveSession, AppearancePreference, AuthState, BackupEntry,
   BackupInventory, HostMetrics, HostMetricSeries, InvitationRecipient, InvitationSummary, LinkedLoginAccount, LinkedLoginAccounts, LoginOptions, LoginProviderId,
-  MetricRange, SessionOperation,
+  IssuedAccessInvitation, MetricRange, SessionOperation,
   SpawnpointApi, SpawnpointSession, SubscriptionState, VisitorSession, WorldLifecycleAction,
 } from "./api/contract";
 import type { MetricRange } from "./api/contract";
@@ -21,11 +21,12 @@ export function authConfigured(): boolean {
 }
 
 export const restoreAuth = (): ReturnType<SpawnpointApi["restoreSession"]> => api.restoreSession();
+export const switchLogin = (): ReturnType<SpawnpointApi["revokeSession"]> => api.revokeSession();
 export const loadLoginOptions = () => api.loadLoginOptions();
 export const exchangeTelegramOidc = (idToken: string) => api.exchangeTelegramOidc(idToken);
 export const signInWithPassword = (email: string, password: string) => api.signInWithPassword(email, password);
-export const registerWithPassword = (email: string, password: string, displayName: string) => api.registerWithPassword(email, password, displayName);
-export const resendEmailVerification = (email: string) => api.resendEmailVerification(email);
+export const registerWithPassword = (email: string, password: string, displayName: string, invitationToken?: string) => api.registerWithPassword(email, password, displayName, invitationToken);
+export const resendEmailVerification = (email: string, invitationToken?: string) => api.resendEmailVerification(email, invitationToken);
 export const verifyEmail = (token: string) => api.verifyEmail(token);
 export const requestPasswordReset = (email: string) => api.requestPasswordReset(email);
 export const resetPassword = (token: string, password: string) => api.resetPassword(token, password);
@@ -35,6 +36,12 @@ export const linkPassword = (email: string, password: string, displayName: strin
 export const changePassword = (email: string, currentPassword: string, password: string) => api.changePassword(email, currentPassword, password);
 
 export const requestAccess = () => api.requestAccess();
+export const checkAccessInvitation = (token: string) => api.checkAccessInvitation(token);
+export const redeemAccessInvitation = (token: string, proof?: string) => api.redeemAccessInvitation(token, proof);
+export const requestAccessInvitationProof = (token: string) => api.requestAccessInvitationProof(token);
+export const loadAccessInvitations = () => api.loadAccessInvitations();
+export const createAccessInvitation = (email: string | null) => api.createAccessInvitation(email);
+export const revokeAccessInvitation = (id: string) => api.revokeAccessInvitation(id);
 export const loadAccessCandidates = () => api.loadAccessCandidates();
 export const approveAccessCandidate = (platform: string, platformUserId: string, roleId: string) => api.approveAccessCandidate(platform, platformUserId, roleId);
 export const dismissAccessCandidate = (platform: string, platformUserId: string) => api.dismissAccessCandidate(platform, platformUserId);

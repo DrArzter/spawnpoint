@@ -183,6 +183,24 @@ export type LinkedLoginAccounts = Readonly<{
   passwordManagementAvailable: boolean;
 }>;
 
+export type AccessInvitation = Readonly<{
+  id: string;
+  status: "PENDING" | "USED" | "REVOKED" | "EXPIRED";
+  createdAt: string;
+  expiresAt: string;
+  usedAt: string | null;
+  delivery: "not_requested" | "pending" | "sent" | "failed";
+  deliveryEmail: string | null;
+}>;
+
+export type IssuedAccessInvitation = Readonly<{
+  id: string;
+  url: string;
+  createdAt: string;
+  expiresAt: string;
+  delivery: AccessInvitation["delivery"];
+}>;
+
 /**
  * Everything the panel asks of a backend. The live transport and the demo both
  * implement it, so a screen cannot tell them apart and the demo cannot quietly
@@ -195,8 +213,8 @@ export type SpawnpointApi = Readonly<{
   exchangeTelegramOidc(idToken: string): Promise<AuthState>;
   /** Resolves to a session or throws a sentence the form can show beside its fields. */
   signInWithPassword(email: string, password: string): Promise<AuthState>;
-  registerWithPassword(email: string, password: string, displayName: string): Promise<{ result: "verification_sent"; email: string }>;
-  resendEmailVerification(email: string): Promise<void>;
+  registerWithPassword(email: string, password: string, displayName: string, invitationToken?: string): Promise<{ result: "verification_sent"; email: string }>;
+  resendEmailVerification(email: string, invitationToken?: string): Promise<void>;
   verifyEmail(token: string): Promise<AuthState>;
   requestPasswordReset(email: string): Promise<void>;
   resetPassword(token: string, password: string): Promise<void>;
@@ -209,6 +227,12 @@ export type SpawnpointApi = Readonly<{
   changePassword(email: string, currentPassword: string, password: string): Promise<void>;
 
   requestAccess(): Promise<void>;
+  checkAccessInvitation(token: string): Promise<{ valid: boolean; email: string | null }>;
+  redeemAccessInvitation(token: string, proof?: string): Promise<void>;
+  requestAccessInvitationProof(token: string): Promise<void>;
+  loadAccessInvitations(): Promise<AccessInvitation[]>;
+  createAccessInvitation(email: string | null): Promise<IssuedAccessInvitation>;
+  revokeAccessInvitation(id: string): Promise<void>;
   loadAccessCandidates(): Promise<AccessCandidate[]>;
   approveAccessCandidate(platform: string, platformUserId: string, roleId: string): Promise<{ id: string; displayName: string; roleId: string }>;
   dismissAccessCandidate(platform: string, platformUserId: string): Promise<void>;

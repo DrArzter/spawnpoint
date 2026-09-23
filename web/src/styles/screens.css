@@ -816,6 +816,16 @@
 .access-invite-link p { flex-basis: 100%; margin: 0; }
 .access-invite-link .field { flex: 1 1 18rem; min-width: 0; }
 
+/* On a phone the field takes the whole line and the button lands on the next
+   one; a button alone on its line takes the width, as every action does at
+   this step. */
+@media (max-width: 599px) {
+  .access-invite-form .btn,
+  .access-invite-link .btn {
+    flex: 1 1 100%;
+  }
+}
+
 .access-invite-list { margin-top: 1.5rem; }
 .access-invite-list h3 { margin: 0 0 0.75rem; }
 .access-invite-list ul { list-style: none; margin: 0; padding: 0; }

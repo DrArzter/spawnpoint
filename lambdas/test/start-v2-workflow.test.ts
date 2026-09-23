@@ -210,6 +210,7 @@ test("the placement mode routes the start: single uses the configured host, shar
   // Every host command from here on names the placed host and slot.
   const nested = state(definition, "Start Accepted V1").Parameters?.Input as Record<string, string>;
   assert.equal(nested["instanceId.$"], "$.request.placed.hostId");
+  assert.equal(nested["placement.$"], "$.request.placement");
   assert.equal(nested["slot.$"], "$.request.placed.slot");
   const watchdog = state(definition, "Start Session Watchdog").Parameters?.Input as Record<string, string>;
   assert.equal(watchdog["instanceId.$"], "$.request.placed.hostId");

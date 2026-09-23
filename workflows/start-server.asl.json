@@ -184,8 +184,15 @@
     },
     "Route Session Command": {
       "Type": "Choice",
-      "Comment": "ADR-0054: a placed session carries its slot to the host. A request with no slot — an execution begun before placement existed — runs the command it always ran.",
+      "Comment": "A fleet instance may register with SSM before cloud-init finishes. Wait for its explicit bootstrap marker before invoking the game command.",
       "Choices": [
+        {
+          "And": [
+            { "Variable": "$.request.placement", "StringEquals": "fleet" },
+            { "Variable": "$.request.slot", "IsPresent": true }
+          ],
+          "Next": "Start Fleet Session Command"
+        },
         {
           "Variable": "$.request.slot",
           "IsPresent": true,
@@ -193,6 +200,20 @@
         }
       ],
       "Default": "Start Session Command"
+    },
+    "Start Fleet Session Command": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:sendCommand",
+      "Parameters": {
+        "DocumentName": "AWS-RunShellScript",
+        "InstanceIds.$": "States.Array($.request.instanceId)",
+        "Parameters": {
+          "commands.$": "States.Array('set -euo pipefail', 'attempt=0; until test -f /etc/spawnpoint-fleet-ready && test -x /srv/spawnpoint/app/server/scripts/start-session.sh; do attempt=$((attempt + 1)); if [ \"$attempt\" -ge 60 ]; then echo \"fleet bootstrap not ready after 300 seconds\" >&2; exit 70; fi; sleep 5; done', States.Format('WORLD_ID={} SPAWNPOINT_SLOT={} SESSION_FORMAT=json /srv/spawnpoint/app/server/scripts/start-session.sh', $.request.worldId, $.request.slot))"
+        },
+        "TimeoutSeconds": 900
+      },
+      "ResultPath": "$.observed.command",
+      "Next": "Wait Before Command Poll"
     },
     "Start Placed Session Command": {
       "Type": "Task",

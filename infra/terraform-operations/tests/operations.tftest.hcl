@@ -288,12 +288,13 @@ run "lifecycle_v2_workflows_are_additive_standard_and_session_scoped" {
 
   assert {
     condition = alltrue([
-      data.aws_iam_policy_document.lifecycle_v2_start.statement[4].actions == toset(["ec2:StopInstances"]),
-      data.aws_iam_policy_document.lifecycle_v2_start.statement[4].resources == toset(["arn:aws:ec2:eu-central-1:123456789012:instance/i-00000000000000000"]),
-      data.aws_iam_policy_document.lifecycle_v2_start.statement[5].actions == toset(["ec2:DescribeInstances"]),
-      data.aws_iam_policy_document.lifecycle_v2_start.statement[6].actions == toset(["ec2:DescribeInstanceTypes"]),
+      one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "ForceStopOnlyFailedStartHost"]) == toset(["ec2:StopInstances"]),
+      one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.resources if statement.sid == "ForceStopOnlyFailedStartHost"]) == toset(["arn:aws:ec2:eu-central-1:123456789012:instance/i-00000000000000000"]),
+      one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "ForceStopOnlyFailedLaunchedHost"]) == toset(["ec2:StopInstances"]),
+      one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "ObserveForcedStop"]) == toset(["ec2:DescribeInstances"]),
+      one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "DescribeHostShape"]) == toset(["ec2:DescribeInstanceTypes"]),
     ])
-    error_message = "Only the V2 start failure safeguard may stop the exact configured host and poll its state; beyond that the start reads only instance types, for the host record."
+    error_message = "The V2 failure safeguard may stop the configured host or a tagged fleet host, and may only observe EC2 state and host shape otherwise."
   }
 
   assert {
@@ -392,10 +393,11 @@ run "launched_hosts_are_placed_drained_and_let_go_by_tag" {
 
   assert {
     condition = alltrue([
-      data.aws_iam_policy_document.lifecycle_v2_start.statement[7].actions == toset(["ec2:CreateFleet", "ec2:RunInstances"]),
-      data.aws_iam_policy_document.lifecycle_v2_start.statement[9].actions == toset(["iam:PassRole"]),
-      data.aws_iam_policy_document.lifecycle_v2_start.statement[10].actions == toset(["ec2:TerminateInstances"]),
-      length(data.aws_iam_policy_document.lifecycle_v2_start.statement[10].condition) == 1,
+      one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "LaunchFleetHosts"]) == toset(["ec2:CreateFleet", "ec2:RunInstances"]),
+      one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "PassOnlyTheHostRole"]) == toset(["iam:PassRole"]),
+      one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "TerminateOnlyLaunchedHosts"]) == toset(["ec2:TerminateInstances"]),
+      length(one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.condition if statement.sid == "ForceStopOnlyFailedLaunchedHost"])) == 1,
+      length(one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.condition if statement.sid == "TerminateOnlyLaunchedHosts"])) == 1,
     ])
     error_message = "The start may launch, pass only the host role, and terminate only what carries the fleet tag."
   }

@@ -24,7 +24,7 @@ export const GOOGLE_CLIENT_ID = /^[A-Za-z0-9-]+\.apps\.googleusercontent\.com$/;
  * vouches for it, because an unverified address is a claim anyone can type.
  */
 export function googlePrincipal(claims: OidcClaims): LoginPrincipal | null {
-  const subject = typeof claims.sub === "string" && /^[0-9]{1,255}$/.test(claims.sub) ? claims.sub : null;
+  const subject = typeof claims.sub === "string" && /^\d{1,255}$/.test(claims.sub) ? claims.sub : null;
   if (subject === null) return null;
   const email = typeof claims.email === "string" && claims.email_verified === true && claims.email.includes("@")
     ? claims.email.trim().toLowerCase()

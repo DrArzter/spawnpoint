@@ -1,6 +1,6 @@
 # ADR-0052 — Keep a release while a generation names it, and check before restoring
 
-- Status: Proposed
+- Status: Accepted — restore preflight enforced at request and workflow boundaries, 2026-09-23; retention rule applies to any future release cleanup
 - Date: 2026-09-16
 - Milestone: M4
 - Relates: [ADR-0042](0042-preset-scoped-release-identity.md) (the namespace a release is stored under),

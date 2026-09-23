@@ -11,3 +11,7 @@ export function releaseArtifactPrefix(gameId: string, presetId: string, release:
 export function clientPackKey(gameId: string, presetId: string, release: string): string {
   return `${releaseArtifactPrefix(gameId, presetId, release)}/client.zip`;
 }
+
+export function releaseManifestKey(gameId: string, presetId: string, release: string): string {
+  return `${releaseArtifactPrefix(gameId, presetId, release)}/manifest.json`;
+}

@@ -532,6 +532,8 @@ export const liveApi: SpawnpointApi = {
         invalid_purge_confirmation: "Type the exact world ID before permanently deleting it.",
         world_not_archived: "Archive this world before permanently deleting it.",
         invalid_backup_key: "This backup does not belong to the selected world.",
+        unknown_generation: "This backup no longer matches a wipe in this world.",
+        release_missing: "The release required by this backup is missing. The world was not changed.",
         unknown_materialized_world: "Create this world with its first Start before managing its lifecycle.",
         operation_in_progress: "Another control-plane operation is already running.",
         host_not_unique: "Spawnpoint could not select exactly one compatible host.",

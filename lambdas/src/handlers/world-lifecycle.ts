@@ -1,15 +1,17 @@
 import {
-  DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, ListObjectVersionsCommand,
+  DeleteObjectsCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, ListObjectVersionsCommand,
   NoSuchKey, PutObjectCommand, S3Client,
 } from "@aws-sdk/client-s3";
 
 import { backupInventory } from "../control-plane/backups.ts";
 import { parsePresetCatalog } from "../control-plane/preset-catalog.ts";
 import { type ReleaseState } from "../control-plane/release-state.ts";
+import { releaseManifestKey } from "../control-plane/release-artifacts.ts";
+import { restoreWithPublishedRelease } from "../control-plane/restore-guard.ts";
 import { S3ReleaseStateStore } from "../control-plane/s3-release-state-store.ts";
 import { S3WorldRepository } from "../control-plane/s3-world-repository.ts";
 import {
-  archiveWorldRecord, parseWorldRecord, purgeGenerationIds, regenerateWorldRecord, restoreWorldRecord, type WorldRecord,
+  archiveWorldRecord, parseWorldRecord, purgeGenerationIds, regenerateWorldRecord, type WorldRecord,
 } from "../control-plane/world-registry.ts";
 
 type Input = Readonly<{
@@ -175,6 +177,19 @@ async function latestPreset(record: WorldRecord) {
   return preset;
 }
 
+async function publishedReleaseExists(gameId: string, presetId: string, release: string): Promise<boolean> {
+  try {
+    await s3.send(new HeadObjectCommand({
+      Bucket: requiredEnv("RELEASE_BUCKET"),
+      Key: releaseManifestKey(gameId, presetId, release),
+    }));
+    return true;
+  } catch (error) {
+    if (error instanceof NoSuchKey || (error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound"))) return false;
+    throw error;
+  }
+}
+
 async function writeInitialReleaseState(record: WorldRecord, input: Input): Promise<void> {
   const store = new S3ReleaseStateStore(s3, requiredEnv("RELEASE_BUCKET"));
   const state: ReleaseState = {
@@ -233,9 +248,9 @@ export async function handler(event: unknown) {
     } else {
       const backup = backups.find((candidate) => candidate.key === input.backupKey);
       if (backup === undefined || backup.generationId === null) throw new Error("backup_not_verified");
-      next = restoreWorldRecord(record, {
+      next = await restoreWithPublishedRelease(record, {
         key: backup.key, checksum: backup.checksum, generationId: backup.generationId,
-      }, input.generationUuid!, input.requestedAt);
+      }, input.generationUuid!, input.requestedAt, publishedReleaseExists);
     }
   }
 

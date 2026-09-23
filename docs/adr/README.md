@@ -111,7 +111,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0049](0049-project-control-plane-events-into-dynamodb.md) | Project control-plane events into DynamoDB for user-facing surfaces | Accepted | cross-cutting |
 | [0050](0050-default-role-on-sign-in-and-elevation-requests.md) | Join as Viewer through any login provider, and ask for more | Proposed | M4 |
 | [0051](0051-restart-a-session-without-releasing-the-host.md) | Restart a session without releasing the host | Proposed | M4 |
-| [0052](0052-keep-a-release-while-a-generation-names-it.md) | Keep a release while a generation names it, and check before restoring | Proposed | M4 |
+| [0052](0052-keep-a-release-while-a-generation-names-it.md) | Keep a release while a generation names it, and check before restoring | Accepted — restore guard implemented; cleanup rule retained | M4 |
 | [0053](0053-tell-not-built-apart-from-broken.md) | Tell "not built yet" apart from "broken", in the transport | Proposed | M4 |
 | [0054](0054-place-a-session-on-a-host-with-room.md) | Place a session on a host with room, or launch one that fits | Proposed | later |
 | [0055](0055-sign-in-with-email-and-password-by-default.md) | Sign in with email and password by default, and with a provider as an alternative | Accepted — implemented | M4 |

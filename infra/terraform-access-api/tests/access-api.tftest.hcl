@@ -144,6 +144,20 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition = alltrue([
+      one([
+        for statement in data.aws_iam_policy_document.world_lifecycle.statement : statement.resources
+        if statement.sid == "VerifyReleaseBeforeRestore"
+      ]) == toset(["arn:aws:s3:::spawnpoint-releases-123456789012/releases/*/manifest.json"]),
+      one([
+        for statement in data.aws_iam_policy_document.world_lifecycle.statement : statement.actions
+        if statement.sid == "DistinguishMissingReleaseManifest"
+      ]) == toset(["s3:ListBucket"]),
+    ])
+    error_message = "The world lifecycle may verify release manifests before restoring, without reading arbitrary release objects."
+  }
+
+  assert {
     condition     = contains(local.access_routes, "POST /auth/refresh") && contains(local.access_routes, "POST /auth/logout")
     error_message = "Persistent browser login requires explicit refresh and logout endpoints."
   }

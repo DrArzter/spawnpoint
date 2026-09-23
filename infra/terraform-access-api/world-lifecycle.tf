@@ -27,6 +27,21 @@ data "aws_iam_policy_document" "world_lifecycle" {
   }
 
   statement {
+    sid       = "VerifyReleaseBeforeRestore"
+    actions   = ["s3:GetObject"]
+    resources = ["${data.aws_s3_bucket.releases.arn}/releases/*/manifest.json"]
+  }
+
+  # S3 returns 403 rather than 404 for a missing HeadObject target unless
+  # the caller may list the bucket. Without this, a deleted release could not
+  # be distinguished from an IAM failure and reported as release_missing.
+  statement {
+    sid       = "DistinguishMissingReleaseManifest"
+    actions   = ["s3:ListBucket"]
+    resources = [data.aws_s3_bucket.releases.arn]
+  }
+
+  statement {
     sid     = "UpdateWorldAndPointer"
     actions = ["s3:PutObject"]
     resources = [

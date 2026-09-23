@@ -28,8 +28,9 @@ declare global {
   }
 }
 
-/** An OAuth client id from the Google Cloud console, the same test the API applies. */
-export const GOOGLE_CLIENT_ID = /^[A-Za-z0-9-]+\.apps\.googleusercontent\.com$/;
+import { GOOGLE_CLIENT_ID } from "../lib/signin";
+
+export { GOOGLE_CLIENT_ID };
 
 // The console speaks English everywhere. Google's default follows the account's
 // language, and the `locale` option of renderButton does not override it; the

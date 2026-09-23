@@ -4,6 +4,9 @@ export const PASSWORD_MINIMUM_LENGTH = 12;
 export const PASSWORD_MAXIMUM_LENGTH = 128;
 export const DISPLAY_NAME_MAXIMUM_LENGTH = 80;
 
+/** An OAuth client id from the Google Cloud console, the same test the API applies. */
+export const GOOGLE_CLIENT_ID = /^[A-Za-z0-9-]+\.apps\.googleusercontent\.com$/;
+
 export type LoginProviderId = "telegram" | "google" | "password";
 
 export function isLoginProviderId(value: unknown): value is LoginProviderId {

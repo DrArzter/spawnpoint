@@ -30,8 +30,9 @@ function useModal(open: boolean, onClose: () => void) {
   return ref;
 }
 
-export function Dialog({ open, onClose, title, children, actions, className, dismissOnBackdrop = true, brand }: {
+export function Dialog({ open, onClose, title, children, actions, className, dismissOnBackdrop = true, brand, closeActionId }: Readonly<{
   open: boolean;
+  closeActionId?: string;
   onClose: () => void;
   title: ReactNode;
   children?: ReactNode;
@@ -44,7 +45,7 @@ export function Dialog({ open, onClose, title, children, actions, className, dis
    * close button with it, because a threshold can be walked away from.
    */
   brand?: ReactNode;
-}) {
+}>) {
   const ref = useModal(open, onClose);
   const titleId = useId();
   return (
@@ -59,7 +60,7 @@ export function Dialog({ open, onClose, title, children, actions, className, dis
           {brand && (
             <div className="dialog-brand">
               {brand}
-              <IconButton icon="close" label="Close" onClick={onClose} size="small" />
+              <IconButton data-action={closeActionId} icon="close" label="Close" onClick={onClose} size="small" />
             </div>
           )}
           <h2 id={titleId}>{title}</h2>
@@ -71,15 +72,16 @@ export function Dialog({ open, onClose, title, children, actions, className, dis
   );
 }
 
-export function Sheet({ open, onClose, title, description, children, footer, className }: {
+export function Sheet({ open, onClose, title, description, children, footer, className, closeActionId }: Readonly<{
   open: boolean;
+  closeActionId?: string;
   onClose: () => void;
   title: ReactNode;
   description?: ReactNode;
   children?: ReactNode;
   footer?: ReactNode;
   className?: string;
-}) {
+}>) {
   const ref = useModal(open, onClose);
   const titleId = useId();
   return (
@@ -91,7 +93,7 @@ export function Sheet({ open, onClose, title, description, children, footer, cla
               <h2 id={titleId}>{title}</h2>
               {description && <p>{description}</p>}
             </div>
-            <IconButton icon="close" label="Close panel" onClick={onClose} />
+            <IconButton data-action={closeActionId} icon="close" label="Close panel" onClick={onClose} />
           </header>
           <div className="sheet-body">{children}</div>
           {footer && <footer className="sheet-footer">{footer}</footer>}

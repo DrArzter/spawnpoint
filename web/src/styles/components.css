@@ -327,6 +327,14 @@ button.chip[aria-pressed="true"] {
   color: var(--on-primary-container);
 }
 
+/* A fieldset used only to group controls: the browser's box is not wanted. */
+.fieldset-plain {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
 .chip-row {
   display: flex;
   flex-wrap: wrap;

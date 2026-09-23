@@ -1077,10 +1077,17 @@ button.chip[aria-pressed="true"] {
     column-gap: 12px;
   }
 
-  .details-row,
-  .details-flush .details-row {
+  .details-row {
     align-items: baseline;
     padding: 8px 0;
+  }
+
+  /* A flush list sits in a card with no padding of its own, so its rows keep
+     the 16px a stacked table row has at this step; without it the labels
+     touched the card's edge while every row above them did not. */
+  .details-flush .details-row {
+    align-items: baseline;
+    padding: 8px 16px;
   }
 
   .details dt {

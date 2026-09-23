@@ -38,8 +38,8 @@ jobs:
       - name: Run static shard
         run: scripts/check.sh static
 
-  app:
-    name: Lambda and web checks
+  lambda-build:
+    name: Lambda typecheck and bundles
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -51,20 +51,14 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: |
-            lambdas/package-lock.json
-            web/package-lock.json
+          cache-dependency-path: lambdas/package-lock.json
 
       - name: Install the lambdas dependencies
         run: npm ci --ignore-scripts
         working-directory: lambdas
 
-      - name: Install the mini app dependencies
-        run: npm ci --ignore-scripts
-        working-directory: web
-
-      - name: Run application shard
-        run: scripts/check.sh app
+      - name: Typecheck and build Lambda bundles
+        run: scripts/check.sh lambda-build
 
       - name: Share Lambda bundles with Terraform shards
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -74,20 +68,83 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  server:
-    name: Server checks
+  lambda-tests:
+    name: Lambda tests (${{ matrix.shard }}/4)
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Check out the commit under test
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Run server shard
-        run: scripts/check.sh server
+      - name: Use Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: lambdas/package-lock.json
+
+      - name: Install the lambdas dependencies
+        run: npm ci --ignore-scripts
+        working-directory: lambdas
+
+      - name: Run Lambda test shard
+        run: scripts/check.sh lambda-test-shard "${{ matrix.shard }}" 4
+
+  web:
+    name: Web checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the commit under test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Use Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install the mini app dependencies
+        run: npm ci --ignore-scripts
+        working-directory: web
+
+      - name: Run web tests and build
+        run: scripts/check.sh web
+
+  server-tests:
+    name: Server tests (${{ matrix.shard }}/4)
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the commit under test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run server test shard
+        run: scripts/check.sh server-suite-shard "${{ matrix.shard }}" 4
+
+  server-compose:
+    name: Server compose bindings
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the commit under test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run compose bindings
+        run: scripts/check.sh server-compose
 
   terraform:
     name: Terraform (${{ matrix.root }})
-    needs: [static, app]
+    needs: [static, lambda-build]
     strategy:
       fail-fast: false
       matrix:
@@ -110,7 +167,7 @@ jobs:
   check:
     name: scripts/check.sh
     if: always()
-    needs: [static, app, server, terraform]
+    needs: [static, lambda-build, lambda-tests, web, server-tests, server-compose, terraform]
     permissions:
       contents: read
       pull-requests: write
@@ -126,13 +183,16 @@ jobs:
         id: checks
         env:
           STATIC_RESULT: ${{ needs.static.result }}
-          APP_RESULT: ${{ needs.app.result }}
-          SERVER_RESULT: ${{ needs.server.result }}
+          LAMBDA_BUILD_RESULT: ${{ needs.lambda-build.result }}
+          LAMBDA_TESTS_RESULT: ${{ needs.lambda-tests.result }}
+          WEB_RESULT: ${{ needs.web.result }}
+          SERVER_TESTS_RESULT: ${{ needs.server-tests.result }}
+          SERVER_COMPOSE_RESULT: ${{ needs.server-compose.result }}
           TERRAFORM_RESULT: ${{ needs.terraform.result }}
         run: |
           failed=0
           : > check-output.log
-          for pair in "static:${STATIC_RESULT}" "app:${APP_RESULT}" "server:${SERVER_RESULT}" "terraform:${TERRAFORM_RESULT}"; do
+          for pair in "static:${STATIC_RESULT}" "lambda-build:${LAMBDA_BUILD_RESULT}" "lambda-tests:${LAMBDA_TESTS_RESULT}" "web:${WEB_RESULT}" "server-tests:${SERVER_TESTS_RESULT}" "server-compose:${SERVER_COMPOSE_RESULT}" "terraform:${TERRAFORM_RESULT}"; do
             name="${pair%%:*}"
             result="${pair#*:}"
             if [[ "${result}" == "success" ]]; then

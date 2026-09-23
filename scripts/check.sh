@@ -9,6 +9,8 @@
 #   scripts/check.sh static   markdown, workflow and shell checks
 #   scripts/check.sh app      Lambda tests and builds plus the web build
 #   scripts/check.sh server   container and compose server suites
+#   scripts/check.sh lambda-build | lambda-test-shard INDEX COUNT | web
+#   scripts/check.sh server-suite-shard INDEX COUNT | server-compose
 #   scripts/check.sh terraform
 
 set -Eeuo pipefail
@@ -61,6 +63,26 @@ check_node() {
   (cd lambdas && npm run typecheck && npm test)
 }
 
+check_lambda_typecheck() {
+  (cd lambdas && npm run typecheck)
+}
+
+check_lambda_test_shard() {
+  local index="$1" count="$2" file position=0
+  local selected=()
+  for file in lambdas/test/*.test.ts; do
+    if (( position % count == index )); then
+      selected+=("${file#lambdas/}")
+    fi
+    (( position += 1 ))
+  done
+  if (( ${#selected[@]} == 0 )); then
+    printf 'Lambda test shard %s/%s has no files\n' "${index}" "${count}" >&2
+    return 2
+  fi
+  (cd lambdas && node --test "${selected[@]}")
+}
+
 check_web() {
   (cd web && npm test && npm run build)
 }
@@ -73,22 +95,37 @@ check_lambda_bundles() {
 }
 
 check_server_suite() {
-  docker run --rm -v "${REPOSITORY_ROOT}:/repo:ro" "${ALPINE_IMAGE}" sh -c '
+  local index="${1:-0}" count="${2:-1}"
+  docker run --rm -v "${REPOSITORY_ROOT}:/repo:ro" \
+    -e SHARD_INDEX="${index}" -e SHARD_COUNT="${count}" "${ALPINE_IMAGE}" sh -c '
     apk add -q bash coreutils findutils diffutils tar zstd jq util-linux openssl curl zip unzip python3 git rsync >/dev/null
-    fail=0
+    fail=0; position=0; selected=0
     for t in /repo/server/tests/*-test.sh; do
       name="$(basename "$t")"
       # profile-resolver drives real docker; it has no daemon in this container.
       [ "$name" = "profile-resolver-test.sh" ] && continue
       # compose-bindings needs the real docker compose; it runs on the host below.
       [ "$name" = "compose-bindings-test.sh" ] && continue
+      slot=$((position % SHARD_COUNT)); position=$((position + 1))
+      [ "$slot" -eq "$SHARD_INDEX" ] || continue
+      selected=$((selected + 1))
       if bash "$t" >"/tmp/${name}.log" 2>&1; then
         echo "PASS ${name}"
       else
         echo "FAIL ${name}"; tail -8 "/tmp/${name}.log"; fail=1
       fi
     done
+    [ "$selected" -gt 0 ] || exit 2
     exit $fail'
+}
+
+validate_shard() {
+  if [[ $# -eq 2 && "$1" =~ ^[0-9]+$ && "$2" =~ ^[1-9][0-9]*$ ]] && (( $1 < $2 )); then
+    return 0
+  else
+    printf 'usage: scripts/check.sh {lambda-test-shard|server-suite-shard} INDEX COUNT (0 <= INDEX < COUNT)\n' >&2
+    return 2
+  fi
 }
 
 check_compose_bindings() {
@@ -160,6 +197,20 @@ case "${mode}" in
   static) run_static ;;
   app) run_app ;;
   server) run_server ;;
+  lambda-build)
+    step "lambda typecheck" check_lambda_typecheck
+    step "lambda bundles" check_lambda_bundles
+    ;;
+  lambda-test-shard)
+    validate_shard "${@:2}" || exit 2
+    step "lambda tests (shard ${2}/${3})" check_lambda_test_shard "$2" "$3"
+    ;;
+  web) step "production build and tests (mini app)" check_web ;;
+  server-suite-shard)
+    validate_shard "${@:2}" || exit 2
+    step "server test suite (shard ${2}/${3})" check_server_suite "$2" "$3"
+    ;;
+  server-compose) step "compose bindings (host docker)" check_compose_bindings ;;
   terraform)
     step "lambda bundles" check_lambda_bundles
     run_terraform
@@ -172,7 +223,7 @@ case "${mode}" in
     step "terraform fmt+test (${2})" check_terraform_root "$2"
     ;;
   *)
-    printf 'usage: scripts/check.sh [full|fast|static|app|server|terraform]\n' >&2
+    printf 'usage: scripts/check.sh [full|fast|static|app|server|lambda-build|lambda-test-shard|web|server-suite-shard|server-compose|terraform]\n' >&2
     exit 2
     ;;
 esac

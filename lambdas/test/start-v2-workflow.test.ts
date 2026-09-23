@@ -118,10 +118,13 @@ test("a failed verified compensation force-stops the billed host with a bounded 
 
 test("a failed Fleet start drains an emptied launched host and never hides a failed handoff", async () => {
   const definition = await loadDefinition();
+  // `as const` keeps these tuples: without it the array is `string[]` and every
+  // destructured name is `string | undefined`, which is what `noUncheckedIndexedAccess`
+  // is for and what made this file the one thing `tsc` refused.
   for (const [release, route, drain] of [
     ["Release Compensated Placement", "Route Compensated Fleet Drain", "Start Compensated Host Drain"],
     ["Release Forced Placement", "Route Forced Fleet Drain", "Start Forced Host Drain"],
-  ]) {
+  ] as const) {
     const payload = state(definition, release).Parameters?.Payload as Record<string, unknown>;
     assert.equal(payload.action, "releasePlacement");
     assert.equal(payload["hostId.$"], "$.request.placed.hostId");

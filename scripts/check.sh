@@ -54,8 +54,11 @@ check_deployment_plan() {
   python3 -m unittest discover -s scripts/tests -p '*_test.py'
 }
 
+# The tests run on Node's own type stripping, which checks nothing: a test file
+# with seven type errors passed this rung for a week. `tsc` is the rung that
+# would have refused it, so it runs here rather than only on somebody's laptop.
 check_node() {
-  (cd lambdas && npm test)
+  (cd lambdas && npm run typecheck && npm test)
 }
 
 check_web() {

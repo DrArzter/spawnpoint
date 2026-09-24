@@ -804,6 +804,7 @@
 }
 
 .access-invite-form .field,
+.access-invite-form > p { grid-column: 1; grid-row: 1; min-width: 0; }
 .access-invite-form .btn { grid-column: 2; grid-row: 1; }
 .access-invite-form p { margin: 0; }
 
@@ -823,7 +824,7 @@
    this step. */
 @media (max-width: 599px) {
   .access-invite-form { grid-template-columns: minmax(0, 1fr); }
-  .access-invite-form .btn { grid-column: 1; grid-row: 3; width: 100%; }
+  .access-invite-form .btn { grid-column: 1; grid-row: 2; width: 100%; }
   .access-invite-link .btn {
     flex: 1 1 100%;
   }

@@ -804,7 +804,6 @@
 }
 
 .access-invite-form .field,
-.access-invite-form > p:not(.access-invite-hint) { grid-column: 1; grid-row: 1; min-width: 0; }
 .access-invite-form .btn { grid-column: 2; grid-row: 1; }
 .access-invite-form p { margin: 0; }
 .access-invite-form .access-invite-hint {

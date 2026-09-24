@@ -1146,6 +1146,10 @@ button.chip[aria-pressed="true"] {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239aa0a6'%3E%3Cpath d='M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z'/%3E%3C/svg%3E");
 }
 
+.field select {
+  height: 40px;
+}
+
 .field input:hover,
 .field select:hover {
   border-color: var(--ink);
@@ -1177,6 +1181,7 @@ button.chip[aria-pressed="true"] {
 }
 
 .inline-select {
+  height: 32px;
   min-height: 32px;
   padding: 0 32px 0 10px;
   border: 1px solid var(--outline);
@@ -2015,10 +2020,17 @@ button.chip[aria-pressed="true"] {
 @media (pointer: coarse) {
   .btn,
   .icon-btn,
-  .inline-select,
   .tab,
   .menu-item {
     min-height: 44px;
+  }
+
+  /* A role select sits beside small buttons in every row it appears in, so
+     it grows to their 40px, not the 44px of a full-size control. Height, not
+     min-height: WebKit sizes a select from its font and ignores the latter. */
+  .inline-select {
+    height: 40px;
+    min-height: 40px;
   }
 
   .table .row-link,
@@ -2047,5 +2059,9 @@ button.chip[aria-pressed="true"] {
   .search input {
     font-size: 16px;
     min-height: 44px;
+  }
+
+  .field select {
+    height: 44px;
   }
 }

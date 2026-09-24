@@ -805,6 +805,10 @@
 
 .access-invite-form .field,
 .access-invite-form > p { grid-column: 1; grid-row: 1; min-width: 0; }
+/* A button beside a field takes the field's height, or it sits 4px short of
+   the field's top while sharing its bottom edge. */
+.access-invite-form .btn,
+.access-invite-link .btn { height: 40px; }
 .access-invite-form .btn { grid-column: 2; grid-row: 1; }
 .access-invite-form p { margin: 0; }
 

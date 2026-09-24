@@ -823,7 +823,7 @@
    one; a button alone on its line takes the width, as every action does at
    this step. */
 @media (max-width: 599px) {
-  .access-invite-form { grid-template-columns: minmax(0, 1fr); }
+  .access-invite-form { grid-template-columns: minmax(0, 1fr); row-gap: 12px; }
   .access-invite-form .btn { grid-column: 1; grid-row: 2; width: 100%; }
   .access-invite-link .btn {
     flex: 1 1 100%;

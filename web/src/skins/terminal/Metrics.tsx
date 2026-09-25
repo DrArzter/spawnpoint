@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { HostMetricPoint, HostMetrics } from "../../api/contract";
-import { Skeleton } from "../../components/ui/Skeleton";
+import { Status } from "../../components/ui/Status";
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { MetricsModel } from "../../core/models";
 import { MetricsPage, formatMetric, seriesPeak } from "../console/Metrics";
@@ -17,21 +17,27 @@ const PAD_TOP = 8;
 const PAD_BOTTOM = 12;
 
 export function Metrics({ model }: Readonly<{ model: MetricsModel }>) {
-  return <MetricsPage chart={lineCharts} model={model} placeholder={placeholder} />;
+  return <MetricsPage chart={lineCharts} model={model} placeholder={waiting(model)} />;
 }
 
-// While the numbers load: the wells at their size, with one full line under
-// each where the caption will be, so nothing moves when they arrive.
-const placeholder = (
-  <>
-    {["cpu", "in", "out"].map((id) => (
-      <div className="tchart-placeholder" key={id}>
-        <Skeleton height={HEIGHT} />
-        <Skeleton height={16} />
-      </div>
-    ))}
-  </>
-);
+// While the numbers load: the wells at their size, each saying what it is
+// waiting for the way a terminal does, and an empty line where the caption
+// will be, so nothing moves when they arrive.
+function waiting(model: MetricsModel): ReactNode {
+  const range = model.ranges.find((option) => option.id === model.range)?.label.toLowerCase() ?? model.range;
+  return (
+    <>
+      {["cpu", "in", "out"].map((id) => (
+        <div className="tchart-placeholder" key={id}>
+          <div aria-hidden="true" className="tchart-waiting">
+            <Status kind="progress" label={`reading cloudwatch · ${range}`} />
+          </div>
+          <span className="tchart-caption-slot" />
+        </div>
+      ))}
+    </>
+  );
+}
 
 function lineCharts(metrics: HostMetrics): ReactNode {
   return (

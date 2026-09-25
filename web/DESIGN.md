@@ -411,7 +411,7 @@ views redrawn by `terminal.css`, which applies only while the terminal Shell is 
   the window is stated once under all of them. A gap in the readings is a gap in the line, never a line to zero.
 - **Placeholders.** A terminal draws nothing for what has not arrived. A value still on its way is an empty slot,
   a dashed rule where the text will sit; a region still loading says so in one line with the spinning mark, as the
-  boot does (`[~] reading cloudwatch · 24 hours`, `[~] Loading invitations`). The metrics wells wait at their own
+  boot does (`[~] Reading CloudWatch`, `[~] Loading invitations`). The metrics wells wait at their own
   height so nothing moves when the numbers land. No shimmer, no texture.
 - **Spacing.** The page gutter and the gap between panels are the console's (24px, 16px on a phone); a named panel
   keeps 10px more above it for the name on its rule, an unnamed one does not. Cells are 16px in from the rule, 12px at

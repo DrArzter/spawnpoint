@@ -2021,6 +2021,12 @@ button.chip[aria-pressed="true"] {
     min-height: 44px;
   }
 
+  /* A chip is a choice, not a verb: it takes the 32px floor, not the 44px a
+     button gets, so a row of them still reads as one line. */
+  .chip {
+    height: 32px;
+  }
+
   .table .row-link,
   .preset-source a,
   .breadcrumb a,

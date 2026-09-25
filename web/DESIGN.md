@@ -382,9 +382,10 @@ The front door, sign-in and the boot card are outside the skin and always wear t
 width on a phone as on a 4K monitor. It owns the frame and the first screen; the other pages are the console skin's
 views redrawn by `terminal.css`, which applies only while the terminal Shell is mounted (`html[data-skin="terminal"]`).
 
-- **One face.** B612 Mono for everything, loaded on demand when the skin mounts. Weight and inversion carry emphasis;
-  there is no second face and no second size for the same role. A panel's name sits in its top rule as a tracked
-  uppercase label.
+- **One face.** B612 Mono for everything, loaded on demand when the skin mounts. Two weights, 400 and 700, and
+  inversion carry emphasis; whatever the console sets to medium is bold here. Lines sit on the 4px grid: 16px under
+  12px type (labels, column headings, small print), 20px under 13px and 14px (everything read), 24px under the 18px
+  page title, 28px under the 22px host headline. A panel's name sits in its top rule as a tracked uppercase label.
 - **No radius, no shadow.** Every corner is square and every surface is flat. Boxes are drawn with `--rule`, one step
   darker than the hairline, so they read as box-drawing lines rather than card borders. Menus, dialogs and sheets are
   boxed the same way.
@@ -402,6 +403,10 @@ views redrawn by `terminal.css`, which applies only while the terminal Shell is 
   by `raster.ts` from shapes and move through their phase while the host is online, the gear turning, the zombie
   walking across and coming back in. Starting and stopping show the picture at rest under one brighter scanline;
   stopped is sparse and still. Reduced motion stops the tick.
+- **Spacing.** The page gutter and the gap between panels are the console's (24px, 16px on a phone); a named panel
+  keeps 10px more above it for the name on its rule, an unnamed one does not. Cells are 16px in from the rule, 12px at
+  the medium step so the worlds table fits a tablet in the wider face. Under a coarse pointer the frame's controls
+  (scope, avatar, menu words) are 36px tall inside their 40px rows and a chip is 32px.
 - **What it does not do.** It never restyles the front door or sign-in, never introduces a new colour, and never hides
   an action the model offers; the contract test holds it to the same list as the console face.
 

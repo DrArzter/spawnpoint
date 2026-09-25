@@ -11,6 +11,8 @@ import { join } from "node:path";
 // run prints its report and leaves nothing behind.
 const [base = "http://localhost:5173", detail = "-", scheme = "light"] = process.argv.slice(2);
 const out = detail === "-" ? null : detail;
+// SKIN=terminal audits another face; the console is worn when it is unset.
+const skin = process.env.SKIN ? `&skin=${encodeURIComponent(process.env.SKIN)}` : "";
 
 const ROUTES = [
   ["landing", "/#/"],
@@ -287,7 +289,7 @@ try {
       pass += 1;
       const joiner = route.includes("?") ? "&" : "?";
       const [path, hash = ""] = route.split("#");
-      const url = `${base}${path}${joiner}probe=${pass}${hash ? "#" + hash : ""}`;
+      const url = `${base}${path}${joiner}probe=${pass}${skin}${hash ? "#" + hash : ""}`;
       const loaded = new Promise((r) => { onLoad = r; });
       await send("Page.navigate", { url });
       await Promise.race([loaded, sleep(8000)]);

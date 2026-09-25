@@ -22,6 +22,7 @@ Run it against a dev server or a preview deployment:
 npm run dev                      # in one terminal
 npm run audit:ui                 # light theme, writes audit-light.json
 npm run audit:ui -- http://localhost:5173 audit-dark.json dark
+SKIN=terminal npm run audit:ui       # another face; the console is worn when SKIN is unset
 node tools/ui-audit/summarise.mjs light
 node tools/ui-audit/summarise.mjs dark
 ```

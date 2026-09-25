@@ -43,6 +43,23 @@ html[data-skin="terminal"] h3 {
   font-weight: 700;
 }
 
+/* The face has two weights. Anything the console sets to medium is bold
+   here, and every line of running text sits on the 4px grid: 16px under
+   12px type, 20px under 13px and 14px. */
+html[data-skin="terminal"] strong,
+html[data-skin="terminal"] b {
+  font-weight: 700;
+}
+
+html[data-skin="terminal"] :is(p, dd, td, .status:not(.status-large), .row-link, .empty, .not-connected, .terminal-bar strong) {
+  line-height: 20px;
+}
+
+html[data-skin="terminal"] .crumb-label,
+html[data-skin="terminal"] code {
+  font-weight: 400;
+}
+
 html[data-skin="terminal"] h1 {
   font-size: 18px;
   line-height: 24px;
@@ -130,6 +147,10 @@ html[data-skin="terminal"] .tbrand {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-decoration: none;
+}
+
+html[data-skin="terminal"] .tbrand strong {
+  font-weight: 700;
 }
 
 html[data-skin="terminal"] .tbrand:hover {
@@ -289,11 +310,16 @@ html[data-skin="terminal"] .tmain > .page {
 
 html[data-skin="terminal"] .card {
   position: relative;
-  margin-top: 10px;
   border: 1px solid var(--rule);
   border-radius: 0;
   background: var(--canvas);
   box-shadow: none;
+}
+
+/* The name sits 11px above the top rule, so a named panel keeps that much
+   clear above it; a panel without a name keeps the page's own gap. */
+html[data-skin="terminal"] .card:has(> .card-header h2) {
+  margin-top: 10px;
 }
 
 html[data-skin="terminal"] .card-header {
@@ -497,8 +523,19 @@ html[data-skin="terminal"] .table th {
   color: var(--ink-secondary);
   font-size: 12px;
   font-weight: 700;
+  line-height: 16px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* A monospace face is wider than Roboto; at the medium step the cells give
+   up 4px a side so the worlds table still fits a tablet without scrolling. */
+@media (max-width: 839px) {
+  html[data-skin="terminal"] .table th,
+  html[data-skin="terminal"] .table td {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
 }
 
 html[data-skin="terminal"] .table td {
@@ -664,6 +701,7 @@ html[data-skin="terminal"] .chip {
   border-color: var(--rule);
   background: transparent;
   font-size: 13px;
+  font-weight: 400;
 }
 
 html[data-skin="terminal"] .chip-primary,
@@ -767,6 +805,19 @@ html[data-skin="terminal"] .banner {
   border: 1px solid var(--rule);
   border-radius: 0;
   background: var(--canvas);
+}
+
+/* The console page's note that no gateway is attached: a mark, like every
+   other state on the screen. */
+html[data-skin="terminal"] .not-connected > .icon {
+  display: none;
+}
+
+html[data-skin="terminal"] .not-connected::before {
+  content: "[-]";
+  flex: none;
+  font-weight: 700;
+  color: var(--ink);
 }
 
 html[data-skin="terminal"] .banner > .icon {
@@ -904,12 +955,16 @@ html[data-skin="terminal"] .thost-state {
   min-width: 0;
 }
 
+/* Running text, so the help mark stays on the line with its last word
+   instead of dropping to a line of its own on a phone. */
 html[data-skin="terminal"] .thost-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1ch;
+  display: block;
   color: var(--ink-secondary);
+}
+
+html[data-skin="terminal"] .thost-line .tip-anchor {
+  margin-left: 0.5ch;
+  vertical-align: -2px;
 }
 
 html[data-skin="terminal"] .thost-line strong {
@@ -921,7 +976,14 @@ html[data-skin="terminal"] .thost-facts {
   margin-top: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--outline);
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+/* A host's name and state share a cell that is sometimes a word too narrow;
+   balanced lines break "Shared game / host · running" rather than leaving
+   the state alone on the second line. */
+html[data-skin="terminal"] .thost-facts .status > span {
+  text-wrap: balance;
 }
 
 @media (max-width: 839px) {
@@ -931,6 +993,26 @@ html[data-skin="terminal"] .thost-facts {
 
   html[data-skin="terminal"] .scene {
     justify-self: start;
+  }
+}
+
+/* A finger gets 36px in the two rows of the frame; the rows are 40px, so
+   nothing moves. The chip grows to the same floor the console gives it. */
+@media (pointer: coarse) {
+  html[data-skin="terminal"] .tscope,
+  html[data-skin="terminal"] .tavatar,
+  html[data-skin="terminal"] .tmenu-item {
+    height: 36px;
+  }
+
+  html[data-skin="terminal"] .tbrand {
+    min-height: 36px;
+    margin: 0 -6px;
+    padding: 0 6px;
+  }
+
+  html[data-skin="terminal"] .chip {
+    height: 32px;
   }
 }
 

@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 import { DataTable } from "../../components/ui/DataTable";
-import { Skeleton } from "../../components/ui/Skeleton";
 import { Status } from "../../components/ui/Status";
 import { Card, EmptyState, Ghost } from "../../components/ui/Surfaces";
 import { Timestamp } from "../../components/ui/Timestamp";
@@ -58,10 +57,8 @@ function HostState({ overview, loading }: Readonly<{ overview: SessionOverview; 
   const host = overview.host;
   if (loading) {
     return (
-      <div className="thost-state">
-        <Skeleton height={28} width="60%" />
-        <Skeleton width="70%" />
-        <Skeleton width="50%" />
+      <div className="thost-state thost-waiting">
+        <Status kind="progress" label="Reading the host" />
       </div>
     );
   }

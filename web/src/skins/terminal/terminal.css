@@ -882,21 +882,38 @@ html[data-skin="terminal"] .empty-icon {
   border: 1px solid var(--rule);
 }
 
-/* A terminal draws nothing for what has not arrived. A value still on its
-   way is an empty slot, a rule where the text will sit; a region still
-   loading says so in one line with the spinning mark, like the boot. */
-html[data-skin="terminal"] .skeleton {
-  height: auto;
-  min-height: 0;
-  border-radius: 0;
-  background: none;
-  border-bottom: 1px dashed var(--outline-strong);
-  animation: none;
+/* A terminal draws nothing for what has not arrived. Every region that is
+   still loading says so in one line in the middle of its box, with the
+   spinning mark, as the boot does; the shapes the console waits with are
+   not drawn at all. */
+html[data-skin="terminal"] .skeleton,
+html[data-skin="terminal"] .table-skeleton {
+  display: none;
 }
 
-/* A group of placeholder rows carries its own label for a reader; here the
-   label is the line the reader sees, with the mark in front of it. */
-html[data-skin="terminal"] [role="status"][aria-busy="true"] > .visually-hidden {
+html[data-skin="terminal"] .table-loading {
+  display: table-row;
+}
+
+html[data-skin="terminal"] .table-loading td {
+  height: 120px;
+  text-align: center;
+}
+
+html[data-skin="terminal"] .skeleton-rows,
+html[data-skin="terminal"] .account-loading {
+  display: grid;
+  gap: 0;
+  place-content: center;
+  place-items: center;
+  min-height: 120px;
+  padding: 0;
+}
+
+/* The label a loading region carries for a reader is the line it shows. */
+html[data-skin="terminal"] .table-loading .visually-hidden,
+html[data-skin="terminal"] .skeleton-rows > .visually-hidden,
+html[data-skin="terminal"] .account-loading > .visually-hidden {
   position: static;
   width: auto;
   height: auto;
@@ -905,19 +922,48 @@ html[data-skin="terminal"] [role="status"][aria-busy="true"] > .visually-hidden 
   clip: auto;
   clip-path: none;
   white-space: normal;
-  justify-self: center;
   color: var(--ink-secondary);
   font-size: 13px;
   line-height: 20px;
   text-align: center;
 }
 
-html[data-skin="terminal"] [role="status"][aria-busy="true"] > .visually-hidden::before {
-  content: "[~] ";
+html[data-skin="terminal"] .table-loading .visually-hidden::before,
+html[data-skin="terminal"] .skeleton-rows > .visually-hidden::before,
+html[data-skin="terminal"] .account-loading > .visually-hidden::before {
+  content: "[~]";
+  margin-right: 1ch;
   color: var(--primary-ink);
   font-weight: 700;
-  white-space: pre;
   animation: tspin 800ms steps(1, end) infinite;
+}
+
+/* A loading sentence that the console prints as a paragraph waits the same
+   way here: one line, centred, with the mark. */
+html[data-skin="terminal"] .loading-line {
+  display: block;
+  min-height: 80px;
+  align-content: center;
+  color: var(--ink-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+
+html[data-skin="terminal"] .loading-line::before {
+  content: "[~]";
+  margin-right: 1ch;
+  color: var(--primary-ink);
+  font-weight: 700;
+  animation: tspin 800ms steps(1, end) infinite;
+}
+
+html[data-skin="terminal"] .thost-waiting {
+  align-self: center;
+  justify-items: center;
+  min-height: 120px;
+  align-content: center;
+  color: var(--ink-secondary);
+  font-size: 13px;
 }
 
 html[data-skin="terminal"] .tchart-placeholder {
@@ -1236,7 +1282,10 @@ html[data-skin="terminal"] .thost-facts .status > span {
 
   html[data-skin="terminal"] .status-progress::before,
   html[data-skin="terminal"] .boot-progress,
-  html[data-skin="terminal"] [role="status"][aria-busy="true"] > .visually-hidden::before {
+  html[data-skin="terminal"] .table-loading .visually-hidden::before,
+  html[data-skin="terminal"] .skeleton-rows > .visually-hidden::before,
+  html[data-skin="terminal"] .account-loading > .visually-hidden::before,
+  html[data-skin="terminal"] .loading-line::before {
     animation: none;
   }
 }

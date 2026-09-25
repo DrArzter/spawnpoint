@@ -752,6 +752,12 @@ button.chip[aria-pressed="true"] {
   height: var(--row-height);
 }
 
+/* The console waits with the shape of the rows; the words are for a reader
+   and for a face that waits with a line instead. */
+.table-loading {
+  display: none;
+}
+
 /* Medium: a row that carries a person, a control and a decision is still too
    wide to fold into a record, and too narrow for the three to share a line
    without the person's second line wrapping. The person keeps the first line;

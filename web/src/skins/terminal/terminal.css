@@ -355,7 +355,12 @@ html[data-skin="terminal"] .card-body-flush {
 }
 
 html[data-skin="terminal"] .card-actions {
-  padding: 12px 16px;
+  padding: 8px 16px;
+}
+
+/* A header that carries verbs keeps the same air under them as above. */
+html[data-skin="terminal"] .card-header:has(.card-actions) {
+  padding-bottom: 12px;
 }
 
 html[data-skin="terminal"] .card-footer {
@@ -408,34 +413,43 @@ html[data-skin="terminal"] .btn-text:hover {
   background: var(--primary-state);
 }
 
+/* A terminal fills nothing. The verb that matters keeps its colour in the
+   word and in its brackets, where a secondary verb's brackets are dim; the
+   danger verb says so in red. Hover is a tint, not a slab. */
 html[data-skin="terminal"] .btn-filled {
-  background: var(--primary);
-  color: var(--on-primary);
+  background: transparent;
+  color: var(--primary-ink);
 }
 
 html[data-skin="terminal"] .btn-filled:hover {
-  background: var(--primary-hover);
+  background: var(--primary-state);
   box-shadow: none;
 }
 
-html[data-skin="terminal"] .btn-danger {
-  background: var(--error);
-  color: var(--on-error);
-}
-
+html[data-skin="terminal"] .btn-danger,
 html[data-skin="terminal"] .btn-danger-text {
   background: transparent;
   color: var(--error-ink);
 }
 
-html[data-skin="terminal"] .btn:disabled {
-  background: transparent;
-  color: var(--ink-disabled);
+html[data-skin="terminal"] .btn-danger:hover,
+html[data-skin="terminal"] .btn-danger-text:hover {
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  box-shadow: none;
 }
 
+html[data-skin="terminal"] .btn-filled::before,
+html[data-skin="terminal"] .btn-filled::after,
+html[data-skin="terminal"] .btn-danger::before,
+html[data-skin="terminal"] .btn-danger::after {
+  font-weight: 700;
+  opacity: 1;
+}
+
+html[data-skin="terminal"] .btn:disabled,
 html[data-skin="terminal"] .btn-filled:disabled,
 html[data-skin="terminal"] .btn-danger:disabled {
-  background: var(--surface-variant);
+  background: transparent;
   color: var(--ink-disabled);
 }
 
@@ -913,33 +927,47 @@ html[data-skin="terminal"] .boot-card .mark {
 }
 
 /* The console's indeterminate bar, drawn the way a terminal draws one: a
-   block of six sweeping along a bracketed track of twenty-four. */
+   block sweeping a bracketed track that runs the width of the panel. The
+   block is a background on the content box, so the width is whatever the
+   panel gives it and the brackets sit in the padding on either side. */
 html[data-skin="terminal"] .boot-progress {
-  height: auto;
-  background: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 20px;
+  padding: 0 1.2ch;
+  background: linear-gradient(var(--primary-ink), var(--primary-ink)) no-repeat content-box;
+  background-size: 24% 6px;
+  background-position: 0% 50%;
   color: var(--primary-ink);
   font-weight: 700;
-  white-space: pre;
+  animation: tsweep 1.6s steps(16, end) infinite;
 }
 
+html[data-skin="terminal"] .boot-progress::before,
 html[data-skin="terminal"] .boot-progress::after {
-  content: "[======                  ]";
   position: static;
   display: block;
   width: auto;
   height: auto;
   background: none;
-  animation: tsweep 1.6s steps(1, end) infinite;
+  animation: none;
+}
+
+html[data-skin="terminal"] .boot-progress::before {
+  content: "[";
+  margin-left: -1.2ch;
+}
+
+html[data-skin="terminal"] .boot-progress::after {
+  content: "]";
+  margin-right: -1.2ch;
 }
 
 @keyframes tsweep {
-  0% { content: "[======                  ]"; }
-  14.3% { content: "[   ======               ]"; }
-  28.6% { content: "[      ======            ]"; }
-  42.9% { content: "[         ======         ]"; }
-  57.1% { content: "[            ======      ]"; }
-  71.4% { content: "[               ======   ]"; }
-  85.7% { content: "[                  ======]"; }
+  from { background-position-x: 0%; }
+  to { background-position-x: 100%; }
 }
 
 /* --- metrics: the status page's line in a well -------------------------------------- */
@@ -1149,7 +1177,7 @@ html[data-skin="terminal"] .thost-facts .status > span {
   }
 
   html[data-skin="terminal"] .status-progress::before,
-  html[data-skin="terminal"] .boot-progress::after {
+  html[data-skin="terminal"] .boot-progress {
     animation: none;
   }
 }

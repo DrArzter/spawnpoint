@@ -396,9 +396,9 @@ views redrawn by `terminal.css`, which applies only while the terminal Shell is 
   `[-]` off, `[.]` pending, `[?]` unknown, `[!]` error and warning, `[i]` info, `[x]` archived, `[+]` absent. Progress
   is the one mark that moves: `[~]` spinning through `|`, `/`, `-` and `\`, held on the tilde under reduced motion.
   Notices carry the same marks in front of their titles.
-- **Bracketed controls.** A button is its label between `[` and `]`; the filled variant inverts to blue on a whole
-  cell, the danger variant to red. Tabs are cells on a rule; the selected one is inverted. Chips and switches are
-  square.
+- **Bracketed controls.** A button is its label between `[` and `]`, and nothing is filled: the primary verb keeps
+  the accent in its word and its brackets where a secondary verb's brackets are dim, the danger verb says so in red,
+  and hover is a tint. Tabs are cells on a rule; the selected one is inverted. Chips and switches are square.
 - **The host scene.** The first screen draws the scoped game's icon in a glyph ramp (`" .:-=+*#%@"`) on a dark cell,
   40×18 cells, 24×11 on a phone. `HostScene` is the adapter: it takes a painter's grid of brightness per cell, sets the
   exposure from the session state and keeps time. `GameIcon` picks the painter: the Spawnpoint mark and the Minecraft

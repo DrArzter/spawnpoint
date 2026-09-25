@@ -35,7 +35,7 @@ export function clearDemoFlag(): void {
  * both, and `?latency=0` makes everything immediate, which is how the UI
  * audit reaches the pages rather than the boot card.
  */
-const BOOT_LATENCY_MS = 1400;
+const BOOT_LATENCY_MS = 700;
 const CALL_LATENCY_MS = 140;
 
 function requestedLatency(): number | null {

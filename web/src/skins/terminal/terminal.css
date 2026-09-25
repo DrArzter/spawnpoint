@@ -882,8 +882,23 @@ html[data-skin="terminal"] .empty-icon {
   border: 1px solid var(--rule);
 }
 
+/* A placeholder is a line of dots, the way a terminal shows text that has
+   not arrived: one row of dots per 20px line, so a tall placeholder reads as
+   lines of them, and the dots march one cell to the right while they wait. */
 html[data-skin="terminal"] .skeleton {
   border-radius: 0;
+  background: radial-gradient(circle, var(--outline-strong) 1.5px, transparent 2px) 0 50% / 8px 20px repeat;
+  animation: tmarch 800ms steps(4, end) infinite;
+}
+
+@keyframes tmarch {
+  to { background-position-x: 8px; }
+}
+
+html[data-skin="terminal"] .tchart-placeholder {
+  display: grid;
+  gap: 8px;
+  padding: 8px 0 12px;
 }
 
 html[data-skin="terminal"] .avatar {
@@ -1177,7 +1192,8 @@ html[data-skin="terminal"] .thost-facts .status > span {
   }
 
   html[data-skin="terminal"] .status-progress::before,
-  html[data-skin="terminal"] .boot-progress {
+  html[data-skin="terminal"] .boot-progress,
+  html[data-skin="terminal"] .skeleton {
     animation: none;
   }
 }

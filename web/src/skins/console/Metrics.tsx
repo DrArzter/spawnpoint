@@ -21,12 +21,12 @@ export function Metrics({ model }: Readonly<{ model: MetricsModel }>) {
 // The page around a chart: source tabs, the window chips, the states before
 // there is anything to draw. Which chart draws the numbers is the skin's
 // choice, so it comes in as a function.
-export function MetricsPage({ model, chart }: Readonly<{ model: MetricsModel; chart: (metrics: HostMetrics) => ReactNode }>) {
+export function MetricsPage({ model, chart, placeholder }: Readonly<{ model: MetricsModel; chart: (metrics: HostMetrics) => ReactNode; placeholder?: ReactNode }>) {
   return (
     <div className="page">
       <h1 className="visually-hidden">Metrics</h1>
       <Tabs label="Metric source" onChange={model.setSource} options={[{ id: "cloudwatch", label: "CloudWatch", icon: "cloud" }, { id: "session", label: "Session", icon: "bar_chart" }]} value={model.source} />
-      {model.source === "cloudwatch" && <HostChart chart={chart} model={model} />}
+      {model.source === "cloudwatch" && <HostChart chart={chart} model={model} placeholder={placeholder} />}
       {/* The stack that answers this already runs beside the game — node-exporter,
           cAdvisor, Prometheus and Grafana, session-scoped. What is missing is the
           path from a host on a private overlay to a public panel, so this stays
@@ -39,7 +39,7 @@ export function MetricsPage({ model, chart }: Readonly<{ model: MetricsModel; ch
   );
 }
 
-function HostChart({ model, chart }: Readonly<{ model: MetricsModel; chart: (metrics: HostMetrics) => ReactNode }>) {
+function HostChart({ model, chart, placeholder }: Readonly<{ model: MetricsModel; chart: (metrics: HostMetrics) => ReactNode; placeholder?: ReactNode }>) {
   if (model.instanceId === undefined) {
     return <Card flush><EmptyState description="Metrics are read from the compute host, and the control plane reports none right now." icon="bar_chart" title="No host to measure" /></Card>;
   }
@@ -56,7 +56,7 @@ function HostChart({ model, chart }: Readonly<{ model: MetricsModel; chart: (met
       title="Compute host"
     >
       {metrics.status === "error" && <Banner actions={<ActionButton action={metrics.retry} variant="text" />} description={metrics.error} title="Metrics could not be loaded" tone="error" />}
-      {metrics.status === "loading" && <div className="page">{model.ranges.map((option) => <Skeleton height={68} key={option.id} />)}</div>}
+      {metrics.status === "loading" && (placeholder ?? <div className="page">{model.ranges.map((option) => <Skeleton height={68} key={option.id} />)}</div>)}
       {metrics.status === "ready" && chart(metrics.value)}
     </Card>
   );

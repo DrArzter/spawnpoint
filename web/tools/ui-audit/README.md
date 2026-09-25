@@ -2,7 +2,7 @@
 
 Drives the running console in headless Chrome and probes the live DOM, instead of asking a person to look at every
 screen at every width. It opens each route at fifteen viewports from 360px to 3840px, both sides of every step in `web/DESIGN.md`, in demo mode so the pages carry
-real records, and reports what the design system can be checked against mechanically:
+real records (`latency=0`, so the demo answers at once and the probe lands on the page, not the boot card), and reports what the design system can be checked against mechanically:
 
 | Check | What counts as a finding |
 |---|---|

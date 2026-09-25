@@ -6,7 +6,8 @@ import { Releases } from "../console/Releases";
 import { World } from "../console/World";
 import type { Skin } from "../skin";
 import { Metrics } from "./Metrics";
-import { Boot, Shell } from "./Shell";
+import { Boot } from "./Boot";
+import { Shell } from "./Shell";
 import { Worlds } from "./Worlds";
 
 // The terminal: one monospace grid, every state a mark and a word, the host

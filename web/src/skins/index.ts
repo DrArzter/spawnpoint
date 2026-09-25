@@ -44,6 +44,18 @@ export function currentSkinId(): SkinId {
 }
 
 /**
+ * Stamp the document with the face the console surfaces wear, or take it
+ * off for the front door, which never wears one. index.html stamps the
+ * remembered face before the first paint, so on a console route this only
+ * confirms it; on the front door it undoes it.
+ */
+export function wearOnDocument(id: SkinId, worn: boolean): void {
+  const root = document.documentElement;
+  if (worn && id !== DEFAULT_SKIN) root.dataset.skin = id;
+  else delete root.dataset.skin;
+}
+
+/**
  * Wear another face from now on. The skin is chosen once, when the app
  * mounts, so the choice reloads the page rather than swapping views under
  * whatever is open; the address loses any `?skin=` that would override it.

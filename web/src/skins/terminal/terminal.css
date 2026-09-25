@@ -749,10 +749,6 @@ html[data-skin="terminal"] .switch-track::after {
   box-shadow: none;
 }
 
-html[data-skin="terminal"] .swatch {
-  border-radius: 0;
-}
-
 /* --- top layer: boxes over a dimmed screen, no depth --------------------------------- */
 
 html[data-skin="terminal"] .menu {
@@ -916,28 +912,34 @@ html[data-skin="terminal"] .boot-card .mark {
   border-radius: 0;
 }
 
+/* The console's indeterminate bar, drawn the way a terminal draws one: a
+   block of six sweeping along a bracketed track of twenty-four. */
 html[data-skin="terminal"] .boot-progress {
   height: auto;
   background: none;
   color: var(--primary-ink);
   font-weight: 700;
+  white-space: pre;
 }
 
 html[data-skin="terminal"] .boot-progress::after {
-  content: "|";
+  content: "[======                  ]";
   position: static;
   display: block;
   width: auto;
   height: auto;
   background: none;
-  animation: tglyph 800ms steps(1, end) infinite;
+  animation: tsweep 1.6s steps(1, end) infinite;
 }
 
-@keyframes tglyph {
-  0% { content: "|"; }
-  25% { content: "/"; }
-  50% { content: "-"; }
-  75% { content: "\\"; }
+@keyframes tsweep {
+  0% { content: "[======                  ]"; }
+  14.3% { content: "[   ======               ]"; }
+  28.6% { content: "[      ======            ]"; }
+  42.9% { content: "[         ======         ]"; }
+  57.1% { content: "[            ======      ]"; }
+  71.4% { content: "[               ======   ]"; }
+  85.7% { content: "[                  ======]"; }
 }
 
 /* --- metrics: the status page's line in a well -------------------------------------- */
@@ -992,6 +994,47 @@ html[data-skin="terminal"] .tchart-scale {
   color: var(--ink-secondary);
   font-size: 12px;
   line-height: 16px;
+}
+
+/* --- boot: the same box as any panel, before there is a shell around it ----------- */
+
+html[data-skin="terminal"] .tboot {
+  background: var(--canvas);
+}
+
+html[data-skin="terminal"] .tboot-card {
+  width: min(520px, 100%);
+}
+
+html[data-skin="terminal"] .tboot-body {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+html[data-skin="terminal"] .tboot-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 1ch;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+html[data-skin="terminal"] .tboot-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 28px;
+}
+
+html[data-skin="terminal"] .tboot-body p {
+  max-width: 48ch;
+  color: var(--ink-secondary);
+}
+
+html[data-skin="terminal"] .boot-progress,
+html[data-skin="terminal"] .boot-progress::after {
+  border-radius: 0;
 }
 
 /* --- the host: a scene in glyphs, its state beside it ------------------------------- */

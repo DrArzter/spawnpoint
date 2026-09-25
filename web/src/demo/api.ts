@@ -5,13 +5,15 @@ import { clearDemoFlag, demoLatency } from "./flag";
 import * as store from "./store";
 
 let accessInvitations: AccessInvitation[] = [];
+// The first snapshot is a boot answer; every one after it is a refresh.
+let snapshotServed = false;
 
 // The demo is a transport, not a second panel: it implements the same contract
 // the live API does, so every screen, every error path and every navigation is
 // the shipped one. Only the data underneath is swapped.
 export const demoApi: SpawnpointApi = {
   async restoreSession(): Promise<AuthState> {
-    await demoLatency();
+    await demoLatency("boot");
     return { status: "authenticated", session: demoSession };
   },
 
@@ -144,7 +146,8 @@ export const demoApi: SpawnpointApi = {
   },
 
   async loadControlPlane() {
-    await demoLatency();
+    await demoLatency(snapshotServed ? "call" : "boot");
+    snapshotServed = true;
     return store.snapshot();
   },
 

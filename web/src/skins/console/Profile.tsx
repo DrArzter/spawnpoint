@@ -44,16 +44,6 @@ const THEMES: readonly { id: ThemePreference; label: string; icon: IconName }[] 
 ];
 
 /** A starting point, not a limit: the field below takes any colour. */
-const SUGGESTED: readonly { name: string; colour: string }[] = [
-  { name: "Blue", colour: "#1a73e8" },
-  { name: "Green", colour: "#1e8e3e" },
-  { name: "Purple", colour: "#8430ce" },
-  { name: "Red", colour: "#d93025" },
-  { name: "Orange", colour: "#e8710a" },
-  { name: "Teal", colour: "#00838f" },
-  { name: "Pink", colour: "#c2185b" },
-  { name: "Grey", colour: "#5f5f5f" },
-];
 
 function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: LookModel }>) {
   const notify = useSnackbar();
@@ -107,14 +97,9 @@ function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: Lo
             <label className="accent-well">
               <input aria-label="Pick an accent colour" onChange={(event) => commitAccent(event.target.value)} type="color" value={parseHex(draft) ? draft : model.accent} />
             </label>
-            <TextField hint={valid ? undefined : "Six hex digits, for example #1a73e8."} label="Hex" mono onChange={(event) => commitAccent(event.target.value)} spellCheck={false} value={draft} />
+            <TextField hideLabel hint={valid ? undefined : "Six hex digits, for example #1a73e8."} label="Accent colour, hex" mono onChange={(event) => commitAccent(event.target.value)} spellCheck={false} value={draft} />
             <Button disabled={model.accent === DEFAULT_ACCENT} icon="restore" onClick={() => { setDraft(DEFAULT_ACCENT); save({ accent: DEFAULT_ACCENT }); }} variant="text">Reset</Button>
           </fieldset>
-          <div className="swatches">
-            {SUGGESTED.map(({ name, colour }) => (
-              <button aria-label={`${name} ${colour}`} aria-pressed={model.accent === colour} className="swatch" key={colour} onClick={() => { setDraft(colour); save({ accent: colour }); }} style={{ background: colour }} type="button" />
-            ))}
-          </div>
           {/* A picked colour is a hue, not a contrast ratio. When the two
               disagree the panel keeps the hue and moves the lightness, and
               says so rather than quietly painting something else. */}

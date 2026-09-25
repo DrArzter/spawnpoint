@@ -770,24 +770,6 @@
 
 .accent-well:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
 
-.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
-
-.swatch {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--outline);
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.swatch[aria-pressed="true"] {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
-}
-
-.swatch:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-
 .appearance-note {
   max-width: 72ch;
   color: var(--ink-secondary);

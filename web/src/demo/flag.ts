@@ -28,8 +28,25 @@ export function clearDemoFlag(): void {
   }
 }
 
-export async function demoLatency(): Promise<void> {
-  const requested = Number(new URLSearchParams(window.location.search).get("latency"));
-  const delay = Number.isFinite(requested) && requested > 0 ? Math.min(requested, 5000) : 140;
+/**
+ * How long a demo answer takes. A call is quick; the two answers the panel
+ * boots on (the session, the first snapshot) take long enough for the boot
+ * screens to be seen, which is what a demo is for. `?latency=` overrides
+ * both, and `?latency=0` makes everything immediate, which is how the UI
+ * audit reaches the pages rather than the boot card.
+ */
+const BOOT_LATENCY_MS = 1400;
+const CALL_LATENCY_MS = 140;
+
+function requestedLatency(): number | null {
+  const raw = new URLSearchParams(window.location.search).get("latency");
+  if (raw === null) return null;
+  const requested = Number(raw);
+  return Number.isFinite(requested) && requested >= 0 ? Math.min(requested, 5000) : null;
+}
+
+export async function demoLatency(kind: "call" | "boot" = "call"): Promise<void> {
+  const delay = requestedLatency() ?? (kind === "boot" ? BOOT_LATENCY_MS : CALL_LATENCY_MS);
+  if (delay === 0) return;
   await new Promise((resolve) => window.setTimeout(resolve, delay));
 }

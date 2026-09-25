@@ -374,7 +374,10 @@ Since [ADR-0059](../docs/adr/0059-separate-the-console-into-bones-and-skins.md) 
 `console`, the default face. A skin is a set of views over the same models; it may not change what a page offers,
 only how it is drawn. Every skin keeps the colour roles in this file: the owner wants the palette recognisable across
 their projects, so a skin changes type, shape, motion and chrome, never the hue of a status or the blue of an action.
-The front door, sign-in and the boot card are outside the skin and always wear the console face.
+The front door and sign-in are outside the skin and always wear the console face. The boot screens wear the remembered
+skin from the first frame: `index.html` stamps `html[data-skin]` from `spawnpoint.skin` (or `?skin=`) before anything
+is painted and asks for the skin's font, `main.tsx` paints the remembered accent and theme before the first render, and
+`App` confirms or removes the stamp for the surface it shows (`wearOnDocument`).
 
 ### Terminal
 

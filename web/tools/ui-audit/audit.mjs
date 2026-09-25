@@ -16,18 +16,18 @@ const skin = process.env.SKIN ? `&skin=${encodeURIComponent(process.env.SKIN)}` 
 
 const ROUTES = [
   ["landing", "/#/"],
-  ["landing-signed-in", "/?demo#/"],
-  ["worlds", "/?demo#/worlds/minecraft"],
-  ["worlds-factorio", "/?demo#/worlds/factorio"],
-  ["world", "/?demo#/worlds/minecraft/minecraft-rostik-12345678"],
-  ["world-vanilla", "/?demo#/worlds/minecraft/vanilla"],
-  ["releases", "/?demo#/releases/minecraft"],
-  ["console", "/?demo#/console/minecraft"],
-  ["metrics", "/?demo#/metrics/minecraft"],
-  ["access-users", "/?demo#/access/users"],
-  ["access-roles", "/?demo#/access/roles"],
-  ["access-notifications", "/?demo#/access/notifications"],
-  ["profile", "/?demo#/profile"],
+  ["landing-signed-in", "/?demo&latency=0#/"],
+  ["worlds", "/?demo&latency=0#/worlds/minecraft"],
+  ["worlds-factorio", "/?demo&latency=0#/worlds/factorio"],
+  ["world", "/?demo&latency=0#/worlds/minecraft/minecraft-rostik-12345678"],
+  ["world-vanilla", "/?demo&latency=0#/worlds/minecraft/vanilla"],
+  ["releases", "/?demo&latency=0#/releases/minecraft"],
+  ["console", "/?demo&latency=0#/console/minecraft"],
+  ["metrics", "/?demo&latency=0#/metrics/minecraft"],
+  ["access-users", "/?demo&latency=0#/access/users"],
+  ["access-roles", "/?demo&latency=0#/access/roles"],
+  ["access-notifications", "/?demo&latency=0#/access/notifications"],
+  ["profile", "/?demo&latency=0#/profile"],
 ];
 
 // Both sides of every breakpoint, because a rule that fires one pixel early is

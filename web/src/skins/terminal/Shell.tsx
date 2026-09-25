@@ -2,28 +2,17 @@ import { useEffect, type ReactNode } from "react";
 
 import { Avatar } from "../../components/Avatar";
 import { IconButton } from "../../components/ui/Button";
-import type { BootModel, ShellModel } from "../../core/models";
-import { BootScreen } from "../../screens/AuthScreen";
+import type { ShellModel } from "../../core/models";
 import { DemoBadge, SpawnpointMark } from "../../shell/AppBar";
-
-const FONT_URL = "https://fonts.googleapis.com/css2?family=B612+Mono:wght@400;700&display=swap";
+import { ensureTerminalFont } from "./font";
 
 // The screen: a top row, a menu row, then the grid. Nothing sits beside the
 // content; every row runs the whole width, on a phone as on a 4K monitor.
-// The skin marks the document while it is mounted, so its stylesheet applies
-// to the console alone and never to the front door.
+// The document wears the skin's mark from index.html and App (skins/index.ts,
+// wearOnDocument), so the stylesheet applies to the console and never to the
+// front door; the shell only makes sure its face has loaded.
 export function Shell({ model, children }: Readonly<{ model: ShellModel; children: ReactNode }>) {
-  useEffect(() => {
-    const root = document.documentElement;
-    root.dataset.skin = "terminal";
-    if (!document.querySelector(`link[href="${FONT_URL}"]`)) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = FONT_URL;
-      document.head.append(link);
-    }
-    return () => { delete root.dataset.skin; };
-  }, []);
+  useEffect(ensureTerminalFont, []);
 
   return (
     <div className="tshell">
@@ -58,8 +47,4 @@ export function Shell({ model, children }: Readonly<{ model: ShellModel; childre
       </main>
     </div>
   );
-}
-
-export function Boot({ model }: Readonly<{ model: BootModel }>) {
-  return <BootScreen description={model.description} title={model.title} />;
 }

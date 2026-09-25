@@ -1,0 +1,2243 @@
+/*
+ * The terminal skin. One monospace grid over the family's colours: the same
+ * canvas, surface, ink and Google Blue as every other face, so the projects
+ * still read as one. Every class here is the face's own (t-*), drawn from
+ * scratch in skins/terminal; the console's components and stylesheet play no
+ * part in it. The rules apply while the document carries data-skin="terminal",
+ * which index.html stamps before the first paint and App keeps true.
+ */
+
+/* --- tokens --------------------------------------------------------------------------- */
+
+html[data-skin="terminal"] {
+  --font-ui: "B612 Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-title: var(--font-ui);
+  --font-mono: var(--font-ui);
+  /* Box-drawing lines: dimmer than ink, darker than a hairline. */
+  --rule: var(--outline-strong);
+  --t-gutter: 24px;
+  --t-gap: 24px;
+  --t-key: 36px;
+  --t-key-small: 32px;
+  --t-field: 40px;
+}
+
+@media (max-width: 599px) {
+  html[data-skin="terminal"] {
+    --t-gutter: 16px;
+    --t-gap: 16px;
+  }
+}
+
+@media (pointer: coarse) {
+  html[data-skin="terminal"] {
+    --t-key: 44px;
+    --t-key-small: 40px;
+    --t-field: 44px;
+  }
+}
+
+/* --- type: one face, two weights, lines on the 4px grid ------------------------------ */
+
+html[data-skin="terminal"] body,
+html[data-skin="terminal"] button,
+html[data-skin="terminal"] input,
+html[data-skin="terminal"] select,
+html[data-skin="terminal"] textarea {
+  font-family: var(--font-ui);
+}
+
+html[data-skin="terminal"] body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+html[data-skin="terminal"] h1,
+html[data-skin="terminal"] h2,
+html[data-skin="terminal"] h3,
+html[data-skin="terminal"] strong,
+html[data-skin="terminal"] b {
+  font-weight: 700;
+}
+
+html[data-skin="terminal"] code,
+html[data-skin="terminal"] .t-clip {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+html[data-skin="terminal"] .t-clip {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+html[data-skin="terminal"] small,
+html[data-skin="terminal"] .t-secondary {
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+html[data-skin="terminal"] a {
+  color: var(--primary-ink);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 3px;
+}
+
+html[data-skin="terminal"] a:hover {
+  text-decoration-color: currentColor;
+}
+
+html[data-skin="terminal"] :focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* The uppercase label: a panel's name, a column, a field, a fact. */
+html[data-skin="terminal"] .t-label,
+html[data-skin="terminal"] .t-panel-name,
+html[data-skin="terminal"] .t-field-label,
+html[data-skin="terminal"] .t-setting-label,
+html[data-skin="terminal"] .t-table th,
+html[data-skin="terminal"] .t-detail dt,
+html[data-skin="terminal"] .t-fact dt,
+html[data-skin="terminal"] .t-group-name,
+html[data-skin="terminal"] .t-crumb,
+html[data-skin="terminal"] .t-demo {
+  color: var(--ink-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* --- the frame: a top row, a menu row, then the grid ---------------------------------- */
+
+html[data-skin="terminal"] .t-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+html[data-skin="terminal"] .t-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 2ch;
+  height: 40px;
+  padding: 0 var(--t-gutter);
+  background: var(--canvas);
+  border-bottom: 1px solid var(--rule);
+}
+
+html[data-skin="terminal"] .t-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 1ch;
+  min-height: 36px;
+  margin: 0 -6px;
+  padding: 0 6px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+html[data-skin="terminal"] .t-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 1ch;
+  height: 36px;
+  padding: 0 1ch;
+  border: 0;
+  background: none;
+  color: var(--primary-ink);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+html[data-skin="terminal"] .t-scope:hover .t-scope-name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+html[data-skin="terminal"] .t-scope-caret {
+  font-size: 11px;
+  color: var(--ink-secondary);
+}
+
+html[data-skin="terminal"] .t-bar-gap {
+  flex: 1;
+}
+
+html[data-skin="terminal"] .t-bar-verbs {
+  display: flex;
+  align-items: center;
+  gap: 1ch;
+}
+
+html[data-skin="terminal"] .t-demo {
+  color: var(--warning-ink);
+  white-space: nowrap;
+}
+
+@media (max-width: 599px) {
+  html[data-skin="terminal"] .t-brand strong,
+  html[data-skin="terminal"] .t-menu-note {
+    display: none;
+  }
+}
+
+html[data-skin="terminal"] .t-bar-avatar {
+  display: inline-grid;
+  place-items: center;
+  height: 36px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+html[data-skin="terminal"] .t-bar-avatar:hover {
+  background: var(--surface-hover);
+}
+
+/* The menu row. Each destination is a word; the current one is inverted. */
+html[data-skin="terminal"] .t-menu-row {
+  position: sticky;
+  top: 40px;
+  z-index: 19;
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 calc(var(--t-gutter) - 1ch);
+  background: var(--canvas);
+  border-bottom: 1px solid var(--rule);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+html[data-skin="terminal"] .t-menu-row::-webkit-scrollbar {
+  display: none;
+}
+
+html[data-skin="terminal"] .t-menu-link {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 1ch;
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+html[data-skin="terminal"] .t-menu-link:hover {
+  background: var(--surface-hover);
+}
+
+html[data-skin="terminal"] .t-menu-link[aria-current="page"] {
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 700;
+}
+
+html[data-skin="terminal"] .t-menu-note {
+  margin-left: auto;
+  padding-left: 2ch;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+html[data-skin="terminal"] .t-menu-note strong {
+  color: var(--ink);
+  font-weight: 400;
+}
+
+html[data-skin="terminal"] .t-main {
+  flex: 1;
+  min-width: 0;
+  padding: var(--t-gutter);
+}
+
+/* --- pages ------------------------------------------------------------------------------ */
+
+/* A page redraws the way a terminal does: top to bottom, in steps, every
+   line legible the moment it lands. Never a fade. */
+html[data-skin="terminal"] .t-page {
+  display: grid;
+  gap: var(--t-gap);
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-main > .t-page {
+  animation: t-redraw 200ms steps(10, end) both;
+}
+
+@keyframes t-redraw {
+  from { clip-path: inset(0 0 100% 0); }
+  to { clip-path: inset(0); }
+}
+
+/* The head is two lines: what the page is, then what can be done to it.
+   Both read from the left; nothing floats to the far edge. */
+html[data-skin="terminal"] .t-page-head {
+  display: grid;
+  gap: 12px;
+}
+
+html[data-skin="terminal"] .t-page-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 2ch;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-page-title h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 28px;
+}
+
+html[data-skin="terminal"] .t-page-title-person {
+  gap: 4px 16px;
+}
+
+html[data-skin="terminal"] .t-page-title-person small {
+  font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-crumb {
+  color: var(--ink-secondary);
+  text-decoration: none;
+}
+
+html[data-skin="terminal"] .t-crumb:hover {
+  color: var(--primary-ink);
+  text-decoration: underline;
+}
+
+/* --- panels: line boxes on the ground, the name set into the top rule ------------ */
+
+html[data-skin="terminal"] .t-panel {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  background: var(--canvas);
+}
+
+/* The name sits 11px above the top rule, so a named panel keeps that much
+   clear above it; an unnamed one keeps the page's own gap. */
+html[data-skin="terminal"] .t-panel-named {
+  margin-top: 10px;
+}
+
+html[data-skin="terminal"] .t-panel-name {
+  position: absolute;
+  top: -11px;
+  left: 12px;
+  margin: 0;
+  padding: 0 1ch;
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+html[data-skin="terminal"] .t-panel-head {
+  display: grid;
+  gap: 12px;
+  padding: 20px 16px 0;
+}
+
+html[data-skin="terminal"] .t-panel-desc {
+  flex: 1 1 24ch;
+  max-width: 72ch;
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-panel-verbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A named panel's verbs sit in its top rule at the right, as its name sits
+   at the left: the box carries its own controls, the way a drawn frame
+   carries its buttons. */
+html[data-skin="terminal"] .t-panel-rule-verbs {
+  position: absolute;
+  top: calc(var(--t-key) / -2);
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  height: var(--t-key);
+  padding: 0 1ch;
+  background: var(--canvas);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+html[data-skin="terminal"] .t-panel:has(> .t-panel-rule-verbs) {
+  margin-top: calc(var(--t-key) / 2 + 2px);
+}
+
+/* Narrower than this the name and the verbs would meet on the rule; the
+   verbs step down to a line of their own under the name. */
+@media (max-width: 699px) {
+  html[data-skin="terminal"] .t-panel-rule-verbs:not(.t-drawer-close) {
+    position: static;
+    flex-wrap: wrap;
+    max-width: none;
+    height: auto;
+    min-height: 0;
+    padding: 20px 16px 0;
+  }
+
+  html[data-skin="terminal"] .t-panel:has(> .t-panel-rule-verbs:not(.t-drawer-close)) {
+    margin-top: 10px;
+  }
+
+  html[data-skin="terminal"] .t-panel-rule-verbs:not(.t-drawer-close) + .t-panel-head {
+    padding-top: 12px;
+  }
+
+  html[data-skin="terminal"] .t-panel-rule-verbs:not(.t-drawer-close) + .t-panel-body {
+    padding-top: 12px;
+  }
+}
+
+html[data-skin="terminal"] .t-panel-body {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+html[data-skin="terminal"] .t-panel-named > .t-panel-body {
+  padding-top: 20px;
+}
+
+html[data-skin="terminal"] .t-panel-head + .t-panel-body {
+  padding-top: 16px;
+}
+
+/* A flush panel gives its whole width to the table inside it. */
+html[data-skin="terminal"] .t-panel-flush > .t-panel-body {
+  gap: 0;
+  padding: 0;
+}
+
+html[data-skin="terminal"] .t-panel-flush.t-panel-named > .t-panel-body {
+  padding-top: 12px;
+}
+
+html[data-skin="terminal"] .t-panel-flush > .t-panel-head {
+  padding-bottom: 16px;
+}
+
+html[data-skin="terminal"] .t-panel-flush > .t-panel-head + .t-panel-body {
+  padding-top: 0;
+}
+
+html[data-skin="terminal"] .t-panel-foot {
+  padding: 8px 16px 12px;
+}
+
+html[data-skin="terminal"] .t-panel-note {
+  color: var(--ink-secondary);
+  font-size: 12px;
+}
+
+html[data-skin="terminal"] .t-inset {
+  padding: 0 16px 16px;
+}
+
+/* --- marks and states ------------------------------------------------------------------- */
+
+html[data-skin="terminal"] .t-mark {
+  flex: none;
+  color: var(--ink-secondary);
+  font-weight: 700;
+  white-space: pre;
+}
+
+html[data-skin="terminal"] .t-mark-ok { color: var(--success-ink); }
+html[data-skin="terminal"] .t-mark-ready { color: var(--ink); }
+html[data-skin="terminal"] .t-mark-error { color: var(--error-ink); }
+html[data-skin="terminal"] .t-mark-warning { color: var(--warning-ink); }
+html[data-skin="terminal"] .t-mark-info { color: var(--primary-ink); }
+
+/* A transition is the one mark that moves: the four-glyph spinner of every
+   terminal. Reduced motion holds it on the tilde. */
+html[data-skin="terminal"] .t-mark-progress::before {
+  content: "[~]";
+  color: var(--primary-ink);
+  animation: t-spin 800ms steps(1, end) infinite;
+}
+
+@keyframes t-spin {
+  0% { content: "[|]"; }
+  25% { content: "[/]"; }
+  50% { content: "[-]"; }
+  75% { content: "[\\]"; }
+}
+
+html[data-skin="terminal"] .t-state {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1ch;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-state > span:last-child {
+  min-width: 0;
+}
+
+/* In a table a state is one word beside its mark, never broken. */
+html[data-skin="terminal"] .t-table .t-state {
+  white-space: nowrap;
+}
+
+html[data-skin="terminal"] .t-state-large {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 28px;
+}
+
+html[data-skin="terminal"] .t-ghost,
+html[data-skin="terminal"] .t-copy-line {
+  color: var(--ink-secondary);
+}
+
+html[data-skin="terminal"] .t-copy-line {
+  max-width: 72ch;
+  margin: 0;
+  font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-attention {
+  color: var(--warning-ink);
+}
+
+html[data-skin="terminal"] .t-error {
+  margin: 0;
+  color: var(--error-ink);
+  font-size: 13px;
+}
+
+/* A note above a screen: a mark, a bold sentence, a plain one. */
+html[data-skin="terminal"] .t-note {
+  max-width: 72ch;
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-note .t-mark {
+  margin-right: 1ch;
+}
+
+html[data-skin="terminal"] .t-note strong {
+  color: var(--ink);
+}
+
+html[data-skin="terminal"] .t-help {
+  margin-left: 0.5ch;
+  color: var(--ink-secondary);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: help;
+}
+
+html[data-skin="terminal"] .t-help:hover {
+  color: var(--primary-ink);
+}
+
+/* --- verbs: a word between brackets, nothing filled ---------------------------------- */
+
+html[data-skin="terminal"] .t-verb {
+  display: inline-flex;
+  align-items: center;
+  gap: 1ch;
+  height: var(--t-key);
+  padding: 0 1ch;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+html[data-skin="terminal"] .t-verb-small {
+  height: var(--t-key-small);
+  font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-bracket {
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+html[data-skin="terminal"] .t-verb-icon {
+  flex: none;
+}
+
+/* The verb that matters keeps its colour in the word and in its brackets;
+   a plain verb's brackets are dim. */
+html[data-skin="terminal"] .t-verb-primary {
+  color: var(--primary-ink);
+}
+
+html[data-skin="terminal"] .t-verb-danger {
+  color: var(--error-ink);
+}
+
+html[data-skin="terminal"] .t-verb-primary > .t-bracket,
+html[data-skin="terminal"] .t-verb-danger > .t-bracket {
+  font-weight: 700;
+  opacity: 1;
+}
+
+/* Hover is never a slab: the word takes an underline, the brackets come up. */
+html[data-skin="terminal"] .t-verb:hover:not(:disabled) .t-verb-label {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+html[data-skin="terminal"] .t-verb:hover:not(:disabled) > .t-bracket {
+  opacity: 1;
+}
+
+html[data-skin="terminal"] .t-verb:active:not(:disabled) {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+html[data-skin="terminal"] .t-verb-danger:active:not(:disabled) {
+  background: var(--error);
+  color: var(--on-error);
+}
+
+html[data-skin="terminal"] .t-verb:disabled {
+  color: var(--ink-disabled);
+  cursor: default;
+}
+
+html[data-skin="terminal"] .t-verb:disabled > .t-bracket {
+  opacity: 0.5;
+}
+
+html[data-skin="terminal"] .t-verb-icon-only {
+  padding: 0 0.5ch;
+  gap: 0.5ch;
+}
+
+html[data-skin="terminal"] .t-verb-bare {
+  height: auto;
+  min-height: 24px;
+  padding: 0;
+}
+
+/* Text that is a target reaches the floor a pointer needs. */
+html[data-skin="terminal"] .t-row-link,
+html[data-skin="terminal"] .t-source,
+html[data-skin="terminal"] .t-crumb {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
+
+@media (pointer: coarse) {
+  html[data-skin="terminal"] .t-verb-bare,
+  html[data-skin="terminal"] .t-row-link,
+  html[data-skin="terminal"] .t-source,
+  html[data-skin="terminal"] .t-crumb {
+    min-height: 32px;
+  }
+}
+
+html[data-skin="terminal"] .t-verbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+html[data-skin="terminal"] .t-verbs-end {
+  justify-content: flex-end;
+}
+
+/* --- choices and toggles ------------------------------------------------------------------ */
+
+html[data-skin="terminal"] .t-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* One of several: a radio as a terminal draws one, (o) for the chosen. */
+html[data-skin="terminal"] .t-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 1ch;
+  height: var(--t-key-small);
+  padding: 0 0.5ch;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+html[data-skin="terminal"] .t-choice:hover > span:not(.t-choice-box) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+html[data-skin="terminal"] .t-choice-box {
+  color: var(--ink-secondary);
+}
+
+html[data-skin="terminal"] .t-choice-on {
+  font-weight: 700;
+}
+
+html[data-skin="terminal"] .t-choice-on > .t-choice-box {
+  color: var(--primary-ink);
+}
+
+html[data-skin="terminal"] .t-toggle {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 1ch;
+  min-height: var(--t-key-small);
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+
+html[data-skin="terminal"] .t-toggle-box {
+  flex: none;
+  color: var(--ink-secondary);
+  font-weight: 700;
+  white-space: pre;
+}
+
+html[data-skin="terminal"] .t-toggle-on .t-toggle-box {
+  color: var(--primary-ink);
+}
+
+html[data-skin="terminal"] .t-toggle:hover .t-toggle-copy > span:first-child {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+html[data-skin="terminal"] .t-toggle:disabled {
+  color: var(--ink-disabled);
+  cursor: default;
+}
+
+html[data-skin="terminal"] .t-toggle-copy {
+  display: grid;
+  gap: 2px;
+}
+
+html[data-skin="terminal"] .t-toggle-list {
+  display: grid;
+}
+
+html[data-skin="terminal"] .t-toggle-list .t-toggle + .t-toggle {
+  border-top: 1px solid var(--outline);
+}
+
+/* --- fields ------------------------------------------------------------------------------ */
+
+html[data-skin="terminal"] .t-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--t-field);
+  padding: 0 12px;
+  border: 1px solid var(--outline-strong);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+html[data-skin="terminal"] .t-input::placeholder {
+  color: var(--ink-secondary);
+}
+
+html[data-skin="terminal"] .t-input:disabled {
+  color: var(--ink-disabled);
+  background: var(--surface-variant);
+}
+
+html[data-skin="terminal"] .t-input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+}
+
+html[data-skin="terminal"] .t-input-mono {
+  font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-select-well {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-select {
+  padding-right: 32px;
+  appearance: none;
+}
+
+html[data-skin="terminal"] .t-select-caret {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  color: var(--ink-secondary);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+html[data-skin="terminal"] .t-select-inline {
+  display: inline-block;
+  width: auto;
+}
+
+html[data-skin="terminal"] .t-select-inline .t-select {
+  width: auto;
+  min-width: 160px;
+  height: var(--t-key-small);
+  font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-field-hint {
+  color: var(--ink-secondary);
+}
+
+@media (max-width: 959px) {
+  html[data-skin="terminal"] .t-input {
+    font-size: 16px;
+  }
+}
+
+/* --- waiting, empty, notices ------------------------------------------------------------- */
+
+/* A terminal draws nothing for what has not arrived: every region still
+   loading says so in one line in the middle of its box. */
+html[data-skin="terminal"] .t-wait {
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1ch;
+  min-height: 120px;
+  margin: 0;
+  padding: 16px;
+  color: var(--ink-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+}
+
+html[data-skin="terminal"] .t-empty {
+  box-sizing: border-box;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 6px;
+  min-height: 120px;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+html[data-skin="terminal"] .t-empty strong {
+  font-size: 14px;
+}
+
+html[data-skin="terminal"] .t-empty p {
+  max-width: 48ch;
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-empty .t-verb {
+  margin-top: 6px;
+}
+
+html[data-skin="terminal"] .t-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 1ch;
+  padding: 12px 16px;
+  border: 1px solid var(--rule);
+  background: var(--canvas);
+}
+
+html[data-skin="terminal"] .t-notice-copy {
+  flex: 1 1 24ch;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-notice-copy p {
+  margin: 4px 0 0;
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-notice-verbs {
+  margin-left: auto;
+}
+
+/* --- tags, links, stacks --------------------------------------------------------------- */
+
+html[data-skin="terminal"] .t-tag {
+  display: inline-block;
+  padding: 0 0.5ch;
+  border: 1px solid var(--rule);
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+html[data-skin="terminal"] .t-tag-primary {
+  border-color: var(--primary-ink);
+  color: var(--primary-ink);
+}
+
+html[data-skin="terminal"] .t-row-link {
+  font-weight: 700;
+}
+
+html[data-skin="terminal"] .t-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5ch;
+}
+
+html[data-skin="terminal"] .t-stack {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-stack > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+html[data-skin="terminal"] .t-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 1ch;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-pair {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 1ch;
+}
+
+html[data-skin="terminal"] .t-pair-arrow {
+  color: var(--ink-secondary);
+}
+
+html[data-skin="terminal"] .t-address {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5ch;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-address code {
+  white-space: nowrap;
+}
+
+html[data-skin="terminal"] .t-address-net {
+  display: inline-flex;
+  color: var(--ink-secondary);
+}
+
+html[data-skin="terminal"] .t-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  background: var(--primary-container);
+  color: var(--primary-ink);
+  font-weight: 700;
+}
+
+html[data-skin="terminal"] .t-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+html[data-skin="terminal"] .t-avatar-small {
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-avatar-large {
+  width: 48px;
+  height: 48px;
+  font-size: 20px;
+}
+
+/* --- tabs: cells on a rule, the chosen one inverted ------------------------------------ */
+
+html[data-skin="terminal"] .t-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--rule);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+html[data-skin="terminal"] .t-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+html[data-skin="terminal"] .t-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 1ch;
+  height: var(--t-key);
+  padding: 0 2ch;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+html[data-skin="terminal"] .t-tab:hover {
+  background: var(--surface-hover);
+}
+
+html[data-skin="terminal"] .t-tab[aria-selected="true"] {
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 700;
+}
+
+html[data-skin="terminal"] .t-tab-count {
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+/* --- tables: dim caps over rows of one height ----------------------------------------- */
+
+html[data-skin="terminal"] .t-table-wrap {
+  container-type: inline-size;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+html[data-skin="terminal"] .t-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+html[data-skin="terminal"] .t-table th,
+html[data-skin="terminal"] .t-table td {
+  padding: 0 16px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+html[data-skin="terminal"] .t-table th {
+  height: 40px;
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+
+html[data-skin="terminal"] .t-table td {
+  height: 40px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--outline);
+}
+
+html[data-skin="terminal"] .t-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+html[data-skin="terminal"] .t-table tbody tr:hover td {
+  background: var(--surface-hover);
+}
+
+html[data-skin="terminal"] .t-table .t-end {
+  text-align: right;
+}
+
+html[data-skin="terminal"] .t-table .t-verbs-col {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+html[data-skin="terminal"] .t-table .t-verbs-col .t-verbs {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+
+html[data-skin="terminal"] .t-table .t-secondary {
+  color: var(--ink-secondary);
+}
+
+html[data-skin="terminal"] .t-table-state td {
+  padding: 0;
+}
+
+html[data-skin="terminal"] .t-table-state:hover td {
+  background: none;
+}
+
+/* A monospace face is wider than Roboto; at the medium step the cells give
+   up half their side padding so a full row still fits a tablet. */
+@media (max-width: 839px) {
+  html[data-skin="terminal"] .t-table th,
+  html[data-skin="terminal"] .t-table td {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}
+
+/* Between a phone and a desk a table is still a table but a narrow one: a
+   column worth reading but not worth the row scrolling steps out. */
+@container (min-width: 600px) and (max-width: 839px) {
+  html[data-skin="terminal"] .t-table .t-optional {
+    display: none;
+  }
+}
+
+/* On a phone a table is a stack of records: each cell one line, its label
+   a dim word in front of its value, the verbs on the last line. Everything
+   reads from the left, as a terminal prints a record. */
+@container (max-width: 599px) {
+  html[data-skin="terminal"] .t-table thead {
+    display: none;
+  }
+
+  html[data-skin="terminal"] .t-table,
+  html[data-skin="terminal"] .t-table tbody,
+  html[data-skin="terminal"] .t-table tr,
+  html[data-skin="terminal"] .t-table td {
+    display: block;
+  }
+
+  html[data-skin="terminal"] .t-table tr {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--outline);
+  }
+
+  html[data-skin="terminal"] .t-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  html[data-skin="terminal"] .t-table tbody tr:hover td {
+    background: none;
+  }
+
+  html[data-skin="terminal"] .t-table td {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 1.5ch;
+    height: auto;
+    min-height: 24px;
+    padding: 2px 0;
+    border: 0;
+    text-align: left;
+    white-space: normal;
+  }
+
+  html[data-skin="terminal"] .t-table td::before {
+    content: attr(data-label);
+    flex: none;
+    min-width: 8ch;
+    color: var(--ink-secondary);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  html[data-skin="terminal"] .t-table td.t-end {
+    text-align: left;
+  }
+
+  html[data-skin="terminal"] .t-table td.t-verbs-col {
+    width: auto;
+    padding-top: 8px;
+  }
+
+  html[data-skin="terminal"] .t-table td.t-verbs-col::before,
+  html[data-skin="terminal"] .t-table-headless td::before,
+  html[data-skin="terminal"] .t-table-state td::before {
+    display: none;
+  }
+
+  html[data-skin="terminal"] .t-table td.t-verbs-col .t-verbs {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  html[data-skin="terminal"] .t-table-state td {
+    display: block;
+    padding: 0;
+  }
+}
+
+/* --- details ------------------------------------------------------------------------------- */
+
+/* The label column is as wide as its longest label and no wider, so a value
+   starts right after its name; a box too narrow for the two side by side
+   puts the label on its own line above the value. */
+html[data-skin="terminal"] .t-details-wrap {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-details {
+  display: grid;
+  grid-template-columns: fit-content(40%) minmax(0, 1fr);
+  margin: 0;
+}
+
+html[data-skin="terminal"] .t-detail {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: start;
+  gap: 0 3ch;
+  min-height: 44px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--outline);
+}
+
+@container (max-width: 479px) {
+  html[data-skin="terminal"] .t-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html[data-skin="terminal"] .t-detail {
+    gap: 4px 0;
+    min-height: 0;
+    padding: 8px 0;
+  }
+
+  html[data-skin="terminal"] .t-detail dt {
+    padding-top: 0;
+  }
+}
+
+html[data-skin="terminal"] .t-detail:last-child {
+  border-bottom: 0;
+}
+
+html[data-skin="terminal"] .t-detail dt {
+  display: flex;
+  align-items: baseline;
+  padding-top: 2px;
+}
+
+html[data-skin="terminal"] .t-detail dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+html[data-skin="terminal"] .t-detail dd small {
+  display: block;
+  margin-top: 2px;
+}
+
+/* A value and its copy key are one unit: the key never drops to a line of
+   its own under the value. */
+html[data-skin="terminal"] .t-detail-value {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 1ch;
+  min-width: 0;
+  max-width: 100%;
+}
+
+html[data-skin="terminal"] .t-detail-value > :first-child {
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-details-flush .t-detail {
+  padding: 8px 16px;
+  min-height: 40px;
+}
+
+html[data-skin="terminal"] .t-details-group {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-group-name {
+  margin: 0;
+  color: var(--ink);
+}
+
+html[data-skin="terminal"] .t-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+html[data-skin="terminal"] .t-details-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px 32px;
+}
+
+/* --- lists ---------------------------------------------------------------------------------- */
+
+html[data-skin="terminal"] .t-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+html[data-skin="terminal"] .t-list-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--outline);
+}
+
+html[data-skin="terminal"] .t-list-row:last-child {
+  border-bottom: 0;
+}
+
+html[data-skin="terminal"] .t-list-row > .t-stack {
+  flex: 1 1 20ch;
+}
+
+html[data-skin="terminal"] .t-list-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--outline);
+  color: var(--ink-secondary);
+}
+
+html[data-skin="terminal"] .t-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-history-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: center;
+}
+
+html[data-skin="terminal"] .t-history-row > * {
+  justify-self: start;
+}
+
+html[data-skin="terminal"] .t-check,
+html[data-skin="terminal"] .t-radio {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  cursor: pointer;
+}
+
+html[data-skin="terminal"] .t-check input,
+html[data-skin="terminal"] .t-radio input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+}
+
+html[data-skin="terminal"] .t-check-box,
+html[data-skin="terminal"] .t-radio-box {
+  flex: none;
+  color: var(--ink-secondary);
+  font-weight: 700;
+  white-space: pre;
+}
+
+html[data-skin="terminal"] .t-check input:checked ~ .t-check-box,
+html[data-skin="terminal"] .t-radio input:checked ~ .t-radio-box {
+  color: var(--primary-ink);
+}
+
+html[data-skin="terminal"] .t-check input:focus-visible ~ .t-check-box,
+html[data-skin="terminal"] .t-radio input:focus-visible ~ .t-radio-box {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+html[data-skin="terminal"] .t-check-off {
+  color: var(--ink-disabled);
+  cursor: default;
+}
+
+html[data-skin="terminal"] .t-radios {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+html[data-skin="terminal"] .t-radios legend {
+  padding: 0;
+  margin-bottom: 4px;
+}
+
+html[data-skin="terminal"] .t-radio {
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--outline);
+}
+
+html[data-skin="terminal"] .t-radio:has(input:checked) {
+  border-color: var(--primary-ink);
+}
+
+/* --- the overflow menu: a list of verbs in the top layer --------------------------------- */
+
+html[data-skin="terminal"] .t-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 4px 0;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+html[data-skin="terminal"] .t-menu:not(:popover-open) {
+  display: none;
+}
+
+html[data-skin="terminal"] .t-menu hr {
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--rule);
+}
+
+html[data-skin="terminal"] .t-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1ch;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+
+html[data-skin="terminal"] .t-menu-item .t-bracket {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  padding-top: 2px;
+  color: var(--ink-secondary);
+  opacity: 1;
+}
+
+html[data-skin="terminal"] .t-menu-copy {
+  display: grid;
+  gap: 2px;
+}
+
+html[data-skin="terminal"] .t-menu-item:hover:not(:disabled),
+html[data-skin="terminal"] .t-menu-item:focus-visible {
+  outline: none;
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+html[data-skin="terminal"] .t-menu-item:hover:not(:disabled) .t-bracket,
+html[data-skin="terminal"] .t-menu-item:hover:not(:disabled) small,
+html[data-skin="terminal"] .t-menu-item:focus-visible .t-bracket,
+html[data-skin="terminal"] .t-menu-item:focus-visible small {
+  color: inherit;
+}
+
+html[data-skin="terminal"] .t-menu-item-danger {
+  color: var(--error-ink);
+}
+
+html[data-skin="terminal"] .t-menu-item-danger:hover:not(:disabled),
+html[data-skin="terminal"] .t-menu-item-danger:focus-visible {
+  background: var(--error);
+  color: var(--on-error);
+}
+
+html[data-skin="terminal"] .t-menu-item:disabled {
+  color: var(--ink-disabled);
+  cursor: default;
+}
+
+/* --- the top layer: a box over a dimmed screen, no depth ----------------------------------- */
+
+html[data-skin="terminal"] .t-modal,
+html[data-skin="terminal"] .t-drawer {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+}
+
+html[data-skin="terminal"] .t-modal::backdrop,
+html[data-skin="terminal"] .t-drawer::backdrop {
+  background: var(--scrim);
+  animation: t-scrim var(--dur) var(--ease) both;
+}
+
+@keyframes t-scrim {
+  from { opacity: 0; }
+}
+
+html[data-skin="terminal"] .t-modal {
+  width: min(520px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  overflow: visible;
+}
+
+html[data-skin="terminal"] .t-modal[open] {
+  animation: t-modal-in var(--dur) var(--ease) both;
+}
+
+@keyframes t-modal-in {
+  from { transform: translateY(8px); opacity: 0; }
+}
+
+html[data-skin="terminal"] .t-modal-panel {
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  margin-top: 0;
+}
+
+html[data-skin="terminal"] .t-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 16px 16px;
+}
+
+html[data-skin="terminal"] .t-modal-verbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+
+/* A form opens in the same kind of box as a question, in the middle of the
+   screen: the title in its rule, the close key in the rule's other end. */
+html[data-skin="terminal"] .t-drawer {
+  width: min(560px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  overflow: visible;
+}
+
+html[data-skin="terminal"] .t-drawer[open] {
+  animation: t-modal-in var(--dur) var(--ease) both;
+}
+
+html[data-skin="terminal"] .t-drawer-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 32px);
+  margin-top: 0;
+}
+
+html[data-skin="terminal"] .t-drawer-close {
+  padding: 0;
+}
+
+html[data-skin="terminal"] .t-drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 16px 16px;
+}
+
+html[data-skin="terminal"] .t-drawer-desc {
+  margin: 0 0 16px;
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-drawer-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--rule);
+}
+
+html[data-skin="terminal"] .t-drawer-foot p {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
+@media (max-width: 599px) {
+  html[data-skin="terminal"] .t-modal,
+  html[data-skin="terminal"] .t-drawer {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+
+  html[data-skin="terminal"] .t-drawer-panel {
+    max-height: calc(100dvh - 16px);
+  }
+}
+
+/* --- forms and settings ----------------------------------------------------------------------- */
+
+html[data-skin="terminal"] .t-form {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-settings {
+  display: grid;
+  gap: 20px;
+}
+
+html[data-skin="terminal"] .t-setting {
+  display: grid;
+  gap: 8px;
+}
+
+html[data-skin="terminal"] .t-setting-note {
+  max-width: 72ch;
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+html[data-skin="terminal"] .t-accent-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+html[data-skin="terminal"] .t-accent-row .t-field {
+  width: 160px;
+}
+
+/* The native colour input is a system dialog in the browser's chrome; the
+   well is what makes it look like the rest of the screen. */
+html[data-skin="terminal"] .t-accent-well {
+  position: relative;
+  display: block;
+  flex: none;
+  width: var(--t-field);
+  height: var(--t-field);
+  overflow: hidden;
+  border: 1px solid var(--outline-strong);
+}
+
+html[data-skin="terminal"] .t-accent-well input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+}
+
+html[data-skin="terminal"] .t-accent-well input::-webkit-color-swatch-wrapper { padding: 0; }
+html[data-skin="terminal"] .t-accent-well input::-webkit-color-swatch { border: 0; }
+html[data-skin="terminal"] .t-accent-well input::-moz-color-swatch { border: 0; }
+
+html[data-skin="terminal"] .t-accent-well:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+html[data-skin="terminal"] .t-invite-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px 16px;
+}
+
+html[data-skin="terminal"] .t-invite-form .t-field,
+html[data-skin="terminal"] .t-invite-form .t-copy-line {
+  grid-column: 1;
+}
+
+html[data-skin="terminal"] .t-invite-form .t-invite-verb {
+  grid-column: 2;
+  height: var(--t-field);
+  /* Level with the field, under its label. */
+  margin-top: 22px;
+}
+
+html[data-skin="terminal"] .t-invite-link {
+  display: grid;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--rule);
+}
+
+html[data-skin="terminal"] .t-invite-link p {
+  margin: 0;
+  font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-invite-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+html[data-skin="terminal"] .t-invite-link-row .t-verb {
+  height: var(--t-field);
+}
+
+html[data-skin="terminal"] .t-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--outline);
+}
+
+html[data-skin="terminal"] .t-filter-row .t-field {
+  flex: 1 1 24ch;
+}
+
+html[data-skin="terminal"] .t-filter-count {
+  color: var(--ink-secondary);
+  font-size: 12px;
+}
+
+html[data-skin="terminal"] .t-steps {
+  margin: 0;
+  padding: 0 16px 16px 40px;
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-steps li + li {
+  margin-top: 4px;
+}
+
+html[data-skin="terminal"] .t-delivery {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+html[data-skin="terminal"] .t-release-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+html[data-skin="terminal"] .t-scope-list {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+html[data-skin="terminal"] .t-scope-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+html[data-skin="terminal"] .t-scope-row:hover {
+  background: var(--surface-hover);
+}
+
+html[data-skin="terminal"] .t-scope-row[aria-selected="true"] {
+  border-color: var(--primary-ink);
+}
+
+html[data-skin="terminal"] .t-scope-code {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 28px;
+  border: 1px solid var(--rule);
+  color: var(--ink-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@media (max-width: 599px) {
+  html[data-skin="terminal"] .t-invite-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html[data-skin="terminal"] .t-invite-form .t-invite-verb {
+    grid-column: 1;
+    margin-top: 0;
+  }
+
+  html[data-skin="terminal"] .t-invite-link-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html[data-skin="terminal"] .t-history-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+}
+
+/* --- the host: a scene in glyphs, its state beside it ---------------------------------- */
+
+html[data-skin="terminal"] .t-host-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px 32px;
+  align-items: start;
+}
+
+/* The scene is the one dark object in the light: in the light theme it keeps
+   the terminal's ground, in the dark theme it is the ground. */
+html[data-skin="terminal"] .scene {
+  margin: 0;
+  padding: 8px 1ch;
+  background: var(--term-bg);
+  color: var(--term-blue);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 14px;
+  letter-spacing: 0;
+  user-select: none;
+}
+
+html[data-skin="terminal"] .scene-stopped,
+html[data-skin="terminal"] .scene-unknown {
+  color: var(--term-muted);
+}
+
+html[data-skin="terminal"] .t-host-state {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-host-wait {
+  align-self: center;
+}
+
+html[data-skin="terminal"] .t-host-line {
+  margin: 0;
+  color: var(--ink-secondary);
+}
+
+html[data-skin="terminal"] .t-host-line strong {
+  color: var(--ink);
+}
+
+html[data-skin="terminal"] .t-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 24px;
+  margin: 8px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--outline);
+}
+
+html[data-skin="terminal"] .t-fact {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-fact dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+html[data-skin="terminal"] .t-fact dd small {
+  display: block;
+  margin-top: 2px;
+}
+
+html[data-skin="terminal"] .t-fact .t-state > span:last-child {
+  text-wrap: balance;
+}
+
+@media (max-width: 839px) {
+  html[data-skin="terminal"] .t-host-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html[data-skin="terminal"] .scene {
+    justify-self: start;
+  }
+}
+
+/* --- metrics: the status page's line in a well ---------------------------------------------- */
+
+html[data-skin="terminal"] .t-chart {
+  display: grid;
+  gap: 8px;
+}
+
+html[data-skin="terminal"] .t-chart-well {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: 120px;
+  border: 1px solid var(--outline);
+  background: var(--surface-variant);
+}
+
+html[data-skin="terminal"] .t-chart-line {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+html[data-skin="terminal"] .t-chart-area {
+  fill: color-mix(in srgb, var(--primary) 10%, transparent);
+  stroke: none;
+}
+
+html[data-skin="terminal"] .t-chart-caption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+html[data-skin="terminal"] .t-chart-caption strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-chart-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+html[data-skin="terminal"] .t-chart-caption-slot {
+  display: block;
+  height: 16px;
+}
+
+/* --- the console: a terminal inside the terminal -------------------------------------------- */
+
+html[data-skin="terminal"] .t-rcon {
+  display: flex;
+  flex-direction: column;
+  min-height: clamp(360px, 62vh, 760px);
+  overflow: hidden;
+  border: 1px solid var(--term-outline);
+  background: var(--term-bg);
+  color: var(--term-ink);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+html[data-skin="terminal"] .t-rcon-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 2ch;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--term-outline);
+  background: var(--term-header);
+}
+
+html[data-skin="terminal"] .t-rcon-head .t-state {
+  color: var(--term-muted);
+}
+
+/* Marks on the terminal's dark ground take the terminal's own inks. */
+html[data-skin="terminal"] .t-rcon-head .t-mark { color: var(--term-muted); }
+html[data-skin="terminal"] .t-rcon-head .t-mark-ok { color: var(--term-green); }
+html[data-skin="terminal"] .t-rcon-head .t-mark-progress::before { color: var(--term-blue); }
+
+html[data-skin="terminal"] .t-rcon-log {
+  flex: 1;
+  padding: 16px 20px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+html[data-skin="terminal"] .t-rcon-line {
+  display: block;
+}
+
+html[data-skin="terminal"] .t-rcon-muted { color: var(--term-muted); }
+html[data-skin="terminal"] .t-rcon-blue { color: var(--term-blue); }
+html[data-skin="terminal"] .t-rcon-amber { color: var(--term-amber); }
+html[data-skin="terminal"] .t-rcon-prompt { color: var(--term-prompt); }
+
+html[data-skin="terminal"] .t-rcon-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 16px;
+  vertical-align: text-bottom;
+  background: var(--term-ink);
+  animation: t-blink 1.1s steps(2, jump-none) infinite;
+}
+
+@keyframes t-blink {
+  to { opacity: 0; }
+}
+
+html[data-skin="terminal"] .t-rcon-input {
+  display: flex;
+  align-items: center;
+  gap: 1ch;
+  padding: 12px 20px;
+  border-top: 1px solid var(--term-outline);
+  background: var(--term-header);
+}
+
+html[data-skin="terminal"] .t-rcon-input input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--term-ink);
+  font: inherit;
+}
+
+html[data-skin="terminal"] .t-rcon-input input::placeholder {
+  color: var(--term-muted);
+}
+
+html[data-skin="terminal"] .t-rcon-input .t-verb {
+  color: var(--term-muted);
+}
+
+html[data-skin="terminal"] .t-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* --- boot: the same box as any panel, before there is a shell around it ----------------- */
+
+html[data-skin="terminal"] .t-boot {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: var(--t-gutter);
+  background: var(--canvas);
+}
+
+html[data-skin="terminal"] .t-boot-panel {
+  width: min(520px, 100%);
+}
+
+html[data-skin="terminal"] .t-boot-body {
+  gap: 12px;
+  padding-top: 20px;
+}
+
+html[data-skin="terminal"] .t-boot-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 1ch;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+html[data-skin="terminal"] .t-boot-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 28px;
+}
+
+html[data-skin="terminal"] .t-boot-body p {
+  max-width: 48ch;
+  margin: 0;
+  color: var(--ink-secondary);
+}
+
+/* The console's indeterminate bar, drawn the way a terminal draws one: a
+   block sweeping a bracketed track that runs the width of the panel. */
+html[data-skin="terminal"] .t-track {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 20px;
+  padding: 0 1.2ch;
+  background: linear-gradient(var(--primary-ink), var(--primary-ink)) no-repeat content-box;
+  background-size: 24% 6px;
+  background-position: 0% 50%;
+  color: var(--primary-ink);
+  font-weight: 700;
+  animation: t-sweep 1.6s steps(16, end) infinite;
+}
+
+html[data-skin="terminal"] .t-track::before {
+  content: "[";
+  margin-left: -1.2ch;
+}
+
+html[data-skin="terminal"] .t-track::after {
+  content: "]";
+  margin-right: -1.2ch;
+}
+
+@keyframes t-sweep {
+  from { background-position-x: 0%; }
+  to { background-position-x: 100%; }
+}
+
+/* --- app chrome outside the skin: the snackbar and the tooltip keep the face ------------ */
+
+html[data-skin="terminal"] .snackbar {
+  border-radius: 0;
+  box-shadow: none;
+  font-family: var(--font-ui);
+}
+
+html[data-skin="terminal"] .snackbar p::before {
+  content: ">> ";
+  font-weight: 700;
+}
+
+html[data-skin="terminal"] .tip {
+  border-radius: 0;
+  font-family: var(--font-ui);
+}
+
+/* The two provider widgets keep their own look; the wrapper only sizes them. */
+html[data-skin="terminal"] .t-provider {
+  font-family: var(--font-ui);
+}
+
+/* --- motion ------------------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin="terminal"] .t-main > .t-page,
+  html[data-skin="terminal"] .t-modal[open],
+  html[data-skin="terminal"] .t-drawer[open],
+  html[data-skin="terminal"] .t-modal::backdrop,
+  html[data-skin="terminal"] .t-drawer::backdrop,
+  html[data-skin="terminal"] .t-mark-progress::before,
+  html[data-skin="terminal"] .t-track,
+  html[data-skin="terminal"] .t-rcon-cursor {
+    animation: none;
+  }
+}

@@ -162,7 +162,7 @@ function Invitations({ model }: Readonly<{ model: InvitationsModel }>) {
         <ActionButton action={model.issued.copy} variant="outlined" />
       </div>}
       {list.status === "error" && <Banner actions={<ActionButton action={list.retry} variant="text" />} description={list.error} title="Invitations could not be loaded" tone="error" />}
-      {list.status === "loading" && <p>Loading invitations…</p>}
+      {list.status === "loading" && <p className="loading-line" role="status">Loading invitations…</p>}
       {list.status === "ready" && list.value.length === 0 && <EmptyState description="Create a link to let someone join with their preferred sign-in method." icon="person_add" title="No invitations yet" />}
       {list.status === "ready" && list.value.length > 0 && <div className="access-invite-list">
         <h3>Recent invitations</h3>

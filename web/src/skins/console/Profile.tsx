@@ -10,7 +10,7 @@ import { TextField } from "../../components/ui/Fields";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useSnackbar } from "../../components/ui/Snackbar";
 import { Banner, Card, EmptyState, PageHeader } from "../../components/ui/Surfaces";
-import type { AppearanceModel, LoginAccountsModel, ProfileModel } from "../../core/models";
+import type { AppearanceModel, LoginAccountsModel, LookModel, ProfileModel } from "../../core/models";
 import { Icon, type IconName } from "../../icons";
 import { PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../../lib/signin";
 import { deriveAccent, DEFAULT_ACCENT, parseHex } from "../../styles/accent";
@@ -31,7 +31,7 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
         subtitle={viewer.username ? `@${viewer.username}` : viewer.email ?? "Spawnpoint identity"}
         title={member.name}
       />
-      <Appearance model={model.appearance} />
+      <Appearance look={model.look} model={model.appearance} />
       <LoginAccounts model={model.loginAccounts} />
     </div>
   );
@@ -44,18 +44,8 @@ const THEMES: readonly { id: ThemePreference; label: string; icon: IconName }[] 
 ];
 
 /** A starting point, not a limit: the field below takes any colour. */
-const SUGGESTED: readonly { name: string; colour: string }[] = [
-  { name: "Blue", colour: "#1a73e8" },
-  { name: "Green", colour: "#1e8e3e" },
-  { name: "Purple", colour: "#8430ce" },
-  { name: "Red", colour: "#d93025" },
-  { name: "Orange", colour: "#e8710a" },
-  { name: "Teal", colour: "#00838f" },
-  { name: "Pink", colour: "#c2185b" },
-  { name: "Grey", colour: "#5f5f5f" },
-];
 
-function Appearance({ model }: Readonly<{ model: AppearanceModel }>) {
+function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: LookModel }>) {
   const notify = useSnackbar();
   const [draft, setDraft] = useState(model.accent);
   // What the panel would actually paint, so the note below describes the
@@ -92,19 +82,24 @@ function Appearance({ model }: Readonly<{ model: AppearanceModel }>) {
           </fieldset>
         </div>
         <div className="appearance-group">
+          <span className="appearance-label" id="appearance-look">Look</span>
+          <fieldset aria-labelledby="appearance-look" className="chip-row fieldset-plain">
+            {look.options.map((option) => (
+              <ChoiceChip data-action={option.choose.id} key={option.id} onClick={option.choose.run} pressed={option.id === look.current} title={option.choose.hint}>{option.name}</ChoiceChip>
+            ))}
+          </fieldset>
+          <p className="appearance-note">Remembered on this device; theme and accent follow your identity.</p>
+        </div>
+
+        <div className="appearance-group">
           <span className="appearance-label" id="appearance-accent">Accent</span>
           <fieldset aria-labelledby="appearance-accent" className="accent-row fieldset-plain">
             <label className="accent-well">
               <input aria-label="Pick an accent colour" onChange={(event) => commitAccent(event.target.value)} type="color" value={parseHex(draft) ? draft : model.accent} />
             </label>
-            <TextField hint={valid ? undefined : "Six hex digits, for example #1a73e8."} label="Hex" mono onChange={(event) => commitAccent(event.target.value)} spellCheck={false} value={draft} />
+            <TextField hideLabel hint={valid ? undefined : "Six hex digits, for example #1a73e8."} label="Accent colour, hex" mono onChange={(event) => commitAccent(event.target.value)} spellCheck={false} value={draft} />
             <Button disabled={model.accent === DEFAULT_ACCENT} icon="restore" onClick={() => { setDraft(DEFAULT_ACCENT); save({ accent: DEFAULT_ACCENT }); }} variant="text">Reset</Button>
           </fieldset>
-          <div className="swatches">
-            {SUGGESTED.map(({ name, colour }) => (
-              <button aria-label={`${name} ${colour}`} aria-pressed={model.accent === colour} className="swatch" key={colour} onClick={() => { setDraft(colour); save({ accent: colour }); }} style={{ background: colour }} type="button" />
-            ))}
-          </div>
           {/* A picked colour is a hue, not a contrast ratio. When the two
               disagree the panel keeps the hue and moves the lightness, and
               says so rather than quietly painting something else. */}
@@ -147,7 +142,7 @@ function LoginAccounts({ model }: Readonly<{ model: LoginAccountsModel }>) {
       description="Every method belongs to the same Spawnpoint identity. None becomes primary because it was added first."
       title="Sign-in methods"
     >
-      {accounts.status === "loading" && <div aria-label="Loading sign-in methods" className="account-loading"><Skeleton height={56} /><Skeleton height={56} /></div>}
+      {accounts.status === "loading" && <div aria-busy="true" className="account-loading" data-loading="Loading sign-in methods" role="status"><span className="visually-hidden">Loading sign-in methods</span><Skeleton height={56} /><Skeleton height={56} /></div>}
       {accounts.status === "error" && <Banner actions={<ActionButton action={accounts.retry} size="small" variant="outlined" />} description={accounts.error} title="Sign-in methods are unavailable" tone="error" />}
       {accounts.status === "ready" && accounts.value.length === 0 && <EmptyState description="This identity has no linked login method the current API can report." icon="link" title="No sign-in methods" />}
       {accounts.status === "ready" && accounts.value.length > 0 && (

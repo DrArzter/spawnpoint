@@ -2,7 +2,7 @@
 
 Drives the running console in headless Chrome and probes the live DOM, instead of asking a person to look at every
 screen at every width. It opens each route at fifteen viewports from 360px to 3840px, both sides of every step in `web/DESIGN.md`, in demo mode so the pages carry
-real records, and reports what the design system can be checked against mechanically:
+real records (`latency=0`, so the demo answers at once and the probe lands on the page, not the boot card), and reports what the design system can be checked against mechanically:
 
 | Check | What counts as a finding |
 |---|---|
@@ -22,6 +22,7 @@ Run it against a dev server or a preview deployment:
 npm run dev                      # in one terminal
 npm run audit:ui                 # light theme, writes audit-light.json
 npm run audit:ui -- http://localhost:5173 audit-dark.json dark
+SKIN=terminal npm run audit:ui       # another face; the console is worn when SKIN is unset
 node tools/ui-audit/summarise.mjs light
 node tools/ui-audit/summarise.mjs dark
 ```

@@ -64,6 +64,15 @@
   font-size: 13px;
 }
 
+/* The line under a fact: which host, for the state above it. */
+.fact dd small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
 @media (max-width: 959px) {
   .session-card {
     grid-template-columns: minmax(0, 1fr);
@@ -760,24 +769,6 @@
 .accent-well input::-moz-color-swatch { border: 0; border-radius: 0; }
 
 .accent-well:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
-
-.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
-
-.swatch {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--outline);
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.swatch[aria-pressed="true"] {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
-}
-
-.swatch:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 .appearance-note {
   max-width: 72ch;

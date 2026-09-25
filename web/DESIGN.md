@@ -101,6 +101,18 @@ typography:
     fontWeight: 400
     lineHeight: "16px"
     fontFeature: "tabular-nums"
+  terminal-title:
+    fontFamily: "B612 Mono, ui-monospace, SF Mono, Menlo, Consolas, monospace"
+    fontSize: "18px"
+    fontWeight: 700
+    lineHeight: "24px"
+  terminal-label:
+    fontFamily: "B612 Mono, ui-monospace, SF Mono, Menlo, Consolas, monospace"
+    fontSize: "12px"
+    fontWeight: 700
+    lineHeight: "20px"
+    letterSpacing: "0.08em"
+    textTransform: "uppercase"
 rounded:
   indicator: "2px"
   tab-indicator: "3px"
@@ -355,6 +367,72 @@ is plainly there.
 
 Which of the three applies is not a judgement made in the screen. `unavailable` from the transport means not connected;
 anything else that yields no rows is an empty state. See [ADR-0053](../docs/adr/0053-tell-not-built-apart-from-broken.md).
+
+## Skins
+
+Since [ADR-0059](../docs/adr/0059-separate-the-console-into-bones-and-skins.md) everything above describes one skin,
+`console`, the default face. A skin is a set of views over the same models; it may not change what a page offers,
+only how it is drawn. Every skin keeps the colour roles in this file: the owner wants the palette recognisable across
+their projects, so a skin changes type, shape, motion and chrome, never the hue of a status or the blue of an action.
+The front door and sign-in are outside the skin and always wear the console face. The boot screens wear the remembered
+skin from the first frame: `index.html` stamps `html[data-skin]` from `spawnpoint.skin` (or `?skin=`) before anything
+is painted and asks for the skin's font, `main.tsx` paints the remembered accent and theme before the first render, and
+`App` confirms or removes the stamp for the surface it shows (`wearOnDocument`).
+
+### Terminal
+
+`skins/terminal` draws the console as one monospace screen: a top row, a menu row, then the grid, every row the full
+width on a phone as on a 4K monitor. Every view is the face's own, built from its own vocabulary in `ui.tsx` (panel,
+verb, mark and state, table, tabs, field, toggle, details, overflow, modal, drawer) and styled only by `terminal.css`
+in its own `t-*` classes; the console's components and stylesheet play no part in it. The rules apply while the
+document carries `html[data-skin="terminal"]`, which `index.html` stamps before the first paint and `App` keeps true.
+
+- **One face.** B612 Mono for everything, loaded on demand when the skin mounts. Two weights, 400 and 700, and
+  inversion carry emphasis; whatever the console sets to medium is bold here. Lines sit on the 4px grid: 16px under
+  12px type (labels, column headings, small print), 20px under 13px and 14px (everything read), 24px under the 18px
+  page title, 28px under the 22px host headline. A panel's name sits in its top rule as a tracked uppercase label.
+- **No radius, no shadow.** Every corner is square and every surface is flat. Boxes are drawn with `--rule`, one step
+  darker than the hairline, so they read as box-drawing lines rather than card borders. Menus are boxed the same way.
+  A question and a form open in the same box in the middle of the screen, its title in the rule and, for a form, the
+  close key at the rule's other end; nothing docks to an edge of the screen.
+- **A mark and a word.** Status is a bracketed mark in front of its label, never colour alone: `[*]` ok, `[>]` ready,
+  `[-]` off, `[.]` pending, `[?]` unknown, `[!]` error and warning, `[i]` info, `[x]` archived, `[+]` absent. Progress
+  is the one mark that moves: `[~]` spinning through `|`, `/`, `-` and `\`, held on the tilde under reduced motion.
+  Notices carry the same marks in front of their titles.
+- **Bracketed controls.** A button is its label between `[` and `]`, and nothing is filled: the primary verb keeps
+  the accent in its word and its brackets where a secondary verb's brackets are dim, the danger verb says so in red,
+  and hover is an underline. One of several is a radio drawn in glyphs, `(o)` for the chosen and `( )` for the rest,
+  in the theme and look pickers, the metrics window and the backup filter alike; a switch is `[x]` or `[ ]`. Tabs
+  are cells on a rule; the selected one is inverted, as the menu row's current page is.
+- **From the left.** Nothing floats to the far edge of a line. A page head is two lines, what the page is and then
+  what can be done to it, the verb that matters first. A named panel's verbs sit in its top rule at the right, as its
+  name sits at the left, and step down to a line under the name where the two would meet (under 700px). A verb row
+  starts at the left wherever it is, in a box's foot, under a form, in a record; only a table's verb column keeps
+  its right edge. A details list gives its labels a column as wide as the longest of them and no wider, so a value
+  starts right after its name, and puts the label above the value where the box is narrower than 480px. A value and
+  its copy key are one unit that never breaks across lines. On a phone a table is a stack of records, each cell one
+  line with its label as a dim word before the value and the verbs on the last line.
+- **The host scene.** The first screen draws the scoped game's icon in a glyph ramp (`" .:-=+*#%@"`) on a dark cell,
+  40×18 cells, 24×11 on a phone. `HostScene` is the adapter: it takes a painter's grid of brightness per cell, sets the
+  exposure from the session state and keeps time. `GameIcon` picks the painter: the Spawnpoint mark and the Minecraft
+  cube are sampled grids (`marks.json`) that keep still and breathe; the Factorio gear and the Zomboid zombie are drawn
+  by `raster.ts` from shapes and move through their phase while the host is online, the gear turning, the zombie
+  walking across and coming back in. Starting and stopping show the picture at rest under one brighter scanline;
+  stopped is sparse and still. Reduced motion stops the tick.
+- **Metrics as the status page draws them.** One series is one 120px well with its line in the accent and the area
+  under it filled at a tenth of it, no axes and no grid; a caption under the well names the series and its peak, and
+  the window is stated once under all of them. A gap in the readings is a gap in the line, never a line to zero.
+- **Placeholders.** A terminal draws nothing for what has not arrived. Every region still loading says so in one
+  line in the middle of its box, with the spinning mark, as the boot does (`[~] Reading CloudWatch`,
+  `[~] Loading worlds of Minecraft`, `[~] Loading sign-in methods`); the shapes the console waits with, skeleton
+  rows and bars, are not drawn at all. The metrics wells wait at their own height so nothing moves when the numbers
+  land. No shimmer, no texture, no slots.
+- **Spacing.** The page gutter and the gap between panels are the console's (24px, 16px on a phone); a named panel
+  keeps 10px more above it for the name on its rule, 20px when its verbs sit there too, an unnamed one does not. Cells are 16px in from the rule, 12px at
+  the medium step so the worlds table fits a tablet in the wider face. Under a coarse pointer the frame's controls
+  (scope, avatar, menu words) are 36px tall inside their 40px rows and a chip is 32px.
+- **What it does not do.** It never restyles the front door or sign-in, never introduces a new colour, and never hides
+  an action the model offers; the contract test holds it to the same list as the console face.
 
 ## Do's and Don'ts
 

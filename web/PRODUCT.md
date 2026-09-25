@@ -36,7 +36,7 @@ The panel is opened from Telegram on a phone and as a persistent browser tab on 
 
 ## Brand Commitments
 
-The product name is Spawnpoint. Its established voice is direct, operational and calm. Standing visual preference recorded by the owner on 2026-09-12: the panel is built in the Google Cloud console grammar, played straight at that console's craft level: an app bar with a scope picker, a navigation drawer, resource lists that open into resource pages, Material status iconography and data tables. Spawnpoint stays recognisable through its mark, its names and its game-specific content, not through invented chrome. AWS chrome is not a reference.
+The product name is Spawnpoint. Its established voice is direct, operational and calm. Standing visual preference recorded by the owner on 2026-09-12: the panel is built in the Google Cloud console grammar, played straight at that console's craft level: an app bar with a scope picker, a navigation drawer, resource lists that open into resource pages, Material status iconography and data tables. Spawnpoint stays recognisable through its mark, its names and its game-specific content, not through invented chrome. AWS chrome is not a reference. Since 2026-09-23 that grammar is the default skin (`console`) rather than the whole panel: a second skin, `terminal`, draws the same models as one monospace screen. Every skin keeps the same colour roles, because the owner wants the palette recognisable across their projects (recorded 2026-09-23).
 
 ## Evidence on Hand
 

@@ -120,7 +120,9 @@ export type DetailValue =
   | Readonly<{ type: "time"; at: string | number | null | undefined }>
   | Readonly<{ type: "number"; value: number }>
   | Readonly<{ type: "release"; active: string | null; desired: string | null }>
-  | Readonly<{ type: "address"; address: AddressFacts }>;
+  | Readonly<{ type: "address"; address: AddressFacts }>
+  /** A preset's name and, when it was built from Git, the commit it came from. */
+  | Readonly<{ type: "preset"; name: string; source: Readonly<{ commit: string; short: string; href: string }> | null }>;
 
 export type Detail = Readonly<{
   label: string;
@@ -292,11 +294,18 @@ export type LoginAccountsModel = Readonly<{
   rowActions: (account: LinkedLoginAccount) => readonly Action[];
 }>;
 
+/** Which face the console wears; choosing one reloads the page in it. */
+export type LookModel = Readonly<{
+  current: string;
+  options: readonly Readonly<{ id: string; name: string; choose: Action }>[];
+}>;
+
 export type ProfileModel = Readonly<{
   member: Member;
   role: Role | undefined;
   viewer: ViewerProfile;
   appearance: AppearanceModel;
+  look: LookModel;
   signOut: Action;
   openInBrowser: Action | null;
   loginAccounts: LoginAccountsModel;

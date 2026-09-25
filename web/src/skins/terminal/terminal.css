@@ -895,9 +895,44 @@ html[data-skin="terminal"] .table-loading {
   display: table-row;
 }
 
+/* The cell prints its own words from the attribute the table put there; the
+   hidden span underneath stays hidden and is read aloud as before. */
 html[data-skin="terminal"] .table-loading td {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1ch;
   height: 120px;
+  padding: 16px;
+  color: var(--ink-secondary);
+  font-size: 13px;
+  line-height: 20px;
   text-align: center;
+}
+
+html[data-skin="terminal"] .table-loading td::before {
+  content: "[~]";
+  color: var(--primary-ink);
+  font-weight: 700;
+  animation: tspin 800ms steps(1, end) infinite;
+}
+
+html[data-skin="terminal"] .table-loading td::after {
+  content: attr(data-loading);
+}
+
+/* On a phone the table is a stack of blocks, and so is this row. */
+@container (max-width: 599px) {
+  html[data-skin="terminal"] .table-loading {
+    display: block;
+  }
+}
+
+/* The invite field is 40px; the verb beside it is the same, so the two
+   share a middle. */
+html[data-skin="terminal"] .access-invite-form .btn,
+html[data-skin="terminal"] .access-invite-link .btn {
+  height: 40px;
 }
 
 html[data-skin="terminal"] .skeleton-rows,
@@ -911,7 +946,6 @@ html[data-skin="terminal"] .account-loading {
 }
 
 /* The label a loading region carries for a reader is the line it shows. */
-html[data-skin="terminal"] .table-loading .visually-hidden,
 html[data-skin="terminal"] .skeleton-rows > .visually-hidden,
 html[data-skin="terminal"] .account-loading > .visually-hidden {
   position: static;
@@ -928,7 +962,6 @@ html[data-skin="terminal"] .account-loading > .visually-hidden {
   text-align: center;
 }
 
-html[data-skin="terminal"] .table-loading .visually-hidden::before,
 html[data-skin="terminal"] .skeleton-rows > .visually-hidden::before,
 html[data-skin="terminal"] .account-loading > .visually-hidden::before {
   content: "[~]";
@@ -1282,7 +1315,7 @@ html[data-skin="terminal"] .thost-facts .status > span {
 
   html[data-skin="terminal"] .status-progress::before,
   html[data-skin="terminal"] .boot-progress,
-  html[data-skin="terminal"] .table-loading .visually-hidden::before,
+  html[data-skin="terminal"] .table-loading td::before,
   html[data-skin="terminal"] .skeleton-rows > .visually-hidden::before,
   html[data-skin="terminal"] .account-loading > .visually-hidden::before,
   html[data-skin="terminal"] .loading-line::before {

@@ -294,6 +294,8 @@ export type Col<Row> = Readonly<{
   /** The column of a row's verbs: no heading, packed against the end. */
   verbs?: boolean;
   secondary?: boolean;
+  /** Worth reading, not worth the row scrolling: dropped at the medium step. */
+  optional?: boolean;
 }>;
 
 function lowerFirst(text: string): string {
@@ -315,14 +317,14 @@ export function Table<Row>({ columns, rows, rowKey, label, loading = false, load
     <div className={cx("t-table-wrap", className)}>
       <table aria-busy={loading || undefined} aria-label={label} className={cx("t-table", headless && "t-table-headless")}>
         <thead className={headless ? "visually-hidden" : undefined}>
-          <tr>{columns.map((column) => <th className={cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col")} key={column.id} scope="col" style={column.width ? { width: column.width } : undefined}>{column.verbs ? <span className="visually-hidden">{column.label}</span> : column.label}</th>)}</tr>
+          <tr>{columns.map((column) => <th className={cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col", column.optional && "t-optional")} key={column.id} scope="col" style={column.width ? { width: column.width } : undefined}>{column.verbs ? <span className="visually-hidden">{column.label}</span> : column.label}</th>)}</tr>
         </thead>
         <tbody>
           {loading && <tr className="t-table-state"><td colSpan={columns.length}><Wait label={loadingLabel ?? `Loading ${lowerFirst(label)}`} /></td></tr>}
           {!loading && rows.length === 0 && <tr className="t-table-state"><td colSpan={columns.length}>{empty}</td></tr>}
           {!loading && rows.map((row) => (
             <tr key={rowKey(row)}>
-              {columns.map((column) => <td className={cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col", column.secondary && "t-secondary")} data-label={column.verbs ? "" : column.label} key={column.id}>{column.render(row)}</td>)}
+              {columns.map((column) => <td className={cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col", column.secondary && "t-secondary", column.optional && "t-optional")} data-label={column.verbs ? "" : column.label} key={column.id}>{column.render(row)}</td>)}
             </tr>
           ))}
         </tbody>

@@ -613,7 +613,26 @@ html[data-skin="terminal"] .t-verb-icon-only {
 
 html[data-skin="terminal"] .t-verb-bare {
   height: auto;
+  min-height: 24px;
   padding: 0;
+}
+
+/* Text that is a target reaches the floor a pointer needs. */
+html[data-skin="terminal"] .t-row-link,
+html[data-skin="terminal"] .t-source,
+html[data-skin="terminal"] .t-crumb {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
+
+@media (pointer: coarse) {
+  html[data-skin="terminal"] .t-verb-bare,
+  html[data-skin="terminal"] .t-row-link,
+  html[data-skin="terminal"] .t-source,
+  html[data-skin="terminal"] .t-crumb {
+    min-height: 32px;
+  }
 }
 
 html[data-skin="terminal"] .t-verbs {
@@ -1080,11 +1099,21 @@ html[data-skin="terminal"] .t-table-state:hover td {
   background: none;
 }
 
+/* A monospace face is wider than Roboto; at the medium step the cells give
+   up half their side padding so a full row still fits a tablet. */
 @media (max-width: 839px) {
   html[data-skin="terminal"] .t-table th,
   html[data-skin="terminal"] .t-table td {
-    padding-left: 12px;
-    padding-right: 12px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}
+
+/* Between a phone and a desk a table is still a table but a narrow one: a
+   column worth reading but not worth the row scrolling steps out. */
+@container (min-width: 600px) and (max-width: 839px) {
+  html[data-skin="terminal"] .t-table .t-optional {
+    display: none;
   }
 }
 
@@ -2015,6 +2044,11 @@ html[data-skin="terminal"] .t-rcon-head {
 html[data-skin="terminal"] .t-rcon-head .t-state {
   color: var(--term-muted);
 }
+
+/* Marks on the terminal's dark ground take the terminal's own inks. */
+html[data-skin="terminal"] .t-rcon-head .t-mark { color: var(--term-muted); }
+html[data-skin="terminal"] .t-rcon-head .t-mark-ok { color: var(--term-green); }
+html[data-skin="terminal"] .t-rcon-head .t-mark-progress::before { color: var(--term-blue); }
 
 html[data-skin="terminal"] .t-rcon-log {
   flex: 1;

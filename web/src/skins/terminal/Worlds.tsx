@@ -63,6 +63,7 @@ export const worldColumns: readonly Col<WorldRow>[] = [
     id: "wipe",
     label: "Wipe",
     width: "20%",
+    optional: true,
     render: (row) => row.wipe
       ? <span className="t-stack" title="A wipe is one generation of this world. Starting a new one keeps every backup of the old one."><strong>#{row.wipe.number}</strong><small>Opened {row.wipe.openedAt}</small></span>
       : <Ghost>{row.wipeAbsent}</Ghost>,

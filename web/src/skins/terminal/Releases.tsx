@@ -15,6 +15,7 @@ export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
       id: "releases",
       label: "Releases",
       secondary: true,
+      optional: true,
       width: "22%",
       render: ({ preset }) => {
         if (preset.releases.length === 0) return <Ghost>No releases built</Ghost>;

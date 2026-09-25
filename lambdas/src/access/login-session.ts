@@ -3,6 +3,7 @@ import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 export const accessTokenLifetimeSeconds = 15 * 60;
 export const refreshSessionLifetimeSeconds = 30 * 24 * 60 * 60;
 export const refreshCookieName = "spawnpoint.refresh";
+export const browserSessionCookieName = "__Host-spawnpoint.session";
 
 // What a provider vouches for. `username` is the handle on that provider and
 // `email` the address it verified or was given; either may be absent, and
@@ -126,4 +127,17 @@ export function refreshCookie(token: string, sameSite: "Strict" | "None"): strin
 
 export function expiredRefreshCookie(sameSite: "Strict" | "None"): string {
   return `${refreshCookieName}=; Path=/auth; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`;
+}
+
+export function browserSessionCookie(token: string, sameSite: "Strict" | "None"): string {
+  return `${browserSessionCookieName}=${token}; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=${refreshSessionLifetimeSeconds}`;
+}
+
+export function expiredBrowserSessionCookie(sameSite: "Strict" | "None"): string {
+  return `${browserSessionCookieName}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`;
+}
+
+export function trustedCookieRequest(method: string, hasCookie: boolean, origin: string | undefined, allowedOrigins: readonly string[]): boolean {
+  if (method === "GET" || method === "HEAD" || !hasCookie) return true;
+  return origin !== undefined && allowedOrigins.includes(origin);
 }

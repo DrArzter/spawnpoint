@@ -382,8 +382,10 @@ is painted and asks for the skin's font, `main.tsx` paints the remembered accent
 ### Terminal
 
 `skins/terminal` draws the console as one monospace screen: a top row, a menu row, then the grid, every row the full
-width on a phone as on a 4K monitor. It owns the frame and the first screen; the other pages are the console skin's
-views redrawn by `terminal.css`, which applies only while the terminal Shell is mounted (`html[data-skin="terminal"]`).
+width on a phone as on a 4K monitor. Every view is the face's own, built from its own vocabulary in `ui.tsx` (panel,
+verb, mark and state, table, tabs, field, toggle, details, overflow, modal, drawer) and styled only by `terminal.css`
+in its own `t-*` classes; the console's components and stylesheet play no part in it. The rules apply while the
+document carries `html[data-skin="terminal"]`, which `index.html` stamps before the first paint and `App` keeps true.
 
 - **One face.** B612 Mono for everything, loaded on demand when the skin mounts. Two weights, 400 and 700, and
   inversion carry emphasis; whatever the console sets to medium is bold here. Lines sit on the 4px grid: 16px under

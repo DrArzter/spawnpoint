@@ -43,8 +43,10 @@ no new dependency was added for it.
 ## Consequences
 
 - The Google Cloud console grammar recorded in PRODUCT.md is one skin, not the panel. The terminal skin
-  (`skins/terminal`) is the second: it owns the frame and the first screen, and redraws the console skin's other
-  views through its own stylesheet while its Shell is mounted.
+  (`skins/terminal`) is the second, and it is a whole face of its own: every view drawn from its own primitives and
+  styled by its own stylesheet, sharing with the console only the models, the behavioural hooks (filter, tooltip,
+  snackbar) and the provider sign-in widgets. A skin that restyled another skin's views was tried first and could not
+  be kept straight; a face is its own views or it is not a face.
 - A new verb goes into a model first, then into every skin; the contract test names the skin that forgot it.
 - Two skins are two sets of views to keep current. The seam makes that mechanical, not free.
 - The front door, sign-in, the boot card and the invitation and email-action screens are still shared views outside

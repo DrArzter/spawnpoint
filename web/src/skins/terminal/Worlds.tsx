@@ -1,86 +1,103 @@
 import type { ReactNode } from "react";
 
-import { DataTable } from "../../components/ui/DataTable";
-import { Status } from "../../components/ui/Status";
-import { Card, EmptyState, Ghost } from "../../components/ui/Surfaces";
 import { Timestamp } from "../../components/ui/Timestamp";
-import { Tooltip } from "../../components/ui/Tooltip";
-import type { SessionOverview, WorldsModel } from "../../core/models";
-import { Icon } from "../../icons";
+import type { Notice as NoticeModel, SessionOverview, WorldRow, WorldsModel } from "../../core/models";
 import { formatDateTime, plural } from "../../lib/format";
 import { useMediaQuery } from "../../shell/hooks";
-import { ActionButton } from "../console/actions";
-import { Notices, Worlds as ConsoleWorlds, worldColumns } from "../console/Worlds";
 import { GameIcon } from "./GameIcon";
+import { Address, Col, Empty, Ghost, Help, Notice, Overflow, Page, Panel, State, Table, Verb, Wait } from "./ui";
 
-// The first screen of the terminal: the host as the game's icon drawn in
-// glyphs with its state beside it, then every world of the scoped game as a row.
+// The first screen: the host as the game's icon drawn in glyphs with its
+// state beside it, then every world of the scoped game as a row.
 export function Worlds({ model }: Readonly<{ model: WorldsModel }>) {
   const loading = model.status === "loading";
   const narrow = useMediaQuery("(max-width: 599px)");
-  if (model.unavailable) return <ConsoleWorlds model={model} />;
   const title = model.game ? `Worlds of ${model.game.displayName}` : "Worlds";
+
+  if (model.unavailable) {
+    return (
+      <Page>
+        <h1 className="visually-hidden">Worlds</h1>
+        <Notices notices={model.notices} />
+        <Panel><Empty description={model.unavailable.description} title="No games to show" /></Panel>
+      </Page>
+    );
+  }
+
   return (
-    <div className="page">
+    <Page>
       <h1 className="visually-hidden">Worlds</h1>
       <Notices notices={model.notices} />
-      <section aria-labelledby="thost-title" className="card thost">
-        <header className="card-header"><div><h2 id="thost-title">Host</h2></div></header>
-        <div aria-busy={loading} className="card-body thost-body">
+      <Panel className="t-host" name="Host">
+        <div aria-busy={loading || undefined} className="t-host-body">
           <GameIcon game={model.game} size={narrow ? "24x11" : "40x18"} state={model.overview.state} />
-          <HostState loading={loading} overview={model.overview} />
+          {loading ? <Wait className="t-host-wait" label="Reading the host" /> : <HostState overview={model.overview} />}
         </div>
-      </section>
-      <Card
-        actions={<>
-          <ActionButton action={model.refresh} variant="outlined" />
-          {model.createWorld && <ActionButton action={model.createWorld} variant="filled" />}
-        </>}
+      </Panel>
+      <Panel
         flush
-        title={title}
+        name={title}
+        verbs={<>
+          <Verb action={model.refresh} />
+          {model.createWorld && <Verb action={model.createWorld} tone="primary" />}
+        </>}
       >
-        <DataTable
+        <Table
           columns={worldColumns}
-          empty={<EmptyState description={model.emptyDescription} icon="public" title="No worlds in this game" />}
+          empty={<Empty description={model.emptyDescription} title="No worlds in this game" />}
           label={title}
           loading={loading}
-          loadingRows={3}
           rowKey={(row) => row.world.id}
           rows={model.rows}
         />
-      </Card>
-    </div>
+      </Panel>
+    </Page>
   );
 }
 
-function HostState({ overview, loading }: Readonly<{ overview: SessionOverview; loading: boolean }>) {
+export const worldColumns: readonly Col<WorldRow>[] = [
+  { id: "status", label: "Status", width: "1%", render: (row) => <State kind={row.status.kind} label={row.status.label} /> },
+  { id: "name", label: "Name", width: "22%", render: (row) => <a className="t-row-link" href={row.href}>{row.world.displayName}</a> },
+  { id: "release", label: "Preset and release", width: "24%", render: (row) => <span className="t-stack"><strong>{row.presetName}</strong><small>{row.releaseSummary}</small></span> },
+  {
+    id: "wipe",
+    label: "Wipe",
+    width: "20%",
+    render: (row) => row.wipe
+      ? <span className="t-stack" title="A wipe is one generation of this world. Starting a new one keeps every backup of the old one."><strong>#{row.wipe.number}</strong><small>Opened {row.wipe.openedAt}</small></span>
+      : <Ghost>{row.wipeAbsent}</Ghost>,
+  },
+  { id: "address", label: "Address", render: (row) => row.address ? <Address connectivity={row.address.connectivity} copyLabel={`Copy the address of ${row.world.displayName}`} network={row.address.network} value={row.address.value} /> : <Ghost>{row.addressAbsent}</Ghost> },
+  { id: "verbs", label: "Actions", verbs: true, render: (row) => <Overflow groups={[row.actions]} label={`More actions for ${row.world.displayName}`} size="small" /> },
+];
+
+export function Notices({ notices }: Readonly<{ notices: readonly NoticeModel[] }>) {
+  return <>{notices.map((notice) => (
+    <Notice description={notice.description} key={notice.id} title={notice.title} tone={notice.tone} verbs={notice.action ? <Verb action={notice.action} size="small" /> : undefined} />
+  ))}</>;
+}
+
+function HostState({ overview }: Readonly<{ overview: SessionOverview }>) {
   const host = overview.host;
-  if (loading) {
-    return (
-      <div className="thost-state thost-waiting">
-        <Status kind="progress" label="Reading the host" />
-      </div>
-    );
-  }
   return (
-    <div className="thost-state">
-      <Status kind={overview.status.kind} label={overview.headline} size="large" />
-      <p className={overview.reason.attention ? "thost-line session-reason-attention" : "thost-line"}>
+    <div className="t-host-state">
+      <State kind={overview.status.kind} label={overview.headline} size="large" />
+      <p className={overview.reason.attention ? "t-host-line t-attention" : "t-host-line"}>
         {overview.reason.text}
-        {!overview.fleet && <Tooltip text={overview.reason.detail}><Icon name="help" size={14} /></Tooltip>}
+        {!overview.fleet && <Help text={overview.reason.detail} />}
       </p>
-      <p className="thost-line">
+      <p className="t-host-line">
         {overview.players !== null && <span><strong>{plural(overview.players, "player")}</strong> online · </span>}
         <span>observed <strong>{formatDateTime(overview.observedAt)}</strong></span>
       </p>
-      <dl className="session-facts thost-facts">
+      <dl className="t-facts">
         {overview.fleet ? <>
           <Fact label="Fleet hosts">{overview.fleetHosts.running} running</Fact>
           <Fact label="Provisioning">{overview.fleetHosts.pending} hosts</Fact>
         </> : <>
-          <Fact label="Compute host">{host ? <><Status kind={host.status.kind} label={host.status.label} /><small>{host.name}</small></> : <Ghost>No host available</Ghost>}</Fact>
-          <Fact label="Instance type" mono>{host?.instanceType ?? <Ghost>Not reported</Ghost>}</Fact>
-          <Fact label="Zone" mono>{host?.zone ?? <Ghost>Not reported</Ghost>}</Fact>
+          <Fact label="Compute host">{host ? <><State kind={host.status.kind} label={host.status.label} /><small>{host.name}</small></> : <Ghost>No host available</Ghost>}</Fact>
+          <Fact label="Instance type">{host?.instanceType ? <code>{host.instanceType}</code> : <Ghost>Not reported</Ghost>}</Fact>
+          <Fact label="Zone">{host?.zone ? <code>{host.zone}</code> : <Ghost>Not reported</Ghost>}</Fact>
           <Fact label="Launched">{host?.launchedAt ? <Timestamp value={host.launchedAt} /> : <Ghost>Not running</Ghost>}</Fact>
         </>}
       </dl>
@@ -88,11 +105,11 @@ function HostState({ overview, loading }: Readonly<{ overview: SessionOverview; 
   );
 }
 
-function Fact({ label, children, mono = false }: Readonly<{ label: string; children: ReactNode; mono?: boolean }>) {
+function Fact({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
   return (
-    <div className="fact">
+    <div className="t-fact">
       <dt>{label}</dt>
-      <dd className={mono ? "mono" : undefined}>{children}</dd>
+      <dd>{children}</dd>
     </div>
   );
 }

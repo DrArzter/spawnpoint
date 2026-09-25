@@ -1,20 +1,19 @@
-import { Access } from "../console/Access";
-import { ConfirmationDialog, CreateWorldSheet, InvitationSheet, ScopeDialog, WorldSettingsSheet } from "../console/Dialogs";
-import { Profile } from "../console/Profile";
-import { Rcon } from "../console/Rcon";
-import { Releases } from "../console/Releases";
-import { World } from "../console/World";
 import type { Skin } from "../skin";
-import { Metrics } from "./Metrics";
+import { Access } from "./Access";
 import { Boot } from "./Boot";
+import { ConfirmationDialog, CreateWorldSheet, InvitationSheet, ScopeDialog, WorldSettingsSheet } from "./Dialogs";
+import { Metrics } from "./Metrics";
+import { Profile } from "./Profile";
+import { Rcon } from "./Rcon";
+import { Releases } from "./Releases";
 import { Shell } from "./Shell";
+import { World } from "./World";
 import { Worlds } from "./Worlds";
 
-// The terminal: one monospace grid, every state a mark and a word, the host
-// drawn in glyphs. It owns the frame, the first screen and the metrics
-// strip; the other pages are the console skin's views redrawn by this
-// skin's stylesheet, which applies while its Shell is mounted (terminal.css,
-// imported in main.tsx).
+// The terminal: one monospace grid, every state a mark and a word, every verb
+// its word between brackets, every panel a box with its name on the rule,
+// the host drawn in glyphs. Every view is the face's own (ui.tsx); the
+// console's components and stylesheet play no part in it.
 export const terminalSkin: Skin = {
   id: "terminal",
   name: "Terminal",

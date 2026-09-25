@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 
 import type { HostMetricPoint, HostMetrics } from "../../api/contract";
-import { Status } from "../../components/ui/Status";
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { MetricsModel } from "../../core/models";
-import { MetricsPage, formatMetric, seriesPeak } from "../console/Metrics";
+import { formatBytes } from "../../lib/format";
+import { Choice, Choices, Empty, Notice, Page, Panel, Tabs, Verb, Wait } from "./ui";
 
 // Metrics the way the status page draws its response line: one series is one
 // well with the area under its line filled in the accent, no axes and no
@@ -16,25 +16,65 @@ const HEIGHT = 120;
 const PAD_TOP = 8;
 const PAD_BOTTOM = 12;
 
+const formatMetric = (unit: string) => (value: number) => (unit === "percent" ? `${value.toFixed(1)}%` : formatBytes(value));
+
 export function Metrics({ model }: Readonly<{ model: MetricsModel }>) {
-  return <MetricsPage chart={lineCharts} model={model} placeholder={waiting} />;
+  return (
+    <Page>
+      <h1 className="visually-hidden">Metrics</h1>
+      <Tabs label="Metric source" onChange={model.setSource} options={[{ id: "cloudwatch", label: "CloudWatch" }, { id: "session", label: "Session" }]} value={model.source} />
+      {model.source === "cloudwatch" && <HostPanel model={model} />}
+      {/* The stack that answers this already runs beside the game; what is
+          missing is the path from a host on a private overlay to a public
+          panel, so this stays closed rather than empty. */}
+      {model.source === "session" && <Panel><Empty
+        description={model.online ? "Prometheus and Grafana are running beside this session, on a host the panel cannot reach yet. Charts appear once a path out of the overlay exists." : "Prometheus and Grafana run inside an active game session, and the path that would carry them to this page does not exist yet."}
+        title="Session telemetry is not connected yet"
+      /></Panel>}
+    </Page>
+  );
+}
+
+function HostPanel({ model }: Readonly<{ model: MetricsModel }>) {
+  if (model.instanceId === undefined) {
+    return <Panel><Empty description="Metrics are read from the compute host, and the control plane reports none right now." title="No host to measure" /></Panel>;
+  }
+  const metrics = model.metrics;
+  if (metrics.status === "error" && metrics.kind === "unavailable") {
+    return <Panel><Empty description="Host metrics appear here once the control plane reads CloudWatch." title="CloudWatch is not connected yet" /></Panel>;
+  }
+  return (
+    <Panel
+      name="Compute host"
+      verbs={<Choices label="Window">
+        {model.ranges.map((option) => <Choice key={option.id} onClick={() => model.setRange(option.id)} pressed={model.range === option.id}>{option.label}</Choice>)}
+      </Choices>}
+    >
+      {metrics.status === "error" && <Notice description={metrics.error} title="Metrics could not be loaded" tone="error" verbs={<Verb action={metrics.retry} size="small" />} />}
+      {metrics.status === "loading" && waiting}
+      {metrics.status === "ready" && lineCharts(metrics.value)}
+    </Panel>
+  );
 }
 
 // While the numbers load: the wells at their size, each saying what it is
-// waiting for the way a terminal does, and an empty line where the caption
-// will be, so nothing moves when they arrive.
+// waiting for, and an empty line where the caption will be, so nothing moves
+// when they arrive.
 const waiting: ReactNode = (
-    <>
-      {["cpu", "in", "out"].map((id) => (
-        <div className="tchart-placeholder" key={id}>
-          <div aria-hidden="true" className="tchart-waiting">
-            <Status kind="progress" label="Reading CloudWatch" />
-          </div>
-          <span className="tchart-caption-slot" />
-        </div>
-      ))}
-    </>
+  <>
+    {["cpu", "in", "out"].map((id) => (
+      <div className="t-chart" key={id}>
+        <Wait className="t-chart-well t-chart-waiting" label="Reading CloudWatch" />
+        <span className="t-chart-caption-slot" />
+      </div>
+    ))}
+  </>
 );
+
+export function seriesPeak(points: readonly Readonly<{ value: number | null }>[]): number | null {
+  const known = points.filter((point) => point.value !== null);
+  return known.length > 0 ? Math.max(...known.map((point) => point.value ?? 0)) : null;
+}
 
 function lineCharts(metrics: HostMetrics): ReactNode {
   return (
@@ -44,19 +84,19 @@ function lineCharts(metrics: HostMetrics): ReactNode {
         const format = formatMetric(series.unit);
         const runs = tracePaths(series.points, peak);
         return (
-          <section className="tchart" key={series.id}>
-            <svg aria-label={`${series.label} over the window`} className="tchart-well" preserveAspectRatio="none" role="img" viewBox={`0 0 ${WIDTH} ${HEIGHT}`}>
-              {runs.map((run) => <polygon className="tchart-area" key={`area-${run.from}`} points={run.area} />)}
-              {runs.map((run) => <polyline className="tchart-line" key={`line-${run.from}`} points={run.line} />)}
+          <section className="t-chart" key={series.id}>
+            <svg aria-label={`${series.label} over the window`} className="t-chart-well" preserveAspectRatio="none" role="img" viewBox={`0 0 ${WIDTH} ${HEIGHT}`}>
+              {runs.map((run) => <polygon className="t-chart-area" key={`area-${run.from}`} points={run.area} />)}
+              {runs.map((run) => <polyline className="t-chart-line" key={`line-${run.from}`} points={run.line} />)}
             </svg>
-            <p className="tchart-caption">
+            <p className="t-chart-caption">
               <strong>{series.label}</strong>
               <span>{peak === null ? "no data in this window" : <>peak <strong>{format(peak)}</strong></>}</span>
             </p>
           </section>
         );
       })}
-      <div className="tchart-scale">
+      <div className="t-chart-scale">
         <Timestamp value={metrics.startedAt} />
         <Timestamp value={metrics.endedAt} />
       </div>

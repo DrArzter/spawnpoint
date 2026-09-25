@@ -1724,6 +1724,12 @@ button.chip[aria-pressed="true"] {
 }
 
 /* Skeleton */
+.skeleton-rows {
+  display: grid;
+  gap: 14px;
+  padding: 16px 20px;
+}
+
 .skeleton {
   display: block;
   height: 14px;

@@ -142,7 +142,7 @@ function LoginAccounts({ model }: Readonly<{ model: LoginAccountsModel }>) {
       description="Every method belongs to the same Spawnpoint identity. None becomes primary because it was added first."
       title="Sign-in methods"
     >
-      {accounts.status === "loading" && <div aria-busy="true" className="account-loading" role="status"><span className="visually-hidden">Loading sign-in methods</span><Skeleton height={56} /><Skeleton height={56} /></div>}
+      {accounts.status === "loading" && <div aria-busy="true" className="account-loading" data-loading="Loading sign-in methods" role="status"><span className="visually-hidden">Loading sign-in methods</span><Skeleton height={56} /><Skeleton height={56} /></div>}
       {accounts.status === "error" && <Banner actions={<ActionButton action={accounts.retry} size="small" variant="outlined" />} description={accounts.error} title="Sign-in methods are unavailable" tone="error" />}
       {accounts.status === "ready" && accounts.value.length === 0 && <EmptyState description="This identity has no linked login method the current API can report." icon="link" title="No sign-in methods" />}
       {accounts.status === "ready" && accounts.value.length > 0 && (

@@ -178,6 +178,7 @@ resource "aws_lambda_function" "access_api" {
       EMAIL_FROM                       = var.email_from
       EMAIL_REPLY_TO                   = var.email_reply_to
       PANEL_URL                        = trimsuffix(var.panel_url, "/")
+      LEGACY_PANEL_URL                 = var.legacy_panel_url == null ? "" : trimsuffix(var.legacy_panel_url, "/")
       LIFECYCLE_TABLE_NAME             = data.aws_dynamodb_table.lifecycle.name
       CONTROL_PLANE_VIEW_TABLE         = var.control_plane_view_table_name
       CONTROL_PLANE_WEBSOCKET_URL      = "wss://${aws_apigatewayv2_api.control_plane.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.control_plane.name}"

@@ -16,15 +16,16 @@ import { builtInRoles, hasPermission, isBuiltInRoleId, permissions, type Identit
 import { accessInvitationTokenHash, accessInvitationUrl, accessInvitationUsable, issueAccessInvitation, renderAccessInvitationEmail, renderAccessInvitationProofEmail } from "../access/access-invitations.ts";
 import { directInvitationReadiness } from "../access/invitation-readiness.ts";
 import {
-  accessTokenLifetimeSeconds,
+  browserSessionCookie,
+  browserSessionCookieName,
   equalRefreshHashes,
+  expiredBrowserSessionCookie,
   expiredRefreshCookie,
-  issueAccessToken,
   issueRefreshCredential,
   parseRefreshCredential,
-  refreshCookie,
   refreshCookieName,
   refreshSessionLifetimeSeconds,
+  trustedCookieRequest,
   verifyAccessToken,
   type LoginPrincipal,
 } from "../access/login-session.ts";
@@ -110,6 +111,7 @@ const googleLoginEnabled = googleOidcClientId !== "";
 const passwordRegistrationEnabled = (process.env.PASSWORD_REGISTRATION_ENABLED ?? "false") === "true";
 const emailDeliveryProvider = process.env.EMAIL_DELIVERY_PROVIDER ?? "none";
 const panelUrl = (process.env.PANEL_URL ?? "").trim();
+const legacyPanelUrl = (process.env.LEGACY_PANEL_URL ?? "").trim();
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const events = new EventBridgeClient({});
 const ssm = new SSMClient({});
@@ -121,8 +123,8 @@ function response(statusCode: number, body: unknown): Response {
   return { statusCode, headers: { "content-type": "application/json; charset=utf-8" }, body: body === null ? "" : JSON.stringify(body) };
 }
 
-function responseWithCookie(statusCode: number, body: unknown, cookie: string): Response {
-  return { ...response(statusCode, body), cookies: [cookie] };
+function responseWithCookies(statusCode: number, body: unknown, cookies: string[]): Response {
+  return { ...response(statusCode, body), cookies };
 }
 
 function requestCookie(event: Event, name: string): string | null {
@@ -173,11 +175,29 @@ function emailSender(): Promise<EmailSender | null> {
 async function caller(event: Event): Promise<Caller | null> {
   const authorization = Object.entries(event.headers ?? {}).find(([key]) => key.toLowerCase() === "authorization")?.[1] ?? "";
   const match = /^Bearer ([A-Za-z0-9._-]+)$/.exec(authorization);
-  if (match === null) return null;
+  if (match === null) return browserSessionPrincipal(event);
   const current = verifyAccessToken(match[1]!, await sessionSigningSecret())?.principal;
   if (current !== undefined) return current;
   const legacy = verifySessionToken(match[1]!, await botToken());
   return legacy === null ? null : telegramPrincipal(legacy);
+}
+
+async function browserSessionPrincipal(event: Event): Promise<LoginPrincipal | null> {
+  const token = requestCookie(event, browserSessionCookieName);
+  const supplied = token === null ? null : parseRefreshCredential(token);
+  if (supplied === null) return null;
+  const result = await document.send(new GetCommand({
+    TableName: tableName,
+    Key: loginSessionKey(supplied.loginSessionId),
+    ConsistentRead: true,
+  }));
+  const item = result.Item;
+  if (
+    item === undefined || item.status !== "ACTIVE" ||
+    typeof item.expires_at !== "number" || item.expires_at <= Math.floor(Date.now() / 1000) ||
+    typeof item.token_hash !== "string" || !equalRefreshHashes(item.token_hash, supplied.tokenHash)
+  ) return null;
+  return principalFromLoginSession(item);
 }
 
 function accountKeyFor(platform: string, subject: string): string {
@@ -1132,7 +1152,7 @@ function principalFromLoginSession(item: Item): LoginPrincipal | null {
   };
 }
 
-async function createLoginSession(principal: LoginPrincipal, signingSecret: string): Promise<Response> {
+async function createLoginSession(principal: LoginPrincipal): Promise<Response> {
   const credential = issueRefreshCredential();
   const createdAt = new Date().toISOString();
   const expiresAt = Math.floor(Date.now() / 1000) + refreshSessionLifetimeSeconds;
@@ -1157,14 +1177,14 @@ async function createLoginSession(principal: LoginPrincipal, signingSecret: stri
     },
     ConditionExpression: "attribute_not_exists(pk)",
   }));
-  return responseWithCookie(200, {
-    accessToken: issueAccessToken(principal, credential.loginSessionId, signingSecret),
-    expiresIn: accessTokenLifetimeSeconds,
-  }, refreshCookie(credential.token, refreshCookieSameSite));
+  return responseWithCookies(200, { authenticated: true }, [
+    browserSessionCookie(credential.token, refreshCookieSameSite),
+    expiredRefreshCookie(refreshCookieSameSite),
+  ]);
 }
 
 async function refreshLoginSession(event: Event): Promise<Response> {
-  const cookie = requestCookie(event, refreshCookieName);
+  const cookie = requestCookie(event, browserSessionCookieName) ?? requestCookie(event, refreshCookieName);
   const supplied = cookie === null ? null : parseRefreshCredential(cookie);
   if (supplied === null) return response(401, { error: "invalid_or_expired_refresh_session" });
 
@@ -1204,15 +1224,14 @@ async function refreshLoginSession(event: Event): Promise<Response> {
     // once with the newest cookie; do not revoke the whole login session here.
     return response(401, { error: "refresh_credential_rotated" });
   }
-  const signingSecret = await sessionSigningSecret();
-  return responseWithCookie(200, {
-    accessToken: issueAccessToken(principal, supplied.loginSessionId, signingSecret),
-    expiresIn: accessTokenLifetimeSeconds,
-  }, refreshCookie(rotated.token, refreshCookieSameSite));
+  return responseWithCookies(200, { authenticated: true }, [
+    browserSessionCookie(rotated.token, refreshCookieSameSite),
+    expiredRefreshCookie(refreshCookieSameSite),
+  ]);
 }
 
 async function logoutLoginSession(event: Event): Promise<Response> {
-  const cookie = requestCookie(event, refreshCookieName);
+  const cookie = requestCookie(event, browserSessionCookieName) ?? requestCookie(event, refreshCookieName);
   const supplied = cookie === null ? null : parseRefreshCredential(cookie);
   if (supplied !== null) {
     try {
@@ -1233,7 +1252,10 @@ async function logoutLoginSession(event: Event): Promise<Response> {
       // Logout is idempotent and never reveals whether a credential existed.
     }
   }
-  return responseWithCookie(204, null, expiredRefreshCookie(refreshCookieSameSite));
+  return responseWithCookies(204, null, [
+    expiredBrowserSessionCookie(refreshCookieSameSite),
+    expiredRefreshCookie(refreshCookieSameSite),
+  ]);
 }
 
 function objectBody(event: Event): Readonly<Record<string, unknown>> | null {
@@ -1251,7 +1273,7 @@ async function authenticate(provider: LoginProvider, event: Event): Promise<Resp
   if (attempt === null) return response(400, { error: "invalid_json" });
   const principal = await authenticateWith(provider, attempt);
   if (principal === null) return response(401, { error: `invalid_or_expired_${provider.id}_login` });
-  return createLoginSession(principal, await sessionSigningSecret());
+  return createLoginSession(principal);
 }
 
 // Email and password is one login adapter among peers. Its credential is kept
@@ -1511,7 +1533,7 @@ async function verifyEmail(event: Event): Promise<Response> {
     }
     throw error;
   }
-  return createLoginSession(passwordPrincipal(credential), await sessionSigningSecret());
+  return createLoginSession(passwordPrincipal(credential));
 }
 
 async function requestPasswordReset(event: Event): Promise<Response> {
@@ -2061,6 +2083,16 @@ export async function handler(event: Event): Promise<Response> {
   // Default deny: an unrouted request never reaches a handler, and neither does
   // a route somebody deployed without declaring its authority here.
   if (route === undefined) return response(404, { error: "not_found" });
+
+  // Cookies are sent automatically, including with SameSite=None on the
+  // legacy CloudFront domain. A credential-bearing write must originate from
+  // one of the two configured panel origins, even when CORS would hide its
+  // response from another site.
+  const hasCookie = requestCookie(event, browserSessionCookieName) !== null || requestCookie(event, refreshCookieName) !== null;
+  const origin = Object.entries(event.headers ?? {}).find(([key]) => key.toLowerCase() === "origin")?.[1];
+  if (!trustedCookieRequest(routeKey.split(" ", 1)[0]!, hasCookie, origin, [panelUrl, legacyPanelUrl].filter(Boolean))) {
+    return response(403, { error: "untrusted_origin" });
+  }
 
   const call = (subject: unknown) =>
     (route.handle as (subject: unknown, event: Event) => Promise<Response> | Response)(subject, event);

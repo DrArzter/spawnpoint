@@ -30,7 +30,7 @@ const WITHOUT_PERMISSION = new Map<string, string>([
   ["POST /auth/email/verification/resend", "enumeration-safe replacement of the caller's mailbox proof"],
   ["POST /auth/password/forgot", "enumeration-safe request for a one-time password-reset proof"],
   ["POST /auth/password/reset", "consumes a one-time reset proof without an existing session"],
-  ["POST /auth/refresh", "rotates the caller's HttpOnly refresh credential"],
+  ["POST /auth/refresh", "rotates a legacy refresh cookie or the caller's HttpOnly browser session"],
   ["POST /auth/logout", "revokes the caller's HttpOnly refresh credential"],
   ["POST /auth/access-invitations/check", "checks a one-time bearer link before asking somebody to sign in"],
   ["GET /session", "reports the caller's own session and bootstrap state"],

@@ -12,8 +12,7 @@ const apiUrl = (import.meta.env.VITE_ACCESS_API_URL ?? "").replace(/\/$/, "");
 export const telegramOidcClientId = (import.meta.env.VITE_TELEGRAM_OIDC_CLIENT_ID ?? "").trim();
 export const googleOidcClientId = (import.meta.env.VITE_GOOGLE_OIDC_CLIENT_ID ?? "").trim();
 
-let accessToken: string | null = null;
-let refreshPromise: Promise<string | null> | null = null;
+let refreshPromise: Promise<boolean> | null = null;
 
 function controlPlaneSubscription(onInvalidated: () => void): () => void {
   let closed = false;
@@ -109,19 +108,18 @@ function publicPost(path: string, body: unknown): Promise<Response> {
 
 // Every login exchanges a provider's proof for one Spawnpoint session. What
 // differs per provider is the proof and how a refusal is worded.
-async function exchangeLogin(path: string, body: unknown, describeFailure: FailureDescription): Promise<string> {
+async function exchangeLogin(path: string, body: unknown, describeFailure: FailureDescription): Promise<void> {
   const response = await publicPost(path, body);
   if (!response.ok) {
     const parsed = await response.json().catch(() => null) as { error?: unknown } | null;
     const code = typeof parsed?.error === "string" ? parsed.error : undefined;
     throw await apiFailure(response, describeFailure(response.status, code), parsed);
   }
-  const result = await response.json() as { accessToken?: unknown };
-  if (typeof result.accessToken !== "string") throw new Error("Spawnpoint did not create a valid session.");
-  return result.accessToken;
+  const result = await response.json() as { authenticated?: unknown };
+  if (result.authenticated !== true) throw new Error("Spawnpoint did not create a valid session.");
 }
 
-function exchangeTelegram(body: { idToken: string } | { login: Record<string, string> } | { initData: string }): Promise<string> {
+function exchangeTelegram(body: { idToken: string } | { login: Record<string, string> } | { initData: string }): Promise<void> {
   return exchangeLogin("/auth/telegram", body, (status, code) => describeProviderSignInFailure("Telegram", status, code));
 }
 
@@ -154,10 +152,9 @@ async function linkProofAccount(provider: "telegram" | "google", label: string, 
 }
 
 async function sessionFromLogin(path: string, body: unknown, describeFailure: FailureDescription): Promise<AuthState> {
-  const token = await exchangeLogin(path, body, describeFailure);
-  accessToken = token;
+  await exchangeLogin(path, body, describeFailure);
   clearLegacyTokens();
-  return { status: "authenticated", session: await loadSession(token) };
+  return { status: "authenticated", session: await loadSession() };
 }
 
 // An API that predates providers describes only a Telegram account.
@@ -173,9 +170,8 @@ function accountProfile(profile: Partial<AccountProfile>): AccountProfile {
   };
 }
 
-async function loadSession(token: string): Promise<SpawnpointSession> {
+async function loadSession(): Promise<SpawnpointSession> {
   const response = await fetch(`${apiUrl}/session`, {
-    headers: { authorization: `Bearer ${token}` },
     credentials: "include",
   });
   if (!response.ok) throw new Error("Your Spawnpoint session expired.");
@@ -186,44 +182,33 @@ async function loadSession(token: string): Promise<SpawnpointSession> {
   return { ...parsed, candidate: { ...accountProfile(parsed.candidate), displayName: parsed.candidate.displayName, status: parsed.candidate.status } };
 }
 
-async function requestRefresh(): Promise<string | null> {
+async function requestRefresh(): Promise<boolean> {
   const response = await fetch(`${apiUrl}/auth/refresh`, { method: "POST", credentials: "include" });
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { error?: unknown } | null;
     if (body?.error === "refresh_credential_rotated") {
       const retry = await fetch(`${apiUrl}/auth/refresh`, { method: "POST", credentials: "include" });
-      if (retry.ok) {
-        const retried = await retry.json() as { accessToken?: unknown };
-        return typeof retried.accessToken === "string" ? retried.accessToken : null;
-      }
+      return retry.ok;
     }
-    return null;
+    return false;
   }
-  const result = await response.json() as { accessToken?: unknown };
-  return typeof result.accessToken === "string" ? result.accessToken : null;
+  return true;
 }
 
-async function refreshAccessToken(): Promise<string | null> {
-  refreshPromise ??= requestRefresh().then((token) => {
-    accessToken = token;
-    return token;
-  }).finally(() => { refreshPromise = null; });
+async function refreshBrowserSession(): Promise<boolean> {
+  refreshPromise ??= requestRefresh().finally(() => { refreshPromise = null; });
   return refreshPromise;
 }
 
 async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const token = accessToken ?? await refreshAccessToken();
-  if (token === null) throw new Error("Your sign-in session expired.");
-  const send = (bearer: string) => fetch(`${apiUrl}${path}`, {
+  const send = () => fetch(`${apiUrl}${path}`, {
     ...init,
     credentials: "include",
-    headers: { ...init.headers, authorization: `Bearer ${bearer}` },
   });
-  const first = await send(token);
+  const first = await send();
   if (first.status !== 401) return first;
-  accessToken = null;
-  const refreshed = await refreshAccessToken();
-  return refreshed === null ? first : send(refreshed);
+  const refreshed = await refreshBrowserSession();
+  return refreshed ? send() : first;
 }
 
 function authError(error: unknown, fallback: string): AuthState {
@@ -232,10 +217,9 @@ function authError(error: unknown, fallback: string): AuthState {
 
 async function restoreLogin(login: Record<string, string>): Promise<AuthState> {
   try {
-    const token = await exchangeTelegram({ login });
-    accessToken = token;
+    await exchangeTelegram({ login });
     clearLegacyTokens();
-    return { status: "authenticated", session: await loadSession(token) };
+    return { status: "authenticated", session: await loadSession() };
   } catch (error) {
     return authError(error, "Telegram sign-in failed.");
   } finally {
@@ -244,21 +228,22 @@ async function restoreLogin(login: Record<string, string>): Promise<AuthState> {
 }
 
 async function restoreRefreshCredential(): Promise<AuthState | null> {
-  const refreshed = await refreshAccessToken();
-  if (refreshed === null) return null;
   try {
-    return { status: "authenticated", session: await loadSession(refreshed) };
+    return { status: "authenticated", session: await loadSession() };
   } catch {
-    accessToken = null;
-    return null;
+    if (!await refreshBrowserSession()) return null;
+    try {
+      return { status: "authenticated", session: await loadSession() };
+    } catch {
+      return null;
+    }
   }
 }
 
 async function restoreMiniApp(initData: string): Promise<AuthState> {
   try {
-    const token = await exchangeTelegram({ initData });
-    accessToken = token;
-    return { status: "authenticated", session: await loadSession(token) };
+    await exchangeTelegram({ initData });
+    return { status: "authenticated", session: await loadSession() };
   } catch (error) {
     return authError(error, "Telegram Mini App sign-in failed.");
   }
@@ -349,7 +334,6 @@ export const liveApi: SpawnpointApi = {
   },
 
   async revokeSession(): Promise<void> {
-    accessToken = null;
     clearLegacyTokens();
     // The cookie is the session; a failure here must not stop the sign-out, so
     // the caller navigates either way.

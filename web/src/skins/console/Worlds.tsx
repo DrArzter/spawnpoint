@@ -115,7 +115,7 @@ function Overview({ overview, loading }: Readonly<{ overview: SessionOverview; l
             <Fact label="Fleet hosts" loading={loading}>{overview.fleetHosts.running} running</Fact>
             <Fact label="Provisioning" loading={loading}>{overview.fleetHosts.pending} hosts</Fact>
           </> : <>
-            <Fact label="Compute host" loading={loading}>{host ? <Status kind={host.status.kind} label={`${host.name} · ${host.status.label.toLowerCase()}`} /> : <Ghost>No host available</Ghost>}</Fact>
+            <Fact label="Compute host" loading={loading}>{host ? <><Status kind={host.status.kind} label={host.status.label} /><small>{host.name}</small></> : <Ghost>No host available</Ghost>}</Fact>
             <Fact label="Instance type" loading={loading} mono>{host?.instanceType ?? <Ghost>Not reported</Ghost>}</Fact>
             <Fact label="Zone" loading={loading} mono>{host?.zone ?? <Ghost>Not reported</Ghost>}</Fact>
             <Fact label="Launched" loading={loading}>{host?.launchedAt ? <Timestamp value={host.launchedAt} /> : <Ghost>Not running</Ghost>}</Fact>

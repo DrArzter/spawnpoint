@@ -389,7 +389,7 @@ views redrawn by `terminal.css`, which applies only while the terminal Shell is 
 - **No radius, no shadow.** Every corner is square and every surface is flat. Boxes are drawn with `--rule`, one step
   darker than the hairline, so they read as box-drawing lines rather than card borders. Menus, dialogs and sheets are
   boxed the same way.
-- **A mark and a word.** Status is a bracketed mark in front of its label, never colour alone: `[*]` ok, `[ ]` ready,
+- **A mark and a word.** Status is a bracketed mark in front of its label, never colour alone: `[*]` ok, `[>]` ready,
   `[-]` off, `[.]` pending, `[?]` unknown, `[!]` error and warning, `[i]` info, `[x]` archived, `[+]` absent. Progress
   is the one mark that moves: `[~]` spinning through `|`, `/`, `-` and `\`, held on the tilde under reduced motion.
   Notices carry the same marks in front of their titles.
@@ -403,6 +403,9 @@ views redrawn by `terminal.css`, which applies only while the terminal Shell is 
   by `raster.ts` from shapes and move through their phase while the host is online, the gear turning, the zombie
   walking across and coming back in. Starting and stopping show the picture at rest under one brighter scanline;
   stopped is sparse and still. Reduced motion stops the tick.
+- **Metrics as the status page draws them.** One series is one 120px well with its line in the accent and the area
+  under it filled at a tenth of it, no axes and no grid; a caption under the well names the series and its peak, and
+  the window is stated once under all of them. A gap in the readings is a gap in the line, never a line to zero.
 - **Spacing.** The page gutter and the gap between panels are the console's (24px, 16px on a phone); a named panel
   keeps 10px more above it for the name on its rule, an unnamed one does not. Cells are 16px in from the rule, 12px at
   the medium step so the worlds table fits a tablet in the wider face. Under a coarse pointer the frame's controls

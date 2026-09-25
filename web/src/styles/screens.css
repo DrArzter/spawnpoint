@@ -64,6 +64,15 @@
   font-size: 13px;
 }
 
+/* The line under a fact: which host, for the state above it. */
+.fact dd small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
 @media (max-width: 959px) {
   .session-card {
     grid-template-columns: minmax(0, 1fr);

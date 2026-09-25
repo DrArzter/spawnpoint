@@ -1339,7 +1339,7 @@ button.chip[aria-pressed="true"] {
   box-shadow: var(--shadow-3);
   overflow: hidden;
   transform-origin: top;
-  animation: menu-in var(--dur) var(--ease);
+  animation: menu-in var(--dur) var(--ease) both;
 }
 
 @keyframes menu-in {
@@ -1471,7 +1471,20 @@ button.chip[aria-pressed="true"] {
 
 .sheet[open] {
   display: flex;
-  animation: sheet-in var(--dur) var(--ease);
+  animation: sheet-in var(--dur) var(--ease) both;
+}
+
+/* The scrim arrives with the panel. Snapping on while the panel was still
+   fading read as a blink behind it. */
+.dialog[open]::backdrop,
+.sheet[open]::backdrop {
+  animation: scrim-in var(--dur) var(--ease) both;
+}
+
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
 }
 
 @keyframes sheet-in {
@@ -1482,7 +1495,7 @@ button.chip[aria-pressed="true"] {
 }
 
 .dialog[open] {
-  animation: dialog-in var(--dur) var(--ease);
+  animation: dialog-in var(--dur) var(--ease) both;
 }
 
 @keyframes dialog-in {
@@ -1845,6 +1858,17 @@ button.chip[aria-pressed="true"] {
 
 .copy-value code {
   overflow-wrap: anywhere;
+}
+
+/* An address on a detail row is read as one thing: it never breaks inside
+   its port. When the row is too narrow the copy button steps down a line. */
+.details .copy-value {
+  flex-wrap: wrap;
+}
+
+.details .copy-value code {
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 /* The value gives up width; the button that copies it does not. In a truncating

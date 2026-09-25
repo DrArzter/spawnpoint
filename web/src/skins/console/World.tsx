@@ -67,6 +67,15 @@ function detailValue(value: DetailValue): ReactNode {
     case "time": return <Timestamp value={value.at} />;
     case "number": return <strong className="num">{value.value}</strong>;
     case "release": return <span className="pair"><span>Active <strong>{value.active ?? "none"}</strong></span><Icon name="chevron_right" size={16} /><span>Desired <strong>{value.desired ?? "none"}</strong></span></span>;
+    case "preset": return <>
+      <span>{value.name}</span>
+      {value.source && (
+        <a className="preset-source" href={value.source.href} rel="noreferrer" target="_blank" title={value.source.commit}>
+          <code>{value.source.short}</code>
+          <Icon name="open_in_new" size={14} />
+        </a>
+      )}
+    </>;
     default: return <ConnectionAddress address={value.address} />;
   }
 }

@@ -81,7 +81,7 @@ function HostState({ overview, loading }: Readonly<{ overview: SessionOverview; 
           <Fact label="Fleet hosts">{overview.fleetHosts.running} running</Fact>
           <Fact label="Provisioning">{overview.fleetHosts.pending} hosts</Fact>
         </> : <>
-          <Fact label="Compute host">{host ? <Status kind={host.status.kind} label={`${host.name} · ${host.status.label.toLowerCase()}`} /> : <Ghost>No host available</Ghost>}</Fact>
+          <Fact label="Compute host">{host ? <><Status kind={host.status.kind} label={host.status.label} /><small>{host.name}</small></> : <Ghost>No host available</Ghost>}</Fact>
           <Fact label="Instance type" mono>{host?.instanceType ?? <Ghost>Not reported</Ghost>}</Fact>
           <Fact label="Zone" mono>{host?.zone ?? <Ghost>Not reported</Ghost>}</Fact>
           <Fact label="Launched">{host?.launchedAt ? <Timestamp value={host.launchedAt} /> : <Ghost>Not running</Ghost>}</Fact>

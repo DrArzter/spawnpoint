@@ -8,9 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { action, actionsOf, type Action } from "../src/core/actions.ts";
 import type { AccessModel, ConfirmationModel, ConsoleModel, CreateWorldModel, InvitationModel, MetricsModel, ProfileModel, ReleasesModel, ShellModel, WorldModel, WorldsModel, WorldSettingsModel } from "../src/core/models.ts";
 import type { Game, World } from "../src/model.ts";
-import { consoleSkin } from "../src/skins/console/index.ts";
-import { terminalSkin } from "../src/skins/terminal/index.ts";
-import type { Skin } from "../src/skins/skin.ts";
+import { SKINS } from "../src/skins/index.ts";
 
 /*
  * The skin contract. A skin may draw a model however it likes; what it may
@@ -181,9 +179,9 @@ function checkSurface(name: string, markup: string, model: unknown, allowMissing
   assert.deepEqual([...new Set(missing)], [], `${name}: actions in the model that never reached the screen`);
 }
 
-const skins: readonly Skin[] = [consoleSkin, terminalSkin];
-
-for (const skin of skins) {
+// Every registered face, so a skin added to the registry joins the contract
+// without anyone remembering to list it here.
+for (const skin of SKINS) {
   test(`${skin.name}: the shell and the scope dialog draw the scope, the theme toggle and the profile door`, () => {
     // The scope model is shared: the shell draws the chip that opens it, the
     // dialog draws the list and the way out.

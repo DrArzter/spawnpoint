@@ -12,10 +12,10 @@ import { formatDateTime, plural } from "../../lib/format";
 import { useMediaQuery } from "../../shell/hooks";
 import { ActionButton } from "../console/actions";
 import { Notices, Worlds as ConsoleWorlds, worldColumns } from "../console/Worlds";
-import { HostScene, sceneMarkFor } from "./HostScene";
+import { GameIcon } from "./GameIcon";
 
-// The first screen of the terminal: the host as a scene drawn in glyphs with
-// its state beside it, then every world of the scoped game as a row.
+// The first screen of the terminal: the host as the game's icon drawn in
+// glyphs with its state beside it, then every world of the scoped game as a row.
 export function Worlds({ model }: Readonly<{ model: WorldsModel }>) {
   const loading = model.status === "loading";
   const narrow = useMediaQuery("(max-width: 599px)");
@@ -28,7 +28,7 @@ export function Worlds({ model }: Readonly<{ model: WorldsModel }>) {
       <section aria-labelledby="thost-title" className="card thost">
         <header className="card-header"><div><h2 id="thost-title">Host</h2></div></header>
         <div aria-busy={loading} className="card-body thost-body">
-          <HostScene mark={sceneMarkFor(model.game)} size={narrow ? "24x11" : "40x18"} state={model.overview.state} />
+          <GameIcon game={model.game} size={narrow ? "24x11" : "40x18"} state={model.overview.state} />
           <HostState loading={loading} overview={model.overview} />
         </div>
       </section>

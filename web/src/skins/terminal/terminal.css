@@ -528,6 +528,32 @@ html[data-skin="terminal"] .table small {
   font-size: 12px;
 }
 
+/* On a phone the table is a stack of cards (components.css); the row height
+   and cell padding above are for the table. The card gets the label in the
+   same caps as a column heading. */
+@container (max-width: 599px) {
+  html[data-skin="terminal"] .table td {
+    height: auto;
+    padding: 4px 0;
+    border-bottom: 0;
+  }
+
+  html[data-skin="terminal"] .table td::before {
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  html[data-skin="terminal"] .table tbody tr:hover td,
+  html[data-skin="terminal"] .table tbody tr[aria-selected="true"] td {
+    background: transparent;
+  }
+
+  html[data-skin="terminal"] .table tbody tr[aria-selected="true"] {
+    background: var(--primary-container);
+  }
+}
+
 /* --- details, headers, tabs ------------------------------------------------------ */
 
 html[data-skin="terminal"] .details-row {

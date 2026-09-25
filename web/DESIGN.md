@@ -395,10 +395,13 @@ views redrawn by `terminal.css`, which applies only while the terminal Shell is 
 - **Bracketed controls.** A button is its label between `[` and `]`; the filled variant inverts to blue on a whole
   cell, the danger variant to red. Tabs are cells on a rule; the selected one is inverted. Chips and switches are
   square.
-- **The host scene.** The first screen draws the scoped game's mark in a glyph ramp (`" .:-=+*#%@"`) on a dark cell,
-  from `marks.json` (40×18, 24×11 on a phone). The session state sets the exposure: online is dense and breathes,
-  starting and stopping sweep one brighter scanline down the mark, stopped is sparse and still. Reduced motion stops
-  the tick.
+- **The host scene.** The first screen draws the scoped game's icon in a glyph ramp (`" .:-=+*#%@"`) on a dark cell,
+  40×18 cells, 24×11 on a phone. `HostScene` is the adapter: it takes a painter's grid of brightness per cell, sets the
+  exposure from the session state and keeps time. `GameIcon` picks the painter: the Spawnpoint mark and the Minecraft
+  cube are sampled grids (`marks.json`) that keep still and breathe; the Factorio gear and the Zomboid zombie are drawn
+  by `raster.ts` from shapes and move through their phase while the host is online, the gear turning, the zombie
+  walking across and coming back in. Starting and stopping show the picture at rest under one brighter scanline;
+  stopped is sparse and still. Reduced motion stops the tick.
 - **What it does not do.** It never restyles the front door or sign-in, never introduces a new colour, and never hides
   an action the model offers; the contract test holds it to the same list as the console face.
 

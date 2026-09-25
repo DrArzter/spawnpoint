@@ -7,6 +7,8 @@ export type { Skin, SkinId } from "./skin";
 const skins: Readonly<Record<SkinId, Skin>> = { console: consoleSkin, terminal: terminalSkin };
 
 /** Every face, for the chooser on the profile page. */
+/** Every face the console can wear, in the order they are offered. */
+export const SKINS: readonly Skin[] = SKIN_IDS.map((id) => skins[id]);
 export const SKIN_CHOICES: readonly Readonly<{ id: SkinId; name: string }>[] = SKIN_IDS.map((id) => ({ id, name: skins[id].name }));
 
 export function isSkinId(value: unknown): value is SkinId {

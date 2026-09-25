@@ -905,9 +905,11 @@ html[data-skin="terminal"] [role="status"][aria-busy="true"] > .visually-hidden 
   clip: auto;
   clip-path: none;
   white-space: normal;
+  justify-self: center;
   color: var(--ink-secondary);
   font-size: 13px;
   line-height: 20px;
+  text-align: center;
 }
 
 html[data-skin="terminal"] [role="status"][aria-busy="true"] > .visually-hidden::before {
@@ -927,6 +929,8 @@ html[data-skin="terminal"] .tchart-placeholder {
 /* The well at its size, with the one line a terminal prints while it waits. */
 html[data-skin="terminal"] .tchart-waiting {
   box-sizing: border-box;
+  display: grid;
+  place-items: center;
   height: 120px;
   padding: 12px 16px;
   border: 1px solid var(--outline);

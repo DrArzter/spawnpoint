@@ -105,8 +105,9 @@ export function IconKey({ icon, label, className, ...props }: Omit<ComponentProp
   );
 }
 
-export function Verbs({ children, className, align = "end" }: Readonly<{ children: ReactNode; className?: string; align?: "start" | "end" }>) {
-  return <div className={cx("t-verbs", align === "start" && "t-verbs-start", className)}>{children}</div>;
+/** A row of keys. It reads from the left, as every line here does. */
+export function Verbs({ children, className, align = "start" }: Readonly<{ children: ReactNode; className?: string; align?: "start" | "end" }>) {
+  return <div className={cx("t-verbs", align === "end" && "t-verbs-end", className)}>{children}</div>;
 }
 
 /** Copies a value to the clipboard; the key says so for a moment. */
@@ -138,14 +139,13 @@ export function Choices({ label, children, className }: Readonly<{ label: string
   );
 }
 
-/** One of a row of options; the chosen one is inverted. */
+/** One of a row of options: a radio drawn in glyphs, (o) for the chosen. */
 export function Choice({ pressed, children, icon, className, ...props }: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & Readonly<{ pressed: boolean; icon?: IconName; children: ReactNode }>) {
   return (
     <button aria-pressed={pressed} className={cx("t-choice", pressed && "t-choice-on", className)} type="button" {...props}>
-      <span aria-hidden="true" className="t-bracket">[</span>
+      <span aria-hidden="true" className="t-choice-box">{pressed ? "(o)" : "( )"}</span>
       {icon && <Icon className="t-verb-icon" name={icon} size={16} />}
       <span>{children}</span>
-      <span aria-hidden="true" className="t-bracket">]</span>
     </button>
   );
 }
@@ -194,7 +194,8 @@ export function Page({ children, className }: Readonly<{ children: ReactNode; cl
   return <div className={cx("t-page", className)}>{children}</div>;
 }
 
-/** A box with its name set into the top rule, and its verbs in the head. */
+/** A box with its name set into the top rule and its verbs in the rule's
+    other end; a box without a name keeps its verbs in a head line. */
 export function Panel({ name, verbs, description, children, flush = false, className }: Readonly<{
   name?: string;
   verbs?: ReactNode;
@@ -204,13 +205,15 @@ export function Panel({ name, verbs, description, children, flush = false, class
   className?: string;
 }>) {
   const id = useId();
+  const inRule = Boolean(name && verbs);
   return (
     <section aria-labelledby={name ? id : undefined} className={cx("t-panel", name && "t-panel-named", flush && "t-panel-flush", className)}>
       {name && <h2 className="t-panel-name" id={id}>{name}</h2>}
-      {(description || verbs) && (
+      {inRule && <div className="t-panel-rule-verbs">{verbs}</div>}
+      {(description || (verbs && !inRule)) && (
         <div className="t-panel-head">
           {description && <p className="t-panel-desc">{description}</p>}
-          {verbs && <div className="t-panel-verbs">{verbs}</div>}
+          {verbs && !inRule && <div className="t-panel-verbs">{verbs}</div>}
         </div>
       )}
       <div className="t-panel-body">{children}</div>
@@ -339,17 +342,19 @@ export type DetailRow = Readonly<{ label: string; value: ReactNode; hint?: React
 
 export function Details({ items, label, className }: Readonly<{ items: readonly DetailRow[]; label?: string; className?: string }>) {
   return (
-    <dl aria-label={label} className={cx("t-details", className)}>
-      {items.map((item) => (
-        <div className="t-detail" key={item.label}>
-          <dt>{item.label}{item.explain && <Help text={item.explain} />}</dt>
-          <dd>
-            <span className="t-detail-value">{item.value}{item.copy && <Copy label={`Copy ${item.label.toLowerCase()}`} value={item.copy} />}</span>
-            {item.hint && <small>{item.hint}</small>}
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <div className={cx("t-details-wrap", className)}>
+      <dl aria-label={label} className="t-details">
+        {items.map((item) => (
+          <div className="t-detail" key={item.label}>
+            <dt>{item.label}{item.explain && <Help text={item.explain} />}</dt>
+            <dd>
+              <span className="t-detail-value">{item.value}{item.copy && <Copy label={`Copy ${item.label.toLowerCase()}`} value={item.copy} />}</span>
+              {item.hint && <small>{item.hint}</small>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 
@@ -497,7 +502,8 @@ export function Modal({ open, onClose, title, children, verbs, className, dismis
   );
 }
 
-/** A drawer from the right edge, the height of the screen. */
+/** A form or a reading in the middle of the screen: the same box as a
+    question, with a close key in its rule and a scrolling body. */
 export function Drawer({ open, onClose, title, description, children, footer, closeActionId, className }: Readonly<{
   open: boolean;
   onClose: () => void;
@@ -513,17 +519,17 @@ export function Drawer({ open, onClose, title, description, children, footer, cl
   return (
     <dialog aria-labelledby={titleId} className={cx("t-drawer", className)} ref={ref}>
       {open && (
-        <>
-          <header className="t-drawer-head">
-            <div className="t-drawer-title">
-              <h2 id={titleId}>{title}</h2>
-              {description && <p>{description}</p>}
-            </div>
+        <div className="t-panel t-panel-named t-drawer-panel">
+          <h2 className="t-panel-name" id={titleId}>{title}</h2>
+          <div className="t-panel-rule-verbs t-drawer-close">
             <IconKey data-action={closeActionId} icon="close" label="Close panel" onClick={onClose} />
-          </header>
-          <div className="t-drawer-body">{children}</div>
+          </div>
+          <div className="t-drawer-body">
+            {description && <p className="t-drawer-desc">{description}</p>}
+            {children}
+          </div>
           {footer && <footer className="t-drawer-foot">{footer}</footer>}
-        </>
+        </div>
       )}
     </dialog>
   );

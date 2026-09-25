@@ -116,17 +116,7 @@ function LoginAccounts({ model }: Readonly<{ model: LoginAccountsModel }>) {
   const accounts = model.accounts;
   const offers = model.connectTelegram !== null || model.connectGoogle !== null || model.addPassword !== null;
   return (
-    <Panel
-      description="Every method belongs to the same Spawnpoint identity. None becomes primary because it was added first."
-      name="Sign-in methods"
-      verbs={offers ? <Verbs>
-        {/* The two provider widgets are the providers' own flows; they keep
-            their own look, as a sign-in button from elsewhere should. */}
-        {model.connectTelegram && <TelegramLoginButton className="t-provider" label="Add Telegram" onToken={model.connectTelegram} variant="outlined" />}
-        {model.connectGoogle && <GoogleLoginButton className="t-provider" onToken={model.connectGoogle} />}
-        {model.addPassword && <Verb action={model.addPassword} />}
-      </Verbs> : undefined}
-    >
+    <Panel description="Every method belongs to the same Spawnpoint identity. None becomes primary because it was added first." name="Sign-in methods">
       {accounts.status === "loading" && <Wait label="Loading sign-in methods" />}
       {accounts.status === "error" && <Notice description={accounts.error} title="Sign-in methods are unavailable" tone="error" verbs={<Verb action={accounts.retry} size="small" />} />}
       {accounts.status === "ready" && accounts.value.length === 0 && <Empty description="This identity has no linked login method the current API can report." title="No sign-in methods" />}
@@ -148,6 +138,15 @@ function LoginAccounts({ model }: Readonly<{ model: LoginAccountsModel }>) {
             );
           })}
         </ul>
+      )}
+      {offers && (
+        <Verbs>
+          {/* The two provider widgets are the providers' own flows; they keep
+              their own look, as a sign-in button from elsewhere should. */}
+          {model.connectTelegram && <TelegramLoginButton className="t-provider" label="Add Telegram" onToken={model.connectTelegram} variant="outlined" />}
+          {model.connectGoogle && <GoogleLoginButton className="t-provider" onToken={model.connectGoogle} />}
+          {model.addPassword && <Verb action={model.addPassword} />}
+        </Verbs>
       )}
       {model.form && (
         <form className="t-form" onSubmit={(event) => { event.preventDefault(); model.form?.submit.run(); }}>

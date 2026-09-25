@@ -2,23 +2,17 @@ import type { ReactNode } from "react";
 
 import type { BackupEntry } from "../../api/contract";
 import { Timestamp } from "../../components/ui/Timestamp";
-import type { Action } from "../../core/actions";
 import type { BackupsModel, Detail, DetailValue, ReleaseRow, WorldModel } from "../../core/models";
 import { wipeStatus } from "../../core/worlds";
 import { Icon } from "../../icons";
 import { formatBytes, formatTime, shortDigest } from "../../lib/format";
-import { useMediaQuery } from "../../shell/hooks";
 import { Address, Choice, Choices, Col, Copy, DetailRow, DetailsGroup, Empty, Ghost, Notice, Overflow, Page, Panel, State, Table, Tabs, Verb, Verbs } from "./ui";
 import { Notices } from "./Worlds";
 
-// One world: its name and state on the first line with its verbs, the
-// notices, then the four sections behind tabs.
+// One world: its name and state on the first line, its verbs on the second
+// with the one that matters first, the notices, then the sections behind tabs.
 export function World({ model }: Readonly<{ model: WorldModel }>) {
   const { world, game } = model;
-  // A phone has room for one decision; refresh and invite move into the overflow.
-  const narrow = useMediaQuery("(max-width: 599px)");
-  const secondary: Action[] = [model.refresh, ...(model.invite ? [model.invite] : [])];
-  const groups: (readonly Action[])[] = narrow ? [secondary, model.more] : [model.more];
 
   return (
     <Page>
@@ -29,10 +23,10 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
           <State kind={model.availability.kind} label={model.availability.label} />
         </div>
         <Verbs className="t-page-verbs">
-          {!narrow && <Verb action={model.refresh} />}
-          {!narrow && model.invite && <Verb action={model.invite} />}
           <Verb action={model.session} tone="primary" />
-          {groups.some((group) => group.length > 0) && <Overflow groups={groups} label={`More actions for ${world.displayName}`} />}
+          <Verb action={model.refresh} />
+          {model.invite && <Verb action={model.invite} />}
+          {model.more.length > 0 && <Overflow groups={[model.more]} label={`More actions for ${world.displayName}`} />}
         </Verbs>
       </header>
       <Notices notices={model.notices} />

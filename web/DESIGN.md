@@ -392,15 +392,26 @@ document carries `html[data-skin="terminal"]`, which `index.html` stamps before 
   12px type (labels, column headings, small print), 20px under 13px and 14px (everything read), 24px under the 18px
   page title, 28px under the 22px host headline. A panel's name sits in its top rule as a tracked uppercase label.
 - **No radius, no shadow.** Every corner is square and every surface is flat. Boxes are drawn with `--rule`, one step
-  darker than the hairline, so they read as box-drawing lines rather than card borders. Menus, dialogs and sheets are
-  boxed the same way.
+  darker than the hairline, so they read as box-drawing lines rather than card borders. Menus are boxed the same way.
+  A question and a form open in the same box in the middle of the screen, its title in the rule and, for a form, the
+  close key at the rule's other end; nothing docks to an edge of the screen.
 - **A mark and a word.** Status is a bracketed mark in front of its label, never colour alone: `[*]` ok, `[>]` ready,
   `[-]` off, `[.]` pending, `[?]` unknown, `[!]` error and warning, `[i]` info, `[x]` archived, `[+]` absent. Progress
   is the one mark that moves: `[~]` spinning through `|`, `/`, `-` and `\`, held on the tilde under reduced motion.
   Notices carry the same marks in front of their titles.
 - **Bracketed controls.** A button is its label between `[` and `]`, and nothing is filled: the primary verb keeps
   the accent in its word and its brackets where a secondary verb's brackets are dim, the danger verb says so in red,
-  and hover is a tint. Tabs are cells on a rule; the selected one is inverted. Chips and switches are square.
+  and hover is an underline. One of several is a radio drawn in glyphs, `(o)` for the chosen and `( )` for the rest,
+  in the theme and look pickers, the metrics window and the backup filter alike; a switch is `[x]` or `[ ]`. Tabs
+  are cells on a rule; the selected one is inverted, as the menu row's current page is.
+- **From the left.** Nothing floats to the far edge of a line. A page head is two lines, what the page is and then
+  what can be done to it, the verb that matters first. A named panel's verbs sit in its top rule at the right, as its
+  name sits at the left, and step down to a line under the name where the two would meet (under 700px). A verb row
+  starts at the left wherever it is, in a box's foot, under a form, in a record; only a table's verb column keeps
+  its right edge. A details list gives its labels a column as wide as the longest of them and no wider, so a value
+  starts right after its name, and puts the label above the value where the box is narrower than 480px. A value and
+  its copy key are one unit that never breaks across lines. On a phone a table is a stack of records, each cell one
+  line with its label as a dim word before the value and the verbs on the last line.
 - **The host scene.** The first screen draws the scoped game's icon in a glyph ramp (`" .:-=+*#%@"`) on a dark cell,
   40×18 cells, 24×11 on a phone. `HostScene` is the adapter: it takes a painter's grid of brightness per cell, sets the
   exposure from the session state and keeps time. `GameIcon` picks the painter: the Spawnpoint mark and the Minecraft
@@ -417,7 +428,7 @@ document carries `html[data-skin="terminal"]`, which `index.html` stamps before 
   rows and bars, are not drawn at all. The metrics wells wait at their own height so nothing moves when the numbers
   land. No shimmer, no texture, no slots.
 - **Spacing.** The page gutter and the gap between panels are the console's (24px, 16px on a phone); a named panel
-  keeps 10px more above it for the name on its rule, an unnamed one does not. Cells are 16px in from the rule, 12px at
+  keeps 10px more above it for the name on its rule, 20px when its verbs sit there too, an unnamed one does not. Cells are 16px in from the rule, 12px at
   the medium step so the worlds table fits a tablet in the wider face. Under a coarse pointer the frame's controls
   (scope, avatar, menu words) are 36px tall inside their 40px rows and a chip is 32px.
 - **What it does not do.** It never restyles the front door or sign-in, never introduces a new colour, and never hides

@@ -292,12 +292,11 @@ html[data-skin="terminal"] .t-main > .t-page {
   to { clip-path: inset(0); }
 }
 
+/* The head is two lines: what the page is, then what can be done to it.
+   Both read from the left; nothing floats to the far edge. */
 html[data-skin="terminal"] .t-page-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px 24px;
+  display: grid;
+  gap: 12px;
 }
 
 html[data-skin="terminal"] .t-page-title {
@@ -358,11 +357,8 @@ html[data-skin="terminal"] .t-panel-name {
 }
 
 html[data-skin="terminal"] .t-panel-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px 24px;
+  display: grid;
+  gap: 12px;
   padding: 20px 16px 0;
 }
 
@@ -379,7 +375,53 @@ html[data-skin="terminal"] .t-panel-verbs {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
+}
+
+/* A named panel's verbs sit in its top rule at the right, as its name sits
+   at the left: the box carries its own controls, the way a drawn frame
+   carries its buttons. */
+html[data-skin="terminal"] .t-panel-rule-verbs {
+  position: absolute;
+  top: calc(var(--t-key) / -2);
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  height: var(--t-key);
+  padding: 0 1ch;
+  background: var(--canvas);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+html[data-skin="terminal"] .t-panel:has(> .t-panel-rule-verbs) {
+  margin-top: calc(var(--t-key) / 2 + 2px);
+}
+
+/* Narrower than this the name and the verbs would meet on the rule; the
+   verbs step down to a line of their own under the name. */
+@media (max-width: 699px) {
+  html[data-skin="terminal"] .t-panel-rule-verbs:not(.t-drawer-close) {
+    position: static;
+    flex-wrap: wrap;
+    max-width: none;
+    height: auto;
+    min-height: 0;
+    padding: 20px 16px 0;
+  }
+
+  html[data-skin="terminal"] .t-panel:has(> .t-panel-rule-verbs:not(.t-drawer-close)) {
+    margin-top: 10px;
+  }
+
+  html[data-skin="terminal"] .t-panel-rule-verbs:not(.t-drawer-close) + .t-panel-head {
+    padding-top: 12px;
+  }
+
+  html[data-skin="terminal"] .t-panel-rule-verbs:not(.t-drawer-close) + .t-panel-body {
+    padding-top: 12px;
+  }
 }
 
 html[data-skin="terminal"] .t-panel-body {
@@ -388,7 +430,7 @@ html[data-skin="terminal"] .t-panel-body {
   padding: 16px;
 }
 
-html[data-skin="terminal"] .t-panel-named > .t-panel-body:first-of-type {
+html[data-skin="terminal"] .t-panel-named > .t-panel-body {
   padding-top: 20px;
 }
 
@@ -402,7 +444,7 @@ html[data-skin="terminal"] .t-panel-flush > .t-panel-body {
   padding: 0;
 }
 
-html[data-skin="terminal"] .t-panel-flush.t-panel-named > .t-panel-body:first-of-type {
+html[data-skin="terminal"] .t-panel-flush.t-panel-named > .t-panel-body {
   padding-top: 12px;
 }
 
@@ -639,12 +681,12 @@ html[data-skin="terminal"] .t-verbs {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 8px;
 }
 
-html[data-skin="terminal"] .t-verbs-start {
-  justify-content: flex-start;
+html[data-skin="terminal"] .t-verbs-end {
+  justify-content: flex-end;
 }
 
 /* --- choices and toggles ------------------------------------------------------------------ */
@@ -658,12 +700,13 @@ html[data-skin="terminal"] .t-choices {
   border: 0;
 }
 
+/* One of several: a radio as a terminal draws one, (o) for the chosen. */
 html[data-skin="terminal"] .t-choice {
   display: inline-flex;
   align-items: center;
   gap: 1ch;
   height: var(--t-key-small);
-  padding: 0 1ch;
+  padding: 0 0.5ch;
   border: 0;
   background: none;
   color: var(--ink);
@@ -673,19 +716,21 @@ html[data-skin="terminal"] .t-choice {
   cursor: pointer;
 }
 
-html[data-skin="terminal"] .t-choice:hover > span:not(.t-bracket) {
+html[data-skin="terminal"] .t-choice:hover > span:not(.t-choice-box) {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
+html[data-skin="terminal"] .t-choice-box {
+  color: var(--ink-secondary);
+}
+
 html[data-skin="terminal"] .t-choice-on {
-  background: var(--primary);
-  color: var(--on-primary);
   font-weight: 700;
 }
 
-html[data-skin="terminal"] .t-choice-on > .t-bracket {
-  opacity: 1;
+html[data-skin="terminal"] .t-choice-on > .t-choice-box {
+  color: var(--primary-ink);
 }
 
 html[data-skin="terminal"] .t-toggle {
@@ -1085,6 +1130,7 @@ html[data-skin="terminal"] .t-table .t-verbs-col {
 
 html[data-skin="terminal"] .t-table .t-verbs-col .t-verbs {
   flex-wrap: nowrap;
+  justify-content: flex-end;
 }
 
 html[data-skin="terminal"] .t-table .t-secondary {
@@ -1117,8 +1163,9 @@ html[data-skin="terminal"] .t-table-state:hover td {
   }
 }
 
-/* On a phone every row is a block: the label against the left, the value
-   against the right, the verbs on a line of their own. */
+/* On a phone a table is a stack of records: each cell one line, its label
+   a dim word in front of its value, the verbs on the last line. Everything
+   reads from the left, as a terminal prints a record. */
 @container (max-width: 599px) {
   html[data-skin="terminal"] .t-table thead {
     display: none;
@@ -1145,87 +1192,68 @@ html[data-skin="terminal"] .t-table-state:hover td {
   }
 
   html[data-skin="terminal"] .t-table td {
-    display: grid;
-    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
-    gap: 12px;
-    height: auto;
-    min-height: 32px;
-    padding: 4px 0;
-    border: 0;
+    display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
-    justify-items: end;
-    text-align: right;
+    gap: 2px 1.5ch;
+    height: auto;
+    min-height: 24px;
+    padding: 2px 0;
+    border: 0;
+    text-align: left;
+    white-space: normal;
   }
 
   html[data-skin="terminal"] .t-table td::before {
     content: attr(data-label);
-    justify-self: start;
+    flex: none;
+    min-width: 8ch;
     color: var(--ink-secondary);
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+  }
+
+  html[data-skin="terminal"] .t-table td.t-end {
     text-align: left;
   }
 
   html[data-skin="terminal"] .t-table td.t-verbs-col {
-    display: flex;
-    justify-content: flex-end;
     width: auto;
     padding-top: 8px;
   }
 
-  html[data-skin="terminal"] .t-table td.t-verbs-col::before {
+  html[data-skin="terminal"] .t-table td.t-verbs-col::before,
+  html[data-skin="terminal"] .t-table-headless td::before,
+  html[data-skin="terminal"] .t-table-state td::before {
     display: none;
   }
 
-  html[data-skin="terminal"] .t-table td.t-verbs-col .t-verbs,
-  html[data-skin="terminal"] .t-table td.t-verbs-col .t-verb {
-    flex: 1;
-    justify-content: center;
+  html[data-skin="terminal"] .t-table td.t-verbs-col .t-verbs {
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   html[data-skin="terminal"] .t-table-state td {
     display: block;
     padding: 0;
   }
-
-  html[data-skin="terminal"] .t-table-state td::before {
-    display: none;
-  }
-
-  html[data-skin="terminal"] .t-table .t-stack {
-    justify-items: end;
-    text-align: right;
-  }
-
-  /* A table that hid its headings shows no labels here either: the person
-     and their controls read from the left, as a record does. */
-  html[data-skin="terminal"] .t-table-headless td {
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: start;
-    text-align: left;
-  }
-
-  html[data-skin="terminal"] .t-table-headless td::before {
-    display: none;
-  }
-
-  html[data-skin="terminal"] .t-table-headless td.t-end {
-    justify-items: end;
-  }
-
-  html[data-skin="terminal"] .t-table-headless .t-stack {
-    justify-items: start;
-    text-align: left;
-  }
 }
 
 /* --- details ------------------------------------------------------------------------------- */
 
+/* The label column is as wide as its longest label and no wider, so a value
+   starts right after its name; a box too narrow for the two side by side
+   puts the label on its own line above the value. */
+html[data-skin="terminal"] .t-details-wrap {
+  container-type: inline-size;
+  min-width: 0;
+}
+
 html[data-skin="terminal"] .t-details {
   display: grid;
-  grid-template-columns: minmax(140px, 36%) minmax(0, 1fr);
+  grid-template-columns: fit-content(40%) minmax(0, 1fr);
   margin: 0;
 }
 
@@ -1234,10 +1262,26 @@ html[data-skin="terminal"] .t-detail {
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
   align-items: start;
-  gap: 0 24px;
+  gap: 0 3ch;
   min-height: 44px;
   padding: 10px 0;
   border-bottom: 1px solid var(--outline);
+}
+
+@container (max-width: 479px) {
+  html[data-skin="terminal"] .t-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html[data-skin="terminal"] .t-detail {
+    gap: 4px 0;
+    min-height: 0;
+    padding: 8px 0;
+  }
+
+  html[data-skin="terminal"] .t-detail dt {
+    padding-top: 0;
+  }
 }
 
 html[data-skin="terminal"] .t-detail:last-child {
@@ -1261,11 +1305,18 @@ html[data-skin="terminal"] .t-detail dd small {
   margin-top: 2px;
 }
 
+/* A value and its copy key are one unit: the key never drops to a line of
+   its own under the value. */
 html[data-skin="terminal"] .t-detail-value {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 4px 1ch;
+  gap: 1ch;
+  min-width: 0;
+  max-width: 100%;
+}
+
+html[data-skin="terminal"] .t-detail-value > :first-child {
   min-width: 0;
 }
 
@@ -1276,6 +1327,7 @@ html[data-skin="terminal"] .t-details-flush .t-detail {
 
 html[data-skin="terminal"] .t-details-group {
   display: grid;
+  align-content: start;
   gap: 8px;
   min-width: 0;
 }
@@ -1287,9 +1339,9 @@ html[data-skin="terminal"] .t-group-name {
 
 html[data-skin="terminal"] .t-group-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 8px 16px;
 }
 
 html[data-skin="terminal"] .t-details-columns {
@@ -1551,94 +1603,74 @@ html[data-skin="terminal"] .t-modal-body {
 
 html[data-skin="terminal"] .t-modal-verbs {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 0 16px 16px;
 }
 
+/* A form opens in the same kind of box as a question, in the middle of the
+   screen: the title in its rule, the close key in the rule's other end. */
 html[data-skin="terminal"] .t-drawer {
-  position: fixed;
-  inset: 0 0 0 auto;
-  width: min(480px, 100vw);
-  height: 100dvh;
+  width: min(560px, calc(100vw - 32px));
   max-width: none;
-  max-height: none;
-  margin: 0;
-  display: none;
-  flex-direction: column;
-  border-left: 1px solid var(--rule);
-  background: var(--surface);
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  overflow: visible;
 }
 
 html[data-skin="terminal"] .t-drawer[open] {
+  animation: t-modal-in var(--dur) var(--ease) both;
+}
+
+html[data-skin="terminal"] .t-drawer-panel {
   display: flex;
-  animation: t-drawer-in var(--dur) var(--ease) both;
+  flex-direction: column;
+  max-height: calc(100dvh - 32px);
+  margin-top: 0;
 }
 
-@keyframes t-drawer-in {
-  from { transform: translateX(24px); opacity: 0; }
-}
-
-html[data-skin="terminal"] .t-drawer-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 16px 12px 24px;
-  border-bottom: 1px solid var(--rule);
-}
-
-html[data-skin="terminal"] .t-drawer-title h2 {
-  margin: 0;
-  font-size: 16px;
-  line-height: 24px;
-}
-
-html[data-skin="terminal"] .t-drawer-title p {
-  margin: 4px 0 0;
-  color: var(--ink-secondary);
-  font-size: 13px;
+html[data-skin="terminal"] .t-drawer-close {
+  padding: 0;
 }
 
 html[data-skin="terminal"] .t-drawer-body {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 20px 24px;
+  padding: 24px 16px 16px;
+}
+
+html[data-skin="terminal"] .t-drawer-desc {
+  margin: 0 0 16px;
+  color: var(--ink-secondary);
+  font-size: 13px;
 }
 
 html[data-skin="terminal"] .t-drawer-foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
-  gap: 16px;
-  padding: 12px 24px;
+  gap: 8px 16px;
+  padding: 12px 16px 16px;
   border-top: 1px solid var(--rule);
 }
 
 html[data-skin="terminal"] .t-drawer-foot p {
-  flex: 1;
+  flex: 1 1 100%;
   margin: 0;
   color: var(--ink-secondary);
   font-size: 13px;
 }
 
 @media (max-width: 599px) {
-  html[data-skin="terminal"] .t-modal {
-    inset: auto 0 0 0;
-    width: 100vw;
-    max-height: calc(100dvh - 48px);
-    margin: 0;
+  html[data-skin="terminal"] .t-modal,
+  html[data-skin="terminal"] .t-drawer {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
   }
 
-  html[data-skin="terminal"] .t-drawer-body,
-  html[data-skin="terminal"] .t-drawer-foot {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  html[data-skin="terminal"] .t-drawer-head {
-    padding-left: 16px;
+  html[data-skin="terminal"] .t-drawer-panel {
+    max-height: calc(100dvh - 16px);
   }
 }
 
@@ -1836,24 +1868,7 @@ html[data-skin="terminal"] .t-scope-code {
   font-weight: 700;
 }
 
-/* A phone has room for one decision on a line: the primary verb takes the
-   width, the overflow sits beside it. */
 @media (max-width: 599px) {
-  html[data-skin="terminal"] .t-page-head {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  html[data-skin="terminal"] .t-page-verbs {
-    flex-wrap: nowrap;
-  }
-
-  html[data-skin="terminal"] .t-page-verbs > .t-verb:not(.t-verb-icon-only) {
-    flex: 1;
-    justify-content: center;
-    min-width: 0;
-  }
-
   html[data-skin="terminal"] .t-invite-form {
     grid-template-columns: minmax(0, 1fr);
   }

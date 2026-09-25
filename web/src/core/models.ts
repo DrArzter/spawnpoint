@@ -292,11 +292,18 @@ export type LoginAccountsModel = Readonly<{
   rowActions: (account: LinkedLoginAccount) => readonly Action[];
 }>;
 
+/** Which face the console wears; choosing one reloads the page in it. */
+export type LookModel = Readonly<{
+  current: string;
+  options: readonly Readonly<{ id: string; name: string; choose: Action }>[];
+}>;
+
 export type ProfileModel = Readonly<{
   member: Member;
   role: Role | undefined;
   viewer: ViewerProfile;
   appearance: AppearanceModel;
+  look: LookModel;
   signOut: Action;
   openInBrowser: Action | null;
   loginAccounts: LoginAccountsModel;

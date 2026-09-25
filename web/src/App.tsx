@@ -9,7 +9,7 @@ import { EmailActionScreen } from "./screens/EmailActionScreen";
 import { JoinScreen } from "./screens/JoinScreen";
 import { LandingScreen } from "./screens/LandingScreen";
 import { useBootCard } from "./shell/hooks";
-import { chooseSkin } from "./skins";
+import { chooseSkin, currentSkinId, isSkinId, SKIN_CHOICES, wearSkin } from "./skins";
 
 // The gate in front of the console: who is here, and which door they came
 // through. The console itself is bones under a skin (core/Console.tsx).
@@ -20,6 +20,7 @@ export function App() {
   const { visible: bootVisible, publish } = useBootCard();
   const emailAction = readEmailActionRoute();
   const skin = useMemo(chooseSkin, []);
+  const looks = useMemo(() => ({ current: currentSkinId(), options: SKIN_CHOICES, wear: (id: string) => { if (isSkinId(id)) wearSkin(id); } }), []);
 
   useEffect(() => {
     let active = true;
@@ -67,5 +68,5 @@ export function App() {
   if (atLanding) return <LandingScreen auth={auth} onChange={handleAuth} />;
   if (auth.status !== "authenticated") return <LandingScreen auth={auth} onChange={handleAuth} />;
   if (auth.session.state !== "active") return <AuthScreen auth={auth} onChange={handleAuth} />;
-  return <SnackbarProvider><ConsoleRoot continuesBootCard={bootVisible} session={auth.session} skin={skin} /></SnackbarProvider>;
+  return <SnackbarProvider><ConsoleRoot continuesBootCard={bootVisible} looks={looks} session={auth.session} skin={skin} /></SnackbarProvider>;
 }

@@ -10,7 +10,7 @@ import { TextField } from "../../components/ui/Fields";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useSnackbar } from "../../components/ui/Snackbar";
 import { Banner, Card, EmptyState, PageHeader } from "../../components/ui/Surfaces";
-import type { AppearanceModel, LoginAccountsModel, ProfileModel } from "../../core/models";
+import type { AppearanceModel, LoginAccountsModel, LookModel, ProfileModel } from "../../core/models";
 import { Icon, type IconName } from "../../icons";
 import { PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../../lib/signin";
 import { deriveAccent, DEFAULT_ACCENT, parseHex } from "../../styles/accent";
@@ -31,7 +31,7 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
         subtitle={viewer.username ? `@${viewer.username}` : viewer.email ?? "Spawnpoint identity"}
         title={member.name}
       />
-      <Appearance model={model.appearance} />
+      <Appearance look={model.look} model={model.appearance} />
       <LoginAccounts model={model.loginAccounts} />
     </div>
   );
@@ -55,7 +55,7 @@ const SUGGESTED: readonly { name: string; colour: string }[] = [
   { name: "Grey", colour: "#5f5f5f" },
 ];
 
-function Appearance({ model }: Readonly<{ model: AppearanceModel }>) {
+function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: LookModel }>) {
   const notify = useSnackbar();
   const [draft, setDraft] = useState(model.accent);
   // What the panel would actually paint, so the note below describes the
@@ -91,6 +91,16 @@ function Appearance({ model }: Readonly<{ model: AppearanceModel }>) {
             ))}
           </fieldset>
         </div>
+        <div className="appearance-group">
+          <span className="appearance-label" id="appearance-look">Look</span>
+          <fieldset aria-labelledby="appearance-look" className="chip-row fieldset-plain">
+            {look.options.map((option) => (
+              <ChoiceChip data-action={option.choose.id} key={option.id} onClick={option.choose.run} pressed={option.id === look.current} title={option.choose.hint}>{option.name}</ChoiceChip>
+            ))}
+          </fieldset>
+          <p className="appearance-note">Remembered on this device; theme and accent follow your identity.</p>
+        </div>
+
         <div className="appearance-group">
           <span className="appearance-label" id="appearance-accent">Accent</span>
           <fieldset aria-labelledby="appearance-accent" className="accent-row fieldset-plain">

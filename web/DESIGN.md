@@ -101,6 +101,18 @@ typography:
     fontWeight: 400
     lineHeight: "16px"
     fontFeature: "tabular-nums"
+  terminal-title:
+    fontFamily: "B612 Mono, ui-monospace, SF Mono, Menlo, Consolas, monospace"
+    fontSize: "18px"
+    fontWeight: 700
+    lineHeight: "24px"
+  terminal-label:
+    fontFamily: "B612 Mono, ui-monospace, SF Mono, Menlo, Consolas, monospace"
+    fontSize: "12px"
+    fontWeight: 700
+    lineHeight: "20px"
+    letterSpacing: "0.08em"
+    textTransform: "uppercase"
 rounded:
   indicator: "2px"
   tab-indicator: "3px"
@@ -355,6 +367,40 @@ is plainly there.
 
 Which of the three applies is not a judgement made in the screen. `unavailable` from the transport means not connected;
 anything else that yields no rows is an empty state. See [ADR-0053](../docs/adr/0053-tell-not-built-apart-from-broken.md).
+
+## Skins
+
+Since [ADR-0059](../docs/adr/0059-separate-the-console-into-bones-and-skins.md) everything above describes one skin,
+`console`, the default face. A skin is a set of views over the same models; it may not change what a page offers,
+only how it is drawn. Every skin keeps the colour roles in this file: the owner wants the palette recognisable across
+their projects, so a skin changes type, shape, motion and chrome, never the hue of a status or the blue of an action.
+The front door, sign-in and the boot card are outside the skin and always wear the console face.
+
+### Terminal
+
+`skins/terminal` draws the console as one monospace screen: a top row, a menu row, then the grid, every row the full
+width on a phone as on a 4K monitor. It owns the frame and the first screen; the other pages are the console skin's
+views redrawn by `terminal.css`, which applies only while the terminal Shell is mounted (`html[data-skin="terminal"]`).
+
+- **One face.** B612 Mono for everything, loaded on demand when the skin mounts. Weight and inversion carry emphasis;
+  there is no second face and no second size for the same role. A panel's name sits in its top rule as a tracked
+  uppercase label.
+- **No radius, no shadow.** Every corner is square and every surface is flat. Boxes are drawn with `--rule`, one step
+  darker than the hairline, so they read as box-drawing lines rather than card borders. Menus, dialogs and sheets are
+  boxed the same way.
+- **A mark and a word.** Status is a bracketed mark in front of its label, never colour alone: `[*]` ok, `[ ]` ready,
+  `[-]` off, `[.]` pending, `[?]` unknown, `[!]` error and warning, `[i]` info, `[x]` archived, `[+]` absent. Progress
+  is the one mark that moves: `[~]` spinning through `|`, `/`, `-` and `\`, held on the tilde under reduced motion.
+  Notices carry the same marks in front of their titles.
+- **Bracketed controls.** A button is its label between `[` and `]`; the filled variant inverts to blue on a whole
+  cell, the danger variant to red. Tabs are cells on a rule; the selected one is inverted. Chips and switches are
+  square.
+- **The host scene.** The first screen draws the scoped game's mark in a glyph ramp (`" .:-=+*#%@"`) on a dark cell,
+  from `marks.json` (40×18, 24×11 on a phone). The session state sets the exposure: online is dense and breathes,
+  starting and stopping sweep one brighter scanline down the mark, stopped is sparse and still. Reduced motion stops
+  the tick.
+- **What it does not do.** It never restyles the front door or sign-in, never introduces a new colour, and never hides
+  an action the model offers; the contract test holds it to the same list as the console face.
 
 ## Do's and Don'ts
 

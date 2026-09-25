@@ -9,6 +9,7 @@ import { action, actionsOf, type Action } from "../src/core/actions.ts";
 import type { AccessModel, ConfirmationModel, ConsoleModel, CreateWorldModel, InvitationModel, MetricsModel, ProfileModel, ReleasesModel, ShellModel, WorldModel, WorldsModel, WorldSettingsModel } from "../src/core/models.ts";
 import type { Game, World } from "../src/model.ts";
 import { consoleSkin } from "../src/skins/console/index.ts";
+import { terminalSkin } from "../src/skins/terminal/index.ts";
 import type { Skin } from "../src/skins/skin.ts";
 
 /*
@@ -141,6 +142,7 @@ const profile: ProfileModel = {
   role: { id: "owner", name: "Owner", description: "Everything", permissions: ["a"] },
   viewer: { displayName: "DrArzter", inTelegram: true, username: "drarzter" },
   appearance: shell.appearance,
+  look: { current: "console", options: [{ id: "console", name: "Cloud console", choose: spy("look.console", "Cloud console", { disabled: true }) }, { id: "terminal", name: "Terminal", choose: spy("look.terminal", "Terminal") }] },
   signOut: spy("profile.signout", "Sign out"),
   openInBrowser: spy("profile.browser", "Open in browser"),
   loginAccounts: {
@@ -179,7 +181,7 @@ function checkSurface(name: string, markup: string, model: unknown, allowMissing
   assert.deepEqual([...new Set(missing)], [], `${name}: actions in the model that never reached the screen`);
 }
 
-const skins: readonly Skin[] = [consoleSkin];
+const skins: readonly Skin[] = [consoleSkin, terminalSkin];
 
 for (const skin of skins) {
   test(`${skin.name}: the shell and the scope dialog draw the scope, the theme toggle and the profile door`, () => {

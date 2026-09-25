@@ -13,6 +13,38 @@ import { Icon } from "../../icons";
 import { formatDateTime, plural } from "../../lib/format";
 import { ActionButton, menuItems } from "./actions";
 
+export const worldColumns: Column<WorldRow>[] = [
+  { id: "status", label: "Status", width: "15%", render: (row) => <Status kind={row.status.kind} label={row.status.label} /> },
+  {
+    id: "name",
+    label: "Name",
+    // Shares are declared, because auto layout hands the width to whichever
+    // cell wraps first: a date breaking into three lines was taking it from
+    // the name, which then truncated to four characters.
+    width: "24%",
+    render: (row) => <a className="row-link" href={row.href}>{row.world.displayName}</a>,
+  },
+  { id: "release", label: "Preset and release", width: "20%", render: (row) => <span><strong>{row.presetName}</strong><small>{row.releaseSummary}</small></span> },
+  {
+    id: "wipe",
+    label: "Wipe",
+    width: "16%",
+    render: (row) => row.wipe
+      ? <span title="A wipe is one generation of this world. Starting a new one keeps every backup of the old one."><strong className="num">#{row.wipe.number}</strong><small className="nowrap">Opened {row.wipe.openedAt}</small></span>
+      : <Ghost>{row.wipeAbsent}</Ghost>,
+  },
+  {
+    id: "address",
+    label: "Address",
+    // An address is copied, not read character by character, so it gives up
+    // width before the table has to scroll.
+    truncate: true,
+    width: "25%",
+    render: (row) => row.address ? <ConnectionAddress address={row.address} copyLabel={`Copy the address of ${row.world.displayName}`} /> : <Ghost>{row.addressAbsent}</Ghost>,
+  },
+  { id: "actions", label: "Actions", actions: true, render: (row) => <Menu items={menuItems(row.actions)} label={`More actions for ${row.world.displayName}`} size="small" /> },
+];
+
 export function Worlds({ model }: Readonly<{ model: WorldsModel }>) {
   const loading = model.status === "loading";
 
@@ -26,37 +58,6 @@ export function Worlds({ model }: Readonly<{ model: WorldsModel }>) {
     );
   }
 
-  const columns: Column<WorldRow>[] = [
-    { id: "status", label: "Status", width: "15%", render: (row) => <Status kind={row.status.kind} label={row.status.label} /> },
-    {
-      id: "name",
-      label: "Name",
-      // Shares are declared, because auto layout hands the width to whichever
-      // cell wraps first: a date breaking into three lines was taking it from
-      // the name, which then truncated to four characters.
-      width: "24%",
-      render: (row) => <a className="row-link" href={row.href}>{row.world.displayName}</a>,
-    },
-    { id: "release", label: "Preset and release", width: "20%", render: (row) => <span><strong>{row.presetName}</strong><small>{row.releaseSummary}</small></span> },
-    {
-      id: "wipe",
-      label: "Wipe",
-      width: "16%",
-      render: (row) => row.wipe
-        ? <span title="A wipe is one generation of this world. Starting a new one keeps every backup of the old one."><strong className="num">#{row.wipe.number}</strong><small className="nowrap">Opened {row.wipe.openedAt}</small></span>
-        : <Ghost>{row.wipeAbsent}</Ghost>,
-    },
-    {
-      id: "address",
-      label: "Address",
-      // An address is copied, not read character by character, so it gives up
-      // width before the table has to scroll.
-      truncate: true,
-      width: "25%",
-      render: (row) => row.address ? <ConnectionAddress address={row.address} copyLabel={`Copy the address of ${row.world.displayName}`} /> : <Ghost>{row.addressAbsent}</Ghost>,
-    },
-    { id: "actions", label: "Actions", actions: true, render: (row) => <Menu items={menuItems(row.actions)} label={`More actions for ${row.world.displayName}`} size="small" /> },
-  ];
 
   return (
     <div className="page">
@@ -72,7 +73,7 @@ export function Worlds({ model }: Readonly<{ model: WorldsModel }>) {
         title={model.game ? `Worlds of ${model.game.displayName}` : "Worlds"}
       >
         <DataTable
-          columns={columns}
+          columns={worldColumns}
           empty={<EmptyState description={model.emptyDescription} icon="public" title="No worlds in this game" />}
           label={model.game ? `Worlds of ${model.game.displayName}` : "Worlds"}
           loading={loading}

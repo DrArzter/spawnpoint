@@ -29,7 +29,7 @@ export type Skin = Readonly<{
   InvitationSheet: ComponentType<{ model: InvitationModel }>;
 }>;
 
-export type SkinId = "console";
+export type SkinId = "console" | "terminal";
 
-export const SKIN_IDS: readonly SkinId[] = ["console"];
+export const SKIN_IDS: readonly SkinId[] = ["console", "terminal"];
 export const DEFAULT_SKIN: SkinId = "console";

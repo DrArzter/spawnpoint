@@ -882,17 +882,18 @@ html[data-skin="terminal"] .empty-icon {
   border: 1px solid var(--rule);
 }
 
-/* A placeholder is a line of dots, the way a terminal shows text that has
-   not arrived: one row of dots per 20px line, so a tall placeholder reads as
-   lines of them, and the dots march one cell to the right while they wait. */
+/* A placeholder is a hatched block, the way a terminal shades what it is
+   still fetching: diagonal stripes in the rule's grey on the panel's own
+   ground, crawling to the right while the reader waits. */
 html[data-skin="terminal"] .skeleton {
   border-radius: 0;
-  background: radial-gradient(circle, var(--outline-strong) 1.5px, transparent 2px) 0 50% / 8px 20px repeat;
-  animation: tmarch 800ms steps(4, end) infinite;
+  background: repeating-linear-gradient(-45deg, var(--surface-variant) 0 6px, var(--outline) 6px 12px);
+  background-size: 16.97px 100%;
+  animation: tcrawl 900ms linear infinite;
 }
 
-@keyframes tmarch {
-  to { background-position-x: 8px; }
+@keyframes tcrawl {
+  to { background-position-x: 16.97px; }
 }
 
 html[data-skin="terminal"] .tchart-placeholder {

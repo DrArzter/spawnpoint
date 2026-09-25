@@ -409,9 +409,9 @@ views redrawn by `terminal.css`, which applies only while the terminal Shell is 
 - **Metrics as the status page draws them.** One series is one 120px well with its line in the accent and the area
   under it filled at a tenth of it, no axes and no grid; a caption under the well names the series and its peak, and
   the window is stated once under all of them. A gap in the readings is a gap in the line, never a line to zero.
-- **Placeholders.** A skeleton is a line of dots, one row per 20px line, marching one cell to the right while the
-  reader waits; a tall placeholder reads as lines of them. The metrics wells wait at their own height with a caption
-  line under each, so nothing moves when the numbers land.
+- **Placeholders.** A skeleton is a hatched block: diagonal stripes in the rule's grey on the panel's ground,
+  crawling to the right while the reader waits. The metrics wells wait at their own height with one line under each
+  where the caption will be, so nothing moves when the numbers land.
 - **Spacing.** The page gutter and the gap between panels are the console's (24px, 16px on a phone); a named panel
   keeps 10px more above it for the name on its rule, an unnamed one does not. Cells are 16px in from the rule, 12px at
   the medium step so the worlds table fits a tablet in the wider face. Under a coarse pointer the frame's controls

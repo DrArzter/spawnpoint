@@ -38,8 +38,8 @@ export function Worlds({ model }: Readonly<{ model: WorldsModel }>) {
         flush
         name={title}
         verbs={<>
-          <Verb action={model.refresh} />
           {model.createWorld && <Verb action={model.createWorld} tone="primary" />}
+          <Verb action={model.refresh} />
         </>}
       >
         <Table
@@ -68,7 +68,7 @@ export const worldColumns: readonly Col<WorldRow>[] = [
       ? <span className="t-stack" title="A wipe is one generation of this world. Starting a new one keeps every backup of the old one."><strong>#{row.wipe.number}</strong><small>Opened {row.wipe.openedAt}</small></span>
       : <Ghost>{row.wipeAbsent}</Ghost>,
   },
-  { id: "address", label: "Address", render: (row) => row.address ? <Address connectivity={row.address.connectivity} copyLabel={`Copy the address of ${row.world.displayName}`} network={row.address.network} value={row.address.value} /> : <Ghost>{row.addressAbsent}</Ghost> },
+  { id: "address", label: "Address", render: (row) => row.address ? <Address connectivity={row.address.connectivity} copyLabel={`Copy the address of ${row.world.displayName}`} network={row.address.network} size="small" value={row.address.value} /> : <Ghost>{row.addressAbsent}</Ghost> },
   { id: "verbs", label: "Actions", verbs: true, render: (row) => <Overflow groups={[row.actions]} label={`More actions for ${row.world.displayName}`} size="small" /> },
 ];
 

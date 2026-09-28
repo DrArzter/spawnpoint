@@ -104,6 +104,7 @@ html[data-skin="terminal"] :focus-visible {
 /* The uppercase label: a panel's name, a column, a field, a fact. */
 html[data-skin="terminal"] .t-label,
 html[data-skin="terminal"] .t-panel-name,
+html[data-skin="terminal"] .t-dialog-title,
 html[data-skin="terminal"] .t-field-label,
 html[data-skin="terminal"] .t-setting-label,
 html[data-skin="terminal"] .t-table th,
@@ -402,7 +403,7 @@ html[data-skin="terminal"] .t-panel:has(> .t-panel-rule-verbs) {
 /* Narrower than this the name and the verbs would meet on the rule; the
    verbs step down to a line of their own under the name. */
 @media (max-width: 699px) {
-  html[data-skin="terminal"] .t-panel-rule-verbs:not(.t-drawer-close) {
+  html[data-skin="terminal"] .t-panel-rule-verbs {
     position: static;
     flex-wrap: wrap;
     max-width: none;
@@ -411,15 +412,15 @@ html[data-skin="terminal"] .t-panel:has(> .t-panel-rule-verbs) {
     padding: 20px 16px 0;
   }
 
-  html[data-skin="terminal"] .t-panel:has(> .t-panel-rule-verbs:not(.t-drawer-close)) {
+  html[data-skin="terminal"] .t-panel:has(> .t-panel-rule-verbs) {
     margin-top: 10px;
   }
 
-  html[data-skin="terminal"] .t-panel-rule-verbs:not(.t-drawer-close) + .t-panel-head {
+  html[data-skin="terminal"] .t-panel-rule-verbs + .t-panel-head {
     padding-top: 12px;
   }
 
-  html[data-skin="terminal"] .t-panel-rule-verbs:not(.t-drawer-close) + .t-panel-body {
+  html[data-skin="terminal"] .t-panel-rule-verbs + .t-panel-body {
     padding-top: 12px;
   }
 }
@@ -513,6 +514,10 @@ html[data-skin="terminal"] .t-state > span:last-child {
 /* In a table a state is one word beside its mark, never broken. */
 html[data-skin="terminal"] .t-table .t-state {
   white-space: nowrap;
+}
+
+html[data-skin="terminal"] .t-table .timestamp {
+  flex-wrap: nowrap;
 }
 
 html[data-skin="terminal"] .t-state-large {
@@ -653,12 +658,6 @@ html[data-skin="terminal"] .t-verb-icon-only {
   gap: 0.5ch;
 }
 
-html[data-skin="terminal"] .t-verb-bare {
-  height: auto;
-  min-height: 24px;
-  padding: 0;
-}
-
 /* Text that is a target reaches the floor a pointer needs. */
 html[data-skin="terminal"] .t-row-link,
 html[data-skin="terminal"] .t-source,
@@ -669,7 +668,6 @@ html[data-skin="terminal"] .t-crumb {
 }
 
 @media (pointer: coarse) {
-  html[data-skin="terminal"] .t-verb-bare,
   html[data-skin="terminal"] .t-row-link,
   html[data-skin="terminal"] .t-source,
   html[data-skin="terminal"] .t-crumb {
@@ -1105,7 +1103,7 @@ html[data-skin="terminal"] .t-table th {
 }
 
 html[data-skin="terminal"] .t-table td {
-  height: 40px;
+  height: calc(var(--t-key-small) + 20px);
   padding: 10px 16px;
   border-bottom: 1px solid var(--outline);
 }
@@ -1307,7 +1305,8 @@ html[data-skin="terminal"] .t-detail dd small {
 
 /* A value and its copy key are one unit: the key never drops to a line of
    its own under the value. */
-html[data-skin="terminal"] .t-detail-value {
+html[data-skin="terminal"] .t-detail-value,
+html[data-skin="terminal"] .t-with-copy {
   display: inline-flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -1316,8 +1315,18 @@ html[data-skin="terminal"] .t-detail-value {
   max-width: 100%;
 }
 
-html[data-skin="terminal"] .t-detail-value > :first-child {
+html[data-skin="terminal"] .t-detail-value > :first-child,
+html[data-skin="terminal"] .t-with-copy > :first-child {
   min-width: 0;
+}
+
+html[data-skin="terminal"] .t-with-copy {
+  display: flex;
+}
+
+html[data-skin="terminal"] .t-details-code .t-detail dt {
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 html[data-skin="terminal"] .t-details-flush .t-detail {
@@ -1449,7 +1458,6 @@ html[data-skin="terminal"] .t-check-off {
 
 html[data-skin="terminal"] .t-radios {
   display: grid;
-  gap: 8px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -1462,12 +1470,12 @@ html[data-skin="terminal"] .t-radios legend {
 
 html[data-skin="terminal"] .t-radio {
   align-items: flex-start;
-  padding: 12px;
-  border: 1px solid var(--outline);
+  gap: 1ch;
+  padding: 8px 0;
 }
 
-html[data-skin="terminal"] .t-radio:has(input:checked) {
-  border-color: var(--primary-ink);
+html[data-skin="terminal"] .t-radio + .t-radio {
+  border-top: 1px solid var(--outline);
 }
 
 /* --- the overflow menu: a list of verbs in the top layer --------------------------------- */
@@ -1594,11 +1602,34 @@ html[data-skin="terminal"] .t-modal-panel {
   margin-top: 0;
 }
 
+html[data-skin="terminal"] .t-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 1ch;
+  min-height: var(--t-key);
+  padding: 8px 12px 0 16px;
+}
+
+html[data-skin="terminal"] .t-dialog-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+}
+
+html[data-skin="terminal"] .t-dialog-head > .t-verb {
+  margin-left: auto;
+}
+
+html[data-skin="terminal"] .t-dialog-body:focus {
+  outline: none;
+}
+
 html[data-skin="terminal"] .t-modal-body {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 24px 16px 16px;
+  padding: 16px;
 }
 
 html[data-skin="terminal"] .t-modal-verbs {
@@ -1609,7 +1640,7 @@ html[data-skin="terminal"] .t-modal-verbs {
 }
 
 /* A form opens in the same kind of box as a question, in the middle of the
-   screen: the title in its rule, the close key in the rule's other end. */
+   screen: the title on its first line, the close key at that line's end. */
 html[data-skin="terminal"] .t-drawer {
   width: min(560px, calc(100vw - 32px));
   max-width: none;
@@ -1629,15 +1660,11 @@ html[data-skin="terminal"] .t-drawer-panel {
   margin-top: 0;
 }
 
-html[data-skin="terminal"] .t-drawer-close {
-  padding: 0;
-}
-
 html[data-skin="terminal"] .t-drawer-body {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 24px 16px 16px;
+  padding: 16px;
 }
 
 html[data-skin="terminal"] .t-drawer-desc {
@@ -1756,9 +1783,8 @@ html[data-skin="terminal"] .t-invite-form .t-copy-line {
 
 html[data-skin="terminal"] .t-invite-form .t-invite-verb {
   grid-column: 2;
-  height: var(--t-field);
   /* Level with the field, under its label. */
-  margin-top: 22px;
+  margin-top: calc(22px + (var(--t-field) - var(--t-key)) / 2);
 }
 
 html[data-skin="terminal"] .t-invite-link {
@@ -1781,7 +1807,7 @@ html[data-skin="terminal"] .t-invite-link-row {
 }
 
 html[data-skin="terminal"] .t-invite-link-row .t-verb {
-  height: var(--t-field);
+  margin-bottom: calc((var(--t-field) - var(--t-key)) / 2);
 }
 
 html[data-skin="terminal"] .t-filter-row {

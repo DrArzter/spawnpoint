@@ -45,10 +45,10 @@ function HostPanel({ model }: Readonly<{ model: MetricsModel }>) {
   }
   return (
     <Panel
-      name="Compute host"
-      verbs={<Choices label="Window">
+      head={<Choices label="Window">
         {model.ranges.map((option) => <Choice key={option.id} onClick={() => model.setRange(option.id)} pressed={model.range === option.id}>{option.label}</Choice>)}
       </Choices>}
+      name="Compute host"
     >
       {metrics.status === "error" && <Notice description={metrics.error} title="Metrics could not be loaded" tone="error" verbs={<Verb action={metrics.retry} size="small" />} />}
       {metrics.status === "loading" && waiting}

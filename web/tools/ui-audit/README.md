@@ -40,3 +40,7 @@ Read the output as evidence, not as a verdict. These results are expected and we
 Everything else is worth explaining or fixing.
 
 The routes are listed at the top of `audit.mjs`. Add one whenever a screen is added, otherwise it is never measured.
+
+What the probe cannot measure, where a control sits and whether the same control looks the same twice, is read by
+eye and written down per face under [`web/audits/`](../../audits/); the terminal skin's pass is
+[terminal-skin-2026-09-28.md](../../audits/terminal-skin-2026-09-28.md).

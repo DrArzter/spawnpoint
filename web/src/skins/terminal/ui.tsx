@@ -54,28 +54,25 @@ export type VerbTone = "plain" | "primary" | "danger";
 
 type KeyProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & Readonly<{
   label: ReactNode;
-  icon?: IconName;
   busy?: boolean;
   tone?: VerbTone;
   size?: "small" | "medium";
-  /** The word alone, no brackets: for a verb that sits inside a sentence. */
-  bare?: boolean;
 }>;
 
 /** A key on the terminal: its word between brackets. */
-export function Key({ label, icon, busy = false, tone = "plain", size = "medium", bare = false, className, type = "button", ...props }: KeyProps) {
+export function Key({ label, busy = false, tone = "plain", size = "medium", className, type = "button", ...props }: KeyProps) {
   return (
-    <button className={cx("t-verb", `t-verb-${tone}`, size === "small" && "t-verb-small", bare && "t-verb-bare", className)} type={type} {...props}>
-      {!bare && <span aria-hidden="true" className="t-bracket">[</span>}
-      {busy ? <Mark className="t-verb-icon" kind="progress" /> : icon && <Icon className="t-verb-icon" name={icon} size={16} />}
+    <button className={cx("t-verb", `t-verb-${tone}`, size === "small" && "t-verb-small", className)} type={type} {...props}>
+      <span aria-hidden="true" className="t-bracket">[</span>
+      {busy && <Mark className="t-verb-icon" kind="progress" />}
       <span className="t-verb-label">{label}</span>
-      {!bare && <span aria-hidden="true" className="t-bracket">]</span>}
+      <span aria-hidden="true" className="t-bracket">]</span>
     </button>
   );
 }
 
 /** A model's action as a key, carrying `data-action` for the contract. */
-export function Verb({ action, tone = "plain", size, className, hideIcon = false, ...rest }: Readonly<{ action: Action; tone?: VerbTone; size?: "small" | "medium"; className?: string; hideIcon?: boolean }> & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "disabled" | "children">) {
+export function Verb({ action, tone = "plain", size, className, ...rest }: Readonly<{ action: Action; tone?: VerbTone; size?: "small" | "medium"; className?: string }> & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "disabled" | "children">) {
   return (
     <Key
       aria-label={action.disabled && action.hint ? `${action.label}. ${action.hint}` : undefined}
@@ -83,7 +80,6 @@ export function Verb({ action, tone = "plain", size, className, hideIcon = false
       className={className}
       data-action={action.id}
       disabled={action.disabled}
-      icon={hideIcon ? undefined : action.icon}
       label={action.label}
       onClick={action.run}
       size={size}
@@ -95,9 +91,9 @@ export function Verb({ action, tone = "plain", size, className, hideIcon = false
 }
 
 /** An icon alone between brackets, for a control whose word is its label. */
-export function IconKey({ icon, label, className, ...props }: Omit<ComponentPropsWithRef<"button">, "children"> & Readonly<{ icon: IconName; label: string }>) {
+export function IconKey({ icon, label, size = "medium", className, ...props }: Omit<ComponentPropsWithRef<"button">, "children"> & Readonly<{ icon: IconName; label: string; size?: "small" | "medium" }>) {
   return (
-    <button aria-label={label} className={cx("t-verb", "t-verb-plain", "t-verb-icon-only", className)} title={label} type="button" {...props}>
+    <button aria-label={label} className={cx("t-verb", "t-verb-plain", "t-verb-icon-only", size === "small" && "t-verb-small", className)} title={label} type="button" {...props}>
       <span aria-hidden="true" className="t-bracket">[</span>
       <Icon name={icon} size={16} />
       <span aria-hidden="true" className="t-bracket">]</span>
@@ -111,7 +107,7 @@ export function Verbs({ children, className, align = "start" }: Readonly<{ child
 }
 
 /** Copies a value to the clipboard; the key says so for a moment. */
-export function Copy({ value, label }: Readonly<{ value: string; label: string }>) {
+export function Copy({ value, label, size = "medium" }: Readonly<{ value: string; label: string; size?: "small" | "medium" }>) {
   const [done, setDone] = useState(false);
   useEffect(() => {
     if (!done) return;
@@ -124,6 +120,7 @@ export function Copy({ value, label }: Readonly<{ value: string; label: string }
       icon={done ? "check" : "content_copy"}
       label={done ? "Copied" : label}
       onClick={() => { navigator.clipboard?.writeText(value).then(() => setDone(true)).catch(() => undefined); }}
+      size={size}
     />
   );
 }
@@ -140,11 +137,10 @@ export function Choices({ label, children, className }: Readonly<{ label: string
 }
 
 /** One of a row of options: a radio drawn in glyphs, (o) for the chosen. */
-export function Choice({ pressed, children, icon, className, ...props }: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & Readonly<{ pressed: boolean; icon?: IconName; children: ReactNode }>) {
+export function Choice({ pressed, children, className, ...props }: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & Readonly<{ pressed: boolean; children: ReactNode }>) {
   return (
     <button aria-pressed={pressed} className={cx("t-choice", pressed && "t-choice-on", className)} type="button" {...props}>
       <span aria-hidden="true" className="t-choice-box">{pressed ? "(o)" : "( )"}</span>
-      {icon && <Icon className="t-verb-icon" name={icon} size={16} />}
       <span>{children}</span>
     </button>
   );
@@ -196,10 +192,11 @@ export function Page({ children, className }: Readonly<{ children: ReactNode; cl
 
 /** A box with its name set into the top rule and its verbs in the rule's
     other end; a box without a name keeps its verbs in a head line. */
-export function Panel({ name, verbs, description, children, flush = false, className }: Readonly<{
+export function Panel({ name, verbs, description, head, children, flush = false, className }: Readonly<{
   name?: string;
   verbs?: ReactNode;
   description?: ReactNode;
+  head?: ReactNode;
   children: ReactNode;
   flush?: boolean;
   className?: string;
@@ -210,9 +207,10 @@ export function Panel({ name, verbs, description, children, flush = false, class
     <section aria-labelledby={name ? id : undefined} className={cx("t-panel", name && "t-panel-named", flush && "t-panel-flush", className)}>
       {name && <h2 className="t-panel-name" id={id}>{name}</h2>}
       {inRule && <div className="t-panel-rule-verbs">{verbs}</div>}
-      {(description || (verbs && !inRule)) && (
+      {(description || head || (verbs && !inRule)) && (
         <div className="t-panel-head">
           {description && <p className="t-panel-desc">{description}</p>}
+          {head}
           {verbs && !inRule && <div className="t-panel-verbs">{verbs}</div>}
         </div>
       )}
@@ -327,7 +325,7 @@ export function Table<Row>({ columns, rows, rowKey, label, loading = false, load
           {!loading && rows.length === 0 && <tr className="t-table-state"><td colSpan={columns.length}>{empty}</td></tr>}
           {!loading && rows.map((row) => (
             <tr key={rowKey(row)}>
-              {columns.map((column) => <td className={cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col", column.secondary && "t-secondary", column.optional && "t-optional")} data-label={column.verbs ? "" : column.label} key={column.id}>{column.render(row)}</td>)}
+              {columns.map((column) => <td className={cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col", column.secondary && "t-secondary", column.optional && "t-optional")} data-label={column.verbs ? "" : column.label} key={column.id} style={column.width ? { width: column.width } : undefined}>{column.render(row)}</td>)}
             </tr>
           ))}
         </tbody>
@@ -368,12 +366,12 @@ export function DetailsGroup({ title, items, level = 3 }: Readonly<{ title: stri
   );
 }
 
-export function Address({ value, connectivity, network, copyLabel }: Readonly<{ value: string; connectivity: "zerotier" | "route53" | "raw"; network: string; copyLabel?: string }>) {
+export function Address({ value, connectivity, network, copyLabel, size = "medium" }: Readonly<{ value: string; connectivity: "zerotier" | "route53" | "raw"; network: string; copyLabel?: string; size?: "small" | "medium" }>) {
   return (
     <span className="t-address">
       <span className="t-address-net" title={network}><Icon name={connectivity === "zerotier" ? "dns" : "public"} size={14} /><span className="visually-hidden">{network}</span></span>
       <code>{value}</code>
-      {copyLabel && <Copy label={copyLabel} value={value} />}
+      {copyLabel && <Copy label={copyLabel} size={size} value={value} />}
     </span>
   );
 }
@@ -396,7 +394,8 @@ export function Overflow({ label, groups, size = "medium", className }: Readonly
     const width = 240;
     const count = present.reduce((sum, group) => sum + group.length, 0);
     const estimated = 16 + count * 40 + (present.length - 1) * 9;
-    const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+    const anchored = rect.left + rect.width / 2 < window.innerWidth / 2 ? rect.left : rect.right - width;
+    const left = Math.max(8, Math.min(anchored, window.innerWidth - width - 8));
     const below = rect.bottom + 4;
     menu.style.left = `${left}px`;
     menu.style.top = below + estimated > window.innerHeight ? `${Math.max(8, rect.top - estimated - 4)}px` : `${below}px`;
@@ -435,7 +434,7 @@ export function Overflow({ label, groups, size = "medium", className }: Readonly
 
   return (
     <>
-      <IconKey aria-controls={id} aria-expanded={open} aria-haspopup="menu" className={cx(size === "small" && "t-verb-small", className)} icon="more_vert" label={label} onClick={() => (open ? hide() : show())} ref={trigger} />
+      <IconKey aria-controls={id} aria-expanded={open} aria-haspopup="menu" className={className} icon="more_vert" label={label} onClick={() => (open ? hide() : show())} ref={trigger} size={size} />
       <div className="t-menu" id={id} onKeyDown={onKeyDown} popover="auto" ref={panel} role="menu">
         {present.map((group, groupIndex) => (
           <div className="t-menu-group" key={group[0]?.id ?? groupIndex} role="presentation">
@@ -463,6 +462,7 @@ function useModal(open: boolean, onClose: () => void) {
     if (open && !dialog.open) {
       dialog.showModal();
       dialog.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+      if (!dialog.contains(document.activeElement) || document.activeElement === dialog) dialog.querySelector<HTMLElement>(".t-dialog-body")?.focus();
     }
     if (!open && dialog.open) dialog.close();
   }, [open]);
@@ -492,9 +492,11 @@ export function Modal({ open, onClose, title, children, verbs, className, dismis
   return (
     <dialog aria-labelledby={titleId} className={cx("t-modal", className)} onClick={onClick} ref={ref}>
       {open && (
-        <div className="t-panel t-panel-named t-modal-panel">
-          <h2 className="t-panel-name" id={titleId}>{title}</h2>
-          <div className="t-panel-body t-modal-body">{children}</div>
+        <div className="t-panel t-modal-panel">
+          <div className="t-dialog-head">
+            <h2 className="t-dialog-title" id={titleId}>{title}</h2>
+          </div>
+          <div className="t-panel-body t-modal-body t-dialog-body" tabIndex={-1}>{children}</div>
           {verbs && <div className="t-modal-verbs">{verbs}</div>}
         </div>
       )}
@@ -503,8 +505,8 @@ export function Modal({ open, onClose, title, children, verbs, className, dismis
 }
 
 /** A form or a reading in the middle of the screen: the same box as a
-    question, with a close key in its rule and a scrolling body. */
-export function Drawer({ open, onClose, title, description, children, footer, closeActionId, className }: Readonly<{
+    question, with a close key and a scrolling body. */
+export function Drawer({ open, onClose, title, description, children, footer, closeActionId, cancel, cancelLabel = "Cancel", className }: Readonly<{
   open: boolean;
   onClose: () => void;
   title: ReactNode;
@@ -512,6 +514,8 @@ export function Drawer({ open, onClose, title, description, children, footer, cl
   children?: ReactNode;
   footer?: ReactNode;
   closeActionId?: string;
+  cancel?: Action;
+  cancelLabel?: string;
   className?: string;
 }>) {
   const ref = useModal(open, onClose);
@@ -519,16 +523,21 @@ export function Drawer({ open, onClose, title, description, children, footer, cl
   return (
     <dialog aria-labelledby={titleId} className={cx("t-drawer", className)} ref={ref}>
       {open && (
-        <div className="t-panel t-panel-named t-drawer-panel">
-          <h2 className="t-panel-name" id={titleId}>{title}</h2>
-          <div className="t-panel-rule-verbs t-drawer-close">
+        <div className="t-panel t-drawer-panel">
+          <div className="t-dialog-head">
+            <h2 className="t-dialog-title" id={titleId}>{title}</h2>
             <IconKey data-action={closeActionId} icon="close" label="Close panel" onClick={onClose} />
           </div>
-          <div className="t-drawer-body">
+          <div className="t-drawer-body t-dialog-body" tabIndex={-1}>
             {description && <p className="t-drawer-desc">{description}</p>}
             {children}
           </div>
-          {footer && <footer className="t-drawer-foot">{footer}</footer>}
+          {(footer || cancel) && (
+            <footer className="t-drawer-foot">
+              {footer}
+              {cancel && <Key data-action={cancel.id} disabled={cancel.disabled} label={cancelLabel} onClick={cancel.run} />}
+            </footer>
+          )}
         </div>
       )}
     </dialog>

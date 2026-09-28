@@ -24,7 +24,7 @@ export function Rcon({ model }: Readonly<{ model: ConsoleModel }>) {
         <form className="t-rcon-input" onSubmit={(event) => event.preventDefault()}>
           <span aria-hidden="true" className="t-rcon-prompt">rcon&gt;</span>
           <input aria-label="RCON command" disabled placeholder="Gateway not connected" />
-          <Key disabled icon="keyboard_return" label="Run" size="small" />
+          <Key disabled label="Run" size="small" />
         </form>
       </section>
       <fieldset className="t-quick">

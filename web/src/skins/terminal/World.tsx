@@ -109,11 +109,11 @@ function WipesTab({ rows, worldName }: Readonly<{ rows: WorldModel["wipes"]; wor
 
 function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldName: string }>) {
   const columns: readonly Col<BackupEntry>[] = [
-    { id: "archive", label: "Archive", width: "40%", render: (entry) => <span className="t-inline"><code className="t-clip" title={entry.archiveName}>{entry.archiveName}</code><Copy label={`Copy the archive name ${entry.archiveName}`} value={entry.archiveName} /></span> },
+    { id: "archive", label: "Archive", width: "36%", render: (entry) => <span className="t-with-copy"><code className="t-clip" title={entry.archiveName}>{entry.archiveName}</code><Copy label={`Copy the archive name ${entry.archiveName}`} size="small" value={entry.archiveName} /></span> },
     { id: "wipe", label: "Wipe", width: "90px", render: (entry) => { const number = model.wipeNumber(entry.generationId); return number !== undefined ? <span>#{number}</span> : <Ghost>Legacy</Ghost>; } },
-    { id: "stored", label: "Stored", render: (entry) => <Timestamp value={entry.storedAt} /> },
-    { id: "size", label: "Size", width: "110px", align: "end", render: (entry) => formatBytes(entry.sizeBytes) },
-    { id: "checksum", label: "SHA-256", secondary: true, width: "180px", render: (entry) => <span className="t-inline"><code title={entry.checksum}>{shortDigest(entry.checksum)}</code><Copy label="Copy the full checksum" value={entry.checksum} /></span> },
+    { id: "stored", label: "Stored", width: "170px", render: (entry) => <Timestamp value={entry.storedAt} /> },
+    { id: "size", label: "Size", width: "130px", align: "end", render: (entry) => formatBytes(entry.sizeBytes) },
+    { id: "checksum", label: "SHA-256", secondary: true, width: "180px", render: (entry) => <span className="t-with-copy"><code title={entry.checksum}>{shortDigest(entry.checksum)}</code><Copy label="Copy the full checksum" size="small" value={entry.checksum} /></span> },
     { id: "verbs", label: "Actions", verbs: true, render: (entry) => <Verb action={model.restore(entry)} size="small" /> },
   ];
 

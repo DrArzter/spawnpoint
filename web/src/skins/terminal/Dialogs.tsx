@@ -45,8 +45,8 @@ export function ConfirmationDialog({ model }: Readonly<{ model: ConfirmationMode
       open
       title={model.title}
       verbs={<>
-        <Verb action={model.cancel} />
         <Verb action={model.confirm} tone={model.destructive ? "danger" : "primary"} />
+        <Verb action={model.cancel} data-autofocus={model.typedConfirmation ? undefined : true} />
       </>}
     >
       <p className="t-copy-line">{model.description}</p>
@@ -68,10 +68,10 @@ export function ConfirmationDialog({ model }: Readonly<{ model: ConfirmationMode
   );
 }
 
-function ConnectionFields({ model }: Readonly<{ model: ConnectionFieldsModel }>) {
+function ConnectionFields({ model, first = false }: Readonly<{ model: ConnectionFieldsModel; first?: boolean }>) {
   return <>
     <Field hint="Choose where this world's server starts." label="Hosting">
-      <SelectInput onChange={(event) => model.setPlacement(event.target.value as "configured" | "fleet")} value={model.placement}>
+      <SelectInput data-autofocus={first ? true : undefined} onChange={(event) => model.setPlacement(event.target.value as "configured" | "fleet")} value={model.placement}>
         <option value="configured">Persistent host · ZeroTier</option>
         <option disabled={!model.fleetAvailable} value="fleet">On-demand fleet · public connection{model.fleetAvailable ? "" : " (not configured)"}</option>
       </SelectInput>
@@ -90,6 +90,7 @@ export function CreateWorldSheet({ model }: Readonly<{ model: CreateWorldModel }
   const readyPresets = model.presets.filter((preset) => preset.buildStatus === "ready");
   return (
     <Drawer
+      cancel={model.cancel}
       closeActionId={model.cancel.id}
       description={`A new world opens wipe #1 from an immutable ${model.game.displayName} release.`}
       footer={<>
@@ -124,15 +125,17 @@ export function CreateWorldSheet({ model }: Readonly<{ model: CreateWorldModel }
 export function WorldSettingsSheet({ model }: Readonly<{ model: WorldSettingsModel }>) {
   return (
     <Drawer
+      cancel={model.cancel}
+      closeActionId={model.cancel.id}
       description={`Choose how ${model.world.displayName} is hosted and reached. Changes are allowed only while the world is stopped.`}
-      footer={<><Verb action={model.cancel} /><Verb action={model.save} tone="primary" /></>}
+      footer={<Verb action={model.save} tone="primary" />}
       onClose={model.cancel.run}
       open
       title={`Hosting · ${model.game.displayName}`}
     >
       <div className="t-form">
         {!model.stopped && <p className="t-copy-line">Stop this game's current session before changing hosting.</p>}
-        <ConnectionFields model={model.connection} />
+        <ConnectionFields first model={model.connection} />
       </div>
     </Drawer>
   );
@@ -147,6 +150,7 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
   const summary = model.query.trim() ? `${matches} matches` : `${model.reachable} reachable`;
   return (
     <Drawer
+      cancel={model.close}
       closeActionId={model.close.id}
       description={`${game.displayName} · ${world.displayName}${address}`}
       footer={<>
@@ -161,7 +165,7 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
         <fieldset className="t-radios">
           <legend className="t-setting-label">Audience</legend>
           <label className="t-radio">
-            <input checked={model.audience === "broadcast"} name="invite-audience" onChange={() => model.setAudience("broadcast")} type="radio" />
+            <input checked={model.audience === "broadcast"} data-autofocus name="invite-audience" onChange={() => model.setAudience("broadcast")} type="radio" />
             <span aria-hidden="true" className="t-radio-box">{model.audience === "broadcast" ? "(o)" : "( )"}</span>
             <span className="t-stack"><strong>Everyone</strong><small>Group chats and people subscribed to broadcast invitations. Your own chat is excluded.</small></span>
           </label>

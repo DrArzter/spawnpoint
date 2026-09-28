@@ -35,10 +35,10 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
   );
 }
 
-const THEMES: readonly { id: ThemePreference; label: string; icon: IconName }[] = [
-  { id: "system", label: "System", icon: "brightness_auto" },
-  { id: "light", label: "Light", icon: "light_mode" },
-  { id: "dark", label: "Dark", icon: "dark_mode" },
+const THEMES: readonly { id: ThemePreference; label: string }[] = [
+  { id: "system", label: "System" },
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
 ];
 
 function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: LookModel }>) {
@@ -67,7 +67,7 @@ function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: Lo
         <div className="t-setting">
           <span className="t-setting-label" id="t-appearance-theme">Theme</span>
           <Choices label="Theme">
-            {THEMES.map((option) => <Choice icon={option.icon} key={option.id} onClick={() => save({ theme: option.id })} pressed={model.preference === option.id}>{option.label}</Choice>)}
+            {THEMES.map((option) => <Choice key={option.id} onClick={() => save({ theme: option.id })} pressed={model.preference === option.id}>{option.label}</Choice>)}
           </Choices>
         </div>
         <div className="t-setting">
@@ -86,7 +86,7 @@ function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: Lo
             <Field hideLabel hint={valid ? undefined : "Six hex digits, for example #1a73e8."} label="Accent colour, hex">
               <TextInput mono onChange={(event) => commitAccent(event.target.value)} spellCheck={false} value={draft} />
             </Field>
-            <Key disabled={model.accent === DEFAULT_ACCENT} icon="restore" label="Reset" onClick={() => { setDraft(DEFAULT_ACCENT); save({ accent: DEFAULT_ACCENT }); }} />
+            <Key disabled={model.accent === DEFAULT_ACCENT} label="Reset" onClick={() => { setDraft(DEFAULT_ACCENT); save({ accent: DEFAULT_ACCENT }); }} />
           </div>
           {derived?.adjusted === true && (
             <p className="t-setting-note">Lightened or darkened for the {model.theme} theme so text on it stays readable. Links and buttons use <code>{derived.ink}</code>.</p>
@@ -157,8 +157,8 @@ function LoginAccounts({ model }: Readonly<{ model: LoginAccountsModel }>) {
           <Field label="Confirm password"><TextInput autoComplete="new-password" disabled={model.form.busy} maxLength={PASSWORD_MAXIMUM_LENGTH} minLength={PASSWORD_MINIMUM_LENGTH} onChange={(event) => model.form?.setConfirmation(event.target.value)} required type="password" value={model.form.confirmation} /></Field>
           {model.form.error && <p className="t-error" role="alert">{model.form.error}</p>}
           <Verbs>
-            <Verb action={model.form.cancel} />
             <Verb action={model.form.submit} tone="primary" type="submit" />
+            <Verb action={model.form.cancel} />
           </Verbs>
         </form>
       )}

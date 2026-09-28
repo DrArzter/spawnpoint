@@ -50,12 +50,12 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
       ),
     },
     { id: "role", label: "Role", align: "end", width: "180px", render: (row) => <RoleSelect disabled={rolesBlocked} excludeOwner fallback="Loading roles…" label={`Role for ${row.candidate.displayName}`} onChange={row.setRoleId} roles={model.roles} value={row.roleId} /> },
-    { id: "verbs", label: "Actions", verbs: true, render: (row) => <Verbs><Verb action={row.dismiss} size="small" /><Verb action={row.approve} size="small" tone="primary" /></Verbs> },
+    { id: "verbs", label: "Actions", verbs: true, width: "260px", render: (row) => <Verbs><Verb action={row.approve} size="small" tone="primary" /><Verb action={row.dismiss} size="small" /></Verbs> },
   ];
   const memberColumns: readonly Col<MemberRow>[] = [
     { id: "user", label: "User", render: (row) => <span className="t-person"><Avatar name={row.member.name} /><strong>{row.member.name}</strong></span> },
     { id: "role", label: "Role", align: "end", width: "180px", render: (row) => <RoleSelect disabled={rolesBlocked || row.changing} fallback={row.roleId} label={`Role for ${row.member.name}`} onChange={row.setRoleId} roles={model.roles} value={row.roleId} /> },
-    { id: "verbs", label: "Actions", verbs: true, render: (row) => <Verb action={row.linkedAccounts} aria-expanded={row.member.id === model.managed?.id} size="small" /> },
+    { id: "verbs", label: "Actions", verbs: true, width: "260px", render: (row) => <Verb action={row.linkedAccounts} aria-expanded={row.member.id === model.managed?.id} size="small" /> },
   ];
   const candidates = model.candidates;
   const managedRole = model.managed ? model.roles.find((role) => role.id === model.managed?.roleId)?.name ?? model.managed.roleId : "";
@@ -85,8 +85,8 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
       <Panel
         description={model.bootstrapDescription}
         flush
+        head={<State kind={model.bootstrap.state === "claimed" ? "ok" : "warning"} label={model.bootstrap.state === "claimed" ? "Complete" : "Action required"} />}
         name="Initial owner"
-        verbs={<State kind={model.bootstrap.state === "claimed" ? "ok" : "warning"} label={model.bootstrap.state === "claimed" ? "Complete" : "Action required"} />}
       >
         <Details className="t-details-flush" items={[
           { label: "Telegram ID", value: model.bootstrap.telegramId ? <code>{model.bootstrap.telegramId}</code> : "Set in the deployment configuration" },
@@ -94,7 +94,7 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
           ...(model.bootstrap.state === "claimed" ? [{ label: "Claimed", value: formatDateTime(model.bootstrap.claimedAt) }] : []),
         ]} label="Initial owner" />
         <div className="t-panel-foot">
-          <Key aria-expanded={showBootstrap} icon={showBootstrap ? "expand_less" : "expand_more"} label={showBootstrap ? "Hide setup steps" : "How the first Owner is set"} onClick={() => setShowBootstrap((value) => !value)} size="small" />
+          <Key aria-expanded={showBootstrap} label={showBootstrap ? "Hide setup steps" : "How the first Owner is set"} onClick={() => setShowBootstrap((value) => !value)} size="small" />
         </div>
         {showBootstrap && (
           <ol className="t-steps">
@@ -106,7 +106,7 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
         )}
       </Panel>
 
-      <Drawer closeActionId={model.closeManaged.id} description={model.managed ? `${model.managed.name} · ${managedRole}` : undefined} onClose={model.closeManaged.run} open={model.managed !== null} title="Linked accounts">
+      <Drawer cancel={model.closeManaged} cancelLabel="Close" closeActionId={model.closeManaged.id} description={model.managed ? `${model.managed.name} · ${managedRole}` : undefined} onClose={model.closeManaged.run} open={model.managed !== null} title="Linked accounts">
         {model.managed && <LinkedAccounts member={model.managed} />}
       </Drawer>
     </Page>
@@ -201,7 +201,7 @@ function Roles({ model }: Readonly<{ model: RolesModel }>) {
   const columns: readonly Col<Role>[] = [
     { id: "role", label: "Role", width: "160px", render: (role) => <strong>{role.name}</strong> },
     { id: "description", label: "Description", width: "50%", render: (role) => role.description },
-    { id: "permissions", label: "Permissions", render: (role) => { const read = model.read(role); return <Key bare data-action={read.id} icon="chevron_right" label={read.label} onClick={read.run} size="small" tone="primary" />; } },
+    { id: "permissions", label: "Permissions", render: (role) => <Verb action={model.read(role)} size="small" tone="primary" /> },
   ];
   const state = model.roles;
   return (
@@ -226,6 +226,8 @@ function Roles({ model }: Readonly<{ model: RolesModel }>) {
       </Panel>}
 
       <Drawer
+        cancel={model.closeReading}
+        cancelLabel="Close"
         closeActionId={model.closeReading.id}
         description={model.reading ? roleDescription(model.reading) : undefined}
         onClose={model.closeReading.run}
@@ -258,7 +260,7 @@ function RolePermissions({ role }: Readonly<{ role: Role }>) {
       )}
       {filter.rows.length === 0
         ? <Empty description={`Nothing matches "${filter.query}".`} title="No matching permissions" verbs={<Key label="Clear search" onClick={filter.clear} size="small" />} />
-        : <Details items={filter.rows.map((permission) => ({ label: permission, value: describePermission(permission) ?? <Ghost>No description recorded for this permission.</Ghost> }))} label="Permissions" />}
+        : <Details className="t-details-code" items={filter.rows.map((permission) => ({ label: permission, value: describePermission(permission) ?? <Ghost>No description recorded for this permission.</Ghost> }))} label="Permissions" />}
     </div>
   );
 }
@@ -272,7 +274,7 @@ function Notifications({ model }: Readonly<{ model: NotificationsModel }>) {
   return (
     <Page>
       {model.state === "error" && <Notice description={model.error} title="Subscriptions are unavailable" tone="error" verbs={model.retry ? <Verb action={model.retry} size="small" /> : undefined} />}
-      <Panel flush name="Session events" verbs={<span aria-live="polite" className="t-panel-note" role="status">{model.saveStatus}</span>}>
+      <Panel flush head={<span aria-live="polite" className="t-panel-note" role="status">{model.saveStatus}</span>} name="Session events">
         <Table columns={columns} empty={<Empty title="No games" />} label="Session event subscriptions" loading={model.state === "loading"} rowKey={(game) => game.id} rows={model.games} />
       </Panel>
       <Panel name="Game invitations">

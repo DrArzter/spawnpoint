@@ -393,25 +393,41 @@ document carries `html[data-skin="terminal"]`, which `index.html` stamps before 
   page title, 28px under the 22px host headline. A panel's name sits in its top rule as a tracked uppercase label.
 - **No radius, no shadow.** Every corner is square and every surface is flat. Boxes are drawn with `--rule`, one step
   darker than the hairline, so they read as box-drawing lines rather than card borders. Menus are boxed the same way.
-  A question and a form open in the same box in the middle of the screen, its title in the rule and, for a form, the
-  close key at the rule's other end; nothing docks to an edge of the screen.
+  A question and a form open in the same box in the middle of the screen. Over the scrim a name on the rule would
+  show its ground above the box, so a box in the top layer keeps its title on its first line, with the close key at
+  that line's end for a form; its foot holds the primary verb, then Cancel (Close, for a reading). Nothing docks to
+  an edge of the screen.
 - **A mark and a word.** Status is a bracketed mark in front of its label, never colour alone: `[*]` ok, `[>]` ready,
   `[-]` off, `[.]` pending, `[?]` unknown, `[!]` error and warning, `[i]` info, `[x]` archived, `[+]` absent. Progress
   is the one mark that moves: `[~]` spinning through `|`, `/`, `-` and `\`, held on the tilde under reduced motion.
   Notices carry the same marks in front of their titles.
 - **Bracketed controls.** A button is its label between `[` and `]`, and nothing is filled: the primary verb keeps
   the accent in its word and its brackets where a secondary verb's brackets are dim, the danger verb says so in red,
-  and hover is an underline. One of several is a radio drawn in glyphs, `(o)` for the chosen and `( )` for the rest,
-  in the theme and look pickers, the metrics window and the backup filter alike; a switch is `[x]` or `[ ]`. Tabs
-  are cells on a rule; the selected one is inverted, as the menu row's current page is.
+  and hover is an underline. A verb carries no icon, whatever the model suggests; the only keys that hold a glyph are
+  the ones whose word is their label (copy, the overflow, close, the theme), and the spinning mark stands in front of
+  the word while a key is busy. Two heights and no other: 36px, and 32px for a key inside a table or beside a state;
+  44 and 40 under a finger. A key beside a field is centred on it, never stretched to it. The primary tone marks the
+  one verb a screen exists for; the same verb reached from elsewhere is plain. One of several is a radio drawn in
+  glyphs, `(o)` for the chosen and `( )` for the rest, in the theme and look pickers, the metrics window and the
+  backup filter alike; a radio with small print under it (the invitation audience) is the same mark and word with
+  the print beneath, rows parted by a hairline, never a card; a switch is `[x]` or `[ ]`. Tabs are cells on a rule;
+  the selected one is inverted, as the menu row's current page is.
 - **From the left.** Nothing floats to the far edge of a line. A page head is two lines, what the page is and then
-  what can be done to it, the verb that matters first. A named panel's verbs sit in its top rule at the right, as its
-  name sits at the left, and step down to a line under the name where the two would meet (under 700px). A verb row
-  starts at the left wherever it is, in a box's foot, under a form, in a record; only a table's verb column keeps
-  its right edge. A details list gives its labels a column as wide as the longest of them and no wider, so a value
-  starts right after its name, and puts the label above the value where the box is narrower than 480px. A value and
-  its copy key are one unit that never breaks across lines. On a phone a table is a stack of records, each cell one
-  line with its label as a dim word before the value and the verbs on the last line.
+  what can be done to it, the verb that matters first. The verb that matters comes first wherever verbs stand in a
+  row: a page head, a panel's rule, a table row, a dialog's foot (`[Stop session] [Cancel]`), the end of a form;
+  Cancel is last, and in a question focus rests on it. A named panel's verbs sit in its top rule at the right, as its
+  name sits at the left, and step down to a line under the name where the two would meet (under 700px); the rule
+  holds keys and nothing else, and a state, a note or a row of choices that belongs to the whole box is the first
+  line inside it. A verb row starts at the left wherever it is, in a box's foot, under a form, in a record. The
+  right edge is kept by these and only these: a table's verb column, a list row's state and verbs, the retry in a
+  notice, the frame's own bar and the menu row's note, the number in a chart's caption, and a dialog's close key at
+  the end of its title line. The overflow list hangs from its key's left edge when the key stands in the left half
+  of the screen, from its right edge otherwise. A details list gives its labels a column as wide as the longest of
+  them and no wider, so a value starts right after its name, and puts the label above the value where the box is
+  narrower than 480px. A value and its copy key are one unit that never breaks across lines, in a details list or a
+  table cell. Every row of a table is as tall as a small key with its padding, whether or not it holds one. On a
+  phone a table is a stack of records, each cell one line with its label as a dim word before the value and the
+  verbs on the last line.
 - **The host scene.** The first screen draws the scoped game's icon in a glyph ramp (`" .:-=+*#%@"`) on a dark cell,
   40×18 cells, 24×11 on a phone. `HostScene` is the adapter: it takes a painter's grid of brightness per cell, sets the
   exposure from the session state and keeps time. `GameIcon` picks the painter: the Spawnpoint mark and the Minecraft

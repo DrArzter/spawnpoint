@@ -43,8 +43,8 @@ export function LinkedAccounts({ member, handles, bare = false }: { member: Memb
     : ({ children }: { children: ReactNode }) => <Card title="Linked accounts">{children}</Card>;
   return (
     <Frame>
-      <NotConnected description="Existing links come from Spawnpoint." inline title="Adding and removing accounts is not connected yet." />
-      {member.links.length === 0 && <EmptyState description="Links appear once their verification flow exists." icon="link" title="No linked accounts" />}
+      <NotConnected inline title="Adding and removing accounts is not connected yet." />
+      {member.links.length === 0 && <EmptyState icon="link" title="No linked accounts" />}
       {purposes.map((purpose) => {
         const links = member.links.filter((link) => providers[link.kind].purpose === purpose.id);
         if (links.length === 0) return null;

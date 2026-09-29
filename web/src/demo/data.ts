@@ -94,6 +94,8 @@ export function initialState(): DemoState {
           presets: [],
           worlds: [
             { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:34197", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },
+            // A world that can start, so the demo can show a running Factorio host.
+            { id: "factorio-megabase", displayName: "Megabase", profileId: "factorio-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:34197", release: { state: "available", generationId: null, activeRelease: "2.0.55", desiredRelease: "2.0.55" } },
             { id: "factorio-archive", displayName: "Archived rail world", profileId: "factorio-rail", sessionControlAvailable: false, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "archived", preset: null, wipes: [], connectionAddress: null, release: { state: "available", generationId: null, activeRelease: "1.0", desiredRelease: "1.0" } },
           ],
         },
@@ -105,6 +107,8 @@ export function initialState(): DemoState {
           presets: [],
           worlds: [
             { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "not_created", preset: null, wipes: [], connectionAddress: "172.29.23.24:16261", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },
+            // A world that can start, so the demo can show a running Zomboid host.
+            { id: "zomboid-muldraugh", displayName: "Muldraugh", profileId: "zomboid-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:16261", release: { state: "available", generationId: null, activeRelease: "42.13.1", desiredRelease: "42.13.1" } },
           ],
         },
       ],

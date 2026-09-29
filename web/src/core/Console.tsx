@@ -9,8 +9,8 @@ import { action, type Action } from "./actions";
 import { useConsole, type ConsoleController } from "./useConsole";
 import { useBackups, useInvitation, useLoginAccounts, useMetrics, useNotifications, useRoles, useUsers } from "./data";
 import { useConfirmationForm, useCreateWorldForm, useWorldSettingsForm } from "./forms";
-import type { AccessModel, ConsoleModel, ReleasesModel, WorldModel, WorldsModel } from "./models";
-import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionActionForWorld, sessionControlAvailability, sessionDetails, sharedHostNotice, worldDetails, worldMoreActions, worldNotices, worldTabs } from "./worlds";
+import type { AccessModel, ConsoleModel, LookModel, ReleasesModel, WorldModel, WorldsModel } from "./models";
+import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionActionForWorld, sessionControlAvailability, sessionDetails, worldDetails, worldMoreActions, worldNotices, worldTabs } from "./worlds";
 
 /*
  * The controllers: each takes the console's bones, builds one page's model
@@ -18,13 +18,15 @@ import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, relea
  * page is shown, which is why these are components and not one hook.
  */
 
-export function ConsoleRoot({ session, skin, continuesBootCard }: Readonly<{ session: ActiveSession; skin: Skin; continuesBootCard: boolean }>) {
+export type LookChoices = Readonly<{ current: string; options: readonly Readonly<{ id: string; name: string }>[]; wear: (id: string) => void }>;
+
+export function ConsoleRoot({ session, skin, looks, continuesBootCard }: Readonly<{ session: ActiveSession; skin: Skin; looks: LookChoices; continuesBootCard: boolean }>) {
   const notify = useSnackbar();
   const console = useConsole(session, continuesBootCard, notify);
   if (!console.booted) return console.bootVisible ? <skin.Boot model={{ title: "Preparing the console", description: "Reading games, worlds and the current AWS state." }} /> : null;
   return (
     <skin.Shell model={console.shell}>
-      <CurrentPage console={console} skin={skin} />
+      <CurrentPage console={console} looks={looks} skin={skin} />
       <skin.ScopeDialog model={console.shell.scope} />
       <ConfirmationController console={console} skin={skin} />
       {console.invite && <InvitationController console={console} game={console.invite.game} skin={skin} world={console.invite.world} />}
@@ -36,7 +38,7 @@ export function ConsoleRoot({ session, skin, continuesBootCard }: Readonly<{ ses
 
 type Controlled = Readonly<{ console: ConsoleController; skin: Skin }>;
 
-function CurrentPage({ console, skin }: Controlled) {
+function CurrentPage({ console, skin, looks }: Controlled & Readonly<{ looks: LookChoices }>) {
   const { page, game, world } = console;
   if (page === "worlds" && game && world) return <WorldPage console={console} game={game} skin={skin} world={world} />;
   if (page === "worlds") return <WorldsPage console={console} skin={skin} />;
@@ -44,7 +46,7 @@ function CurrentPage({ console, skin }: Controlled) {
   if (page === "console") return <skin.Console model={consoleModel(console)} />;
   if (page === "releases") return <skin.Releases model={releasesModel(console)} />;
   if (page === "access") return <AccessPage console={console} skin={skin} />;
-  return <ProfilePage console={console} skin={skin} />;
+  return <ProfilePage console={console} looks={looks} skin={skin} />;
 }
 
 function refreshAction(console: ConsoleController): Action {
@@ -56,8 +58,6 @@ function WorldsPage({ console, skin }: Controlled) {
   const loading = listStatus === "loading";
   const canManage = granted.has("world.manage");
   const readyPreset = game?.presets.some((preset) => preset.buildStatus === "ready") ?? false;
-  const controlBusy = pending?.kind === "session" || pending?.kind === "lifecycle";
-  const notice = fleetOverview ? null : sharedHostNotice(sharedSession, controlBusy);
   const model: WorldsModel = {
     status: listStatus,
     error,
@@ -65,7 +65,6 @@ function WorldsPage({ console, skin }: Controlled) {
     unavailable: !loading && !game ? { failed: listStatus === "error", description: listStatus === "error" ? "Spawnpoint could not read games, worlds and the compute host." : "The control plane lists no games yet. Games and their presets are declared in Git." } : null,
     notices: [
       ...(listStatus === "error" ? [{ id: "load", tone: "error" as const, title: "Current state could not be loaded", description: error, action: action("refresh", "Try again", () => void console.refresh()) }] : []),
-      ...(notice ? [notice] : []),
     ],
     overview: buildSessionOverview(game, snapshot, serverState, sharedSession, fleetOverview),
     rows: game ? game.worlds.map((world) => buildWorldRow(game, world, { fleet: fleetOverview, sharedSession, serverState, granted, pending, callbacks: worldCallbacks })) : [],
@@ -92,13 +91,12 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     settled: `${world.wipes.length}:${operations.length}`,
     onRestore: (entry) => worldCallbacks.onWorldAction(game, world, "restore", { key: entry.key, name: entry.archiveName }),
   });
-  const notice = fleet ? null : sharedHostNotice(sharedSession, controlBusy);
   const model: WorldModel = {
     game,
     world,
     worldsHref: routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: null }),
     availability: worldStatus(world),
-    notices: [...worldNotices(world, rowPending), ...(notice ? [notice] : [])],
+    notices: worldNotices(world, rowPending),
     tabs: worldTabs(world, granted.has("release.read")),
     tab: route.worldTab,
     setTab: (tab) => navigate({ worldTab: tab }),
@@ -176,16 +174,21 @@ function AccessPage({ console, skin }: Controlled) {
   return <skin.Access model={model} />;
 }
 
-function ProfilePage({ console, skin }: Controlled) {
+function ProfilePage({ console, skin, looks }: Controlled & Readonly<{ looks: LookChoices }>) {
   const { members, session, roles, viewer, appearance, notify } = console;
   const member = members.find((item) => item.id === session.identity.id) ?? members[0]!;
   const loginAccounts = useLoginAccounts(member.name, notify);
   const open = console.openInBrowser;
+  const look: LookModel = {
+    current: looks.current,
+    options: looks.options.map((option) => ({ ...option, choose: action(`look.${option.id}`, option.name, () => looks.wear(option.id), { disabled: option.id === looks.current, hint: option.id === looks.current ? "The face the console wears now" : `Wear the ${option.name} face` }) })),
+  };
   return <skin.Profile model={{
     member,
     role: roles.find((role) => role.id === member.roleId),
     viewer,
     appearance,
+    look,
     signOut: action("profile.signout", "Sign out", console.signOut, { icon: "logout" }),
     openInBrowser: open ? action("profile.browser", "Open in browser", open, { icon: "open_in_new" }) : null,
     loginAccounts,

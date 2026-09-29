@@ -55,7 +55,6 @@ export function Shell({ model, children }: Readonly<{ model: ShellModel; childre
         <span className="appbar-spacer" />
         <div className="appbar-actions">
           {model.demo && <DemoBadge />}
-          <IconButton data-action={model.cycleTheme.id} icon={model.appearance.theme === "dark" ? "light_mode" : "dark_mode"} label={model.cycleTheme.label} onClick={model.cycleTheme.run} />
           <button aria-label={model.openProfile.label} className="appbar-avatar" data-action={model.openProfile.id} onClick={model.openProfile.run} title={model.viewer.displayName} type="button">
             <Avatar name={model.viewer.displayName} photoUrl={model.viewer.photoUrl} />
           </button>

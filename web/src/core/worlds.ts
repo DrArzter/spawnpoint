@@ -1,5 +1,5 @@
 import { hostStatus, sessionStatus, worldStatus, type StatusDescriptor } from "../components/ui/Status";
-import { formatDate, repositoryName, shortCommit } from "../lib/format";
+import { commitUrl, formatDate, shortCommit } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Operation, ServerState, Wipe, World, WorldTab } from "../model";
 import { routeHash } from "../routing";
 import { playersOnline, sessionReason, sharedSessionOwnerLabel, worldOwnsSharedSession, type SessionReason, type SharedHostSession } from "../session";
@@ -87,23 +87,6 @@ export function missingAddressLabel(world: World, serverState: ServerState): str
   return serverState === "running" ? "No address yet" : "Assigned while online";
 }
 
-export function sharedHostNotice(session: SharedHostSession, busy: boolean): Notice | null {
-  const owner = sharedSessionOwnerLabel(session);
-  if (session.recoveryPending) {
-    return { id: "recovery", tone: "info", title: "Automatic recovery in progress", description: owner ? `${owner} still owns the recorded session, although the compute host is stopped. Spawnpoint is reconciling it automatically; session controls remain locked until it finishes.` : "The compute host is stopped and Spawnpoint is reconciling its session record automatically." };
-  }
-  if (busy || session.operationRunning || session.state === "starting" || session.state === "stopping") {
-    return { id: "operation", tone: "info", title: "Shared host operation in progress", description: owner ? `${owner} owns the current session. Session controls stay locked until the operation finishes.` : "Session controls stay locked until the current operation finishes." };
-  }
-  if (session.state === "running") {
-    return { id: "occupied", tone: "info", title: "Shared host is occupied", description: owner ? `${owner} is running. Stop that session before starting another world.` : "A session is running, but its world is not reported. Session starts stay locked for safety." };
-  }
-  if (session.state === "unknown") {
-    return { id: "unknown", tone: "warning", title: "Shared host availability is unknown", description: "Spawnpoint cannot prove that the shared host is free. Refresh the control-plane state before starting a world." };
-  }
-  return null;
-}
-
 function fleetReason(game: Game | undefined): string {
   const state = game?.lifecycle?.observedState;
   if (state === "ready") return "This game's world is running on a fleet host.";
@@ -118,13 +101,18 @@ export function buildSessionOverview(game: Game | undefined, snapshot: ControlPl
   const status = sessionStatus(serverState);
   const reason = sessionReason(sharedSession, game);
   const hosts = snapshot?.hosts ?? [];
+  const activeGame = fleet ? game : sharedSession.activeGame ?? game;
+  const activeWorld = fleet ? game?.worlds.find((world) => world.id === game.lifecycle?.activeWorldId) ?? null : sharedSession.activeWorld;
+  const subject = activeWorld
+    ? activeGame && activeGame.id !== game?.id ? `${activeWorld.displayName} (${activeGame.displayName})` : activeWorld.displayName
+    : game?.displayName ?? "Session";
   return {
     fleet,
     state: serverState,
     status,
-    headline: `${game?.displayName ?? "Session"} ${status.label.toLowerCase()}`,
+    headline: `${subject} ${status.label.toLowerCase()}`,
     reason: fleet ? { text: fleetReason(game), detail: reason.detail, attention: false } : reason,
-    players: playersOnline(game),
+    players: playersOnline(activeGame),
     observedAt: snapshot?.observedAt,
     host: host ? { name: host.name, status: hostStatus(host.state), instanceType: host.instanceType ?? null, zone: host.availabilityZone ?? null, launchedAt: host.launchedAt ?? null } : null,
     fleetHosts: {
@@ -203,7 +191,7 @@ export function buildWorldRow(game: Game, world: World, opts: Readonly<{ fleet: 
     status: active ? sessionStatus("running") : worldStatus(world),
     presetName: presetOf(game, world)?.displayName ?? world.profileId,
     releaseSummary: releaseSummary(world),
-    wipe: wipe ? { number: wipe.number, openedAt: formatDate(wipe.createdAt) } : null,
+    wipe: wipe ? { number: wipe.number } : null,
     wipeAbsent: world.worldLifecycleAvailable ? "No wipes yet" : "Legacy world",
     address: addressFacts(world),
     addressAbsent: missingAddressLabel(world, opts.serverState),
@@ -228,12 +216,12 @@ function sessionHint(fleet: boolean, game: Game, world: World, reason: SessionRe
 
 function hostDetail(host: Host | undefined): Detail {
   if (!host) return { label: "Compute host", value: { type: "absent", text: "No host available" } };
-  const status = hostStatus(host.state);
+  // The state is the value; which host, and what kind, is the line under it.
   const zone = host.availabilityZone ? ` in ${host.availabilityZone}` : "";
   return {
     label: "Compute host",
-    value: { type: "status", status: { kind: status.kind, label: `${host.name} · ${status.label.toLowerCase()}` } },
-    hint: host.instanceType ? `${host.instanceType}${zone}` : undefined,
+    value: { type: "status", status: hostStatus(host.state) },
+    hint: [host.name, host.instanceType ? `${host.instanceType}${zone}` : null].filter(Boolean).join(" · "),
   };
 }
 
@@ -245,14 +233,11 @@ export function sessionDetails(game: Game, world: World, sharedSession: SharedHo
   const host = snapshot?.hosts[0];
   const reason = sessionReason(sharedSession, game, world);
   const players = playersOnline(game);
-  const idleAt = game.lifecycle?.idle?.lastObservedAtEpochSeconds ?? null;
   const running = snapshot?.hosts.filter((item) => item.provenance === "launched" && item.state === "running").length ?? 0;
   const details: Detail[] = [{
     label: "Session",
     value: { type: "status", status: sessionStatus(serverState) },
-    hint: sessionHint(fleet, game, world, reason),
-    hintAttention: !fleet && reason.attention,
-    explain: fleet ? "A fleet host launches when a session needs one and drains after its last session." : `${game.displayName} runs one session at a time on the shared host. ${reason.detail}`,
+    explain: sessionHint(fleet, game, world, reason),
   }];
   if (fleet) {
     details.push({ label: "Fleet", value: { type: "text", text: `${running} running hosts` } });
@@ -260,7 +245,7 @@ export function sessionDetails(game: Game, world: World, sharedSession: SharedHo
     details.push(hostDetail(host));
     if (host) details.push(launchedDetail(host));
   }
-  if (players !== null) details.push({ label: "Players online", value: { type: "number", value: players }, hint: idleAt === null ? undefined : "Counted", hintTime: idleAt });
+  if (players !== null) details.push({ label: "Players online", value: { type: "number", value: players } });
   details.push({ label: "Last observed", value: { type: "time", at: snapshot?.observedAt } });
   return details;
 }
@@ -272,13 +257,21 @@ export function worldDetails(game: Game, world: World, serverState: ServerState)
   const availability = worldStatus(world);
   const address = addressFacts(world);
   return [
-    { label: "World ID", value: { type: "text", text: world.id, mono: true }, copy: world.id },
-    { label: "Availability", value: { type: "status", status: availability }, hint: world.worldLifecycleAvailable ? undefined : "Legacy world without wipe management" },
-    { label: "Preset", value: { type: "text", text: preset?.displayName ?? world.profileId }, hint: world.preset ? `${repositoryName(world.preset.repository)} @ ${shortCommit(world.preset.commit)}` : "Not built from a Git preset" },
-    { label: "Release", value: hasRelease ? { type: "release", active: world.release.activeRelease, desired: world.release.desiredRelease } : { type: "absent", text: releaseSummary(world) }, explain: "The release this world runs, next to the one it is asked to run." },
-    { label: "Current wipe", value: currentWipe ? { type: "text", text: `#${currentWipe.number}` } : { type: "absent", text: world.worldLifecycleAvailable ? "No wipes yet" : "Not tracked" }, explain: "One wipe is one generation of this world. A new one keeps every backup of the old one.", hint: currentWipe ? `Opened ${formatDate(currentWipe.createdAt)} · release ${currentWipe.originRelease}` : undefined },
+    { label: "World ID", value: { type: "text", text: world.id, mono: true } },
+    { label: "Availability", value: { type: "status", status: availability }, explain: world.worldLifecycleAvailable ? undefined : "Legacy world without wipe management" },
+    {
+      label: "Preset",
+      value: {
+        type: "preset",
+        name: preset?.displayName ?? world.profileId,
+        source: world.preset ? { commit: world.preset.commit, short: shortCommit(world.preset.commit), href: commitUrl(world.preset.repository, world.preset.commit) } : null,
+      },
+      explain: world.preset ? undefined : "Not built from a Git preset",
+    },
+    { label: "Release", value: hasRelease ? { type: "release", active: world.release.activeRelease, desired: world.release.desiredRelease } : { type: "absent", text: releaseSummary(world) } },
+    { label: "Current wipe", value: currentWipe ? { type: "text", text: `#${currentWipe.number}` } : { type: "absent", text: world.worldLifecycleAvailable ? "No wipes yet" : "Not tracked" } },
     { label: "Address", value: address ? { type: "address", address } : { type: "absent", text: missingAddressLabel(world, serverState) }, copy: world.connectionAddress ?? undefined },
-    { label: "Hosting", value: { type: "text", text: world.placement === "fleet" ? "On-demand fleet" : "Persistent host" }, hint: world.placement === "fleet" ? "A disposable host is allocated for each session." : "Uses the configured long-lived host." },
+    { label: "Hosting", value: { type: "text", text: world.placement === "fleet" ? "On-demand fleet" : "Persistent host" } },
     { label: "Connection", value: { type: "text", text: connectionLabels[world.connectivity] } },
   ];
 }
@@ -301,7 +294,7 @@ export function worldNotices(world: World, pending: Pending | null): Notice[] {
   return notices;
 }
 
-export function releaseRows(world: World, canDownload: boolean, busy: boolean, download: () => void): Array<{ name: string; status: string; downloadable: boolean; download: Action | null }> {
+export function releaseRows(world: World, canDownload: boolean, busy: boolean, download: () => void): Array<{ name: string; status: string; downloadable: boolean; sourceHref: string | null; download: Action | null }> {
   const map = new Map<string, { name: string; status: string; downloadable: boolean }>();
   if (world.release.activeRelease) map.set(world.release.activeRelease, { name: world.release.activeRelease, status: "Active", downloadable: true });
   if (world.release.desiredRelease) {
@@ -313,6 +306,7 @@ export function releaseRows(world: World, canDownload: boolean, busy: boolean, d
   }
   return [...map.values()].map((row) => ({
     ...row,
+    sourceHref: world.preset?.repository ?? null,
     download: row.downloadable && canDownload ? action("world.pack", "Download", download, { icon: "download", disabled: busy, hint: "Client pack for this release" }) : null,
   }));
 }

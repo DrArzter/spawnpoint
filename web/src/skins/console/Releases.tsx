@@ -2,6 +2,7 @@ import { Chip } from "../../components/ui/Chip";
 import { Column, DataTable } from "../../components/ui/DataTable";
 import { Status } from "../../components/ui/Status";
 import { Card, EmptyState, Ghost } from "../../components/ui/Surfaces";
+import { Tooltip } from "../../components/ui/Tooltip";
 import type { PointerRow, PresetRow, ReleasesModel } from "../../core/models";
 import { Icon } from "../../icons";
 import { commitUrl, repositoryName, shortCommit } from "../../lib/format";
@@ -49,11 +50,10 @@ export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
     { id: "actions", label: "Actions", actions: true, render: (row) => (row.createWorld ? <ActionButton action={row.createWorld} size="small" variant="text" /> : null) },
   ];
   const worldColumns: Column<PointerRow>[] = [
-    { id: "world", label: "World", width: "28%", render: (row) => <a className="row-link" href={row.href}>{row.world.displayName}</a> },
+    { id: "world", label: "World", width: "28%", render: (row) => <span className="release-world"><a className="row-link" href={row.href}>{row.world.displayName}</a><Tooltip text={row.summary}><Icon className={row.world.release.activeRelease === row.world.release.desiredRelease ? "release-state-active" : "release-state-pending"} name={row.world.release.activeRelease === row.world.release.desiredRelease ? "verified" : "schedule"} size={18} /><span className="visually-hidden">{row.summary}</span></Tooltip></span> },
     { id: "preset", label: "Preset", width: "24%", render: (row) => row.presetName },
     { id: "active", label: "Running build", width: "140px", render: ({ world }) => (world.release.activeRelease ? <code title="Immutable build ID, not the game version">{world.release.activeRelease}</code> : <Ghost>Not started</Ghost>) },
     { id: "desired", label: "Next build", width: "140px", render: ({ world }) => (world.release.desiredRelease ? <code title="Immutable build ID, not the game version">{world.release.desiredRelease}</code> : <Ghost>None selected</Ghost>) },
-    { id: "pointer", label: "Status", render: (row) => <span>{row.summary}</span> },
   ];
   const title = model.game ? `Presets of ${model.game.displayName}` : "Presets";
   return (
@@ -62,7 +62,7 @@ export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
       <Card flush title={title}>
         <DataTable
           columns={presetColumns}
-          empty={<EmptyState description="This game has no Git presets yet. Its worlds run legacy profiles that are not built here." icon="inventory" title="No presets" />}
+          empty={<EmptyState icon="inventory" title="No presets" />}
           label={title}
           loading={model.loading}
           loadingRows={2}
@@ -73,7 +73,7 @@ export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
       <Card flush title="Release pointers">
         <DataTable
           columns={worldColumns}
-          empty={<EmptyState description="Worlds appear here with their active and desired release." icon="public" title="No worlds" />}
+          empty={<EmptyState icon="public" title="No worlds" />}
           label="Release pointers by world"
           loading={model.loading}
           rowKey={(row) => row.world.id}

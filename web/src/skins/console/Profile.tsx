@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type { LinkedLoginAccount } from "../../api/contract";
 import { Avatar } from "../../components/Avatar";
@@ -7,15 +7,17 @@ import { TelegramLoginButton } from "../../components/TelegramLogin";
 import { ActionRow, Button } from "../../components/ui/Button";
 import { Chip, ChoiceChip } from "../../components/ui/Chip";
 import { TextField } from "../../components/ui/Fields";
-import { Skeleton } from "../../components/ui/Skeleton";
+import { SkeletonRows } from "../../components/ui/Skeleton";
 import { useSnackbar } from "../../components/ui/Snackbar";
+import { Menu } from "../../components/ui/Menu";
 import { Banner, Card, EmptyState, PageHeader } from "../../components/ui/Surfaces";
-import type { AppearanceModel, LoginAccountsModel, ProfileModel } from "../../core/models";
+import { Tooltip } from "../../components/ui/Tooltip";
+import type { AppearanceModel, LoginAccountsModel, LookModel, ProfileModel } from "../../core/models";
 import { Icon, type IconName } from "../../icons";
 import { PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../../lib/signin";
-import { deriveAccent, DEFAULT_ACCENT, parseHex } from "../../styles/accent";
+import { DEFAULT_ACCENT, parseHex } from "../../styles/accent";
 import type { ThemePreference } from "../../telegram";
-import { ActionButton } from "./actions";
+import { ActionButton, menuItems } from "./actions";
 
 export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
   const { member, role, viewer } = model;
@@ -31,7 +33,7 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
         subtitle={viewer.username ? `@${viewer.username}` : viewer.email ?? "Spawnpoint identity"}
         title={member.name}
       />
-      <Appearance model={model.appearance} />
+      <Appearance look={model.look} model={model.appearance} />
       <LoginAccounts model={model.loginAccounts} />
     </div>
   );
@@ -44,23 +46,10 @@ const THEMES: readonly { id: ThemePreference; label: string; icon: IconName }[] 
 ];
 
 /** A starting point, not a limit: the field below takes any colour. */
-const SUGGESTED: readonly { name: string; colour: string }[] = [
-  { name: "Blue", colour: "#1a73e8" },
-  { name: "Green", colour: "#1e8e3e" },
-  { name: "Purple", colour: "#8430ce" },
-  { name: "Red", colour: "#d93025" },
-  { name: "Orange", colour: "#e8710a" },
-  { name: "Teal", colour: "#00838f" },
-  { name: "Pink", colour: "#c2185b" },
-  { name: "Grey", colour: "#5f5f5f" },
-];
 
-function Appearance({ model }: Readonly<{ model: AppearanceModel }>) {
+function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: LookModel }>) {
   const notify = useSnackbar();
   const [draft, setDraft] = useState(model.accent);
-  // What the panel would actually paint, so the note below describes the
-  // colour in use rather than the colour that was typed.
-  const derived = useMemo(() => deriveAccent(model.accent, model.theme), [model.accent, model.theme]);
 
   function save(next: { theme?: ThemePreference; accent?: string }) {
     // The panel has already repainted; the setters write through to the account.
@@ -81,7 +70,7 @@ function Appearance({ model }: Readonly<{ model: AppearanceModel }>) {
 
   const valid = parseHex(draft) !== null;
   return (
-    <Card description="Stored against your identity, so the console looks the same on every device you sign in from." title="Appearance">
+    <Card title="Appearance">
       <div className="appearance">
         <div className="appearance-group">
           <span className="appearance-label" id="appearance-theme">Theme</span>
@@ -92,27 +81,23 @@ function Appearance({ model }: Readonly<{ model: AppearanceModel }>) {
           </fieldset>
         </div>
         <div className="appearance-group">
+          <span className="appearance-label" id="appearance-look">Look</span>
+          <fieldset aria-labelledby="appearance-look" className="chip-row fieldset-plain">
+            {look.options.map((option) => (
+              <ChoiceChip data-action={option.choose.id} key={option.id} onClick={option.choose.run} pressed={option.id === look.current} title={option.choose.hint}>{option.name}</ChoiceChip>
+            ))}
+          </fieldset>
+        </div>
+
+        <div className="appearance-group">
           <span className="appearance-label" id="appearance-accent">Accent</span>
           <fieldset aria-labelledby="appearance-accent" className="accent-row fieldset-plain">
             <label className="accent-well">
               <input aria-label="Pick an accent colour" onChange={(event) => commitAccent(event.target.value)} type="color" value={parseHex(draft) ? draft : model.accent} />
             </label>
-            <TextField hint={valid ? undefined : "Six hex digits, for example #1a73e8."} label="Hex" mono onChange={(event) => commitAccent(event.target.value)} spellCheck={false} value={draft} />
+            <TextField hideLabel hint={valid ? undefined : "Six hex digits, for example #1a73e8."} label="Accent colour, hex" mono onChange={(event) => commitAccent(event.target.value)} spellCheck={false} value={draft} />
             <Button disabled={model.accent === DEFAULT_ACCENT} icon="restore" onClick={() => { setDraft(DEFAULT_ACCENT); save({ accent: DEFAULT_ACCENT }); }} variant="text">Reset</Button>
           </fieldset>
-          <div className="swatches">
-            {SUGGESTED.map(({ name, colour }) => (
-              <button aria-label={`${name} ${colour}`} aria-pressed={model.accent === colour} className="swatch" key={colour} onClick={() => { setDraft(colour); save({ accent: colour }); }} style={{ background: colour }} type="button" />
-            ))}
-          </div>
-          {/* A picked colour is a hue, not a contrast ratio. When the two
-              disagree the panel keeps the hue and moves the lightness, and
-              says so rather than quietly painting something else. */}
-          {derived?.adjusted === true && (
-            <p className="appearance-note">
-              Lightened or darkened for the {model.theme} theme so text on it stays readable. Links and buttons use <code>{derived.ink}</code>.
-            </p>
-          )}
         </div>
       </div>
     </Card>
@@ -144,12 +129,11 @@ function LoginAccounts({ model }: Readonly<{ model: LoginAccountsModel }>) {
         {model.connectGoogle && <GoogleLoginButton className="google-login" onToken={model.connectGoogle} />}
         {model.addPassword && <ActionButton action={model.addPassword} variant="outlined" />}
       </ActionRow> : undefined}
-      description="Every method belongs to the same Spawnpoint identity. None becomes primary because it was added first."
       title="Sign-in methods"
     >
-      {accounts.status === "loading" && <div aria-label="Loading sign-in methods" className="account-loading"><Skeleton height={56} /><Skeleton height={56} /></div>}
+      {accounts.status === "loading" && <SkeletonRows label="Loading sign-in methods" rows={2} />}
       {accounts.status === "error" && <Banner actions={<ActionButton action={accounts.retry} size="small" variant="outlined" />} description={accounts.error} title="Sign-in methods are unavailable" tone="error" />}
-      {accounts.status === "ready" && accounts.value.length === 0 && <EmptyState description="This identity has no linked login method the current API can report." icon="link" title="No sign-in methods" />}
+      {accounts.status === "ready" && accounts.value.length === 0 && <EmptyState icon="link" title="No sign-in methods" />}
       {accounts.status === "ready" && accounts.value.length > 0 && (
         <ul className="login-account-list">
           {accounts.value.map((account) => {
@@ -159,11 +143,16 @@ function LoginAccounts({ model }: Readonly<{ model: LoginAccountsModel }>) {
               <li className="login-account-row" key={`${account.provider}:${account.subject}`}>
                 <span aria-hidden="true" className="link-icon"><Icon name={presentation.icon} size={20} /></span>
                 <span className="login-account-copy">
-                  <strong>{presentation.label}</strong>
+                  <span className="login-account-title">
+                    <strong>{presentation.label}</strong>
+                    <Tooltip text={account.verified ? "Verified" : "Pending verification"}>
+                      <Icon name={account.verified ? "verified" : "pending"} size={18} />
+                      <span className="visually-hidden">{account.verified ? "Verified" : "Pending verification"}</span>
+                    </Tooltip>
+                  </span>
                   <span>{accountLine(account)}</span>
                 </span>
-                <Chip icon={account.verified ? "verified" : "pending"} tone={account.verified ? "success" : "warning"}>{account.verified ? "Verified" : "Pending"}</Chip>
-                {rowActions.length > 0 && <div className="login-account-actions">{rowActions.map((rowAction) => <ActionButton action={rowAction} key={rowAction.id} size="small" variant="text" />)}</div>}
+                {rowActions.length > 0 && <div className="login-account-actions"><Menu items={menuItems(rowActions)} label={`Manage ${presentation.label}`} size="small" /></div>}
               </li>
             );
           })}

@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 
 import { AuthState, restoreAuth } from "./auth";
 import { SnackbarProvider } from "./components/ui/Snackbar";
 import { ConsoleRoot } from "./core/Console";
 import { isLandingHash, isRootHash, readAccessInvitationRoute, readEmailActionRoute } from "./routing";
-import { AuthScreen, BootScreen } from "./screens/AuthScreen";
+import { AuthScreen } from "./screens/AuthScreen";
 import { EmailActionScreen } from "./screens/EmailActionScreen";
 import { JoinScreen } from "./screens/JoinScreen";
 import { LandingScreen } from "./screens/LandingScreen";
 import { useBootCard } from "./shell/hooks";
-import { chooseSkin } from "./skins";
+import { chooseSkin, currentSkinId, isSkinId, SKIN_CHOICES, wearOnDocument, wearSkin } from "./skins";
 
 // The gate in front of the console: who is here, and which door they came
 // through. The console itself is bones under a skin (core/Console.tsx).
@@ -20,6 +20,7 @@ export function App() {
   const { visible: bootVisible, publish } = useBootCard();
   const emailAction = readEmailActionRoute();
   const skin = useMemo(chooseSkin, []);
+  const looks = useMemo(() => ({ current: currentSkinId(), options: SKIN_CHOICES, wear: (id: string) => { if (isSkinId(id)) wearSkin(id); } }), []);
 
   useEffect(() => {
     let active = true;
@@ -49,6 +50,12 @@ export function App() {
     return () => window.removeEventListener("hashchange", onChange);
   }, []);
 
+  // The boot and the console wear the chosen face; the front door, the join
+  // and email screens never do. Decided here, once, for every surface.
+  const consoleSurface = emailAction === null && joinToken === null
+    && (auth.status === "loading" || (!atLanding && auth.status === "authenticated" && auth.session.state === "active"));
+  useLayoutEffect(() => { wearOnDocument(skin.id, consoleSurface); }, [skin, consoleSurface]);
+
   // A sign-in started on the front door ends in the console; an account that
   // holds no role yet lands on the card that asks for one.
   const handleAuth = useCallback((state: AuthState) => {
@@ -62,10 +69,10 @@ export function App() {
   if (emailAction !== null) return <EmailActionScreen action={emailAction} onAuth={handleAuth} />;
   if (joinToken !== null) return <JoinScreen auth={auth} onAuth={handleAuth} proof={joinToken.proof} token={joinToken.token} />;
   if (auth.status === "loading") {
-    return bootVisible ? <BootScreen description="Confirming who you are with the access API." title="Checking your session" /> : null;
+    return bootVisible ? <skin.Boot model={{ title: "Checking your session", description: "Confirming who you are with the access API." }} /> : null;
   }
   if (atLanding) return <LandingScreen auth={auth} onChange={handleAuth} />;
   if (auth.status !== "authenticated") return <LandingScreen auth={auth} onChange={handleAuth} />;
   if (auth.session.state !== "active") return <AuthScreen auth={auth} onChange={handleAuth} />;
-  return <SnackbarProvider><ConsoleRoot continuesBootCard={bootVisible} session={auth.session} skin={skin} /></SnackbarProvider>;
+  return <SnackbarProvider><ConsoleRoot continuesBootCard={bootVisible} looks={looks} session={auth.session} skin={skin} /></SnackbarProvider>;
 }

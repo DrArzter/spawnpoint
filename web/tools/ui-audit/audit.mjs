@@ -235,7 +235,9 @@ const PROBE = String.raw`(() => {
   return JSON.stringify(result);
 })()`;
 
-const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const chrome = process.env.CHROME_BIN ?? (process.platform === "darwin"
+  ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  : "/usr/bin/chromium");
 const profile = mkdtempSync(join(process.env.SCRATCH ?? tmpdir(), "audit-"));
 const port = randomInt(9600, 9900);
 const proc = spawn(chrome, [

@@ -27,25 +27,18 @@ export function MetricsPage({ model, chart, placeholder }: Readonly<{ model: Met
       <h1 className="visually-hidden">Metrics</h1>
       <Tabs label="Metric source" onChange={model.setSource} options={[{ id: "cloudwatch", label: "CloudWatch", icon: "cloud" }, { id: "session", label: "Session", icon: "bar_chart" }]} value={model.source} />
       {model.source === "cloudwatch" && <HostChart chart={chart} model={model} placeholder={placeholder} />}
-      {/* The stack that answers this already runs beside the game — node-exporter,
-          cAdvisor, Prometheus and Grafana, session-scoped. What is missing is the
-          path from a host on a private overlay to a public panel, so this stays
-          closed rather than empty. */}
-      {model.source === "session" && <Card flush><NotConnected
-        description={model.online ? "Prometheus and Grafana are running beside this session, on a host the panel cannot reach yet. Charts appear once a path out of the overlay exists." : "Prometheus and Grafana run inside an active game session, and the path that would carry them to this page does not exist yet."}
-        title="Session telemetry is not connected yet"
-      /></Card>}
+      {model.source === "session" && <Card flush><NotConnected title="Session telemetry is not connected yet" /></Card>}
     </div>
   );
 }
 
 function HostChart({ model, chart, placeholder }: Readonly<{ model: MetricsModel; chart: (metrics: HostMetrics) => ReactNode; placeholder?: ReactNode }>) {
   if (model.instanceId === undefined) {
-    return <Card flush><EmptyState description="Metrics are read from the compute host, and the control plane reports none right now." icon="bar_chart" title="No host to measure" /></Card>;
+    return <Card flush><EmptyState icon="bar_chart" title="No host to measure" /></Card>;
   }
   const metrics = model.metrics;
   if (metrics.status === "error" && metrics.kind === "unavailable") {
-    return <Card flush><NotConnected description="Host metrics appear here once the control plane reads CloudWatch." title="CloudWatch is not connected yet" /></Card>;
+    return <Card flush><NotConnected title="CloudWatch is not connected yet" /></Card>;
   }
   return (
     <Card
@@ -56,7 +49,7 @@ function HostChart({ model, chart, placeholder }: Readonly<{ model: MetricsModel
       title="Compute host"
     >
       {metrics.status === "error" && <Banner actions={<ActionButton action={metrics.retry} variant="text" />} description={metrics.error} title="Metrics could not be loaded" tone="error" />}
-      {metrics.status === "loading" && (placeholder ?? <div className="page">{model.ranges.map((option) => <Skeleton height={68} key={option.id} />)}</div>)}
+      {metrics.status === "loading" && (placeholder ?? <MetricsSkeleton />)}
       {metrics.status === "ready" && chart(metrics.value)}
     </Card>
   );
@@ -65,6 +58,21 @@ function HostChart({ model, chart, placeholder }: Readonly<{ model: MetricsModel
 export function seriesPeak(points: readonly Readonly<{ value: number | null }>[]): number | null {
   const known = points.filter((point) => point.value !== null);
   return known.length > 0 ? Math.max(...known.map((point) => point.value ?? 0)) : null;
+}
+
+const metricLabels = ["CPU", "Network in", "Network out"] as const;
+
+function MetricsSkeleton() {
+  return (
+    <div aria-busy="true" aria-live="polite" className="page">
+      <span className="visually-hidden">Reading CloudWatch metrics</span>
+      {metricLabels.map((label) => <section aria-hidden="true" className="spark-row" key={label}>
+        <div className="spark-head"><strong>{label}</strong><Skeleton width="88px" /></div>
+        <Skeleton height={68} />
+      </section>)}
+      <div aria-hidden="true" className="scale"><Skeleton width="104px" /><Skeleton width="104px" /></div>
+    </div>
+  );
 }
 
 function sparkChart(metrics: HostMetrics): ReactNode {

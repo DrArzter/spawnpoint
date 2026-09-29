@@ -23,7 +23,7 @@ export function GameIcon({ game, size, state }: Readonly<{ game: GameRef; size: 
 export function painterFor(game: GameRef, size: SceneSize): Painter {
   const key = `${game?.id ?? ""} ${game?.code ?? ""}`.toLowerCase();
   const [cols, rows] = dimensions[size];
-  if (key.includes("minecraft")) return still(marks.minecraft[size]);
+  if (key.includes("minecraft")) return minecraftCreeper(cols, rows);
   if (key.includes("factorio")) return turningGear(cols, rows);
   if (key.includes("zomboid")) return walkingZombie(cols, rows);
   return still(marks.spawnpoint[size]);
@@ -31,6 +31,29 @@ export function painterFor(game: GameRef, size: SceneSize): Painter {
 
 function still(grid: Grid): Painter {
   return { cols: grid[0]?.length ?? 0, rows: grid.length, paint: () => grid };
+}
+
+// A creeper face survives the terminal's monochrome ramp better than a shaded
+// grass block: one hard square, two square eyes and the stepped mouth are still
+// unmistakable at 24×11. The low-contrast mottling belongs to the lit face;
+// the features stay true holes, so they never dissolve into the texture.
+function minecraftCreeper(cols: number, rows: number): Painter {
+  const height = Math.max(8, Math.floor(rows * 0.8));
+  const width = Math.min(cols - 4, Math.round(height * CELL_ASPECT));
+  const top = Math.floor((rows - height) / 2);
+  const left = Math.floor((cols - width) / 2);
+  const holes = new Set(["1,2", "2,2", "5,2", "6,2", "1,3", "2,3", "5,3", "6,3", "3,4", "4,4", "2,5", "3,5", "4,5", "5,5", "2,6", "3,6", "4,6", "5,6", "2,7", "5,7"]);
+  const grid: number[][] = Array.from({ length: rows }, (_, row) => Array.from({ length: cols }, (_, col) => {
+    if (col < left || col >= left + width || row < top || row >= top + height) return 0;
+    const pixelX = Math.min(7, Math.floor(((col - left) / width) * 8));
+    const pixelY = Math.min(7, Math.floor(((row - top) / height) * 8));
+    if (holes.has(`${pixelX},${pixelY}`)) return 0;
+    const grain = (col * 17 + row * 31 + col * row) % 13;
+    if (grain === 0) return 0.58;
+    if (grain === 5 || grain === 9) return 0.72;
+    return 0.88;
+  }));
+  return still(grid);
 }
 
 // A rim of GEAR_TEETH teeth on GEAR_SPOKES spokes, turning one tooth of

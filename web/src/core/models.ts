@@ -38,7 +38,6 @@ export type AppearanceModel = Readonly<{
   preference: ThemePreference;
   theme: Theme;
   accent: string;
-  label: string;
   setPreference: (next: ThemePreference) => Promise<void>;
   setAccent: (next: string) => Promise<void>;
 }>;
@@ -47,9 +46,6 @@ export type ShellModel = Readonly<{
   navigation: readonly NavigationItem[];
   page: Page;
   scope: ScopeModel;
-  appearance: AppearanceModel;
-  /** The bar's one-tap theme toggle. */
-  cycleTheme: Action;
   viewer: ViewerProfile;
   demo: boolean;
   observedAt: string | undefined;
@@ -72,7 +68,7 @@ export type SessionOverview = Readonly<{
   fleet: boolean;
   state: ServerState;
   status: StatusDescriptor;
-  /** "Minecraft online", the sentence a skin can set large. */
+  /** "Rostik online", the active world and its state. */
   headline: string;
   reason: SessionReason;
   players: number | null;
@@ -89,7 +85,7 @@ export type WorldRow = Readonly<{
   status: StatusDescriptor;
   presetName: string;
   releaseSummary: string;
-  wipe: Readonly<{ number: number; openedAt: string }> | null;
+  wipe: Readonly<{ number: number }> | null;
   /** What stands where a wipe would: "Legacy world", "No wipes yet". */
   wipeAbsent: string;
   address: AddressFacts | null;
@@ -145,7 +141,7 @@ export type BackupsModel = Readonly<{
   restore: (entry: BackupEntry) => Action;
 }>;
 
-export type ReleaseRow = Readonly<{ name: string; status: string; downloadable: boolean; download: Action | null }>;
+export type ReleaseRow = Readonly<{ name: string; status: string; downloadable: boolean; sourceHref: string | null; download: Action | null }>;
 
 export type WorldModel = Readonly<{
   game: Game;

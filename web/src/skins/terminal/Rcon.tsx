@@ -9,7 +9,7 @@ export function Rcon({ model }: Readonly<{ model: ConsoleModel }>) {
   return (
     <Page>
       <h1 className="visually-hidden">Console</h1>
-      <p className="t-note"><span aria-hidden="true" className="t-mark t-mark-off">[-]</span><strong>The RCON gateway is not connected yet.</strong> The terminal below shows the session it would attach to.</p>
+      <p className="t-note"><span aria-hidden="true" className="t-mark t-mark-off">[-]</span><strong>RCON is not connected.</strong></p>
       <section aria-label="RCON terminal" className="t-rcon">
         <header className="t-rcon-head">
           <strong>{game ? `${game.displayName} session` : "Session"}</strong>

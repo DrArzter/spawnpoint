@@ -11,7 +11,7 @@ export function Rcon({ model }: Readonly<{ model: ConsoleModel }>) {
   return (
     <div className="page">
       <h1 className="visually-hidden">Console</h1>
-      <NotConnected description="The terminal below shows the session it would attach to." inline title="The RCON gateway is not connected yet." />
+      <NotConnected inline title="RCON is not connected." />
       <section aria-label="RCON terminal" className="terminal">
         <header className="terminal-bar">
           <Icon name="terminal" size={18} />

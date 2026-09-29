@@ -128,11 +128,11 @@ export function EmptyState({ icon, title, description, actions }: { icon: IconNa
 // `inline` is the form for a screen that still has something to show — a strip
 // above the content. The full state is for a container that would otherwise be
 // empty, and putting it above content reads as "nothing here" over something.
-export function NotConnected({ title, description, inline = false }: { title: ReactNode; description: ReactNode; inline?: boolean }) {
+export function NotConnected({ title, description, inline = false }: { title: ReactNode; description?: ReactNode; inline?: boolean }) {
   // A line, not a box. A box is how a screen says the whole of it is missing;
   // this form is for a screen that still has something to show, and a banner
   // with a title and a paragraph was louder than the part it was reporting.
-  if (inline) return <p className="not-connected"><Icon name="do_not_disturb_on" size={16} /><span><strong>{title}</strong> {description}</span></p>;
+  if (inline) return <p className="not-connected"><Icon name="do_not_disturb_on" size={16} /><span><strong>{title}</strong>{description && <> {description}</>}</span></p>;
   // Not the three dots: they read as something in progress, which is the one
   // thing that is not happening. A closed sign says it plainly — the door is
   // shut, not that you may not pass, which is what `lock` says elsewhere.

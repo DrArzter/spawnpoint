@@ -3,7 +3,7 @@ import { useEffect, type ReactNode } from "react";
 import type { ShellModel } from "../../core/models";
 import { SpawnpointMark } from "../../shell/AppBar";
 import { ensureTerminalFont } from "./font";
-import { Avatar, IconKey } from "./ui";
+import { Avatar } from "./ui";
 
 // The screen: a top row, a menu row, then the grid. Nothing sits beside the
 // content; every row runs the whole width, on a phone as on a 4K monitor.
@@ -25,10 +25,18 @@ export function Shell({ model, children }: Readonly<{ model: ShellModel; childre
           <span aria-hidden="true" className="t-scope-caret">▾</span>
           <span aria-hidden="true" className="t-bracket">]</span>
         </button>
+        <span aria-hidden="true" className="t-mobile-separator">/</span>
+        <nav aria-label="Main navigation" className="t-mobile-section">
+          <span aria-hidden="true" className="t-bracket">[</span>
+          <select aria-label="Current section" onChange={(event) => { window.location.href = event.currentTarget.value; }} value={model.navigation.find((item) => item.current)?.href ?? model.navigation[0]?.href}>
+            {model.navigation.map((item) => <option key={item.id} value={item.href}>{item.label}</option>)}
+          </select>
+          <span aria-hidden="true" className="t-mobile-section-caret">▾</span>
+          <span aria-hidden="true" className="t-bracket">]</span>
+        </nav>
         <span className="t-bar-gap" />
         <div className="t-bar-verbs">
           {model.demo && <span className="t-demo">Demo data</span>}
-          <IconKey data-action={model.cycleTheme.id} icon={model.appearance.theme === "dark" ? "light_mode" : "dark_mode"} label={model.cycleTheme.label} onClick={model.cycleTheme.run} />
           <button aria-label={model.openProfile.label} className="t-bar-avatar" data-action={model.openProfile.id} onClick={model.openProfile.run} title={model.viewer.displayName} type="button">
             <Avatar name={model.viewer.displayName} photoUrl={model.viewer.photoUrl} size="small" />
           </button>

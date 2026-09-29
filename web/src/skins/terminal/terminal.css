@@ -159,6 +159,7 @@ html[data-skin="terminal"] .t-brand {
 html[data-skin="terminal"] .t-scope {
   display: inline-flex;
   align-items: center;
+  min-width: 0;
   gap: 1ch;
   height: 36px;
   padding: 0 1ch;
@@ -176,8 +177,14 @@ html[data-skin="terminal"] .t-scope:hover .t-scope-name {
 }
 
 html[data-skin="terminal"] .t-scope-caret {
-  font-size: 11px;
+  flex: none;
+  font-size: 12px;
   color: var(--ink-secondary);
+}
+
+html[data-skin="terminal"] .t-scope-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 html[data-skin="terminal"] .t-bar-gap {
@@ -190,15 +197,73 @@ html[data-skin="terminal"] .t-bar-verbs {
   gap: 1ch;
 }
 
+html[data-skin="terminal"] .t-mobile-separator,
+html[data-skin="terminal"] .t-mobile-section {
+  display: none;
+}
+
 html[data-skin="terminal"] .t-demo {
   color: var(--warning-ink);
   white-space: nowrap;
 }
 
 @media (max-width: 599px) {
-  html[data-skin="terminal"] .t-brand strong,
+  html[data-skin="terminal"] .t-brand,
+  html[data-skin="terminal"] .t-demo,
   html[data-skin="terminal"] .t-menu-note {
     display: none;
+  }
+
+  html[data-skin="terminal"] .t-bar {
+    gap: 1ch;
+  }
+
+  html[data-skin="terminal"] .t-scope {
+    flex: 0 1 auto;
+  }
+
+  html[data-skin="terminal"] .t-mobile-separator {
+    display: inline;
+    flex: none;
+    color: var(--ink-secondary);
+  }
+
+  html[data-skin="terminal"] .t-mobile-section {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    min-width: 0;
+    color: var(--primary-ink);
+    font-weight: 700;
+  }
+
+  html[data-skin="terminal"] .t-mobile-section select {
+    min-width: 0;
+    max-width: 11ch;
+    min-height: 32px;
+    padding: 0 0.5ch;
+    overflow: hidden;
+    border: 0;
+    appearance: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+
+  html[data-skin="terminal"] .t-mobile-section-caret {
+    color: var(--ink-secondary);
+    font-size: 12px;
+    pointer-events: none;
+  }
+
+  html[data-skin="terminal"] .t-bar-gap {
+    min-width: 0;
+  }
+
+  html[data-skin="terminal"] .t-bar-verbs {
+    flex: none;
   }
 }
 
@@ -268,6 +333,12 @@ html[data-skin="terminal"] .t-menu-note strong {
   font-weight: 400;
 }
 
+@media (max-width: 599px) {
+  html[data-skin="terminal"] .t-menu-row {
+    display: none;
+  }
+}
+
 html[data-skin="terminal"] .t-main {
   flex: 1;
   min-width: 0;
@@ -293,19 +364,23 @@ html[data-skin="terminal"] .t-main > .t-page {
   to { clip-path: inset(0); }
 }
 
-/* The head is two lines: what the page is, then what can be done to it.
-   Both read from the left; nothing floats to the far edge. */
 html[data-skin="terminal"] .t-page-head {
-  display: grid;
-  gap: 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 html[data-skin="terminal"] .t-page-title {
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 2ch;
   min-width: 0;
+}
+
+html[data-skin="terminal"] .t-page-verbs {
+  flex: none;
 }
 
 html[data-skin="terminal"] .t-page-title h1 {
@@ -320,6 +395,42 @@ html[data-skin="terminal"] .t-page-title-person {
 
 html[data-skin="terminal"] .t-page-title-person small {
   font-size: 13px;
+}
+
+@media (max-width: 599px) {
+  html[data-skin="terminal"] .t-page-head {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  html[data-skin="terminal"] .t-page-title {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    gap: 1ch;
+    overflow: hidden;
+  }
+
+  html[data-skin="terminal"] .t-page-title .t-crumb {
+    display: none;
+  }
+
+  html[data-skin="terminal"] .t-page-title h1 {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  html[data-skin="terminal"] .t-page-verbs {
+    flex: none;
+    flex-wrap: nowrap;
+  }
+
+  html[data-skin="terminal"] .t-page-title-person > .t-tag {
+    display: none;
+  }
 }
 
 html[data-skin="terminal"] .t-crumb {
@@ -509,6 +620,15 @@ html[data-skin="terminal"] .t-state {
 
 html[data-skin="terminal"] .t-state > span:last-child {
   min-width: 0;
+}
+
+html[data-skin="terminal"] .t-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3ch;
+  color: inherit;
+  cursor: help;
 }
 
 /* In a table a state is one word beside its mark, never broken. */
@@ -836,7 +956,7 @@ html[data-skin="terminal"] .t-select-caret {
   right: 12px;
   transform: translateY(-50%);
   color: var(--ink-secondary);
-  font-size: 11px;
+  font-size: 12px;
   pointer-events: none;
 }
 
@@ -847,9 +967,35 @@ html[data-skin="terminal"] .t-select-inline {
 
 html[data-skin="terminal"] .t-select-inline .t-select {
   width: auto;
-  min-width: 160px;
+  min-width: 0;
   height: var(--t-key-small);
   font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-select-inline {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink);
+}
+
+html[data-skin="terminal"] .t-select-inline::before,
+html[data-skin="terminal"] .t-select-inline::after {
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
+html[data-skin="terminal"] .t-select-inline::before { content: "["; }
+html[data-skin="terminal"] .t-select-inline::after { content: "]"; }
+
+html[data-skin="terminal"] .t-select-inline .t-select {
+  padding: 0 2ch 0 1ch;
+  border: 0;
+  background: none;
+  font-weight: 700;
+}
+
+html[data-skin="terminal"] .t-select-inline .t-select-caret {
+  right: 1.5ch;
 }
 
 html[data-skin="terminal"] .t-field-hint {
@@ -864,21 +1010,77 @@ html[data-skin="terminal"] .t-field-hint {
 
 /* --- waiting, empty, notices ------------------------------------------------------------- */
 
-/* A terminal draws nothing for what has not arrived: every region still
-   loading says so in one line in the middle of its box. */
-html[data-skin="terminal"] .t-wait {
-  box-sizing: border-box;
-  display: flex;
-  justify-content: center;
+/* Loading keeps the final geometry on screen. A terminal trace appears in
+   discrete samples instead of borrowing the web's usual shimmer. */
+html[data-skin="terminal"] .t-skeleton-group {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-skeleton {
+  display: inline-block;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--ink-secondary) 38%, transparent);
+}
+
+html[data-skin="terminal"] .t-skeleton-text {
+  height: 12px;
+  background: currentColor;
+  vertical-align: middle;
+}
+
+html[data-skin="terminal"] .t-skeleton-short { width: 9ch; }
+html[data-skin="terminal"] .t-skeleton-medium { width: 16ch; }
+html[data-skin="terminal"] .t-skeleton-long { width: min(32ch, 100%); }
+
+html[data-skin="terminal"] .t-skeleton-rows {
+  gap: 0;
+}
+
+html[data-skin="terminal"] .t-skeleton-row {
+  display: grid;
   align-items: center;
-  gap: 1ch;
-  min-height: 120px;
-  margin: 0;
-  padding: 16px;
-  color: var(--ink-secondary);
-  font-size: 13px;
-  line-height: 20px;
-  text-align: center;
+  gap: 16px;
+  min-height: 52px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--outline);
+}
+
+html[data-skin="terminal"] .t-skeleton-row:last-child {
+  border-bottom: 0;
+}
+
+html[data-skin="terminal"] .t-skeleton-cols-1 { grid-template-columns: minmax(0, 1fr); }
+html[data-skin="terminal"] .t-skeleton-cols-2 { grid-template-columns: minmax(0, 2fr) minmax(9ch, 1fr); }
+html[data-skin="terminal"] .t-skeleton-cols-3 { grid-template-columns: minmax(0, 2fr) minmax(9ch, 1fr) minmax(9ch, 1fr); }
+
+html[data-skin="terminal"] .t-skeleton-plot {
+  display: grid;
+  align-content: center;
+  gap: 11px;
+  padding: 16px 10%;
+  color: color-mix(in srgb, var(--primary) 66%, var(--ink-secondary));
+}
+
+html[data-skin="terminal"] .t-skeleton-trace {
+  height: 3px;
+  background: currentColor;
+  transform-origin: left;
+  animation: t-trace-wait 1.4s steps(2, end) infinite;
+}
+
+html[data-skin="terminal"] .t-skeleton-trace:nth-child(1) { width: 34%; animation-delay: -1.2s; }
+html[data-skin="terminal"] .t-skeleton-trace:nth-child(2) { width: 68%; margin-left: 12%; animation-delay: -1s; }
+html[data-skin="terminal"] .t-skeleton-trace:nth-child(3) { width: 42%; margin-left: 46%; animation-delay: -0.8s; }
+html[data-skin="terminal"] .t-skeleton-trace:nth-child(4) { width: 76%; margin-left: 8%; animation-delay: -0.6s; }
+html[data-skin="terminal"] .t-skeleton-trace:nth-child(5) { width: 28%; margin-left: 58%; animation-delay: -0.4s; }
+html[data-skin="terminal"] .t-skeleton-trace:nth-child(6) { width: 54%; margin-left: 26%; animation-delay: -0.2s; }
+html[data-skin="terminal"] .t-skeleton-trace:nth-child(7) { width: 38%; margin-left: 4%; }
+
+@keyframes t-trace-wait {
+  0%, 100% { opacity: 0.42; transform: scaleX(0.82); }
+  50% { opacity: 0.9; transform: scaleX(1); }
 }
 
 html[data-skin="terminal"] .t-empty {
@@ -991,16 +1193,25 @@ html[data-skin="terminal"] .t-pair-arrow {
 html[data-skin="terminal"] .t-address {
   display: inline-flex;
   align-items: center;
-  gap: 0.5ch;
+  gap: 1ch;
   min-width: 0;
+  min-height: var(--t-key-small);
 }
 
-html[data-skin="terminal"] .t-address code {
+html[data-skin="terminal"] .t-address-value {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--t-key-small);
+  line-height: 20px;
   white-space: nowrap;
 }
 
 html[data-skin="terminal"] .t-address-net {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  min-height: var(--t-key-small);
   color: var(--ink-secondary);
 }
 
@@ -1076,6 +1287,27 @@ html[data-skin="terminal"] .t-tab-count {
   opacity: 0.8;
 }
 
+html[data-skin="terminal"] .t-checksum-full {
+  display: none;
+}
+
+html[data-skin="terminal"] .t-release-line {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-sp-2);
+  width: 100%;
+}
+
+html[data-skin="terminal"] .t-release-line .t-verb {
+  margin-inline-start: auto;
+}
+
+html[data-skin="terminal"] .t-release-line > .tip-anchor,
+html[data-skin="terminal"] .t-detail-value > .t-inline > .tip-anchor {
+  margin-inline-start: 1ch;
+}
+
 /* --- tables: dim caps over rows of one height ----------------------------------------- */
 
 html[data-skin="terminal"] .t-table-wrap {
@@ -1114,6 +1346,10 @@ html[data-skin="terminal"] .t-table tbody tr:last-child td {
 
 html[data-skin="terminal"] .t-table tbody tr:hover td {
   background: var(--surface-hover);
+}
+
+html[data-skin="terminal"] .t-table-skeleton:hover td {
+  background: none;
 }
 
 html[data-skin="terminal"] .t-table .t-end {
@@ -1177,6 +1413,7 @@ html[data-skin="terminal"] .t-table-state:hover td {
   }
 
   html[data-skin="terminal"] .t-table tr {
+    position: relative;
     padding: 12px 16px;
     border-bottom: 1px solid var(--outline);
   }
@@ -1194,6 +1431,7 @@ html[data-skin="terminal"] .t-table-state:hover td {
     flex-wrap: wrap;
     align-items: baseline;
     gap: 2px 1.5ch;
+    width: auto !important;
     height: auto;
     min-height: 24px;
     padding: 2px 0;
@@ -1218,7 +1456,7 @@ html[data-skin="terminal"] .t-table-state:hover td {
   }
 
   html[data-skin="terminal"] .t-table td.t-verbs-col {
-    width: auto;
+    width: auto !important;
     padding-top: 8px;
   }
 
@@ -1233,8 +1471,98 @@ html[data-skin="terminal"] .t-table-state:hover td {
     justify-content: flex-start;
   }
 
+  html[data-skin="terminal"] .t-table td.t-corner-col {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    padding: 0;
+  }
+
+  html[data-skin="terminal"] .t-table td.t-compact-block {
+    display: block;
+  }
+
+  html[data-skin="terminal"] .t-table td.t-compact-block::before {
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  html[data-skin="terminal"] .t-table .t-row-corner td:not(.t-verbs-col) {
+    padding-right: 48px;
+  }
+
+  html[data-skin="terminal"] .t-table .t-with-copy {
+    flex: 1 1 0;
+  }
+
+  html[data-skin="terminal"] .t-table .t-with-copy > :first-child {
+    flex: 1 1 auto;
+    max-width: none;
+  }
+
+  html[data-skin="terminal"] .t-table .t-clip,
+  html[data-skin="terminal"] .t-table .t-checksum {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  html[data-skin="terminal"] .t-checksum-short {
+    display: none;
+  }
+
+  html[data-skin="terminal"] .t-checksum-full {
+    display: inline;
+  }
+
+  html[data-skin="terminal"] .t-tabs {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+
+  html[data-skin="terminal"] .t-tab {
+    justify-content: center;
+    gap: 0.5ch;
+    min-width: 0;
+    padding-inline: 0.5ch;
+    font-size: 13px;
+  }
+
   html[data-skin="terminal"] .t-table-state td {
     display: block;
+    padding: 0;
+  }
+
+  html[data-skin="terminal"] .t-table-decision tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    padding: 16px;
+  }
+
+  html[data-skin="terminal"] .t-table-decision td {
+    min-height: 0;
+    padding: 0;
+  }
+
+  html[data-skin="terminal"] .t-table-decision td[data-label="User"] {
+    grid-column: 1 / -1;
+  }
+
+  html[data-skin="terminal"] .t-table-decision td[data-label="Role"] {
+    grid-column: 1;
+    align-self: center;
+  }
+
+  html[data-skin="terminal"] .t-table-decision .t-select-inline .t-select {
+    min-width: 9ch;
+  }
+
+  html[data-skin="terminal"] .t-table-decision td.t-verbs-col {
+    grid-column: 2;
+    align-self: center;
     padding: 0;
   }
 }
@@ -1382,6 +1710,27 @@ html[data-skin="terminal"] .t-list-row:last-child {
 
 html[data-skin="terminal"] .t-list-row > .t-stack {
   flex: 1 1 20ch;
+}
+
+html[data-skin="terminal"] .t-login-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+html[data-skin="terminal"] .t-account-provider {
+  display: flex;
+  align-items: baseline;
+  gap: 1ch;
+}
+
+html[data-skin="terminal"] .t-account-provider .tip-anchor {
+  color: var(--success-ink);
+}
+
+@media (max-width: 599px) {
+  html[data-skin="terminal"] .t-login-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
 }
 
 html[data-skin="terminal"] .t-list-icon {
@@ -1948,8 +2297,47 @@ html[data-skin="terminal"] .t-host-state {
   min-width: 0;
 }
 
-html[data-skin="terminal"] .t-host-wait {
+html[data-skin="terminal"] .t-host-title {
+  align-items: center;
+  display: flex;
+  gap: 1ch;
+}
+
+html[data-skin="terminal"] .t-host-title .t-help {
+  margin-inline-start: 0;
+  line-height: 1;
+}
+
+@media (max-width: 599px) {
+  html[data-skin="terminal"] .t-host-state-compact {
+    gap: 6px;
+  }
+
+  html[data-skin="terminal"] .t-worlds-list .t-panel-rule-verbs {
+    position: absolute;
+    top: calc(var(--t-key) / -2);
+    right: 8px;
+    height: var(--t-key);
+    padding: 0 1ch;
+    background: var(--canvas);
+  }
+
+  html[data-skin="terminal"] .t-worlds-list > .t-panel-body {
+    padding-top: 20px;
+  }
+}
+
+html[data-skin="terminal"] .t-host-skeleton {
   align-self: center;
+  width: 100%;
+}
+
+html[data-skin="terminal"] .t-host-skeleton-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+  padding-top: 12px;
+  border-top: 1px solid var(--outline);
 }
 
 html[data-skin="terminal"] .t-host-line {
@@ -2262,8 +2650,14 @@ html[data-skin="terminal"] .t-provider {
   html[data-skin="terminal"] .t-modal::backdrop,
   html[data-skin="terminal"] .t-drawer::backdrop,
   html[data-skin="terminal"] .t-mark-progress::before,
+  html[data-skin="terminal"] .t-skeleton-trace,
   html[data-skin="terminal"] .t-track,
   html[data-skin="terminal"] .t-rcon-cursor {
     animation: none;
+  }
+
+  html[data-skin="terminal"] .t-skeleton-trace {
+    opacity: 0.5;
+    transform: none;
   }
 }

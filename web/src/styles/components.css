@@ -1745,6 +1745,13 @@ button.chip[aria-pressed="true"] {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--surface-variant);
+  }
+}
+
 /* Snackbar */
 .snackbar-host {
   position: fixed;

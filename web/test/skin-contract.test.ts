@@ -51,7 +51,6 @@ const shell: ShellModel = {
   page: "worlds",
   scope: { game, games: [game], statusOf: () => ({ kind: "ok", label: "Online" }), open: true, show: spy("scope.show", "Minecraft"), close: spy("scope.close", "Cancel"), select: noop },
   appearance: { preference: "system", theme: "light", accent: "#1a73e8", label: "System theme (light)", setPreference: async () => undefined, setAccent: async () => undefined },
-  cycleTheme: spy("appearance.cycle", "Change theme"),
   viewer: { displayName: "DrArzter", inTelegram: true },
   demo: true,
   observedAt: "Sep 23, 2026, 2:01 PM",
@@ -109,7 +108,7 @@ const worldPage: WorldModel = {
     wipeNumber: () => 2,
     restore: () => spy("backup.restore", "Restore"),
   },
-  releases: { rows: [{ name: "1.2", status: "Active", downloadable: true, download: spy("world.pack", "Download") }], state: "ready" },
+  releases: { rows: [{ name: "1.2", status: "Active", downloadable: true, sourceHref: "https://github.com/example/preset", download: spy("world.pack", "Download") }], state: "ready" },
 };
 
 const metrics: MetricsModel = { source: "cloudwatch", setSource: noop, online: true, instanceId: "i-1", range: "24h", ranges: [{ id: "24h", label: "24 hours" }], setRange: noop, metrics: { status: "error", error: "boom", kind: "failed", retry: spy("metrics.retry", "Try again") } };
@@ -182,7 +181,7 @@ function checkSurface(name: string, markup: string, model: unknown, allowMissing
 // Every registered face, so a skin added to the registry joins the contract
 // without anyone remembering to list it here.
 for (const skin of SKINS) {
-  test(`${skin.name}: the shell and the scope dialog draw the scope, the theme toggle and the profile door`, () => {
+  test(`${skin.name}: the shell and the scope dialog draw the scope and the profile door`, () => {
     // The scope model is shared: the shell draws the chip that opens it, the
     // dialog draws the list and the way out.
     const frame = renderToStaticMarkup(createElement(skin.Shell, { model: shell }, "page"));

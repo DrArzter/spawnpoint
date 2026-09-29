@@ -300,7 +300,6 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     preference: appearance.preference,
     theme: appearance.theme,
     accent: appearance.accent,
-    label: appearance.label,
     setPreference: appearance.setPreference,
     setAccent: appearance.setAccent,
   };
@@ -317,8 +316,6 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
       close: action("scope.close", "Cancel", () => setScopeOpen(false)),
       select: (gameId) => { setScopeOpen(false); navigate({ gameId, worldId: null }); },
     },
-    appearance: appearanceModel,
-    cycleTheme: action("appearance.cycle", `${appearance.label}. Change theme`, appearance.cycle, { icon: appearance.theme === "dark" ? "light_mode" : "dark_mode" }),
     viewer,
     demo: session.demo === true,
     observedAt: snapshot ? formatDateTime(snapshot.observedAt) : undefined,

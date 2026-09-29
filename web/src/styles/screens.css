@@ -16,6 +16,12 @@
   align-items: center;
 }
 
+.session-headline {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
 .session-state .status-large .icon,
 .session-state .status-large .ring {
   width: 32px;
@@ -296,6 +302,17 @@
   font-weight: 500;
 }
 
+.login-account-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.login-account-title .tip-anchor {
+  display: inline-flex;
+  color: var(--success);
+}
+
 .login-account-copy span {
   overflow: hidden;
   color: var(--ink-secondary);
@@ -304,10 +321,34 @@
 }
 
 .login-account-actions {
-  grid-column: 2 / -1;
+  display: flex;
+  justify-self: end;
+}
+
+.release-line {
+  align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 8px;
+  width: 100%;
+}
+
+.release-line .button {
+  margin-inline-start: auto;
+}
+
+.release-state-active {
+  color: var(--success);
+}
+
+.release-state-pending {
+  color: var(--warning);
+}
+
+.release-world {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
 }
 
 .account-form {
@@ -324,19 +365,13 @@
   font-weight: 500;
 }
 
-.account-loading {
-  display: grid;
-  gap: 12px;
-}
-
 @media (max-width: 599px) {
   .login-account-row {
-    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-columns: 40px minmax(0, 1fr) auto;
   }
 
-  .login-account-row > .chip {
-    grid-column: 2;
-    justify-self: start;
+  .login-account-actions {
+    grid-column: 3;
   }
 }
 

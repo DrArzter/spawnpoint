@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type { LinkedLoginAccount } from "../../api/contract";
 import { GoogleLoginButton } from "../../components/GoogleLogin";
@@ -7,9 +7,9 @@ import { useSnackbar } from "../../components/ui/Snackbar";
 import type { AppearanceModel, LoginAccountsModel, LookModel, ProfileModel } from "../../core/models";
 import { Icon, type IconName } from "../../icons";
 import { PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../../lib/signin";
-import { deriveAccent, DEFAULT_ACCENT, parseHex } from "../../styles/accent";
+import { DEFAULT_ACCENT, parseHex } from "../../styles/accent";
 import type { ThemePreference } from "../../telegram";
-import { Avatar, Choice, Choices, Empty, Field, Key, Notice, Page, Panel, State, TextInput, Verb, Verbs, Wait } from "./ui";
+import { Avatar, Choice, Choices, Empty, Field, Indicator, Key, Notice, Overflow, Page, Panel, SkeletonRows, TextInput, Verb, Verbs } from "./ui";
 
 export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
   const { member, role, viewer } = model;
@@ -44,7 +44,6 @@ const THEMES: readonly { id: ThemePreference; label: string }[] = [
 function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: LookModel }>) {
   const notify = useSnackbar();
   const [draft, setDraft] = useState(model.accent);
-  const derived = useMemo(() => deriveAccent(model.accent, model.theme), [model.accent, model.theme]);
 
   function save(next: { theme?: ThemePreference; accent?: string }) {
     const writes: Promise<void>[] = [];
@@ -62,7 +61,7 @@ function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: Lo
 
   const valid = parseHex(draft) !== null;
   return (
-    <Panel description="Stored against your identity, so the console looks the same on every device you sign in from." name="Appearance">
+    <Panel name="Appearance">
       <div className="t-settings">
         <div className="t-setting">
           <span className="t-setting-label" id="t-appearance-theme">Theme</span>
@@ -75,7 +74,6 @@ function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: Lo
           <Choices label="Look">
             {look.options.map((option) => <Choice data-action={option.choose.id} key={option.id} onClick={option.choose.run} pressed={option.id === look.current} title={option.choose.hint}>{option.name}</Choice>)}
           </Choices>
-          <p className="t-setting-note">Remembered on this device; theme and accent follow your identity.</p>
         </div>
         <div className="t-setting">
           <span className="t-setting-label">Accent</span>
@@ -88,9 +86,6 @@ function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: Lo
             </Field>
             <Key disabled={model.accent === DEFAULT_ACCENT} label="Reset" onClick={() => { setDraft(DEFAULT_ACCENT); save({ accent: DEFAULT_ACCENT }); }} />
           </div>
-          {derived?.adjusted === true && (
-            <p className="t-setting-note">Lightened or darkened for the {model.theme} theme so text on it stays readable. Links and buttons use <code>{derived.ink}</code>.</p>
-          )}
         </div>
       </div>
     </Panel>
@@ -116,24 +111,26 @@ function LoginAccounts({ model }: Readonly<{ model: LoginAccountsModel }>) {
   const accounts = model.accounts;
   const offers = model.connectTelegram !== null || model.connectGoogle !== null || model.addPassword !== null;
   return (
-    <Panel description="Every method belongs to the same Spawnpoint identity. None becomes primary because it was added first." name="Sign-in methods">
-      {accounts.status === "loading" && <Wait label="Loading sign-in methods" />}
+    <Panel name="Sign-in methods">
+      {accounts.status === "loading" && <SkeletonRows label="Loading sign-in methods" rows={2} />}
       {accounts.status === "error" && <Notice description={accounts.error} title="Sign-in methods are unavailable" tone="error" verbs={<Verb action={accounts.retry} size="small" />} />}
-      {accounts.status === "ready" && accounts.value.length === 0 && <Empty description="This identity has no linked login method the current API can report." title="No sign-in methods" />}
+      {accounts.status === "ready" && accounts.value.length === 0 && <Empty title="No sign-in methods" />}
       {accounts.status === "ready" && accounts.value.length > 0 && (
         <ul className="t-list">
           {accounts.value.map((account) => {
             const presentation = presentProvider(account.provider);
             const rowActions = model.rowActions(account);
             return (
-              <li className="t-list-row" key={`${account.provider}:${account.subject}`}>
+              <li className="t-list-row t-login-row" key={`${account.provider}:${account.subject}`}>
                 <span aria-hidden="true" className="t-list-icon"><Icon name={presentation.icon} size={18} /></span>
                 <span className="t-stack">
-                  <strong>{presentation.label}</strong>
+                  <span className="t-account-provider">
+                    <strong>{presentation.label}</strong>
+                    <Indicator kind={account.verified ? "ok" : "pending"} label={account.verified ? "Verified" : "Pending verification"} />
+                  </span>
                   <span>{accountLine(account)}</span>
                 </span>
-                <State kind={account.verified ? "ok" : "pending"} label={account.verified ? "Verified" : "Pending"} />
-                {rowActions.length > 0 && <Verbs>{rowActions.map((rowAction) => <Verb action={rowAction} key={rowAction.id} size="small" />)}</Verbs>}
+                {rowActions.length > 0 && <Overflow groups={[rowActions]} label={`Manage ${presentation.label}`} size="small" />}
               </li>
             );
           })}

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentPropsWithRef, type KeyboardEvent, type MouseEvent, type ReactNode, type SelectHTMLAttributes } from "react";
+import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentPropsWithRef, type KeyboardEvent, type ReactNode, type SelectHTMLAttributes } from "react";
 
 import type { StatusKind } from "../../components/ui/Status";
 import { Tooltip } from "../../components/ui/Tooltip";
@@ -34,13 +34,60 @@ export function State({ kind, label, size = "medium", className }: Readonly<{ ki
   );
 }
 
-/** One line in the middle of a box while it waits; the same everywhere. */
-export function Wait({ label, className }: Readonly<{ label: string; className?: string }>) {
+/** A compact state for dense rows: the mark stays visible and the label moves
+    into the tooltip without becoming inaccessible to readers. */
+export function Indicator({ kind, label, className }: Readonly<{ kind: StatusKind; label: string; className?: string }>) {
   return (
-    <div aria-busy="true" aria-live="polite" className={cx("t-wait", className)} role="status">
-      <Mark kind="progress" />
-      <span>{label}</span>
+    <Tooltip className={cx("t-indicator", className)} text={label}>
+      <Mark kind={kind} />
+      <span className="visually-hidden">{label}</span>
+    </Tooltip>
+  );
+}
+
+/** One announced loading region. Its children preserve the geometry of the
+    content that will replace them, without repeating loading copy. */
+export function SkeletonGroup({ label, children, className }: Readonly<{ label: string; children: ReactNode; className?: string }>) {
+  return (
+    <div aria-busy="true" aria-live="polite" className={cx("t-skeleton-group", className)}>
+      <span className="visually-hidden">{label}</span>
+      {children}
     </div>
+  );
+}
+
+/** Geometry-only loading content. A plot uses discrete terminal traces; text
+    uses a quiet block sized by the same small vocabulary everywhere. */
+export function Skeleton({ variant = "text", width = "medium", className }: Readonly<{
+  variant?: "text" | "plot";
+  width?: "short" | "medium" | "long";
+  className?: string;
+}>) {
+  return (
+    <span aria-hidden="true" className={cx("t-skeleton", `t-skeleton-${variant}`, variant === "text" && `t-skeleton-${width}`, className)}>
+      {variant === "plot" && Array.from({ length: 7 }, (_, index) => <span className="t-skeleton-trace" key={index} />)}
+    </span>
+  );
+}
+
+/** Repeated list-shaped placeholders. The column contract is intentionally
+    small so lists, drawers and preference rows do not invent their own wait. */
+export function SkeletonRows({ label, rows = 3, columns = 2, className }: Readonly<{
+  label: string;
+  rows?: number;
+  columns?: 1 | 2 | 3;
+  className?: string;
+}>) {
+  return (
+    <SkeletonGroup className={cx("t-skeleton-rows", className)} label={label}>
+      {Array.from({ length: rows }, (_, row) => (
+        <span aria-hidden="true" className={cx("t-skeleton-row", `t-skeleton-cols-${columns}`)} key={row}>
+          {Array.from({ length: columns }, (_, column) => (
+            <Skeleton key={column} width={column === 0 ? "long" : (row + column) % 2 === 0 ? "medium" : "short"} />
+          ))}
+        </span>
+      ))}
+    </SkeletonGroup>
   );
 }
 
@@ -72,8 +119,8 @@ export function Key({ label, busy = false, tone = "plain", size = "medium", clas
 }
 
 /** A model's action as a key, carrying `data-action` for the contract. */
-export function Verb({ action, tone = "plain", size, className, ...rest }: Readonly<{ action: Action; tone?: VerbTone; size?: "small" | "medium"; className?: string }> & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "disabled" | "children">) {
-  return (
+export function Verb({ action, tone = "plain", size, className, tooltipWhenDisabled = false, ...rest }: Readonly<{ action: Action; tone?: VerbTone; size?: "small" | "medium"; className?: string; tooltipWhenDisabled?: boolean }> & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "disabled" | "children">) {
+  const button = (
     <Key
       aria-label={action.disabled && action.hint ? `${action.label}. ${action.hint}` : undefined}
       busy={action.busy}
@@ -88,6 +135,7 @@ export function Verb({ action, tone = "plain", size, className, ...rest }: Reado
       {...rest}
     />
   );
+  return tooltipWhenDisabled && action.disabled && action.hint ? <Tooltip text={action.hint}>{button}</Tooltip> : button;
 }
 
 /** An icon alone between brackets, for a control whose word is its label. */
@@ -224,7 +272,7 @@ const noticeMark: Readonly<Record<NoticeTone, StatusKind>> = { info: "info", war
 
 export function Notice({ tone, title, description, verbs, className }: Readonly<{ tone: NoticeTone; title: ReactNode; description?: ReactNode; verbs?: ReactNode; className?: string }>) {
   return (
-    <div className={cx("t-notice", `t-notice-${tone}`, className)} role={tone === "error" ? "alert" : "status"}>
+    <div aria-live={tone === "error" ? undefined : "polite"} className={cx("t-notice", `t-notice-${tone}`, className)} role={tone === "error" ? "alert" : undefined}>
       <Mark kind={noticeMark[tone]} />
       <div className="t-notice-copy">
         <strong>{title}</strong>
@@ -257,6 +305,19 @@ export function Avatar({ name, photoUrl, size = "medium", className }: Readonly<
   );
 }
 
+/** The one person row used by access requests, identities and pickers. */
+export function Person({ name, detail, photoUrl, className }: Readonly<{ name: string; detail?: ReactNode; photoUrl?: string | null; className?: string }>) {
+  return (
+    <span className={cx("t-person", className)}>
+      <Avatar name={name} photoUrl={photoUrl} />
+      <span className="t-stack">
+        <strong>{name}</strong>
+        {detail && <small>{detail}</small>}
+      </span>
+    </span>
+  );
+}
+
 // --- tabs -----------------------------------------------------------------------
 
 export type TabOption<T extends string> = Readonly<{ id: T; label: string; count?: number }>;
@@ -273,7 +334,7 @@ export function Tabs<T extends string>({ label, options, value, onChange, classN
     }
   }
   return (
-    <div aria-label={label} className={cx("t-tabs", className)} data-scroll="expected" onKeyDown={onKeyDown} role="tablist">
+    <div aria-label={label} className={cx("t-tabs", className)} data-scroll="expected" onKeyDown={onKeyDown} role="tablist" tabIndex={-1}>
       {options.map((option) => (
         <button aria-selected={option.id === value} className="t-tab" key={option.id} onClick={() => onChange(option.id)} role="tab" tabIndex={option.id === value ? 0 : -1} type="button">
           {option.label}
@@ -294,6 +355,10 @@ export type Col<Row> = Readonly<{
   align?: "start" | "end";
   /** The column of a row's verbs: no heading, packed against the end. */
   verbs?: boolean;
+  /** On compact records, pin this one icon-only menu to the upper corner. */
+  corner?: boolean;
+  /** On compact records, put the value below its label instead of beside it. */
+  compactBlock?: boolean;
   secondary?: boolean;
   /** Worth reading, not worth the row scrolling: dropped at the medium step. */
   optional?: boolean;
@@ -303,29 +368,36 @@ function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
-export function Table<Row>({ columns, rows, rowKey, label, loading = false, loadingLabel, empty, headless = false, className }: Readonly<{
+export function Table<Row>({ columns, rows, rowKey, label, loading = false, loadingLabel, loadingRows = 3, empty, headless = false, decision = false, className }: Readonly<{
   columns: readonly Col<Row>[];
   rows: readonly Row[];
   rowKey: (row: Row) => string;
   label: string;
   loading?: boolean;
   loadingLabel?: string;
+  loadingRows?: number;
   empty: ReactNode;
   headless?: boolean;
+  /** A person, one compact choice and one action. Both access tables use it. */
+  decision?: boolean;
   className?: string;
 }>) {
   return (
-    <div className={cx("t-table-wrap", className)}>
-      <table aria-busy={loading || undefined} aria-label={label} className={cx("t-table", headless && "t-table-headless")}>
+    <div className={cx("t-table-wrap", decision && "t-table-decision", className)}>
+      <table aria-busy={loading || undefined} aria-label={loading ? `${label}. ${loadingLabel ?? `Loading ${lowerFirst(label)}`}` : label} aria-live={loading ? "polite" : undefined} className={cx("t-table", headless && "t-table-headless")}>
         <thead className={headless ? "visually-hidden" : undefined}>
-          <tr>{columns.map((column) => <th className={cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col", column.optional && "t-optional")} key={column.id} scope="col" style={column.width ? { width: column.width } : undefined}>{column.verbs ? <span className="visually-hidden">{column.label}</span> : column.label}</th>)}</tr>
+          <tr>{columns.map((column) => <th className={cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col", column.corner && "t-corner-col", column.compactBlock && "t-compact-block", column.optional && "t-optional")} key={column.id} scope="col" style={column.width ? { width: column.width } : undefined}>{column.verbs ? <span className="visually-hidden">{column.label}</span> : column.label}</th>)}</tr>
         </thead>
         <tbody>
-          {loading && <tr className="t-table-state"><td colSpan={columns.length}><Wait label={loadingLabel ?? `Loading ${lowerFirst(label)}`} /></td></tr>}
+          {loading && Array.from({ length: loadingRows }, (_, row) => (
+            <tr aria-hidden="true" className="t-table-skeleton" key={`skeleton-${row}`}>
+              {columns.map((column, columnIndex) => <td className={cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col", column.corner && "t-corner-col", column.compactBlock && "t-compact-block", column.secondary && "t-secondary", column.optional && "t-optional")} data-label={column.verbs ? "" : column.label} key={column.id} style={column.width ? { width: column.width } : undefined}><Skeleton width={column.verbs ? "short" : (row + columnIndex) % 3 === 0 ? "long" : "medium"} /></td>)}
+            </tr>
+          ))}
           {!loading && rows.length === 0 && <tr className="t-table-state"><td colSpan={columns.length}>{empty}</td></tr>}
           {!loading && rows.map((row) => (
-            <tr key={rowKey(row)}>
-              {columns.map((column) => <td className={cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col", column.secondary && "t-secondary", column.optional && "t-optional")} data-label={column.verbs ? "" : column.label} key={column.id} style={column.width ? { width: column.width } : undefined}>{column.render(row)}</td>)}
+            <tr className={columns.some((column) => column.corner) ? "t-row-corner" : undefined} key={rowKey(row)}>
+              {columns.map((column) => <td className={cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col", column.corner && "t-corner-col", column.compactBlock && "t-compact-block", column.secondary && "t-secondary", column.optional && "t-optional")} data-label={column.verbs ? "" : column.label} key={column.id} style={column.width ? { width: column.width } : undefined}>{column.render(row)}</td>)}
             </tr>
           ))}
         </tbody>
@@ -370,7 +442,7 @@ export function Address({ value, connectivity, network, copyLabel, size = "mediu
   return (
     <span className="t-address">
       <span className="t-address-net" title={network}><Icon name={connectivity === "zerotier" ? "dns" : "public"} size={14} /><span className="visually-hidden">{network}</span></span>
-      <code>{value}</code>
+      <code className="t-address-value">{value}</code>
       {copyLabel && <Copy label={copyLabel} size={size} value={value} />}
     </span>
   );
@@ -435,9 +507,9 @@ export function Overflow({ label, groups, size = "medium", className }: Readonly
   return (
     <>
       <IconKey aria-controls={id} aria-expanded={open} aria-haspopup="menu" className={className} icon="more_vert" label={label} onClick={() => (open ? hide() : show())} ref={trigger} size={size} />
-      <div className="t-menu" id={id} onKeyDown={onKeyDown} popover="auto" ref={panel} role="menu">
+      <div className="t-menu" id={id} onKeyDown={onKeyDown} popover="auto" ref={panel} role="menu" tabIndex={-1}>
         {present.map((group, groupIndex) => (
-          <div className="t-menu-group" key={group[0]?.id ?? groupIndex} role="presentation">
+          <div className="t-menu-group" key={group[0]?.id ?? groupIndex}>
             {groupIndex > 0 && <hr />}
             {group.map((action) => (
               <button className={cx("t-menu-item", action.danger && "t-menu-item-danger")} data-action={action.id} disabled={action.disabled} key={action.id} onClick={() => { hide(); action.run(); }} role="menuitem" title={action.hint} type="button">
@@ -454,7 +526,7 @@ export function Overflow({ label, groups, size = "medium", className }: Readonly
 
 // --- top layer: modal and drawer -------------------------------------------------
 
-function useModal(open: boolean, onClose: () => void) {
+function useModal(open: boolean, onClose: () => void, dismissOnBackdrop = false) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current;
@@ -473,6 +545,13 @@ function useModal(open: boolean, onClose: () => void) {
     dialog.addEventListener("cancel", cancel);
     return () => dialog.removeEventListener("cancel", cancel);
   }, [onClose]);
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog || !dismissOnBackdrop) return;
+    const click = (event: Event) => { if (event.target === dialog) onClose(); };
+    dialog.addEventListener("click", click);
+    return () => dialog.removeEventListener("click", click);
+  }, [dismissOnBackdrop, onClose]);
   return ref;
 }
 
@@ -486,11 +565,10 @@ export function Modal({ open, onClose, title, children, verbs, className, dismis
   className?: string;
   dismissOnBackdrop?: boolean;
 }>) {
-  const ref = useModal(open, onClose);
+  const ref = useModal(open, onClose, dismissOnBackdrop);
   const titleId = useId();
-  const onClick = (event: MouseEvent<HTMLDialogElement>) => { if (dismissOnBackdrop && event.target === event.currentTarget) onClose(); };
   return (
-    <dialog aria-labelledby={titleId} className={cx("t-modal", className)} onClick={onClick} ref={ref}>
+    <dialog aria-labelledby={titleId} className={cx("t-modal", className)} ref={ref}>
       {open && (
         <div className="t-panel t-modal-panel">
           <div className="t-dialog-head">

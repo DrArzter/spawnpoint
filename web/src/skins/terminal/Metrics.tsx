@@ -4,7 +4,7 @@ import type { HostMetricPoint, HostMetrics } from "../../api/contract";
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { MetricsModel } from "../../core/models";
 import { formatBytes } from "../../lib/format";
-import { Choice, Choices, Empty, Notice, Page, Panel, Tabs, Verb, Wait } from "./ui";
+import { Choice, Choices, Empty, Notice, Page, Panel, Skeleton, SkeletonGroup, Tabs, Verb } from "./ui";
 
 // Metrics the way the status page draws its response line: one series is one
 // well with the area under its line filled in the accent, no axes and no
@@ -24,24 +24,18 @@ export function Metrics({ model }: Readonly<{ model: MetricsModel }>) {
       <h1 className="visually-hidden">Metrics</h1>
       <Tabs label="Metric source" onChange={model.setSource} options={[{ id: "cloudwatch", label: "CloudWatch" }, { id: "session", label: "Session" }]} value={model.source} />
       {model.source === "cloudwatch" && <HostPanel model={model} />}
-      {/* The stack that answers this already runs beside the game; what is
-          missing is the path from a host on a private overlay to a public
-          panel, so this stays closed rather than empty. */}
-      {model.source === "session" && <Panel><Empty
-        description={model.online ? "Prometheus and Grafana are running beside this session, on a host the panel cannot reach yet. Charts appear once a path out of the overlay exists." : "Prometheus and Grafana run inside an active game session, and the path that would carry them to this page does not exist yet."}
-        title="Session telemetry is not connected yet"
-      /></Panel>}
+      {model.source === "session" && <Panel><Empty title="Session telemetry is not connected yet" /></Panel>}
     </Page>
   );
 }
 
 function HostPanel({ model }: Readonly<{ model: MetricsModel }>) {
   if (model.instanceId === undefined) {
-    return <Panel><Empty description="Metrics are read from the compute host, and the control plane reports none right now." title="No host to measure" /></Panel>;
+    return <Panel><Empty title="No host to measure" /></Panel>;
   }
   const metrics = model.metrics;
   if (metrics.status === "error" && metrics.kind === "unavailable") {
-    return <Panel><Empty description="Host metrics appear here once the control plane reads CloudWatch." title="CloudWatch is not connected yet" /></Panel>;
+    return <Panel><Empty title="CloudWatch is not connected yet" /></Panel>;
   }
   return (
     <Panel
@@ -57,18 +51,30 @@ function HostPanel({ model }: Readonly<{ model: MetricsModel }>) {
   );
 }
 
-// While the numbers load: the wells at their size, each saying what it is
-// waiting for, and an empty line where the caption will be, so nothing moves
-// when they arrive.
+// The labels and final chart geometry are already useful while the readings
+// arrive. One group announces the wait; the three plots do not repeat it.
+const waitingSeries = [
+  { id: "cpu", label: "CPU" },
+  { id: "in", label: "Network in" },
+  { id: "out", label: "Network out" },
+] as const;
+
 const waiting: ReactNode = (
-  <>
-    {["cpu", "in", "out"].map((id) => (
-      <div className="t-chart" key={id}>
-        <Wait className="t-chart-well t-chart-waiting" label="Reading CloudWatch" />
-        <span className="t-chart-caption-slot" />
+  <SkeletonGroup label="Reading CloudWatch metrics">
+    {waitingSeries.map((series) => (
+      <div className="t-chart" key={series.id}>
+        <Skeleton className="t-chart-well" variant="plot" />
+        <p className="t-chart-caption">
+          <strong>{series.label}</strong>
+          <Skeleton width="short" />
+        </p>
       </div>
     ))}
-  </>
+    <div className="t-chart-scale">
+      <Skeleton width="medium" />
+      <Skeleton width="medium" />
+    </div>
+  </SkeletonGroup>
 );
 
 export function seriesPeak(points: readonly Readonly<{ value: number | null }>[]): number | null {

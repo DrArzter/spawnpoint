@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, InvitationModel, ScopeModel, WorldSettingsModel } from "../../core/models";
 import { plural } from "../../lib/format";
-import { Avatar, Drawer, Empty, Field, Key, Modal, Notice, SelectInput, State, TextInput, Verb, Wait } from "./ui";
+import { Avatar, Drawer, Empty, Field, Key, Modal, Notice, Person, SelectInput, SkeletonRows, State, TextInput, Verb } from "./ui";
 
 // The scope picker: choosing a game re-scopes the whole console.
 export function ScopeDialog({ model }: Readonly<{ model: ScopeModel }>) {
@@ -70,7 +70,7 @@ export function ConfirmationDialog({ model }: Readonly<{ model: ConfirmationMode
 
 function ConnectionFields({ model, first = false }: Readonly<{ model: ConnectionFieldsModel; first?: boolean }>) {
   return <>
-    <Field hint="Choose where this world's server starts." label="Hosting">
+    <Field label="Hosting">
       <SelectInput data-autofocus={first ? true : undefined} onChange={(event) => model.setPlacement(event.target.value as "configured" | "fleet")} value={model.placement}>
         <option value="configured">Persistent host · ZeroTier</option>
         <option disabled={!model.fleetAvailable} value="fleet">On-demand fleet · public connection{model.fleetAvailable ? "" : " (not configured)"}</option>
@@ -92,7 +92,6 @@ export function CreateWorldSheet({ model }: Readonly<{ model: CreateWorldModel }
     <Drawer
       cancel={model.cancel}
       closeActionId={model.cancel.id}
-      description={`A new world opens wipe #1 from an immutable ${model.game.displayName} release.`}
       footer={<>
         <p>{model.preset ? `${model.preset.displayName} · ${plural(model.preset.releases.length, "release")}` : "Choose a preset"}</p>
         <Verb action={model.submit} tone="primary" />
@@ -127,7 +126,6 @@ export function WorldSettingsSheet({ model }: Readonly<{ model: WorldSettingsMod
     <Drawer
       cancel={model.cancel}
       closeActionId={model.cancel.id}
-      description={`Choose how ${model.world.displayName} is hosted and reached. Changes are allowed only while the world is stopped.`}
       footer={<Verb action={model.save} tone="primary" />}
       onClose={model.cancel.run}
       open
@@ -153,10 +151,7 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
       cancel={model.close}
       closeActionId={model.close.id}
       description={`${game.displayName} · ${world.displayName}${address}`}
-      footer={<>
-        <p>{model.send.hint}</p>
-        <Verb action={model.send} tone="primary" />
-      </>}
+      footer={<Verb action={model.send} tone="primary" />}
       onClose={model.close.run}
       open
       title="Invite players"
@@ -167,12 +162,12 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
           <label className="t-radio">
             <input checked={model.audience === "broadcast"} data-autofocus name="invite-audience" onChange={() => model.setAudience("broadcast")} type="radio" />
             <span aria-hidden="true" className="t-radio-box">{model.audience === "broadcast" ? "(o)" : "( )"}</span>
-            <span className="t-stack"><strong>Everyone</strong><small>Group chats and people subscribed to broadcast invitations. Your own chat is excluded.</small></span>
+            <strong>Everyone</strong>
           </label>
           <label className="t-radio">
             <input checked={model.audience === "direct"} name="invite-audience" onChange={() => model.setAudience("direct")} type="radio" />
             <span aria-hidden="true" className="t-radio-box">{model.audience === "direct" ? "(o)" : "( )"}</span>
-            <span className="t-stack"><strong>Specific people</strong><small>Only the selected people, if they allow direct invitations.</small></span>
+            <strong>Specific people</strong>
           </label>
         </fieldset>
 
@@ -185,7 +180,7 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
               <span>{summary}</span>
               {model.selectedCount > 0 && <Verb action={model.clearSelection} size="small" />}
             </p>
-            {recipients.status === "loading" && <Wait label="Loading approved players" />}
+            {recipients.status === "loading" && <SkeletonRows label="Loading approved players" rows={3} />}
             {recipients.status === "error" && <Notice title="Players could not be loaded" tone="error" verbs={<Verb action={recipients.retry} size="small" />} />}
             {recipients.status === "ready" && recipients.value.length === 0 && !model.query.trim() && <Empty description="Approve another player in Access before sending a direct invitation." title="No other approved players" />}
             {recipients.status === "ready" && recipients.value.length === 0 && model.query.trim() && <Empty description={`Nothing matches "${model.query}".`} title="No matching players" verbs={<Key label="Clear search" onClick={() => model.setQuery("")} size="small" />} />}
@@ -196,8 +191,7 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
                     <label className={recipient.ready ? "t-check" : "t-check t-check-off"}>
                       <input checked={recipient.selected} disabled={!recipient.ready} onChange={recipient.toggle} type="checkbox" />
                       <span aria-hidden="true" className="t-check-box">{recipient.selected ? "[x]" : "[ ]"}</span>
-                      <Avatar name={recipient.displayName} photoUrl={recipient.photoUrl} />
-                      <span className="t-stack"><strong>{recipient.displayName}</strong><small>{recipient.delivery}</small></span>
+                      <Person detail={recipient.delivery} name={recipient.displayName} photoUrl={recipient.photoUrl} />
                     </label>
                   </li>
                 ))}
@@ -211,9 +205,9 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
             <h3 className="t-group-name" id="t-invite-history">Recent invitations</h3>
             <Verb action={model.refreshHistory} size="small" />
           </div>
-          {history.status === "loading" && <Wait label="Loading recent invitation results" />}
+          {history.status === "loading" && <SkeletonRows columns={3} label="Loading recent invitation results" rows={2} />}
           {history.status === "error" && <Notice title="Delivery history could not be loaded" tone="error" verbs={<Verb action={history.retry} size="small" />} />}
-          {history.status === "ready" && history.value.length === 0 && <p className="t-copy-line">No invitations sent for this world yet.</p>}
+          {history.status === "ready" && history.value.length === 0 && <Empty title="No invitations yet" />}
           {history.status === "ready" && history.value.length > 0 && (
             <ul className="t-list">
               {history.value.map((item) => (

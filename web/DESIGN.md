@@ -400,7 +400,8 @@ document carries `html[data-skin="terminal"]`, which `index.html` stamps before 
 - **A mark and a word.** Status is a bracketed mark in front of its label, never colour alone: `[*]` ok, `[>]` ready,
   `[-]` off, `[.]` pending, `[?]` unknown, `[!]` error and warning, `[i]` info, `[x]` archived, `[+]` absent. Progress
   is the one mark that moves: `[~]` spinning through `|`, `/`, `-` and `\`, held on the tilde under reduced motion.
-  Notices carry the same marks in front of their titles.
+  Notices carry the same marks in front of their titles. Dense rows use `Indicator`: the same visible mark with the
+  word in its tooltip and accessible label. `State` is reserved for places with room for both mark and word.
 - **Bracketed controls.** A button is its label between `[` and `]`, and nothing is filled: the primary verb keeps
   the accent in its word and its brackets where a secondary verb's brackets are dim, the danger verb says so in red,
   and hover is an underline. A verb carries no icon, whatever the model suggests; the only keys that hold a glyph are
@@ -428,21 +429,27 @@ document carries `html[data-skin="terminal"]`, which `index.html` stamps before 
   table cell. Every row of a table is as tall as a small key with its padding, whether or not it holds one. On a
   phone a table is a stack of records, each cell one line with its label as a dim word before the value and the
   verbs on the last line.
+- **One primitive, one intent.** `Person` owns avatar/name/detail rows across access requests, identities and people
+  pickers. `Address` owns the network glyph, mono address and copy key on one centreline. `Table decision` owns the
+  person/control/action composition for both access tables, including its compact grid. `Key`, `IconKey`, `Verb`,
+  `Overflow`, `State` and `Indicator` are the only bracketed controls and status treatments; screens do not rebuild
+  their glyphs or spacing locally.
 - **The host scene.** The first screen draws the scoped game's icon in a glyph ramp (`" .:-=+*#%@"`) on a dark cell,
   40×18 cells, 24×11 on a phone. `HostScene` is the adapter: it takes a painter's grid of brightness per cell, sets the
-  exposure from the session state and keeps time. `GameIcon` picks the painter: the Spawnpoint mark and the Minecraft
-  cube are sampled grids (`marks.json`) that keep still and breathe; the Factorio gear and the Zomboid zombie are drawn
+  exposure from the session state and keeps time. `GameIcon` picks the painter: the Spawnpoint mark is a sampled grid
+  (`marks.json`), the Minecraft creeper face is a procedural pixel grid, and both keep still and breathe; the Factorio
+  gear and the Zomboid zombie are drawn
   by `raster.ts` from shapes and move through their phase while the host is online, the gear turning, the zombie
   walking across and coming back in. Starting and stopping show the picture at rest under one brighter scanline;
   stopped is sparse and still. Reduced motion stops the tick.
 - **Metrics as the status page draws them.** One series is one 120px well with its line in the accent and the area
   under it filled at a tenth of it, no axes and no grid; a caption under the well names the series and its peak, and
   the window is stated once under all of them. A gap in the readings is a gap in the line, never a line to zero.
-- **Placeholders.** A terminal draws nothing for what has not arrived. Every region still loading says so in one
-  line in the middle of its box, with the spinning mark, as the boot does (`[~] Reading CloudWatch`,
-  `[~] Loading worlds of Minecraft`, `[~] Loading sign-in methods`); the shapes the console waits with, skeleton
-  rows and bars, are not drawn at all. The metrics wells wait at their own height so nothing moves when the numbers
-  land. No shimmer, no texture, no slots.
+- **Placeholders.** A loading region is announced once, while shared skeleton primitives preserve the final
+  geometry and any labels already known. Terminal plots use quiet, discrete traces rather than fake readings or a
+  web shimmer; text uses a small fixed vocabulary of widths. The metrics wells stay at their final 120px height so
+  nothing moves when the numbers land. Reduced motion freezes every trace. Simple waits and boot sequences may still
+  use one `[~]` line when there is no useful final geometry to show.
 - **Spacing.** The page gutter and the gap between panels are the console's (24px, 16px on a phone); a named panel
   keeps 10px more above it for the name on its rule, 20px when its verbs sit there too, an unnamed one does not. Cells are 16px in from the rule, 12px at
   the medium step so the worlds table fits a tablet in the wider face. Under a coarse pointer the frame's controls

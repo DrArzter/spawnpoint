@@ -44,10 +44,10 @@ for (const size of sizes) {
 test("the gear turns and the zombie walks; the sampled marks keep still", () => {
   const gear = painterFor(games.factorio, "40x18");
   const zombie = painterFor(games.zomboid, "40x18");
-  const cube = painterFor(games.minecraft, "40x18");
+  const minecraft = painterFor(games.minecraft, "40x18");
   assert.notDeepEqual(gear.paint(0), gear.paint(3));
   assert.notDeepEqual(zombie.paint(0), zombie.paint(3));
-  assert.deepEqual(cube.paint(0), cube.paint(3));
+  assert.deepEqual(minecraft.paint(0), minecraft.paint(3));
 });
 
 test("the gear comes back round after one turn of its spokes", () => {

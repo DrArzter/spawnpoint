@@ -10,7 +10,7 @@ import { useConsole, type ConsoleController } from "./useConsole";
 import { useBackups, useInvitation, useLoginAccounts, useMetrics, useNotifications, useRoles, useUsers } from "./data";
 import { useConfirmationForm, useCreateWorldForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleModel, LookModel, ReleasesModel, WorldModel, WorldsModel } from "./models";
-import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionActionForWorld, sessionControlAvailability, sessionDetails, sharedHostNotice, worldDetails, worldMoreActions, worldNotices, worldTabs } from "./worlds";
+import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionActionForWorld, sessionControlAvailability, sessionDetails, worldDetails, worldMoreActions, worldNotices, worldTabs } from "./worlds";
 
 /*
  * The controllers: each takes the console's bones, builds one page's model
@@ -58,8 +58,6 @@ function WorldsPage({ console, skin }: Controlled) {
   const loading = listStatus === "loading";
   const canManage = granted.has("world.manage");
   const readyPreset = game?.presets.some((preset) => preset.buildStatus === "ready") ?? false;
-  const controlBusy = pending?.kind === "session" || pending?.kind === "lifecycle";
-  const notice = fleetOverview ? null : sharedHostNotice(sharedSession, controlBusy);
   const model: WorldsModel = {
     status: listStatus,
     error,
@@ -67,7 +65,6 @@ function WorldsPage({ console, skin }: Controlled) {
     unavailable: !loading && !game ? { failed: listStatus === "error", description: listStatus === "error" ? "Spawnpoint could not read games, worlds and the compute host." : "The control plane lists no games yet. Games and their presets are declared in Git." } : null,
     notices: [
       ...(listStatus === "error" ? [{ id: "load", tone: "error" as const, title: "Current state could not be loaded", description: error, action: action("refresh", "Try again", () => void console.refresh()) }] : []),
-      ...(notice ? [notice] : []),
     ],
     overview: buildSessionOverview(game, snapshot, serverState, sharedSession, fleetOverview),
     rows: game ? game.worlds.map((world) => buildWorldRow(game, world, { fleet: fleetOverview, sharedSession, serverState, granted, pending, callbacks: worldCallbacks })) : [],
@@ -94,13 +91,12 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     settled: `${world.wipes.length}:${operations.length}`,
     onRestore: (entry) => worldCallbacks.onWorldAction(game, world, "restore", { key: entry.key, name: entry.archiveName }),
   });
-  const notice = fleet ? null : sharedHostNotice(sharedSession, controlBusy);
   const model: WorldModel = {
     game,
     world,
     worldsHref: routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: null }),
     availability: worldStatus(world),
-    notices: [...worldNotices(world, rowPending), ...(notice ? [notice] : [])],
+    notices: worldNotices(world, rowPending),
     tabs: worldTabs(world, granted.has("release.read")),
     tab: route.worldTab,
     setTab: (tab) => navigate({ worldTab: tab }),

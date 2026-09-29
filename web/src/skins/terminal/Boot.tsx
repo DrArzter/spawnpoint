@@ -12,7 +12,7 @@ import { State } from "./ui";
 export function Boot({ model }: Readonly<{ model: BootModel }>) {
   useEffect(ensureTerminalFont, []);
   return (
-    <main aria-busy="true" aria-live="polite" className="t-boot" role="status">
+    <main aria-busy="true" aria-live="polite" className="t-boot">
       <section aria-labelledby="t-boot-title" className="t-panel t-panel-named t-boot-panel">
         <h2 className="t-panel-name">Boot</h2>
         <div className="t-panel-body t-boot-body">

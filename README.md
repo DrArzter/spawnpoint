@@ -36,7 +36,7 @@ The name is a working title.
 | Worlds, wipes and backups as operations | Create a world from a ready preset release; archive it, start a new wipe, restore a backup into a new wipe, or purge an archived world. Each is a guarded Standard Workflow that stops and backs up an active session first. See [ADR-0040](docs/adr/0040-reusable-presets-and-world-wipes.md) |
 | Chat notifications | Step Functions execution events reach a notifier Lambda: start requested, ready, stopped, promoted, rolled back, failed stop. Guardrail alerts on `spawnpoint-alert` arrive in the same chat. Players choose their own subscriptions in the panel |
 | Production deployed from pull requests | `Check` must pass on `main`; then GitHub Actions classifies the tested diff and assumes an OIDC role to apply only the changed Terraform roots, Lambda bundles and web build, refusing any plan with a delete or replacement. Pull requests get a read-only production plan; the pipeline's own identities are applied by a fourth, owner-gated identity that nothing automated can reach. See [ADR-0043](docs/adr/0043-deploy-production-from-reviewed-pull-requests.md) and [ADR-0044](docs/adr/0044-apply-github-identities-behind-an-owner-gate.md) |
-| Agent control through MCP | A local stdio [MCP adapter](mcp/README.md) gives Codex and Claude Code the same status, metrics, backups, pack, start and stop operations as the panel. It calls the existing HTTP API and inherits the connected identity's permissions; it has no AWS or database access of its own. See [ADR-0060](docs/adr/0060-expose-control-plane-through-a-local-mcp-adapter.md) |
+| Agent control through MCP | A browser-approved remote [MCP connection](mcp/README.md) gives Codex and compatible clients the same status, metrics, backups, pack, start and stop operations as the panel, with no copied password or cookie. OAuth scopes cap the connection and the identity's live permissions remain authoritative. See [ADR-0061](docs/adr/0061-connect-agents-through-oauth.md) |
 | Running-hours alarm and budget | `spawnpoint-running-hours` fires after ten consecutive running hours; it and the $20 budget publish to `spawnpoint-alert`, which reaches email and the Telegram notifier |
 | Per-session observability | Prometheus and Grafana come up with the session and go down with it. Prometheus binds to loopback; Grafana is reachable only inside the overlay |
 
@@ -97,7 +97,7 @@ flowchart LR
         WEB[Web panel]
         DIS[Discord bot<br/>designed, not built]
         TG[Telegram bot]
-        MCP[Codex / Claude Code<br/>local MCP adapter]
+        MCP[Codex / MCP clients<br/>OAuth connection]
         CLI[Owner CLI]
     end
 
@@ -177,7 +177,7 @@ infra/terraform-bot/        The Telegram command bot and the notifier
 infra/terraform-web/        Private S3 + CloudFront hosting for the Mini App and browser panel
 infra/terraform-github/     GitHub OIDC identities: release trigger, production deploy, read-only plan
 lambdas/                    Control-plane handlers and the shared domain code
-mcp/                        Local stdio MCP adapter for Codex, Claude Code and compatible agents
+mcp/                        Remote MCP contract plus the local stdio development adapter
 workflows/                  Step Functions ASL definitions for long-running operations
 server/                     Compose files, game modules, on-instance scripts, tests, observability
 scripts/                    Owner-side helpers, and the deployment helpers GitHub Actions shares

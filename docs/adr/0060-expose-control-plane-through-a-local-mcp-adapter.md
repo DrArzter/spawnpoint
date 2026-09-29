@@ -1,6 +1,6 @@
 # ADR-0060 — Expose the control plane through a local MCP adapter first
 
-- Status: Accepted
+- Status: Superseded by [ADR-0061](0061-connect-agents-through-oauth.md)
 - Date: 2026-09-29
 - Milestone: M4
 - Relates: [ADR-0012](0012-web-control-panel.md), [ADR-0045](0045-provider-neutral-login-sessions.md)

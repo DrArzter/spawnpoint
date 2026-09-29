@@ -44,6 +44,21 @@ import { createTelegramLoginProvider, telegramPrincipal } from "../access/telegr
 import { createGoogleLoginProvider, googleProviderId } from "../access/google-login-provider.ts";
 import { defaultAppearance, validateAppearance } from "../access/appearance.ts";
 import { defaultSubscriptions, validateSubscriptions } from "../access/subscriptions.ts";
+import {
+  credentialHash,
+  issueAuthorizationRequest,
+  issueOAuthAccessToken,
+  issueOpaqueCredential,
+  normalizeScopes,
+  oauthScopes,
+  oauthAccessTokenLifetimeSeconds,
+  oauthAuthorizationCodeLifetimeSeconds,
+  oauthRefreshTokenLifetimeSeconds,
+  verifyAuthorizationRequest,
+  verifyOAuthAccessToken,
+  verifyPkce,
+  type OAuthScope,
+} from "../access/oauth.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../domain/access-events.ts";
 import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
 import type { EmailSender } from "../email/email-sender.ts";
@@ -112,6 +127,7 @@ const passwordRegistrationEnabled = (process.env.PASSWORD_REGISTRATION_ENABLED ?
 const emailDeliveryProvider = process.env.EMAIL_DELIVERY_PROVIDER ?? "none";
 const panelUrl = (process.env.PANEL_URL ?? "").trim();
 const legacyPanelUrl = (process.env.LEGACY_PANEL_URL ?? "").trim();
+const apiUrl = (process.env.API_URL ?? "").trim().replace(/\/$/, "");
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const events = new EventBridgeClient({});
 const ssm = new SSMClient({});
@@ -121,6 +137,11 @@ let emailSenderPromise: Promise<EmailSender | null> | undefined;
 
 function response(statusCode: number, body: unknown): Response {
   return { statusCode, headers: { "content-type": "application/json; charset=utf-8" }, body: body === null ? "" : JSON.stringify(body) };
+}
+
+function responseWithHeaders(statusCode: number, body: unknown, headers: Record<string, string>): Response {
+  const base = response(statusCode, body);
+  return { ...base, headers: { ...base.headers, ...headers } };
 }
 
 function responseWithCookies(statusCode: number, body: unknown, cookies: string[]): Response {
@@ -1940,6 +1961,362 @@ function me(identity: Identity): Response {
   return response(200, { identity, role });
 }
 
+// --- Remote MCP authorization and transport ---------------------------------
+
+const oauthResource = `${apiUrl}/mcp`;
+const oauthIssuer = apiUrl;
+const oauthProtectedResourceMetadata = `${apiUrl}/.well-known/oauth-protected-resource/mcp`;
+
+type OAuthClient = Readonly<{
+  id: string;
+  name: string;
+  redirectUris: readonly string[];
+}>;
+
+function oauthClientKey(clientId: string): Record<string, string> {
+  return { pk: `OAUTH#CLIENT#${clientId}`, sk: "CLIENT" };
+}
+
+function oauthCredentialKey(kind: "CODE" | "REFRESH", hash: string): Record<string, string> {
+  return { pk: `OAUTH#${kind}#${hash}`, sk: kind };
+}
+
+function jsonBody(event: Event): Record<string, unknown> | null {
+  if (!event.body) return null;
+  try {
+    const value = JSON.parse(event.body) as unknown;
+    return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  } catch { return null; }
+}
+
+function formBody(event: Event): URLSearchParams {
+  return new URLSearchParams(event.body ?? "");
+}
+
+function oauthError(statusCode: number, error: string, description?: string): Response {
+  return response(statusCode, { error, ...(description ? { error_description: description } : {}) });
+}
+
+function validRedirectUri(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.hash) return false;
+    if (url.protocol === "https:") return true;
+    return url.protocol === "http:" && (url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "[::1]");
+  } catch { return false; }
+}
+
+async function oauthClient(clientId: string): Promise<OAuthClient | null> {
+  if (!/^[A-Za-z0-9._~-]{8,200}$/.test(clientId)) return null;
+  const item = (await document.send(new GetCommand({ TableName: tableName, Key: oauthClientKey(clientId), ConsistentRead: true }))).Item;
+  if (item === undefined || item.status !== "ACTIVE" || typeof item.client_name !== "string" || !Array.isArray(item.redirect_uris)) return null;
+  const redirectUris = item.redirect_uris.filter((uri): uri is string => typeof uri === "string");
+  return { id: clientId, name: item.client_name, redirectUris };
+}
+
+async function registerOAuthClient(event: Event): Promise<Response> {
+  const body = jsonBody(event);
+  const name = typeof body?.client_name === "string" ? body.client_name.trim() : "";
+  const redirectUris = Array.isArray(body?.redirect_uris) ? body.redirect_uris.filter((uri): uri is string => typeof uri === "string") : [];
+  if (!name || name.length > 80 || redirectUris.length === 0 || redirectUris.length > 8 || redirectUris.some((uri) => !validRedirectUri(uri))) {
+    return oauthError(400, "invalid_client_metadata");
+  }
+  if (body?.token_endpoint_auth_method !== undefined && body.token_endpoint_auth_method !== "none") {
+    return oauthError(400, "invalid_client_metadata", "Spawnpoint accepts public PKCE clients only.");
+  }
+  const clientId = `sp_${randomUUID()}`;
+  await document.send(new PutCommand({ TableName: tableName, Item: {
+    ...oauthClientKey(clientId), status: "ACTIVE", client_name: name, redirect_uris: redirectUris,
+    token_endpoint_auth_method: "none", created_at: new Date().toISOString(),
+  }, ConditionExpression: "attribute_not_exists(pk)" }));
+  return response(201, {
+    client_id: clientId,
+    client_id_issued_at: Math.floor(Date.now() / 1000),
+    client_name: name,
+    redirect_uris: redirectUris,
+    token_endpoint_auth_method: "none",
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+  });
+}
+
+async function startOAuthAuthorization(event: Event): Promise<Response> {
+  const query = event.queryStringParameters ?? {};
+  const client = await oauthClient(query.client_id ?? "");
+  if (client === null) return oauthError(400, "invalid_request", "Unknown OAuth client.");
+  const redirectUri = query.redirect_uri ?? "";
+  const scopes = normalizeScopes(query.scope ?? oauthScopes.join(" "));
+  if (
+    query.response_type !== "code" || !client.redirectUris.includes(redirectUri) || query.resource !== oauthResource ||
+    query.code_challenge_method !== "S256" || !/^[A-Za-z0-9_-]{43}$/.test(query.code_challenge ?? "") ||
+    typeof query.state !== "string" || query.state.length < 8 || query.state.length > 1024 || scopes === null
+  ) return oauthError(400, "invalid_request");
+  const request = issueAuthorizationRequest({
+    clientId: client.id, redirectUri, resource: oauthResource, scopes, state: query.state,
+    codeChallenge: query.code_challenge!,
+  }, await sessionSigningSecret());
+  const location = `${panelUrl}/#/connect?request=${encodeURIComponent(request)}`;
+  return responseWithHeaders(302, null, { location, "cache-control": "no-store" });
+}
+
+function oauthRedirect(redirectUri: string, values: Record<string, string>): string {
+  const url = new URL(redirectUri);
+  for (const [key, value] of Object.entries(values)) url.searchParams.set(key, value);
+  return url.toString();
+}
+
+async function completeOAuthAuthorization(identity: Identity, event: Event): Promise<Response> {
+  const body = jsonBody(event);
+  const requestToken = typeof body?.request === "string" ? body.request : "";
+  const request = verifyAuthorizationRequest(requestToken, await sessionSigningSecret());
+  if (request === null) return oauthError(400, "invalid_request");
+  const client = await oauthClient(request.clientId);
+  if (client === null || !client.redirectUris.includes(request.redirectUri)) return oauthError(400, "invalid_request");
+  if (body?.approved !== true) {
+    return response(200, { redirect_to: oauthRedirect(request.redirectUri, { error: "access_denied", state: request.state }) });
+  }
+  const code = issueOpaqueCredential();
+  const now = Math.floor(Date.now() / 1000);
+  await document.send(new PutCommand({ TableName: tableName, Item: {
+    ...oauthCredentialKey("CODE", code.hash), status: "ACTIVE", identity_id: identity.id,
+    client_id: request.clientId, redirect_uri: request.redirectUri, resource: request.resource,
+    scope: request.scopes.join(" "), code_challenge: request.codeChallenge,
+    created_at: new Date(now * 1000).toISOString(), expires_at: now + oauthAuthorizationCodeLifetimeSeconds,
+    ttl: now + oauthAuthorizationCodeLifetimeSeconds,
+  }, ConditionExpression: "attribute_not_exists(pk)" }));
+  return response(200, { redirect_to: oauthRedirect(request.redirectUri, { code: code.token, state: request.state, iss: oauthIssuer }) });
+}
+
+async function inspectOAuthAuthorization(event: Event): Promise<Response> {
+  const body = jsonBody(event);
+  const request = verifyAuthorizationRequest(typeof body?.request === "string" ? body.request : "", await sessionSigningSecret());
+  if (request === null) return oauthError(400, "invalid_request");
+  const client = await oauthClient(request.clientId);
+  if (client === null || !client.redirectUris.includes(request.redirectUri)) return oauthError(400, "invalid_request");
+  return response(200, { client: { name: client.name, redirectOrigin: new URL(request.redirectUri).origin }, scopes: request.scopes });
+}
+
+async function issueOAuthTokens(subject: { identityId: string; clientId: string; resource: string; scopes: readonly OAuthScope[] }): Promise<Response> {
+  const secret = await sessionSigningSecret();
+  const refresh = issueOpaqueCredential();
+  const now = Math.floor(Date.now() / 1000);
+  await document.send(new PutCommand({ TableName: tableName, Item: {
+    ...oauthCredentialKey("REFRESH", refresh.hash), status: "ACTIVE", identity_id: subject.identityId,
+    client_id: subject.clientId, resource: subject.resource, scope: subject.scopes.join(" "),
+    created_at: new Date(now * 1000).toISOString(), expires_at: now + oauthRefreshTokenLifetimeSeconds,
+    ttl: now + oauthRefreshTokenLifetimeSeconds,
+  }, ConditionExpression: "attribute_not_exists(pk)" }));
+  return responseWithHeaders(200, {
+    access_token: issueOAuthAccessToken({
+      identityId: subject.identityId, clientId: subject.clientId, audience: subject.resource, scopes: subject.scopes,
+    }, oauthIssuer, secret, now),
+    token_type: "Bearer", expires_in: oauthAccessTokenLifetimeSeconds,
+    refresh_token: refresh.token, scope: subject.scopes.join(" "),
+  }, { "cache-control": "no-store", pragma: "no-cache" });
+}
+
+async function exchangeAuthorizationCode(params: URLSearchParams): Promise<Response> {
+  const code = params.get("code") ?? "";
+  const item = (await document.send(new GetCommand({
+    TableName: tableName, Key: oauthCredentialKey("CODE", credentialHash(code)), ConsistentRead: true,
+  }))).Item;
+  const now = Math.floor(Date.now() / 1000);
+  if (
+    item === undefined || item.status !== "ACTIVE" || typeof item.expires_at !== "number" || item.expires_at <= now ||
+    item.client_id !== params.get("client_id") || item.redirect_uri !== params.get("redirect_uri") ||
+    item.resource !== params.get("resource") || typeof item.code_challenge !== "string" || !verifyPkce(params.get("code_verifier") ?? "", item.code_challenge) ||
+    typeof item.identity_id !== "string" || typeof item.client_id !== "string" || typeof item.resource !== "string" || typeof item.scope !== "string"
+  ) return oauthError(400, "invalid_grant");
+  const scopes = normalizeScopes(item.scope);
+  if (scopes === null) return oauthError(400, "invalid_grant");
+  try {
+    await document.send(new UpdateCommand({
+      TableName: tableName, Key: oauthCredentialKey("CODE", credentialHash(code)),
+      UpdateExpression: "SET #status = :used, used_at = :now",
+      ConditionExpression: "#status = :active AND expires_at > :epoch",
+      ExpressionAttributeNames: { "#status": "status" },
+      ExpressionAttributeValues: { ":used": "USED", ":active": "ACTIVE", ":now": new Date().toISOString(), ":epoch": now },
+    }));
+  } catch { return oauthError(400, "invalid_grant"); }
+  return issueOAuthTokens({ identityId: item.identity_id, clientId: item.client_id, resource: item.resource, scopes });
+}
+
+async function rotateRefreshToken(params: URLSearchParams): Promise<Response> {
+  const token = params.get("refresh_token") ?? "";
+  const hash = credentialHash(token);
+  const item = (await document.send(new GetCommand({
+    TableName: tableName, Key: oauthCredentialKey("REFRESH", hash), ConsistentRead: true,
+  }))).Item;
+  const now = Math.floor(Date.now() / 1000);
+  if (
+    item === undefined || item.status !== "ACTIVE" || typeof item.expires_at !== "number" || item.expires_at <= now ||
+    item.client_id !== params.get("client_id") || item.resource !== params.get("resource") ||
+    typeof item.identity_id !== "string" || typeof item.client_id !== "string" || typeof item.resource !== "string" || typeof item.scope !== "string"
+  ) return oauthError(400, "invalid_grant");
+  const scopes = normalizeScopes(item.scope);
+  if (scopes === null) return oauthError(400, "invalid_grant");
+  try {
+    await document.send(new UpdateCommand({
+      TableName: tableName, Key: oauthCredentialKey("REFRESH", hash),
+      UpdateExpression: "SET #status = :rotated, rotated_at = :now",
+      ConditionExpression: "#status = :active AND expires_at > :epoch",
+      ExpressionAttributeNames: { "#status": "status" },
+      ExpressionAttributeValues: { ":rotated": "ROTATED", ":active": "ACTIVE", ":now": new Date().toISOString(), ":epoch": now },
+    }));
+  } catch { return oauthError(400, "invalid_grant"); }
+  return issueOAuthTokens({ identityId: item.identity_id, clientId: item.client_id, resource: item.resource, scopes });
+}
+
+async function oauthToken(event: Event): Promise<Response> {
+  const params = formBody(event);
+  const grant = params.get("grant_type");
+  if (grant === "authorization_code") return exchangeAuthorizationCode(params);
+  if (grant === "refresh_token") return rotateRefreshToken(params);
+  return oauthError(400, "unsupported_grant_type");
+}
+
+async function revokeOAuthToken(event: Event): Promise<Response> {
+  const params = formBody(event);
+  const token = params.get("token") ?? "";
+  const clientId = params.get("client_id") ?? "";
+  const key = oauthCredentialKey("REFRESH", credentialHash(token));
+  const item = (await document.send(new GetCommand({ TableName: tableName, Key: key, ConsistentRead: true }))).Item;
+  if (item?.client_id === clientId && item.status === "ACTIVE") {
+    try {
+      await document.send(new UpdateCommand({
+        TableName: tableName, Key: key,
+        UpdateExpression: "SET #status = :revoked, revoked_at = :now",
+        ConditionExpression: "#status = :active AND client_id = :client",
+        ExpressionAttributeNames: { "#status": "status" },
+        ExpressionAttributeValues: { ":revoked": "REVOKED", ":active": "ACTIVE", ":client": clientId, ":now": new Date().toISOString() },
+      }));
+    } catch { /* Revocation is deliberately idempotent and enumeration-safe. */ }
+  }
+  return responseWithHeaders(200, null, { "cache-control": "no-store" });
+}
+
+function oauthServerMetadata(): Response {
+  return response(200, {
+    issuer: oauthIssuer,
+    authorization_endpoint: `${oauthIssuer}/oauth/authorize`,
+    token_endpoint: `${oauthIssuer}/oauth/token`,
+    revocation_endpoint: `${oauthIssuer}/oauth/revoke`,
+    registration_endpoint: `${oauthIssuer}/oauth/register`,
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
+    code_challenge_methods_supported: ["S256"],
+    token_endpoint_auth_methods_supported: ["none"],
+    authorization_response_iss_parameter_supported: true,
+    scopes_supported: oauthScopes,
+  });
+}
+
+function oauthResourceMetadata(): Response {
+  return response(200, { resource: oauthResource, authorization_servers: [oauthIssuer], scopes_supported: oauthScopes });
+}
+
+async function identityById(identityId: string): Promise<Identity | null> {
+  const item = (await document.send(new GetCommand({
+    TableName: tableName, Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" }, ConsistentRead: true,
+  }))).Item;
+  return item === undefined || item.status !== "ACTIVE" ? null : identityFromItem(item);
+}
+
+type McpRequest = Readonly<{ jsonrpc?: unknown; id?: unknown; method?: unknown; params?: unknown }>;
+
+const mcpTools = [
+  { name: "get_profile", title: "Get Spawnpoint profile", description: "Read the connected Spawnpoint identity and role.", permission: null, scope: "spawnpoint.read", inputSchema: { type: "object", properties: {}, additionalProperties: false }, readOnly: true },
+  { name: "get_control_plane", title: "Get Spawnpoint control plane", description: "List games, worlds, sessions, hosts, releases, permissions, and current state.", permission: "status.read", scope: "spawnpoint.read", inputSchema: { type: "object", properties: {}, additionalProperties: false }, readOnly: true },
+  { name: "get_host_metrics", title: "Get host metrics", description: "Read recent metrics for one host.", permission: "metrics.read", scope: "spawnpoint.read", inputSchema: { type: "object", properties: { instanceId: { type: "string" }, range: { type: "string", enum: ["1h", "6h", "24h", "7d"], default: "24h" } }, required: ["instanceId"], additionalProperties: false }, readOnly: true },
+  { name: "list_world_backups", title: "List world backups", description: "List recoverable backups for one world.", permission: "backup.read", scope: "spawnpoint.read", inputSchema: { type: "object", properties: { gameId: { type: "string" }, worldId: { type: "string" } }, required: ["gameId", "worldId"], additionalProperties: false }, readOnly: true },
+  { name: "get_world_pack", title: "Get world client pack", description: "Create a temporary download link for the world's client pack.", permission: "connection.read", scope: "spawnpoint.read", inputSchema: { type: "object", properties: { gameId: { type: "string" }, worldId: { type: "string" } }, required: ["gameId", "worldId"], additionalProperties: false }, readOnly: true },
+  { name: "start_world", title: "Start world", description: "Request that Spawnpoint start one world.", permission: "session.start", scope: "spawnpoint.operate", inputSchema: { type: "object", properties: { gameId: { type: "string" }, worldId: { type: "string" } }, required: ["gameId", "worldId"], additionalProperties: false }, readOnly: false },
+  { name: "stop_world", title: "Stop world", description: "Request a verified backup and stop for one world.", permission: "session.stop", scope: "spawnpoint.operate", inputSchema: { type: "object", properties: { gameId: { type: "string" }, worldId: { type: "string" } }, required: ["gameId", "worldId"], additionalProperties: false }, readOnly: false },
+] as const satisfies readonly { name: string; title: string; description: string; permission: Permission | null; scope: OAuthScope; inputSchema: Record<string, unknown>; readOnly: boolean }[];
+
+function mcpJson(id: unknown, result: unknown): Response {
+  return response(200, { jsonrpc: "2.0", id, result });
+}
+
+function mcpError(id: unknown, code: number, message: string): Response {
+  return response(200, { jsonrpc: "2.0", id, error: { code, message } });
+}
+
+function mcpResult(data: unknown): Record<string, unknown> {
+  return { structuredContent: { data }, content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+}
+
+async function callMcpTool(identity: Identity, scopes: readonly OAuthScope[], name: string, args: Record<string, unknown>): Promise<Response> {
+  const tool = mcpTools.find((candidate) => candidate.name === name);
+  if (tool === undefined) return response(200, { ...mcpResult({ error: `Unknown tool: ${name}` }), isError: true });
+  if (!scopes.includes(tool.scope)) return response(403, { error: "insufficient_scope" });
+  if (tool.permission !== null) {
+    const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : undefined;
+    if (role === undefined || !hasPermission(identity, role, tool.permission)) return response(403, { error: "forbidden" });
+  }
+  const gameId = typeof args.gameId === "string" ? args.gameId : "";
+  const worldId = typeof args.worldId === "string" ? args.worldId : "";
+  let apiResponse: Response;
+  if (name === "get_profile") {
+    const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
+    const profile = { id: identity.id, name: identity.displayName, role: role?.name ?? identity.roleId, permissions: role?.permissions ?? identity.directGrants };
+    return response(200, { structuredContent: profile, content: [{ type: "text", text: JSON.stringify(profile, null, 2) }] });
+  }
+  if (name === "get_control_plane") apiResponse = await controlPlane(identity);
+  else if (name === "get_host_metrics") {
+    if (typeof args.instanceId !== "string" || !["1h", "6h", "24h", "7d"].includes(String(args.range ?? "24h"))) return response(200, { ...mcpResult({ error: "Invalid tool arguments" }), isError: true });
+    apiResponse = await hostMetrics(args.instanceId, String(args.range ?? "24h"));
+  } else if (!gameId || !worldId) return response(200, { ...mcpResult({ error: "Invalid tool arguments" }), isError: true });
+  else if (name === "list_world_backups") apiResponse = await backups(gameId, worldId);
+  else if (name === "get_world_pack") apiResponse = await packDownload(gameId, worldId);
+  else if (name === "start_world") apiResponse = await controlSession(identity, "start", gameId, worldId);
+  else apiResponse = await controlSession(identity, "stop", gameId, worldId);
+  const data = JSON.parse(apiResponse.body || "null") as unknown;
+  return apiResponse.statusCode >= 200 && apiResponse.statusCode < 300
+    ? response(200, mcpResult(data))
+    : response(200, { ...mcpResult(data), isError: true });
+}
+
+async function remoteMcp(event: Event): Promise<Response> {
+  const authorization = Object.entries(event.headers ?? {}).find(([key]) => key.toLowerCase() === "authorization")?.[1] ?? "";
+  const bearer = /^Bearer ([A-Za-z0-9._-]+)$/.exec(authorization)?.[1];
+  const subject = bearer ? verifyOAuthAccessToken(bearer, oauthIssuer, oauthResource, await sessionSigningSecret()) : null;
+  if (subject === null) return responseWithHeaders(401, { error: "invalid_token" }, {
+    "www-authenticate": `Bearer resource_metadata="${oauthProtectedResourceMetadata}"`,
+  });
+  const identity = await identityById(subject.identityId);
+  if (identity === null) return responseWithHeaders(401, { error: "invalid_token" }, {
+    "www-authenticate": `Bearer resource_metadata="${oauthProtectedResourceMetadata}"`,
+  });
+  const request = jsonBody(event) as McpRequest | null;
+  if (request?.jsonrpc !== "2.0" || typeof request.method !== "string") return mcpError(request?.id ?? null, -32600, "Invalid Request");
+  if (request.method === "notifications/initialized") return { statusCode: 202, headers: {}, body: "" };
+  if (request.method === "initialize") {
+    const params = request.params !== null && typeof request.params === "object" ? request.params as Record<string, unknown> : {};
+    const requestedVersion = typeof params.protocolVersion === "string" ? params.protocolVersion : "2025-11-25";
+    const protocolVersion = ["2025-11-25", "2025-06-18", "2025-03-26"].includes(requestedVersion) ? requestedVersion : "2025-11-25";
+    return mcpJson(request.id, {
+      protocolVersion, capabilities: { tools: { listChanged: false } },
+      serverInfo: { name: "spawnpoint", version: "0.2.0" },
+      instructions: "Read current state before changing a world. Operations are asynchronous and remain subject to Spawnpoint permissions.",
+    });
+  }
+  if (request.method === "tools/list") return mcpJson(request.id, { tools: mcpTools.map((tool) => ({
+    name: tool.name, title: tool.title, description: tool.description, inputSchema: tool.inputSchema,
+    annotations: { readOnlyHint: tool.readOnly, destructiveHint: false, openWorldHint: false },
+    securitySchemes: [{ type: "oauth2", scopes: [tool.scope] }],
+    _meta: { securitySchemes: [{ type: "oauth2", scopes: [tool.scope] }], ...(tool.name === "get_profile" ? { "openai/profile": true } : {}) },
+  })) });
+  if (request.method === "tools/call") {
+    const params = request.params !== null && typeof request.params === "object" ? request.params as Record<string, unknown> : {};
+    const args = params.arguments !== null && typeof params.arguments === "object" ? params.arguments as Record<string, unknown> : {};
+    const called = await callMcpTool(identity, subject.scopes, typeof params.name === "string" ? params.name : "", args);
+    const payload = JSON.parse(called.body || "null") as unknown;
+    return called.statusCode === 200 ? mcpJson(request.id, payload) : mcpJson(request.id, { ...mcpResult(payload), isError: true });
+  }
+  return mcpError(request.id, -32601, "Method not found");
+}
+
 // Authority is declared here, once per route, and nowhere else. The dispatcher
 // resolves exactly what a route's level requires and refuses before the handler
 // runs, so a handler never decides whether it should have been reached — it
@@ -1983,6 +2360,16 @@ const withCandidateAddress = (event: Event, handle: (platform: string, platformU
 };
 
 export const routes: Readonly<Record<string, Route>> = {
+  "GET /.well-known/oauth-protected-resource": publicRoute(() => oauthResourceMetadata()),
+  "GET /.well-known/oauth-protected-resource/mcp": publicRoute(() => oauthResourceMetadata()),
+  "GET /.well-known/oauth-authorization-server": publicRoute(() => oauthServerMetadata()),
+  "POST /oauth/register": publicRoute((event) => registerOAuthClient(event)),
+  "GET /oauth/authorize": publicRoute((event) => startOAuthAuthorization(event)),
+  "POST /oauth/token": publicRoute((event) => oauthToken(event)),
+  "POST /oauth/revoke": publicRoute((event) => revokeOAuthToken(event)),
+  "POST /oauth/authorize/inspect": identityRoute((_identity, event) => inspectOAuthAuthorization(event)),
+  "POST /oauth/authorize": identityRoute((identity, event) => completeOAuthAuthorization(identity, event)),
+  "POST /mcp": publicRoute((event) => remoteMcp(event)),
   "GET /auth/providers": publicRoute(() => loginProviders()),
   "POST /auth/telegram": publicRoute((event) => authenticate(telegramProvider, event)),
   "POST /auth/google": publicRoute((event) => (googleLoginEnabled ? authenticate(googleProvider, event) : loginProviderDisabled())),

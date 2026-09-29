@@ -3,11 +3,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "reac
 import { AuthState, restoreAuth } from "./auth";
 import { SnackbarProvider } from "./components/ui/Snackbar";
 import { ConsoleRoot } from "./core/Console";
-import { isLandingHash, isRootHash, readAccessInvitationRoute, readEmailActionRoute } from "./routing";
+import { isLandingHash, isRootHash, readAccessInvitationRoute, readEmailActionRoute, readMcpConnectRoute } from "./routing";
 import { AuthScreen } from "./screens/AuthScreen";
 import { EmailActionScreen } from "./screens/EmailActionScreen";
 import { JoinScreen } from "./screens/JoinScreen";
 import { LandingScreen } from "./screens/LandingScreen";
+import { ConnectScreen } from "./screens/ConnectScreen";
 import { useBootCard } from "./shell/hooks";
 import { chooseSkin, currentSkinId, isSkinId, SKIN_CHOICES, wearOnDocument, wearSkin } from "./skins";
 
@@ -17,6 +18,7 @@ export function App() {
   const [auth, setAuth] = useState<AuthState>({ status: "loading" });
   const [atLanding, setAtLanding] = useState(() => isLandingHash());
   const [joinToken, setJoinToken] = useState(() => readAccessInvitationRoute());
+  const [connectRequest, setConnectRequest] = useState(() => readMcpConnectRoute());
   const { visible: bootVisible, publish } = useBootCard();
   const emailAction = readEmailActionRoute();
   const skin = useMemo(chooseSkin, []);
@@ -45,14 +47,14 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const onChange = () => { setAtLanding(isLandingHash()); setJoinToken(readAccessInvitationRoute()); };
+    const onChange = () => { setAtLanding(isLandingHash()); setJoinToken(readAccessInvitationRoute()); setConnectRequest(readMcpConnectRoute()); };
     window.addEventListener("hashchange", onChange);
     return () => window.removeEventListener("hashchange", onChange);
   }, []);
 
   // The boot and the console wear the chosen face; the front door, the join
   // and email screens never do. Decided here, once, for every surface.
-  const consoleSurface = emailAction === null && joinToken === null
+  const consoleSurface = emailAction === null && joinToken === null && connectRequest === null
     && (auth.status === "loading" || (!atLanding && auth.status === "authenticated" && auth.session.state === "active"));
   useLayoutEffect(() => { wearOnDocument(skin.id, consoleSurface); }, [skin, consoleSurface]);
 
@@ -68,6 +70,7 @@ export function App() {
   // arriving from nowhere, or a jump into the console a beat after landing.
   if (emailAction !== null) return <EmailActionScreen action={emailAction} onAuth={handleAuth} />;
   if (joinToken !== null) return <JoinScreen auth={auth} onAuth={handleAuth} proof={joinToken.proof} token={joinToken.token} />;
+  if (connectRequest !== null && auth.status !== "loading") return <ConnectScreen auth={auth} onAuth={handleAuth} request={connectRequest} />;
   if (auth.status === "loading") {
     return bootVisible ? <skin.Boot model={{ title: "Checking your session", description: "Confirming who you are with the access API." }} /> : null;
   }

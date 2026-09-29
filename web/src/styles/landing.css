@@ -457,3 +457,58 @@ button.landing-link:hover {
     animation: none;
   }
 }
+
+/* OAuth is one short trust decision outside both console skins, so every
+   requesting client meets the same surface and the same action contract. */
+.connect-card {
+  width: min(480px, calc(100vw - 32px));
+}
+
+.connect-brands {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--ink-secondary);
+}
+
+.connect-client-mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-card);
+  background: var(--ink);
+  color: var(--surface);
+  font: 500 22px/1 var(--font-display);
+}
+
+.connect-origin {
+  color: var(--ink-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.connect-scopes {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 16px 0;
+  border-block: 1px solid var(--outline);
+  list-style: none;
+}
+
+.connect-scopes li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.connect-scopes .icon {
+  color: var(--success);
+}

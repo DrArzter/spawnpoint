@@ -2071,7 +2071,7 @@ async function completeOAuthAuthorization(identity: Identity, event: Event): Pro
   const request = verifyAuthorizationRequest(requestToken, await sessionSigningSecret());
   if (request === null) return oauthError(400, "invalid_request");
   const client = await oauthClient(request.clientId);
-  if (client === null || !client.redirectUris.includes(request.redirectUri)) return oauthError(400, "invalid_request");
+  if (!client?.redirectUris.includes(request.redirectUri)) return oauthError(400, "invalid_request");
   if (body?.approved !== true) {
     return response(200, { redirect_to: oauthRedirect(request.redirectUri, { error: "access_denied", state: request.state }) });
   }
@@ -2092,7 +2092,7 @@ async function inspectOAuthAuthorization(event: Event): Promise<Response> {
   const request = verifyAuthorizationRequest(typeof body?.request === "string" ? body.request : "", await sessionSigningSecret());
   if (request === null) return oauthError(400, "invalid_request");
   const client = await oauthClient(request.clientId);
-  if (client === null || !client.redirectUris.includes(request.redirectUri)) return oauthError(400, "invalid_request");
+  if (!client?.redirectUris.includes(request.redirectUri)) return oauthError(400, "invalid_request");
   return response(200, { client: { name: client.name, redirectOrigin: new URL(request.redirectUri).origin }, scopes: request.scopes });
 }
 

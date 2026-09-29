@@ -119,7 +119,8 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0057](0057-link-login-providers-through-the-current-identity.md) | Link login providers through the current Identity | Accepted — implemented | M4 |
 | [0058](0058-sign-in-with-google.md) | Sign in with Google as one more proof-based provider, off until configured | Accepted — implemented | M4 |
 | [0059](0059-separate-the-console-into-bones-and-skins.md) | Separate the console into bones and skins, and hold every skin to one contract | Accepted — implemented | M4 |
-| [0060](0060-expose-control-plane-through-a-local-mcp-adapter.md) | Expose the control plane through a local MCP adapter first | Accepted — implemented | M4 |
+| [0060](0060-expose-control-plane-through-a-local-mcp-adapter.md) | Expose the control plane through a local MCP adapter first | Superseded by [0061](0061-connect-agents-through-oauth.md) | M4 |
+| [0061](0061-connect-agents-through-oauth.md) | Connect agents through OAuth | Accepted — implemented | M4 |
 
 ## Decisions still to record
 

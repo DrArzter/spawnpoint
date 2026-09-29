@@ -21,6 +21,16 @@ const { routes, deployedCapabilities } = await import("../src/handlers/access-ap
 // Routes that are deliberately reachable without a permission, with the reason
 // each is safe. A route may only appear here on purpose.
 const WITHOUT_PERMISSION = new Map<string, string>([
+  ["GET /.well-known/oauth-protected-resource", "OAuth discovery metadata contains no user data"],
+  ["GET /.well-known/oauth-protected-resource/mcp", "path-specific OAuth discovery metadata contains no user data"],
+  ["GET /.well-known/oauth-authorization-server", "OAuth discovery metadata contains no user data"],
+  ["POST /oauth/register", "registers a public PKCE client but grants no identity or permission"],
+  ["GET /oauth/authorize", "validates a public OAuth request and sends the browser to the signed-in consent surface"],
+  ["POST /oauth/token", "exchanges a one-time PKCE code or rotating refresh credential"],
+  ["POST /oauth/revoke", "idempotently revokes the caller-supplied refresh credential without exposing whether it existed"],
+  ["POST /oauth/authorize", "the identity may approve only its own delegated connection"],
+  ["POST /oauth/authorize/inspect", "the identity may inspect only a signed, expiring consent request"],
+  ["POST /mcp", "the MCP resource validates its own audience- and scope-bound OAuth bearer"],
   ["GET /auth/providers", "which ways in this deployment offers; read before any session exists"],
   ["POST /auth/telegram", "login itself: it is what produces a session"],
   ["POST /auth/google", "login itself: it is what produces a session"],

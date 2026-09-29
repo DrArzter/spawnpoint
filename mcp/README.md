@@ -1,6 +1,6 @@
 # Spawnpoint MCP
 
-This is a thin stdio adapter over the production Spawnpoint control-plane API. It does not bypass the API: every tool runs as the connected Spawnpoint identity and keeps the same role and permission checks as the web console.
+Spawnpoint exposes the same tool contract through the production remote MCP endpoint and a repository-local stdio adapter. Neither bypasses the API: every tool runs as the connected Spawnpoint identity and keeps the same role and permission checks as the web console.
 
 ## Tools
 
@@ -22,7 +22,34 @@ npm ci
 npm run build
 ```
 
-## Authentication
+## Connect — recommended
+
+Add the remote server URL to an OAuth-capable MCP client:
+
+```text
+https://api.spawnpoint.drarzter.dev/mcp
+```
+
+For Codex, one setup command registers the remote resource and starts the browser flow:
+
+```sh
+codex mcp add spawnpoint \
+  --url https://api.spawnpoint.drarzter.dev/mcp \
+  --oauth-resource https://api.spawnpoint.drarzter.dev/mcp \
+  --oauth-client-registration dcr
+```
+
+If the browser was closed before approval, restart only the login step:
+
+```sh
+codex mcp login spawnpoint --oauth-client-registration dcr --scopes spawnpoint.read,spawnpoint.operate
+```
+
+The client opens Spawnpoint in the browser. Sign in if needed, review the requested access, and press **Allow**. Spawnpoint returns to the client automatically; no password, cookie or environment variable is copied.
+
+The connection receives short-lived, resource-bound access tokens and a rotating refresh credential. Its scopes only limit the connection further: Spawnpoint still checks the identity's live role and permissions for every tool call.
+
+## Local stdio adapter
 
 Set the API and panel origins, then choose one authentication method:
 
@@ -56,6 +83,6 @@ codex mcp list
 
 The same command works in a cloud development environment after the repository build step and the four environment variables are provided as secrets.
 
-## Why stdio first
+## History
 
-A public HTTPS `/mcp` endpoint for ChatGPT and hosted Codex should use OAuth 2.1 and verify authorization on every call. Spawnpoint currently has login sessions, not an OAuth authorization server. Stdio makes the control surface useful now without weakening that boundary or deploying a second privileged service. A remote transport can reuse these tool contracts when OAuth exists.
+The stdio adapter established the first tool contract. [ADR-0061](../docs/adr/0061-connect-agents-through-oauth.md) supersedes that local-first product path with browser-approved OAuth while retaining stdio for repository development.

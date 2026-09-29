@@ -12,7 +12,13 @@ const scopeLabels: Readonly<Record<string, string>> = {
   "spawnpoint.operate": "Start and stop worlds you already have permission to operate",
 };
 
-export function ConnectScreen({ auth, request, onAuth }: { auth: AuthState; request: string; onAuth: (state: AuthState) => void }) {
+type ConnectScreenProps = Readonly<{
+  auth: AuthState;
+  request: string;
+  onAuth: (state: AuthState) => void;
+}>;
+
+export function ConnectScreen({ auth, request, onAuth }: ConnectScreenProps) {
   const [summary, setSummary] = useState<OAuthAuthorizationSummary | null>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);

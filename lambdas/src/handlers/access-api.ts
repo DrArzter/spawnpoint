@@ -2122,7 +2122,7 @@ async function exchangeAuthorizationCode(params: URLSearchParams): Promise<Respo
   }))).Item;
   const now = Math.floor(Date.now() / 1000);
   if (
-    item === undefined || item.status !== "ACTIVE" || typeof item.expires_at !== "number" || item.expires_at <= now ||
+    item?.status !== "ACTIVE" || typeof item.expires_at !== "number" || item.expires_at <= now ||
     item.client_id !== params.get("client_id") || item.redirect_uri !== params.get("redirect_uri") ||
     item.resource !== params.get("resource") || typeof item.code_challenge !== "string" || !verifyPkce(params.get("code_verifier") ?? "", item.code_challenge) ||
     typeof item.identity_id !== "string" || typeof item.client_id !== "string" || typeof item.resource !== "string" || typeof item.scope !== "string"
@@ -2150,7 +2150,7 @@ async function rotateRefreshToken(params: URLSearchParams): Promise<Response> {
   }))).Item;
   const now = Math.floor(Date.now() / 1000);
   if (
-    item === undefined || item.status !== "ACTIVE" || typeof item.expires_at !== "number" || item.expires_at <= now ||
+    item?.status !== "ACTIVE" || typeof item.expires_at !== "number" || item.expires_at <= now ||
     item.client_id !== params.get("client_id") || (requestedResource !== null && item.resource !== requestedResource) ||
     typeof item.identity_id !== "string" || typeof item.client_id !== "string" || typeof item.resource !== "string" || typeof item.scope !== "string"
   ) return oauthError(400, "invalid_grant");
@@ -2248,74 +2248,114 @@ function mcpResult(data: unknown): Record<string, unknown> {
   return { structuredContent: { data }, content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
 }
 
-async function callMcpTool(identity: Identity, scopes: readonly OAuthScope[], name: string, args: Record<string, unknown>): Promise<Response> {
-  const tool = mcpTools.find((candidate) => candidate.name === name);
-  if (tool === undefined) return response(200, { ...mcpResult({ error: `Unknown tool: ${name}` }), isError: true });
-  if (!scopes.includes(tool.scope)) return response(403, { error: "insufficient_scope" });
-  if (tool.permission !== null) {
-    const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : undefined;
-    if (role === undefined || !hasPermission(identity, role, tool.permission)) return response(403, { error: "forbidden" });
-  }
-  const gameId = typeof args.gameId === "string" ? args.gameId : "";
-  const worldId = typeof args.worldId === "string" ? args.worldId : "";
-  let apiResponse: Response;
+function mcpToolError(message: string): Response {
+  return response(200, { ...mcpResult({ error: message }), isError: true });
+}
+
+function hasMcpToolPermission(identity: Identity, permission: Permission | null): boolean {
+  if (permission === null) return true;
+  const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : undefined;
+  return role !== undefined && hasPermission(identity, role, permission);
+}
+
+function worldToolArguments(args: Record<string, unknown>): readonly [string, string] | null {
+  return typeof args.gameId === "string" && args.gameId.length > 0 && typeof args.worldId === "string" && args.worldId.length > 0
+    ? [args.gameId, args.worldId]
+    : null;
+}
+
+function metricsToolArguments(args: Record<string, unknown>): readonly [string, string] | null {
+  const range = args.range ?? "24h";
+  return typeof args.instanceId === "string" && typeof range === "string" && ["1h", "6h", "24h", "7d"].includes(range)
+    ? [args.instanceId, range]
+    : null;
+}
+
+async function invokeMcpTool(identity: Identity, name: string, args: Record<string, unknown>): Promise<Response | null> {
   if (name === "get_profile") {
     const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
     const profile = { id: identity.id, name: identity.displayName, role: role?.name ?? identity.roleId, permissions: role?.permissions ?? identity.directGrants };
     return response(200, { structuredContent: profile, content: [{ type: "text", text: JSON.stringify(profile, null, 2) }] });
   }
-  if (name === "get_control_plane") apiResponse = await controlPlane(identity);
-  else if (name === "get_host_metrics") {
-    if (typeof args.instanceId !== "string" || !["1h", "6h", "24h", "7d"].includes(String(args.range ?? "24h"))) return response(200, { ...mcpResult({ error: "Invalid tool arguments" }), isError: true });
-    apiResponse = await hostMetrics(args.instanceId, String(args.range ?? "24h"));
-  } else if (!gameId || !worldId) return response(200, { ...mcpResult({ error: "Invalid tool arguments" }), isError: true });
-  else if (name === "list_world_backups") apiResponse = await backups(gameId, worldId);
-  else if (name === "get_world_pack") apiResponse = await packDownload(gameId, worldId);
-  else if (name === "start_world") apiResponse = await controlSession(identity, "start", gameId, worldId);
-  else apiResponse = await controlSession(identity, "stop", gameId, worldId);
+  if (name === "get_control_plane") return controlPlane(identity);
+  if (name === "get_host_metrics") {
+    const metricsArgs = metricsToolArguments(args);
+    return metricsArgs === null ? null : hostMetrics(...metricsArgs);
+  }
+  const worldArgs = worldToolArguments(args);
+  if (worldArgs === null) return null;
+  if (name === "list_world_backups") return backups(...worldArgs);
+  if (name === "get_world_pack") return packDownload(...worldArgs);
+  if (name === "start_world") return controlSession(identity, "start", ...worldArgs);
+  return controlSession(identity, "stop", ...worldArgs);
+}
+
+async function callMcpTool(identity: Identity, scopes: readonly OAuthScope[], name: string, args: Record<string, unknown>): Promise<Response> {
+  const tool = mcpTools.find((candidate) => candidate.name === name);
+  if (tool === undefined) return mcpToolError(`Unknown tool: ${name}`);
+  if (!scopes.includes(tool.scope)) return response(403, { error: "insufficient_scope" });
+  if (!hasMcpToolPermission(identity, tool.permission)) return response(403, { error: "forbidden" });
+  const apiResponse = await invokeMcpTool(identity, name, args);
+  if (apiResponse === null) return mcpToolError("Invalid tool arguments");
   const data = JSON.parse(apiResponse.body || "null") as unknown;
   return apiResponse.statusCode >= 200 && apiResponse.statusCode < 300
     ? response(200, mcpResult(data))
     : response(200, { ...mcpResult(data), isError: true });
 }
 
-async function remoteMcp(event: Event): Promise<Response> {
+function mcpUnauthorized(): Response {
+  return responseWithHeaders(401, { error: "invalid_token" }, {
+    "www-authenticate": `Bearer resource_metadata="${oauthProtectedResourceMetadata}"`,
+  });
+}
+
+async function authenticateRemoteMcp(event: Event): Promise<Readonly<{ identity: Identity; scopes: readonly OAuthScope[] }> | null> {
   const authorization = Object.entries(event.headers ?? {}).find(([key]) => key.toLowerCase() === "authorization")?.[1] ?? "";
   const bearer = /^Bearer ([A-Za-z0-9._-]+)$/.exec(authorization)?.[1];
   const subject = bearer ? verifyOAuthAccessToken(bearer, oauthIssuer, oauthResource, await sessionSigningSecret()) : null;
-  if (subject === null) return responseWithHeaders(401, { error: "invalid_token" }, {
-    "www-authenticate": `Bearer resource_metadata="${oauthProtectedResourceMetadata}"`,
-  });
+  if (subject === null) return null;
   const identity = await identityById(subject.identityId);
-  if (identity === null) return responseWithHeaders(401, { error: "invalid_token" }, {
-    "www-authenticate": `Bearer resource_metadata="${oauthProtectedResourceMetadata}"`,
+  return identity === null ? null : { identity, scopes: subject.scopes };
+}
+
+function initializeMcp(request: McpRequest): Response {
+  const params = request.params !== null && typeof request.params === "object" ? request.params as Record<string, unknown> : {};
+  const requestedVersion = typeof params.protocolVersion === "string" ? params.protocolVersion : "2025-11-25";
+  const protocolVersion = ["2025-11-25", "2025-06-18", "2025-03-26"].includes(requestedVersion) ? requestedVersion : "2025-11-25";
+  return mcpJson(request.id, {
+    protocolVersion, capabilities: { tools: { listChanged: false } },
+    serverInfo: { name: "spawnpoint", version: "0.2.0" },
+    instructions: "Read current state before changing a world. Operations are asynchronous and remain subject to Spawnpoint permissions.",
   });
-  const request = jsonBody(event) as McpRequest | null;
-  if (request?.jsonrpc !== "2.0" || typeof request.method !== "string") return mcpError(request?.id ?? null, -32600, "Invalid Request");
-  if (request.method === "notifications/initialized") return { statusCode: 202, headers: {}, body: "" };
-  if (request.method === "initialize") {
-    const params = request.params !== null && typeof request.params === "object" ? request.params as Record<string, unknown> : {};
-    const requestedVersion = typeof params.protocolVersion === "string" ? params.protocolVersion : "2025-11-25";
-    const protocolVersion = ["2025-11-25", "2025-06-18", "2025-03-26"].includes(requestedVersion) ? requestedVersion : "2025-11-25";
-    return mcpJson(request.id, {
-      protocolVersion, capabilities: { tools: { listChanged: false } },
-      serverInfo: { name: "spawnpoint", version: "0.2.0" },
-      instructions: "Read current state before changing a world. Operations are asynchronous and remain subject to Spawnpoint permissions.",
-    });
-  }
-  if (request.method === "tools/list") return mcpJson(request.id, { tools: mcpTools.map((tool) => ({
+}
+
+function listMcpTools(id: unknown): Response {
+  return mcpJson(id, { tools: mcpTools.map((tool) => ({
     name: tool.name, title: tool.title, description: tool.description, inputSchema: tool.inputSchema,
     annotations: { readOnlyHint: tool.readOnly, destructiveHint: false, openWorldHint: false },
     securitySchemes: [{ type: "oauth2", scopes: [tool.scope] }],
     _meta: { securitySchemes: [{ type: "oauth2", scopes: [tool.scope] }], ...(tool.name === "get_profile" ? { "openai/profile": true } : {}) },
   })) });
-  if (request.method === "tools/call") {
-    const params = request.params !== null && typeof request.params === "object" ? request.params as Record<string, unknown> : {};
-    const args = params.arguments !== null && typeof params.arguments === "object" ? params.arguments as Record<string, unknown> : {};
-    const called = await callMcpTool(identity, subject.scopes, typeof params.name === "string" ? params.name : "", args);
-    const payload = JSON.parse(called.body || "null") as unknown;
-    return called.statusCode === 200 ? mcpJson(request.id, payload) : mcpJson(request.id, { ...mcpResult(payload), isError: true });
-  }
+}
+
+async function callRemoteMcpTool(request: McpRequest, identity: Identity, scopes: readonly OAuthScope[]): Promise<Response> {
+  const params = request.params !== null && typeof request.params === "object" ? request.params as Record<string, unknown> : {};
+  const args = params.arguments !== null && typeof params.arguments === "object" ? params.arguments as Record<string, unknown> : {};
+  const name = typeof params.name === "string" ? params.name : "";
+  const called = await callMcpTool(identity, scopes, name, args);
+  const payload = JSON.parse(called.body || "null") as unknown;
+  return called.statusCode === 200 ? mcpJson(request.id, payload) : mcpJson(request.id, { ...mcpResult(payload), isError: true });
+}
+
+async function remoteMcp(event: Event): Promise<Response> {
+  const authenticated = await authenticateRemoteMcp(event);
+  if (authenticated === null) return mcpUnauthorized();
+  const request = jsonBody(event) as McpRequest | null;
+  if (request?.jsonrpc !== "2.0" || typeof request.method !== "string") return mcpError(request?.id ?? null, -32600, "Invalid Request");
+  if (request.method === "notifications/initialized") return { statusCode: 202, headers: {}, body: "" };
+  if (request.method === "initialize") return initializeMcp(request);
+  if (request.method === "tools/list") return listMcpTools(request.id);
+  if (request.method === "tools/call") return callRemoteMcpTool(request, authenticated.identity, authenticated.scopes);
   return mcpError(request.id, -32601, "Method not found");
 }
 

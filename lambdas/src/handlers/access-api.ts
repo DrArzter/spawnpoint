@@ -2144,13 +2144,14 @@ async function exchangeAuthorizationCode(params: URLSearchParams): Promise<Respo
 async function rotateRefreshToken(params: URLSearchParams): Promise<Response> {
   const token = params.get("refresh_token") ?? "";
   const hash = credentialHash(token);
+  const requestedResource = params.get("resource");
   const item = (await document.send(new GetCommand({
     TableName: tableName, Key: oauthCredentialKey("REFRESH", hash), ConsistentRead: true,
   }))).Item;
   const now = Math.floor(Date.now() / 1000);
   if (
     item === undefined || item.status !== "ACTIVE" || typeof item.expires_at !== "number" || item.expires_at <= now ||
-    item.client_id !== params.get("client_id") || item.resource !== params.get("resource") ||
+    item.client_id !== params.get("client_id") || (requestedResource !== null && item.resource !== requestedResource) ||
     typeof item.identity_id !== "string" || typeof item.client_id !== "string" || typeof item.resource !== "string" || typeof item.scope !== "string"
   ) return oauthError(400, "invalid_grant");
   const scopes = normalizeScopes(item.scope);
@@ -2206,6 +2207,7 @@ function oauthServerMetadata(): Response {
     grant_types_supported: ["authorization_code", "refresh_token"],
     code_challenge_methods_supported: ["S256"],
     token_endpoint_auth_methods_supported: ["none"],
+    revocation_endpoint_auth_methods_supported: ["none"],
     authorization_response_iss_parameter_supported: true,
     scopes_supported: oauthScopes,
   });

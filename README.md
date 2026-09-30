@@ -1,44 +1,55 @@
 # Spawnpoint
 
-A self-built control plane for private game servers on AWS — one modded Minecraft world today, with Factorio and
-Project Zomboid adapters behind the same lifecycle. It starts a world's server when somebody asks for it, stops it
-when the last player leaves, treats the mod set as a versioned release, and hands every player the matching client
-pack.
+A self-built control plane for private game servers on AWS. Worlds are created from versioned presets for modded
+Minecraft, Factorio and Project Zomboid behind one lifecycle. It starts a world's server when somebody asks for it,
+stops it when the last player leaves, treats the mod set as an immutable release, and hands every player the matching
+client pack.
 
 The name is a working title.
 
-> **Status: running on AWS, operated from Telegram.** M0 and M1 are done. The server is live on EC2, reachable only
-> inside the overlay, rebuilt from Terraform, and its world has been restored from an S3 archive in a real drill rather
-> than a thought experiment. M2's start, stop and idle-watchdog path was acceptance-tested on release `1.1`, and on
-> 2026-09-11 session control and release promotion cut over to Lifecycle V2 — fenced sessions, one watchdog per
-> session, promotion proven end to end in both directions. Players start the server from the Telegram bot or the Mini
-> App; an Owner approves who they are. Production is deployed by GitHub Actions from reviewed pull requests.
+> **Status: running on AWS, operated from the browser, from Telegram and by agents over MCP.** M0, M1 and M2 are
+> done; M3, M4 and M6 are in progress. The server is live on EC2, rebuilt from Terraform, reachable only inside the
+> overlay unless a world opts into a public address, and its world has been restored from an S3 archive in a real
+> drill rather than a thought experiment. Session control and release promotion have run on Lifecycle V2 since
+> 2026-09-11 — fenced sessions, one watchdog per session, promotion proven end to end in both directions, and a
+> deliberately broken release that rolled itself back on 2026-09-13. Worlds are created from Git presets built into
+> immutable releases in AWS, each world with its own wipes and backups; since 2026-09-22 a world born from a preset runs
+> on an EC2 Fleet host launched for its session and terminated after it, so it costs nothing between evenings, while the
+> configured host still serves the two legacy worlds over the overlay. People sign in with an email and password, with
+> Telegram or, where configured, with Google; an Owner approves who they are; they start worlds from the browser panel,
+> the Telegram Mini App and bot, or from an agent connected through OAuth. Production is deployed by GitHub Actions from
+> reviewed pull requests.
 >
-> The two tables below separate what runs from what is only designed. Command-by-command records of what was actually
-> executed, with verification and rollback beside each change: [M0](docs/aws-m0-command-log.md),
-> [M1](docs/aws-m1-command-log.md), [M2](docs/aws-m2-command-log.md), [M3](docs/aws-m3-command-log.md),
-> [bot](docs/aws-bot-command-log.md), [access](docs/aws-access-command-log.md), [web](docs/aws-web-command-log.md).
-> The V2 cutover and the promotion drills are recorded in [docs/lifecycle-v2-rollout.md](docs/lifecycle-v2-rollout.md).
+> The two tables below separate what runs from what is only designed. Command-by-command
+> records of what was actually executed, with verification and rollback beside each change:
+> [M0](docs/aws-m0-command-log.md), [M1](docs/aws-m1-command-log.md), [M2](docs/aws-m2-command-log.md),
+> [M3](docs/aws-m3-command-log.md), [bot](docs/aws-bot-command-log.md), [access](docs/aws-access-command-log.md),
+> [web](docs/aws-web-command-log.md). The V2 cutover and the promotion drills are recorded in
+> [docs/lifecycle-v2-rollout.md](docs/lifecycle-v2-rollout.md); the placement rollout, phase by phase, in
+> [docs/capacity-allocation-rollout.md](docs/capacity-allocation-rollout.md).
 
 ## What runs today
 
 | Capability | Detail |
 | --- | --- |
-| A server with no inbound ports | The security group has no inbound rules at all. The game is reachable only inside the ZeroTier overlay, and SSM reaches the host over its outbound connection. A world may opt into a public address per [ADR-0033](docs/adr/0033-connectivity-as-a-strategy.md), which opens exactly that game's port. See [ADR-0024](docs/adr/0024-connectivity-modes.md) and [ADR-0007](docs/adr/0007-ssm-instead-of-ssh.md) |
+| A server with no inbound ports | The security group has no inbound rules at all. The game is reachable only inside the ZeroTier overlay, and SSM reaches the host over its outbound connection. Connectivity is a per-world setting: the configured host offers ZeroTier; a world placed on a launched fleet host takes a raw public address or a Route 53 name instead, which opens exactly that game's port ([ADR-0033](docs/adr/0033-connectivity-as-a-strategy.md)). See [ADR-0024](docs/adr/0024-connectivity-modes.md) and [ADR-0007](docs/adr/0007-ssm-instead-of-ssh.md) |
+| Worlds that scale to zero on fleet hosts | Production runs `SPAWNPOINT_PLACEMENT=fleet` with `SPAWNPOINT_LAUNCH=enabled` since 2026-09-22. A start for a world created from a preset places it on a ready host with room, or asks EC2 Fleet for an instant host from a launch template with the footprint's memory and vCPU requirements at the lowest price, so no instance type or price lives in the code; the host bootstraps itself at the deploy's pinned commit, publishes `<world-id>.spawnpoint.drarzter.dev` in Route 53, and is drained and terminated after its last session, with orphaned hosts swept back. The two legacy Minecraft worlds stay bound to the configured host. See [ADR-0054](docs/adr/0054-place-a-session-on-a-host-with-room.md) and, phase by phase, [docs/capacity-allocation-rollout.md](docs/capacity-allocation-rollout.md) |
 | Rebuilt from Terraform | Eleven isolated roots — state bucket, guardrails, the storage that outlives the host, the host, releases, operations, access, access API, bot, web and the GitHub identities. Buckets live in separate state, so an ordinary host teardown cannot take the backups with it |
 | Backups that were actually restored | The world is archived to S3 and verified after upload. On 2026-08-13 an archive was downloaded by the instance role, restored onto a fresh volume, reconciled against release `1.0`, and a player joined the recovered world. Every backup now names the wipe and release that produced it |
 | Start and stop as durable operations | Step Functions Standard, composed by Lifecycle V2 since 2026-09-11: a fenced lease, one explicit session identity, and a verified stop that rechecks the player count, flushes the world, stops every session container and verifies an immutable backup before the instance stops. See [docs/lifecycle-v2-rollout.md](docs/lifecycle-v2-rollout.md) |
-| Session watchdog and release promotion | One watchdog per session, launched by the V2 start; three confirmed empty checks produce a verified backup and stop EC2. Promotion is pointer writes around a fenced V2 stop and start: `1.1 → 34246388450.1 → 1.1` round-tripped in production on 2026-09-11, each leg health-gated and archived |
+| Session watchdog and release promotion | One watchdog per session, launched by the V2 start; three confirmed empty checks produce a verified backup and stop EC2. Promotion is pointer writes around a fenced V2 stop and start: `1.1 → 34246388450.1 → 1.1` round-tripped in production on 2026-09-11, each leg health-gated and archived, and a deliberately incomplete release `9.99` rolled itself back to `1.1` on 2026-09-13 without operator repair |
 | An immutable bootstrap release | Release `1.0`: 111 JARs, pinned and hashed, retained as the hand-cut baseline |
 | AWS-built releases from preset snapshots | A source adapter verifies and materializes inert authoring input; today the enabled `github-snapshot` adapter receives exact Git commits through GitHub OIDC. A Standard Workflow and ephemeral CodeBuild job then resolve, hash and publish the release manifest-last, per preset ([ADR-0042](docs/adr/0042-preset-scoped-release-identity.md), [ADR-0047](docs/adr/0047-normalize-preset-sources-before-building.md)). A catalog builder publishes which presets are ready. Release `1.1` was the first, built without starting the game host |
-| Telegram bot and Mini App | A webhook bot on Lambda — `/server_start`, `/status`, `/address`, `/network`, `/pack`, an inline menu — and a static React Mini App behind CloudFront, both thin clients of the same access API. Deployed 2026-08-27 to 29. See [ADR-0012](docs/adr/0012-web-control-panel.md), [ADR-0016](docs/adr/0016-chat-integrations.md) and [ADR-0037](docs/adr/0037-telegram-only-browser-identity.md) |
-| Identity, roles and approval | The access API signs people in with an email and password, or through Telegram (an OIDC token or Mini App `initData`), and issues one provider-neutral session either way. A signed-in stranger is a Visitor who sees coarse status only; an Owner approves the observed account and assigns viewer, player, operator or owner. See [ADR-0036](docs/adr/0036-observed-visitors-and-owner-approved-access.md), [ADR-0045](docs/adr/0045-provider-neutral-login-sessions.md), [ADR-0055](docs/adr/0055-sign-in-with-email-and-password-by-default.md) |
-| Worlds, wipes and backups as operations | Create a world from a ready preset release; archive it, start a new wipe, restore a backup into a new wipe, or purge an archived world. Each is a guarded Standard Workflow that stops and backs up an active session first. See [ADR-0040](docs/adr/0040-reusable-presets-and-world-wipes.md) |
-| Chat notifications | Step Functions execution events reach a notifier Lambda: start requested, ready, stopped, promoted, rolled back, failed stop. Guardrail alerts on `spawnpoint-alert` arrive in the same chat. Players choose their own subscriptions in the panel |
+| Telegram bot and Mini App | A webhook bot on Lambda — `/server_start`, `/status`, `/address`, `/network`, `/pack`, an inline menu — and a static React Mini App behind CloudFront, both thin clients of the same access API. Deployed 2026-08-27 to 29. See [ADR-0012](docs/adr/0012-web-control-panel.md) and [ADR-0016](docs/adr/0016-chat-integrations.md) |
+| Browser panel with two faces | The same React app served from `spawnpoint.drarzter.dev` with a front door, sign-in, and a demo anyone can drive without an account. Its models are separate from its looks ([ADR-0059](docs/adr/0059-separate-the-console-into-bones-and-skins.md)): the default face is the Google Cloud console grammar, the second is one monospace terminal screen, and a contract test holds both to the same list of actions. Theme and accent follow the person to their account; the look is remembered per device. Browser sessions ride in `HttpOnly` cookies, never in JavaScript |
+| Identity, roles and approval | The access API signs people in with an email and password, through Telegram (an OIDC token or Mini App `initData`) or, when a deployment sets a client id, with Google, and issues one provider-neutral session either way. A signed-in person links further providers to the same identity from their profile. A stranger joins as a Viewer who sees coarse status only; an Owner approves the observed account and assigns viewer, player, operator or owner. See [ADR-0036](docs/adr/0036-observed-visitors-and-owner-approved-access.md), [ADR-0045](docs/adr/0045-provider-neutral-login-sessions.md), [ADR-0055](docs/adr/0055-sign-in-with-email-and-password-by-default.md), [ADR-0057](docs/adr/0057-link-login-providers-through-the-current-identity.md), [ADR-0058](docs/adr/0058-sign-in-with-google.md) |
+| Invitations | An Owner invites someone to the project by email or as a one-time shareable link; the recipient claims it with any enabled provider and joins as a Viewer. A player invites the group, or chosen people, to a running world; those go out through Telegram to whoever subscribed. Email delivery is an optional Resend adapter, off by default; without it the links are still made, and every message the system sends uses one Spawnpoint layout ([ADR-0020](docs/adr/0020-email-channel.md), [ADR-0038](docs/adr/0038-invitation-delivery-claim.md)) |
+| Worlds, wipes and backups as operations | Create a world from a ready preset release; archive it, start a new wipe, restore a backup into a new wipe, or purge an archived world. Each is a guarded Standard Workflow that stops and backs up an active session first, and a restore refuses to begin unless the backup's own release still exists. Each world carries its hosting and connection settings, changed only while it is stopped. See [ADR-0040](docs/adr/0040-reusable-presets-and-world-wipes.md), [ADR-0052](docs/adr/0052-keep-a-release-while-a-generation-names-it.md) |
+| Chat notifications | Step Functions execution events reach a notifier Lambda: start requested, ready, stopped, promoted, rolled back, failed stop, and game invitations. Guardrail alerts on `spawnpoint-alert` arrive in the same chat. Players choose their own subscriptions in the panel |
 | Production deployed from pull requests | `Check` must pass on `main`; then GitHub Actions classifies the tested diff and assumes an OIDC role to apply only the changed Terraform roots, Lambda bundles and web build, refusing any plan with a delete or replacement. Pull requests get a read-only production plan; the pipeline's own identities are applied by a fourth, owner-gated identity that nothing automated can reach. See [ADR-0043](docs/adr/0043-deploy-production-from-reviewed-pull-requests.md) and [ADR-0044](docs/adr/0044-apply-github-identities-behind-an-owner-gate.md) |
-| Agent control through MCP | A browser-approved remote [MCP connection](mcp/README.md) gives Codex and compatible clients the same status, metrics, backups, pack, start and stop operations as the panel, with no copied password or cookie. OAuth scopes cap the connection and the identity's live permissions remain authoritative. See [ADR-0061](docs/adr/0061-connect-agents-through-oauth.md) |
-| Running-hours alarm and budget | `spawnpoint-running-hours` fires after ten consecutive running hours; it and the $20 budget publish to `spawnpoint-alert`, which reaches email and the Telegram notifier |
-| Per-session observability | Prometheus and Grafana come up with the session and go down with it. Prometheus binds to loopback; Grafana is reachable only inside the overlay |
+| Agent control through MCP | A browser-approved remote [MCP connection](mcp/README.md) gives Codex and compatible clients the same status, host metrics, backups, pack, start and stop operations as the panel, with no copied password or cookie; restore, wipe, purge, access and promotion are deliberately withheld until a narrower confirmation contract exists. OAuth scopes cap the connection and the identity's live permissions remain authoritative. A local stdio adapter serves repository development. See [ADR-0061](docs/adr/0061-connect-agents-through-oauth.md) |
+| Alarms and budget | `spawnpoint-running-hours` fires after ten consecutive running hours and `spawnpoint-fleet-sweep-failed` when the host sweeper errors; they, the $20 budget (actual and forecast) and cost anomaly detection publish to `spawnpoint-alert`, which reaches email and the Telegram notifier. Every log group keeps fourteen days. No alarm has yet been forced in a recorded test |
+| Per-session observability | Prometheus and Grafana come up with the session and go down with it. Prometheus binds to loopback; Grafana is reachable only inside the overlay. After the instance is gone, the panel and the MCP tools read the host's CPU and network from CloudWatch over a chosen window |
 
 ## What is designed, not built
 
@@ -47,14 +58,15 @@ player-facing feature yet. Read the roadmap for the order.
 
 | Capability | Detail |
 | --- | --- |
+| Two worlds of one game at once | Worlds of different games already run side by side on their own fleet hosts. The lifecycle record is still one per game with one active session, so two worlds of the same game take turns; keying it by world is its own change ([docs/capacity-allocation-rollout.md](docs/capacity-allocation-rollout.md)) |
 | Updates you approve, not updates that happen | A scheduled check resolves every mod, diffs by hash, and opens a pull request. Five changed mods with changelogs is a decision; a server that updated itself is an incident. [ADR-0028](docs/adr/0028-update-proposals.md), proposed |
 | Preview environments per proposal | A pull request boots a throwaway server on a copy of the real world. Join it and look at your base before approving. [ADR-0029](docs/adr/0029-preview-environments.md), proposed |
 | A pack site with history | Every release published today carries its `client.zip`, presigned from the panel and `/pack`. The stable public URL, changelog and version history of [ADR-0013](docs/adr/0013-modpack-distribution.md) are not built |
 | Discord as a second surface | Telegram is deployed; Discord has not been attempted, which is why [ADR-0016](docs/adr/0016-chat-integrations.md) stays open |
-| Self-serve account linking | A signed-in Identity can add and verify email/password from its own profile. Chat, game and network linking through one-time codes remains proposed in [ADR-0019](docs/adr/0019-account-linking.md) |
+| Game and network account linking | Login providers already link to the signed-in identity from its profile: email and password, Telegram, Google ([ADR-0057](docs/adr/0057-link-login-providers-through-the-current-identity.md)). A Minecraft name or a ZeroTier client has no linking route yet; the profile says so. The one-time chat code of [ADR-0019](docs/adr/0019-account-linking.md) is superseded, and no link can be removed once made |
 | Whitelist that maintains itself | The Minecraft identity is a third link, and `whitelist.json` is generated from the link table. Remove someone once, and they lose the panel, the bots and the game. [ADR-0022](docs/adr/0022-minecraft-account-as-linked-identity.md), proposed |
-| A world picker in the bot | The panel starts any world; the bot still operates the one world it is configured for |
-| Several worlds at once | One world is active at a time. [ADR-0048](docs/adr/0048-one-instance-per-active-world.md) gives each session its own host; [ADR-0054](docs/adr/0054-place-a-session-on-a-host-with-room.md) places a session on a host with room and launches one that fits when none has; EC2 picks the instance type from the footprint's requirements, so no type or price lives in the code. The placement domain model and its tests exist; the rollout is in [docs/capacity-allocation-rollout.md](docs/capacity-allocation-rollout.md) |
+| A world picker in the bot | The panel and the MCP tools start any world; the bot still operates the one world its `WORLD_ID` names |
+| A console and session telemetry in the panel | Both faces draw the RCON console and a session tab under Metrics, and both say what is missing: the RCON gateway that would record who ran what, and the telemetry feed. Host metrics from CloudWatch are the one live series |
 
 ## Why it exists
 
@@ -115,9 +127,9 @@ flowchart LR
     end
 
     subgraph Runtime
-        EC2[EC2 on-demand instance<br/>Docker: game server]
+        EC2[EC2 on-demand hosts<br/>the configured host, or a fleet host per session<br/>Docker: game server]
         EBS[(EBS: worlds)]
-        NET[Connectivity<br/>ZeroTier overlay today]
+        NET[Connectivity per world<br/>ZeroTier overlay, raw address or DNS]
         CW[CloudWatch<br/>metrics, logs, alarms]
     end
 
@@ -212,7 +224,7 @@ production plan through a second, owner-gated role. See
 
 ## Decisions
 
-Forty-three records, each with the alternatives that were rejected and why. Seven have been superseded, one was
+Sixty-one records, each with the alternatives that were rejected and why. Ten have been superseded, one was
 rejected the same day it was written and one is deferred, which is the process working rather than failing — as is
 [ADR-0040](docs/adr/0040-reusable-presets-and-world-wipes.md) replacing ADR-0039 four days after it, or
 [ADR-0032](docs/adr/0032-on-demand-single-instance.md) replacing ADR-0004 rather than editing it a ninth time.
@@ -244,7 +256,8 @@ Vocabulary does not live in them either. One word per thing, and what each one m
 | [0016](docs/adr/0016-chat-integrations.md) | Discord and Telegram as control surfaces | Proposed — Telegram deployed, Discord untried |
 | [0017](docs/adr/0017-stable-server-address.md) | Stable hostname in Route 53 | Superseded by 0024 |
 | [0018](docs/adr/0018-identity-and-sign-in.md) | Cognito broker; earlier Google-first design | Superseded by 0037 |
-| [0019](docs/adr/0019-account-linking.md) | Link chat accounts with a one-time code | Proposed |
+| [0019](docs/adr/0019-account-linking.md) | Link chat accounts with a one-time code | Superseded by 0057 |
+| [0020](docs/adr/0020-email-channel.md) | SNS email for alerts; SES deferred | Accepted |
 | [0021](docs/adr/0021-sign-in-from-linked-chat-account.md) | Chat sign-in, but only into a linked account | Superseded by 0037 |
 | [0022](docs/adr/0022-minecraft-account-as-linked-identity.md) | Minecraft identity is a link; whitelist derived; `online-mode=false` | Proposed |
 | [0023](docs/adr/0023-multiple-worlds.md) | Several worlds, one active at a time | Accepted |
@@ -260,14 +273,32 @@ Vocabulary does not live in them either. One word per thing, and what each one m
 | [0033](docs/adr/0033-connectivity-as-a-strategy.md) | Connectivity is a strategy behind one interface, constrained by the game's auth model | Accepted |
 | [0034](docs/adr/0034-per-game-adapter.md) | A game is a module: data plus functions, minecraft the byte-identical default | Accepted |
 | [0035](docs/adr/0035-bootstrap-first-owner.md) | Bootstrap the first Owner through one verified Google identity | Superseded by 0037 |
-| [0036](docs/adr/0036-observed-visitors-and-owner-approved-access.md) | Observe visitors, but let an Owner grant access | Accepted |
-| [0037](docs/adr/0037-telegram-only-browser-identity.md) | Telegram is the default and only browser identity provider | Accepted |
+| [0036](docs/adr/0036-observed-visitors-and-owner-approved-access.md) | Observe visitors, but let an Owner grant access | Accepted, amended by 0050 |
+| [0037](docs/adr/0037-telegram-only-browser-identity.md) | Telegram-only browser identity through signed Widget and Mini App payloads | Superseded by 0045 |
 | [0038](docs/adr/0038-invitation-delivery-claim.md) | Claim an invitation once before Telegram delivery | Accepted |
 | [0039](docs/adr/0039-git-presets-instantiate-world-generations.md) | Git presets instantiate recoverable world generations | Superseded by 0040 |
 | [0040](docs/adr/0040-reusable-presets-and-world-wipes.md) | Reusable presets create worlds whose wipes own release state | Accepted |
 | [0041](docs/adr/0041-evaluate-spt-profile-backed-adapter.md) | Evaluate SPT as a profile-backed adapter without distributing EFT | Proposed |
 | [0042](docs/adr/0042-preset-scoped-release-identity.md) | Release identity and storage are scoped by preset | Accepted |
-| [0043](docs/adr/0043-deploy-production-from-reviewed-pull-requests.md) | Deploy production from reviewed pull requests through OIDC roles | Accepted |
+| [0043](docs/adr/0043-deploy-production-from-reviewed-pull-requests.md) | Deploy production from reviewed pull requests through OIDC roles | Accepted, amended by 0044 |
+| [0044](docs/adr/0044-apply-github-identities-behind-an-owner-gate.md) | Apply the GitHub identities from the pipeline, behind an owner gate | Accepted |
+| [0045](docs/adr/0045-provider-neutral-login-sessions.md) | Keep login sessions independent of identity providers | Accepted |
+| [0046](docs/adr/0046-keep-dynamodb-until-relational-needs-arrive.md) | Keep DynamoDB until relational needs arrive | Accepted |
+| [0047](docs/adr/0047-normalize-preset-sources-before-building.md) | Normalize preset sources before building | Accepted |
+| [0048](docs/adr/0048-one-instance-per-active-world.md) | One instance per active world, created for the session | Accepted, amended by 0054 |
+| [0049](docs/adr/0049-project-control-plane-events-into-dynamodb.md) | Project control-plane events into DynamoDB for user-facing surfaces | Accepted |
+| [0050](docs/adr/0050-default-role-on-sign-in-and-elevation-requests.md) | Join as Viewer through any login provider, and ask for more | Proposed |
+| [0051](docs/adr/0051-restart-a-session-without-releasing-the-host.md) | Restart a session without releasing the host | Proposed |
+| [0052](docs/adr/0052-keep-a-release-while-a-generation-names-it.md) | Keep a release while a generation names it, and check before restoring | Accepted — restore guard implemented |
+| [0053](docs/adr/0053-tell-not-built-apart-from-broken.md) | Tell "not built yet" apart from "broken", in the transport | Proposed |
+| [0054](docs/adr/0054-place-a-session-on-a-host-with-room.md) | Place a session on a host with room, or launch one that fits | Accepted — in production since 2026-09-22 |
+| [0055](docs/adr/0055-sign-in-with-email-and-password-by-default.md) | Sign in with email and password by default, and with a provider as an alternative | Accepted — implemented |
+| [0056](docs/adr/0056-verify-and-link-password-credentials.md) | Verify and link password credentials without making a provider primary | Accepted — implemented; amends 0055 |
+| [0057](docs/adr/0057-link-login-providers-through-the-current-identity.md) | Link login providers through the current Identity | Accepted — implemented |
+| [0058](docs/adr/0058-sign-in-with-google.md) | Sign in with Google as one more proof-based provider, off until configured | Accepted — implemented |
+| [0059](docs/adr/0059-separate-the-console-into-bones-and-skins.md) | Separate the console into bones and skins, and hold every skin to one contract | Accepted — implemented |
+| [0060](docs/adr/0060-expose-control-plane-through-a-local-mcp-adapter.md) | Expose the control plane through a local MCP adapter first | Superseded by 0061 |
+| [0061](docs/adr/0061-connect-agents-through-oauth.md) | Connect agents through OAuth | Accepted — implemented |
 
 Index, template and the decisions still to make: [docs/adr/README.md](docs/adr/README.md).
 
@@ -290,9 +321,9 @@ $129 a month. That is why a stop that silently fails is treated as an incident.
 | M1 | The same thing rebuilt in Terraform, with backups and a tested restore | **Done** 2026-08-13 |
 | M2 | On-demand start and idle stop, over a stable overlay address | **Done** 2026-08-26, re-based on Lifecycle V2 2026-09-11 — fenced sessions, one watchdog per session; Spot remains deliberately deferred |
 | M3 | Versioned mod releases and the deployment pipeline | **In progress** — releases are built in AWS per preset, promotion round-tripped on V2 on 2026-09-11, and deliberate bad release `9.99` rolled itself back on 2026-09-13; the update proposals of ADR-0028 remain |
-| M4 | Telegram bot, shared identity/role authorization and client pack distribution | **Largely done** — bot, Mini App, Telegram sign-in, Owner approval and roles are deployed; a pack rides with every new release; the stable pack site of ADR-0013 is not built |
+| M4 | Telegram bot, shared identity/role authorization and client pack distribution | **Largely done** — the bot, the Mini App and the browser panel are deployed; people sign in with an email and password, Telegram or Google and link the others to one identity; an Owner approves and assigns roles; project and game invitations, notification subscriptions and an MCP connection for agents exist; a pack rides with every new release. Not built: the stable pack site of ADR-0013, Discord, the derived whitelist, a world picker in the bot |
 | M5 | Observability, alerting and cost guardrails | Session Grafana runs; the running-hours alarm and the budget publish to `spawnpoint-alert`, reaching email and Telegram. The remaining ADR-0015 signals, the forced-alarm tests and the first monthly cost check are not done |
-| M6 | Several worlds, one active at a time | **In progress** — worlds are created from reusable presets, each with its own wipes and backups (ADR-0040); Factorio and Zomboid adapters exist; the bot still operates one configured world |
+| M6 | Several worlds | **Largely done** — worlds are created from reusable presets, each with its own wipes, backups and hosting settings (ADR-0040); Factorio and Zomboid adapters exist; since 2026-09-22 a preset-born world runs on a fleet host launched for its session and terminated after it (ADR-0054); two worlds of the same game still take turns, the bot still operates one configured world, and content-addressed mod storage is not done |
 
 Definition of done per milestone: [docs/roadmap.md](docs/roadmap.md).
 

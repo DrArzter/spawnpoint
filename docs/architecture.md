@@ -18,7 +18,7 @@ broker with Google.
 
 | Component | Runs on | Responsibility |
 | --- | --- | --- |
-| Game session stack | Docker Compose on one on-demand EC2 instance | Minecraft plus session-local Prometheus, Grafana and exporters; all stop together |
+| Game session stack | Docker Compose on the configured on-demand EC2 instance for the legacy worlds, or on an EC2 Fleet host launched for the session and terminated after it for a world born from a preset | The game plus session-local Prometheus, Grafana and exporters; all stop together |
 | Data volume | EBS, survives the instance | The world, the mod directory, configs |
 | Control-plane API | API Gateway + Lambda | The only thing allowed to change state. Owns every rule |
 | Operation orchestration | Step Functions, Standard workflows | Runs the long operations. The execution **is** the operation state, so there is no table for it. See [ADR-0025](adr/0025-step-functions-for-long-operations.md) |
@@ -27,10 +27,11 @@ broker with Google.
 | Backup store | S3, versioned, lifecycle rules | World archives |
 | Events | EventBridge + SNS | Step Functions and EC2 publish lifecycle observations; a projector records bounded event history and a current control-plane view. Alarms and the budget publish to the `spawnpoint-alert` SNS topic |
 | Chat adapters | Lambda per platform | Telegram today: a webhook command bot and a notifier fed by execution events. Discord is designed, not built |
-| Identity | Access Lambda + DynamoDB | Verifies an email and password or a signed Telegram browser/Mini App identity and issues one short-lived Spawnpoint session either way; roles grant access separately. See [ADR-0045](adr/0045-provider-neutral-login-sessions.md), [ADR-0055](adr/0055-sign-in-with-email-and-password-by-default.md) |
+| Agent surface | API Gateway + Lambda, `/mcp` | A remote MCP resource behind OAuth with PKCE; scopes cap the tools, the identity's role decides each call. A local stdio adapter serves development. See [ADR-0061](adr/0061-connect-agents-through-oauth.md) |
+| Identity | Access Lambda + DynamoDB | Verifies an email and password, a signed Telegram browser/Mini App identity or, where a client id is configured, a Google token, and issues one short-lived Spawnpoint session either way; a signed-in person links the other providers to the same identity; roles grant access separately. See [ADR-0045](adr/0045-provider-neutral-login-sessions.md), [ADR-0055](adr/0055-sign-in-with-email-and-password-by-default.md), [ADR-0057](adr/0057-link-login-providers-through-the-current-identity.md), [ADR-0058](adr/0058-sign-in-with-google.md) |
 | Access directory | DynamoDB | Maps Telegram accounts, password credentials, game and network accounts to an internal identity, role and direct grants. The bot and panel read the same authority |
 | Web panel and pack site | S3 + CloudFront | Static. Panel is a client of the API; packs are files |
-| Connectivity | An overlay agent on the instance today; Route 53 or a raw address are the other two modes of the same contract | Publishes the connection string on start and retracts it on stop. One contract, three implementations; **ZeroTier is the chosen mode**. See [ADR-0024](adr/0024-connectivity-modes.md) |
+| Connectivity | An overlay agent on the configured instance; Route 53 or a raw address on a launched host | Publishes the connection string on start and retracts it on stop. One contract, three implementations, chosen per world: **ZeroTier on the configured host**, a public address or DNS name on a fleet host. See [ADR-0024](adr/0024-connectivity-modes.md), [ADR-0033](adr/0033-connectivity-as-a-strategy.md) |
 | Observability | Session Prometheus/Grafana + CloudWatch + Budgets | Detailed live game/host dashboard during play; durable AWS signals and alarms after the instance is gone |
 
 Boundaries that matter:
@@ -235,7 +236,7 @@ nothing before the acknowledgement except verifying the signature. See [ADR-0016
 | Lambda permissions | Per-function roles. SSM send limited to instances carrying the project tag |
 | Who may act | Four built-in roles — viewer, player, operator, owner — plus direct grants on one identity. A Telegram account is authorised only once an Owner has approved it into an identity. See [ADR-0036](adr/0036-observed-visitors-and-owner-approved-access.md) |
 | Identity | The access Lambda verifies an email and password against a salted scrypt hash, or a Telegram OIDC token or Mini App `initData`. The webhook secret authenticates bot transport; every surface then resolves the same account in the access directory. See [ADR-0045](adr/0045-provider-neutral-login-sessions.md), [ADR-0055](adr/0055-sign-in-with-email-and-password-by-default.md) |
-| Account linking | Today an Owner records a player's game and network accounts in the profile. The self-serve one-time code of [ADR-0019](adr/0019-account-linking.md) is designed, not built. Linking grants no privilege and never changes a role |
+| Account linking | A signed-in person links login providers to their own identity by proving each one ([ADR-0057](adr/0057-link-login-providers-through-the-current-identity.md)). Game and network accounts have no linking route yet, and no link can be removed; the one-time code of [ADR-0019](adr/0019-account-linking.md) is superseded. Linking grants no privilege and never changes a role |
 | Browser sign-in | The email-and-password form is the default and also registers; Telegram is the alternative button. Either is exchanged for a 15-minute access token and a 30-day HttpOnly refresh credential. Authentication creates at most a Visitor/access candidate; Owner approval creates the identity and role. An email address is a sign-in name, not a verified channel, until a sender exists ([ADR-0020](adr/0020-email-channel.md)) |
 | Secrets | Bot tokens and RCON password in SSM Parameter Store, encrypted. Never in Terraform state or the repository |
 | Public surfaces | Pack site and panel are public; the API requires identity on every request |
@@ -276,6 +277,8 @@ Collected from the ADRs, in rough order of how much they would change the design
    Step Functions' own vocabulary. [ADR-0025](adr/0025-step-functions-for-long-operations.md)
 5. **Content-addressed mod storage** versus per-release copies. [ADR-0008](adr/0008-versioned-mod-releases.md)
 6. **Pack format**, and whether to reuse `packwiz` for the export. [ADR-0013](adr/0013-modpack-distribution.md)
-7. ~~**Whether anybody refuses a Google account for first contact.**~~ **Settled: Google is gone.** Telegram is the
-   only browser identity, and an Owner approves the first contact. [ADR-0037](adr/0037-telegram-only-browser-identity.md),
-   [ADR-0036](adr/0036-observed-visitors-and-owner-approved-access.md)
+7. ~~**Whether anybody refuses a Google account for first contact.**~~ **Settled twice.** Google went with
+   [ADR-0037](adr/0037-telegram-only-browser-identity.md); then email and password became the default way in
+   ([ADR-0055](adr/0055-sign-in-with-email-and-password-by-default.md)) and Google came back as one optional provider
+   among several, off until a deployment configures it ([ADR-0058](adr/0058-sign-in-with-google.md)). An Owner still
+   approves the first contact. [ADR-0036](adr/0036-observed-visitors-and-owner-approved-access.md)

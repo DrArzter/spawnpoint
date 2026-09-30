@@ -16,7 +16,7 @@ Spawnpoint makes disposable, on-demand game infrastructure usable without requir
 
 ## Positioning
 
-One control plane presents worlds, releases, access, invitations and session operations consistently across a Telegram bot, Telegram Mini App and ordinary browser while AWS remains the execution platform rather than the user interface.
+One control plane presents worlds, releases, access, invitations and session operations consistently across a Telegram bot, Telegram Mini App, ordinary browser and agents connected through MCP, while AWS remains the execution platform rather than the user interface.
 
 ## Operating Context
 
@@ -24,7 +24,7 @@ The panel is opened from Telegram on a phone and as a persistent browser tab on 
 
 ## Capabilities and Constraints
 
-- Telegram is the initial identity provider for both Mini App and browser sessions.
+- Email and password is the default way in; Telegram (Mini App and browser) and, where a deployment configures it, Google are alternatives, and every provider issues the same session.
 - Every action is subject to the same backend identity, role and permission checks regardless of client.
 - Games contain persistent worlds; sessions temporarily bind a selected world to disposable compute.
 - The interface exposes status, session controls, invitations, metrics, console, releases, backups, identities, roles, notification subscriptions and linked accounts only where the backend has real support.

@@ -59,6 +59,7 @@ import {
   verifyPkce,
   type OAuthScope,
 } from "../access/oauth.ts";
+import { requestBody } from "../access/request-body.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../domain/access-events.ts";
 import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
 import type { EmailSender } from "../email/email-sender.ts";
@@ -93,6 +94,7 @@ type Event = Readonly<{
   headers?: Record<string, string | undefined>;
   cookies?: string[];
   body?: string;
+  isBase64Encoded?: boolean;
 }>;
 type Response = Readonly<{ statusCode: number; headers: Record<string, string>; body: string; cookies?: string[] }>;
 type Item = Record<string, unknown>;
@@ -1984,13 +1986,13 @@ function oauthCredentialKey(kind: "CODE" | "REFRESH", hash: string): Record<stri
 function jsonBody(event: Event): Record<string, unknown> | null {
   if (!event.body) return null;
   try {
-    const value = JSON.parse(event.body) as unknown;
+    const value = JSON.parse(requestBody(event)) as unknown;
     return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
   } catch { return null; }
 }
 
 function formBody(event: Event): URLSearchParams {
-  return new URLSearchParams(event.body ?? "");
+  return new URLSearchParams(requestBody(event));
 }
 
 function oauthError(statusCode: number, error: string, description?: string): Response {

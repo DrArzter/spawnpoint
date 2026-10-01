@@ -50,10 +50,7 @@ If a component lacks a needed capability, extend its typed API and implement the
 - Remove unused selectors when their component is removed. Do not retain speculative utility classes.
 - Use existing tokens and `t-*` scoping. Do not introduce raw colours, spacing values, or unscoped terminal rules when a semantic token already exists.
 
-Current terminal CSS cleanup debt discovered during the component-contract audit:
-
-- `.t-select-inline` declares `display: inline-block` and later overwrites it with `inline-flex`; consolidate it into one base rule.
-- `.t-label`, `.t-pair`, `.t-pair-arrow`, `.t-with-copy`, and `.t-setting-note` currently have CSS but no terminal markup consumer; remove them unless a real component contract adopts them.
+`web/test/terminal-css.test.ts` enforces two of these rules on `terminal.css`: every styled `t-*` class has a consumer in `web/src` (a class built as `` `t-mark-${kind}` `` counts by its prefix), and no selector sets the same property twice in one cascade context. When it fails, consolidate the rules or delete the dead class; do not silence it.
 
 ### Verification
 

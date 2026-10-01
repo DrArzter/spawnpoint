@@ -56,6 +56,12 @@ export function DataTable<Row>({ columns, rows, rowKey, label, empty = "No items
               {columns.map((column) => <td className={cellClass(column)} data-label={column.label} key={column.id}><Skeleton width={column.actions ? "48px" : `${55 + ((index * 17 + column.id.length * 7) % 35)}%`} /></td>)}
             </tr>
           ))}
+          {/* What is loading, in words: read aloud always, shown by a face
+              that waits with a line rather than with the shape of the rows. */}
+          {loading && (() => {
+            const words = `Loading ${label.charAt(0).toLowerCase() + label.slice(1)}`;
+            return <tr className="table-loading"><td colSpan={columns.length} data-loading={words}><span className="visually-hidden">{words}</span></td></tr>;
+          })()}
           {!loading && rows.length === 0 && <tr><td className="table-empty" colSpan={columns.length}>{empty}</td></tr>}
           {!loading && rows.map((row) => {
             const key = rowKey(row);

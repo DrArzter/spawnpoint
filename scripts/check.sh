@@ -7,9 +7,9 @@
 #   scripts/check.sh          run everything
 #   scripts/check.sh fast     skip the terraform container (the slowest rung)
 #   scripts/check.sh static   markdown, workflow and shell checks
-#   scripts/check.sh app      Lambda tests and builds plus the web build
+#   scripts/check.sh app      Lambda tests and builds, web build, and MCP adapter
 #   scripts/check.sh server   container and compose server suites
-#   scripts/check.sh lambda-build | lambda-test-shard INDEX COUNT | web
+#   scripts/check.sh lambda-build | lambda-test-shard INDEX COUNT | web | mcp
 #   scripts/check.sh server-suite-shard INDEX COUNT | server-compose
 #   scripts/check.sh terraform
 
@@ -85,6 +85,10 @@ check_lambda_test_shard() {
 
 check_web() {
   (cd web && npm test && npm run build)
+}
+
+check_mcp() {
+  (cd mcp && npm test)
 }
 
 # The bot, notifier and access-api roots archive lambdas/dist/*, so a Terraform
@@ -170,6 +174,7 @@ run_static() {
 run_app() {
   step "node tests (lambdas)" check_node
   step "production build (mini app)" check_web
+  step "MCP adapter tests and build" check_mcp
   step "lambda bundles" check_lambda_bundles
 }
 
@@ -206,6 +211,7 @@ case "${mode}" in
     step "lambda tests (shard ${2}/${3})" check_lambda_test_shard "$2" "$3"
     ;;
   web) step "production build and tests (mini app)" check_web ;;
+  mcp) step "MCP adapter tests and build" check_mcp ;;
   server-suite-shard)
     validate_shard "${@:2}" || exit 2
     step "server test suite (shard ${2}/${3})" check_server_suite "$2" "$3"
@@ -223,7 +229,7 @@ case "${mode}" in
     step "terraform fmt+test (${2})" check_terraform_root "$2"
     ;;
   *)
-    printf 'usage: scripts/check.sh [full|fast|static|app|server|lambda-build|lambda-test-shard|web|server-suite-shard|server-compose|terraform]\n' >&2
+    printf 'usage: scripts/check.sh [full|fast|static|app|server|lambda-build|lambda-test-shard|web|mcp|server-suite-shard|server-compose|terraform]\n' >&2
     exit 2
     ;;
 esac

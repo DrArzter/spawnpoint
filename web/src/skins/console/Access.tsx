@@ -2,11 +2,11 @@ import { useState } from "react";
 
 import { Avatar } from "../../components/Avatar";
 import { LinkedAccounts } from "../../components/LinkedAccounts";
-import { ActionRow } from "../../components/ui/Button";
 import { Column, DataTable } from "../../components/ui/DataTable";
 import { Sheet } from "../../components/ui/Dialog";
 import { InlineSelect, Switch, TextField } from "../../components/ui/Fields";
 import { FilterBar, NoMatches, useFilter } from "../../components/ui/Filter";
+import { Menu } from "../../components/ui/Menu";
 import { SkeletonRows } from "../../components/ui/Skeleton";
 import { Status } from "../../components/ui/Status";
 import { Banner, Card, Details, EmptyState, Ghost, NotConnected } from "../../components/ui/Surfaces";
@@ -16,7 +16,7 @@ import { Icon } from "../../icons";
 import { formatDateTime, plural } from "../../lib/format";
 import { describePermission } from "../../lib/permissions";
 import type { Game, Role } from "../../model";
-import { ActionButton } from "./actions";
+import { ActionButton, menuItems } from "./actions";
 
 export function Access({ model }: Readonly<{ model: AccessModel }>) {
   return (
@@ -64,12 +64,7 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
       id: "actions",
       label: "Actions",
       actions: true,
-      render: (row) => (
-        <ActionRow>
-          <ActionButton action={row.dismiss} size="small" variant="outlined" />
-          <ActionButton action={row.approve} size="small" variant="filled" />
-        </ActionRow>
-      ),
+      render: (row) => <Menu items={menuItems([row.approve, row.dismiss])} label={`Actions for ${row.candidate.displayName}`} size="small" />,
     },
   ];
   const columns: Column<MemberRow>[] = [
@@ -98,7 +93,7 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
           columns={candidateColumns}
           decision
           hideHeader
-          empty={<EmptyState description="Somebody appears here after signing in, or creating an account, and asking for access." icon="person_add" title="Nobody is waiting for review" />}
+          empty={<EmptyState icon="person_add" title="No access requests" />}
           label="Access requests"
           loading={candidates.status === "loading"}
           loadingRows={2}
@@ -113,7 +108,6 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
 
       <Card
         actions={<Status kind={model.bootstrap.state === "claimed" ? "ok" : "warning"} label={model.bootstrap.state === "claimed" ? "Complete" : "Action required"} />}
-        description={model.bootstrapDescription}
         flush
         title="Initial owner"
       >
@@ -159,8 +153,7 @@ function Invitations({ model }: Readonly<{ model: InvitationsModel }>) {
         <ActionButton action={model.issued.copy} variant="outlined" />
       </div>}
       {list.status === "error" && <Banner actions={<ActionButton action={list.retry} variant="text" />} description={list.error} title="Invitations could not be loaded" tone="error" />}
-      {list.status === "loading" && <p>Loading invitations…</p>}
-      {list.status === "ready" && list.value.length === 0 && <EmptyState description="Create a link to let someone join with their preferred sign-in method." icon="person_add" title="No invitations yet" />}
+      {list.status === "loading" && <SkeletonRows label="Loading invitations" rows={3} />}
       {list.status === "ready" && list.value.length > 0 && <div className="access-invite-list">
         <h3>Recent invitations</h3>
         <ul>
@@ -187,13 +180,13 @@ function Roles({ model }: Readonly<{ model: RolesModel }>) {
     <div className="page">
       {/* A directory that has no route yet is not a fault, and no retry reaches
           it. Anything else keeps the banner and the retry it always had. */}
-      {state.status === "error" && state.kind === "unavailable" && <Card flush><NotConnected description="Roles and their permissions appear here once the access directory is reachable." title="The access directory is not connected yet" /></Card>}
+      {state.status === "error" && state.kind === "unavailable" && <Card flush><NotConnected title="The access directory is not connected yet" /></Card>}
       {state.status === "error" && state.kind !== "unavailable" && <Banner actions={state.kind === "forbidden" ? undefined : <ActionButton action={state.retry} variant="text" />} description={state.error} title={state.kind === "forbidden" ? "Your role cannot read this" : "Roles could not be loaded"} tone="error" />}
       {state.status !== "error" && <Card flush>
         <FilterBar disabled={state.status !== "ready"} filter={filter} label="Search roles" noun="roles" placeholder="Search by role or description" />
         <DataTable
           columns={columns}
-          empty={filter.active ? <NoMatches filter={filter} icon="admin_panel_settings" noun="roles" /> : <EmptyState description="The access directory returned no roles." icon="admin_panel_settings" title="No roles" />}
+          empty={filter.active ? <NoMatches filter={filter} icon="admin_panel_settings" noun="roles" /> : <EmptyState icon="admin_panel_settings" title="No roles" />}
           label="Roles and permissions"
           loading={state.status === "loading"}
           rowKey={(role) => role.id}
@@ -253,18 +246,18 @@ function Notifications({ model }: Readonly<{ model: NotificationsModel }>) {
   return (
     <div className="page notification-groups">
       {model.state === "error" && <Banner actions={model.retry ? <ActionButton action={model.retry} variant="text" /> : undefined} description={model.error} title="Subscriptions are unavailable" tone="error" />}
-      <Card actions={<span aria-live="polite" className="secondary" role="status">{model.saveStatus}</span>} flush title="Session events">
+      <Card actions={<output aria-live="polite" className="secondary">{model.saveStatus}</output>} flush title="Session events">
         <DataTable columns={columns} label="Session event subscriptions" loading={model.state === "loading"} rowKey={(game) => game.id} rows={model.games} />
       </Card>
       <Card title="Game invitations">
         {model.state === "loading" ? <SkeletonRows label="Loading invitation preferences" rows={2} /> : <>
-          <SubscriptionSwitch action={model.toggle("invitation.broadcast", "Invitations sent to everyone")} checked={Boolean(model.subscriptions["invitation.broadcast"])} note="A player invited everyone to join a game" />
-          <SubscriptionSwitch action={model.toggle("invitation.direct", "Invitations sent directly to me")} checked={Boolean(model.subscriptions["invitation.direct"])} note="A player invited only selected people" />
+          <SubscriptionSwitch action={model.toggle("invitation.broadcast", "Invitations sent to everyone")} checked={Boolean(model.subscriptions["invitation.broadcast"])} />
+          <SubscriptionSwitch action={model.toggle("invitation.direct", "Invitations sent directly to me")} checked={Boolean(model.subscriptions["invitation.direct"])} />
         </>}
       </Card>
       <Card flush>
         <div className="delivery-row">
-          <div><h3>Delivery channel</h3><p>Telegram receives every category enabled above.</p></div>
+          <h3>Delivery channel</h3>
           <Status kind="ok" label="Telegram linked" />
         </div>
       </Card>

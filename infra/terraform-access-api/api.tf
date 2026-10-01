@@ -178,6 +178,8 @@ resource "aws_lambda_function" "access_api" {
       EMAIL_FROM                       = var.email_from
       EMAIL_REPLY_TO                   = var.email_reply_to
       PANEL_URL                        = trimsuffix(var.panel_url, "/")
+      API_URL                          = local.custom_api_domain_enabled ? "https://${var.api_domain_name}" : aws_apigatewayv2_api.access.api_endpoint
+      LEGACY_PANEL_URL                 = var.legacy_panel_url == null ? "" : trimsuffix(var.legacy_panel_url, "/")
       LIFECYCLE_TABLE_NAME             = data.aws_dynamodb_table.lifecycle.name
       CONTROL_PLANE_VIEW_TABLE         = var.control_plane_view_table_name
       CONTROL_PLANE_WEBSOCKET_URL      = "wss://${aws_apigatewayv2_api.control_plane.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.control_plane.name}"
@@ -222,6 +224,16 @@ resource "aws_apigatewayv2_integration" "access_api" {
 
 locals {
   access_routes = toset([
+    "GET /.well-known/oauth-protected-resource",
+    "GET /.well-known/oauth-protected-resource/mcp",
+    "GET /.well-known/oauth-authorization-server",
+    "POST /oauth/register",
+    "GET /oauth/authorize",
+    "POST /oauth/authorize",
+    "POST /oauth/authorize/inspect",
+    "POST /oauth/token",
+    "POST /oauth/revoke",
+    "POST /mcp",
     "GET /auth/providers",
     "POST /auth/telegram",
     "POST /auth/google",
@@ -303,6 +315,9 @@ resource "aws_apigatewayv2_stage" "default" {
       "POST /auth/email/verification/resend",
       "POST /auth/password/forgot",
       "POST /auth/password/reset",
+      "POST /oauth/register",
+      "POST /oauth/token",
+      "POST /oauth/revoke",
     ])
     content {
       route_key              = route_settings.value

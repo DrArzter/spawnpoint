@@ -6,10 +6,11 @@ import { Column, DataTable } from "../../components/ui/DataTable";
 import { Ellipsis } from "../../components/ui/Ellipsis";
 import { Menu, type MenuItem } from "../../components/ui/Menu";
 import { Status } from "../../components/ui/Status";
-import { Banner, Card, CopyButton, DetailItem, DetailsGroup, EmptyState, Ghost, NotConnected, PageHeader } from "../../components/ui/Surfaces";
+import { Banner, Card, DetailItem, DetailsGroup, EmptyState, Ghost, NotConnected, PageHeader } from "../../components/ui/Surfaces";
 import { Tabs } from "../../components/ui/Tabs";
 import { Timestamp } from "../../components/ui/Timestamp";
-import type { Action } from "../../core/actions";
+import { Tooltip } from "../../components/ui/Tooltip";
+import { action, type Action } from "../../core/actions";
 import type { BackupsModel, Detail, DetailValue, ReleaseRow, WorldModel } from "../../core/models";
 import { wipeStatus } from "../../core/worlds";
 import { Icon } from "../../icons";
@@ -47,12 +48,12 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
         {model.tab === "details" && <>
           <Card><div className="details-columns"><DetailsGroup items={model.sessionDetails.map(detailItem)} level={2} title="Session" /><DetailsGroup items={model.worldDetails.map(detailItem)} level={2} title="World" /></div></Card>
           <Card flush title="Operations">
-            <DataTable columns={operationColumns} empty={<EmptyState description="Completed executions will be listed after the operations API exposes history. Spawnpoint shows only what it observes." icon="sync" title="No operation in progress" />} label="Running operations" rowKey={(row) => `${row.operation.type}-${row.operation.id}`} rows={model.operations} />
+            <DataTable columns={operationColumns} empty={<EmptyState icon="sync" title="No operation in progress" />} label="Running operations" rowKey={(row) => `${row.operation.type}-${row.operation.id}`} rows={model.operations} />
           </Card>
         </>}
         {model.tab === "wipes" && <WipesTab rows={model.wipes} worldName={world.displayName} />}
         {model.tab === "backups" && <BackupsTab model={model.backups} worldName={world.displayName} />}
-        {model.tab === "releases" && <ReleasesTab rows={model.releases.rows} state={model.releases.state} worldName={world.displayName} />}
+        {model.tab === "releases" && <ReleasesTab rows={model.releases.rows} worldName={world.displayName} />}
       </div>
       <span className="visually-hidden">{game.displayName}</span>
     </div>
@@ -66,7 +67,20 @@ function detailValue(value: DetailValue): ReactNode {
     case "status": return <Status kind={value.status.kind} label={value.status.label} />;
     case "time": return <Timestamp value={value.at} />;
     case "number": return <strong className="num">{value.value}</strong>;
-    case "release": return <span className="pair"><span>Active <strong>{value.active ?? "none"}</strong></span><Icon name="chevron_right" size={16} /><span>Desired <strong>{value.desired ?? "none"}</strong></span></span>;
+    case "release": {
+      const aligned = value.active !== null && value.active === value.desired;
+      const label = aligned ? "Active and desired" : `Active ${value.active ?? "none"}; desired ${value.desired ?? "none"}`;
+      return <span className="release-world"><code>{value.desired ?? value.active ?? "none"}</code><Tooltip text={label}><Icon className={aligned ? "release-state-active" : "release-state-pending"} name={aligned ? "verified" : "schedule"} size={18} /><span className="visually-hidden">{label}</span></Tooltip></span>;
+    }
+    case "preset": return <>
+      <span>{value.name}</span>
+      {value.source && (
+        <a className="preset-source" href={value.source.href} rel="noreferrer" target="_blank" title={value.source.commit}>
+          <code>{value.source.short}</code>
+          <Icon name="open_in_new" size={14} />
+        </a>
+      )}
+    </>;
     default: return <ConnectionAddress address={value.address} />;
   }
 }
@@ -103,11 +117,11 @@ function WipesTab({ rows, worldName }: Readonly<{ rows: WorldModel["wipes"]; wor
     { id: "release", label: "Started on release", width: "140px", render: (row) => <code>{row.wipe.originRelease}</code> },
     { id: "opened", label: "Opened", render: (row) => <Timestamp value={row.wipe.createdAt} /> },
     { id: "closed", label: "Closed", render: (row) => (row.wipe.closedAt ? <Timestamp value={row.wipe.closedAt} /> : <Ghost>Open</Ghost>) },
-    { id: "actions", label: "Actions", actions: true, render: (row) => <ActionButton action={row.showBackups} size="small" variant="text" /> },
+    { id: "actions", label: "Actions", actions: true, render: (row) => <Menu items={menuItems([row.showBackups])} label={`Actions for wipe ${row.wipe.number}`} size="small" /> },
   ];
   return (
     <Card flush title="Wipes">
-      <DataTable columns={columns} empty={<EmptyState description="The first start opens wipe #1." icon="history" title="No wipes yet" />} label={`Wipes of ${worldName}`} rowKey={(row: { wipe: Wipe }) => row.wipe.id} rows={rows} />
+      <DataTable columns={columns} empty={<EmptyState icon="history" title="No wipes yet" />} label={`Wipes of ${worldName}`} rowKey={(row: { wipe: Wipe }) => row.wipe.id} rows={rows} />
     </Card>
   );
 }
@@ -116,12 +130,12 @@ function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldN
   const columns: Column<BackupEntry>[] = [
     // The timestamp is the only part that tells two archives of one world apart,
     // so it is the part that survives a narrow column.
-    { id: "archive", label: "Archive", truncate: true, width: "45%", render: (entry) => <span className="copy-value"><Ellipsis mono tail={22} value={entry.archiveName} /><CopyButton label={`Copy the archive name ${entry.archiveName}`} value={entry.archiveName} /></span> },
+    { id: "archive", label: "Archive", truncate: true, width: "45%", render: (entry) => <Ellipsis mono tail={22} value={entry.archiveName} /> },
     { id: "wipe", label: "Wipe", width: "100px", render: (entry) => { const number = model.wipeNumber(entry.generationId); return number !== undefined ? <span className="num">#{number}</span> : <Ghost>Legacy</Ghost>; } },
     { id: "stored", label: "Stored", render: (entry) => <Timestamp value={entry.storedAt} /> },
     { id: "size", label: "Size", width: "110px", align: "num", render: (entry) => formatBytes(entry.sizeBytes) },
-    { id: "checksum", label: "SHA-256", secondary: true, width: "210px", render: (entry) => <span className="copy-value"><code title={entry.checksum}>{shortDigest(entry.checksum)}</code><CopyButton label="Copy the full checksum" value={entry.checksum} /></span> },
-    { id: "actions", label: "Actions", actions: true, render: (entry) => <ActionButton action={model.restore(entry)} size="small" variant="text" /> },
+    { id: "checksum", label: "SHA-256", secondary: true, width: "210px", render: (entry) => <code title={entry.checksum}>{shortDigest(entry.checksum)}</code> },
+    { id: "actions", label: "Actions", actions: true, render: (entry) => <Menu items={menuItems([copyValueAction(`backup.copy-archive.${entry.key}`, "Copy archive name", entry.archiveName), copyValueAction(`backup.copy-checksum.${entry.key}`, "Copy SHA-256", entry.checksum), model.restore(entry)])} label={`Actions for ${entry.archiveName}`} size="small" /> },
   ];
 
   if (!model.canRead) {
@@ -129,7 +143,7 @@ function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldN
   }
   const inventory = model.inventory;
   return (
-    <Card description="Restoring one opens a new wipe. Nothing here is overwritten." flush title="Backups">
+    <Card flush title="Backups">
       {model.wipes.length > 0 && (
         <div className="filter-bar">
           <Icon name="filter_list" size={20} />
@@ -140,11 +154,11 @@ function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldN
           </fieldset>
         </div>
       )}
-      {inventory.status === "error" && inventory.kind === "unavailable" && <NotConnected description="Verified archives appear here once the backup inventory is reachable." title="The backup inventory is not connected yet" />}
+      {inventory.status === "error" && inventory.kind === "unavailable" && <NotConnected title="The backup inventory is not connected yet" />}
       {inventory.status === "error" && inventory.kind !== "unavailable" && <div style={{ padding: 16 }}><Banner actions={<ActionButton action={inventory.retry} variant="text" />} description={inventory.error} title="The inventory is unavailable" tone="error" /></div>}
       {inventory.status !== "error" && <DataTable
         columns={columns}
-        empty={<EmptyState description={model.filter ? "This wipe has no verified backups yet." : "Backups are taken at every safe stop and before every wipe."} icon="backup" title="No verified backups" />}
+        empty={<EmptyState icon="backup" title="No verified backups" />}
         label={`Verified backups of ${worldName}`}
         loading={inventory.status === "loading"}
         rowKey={(entry) => entry.key}
@@ -163,15 +177,24 @@ function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldN
   );
 }
 
-function ReleasesTab({ rows, state, worldName }: Readonly<{ rows: readonly ReleaseRow[]; state: WorldModel["releases"]["state"]; worldName: string }>) {
+function ReleasesTab({ rows, worldName }: Readonly<{ rows: readonly ReleaseRow[]; worldName: string }>) {
   const columns: Column<ReleaseRow>[] = [
-    { id: "release", label: "Release", width: "140px", render: (row) => <code>{row.name}</code> },
-    { id: "status", label: "Pointer status", render: (row) => (row.status === "Desired" ? <Status kind="pending" label="Desired, not yet active" /> : <Status kind="ok" label={row.status} />) },
-    { id: "pack", label: "Client pack", actions: true, render: (row) => (row.download ? <ActionButton action={row.download} size="small" variant="text" /> : <Ghost>{row.downloadable ? "Needs connection.read" : "Available once active"}</Ghost>) },
+    { id: "release", label: "Release", render: (row) => <span className="release-line">
+      {row.sourceHref ? <a className="preset-source" href={row.sourceHref} rel="noreferrer" target="_blank" title="Open preset repository"><code>{row.name}</code><Icon name="open_in_new" size={14} /></a> : <code>{row.name}</code>}
+      <Tooltip text={row.status === "Desired" ? "Desired, not yet active" : row.status}>
+        <Icon className={row.status === "Desired" ? "release-state-pending" : "release-state-active"} name={row.status === "Desired" ? "schedule" : "verified"} size={18} />
+        <span className="visually-hidden">{row.status}</span>
+      </Tooltip>
+      {row.download && <ActionButton action={row.download} size="small" variant="text" />}
+    </span> },
   ];
   return (
-    <Card description="Pack links are presigned for an hour." flush title="Release pointer">
-      <DataTable columns={columns} empty={<EmptyState description={state === "unconfigured" ? "This world has no release pointer yet." : "Release data is unavailable."} icon="inventory" title="No release" />} label={`Release pointer of ${worldName}`} rowKey={(row) => row.name} rows={rows} />
+    <Card flush>
+      <DataTable columns={columns} empty={<EmptyState icon="inventory" title="No release" />} label={`Release pointer of ${worldName}`} rowKey={(row) => row.name} rows={rows} />
     </Card>
   );
+}
+
+function copyValueAction(id: string, label: string, value: string): Action {
+  return action(id, label, () => { void navigator.clipboard?.writeText(value); }, { icon: "content_copy" });
 }

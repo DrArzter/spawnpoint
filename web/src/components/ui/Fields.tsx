@@ -3,10 +3,10 @@ import type { InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes } from "
 import { Icon } from "../../icons";
 import { cx } from "../../lib/cx";
 
-export function TextField({ label, hint, className, mono = false, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: ReactNode; mono?: boolean }) {
+export function TextField({ label, hideLabel = false, hint, className, mono = false, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string; hideLabel?: boolean; hint?: ReactNode; mono?: boolean }) {
   return (
     <label className={cx("field", className)}>
-      <span>{label}</span>
+      <span className={hideLabel ? "visually-hidden" : undefined}>{label}</span>
       <input className={cx(mono && "mono")} {...props} />
       {hint && <small>{hint}</small>}
     </label>

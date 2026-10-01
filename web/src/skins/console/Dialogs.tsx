@@ -72,7 +72,7 @@ export function ConfirmationDialog({ model }: Readonly<{ model: ConfirmationMode
 
 function ConnectionFields({ model }: Readonly<{ model: ConnectionFieldsModel }>) {
   return <>
-    <SelectField hint="Choose where this world's server starts." label="Hosting" onChange={(event) => model.setPlacement(event.target.value as "configured" | "fleet")} value={model.placement}>
+    <SelectField label="Hosting" onChange={(event) => model.setPlacement(event.target.value as "configured" | "fleet")} value={model.placement}>
       <option value="configured">Persistent host · ZeroTier</option>
       <option disabled={!model.fleetAvailable} value="fleet">On-demand fleet · public connection{model.fleetAvailable ? "" : " (not configured)"}</option>
     </SelectField>
@@ -88,7 +88,6 @@ export function CreateWorldSheet({ model }: Readonly<{ model: CreateWorldModel }
   const readyPresets = model.presets.filter((preset) => preset.buildStatus === "ready");
   return (
     <Sheet
-      description={`A new world opens wipe #1 from an immutable ${model.game.displayName} release.`}
       footer={<>
         <p>{model.preset ? `${model.preset.displayName} · ${plural(model.preset.releases.length, "release")}` : "Choose a preset"}</p>
         <ActionButton action={model.submit} variant="filled" />
@@ -116,7 +115,6 @@ export function CreateWorldSheet({ model }: Readonly<{ model: CreateWorldModel }
 export function WorldSettingsSheet({ model }: Readonly<{ model: WorldSettingsModel }>) {
   return (
     <Sheet
-      description={`Choose how ${model.world.displayName} is hosted and reached. Changes are allowed only while the world is stopped.`}
       footer={<><ActionButton action={model.cancel} variant="text" /><ActionButton action={model.save} variant="filled" /></>}
       onClose={model.cancel.run}
       open
@@ -138,10 +136,7 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
   return (
     <Sheet
       description={`${game.displayName} · ${world.displayName}${address}`}
-      footer={<>
-        <p>{model.send.hint}</p>
-        <ActionButton action={model.send} variant="filled" />
-      </>}
+      footer={<ActionButton action={model.send} variant="filled" />}
       closeActionId={model.close.id}
       onClose={model.close.run}
       open
@@ -151,11 +146,11 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
         <legend>Audience</legend>
         <label aria-label="Everyone" className="audience-option">
           <input checked={model.audience === "broadcast"} name="invite-audience" onChange={() => model.setAudience("broadcast")} type="radio" />
-          <span><strong>Everyone</strong><small>Group chats and people subscribed to broadcast invitations. Your own chat is excluded.</small></span>
+          <strong>Everyone</strong>
         </label>
         <label aria-label="Specific people" className="audience-option">
           <input checked={model.audience === "direct"} name="invite-audience" onChange={() => model.setAudience("direct")} type="radio" />
-          <span><strong>Specific people</strong><small>Only the selected people, if they allow direct invitations.</small></span>
+          <strong>Specific people</strong>
         </label>
       </fieldset>
 
@@ -193,7 +188,7 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
         </header>
         {history.status === "loading" && <SkeletonRows label="Loading recent invitation results" rows={2} />}
         {history.status === "error" && <Banner actions={<ActionButton action={history.retry} variant="text" />} title="Delivery history could not be loaded" tone="error" />}
-        {history.status === "ready" && history.value.length === 0 && <p className="secondary">No invitations sent for this world yet.</p>}
+        {history.status === "ready" && history.value.length === 0 && <EmptyState icon="person_add" title="No invitations yet" />}
         {history.status === "ready" && history.value.length > 0 && (
           <ul className="history-list">
             {history.value.map((item) => (

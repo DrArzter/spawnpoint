@@ -64,6 +64,8 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Login session**: A revocable period in which a browser may continue acting as one previously verified external account without repeating sign-in. It is distinct from a gameplay Session. _Avoid_: Browser session, auth token.
 
+**Agent connection**: One identity's revocable delegation to an external MCP client. The approved scopes are a ceiling on what that client may ask for; the identity's current role and permissions still decide what Spawnpoint will actually perform. The client never receives the identity's login credential. _Avoid_: Bot user, API password, or treating a scope as a role.
+
 **Login provider**: An adapter that verifies one kind of credential and produces a provider-neutral principal for a login session. A deployment chooses which providers it offers; no provider is part of an identity's type. A login provider does not resolve identities and grants no permission. _Avoid_: Identity provider when the credential is one Spawnpoint itself keeps.
 
 **Password credential**: A verified email address and salted password hash kept by Spawnpoint as one possible linked account. It may establish a new identity relationship or be added to an existing identity; the credential's own id, not the address, is the account's subject.

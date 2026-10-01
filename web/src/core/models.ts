@@ -38,7 +38,6 @@ export type AppearanceModel = Readonly<{
   preference: ThemePreference;
   theme: Theme;
   accent: string;
-  label: string;
   setPreference: (next: ThemePreference) => Promise<void>;
   setAccent: (next: string) => Promise<void>;
 }>;
@@ -47,9 +46,6 @@ export type ShellModel = Readonly<{
   navigation: readonly NavigationItem[];
   page: Page;
   scope: ScopeModel;
-  appearance: AppearanceModel;
-  /** The bar's one-tap theme toggle. */
-  cycleTheme: Action;
   viewer: ViewerProfile;
   demo: boolean;
   observedAt: string | undefined;
@@ -72,7 +68,7 @@ export type SessionOverview = Readonly<{
   fleet: boolean;
   state: ServerState;
   status: StatusDescriptor;
-  /** "Minecraft online", the sentence a skin can set large. */
+  /** "Rostik online", the active world and its state. */
   headline: string;
   reason: SessionReason;
   players: number | null;
@@ -89,7 +85,7 @@ export type WorldRow = Readonly<{
   status: StatusDescriptor;
   presetName: string;
   releaseSummary: string;
-  wipe: Readonly<{ number: number; openedAt: string }> | null;
+  wipe: Readonly<{ number: number }> | null;
   /** What stands where a wipe would: "Legacy world", "No wipes yet". */
   wipeAbsent: string;
   address: AddressFacts | null;
@@ -120,7 +116,9 @@ export type DetailValue =
   | Readonly<{ type: "time"; at: string | number | null | undefined }>
   | Readonly<{ type: "number"; value: number }>
   | Readonly<{ type: "release"; active: string | null; desired: string | null }>
-  | Readonly<{ type: "address"; address: AddressFacts }>;
+  | Readonly<{ type: "address"; address: AddressFacts }>
+  /** A preset's name and, when it was built from Git, the commit it came from. */
+  | Readonly<{ type: "preset"; name: string; source: Readonly<{ commit: string; short: string; href: string }> | null }>;
 
 export type Detail = Readonly<{
   label: string;
@@ -143,7 +141,7 @@ export type BackupsModel = Readonly<{
   restore: (entry: BackupEntry) => Action;
 }>;
 
-export type ReleaseRow = Readonly<{ name: string; status: string; downloadable: boolean; download: Action | null }>;
+export type ReleaseRow = Readonly<{ name: string; status: string; downloadable: boolean; sourceHref: string | null; download: Action | null }>;
 
 export type WorldModel = Readonly<{
   game: Game;
@@ -292,11 +290,18 @@ export type LoginAccountsModel = Readonly<{
   rowActions: (account: LinkedLoginAccount) => readonly Action[];
 }>;
 
+/** Which face the console wears; choosing one reloads the page in it. */
+export type LookModel = Readonly<{
+  current: string;
+  options: readonly Readonly<{ id: string; name: string; choose: Action }>[];
+}>;
+
 export type ProfileModel = Readonly<{
   member: Member;
   role: Role | undefined;
   viewer: ViewerProfile;
   appearance: AppearanceModel;
+  look: LookModel;
   signOut: Action;
   openInBrowser: Action | null;
   loginAccounts: LoginAccountsModel;

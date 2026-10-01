@@ -3,7 +3,6 @@ import { IconButton } from "../components/ui/Button";
 import { Tooltip } from "../components/ui/Tooltip";
 import { Icon } from "../icons";
 import type { Game } from "../model";
-import type { Theme } from "../telegram";
 
 export function SpawnpointMark({ size = 32 }: Readonly<{ size?: number }>) {
   // The mark: one block seen from above, the spawn point set on its top face.
@@ -33,14 +32,11 @@ export function DemoBadge() {
   );
 }
 
-export function AppBar({ game, onMenu, onScope, scopeDisabled, theme, themeLabel, onTheme, viewerName, viewerPhoto, onProfile, demo }: Readonly<{
+export function AppBar({ game, onMenu, onScope, scopeDisabled, viewerName, viewerPhoto, onProfile, demo }: Readonly<{
   game: Game | undefined;
   onMenu: () => void;
   onScope: () => void;
   scopeDisabled: boolean;
-  theme: Theme;
-  themeLabel: string;
-  onTheme: () => void;
   viewerName: string;
   viewerPhoto?: string | null;
   onProfile: () => void;
@@ -62,7 +58,6 @@ export function AppBar({ game, onMenu, onScope, scopeDisabled, theme, themeLabel
       <span className="appbar-spacer" />
       <div className="appbar-actions">
         {demo && <DemoBadge />}
-        <IconButton icon={theme === "dark" ? "light_mode" : "dark_mode"} label={`${themeLabel}. Change theme`} onClick={onTheme} />
         <button aria-label="Open my profile" className="appbar-avatar" onClick={onProfile} title={viewerName} type="button">
           <Avatar name={viewerName} photoUrl={viewerPhoto} />
         </button>

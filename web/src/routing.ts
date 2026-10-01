@@ -25,6 +25,12 @@ export function readEmailActionRoute(hash: string = window.location.hash): Email
   return { kind: path, token: parameters.get("token") ?? "", invitationToken: parameters.get("invite") };
 }
 
+export function readMcpConnectRoute(hash: string = window.location.hash): string | null {
+  const [path = "", query = ""] = hash.replace(/^#\/?/, "").split("?", 2);
+  if (path !== "connect") return null;
+  return new URLSearchParams(query).get("request")?.trim() || null;
+}
+
 // The front door lives at the bare root; every other hash is the console.
 export function isLandingHash(hash: string = window.location.hash): boolean {
   const path = hash.replace(/^#\/?/, "").split("/")[0] ?? "";

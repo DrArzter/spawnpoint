@@ -3,13 +3,17 @@ import test from "node:test";
 
 import {
   accessTokenLifetimeSeconds,
+  browserSessionCookie,
+  browserSessionCookieName,
   equalRefreshHashes,
+  expiredBrowserSessionCookie,
   expiredRefreshCookie,
   issueAccessToken,
   issueRefreshCredential,
   parseRefreshCredential,
   refreshCookie,
   refreshSessionLifetimeSeconds,
+  trustedCookieRequest,
   verifyAccessToken,
 } from "../src/access/login-session.ts";
 
@@ -59,4 +63,25 @@ test("the refresh credential is an HttpOnly thirty-day cookie", () => {
     expiredRefreshCookie("Strict"),
     "spawnpoint.refresh=; Path=/auth; HttpOnly; Secure; SameSite=Strict; Max-Age=0",
   );
+});
+
+test("the browser session is an opaque, host-only HttpOnly cookie", () => {
+  const issued = issueRefreshCredential(loginSessionId);
+  assert.equal(browserSessionCookieName, "__Host-spawnpoint.session");
+  assert.equal(browserSessionCookie(issued.token, "None"),
+    `__Host-spawnpoint.session=${issued.token}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=2592000`);
+  assert.equal(expiredBrowserSessionCookie("None"),
+    "__Host-spawnpoint.session=; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=0");
+});
+
+test("cookie-backed writes require an exact trusted Origin", () => {
+  const allowed = ["https://spawnpoint.example", "https://legacy.example"];
+  assert.ok(trustedCookieRequest("GET", true, undefined, allowed));
+  assert.ok(trustedCookieRequest("POST", false, undefined, allowed));
+  assert.ok(trustedCookieRequest("POST", true, allowed[0], allowed));
+  assert.ok(trustedCookieRequest("PUT", true, allowed[1], allowed));
+  assert.equal(trustedCookieRequest("POST", true, undefined, allowed), false);
+  assert.equal(trustedCookieRequest("POST", true, "null", allowed), false);
+  assert.equal(trustedCookieRequest("POST", true, "https://evil.example", allowed), false);
+  assert.equal(trustedCookieRequest("POST", true, "https://spawnpoint.example.evil.example", allowed), false);
 });

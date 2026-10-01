@@ -1,8 +1,8 @@
 # ADR-0048 — One instance per active world, created for the session
 
-- Status: Proposed
+- Status: Accepted, amended by [ADR-0054](0054-place-a-session-on-a-host-with-room.md), which is what runs in production since 2026-09-22
 - Date: 2026-09-14
-- Milestone: later — the trigger is two groups wanting different worlds on the same evening
+- Milestone: M6
 - Amends: [ADR-0023](0023-multiple-worlds.md), which keeps its world entity, its storage layout and its
   release lineage, and loses only "one of them active at a time"
 - Amends: [ADR-0032](0032-on-demand-single-instance.md), which keeps on-demand purchasing, the instance family and

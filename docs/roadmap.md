@@ -164,8 +164,17 @@ ADR-0013.
 
 **2026-09-17: email and password is the default way in**, with Telegram as the alternative button; the same form
 registers and signs in, and approval still decides what an account may do
-([ADR-0055](adr/0055-sign-in-with-email-and-password-by-default.md)). Password reset waits for a sender
-([ADR-0020](adr/0020-email-channel.md)).
+([ADR-0055](adr/0055-sign-in-with-email-and-password-by-default.md)).
+
+**Status 2026-09-29: the rest of the larger version followed.** A sender exists: an optional Resend adapter, off by
+default, carries verification, reset and invitation mail in one Spawnpoint layout
+([ADR-0020](adr/0020-email-channel.md)). A signed-in person links Telegram or Google to the same identity from
+their profile ([ADR-0057](adr/0057-link-login-providers-through-the-current-identity.md)); Google is a provider
+switched on by a client id ([ADR-0058](adr/0058-sign-in-with-google.md)). An Owner invites people by email or by a
+one-time link, and players invite the group to a running world. The panel has two faces over one set of models
+([ADR-0059](adr/0059-separate-the-console-into-bones-and-skins.md)), and agents reach the same operations through an
+OAuth-approved MCP connection ([ADR-0061](adr/0061-connect-agents-through-oauth.md)). Still not built: Discord, the
+derived whitelist of ADR-0022, the pack site of ADR-0013, game and network account linking, a world picker in the bot.
 
 ## M5 — Observability and guardrails
 
@@ -207,6 +216,16 @@ that dimension into machinery that does not exist yet.
 each with its own wipes and backups ([ADR-0040](adr/0040-reusable-presets-and-world-wipes.md)); the Factorio and
 Project Zomboid adapters exist ([ADR-0034](adr/0034-per-game-adapter.md)); the panel starts any world while the bot
 operates one configured world. Content-addressed mod storage is not done.
+
+**Status 2026-09-29: several worlds at once runs.** Each world carries its hosting and connection settings. Since
+2026-09-22 production runs `SPAWNPOINT_PLACEMENT=fleet` with `SPAWNPOINT_LAUNCH=enabled`:
+[ADR-0054](adr/0054-place-a-session-on-a-host-with-room.md) places a preset-born world on a ready host with room or
+launches an EC2 Fleet host that fits, names it in Route 53, drains and terminates it after its last session and sweeps
+orphaned hosts; the two legacy worlds stay on the configured host over the overlay. The first launches surfaced a
+bootstrap race and drain faults, fixed the next day. Two worlds of the same game still take turns, because the
+lifecycle record is one per game; the bot still operates one configured world; content-addressed mod storage is still
+not done. The phases and what the acceptance run should still record are in
+[docs/capacity-allocation-rollout.md](capacity-allocation-rollout.md).
 
 ## Afterwards, if the project earns it
 

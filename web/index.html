@@ -25,6 +25,18 @@
           document.documentElement.dataset.theme = theme;
           document.documentElement.style.colorScheme = theme;
           document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#222222" : "#ffffff");
+          // The remembered face, so the first frame is already drawn in it and
+          // its font is asked for now rather than when the shell mounts. The
+          // front door never wears it; the app takes it off there.
+          const asked = new URLSearchParams(location.search).get("skin");
+          const skin = asked === "terminal" || asked === "console" ? asked : localStorage.getItem("spawnpoint.skin");
+          if (skin === "terminal" && !location.hash.startsWith("#/welcome")) {
+            document.documentElement.dataset.skin = "terminal";
+            const font = document.createElement("link");
+            font.rel = "stylesheet";
+            font.href = "https://fonts.googleapis.com/css2?family=B612+Mono:wght@400;700&display=swap";
+            document.head.append(font);
+          }
         } catch {}
       })();
     </script>

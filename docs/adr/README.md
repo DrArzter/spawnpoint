@@ -107,18 +107,20 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0045](0045-provider-neutral-login-sessions.md) | Keep login sessions independent of identity providers | Accepted | M4 |
 | [0046](0046-keep-dynamodb-until-relational-needs-arrive.md) | Keep DynamoDB until relational needs arrive | Accepted | cross-cutting |
 | [0047](0047-normalize-preset-sources-before-building.md) | Normalize preset sources before building | Accepted | cross-cutting |
-| [0048](0048-one-instance-per-active-world.md) | One instance per active world, created for the session | Proposed | later |
+| [0048](0048-one-instance-per-active-world.md) | One instance per active world, created for the session | Accepted, amended by [0054](0054-place-a-session-on-a-host-with-room.md) | M6 |
 | [0049](0049-project-control-plane-events-into-dynamodb.md) | Project control-plane events into DynamoDB for user-facing surfaces | Accepted | cross-cutting |
 | [0050](0050-default-role-on-sign-in-and-elevation-requests.md) | Join as Viewer through any login provider, and ask for more | Proposed | M4 |
 | [0051](0051-restart-a-session-without-releasing-the-host.md) | Restart a session without releasing the host | Proposed | M4 |
 | [0052](0052-keep-a-release-while-a-generation-names-it.md) | Keep a release while a generation names it, and check before restoring | Accepted — restore guard implemented; cleanup rule retained | M4 |
 | [0053](0053-tell-not-built-apart-from-broken.md) | Tell "not built yet" apart from "broken", in the transport | Proposed | M4 |
-| [0054](0054-place-a-session-on-a-host-with-room.md) | Place a session on a host with room, or launch one that fits | Proposed | later |
+| [0054](0054-place-a-session-on-a-host-with-room.md) | Place a session on a host with room, or launch one that fits | Accepted — in production since 2026-09-22 | M6 |
 | [0055](0055-sign-in-with-email-and-password-by-default.md) | Sign in with email and password by default, and with a provider as an alternative | Accepted — implemented | M4 |
 | [0056](0056-verify-and-link-password-credentials.md) | Verify and link password credentials without making a provider primary | Accepted — implemented; amends [0055](0055-sign-in-with-email-and-password-by-default.md) | M4 |
 | [0057](0057-link-login-providers-through-the-current-identity.md) | Link login providers through the current Identity | Accepted — implemented | M4 |
 | [0058](0058-sign-in-with-google.md) | Sign in with Google as one more proof-based provider, off until configured | Accepted — implemented | M4 |
 | [0059](0059-separate-the-console-into-bones-and-skins.md) | Separate the console into bones and skins, and hold every skin to one contract | Accepted — implemented | M4 |
+| [0060](0060-expose-control-plane-through-a-local-mcp-adapter.md) | Expose the control plane through a local MCP adapter first | Superseded by [0061](0061-connect-agents-through-oauth.md) | M4 |
+| [0061](0061-connect-agents-through-oauth.md) | Connect agents through OAuth | Accepted — implemented | M4 |
 
 ## Decisions still to record
 

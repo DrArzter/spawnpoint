@@ -1,6 +1,7 @@
 # Runbook
 
-**Work in progress.** M1 infrastructure is live; procedures still marked `TODO` belong to later automation milestones.
+**Work in progress.** Everything up to fleet placement is live; procedures still marked `TODO` are the few that have
+not been needed yet, and each carries the date it was last actually run.
 
 Fill each section in the milestone that builds it, and record the date each procedure was last actually
 performed. A procedure nobody has run is a guess.
@@ -661,6 +662,12 @@ As of 2026-08-12, one of five. The rest switch on by themselves as history accum
 | Cost anomaly detection | No — needs about ten days to build a baseline |
 | Running-hours alarm, [ADR-0015](adr/0015-observability-and-alerting.md) | Not built |
 | Budget action that stops instances | Deferred to M1 |
+
+As of 2026-09-29 the picture is: the budget's actual and forecast notifications, cost anomaly detection, the
+running-hours alarm (`spawnpoint-running-hours`, ten consecutive hours) and the fleet sweeper's error alarm
+(`spawnpoint-fleet-sweep-failed`) are all defined in Terraform and publish to `spawnpoint-alert`. What is still
+missing is the M5 proof: none of the alarms has been forced in a recorded test, and the budget action that stops
+instances remains deferred.
 
 **Two things the budget does not yet cover, both temporary.**
 

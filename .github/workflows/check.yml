@@ -116,6 +116,28 @@ jobs:
       - name: Run web tests and build
         run: scripts/check.sh web
 
+  mcp:
+    name: MCP checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the commit under test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Use Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+
+      - name: Install the MCP dependencies
+        run: npm ci --ignore-scripts
+        working-directory: mcp
+
+      - name: Run MCP tests and build
+        run: scripts/check.sh mcp
+
   server-tests:
     name: Server tests (${{ matrix.shard }}/4)
     strategy:
@@ -167,7 +189,7 @@ jobs:
   check:
     name: scripts/check.sh
     if: always()
-    needs: [static, lambda-build, lambda-tests, web, server-tests, server-compose, terraform]
+    needs: [static, lambda-build, lambda-tests, web, mcp, server-tests, server-compose, terraform]
     permissions:
       contents: read
       pull-requests: write
@@ -186,13 +208,14 @@ jobs:
           LAMBDA_BUILD_RESULT: ${{ needs.lambda-build.result }}
           LAMBDA_TESTS_RESULT: ${{ needs.lambda-tests.result }}
           WEB_RESULT: ${{ needs.web.result }}
+          MCP_RESULT: ${{ needs.mcp.result }}
           SERVER_TESTS_RESULT: ${{ needs.server-tests.result }}
           SERVER_COMPOSE_RESULT: ${{ needs.server-compose.result }}
           TERRAFORM_RESULT: ${{ needs.terraform.result }}
         run: |
           failed=0
           : > check-output.log
-          for pair in "static:${STATIC_RESULT}" "lambda-build:${LAMBDA_BUILD_RESULT}" "lambda-tests:${LAMBDA_TESTS_RESULT}" "web:${WEB_RESULT}" "server-tests:${SERVER_TESTS_RESULT}" "server-compose:${SERVER_COMPOSE_RESULT}" "terraform:${TERRAFORM_RESULT}"; do
+          for pair in "static:${STATIC_RESULT}" "lambda-build:${LAMBDA_BUILD_RESULT}" "lambda-tests:${LAMBDA_TESTS_RESULT}" "web:${WEB_RESULT}" "mcp:${MCP_RESULT}" "server-tests:${SERVER_TESTS_RESULT}" "server-compose:${SERVER_COMPOSE_RESULT}" "terraform:${TERRAFORM_RESULT}"; do
             name="${pair%%:*}"
             result="${pair#*:}"
             if [[ "${result}" == "success" ]]; then

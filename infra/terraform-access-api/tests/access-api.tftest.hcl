@@ -218,7 +218,12 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
 
   assert {
     condition     = aws_apigatewayv2_api.access.cors_configuration[0].allow_credentials
-    error_message = "The browser must be allowed to send the HttpOnly refresh cookie to the API."
+    error_message = "The browser must be allowed to send the HttpOnly session cookie to the API."
+  }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.LEGACY_PANEL_URL == "https://legacy.example.dev"
+    error_message = "Cookie-backed writes must validate the legacy panel origin as well as the primary origin."
   }
 
   assert {

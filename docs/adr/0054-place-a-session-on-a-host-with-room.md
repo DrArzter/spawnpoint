@@ -1,8 +1,8 @@
 # ADR-0054 — Place a session on a host with room, or launch one that fits
 
-- Status: Proposed
+- Status: Accepted — in production since 2026-09-22 (`fleet` placement, launch enabled); the phase-10 acceptance report is still owed
 - Date: 2026-09-17
-- Milestone: later — after [ADR-0048](0048-one-instance-per-active-world.md)'s trigger has fired at least once
+- Milestone: M6
 - Amends: [ADR-0048](0048-one-instance-per-active-world.md), which keeps the host created for the session, S3 as the
   world's home between sessions, the ten-minute waiting budget, the `cold`/`warm` policy and the verified-archive gate,
   and loses two sentences: "two worlds never share an instance" and "capacity is data, not a scheduler"

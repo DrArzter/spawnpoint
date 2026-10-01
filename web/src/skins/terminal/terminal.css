@@ -101,8 +101,8 @@ html[data-skin="terminal"] :focus-visible {
   outline-offset: 2px;
 }
 
-/* The uppercase label: a panel's name, a column, a field, a fact. */
-html[data-skin="terminal"] .t-label,
+/* The uppercase label: a panel's name, a column, a field, a fact. Its colour
+   is the owner's: a name is ink, a label is dim, the demo flag is a warning. */
 html[data-skin="terminal"] .t-panel-name,
 html[data-skin="terminal"] .t-dialog-title,
 html[data-skin="terminal"] .t-field-label,
@@ -113,12 +113,20 @@ html[data-skin="terminal"] .t-fact dt,
 html[data-skin="terminal"] .t-group-name,
 html[data-skin="terminal"] .t-crumb,
 html[data-skin="terminal"] .t-demo {
-  color: var(--ink-secondary);
   font-size: 12px;
   font-weight: 700;
   line-height: 16px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+html[data-skin="terminal"] .t-field-label,
+html[data-skin="terminal"] .t-setting-label,
+html[data-skin="terminal"] .t-table th,
+html[data-skin="terminal"] .t-detail dt,
+html[data-skin="terminal"] .t-fact dt,
+html[data-skin="terminal"] .t-crumb {
+  color: var(--ink-secondary);
 }
 
 /* --- the frame: a top row, a menu row, then the grid ---------------------------------- */
@@ -434,7 +442,6 @@ html[data-skin="terminal"] .t-page-title-person small {
 }
 
 html[data-skin="terminal"] .t-crumb {
-  color: var(--ink-secondary);
   text-decoration: none;
 }
 
@@ -961,20 +968,9 @@ html[data-skin="terminal"] .t-select-caret {
 }
 
 html[data-skin="terminal"] .t-select-inline {
-  display: inline-block;
-  width: auto;
-}
-
-html[data-skin="terminal"] .t-select-inline .t-select {
-  width: auto;
-  min-width: 0;
-  height: var(--t-key-small);
-  font-size: 13px;
-}
-
-html[data-skin="terminal"] .t-select-inline {
   display: inline-flex;
   align-items: center;
+  width: auto;
   color: var(--ink);
 }
 
@@ -988,9 +984,13 @@ html[data-skin="terminal"] .t-select-inline::before { content: "["; }
 html[data-skin="terminal"] .t-select-inline::after { content: "]"; }
 
 html[data-skin="terminal"] .t-select-inline .t-select {
+  width: auto;
+  min-width: 0;
+  height: var(--t-key-small);
   padding: 0 2ch 0 1ch;
   border: 0;
   background: none;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -1155,8 +1155,6 @@ html[data-skin="terminal"] .t-row-link {
 }
 
 html[data-skin="terminal"] .t-source {
-  display: inline-flex;
-  align-items: center;
   gap: 0.5ch;
 }
 
@@ -1177,17 +1175,6 @@ html[data-skin="terminal"] .t-inline {
   align-items: center;
   gap: 4px 1ch;
   min-width: 0;
-}
-
-html[data-skin="terminal"] .t-pair {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 1ch;
-}
-
-html[data-skin="terminal"] .t-pair-arrow {
-  color: var(--ink-secondary);
 }
 
 html[data-skin="terminal"] .t-address {
@@ -1323,13 +1310,13 @@ html[data-skin="terminal"] .t-table {
 
 html[data-skin="terminal"] .t-table th,
 html[data-skin="terminal"] .t-table td {
-  padding: 0 16px;
   text-align: left;
   vertical-align: middle;
 }
 
 html[data-skin="terminal"] .t-table th {
   height: 40px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--rule);
   white-space: nowrap;
 }
@@ -1407,8 +1394,7 @@ html[data-skin="terminal"] .t-table-state:hover td {
 
   html[data-skin="terminal"] .t-table,
   html[data-skin="terminal"] .t-table tbody,
-  html[data-skin="terminal"] .t-table tr,
-  html[data-skin="terminal"] .t-table td {
+  html[data-skin="terminal"] .t-table tr {
     display: block;
   }
 
@@ -1489,15 +1475,6 @@ html[data-skin="terminal"] .t-table-state:hover td {
 
   html[data-skin="terminal"] .t-table .t-row-corner td:not(.t-verbs-col) {
     padding-right: 48px;
-  }
-
-  html[data-skin="terminal"] .t-table .t-with-copy {
-    flex: 1 1 0;
-  }
-
-  html[data-skin="terminal"] .t-table .t-with-copy > :first-child {
-    flex: 1 1 auto;
-    max-width: none;
   }
 
   html[data-skin="terminal"] .t-table .t-clip,
@@ -1633,8 +1610,7 @@ html[data-skin="terminal"] .t-detail dd small {
 
 /* A value and its copy key are one unit: the key never drops to a line of
    its own under the value. */
-html[data-skin="terminal"] .t-detail-value,
-html[data-skin="terminal"] .t-with-copy {
+html[data-skin="terminal"] .t-detail-value {
   display: inline-flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -1643,13 +1619,8 @@ html[data-skin="terminal"] .t-with-copy {
   max-width: 100%;
 }
 
-html[data-skin="terminal"] .t-detail-value > :first-child,
-html[data-skin="terminal"] .t-with-copy > :first-child {
+html[data-skin="terminal"] .t-detail-value > :first-child {
   min-width: 0;
-}
-
-html[data-skin="terminal"] .t-with-copy {
-  display: flex;
 }
 
 html[data-skin="terminal"] .t-details-code .t-detail dt {
@@ -1764,10 +1735,13 @@ html[data-skin="terminal"] .t-history-row > * {
 html[data-skin="terminal"] .t-check,
 html[data-skin="terminal"] .t-radio {
   display: flex;
-  align-items: center;
-  gap: 12px;
   width: 100%;
   cursor: pointer;
+}
+
+html[data-skin="terminal"] .t-check {
+  align-items: center;
+  gap: 12px;
 }
 
 html[data-skin="terminal"] .t-check input,
@@ -2066,14 +2040,6 @@ html[data-skin="terminal"] .t-settings {
 html[data-skin="terminal"] .t-setting {
   display: grid;
   gap: 8px;
-}
-
-html[data-skin="terminal"] .t-setting-note {
-  max-width: 72ch;
-  margin: 0;
-  color: var(--ink-secondary);
-  font-size: 12px;
-  line-height: 16px;
 }
 
 html[data-skin="terminal"] .t-accent-row {
@@ -2439,11 +2405,6 @@ html[data-skin="terminal"] .t-chart-scale {
   color: var(--ink-secondary);
   font-size: 12px;
   line-height: 16px;
-}
-
-html[data-skin="terminal"] .t-chart-caption-slot {
-  display: block;
-  height: 16px;
 }
 
 /* --- the console: a terminal inside the terminal -------------------------------------------- */

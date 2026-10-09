@@ -12,7 +12,7 @@ import { pendingFor } from "../shell/actions";
 import type { Skin } from "../skins/skin";
 import { action, type Action } from "./actions";
 import { useConsole, type ConsoleController } from "./useConsole";
-import { useBackups, useConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useRoles, useUsers, useWorldMetrics } from "./data";
+import { useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useRoles, useUsers, useWorldMetrics } from "./data";
 import { useConfirmationForm, useCreateWorldForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, ReleasesModel, WorldModel, WorldsModel } from "./models";
 import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionActionForWorld, sessionControlAvailability, sessionDetails, worldDetails, worldMoreActions, worldNotices, worldTabs } from "./worlds";
@@ -159,6 +159,14 @@ function consoleLine(entry: ConsoleEntry): ConsoleLine {
   return { id: entry.id, at: entry.at, who: entry.displayName, command: entry.command, status: consoleStatuses[entry.status], output: entry.output, pending: entry.status === "pending" };
 }
 
+// The log, newest last as a terminal prints it; none while the world runs nowhere.
+function consoleLog(entries: ConsoleGateway["entries"], running: boolean, retry: () => void): ConsoleModel["log"] {
+  if (!running) return null;
+  if (entries.status === "ready") return { status: "ready", value: [...entries.value].reverse().map(consoleLine) };
+  if (entries.status === "error") return { status: "error", error: entries.error, kind: entries.kind, retry: action("console.retry", "Try again", retry) };
+  return { status: "loading" };
+}
+
 // A world's own console (ADR-0063): it speaks to this world's session and to
 // no other, so several worlds of a game running at once never share one.
 function useWorldConsole(game: Game, world: World, open: boolean, running: boolean, notify: ReturnType<typeof useSnackbar>): ConsoleModel {
@@ -174,10 +182,7 @@ function useWorldConsole(game: Game, world: World, open: boolean, running: boole
     world,
     session: sessionStatus(running ? "running" : "stopped"),
     online: running,
-    log: !running ? null
-      : entries.status === "ready" ? { status: "ready", value: [...entries.value].reverse().map(consoleLine) }
-        : entries.status === "error" ? { status: "error", error: entries.error, kind: entries.kind, retry: action("console.retry", "Try again", gateway.retry) }
-          : { status: "loading" },
+    log: consoleLog(entries, running, gateway.retry),
     draft,
     setDraft,
     run: action("console.run", "Run", () => send(draft.trim(), true), {

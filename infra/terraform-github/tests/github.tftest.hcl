@@ -65,6 +65,16 @@ run "plan_role_is_owner_reviewed_and_separate_from_deploy" {
   }
 
   assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_plan_iam.statement :
+      statement.sid == "ReadOnlyTheHostAppCommitParameter" &&
+      toset(statement.actions) == toset(["ssm:GetParameter", "ssm:ListTagsForResource"]) &&
+      toset(statement.resources) == toset(["arn:aws:ssm:eu-central-1:123456789012:parameter/spawnpoint/host/app-commit"])
+    ])
+    error_message = "The plan identity reads the host app-commit parameter and changes nothing (ADR-0067)."
+  }
+
+  assert {
     condition     = local.plan_subject == "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production-plan"
     error_message = "Pull request plans must use the immutable Spawnpoint repository identity and the production-plan environment."
   }
@@ -231,6 +241,16 @@ run "deployment_role_trusts_only_the_production_environment" {
       toset(statement.resources) == toset(["arn:aws:ssm:eu-central-1:123456789012:document/spawnpoint-*"])
     ])
     error_message = "The deploy identity may create and update only Spawnpoint's own SSM documents, and may neither delete nor run them."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      statement.sid == "WriteOnlyTheHostAppCommitParameter" &&
+      contains(statement.actions, "ssm:PutParameter") && !contains(statement.actions, "ssm:DeleteParameter") &&
+      toset(statement.resources) == toset(["arn:aws:ssm:eu-central-1:123456789012:parameter/spawnpoint/host/app-commit"])
+    ])
+    error_message = "The deploy identity may write the host app-commit parameter and no other parameter (ADR-0067)."
   }
 
   assert {

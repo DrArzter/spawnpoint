@@ -157,3 +157,15 @@ test("a placed session's command carries its slot, and a request with no slot ru
   assert.match(fleet, /fleet bootstrap not ready after 300 seconds/);
   assert.equal(definition.States["Start Fleet Session Command"]?.Next, definition.States["Start Session Command"]?.Next);
 });
+
+test("every session start first brings the host's checkout to the deployed commit, and never fails for it", async () => {
+  const definition = await loadDefinition();
+  for (const name of ["Start Fleet Session Command", "Start Placed Session Command", "Start Session Command"]) {
+    const command = JSON.stringify(definition.States[name]);
+    const update = command.indexOf("update-checkout.sh");
+    assert.ok(update > 0, `${name} updates the checkout`);
+    assert.ok(update < command.indexOf("start-session.sh', $.request.worldId"), `${name} updates before the session starts`);
+    // The session summary is read from standard output, so the update writes to standard error.
+    assert.match(command, /update-checkout\.sh; if \[ -x \\"\$update\\" \]; then \\"\$update\\" >&2 \|\| true; fi/);
+  }
+});

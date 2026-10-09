@@ -142,7 +142,9 @@ def select_workflow_path(path: str, selected: Selection) -> bool:
 
 def select_other_path(path: str, selected: Selection) -> None:
     if path.startswith("server/"):
-        selected.add_roots((TF_CORE, TF_RELEASES))
+        # The access API root holds the commit hosts bring their checkout to
+        # (ADR-0067); applying it is what moves that commit forward.
+        selected.add_roots((TF_CORE, TF_RELEASES, TF_ACCESS_API))
         if path == "server/user-data.sh":
             reason = "host user-data changes require a reviewed EC2 replacement or an explicit live-host rollout"
             selected.manual.append(reason)

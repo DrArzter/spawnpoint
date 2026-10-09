@@ -48,7 +48,7 @@ export type ConsoleInvocation = Readonly<{
 }>;
 
 function clip(text: string): string {
-  const trimmed = text.replace(/\s+$/, "");
+  const trimmed = text.trimEnd();
   return trimmed.length > CONSOLE_OUTPUT_LIMIT ? `${trimmed.slice(0, CONSOLE_OUTPUT_LIMIT)}\n…` : trimmed;
 }
 

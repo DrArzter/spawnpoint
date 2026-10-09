@@ -41,12 +41,14 @@ FACTORIO_RCON_HOST="${FACTORIO_RCON_HOST:-127.0.0.1}"
 # the game first and exports the slot's ports after, in configure_game_compose.
 factorio_rcon_port() {
   printf '%s' "${FACTORIO_RCON_PORT:-${SPAWNPOINT_RCON_PORT:-27015}}"
+  return 0
 }
 
 # Where the release's mods are reconciled and the container reads them
 # (/factorio/mods). Read when called, not when the module loads.
 factorio_mods_dir() {
   printf '%s' "${SPAWNPOINT_WORLD_MODS_DIRECTORY:-${FACTORIO_DATA_DIR}/mods}"
+  return 0
 }
 
 # The preset release, not Spawnpoint, selects the immutable container image
@@ -101,8 +103,11 @@ game_query_players_raw() {
   return 0
 }
 
+# The reply, or the transport's failure: its status is the caller's answer.
 game_console() {
-  factorio_rcon "$1"
+  local command="$1"
+  factorio_rcon "${command}"
+  return $?
 }
 
 # Milliseconds per tick from two readings of the tick counter. Factorio has no

@@ -5,7 +5,7 @@
  */
 
 export const WHITELIST_LIMIT = 200;
-const MINECRAFT_NAME = /^[A-Za-z0-9_]{3,16}$/;
+const MINECRAFT_NAME = /^\w{3,16}$/;
 
 export function minecraftNameValid(name: unknown): name is string {
   return typeof name === "string" && MINECRAFT_NAME.test(name);

@@ -224,7 +224,8 @@ export const worldsApi = {
     const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}`);
     const body = await response.json().catch(() => ({})) as { error?: string; release?: string; mods?: ReleaseMod[] };
     if (!response.ok || body.mods === undefined) {
-      throw await apiFailure(response, body.error === "forbidden" ? "Your role cannot read releases." : body.error === "unknown_release" ? `Release ${release} is not in the store.` : "The release's mods could not be read.", body);
+      const messages: Record<string, string> = { forbidden: "Your role cannot read releases.", unknown_release: `Release ${release} is not in the store.` };
+      throw await apiFailure(response, messages[body.error ?? ""] ?? "The release's mods could not be read.", body);
     }
     return { release: body.release ?? release, mods: body.mods };
   },
@@ -233,7 +234,8 @@ export const worldsApi = {
     const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}/mods/${encodeURIComponent(sha256)}`);
     const body = await response.json().catch(() => ({})) as { error?: string; url?: string; expiresIn?: number };
     if (!response.ok || body.url === undefined) {
-      throw new Error(body.error === "forbidden" ? "Your role cannot read releases." : body.error === "unknown_mod" ? "This release no longer lists that mod." : "The download link could not be created.");
+      const messages: Record<string, string> = { forbidden: "Your role cannot read releases.", unknown_mod: "This release no longer lists that mod." };
+      throw new Error(messages[body.error ?? ""] ?? "The download link could not be created.");
     }
     return { url: body.url, expiresIn: body.expiresIn ?? 0 };
   },

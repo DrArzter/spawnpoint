@@ -833,7 +833,7 @@ function gameKeepsWhitelist(gameId: string): boolean {
 async function whitelistOf(gameId: string, worldId: string): Promise<Response> {
   if (!gameKeepsWhitelist(gameId)) return response(409, { error: "game_has_no_whitelist" });
   const record = await readWorldRecord(worldId);
-  if (record === null || record.gameId !== gameId) return response(404, { error: "unknown_world" });
+  if (record?.gameId !== gameId) return response(404, { error: "unknown_world" });
   return response(200, record.whitelist === undefined
     ? { managed: false, names: [], updatedAt: null, updatedBy: null }
     : { managed: true, names: record.whitelist.names, updatedAt: record.whitelist.updatedAt, updatedBy: record.whitelist.updatedBy.displayName });

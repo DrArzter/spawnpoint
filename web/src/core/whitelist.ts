@@ -4,7 +4,7 @@
  * case typed is the case kept. The API and the host check every name again.
  */
 
-const MINECRAFT_NAME = /^[A-Za-z0-9_]{3,16}$/;
+const MINECRAFT_NAME = /^\w{3,16}$/;
 
 export function minecraftNameValid(name: string): boolean {
   return MINECRAFT_NAME.test(name);

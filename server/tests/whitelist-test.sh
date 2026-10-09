@@ -16,7 +16,9 @@ trap cleanup EXIT
 
 # --- the UUID an offline server gives a name, as Java derives it ---
 uuid() {
-  bash -c 'source "$1/server/games/minecraft/game.sh"; minecraft_offline_uuid "$2"' _ "${repository_root}" "$1"
+  local name="$1"
+  bash -c 'source "$1/server/games/minecraft/game.sh"; minecraft_offline_uuid "$2"' _ "${repository_root}" "${name}"
+  return $?
 }
 [[ "$(uuid Notch)" == "b50ad385-829d-3141-a216-7e7d7539ba7f" ]]
 [[ "$(uuid DrArzter)" == "edf613ca-bf4d-31f0-a794-f21ac9c39769" ]]
@@ -24,7 +26,9 @@ uuid() {
 
 # --- the file is exactly the list, in place of whatever was there ---
 render() {
-  bash -c 'source "$1/server/games/minecraft/game.sh"; game_render_whitelist "$2" "$3"' _ "${repository_root}" "$1" "$2"
+  local directory="$1" names="$2"
+  bash -c 'source "$1/server/games/minecraft/game.sh"; game_render_whitelist "$2" "$3"' _ "${repository_root}" "${directory}" "${names}"
+  return $?
 }
 mkdir -p -- "${fixture}/data"
 printf '[{"uuid":"00000000-0000-3000-8000-000000000000","name":"AddedByHand"}]\n' >"${fixture}/data/whitelist.json"

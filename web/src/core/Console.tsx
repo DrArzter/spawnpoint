@@ -5,14 +5,14 @@ import type { ActiveSession } from "../auth";
 import { useSnackbar } from "../components/ui/Snackbar";
 import { buildStatus, sessionStatus, worldStatus } from "../components/ui/Status";
 import type { StatusDescriptor } from "../components/ui/Status";
-import type { Game, World } from "../model";
+import type { Game, World, WorldTab } from "../model";
 import { routeHash } from "../routing";
 import { fleetWorldState, operationsBlockingWorld, runningWorlds } from "../session";
 import { pendingFor } from "../shell/actions";
 import type { Skin } from "../skins/skin";
 import { action, type Action } from "./actions";
 import { useConsole, type ConsoleController } from "./useConsole";
-import { useBackups, useConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
+import { useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, ReleasesModel, WorldModel, WorldsModel } from "./models";
 import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionActionForWorld, sessionControlAvailability, sessionDetails, worldDetails, worldMoreActions, worldNotices, worldTabs } from "./worlds";
@@ -79,43 +79,80 @@ function WorldsPage({ console, skin }: Controlled) {
   return <skin.Worlds model={model} />;
 }
 
+// Start or stop, and why it may be refused: a fleet world answers for its own
+// session, a configured one for the shared host (ADR-0062).
+function sessionVerb(console: ConsoleController, game: Game, world: World, busy: boolean, sessionBusy: boolean): Action {
+  const { snapshot, granted, pending, sharedSession, fleet } = console;
+  const controlBusy = pending?.kind === "session" || pending?.kind === "lifecycle";
+  const verb = sessionActionForWorld(world, game, sharedSession, fleet);
+  const permitted = granted.has(verb === "start" ? "session.start" : "session.stop");
+  const control = sessionControlAvailability(world, game, sharedSession, permitted, controlBusy || busy, fleet, operationsBlockingWorld(snapshot, world));
+  const stop = verb === "stop";
+  return action(`session.${verb}`, stop ? "Stop" : "Start", () => console.requestSession(game, world, verb), {
+    icon: stop ? "stop" : "play_arrow",
+    danger: stop,
+    disabled: control.disabled,
+    busy: sessionBusy,
+    hint: control.hint,
+  });
+}
+
+// The release a world starts with, whose server mods the Releases tab lists (ADR-0065).
+function modsSource(world: World, open: boolean): Readonly<{ presetId: string; version: string }> | null {
+  const version = world.release.desiredRelease ?? world.release.activeRelease;
+  return open && world.preset !== null && version !== null ? { presetId: world.preset.id, version } : null;
+}
+
+// A whitelist kept on the world's record (ADR-0066): a game that keeps one, a
+// live world with a record, a role and a deployment that manage it.
+function whitelistOffered(console: ConsoleController, game: Game, world: World): boolean {
+  return console.granted.has("whitelist.manage") && console.capabilities.has("whitelist") && game.whitelist === true &&
+    world.worldLifecycleAvailable && world.materialization !== "archived";
+}
+
+// The world page's tabs, and what each reads, only while it is open: a closed
+// tab costs no host a request.
+function useWorldTabs(console: ConsoleController, game: Game, world: World, notify: ReturnType<typeof useSnackbar>) {
+  const { granted, capabilities, route } = console;
+  const tabs = worldTabs(world, {
+    releases: granted.has("release.read"),
+    whitelist: whitelistOffered(console, game, world),
+    console: granted.has("console.use") && capabilities.has("consoleGateway"),
+    metrics: granted.has("metrics.read") && capabilities.has("worldMetrics"),
+  });
+  const offered = (tab: WorldTab) => tabs.some((item) => item.id === tab);
+  const open = (tab: WorldTab) => route.worldTab === tab && offered(tab);
+  const running = runningWorlds(game).some((item) => item.id === world.id);
+  const consoleModel = useWorldConsole(game, world, open("console"), running, notify);
+  const metrics = useWorldMetrics(open("metrics") ? game.id : undefined, world.id);
+  const whitelist = useWhitelist(game.id, world, open("whitelist"), notify);
+  const mods = useReleaseMods(game.id, modsSource(world, open("releases") && capabilities.has("releaseFiles")), (presetId, version, mod) => console.downloadMod(game, presetId, version, mod));
+  return {
+    tabs,
+    mods,
+    whitelist: offered("whitelist") ? whitelist : null,
+    console: offered("console") ? consoleModel : null,
+    metrics: offered("metrics") ? metrics : null,
+  };
+}
+
 function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game: Game; world: World }>) {
   const { snapshot, granted, capabilities, pending, sharedSession, serverState, fleet, worldCallbacks, route, navigate } = console;
   const notify = useSnackbar();
   const rowPending = pendingFor(pending, world.id);
   const busy = rowPending !== null;
-  const controlBusy = pending?.kind === "session" || pending?.kind === "lifecycle";
-  const verb = sessionActionForWorld(world, game, sharedSession, fleet);
-  const permitted = granted.has(verb === "start" ? "session.start" : "session.stop");
-  const control = sessionControlAvailability(world, game, sharedSession, permitted, controlBusy || busy, fleet, operationsBlockingWorld(snapshot, world));
   // A fleet world's page tells its own session, not the game's (ADR-0062).
   const worldState = fleet ? fleetWorldState(game, world) : serverState;
   const operations = snapshot?.operations ?? [];
-  const tabs = worldTabs(world, {
-    releases: granted.has("release.read"),
-    whitelist: granted.has("whitelist.manage") && capabilities.has("whitelist") && game.whitelist === true && world.worldLifecycleAvailable && world.materialization !== "archived",
-    console: granted.has("console.use") && capabilities.has("consoleGateway"),
-    metrics: granted.has("metrics.read") && capabilities.has("worldMetrics"),
-  });
-  const offered = (tab: string) => tabs.some((item) => item.id === tab);
-  // Read only while their tab is open: a closed tab costs no host a request.
-  const running = runningWorlds(game).some((item) => item.id === world.id);
-  const consoleOpen = route.worldTab === "console" && offered("console");
-  const metricsOpen = route.worldTab === "metrics" && offered("metrics");
-  const consoleModel = useWorldConsole(game, world, consoleOpen, running, notify);
-  const metrics = useWorldMetrics(metricsOpen ? game.id : undefined, world.id);
-  const whitelist = useWhitelist(game.id, world, route.worldTab === "whitelist" && offered("whitelist"), notify);
-  // The server mods of the release the world starts with (ADR-0065).
-  const modsRelease = world.release.desiredRelease ?? world.release.activeRelease;
-  const modsOpen = route.worldTab === "releases" && offered("releases") && capabilities.has("releaseFiles") && world.preset !== null && modsRelease !== null;
-  const mods = useReleaseMods(game.id, modsOpen && world.preset && modsRelease ? { presetId: world.preset.id, version: modsRelease } : null, (presetId, version, mod) => console.downloadMod(game, presetId, version, mod));
+  const shown = useWorldTabs(console, game, world, notify);
+  const canDownload = granted.has("backup.download") && capabilities.has("backupDownloads");
   const backups = useBackups(game.id, world, {
     canRead: granted.has("backup.read"),
     canRestore: granted.has("backup.restore"),
     busy,
     settled: `${world.wipes.length}:${operations.length}`,
     onRestore: (entry) => worldCallbacks.onWorldAction(game, world, "restore", { key: entry.key, name: entry.archiveName }),
-    onDownload: granted.has("backup.download") && capabilities.has("backupDownloads") ? (entry) => console.downloadBackup(game, world, entry) : null,
+    onDownload: canDownload ? (entry) => console.downloadBackup(game, world, entry) : null,
   });
   const model: WorldModel = {
     game,
@@ -123,16 +160,10 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     worldsHref: routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: null }),
     availability: worldStatus(world),
     notices: worldNotices(world, rowPending),
-    tabs,
+    tabs: shown.tabs,
     tab: route.worldTab,
     setTab: (tab) => navigate({ worldTab: tab }),
-    session: action(`session.${verb}`, verb === "stop" ? "Stop" : "Start", () => console.requestSession(game, world, verb), {
-      icon: verb === "stop" ? "stop" : "play_arrow",
-      danger: verb === "stop",
-      disabled: control.disabled,
-      busy: rowPending?.kind === "session",
-      hint: control.hint,
-    }),
+    session: sessionVerb(console, game, world, busy, rowPending?.kind === "session"),
     refresh: refreshAction(console),
     invite: granted.has("invitation.send") ? action("world.invite", "Invite players", () => worldCallbacks.onInvite(game, world), { icon: "send" }) : null,
     more: worldMoreActions(game, world, granted, busy, worldCallbacks),
@@ -141,10 +172,10 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     operations: operations.map((operation) => ({ operation, label: operationLabel(operation.type) })),
     wipes: [...world.wipes].reverse().map((wipe) => ({ wipe, showBackups: action("wipe.backups", "Backups", () => { backups.setFilter(wipe.id); navigate({ worldTab: "backups" }); }) })),
     backups,
-    releases: { rows: releaseRows(world, granted.has("connection.read"), busy, () => worldCallbacks.onDownloadPack(game, world)), state: world.release.state, mods },
-    whitelist: offered("whitelist") ? whitelist : null,
-    console: offered("console") ? consoleModel : null,
-    metrics: offered("metrics") ? metrics : null,
+    releases: { rows: releaseRows(world, granted.has("connection.read"), busy, () => worldCallbacks.onDownloadPack(game, world)), state: world.release.state, mods: shown.mods },
+    whitelist: shown.whitelist,
+    console: shown.console,
+    metrics: shown.metrics,
   };
   return <skin.World model={model} />;
 }
@@ -168,6 +199,14 @@ function consoleLine(entry: ConsoleEntry): ConsoleLine {
   return { id: entry.id, at: entry.at, who: entry.displayName, command: entry.command, status: consoleStatuses[entry.status], output: entry.output, pending: entry.status === "pending" };
 }
 
+// The log, newest last as a terminal prints it; none while the world runs nowhere.
+function consoleLog(entries: ConsoleGateway["entries"], running: boolean, retry: () => void): ConsoleModel["log"] {
+  if (!running) return null;
+  if (entries.status === "ready") return { status: "ready", value: [...entries.value].reverse().map(consoleLine) };
+  if (entries.status === "error") return { status: "error", error: entries.error, kind: entries.kind, retry: action("console.retry", "Try again", retry) };
+  return { status: "loading" };
+}
+
 // A world's own console (ADR-0063): it speaks to this world's session and to
 // no other, so several worlds of a game running at once never share one.
 function useWorldConsole(game: Game, world: World, open: boolean, running: boolean, notify: ReturnType<typeof useSnackbar>): ConsoleModel {
@@ -183,10 +222,7 @@ function useWorldConsole(game: Game, world: World, open: boolean, running: boole
     world,
     session: sessionStatus(running ? "running" : "stopped"),
     online: running,
-    log: !running ? null
-      : entries.status === "ready" ? { status: "ready", value: [...entries.value].reverse().map(consoleLine) }
-        : entries.status === "error" ? { status: "error", error: entries.error, kind: entries.kind, retry: action("console.retry", "Try again", gateway.retry) }
-          : { status: "loading" },
+    log: consoleLog(entries, running, gateway.retry),
     draft,
     setDraft,
     run: action("console.run", "Run", () => send(draft.trim(), true), {

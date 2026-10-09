@@ -53,6 +53,7 @@ ZOMBOID_RCON_HOST="${ZOMBOID_RCON_HOST:-127.0.0.1}"
 # command is sent: the slot's ports are exported after the module loads.
 zomboid_rcon_port() {
   printf '%s' "${ZOMBOID_RCON_PORT:-${SPAWNPOINT_RCON_PORT:-27015}}"
+  return 0
 }
 # Unlike factorio, this server does not generate its own password: the image
 # takes RCON_PASSWORD from the environment, so the host's runtime environment is
@@ -72,7 +73,7 @@ zomboid_rcon_password() {
 # Source RCON, spoken from the host with the factorio module's client — the
 # protocol is the same, only the commands and their wording differ.
 zomboid_rcon() {
-  local password
+  local command="$1" password
   password="$(zomboid_rcon_password)" || {
     printf 'error: ZOMBOID_RCON_PASSWORD is not set in the environment or the runtime .env\n' >&2
     return 1
@@ -80,15 +81,20 @@ zomboid_rcon() {
   python3 "${ZOMBOID_GAME_DIR}/../factorio/rcon-client.py" \
     "${ZOMBOID_RCON_HOST}" "$(zomboid_rcon_port)" \
     "${password}" \
-    "$1"
+    "${command}"
+  return $?
 }
 
 game_query_players_raw() {
   zomboid_rcon "players"
+  return $?
 }
 
+# The reply, or the transport's failure: its status is the caller's answer.
 game_console() {
-  zomboid_rcon "$1"
+  local command="$1"
+  zomboid_rcon "${command}"
+  return $?
 }
 
 # Project Zomboid exposes no tick or frame time over RCON; the acceptance

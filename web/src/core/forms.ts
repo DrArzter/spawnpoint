@@ -93,12 +93,22 @@ function draftOf(setting: SettingDefinition, value: SettingValue): SettingDraft 
   return setting.type === "boolean" ? value === true : String(value);
 }
 
+function draftValue(setting: SettingDefinition, draft: SettingDraft): SettingValue {
+  if (setting.type === "boolean") return draft === true;
+  if (setting.type !== "integer") return String(draft);
+  const text = typeof draft === "string" ? draft.trim() : "";
+  return /^-?\d+$/.test(text) ? Number(text) : Number.NaN;
+}
+
 // The value a draft stands for, or undefined when the game would not accept it.
 function parsedValue(setting: SettingDefinition, draft: SettingDraft): SettingValue | undefined {
-  const value: SettingValue = setting.type === "boolean" ? draft === true
-    : setting.type === "integer" ? (typeof draft === "string" && /^-?[0-9]+$/.test(draft.trim()) ? Number(draft.trim()) : Number.NaN)
-      : String(draft);
+  const value = draftValue(setting, draft);
   return settingValueValid(setting, value) ? value : undefined;
+}
+
+function saveHint(valid: boolean, changed: boolean): string | undefined {
+  if (!valid) return "Correct the marked settings first.";
+  return changed ? undefined : "Nothing has changed.";
 }
 
 function fieldError(setting: SettingDefinition, draft: SettingDraft): string | null {
@@ -158,11 +168,23 @@ export function useGameSettingsForm(game: Game, world: World, opts: Readonly<{ b
     save: action("game-settings.save", "Save settings", () => { if (valid && changed) opts.onSave(values); }, {
       disabled: !valid || !changed || opts.busy,
       busy: opts.busy,
-      hint: !valid ? "Correct the marked settings first." : !changed ? "Nothing has changed." : undefined,
+      hint: saveHint(valid, changed),
     }),
     restoreDefaults: action("game-settings.defaults", "Restore defaults", () => setDrafts(Object.fromEntries(definitions.map((setting) => [setting.id, draftOf(setting, setting.default)]))), { disabled: atDefaults || opts.busy }),
     cancel: action("sheet.close", "Cancel", opts.onClose, { disabled: opts.busy }),
   };
+}
+
+// What a start does, in the words of where the world will run.
+function startDescription(game: Game, world: World): string {
+  if (world.materialization === "not_created") {
+    const host = world.placement === "fleet" ? "launch a fleet host for it" : `boot the shared host for ${game.displayName}`;
+    return `Spawnpoint will create ${world.displayName} from its ready preset, open wipe #1 and ${host}. The first start may take several minutes, and the host is billed while it runs.`;
+  }
+  if (world.placement === "fleet") {
+    return `Spawnpoint will launch a fleet host for ${world.displayName}, or reuse one with room. Other worlds keep running. ${game.displayName} may take several minutes to become healthy, and the host is billed while it runs.`;
+  }
+  return `Spawnpoint will boot the shared host and start ${world.displayName}. ${game.displayName} may take several minutes to become healthy, and the host is billed while it runs.`;
 }
 
 function confirmationCopy(confirmation: Confirmation): { title: string; description: string; label: string; destructive: boolean } {
@@ -172,11 +194,7 @@ function confirmationCopy(confirmation: Confirmation): { title: string; descript
       return confirmation.action === "start"
         ? {
           title: "Start a billed AWS session?",
-          description: world.materialization === "not_created"
-            ? `Spawnpoint will create ${world.displayName} from its ready preset, open wipe #1 and ${world.placement === "fleet" ? "launch a fleet host for it" : `boot the shared host for ${game.displayName}`}. The first start may take several minutes, and the host is billed while it runs.`
-            : world.placement === "fleet"
-              ? `Spawnpoint will launch a fleet host for ${world.displayName}, or reuse one with room. Other worlds keep running. ${game.displayName} may take several minutes to become healthy, and the host is billed while it runs.`
-              : `Spawnpoint will boot the shared host and start ${world.displayName}. ${game.displayName} may take several minutes to become healthy, and the host is billed while it runs.`,
+          description: startDescription(game, world),
           label: "Start session",
           destructive: false,
         }

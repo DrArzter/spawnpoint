@@ -9,7 +9,8 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { GetCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommandInvocationCommand, SendCommandCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 import { randomUUID } from "node:crypto";
@@ -28,6 +29,8 @@ import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildLifecycleStartInput, buildLifecycleStopInput, buildStopInput } from "../domain/telegram-bot.ts";
 import type { ControlPlaneSources, HostMetrics, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 import { operationWorldId } from "./world-session.ts";
+import type { ConsoleInvocation } from "./console.ts";
+import type { HostRecord } from "../domain/placement.ts";
 
 type MachineType = OperationObservation["type"];
 type OperationMachine = Readonly<{ type: MachineType; arn: string }>;
@@ -61,6 +64,7 @@ const s3 = new S3Client({});
 const cloudwatch = new CloudWatchClient({});
 const sfn = new SFNClient({});
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const ssm = new SSMClient({});
 
 function tag(instance: Instance, key: string): string | undefined {
   return instance.Tags?.find((candidate) => candidate.Key === key)?.Value;
@@ -483,6 +487,59 @@ export async function replaceWorldAccess(
     return "updated";
   } catch (error) {
     if (preconditionFailed(error)) return "conflict";
+    throw error;
+  }
+}
+
+// --- The console gateway (ADR-0063) -------------------------------------------
+
+/** Which host and slot a session holds, from the host records beside the lifecycle. */
+export async function findSessionPlacement(sessionId: string): Promise<Readonly<{ hostId: string; slot: number }> | null> {
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const page = await document.send(new ScanCommand({
+      TableName: requiredEnv("LIFECYCLE_TABLE_NAME"),
+      FilterExpression: "begins_with(server_id, :prefix)",
+      ExpressionAttributeValues: { ":prefix": "host#" },
+      ProjectionExpression: "host",
+      ...(exclusiveStartKey ? { ExclusiveStartKey: exclusiveStartKey } : {}),
+    }));
+    for (const item of page.Items ?? []) {
+      const host = item.host as HostRecord | undefined;
+      const held = host?.reservations.find((reservation) => reservation.sessionId === sessionId);
+      if (host && held) return { hostId: host.hostId, slot: held.slot };
+    }
+    exclusiveStartKey = page.LastEvaluatedKey;
+  } while (exclusiveStartKey);
+  return null;
+}
+
+export async function sendConsoleCommand(args: Readonly<{ hostId: string; worldId: string; slot: string; encodedCommand: string }>): Promise<string> {
+  requireWorldId(args.worldId);
+  const sent = await ssm.send(new SendCommandCommand({
+    DocumentName: requiredEnv("CONSOLE_DOCUMENT_NAME"),
+    InstanceIds: [args.hostId],
+    Parameters: { worldId: [args.worldId], slot: [args.slot], command: [args.encodedCommand] },
+    TimeoutSeconds: 60,
+    Comment: `console ${args.worldId}`,
+  }));
+  const commandId = sent.Command?.CommandId;
+  if (!commandId) throw new Error("console command did not return an id");
+  return commandId;
+}
+
+export async function readConsoleInvocation(commandId: string, hostId: string): Promise<ConsoleInvocation> {
+  try {
+    const invocation = await ssm.send(new GetCommandInvocationCommand({ CommandId: commandId, InstanceId: hostId }));
+    return {
+      status: invocation.Status ?? "Pending",
+      responseCode: invocation.ResponseCode ?? null,
+      output: invocation.StandardOutputContent ?? "",
+      error: invocation.StandardErrorContent ?? "",
+    };
+  } catch (error) {
+    // A command just sent may not have reached the host's invocation list yet.
+    if (error instanceof Error && error.name === "InvocationDoesNotExist") return { status: "Pending", responseCode: null, output: "", error: "" };
     throw error;
   }
 }

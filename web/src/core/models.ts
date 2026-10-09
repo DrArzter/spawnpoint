@@ -179,11 +179,36 @@ export type MetricsModel = Readonly<{
   metrics: Loading<HostMetrics>;
 }>;
 
+/** One command in the console's log and what the game answered (ADR-0063). */
+export type ConsoleLine = Readonly<{
+  id: string;
+  at: string;
+  who: string;
+  command: string;
+  status: StatusDescriptor;
+  output: string | null;
+  pending: boolean;
+}>;
+
+/** A running world the console can speak to. */
+export type ConsoleTarget = Readonly<{ id: string; name: string; current: boolean; choose: Action }>;
+
 export type ConsoleModel = Readonly<{
   game: Game | undefined;
+  /** The world the console speaks to, and its session's state. */
+  world: World | null;
   session: StatusDescriptor;
   online: boolean;
-  quickCommands: readonly string[];
+  /** The scoped game's running worlds; more than one when several run at once (ADR-0062). */
+  targets: readonly ConsoleTarget[];
+  /** Newest last, as a terminal prints; null while no world runs. */
+  log: Loading<readonly ConsoleLine[]> | null;
+  draft: string;
+  setDraft: (value: string) => void;
+  run: Action;
+  quickCommands: readonly Action[];
+  /** Why the console cannot be used right now, when it cannot. */
+  unavailable: string | null;
 }>;
 
 export type PresetRow = Readonly<{ preset: Preset; status: StatusDescriptor; createWorld: Action | null }>;

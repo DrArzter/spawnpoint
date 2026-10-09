@@ -674,22 +674,6 @@ html[data-skin="terminal"] .t-error {
   font-size: 13px;
 }
 
-/* A note above a screen: a mark, a bold sentence, a plain one. */
-html[data-skin="terminal"] .t-note {
-  max-width: 72ch;
-  margin: 0;
-  color: var(--ink-secondary);
-  font-size: 13px;
-}
-
-html[data-skin="terminal"] .t-note .t-mark {
-  margin-right: 1ch;
-}
-
-html[data-skin="terminal"] .t-note strong {
-  color: var(--ink);
-}
-
 html[data-skin="terminal"] .t-help {
   margin-left: 0.5ch;
   color: var(--ink-secondary);
@@ -2453,22 +2437,8 @@ html[data-skin="terminal"] .t-rcon-line {
 }
 
 html[data-skin="terminal"] .t-rcon-muted { color: var(--term-muted); }
-html[data-skin="terminal"] .t-rcon-blue { color: var(--term-blue); }
 html[data-skin="terminal"] .t-rcon-amber { color: var(--term-amber); }
 html[data-skin="terminal"] .t-rcon-prompt { color: var(--term-prompt); }
-
-html[data-skin="terminal"] .t-rcon-cursor {
-  display: inline-block;
-  width: 8px;
-  height: 16px;
-  vertical-align: text-bottom;
-  background: var(--term-ink);
-  animation: t-blink 1.1s steps(2, jump-none) infinite;
-}
-
-@keyframes t-blink {
-  to { opacity: 0; }
-}
 
 html[data-skin="terminal"] .t-rcon-input {
   display: flex;
@@ -2498,13 +2468,13 @@ html[data-skin="terminal"] .t-rcon-input .t-verb {
   color: var(--term-muted);
 }
 
-html[data-skin="terminal"] .t-quick {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  border: 0;
+/* One recorded command and the game's answer under it (ADR-0063). */
+html[data-skin="terminal"] .t-rcon-entry {
+  display: block;
+}
+
+html[data-skin="terminal"] .t-rcon-entry + .t-rcon-entry {
+  margin-top: 8px;
 }
 
 /* --- boot: the same box as any panel, before there is a shell around it ----------------- */
@@ -2612,8 +2582,7 @@ html[data-skin="terminal"] .t-provider {
   html[data-skin="terminal"] .t-drawer::backdrop,
   html[data-skin="terminal"] .t-mark-progress::before,
   html[data-skin="terminal"] .t-skeleton-trace,
-  html[data-skin="terminal"] .t-track,
-  html[data-skin="terminal"] .t-rcon-cursor {
+  html[data-skin="terminal"] .t-track {
     animation: none;
   }
 

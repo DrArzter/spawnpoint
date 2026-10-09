@@ -206,6 +206,18 @@ export type IssuedAccessInvitation = Readonly<{
  * implement it, so a screen cannot tell them apart and the demo cannot quietly
  * skip a call: leaving one out is a type error.
  */
+/** One console command and the game's answer, recorded against who ran it (ADR-0063). */
+export type ConsoleEntry = Readonly<{
+  id: string;
+  at: string;
+  identityId: string;
+  displayName: string;
+  worldId: string;
+  command: string;
+  status: "pending" | "succeeded" | "failed" | "unavailable" | "timed_out";
+  output: string | null;
+}>;
+
 export type SpawnpointApi = Readonly<{
   restoreSession(): Promise<AuthState>;
   /** Which ways in the deployment offers, and which accept anonymous registration. */
@@ -252,6 +264,9 @@ export type SpawnpointApi = Readonly<{
   requestPackDownload(gameId: string, worldId: string): Promise<{ release: string; url: string }>;
   loadBackups(gameId: string, worldId: string): Promise<BackupInventory>;
   loadHostMetrics(instanceId: string, range: MetricRange): Promise<HostMetrics>;
+  /** The world's recent console commands, newest first; a pending one is settled on read. */
+  loadConsole(gameId: string, worldId: string): Promise<readonly ConsoleEntry[]>;
+  runConsoleCommand(gameId: string, worldId: string, command: string): Promise<ConsoleEntry>;
 
   loadInvitationRecipients(): Promise<InvitationRecipient[]>;
   loadInvitationHistory(gameId: string, worldId: string): Promise<InvitationSummary[]>;

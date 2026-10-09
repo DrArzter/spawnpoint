@@ -1,4 +1,5 @@
 import type { AccessCandidate, AccessIdentity, AccessRole, ActiveSession, AppearancePreference, BackupEntry, InvitationSummary, SubscriptionState } from "../auth";
+import type { ConsoleEntry } from "../api/contract";
 import type { ControlPlaneSnapshot } from "../model";
 import { DEFAULT_ACCENT } from "../styles/accent";
 
@@ -18,6 +19,8 @@ export type DemoState = {
   appearance: AppearancePreference;
   invitations: Record<string, InvitationSummary[]>;
   backups: Record<string, BackupEntry[]>;
+  /** Console commands per world, newest first (ADR-0063). */
+  console: Record<string, ConsoleEntry[]>;
   /** Effects that land when their time passes; read calls settle them. */
   scheduled: { operationId: string; at: number; apply: (state: DemoState) => void }[];
   counter: number;
@@ -148,6 +151,12 @@ export function initialState(): DemoState {
       ],
       "factorio/factorio": [
         { key: "worlds/factorio/archives/20260908T201100Z", archiveName: "factorio-20260908T201100Z.tar.zst", checksum: "5f2d0c7b9a1e4438ac6f05d2e7b3418c9d6a2f7e0b5c84913ad2e6f70b9c3d55", generationId: null, sizeBytes: 42991616, storedAt: "2026-09-08T20:11:00.000Z" },
+      ],
+    },
+    console: {
+      "minecraft/minecraft-rostik-12345678": [
+        { id: "console-2", at: "2026-09-14T18:41:12.000Z", identityId: "identity-alex", displayName: "Alex", worldId: "minecraft-rostik-12345678", command: "time set day", status: "succeeded", output: "Set the time to 1000" },
+        { id: "console-1", at: "2026-09-14T18:40:03.000Z", identityId: "identity-owner", displayName: "DrArzter", worldId: "minecraft-rostik-12345678", command: "list", status: "succeeded", output: "There are 3 of a max of 20 players online: Alex, Mira, Kira" },
       ],
     },
     scheduled: [],

@@ -47,6 +47,7 @@ The name is a working title.
 | Worlds, wipes and backups as operations | Create a world from a ready preset release; archive it, start a new wipe, restore a backup into a new wipe, or purge an archived world. Each is a guarded Standard Workflow that stops and backs up an active session first, and a restore refuses to begin unless the backup's own release still exists. Each world carries its hosting and connection settings, changed only while it is stopped. See [ADR-0040](docs/adr/0040-reusable-presets-and-world-wipes.md), [ADR-0052](docs/adr/0052-keep-a-release-while-a-generation-names-it.md) |
 | Chat notifications | Step Functions execution events reach a notifier Lambda: start requested, ready, stopped, promoted, rolled back, failed stop, and game invitations. Guardrail alerts on `spawnpoint-alert` arrive in the same chat. Players choose their own subscriptions in the panel |
 | Production deployed from pull requests | `Check` must pass on `main`; then GitHub Actions classifies the tested diff and assumes an OIDC role to apply only the changed Terraform roots, Lambda bundles and web build, refusing any plan with a delete or replacement. Pull requests get a read-only production plan; the pipeline's own identities are applied by a fourth, owner-gated identity that nothing automated can reach. See [ADR-0043](docs/adr/0043-deploy-production-from-reviewed-pull-requests.md) and [ADR-0044](docs/adr/0044-apply-github-identities-behind-an-owner-gate.md) |
+| A console that records who ran what | Operators type RCON commands into a running world from either face of the panel. The command reaches the game through one SSM document that runs nothing but the console script, travels as base64 so no shell reads it, and is recorded against the identity that sent it; `stop` and other commands that skip the lifecycle are refused. See [ADR-0063](docs/adr/0063-run-console-commands-through-one-ssm-document.md) |
 | Agent control through MCP | A browser-approved remote [MCP connection](mcp/README.md) gives Codex and compatible clients the same status, host metrics, backups, pack, start and stop operations as the panel, with no copied password or cookie; restore, wipe, purge, access and promotion are deliberately withheld until a narrower confirmation contract exists. OAuth scopes cap the connection and the identity's live permissions remain authoritative. A local stdio adapter serves repository development. See [ADR-0061](docs/adr/0061-connect-agents-through-oauth.md) |
 | Alarms and budget | `spawnpoint-running-hours` fires after ten consecutive running hours and `spawnpoint-fleet-sweep-failed` when the host sweeper errors; they, the $20 budget (actual and forecast) and cost anomaly detection publish to `spawnpoint-alert`, which reaches email and the Telegram notifier. Every log group keeps fourteen days. No alarm has yet been forced in a recorded test |
 | Per-session observability | Prometheus and Grafana come up with the session and go down with it. Prometheus binds to loopback; Grafana is reachable only inside the overlay. After the instance is gone, the panel and the MCP tools read the host's CPU and network from CloudWatch over a chosen window |
@@ -65,7 +66,7 @@ player-facing feature yet. Read the roadmap for the order.
 | Game and network account linking | Login providers already link to the signed-in identity from its profile: email and password, Telegram, Google ([ADR-0057](docs/adr/0057-link-login-providers-through-the-current-identity.md)). A Minecraft name or a ZeroTier client has no linking route yet; the profile says so. The one-time chat code of [ADR-0019](docs/adr/0019-account-linking.md) is superseded, and no link can be removed once made |
 | Whitelist that maintains itself | The Minecraft identity is a third link, and `whitelist.json` is generated from the link table. Remove someone once, and they lose the panel, the bots and the game. [ADR-0022](docs/adr/0022-minecraft-account-as-linked-identity.md), proposed |
 | A world picker in the bot | The panel and the MCP tools start any world; the bot still operates the one world its `WORLD_ID` names |
-| A console and session telemetry in the panel | Both faces draw the RCON console and a session tab under Metrics, and both say what is missing: the RCON gateway that would record who ran what, and the telemetry feed. Host metrics from CloudWatch are the one live series |
+| Session telemetry in the panel | The Metrics page draws a session tab beside the host's CloudWatch series, and says the telemetry feed is not connected. Host metrics from CloudWatch are the live series |
 
 ## Why it exists
 
@@ -223,7 +224,7 @@ production plan through a second, owner-gated role. See
 
 ## Decisions
 
-Sixty-two records, each with the alternatives that were rejected and why. Ten have been superseded, one was
+Sixty-three records, each with the alternatives that were rejected and why. Ten have been superseded, one was
 rejected the same day it was written and one is deferred, which is the process working rather than failing — as is
 [ADR-0040](docs/adr/0040-reusable-presets-and-world-wipes.md) replacing ADR-0039 four days after it, or
 [ADR-0032](docs/adr/0032-on-demand-single-instance.md) replacing ADR-0004 rather than editing it a ninth time.
@@ -299,6 +300,7 @@ Vocabulary does not live in them either. One word per thing, and what each one m
 | [0060](docs/adr/0060-expose-control-plane-through-a-local-mcp-adapter.md) | Expose the control plane through a local MCP adapter first | Superseded by 0061 |
 | [0061](docs/adr/0061-connect-agents-through-oauth.md) | Connect agents through OAuth | Accepted — implemented |
 | [0062](docs/adr/0062-give-each-fleet-world-a-session-record-of-its-own.md) | Give each fleet world a session record of its own | Accepted — implemented |
+| [0063](docs/adr/0063-run-console-commands-through-one-ssm-document.md) | Run console commands through one SSM document, recorded per identity | Accepted — implemented |
 
 Index, template and the decisions still to make: [docs/adr/README.md](docs/adr/README.md).
 

@@ -191,6 +191,16 @@ export const demoApi: SpawnpointApi = {
     return store.hostMetrics(instanceId, range);
   },
 
+  async loadConsole(gameId: string, worldId: string) {
+    await demoLatency();
+    return store.consoleHistory(gameId, worldId);
+  },
+
+  async runConsoleCommand(gameId: string, worldId: string, command: string) {
+    await demoLatency();
+    return store.runConsoleCommand(gameId, worldId, command);
+  },
+
   async loadInvitationRecipients() {
     await demoLatency();
     return store.recipients();

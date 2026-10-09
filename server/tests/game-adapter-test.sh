@@ -413,4 +413,52 @@ diff -r -- "${zomboid_world}/db" "${fixture}/zomboid-restored/db"
 # Workshop ids are not bytes, so the vanilla release tested above deliberately
 # carries an empty payload. A future Workshop resolver owns that translation.
 
+# The console (ADR-0063) speaks to the slot's RCON port. Every entry script
+# loads the game before configure_game_compose exports the slot's ports, so the
+# port must be read when the command is sent, not when the module loads.
+python3 - "$fixture" <<'CONSOLE_RCON' &
+import socket, struct, sys
+
+def packet(req_id, ptype, body):
+    payload = struct.pack("<ii", req_id, ptype) + body + b"\x00\x00"
+    return struct.pack("<i", len(payload)) + payload
+
+def read(conn):
+    length = struct.unpack("<i", conn.recv(4))[0]
+    data = b""
+    while len(data) < length:
+        data += conn.recv(length - len(data))
+    req_id, ptype = struct.unpack("<ii", data[:8])
+    return req_id, ptype, data[8:-2]
+
+server = socket.socket()
+server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server.bind(("127.0.0.1", 0))
+server.listen(1)
+open(sys.argv[1] + "/console-rcon-port", "w").write(str(server.getsockname()[1]))
+conn, _addr = server.accept()
+req_id, _ptype, body = read(conn)
+assert body == b"correct-password", body
+conn.sendall(packet(req_id, 2, b""))
+req_id, _ptype, body = read(conn)
+open(sys.argv[1] + "/console-rcon-command", "wb").write(body)
+conn.sendall(packet(req_id, 0, b"Alice (online)"))
+CONSOLE_RCON
+console_rcon_pid=$!
+for _ in $(seq 1 50); do
+  [[ -s "${fixture}/console-rcon-port" ]] && break
+  sleep 0.1
+done
+(
+  unset FACTORIO_RCON_PORT SPAWNPOINT_RCON_PORT
+  export FACTORIO_DATA_DIR="${fixture}/factorio-save"
+  source "${GAMES}/factorio/game.sh"
+  # What configure_game_compose does for a slot, after the module has loaded.
+  export SPAWNPOINT_RCON_PORT
+  SPAWNPOINT_RCON_PORT="$(cat "${fixture}/console-rcon-port")"
+  [[ "$(game_console "/players online")" == "Alice (online)" ]]
+)
+wait "${console_rcon_pid}"
+[[ "$(cat "${fixture}/console-rcon-command")" == "/players online" ]]
+
 printf 'game-adapter-test: ok\n'

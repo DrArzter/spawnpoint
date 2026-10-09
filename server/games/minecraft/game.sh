@@ -36,6 +36,10 @@ game_query_players_raw() {
   rcon list
 }
 
+game_console() {
+  rcon "$1"
+}
+
 game_save() {
   local save_result
   rcon save-off >/dev/null

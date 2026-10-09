@@ -31,6 +31,14 @@ export function fleetPlayersOnline(game: Game, world: World): number | null {
   return session.idle.playersOnline;
 }
 
+/** The worlds of a game whose session answers now: a fleet world on its own record, a configured one on its game's. */
+export function runningWorlds(game: Game | undefined): World[] {
+  if (!game) return [];
+  return game.worlds.filter((world) => world.placement === "fleet"
+    ? fleetWorldState(game, world) === "running"
+    : game.lifecycle?.activeWorldId === world.id && game.lifecycle.observedState === "ready");
+}
+
 /** Whether this world's own session holds back a change to it, whatever its placement. */
 export function worldSessionActive(game: Game, world: World): boolean {
   const holds = (session: WorldSession | null | undefined) => session != null && session.activeWorldId === world.id &&

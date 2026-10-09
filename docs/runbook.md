@@ -140,6 +140,33 @@ stop produced a checked backup before EC2 stopped. If the watchdog itself fails,
 `Spawnpoint.WatchdogBlind` means the host was unobservable and was deliberately left running; the
 `spawnpoint-running-hours` alarm (10 consecutive hours → `spawnpoint-alert`) and the budget are the backstops.
 
+## The console (ADR-0063)
+
+The panel's Console page sends one RCON command to a running world through the `spawnpoint-console` SSM document, which
+runs `server/scripts/console.sh` and nothing else. Every command is recorded in the access table under
+`CONSOLE#<worldId>` with who sent it, the host, the command and up to 4,000 characters of the answer, for ninety days.
+
+**The configured host needs the script.** A fleet host checks out the deployed commit when it launches. The configured
+host runs whatever copy of the repository it has, so after this lands, update its checkout once; until then the panel
+shows "This host has no console script yet". Check it:
+
+```bash
+aws ssm send-command --document-name spawnpoint-console --instance-ids <configured-instance-id> \
+  --parameters 'worldId=world,slot=,command=bGlzdA==' --query Command.CommandId --output text
+```
+
+`bGlzdA==` is `list`. Read the answer with `aws ssm get-command-invocation --command-id <id> --instance-id <id>`.
+
+**Who ran what.** Read a world's recent commands, newest first:
+
+```bash
+aws dynamodb query --table-name spawnpoint-access --key-condition-expression 'pk = :pk' \
+  --expression-attribute-values '{":pk":{"S":"CONSOLE#<worldId>"}}' --no-scan-index-forward --max-items 30
+```
+
+The console refuses `stop` and `save-off` for Minecraft and `quit` for Factorio and Project Zomboid: those end the game
+without the verified backup. Stop a world from its page.
+
 ## Telegram bot
 
 The exact first deployment, webhook and acceptance commands are recorded in

@@ -60,6 +60,8 @@ export const requestUpdateWorldSettings = (gameId: string, worldId: string, plac
 export const requestPackDownload = (gameId: string, worldId: string) => api.requestPackDownload(gameId, worldId);
 export const loadBackups = (gameId: string, worldId: string) => api.loadBackups(gameId, worldId);
 export const loadHostMetrics = (instanceId: string, range: MetricRange) => api.loadHostMetrics(instanceId, range);
+export const loadConsole = (gameId: string, worldId: string) => api.loadConsole(gameId, worldId);
+export const runConsoleCommand = (gameId: string, worldId: string, command: string) => api.runConsoleCommand(gameId, worldId, command);
 
 export const loadInvitationRecipients = () => api.loadInvitationRecipients();
 export const loadInvitationHistory = (gameId: string, worldId: string) => api.loadInvitationHistory(gameId, worldId);

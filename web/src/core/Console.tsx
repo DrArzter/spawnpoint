@@ -1,16 +1,20 @@
+import { useState } from "react";
+
+import type { ConsoleEntry } from "../api/contract";
 import type { ActiveSession } from "../auth";
 import { useSnackbar } from "../components/ui/Snackbar";
 import { buildStatus, sessionStatus, worldStatus } from "../components/ui/Status";
+import type { StatusDescriptor } from "../components/ui/Status";
 import type { Game, World } from "../model";
 import { routeHash } from "../routing";
-import { fleetWorldState, operationsBlockingWorld } from "../session";
+import { fleetWorldState, operationsBlockingWorld, runningWorlds } from "../session";
 import { pendingFor } from "../shell/actions";
 import type { Skin } from "../skins/skin";
 import { action, type Action } from "./actions";
 import { useConsole, type ConsoleController } from "./useConsole";
-import { useBackups, useInvitation, useLoginAccounts, useMetrics, useNotifications, useRoles, useUsers } from "./data";
+import { useBackups, useConsoleGateway, useInvitation, useLoginAccounts, useMetrics, useNotifications, useRoles, useUsers } from "./data";
 import { useConfirmationForm, useCreateWorldForm, useWorldSettingsForm } from "./forms";
-import type { AccessModel, ConsoleModel, LookModel, ReleasesModel, WorldModel, WorldsModel } from "./models";
+import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, ReleasesModel, WorldModel, WorldsModel } from "./models";
 import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionActionForWorld, sessionControlAvailability, sessionDetails, worldDetails, worldMoreActions, worldNotices, worldTabs } from "./worlds";
 
 /*
@@ -44,7 +48,7 @@ function CurrentPage({ console, skin, looks }: Controlled & Readonly<{ looks: Lo
   if (page === "worlds" && game && world) return <WorldPage console={console} game={game} skin={skin} world={world} />;
   if (page === "worlds") return <WorldsPage console={console} skin={skin} />;
   if (page === "metrics") return <MetricsPage console={console} skin={skin} />;
-  if (page === "console") return <skin.Console model={consoleModel(console)} />;
+  if (page === "console") return <ConsolePage console={console} skin={skin} />;
   if (page === "releases") return <skin.Releases model={releasesModel(console)} />;
   if (page === "access") return <AccessPage console={console} skin={skin} />;
   return <ProfilePage console={console} looks={looks} skin={skin} />;
@@ -128,8 +132,67 @@ function MetricsPage({ console, skin }: Controlled) {
   return <skin.Metrics model={model} />;
 }
 
-function consoleModel(console: ConsoleController): ConsoleModel {
-  return { game: console.game, session: sessionStatus(console.serverState), online: console.serverState === "running", quickCommands: ["list", "save-all", "say Server stops in 5 minutes"] };
+// What each game's console is most often asked; Factorio's commands start with a slash.
+const QUICK_COMMANDS: Readonly<Record<string, readonly string[]>> = {
+  minecraft: ["list", "save-all", "say Server stops in 5 minutes"],
+  factorio: ["/players online", "/server-save", "/time"],
+  zomboid: ["players", "save", "servermsg \"Server stops in 5 minutes\""],
+};
+
+const consoleStatuses: Readonly<Record<ConsoleEntry["status"], StatusDescriptor>> = {
+  pending: { kind: "progress", label: "Waiting for the game" },
+  succeeded: { kind: "ok", label: "Answered" },
+  failed: { kind: "error", label: "No answer" },
+  unavailable: { kind: "warning", label: "No console on this host" },
+  timed_out: { kind: "error", label: "Timed out" },
+};
+
+function consoleLine(entry: ConsoleEntry): ConsoleLine {
+  return { id: entry.id, at: entry.at, who: entry.displayName, command: entry.command, status: consoleStatuses[entry.status], output: entry.output, pending: entry.status === "pending" };
+}
+
+// The console speaks to one running world at a time (ADR-0063); with several
+// worlds of the game running (ADR-0062) the operator picks which.
+function ConsolePage({ console, skin }: Controlled) {
+  const notify = useSnackbar();
+  const { game, granted } = console;
+  const running = runningWorlds(game);
+  const [chosen, setChosen] = useState<string | null>(null);
+  const world = running.find((item) => item.id === chosen) ?? running[0] ?? null;
+  const [draft, setDraft] = useState("");
+  const gateway = useConsoleGateway(world ? game?.id : undefined, world?.id, notify);
+  const unavailable = !granted.has("console.use")
+    ? "Your role cannot use the console."
+    : world === null ? `No world of ${game?.displayName ?? "this game"} is running. Start one from Worlds to use its console.` : null;
+  const send = (command: string, clear: boolean) => {
+    void gateway.run(command).then((accepted) => { if (accepted && clear) setDraft(""); });
+  };
+  const entries = gateway.entries;
+  const model: ConsoleModel = {
+    game,
+    world,
+    session: world ? sessionStatus("running") : sessionStatus(console.serverState),
+    online: world !== null,
+    targets: running.map((item) => ({ id: item.id, name: item.displayName, current: item.id === world?.id, choose: action("console.target", item.displayName, () => setChosen(item.id)) })),
+    log: world === null ? null
+      : entries.status === "ready" ? { status: "ready", value: [...entries.value].reverse().map(consoleLine) }
+        : entries.status === "error" ? { status: "error", error: entries.error, kind: entries.kind, retry: action("console.retry", "Try again", gateway.retry) }
+          : { status: "loading" },
+    draft,
+    setDraft,
+    run: action("console.run", "Run", () => send(draft.trim(), true), {
+      icon: "keyboard_return",
+      disabled: unavailable !== null || draft.trim() === "" || gateway.sending,
+      busy: gateway.sending,
+      hint: unavailable ?? undefined,
+    }),
+    quickCommands: (QUICK_COMMANDS[game?.id ?? ""] ?? []).map((command) => action("console.quick", command, () => send(command, false), {
+      disabled: unavailable !== null || gateway.sending,
+      hint: unavailable ?? `Run ${command}`,
+    })),
+    unavailable,
+  };
+  return <skin.Console model={model} />;
 }
 
 function releasesModel(console: ConsoleController): ReleasesModel {

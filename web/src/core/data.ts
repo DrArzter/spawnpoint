@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, SubscriptionState } from "../api/contract";
+import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, SubscriptionState } from "../api/contract";
 import { failureKind } from "../api/contract";
 import {
   approveAccessCandidate, changePassword, createAccessInvitation, dismissAccessCandidate, googleOidcClientId, linkGoogle, linkPassword, linkTelegram, loadAccessCandidates, loadAccessIdentities, loadAccessInvitations,
-  loadAccessRoles, loadBackups, loadHostMetrics, loadInvitationHistory, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
-  sendInvitation, telegramOidcClientId, updateIdentityRole, updateSubscriptions,
+  loadAccessRoles, loadBackups, loadConsole, loadHostMetrics, loadInvitationHistory, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
+  runConsoleCommand, sendInvitation, telegramOidcClientId, updateIdentityRole, updateSubscriptions,
 } from "../auth";
 import type { SnackInput } from "../components/ui/Snackbar";
 import type { StatusKind } from "../components/ui/Status";
@@ -94,6 +94,69 @@ export function useMetrics(instanceId: string | undefined, online: boolean): Met
   const [range, setRange] = useState<MetricRange>("24h");
   const [state, retry] = useLoad<HostMetrics>(instanceId === undefined ? null : () => loadHostMetrics(instanceId, range), [instanceId, range]);
   return { source, setSource, online, instanceId, range, ranges: METRIC_RANGES, setRange, metrics: asLoading(state, retry, "metrics.retry") };
+}
+
+// --- console (ADR-0063) --------------------------------------------------------
+
+const CONSOLE_POLL_PENDING_MS = 1500;
+const CONSOLE_POLL_IDLE_MS = 5000;
+
+export type ConsoleGateway = Readonly<{
+  entries: LoadState<readonly ConsoleEntry[]>;
+  sending: boolean;
+  /** Resolves true when the command was accepted; a refusal reaches `notify`. */
+  run: (command: string) => Promise<boolean>;
+  retry: () => void;
+}>;
+
+/**
+ * A world's console history, kept fresh without flicker: the first read shows
+ * as loading, later reads replace the list in place. A command that waits for
+ * its answer is read again sooner than a quiet log.
+ */
+export function useConsoleGateway(gameId: string | undefined, worldId: string | undefined, notify: Notify): ConsoleGateway {
+  const [entries, setEntries] = useState<LoadState<readonly ConsoleEntry[]>>({ status: "loading" });
+  const [sending, setSending] = useState(false);
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    if (gameId === undefined || worldId === undefined) return;
+    let current = true;
+    setEntries({ status: "loading" });
+    loadConsole(gameId, worldId)
+      .then((value) => { if (current) setEntries({ status: "ready", value }); })
+      .catch((cause: unknown) => { if (current) setEntries({ status: "error", error: cause instanceof Error ? cause.message : "The console history could not be loaded.", kind: failureKind(cause) }); });
+    return () => { current = false; };
+  }, [gameId, worldId, revision]);
+
+  const pending = entries.status === "ready" && entries.value.some((entry) => entry.status === "pending");
+  useEffect(() => {
+    if (gameId === undefined || worldId === undefined || entries.status !== "ready") return;
+    let current = true;
+    const timer = window.setTimeout(() => {
+      loadConsole(gameId, worldId)
+        .then((value) => { if (current) setEntries({ status: "ready", value }); })
+        .catch(() => undefined);
+    }, pending ? CONSOLE_POLL_PENDING_MS : CONSOLE_POLL_IDLE_MS);
+    return () => { current = false; window.clearTimeout(timer); };
+  }, [gameId, worldId, entries, pending]);
+
+  const run = useCallback(async (command: string) => {
+    if (gameId === undefined || worldId === undefined) return false;
+    setSending(true);
+    try {
+      const entry = await runConsoleCommand(gameId, worldId, command);
+      setEntries((state) => state.status === "ready" ? { status: "ready", value: [entry, ...state.value.filter((item) => item.id !== entry.id)] } : state);
+      return true;
+    } catch (cause) {
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : "The command could not be sent." });
+      return false;
+    } finally {
+      setSending(false);
+    }
+  }, [gameId, worldId, notify]);
+
+  return { entries, sending, run, retry: () => setRevision((value) => value + 1) };
 }
 
 // --- access: users -------------------------------------------------------------

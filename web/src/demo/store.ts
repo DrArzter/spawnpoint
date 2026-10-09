@@ -1,5 +1,5 @@
 import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
-import type { HostMetrics, MetricRange } from "../api/contract";
+import type { ConsoleEntry, HostMetrics, MetricRange } from "../api/contract";
 import type { ControlPlaneSnapshot, Preset, World } from "../model";
 import { DemoState, initialState, Mutable } from "./data";
 
@@ -427,4 +427,52 @@ export function sendInvitation(gameId: string, worldId: string, audience: "broad
       ? { ...item, status, successCount: delivered, failureCount: targets - delivered }
       : item);
   }, DELIVERY_MS);
+}
+
+// --- console (ADR-0063) ----------------------------------------------------------
+// The demo answers the way a Minecraft server would, a moment later, so the
+// console shows a command waiting and then settling as it does live.
+
+const CONSOLE_REPLY_MS = 900;
+
+function demoReply(command: string): string {
+  const [verb = "", ...rest] = command.replace(/^\/+/, "").split(/\s+/);
+  switch (verb.toLowerCase()) {
+    case "list": return "There are 3 of a max of 20 players online: Alex, Mira, Kira";
+    case "say": return `[Server] ${rest.join(" ")}`;
+    case "save-all": return "Saving the game (this may take a moment!)\nSaved the game";
+    case "time": return rest[0] === "set" ? "Set the time to 1000" : "The time is 6000";
+    case "weather": return "Set the weather to clear";
+    case "help": return "/list, /say <message>, /save-all, /time set <value>, /weather <type>, /whitelist ...";
+    default: return `Unknown or incomplete command, see below for error\n${command}<--[HERE]`;
+  }
+}
+
+export function consoleHistory(gameId: string, worldId: string): ConsoleEntry[] {
+  settle();
+  return state.console[worldKey(gameId, worldId)] ?? [];
+}
+
+export function runConsoleCommand(gameId: string, worldId: string, command: string): ConsoleEntry {
+  settle();
+  const game = state.snapshot.games.find((item) => item.id === gameId);
+  const world = game?.worlds.find((item) => item.id === worldId);
+  if (!game || !world) throw new Error("Spawnpoint does not know this world. Refresh and try again.");
+  const trimmed = command.trim();
+  if (trimmed.length === 0 || trimmed.length > 256) throw new Error("A command is one line of at most 256 characters.");
+  if (["stop", "save-off"].includes((trimmed.replace(/^\/+/, "").split(/\s+/)[0] ?? "").toLowerCase())) {
+    throw new Error("Stopping the game here would skip the verified backup. Use Stop on the world page.");
+  }
+  if (game.lifecycle?.activeWorldId !== worldId || game.lifecycle.observedState !== "ready") throw new Error("This world is not running. Start it first.");
+  state.counter += 1;
+  const key = worldKey(gameId, worldId);
+  const entry: ConsoleEntry = { id: `console-${state.counter + 100}`, at: iso(), identityId: "identity-owner", displayName: "DrArzter", worldId, command: trimmed, status: "pending", output: null };
+  state.console[key] = [entry, ...(state.console[key] ?? [])].slice(0, 30);
+  window.setTimeout(() => {
+    const list = state.console[key];
+    const index = list?.findIndex((item) => item.id === entry.id) ?? -1;
+    if (!list || index < 0) return;
+    list[index] = { ...entry, status: "succeeded", output: demoReply(trimmed) };
+  }, CONSOLE_REPLY_MS);
+  return entry;
 }

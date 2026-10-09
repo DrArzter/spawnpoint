@@ -122,6 +122,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0060](0060-expose-control-plane-through-a-local-mcp-adapter.md) | Expose the control plane through a local MCP adapter first | Superseded by [0061](0061-connect-agents-through-oauth.md) | M4 |
 | [0061](0061-connect-agents-through-oauth.md) | Connect agents through OAuth | Accepted — implemented | M4 |
 | [0062](0062-give-each-fleet-world-a-session-record-of-its-own.md) | Give each fleet world a session record of its own | Accepted — implemented | M6 |
+| [0063](0063-run-console-commands-through-one-ssm-document.md) | Run console commands through one SSM document, recorded per identity | Accepted — implemented | M4 |
 
 ## Decisions still to record
 

@@ -112,7 +112,26 @@ const worldPage: WorldModel = {
 };
 
 const metrics: MetricsModel = { source: "cloudwatch", setSource: noop, online: true, instanceId: "i-1", range: "24h", ranges: [{ id: "24h", label: "24 hours" }], setRange: noop, metrics: { status: "error", error: "boom", kind: "failed", retry: spy("metrics.retry", "Try again") } };
-const rcon: ConsoleModel = { game, session: { kind: "ok", label: "Online" }, online: true, quickCommands: ["list"] };
+const rcon: ConsoleModel = {
+  game,
+  world,
+  session: { kind: "ok", label: "Online" },
+  online: true,
+  targets: [
+    { id: world.id, name: world.displayName, current: true, choose: spy("console.target", world.displayName) },
+    { id: "magic", name: "Magic", current: false, choose: spy("console.target", "Magic") },
+  ],
+  log: { status: "ready", value: [
+    { id: "c1", at: "2026-10-09T18:40:03.000Z", who: "Alex", command: "list", status: { kind: "ok", label: "Answered" }, output: "There are 3 of a max of 20 players online: Alex, Mira, Kira", pending: false },
+    { id: "c2", at: "2026-10-09T18:41:12.000Z", who: "DrArzter", command: "say hello", status: { kind: "progress", label: "Waiting for the game" }, output: null, pending: true },
+  ] },
+  draft: "time set day",
+  setDraft: noop,
+  run: spy("console.run", "Run"),
+  quickCommands: [spy("console.quick", "list"), spy("console.quick", "save-all")],
+  unavailable: null,
+};
+const rconUnreadable: ConsoleModel = { ...rcon, log: { status: "error", error: "boom", kind: "failed", retry: spy("console.retry", "Try again") } };
 const releases: ReleasesModel = { game, loading: false, presets: [{ preset: game.presets[0]!, status: { kind: "ok", label: "Ready" }, createWorld: spy("world.create", "Create world") }], pointers: [{ world, href: "#/w", presetName: "Industrial", summary: "Release 1.2" }] };
 
 const access: AccessModel = {
@@ -205,6 +224,7 @@ for (const skin of SKINS) {
   test(`${skin.name}: metrics, console and releases draw their verbs`, () => {
     checkSurface("Metrics", renderToStaticMarkup(createElement(skin.Metrics, { model: metrics })), metrics);
     checkSurface("Console", renderToStaticMarkup(createElement(skin.Console, { model: rcon })), rcon);
+    checkSurface("Console", renderToStaticMarkup(createElement(skin.Console, { model: rconUnreadable })), rconUnreadable);
     checkSurface("Releases", renderToStaticMarkup(createElement(skin.Releases, { model: releases })), releases);
   });
 

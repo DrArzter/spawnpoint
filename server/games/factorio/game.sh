@@ -35,8 +35,13 @@ GAME_FOOTPRINT_CORES="0.5"
 FACTORIO_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 FACTORIO_DATA_DIR="${FACTORIO_DATA_DIR:-${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${FACTORIO_GAME_DIR}/data}}"
 FACTORIO_RCON_HOST="${FACTORIO_RCON_HOST:-127.0.0.1}"
-# The host side of the RCON mapping follows the slot (ADR-0054).
-FACTORIO_RCON_PORT="${FACTORIO_RCON_PORT:-${SPAWNPOINT_RCON_PORT:-27015}}"
+
+# The host side of the RCON mapping follows the slot (ADR-0054). It is read
+# when a command is sent, not when the module loads: every entry script loads
+# the game first and exports the slot's ports after, in configure_game_compose.
+factorio_rcon_port() {
+  printf '%s' "${FACTORIO_RCON_PORT:-${SPAWNPOINT_RCON_PORT:-27015}}"
+}
 
 # The preset release, not Spawnpoint, selects the immutable container image
 # that opens this save. Version metadata still has to agree with itself; the
@@ -80,7 +85,7 @@ factorio_rcon() {
     return 1
   }
   python3 "${FACTORIO_GAME_DIR}/rcon-client.py" \
-    "${FACTORIO_RCON_HOST}" "${FACTORIO_RCON_PORT}" \
+    "${FACTORIO_RCON_HOST}" "$(factorio_rcon_port)" \
     "$(head -n1 -- "${password_file}")" \
     "${command}"
 }
@@ -88,6 +93,10 @@ factorio_rcon() {
 game_query_players_raw() {
   factorio_rcon "/players online" || return $?
   return 0
+}
+
+game_console() {
+  factorio_rcon "$1"
 }
 
 # Milliseconds per tick from two readings of the tick counter. Factorio has no

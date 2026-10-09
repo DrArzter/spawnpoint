@@ -69,11 +69,14 @@ import { backupInventory } from "../control-plane/backups.ts";
 import {
   awsControlPlaneSources,
   dashboardControlPlaneSources,
+  findSessionPlacement,
   listWorldBackups,
   materializePresetWorld,
   packDownloadUrl,
+  readConsoleInvocation,
   readWorldRecord,
   replaceWorldAccess,
+  sendConsoleCommand,
   startSessionExecution,
   stopSessionExecution,
   worldLifecycleExecution,
@@ -83,6 +86,7 @@ import type { ControlPlaneSources } from "../control-plane/read-model.ts";
 import type { WorldRecord } from "../control-plane/world-registry.ts";
 import { packRelease, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, type SessionAction, type SessionPlan } from "../control-plane/session-control.ts";
 import { blockingOperations, holdsWorld, locateWorldSession, sessionLifecycleKey, type WorldPlacement } from "../control-plane/world-session.ts";
+import { CONSOLE_RECORD_DAYS, checkConsoleCommand, consoleResult, encodeConsoleCommand, type ConsoleEntry, type ConsoleStatus } from "../control-plane/console.ts";
 import { issueSubscriptionTicket, subscriptionTicketItem, subscriptionTicketLifetimeSeconds } from "../control-plane/subscriptions.ts";
 import { worldIdForName } from "../control-plane/world-registry.ts";
 
@@ -352,6 +356,7 @@ const capabilityRoutes: Readonly<Record<string, string>> = {
   worldLifecycle: "POST /games/{gameId}/worlds/{worldId}/wipe",
   accessManagement: "GET /access/identities",
   accessInvitations: "GET /access/invitations",
+  consoleGateway: "POST /games/{gameId}/worlds/{worldId}/console",
 };
 
 export function deployedCapabilities(): readonly string[] {
@@ -857,6 +862,95 @@ async function controlWorldLifecycle(
     stopRequired, record.currentGeneration.id,
   );
   return response(202, { result: "requested", operationId });
+}
+
+// --- The console gateway (ADR-0063) -------------------------------------------
+// A command is sent and recorded at once; its answer is collected when the
+// history is next read, so no request waits on a host.
+
+const CONSOLE_HISTORY_LIMIT = 30;
+
+function consoleEntry(item: Record<string, unknown>): ConsoleEntry {
+  const text = (key: string) => (typeof item[key] === "string" ? item[key] as string : "");
+  return {
+    id: text("command_id"),
+    at: text("created_at"),
+    identityId: text("identity_id"),
+    displayName: text("display_name"),
+    worldId: text("world_id"),
+    command: text("command"),
+    status: (text("status") || "pending") as ConsoleStatus,
+    output: typeof item.output === "string" ? item.output : null,
+  };
+}
+
+async function runConsoleCommand(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
+  let parsed: { command?: unknown };
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const [presets, worldRecords, hosts] = await Promise.all([
+    awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
+    awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
+    awsControlPlaneSources.listHosts(),
+  ]);
+  const world = catalogWithPresets(presets, gameCatalog, worldRecords)
+    .find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
+  if (world === undefined) return response(404, { error: "unknown_world" });
+  const check = checkConsoleCommand(gameId, parsed.command);
+  if (!check.ok) return response(check.reason === "lifecycle_command" ? 409 : 400, { error: check.reason });
+
+  // The world's own session, ready: a console attaches to a game that answers.
+  const placement: WorldPlacement = world.placement === "fleet" ? "fleet" : "configured";
+  const located = await readWorldSession(gameId, worldId, placement);
+  const sessionId = located.record?.activeSessionId;
+  if (located.record?.observedState !== "ready" || !sessionId) return response(409, { error: "session_not_ready" });
+
+  // A placed session knows its host and slot; a configured session that was
+  // never placed runs unslotted on the one configured host.
+  const placed = await findSessionPlacement(sessionId);
+  let target: { hostId: string; slot: string } | null = placed === null ? null : { hostId: placed.hostId, slot: String(placed.slot) };
+  if (target === null && placement === "configured") {
+    const configured = hosts.filter((host) => host.provenance !== "launched");
+    if (configured.length === 1 && configured[0]!.state === "running") target = { hostId: configured[0]!.providerRef, slot: "" };
+  }
+  if (target === null) return response(409, { error: "console_unavailable" });
+
+  const commandId = await sendConsoleCommand({ hostId: target.hostId, worldId, slot: target.slot, encodedCommand: encodeConsoleCommand(check.command) });
+  const at = new Date().toISOString();
+  await document.send(new PutCommand({ TableName: tableName, Item: {
+    pk: `CONSOLE#${worldId}`, sk: `${at}#${commandId}`, command_id: commandId, created_at: at,
+    identity_id: identity.id, display_name: identity.displayName, game_id: gameId, world_id: worldId,
+    session_id: sessionId, host_id: target.hostId, command: check.command, status: "pending",
+    ttl: Math.floor(Date.now() / 1000) + CONSOLE_RECORD_DAYS * 24 * 3600,
+  } }));
+  const entry: ConsoleEntry = { id: commandId, at, identityId: identity.id, displayName: identity.displayName, worldId, command: check.command, status: "pending", output: null };
+  return response(202, { entry });
+}
+
+async function consoleHistory(gameId: string, worldId: string): Promise<Response> {
+  const page = await document.send(new QueryCommand({
+    TableName: tableName, KeyConditionExpression: "pk = :pk", ExpressionAttributeValues: { ":pk": `CONSOLE#${worldId}` },
+    ScanIndexForward: false, Limit: CONSOLE_HISTORY_LIMIT,
+  }));
+  const items = (page.Items ?? []).filter((item) => item.game_id === gameId);
+  const settled = await Promise.all(items.map(async (item) => {
+    if (item.status !== "pending" || typeof item.command_id !== "string" || typeof item.host_id !== "string") return item;
+    const result = consoleResult(await readConsoleInvocation(item.command_id, item.host_id));
+    if (result.status === "pending") return item;
+    try {
+      await document.send(new UpdateCommand({
+        TableName: tableName, Key: { pk: item.pk, sk: item.sk },
+        UpdateExpression: "SET #status = :status, #output = :output, completed_at = :now",
+        ConditionExpression: "#status = :pending",
+        ExpressionAttributeNames: { "#status": "status", "#output": "output" },
+        ExpressionAttributeValues: { ":status": result.status, ":output": result.output, ":now": new Date().toISOString(), ":pending": "pending" },
+      }));
+    } catch (error) {
+      // Another reader settled it first; its answer is the same.
+      if (!(error instanceof Error && error.name === "ConditionalCheckFailedException")) throw error;
+    }
+    return { ...item, status: result.status, output: result.output };
+  }));
+  return response(200, { entries: settled.map(consoleEntry) });
 }
 
 function roles(identity: Identity): Response {
@@ -2522,6 +2616,10 @@ export const routes: Readonly<Record<string, Route>> = {
 
   "GET /games/{gameId}/worlds/{worldId}/backups": permissionRoute("backup.read", (_identity, event) =>
     backups(parameter(event, "gameId"), parameter(event, "worldId"))),
+  "POST /games/{gameId}/worlds/{worldId}/console": permissionRoute("console.use", (identity, event) =>
+    runConsoleCommand(identity, parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
+  "GET /games/{gameId}/worlds/{worldId}/console": permissionRoute("console.use", (_identity, event) =>
+    consoleHistory(parameter(event, "gameId"), parameter(event, "worldId"))),
   "POST /games/{gameId}/worlds/{worldId}/archive": permissionRoute("world.manage", (identity, event) =>
     controlWorldLifecycle(identity, "archive", parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
   "POST /games/{gameId}/worlds/{worldId}/wipe": permissionRoute("world.manage", (identity, event) =>

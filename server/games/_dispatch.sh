@@ -35,6 +35,8 @@
 #                              game actually serves
 #   game_query_players_raw     transport: print the raw player query response
 #   game_parse_player_count    parser: raw on stdin -> integer on stdout
+#   game_console               one command an operator typed (ADR-0063), handed to
+#                              the game's own RCON as a single argument; print the reply
 #   game_save                  flush the running game to durable storage
 #   game_save_paths            print NUL-separated paths under the data dir to archive
 #   game_save_sentinel         succeed only if the data dir holds a real save

@@ -33,7 +33,7 @@ export function fleetPlayersOnline(game: Game, world: World): number | null {
 
 /** Whether this world's own session holds back a change to it, whatever its placement. */
 export function worldSessionActive(game: Game, world: World): boolean {
-  const holds = (session: WorldSession | null | undefined) => session != null && session.activeWorldId === world.id &&
+  const holds = (session: WorldSession | null | undefined) => session?.activeWorldId === world.id &&
     (session.activeSessionId !== null || session.observedState !== "stopped");
   const unnamed = game.lifecycle != null && game.lifecycle.activeWorldId == null && game.lifecycle.activeSessionId !== null;
   return holds(world.session) || holds(game.lifecycle) || (world.placement !== "fleet" && unnamed);

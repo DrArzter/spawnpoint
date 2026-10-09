@@ -115,6 +115,14 @@ function sumKnown(values: readonly (number | null)[]): number | null {
   return known.length === 0 ? null : known.reduce((total, value) => total + value, 0);
 }
 
+// What the session panel names: the one world running, with its game when it
+// is another's; how many run, when several do; else the game.
+function sessionSubject(game: Game | undefined, activeGame: Game | undefined, activeWorld: World | null, runningCount: number): string {
+  if (activeWorld) return activeGame && activeGame.id !== game?.id ? `${activeWorld.displayName} (${activeGame.displayName})` : activeWorld.displayName;
+  if (runningCount > 1) return `${runningCount} worlds`;
+  return game?.displayName ?? "Session";
+}
+
 export function buildSessionOverview(game: Game | undefined, snapshot: ControlPlaneSnapshot | null, serverState: ServerState, sharedSession: SharedHostSession, fleet: boolean): SessionOverview {
   const host = snapshot?.hosts[0];
   const status = sessionStatus(serverState);
@@ -122,10 +130,9 @@ export function buildSessionOverview(game: Game | undefined, snapshot: ControlPl
   const hosts = snapshot?.hosts ?? [];
   const activeGame = fleet ? game : sharedSession.activeGame ?? game;
   const running = fleet ? fleetWorlds(game, "running") : [];
-  const activeWorld = fleet ? (running.length === 1 ? running[0]! : null) : sharedSession.activeWorld;
-  const subject = activeWorld
-    ? activeGame && activeGame.id !== game?.id ? `${activeWorld.displayName} (${activeGame.displayName})` : activeWorld.displayName
-    : running.length > 1 ? `${running.length} worlds` : game?.displayName ?? "Session";
+  const soleRunning = running.length === 1 ? running[0]! : null;
+  const activeWorld = fleet ? soleRunning : sharedSession.activeWorld;
+  const subject = sessionSubject(game, activeGame, activeWorld, running.length);
   return {
     fleet,
     state: serverState,
@@ -200,21 +207,30 @@ export function worldMoreActions(game: Game, world: World, granted: ReadonlySet<
   return items;
 }
 
+// Whether a world's row shows it running: a fleet world by its own session, a
+// configured one by its game's record or by the shared host it holds.
+function worldRunning(game: Game, world: World, opts: Readonly<{ fleet: boolean; sharedSession: SharedHostSession }>, state: ServerState | null): boolean {
+  if (world.placement === "fleet") return state === "running";
+  if (opts.fleet) return game.lifecycle?.activeWorldId === world.id && game.lifecycle.observedState === "ready";
+  return worldOwnsSharedSession(opts.sharedSession, game, world) && opts.sharedSession.state === "running";
+}
+
+function rowStatus(world: World, active: boolean, state: ServerState | null): StatusDescriptor {
+  if (active) return sessionStatus("running");
+  if (state === "starting" || state === "stopping") return sessionStatus(state);
+  return worldStatus(world);
+}
+
 export function buildWorldRow(game: Game, world: World, opts: Readonly<{ fleet: boolean; sharedSession: SharedHostSession; serverState: ServerState; granted: ReadonlySet<string>; pending: Pending | null; callbacks: WorldCallbacks }>): WorldRow {
   // A fleet world's row tells its own session's state, so two of one game read apart.
   const fleetWorld = world.placement === "fleet";
   const state = fleetWorld ? fleetWorldState(game, world) : null;
-  const active = fleetWorld
-    ? state === "running"
-    : opts.fleet
-      ? game.lifecycle?.activeWorldId === world.id && game.lifecycle.observedState === "ready"
-      : worldOwnsSharedSession(opts.sharedSession, game, world) && opts.sharedSession.state === "running";
-  const moving = state === "starting" || state === "stopping";
+  const active = worldRunning(game, world, opts, state);
   const wipe = world.wipes.find((item) => item.state === "current") ?? world.wipes.at(-1);
   return {
     world,
     href: routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: world.id }),
-    status: active ? sessionStatus("running") : moving ? sessionStatus(state) : worldStatus(world),
+    status: rowStatus(world, active, state),
     presetName: presetOf(game, world)?.displayName ?? world.profileId,
     releaseSummary: releaseSummary(world),
     wipe: wipe ? { number: wipe.number } : null,

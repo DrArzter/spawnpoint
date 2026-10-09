@@ -17,10 +17,12 @@ trap cleanup EXIT
 
 # A `! grep` line never fails a set -e script, so absence is asserted here.
 refute_line() {
-  if grep -q -- "$1" <<<"$2"; then
-    printf 'unexpected line matching %s\n' "$1" >&2
+  local pattern="$1" text="$2"
+  if grep -q -- "${pattern}" <<<"${text}"; then
+    printf 'unexpected line matching %s\n' "${pattern}" >&2
     exit 1
   fi
+  return 0
 }
 
 expect_failure() {
@@ -87,12 +89,16 @@ stop_on() {
 }
 
 play() {
-  mkdir -p -- "$1/data/world"
-  printf '%s\n' "$2" >"$1/data/world/level.dat"
+  local directory="$1" level="$2"
+  mkdir -p -- "${directory}/data/world"
+  printf '%s\n' "${level}" >"${directory}/data/world/level.dat"
+  return 0
 }
 
 recorded_key() {
-  jq -r '.key // "null"' "$1/.spawnpoint-archive.json"
+  local directory="$1"
+  jq -r '.key // "null"' "${directory}/.spawnpoint-archive.json"
+  return $?
 }
 
 # --- a new wipe with no archive starts empty, and says so in its record ---

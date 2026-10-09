@@ -198,8 +198,6 @@ jobs:
     steps:
       - name: Check out the commit under test
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
 
       - name: Aggregate shard results
         id: checks
@@ -260,16 +258,3 @@ jobs:
       - name: Enforce the test result
         if: steps.checks.outputs.exit_code != '0'
         run: exit 1
-
-      - name: Classify production changes
-        if: github.event_name == 'push'
-        run: python3 scripts/deployment_plan.py "${{ github.event.before }}" "${{ github.sha }}" > production-deployment-plan.json
-
-      - name: Publish the tested deployment plan
-        if: github.event_name == 'push'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: production-deployment-plan
-          path: production-deployment-plan.json
-          if-no-files-found: error
-          retention-days: 7

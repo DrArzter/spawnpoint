@@ -1,4 +1,6 @@
 name: Deploy production
+# The next deploy reads this title to find the last revision deployed.
+run-name: Deploy production ${{ github.event.workflow_run.head_sha }}
 
 on:
   workflow_run:
@@ -29,18 +31,38 @@ jobs:
       terraform_roots: ${{ steps.read.outputs.terraform_roots }}
       web: ${{ steps.read.outputs.web }}
     steps:
-      - name: Download the plan produced by the successful check
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      # The scripts that read the diff come from main, never from the commit
+      # that triggered the run; deployment_base.py refuses a commit not on main.
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 NOSONAR(githubactions:S7631) ref is main, never the triggering commit
         with:
-          name: production-deployment-plan
-          path: .production
-          github-token: ${{ github.token }}
-          run-id: ${{ github.event.workflow_run.id }}
+          ref: main
+          fetch-depth: 0
+
+      # Measured from the last successful deploy, not from the push before this
+      # one: a cancelled Check, a replaced queued deploy or a failed deploy
+      # leaves its changes for this run to carry.
+      - name: Find the last deployed revision
+        id: base
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-production.yml/runs?branch=main&status=success&per_page=50" \
+            --jq '.workflow_runs[].display_title' > deployed-titles.txt
+          base="$(python3 scripts/deployment_base.py "${HEAD_SHA}" < deployed-titles.txt)"
+          echo "base=${base}" >> "${GITHUB_OUTPUT}"
+
+      - name: Classify the changes since that revision
+        env:
+          BASE_SHA: ${{ steps.base.outputs.base }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: python3 scripts/deployment_plan.py "${BASE_SHA}" "${HEAD_SHA}" > production-deployment-plan.json
 
       - name: Read deployment units
         id: read
         run: |
-          plan=.production/production-deployment-plan.json
+          plan=production-deployment-plan.json
           jq . "${plan}"
           if jq -e '.manual_review | length > 0' "${plan}" >/dev/null; then
             jq -r '.manual_review[] | "::warning::Manual review required: \(.)"' "${plan}"
@@ -71,7 +93,7 @@ jobs:
       TF_VAR_aws_region: ${{ vars.AWS_REGION }}
     steps:
       - name: Check out the tested commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 NOSONAR(githubactions:S7631) ref is main, never the triggering commit
         with:
           ref: main
 

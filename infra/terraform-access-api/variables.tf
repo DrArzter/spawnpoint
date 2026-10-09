@@ -255,12 +255,13 @@ variable "launch" {
 }
 
 variable "app_commit" {
-  description = "The commit of this repository a launched host checks out into its app directory, carried as the instance's AppCommit tag. `main` follows the branch; the deploy pipeline should pin the tested commit."
+  description = "The commit of this repository a host checks out into its app directory: a launched host through its AppCommit tag, a running host through the /spawnpoint/host/app-commit parameter before each session (ADR-0067). `main` follows the branch; the deploy pipeline pins the tested commit."
   type        = string
   default     = "main"
 
+  # The host refuses a value git could read as an option, so this does too.
   validation {
-    condition     = can(regex("^([0-9a-f]{40}|[A-Za-z0-9._/-]{1,120})$", var.app_commit))
-    error_message = "app_commit must be a commit hash or a ref name."
+    condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$", var.app_commit))
+    error_message = "app_commit must be a commit hash or a ref name that starts with a letter or digit."
   }
 }

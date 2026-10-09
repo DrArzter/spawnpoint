@@ -56,8 +56,15 @@ class DeploymentPlanTest(unittest.TestCase):
 
     def test_host_bootstrap_payload_is_never_reported_as_fully_automatic(self) -> None:
         plan = make_plan(["server/user-data.sh"])
-        self.assertEqual(plan["terraform_roots"], ["infra/terraform", "infra/terraform-releases"])
+        self.assertEqual(plan["terraform_roots"], ["infra/terraform", "infra/terraform-releases", "infra/terraform-access-api"])
         self.assertTrue(plan["manual_review"])
+
+    def test_host_code_change_moves_the_commit_hosts_check_out(self) -> None:
+        # ADR-0067: the access API root writes the commit a host updates to.
+        plan = make_plan(["server/scripts/start-session.sh"])
+        self.assertIn("infra/terraform-access-api", plan["terraform_roots"])
+        self.assertFalse(plan["web"])
+        self.assertFalse(plan["lambdas"])
 
     def test_bootstrap_change_requires_manual_review(self) -> None:
         plan = make_plan(["infra/terraform-bootstrap/main.tf"])

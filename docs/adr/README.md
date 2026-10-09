@@ -123,6 +123,10 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0061](0061-connect-agents-through-oauth.md) | Connect agents through OAuth | Accepted — implemented | M4 |
 | [0062](0062-give-each-fleet-world-a-session-record-of-its-own.md) | Give each fleet world a session record of its own | Accepted — implemented | M6 |
 | [0063](0063-run-console-commands-through-one-ssm-document.md) | Run console commands through one SSM document, recorded per identity | Accepted — implemented | M4 |
+| [0064](0064-let-a-world-carry-game-settings.md) | Let a world carry game settings, applied at its next start | Accepted — implemented | M6 |
+| [0065](0065-hand-out-world-files-as-short-lived-links.md) | Hand out a world's archives and its release's mods as short-lived links | Accepted — implemented | M6 |
+| [0066](0066-keep-a-world-whitelist-on-its-record.md) | Keep a world's whitelist on its record | Accepted — implemented | M6 |
+| [0067](0067-bring-a-host-checkout-to-the-deployed-commit-at-session-start.md) | Bring a host's checkout to the deployed commit when a session starts | Accepted — implemented | M6 |
 
 ## Decisions still to record
 

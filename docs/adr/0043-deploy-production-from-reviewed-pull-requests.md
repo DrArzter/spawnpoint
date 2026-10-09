@@ -87,7 +87,9 @@ secrets; the CurseForge key never leaves Parameter Store; there are no AWS acces
 - The classifier is a list of path rules. A new root or a new workflow file must be added to
   `scripts/deployment_plan.py`, or its change is silently not deployed; the tests in `scripts/tests/` guard the rules
   that exist, not the ones nobody wrote.
-- **The host's checkout under `/srv/spawnpoint/app` is outside this pipeline.** A `server/` change re-plans Terraform
+- **The host's checkout under `/srv/spawnpoint/app` is outside this pipeline.** Since
+  [ADR-0067](0067-bring-a-host-checkout-to-the-deployed-commit-at-session-start.md) a host brings it to the deployed
+  commit at its next idle session start; what follows describes the time before that. A `server/` change re-plans Terraform
   but does not reach the instance; the host copy is refreshed by an explicit SSM step, and any change to a host-side
   contract must land there before the machine that depends on it is applied. The runbook records the order per
   contract; this pipeline does not enforce it.

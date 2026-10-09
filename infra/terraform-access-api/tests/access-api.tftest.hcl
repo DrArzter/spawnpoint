@@ -437,6 +437,11 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition     = aws_ssm_parameter.app_commit.name == "/spawnpoint/host/app-commit" && aws_ssm_parameter.app_commit.value == aws_lambda_function.access_api.environment[0].variables.SPAWNPOINT_APP_COMMIT
+    error_message = "A running host brings its checkout to the same commit a launched host checks out (ADR-0067)."
+  }
+
+  assert {
     condition     = aws_lambda_function.access_api.environment[0].variables.CONTROL_PLANE_VIEW_TABLE == "spawnpoint-control-plane-view"
     error_message = "Dashboard reads must use the event-driven DynamoDB projection when it is fresh."
   }

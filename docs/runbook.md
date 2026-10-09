@@ -140,15 +140,33 @@ stop produced a checked backup before EC2 stopped. If the watchdog itself fails,
 `Spawnpoint.WatchdogBlind` means the host was unobservable and was deliberately left running; the
 `spawnpoint-running-hours` alarm (10 consecutive hours → `spawnpoint-alert`) and the budget are the backstops.
 
+## Host checkout (ADR-0067)
+
+Before a session starts, a host brings `/srv/spawnpoint/app` to the commit in `/spawnpoint/host/app-commit`, which
+every access API apply sets to the deployed commit. It does so only while no game runs on it and no tracked file has a
+local change, and it never fails the start. The start command's error output says what it did: `result=updated`,
+`result=current`, or `result=kept` with a `reason` (`sessions_running`, `local_changes`, `fetch_failed`, …).
+
+**The configured host needs one last update by hand**, to receive `update-checkout.sh`. Run it while no game runs:
+
+```bash
+aws ssm send-command --document-name AWS-RunShellScript --instance-ids <configured-instance-id> \
+  --parameters 'commands=["set -euo pipefail","app=/srv/spawnpoint/app","git -c safe.directory=$app -C $app fetch -q --depth 1 origin main","git -c safe.directory=$app -C $app checkout -q --detach FETCH_HEAD","git -c safe.directory=$app -C $app rev-parse HEAD"]' \
+  --query Command.CommandId --output text
+```
+
+If the answer is that the directory is not a git repository, make it one as a launched host does
+(`git init`, then `git remote add origin https://github.com/DrArzter/spawnpoint.git`) and run the command again.
+From then on the host updates itself.
+
 ## The console (ADR-0063)
 
 A world's Console tab in the panel sends one RCON command to that world through the `spawnpoint-console` SSM document, which
 runs `server/scripts/console.sh` and nothing else. Every command is recorded in the access table under
 `CONSOLE#<worldId>` with who sent it, the host, the command and up to 4,000 characters of the answer, for ninety days.
 
-**The configured host needs the script.** A fleet host checks out the deployed commit when it launches. The configured
-host runs whatever copy of the repository it has, so after this lands, update its checkout once; until then the panel
-shows "This host has no console script yet". Check it:
+**The host needs the script.** A host takes it at its next idle session start (see
+[Host checkout](#host-checkout-adr-0067)); until then the panel shows "This host has no console script yet". Check it:
 
 ```bash
 aws ssm send-command --document-name spawnpoint-console --instance-ids <configured-instance-id> \
@@ -185,7 +203,8 @@ aws ssm send-command --document-name spawnpoint-whitelist --instance-ids <instan
 ```
 
 Exit code 3 means the file is written but the game did not answer; 5, that the world keeps no whitelist on its record;
-9, that the host's checkout has no `apply-whitelist.sh` yet. The configured host needs its checkout updated once.
+9, that the host's checkout has no `apply-whitelist.sh` yet; it takes it at its next idle start
+([Host checkout](#host-checkout-adr-0067)).
 
 ## Game settings (ADR-0064)
 
@@ -200,7 +219,7 @@ aws s3api list-object-versions --bucket <releases-bucket> --prefix worlds/<world
 
 What a game may set is `server/games/<game>/settings.json`. At start the host exports only the settings the world sets;
 `warning: ignoring game settings this checkout does not define` in a start's output means the host's checkout is older
-than the panel. On the configured host, update its checkout. A value outside its definition refuses the start, and the
+than the panel; it updates at its next idle start ([Host checkout](#host-checkout-adr-0067)). A value outside its definition refuses the start, and the
 output names the setting.
 
 ## Downloads (ADR-0065)

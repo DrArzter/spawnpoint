@@ -6,6 +6,7 @@ locals {
   plan_subject    = "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production-plan"
 
   spawnpoint_ssm_documents         = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:document/spawnpoint-*"
+  host_app_commit_parameter        = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/spawnpoint/host/app-commit"
   build_release_state_machine_arn  = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-build-release"
   build_release_execution_arn      = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:execution:spawnpoint-build-release:*"
   preset_catalog_state_machine_arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-publish-preset-catalog"
@@ -306,6 +307,20 @@ data "aws_iam_policy_document" "github_deploy_iam" {
     resources = [local.spawnpoint_ssm_documents]
   }
 
+  # The commit a host brings its checkout to before a session starts
+  # (ADR-0067). One parameter, written on every access API apply.
+  statement {
+    sid    = "WriteOnlyTheHostAppCommitParameter"
+    effect = "Allow"
+    actions = [
+      "ssm:AddTagsToResource",
+      "ssm:ListTagsForResource",
+      "ssm:PutParameter",
+      "ssm:RemoveTagsFromResource",
+    ]
+    resources = [local.host_app_commit_parameter]
+  }
+
   # EC2 creates a default allow-all egress rule with every security group.
   # Terraform must revoke it before installing the reviewed game-port rules.
   statement {
@@ -587,6 +602,21 @@ data "aws_iam_policy_document" "github_plan_iam" {
       "ssm:ListTagsForResource",
     ]
     resources = [local.spawnpoint_ssm_documents]
+  }
+
+  statement {
+    sid       = "ReadOnlyTheHostAppCommitParameter"
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter", "ssm:ListTagsForResource"]
+    resources = [local.host_app_commit_parameter]
+  }
+
+  # DescribeParameters takes no resource; it lists names and metadata, not values.
+  statement {
+    sid       = "DescribeParameters"
+    effect    = "Allow"
+    actions   = ["ssm:DescribeParameters"]
+    resources = ["*"]
   }
 
   statement {

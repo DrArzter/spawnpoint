@@ -30,6 +30,15 @@ test("a fenced termination retries EC2; a warm stopped host mismatch alarms", ()
   assert.equal(fleetSweepAction("stopped", NOW - 10000, stopped, NOW, 600), "none");
 });
 
+test("a stopped warm host past its retention gets a drain, which decides; inside it nothing happens", () => {
+  const day = 24 * 3600;
+  const stopped = markStopped(emptyFleet(), NOW - 15 * day);
+  assert.equal(fleetSweepAction("stopped", NOW - 20 * day, stopped, NOW, 600), "drain");
+  assert.equal(fleetSweepAction("stopped", NOW - 20 * day, stopped, NOW - 2 * day, 600), "none");
+  assert.equal(fleetSweepAction("stopped", NOW - 20 * day, stopped, NOW - 15 * day + 7200, 600, 3600), "drain", "the retention is a setting");
+  assert.equal(fleetSweepAction("stopping", NOW - 20 * day, stopped, NOW, 600), "none", "EC2 still moving: wait");
+});
+
 test("unknown, configured, and inconsistent hosts require review rather than deletion", () => {
   assert.equal(fleetSweepAction("running", NOW - 4000, null, NOW, 600), "alarm");
   assert.equal(fleetSweepAction("running", NOW - 10, null, NOW, 600), "none");

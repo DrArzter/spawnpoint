@@ -1,6 +1,6 @@
 # ADR-0053 — Tell "not built yet" apart from "broken", in the transport
 
-- Status: Proposed
+- Status: Accepted — implemented for every screen that calls the API; session telemetry, the RCON console and account linking still say it by hand, because they make no call
 - Date: 2026-09-16
 - Milestone: M4
 - Relates: [ADR-0012](0012-web-control-panel.md) (the panel this governs),

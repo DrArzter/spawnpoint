@@ -287,10 +287,10 @@ Vocabulary does not live in them either. One word per thing, and what each one m
 | [0047](docs/adr/0047-normalize-preset-sources-before-building.md) | Normalize preset sources before building | Accepted |
 | [0048](docs/adr/0048-one-instance-per-active-world.md) | One instance per active world, created for the session | Accepted, amended by 0054 |
 | [0049](docs/adr/0049-project-control-plane-events-into-dynamodb.md) | Project control-plane events into DynamoDB for user-facing surfaces | Accepted |
-| [0050](docs/adr/0050-default-role-on-sign-in-and-elevation-requests.md) | Join as Viewer through any login provider, and ask for more | Proposed |
+| [0050](docs/adr/0050-default-role-on-sign-in-and-elevation-requests.md) | Join as Viewer through any login provider, and ask for more | Accepted in part — invitations implemented; elevation requests and blocking not built |
 | [0051](docs/adr/0051-restart-a-session-without-releasing-the-host.md) | Restart a session without releasing the host | Proposed |
 | [0052](docs/adr/0052-keep-a-release-while-a-generation-names-it.md) | Keep a release while a generation names it, and check before restoring | Accepted — restore guard implemented |
-| [0053](docs/adr/0053-tell-not-built-apart-from-broken.md) | Tell "not built yet" apart from "broken", in the transport | Proposed |
+| [0053](docs/adr/0053-tell-not-built-apart-from-broken.md) | Tell "not built yet" apart from "broken", in the transport | Accepted — implemented |
 | [0054](docs/adr/0054-place-a-session-on-a-host-with-room.md) | Place a session on a host with room, or launch one that fits | Accepted — in production since 2026-09-22 |
 | [0055](docs/adr/0055-sign-in-with-email-and-password-by-default.md) | Sign in with email and password by default, and with a provider as an alternative | Accepted — implemented |
 | [0056](docs/adr/0056-verify-and-link-password-credentials.md) | Verify and link password credentials without making a provider primary | Accepted — implemented; amends 0055 |

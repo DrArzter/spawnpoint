@@ -4,7 +4,7 @@ import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 
 import { fleetSweepAction } from "../domain/fleet-sweep.ts";
-import type { HostRecord } from "../domain/placement.ts";
+import { WARM_HOST_RETENTION_SECONDS, type HostRecord } from "../domain/placement.ts";
 
 const ec2 = new EC2Client({});
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -54,16 +54,18 @@ async function inspectInstance(
   drainArn: string,
   now: number,
   grace: number,
+  warmRetention: number,
   activeDrains: () => Promise<Set<string>>,
 ): Promise<string | null> {
   const hostId = instance.InstanceId;
   if (!hostId || !instance.State?.Name || !instance.LaunchTime) return null;
   const host = await hostRecord(table, hostId);
-  const action = fleetSweepAction(instance.State.Name, Math.floor(instance.LaunchTime.getTime() / 1000), host, now, grace);
+  const action = fleetSweepAction(instance.State.Name, Math.floor(instance.LaunchTime.getTime() / 1000), host, now, grace, warmRetention);
   switch (action) {
     case "drain": {
-      // The drain rechecks the current record, reservations and headroom
-      // after its own grace period. A sweep never decides to delete EC2.
+      // The drain rechecks the current record, reservations, headroom and a
+      // warm host's retention after its own grace period. A sweep never
+      // decides to delete EC2.
       const running = await activeDrains();
       if (running.has(hostId)) return null;
       const name = `sweep-${hostId}-${Math.floor(now / 1800)}`;
@@ -94,6 +96,8 @@ export async function handler(): Promise<void> {
   const drainArn = required("DRAIN_STATE_MACHINE_ARN");
   const grace = Number(required("DRAIN_GRACE_SECONDS"));
   if (!Number.isSafeInteger(grace) || grace < 0) throw new Error("DRAIN_GRACE_SECONDS must be a non-negative integer");
+  const warmRetention = Number(process.env.WARM_HOST_RETENTION_SECONDS ?? WARM_HOST_RETENTION_SECONDS);
+  if (!Number.isSafeInteger(warmRetention) || warmRetention < 0) throw new Error("WARM_HOST_RETENTION_SECONDS must be a non-negative integer");
   const now = Math.floor(Date.now() / 1000);
   const alarms: string[] = [];
   let activeDrainsPromise: Promise<Set<string>> | undefined;
@@ -109,7 +113,7 @@ export async function handler(): Promise<void> {
     }));
     for (const reservation of page.Reservations ?? []) {
       for (const instance of reservation.Instances ?? []) {
-        const alarm = await inspectInstance(instance, table, drainArn, now, grace, activeDrains);
+        const alarm = await inspectInstance(instance, table, drainArn, now, grace, warmRetention, activeDrains);
         if (alarm) alarms.push(alarm);
       }
     }

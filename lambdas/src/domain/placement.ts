@@ -324,9 +324,32 @@ export function release(host: HostRecord, sessionId: string, nowEpochSeconds: nu
  * the record and applies the transition conditionally, because a start may
  * have landed meanwhile.
  */
-export function drainDecision(host: HostRecord, nowEpochSeconds: number, gracePeriodSeconds: number, holdForHeadroom = false): DrainDecision {
+/**
+ * How long a stopped warm host is kept for its world (ADR-0054). A world left
+ * unplayed for longer starts cold from S3, so a host whose world was archived,
+ * or started somewhere else, cannot bill its volume for ever.
+ */
+export const WARM_HOST_RETENTION_SECONDS = 14 * 24 * 3600;
+
+/** A launched host stopped for a warm world, empty, and kept past its retention. */
+export function warmHostExpired(host: HostRecord, nowEpochSeconds: number, retentionSeconds = WARM_HOST_RETENTION_SECONDS): boolean {
+  requireEpoch("nowEpochSeconds", nowEpochSeconds);
+  requireEpoch("retentionSeconds", retentionSeconds);
+  return host.state === "stopped" && host.provenance === "launched" && host.reservations.length === 0 &&
+    nowEpochSeconds >= host.updatedAtEpochSeconds + retentionSeconds;
+}
+
+export function drainDecision(
+  host: HostRecord,
+  nowEpochSeconds: number,
+  gracePeriodSeconds: number,
+  holdForHeadroom = false,
+  warmRetentionSeconds = WARM_HOST_RETENTION_SECONDS,
+): DrainDecision {
   requireEpoch("nowEpochSeconds", nowEpochSeconds);
   requireEpoch("gracePeriodSeconds", gracePeriodSeconds);
+  // A stopped host is nobody's headroom: it cannot take a start in seconds.
+  if (host.state === "stopped") return warmHostExpired(host, nowEpochSeconds, warmRetentionSeconds) ? "terminate" : "keep";
   if (holdForHeadroom) return "keep";
   if (host.state !== "draining" || host.reservations.length > 0 || host.drainingSinceEpochSeconds === null) return "keep";
   if (nowEpochSeconds < host.drainingSinceEpochSeconds + gracePeriodSeconds) return "keep";

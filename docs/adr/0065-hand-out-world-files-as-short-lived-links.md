@@ -43,7 +43,9 @@ not taken for a pop-up.
 - `server.properties`, mod configuration in `config/` and other generated files are not in any archive, so they cannot
   be downloaded. The settings Spawnpoint manages are shown on the world page instead.
 - Single files from inside an archive are not offered. Restore into a new wipe, or download the archive.
-- The MCP tools do not get either download yet.
+- MCP clients get both downloads (amended 2026-10-09): `get_release` and `get_release_mod_link` under `release.read`,
+  and `get_backup_download_link` under `backup.download`, recorded like a download from the panel. All three are
+  reads under the `spawnpoint.read` scope; the permission, not the scope, decides who may take a save.
 
 ## Alternatives
 

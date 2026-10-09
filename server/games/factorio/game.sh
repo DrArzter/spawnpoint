@@ -42,6 +42,7 @@ FACTORIO_RCON_PORT="${FACTORIO_RCON_PORT:-${SPAWNPOINT_RCON_PORT:-27015}}"
 # (/factorio/mods). Read when called, not when the module loads.
 factorio_mods_dir() {
   printf '%s' "${SPAWNPOINT_WORLD_MODS_DIRECTORY:-${FACTORIO_DATA_DIR}/mods}"
+  return 0
 }
 
 # The preset release, not Spawnpoint, selects the immutable container image

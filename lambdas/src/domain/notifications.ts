@@ -15,7 +15,17 @@ export type ExecutionEvent = Readonly<{
   cause: string | null;
 }>;
 
-export type NotificationSubscriptionKey = "minecraft.started" | "minecraft.stopped" | "factorio.started" | "factorio.stopped" | "invitation.broadcast" | "invitation.direct";
+export type NotificationSubscriptionKey = `${string}.started` | `${string}.stopped` | "invitation.broadcast" | "invitation.direct";
+
+// Lifecycle V2 composes the V1 machines and is what EventBridge routes here
+// since the cutover; its start, stop and watchdog say the same things to
+// players, so they are announced under their V1 names. The V1 machines now
+// run only as V2's children, and the rule does not route them.
+const ANNOUNCED_AS: Readonly<Record<string, string>> = {
+  "spawnpoint-start-server-v2": "spawnpoint-start-server",
+  "spawnpoint-stop-server-v2": "spawnpoint-stop-server",
+  "spawnpoint-idle-watchdog-v2": "spawnpoint-idle-watchdog",
+};
 
 export function parseExecutionEvent(detail: unknown): ExecutionEvent | null {
   if (typeof detail !== "object" || detail === null) return null;
@@ -23,7 +33,8 @@ export function parseExecutionEvent(detail: unknown): ExecutionEvent | null {
   if (typeof d.stateMachineArn !== "string" || typeof d.status !== "string" || typeof d.name !== "string") {
     return null;
   }
-  const machine = d.stateMachineArn.split(":").pop() ?? "";
+  const arnName = d.stateMachineArn.split(":").pop() ?? "";
+  const machine = ANNOUNCED_AS[arnName] ?? arnName;
   const parse = (raw: unknown): Record<string, unknown> | null => {
     if (typeof raw !== "string") return null;
     try {
@@ -53,10 +64,15 @@ const str = (record: Record<string, unknown> | null, key: string): string | null
 // children end in -stop / -restop / -rollback / -rollback-stop / -start.
 const CHILD_NAME = /-(idle|cap)-[0-9]+$|-(re)?stop$|-rollback(-stop)?$|-start$/;
 
-function eventGame(event: ExecutionEvent): "minecraft" | "factorio" {
-  const gameId = str(event.input, "gameId");
+const GAME_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
+
+// A V2 input names its game as the lifecycle's server id; a V1 input, the
+// legacy shape, named the world, and only Factorio's world was its game.
+function eventGame(event: ExecutionEvent): string {
+  const named = str(event.input, "gameId") ?? str(event.input, "serverId");
+  if (named !== null && GAME_ID.test(named)) return named;
   const worldId = str(event.input, "worldId") ?? str(event.input, "world");
-  return gameId === "factorio" || worldId === "factorio" ? "factorio" : "minecraft";
+  return worldId === "factorio" ? "factorio" : "minecraft";
 }
 
 export function notificationSubscriptionKey(event: ExecutionEvent): NotificationSubscriptionKey | null {
@@ -109,6 +125,12 @@ export function renderNotification(event: ExecutionEvent): string | null {
       // prints its own result. A FAILED stop is a failed backup contract and
       // is always worth a message, child or not.
       if (!failed) return null;
+      // Not failures of the backup contract: a player came back during the
+      // final recheck, or the session had already ended. The world is safe.
+      if (event.error === "Spawnpoint.V2StaleSession") return null;
+      if (event.error === "Spawnpoint.V2StopRefusedPlayersOnline") {
+        return CHILD_NAME.test(event.name) ? null : "[STOP CANCELLED] Players are online, so the server keeps running. Nothing was lost.";
+      }
       if (event.error === "Spawnpoint.HostActivityUnknown") {
         return `[ALARM] The world was saved and its backup verified (${event.name}), but host activity could not be checked. EC2 may still be running.`;
       }

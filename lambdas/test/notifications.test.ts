@@ -132,6 +132,25 @@ test("promotion narrates its whole arc", () => {
   );
 });
 
+test("the Lifecycle V2 machines EventBridge routes are announced like their V1 names", () => {
+  assert.match(renderNotification(event("spawnpoint-start-server-v2", "RUNNING", { input: { requestedBy: "panel:owner", serverId: "factorio" } })) ?? "", /panel:owner requested/);
+  assert.match(renderNotification(event("spawnpoint-start-server-v2", "SUCCEEDED", { output: { status: "ready", connectionAddress: "factorio-base.spawnpoint.example:34197" } })) ?? "", /factorio-base\.spawnpoint\.example:34197/);
+  assert.match(renderNotification(event("spawnpoint-start-server-v2", "FAILED", { error: "Spawnpoint.SessionUnplaced" })) ?? "", /Start failed/);
+  assert.match(renderNotification(event("spawnpoint-idle-watchdog-v2", "SUCCEEDED", { name: "panel-start-1-watchdog", output: { status: "stopped_idle" } })) ?? "", /Nobody online/);
+  assert.equal(renderNotification(event("spawnpoint-idle-watchdog-v2", "SUCCEEDED", { output: { status: "session_superseded" } })), null);
+  assert.match(renderNotification(event("spawnpoint-stop-server-v2", "FAILED", { name: "panel-stop-1", error: "Spawnpoint.V2VerifiedStopFailed" })) ?? "", /backup/);
+  assert.equal(renderNotification(event("spawnpoint-stop-server-v2", "SUCCEEDED", { name: "panel-stop-1" })), null);
+  for (const name of ["panel-start-1-target-start", "panel-start-1-rollback-start"]) {
+    assert.equal(renderNotification(event("spawnpoint-start-server-v2", "RUNNING", { name })), null, name);
+  }
+});
+
+test("a stop a player cancelled, or one for a session already gone, is not a failed backup", () => {
+  assert.match(renderNotification(event("spawnpoint-stop-server-v2", "FAILED", { name: "panel-stop-1", error: "Spawnpoint.V2StopRefusedPlayersOnline" })) ?? "", /Players are online.*Nothing was lost/);
+  assert.equal(renderNotification(event("spawnpoint-stop-server-v2", "FAILED", { name: "panel-start-1-watchdog-idle-3", error: "Spawnpoint.V2StopRefusedPlayersOnline" })), null, "the watchdog tries again");
+  assert.equal(renderNotification(event("spawnpoint-stop-server-v2", "FAILED", { name: "panel-stop-2", error: "Spawnpoint.V2StaleSession" })), null);
+});
+
 test("unknown machines and malformed details are silence, not crashes", () => {
   assert.equal(renderNotification(event("spawnpoint-something-new", "SUCCEEDED")), null);
   assert.equal(parseExecutionEvent(null), null);
@@ -157,5 +176,7 @@ test("ordinary lifecycle messages map to per-game subscriptions", () => {
     "factorio.stopped",
   );
   assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server", "FAILED")), null, "failures remain operational alerts");
+  assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server-v2", "SUCCEEDED", { input: { serverId: "zomboid", worldId: "zomboid-muldraugh-1a2b3c4d" } })), "zomboid.started", "a V2 input names its game as the server id");
+  assert.equal(notificationSubscriptionKey(event("spawnpoint-idle-watchdog-v2", "SUCCEEDED", { input: { serverId: "factorio", worldId: "factorio-base-1a2b3c4d" }, output: { status: "stopped_idle" } })), "factorio.stopped");
   assert.equal(notificationSubscriptionKey(event("spawnpoint-promote-release", "SUCCEEDED")), null, "release messages are not personal lifecycle subscriptions");
 });

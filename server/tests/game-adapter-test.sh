@@ -211,6 +211,29 @@ expect_failure "a world naming a game with no module" \
 profile_output="$(SPAWNPOINT_WORLD_CATALOG="${fixture}/catalog.json" "${SCRIPTS}/world-profile.sh" factorio)"
 grep -qx 'game=factorio' <<<"${profile_output}"
 
+# --- minecraft saves: a world created from a preset has an id such as
+#     minecraft-rostik-1a2b3c4d, and the server keeps its save in the level
+#     folder compose pins. The id names the backup, never the folder. ---
+mc_world="minecraft-rostik-1a2b3c4d"
+mkdir -p -- "${fixture}/mc-data/world/region" "${fixture}/mc-data/world_nether" "${fixture}/mc-backups"
+printf 'level bytes\n' >"${fixture}/mc-data/world/level.dat"
+printf 'nether bytes\n' >"${fixture}/mc-data/world_nether/marker"
+mc_output="$(
+  SPAWNPOINT_GAME=minecraft \
+  SERVER_DATA_DIR="${fixture}/mc-data" \
+  SERVER_BACKUP_DIR="${fixture}/mc-backups" \
+  WORLD_NAME="${mc_world}" \
+    "${SCRIPTS}/archive-world.sh"
+)"
+mc_archive="$(awk -F= '$1 == "archive" { print $2 }' <<<"${mc_output}")"
+[[ "$(basename -- "${mc_archive}")" == "${mc_world}-"*.tar.zst ]]
+mc_listing="$(tar --list --zstd --file "${mc_archive}")"
+grep -qx 'world/level.dat' <<<"${mc_listing}"
+grep -qx 'world_nether/marker' <<<"${mc_listing}"
+WORLD_NAME="${mc_world}" "${SCRIPTS}/verify-archive.sh" "${mc_archive}" >/dev/null
+WORLD_NAME="${mc_world}" "${SCRIPTS}/restore-world.sh" "${mc_archive}" "${fixture}/mc-restored" >/dev/null
+cmp -- "${fixture}/mc-data/world/level.dat" "${fixture}/mc-restored/world/level.dat"
+
 # --- factorio saves: archive, verify with the per-game sentinel, restore ---
 mkdir -p -- "${fixture}/factorio-data/saves" "${fixture}/backups"
 printf 'zip fixture bytes\n' >"${fixture}/factorio-data/saves/spawnpoint.zip"

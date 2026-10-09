@@ -17,10 +17,11 @@ usage() {
   cat >&2 <<'EOF'
 usage: import-world.sh <data-dir> <world-name> <mods-dir> <release> <game-version> <loader-version> [game]
 
-  data-dir           directory that CONTAINS the save — the world folder(s) for
-                     minecraft, saves/*.zip for factorio
-  world-name         minecraft: the world folder's name inside data-dir;
-                     other games: the world id the catalog will use
+  data-dir           directory that CONTAINS the save — for minecraft the
+                     folder world/ and its world_* siblings, the level-name
+                     the server is pinned to (rename another level first);
+                     saves/*.zip for factorio
+  world-name         the world id the catalog will use; it names the backup
   mods-dir           the exact mod files this world runs on
   release            MAJOR.MINOR for the new immutable release, e.g. 1.0
   game-version       the game's own version; every game's manifest carries it

@@ -57,6 +57,15 @@ jq -e '
   and .services.mc.environment.ENFORCE_WHITELIST == "TRUE"
 ' >/dev/null <<<"${rendered}"
 
+# The server's level folder is the one the backup contract archives. It is
+# pinned, never the image's default and never a world's id.
+level_name="$(
+  # shellcheck source=../games/minecraft/game.sh
+  source "${server_directory}/games/minecraft/game.sh"
+  printf '%s' "${MINECRAFT_LEVEL_NAME}"
+)"
+jq -e --arg level "${level_name}" '.services.mc.environment.LEVEL == $level' >/dev/null <<<"${rendered}"
+
 # The observability tier is shared, so it must appear in a session of a game
 # that has no exporter of its own — and that game must not inherit another
 # game's exporter or scrape file.
@@ -77,6 +86,19 @@ jq -e '
     "protocol": "tcp"
   }])
 ' >/dev/null <<<"${factorio_rendered}"
+
+# The release is reconciled into the world's mods directory, beside its data;
+# the game must read that directory, or a modded world runs without its mods.
+factorio_world_rendered="$(
+  SPAWNPOINT_WORLD_DATA_DIRECTORY=/srv/worlds/f/generations/g/data \
+  SPAWNPOINT_WORLD_MODS_DIRECTORY=/srv/worlds/f/generations/g/mods \
+    render_game factorio 2>/dev/null
+)"
+jq -e '
+  [.services.factorio.volumes[] | select(.type == "bind") | {source, target}]
+  == [{source: "/srv/worlds/f/generations/g/data", target: "/factorio"},
+      {source: "/srv/worlds/f/generations/g/mods", target: "/factorio/mods"}]
+' >/dev/null <<<"${factorio_world_rendered}"
 
 # Minecraft keeps its own exporter, scrape job and dashboard; the shared tier
 # carries only the host dashboards, so a factorio session shows no empty

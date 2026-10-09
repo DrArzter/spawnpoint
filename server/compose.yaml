@@ -41,6 +41,12 @@ services:
       ENABLE_WHITELIST: "TRUE"
       ENFORCE_WHITELIST: "TRUE"
 
+      # PROJECT: the save folder in /data, which the backup contract archives
+      # (MINECRAFT_LEVEL_NAME in games/minecraft/game.sh). Every world has a
+      # data directory of its own, so the folder is never the world's id.
+      # Pinned here, not left to the image's default.
+      LEVEL: "world"
+
     volumes:
       - "${SPAWNPOINT_WORLD_DATA_DIRECTORY:-./data}:/data"
       - "${SPAWNPOINT_WORLD_MODS_DIRECTORY:-./mods}:/data/mods"

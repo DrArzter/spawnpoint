@@ -421,6 +421,9 @@ set to what was imported, `active_release` null until a start passes the health 
 - The same release version with different mod bytes is refused: releases are immutable.
 - The optional seventh argument names the game (ADR-0034): the save sentinel, the archive shape and the manifest's
   `game` follow the game module, so a factorio import is judged by `saves/*.zip` rather than `level.dat`.
+- A Minecraft save must sit in `<data-dir>/world`, the `level-name` the server is pinned to. A server that used
+  another `level-name` keeps its save under that name: rename the folder and its `_nether`/`_the_end` siblings to
+  `world` first, or the server opens a new, empty world. The world name names the backup, not the folder.
 
 **Wired on the code side, pending apply.** `start-session.sh` now performs boot-time reconciliation: it reads the
 current wipe's release state, ensures a verified local copy of the desired release (a cache on the data volume — an unchanged boot

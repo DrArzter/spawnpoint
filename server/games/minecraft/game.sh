@@ -31,6 +31,11 @@ GAME_DEFAULT_AUTH="none"
 # not on it. The container, not the JVM, is what the host counts.
 GAME_FOOTPRINT_MEMORY_MIB="7168"
 GAME_FOOTPRINT_CORES="1"
+# The server's level-name, which compose.yaml pins as LEVEL. The save lives in
+# this folder of the world's data directory. The world's name names its
+# backups, not this folder: each world has a data directory of its own, and a
+# world created from a preset has an id such as minecraft-rostik-1a2b3c4d.
+MINECRAFT_LEVEL_NAME="world"
 
 game_query_players_raw() {
   rcon list
@@ -67,15 +72,15 @@ game_parse_player_count() {
   printf '%s\n' "${count}"
 }
 
-# The world and its dimension siblings (world_nether, ...), exactly as before.
+# The level and its dimension siblings (world_nether, ...).
 game_save_paths() {
-  local data_dir="$1" world_name="$2"
-  find "${data_dir}" -mindepth 1 -maxdepth 1 -type d -name "${world_name}*" -printf '%f\0' | sort -z
+  local data_dir="$1" _world_name="$2"
+  find "${data_dir}" -mindepth 1 -maxdepth 1 -type d -name "${MINECRAFT_LEVEL_NAME}*" -printf '%f\0' | sort -z
 }
 
 game_save_sentinel() {
-  local data_dir="$1" world_name="$2"
-  [[ -f "${data_dir}/${world_name}/level.dat" ]]
+  local data_dir="$1" _world_name="$2"
+  [[ -f "${data_dir}/${MINECRAFT_LEVEL_NAME}/level.dat" ]]
 }
 
 # Milliseconds per tick, as Forge reports it over RCON ("Overall: Mean tick
@@ -94,6 +99,6 @@ game_tick_time_ms() {
 
 # What a verified archive must contain to count as a save of this game.
 game_archive_sentinel_regex() {
-  local world_name="$1"
-  printf '^%s/level\\.dat$' "${world_name}"
+  local _world_name="$1"
+  printf '^%s/level\\.dat$' "${MINECRAFT_LEVEL_NAME}"
 }

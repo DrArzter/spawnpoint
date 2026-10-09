@@ -160,9 +160,11 @@
 
 /* Where a row of actions no longer fits side by side, it takes the width it has
    and divides it evenly rather than huddling in a corner. Buttons only: a chip
-   or a status line sharing the row is not an action and keeps its size. */
+   or a status line sharing the row is not an action and keeps its size. A row
+   with only a menu has nothing to divide: at full width it left its title's
+   line and sat alone under it. */
 @media (max-width: 599px) {
-  .btn-row {
+  .btn-row:has(> .btn, > .tip-anchor) {
     width: 100%;
   }
 
@@ -370,6 +372,14 @@ button.chip[aria-pressed="true"] {
   color: var(--ink-secondary);
   font-size: 13px;
   line-height: 18px;
+}
+
+/* A card's own menu stands in its corner on the title's line, in line with
+   its rows' menus, instead of hanging 10px below the title it belongs to. */
+.card-header > .btn-row:not(:has(.btn, .tip-anchor)) {
+  align-self: center;
+  margin-block: -10px;
+  margin-right: -12px;
 }
 
 .card-body {
@@ -839,7 +849,9 @@ button.chip[aria-pressed="true"] {
 
   /* Label against the left rail, value against the right. Both packed into the
      first third left the rest of the card empty, and a pair with a gap between
-     its halves reads as one line where two columns of ragged text do not. */
+     its halves reads as one line where two columns of ragged text do not.
+     Centred, not on the baseline: a value that starts with an icon has its
+     baseline at the icon's foot, which put its label below the text. */
   .table td {
     display: grid;
     grid-template-columns: minmax(0, auto) minmax(0, 1fr);
@@ -848,7 +860,7 @@ button.chip[aria-pressed="true"] {
     min-height: 32px;
     padding: 4px 0;
     border: 0;
-    align-items: baseline;
+    align-items: center;
     justify-items: end;
     text-align: right;
   }

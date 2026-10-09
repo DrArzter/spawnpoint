@@ -102,6 +102,7 @@ export async function handler(): Promise<void> {
   const alarms: string[] = [];
   let activeDrainsPromise: Promise<Set<string>> | undefined;
   const activeDrains = () => activeDrainsPromise ??= runningDrainHosts(drainArn);
+  const instances: Instance[] = [];
   let nextToken: string | undefined;
   do {
     const page = await ec2.send(new DescribeInstancesCommand({
@@ -111,11 +112,11 @@ export async function handler(): Promise<void> {
       ],
       ...(nextToken ? { NextToken: nextToken } : {}),
     }));
-    // Each host is its own decision; the running drains are read once and shared.
-    const instances = (page.Reservations ?? []).flatMap((reservation) => reservation.Instances ?? []);
-    const found = await Promise.all(instances.map((instance) => inspectInstance(instance, table, drainArn, now, grace, warmRetention, activeDrains)));
-    alarms.push(...found.filter((alarm): alarm is string => Boolean(alarm)));
+    instances.push(...(page.Reservations ?? []).flatMap((reservation) => reservation.Instances ?? []));
     nextToken = page.NextToken;
   } while (nextToken);
+  // Each host is its own decision; the running drains are read once and shared.
+  const found = await Promise.all(instances.map((instance) => inspectInstance(instance, table, drainArn, now, grace, warmRetention, activeDrains)));
+  alarms.push(...found.filter((alarm): alarm is string => Boolean(alarm)));
   if (alarms.length > 0) throw new Error(`Fleet needs manual review: ${alarms.join("; ")}`);
 }

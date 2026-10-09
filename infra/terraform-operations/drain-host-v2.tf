@@ -83,6 +83,7 @@ resource "aws_sfn_state_machine" "lifecycle_v2_drain" {
     grace_period_seconds     = var.drain_grace_seconds
     headroom_mib             = var.headroom_mib
     max_keep_polls           = var.drain_max_keep_polls
+    warm_retention_seconds   = var.warm_host_retention_seconds
   })
 
   tags = {

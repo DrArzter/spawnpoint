@@ -112,6 +112,12 @@ what ADR-0048 already decided per world: **terminate** when every tenant was `co
 a `warm` world. A stopped warm host keeps that world's data and is a candidate for that world's next start and for
 nobody else's.
 
+*Amended 2026-10-09.* A stopped warm host is kept for `warm_host_retention_seconds` after its last session, fourteen
+days by default, and no longer. Past that, the fleet sweeper wakes a drain, and the drain terminates the host through
+the same fenced conclusion as any other; the world's next start is cold, from S3. Without the bound, a stopped host
+whose world was archived, switched to `cold`, or started on another host because it no longer fitted would bill its
+volume for ever, since nothing else revisits a stopped host. The configured host is never let go this way.
+
 **Termination is still conditional on the verified archive.** A session whose stop cannot produce a verified upload
 does not release its reservation, so the host it sits on cannot drain. The paid machine stays the cheaper half of the
 trade, and the alarm on a host that survived a stop keeps its meaning: a world's only copy did not reach S3.

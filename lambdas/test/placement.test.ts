@@ -177,6 +177,26 @@ test("a launched host nobody kept is terminated after its grace period; a launch
   assert.equal(drainDecision(warm, NOW + 100 + 600, 600), "stop");
 });
 
+test("a stopped warm host is kept for its retention, then terminated; a configured host is never let go", () => {
+  let warm = markReady(newHost("i-warm", SHAPES[1]!, NOW, "launched"), NOW + 1);
+  warm = release(reserve(warm, { sessionId: "s1", worldId: "techno", footprint: MODDED, policy: "warm" }, NOW + 2), "s1", NOW + 100);
+  const stopped = markStopped(warm, NOW + 700);
+  const day = 24 * 3600;
+  assert.equal(drainDecision(stopped, NOW + 700 + 13 * day, 600), "keep", "inside the fourteen-day default");
+  assert.equal(drainDecision(stopped, NOW + 700 + 14 * day, 600), "terminate");
+  assert.equal(drainDecision(stopped, NOW + 700 + 3600, 600, false, 3600), "terminate", "the retention is a setting");
+  assert.equal(drainDecision(stopped, NOW + 700 + 14 * day, 600, true), "terminate", "a stopped host is nobody's headroom");
+  assert.equal(markTerminating(stopped, NOW + 700 + 14 * day).state, "terminating");
+
+  // The world came back to its warm host before the retention ran out.
+  const revived = reserve(stopped, { sessionId: "s2", worldId: "techno", footprint: MODDED, policy: "warm" }, NOW + 800);
+  assert.equal(drainDecision(revived, NOW + 700 + 30 * day, 600), "keep");
+
+  let configured = readyHost("i-configured", SHAPES[0]!);
+  configured = markStopped(release(reserve(configured, { sessionId: "s3", worldId: "techno", footprint: MODDED, policy: "cold" }, NOW + 2), "s3", NOW + 100), NOW + 800);
+  assert.equal(drainDecision(configured, NOW + 365 * day, 600), "keep", "Terraform's host holds the legacy worlds");
+});
+
 test("a warm world's host stops instead of terminating, and is a candidate for that world only", () => {
   let host = readyHost("i-1", SHAPES[0]!);
   host = reserve(host, { sessionId: "s1", worldId: "techno", footprint: MODDED, policy: "warm" }, NOW + 2);

@@ -1,6 +1,6 @@
 # ADR-0050 — Join as Viewer through any login provider, and ask for more
 
-- Status: Proposed
+- Status: Accepted in part — Access invitations that create a Viewer are implemented; requesting a higher role with a reason, and an explicit blocked state, are not built
 - Date: 2026-09-16
 - Revised: 2026-09-23 after the invited-mailbox proof and email-free deployment requirements were clarified
 - Milestone: M4

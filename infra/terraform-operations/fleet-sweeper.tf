@@ -96,9 +96,10 @@ resource "aws_lambda_function" "fleet_sweeper" {
 
   environment {
     variables = {
-      LIFECYCLE_TABLE_NAME    = data.aws_dynamodb_table.lifecycle.name
-      DRAIN_STATE_MACHINE_ARN = local.lifecycle_v2_drain_arn
-      DRAIN_GRACE_SECONDS     = tostring(var.drain_grace_seconds)
+      LIFECYCLE_TABLE_NAME        = data.aws_dynamodb_table.lifecycle.name
+      DRAIN_STATE_MACHINE_ARN     = local.lifecycle_v2_drain_arn
+      DRAIN_GRACE_SECONDS         = tostring(var.drain_grace_seconds)
+      WARM_HOST_RETENTION_SECONDS = tostring(var.warm_host_retention_seconds)
     }
   }
 

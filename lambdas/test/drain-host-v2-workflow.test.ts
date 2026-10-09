@@ -23,6 +23,7 @@ async function loadDefinition(): Promise<Definition> {
     .replaceAll("${grace_period_seconds}", "600")
     .replaceAll("${headroom_mib}", "0")
     .replaceAll("${max_keep_polls}", "288")
+    .replaceAll("${warm_retention_seconds}", "1209600")
     .replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource");
   return JSON.parse(rendered) as Definition;
 }

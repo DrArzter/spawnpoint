@@ -62,7 +62,7 @@ export type PlacementInput =
   | (Readonly<{ action: "reserveOnHost"; hostId: string }> & SessionRequest)
   | Readonly<{ action: "findPlacement"; sessionId: string }>
   | Readonly<{ action: "releasePlacement"; hostId?: string; sessionId: string }>
-  | Readonly<{ action: "decideDrain"; hostId: string; gracePeriodSeconds: number; headroomMiB?: number }>
+  | Readonly<{ action: "decideDrain"; hostId: string; gracePeriodSeconds: number; headroomMiB?: number; warmRetentionSeconds?: number }>
   | Readonly<{ action: "concludeDrain"; hostId: string; outcome: "stop" | "terminate"; expectedRevision?: number }>;
 
 export type PlacementOutcome =
@@ -298,7 +298,7 @@ async function decideHostDrain(
   );
   return {
     host: current,
-    drain: drainDecision(current.record, context.nowEpochSeconds(), input.gracePeriodSeconds, hold),
+    drain: drainDecision(current.record, context.nowEpochSeconds(), input.gracePeriodSeconds, hold, input.warmRetentionSeconds),
   };
 }
 

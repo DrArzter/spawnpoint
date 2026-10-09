@@ -38,7 +38,8 @@
           "action": "decideDrain",
           "hostId.$": "$.request.hostId",
           "gracePeriodSeconds": ${grace_period_seconds},
-          "headroomMiB": ${headroom_mib}
+          "headroomMiB": ${headroom_mib},
+          "warmRetentionSeconds": ${warm_retention_seconds}
         }
       },
       "ResultSelector": {
@@ -67,7 +68,8 @@
           "action": "decideDrain",
           "hostId.$": "$.request.hostId",
           "gracePeriodSeconds": 0,
-          "headroomMiB": 0
+          "headroomMiB": 0,
+          "warmRetentionSeconds": ${warm_retention_seconds}
         }
       },
       "ResultSelector": {

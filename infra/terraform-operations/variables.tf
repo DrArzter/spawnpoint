@@ -58,6 +58,17 @@ variable "drain_grace_seconds" {
   default     = 600
 }
 
+variable "warm_host_retention_seconds" {
+  description = "How long a launched host stopped for a warm world is kept after its last session before the drain terminates it (ADR-0054). 1209600 is fourteen days."
+  type        = number
+  default     = 1209600
+
+  validation {
+    condition     = var.warm_host_retention_seconds >= 0 && floor(var.warm_host_retention_seconds) == var.warm_host_retention_seconds
+    error_message = "warm_host_retention_seconds must be a whole number of seconds, zero or more."
+  }
+}
+
 variable "headroom_mib" {
   description = "Memory the fleet keeps free somewhere while anything runs, so the next start lands on a host already up (ADR-0054). Zero keeps nothing."
   type        = number

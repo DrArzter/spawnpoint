@@ -5,6 +5,8 @@
   the placeholder in [the index](README.md#decisions-still-to-record) stops describing it as open
 - Amended by: [ADR-0044](0044-apply-github-identities-behind-an-owner-gate.md) — the GitHub identities root is applied
   by a gated identity job rather than by hand
+- Amended on 2026-10-09: a deploy is measured from the last successful deploy, not from the push before it — see
+  [the amendment](#amendment--a-deploy-carries-everything-since-the-last-successful-deploy-2026-10-09)
 - Relates: [ADR-0011](0011-terraform-for-infrastructure.md) (Terraform owns resources),
   [ADR-0028](0028-update-proposals.md) (GitHub as a thin OIDC client of AWS), [ADR-0025](0025-step-functions-for-long-operations.md)
 
@@ -36,11 +38,11 @@ separate OIDC identities owned by `infra/terraform-github`.**
 | `spawnpoint-github-deploy` | this repository's `production` environment only | the read, create and update calls the current Terraform resources need; IAM management limited to `spawnpoint-*` identities; deletion only of Terraform state locks and obsolete static web assets; an explicit deny on changing itself |
 | `spawnpoint-github-plan` | this repository's owner-reviewed `production-plan` environment only | read Terraform state and infrastructure metadata; it cannot write a state lock, mutate AWS or apply |
 
-**The tested diff is classified, and only the changed units are deployed.** On a push to `main`, `Check` runs
-`scripts/deployment_plan.py` over the tested commit range and publishes the result as an artefact: which Terraform
-roots changed (a workflow definition maps to the root that renders it; a `server/` change re-plans the host and release
-roots), whether Lambda bundles or the web build changed, and what needs a human. `Deploy production` runs when that
-`Check` succeeds, downloads the plan, and applies in order: infrastructure, then Lambdas, then web. Terraform applies go
+**The tested diff is classified, and only the changed units are deployed.** `Deploy production` runs when `Check`
+succeeds on a push to `main`. It runs `scripts/deployment_plan.py` over the commits since the last successful deploy
+(see the amendment below): which Terraform roots changed (a workflow definition maps to the root that renders it; a
+`server/` change re-plans the host and release roots), whether Lambda bundles or the web build changed, and what needs
+a human. It applies in order: infrastructure, then Lambdas, then web. Terraform applies go
 through `scripts/terraform-apply-safe.sh`, which **refuses any delete or replacement the root's `destroy-allowed.txt`
 does not name** (see below); Lambdas
 through `scripts/deploy-lambdas.sh`, which updates only functions whose bundle hash changed; the web build through
@@ -106,3 +108,17 @@ secrets; the CurseForge key never leaves Parameter Store; there are no AWS acces
 | Terraform Cloud, Spacelift or Atlantis | The plan-approve-apply interaction is exactly right and is borrowed. The platforms hold apply-rights credentials to the account — a third party with write access this project keeps declining — and solve multi-operator problems one operator does not have. See [docs/prior-art.md](../prior-art.md) |
 | Long-lived AWS access keys as GitHub secrets | Nothing to rotate is better than a rotation schedule; OIDC was already the mechanism for the release role |
 | Deploy every root on every push | Simpler classifier. Plans eleven roots for a README change, and re-plans the host for every unrelated commit, which is how a stale local module or a provider upgrade becomes a surprise replacement |
+
+## Amendment — a deploy carries everything since the last successful deploy (2026-10-09)
+
+The plan was the diff between the push and the push before it, computed by `Check`. A merge whose deploy never ran
+lost its changes for good: `Check` on `main` cancels the run of the previous merge, GitHub replaces a queued deploy with a
+newer one, and a failed deploy was never retried by the next. On 2026-10-09 three merges in two minutes left the access
+API root unapplied while its Lambda code went out.
+
+`Deploy production` now computes the plan itself. Each run is titled `Deploy production <revision>`, the revision it
+deploys. The plan job reads the newest successful run with such a title and classifies the diff from that revision to
+the tested commit (`scripts/deployment_base.py`). A merge whose deploy did not run is carried by the next deploy. A rerun
+of an older deploy, whose commit a newer deploy already contains, deploys nothing. A last deployed revision outside the
+history of `main` stops the deploy for a person to look at. Until a titled run succeeds, the base is `a0caabc` (#98), the
+last revision every unit is known to have reached.

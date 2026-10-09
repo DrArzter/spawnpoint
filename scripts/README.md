@@ -24,6 +24,7 @@ Available:
 | `terraform-plan-safe.sh` | Plan one changed root read-only for a pull request; a delete or replacement fails the check unless allow-listed the same way |
 | `_terraform-destroy-allow.sh` | The judgement both safe scripts share: which destroys a root's `destroy-allowed.txt` permits, and which types may be listed at all |
 | `deployment_plan.py` | Convert a tested Git diff into web, Lambda and exact Terraform deploy units |
+| `deployment_base.py` | Choose the revision a production deploy is measured from: the last one deployed |
 | `upsert-pr-comment.sh` | Create or update one marker-owned GitHub Actions summary comment on a pull request |
 | `terraform-verify-applied.sh` | Prove a manually applied root has a zero-change read-only plan, for the production workflow |
 | `promote-release.sh` | Promote one world's current wipe to a published release through Lifecycle V2, and follow the operation |

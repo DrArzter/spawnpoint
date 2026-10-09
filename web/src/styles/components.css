@@ -375,8 +375,9 @@ button.chip[aria-pressed="true"] {
 }
 
 /* A card's own menu stands in its corner on the title's line, in line with
-   its rows' menus, instead of hanging 10px below the title it belongs to. */
-.card-header > .btn-row:not(:has(.btn, .tip-anchor)) {
+   its rows' menus, instead of hanging 10px below the title it belongs to.
+   Only a menu: a status in the same place keeps the card's padding. */
+.card-header > .btn-row:has(> .icon-btn):not(:has(.btn, .tip-anchor)) {
   align-self: center;
   margin-block: -10px;
   margin-right: -12px;
@@ -925,9 +926,12 @@ button.chip[aria-pressed="true"] {
   }
 
   /* An empty table has no row to label, so its cell is not a label and a value.
-     Left in the pair, the state sat in the value column, off to one side. */
+     Left in the pair, the state sat in the value column, off to one side. Block
+     layout honours justify-items too, so the pair's `end` is reset as well: it
+     shrank the empty state to its content against the right edge. */
   .table td.table-empty {
     display: block;
+    justify-items: normal;
     padding: 0;
     text-align: center;
   }
@@ -1096,7 +1100,6 @@ button.chip[aria-pressed="true"] {
   }
 
   .details-row {
-    align-items: baseline;
     padding: 8px 0;
   }
 
@@ -1104,11 +1107,16 @@ button.chip[aria-pressed="true"] {
      the 16px a stacked table row has at this step; without it the labels
      touched the card's edge while every row above them did not. */
   .details-flush .details-row {
-    align-items: baseline;
+    align-items: start;
     padding: 8px 16px;
   }
 
+  /* The label stands on the value's first line, not on its baseline: a value
+     that starts with an icon, such as a status or an address, has its baseline
+     at the icon's foot, which put the label below the text. The label's box is
+     the 20px every value's first line takes, so its text centres on that line. */
   .details dt {
+    min-height: 20px;
     font-size: 12px;
     line-height: 16px;
   }

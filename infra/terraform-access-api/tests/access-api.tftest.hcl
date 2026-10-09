@@ -174,7 +174,7 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
     condition = alltrue([
       jsondecode(aws_ssm_document.console.content).parameters.worldId.allowedPattern == "^[a-z0-9][a-z0-9-]{0,31}$",
       jsondecode(aws_ssm_document.console.content).parameters.slot.allowedPattern == "^([0-9]{1,3})?$",
-      jsondecode(aws_ssm_document.console.content).parameters.command.allowedPattern == "^[A-Za-z0-9+/]{1,1400}={0,2}$",
+      jsondecode(aws_ssm_document.console.content).parameters.command.allowedPattern == "^[A-Za-z0-9+/]{1,700}[A-Za-z0-9+/]{0,700}={0,2}$",
     ])
     error_message = "Every value the console document puts in a shell is held to a pattern that admits no quote, space or metacharacter."
   }
@@ -187,6 +187,17 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
       aws_lambda_function.access_api.environment[0].variables.WHITELIST_DOCUMENT_NAME == "spawnpoint-whitelist",
     ])
     error_message = "The whitelist document names only a world and a slot; the names come from the world's record on the host."
+  }
+
+  # SSM compiles allowedPattern as a Go regular expression, as Terraform does.
+  # Go refuses a repeat count above 1000, and SSM refused {1,1400} only at apply.
+  assert {
+    condition = alltrue(flatten([
+      for document in [aws_ssm_document.console, aws_ssm_document.whitelist] : [
+        for parameter in values(jsondecode(document.content).parameters) : can(regexall(parameter.allowedPattern, ""))
+      ]
+    ]))
+    error_message = "Every SSM document pattern must compile as a Go regular expression, which SSM checks only at apply."
   }
 
   assert {

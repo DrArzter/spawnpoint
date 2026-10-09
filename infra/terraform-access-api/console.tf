@@ -37,9 +37,11 @@ resource "aws_ssm_document" "console" {
         allowedPattern = "^([0-9]{1,3})?$"
       }
       command = {
-        type           = "String"
-        description    = "The command, base64-encoded."
-        allowedPattern = "^[A-Za-z0-9+/]{1,1400}={0,2}$"
+        type        = "String"
+        description = "The command, base64-encoded."
+        # Up to 1400 characters in two repeats: SSM compiles the pattern as a
+        # Go regular expression, which refuses a repeat count above 1000.
+        allowedPattern = "^[A-Za-z0-9+/]{1,700}[A-Za-z0-9+/]{0,700}={0,2}$"
       }
     }
     mainSteps = [{

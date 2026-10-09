@@ -35,8 +35,28 @@ GAME_FOOTPRINT_CORES="0.5"
 FACTORIO_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 FACTORIO_DATA_DIR="${FACTORIO_DATA_DIR:-${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${FACTORIO_GAME_DIR}/data}}"
 FACTORIO_RCON_HOST="${FACTORIO_RCON_HOST:-127.0.0.1}"
-# The host side of the RCON mapping follows the slot (ADR-0054).
-FACTORIO_RCON_PORT="${FACTORIO_RCON_PORT:-${SPAWNPOINT_RCON_PORT:-27015}}"
+
+# The host side of the RCON mapping follows the slot (ADR-0054). It is read
+# when a command is sent, not when the module loads: every entry script loads
+# the game first and exports the slot's ports after, in configure_game_compose.
+factorio_rcon_port() {
+  printf '%s' "${FACTORIO_RCON_PORT:-${SPAWNPOINT_RCON_PORT:-27015}}"
+  return 0
+}
+
+# Where the release's mods are reconciled and the container reads them
+# (/factorio/mods). Read when called, not when the module loads.
+factorio_mods_dir() {
+  printf '%s' "${SPAWNPOINT_WORLD_MODS_DIRECTORY:-${FACTORIO_DATA_DIR}/mods}"
+  return 0
+}
+
+# Where the release's mods are reconciled and the container reads them
+# (/factorio/mods). Read when called, not when the module loads.
+factorio_mods_dir() {
+  printf '%s' "${SPAWNPOINT_WORLD_MODS_DIRECTORY:-${FACTORIO_DATA_DIR}/mods}"
+  return 0
+}
 
 # The preset release, not Spawnpoint, selects the immutable container image
 # that opens this save. Version metadata still has to agree with itself; the
@@ -63,7 +83,7 @@ game_prepare_runtime() {
 game_prepare_installed_runtime() {
   [[ -n "${SPAWNPOINT_GAME_IMAGE:-}" ]] && return 0
   local mods_dir manifest
-  mods_dir="${SPAWNPOINT_WORLD_MODS_DIRECTORY:-${FACTORIO_DATA_DIR}/mods}"
+  mods_dir="$(factorio_mods_dir)"
   manifest="${mods_dir}/.spawnpoint-release.json"
   [[ -f "${manifest}" && ! -L "${manifest}" ]] || {
     printf 'error: installed Factorio release manifest not found: %s\n' "${manifest}" >&2
@@ -80,7 +100,7 @@ factorio_rcon() {
     return 1
   }
   python3 "${FACTORIO_GAME_DIR}/rcon-client.py" \
-    "${FACTORIO_RCON_HOST}" "${FACTORIO_RCON_PORT}" \
+    "${FACTORIO_RCON_HOST}" "$(factorio_rcon_port)" \
     "$(head -n1 -- "${password_file}")" \
     "${command}"
 }
@@ -88,6 +108,13 @@ factorio_rcon() {
 game_query_players_raw() {
   factorio_rcon "/players online" || return $?
   return 0
+}
+
+# The reply, or the transport's failure: its status is the caller's answer.
+game_console() {
+  local command="$1"
+  factorio_rcon "${command}"
+  return $?
 }
 
 # Milliseconds per tick from two readings of the tick counter. Factorio has no
@@ -163,7 +190,8 @@ game_archive_sentinel_regex() {
 # is generated at session preparation rather than carried in release payloads
 # — the manifest schema stays mods-only (ADR-0034's open question, answered).
 game_prepare_session() {
-  local mods_dir="${FACTORIO_DATA_DIR}/mods"
+  local mods_dir
+  mods_dir="$(factorio_mods_dir)"
   mkdir -p -- "${mods_dir}"
   local names=()
   local zip name

@@ -14,6 +14,9 @@ services:
       - "127.0.0.1:${SPAWNPOINT_RCON_PORT:-27015}:27015"
     volumes:
       - "${SPAWNPOINT_WORLD_DATA_DIRECTORY:-./games/factorio/data}:/factorio"
+      # The world's mods directory sits beside its data, where the release is
+      # reconciled into it (start-session.sh); the game reads /factorio/mods.
+      - "${SPAWNPOINT_WORLD_MODS_DIRECTORY:-./games/factorio/data/mods}:/factorio/mods"
     environment:
       # First boot generates a map; later boots load the newest save, which is
       # exactly the shape the backup contract archives (saves/*.zip).

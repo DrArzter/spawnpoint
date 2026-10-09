@@ -4,7 +4,7 @@ import type { HostMetricPoint, HostMetrics } from "../../api/contract";
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { MetricsModel } from "../../core/models";
 import { formatBytes } from "../../lib/format";
-import { Choice, Choices, Empty, Notice, Page, Panel, Skeleton, SkeletonGroup, Tabs, Verb } from "./ui";
+import { Choice, Choices, Empty, Notice, Panel, Skeleton, SkeletonGroup, Verb } from "./ui";
 
 // Metrics the way the status page draws its response line: one series is one
 // well with the area under its line filled in the accent, no axes and no
@@ -18,35 +18,25 @@ const PAD_BOTTOM = 12;
 
 const formatMetric = (unit: string) => (value: number) => (unit === "percent" ? `${value.toFixed(1)}%` : formatBytes(value));
 
-export function Metrics({ model }: Readonly<{ model: MetricsModel }>) {
-  return (
-    <Page>
-      <h1 className="visually-hidden">Metrics</h1>
-      <Tabs label="Metric source" onChange={model.setSource} options={[{ id: "cloudwatch", label: "CloudWatch" }, { id: "session", label: "Session" }]} value={model.source} />
-      {model.source === "cloudwatch" && <HostPanel model={model} />}
-      {model.source === "session" && <Panel><Empty title="Session telemetry is not connected yet" /></Panel>}
-    </Page>
-  );
-}
-
-function HostPanel({ model }: Readonly<{ model: MetricsModel }>) {
-  if (model.instanceId === undefined) {
-    return <Panel><Empty title="No host to measure" /></Panel>;
-  }
+// One world's host, measured (ADR-0062): never the first host in a list.
+export function MetricsPanel({ model }: Readonly<{ model: MetricsModel }>) {
   const metrics = model.metrics;
   if (metrics.status === "error" && metrics.kind === "unavailable") {
     return <Panel><Empty title="CloudWatch is not connected yet" /></Panel>;
+  }
+  if (metrics.status === "ready" && metrics.value === null) {
+    return <Panel><Empty description="Metrics show the host this world's session runs on. Start the world to see them." title="No host right now" /></Panel>;
   }
   return (
     <Panel
       head={<Choices label="Window">
         {model.ranges.map((option) => <Choice key={option.id} onClick={() => model.setRange(option.id)} pressed={model.range === option.id}>{option.label}</Choice>)}
       </Choices>}
-      name="Compute host"
+      name="Host this world runs on"
     >
       {metrics.status === "error" && <Notice description={metrics.error} title="Metrics could not be loaded" tone="error" verbs={<Verb action={metrics.retry} size="small" />} />}
       {metrics.status === "loading" && waiting}
-      {metrics.status === "ready" && lineCharts(metrics.value)}
+      {metrics.status === "ready" && metrics.value !== null && lineCharts(metrics.value)}
     </Panel>
   );
 }

@@ -1,4 +1,4 @@
-import type { ControlPlaneSnapshot, Game, ServerState, World } from "./model";
+import type { ControlPlaneSnapshot, Game, Operation, ServerState, World, WorldSession } from "./model";
 
 export type SharedHostSession = Readonly<{
   state: ServerState;
@@ -8,8 +8,62 @@ export type SharedHostSession = Readonly<{
   recoveryPending: boolean;
 }>;
 
+/*
+ * Fleet worlds (ADR-0062). Each runs on a host launched for it, with a session
+ * record of its own, so two worlds of one game run side by side and neither
+ * waits for the other. Configured worlds share the one configured host, below.
+ */
+
+/** A fleet world's session: its own record, or its game's while that still names it. */
+export function fleetSessionOf(game: Game, world: World): WorldSession | null {
+  if (world.session !== undefined) return world.session;
+  return game.lifecycle?.activeWorldId === world.id ? game.lifecycle : null;
+}
+
+export function fleetWorldState(game: Game, world: World): ServerState {
+  const observed = fleetSessionOf(game, world)?.observedState;
+  return observed === "ready" ? "running" : observed ?? "stopped";
+}
+
+export function fleetPlayersOnline(game: Game, world: World): number | null {
+  const session = fleetSessionOf(game, world);
+  if (!session?.idle || session.observedState !== "ready") return null;
+  return session.idle.playersOnline;
+}
+
+/** The worlds of a game whose session answers now: a fleet world on its own record, a configured one on its game's. */
+export function runningWorlds(game: Game | undefined): World[] {
+  if (!game) return [];
+  return game.worlds.filter((world) => world.placement === "fleet"
+    ? fleetWorldState(game, world) === "running"
+    : game.lifecycle?.activeWorldId === world.id && game.lifecycle.observedState === "ready");
+}
+
+/** Whether this world's own session holds back a change to it, whatever its placement. */
+export function worldSessionActive(game: Game, world: World): boolean {
+  const holds = (session: WorldSession | null | undefined) => session?.activeWorldId === world.id &&
+    (session.activeSessionId !== null || session.observedState !== "stopped");
+  const unnamed = game.lifecycle != null && game.lifecycle.activeWorldId == null && game.lifecycle.activeSessionId !== null;
+  return holds(world.session) || holds(game.lifecycle) || (world.placement !== "fleet" && unnamed);
+}
+
+function placementOf(snapshot: ControlPlaneSnapshot | null, worldId: string): World["placement"] {
+  for (const game of snapshot?.games ?? []) {
+    const world = game.worlds.find((candidate) => candidate.id === worldId);
+    if (world) return world.placement ?? "configured";
+  }
+  return "configured";
+}
+
+/** The running operations that hold this world back: its own, and any that name no world. */
+export function operationsBlockingWorld(snapshot: ControlPlaneSnapshot | null, world: World): Operation[] {
+  return (snapshot?.operations ?? []).filter((operation) => operation.worldId == null || operation.worldId === world.id ||
+    (world.placement !== "fleet" && placementOf(snapshot, operation.worldId) !== "fleet"));
+}
+
 export function deriveSharedHostSession(snapshot: ControlPlaneSnapshot | null): SharedHostSession {
-  const operations = snapshot?.operations ?? [];
+  // A fleet world's operation runs on its own host, never on the configured one.
+  const operations = (snapshot?.operations ?? []).filter((operation) => operation.worldId == null || placementOf(snapshot, operation.worldId) !== "fleet");
   const operation = operations[0];
   const activeGames = (snapshot?.games ?? []).filter((game) => game.lifecycle?.activeSessionId != null);
   const activeSessionAmbiguous = activeGames.length > 1;

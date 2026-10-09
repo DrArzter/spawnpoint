@@ -241,10 +241,13 @@
   padding: var(--gutter) var(--gutter) 96px;
 }
 
+/* The stack of a page, a tab or a form. A grid item may shrink below its
+   content, so a long line scrolls inside its own surface. */
 .page {
   display: grid;
   gap: 16px;
   align-content: start;
+  min-width: 0;
 }
 
 .page > .page-header {

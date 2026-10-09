@@ -140,6 +140,80 @@ stop produced a checked backup before EC2 stopped. If the watchdog itself fails,
 `Spawnpoint.WatchdogBlind` means the host was unobservable and was deliberately left running; the
 `spawnpoint-running-hours` alarm (10 consecutive hours → `spawnpoint-alert`) and the budget are the backstops.
 
+## The console (ADR-0063)
+
+A world's Console tab in the panel sends one RCON command to that world through the `spawnpoint-console` SSM document, which
+runs `server/scripts/console.sh` and nothing else. Every command is recorded in the access table under
+`CONSOLE#<worldId>` with who sent it, the host, the command and up to 4,000 characters of the answer, for ninety days.
+
+**The configured host needs the script.** A fleet host checks out the deployed commit when it launches. The configured
+host runs whatever copy of the repository it has, so after this lands, update its checkout once; until then the panel
+shows "This host has no console script yet". Check it:
+
+```bash
+aws ssm send-command --document-name spawnpoint-console --instance-ids <configured-instance-id> \
+  --parameters 'worldId=world,slot=,command=bGlzdA==' --query Command.CommandId --output text
+```
+
+`bGlzdA==` is `list`. Read the answer with `aws ssm get-command-invocation --command-id <id> --instance-id <id>`.
+
+**Who ran what.** Read a world's recent commands, newest first:
+
+```bash
+aws dynamodb query --table-name spawnpoint-access --key-condition-expression 'pk = :pk' \
+  --expression-attribute-values '{":pk":{"S":"CONSOLE#<worldId>"}}' --no-scan-index-forward --max-items 30
+```
+
+The console refuses `stop` and `save-off` for Minecraft and `quit` for Factorio and Project Zomboid: those end the game
+without the verified backup. Stop a world from its page.
+
+## The whitelist (ADR-0066)
+
+A world created from a preset keeps its whitelist on its record, `worlds/<worldId>/world.json` under `whitelist`, and the
+panel edits it in the world's **Whitelist** tab (permission `whitelist.manage`). Every start writes `whitelist.json` from
+it; a running world is sent the `spawnpoint-whitelist` SSM document, which writes the file and runs `whitelist reload`.
+
+- **Add players in the tab, not with `whitelist add`.** The server runs offline and keys a player by the UUID it derives
+  from the name; `whitelist add` looks the name up online and stores a UUID that player never has.
+- **A world that kept no list:** the first name added in the tab replaces the server's own `whitelist.json`. Names a
+  person added there by hand must be added in the tab too.
+- **The running server did not reload:** the list is written at the next start anyway. Check the host:
+
+```bash
+aws ssm send-command --document-name spawnpoint-whitelist --instance-ids <instance-id> \
+  --parameters 'worldId=<worldId>,slot=' --query Command.CommandId --output text
+```
+
+Exit code 3 means the file is written but the game did not answer; 5, that the world keeps no whitelist on its record;
+9, that the host's checkout has no `apply-whitelist.sh` yet. The configured host needs its checkout updated once.
+
+## Game settings (ADR-0064)
+
+A world's game settings are on its record, `worlds/<worldId>/world.json`, under `game_settings`, with who changed them
+and when. The panel changes them from the world's overflow, **Game settings**; a running world takes them at its next
+start. Read them, or an earlier version, from the versioned bucket:
+
+```bash
+aws s3api get-object --bucket <releases-bucket> --key worlds/<worldId>/world.json /dev/stdout | jq .game_settings
+aws s3api list-object-versions --bucket <releases-bucket> --prefix worlds/<worldId>/world.json
+```
+
+What a game may set is `server/games/<game>/settings.json`. At start the host exports only the settings the world sets;
+`warning: ignoring game settings this checkout does not define` in a start's output means the host's checkout is older
+than the panel. On the configured host, update its checkout. A value outside its definition refuses the start, and the
+output names the setting.
+
+## Downloads (ADR-0065)
+
+A world's Releases tab lists the server mods of the release its next start uses, each with a download link valid for
+fifteen minutes. A backup's menu offers **Download archive** to holders of `backup.download`, which only the Owner role
+has; the link is valid for five minutes. Every archive download is recorded first. Read who took which archive:
+
+```bash
+aws dynamodb query --table-name spawnpoint-access --key-condition-expression 'pk = :pk' \
+  --expression-attribute-values '{":pk":{"S":"DOWNLOAD#<worldId>"}}' --no-scan-index-forward --max-items 30
+```
+
 ## Telegram bot
 
 The exact first deployment, webhook and acceptance commands are recorded in
@@ -394,6 +468,9 @@ set to what was imported, `active_release` null until a start passes the health 
 - The same release version with different mod bytes is refused: releases are immutable.
 - The optional seventh argument names the game (ADR-0034): the save sentinel, the archive shape and the manifest's
   `game` follow the game module, so a factorio import is judged by `saves/*.zip` rather than `level.dat`.
+- A Minecraft save must sit in `<data-dir>/world`, the `level-name` the server is pinned to. A server that used
+  another `level-name` keeps its save under that name: rename the folder and its `_nether`/`_the_end` siblings to
+  `world` first, or the server opens a new, empty world. The world name names the backup, not the folder.
 
 **Wired on the code side, pending apply.** `start-session.sh` now performs boot-time reconciliation: it reads the
 current wipe's release state, ensures a verified local copy of the desired release (a cache on the data volume — an unchanged boot
@@ -532,6 +609,24 @@ Automatic on a failed start. To roll back manually:
 
 Rollback is the same mechanism as a deploy, which is why it can be trusted. See
 [ADR-0008](adr/0008-versioned-mod-releases.md).
+
+## A world's copy on a host (ADR-0048, amended)
+
+Between sessions a generation world lives in S3. Each start lists the archives of the current wipe and opens the
+newest; a host's copy is used as it is only when its `.spawnpoint-archive.json` names that archive. Read which archive a
+host's copy is:
+
+```bash
+jq . /srv/spawnpoint/app/server/runtime/worlds/<worldId>/generations/<gen>/.spawnpoint-archive.json
+```
+
+- **`warning: this host held an older copy`** means the world ran on another host since this one held it. The older
+  copy is at `generations/.<gen>.superseded` beside the current one, until the next time it is superseded. It is the
+  place to look if a session ended without a backup on this host and its progress matters.
+- **`error: could not list the backups of world …; refusing to start without them`** means S3 did not answer. Nothing was
+  prepared; start again once S3 answers. A start never opens an empty world in place of an archive it could not list.
+- **`warning: keeping the copy … which predates archive records`** appears once per copy prepared before this check
+  existed. The next stop records its archive.
 
 ## Restore the world
 
@@ -804,9 +899,9 @@ exclude it; then, once the Parameter Store keys below exist and one launch has b
 to `enabled`. A revert is setting `SPAWNPOINT_PLACEMENT=single`; sessions already running finish as they began,
 because every host command carries the slot it started with.
 
-Two things `shared` cannot do yet, and should not surprise anyone: two worlds of the same game still take turns (one
-lifecycle record per game), and the legacy worlds run only on the configured host (they are bound to it in the
-catalog).
+Two things `shared` cannot do yet, and should not surprise anyone: two configured worlds of the same game still take
+turns, because they share the game's lifecycle record (fleet worlds have their own, ADR-0062), and the legacy worlds
+run only on the configured host (they are bound to it in the catalog).
 
 ## Launched hosts (ADR-0054, phase 12)
 

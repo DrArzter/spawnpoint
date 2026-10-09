@@ -40,7 +40,12 @@ export interface PlacementStore {
 type SessionRequest = Readonly<{
   sessionId: string;
   worldId: string;
-  /** The lifecycle's server id, which is the game: the footprint's last resort. */
+  /** The world's game: the footprint's last resort, and whether it names its own ports. */
+  gameId?: string;
+  /**
+   * The lifecycle's server id. It was the game until fleet worlds had records
+   * of their own (ADR-0062); a start begun before then still sends only this.
+   */
   serverId?: string;
   footprint?: Footprint;
   policy?: SessionPolicy;
@@ -95,12 +100,17 @@ function requireId(name: string, value: unknown): string {
 // The footprint a session is placed with: what the caller says, else the
 // world's catalog entry, else its game's default. A world nobody can size is
 // refused here, before a host is chosen for it.
+function requestGame(request: SessionRequest): string | undefined {
+  return request.gameId ?? request.serverId;
+}
+
 export function resolveFootprint(request: SessionRequest): Footprint {
   if (request.footprint) return request.footprint;
   try {
     return footprintForWorld(request.worldId);
   } catch {
-    const byGame = request.serverId === undefined ? undefined : gameFootprints[request.serverId];
+    const gameId = requestGame(request);
+    const byGame = gameId === undefined ? undefined : gameFootprints[gameId];
     if (byGame) return byGame;
     throw new PlacementConflict(`no footprint for world ${request.worldId}`);
   }
@@ -143,7 +153,7 @@ function existingReservation(hosts: readonly VersionedHost[], sessionId: string)
 
 // A public world and a game that names its own ports take slot zero only.
 function pinnedSlot(request: SessionRequest): number | undefined {
-  return worldNeedsSlotZero(request.worldId, request.serverId) ? 0 : undefined;
+  return worldNeedsSlotZero(request.worldId, requestGame(request)) ? 0 : undefined;
 }
 
 // One conditional write per candidate; a lost write moves to the next host

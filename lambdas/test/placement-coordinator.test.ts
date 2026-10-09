@@ -50,6 +50,9 @@ test("a footprint comes from the request, the world, or the game, in that order,
   assert.deepEqual(resolveFootprint({ sessionId: "s", worldId: "world", footprint: { memoryMiB: 1024, cores: 0.25 } }), { memoryMiB: 1024, cores: 0.25 });
   assert.throws(() => resolveFootprint({ sessionId: "s", worldId: "made-later" }), PlacementConflict);
   assert.throws(() => resolveFootprint({ sessionId: "s", worldId: "made-later", serverId: "chess" }), PlacementConflict);
+  // ADR-0062: the server id may be a fleet world's own record, which is no game.
+  assert.deepEqual(resolveFootprint({ sessionId: "s", worldId: "made-later", gameId: "factorio", serverId: "world#made-later" }), { memoryMiB: 2 * 1024, cores: 0.5 });
+  assert.throws(() => resolveFootprint({ sessionId: "s", worldId: "made-later", serverId: "world#made-later" }), PlacementConflict);
 });
 
 test("registering the host that exists today is idempotent, and it is ready", async () => {

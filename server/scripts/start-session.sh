@@ -52,9 +52,9 @@ configure_game_compose
 if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
   export RELEASE_BUCKET="${RELEASE_BUCKET:-$(read_env_value RELEASE_BUCKET)}"
   "${SCRIPT_DIR}/reconcile-purged-worlds.sh" "${WORLD_ID}" >&2
-  if [[ -n "${WORLD_RESTORE_BACKUP_KEY:-}" ]]; then
-    export BACKUP_BUCKET="${BACKUP_BUCKET:-$(read_env_value BACKUP_BUCKET)}"
-  fi
+  # Every start consults the world's archives, not only a restore's: the newest
+  # one is the world wherever it last ran (ADR-0048).
+  export BACKUP_BUCKET="${BACKUP_BUCKET:-$(read_env_value BACKUP_BUCKET 2>/dev/null || true)}"
   "${SCRIPT_DIR}/prepare-world.sh" "${WORLD_ID}" >&2
 fi
 
@@ -132,6 +132,16 @@ fi
 # factorio's mod-list.json is generated here, never carried in payloads.
 if declare -F game_prepare_session >/dev/null; then
   game_prepare_session
+fi
+
+# A world that keeps its whitelist on its record (ADR-0066) gets exactly that
+# list on whichever host it lands. A world that keeps none is left as it is.
+if [[ -n "${WORLD_WHITELIST:-}" ]]; then
+  if declare -F game_render_whitelist >/dev/null; then
+    game_render_whitelist "${WORLD_DATA_DIRECTORY}" "${WORLD_WHITELIST}"
+  else
+    printf 'warning: %s keeps no whitelist file; the list on the world record is not applied\n' "${GAME_ID}" >&2
+  fi
 fi
 
 # A placed session is scraped by the host's own tier, which must exist before

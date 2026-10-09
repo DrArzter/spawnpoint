@@ -12,6 +12,12 @@ export function clientPackKey(gameId: string, presetId: string, release: string)
   return `${releaseArtifactPrefix(gameId, presetId, release)}/client.zip`;
 }
 
+/** One server mod of a release, named as its manifest records it. */
+export function releaseModKey(gameId: string, presetId: string, release: string, file: string): string {
+  if (!/^[^/\\]+\.(jar|zip)$/.test(file)) throw new Error("invalid_mod_file");
+  return `${releaseArtifactPrefix(gameId, presetId, release)}/mods/${file}`;
+}
+
 export function releaseManifestKey(gameId: string, presetId: string, release: string): string {
   return `${releaseArtifactPrefix(gameId, presetId, release)}/manifest.json`;
 }

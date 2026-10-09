@@ -40,8 +40,9 @@ individually and seeing what each one needs.
 - `itzg/docker-minecraft-server` running the intended pack, via Compose.
 - Security group has no inbound rules. No game port, SSH port or key pair; SSM access works through the instance's
   outbound connection.
-- `online-mode=false`, `white-list=true`, `enforce-whitelist=true`, with the names added by hand. The whitelist
-  becomes generated in M4. See [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
+- `online-mode=false`, `white-list=true`, `enforce-whitelist=true`. A world created from a preset keeps its names on
+  its record and the panel edits them ([ADR-0066](adr/0066-keep-a-world-whitelist-on-its-record.md)); a legacy world's
+  are still added by hand. Deriving them from linked identities is [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
 - Connectivity mode C: the persistent ZeroTier identity lives on the data volume, and the node is admitted by hand.
   The game is reachable only over the overlay. See [ADR-0024](adr/0024-connectivity-modes.md).
 - Stable ZeroTier address posted in chat by hand. Started and stopped by hand.
@@ -222,8 +223,8 @@ operates one configured world. Content-addressed mod storage is not done.
 [ADR-0054](adr/0054-place-a-session-on-a-host-with-room.md) places a preset-born world on a ready host with room or
 launches an EC2 Fleet host that fits, names it in Route 53, drains and terminates it after its last session and sweeps
 orphaned hosts; the two legacy worlds stay on the configured host over the overlay. The first launches surfaced a
-bootstrap race and drain faults, fixed the next day. Two worlds of the same game still take turns, because the
-lifecycle record is one per game; the bot still operates one configured world; content-addressed mod storage is still
+bootstrap race and drain faults, fixed the next day. Since ADR-0062 two worlds of one game run at once, each fleet
+world on a session record of its own; the bot still operates one configured world; content-addressed mod storage is still
 not done. The phases and what the acceptance run should still record are in
 [docs/capacity-allocation-rollout.md](capacity-allocation-rollout.md).
 

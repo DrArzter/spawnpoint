@@ -5,7 +5,6 @@ import { ChoiceChip } from "../../components/ui/Chip";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { Sparkline } from "../../components/ui/Sparkline";
 import { Banner, Card, EmptyState, NotConnected } from "../../components/ui/Surfaces";
-import { Tabs } from "../../components/ui/Tabs";
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { MetricsModel } from "../../core/models";
 import { Icon } from "../../icons";
@@ -14,31 +13,20 @@ import { ActionButton } from "./actions";
 
 export const formatMetric = (unit: string) => (value: number) => (unit === "percent" ? `${value.toFixed(1)}%` : formatBytes(value));
 
-export function Metrics({ model }: Readonly<{ model: MetricsModel }>) {
-  return <MetricsPage chart={sparkChart} model={model} />;
+// One world's host, measured (ADR-0062): never the first host in a list.
+// Which chart draws the numbers is the skin's choice, so it comes in as a
+// function; the terminal draws its own wells.
+export function MetricsPanel({ model }: Readonly<{ model: MetricsModel }>) {
+  return <MetricsCard chart={sparkChart} model={model} />;
 }
 
-// The page around a chart: source tabs, the window chips, the states before
-// there is anything to draw. Which chart draws the numbers is the skin's
-// choice, so it comes in as a function.
-export function MetricsPage({ model, chart, placeholder }: Readonly<{ model: MetricsModel; chart: (metrics: HostMetrics) => ReactNode; placeholder?: ReactNode }>) {
-  return (
-    <div className="page">
-      <h1 className="visually-hidden">Metrics</h1>
-      <Tabs label="Metric source" onChange={model.setSource} options={[{ id: "cloudwatch", label: "CloudWatch", icon: "cloud" }, { id: "session", label: "Session", icon: "bar_chart" }]} value={model.source} />
-      {model.source === "cloudwatch" && <HostChart chart={chart} model={model} placeholder={placeholder} />}
-      {model.source === "session" && <Card flush><NotConnected title="Session telemetry is not connected yet" /></Card>}
-    </div>
-  );
-}
-
-function HostChart({ model, chart, placeholder }: Readonly<{ model: MetricsModel; chart: (metrics: HostMetrics) => ReactNode; placeholder?: ReactNode }>) {
-  if (model.instanceId === undefined) {
-    return <Card flush><EmptyState icon="bar_chart" title="No host to measure" /></Card>;
-  }
+export function MetricsCard({ model, chart, placeholder }: Readonly<{ model: MetricsModel; chart: (metrics: HostMetrics) => ReactNode; placeholder?: ReactNode }>) {
   const metrics = model.metrics;
   if (metrics.status === "error" && metrics.kind === "unavailable") {
     return <Card flush><NotConnected title="CloudWatch is not connected yet" /></Card>;
+  }
+  if (metrics.status === "ready" && metrics.value === null) {
+    return <Card flush><EmptyState description="Metrics show the host this world's session runs on. Start the world to see them." icon="bar_chart" title="No host right now" /></Card>;
   }
   return (
     <Card
@@ -46,11 +34,11 @@ function HostChart({ model, chart, placeholder }: Readonly<{ model: MetricsModel
         <legend className="visually-hidden">Window</legend>
         {model.ranges.map((option) => <ChoiceChip key={option.id} onClick={() => model.setRange(option.id)} pressed={model.range === option.id}>{option.label}</ChoiceChip>)}
       </fieldset>}
-      title="Compute host"
+      title="Host this world runs on"
     >
       {metrics.status === "error" && <Banner actions={<ActionButton action={metrics.retry} variant="text" />} description={metrics.error} title="Metrics could not be loaded" tone="error" />}
       {metrics.status === "loading" && (placeholder ?? <MetricsSkeleton />)}
-      {metrics.status === "ready" && chart(metrics.value)}
+      {metrics.status === "ready" && metrics.value !== null && chart(metrics.value)}
     </Card>
   );
 }

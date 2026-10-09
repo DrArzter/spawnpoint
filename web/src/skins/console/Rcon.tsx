@@ -1,39 +1,68 @@
-import { Button, IconButton } from "../../components/ui/Button";
+import { Button } from "../../components/ui/Button";
 import { Status } from "../../components/ui/Status";
-import { NotConnected } from "../../components/ui/Surfaces";
+import { Timestamp } from "../../components/ui/Timestamp";
 import type { ConsoleModel } from "../../core/models";
 import { Icon } from "../../icons";
 
-// The console commits to the terminal grammar: typed command, acknowledged
-// reply, a standby cursor. Nothing here pretends a gateway exists.
-export function Rcon({ model }: Readonly<{ model: ConsoleModel }>) {
-  const { game, online, session } = model;
+// This world's console (ADR-0063), in the terminal grammar: who typed what,
+// and what the game answered. Every line is a recorded command, so nothing
+// here is decoration standing in for a session.
+export function ConsolePanel({ model }: Readonly<{ model: ConsoleModel }>) {
+  const { game, world, session, log, unavailable } = model;
   return (
     <div className="page">
-      <h1 className="visually-hidden">Console</h1>
-      <NotConnected inline title="RCON is not connected." />
       <section aria-label="RCON terminal" className="terminal">
         <header className="terminal-bar">
           <Icon name="terminal" size={18} />
-          <strong>{game ? `${game.displayName} session` : "Session"}</strong>
+          <strong>{world ? world.displayName : `${game?.displayName ?? "Game"} session`}</strong>
           <Status className="terminal-status" kind={session.kind} label={session.label} />
-          <IconButton disabled icon="close" label="Clear output (no output yet)" />
         </header>
-        <div aria-live="polite" className="terminal-output" role="log">
-          <span className="line line-muted">spawnpoint console · {game?.id ?? "no game"} · rcon gateway: not deployed</span>
-          <span className="line line-blue">{online ? `${game?.displayName ?? "The game"} is online. The console will attach to this session once the gateway exists.` : "The console attaches only to a running session."}</span>
-          <span className="line line-amber">{online ? "stop and save commands stay in the Worlds page until the gateway records who issued them." : "Start a session from Worlds to have something to attach to."}</span>
-          <span className="line"><span className="prompt">rcon&gt;</span> <span aria-hidden="true" className="cursor" /></span>
+        <div aria-busy={log?.status === "loading" || undefined} aria-live="polite" className="terminal-output" role="log">
+          {unavailable !== null && <span className="line line-muted">{unavailable}</span>}
+          {log?.status === "loading" && <span className="line line-muted">Reading the console history</span>}
+          {log?.status === "error" && (
+            <span className="line line-amber">
+              {log.error}{" "}
+              <Button data-action={log.retry.id} onClick={log.retry.run} size="small" variant="text">{log.retry.label}</Button>
+            </span>
+          )}
+          {log?.status === "ready" && log.value.length === 0 && (
+            <span className="line line-muted">No commands yet. Each one is recorded with who ran it.</span>
+          )}
+          {log?.status === "ready" && log.value.map((line) => (
+            <span className="console-entry" key={line.id}>
+              <span className="line">
+                <span className="prompt">{line.who}&gt;</span> {line.command}{" "}
+                <Timestamp className="line-muted" value={line.at} />
+              </span>
+              {line.pending && <span className="line line-muted">{line.status.label}</span>}
+              {!line.pending && line.output !== null && line.output !== "" && (
+                <span className={line.status.kind === "ok" ? "line" : "line line-amber"}>{line.output}</span>
+              )}
+              {!line.pending && line.status.kind !== "ok" && !line.output && <span className="line line-amber">{line.status.label}</span>}
+            </span>
+          ))}
         </div>
-        <form className="terminal-input" onSubmit={(event) => event.preventDefault()}>
+        <form className="terminal-input" onSubmit={(event) => { event.preventDefault(); if (!model.run.disabled) model.run.run(); }}>
           <span aria-hidden="true" className="prompt">rcon&gt;</span>
-          <input aria-label="RCON command" disabled placeholder="Gateway not connected" />
-          <Button disabled icon="keyboard_return" size="small" variant="text">Run</Button>
+          <input
+            aria-label="RCON command"
+            autoComplete="off"
+            disabled={unavailable !== null}
+            maxLength={256}
+            onChange={(event) => model.setDraft(event.target.value)}
+            placeholder={unavailable === null ? "Type a command" : "Console unavailable"}
+            spellCheck={false}
+            value={model.draft}
+          />
+          <Button data-action={model.run.id} disabled={model.run.disabled} icon="keyboard_return" loading={model.run.busy} size="small" title={model.run.hint} type="submit" variant="text">{model.run.label}</Button>
         </form>
       </section>
       <fieldset className="quick-commands fieldset-plain">
         <legend className="visually-hidden">Quick commands</legend>
-        {model.quickCommands.map((command) => <Button disabled key={command} size="small" title="Available once the RCON gateway is connected" variant="outlined"><code>{command}</code></Button>)}
+        {model.quickCommands.map((command) => (
+          <Button data-action={command.id} disabled={command.disabled} key={command.label} onClick={command.run} size="small" title={command.hint} variant="outlined"><code>{command.label}</code></Button>
+        ))}
       </fieldset>
     </div>
   );

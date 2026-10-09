@@ -819,12 +819,14 @@
 .entry-form > p { grid-column: 1; grid-row: 1; min-width: 0; }
 .entry-form .btn { grid-column: 2; grid-row: 1; }
 .entry-form p { margin: 0; }
-/* Level with the input, under its 16px label and 6px gap, whatever hint or
-   error the field shows below it. */
+/* A button beside a field takes the field's height and its line: under the
+   16px label and 6px gap, whatever hint or error the field shows below it. */
 .entry-form .field ~ .btn {
   align-self: start;
-  margin-top: calc(22px + (40px - var(--control-height)) / 2);
+  height: 40px;
+  margin-top: 22px;
 }
+.access-invite-link .btn { height: 40px; }
 
 .access-invite-link {
   display: flex;
@@ -841,8 +843,8 @@
    one; a button alone on its line takes the width, as every action does at
    this step. */
 @media (max-width: 599px) {
-  .entry-form { grid-template-columns: minmax(0, 1fr); }
-  .entry-form .btn { grid-column: 1; grid-row: 3; width: 100%; }
+  .entry-form { grid-template-columns: minmax(0, 1fr); row-gap: 12px; }
+  .entry-form .btn { grid-column: 1; grid-row: 2; width: 100%; }
   .entry-form .field ~ .btn { margin-top: 0; }
   .access-invite-link .btn {
     flex: 1 1 100%;

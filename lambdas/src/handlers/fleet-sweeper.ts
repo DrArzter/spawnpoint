@@ -111,12 +111,10 @@ export async function handler(): Promise<void> {
       ],
       ...(nextToken ? { NextToken: nextToken } : {}),
     }));
-    for (const reservation of page.Reservations ?? []) {
-      for (const instance of reservation.Instances ?? []) {
-        const alarm = await inspectInstance(instance, table, drainArn, now, grace, warmRetention, activeDrains);
-        if (alarm) alarms.push(alarm);
-      }
-    }
+    // Each host is its own decision; the running drains are read once and shared.
+    const instances = (page.Reservations ?? []).flatMap((reservation) => reservation.Instances ?? []);
+    const found = await Promise.all(instances.map((instance) => inspectInstance(instance, table, drainArn, now, grace, warmRetention, activeDrains)));
+    alarms.push(...found.filter((alarm): alarm is string => Boolean(alarm)));
     nextToken = page.NextToken;
   } while (nextToken);
   if (alarms.length > 0) throw new Error(`Fleet needs manual review: ${alarms.join("; ")}`);

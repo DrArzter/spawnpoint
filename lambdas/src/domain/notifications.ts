@@ -106,7 +106,8 @@ export function renderNotification(event: ExecutionEvent): string | null {
         const up = world === null ? "Server is up" : `${world} is up`;
         return address === null ? `[READY] ${up}.` : `[READY] ${up}: ${address}`;
       }
-      return `[FAILED] ${world === null ? "Start" : `Start of ${world}`} failed (${event.name}). The owner can read the execution history.`;
+      const start = world === null ? "Start" : `Start of ${world}`;
+      return `[FAILED] ${start} failed (${event.name}). The owner can read the execution history.`;
     }
 
     case "spawnpoint-idle-watchdog": {

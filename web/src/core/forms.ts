@@ -85,6 +85,18 @@ export function useWorldSettingsForm(game: Game, world: World, deployment: Deplo
   };
 }
 
+// What a start does, in the words of where the world will run.
+function startDescription(game: Game, world: World): string {
+  if (world.materialization === "not_created") {
+    const host = world.placement === "fleet" ? "launch a fleet host for it" : `boot the shared host for ${game.displayName}`;
+    return `Spawnpoint will create ${world.displayName} from its ready preset, open wipe #1 and ${host}. The first start may take several minutes, and the host is billed while it runs.`;
+  }
+  if (world.placement === "fleet") {
+    return `Spawnpoint will launch a fleet host for ${world.displayName}, or reuse one with room. Other worlds keep running. ${game.displayName} may take several minutes to become healthy, and the host is billed while it runs.`;
+  }
+  return `Spawnpoint will boot the shared host and start ${world.displayName}. ${game.displayName} may take several minutes to become healthy, and the host is billed while it runs.`;
+}
+
 function confirmationCopy(confirmation: Confirmation): { title: string; description: string; label: string; destructive: boolean } {
   const { world, game } = confirmation;
   switch (confirmation.kind) {
@@ -92,11 +104,7 @@ function confirmationCopy(confirmation: Confirmation): { title: string; descript
       return confirmation.action === "start"
         ? {
           title: "Start a billed AWS session?",
-          description: world.materialization === "not_created"
-            ? `Spawnpoint will create ${world.displayName} from its ready preset, open wipe #1 and ${world.placement === "fleet" ? "launch a fleet host for it" : `boot the shared host for ${game.displayName}`}. The first start may take several minutes, and the host is billed while it runs.`
-            : world.placement === "fleet"
-              ? `Spawnpoint will launch a fleet host for ${world.displayName}, or reuse one with room. Other worlds keep running. ${game.displayName} may take several minutes to become healthy, and the host is billed while it runs.`
-              : `Spawnpoint will boot the shared host and start ${world.displayName}. ${game.displayName} may take several minutes to become healthy, and the host is billed while it runs.`,
+          description: startDescription(game, world),
           label: "Start session",
           destructive: false,
         }

@@ -25,28 +25,34 @@ type ControlPlaneState =
   | { status: "ready"; snapshot: ControlPlaneSnapshot; error: "" }
   | { status: "error"; snapshot: ControlPlaneSnapshot | null; error: string };
 
-export function deriveServerState(game: Game | undefined, snapshot: ControlPlaneSnapshot | null): ServerState {
-  if (snapshot?.deployment?.placement === "fleet") {
-    // Several worlds of a game may run at once, each on its own record
-    // (ADR-0062): the game is online while any of them is.
-    const observed = [game?.lifecycle?.observedState, ...(game?.worlds ?? []).map((world) => world.session?.observedState)];
-    if (observed.includes("ready")) return "running";
-    if (observed.includes("starting")) return "starting";
-    if (observed.includes("stopping")) return "stopping";
-    if (observed.includes("unknown")) return "unknown";
-    return "stopped";
-  }
-  const operation = snapshot?.operations[0];
-  if (operation?.type === "start") return "starting";
-  if (operation?.type === "stop") return "stopping";
-  const observed = game?.lifecycle?.observedState;
-  if (observed === "ready") return "running";
-  if (observed === "starting" || observed === "stopping" || observed === "stopped" || observed === "unknown") return observed;
+// Several worlds of a game may run at once, each on its own record
+// (ADR-0062): the game is online while any of them is.
+function fleetServerState(game: Game | undefined): ServerState {
+  const observed = new Set([game?.lifecycle?.observedState, ...(game?.worlds ?? []).map((world) => world.session?.observedState)]);
+  if (observed.has("ready")) return "running";
+  if (observed.has("starting")) return "starting";
+  if (observed.has("stopping")) return "stopping";
+  if (observed.has("unknown")) return "unknown";
+  return "stopped";
+}
+
+// With no record to go by, the shared host's own state is the answer.
+function hostServerState(snapshot: ControlPlaneSnapshot | null): ServerState {
   const hostStates = snapshot?.hosts.map((host) => host.state) ?? [];
   if (hostStates.includes("pending")) return "starting";
   if (hostStates.includes("stopping")) return "stopping";
   if (hostStates.includes("running")) return "unknown";
   return hostStates.length > 0 ? "stopped" : "unknown";
+}
+
+export function deriveServerState(game: Game | undefined, snapshot: ControlPlaneSnapshot | null): ServerState {
+  if (snapshot?.deployment?.placement === "fleet") return fleetServerState(game);
+  const operation = snapshot?.operations[0];
+  if (operation?.type === "start") return "starting";
+  if (operation?.type === "stop") return "stopping";
+  const observed = game?.lifecycle?.observedState;
+  if (observed === "ready") return "running";
+  return observed ?? hostServerState(snapshot);
 }
 
 const lifecycleLabels: Record<WorldActionKind, string> = { wipe: "New wipe", archive: "Archive", restore: "Restore", purge: "Delete" };

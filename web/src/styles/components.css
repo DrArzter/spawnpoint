@@ -1370,6 +1370,12 @@ button.chip[aria-pressed="true"] {
   color: var(--ink);
   box-shadow: var(--shadow-3);
   overflow: hidden;
+  /* The top layer draws the menu above everything, but it still inherits from
+     the element it is mounted in. A row's menu lives in a right-aligned,
+     non-wrapping action cell: its items read right-aligned, and a long detail
+     pushed the label past the menu's edge. */
+  text-align: start;
+  white-space: normal;
   transform-origin: top;
   animation: menu-in var(--dur) var(--ease) both;
 }
@@ -1397,7 +1403,13 @@ button.chip[aria-pressed="true"] {
 }
 
 .menu-item .icon {
+  flex: none;
   color: var(--ink-secondary);
+}
+
+/* The text gives way to the menu's width, so a detail wraps under its label. */
+.menu-item > span {
+  min-width: 0;
 }
 
 .menu-item:hover,

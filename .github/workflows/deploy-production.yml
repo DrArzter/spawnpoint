@@ -31,10 +31,12 @@ jobs:
       terraform_roots: ${{ steps.read.outputs.terraform_roots }}
       web: ${{ steps.read.outputs.web }}
     steps:
-      - name: Check out the tested commit
+      # The scripts that read the diff come from main, never from the commit
+      # that triggered the run; deployment_base.py refuses a commit not on main.
+      - name: Check out main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: main
           fetch-depth: 0
 
       # Measured from the last successful deploy, not from the push before this

@@ -118,7 +118,8 @@ API root unapplied while its Lambda code went out.
 
 `Deploy production` now computes the plan itself. Each run is titled `Deploy production <revision>`, the revision it
 deploys. The plan job reads the newest successful run with such a title and classifies the diff from that revision to
-the tested commit (`scripts/deployment_base.py`). A merge whose deploy did not run is carried by the next deploy. A rerun
+the tested commit (`scripts/deployment_base.py`). The plan job checks out `main` and runs its scripts, never the
+triggering commit's, and refuses a commit that is not on `main`. A merge whose deploy did not run is carried by the next deploy. A rerun
 of an older deploy, whose commit a newer deploy already contains, deploys nothing. A last deployed revision outside the
 history of `main` stops the deploy for a person to look at. Until a titled run succeeds, the base is `a0caabc` (#98), the
 last revision every unit is known to have reached.

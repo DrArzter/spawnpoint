@@ -21,7 +21,7 @@ def is_ancestor(ancestor: str, descendant: str) -> bool:
 
 
 def base(titles: list[str], head: str) -> str:
-    return choose_base(titles, head, is_ancestor, first_base=A)[0]
+    return choose_base(titles, head, is_ancestor, first_base=A, main=C)[0]
 
 
 class DeploymentBaseTest(unittest.TestCase):
@@ -45,6 +45,10 @@ class DeploymentBaseTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             base([f"Deploy production {OTHER}"], C)
 
+    def test_a_commit_that_is_not_on_main_is_refused(self) -> None:
+        with self.assertRaises(ValueError):
+            base([f"Deploy production {A}"], OTHER)
+
     def test_only_a_full_revision_is_accepted_as_head(self) -> None:
         with self.assertRaises(ValueError):
             base([f"Deploy production {A}"], "main")
@@ -54,6 +58,10 @@ class DeploymentBaseTest(unittest.TestCase):
         self.assertIn("run-name: Deploy production ${{ github.event.workflow_run.head_sha }}", workflow)
         self.assertIn("status=success", workflow)
         self.assertIn("scripts/deployment_base.py", workflow)
+        # Scripts run from main, never from the commit that triggered the run.
+        plan_job = workflow.split("\n  plan:\n", 1)[1].split("\n  manual-review:", 1)[0]
+        self.assertIn("ref: main", plan_job)
+        self.assertNotIn("ref: ${{ github.event.workflow_run.head_sha }}", plan_job)
 
 
 if __name__ == "__main__":

@@ -42,8 +42,12 @@ def choose_base(
     head: str,
     is_ancestor: Callable[[str, str], bool],
     first_base: str = FIRST_BASE,
+    main: str = "HEAD",
 ) -> tuple[str, str]:
     head = validated_revision(head)
+    # The checkout is main: a commit outside it, such as a fork's, is never deployed.
+    if not is_ancestor(head, main):
+        raise ValueError(f"{head} is not on main")
     deployed = last_deployed(titles) or first_base
     if deployed == head or is_ancestor(head, deployed):
         # A rerun of an older deploy must not put older code back.

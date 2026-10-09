@@ -1,3 +1,4 @@
+import type { SettingValue } from "./game-settings.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
 
 export type GenerationSource =
@@ -12,6 +13,13 @@ export type WorldGeneration = Readonly<{
 }>;
 
 export type ClosedWorldGeneration = WorldGeneration & Readonly<{ closedAt: string }>;
+
+/** The game settings a world sets (ADR-0064), and who set them last. They outlive wipes. */
+export type WorldGameSettings = Readonly<{
+  values: Readonly<Record<string, SettingValue>>;
+  updatedAt: string;
+  updatedBy: Readonly<{ identityId: string; displayName: string }>;
+}>;
 
 export type WorldRecord = Readonly<{
   worldId: string;
@@ -29,6 +37,7 @@ export type WorldRecord = Readonly<{
   }>;
   currentGeneration: WorldGeneration;
   previousGenerations: readonly ClosedWorldGeneration[];
+  gameSettings?: WorldGameSettings;
 }>;
 
 type ObjectValue = Record<string, unknown>;
@@ -37,10 +46,38 @@ const GENERATION_ID = /^gen-[0-9a-f]{32}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const RELEASE = /^[0-9]+\.[0-9]+$/;
+const SETTING_ID = /^[a-z][a-z0-9_]{0,31}$/;
 const BACKUP_KEY = /^worlds\/[a-z0-9][a-z0-9-]{0,31}\/archives\/[A-Za-z0-9._-]+\.tar\.zst$/;
 
 function object(value: unknown): ObjectValue | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as ObjectValue : null;
+}
+
+// The record keeps any scalar a setting may hold; whether a value is valid for
+// its game is checked where it is written (game-settings.ts) and again on the
+// host. A record with anything else in it is not a world record.
+function parseGameSettings(value: unknown): WorldGameSettings | null {
+  const root = object(value);
+  const values = object(root?.values);
+  const by = object(root?.updated_by);
+  if (
+    root === null || values === null || by === null ||
+    typeof root.updated_at !== "string" || Number.isNaN(Date.parse(root.updated_at)) ||
+    typeof by.identity_id !== "string" || by.identity_id.length === 0 ||
+    typeof by.display_name !== "string" ||
+    Object.entries(values).some(([id, setting]) => !SETTING_ID.test(id) || !(
+      typeof setting === "boolean" || (typeof setting === "number" && Number.isFinite(setting)) ||
+      (typeof setting === "string" && setting.length <= 200)))
+  ) return null;
+  return {
+    values: values as Record<string, SettingValue>,
+    updatedAt: root.updated_at,
+    updatedBy: { identityId: by.identity_id, displayName: by.display_name },
+  };
+}
+
+export function withGameSettings(record: WorldRecord, gameSettings: WorldGameSettings): WorldRecord {
+  return { ...record, gameSettings };
 }
 
 export function worldIdForName(gameId: string, displayName: string, worldUuid: string): string {
@@ -241,6 +278,11 @@ export function worldRecordDocument(record: WorldRecord): ObjectValue {
     },
     current_generation: generationDocument(record.currentGeneration),
     previous_generations: record.previousGenerations.map(generationDocument),
+    ...(record.gameSettings === undefined ? {} : { game_settings: {
+      values: record.gameSettings.values,
+      updated_at: record.gameSettings.updatedAt,
+      updated_by: { identity_id: record.gameSettings.updatedBy.identityId, display_name: record.gameSettings.updatedBy.displayName },
+    } }),
   };
 }
 
@@ -250,6 +292,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
   const generation = parseGeneration(root?.current_generation, false);
   const previousValues = root?.previous_generations ?? [];
   const previous = Array.isArray(previousValues) ? previousValues.map((value) => parseGeneration(value, true)) : null;
+  const gameSettings = root?.game_settings === undefined ? undefined : parseGameSettings(root.game_settings);
   if (
     root === null || root.schema_version !== 1 || root.storage_layout !== "generation" ||
     typeof root.world_id !== "string" || !ID.test(root.world_id) ||
@@ -266,7 +309,8 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     typeof preset.repository !== "string" || !preset.repository.startsWith("https://github.com/") ||
     typeof preset.commit !== "string" || !COMMIT.test(preset.commit) ||
     typeof preset.profile_digest !== "string" || !SHA256.test(preset.profile_digest) ||
-    generation === null || previous === null || previous.some((value) => value === null)
+    generation === null || previous === null || previous.some((value) => value === null) ||
+    gameSettings === null
   ) return null;
   const current = generation as WorldGeneration;
   const history = previous as ClosedWorldGeneration[];
@@ -298,5 +342,6 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     },
     currentGeneration: current,
     previousGenerations: history,
+    ...(gameSettings === undefined ? {} : { gameSettings }),
   };
 }

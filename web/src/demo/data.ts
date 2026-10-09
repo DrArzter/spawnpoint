@@ -1,6 +1,6 @@
 import type { AccessCandidate, AccessIdentity, AccessRole, ActiveSession, AppearancePreference, BackupEntry, InvitationSummary, SubscriptionState } from "../auth";
 import type { ConsoleEntry } from "../api/contract";
-import type { ControlPlaneSnapshot } from "../model";
+import type { ControlPlaneSnapshot, SettingDefinition } from "../model";
 import { DEFAULT_ACCENT } from "../styles/accent";
 
 // The demo mutates its own control plane, so every record it holds is mutable
@@ -32,13 +32,27 @@ export const demoSession: ActiveSession = {
   identity: { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [] },
   // Demo capabilities include unfinished prototypes so their screens remain
   // explorable without advertising those destinations in production.
-  capabilities: ["releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations"],
-  role: { id: "owner", name: "Owner", permissions: ["status.read", "connection.read", "session.start", "session.stop", "invitation.send", "metrics.read", "console.use", "release.read", "release.promote", "backup.read", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite"] },
+  capabilities: ["releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "backupDownloads"],
+  role: { id: "owner", name: "Owner", permissions: ["status.read", "connection.read", "session.start", "session.stop", "invitation.send", "metrics.read", "console.use", "release.read", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite"] },
   profile: { provider: "telegram", platformUserId: "1780660807", telegramId: "1780660807", username: "drarzter", email: null, photoUrl: null },
   bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "1780660807", claimedAt: "2026-08-28T18:24:00.000Z" },
 };
 
 const OWNER_PERMISSIONS = demoSession.role?.permissions ?? [];
+
+// server/games/minecraft/settings.json as the API serves it (ADR-0064); a test
+// holds the two together.
+export const MINECRAFT_SETTINGS: readonly SettingDefinition[] = [
+  { id: "difficulty", label: "Difficulty", type: "choice", default: "normal", choices: [{ value: "peaceful", label: "Peaceful" }, { value: "easy", label: "Easy" }, { value: "normal", label: "Normal" }, { value: "hard", label: "Hard" }] },
+  { id: "game_mode", label: "Game mode", type: "choice", default: "survival", hint: "Players who join for the first time get it. Players already in the world keep theirs.", choices: [{ value: "survival", label: "Survival" }, { value: "creative", label: "Creative" }, { value: "adventure", label: "Adventure" }, { value: "spectator", label: "Spectator" }] },
+  { id: "max_players", label: "Player limit", type: "integer", default: 20, min: 1, max: 100 },
+  { id: "motd", label: "Server list message", type: "text", default: "A Minecraft Server", maxLength: 59, pattern: "^[A-Za-z0-9 .,!?'()&+#/:-]+$", hint: "Letters, digits, spaces and . , ! ? ' ( ) & + # / : -" },
+  { id: "pvp", label: "Player versus player", type: "boolean", default: true },
+  { id: "allow_flight", label: "Allow flight", type: "boolean", default: false, hint: "Turn it on for mods with jetpacks or flight, or the server kicks players who fly." },
+  { id: "spawn_monsters", label: "Hostile mobs", type: "boolean", default: true },
+  { id: "view_distance", label: "View distance", type: "integer", default: 10, min: 3, max: 32, hint: "In chunks. A larger distance uses more of the host's memory and CPU." },
+  { id: "simulation_distance", label: "Simulation distance", type: "integer", default: 10, min: 3, max: 32, hint: "In chunks. A larger distance uses more of the host's memory and CPU." },
+];
 
 export function initialState(): DemoState {
   return {
@@ -52,6 +66,7 @@ export function initialState(): DemoState {
           id: "minecraft",
           code: "MC",
           displayName: "Minecraft",
+          settings: [...MINECRAFT_SETTINGS],
           lifecycle: { schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "session-42", activeWorldId: "minecraft-rostik-12345678", updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: { playersOnline: 3, consecutiveEmpty: 0, lastObservedAtEpochSeconds: Math.floor(Date.now() / 1000) - 45 } },
           presets: [
             { id: "industrial", displayName: "Industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5", profileDigest: "41d9a8e0c73b5f26184ad0e9cb7f3520a6e81d4c95f27b03ea6d183c7b40f9e2", releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3" },
@@ -73,6 +88,7 @@ export function initialState(): DemoState {
               ],
               connectionAddress: "172.29.23.24:25565",
               release: { state: "available", generationId: "gen-c73b18ae5f0492d6817be30a4c95f2d1", activeRelease: "1.2", desiredRelease: "1.2" },
+              gameSettings: { values: { difficulty: "hard", allow_flight: true }, updatedAt: "2026-09-20T18:00:00.000Z" },
             },
             {
               id: "vanilla",
@@ -86,6 +102,8 @@ export function initialState(): DemoState {
               wipes: [],
               connectionAddress: "172.29.23.24:25565",
               release: { state: "available", generationId: null, activeRelease: "1.21", desiredRelease: "1.21" },
+              // A legacy world has no record to keep settings in.
+              gameSettings: null,
             },
           ],
         },

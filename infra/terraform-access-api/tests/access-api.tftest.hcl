@@ -195,6 +195,18 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.access_api.statement : statement.sid == "DownloadWorldArchives"
+      ]) && alltrue([
+      for statement in data.aws_iam_policy_document.access_api.statement :
+      statement.actions == toset(["s3:GetObject"]) &&
+      statement.resources == toset(["arn:aws:s3:::spawnpoint-backups-123456789012/worlds/*/archives/*.tar.zst"])
+      if anytrue([for resource in statement.resources : startswith(resource, "arn:aws:s3:::spawnpoint-backups-123456789012/")])
+    ])
+    error_message = "The API reads world archives for backup.download and nothing else in the backup bucket, and writes none."
+  }
+
+  assert {
     condition     = aws_lambda_function.access_api.environment[0].variables.CONSOLE_DOCUMENT_NAME == "spawnpoint-console"
     error_message = "The API names the console document it may send."
   }

@@ -66,6 +66,21 @@ level_name="$(
 )"
 jq -e --arg level "${level_name}" '.services.mc.environment.LEVEL == $level' >/dev/null <<<"${rendered}"
 
+# Every game setting (ADR-0064) has its entry. One the world does not set has
+# no value, so the container never sees it and the server keeps what it had;
+# difficulty keeps the default it always had.
+jq -e --slurpfile definitions "${server_directory}/games/minecraft/settings.json" '
+  .services.mc.environment as $environment
+  | all($definitions[0].settings[]; .env as $name | $environment | has($name))
+  and $environment.DIFFICULTY == "normal"
+  and all($definitions[0].settings[] | select(.env != "DIFFICULTY"); .env as $name | $environment[$name] == null)
+' >/dev/null <<<"${rendered}"
+set_rendered="$(DIFFICULTY=hard MAX_PLAYERS=8 MOTD="Rostik's world" render_game minecraft 2>/dev/null)"
+jq -e '
+  .services.mc.environment.DIFFICULTY == "hard" and .services.mc.environment.MAX_PLAYERS == "8"
+  and .services.mc.environment.MOTD == "Rostik'"'"'s world" and .services.mc.environment.MODE == null
+' >/dev/null <<<"${set_rendered}"
+
 # The observability tier is shared, so it must appear in a session of a game
 # that has no exporter of its own — and that game must not inherit another
 # game's exporter or scrape file.

@@ -1,6 +1,6 @@
 import type { Skin } from "../skin";
 import { Access } from "./Access";
-import { ConfirmationDialog, CreateWorldSheet, InvitationSheet, ScopeDialog, WorldSettingsSheet } from "./Dialogs";
+import { ConfirmationDialog, CreateWorldSheet, GameSettingsSheet, InvitationSheet, ScopeDialog, WorldSettingsSheet } from "./Dialogs";
 import { Profile } from "./Profile";
 import { Releases } from "./Releases";
 import { Boot, Shell } from "./Shell";
@@ -23,5 +23,6 @@ export const consoleSkin: Skin = {
   ConfirmationDialog,
   CreateWorldSheet,
   WorldSettingsSheet,
+  GameSettingsSheet,
   InvitationSheet,
 };

@@ -986,6 +986,10 @@ html[data-skin="terminal"] .t-field-hint {
   color: var(--ink-secondary);
 }
 
+html[data-skin="terminal"] .t-field-error {
+  color: var(--error-ink);
+}
+
 @media (max-width: 959px) {
   html[data-skin="terminal"] .t-input {
     font-size: 16px;

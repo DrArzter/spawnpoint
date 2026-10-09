@@ -1,6 +1,7 @@
 import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
-import type { ConsoleEntry, HostMetrics, MetricRange } from "../api/contract";
-import type { ControlPlaneSnapshot, Preset, World } from "../model";
+import type { ConsoleEntry, FileLink, HostMetrics, MetricRange, ReleaseMods } from "../api/contract";
+import { settingValueValid } from "../core/settings";
+import type { ControlPlaneSnapshot, Preset, SettingValue, World, WorldGameSettings } from "../model";
 import { DemoState, initialState, Mutable } from "./data";
 
 // One in-memory control plane for the whole demo. Transitions are scheduled in
@@ -312,21 +313,81 @@ export function worldMetrics(gameId: string, worldId: string, range: MetricRange
   return holds ? hostMetrics(state.snapshot.hosts[0]?.id ?? "host-game", range) : null;
 }
 
+// The real console signs a short-lived S3 link; the demo runs in memory, so a
+// small text file stands in for whatever would download.
+function demoFile(title: string, facts: readonly string[], standsFor: string): string {
+  const body = [title, ``, ...facts, ``, `The real console signs a short-lived S3 link here. The demo runs in memory,`, `so this file stands in for ${standsFor}.`].join("\n");
+  return URL.createObjectURL(new Blob([body], { type: "text/plain" }));
+}
+
 export function packLink(gameId: string, worldId: string): { release: string; url: string } {
   settle();
   const target = world(gameId, worldId);
   const release = target.release.activeRelease;
   if (!release) throw new Error("This world has no release yet, so there is no pack to install.");
-  const body = [
-    `Spawnpoint demo client pack`,
-    ``,
-    `World:   ${target.displayName} (${target.id})`,
-    `Release: ${release}`,
-    ``,
-    `The real console signs a short-lived S3 link here. The demo runs in memory,`,
-    `so this file stands in for the mod pack archive.`,
-  ].join("\n");
-  return { release, url: URL.createObjectURL(new Blob([body], { type: "text/plain" })) };
+  return { release, url: demoFile("Spawnpoint demo client pack", [`World:   ${target.displayName} (${target.id})`, `Release: ${release}`], "the mod pack archive") };
+}
+
+// A release's server mods as its manifest lists them (ADR-0065). The demo has
+// no store, so every release holds a fixed set and each later one adds a mod.
+const DEMO_MODS: readonly (readonly [string, number])[] = [
+  ["create-1.20.1-0.5.1.j.jar", 14_221_830],
+  ["jei-1.20.1-forge-15.20.0.106.jar", 1_402_115],
+  ["Mekanism-1.20.1-10.4.15.75.jar", 11_096_402],
+  ["appliedenergistics2-forge-15.3.3.jar", 6_823_771],
+  ["ftb-quests-forge-2001.4.9.jar", 1_218_903],
+  ["sophisticatedbackpacks-1.20.1-3.21.2.1199.jar", 2_317_664],
+  ["Jade-1.20.1-Forge-11.12.3.jar", 734_020],
+  ["thermal_expansion-1.20.1-11.0.1.29.jar", 1_985_337],
+];
+
+// A stable stand-in for a SHA-256: 64 hex digits derived from the name.
+function demoDigest(text: string): string {
+  let hash = 2166136261;
+  let hex = "";
+  for (let round = 0; hex.length < 64; round += 1) {
+    for (const char of `${text}#${round}`) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
+    hex += hash.toString(16).padStart(8, "0");
+  }
+  return hex.slice(0, 64);
+}
+
+export function releaseMods(gameId: string, presetId: string, release: string): ReleaseMods {
+  settle();
+  const preset = state.snapshot.games.find((game) => game.id === gameId)?.presets.find((candidate) => candidate.id === presetId);
+  if (!preset?.releases.includes(release)) throw new Error(`Release ${release} is not in the store.`);
+  const files = DEMO_MODS.slice(0, 5 + preset.releases.indexOf(release));
+  return { release, mods: files.map(([file, bytes]) => ({ file, bytes, sha256: demoDigest(file) })) };
+}
+
+export function modLink(gameId: string, presetId: string, release: string, sha256: string): FileLink {
+  const mod = releaseMods(gameId, presetId, release).mods.find((candidate) => candidate.sha256 === sha256);
+  if (!mod) throw new Error("This release no longer lists that mod.");
+  return { url: demoFile("Spawnpoint demo mod", [`File:    ${mod.file}`, `Release: ${presetId} ${release}`], "the mod's jar"), expiresIn: 900 };
+}
+
+export function backupLink(gameId: string, worldId: string, key: string): FileLink {
+  settle();
+  const entry = (state.backups[worldKey(gameId, worldId)] ?? []).find((candidate) => candidate.key === key);
+  if (!entry) throw new Error("This backup is no longer in the store. Refresh the list.");
+  return { url: demoFile("Spawnpoint demo world backup", [`World:   ${world(gameId, worldId).displayName}`, `Archive: ${entry.archiveName}`], "the world archive"), expiresIn: 300 };
+}
+
+// A world's game settings (ADR-0064): kept on its record, checked against its
+// game's definitions, taken by a running world at its next start.
+export function updateGameSettings(gameId: string, worldId: string, values: Readonly<Record<string, SettingValue>>): WorldGameSettings {
+  settle();
+  const definitions = state.snapshot.games.find((game) => game.id === gameId)?.settings ?? [];
+  const target = world(gameId, worldId);
+  if (!target.gameSettings) throw new Error("This world has no record to keep settings in.");
+  for (const [id, value] of Object.entries(values)) {
+    const setting = definitions.find((candidate) => candidate.id === id);
+    if (!setting || !settingValueValid(setting, value)) throw new Error(`${setting?.label ?? id} has a value the game does not accept.`);
+  }
+  const saved = { values: { ...values }, updatedAt: iso() };
+  target.gameSettings = saved;
+  state.snapshot.observedAt = iso();
+  return saved;
 }
 
 export function candidates(): AccessCandidate[] {

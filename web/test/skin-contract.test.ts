@@ -6,7 +6,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { action, actionsOf, type Action } from "../src/core/actions.ts";
-import type { AccessModel, ConfirmationModel, ConsoleModel, CreateWorldModel, InvitationModel, MetricsModel, ProfileModel, ReleasesModel, ShellModel, WorldModel, WorldsModel, WorldSettingsModel } from "../src/core/models.ts";
+import type { AccessModel, ConfirmationModel, ConsoleModel, CreateWorldModel, GameSettingsModel, InvitationModel, MetricsModel, ProfileModel, ReleasesModel, ShellModel, WorldModel, WorldsModel, WorldSettingsModel } from "../src/core/models.ts";
 import type { Game, World } from "../src/model.ts";
 import { SKINS } from "../src/skins/index.ts";
 
@@ -107,8 +107,13 @@ const worldPage: WorldModel = {
     inventory: { status: "ready", value: { entries: [{ key: "backups/a.tar.zst", archiveName: "rostik-2026-09-23T11-00-00.tar.zst", generationId: "wipe-2", storedAt: "2026-09-23T11:00:00Z", sizeBytes: 1024, checksum: "abcdef0123456789" }], unverified: 1, truncated: true } },
     wipeNumber: () => 2,
     restore: () => spy("backup.restore", "Restore"),
+    download: () => spy("backup.download", "Download archive"),
   },
-  releases: { rows: [{ name: "1.2", status: "Active", downloadable: true, sourceHref: "https://github.com/example/preset", download: spy("world.pack", "Download") }], state: "ready" },
+  releases: {
+    rows: [{ name: "1.2", status: "Active", downloadable: true, sourceHref: "https://github.com/example/preset", download: spy("world.pack", "Download") }],
+    state: "ready",
+    mods: { release: "1.2", files: { status: "ready", value: [{ file: "create-1.20.1-0.5.1.j.jar", bytes: 14_221_830, sha256: "c".repeat(64), download: spy("mod.download.ccc", "Download") }] } },
+  },
   // Drawn on their own tabs below; on the details tab neither is on screen.
   console: null,
   metrics: null,
@@ -176,6 +181,18 @@ const confirmation: ConfirmationModel = { title: "Permanently delete Rostik?", d
 const connection = { placement: "fleet" as const, setPlacement: noop, fleetAvailable: true, connectivity: "raw" as const, setConnectivity: noop, dnsAvailable: true };
 const createWorld: CreateWorldModel = { game, presets: game.presets, presetId: "industrial", setPresetId: noop, preset: game.presets[0]!, name: "", setName: noop, release: "1.2", setRelease: noop, connection, valid: false, submit: spy("world.create", "Create world"), cancel: spy("sheet.close", "Close panel") };
 const worldSettings: WorldSettingsModel = { game, world, stopped: false, connection, valid: true, save: spy("world.settings.save", "Save settings"), cancel: spy("sheet.close", "Cancel") };
+const gameSettings: GameSettingsModel = {
+  game, world, running: true,
+  fields: [
+    { id: "difficulty", label: "Difficulty", kind: "choice", value: "hard", options: [{ value: "normal", label: "Normal" }, { value: "hard", label: "Hard" }], set: noop },
+    { id: "max_players", label: "Player limit", kind: "number", value: "500", min: 1, max: 100, set: noop, error: "A whole number from 1 to 100." },
+    { id: "motd", label: "Server list message", hint: "Letters, digits and spaces", kind: "text", value: "Rostik", maxLength: 59, set: noop, error: null },
+    { id: "allow_flight", label: "Allow flight", hint: "For jetpacks", kind: "toggle", checked: true, toggle: spy("game-settings.allow_flight", "Allow flight") },
+  ],
+  save: spy("game-settings.save", "Save settings", { disabled: true, hint: "Correct the marked settings first." }),
+  restoreDefaults: spy("game-settings.defaults", "Restore defaults"),
+  cancel: spy("sheet.close", "Cancel"),
+};
 const invitation: InvitationModel = {
   game, world, audience: "direct", setAudience: noop, query: "", setQuery: noop,
   recipients: { status: "ready", value: [{ id: "r1", displayName: "Lena", ready: true, delivery: "Accepts direct invitations", selected: true, toggle: noop }] },
@@ -218,7 +235,29 @@ for (const skin of SKINS) {
     const wipes = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "wipes" } }));
     const backups = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "backups" } }));
     const releasesTab = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "releases" } }));
-    checkSurface("World", details + wipes + backups + releasesTab, { ...worldPage, backups: { ...worldPage.backups, restore: worldPage.backups.restore(worldPage.backups.inventory.status === "ready" ? worldPage.backups.inventory.value.entries[0]! : (null as never)) } });
+    const entry = worldPage.backups.inventory.status === "ready" ? worldPage.backups.inventory.value.entries[0]! : (null as never);
+    checkSurface("World", details + wipes + backups + releasesTab, { ...worldPage, backups: { ...worldPage.backups, restore: worldPage.backups.restore(entry), download: worldPage.backups.download!(entry) } });
+  });
+
+  test(`${skin.name}: a world's files are its release's mods and its backup archives (ADR-0065)`, () => {
+    const releasesTab = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "releases" } }));
+    assert.match(releasesTab, /create-1\.20\.1-0\.5\.1\.j\.jar/, "the mods of the release the world starts with");
+    const withoutMods = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "releases", releases: { ...worldPage.releases, mods: null } } }));
+    assert.doesNotMatch(withoutMods, /Server mods/);
+    const failed = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "releases", releases: { ...worldPage.releases, mods: { release: "1.2", files: { status: "error", error: "boom", kind: "failed", retry: spy("mods.retry", "Try again") } } } } }));
+    assert.match(failed, /data-action="mods\.retry"/);
+    // Without backup.download, the archive is listed and never offered.
+    const noDownload = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "backups", backups: { ...worldPage.backups, download: null } } }));
+    assert.doesNotMatch(noDownload, /data-action="backup\.download"/);
+  });
+
+  test(`${skin.name}: the game settings sheet draws every kind of setting, its errors, save, defaults and cancel (ADR-0064)`, () => {
+    const markup = renderToStaticMarkup(createElement(skin.GameSettingsSheet, { model: gameSettings }));
+    checkSurface("GameSettings", markup, gameSettings);
+    assert.match(markup, /Difficulty/);
+    assert.match(markup, /A whole number from 1 to 100\./, "a field says why it cannot be saved");
+    assert.match(markup, /aria-invalid="true"/);
+    assert.match(markup, /uses|apply from its next start/, "a running world is told when the settings reach it");
   });
 
   test(`${skin.name}: a world's console and metrics tabs draw their verbs, and only that world's`, () => {

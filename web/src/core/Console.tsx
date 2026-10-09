@@ -12,8 +12,8 @@ import { pendingFor } from "../shell/actions";
 import type { Skin } from "../skins/skin";
 import { action, type Action } from "./actions";
 import { useConsole, type ConsoleController } from "./useConsole";
-import { useBackups, useConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useRoles, useUsers, useWorldMetrics } from "./data";
-import { useConfirmationForm, useCreateWorldForm, useWorldSettingsForm } from "./forms";
+import { useBackups, useConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseMods, useRoles, useUsers, useWorldMetrics } from "./data";
+import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, ReleasesModel, WorldModel, WorldsModel } from "./models";
 import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionActionForWorld, sessionControlAvailability, sessionDetails, worldDetails, worldMoreActions, worldNotices, worldTabs } from "./worlds";
 
@@ -37,6 +37,7 @@ export function ConsoleRoot({ session, skin, looks, continuesBootCard }: Readonl
       {console.invite && <InvitationController console={console} game={console.invite.game} skin={skin} world={console.invite.world} />}
       {console.creating && <CreateWorldController console={console} game={console.creating.game} preset={console.creating.preset} skin={skin} />}
       {console.editing && <WorldSettingsController console={console} game={console.editing.game} skin={skin} world={console.editing.world} />}
+      {console.editingGameSettings && <GameSettingsController console={console} game={console.editingGameSettings.game} skin={skin} world={console.editingGameSettings.world} />}
     </skin.Shell>
   );
 }
@@ -102,12 +103,17 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
   const metricsOpen = route.worldTab === "metrics" && offered("metrics");
   const consoleModel = useWorldConsole(game, world, consoleOpen, running, notify);
   const metrics = useWorldMetrics(metricsOpen ? game.id : undefined, world.id);
+  // The server mods of the release the world starts with (ADR-0065).
+  const modsRelease = world.release.desiredRelease ?? world.release.activeRelease;
+  const modsOpen = route.worldTab === "releases" && offered("releases") && capabilities.has("releaseFiles") && world.preset !== null && modsRelease !== null;
+  const mods = useReleaseMods(game.id, modsOpen && world.preset && modsRelease ? { presetId: world.preset.id, version: modsRelease } : null, (presetId, version, mod) => console.downloadMod(game, presetId, version, mod));
   const backups = useBackups(game.id, world, {
     canRead: granted.has("backup.read"),
     canRestore: granted.has("backup.restore"),
     busy,
     settled: `${world.wipes.length}:${operations.length}`,
     onRestore: (entry) => worldCallbacks.onWorldAction(game, world, "restore", { key: entry.key, name: entry.archiveName }),
+    onDownload: granted.has("backup.download") && capabilities.has("backupDownloads") ? (entry) => console.downloadBackup(game, world, entry) : null,
   });
   const model: WorldModel = {
     game,
@@ -133,7 +139,7 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     operations: operations.map((operation) => ({ operation, label: operationLabel(operation.type) })),
     wipes: [...world.wipes].reverse().map((wipe) => ({ wipe, showBackups: action("wipe.backups", "Backups", () => { backups.setFilter(wipe.id); navigate({ worldTab: "backups" }); }) })),
     backups,
-    releases: { rows: releaseRows(world, granted.has("connection.read"), busy, () => worldCallbacks.onDownloadPack(game, world)), state: world.release.state },
+    releases: { rows: releaseRows(world, granted.has("connection.read"), busy, () => worldCallbacks.onDownloadPack(game, world)), state: world.release.state, mods },
     console: offered("console") ? consoleModel : null,
     metrics: offered("metrics") ? metrics : null,
   };
@@ -281,6 +287,17 @@ function WorldSettingsController({ console, skin, game, world }: Controlled & Re
     onClose: console.closeEditing,
   });
   return <skin.WorldSettingsSheet model={model} />;
+}
+
+// Mounted only while the sheet is open, so its drafts start from the world's
+// values each time it opens.
+function GameSettingsController({ console, skin, game, world }: Controlled & Readonly<{ game: Game; world: World }>) {
+  const model = useGameSettingsForm(game, world, {
+    busy: console.savingGameSettings,
+    onSave: (values) => void console.saveGameSettings(game, world, values),
+    onClose: console.closeEditingGameSettings,
+  });
+  return <skin.GameSettingsSheet model={model} />;
 }
 
 // Mounted only while the sheet is open, so its state is created when it opens

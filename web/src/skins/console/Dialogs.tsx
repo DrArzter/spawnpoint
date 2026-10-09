@@ -3,13 +3,13 @@ import { useEffect, useState } from "react";
 import { Avatar } from "../../components/Avatar";
 import { Chip } from "../../components/ui/Chip";
 import { Dialog, Sheet } from "../../components/ui/Dialog";
-import { SearchField, SelectField, TextField } from "../../components/ui/Fields";
+import { SearchField, SelectField, Switch, TextField } from "../../components/ui/Fields";
 import { NoMatches } from "../../components/ui/Filter";
 import { SkeletonRows } from "../../components/ui/Skeleton";
 import { Status } from "../../components/ui/Status";
 import { Banner, EmptyState } from "../../components/ui/Surfaces";
 import { Timestamp } from "../../components/ui/Timestamp";
-import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, InvitationModel, ScopeModel, WorldSettingsModel } from "../../core/models";
+import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, ScopeModel, WorldSettingsModel } from "../../core/models";
 import { plural } from "../../lib/format";
 import { ActionButton } from "./actions";
 
@@ -124,6 +124,40 @@ export function WorldSettingsSheet({ model }: Readonly<{ model: WorldSettingsMod
       <ConnectionFields model={model.connection} />
     </Sheet>
   );
+}
+
+// A world's game settings (ADR-0064): each drawn by its kind, saved together.
+export function GameSettingsSheet({ model }: Readonly<{ model: GameSettingsModel }>) {
+  return (
+    <Sheet
+      closeActionId={model.cancel.id}
+      description={`${model.game.displayName} · ${model.world.displayName}`}
+      footer={<><ActionButton action={model.restoreDefaults} variant="text" /><ActionButton action={model.cancel} variant="text" /><ActionButton action={model.save} variant="filled" /></>}
+      onClose={model.cancel.run}
+      open
+      title="Game settings"
+    >
+      <form className="page" onSubmit={(event) => { event.preventDefault(); model.save.run(); }}>
+        {model.running && <p className="secondary">{model.world.displayName} is running. Saved settings apply from its next start.</p>}
+        {model.fields.map((field) => <GameSettingInput field={field} key={field.id} />)}
+      </form>
+    </Sheet>
+  );
+}
+
+function GameSettingInput({ field }: Readonly<{ field: GameSettingField }>) {
+  switch (field.kind) {
+    case "choice":
+      return <SelectField hint={field.hint} label={field.label} onChange={(event) => field.set(event.target.value)} value={field.value}>
+        {field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </SelectField>;
+    case "number":
+      return <TextField error={field.error} hint={field.hint} inputMode="numeric" label={field.label} max={field.max} min={field.min} onChange={(event) => field.set(event.target.value)} type="number" value={field.value} />;
+    case "text":
+      return <TextField error={field.error} hint={field.hint} label={field.label} maxLength={field.maxLength} onChange={(event) => field.set(event.target.value)} value={field.value} />;
+    case "toggle":
+      return <Switch actionId={field.toggle.id} checked={field.checked} disabled={field.toggle.disabled ?? false} label={field.label} note={field.hint} onChange={field.toggle.run} />;
+  }
 }
 
 export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>) {

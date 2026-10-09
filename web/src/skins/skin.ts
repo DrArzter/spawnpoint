@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 
-import type { AccessModel, BootModel, ConfirmationModel, CreateWorldModel, InvitationModel, ProfileModel, ReleasesModel, ScopeModel, ShellModel, WorldModel, WorldsModel, WorldSettingsModel } from "../core/models";
+import type { AccessModel, BootModel, ConfirmationModel, CreateWorldModel, GameSettingsModel, InvitationModel, ProfileModel, ReleasesModel, ScopeModel, ShellModel, WorldModel, WorldsModel, WorldSettingsModel } from "../core/models";
 
 /**
  * A skin is every face the console can wear, as one set of views. The bones
@@ -25,6 +25,7 @@ export type Skin = Readonly<{
   ConfirmationDialog: ComponentType<{ model: ConfirmationModel | null }>;
   CreateWorldSheet: ComponentType<{ model: CreateWorldModel }>;
   WorldSettingsSheet: ComponentType<{ model: WorldSettingsModel }>;
+  GameSettingsSheet: ComponentType<{ model: GameSettingsModel }>;
   InvitationSheet: ComponentType<{ model: InvitationModel }>;
 }>;
 

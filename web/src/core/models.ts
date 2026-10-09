@@ -139,9 +139,15 @@ export type BackupsModel = Readonly<{
   inventory: Loading<Readonly<{ entries: readonly BackupEntry[]; unverified: number; truncated: boolean }>>;
   wipeNumber: (generationId: string | null) => number | undefined;
   restore: (entry: BackupEntry) => Action;
+  /** The archive itself (ADR-0065); null when the role or the deployment offers no download. */
+  download: ((entry: BackupEntry) => Action) | null;
 }>;
 
 export type ReleaseRow = Readonly<{ name: string; status: string; downloadable: boolean; sourceHref: string | null; download: Action | null }>;
+
+/** One server mod of the release a world starts with, and its download (ADR-0065). */
+export type ModRow = Readonly<{ file: string; bytes: number; sha256: string; download: Action }>;
+export type ModsModel = Readonly<{ release: string; files: Loading<readonly ModRow[]> }>;
 
 export type WorldModel = Readonly<{
   game: Game;
@@ -163,7 +169,12 @@ export type WorldModel = Readonly<{
   operations: readonly Readonly<{ operation: Operation; label: string }>[];
   wipes: readonly Readonly<{ wipe: Wipe; showBackups: Action }>[];
   backups: BackupsModel;
-  releases: Readonly<{ rows: readonly ReleaseRow[]; state: World["release"]["state"] }>;
+  releases: Readonly<{
+    rows: readonly ReleaseRow[];
+    state: World["release"]["state"];
+    /** The server mods of the release the world starts with; null when none can be read. */
+    mods: ModsModel | null;
+  }>;
   /** This world's console and its host's metrics; null when the role or the deployment offers neither tab. */
   console: ConsoleModel | null;
   metrics: MetricsModel | null;
@@ -377,6 +388,25 @@ export type WorldSettingsModel = Readonly<{
   cancel: Action;
 }>;
 
+/** One game setting in the sheet (ADR-0064), drawn by its kind. */
+export type GameSettingField = Readonly<{ id: string; label: string; hint?: string } & (
+  | { kind: "choice"; value: string; options: readonly Readonly<{ value: string; label: string }>[]; set: (value: string) => void }
+  | { kind: "number"; value: string; min: number; max: number; set: (value: string) => void; error: string | null }
+  | { kind: "text"; value: string; maxLength: number; set: (value: string) => void; error: string | null }
+  | { kind: "toggle"; checked: boolean; toggle: Action }
+)>;
+
+export type GameSettingsModel = Readonly<{
+  game: Game;
+  world: World;
+  /** The world runs, so what is saved reaches it at its next start. */
+  running: boolean;
+  fields: readonly GameSettingField[];
+  save: Action;
+  restoreDefaults: Action;
+  cancel: Action;
+}>;
+
 export type InvitationModel = Readonly<{
   game: Game;
   world: World;
@@ -398,6 +428,7 @@ export type DialogsModel = Readonly<{
   confirmation: ConfirmationModel | null;
   createWorld: CreateWorldModel | null;
   worldSettings: WorldSettingsModel | null;
+  gameSettings: GameSettingsModel | null;
   invitation: InvitationModel | null;
 }>;
 

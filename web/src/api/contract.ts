@@ -1,5 +1,5 @@
 import type { LoginProviderId } from "../lib/signin";
-import type { ControlPlaneSnapshot } from "../model";
+import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../model";
 
 export type { LoginProviderId } from "../lib/signin";
 
@@ -145,6 +145,12 @@ export type BackupEntry = {
 
 export type BackupInventory = { entries: BackupEntry[]; unverified: number; truncated: boolean };
 
+/** One server mod of a release, as its manifest records it (ADR-0065). */
+export type ReleaseMod = Readonly<{ file: string; sha256: string; bytes: number }>;
+export type ReleaseMods = Readonly<{ release: string; mods: readonly ReleaseMod[] }>;
+/** A link the browser opens once; it expires, and is never kept. */
+export type FileLink = Readonly<{ url: string; expiresIn: number }>;
+
 export type MetricRange = "6h" | "24h" | "7d";
 export type HostMetricPoint = Readonly<{ at: string; value: number | null }>;
 export type HostMetricSeries = Readonly<{ id: string; label: string; unit: string; points: readonly HostMetricPoint[] }>;
@@ -263,6 +269,14 @@ export type SpawnpointApi = Readonly<{
   requestUpdateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external"): Promise<void>;
   requestPackDownload(gameId: string, worldId: string): Promise<{ release: string; url: string }>;
   loadBackups(gameId: string, worldId: string): Promise<BackupInventory>;
+  /** A short-lived link to one of the world's archives; the API records who asked. */
+  requestBackupDownload(gameId: string, worldId: string, key: string): Promise<FileLink>;
+  /** The game settings the world sets (ADR-0064); a running world takes them at its next start. */
+  updateGameSettings(gameId: string, worldId: string, values: Readonly<Record<string, SettingValue>>): Promise<WorldGameSettings>;
+  /** A release's server mods, from its manifest. */
+  loadReleaseMods(gameId: string, presetId: string, release: string): Promise<ReleaseMods>;
+  /** A short-lived link to one server mod of a release, named by its digest. */
+  requestModDownload(gameId: string, presetId: string, release: string, sha256: string): Promise<FileLink>;
   /** The host this world's session runs on, measured; null while the world runs nowhere. */
   loadWorldMetrics(gameId: string, worldId: string, range: MetricRange): Promise<HostMetrics | null>;
   /** The world's recent console commands, newest first; a pending one is settled on read. */

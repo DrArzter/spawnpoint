@@ -11,7 +11,7 @@ import { Tabs } from "../../components/ui/Tabs";
 import { Timestamp } from "../../components/ui/Timestamp";
 import { Tooltip } from "../../components/ui/Tooltip";
 import { action, type Action } from "../../core/actions";
-import type { BackupsModel, Detail, DetailValue, ReleaseRow, WorldModel } from "../../core/models";
+import type { BackupsModel, Detail, DetailValue, ModRow, ModsModel, ReleaseRow, WorldModel } from "../../core/models";
 import { wipeStatus } from "../../core/worlds";
 import { Icon } from "../../icons";
 import { formatBytes, formatTime, shortDigest } from "../../lib/format";
@@ -55,7 +55,7 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
         </>}
         {model.tab === "wipes" && <WipesTab rows={model.wipes} worldName={world.displayName} />}
         {model.tab === "backups" && <BackupsTab model={model.backups} worldName={world.displayName} />}
-        {model.tab === "releases" && <ReleasesTab rows={model.releases.rows} worldName={world.displayName} />}
+        {model.tab === "releases" && <ReleasesTab releases={model.releases} worldName={world.displayName} />}
         {model.tab === "console" && model.console && <ConsolePanel model={model.console} />}
         {model.tab === "metrics" && model.metrics && <MetricsPanel model={model.metrics} />}
       </div>
@@ -139,7 +139,12 @@ function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldN
     { id: "stored", label: "Stored", render: (entry) => <Timestamp value={entry.storedAt} /> },
     { id: "size", label: "Size", width: "110px", align: "num", render: (entry) => formatBytes(entry.sizeBytes) },
     { id: "checksum", label: "SHA-256", secondary: true, width: "210px", render: (entry) => <code title={entry.checksum}>{shortDigest(entry.checksum)}</code> },
-    { id: "actions", label: "Actions", actions: true, render: (entry) => <Menu items={menuItems([copyValueAction(`backup.copy-archive.${entry.key}`, "Copy archive name", entry.archiveName), copyValueAction(`backup.copy-checksum.${entry.key}`, "Copy SHA-256", entry.checksum), model.restore(entry)])} label={`Actions for ${entry.archiveName}`} size="small" /> },
+    { id: "actions", label: "Actions", actions: true, render: (entry) => <Menu items={menuItems([
+      copyValueAction(`backup.copy-archive.${entry.key}`, "Copy archive name", entry.archiveName),
+      copyValueAction(`backup.copy-checksum.${entry.key}`, "Copy SHA-256", entry.checksum),
+      ...(model.download ? [model.download(entry)] : []),
+      model.restore(entry),
+    ])} label={`Actions for ${entry.archiveName}`} size="small" /> },
   ];
 
   if (!model.canRead) {
@@ -181,7 +186,7 @@ function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldN
   );
 }
 
-function ReleasesTab({ rows, worldName }: Readonly<{ rows: readonly ReleaseRow[]; worldName: string }>) {
+function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["releases"]; worldName: string }>) {
   const columns: Column<ReleaseRow>[] = [
     { id: "release", label: "Release", render: (row) => <span className="release-line">
       {row.sourceHref ? <a className="preset-source" href={row.sourceHref} rel="noreferrer" target="_blank" title="Open preset repository"><code>{row.name}</code><Icon name="open_in_new" size={14} /></a> : <code>{row.name}</code>}
@@ -193,8 +198,36 @@ function ReleasesTab({ rows, worldName }: Readonly<{ rows: readonly ReleaseRow[]
     </span> },
   ];
   return (
-    <Card flush>
-      <DataTable columns={columns} empty={<EmptyState icon="inventory" title="No release" />} label={`Release pointer of ${worldName}`} rowKey={(row) => row.name} rows={rows} />
+    <div className="page">
+      <Card flush>
+        <DataTable columns={columns} empty={<EmptyState icon="inventory" title="No release" />} label={`Release pointer of ${worldName}`} rowKey={(row) => row.name} rows={releases.rows} />
+      </Card>
+      {releases.mods && <ModsCard mods={releases.mods} worldName={worldName} />}
+    </div>
+  );
+}
+
+// The server mods of the release the world starts with (ADR-0065).
+function ModsCard({ mods, worldName }: Readonly<{ mods: ModsModel; worldName: string }>) {
+  const columns: Column<ModRow>[] = [
+    { id: "file", label: "File", truncate: true, render: (row) => <Ellipsis mono tail={12} value={row.file} /> },
+    { id: "size", label: "Size", width: "110px", align: "num", render: (row) => formatBytes(row.bytes) },
+    { id: "checksum", label: "SHA-256", secondary: true, width: "210px", render: (row) => <code title={row.sha256}>{shortDigest(row.sha256)}</code> },
+    { id: "actions", label: "Actions", actions: true, render: (row) => <ActionButton action={row.download} size="small" variant="text" /> },
+  ];
+  const files = mods.files;
+  return (
+    <Card flush title={`Server mods · release ${mods.release}`}>
+      {files.status === "error"
+        ? <div style={{ padding: 16 }}><Banner actions={<ActionButton action={files.retry} variant="text" />} description={files.error} title="The mods are unavailable" tone="error" /></div>
+        : <DataTable
+          columns={columns}
+          empty={<EmptyState icon="inventory" title="This release has no server mods" />}
+          label={`Server mods of ${worldName}, release ${mods.release}`}
+          loading={files.status === "loading"}
+          rowKey={(row) => row.sha256}
+          rows={files.status === "ready" ? files.value : []}
+        />}
     </Card>
   );
 }

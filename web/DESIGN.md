@@ -307,6 +307,9 @@ Controls (buttons, fields, chips' pill, inline selects) use a 4px radius. Cards,
 - **Focus:** border turns blue with an inset 1px blue ring (no glow/blur).
 - **Disabled:** ink-disabled text, hairline border, transparent background.
 - **Select:** native appearance removed, custom chevron SVG swapped per theme.
+- **Error:** the field's `error` prop, a line in `--error-ink` under the hint, which stays because it often names what
+  may be typed; the input carries `aria-invalid`. Both faces' field primitives draw it, so no form styles its own. The
+  game settings sheet is the first user: one field per setting, drawn by its kind (select, number, text or switch).
 
 ### Navigation
 - **App bar (64px, 56px mobile):** menu button, mark (32px rounded-square, blue fill), title (Google Sans Flex 500/20px), divider, scope chip (outlined pill-like control naming the active game), spacer, theme toggle, avatar (40px circle).

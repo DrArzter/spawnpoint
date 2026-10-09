@@ -9,6 +9,7 @@ export type {
   SpawnpointApi, SpawnpointSession, SubscriptionState, VisitorSession, WorldLifecycleAction,
 } from "./api/contract";
 import type { MetricRange } from "./api/contract";
+import type { SettingValue } from "./model";
 export { googleOidcClientId, telegramOidcClientId } from "./api/live";
 
 // One switch, in one place. Everything below is the shipped panel calling the
@@ -59,6 +60,10 @@ export const requestCreateWorld = (gameId: string, presetId: string, displayName
 export const requestUpdateWorldSettings = (gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external") => api.requestUpdateWorldSettings(gameId, worldId, placement, connectivity, auth);
 export const requestPackDownload = (gameId: string, worldId: string) => api.requestPackDownload(gameId, worldId);
 export const loadBackups = (gameId: string, worldId: string) => api.loadBackups(gameId, worldId);
+export const requestBackupDownload = (gameId: string, worldId: string, key: string) => api.requestBackupDownload(gameId, worldId, key);
+export const updateGameSettings = (gameId: string, worldId: string, values: Readonly<Record<string, SettingValue>>) => api.updateGameSettings(gameId, worldId, values);
+export const loadReleaseMods = (gameId: string, presetId: string, release: string) => api.loadReleaseMods(gameId, presetId, release);
+export const requestModDownload = (gameId: string, presetId: string, release: string, sha256: string) => api.requestModDownload(gameId, presetId, release, sha256);
 export const loadWorldMetrics = (gameId: string, worldId: string, range: MetricRange) => api.loadWorldMetrics(gameId, worldId, range);
 export const loadConsole = (gameId: string, worldId: string) => api.loadConsole(gameId, worldId);
 export const runConsoleCommand = (gameId: string, worldId: string, command: string) => api.runConsoleCommand(gameId, worldId, command);

@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 
 import { Timestamp } from "../../components/ui/Timestamp";
-import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, InvitationModel, ScopeModel, WorldSettingsModel } from "../../core/models";
+import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, ScopeModel, WorldSettingsModel } from "../../core/models";
 import { plural } from "../../lib/format";
-import { Avatar, Drawer, Empty, Field, Key, Modal, Notice, Person, SelectInput, SkeletonRows, State, TextInput, Verb } from "./ui";
+import { Avatar, Drawer, Empty, Field, Key, Modal, Notice, Person, SelectInput, SkeletonRows, State, TextInput, Toggle, Verb } from "./ui";
 
 // The scope picker: choosing a game re-scopes the whole console.
 export function ScopeDialog({ model }: Readonly<{ model: ScopeModel }>) {
@@ -137,6 +137,47 @@ export function WorldSettingsSheet({ model }: Readonly<{ model: WorldSettingsMod
       </div>
     </Drawer>
   );
+}
+
+// A world's game settings (ADR-0064): each drawn by its kind, saved together.
+export function GameSettingsSheet({ model }: Readonly<{ model: GameSettingsModel }>) {
+  return (
+    <Drawer
+      cancel={model.cancel}
+      closeActionId={model.cancel.id}
+      description={`${model.game.displayName} · ${model.world.displayName}`}
+      footer={<><Verb action={model.restoreDefaults} /><Verb action={model.save} tone="primary" /></>}
+      onClose={model.cancel.run}
+      open
+      title="Game settings"
+    >
+      <form className="t-form" onSubmit={(event) => { event.preventDefault(); model.save.run(); }}>
+        {model.running && <p className="t-copy-line">{model.world.displayName} is running. Saved settings apply from its next start.</p>}
+        {model.fields.map((field) => <GameSettingInput field={field} key={field.id} />)}
+      </form>
+    </Drawer>
+  );
+}
+
+function GameSettingInput({ field }: Readonly<{ field: GameSettingField }>) {
+  switch (field.kind) {
+    case "choice":
+      return <Field hint={field.hint} label={field.label}>
+        <SelectInput onChange={(event) => field.set(event.target.value)} value={field.value}>
+          {field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </SelectInput>
+      </Field>;
+    case "number":
+      return <Field error={field.error} hint={field.hint} label={field.label}>
+        <TextInput aria-invalid={field.error ? true : undefined} inputMode="numeric" max={field.max} min={field.min} mono onChange={(event) => field.set(event.target.value)} type="number" value={field.value} />
+      </Field>;
+    case "text":
+      return <Field error={field.error} hint={field.hint} label={field.label}>
+        <TextInput aria-invalid={field.error ? true : undefined} maxLength={field.maxLength} onChange={(event) => field.set(event.target.value)} value={field.value} />
+      </Field>;
+    case "toggle":
+      return <Toggle action={field.toggle} checked={field.checked} {...(field.hint ? { note: field.hint } : {})} />;
+  }
 }
 
 export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>) {

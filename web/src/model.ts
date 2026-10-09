@@ -53,7 +53,21 @@ export type World = {
    * record, or its game's while that names it. Absent from older responses.
    */
   session?: WorldSession | null;
+  /**
+   * The game settings this world sets (ADR-0064); null when it has no record
+   * to keep them in, as a legacy world does. Absent from older responses.
+   */
+  gameSettings?: WorldGameSettings | null;
 };
+export type SettingValue = string | number | boolean;
+export type WorldGameSettings = { values: Readonly<Record<string, SettingValue>>; updatedAt: string | null };
+/** One setting a world of this game may set, as its game module defines it. */
+export type SettingDefinition = { id: string; label: string; hint?: string } & (
+  | { type: "choice"; default: string; choices: readonly { value: string; label: string }[] }
+  | { type: "integer"; default: number; min: number; max: number }
+  | { type: "boolean"; default: boolean }
+  | { type: "text"; default: string; maxLength: number; pattern: string }
+);
 export type WorldSession = Omit<Lifecycle, "schemaVersion">;
 export type Lifecycle = {
   schemaVersion: 1;
@@ -66,7 +80,16 @@ export type Lifecycle = {
   /** Present while a watchdog is registered for the session. */
   idle: { playersOnline: number | null; consecutiveEmpty: number; lastObservedAtEpochSeconds: number | null } | null;
 };
-export type Game = { id: string; code: string; displayName: string; lifecycle: Lifecycle | null; presets: readonly Preset[]; worlds: readonly World[] };
+export type Game = {
+  id: string;
+  code: string;
+  displayName: string;
+  lifecycle: Lifecycle | null;
+  /** What a world of this game may set (ADR-0064); absent from older responses. */
+  settings?: readonly SettingDefinition[];
+  presets: readonly Preset[];
+  worlds: readonly World[];
+};
 export type Host = {
   id: string;
   name: string;

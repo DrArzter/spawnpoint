@@ -68,6 +68,7 @@ import { catalogWithPresets, gameCatalog } from "../control-plane/catalog.ts";
 import { backupInventory } from "../control-plane/backups.ts";
 import {
   awsControlPlaneSources,
+  backupArchiveUrl,
   dashboardControlPlaneSources,
   findSessionPlacement,
   listWorldBackups,
@@ -75,7 +76,9 @@ import {
   packDownloadUrl,
   readConsoleInvocation,
   readWorldRecord,
+  releaseModUrl,
   replaceWorldAccess,
+  replaceWorldGameSettings,
   sendConsoleCommand,
   startSessionExecution,
   stopSessionExecution,
@@ -86,6 +89,7 @@ import type { ControlPlaneSources } from "../control-plane/read-model.ts";
 import type { WorldRecord } from "../control-plane/world-registry.ts";
 import { packRelease, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, type SessionAction, type SessionPlan } from "../control-plane/session-control.ts";
 import { blockingOperations, holdsWorld, locateWorldSession, sessionLifecycleKey, worldHost, type WorldHost, type WorldPlacement, type WorldSession } from "../control-plane/world-session.ts";
+import { checkGameSettings } from "../control-plane/game-settings.ts";
 import { CONSOLE_RECORD_DAYS, checkConsoleCommand, consoleResult, encodeConsoleCommand, type ConsoleEntry, type ConsoleStatus } from "../control-plane/console.ts";
 import { issueSubscriptionTicket, subscriptionTicketItem, subscriptionTicketLifetimeSeconds } from "../control-plane/subscriptions.ts";
 import { worldIdForName } from "../control-plane/world-registry.ts";
@@ -358,6 +362,9 @@ const capabilityRoutes: Readonly<Record<string, string>> = {
   accessManagement: "GET /access/identities",
   accessInvitations: "GET /access/invitations",
   consoleGateway: "POST /games/{gameId}/worlds/{worldId}/console",
+  gameSettings: "PUT /games/{gameId}/worlds/{worldId}/game-settings",
+  releaseFiles: "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}",
+  backupDownloads: "POST /games/{gameId}/worlds/{worldId}/backups/download",
 };
 
 export function deployedCapabilities(): readonly string[] {
@@ -788,6 +795,29 @@ async function updateWorldSettings(gameId: string, worldId: string, body: string
   return response(200, { ...access, auth: access.auth ?? null });
 }
 
+// --- A world's game settings (ADR-0064) ----------------------------------------
+// Saved whether or not the world runs: the host reads the record when a session
+// starts, so a running game is never touched and takes them at its next start.
+
+async function updateGameSettings(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
+  let parsed: { values?: unknown };
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const check = checkGameSettings(gameId, parsed.values);
+  if (!check.ok) {
+    return response(check.error === "game_has_no_settings" ? 409 : 400, { error: check.error, ...(check.setting === undefined ? {} : { setting: check.setting }) });
+  }
+  const gameSettings = {
+    values: check.values,
+    updatedAt: new Date().toISOString(),
+    updatedBy: { identityId: identity.id, displayName: identity.displayName },
+  };
+  const result = await replaceWorldGameSettings(gameId, worldId, gameSettings);
+  if (result === "missing") return response(404, { error: "unknown_world" });
+  if (result === "archived") return response(409, { error: "world_archived" });
+  if (result === "conflict") return response(409, { error: "world_settings_conflict" });
+  return response(200, { values: gameSettings.values, updatedAt: gameSettings.updatedAt });
+}
+
 // A backup carries the generation it was taken from, and that generation names
 // the release it ran. Restoring reinstates the pair, so a release that is no
 // longer in the store makes the restored generation unstartable — and today the
@@ -1027,6 +1057,24 @@ async function updateAppearance(identity: Identity, body: string | undefined): P
 
 const RELEASE_ID = /^[a-z0-9][a-z0-9-]*$/;
 const RELEASE_VERSION = /^[0-9]+\.[0-9]+$/;
+
+const SHA256_DIGEST = /^[0-9a-f]{64}$/;
+const MOD_LINK_SECONDS = 900;
+
+// One server mod of a release (ADR-0065), by the digest its manifest records:
+// the digest names the file without putting a mod's name, whatever characters
+// it holds, into a path. Mods are what the release already publishes to every
+// host; whoever may read the release may have its files.
+async function releaseModDownload(gameId: string, presetId: string, version: string, sha256: string): Promise<Response> {
+  if (!RELEASE_ID.test(gameId) || !RELEASE_ID.test(presetId) || !RELEASE_VERSION.test(version) || !SHA256_DIGEST.test(sha256)) {
+    return response(400, { error: "invalid_release_reference" });
+  }
+  const manifest = await awsControlPlaneSources.readReleaseManifest?.(gameId, presetId, version) ?? null;
+  const mods = (manifest as { server?: { mods?: unknown } } | null)?.server?.mods;
+  const mod = Array.isArray(mods) ? (mods as { file?: unknown; sha256?: unknown }[]).find((entry) => entry.sha256 === sha256) : undefined;
+  if (mod === undefined || typeof mod.file !== "string" || !/^[^/\\]+\.(jar|zip)$/.test(mod.file)) return response(404, { error: "unknown_mod" });
+  return response(200, { file: mod.file, url: await releaseModUrl(gameId, presetId, version, mod.file, MOD_LINK_SECONDS), expiresIn: MOD_LINK_SECONDS });
+}
 
 // What a release contains, which until now lived only in S3 and in the mods
 // directory of whichever host last installed it. Shaped rather than echoed: the
@@ -2103,16 +2151,44 @@ async function packDownload(gameId: string, worldId: string): Promise<Response> 
   return response(200, { release: choice.release, url, expiresIn: 3600 });
 }
 
-// What a restore would have to choose between. The inventory is read from a
-// listing rather than by touching an archive, so this role cannot download a
-// world even though it can say which backups exist.
+// Whether the world exists for this game: a legacy world in the static
+// catalog, or a world record.
+async function knownWorld(gameId: string, worldId: string): Promise<boolean> {
+  if (gameCatalog.find((game) => game.id === gameId)?.worlds.some((candidate) => candidate.id === worldId)) return true;
+  return (await readWorldRecord(worldId))?.gameId === gameId;
+}
+
+// What a restore would have to choose between. The inventory is a listing,
+// read without touching an archive; reading one is a download.
 async function backups(gameId: string, worldId: string): Promise<Response> {
-  const legacyWorld = gameCatalog.find((game) => game.id === gameId)?.worlds.some((candidate) => candidate.id === worldId);
-  if (!legacyWorld) {
-    const record = await readWorldRecord(worldId);
-    if (record?.gameId !== gameId) return response(404, { error: "unknown_world" });
-  }
+  if (!await knownWorld(gameId, worldId)) return response(404, { error: "unknown_world" });
   return response(200, backupInventory(await listWorldBackups(worldId)));
+}
+
+const BACKUP_LINK_SECONDS = 300;
+const DOWNLOAD_RECORD_DAYS = 365;
+
+// A world's whole save, for whoever holds backup.download (ADR-0065). The key
+// must be one of this world's archives. Who asked is recorded before the link
+// is handed over, and the link lives five minutes.
+async function backupDownload(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
+  let parsed: { key?: unknown };
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const key = parsed.key;
+  if (typeof key !== "string" || !key.startsWith(`worlds/${worldId}/archives/`) || !/^worlds\/[a-z0-9][a-z0-9-]{0,31}\/archives\/[A-Za-z0-9._-]+\.tar\.zst$/.test(key)) {
+    return response(400, { error: "invalid_backup_key" });
+  }
+  if (!await knownWorld(gameId, worldId)) return response(404, { error: "unknown_world" });
+  const link = await backupArchiveUrl(key, BACKUP_LINK_SECONDS);
+  if (link === null) return response(404, { error: "unknown_backup" });
+  const at = new Date().toISOString();
+  await document.send(new PutCommand({ TableName: tableName, Item: {
+    pk: `DOWNLOAD#${worldId}`, sk: `${at}#${randomUUID()}`, created_at: at,
+    identity_id: identity.id, display_name: identity.displayName, game_id: gameId, world_id: worldId,
+    key, size_bytes: link.sizeBytes,
+    ttl: Math.floor(Date.now() / 1000) + DOWNLOAD_RECORD_DAYS * 24 * 3600,
+  } }));
+  return response(200, { key, url: link.url, expiresIn: BACKUP_LINK_SECONDS, sizeBytes: link.sizeBytes });
 }
 
 function me(identity: Identity): Response {
@@ -2645,6 +2721,12 @@ export const routes: Readonly<Record<string, Route>> = {
 
   "GET /games/{gameId}/worlds/{worldId}/backups": permissionRoute("backup.read", (_identity, event) =>
     backups(parameter(event, "gameId"), parameter(event, "worldId"))),
+  "POST /games/{gameId}/worlds/{worldId}/backups/download": permissionRoute("backup.download", (identity, event) =>
+    backupDownload(identity, parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
+  "PUT /games/{gameId}/worlds/{worldId}/game-settings": permissionRoute("world.manage", (identity, event) =>
+    updateGameSettings(identity, parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
+  "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}": permissionRoute("release.read", (_identity, event) =>
+    releaseModDownload(parameter(event, "gameId"), parameter(event, "presetId"), parameter(event, "version"), parameter(event, "sha256"))),
   "POST /games/{gameId}/worlds/{worldId}/console": permissionRoute("console.use", (identity, event) =>
     runConsoleCommand(identity, parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
   "GET /games/{gameId}/worlds/{worldId}/console": permissionRoute("console.use", (_identity, event) =>

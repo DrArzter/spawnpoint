@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { ActiveSession, endSession, loadAppearance, loadControlPlane, requestCreateWorld, requestPackDownload, requestSessionOperation, requestUpdateWorldSettings, requestWorldLifecycle, subscribeControlPlane, updateAppearance } from "../auth";
+import type { ReleaseMod } from "../api/contract";
+import { ActiveSession, endSession, loadAppearance, loadControlPlane, requestBackupDownload, requestCreateWorld, requestModDownload, requestPackDownload, requestSessionOperation, requestUpdateWorldSettings, requestWorldLifecycle, subscribeControlPlane, updateAppearance, updateGameSettings, type BackupEntry } from "../auth";
 import { sessionStatus } from "../components/ui/Status";
 import { formatDateTime } from "../lib/format";
-import type { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, World } from "../model";
+import type { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, SettingValue, World } from "../model";
 import { routeHash, type AppRoute } from "../routing";
-import { deriveSharedHostSession, type SharedHostSession } from "../session";
+import { deriveSharedHostSession, worldSessionActive, type SharedHostSession } from "../session";
 import type { Confirmation, Pending, SessionAction, WorldActionKind } from "../shell/actions";
 import { useAppearance, useBootCard, useRoute, useStoredState } from "../shell/hooks";
 import { initializeTelegram, openInBrowser, type ViewerProfile } from "../telegram";
 import { action } from "./actions";
 import type { Notify } from "./data";
+import { openDownload } from "./download";
 import type { AppearanceModel, NavigationItem, ShellModel, WorldPlacement } from "./models";
 import { visibleNavigation } from "./navigation";
 import type { WorldCallbacks } from "./worlds";
@@ -137,6 +139,14 @@ export type ConsoleController = Readonly<{
   closeEditing: () => void;
   saveWorldSettings: (game: Game, world: World, placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game") => Promise<void>;
   savingWorldSettings: boolean;
+  /** A world's game settings sheet (ADR-0064). */
+  editingGameSettings: { game: Game; world: World } | null;
+  closeEditingGameSettings: () => void;
+  saveGameSettings: (game: Game, world: World, values: Readonly<Record<string, SettingValue>>) => Promise<void>;
+  savingGameSettings: boolean;
+  /** Short-lived links to a world's archive and a release's mod (ADR-0065). */
+  downloadBackup: (game: Game, world: World, entry: BackupEntry) => void;
+  downloadMod: (game: Game, presetId: string, release: string, mod: ReleaseMod) => void;
   notify: Notify;
 }>;
 
@@ -156,6 +166,8 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
   const [creating, setCreating] = useState<{ game: Game; preset: Preset | null } | null>(null);
   const [editing, setEditing] = useState<{ game: Game; world: World } | null>(null);
   const [savingWorldSettings, setSavingWorldSettings] = useState(false);
+  const [editingGameSettings, setEditingGameSettings] = useState<{ game: Game; world: World } | null>(null);
+  const [savingGameSettings, setSavingGameSettings] = useState(false);
 
   const granted = useMemo(() => new Set([...(session.role?.permissions ?? []), ...session.identity.directGrants]), [session]);
   const capabilities = useMemo(() => new Set(session.capabilities), [session]);
@@ -246,21 +258,45 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
   }
 
   async function downloadPack(target: Game, targetWorld: World) {
-    // Open during the click's user-activation window; waiting for the API
-    // first makes valid downloads look like unsolicited pop-ups.
-    const downloadWindow = window.open("about:blank", "_blank");
-    if (downloadWindow !== null) downloadWindow.opener = null;
     setPending({ kind: "pack", worldId: targetWorld.id });
     try {
-      const { release, url } = await requestPackDownload(target.id, targetWorld.id);
-      // The link is presigned for an hour and never kept.
-      if (downloadWindow !== null) downloadWindow.location.replace(url); else window.location.assign(url);
+      const { release } = await openDownload(() => requestPackDownload(target.id, targetWorld.id));
       notify({ tone: "success", message: `Pack for release ${release} is downloading.` });
     } catch (error) {
-      downloadWindow?.close();
       notify({ tone: "error", message: error instanceof Error ? error.message : "The pack link failed." });
     } finally {
       setPending(null);
+    }
+  }
+
+  function downloadBackup(target: Game, targetWorld: World, entry: BackupEntry) {
+    openDownload(() => requestBackupDownload(target.id, targetWorld.id, entry.key)).then(
+      () => notify({ tone: "success", message: `${entry.archiveName} is downloading.` }),
+      (error: unknown) => notify({ tone: "error", message: error instanceof Error ? error.message : "The download link could not be created." }),
+    );
+  }
+
+  function downloadMod(target: Game, presetId: string, release: string, mod: ReleaseMod) {
+    openDownload(() => requestModDownload(target.id, presetId, release, mod.sha256)).then(
+      () => notify({ tone: "success", message: `${mod.file} is downloading.` }),
+      (error: unknown) => notify({ tone: "error", message: error instanceof Error ? error.message : "The download link could not be created." }),
+    );
+  }
+
+  async function saveGameSettings(target: Game, targetWorld: World, values: Readonly<Record<string, SettingValue>>) {
+    setSavingGameSettings(true);
+    try {
+      await updateGameSettings(target.id, targetWorld.id, values);
+      // The host reads them when a session starts; a running game is not touched.
+      notify({ tone: "success", message: worldSessionActive(target, targetWorld)
+        ? `Game settings saved. ${targetWorld.displayName} uses them from its next start.`
+        : `Game settings for ${targetWorld.displayName} saved.` });
+      setEditingGameSettings(null);
+      await refresh(true);
+    } catch (error) {
+      notify({ tone: "error", message: error instanceof Error ? error.message : "Game settings could not be saved." });
+    } finally {
+      setSavingGameSettings(false);
     }
   }
 
@@ -303,6 +339,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     onInvite: (target, targetWorld) => setInvite({ game: target, world: targetWorld }),
     onDownloadPack: (target, targetWorld) => void downloadPack(target, targetWorld),
     onEditSettings: (target, targetWorld) => setEditing({ game: target, world: targetWorld }),
+    ...(capabilities.has("gameSettings") ? { onEditGameSettings: (target: Game, targetWorld: World) => setEditingGameSettings({ game: target, world: targetWorld }) } : {}),
   };
 
   const appearanceModel: AppearanceModel = {
@@ -385,6 +422,12 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     closeEditing: () => setEditing(null),
     saveWorldSettings,
     savingWorldSettings,
+    editingGameSettings,
+    closeEditingGameSettings: () => setEditingGameSettings(null),
+    saveGameSettings,
+    savingGameSettings,
+    downloadBackup,
+    downloadMod,
     notify,
   };
 }

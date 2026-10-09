@@ -229,3 +229,22 @@ test("a ready session's address is the one the host reported, port and all; a st
   );
   assert.equal(withheld.games[0]!.worlds.find((world) => world.id === "vanilla")?.connectionAddress, null, "a caller who may not read an address reads none, observed or not");
 });
+
+test("each game carries its settings, and each world with a record what it sets (ADR-0064)", async () => {
+  const { newWorldRecord, withGameSettings } = await import("../src/control-plane/world-registry.ts");
+  const preset = {
+    id: "industrial", displayName: "Industrial", gameId: "minecraft",
+    repository: "https://github.com/DrArzter/config", commit: "a".repeat(40), profileDigest: "b".repeat(64),
+    buildStatus: "ready" as const, releases: ["1.2"], latestRelease: "1.2",
+  };
+  const created = newWorldRecord(preset, { worldId: "minecraft-rostik-1a2b3c4d", displayName: "Rostik", release: "1.2" }, "12345678-1234-1234-1234-1234567890ab", "2026-10-09T10:00:00.000Z");
+  const set = withGameSettings(created, { values: { max_players: 8 }, updatedAt: "2026-10-09T11:00:00.000Z", updatedBy: { identityId: "identity-owner", displayName: "DrArzter" } });
+  const snapshot = await readControlPlaneSnapshot({ ...sources, listPresets: async () => [preset], listWorldRecords: async () => [set] }, { includeInfrastructure: false, includeDesiredRelease: false });
+  const minecraft = snapshot.games.find((game) => game.id === "minecraft")!;
+  assert.ok(minecraft.settings.some((setting) => setting.id === "max_players"));
+  assert.equal("env" in minecraft.settings[0]!, false, "the host's variable names stay on the host");
+  assert.deepEqual(snapshot.games.find((game) => game.id === "factorio")?.settings, []);
+  const worlds = new Map(minecraft.worlds.map((world) => [world.id, world]));
+  assert.deepEqual(worlds.get("minecraft-rostik-1a2b3c4d")?.gameSettings, { values: { max_players: 8 }, updatedAt: "2026-10-09T11:00:00.000Z" });
+  assert.equal(worlds.get("vanilla")?.gameSettings, null, "a legacy world has no record to keep settings in");
+});

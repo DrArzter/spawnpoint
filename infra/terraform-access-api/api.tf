@@ -90,6 +90,15 @@ data "aws_iam_policy_document" "access_api" {
     ]
   }
 
+  # A world archive, for the backup.download permission only (ADR-0065): the
+  # handler checks the key is the world's, records who asked, and presigns
+  # this read for five minutes. Archives only; nothing else in the bucket.
+  statement {
+    sid       = "DownloadWorldArchives"
+    actions   = ["s3:GetObject"]
+    resources = ["${data.aws_s3_bucket.backups.arn}/worlds/*/archives/*.tar.zst"]
+  }
+
   statement {
     sid       = "CreateWorldAndInitialReleasePointer"
     actions   = ["s3:PutObject"]
@@ -283,13 +292,16 @@ locals {
     "GET /games/{gameId}/worlds/{worldId}/invitations",
     "GET /games/{gameId}/worlds/{worldId}/pack",
     "GET /games/{gameId}/worlds/{worldId}/backups",
+    "POST /games/{gameId}/worlds/{worldId}/backups/download",
     "GET /games/{gameId}/worlds/{worldId}/console",
     "GET /games/{gameId}/worlds/{worldId}/metrics",
     "POST /games/{gameId}/worlds/{worldId}/console",
     "GET /hosts/{instanceId}/metrics",
     "GET /games/{gameId}/presets/{presetId}/releases/{version}",
+    "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}",
     "POST /games/{gameId}/presets/{presetId}/worlds",
     "PUT /games/{gameId}/worlds/{worldId}/settings",
+    "PUT /games/{gameId}/worlds/{worldId}/game-settings",
     "POST /games/{gameId}/worlds/{worldId}/archive",
     "POST /games/{gameId}/worlds/{worldId}/wipe",
     "POST /games/{gameId}/worlds/{worldId}/restore",

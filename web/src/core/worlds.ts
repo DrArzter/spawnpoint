@@ -4,6 +4,7 @@ import type { ControlPlaneSnapshot, Game, Operation, ServerState, Wipe, World, W
 import { routeHash } from "../routing";
 import { fleetPlayersOnline, fleetSessionOf, fleetWorldState, playersOnline, sessionReason, sharedSessionOwnerLabel, worldOwnsSharedSession, type SessionReason, type SharedHostSession } from "../session";
 import type { Pending, SessionAction, WorldActionKind } from "../shell/actions";
+import { changedSettings, settingsAvailable } from "./settings";
 import { pendingFor } from "../shell/actions";
 import { action, type Action } from "./actions";
 import type { AddressFacts, Detail, Notice, SessionOverview, WorldRow } from "./models";
@@ -147,6 +148,8 @@ export type WorldCallbacks = Readonly<{
   onInvite: (game: Game, world: World) => void;
   onDownloadPack: (game: Game, world: World) => void;
   onEditSettings?: (game: Game, world: World) => void;
+  /** Present when the deployment can keep game settings (ADR-0064). */
+  onEditGameSettings?: (game: Game, world: World) => void;
 }>;
 
 export function presetOf(game: Game, world: World) {
@@ -195,6 +198,10 @@ export function worldMoreActions(game: Game, world: World, granted: ReadonlySet<
   if (world.materialization !== "archived" && callbacks.onEditSettings) {
     const edit = callbacks.onEditSettings;
     items.push(action("world.settings", "Hosting & connection", () => edit(game, world), { icon: "dns", disabled: busy }));
+  }
+  if (world.materialization !== "archived" && callbacks.onEditGameSettings && settingsAvailable(game, world)) {
+    const edit = callbacks.onEditGameSettings;
+    items.push(action("world.game-settings", "Game settings", () => edit(game, world), { icon: "tune", disabled: busy }));
   }
   items.push(...lifecycleActions(game, world, busy, callbacks));
   return items;
@@ -302,7 +309,19 @@ export function worldDetails(game: Game, world: World, serverState: ServerState)
     { label: "Address", value: address ? { type: "address", address } : { type: "absent", text: missingAddressLabel(world, serverState) }, copy: world.connectionAddress ?? undefined },
     { label: "Hosting", value: { type: "text", text: world.placement === "fleet" ? "On-demand fleet" : "Persistent host" } },
     { label: "Connection", value: { type: "text", text: connectionLabels[world.connectivity] } },
+    ...gameSettingsDetail(game, world),
   ];
+}
+
+// The game settings this world changed from its game's defaults (ADR-0064).
+function gameSettingsDetail(game: Game, world: World): Detail[] {
+  if (!settingsAvailable(game, world)) return [];
+  const changed = changedSettings(game, world);
+  return [{
+    label: "Game settings",
+    value: changed.length > 0 ? { type: "text", text: changed.join(", ") } : { type: "absent", text: "Game defaults" },
+    ...(world.gameSettings?.updatedAt ? { hint: "Changed", hintTime: world.gameSettings.updatedAt } : {}),
+  }];
 }
 
 const connectionLabels: Record<World["connectivity"], string> = { zerotier: "ZeroTier", route53: "Public DNS", raw: "Public IP" };

@@ -167,6 +167,33 @@ aws dynamodb query --table-name spawnpoint-access --key-condition-expression 'pk
 The console refuses `stop` and `save-off` for Minecraft and `quit` for Factorio and Project Zomboid: those end the game
 without the verified backup. Stop a world from its page.
 
+## Game settings (ADR-0064)
+
+A world's game settings are on its record, `worlds/<worldId>/world.json`, under `game_settings`, with who changed them
+and when. The panel changes them from the world's overflow, **Game settings**; a running world takes them at its next
+start. Read them, or an earlier version, from the versioned bucket:
+
+```bash
+aws s3api get-object --bucket <releases-bucket> --key worlds/<worldId>/world.json /dev/stdout | jq .game_settings
+aws s3api list-object-versions --bucket <releases-bucket> --prefix worlds/<worldId>/world.json
+```
+
+What a game may set is `server/games/<game>/settings.json`. At start the host exports only the settings the world sets;
+`warning: ignoring game settings this checkout does not define` in a start's output means the host's checkout is older
+than the panel. On the configured host, update its checkout. A value outside its definition refuses the start, and the
+output names the setting.
+
+## Downloads (ADR-0065)
+
+A world's Releases tab lists the server mods of the release its next start uses, each with a download link valid for
+fifteen minutes. A backup's menu offers **Download archive** to holders of `backup.download`, which only the Owner role
+has; the link is valid for five minutes. Every archive download is recorded first. Read who took which archive:
+
+```bash
+aws dynamodb query --table-name spawnpoint-access --key-condition-expression 'pk = :pk' \
+  --expression-attribute-values '{":pk":{"S":"DOWNLOAD#<worldId>"}}' --no-scan-index-forward --max-items 30
+```
+
 ## Telegram bot
 
 The exact first deployment, webhook and acceptance commands are recorded in

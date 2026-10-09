@@ -16,13 +16,13 @@ import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient, StartExecut
 import { randomUUID } from "node:crypto";
 
 import type { BackupObject } from "./backups.ts";
-import { clientPackKey } from "./release-artifacts.ts";
+import { clientPackKey, releaseModKey } from "./release-artifacts.ts";
 import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts";
 import { gameCatalog } from "./catalog.ts";
 import { type ReleaseState } from "./release-state.ts";
 import { S3ReleaseStateStore } from "./s3-release-state-store.ts";
 import { S3WorldRepository } from "./s3-world-repository.ts";
-import { newWorldRecord, withWorldAccess, type WorldRecord } from "./world-registry.ts";
+import { newWorldRecord, withGameSettings, withWorldAccess, type WorldGameSettings, type WorldRecord } from "./world-registry.ts";
 import { parseDynamicProjection } from "./dynamic-projection.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
@@ -449,9 +449,45 @@ export async function packDownloadUrl(gameId: string, presetId: string, release:
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: 3600 });
 }
 
-// Deliberately ListObjectsV2 and nothing else: the digest lives in the key and
-// the listing reports each object's checksum algorithm, so the panel can show
-// an inventory without this role ever being able to read a world archive.
+// A file the panel hands to someone, named as it is stored, so the browser
+// saves it under that name whatever characters it holds.
+function attachment(filename: string): string {
+  return `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
+/** One server mod of a release, presigned for this role's read of releases. */
+export async function releaseModUrl(gameId: string, presetId: string, release: string, file: string, expiresIn: number): Promise<string> {
+  return getSignedUrl(s3, new GetObjectCommand({
+    Bucket: requiredEnv("RELEASE_BUCKET"),
+    Key: releaseModKey(gameId, presetId, release, file),
+    ResponseContentDisposition: attachment(file),
+  }), { expiresIn });
+}
+
+/**
+ * One world archive, presigned (ADR-0065). The caller has checked that the key
+ * is this world's; a key with no object is a normal answer, not an error.
+ */
+export async function backupArchiveUrl(key: string, expiresIn: number): Promise<Readonly<{ url: string; sizeBytes: number }> | null> {
+  const bucket = requiredEnv("BACKUP_BUCKET");
+  let sizeBytes: number;
+  try {
+    sizeBytes = (await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }))).ContentLength ?? 0;
+  } catch (error) {
+    if ((error as { name?: string }).name === "NotFound") return null;
+    throw error;
+  }
+  const url = await getSignedUrl(s3, new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    ResponseContentDisposition: attachment(key.slice(key.lastIndexOf("/") + 1)),
+  }), { expiresIn });
+  return { url, sizeBytes };
+}
+
+// The inventory is a listing: the digest lives in the key and the listing
+// reports each object's checksum algorithm, so listing never reads an archive.
+// Reading one is a download, which only backup.download may ask for.
 export async function listWorldBackups(worldId: string): Promise<readonly BackupObject[]> {
   const response = await s3.send(new ListObjectsV2Command({
     Bucket: requiredEnv("BACKUP_BUCKET"),
@@ -469,6 +505,25 @@ export async function listWorldBackups(worldId: string): Promise<readonly Backup
 
 export async function readWorldRecord(worldId: string): Promise<WorldRecord | null> {
   return (await new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET")).read(worldId))?.record ?? null;
+}
+
+/** A world's game settings (ADR-0064); a running world takes them at its next start. */
+export async function replaceWorldGameSettings(
+  gameId: string,
+  worldId: string,
+  gameSettings: WorldGameSettings,
+): Promise<"updated" | "missing" | "archived" | "conflict"> {
+  const worlds = new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET"));
+  const stored = await worlds.read(worldId);
+  if (!stored || stored.record.gameId !== gameId) return "missing";
+  if (stored.record.status !== "active") return "archived";
+  try {
+    await worlds.replace(withGameSettings(stored.record, gameSettings), stored.etag);
+    return "updated";
+  } catch (error) {
+    if (preconditionFailed(error)) return "conflict";
+    throw error;
+  }
 }
 
 export async function replaceWorldAccess(

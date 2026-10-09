@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, SubscriptionState } from "../api/contract";
+import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseMod, ReleaseMods, SubscriptionState } from "../api/contract";
 import { failureKind } from "../api/contract";
 import {
   approveAccessCandidate, changePassword, createAccessInvitation, dismissAccessCandidate, googleOidcClientId, linkGoogle, linkPassword, linkTelegram, loadAccessCandidates, loadAccessIdentities, loadAccessInvitations,
-  loadAccessRoles, loadBackups, loadConsole, loadInvitationHistory, loadWorldMetrics, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
+  loadAccessRoles, loadBackups, loadConsole, loadInvitationHistory, loadWorldMetrics, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadReleaseMods, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
   runConsoleCommand, sendInvitation, telegramOidcClientId, updateIdentityRole, updateSubscriptions,
 } from "../auth";
 import type { SnackInput } from "../components/ui/Snackbar";
@@ -13,7 +13,7 @@ import { formatDateTime } from "../lib/format";
 import { GOOGLE_CLIENT_ID } from "../lib/signin";
 import type { Game, LinkKind, Member, OwnerBootstrap, Role, World } from "../model";
 import { action } from "./actions";
-import type { BackupsModel, CandidateRow, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, NotificationsModel, RolesModel, UsersModel } from "./models";
+import type { BackupsModel, CandidateRow, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, NotificationsModel, RolesModel, UsersModel } from "./models";
 
 /*
  * The data each page loads for itself and what may be done with it. Every
@@ -51,10 +51,11 @@ function asLoading<T>(state: LoadState<T>, retry: () => void, retryId: string): 
 
 // --- backups -----------------------------------------------------------------
 
-export function useBackups(gameId: string, world: World, opts: Readonly<{ canRead: boolean; canRestore: boolean; busy: boolean; settled: string; onRestore: (entry: BackupEntry) => void }>): BackupsModel {
+export function useBackups(gameId: string, world: World, opts: Readonly<{ canRead: boolean; canRestore: boolean; busy: boolean; settled: string; onRestore: (entry: BackupEntry) => void; onDownload: ((entry: BackupEntry) => void) | null }>): BackupsModel {
   const [filter, setFilter] = useState<string | null>(null);
   useEffect(() => { setFilter(null); }, [world.id]);
   const [state, retry] = useLoad<BackupInventory>(opts.canRead ? () => loadBackups(gameId, world.id) : null, [opts.canRead, gameId, world.id, opts.settled]);
+  const onDownload = opts.onDownload;
   const inventory = useMemo<Loading<{ entries: readonly BackupEntry[]; unverified: number; truncated: boolean }>>(() => {
     if (state.status !== "ready") return asLoading(state, retry, "backups.retry");
     return { status: "ready", value: { entries: state.value.entries.filter((entry) => filter === null || entry.generationId === filter), unverified: state.value.unverified, truncated: state.value.truncated } };
@@ -72,6 +73,26 @@ export function useBackups(gameId: string, world: World, opts: Readonly<{ canRea
       disabled: !world.worldLifecycleAvailable || !opts.canRestore || entry.generationId === null || opts.busy,
       hint: restoreHint(world, entry, opts.canRestore),
     }),
+    download: onDownload === null ? null : (entry) => action("backup.download", "Download archive", () => onDownload(entry), {
+      icon: "download",
+      hint: "A link that works for five minutes; the download is recorded against you",
+    }),
+  };
+}
+
+// --- release files (ADR-0065) -------------------------------------------------
+
+/** A release's server mods, read only while the tab that shows them is open. */
+export function useReleaseMods(gameId: string, release: Readonly<{ presetId: string; version: string }> | null, onDownload: (presetId: string, version: string, mod: ReleaseMod) => void): ModsModel | null {
+  const [state, retry] = useLoad<ReleaseMods>(release === null ? null : () => loadReleaseMods(gameId, release.presetId, release.version), [gameId, release?.presetId, release?.version]);
+  if (release === null) return null;
+  if (state.status !== "ready") return { release: release.version, files: asLoading(state, retry, "mods.retry") };
+  return {
+    release: release.version,
+    files: { status: "ready", value: state.value.mods.map((mod) => ({
+      ...mod,
+      download: action(`mod.download.${mod.sha256}`, "Download", () => onDownload(release.presetId, release.version, mod), { icon: "download" }),
+    })) },
   };
 }
 

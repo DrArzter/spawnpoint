@@ -13,8 +13,9 @@ const descriptions: Record<string, string> = {
   "release.read": "See presets and the releases built from them.",
   "release.promote": "Move a world onto another release.",
   "backup.read": "List the verified backups of a world.",
+  "backup.download": "Download a world's backup archives, each recorded against your identity.",
   "backup.restore": "Restore a backup, which opens a new wipe.",
-  "world.manage": "Create, wipe, archive and permanently delete worlds.",
+  "world.manage": "Create, wipe, archive and permanently delete worlds, and change their game settings.",
   "access.read": "See who has access and which role they hold.",
   "access.manage": "Approve people and change their roles.",
 };

@@ -10,7 +10,7 @@ import { Icon } from "../../icons";
 export function ConsolePanel({ model }: Readonly<{ model: ConsoleModel }>) {
   const { game, world, session, log, unavailable } = model;
   return (
-    <div className="console-panel">
+    <div className="page">
       <section aria-label="RCON terminal" className="terminal">
         <header className="terminal-bar">
           <Icon name="terminal" size={18} />

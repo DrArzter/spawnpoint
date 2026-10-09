@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "settings": [
+    {
+      "id": "difficulty",
+      "label": "Difficulty",
+      "env": "DIFFICULTY",
+      "type": "choice",
+      "default": "normal",
+      "choices": [
+        { "value": "peaceful", "label": "Peaceful" },
+        { "value": "easy", "label": "Easy" },
+        { "value": "normal", "label": "Normal" },
+        { "value": "hard", "label": "Hard" }
+      ]
+    },
+    {
+      "id": "game_mode",
+      "label": "Game mode",
+      "env": "MODE",
+      "type": "choice",
+      "default": "survival",
+      "hint": "Players who join for the first time get it. Players already in the world keep theirs.",
+      "choices": [
+        { "value": "survival", "label": "Survival" },
+        { "value": "creative", "label": "Creative" },
+        { "value": "adventure", "label": "Adventure" },
+        { "value": "spectator", "label": "Spectator" }
+      ]
+    },
+    {
+      "id": "max_players",
+      "label": "Player limit",
+      "env": "MAX_PLAYERS",
+      "type": "integer",
+      "default": 20,
+      "min": 1,
+      "max": 100
+    },
+    {
+      "id": "motd",
+      "label": "Server list message",
+      "env": "MOTD",
+      "type": "text",
+      "default": "A Minecraft Server",
+      "max_length": 59,
+      "pattern": "^[A-Za-z0-9 .,!?'()&+#/:-]+$",
+      "hint": "Letters, digits, spaces and . , ! ? ' ( ) & + # / : -"
+    },
+    {
+      "id": "pvp",
+      "label": "Player versus player",
+      "env": "PVP",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "id": "allow_flight",
+      "label": "Allow flight",
+      "env": "ALLOW_FLIGHT",
+      "type": "boolean",
+      "default": false,
+      "hint": "Turn it on for mods with jetpacks or flight, or the server kicks players who fly."
+    },
+    {
+      "id": "spawn_monsters",
+      "label": "Hostile mobs",
+      "env": "SPAWN_MONSTERS",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "id": "view_distance",
+      "label": "View distance",
+      "env": "VIEW_DISTANCE",
+      "type": "integer",
+      "default": 10,
+      "min": 3,
+      "max": 32,
+      "hint": "In chunks. A larger distance uses more of the host's memory and CPU."
+    },
+    {
+      "id": "simulation_distance",
+      "label": "Simulation distance",
+      "env": "SIMULATION_DISTANCE",
+      "type": "integer",
+      "default": 10,
+      "min": 3,
+      "max": 32,
+      "hint": "In chunks. A larger distance uses more of the host's memory and CPU."
+    }
+  ]
+}

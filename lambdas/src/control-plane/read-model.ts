@@ -3,6 +3,7 @@ import { catalogWithPresets, gameCatalog, type CatalogGame, worldAddress } from 
 import { locateWorldSession, sessionLifecycleKey } from "./world-session.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
 import type { WorldRecord } from "./world-registry.ts";
+import { gameSettingDefinitions, type SettingDefinition, type SettingValue } from "./game-settings.ts";
 
 export type HostObservation = Readonly<{
   id: string;
@@ -59,6 +60,8 @@ export type ControlPlaneSnapshot = Readonly<{
     code: string;
     displayName: string;
     lifecycle: LifecycleRecord | null;
+    /** What a world of this game may set (ADR-0064); empty when the game defines nothing. */
+    settings: readonly SettingDefinition[];
     presets: ReadonlyArray<Readonly<{
       id: string;
       displayName: string;
@@ -92,6 +95,8 @@ export type ControlPlaneSnapshot = Readonly<{
       release: ReleasePointerObservation;
       /** This world's session, wherever it lives (ADR-0062); null when it has none. */
       session: WorldSessionView | null;
+      /** The game settings this world sets; null when it has no record to keep them in. */
+      gameSettings: Readonly<{ values: Readonly<Record<string, SettingValue>>; updatedAt: string | null }> | null;
     }>>;
   }>>;
   hosts: ReadonlyArray<Readonly<{
@@ -188,6 +193,7 @@ export async function readControlPlaneSnapshot(
       code: game.code,
       displayName: game.displayName,
       lifecycle: lifecycles[gameIndex] ?? null,
+      settings: gameSettingDefinitions(game.id),
       presets: (game.presets ?? []).map((preset) => ({
         id: preset.id,
         displayName: preset.displayName,
@@ -238,6 +244,7 @@ export async function readControlPlaneSnapshot(
               ?? (world.placement === "fleet" ? null : worldAddress(world.id, { connectionHost, publicIp: hostPublicIp }, effectiveCatalog)),
           release: options.includeDesiredRelease ? release : { ...release, desiredRelease: null },
           session: sessionView(session.serverId, session.record),
+          gameSettings: record === undefined ? null : { values: record.gameSettings?.values ?? {}, updatedAt: record.gameSettings?.updatedAt ?? null },
         };
       }),
     })),

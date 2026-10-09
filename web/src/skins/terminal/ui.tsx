@@ -210,12 +210,15 @@ export function Toggle({ action, checked, note, labelHidden = false, className }
 
 // --- fields -------------------------------------------------------------------
 
-export function Field({ label, hint, hideLabel = false, children, className }: Readonly<{ label: string; hint?: ReactNode; hideLabel?: boolean; children: ReactNode; className?: string }>) {
+// An error is why the value cannot be saved; the input it belongs to carries
+// aria-invalid. It stays under the hint, which often names what may be typed.
+export function Field({ label, hint, error = null, hideLabel = false, children, className }: Readonly<{ label: string; hint?: ReactNode; error?: string | null; hideLabel?: boolean; children: ReactNode; className?: string }>) {
   return (
     <label className={cx("t-field", className)}>
       <span className={cx("t-field-label", hideLabel && "visually-hidden")}>{label}</span>
       {children}
       {hint && <small className="t-field-hint">{hint}</small>}
+      {error && <small className="t-field-error">{error}</small>}
     </label>
   );
 }

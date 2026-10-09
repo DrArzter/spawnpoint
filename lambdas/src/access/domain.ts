@@ -9,6 +9,7 @@ export const permissions = [
   "release.read",
   "release.promote",
   "backup.read",
+  "backup.download",
   "backup.restore",
   "world.manage",
   "access.read",

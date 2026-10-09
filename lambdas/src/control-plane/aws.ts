@@ -22,7 +22,7 @@ import { gameCatalog } from "./catalog.ts";
 import { type ReleaseState } from "./release-state.ts";
 import { S3ReleaseStateStore } from "./s3-release-state-store.ts";
 import { S3WorldRepository } from "./s3-world-repository.ts";
-import { newWorldRecord, withGameSettings, withWorldAccess, type WorldGameSettings, type WorldRecord } from "./world-registry.ts";
+import { newWorldRecord, withGameSettings, withWhitelist, withWorldAccess, type WorldGameSettings, type WorldRecord, type WorldWhitelist } from "./world-registry.ts";
 import { parseDynamicProjection } from "./dynamic-projection.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
@@ -526,6 +526,25 @@ export async function replaceWorldGameSettings(
   }
 }
 
+/** A world's whitelist (ADR-0066). The world keeps it from now on, on every host it lands. */
+export async function replaceWorldWhitelist(
+  gameId: string,
+  worldId: string,
+  whitelist: WorldWhitelist,
+): Promise<"updated" | "missing" | "archived" | "conflict"> {
+  const worlds = new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET"));
+  const stored = await worlds.read(worldId);
+  if (!stored || stored.record.gameId !== gameId) return "missing";
+  if (stored.record.status !== "active") return "archived";
+  try {
+    await worlds.replace(withWhitelist(stored.record, whitelist), stored.etag);
+    return "updated";
+  } catch (error) {
+    if (preconditionFailed(error)) return "conflict";
+    throw error;
+  }
+}
+
 export async function replaceWorldAccess(
   gameId: string,
   worldId: string,
@@ -580,6 +599,25 @@ export async function sendConsoleCommand(args: Readonly<{ hostId: string; worldI
   }));
   const commandId = sent.Command?.CommandId;
   if (!commandId) throw new Error("console command did not return an id");
+  return commandId;
+}
+
+/**
+ * Asks a running world's host to write the whitelist from the world's record
+ * and reload it (ADR-0066). Only the world and the slot travel: the host reads
+ * the names from S3 itself.
+ */
+export async function sendWhitelistReload(args: Readonly<{ hostId: string; worldId: string; slot: string }>): Promise<string> {
+  requireWorldId(args.worldId);
+  const sent = await ssm.send(new SendCommandCommand({
+    DocumentName: requiredEnv("WHITELIST_DOCUMENT_NAME"),
+    InstanceIds: [args.hostId],
+    Parameters: { worldId: [args.worldId], slot: [args.slot] },
+    TimeoutSeconds: 60,
+    Comment: `whitelist ${args.worldId}`,
+  }));
+  const commandId = sent.Command?.CommandId;
+  if (!commandId) throw new Error("whitelist reload did not return an id");
   return commandId;
 }
 

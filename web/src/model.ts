@@ -87,6 +87,8 @@ export type Game = {
   lifecycle: Lifecycle | null;
   /** What a world of this game may set (ADR-0064); absent from older responses. */
   settings?: readonly SettingDefinition[];
+  /** The game keeps a whitelist a world's record can hold (ADR-0066). */
+  whitelist?: boolean;
   presets: readonly Preset[];
   worlds: readonly World[];
 };
@@ -112,7 +114,7 @@ export type ControlPlaneSnapshot = {
 };
 
 /** A world's console and metrics are its own: several worlds of a game can run at once (ADR-0062). */
-export type WorldTab = "details" | "wipes" | "backups" | "releases" | "console" | "metrics";
+export type WorldTab = "details" | "wipes" | "backups" | "releases" | "whitelist" | "console" | "metrics";
 
 export type Role = { id: string; name: string; description: string; permissions: string[]; system?: boolean };
 export type LinkKind = "telegram" | "email" | "discord" | "minecraft" | "factorio" | "steam" | "zerotier";

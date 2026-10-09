@@ -21,6 +21,8 @@ export type DemoState = {
   backups: Record<string, BackupEntry[]>;
   /** Console commands per world, newest first (ADR-0063). */
   console: Record<string, ConsoleEntry[]>;
+  /** The whitelists worlds keep on their records (ADR-0066); absent when a world keeps none. */
+  whitelists: Record<string, { names: string[]; updatedAt: string; updatedBy: string }>;
   /** Effects that land when their time passes; read calls settle them. */
   scheduled: { operationId: string; at: number; apply: (state: DemoState) => void }[];
   counter: number;
@@ -32,8 +34,8 @@ export const demoSession: ActiveSession = {
   identity: { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [] },
   // Demo capabilities include unfinished prototypes so their screens remain
   // explorable without advertising those destinations in production.
-  capabilities: ["releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "backupDownloads"],
-  role: { id: "owner", name: "Owner", permissions: ["status.read", "connection.read", "session.start", "session.stop", "invitation.send", "metrics.read", "console.use", "release.read", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite"] },
+  capabilities: ["releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "backupDownloads", "whitelist"],
+  role: { id: "owner", name: "Owner", permissions: ["status.read", "connection.read", "session.start", "session.stop", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "release.read", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite"] },
   profile: { provider: "telegram", platformUserId: "1780660807", telegramId: "1780660807", username: "drarzter", email: null, photoUrl: null },
   bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "1780660807", claimedAt: "2026-08-28T18:24:00.000Z" },
 };
@@ -67,6 +69,7 @@ export function initialState(): DemoState {
           code: "MC",
           displayName: "Minecraft",
           settings: [...MINECRAFT_SETTINGS],
+          whitelist: true,
           lifecycle: { schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "session-42", activeWorldId: "minecraft-rostik-12345678", updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: { playersOnline: 3, consecutiveEmpty: 0, lastObservedAtEpochSeconds: Math.floor(Date.now() / 1000) - 45 } },
           presets: [
             { id: "industrial", displayName: "Industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5", profileDigest: "41d9a8e0c73b5f26184ad0e9cb7f3520a6e81d4c95f27b03ea6d183c7b40f9e2", releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3" },
@@ -137,7 +140,7 @@ export function initialState(): DemoState {
     roles: [
       { id: "viewer", name: "Viewer", description: "Can see public server status and request access to play.", permissions: ["status.read"], system: true },
       { id: "player", name: "Player", description: "Can view the server and control a game session.", permissions: ["status.read", "connection.read", "invitation.send", "session.start"], system: true },
-      { id: "operator", name: "Operator", description: "Can operate sessions, releases and the console.", permissions: ["status.read", "connection.read", "metrics.read", "console.use", "release.read", "backup.read", "invitation.send", "session.start", "session.stop"], system: true },
+      { id: "operator", name: "Operator", description: "Can operate sessions, releases and the console.", permissions: ["status.read", "connection.read", "metrics.read", "console.use", "whitelist.manage", "release.read", "backup.read", "invitation.send", "session.start", "session.stop"], system: true },
       { id: "owner", name: "Owner", description: "Full access to Spawnpoint and its identities.", permissions: [...OWNER_PERMISSIONS], system: true },
     ],
     identities: [
@@ -176,6 +179,9 @@ export function initialState(): DemoState {
         { id: "console-2", at: "2026-09-14T18:41:12.000Z", identityId: "identity-alex", displayName: "Alex", worldId: "minecraft-rostik-12345678", command: "time set day", status: "succeeded", output: "Set the time to 1000" },
         { id: "console-1", at: "2026-09-14T18:40:03.000Z", identityId: "identity-owner", displayName: "DrArzter", worldId: "minecraft-rostik-12345678", command: "list", status: "succeeded", output: "There are 3 of a max of 20 players online: Alex, Mira, Kira" },
       ],
+    },
+    whitelists: {
+      "minecraft/minecraft-rostik-12345678": { names: ["DrArzter", "Alex", "Mira", "Kira"], updatedAt: "2026-09-14T18:20:00.000Z", updatedBy: "DrArzter" },
     },
     scheduled: [],
     counter: 0,

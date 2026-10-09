@@ -167,6 +167,26 @@ aws dynamodb query --table-name spawnpoint-access --key-condition-expression 'pk
 The console refuses `stop` and `save-off` for Minecraft and `quit` for Factorio and Project Zomboid: those end the game
 without the verified backup. Stop a world from its page.
 
+## The whitelist (ADR-0066)
+
+A world created from a preset keeps its whitelist on its record, `worlds/<worldId>/world.json` under `whitelist`, and the
+panel edits it in the world's **Whitelist** tab (permission `whitelist.manage`). Every start writes `whitelist.json` from
+it; a running world is sent the `spawnpoint-whitelist` SSM document, which writes the file and runs `whitelist reload`.
+
+- **Add players in the tab, not with `whitelist add`.** The server runs offline and keys a player by the UUID it derives
+  from the name; `whitelist add` looks the name up online and stores a UUID that player never has.
+- **A world that kept no list:** the first name added in the tab replaces the server's own `whitelist.json`. Names a
+  person added there by hand must be added in the tab too.
+- **The running server did not reload:** the list is written at the next start anyway. Check the host:
+
+```bash
+aws ssm send-command --document-name spawnpoint-whitelist --instance-ids <instance-id> \
+  --parameters 'worldId=<worldId>,slot=' --query Command.CommandId --output text
+```
+
+Exit code 3 means the file is written but the game did not answer; 5, that the world keeps no whitelist on its record;
+9, that the host's checkout has no `apply-whitelist.sh` yet. The configured host needs its checkout updated once.
+
 ## Game settings (ADR-0064)
 
 A world's game settings are on its record, `worlds/<worldId>/world.json`, under `game_settings`, with who changed them

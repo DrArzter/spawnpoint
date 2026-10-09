@@ -11,12 +11,20 @@ export function revealDelta(strip: Span, tab: Span): number {
 
 // A tab strip scrolls sideways on a narrow screen, so the selected tab can sit
 // past its edge, out of sight. Only the strip moves; the page never scrolls.
+// It runs again once fonts load: the terminal face loads its own on demand,
+// and the wider letters push the tab out after the first measure.
 export function useRevealSelectedTab(strip: RefObject<HTMLElement | null>, value: string): void {
   useEffect(() => {
-    const list = strip.current;
-    const tab = list?.querySelector<HTMLElement>("[role=tab][aria-selected=true]");
-    if (!list || !tab) return;
-    const delta = revealDelta(list.getBoundingClientRect(), tab.getBoundingClientRect());
-    if (delta !== 0) list.scrollLeft += delta;
+    const reveal = () => {
+      const list = strip.current;
+      const tab = list?.querySelector<HTMLElement>("[role=tab][aria-selected=true]");
+      if (!list || !tab) return;
+      const delta = revealDelta(list.getBoundingClientRect(), tab.getBoundingClientRect());
+      if (delta !== 0) list.scrollLeft += delta;
+    };
+    reveal();
+    let current = true;
+    void document.fonts?.ready.then(() => { if (current) reveal(); });
+    return () => { current = false; };
   }, [strip, value]);
 }

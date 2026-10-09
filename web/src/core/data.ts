@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseMod, ReleaseMods, SubscriptionState } from "../api/contract";
+import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseMod, ReleaseMods, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
 import { failureKind } from "../api/contract";
 import {
   approveAccessCandidate, changePassword, createAccessInvitation, dismissAccessCandidate, googleOidcClientId, linkGoogle, linkPassword, linkTelegram, loadAccessCandidates, loadAccessIdentities, loadAccessInvitations,
-  loadAccessRoles, loadBackups, loadConsole, loadInvitationHistory, loadWorldMetrics, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadReleaseMods, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
-  runConsoleCommand, sendInvitation, telegramOidcClientId, updateIdentityRole, updateSubscriptions,
+  loadAccessRoles, loadBackups, loadConsole, loadInvitationHistory, loadWorldMetrics, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadReleaseMods, loadWhitelist, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
+  runConsoleCommand, sendInvitation, telegramOidcClientId, updateIdentityRole, updateSubscriptions, updateWhitelist,
 } from "../auth";
 import type { SnackInput } from "../components/ui/Snackbar";
 import type { StatusKind } from "../components/ui/Status";
@@ -13,7 +13,8 @@ import { formatDateTime } from "../lib/format";
 import { GOOGLE_CLIENT_ID } from "../lib/signin";
 import type { Game, LinkKind, Member, OwnerBootstrap, Role, World } from "../model";
 import { action } from "./actions";
-import type { BackupsModel, CandidateRow, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, NotificationsModel, RolesModel, UsersModel } from "./models";
+import type { BackupsModel, CandidateRow, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, NotificationsModel, RolesModel, UsersModel, WhitelistModel } from "./models";
+import { whitelistNameError } from "./whitelist";
 
 /*
  * The data each page loads for itself and what may be done with it. Every
@@ -78,6 +79,55 @@ export function useBackups(gameId: string, world: World, opts: Readonly<{ canRea
       hint: "A link that works for five minutes; the download is recorded against you",
     }),
   };
+}
+
+// --- whitelist (ADR-0066) ------------------------------------------------------
+
+/**
+ * A world's whitelist, read only while its tab is open. Every change saves the
+ * whole list; a running world reloads it at once, a stopped one at its start.
+ */
+export function useWhitelist(gameId: string, world: World, open: boolean, notify: Notify): WhitelistModel {
+  const [state, retry, update] = useLoad<WorldWhitelist>(open ? () => loadWhitelist(gameId, world.id) : null, [open, gameId, world.id]);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const names = state.status === "ready" ? state.value.names : [];
+  const name = draft.trim();
+  const draftError = name === "" ? null : whitelistNameError(name, names);
+  const when = (saved: SavedWhitelist) => saved.applied === "reloading" ? "The running server reloads its list now." : `${world.displayName} reads it at its next start.`;
+  const save = async (next: readonly string[], said: (saved: SavedWhitelist) => string): Promise<boolean> => {
+    setSaving(true);
+    try {
+      const saved = await updateWhitelist(gameId, world.id, next);
+      update(() => saved);
+      notify({ tone: "success", message: said(saved) });
+      return true;
+    } catch (error) {
+      notify({ tone: "error", message: error instanceof Error ? error.message : "The whitelist could not be saved." });
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+  const add = action("whitelist.add", "Add player", () => {
+    if (name === "" || draftError !== null) return;
+    void save([...names, name], (saved) => `${name} is on the whitelist. ${when(saved)}`).then((saved) => { if (saved) setDraft(""); });
+  }, { icon: "add", disabled: state.status !== "ready" || name === "" || draftError !== null || saving, busy: saving });
+  const list: WhitelistModel["list"] = state.status !== "ready" ? asLoading(state, retry, "whitelist.retry") : {
+    status: "ready",
+    value: {
+      managed: state.value.managed,
+      updatedAt: state.value.updatedAt,
+      updatedBy: state.value.updatedBy,
+      rows: state.value.names.map((player) => ({
+        name: player,
+        remove: action(`whitelist.remove.${player}`, "Remove", () => void save(names.filter((item) => item !== player), (saved) => `${player} is off the whitelist. ${when(saved)}`), {
+          danger: true, disabled: saving, hint: `Remove ${player} from the whitelist`,
+        }),
+      })),
+    },
+  };
+  return { world, list, draft, setDraft, draftError, add };
 }
 
 // --- release files (ADR-0065) -------------------------------------------------

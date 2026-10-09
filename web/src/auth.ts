@@ -62,6 +62,8 @@ export const requestPackDownload = (gameId: string, worldId: string) => api.requ
 export const loadBackups = (gameId: string, worldId: string) => api.loadBackups(gameId, worldId);
 export const requestBackupDownload = (gameId: string, worldId: string, key: string) => api.requestBackupDownload(gameId, worldId, key);
 export const updateGameSettings = (gameId: string, worldId: string, values: Readonly<Record<string, SettingValue>>) => api.updateGameSettings(gameId, worldId, values);
+export const loadWhitelist = (gameId: string, worldId: string) => api.loadWhitelist(gameId, worldId);
+export const updateWhitelist = (gameId: string, worldId: string, names: readonly string[]) => api.updateWhitelist(gameId, worldId, names);
 export const loadReleaseMods = (gameId: string, presetId: string, release: string) => api.loadReleaseMods(gameId, presetId, release);
 export const requestModDownload = (gameId: string, presetId: string, release: string, sha256: string) => api.requestModDownload(gameId, presetId, release, sha256);
 export const loadWorldMetrics = (gameId: string, worldId: string, range: MetricRange) => api.loadWorldMetrics(gameId, worldId, range);

@@ -148,6 +148,14 @@ export type BackupInventory = { entries: BackupEntry[]; unverified: number; trun
 /** One server mod of a release, as its manifest records it (ADR-0065). */
 export type ReleaseMod = Readonly<{ file: string; sha256: string; bytes: number }>;
 export type ReleaseMods = Readonly<{ release: string; mods: readonly ReleaseMod[] }>;
+/**
+ * A world's whitelist (ADR-0066). Unmanaged: the world's record keeps none, and
+ * its server's own file is left alone. Managed: these names are the whole list.
+ */
+export type WorldWhitelist = Readonly<{ managed: boolean; names: readonly string[]; updatedAt: string | null; updatedBy: string | null }>;
+/** A saved whitelist, and whether a running server was asked to reload it now. */
+export type SavedWhitelist = WorldWhitelist & Readonly<{ applied: "reloading" | "next_start" }>;
+
 /** A link the browser opens once; it expires, and is never kept. */
 export type FileLink = Readonly<{ url: string; expiresIn: number }>;
 
@@ -273,6 +281,9 @@ export type SpawnpointApi = Readonly<{
   requestBackupDownload(gameId: string, worldId: string, key: string): Promise<FileLink>;
   /** The game settings the world sets (ADR-0064); a running world takes them at its next start. */
   updateGameSettings(gameId: string, worldId: string, values: Readonly<Record<string, SettingValue>>): Promise<WorldGameSettings>;
+  loadWhitelist(gameId: string, worldId: string): Promise<WorldWhitelist>;
+  /** The whole list; a running world is asked to reload it, any start writes it. */
+  updateWhitelist(gameId: string, worldId: string, names: readonly string[]): Promise<SavedWhitelist>;
   /** A release's server mods, from its manifest. */
   loadReleaseMods(gameId: string, presetId: string, release: string): Promise<ReleaseMods>;
   /** A short-lived link to one server mod of a release, named by its digest. */

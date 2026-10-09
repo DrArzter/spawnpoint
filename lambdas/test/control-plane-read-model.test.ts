@@ -244,6 +244,8 @@ test("each game carries its settings, and each world with a record what it sets 
   assert.ok(minecraft.settings.some((setting) => setting.id === "max_players"));
   assert.equal("env" in minecraft.settings[0]!, false, "the host's variable names stay on the host");
   assert.deepEqual(snapshot.games.find((game) => game.id === "factorio")?.settings, []);
+  assert.equal(minecraft.whitelist, true, "Minecraft keeps a whitelist a record can hold (ADR-0066)");
+  assert.equal(snapshot.games.find((game) => game.id === "factorio")?.whitelist, false);
   const worlds = new Map(minecraft.worlds.map((world) => [world.id, world]));
   assert.deepEqual(worlds.get("minecraft-rostik-1a2b3c4d")?.gameSettings, { values: { max_players: 8 }, updatedAt: "2026-10-09T11:00:00.000Z" });
   assert.equal(worlds.get("vanilla")?.gameSettings, null, "a legacy world has no record to keep settings in");

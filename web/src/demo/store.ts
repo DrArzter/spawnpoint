@@ -1,6 +1,7 @@
 import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
-import type { ConsoleEntry, FileLink, HostMetrics, MetricRange, ReleaseMods } from "../api/contract";
+import type { ConsoleEntry, FileLink, HostMetrics, MetricRange, ReleaseMods, SavedWhitelist, WorldWhitelist } from "../api/contract";
 import { settingValueValid } from "../core/settings";
+import { whitelistNameError } from "../core/whitelist";
 import type { ControlPlaneSnapshot, Preset, SettingValue, World, WorldGameSettings } from "../model";
 import { DemoState, initialState, Mutable } from "./data";
 
@@ -371,6 +372,28 @@ export function backupLink(gameId: string, worldId: string, key: string): FileLi
   const entry = (state.backups[worldKey(gameId, worldId)] ?? []).find((candidate) => candidate.key === key);
   if (!entry) throw new Error("This backup is no longer in the store. Refresh the list.");
   return { url: demoFile("Spawnpoint demo world backup", [`World:   ${world(gameId, worldId).displayName}`, `Archive: ${entry.archiveName}`], "the world archive"), expiresIn: 300 };
+}
+
+// A world's whitelist (ADR-0066): kept on its record; a running world reloads it.
+export function whitelist(gameId: string, worldId: string): WorldWhitelist {
+  settle();
+  if (!world(gameId, worldId).worldLifecycleAvailable) throw new Error("This world has no record to keep a whitelist in.");
+  const kept = state.whitelists[worldKey(gameId, worldId)];
+  return kept ? { managed: true, names: [...kept.names], updatedAt: kept.updatedAt, updatedBy: kept.updatedBy } : { managed: false, names: [], updatedAt: null, updatedBy: null };
+}
+
+export function updateWhitelist(gameId: string, worldId: string, names: readonly string[]): SavedWhitelist {
+  settle();
+  const game = state.snapshot.games.find((item) => item.id === gameId);
+  if (!world(gameId, worldId).worldLifecycleAvailable) throw new Error("This world has no record to keep a whitelist in.");
+  names.forEach((name, index) => {
+    const error = whitelistNameError(name, names.slice(0, index));
+    if (error) throw new Error(`${name}: ${error}`);
+  });
+  const kept = { names: [...names], updatedAt: iso(), updatedBy: "DrArzter" };
+  state.whitelists[worldKey(gameId, worldId)] = kept;
+  const running = game?.lifecycle?.activeWorldId === worldId && game.lifecycle.observedState === "ready";
+  return { managed: true, ...kept, applied: running ? "reloading" : "next_start" };
 }
 
 // A world's game settings (ADR-0064): kept on its record, checked against its

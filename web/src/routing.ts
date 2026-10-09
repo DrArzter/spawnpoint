@@ -63,7 +63,7 @@ const pathByPage: Record<Page, string> = {
 };
 
 const accessTabs = new Set<AccessTab>(["users", "roles", "notifications"]);
-const worldTabs = new Set<WorldTab>(["details", "wipes", "backups", "releases", "console", "metrics"]);
+const worldTabs = new Set<WorldTab>(["details", "wipes", "backups", "releases", "whitelist", "console", "metrics"]);
 
 function segment(value: string | undefined): string | null {
   if (!value) return null;

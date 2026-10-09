@@ -310,6 +310,11 @@ Controls (buttons, fields, chips' pill, inline selects) use a 4px radius. Cards,
 - **Error:** the field's `error` prop, a line in `--error-ink` under the hint, which stays because it often names what
   may be typed; the input carries `aria-invalid`. Both faces' field primitives draw it, so no form styles its own. The
   game settings sheet is the first user: one field per setting, drawn by its kind (select, number, text or switch).
+- **Entry form:** one value and the button that submits it, on one line (`.entry-form`, and `.t-entry-form` in the
+  terminal): an invitation's email, a player's name on a world's whitelist. The button is centred on the input whatever
+  hint or error the field shows under it, and takes its own line on a phone.
+- **Person:** the avatar, the name and an optional second line, in the access tables and the whitelist. One component
+  per face (`skins/console/Person.tsx`, `Person` in the terminal's `ui.tsx`); no table builds the cell by hand.
 
 ### Navigation
 - **App bar (64px, 56px mobile):** menu button, mark (32px rounded-square, blue fill), title (Google Sans Flex 500/20px), divider, scope chip (outlined pill-like control naming the active game), spacer, theme toggle, avatar (40px circle).

@@ -208,6 +208,7 @@ resource "aws_lambda_function" "access_api" {
       BACKUP_BUCKET                    = data.aws_s3_bucket.backups.id
       CONNECTION_HOST                  = var.connection_host
       CONSOLE_DOCUMENT_NAME            = aws_ssm_document.console.name
+      WHITELIST_DOCUMENT_NAME          = aws_ssm_document.whitelist.name
       SPAWNPOINT_PLACEMENT             = var.placement
       SPAWNPOINT_LAUNCH                = var.launch
       SPAWNPOINT_APP_COMMIT            = var.app_commit
@@ -302,6 +303,8 @@ locals {
     "POST /games/{gameId}/presets/{presetId}/worlds",
     "PUT /games/{gameId}/worlds/{worldId}/settings",
     "PUT /games/{gameId}/worlds/{worldId}/game-settings",
+    "GET /games/{gameId}/worlds/{worldId}/whitelist",
+    "PUT /games/{gameId}/worlds/{worldId}/whitelist",
     "POST /games/{gameId}/worlds/{worldId}/archive",
     "POST /games/{gameId}/worlds/{worldId}/wipe",
     "POST /games/{gameId}/worlds/{worldId}/restore",

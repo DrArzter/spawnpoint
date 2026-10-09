@@ -2072,19 +2072,21 @@ html[data-skin="terminal"] .t-accent-well:focus-within {
   outline-offset: 2px;
 }
 
-html[data-skin="terminal"] .t-invite-form {
+/* One value and the verb that submits it, on one line: an invitation's email,
+   a player's name. */
+html[data-skin="terminal"] .t-entry-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 12px 16px;
 }
 
-html[data-skin="terminal"] .t-invite-form .t-field,
-html[data-skin="terminal"] .t-invite-form .t-copy-line {
+html[data-skin="terminal"] .t-entry-form .t-field,
+html[data-skin="terminal"] .t-entry-form .t-copy-line {
   grid-column: 1;
 }
 
-html[data-skin="terminal"] .t-invite-form .t-invite-verb {
+html[data-skin="terminal"] .t-entry-form .t-entry-verb {
   grid-column: 2;
   /* Level with the field, under its label. */
   margin-top: calc(22px + (var(--t-field) - var(--t-key)) / 2);
@@ -2198,11 +2200,11 @@ html[data-skin="terminal"] .t-scope-code {
 }
 
 @media (max-width: 599px) {
-  html[data-skin="terminal"] .t-invite-form {
+  html[data-skin="terminal"] .t-entry-form {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  html[data-skin="terminal"] .t-invite-form .t-invite-verb {
+  html[data-skin="terminal"] .t-entry-form .t-entry-verb {
     grid-column: 1;
     margin-top: 0;
   }

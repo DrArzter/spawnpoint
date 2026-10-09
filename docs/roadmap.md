@@ -40,8 +40,9 @@ individually and seeing what each one needs.
 - `itzg/docker-minecraft-server` running the intended pack, via Compose.
 - Security group has no inbound rules. No game port, SSH port or key pair; SSM access works through the instance's
   outbound connection.
-- `online-mode=false`, `white-list=true`, `enforce-whitelist=true`, with the names added by hand. The whitelist
-  becomes generated in M4. See [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
+- `online-mode=false`, `white-list=true`, `enforce-whitelist=true`. A world created from a preset keeps its names on
+  its record and the panel edits them ([ADR-0066](adr/0066-keep-a-world-whitelist-on-its-record.md)); a legacy world's
+  are still added by hand. Deriving them from linked identities is [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md).
 - Connectivity mode C: the persistent ZeroTier identity lives on the data volume, and the node is admitted by hand.
   The game is reachable only over the overlay. See [ADR-0024](adr/0024-connectivity-modes.md).
 - Stable ZeroTier address posted in chat by hand. Started and stopped by hand.

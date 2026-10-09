@@ -10,6 +10,7 @@ const descriptions: Record<string, string> = {
   "invitation.send": "Invite players through the Telegram bot.",
   "metrics.read": "Read session metrics.",
   "console.use": "Run RCON commands, recorded against your identity.",
+  "whitelist.manage": "Choose which players may join a world.",
   "release.read": "See presets and the releases built from them.",
   "release.promote": "Move a world onto another release.",
   "backup.read": "List the verified backups of a world.",

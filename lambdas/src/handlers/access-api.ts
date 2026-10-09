@@ -79,7 +79,9 @@ import {
   releaseModUrl,
   replaceWorldAccess,
   replaceWorldGameSettings,
+  replaceWorldWhitelist,
   sendConsoleCommand,
+  sendWhitelistReload,
   startSessionExecution,
   stopSessionExecution,
   worldLifecycleExecution,
@@ -90,6 +92,7 @@ import type { WorldRecord } from "../control-plane/world-registry.ts";
 import { packRelease, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, type SessionAction, type SessionPlan } from "../control-plane/session-control.ts";
 import { blockingOperations, holdsWorld, locateWorldSession, sessionLifecycleKey, worldHost, type WorldHost, type WorldPlacement, type WorldSession } from "../control-plane/world-session.ts";
 import { checkGameSettings } from "../control-plane/game-settings.ts";
+import { checkWhitelist } from "../control-plane/whitelist.ts";
 import { CONSOLE_RECORD_DAYS, checkConsoleCommand, consoleResult, encodeConsoleCommand, type ConsoleEntry, type ConsoleStatus } from "../control-plane/console.ts";
 import { issueSubscriptionTicket, subscriptionTicketItem, subscriptionTicketLifetimeSeconds } from "../control-plane/subscriptions.ts";
 import { worldIdForName } from "../control-plane/world-registry.ts";
@@ -365,6 +368,7 @@ const capabilityRoutes: Readonly<Record<string, string>> = {
   gameSettings: "PUT /games/{gameId}/worlds/{worldId}/game-settings",
   releaseFiles: "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}",
   backupDownloads: "POST /games/{gameId}/worlds/{worldId}/backups/download",
+  whitelist: "PUT /games/{gameId}/worlds/{worldId}/whitelist",
 };
 
 export function deployedCapabilities(): readonly string[] {
@@ -816,6 +820,66 @@ async function updateGameSettings(identity: Identity, gameId: string, worldId: s
   if (result === "archived") return response(409, { error: "world_archived" });
   if (result === "conflict") return response(409, { error: "world_settings_conflict" });
   return response(200, { values: gameSettings.values, updatedAt: gameSettings.updatedAt });
+}
+
+// --- A world's whitelist (ADR-0066) ---------------------------------------------
+// Kept on the world record, so it follows the world to every host. A running
+// world is asked to reload it at once; any start writes it anyway.
+
+function gameKeepsWhitelist(gameId: string): boolean {
+  return gameCatalog.find((game) => game.id === gameId)?.whitelist === true;
+}
+
+async function whitelistOf(gameId: string, worldId: string): Promise<Response> {
+  if (!gameKeepsWhitelist(gameId)) return response(409, { error: "game_has_no_whitelist" });
+  const record = await readWorldRecord(worldId);
+  if (record === null || record.gameId !== gameId) return response(404, { error: "unknown_world" });
+  return response(200, record.whitelist === undefined
+    ? { managed: false, names: [], updatedAt: null, updatedBy: null }
+    : { managed: true, names: record.whitelist.names, updatedAt: record.whitelist.updatedAt, updatedBy: record.whitelist.updatedBy.displayName });
+}
+
+async function updateWhitelist(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
+  let parsed: { names?: unknown };
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  if (!gameKeepsWhitelist(gameId)) return response(409, { error: "game_has_no_whitelist" });
+  const check = checkWhitelist(parsed.names);
+  if (!check.ok) return response(400, { error: check.error, ...(check.name === undefined ? {} : { name: check.name }) });
+  const whitelist = {
+    names: check.names,
+    updatedAt: new Date().toISOString(),
+    updatedBy: { identityId: identity.id, displayName: identity.displayName },
+  };
+  const result = await replaceWorldWhitelist(gameId, worldId, whitelist);
+  if (result === "missing") return response(404, { error: "unknown_world" });
+  if (result === "archived") return response(409, { error: "world_archived" });
+  if (result === "conflict") return response(409, { error: "world_settings_conflict" });
+  return response(200, { managed: true, names: whitelist.names, updatedAt: whitelist.updatedAt, applied: await reloadRunningWhitelist(gameId, worldId) });
+}
+
+// Fire and forget: the record is saved, and a host that cannot be asked now
+// writes the list at the world's next start.
+async function reloadRunningWhitelist(gameId: string, worldId: string): Promise<"reloading" | "next_start"> {
+  try {
+    const [presets, worldRecords, hosts] = await Promise.all([
+      awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
+      awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
+      awsControlPlaneSources.listHosts(),
+    ]);
+    const world = catalogWithPresets(presets, gameCatalog, worldRecords)
+      .find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
+    if (world === undefined) return "next_start";
+    const placement: WorldPlacement = world.placement === "fleet" ? "fleet" : "configured";
+    const located = await readWorldSession(gameId, worldId, placement);
+    if (located.record?.observedState !== "ready") return "next_start";
+    const host = await locateWorldHost(placement, located.record, hosts);
+    if (host === null) return "next_start";
+    await sendWhitelistReload({ hostId: host.hostId, worldId, slot: host.slot });
+    return "reloading";
+  } catch (error) {
+    console.error(JSON.stringify({ event: "whitelist_reload_not_sent", worldId, error: error instanceof Error ? error.message : String(error) }));
+    return "next_start";
+  }
 }
 
 // A backup carries the generation it was taken from, and that generation names
@@ -2723,6 +2787,10 @@ export const routes: Readonly<Record<string, Route>> = {
     backups(parameter(event, "gameId"), parameter(event, "worldId"))),
   "POST /games/{gameId}/worlds/{worldId}/backups/download": permissionRoute("backup.download", (identity, event) =>
     backupDownload(identity, parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
+  "GET /games/{gameId}/worlds/{worldId}/whitelist": permissionRoute("whitelist.manage", (_identity, event) =>
+    whitelistOf(parameter(event, "gameId"), parameter(event, "worldId"))),
+  "PUT /games/{gameId}/worlds/{worldId}/whitelist": permissionRoute("whitelist.manage", (identity, event) =>
+    updateWhitelist(identity, parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
   "PUT /games/{gameId}/worlds/{worldId}/game-settings": permissionRoute("world.manage", (identity, event) =>
     updateGameSettings(identity, parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
   "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}": permissionRoute("release.read", (_identity, event) =>

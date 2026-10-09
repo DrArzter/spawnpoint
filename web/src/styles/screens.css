@@ -805,7 +805,9 @@
 @media (pointer: coarse) {
   .swatch { width: 44px; height: 44px; }
 }
-.access-invite-form {
+/* One value and the button that submits it, on one line: an invitation's
+   email, a player's name. */
+.entry-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) max-content;
   column-gap: 1rem;
@@ -813,16 +815,15 @@
   align-items: end;
 }
 
-.access-invite-form .field,
-.access-invite-form > p:not(.access-invite-hint) { grid-column: 1; grid-row: 1; min-width: 0; }
-.access-invite-form .btn { grid-column: 2; grid-row: 1; }
-.access-invite-form p { margin: 0; }
-.access-invite-form .access-invite-hint {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  color: var(--ink-secondary);
-  font-size: 12px;
-  line-height: 16px;
+.entry-form .field,
+.entry-form > p { grid-column: 1; grid-row: 1; min-width: 0; }
+.entry-form .btn { grid-column: 2; grid-row: 1; }
+.entry-form p { margin: 0; }
+/* Level with the input, under its 16px label and 6px gap, whatever hint or
+   error the field shows below it. */
+.entry-form .field ~ .btn {
+  align-self: start;
+  margin-top: calc(22px + (40px - var(--control-height)) / 2);
 }
 
 .access-invite-link {
@@ -840,8 +841,9 @@
    one; a button alone on its line takes the width, as every action does at
    this step. */
 @media (max-width: 599px) {
-  .access-invite-form { grid-template-columns: minmax(0, 1fr); }
-  .access-invite-form .btn { grid-column: 1; grid-row: 3; width: 100%; }
+  .entry-form { grid-template-columns: minmax(0, 1fr); }
+  .entry-form .btn { grid-column: 1; grid-row: 3; width: 100%; }
+  .entry-form .field ~ .btn { margin-top: 0; }
   .access-invite-link .btn {
     flex: 1 1 100%;
   }

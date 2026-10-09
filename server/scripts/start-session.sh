@@ -134,6 +134,16 @@ if declare -F game_prepare_session >/dev/null; then
   game_prepare_session
 fi
 
+# A world that keeps its whitelist on its record (ADR-0066) gets exactly that
+# list on whichever host it lands. A world that keeps none is left as it is.
+if [[ -n "${WORLD_WHITELIST:-}" ]]; then
+  if declare -F game_render_whitelist >/dev/null; then
+    game_render_whitelist "${WORLD_DATA_DIRECTORY}" "${WORLD_WHITELIST}"
+  else
+    printf 'warning: %s keeps no whitelist file; the list on the world record is not applied\n' "${GAME_ID}" >&2
+  fi
+fi
+
 # A placed session is scraped by the host's own tier, which must exist before
 # the session's exporter can join its network (ADR-0054, phase 9). An unplaced
 # session carries the tier inside its own project, as it always has.

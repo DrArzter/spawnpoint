@@ -62,6 +62,8 @@ export type ControlPlaneSnapshot = Readonly<{
     lifecycle: LifecycleRecord | null;
     /** What a world of this game may set (ADR-0064); empty when the game defines nothing. */
     settings: readonly SettingDefinition[];
+    /** The game keeps a whitelist a world's record can hold (ADR-0066). */
+    whitelist: boolean;
     presets: ReadonlyArray<Readonly<{
       id: string;
       displayName: string;
@@ -194,6 +196,7 @@ export async function readControlPlaneSnapshot(
       displayName: game.displayName,
       lifecycle: lifecycles[gameIndex] ?? null,
       settings: gameSettingDefinitions(game.id),
+      whitelist: game.whitelist === true,
       presets: (game.presets ?? []).map((preset) => ({
         id: preset.id,
         displayName: preset.displayName,

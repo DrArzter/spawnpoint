@@ -12,7 +12,7 @@ import { pendingFor } from "../shell/actions";
 import type { Skin } from "../skins/skin";
 import { action, type Action } from "./actions";
 import { useConsole, type ConsoleController } from "./useConsole";
-import { useBackups, useConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseMods, useRoles, useUsers, useWorldMetrics } from "./data";
+import { useBackups, useConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, ReleasesModel, WorldModel, WorldsModel } from "./models";
 import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionActionForWorld, sessionControlAvailability, sessionDetails, worldDetails, worldMoreActions, worldNotices, worldTabs } from "./worlds";
@@ -93,6 +93,7 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
   const operations = snapshot?.operations ?? [];
   const tabs = worldTabs(world, {
     releases: granted.has("release.read"),
+    whitelist: granted.has("whitelist.manage") && capabilities.has("whitelist") && game.whitelist === true && world.worldLifecycleAvailable && world.materialization !== "archived",
     console: granted.has("console.use") && capabilities.has("consoleGateway"),
     metrics: granted.has("metrics.read") && capabilities.has("worldMetrics"),
   });
@@ -103,6 +104,7 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
   const metricsOpen = route.worldTab === "metrics" && offered("metrics");
   const consoleModel = useWorldConsole(game, world, consoleOpen, running, notify);
   const metrics = useWorldMetrics(metricsOpen ? game.id : undefined, world.id);
+  const whitelist = useWhitelist(game.id, world, route.worldTab === "whitelist" && offered("whitelist"), notify);
   // The server mods of the release the world starts with (ADR-0065).
   const modsRelease = world.release.desiredRelease ?? world.release.activeRelease;
   const modsOpen = route.worldTab === "releases" && offered("releases") && capabilities.has("releaseFiles") && world.preset !== null && modsRelease !== null;
@@ -140,6 +142,7 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     wipes: [...world.wipes].reverse().map((wipe) => ({ wipe, showBackups: action("wipe.backups", "Backups", () => { backups.setFilter(wipe.id); navigate({ worldTab: "backups" }); }) })),
     backups,
     releases: { rows: releaseRows(world, granted.has("connection.read"), busy, () => worldCallbacks.onDownloadPack(game, world)), state: world.release.state, mods },
+    whitelist: offered("whitelist") ? whitelist : null,
     console: offered("console") ? consoleModel : null,
     metrics: offered("metrics") ? metrics : null,
   };

@@ -1,5 +1,5 @@
 import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../../model";
-import { apiFailure, type FileLink, type ReleaseMod, type ReleaseMods, type SessionOperation, type SpawnpointApi, type WorldLifecycleAction } from "../contract";
+import { apiFailure, type FileLink, type ReleaseMod, type ReleaseMods, type SavedWhitelist, type SessionOperation, type SpawnpointApi, type WorldLifecycleAction, type WorldWhitelist } from "../contract";
 import { authorizedFetch } from "./transport";
 
 function controlPlaneSubscription(onInvalidated: () => void): () => void {
@@ -189,6 +189,35 @@ export const worldsApi = {
       unknown_game_setting: `${body.setting ?? "A setting"} is not one this game offers. Refresh and try again.`,
     };
     throw new Error(messages[body.error ?? ""] ?? "Game settings could not be saved.");
+  },
+
+  async loadWhitelist(gameId: string, worldId: string): Promise<WorldWhitelist> {
+    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/whitelist`);
+    const body = await response.json().catch(() => ({})) as { error?: string } & Partial<WorldWhitelist>;
+    if (!response.ok || body.names === undefined) {
+      throw await apiFailure(response, body.error === "forbidden" ? "Your role cannot manage whitelists." : "The whitelist could not be read.", body);
+    }
+    return { managed: body.managed === true, names: body.names, updatedAt: body.updatedAt ?? null, updatedBy: body.updatedBy ?? null };
+  },
+
+  async updateWhitelist(gameId: string, worldId: string, names: readonly string[]): Promise<SavedWhitelist> {
+    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/whitelist`, {
+      method: "PUT", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ names }),
+    });
+    const body = await response.json().catch(() => ({})) as { error?: string; name?: string } & Partial<SavedWhitelist>;
+    if (response.ok && body.names !== undefined) {
+      return { managed: true, names: body.names, updatedAt: body.updatedAt ?? null, updatedBy: body.updatedBy ?? null, applied: body.applied === "reloading" ? "reloading" : "next_start" };
+    }
+    const messages: Record<string, string> = {
+      forbidden: "Your role cannot manage whitelists.",
+      invalid_player_name: `${body.name ?? "That"} is not a Minecraft name: 3 to 16 letters, digits or underscores.`,
+      duplicate_player_name: `${body.name ?? "That name"} is already on the list.`,
+      whitelist_too_long: "A whitelist holds at most 200 names.",
+      world_archived: "This world is archived. Restore a backup before changing its whitelist.",
+      world_settings_conflict: "The world changed while you were editing. Refresh and try again.",
+    };
+    throw new Error(messages[body.error ?? ""] ?? "The whitelist could not be saved.");
   },
 
   async loadReleaseMods(gameId: string, presetId: string, release: string): Promise<ReleaseMods> {

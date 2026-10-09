@@ -70,6 +70,11 @@ mock_provider "aws" {
     values = { arn = "arn:aws:ssm:eu-central-1:123456789012:document/spawnpoint-console" }
   }
 
+  override_resource {
+    target = aws_ssm_document.whitelist
+    values = { arn = "arn:aws:ssm:eu-central-1:123456789012:document/spawnpoint-whitelist" }
+  }
+
   override_data {
     target = data.aws_iam_policy_document.control_plane_subscriptions
     values = { json = "{}" }
@@ -176,6 +181,16 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
 
   assert {
     condition = alltrue([
+      jsondecode(aws_ssm_document.whitelist.content).parameters.worldId.allowedPattern == "^[a-z0-9][a-z0-9-]{0,31}$",
+      jsondecode(aws_ssm_document.whitelist.content).parameters.slot.allowedPattern == "^([0-9]{1,3})?$",
+      keys(jsondecode(aws_ssm_document.whitelist.content).parameters) == ["slot", "worldId"],
+      aws_lambda_function.access_api.environment[0].variables.WHITELIST_DOCUMENT_NAME == "spawnpoint-whitelist",
+    ])
+    error_message = "The whitelist document names only a world and a slot; the names come from the world's record on the host."
+  }
+
+  assert {
+    condition = alltrue([
       for statement in data.aws_iam_policy_document.access_api_console.statement :
       !contains(statement.actions, "ssm:SendCommand") || (
         !anytrue([for resource in statement.resources : strcontains(resource, "AWS-RunShellScript")])
@@ -187,7 +202,7 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   assert {
     condition = anytrue([
       for statement in data.aws_iam_policy_document.access_api_console.statement :
-      statement.sid == "SendOnlyTheConsoleDocumentToLaunchedHosts" && anytrue([
+      statement.sid == "SendOnlySpawnpointDocumentsToLaunchedHosts" && anytrue([
         for condition in statement.condition : condition.variable == "ssm:resourceTag/ManagedBy" && contains(condition.values, "spawnpoint-fleet")
       ])
     ])

@@ -145,6 +145,19 @@ export type BackupsModel = Readonly<{
 
 export type ReleaseRow = Readonly<{ name: string; status: string; downloadable: boolean; sourceHref: string | null; download: Action | null }>;
 
+/** One player on a world's whitelist, and the way off it (ADR-0066). */
+export type WhitelistRow = Readonly<{ name: string; remove: Action }>;
+export type WhitelistModel = Readonly<{
+  world: World;
+  /** The names the world's record keeps; managed is false while it keeps none. */
+  list: Loading<Readonly<{ managed: boolean; rows: readonly WhitelistRow[]; updatedAt: string | null; updatedBy: string | null }>>;
+  draft: string;
+  setDraft: (value: string) => void;
+  /** Why the draft cannot be added; null while it is empty or can be. */
+  draftError: string | null;
+  add: Action;
+}>;
+
 /** One server mod of the release a world starts with, and its download (ADR-0065). */
 export type ModRow = Readonly<{ file: string; bytes: number; sha256: string; download: Action }>;
 export type ModsModel = Readonly<{ release: string; files: Loading<readonly ModRow[]> }>;
@@ -175,6 +188,8 @@ export type WorldModel = Readonly<{
     /** The server mods of the release the world starts with; null when none can be read. */
     mods: ModsModel | null;
   }>;
+  /** The players who may join; null when the role, the game or the world keeps no whitelist here. */
+  whitelist: WhitelistModel | null;
   /** This world's console and its host's metrics; null when the role or the deployment offers neither tab. */
   console: ConsoleModel | null;
   metrics: MetricsModel | null;

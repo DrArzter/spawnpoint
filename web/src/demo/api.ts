@@ -196,6 +196,16 @@ export const demoApi: SpawnpointApi = {
     return store.updateGameSettings(gameId, worldId, values);
   },
 
+  async loadWhitelist(gameId: string, worldId: string) {
+    await demoLatency();
+    return store.whitelist(gameId, worldId);
+  },
+
+  async updateWhitelist(gameId: string, worldId: string, names: readonly string[]) {
+    await demoLatency();
+    return store.updateWhitelist(gameId, worldId, names);
+  },
+
   async loadReleaseMods(gameId: string, presetId: string, release: string) {
     await demoLatency();
     return store.releaseMods(gameId, presetId, release);

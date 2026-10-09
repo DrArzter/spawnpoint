@@ -1,4 +1,5 @@
 import type { SettingValue } from "./game-settings.ts";
+import { checkWhitelist } from "./whitelist.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
 
 export type GenerationSource =
@@ -13,6 +14,13 @@ export type WorldGeneration = Readonly<{
 }>;
 
 export type ClosedWorldGeneration = WorldGeneration & Readonly<{ closedAt: string }>;
+
+/** The whitelist a world keeps (ADR-0066), and who changed it last. It outlives wipes. */
+export type WorldWhitelist = Readonly<{
+  names: readonly string[];
+  updatedAt: string;
+  updatedBy: Readonly<{ identityId: string; displayName: string }>;
+}>;
 
 /** The game settings a world sets (ADR-0064), and who set them last. They outlive wipes. */
 export type WorldGameSettings = Readonly<{
@@ -38,6 +46,8 @@ export type WorldRecord = Readonly<{
   currentGeneration: WorldGeneration;
   previousGenerations: readonly ClosedWorldGeneration[];
   gameSettings?: WorldGameSettings;
+  /** Absent: Spawnpoint does not keep this world's whitelist. Empty: nobody may join. */
+  whitelist?: WorldWhitelist;
 }>;
 
 type ObjectValue = Record<string, unknown>;
@@ -78,6 +88,22 @@ function parseGameSettings(value: unknown): WorldGameSettings | null {
 
 export function withGameSettings(record: WorldRecord, gameSettings: WorldGameSettings): WorldRecord {
   return { ...record, gameSettings };
+}
+
+function parseWhitelist(value: unknown): WorldWhitelist | null {
+  const root = object(value);
+  const by = object(root?.updated_by);
+  const check = checkWhitelist(root?.names);
+  if (
+    root === null || by === null || !check.ok ||
+    typeof root.updated_at !== "string" || Number.isNaN(Date.parse(root.updated_at)) ||
+    typeof by.identity_id !== "string" || by.identity_id.length === 0 || typeof by.display_name !== "string"
+  ) return null;
+  return { names: check.names, updatedAt: root.updated_at, updatedBy: { identityId: by.identity_id, displayName: by.display_name } };
+}
+
+export function withWhitelist(record: WorldRecord, whitelist: WorldWhitelist): WorldRecord {
+  return { ...record, whitelist };
 }
 
 export function worldIdForName(gameId: string, displayName: string, worldUuid: string): string {
@@ -283,6 +309,11 @@ export function worldRecordDocument(record: WorldRecord): ObjectValue {
       updated_at: record.gameSettings.updatedAt,
       updated_by: { identity_id: record.gameSettings.updatedBy.identityId, display_name: record.gameSettings.updatedBy.displayName },
     } }),
+    ...(record.whitelist === undefined ? {} : { whitelist: {
+      names: record.whitelist.names,
+      updated_at: record.whitelist.updatedAt,
+      updated_by: { identity_id: record.whitelist.updatedBy.identityId, display_name: record.whitelist.updatedBy.displayName },
+    } }),
   };
 }
 
@@ -293,6 +324,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
   const previousValues = root?.previous_generations ?? [];
   const previous = Array.isArray(previousValues) ? previousValues.map((value) => parseGeneration(value, true)) : null;
   const gameSettings = root?.game_settings === undefined ? undefined : parseGameSettings(root.game_settings);
+  const whitelist = root?.whitelist === undefined ? undefined : parseWhitelist(root.whitelist);
   if (
     root === null || root.schema_version !== 1 || root.storage_layout !== "generation" ||
     typeof root.world_id !== "string" || !ID.test(root.world_id) ||
@@ -310,7 +342,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     typeof preset.commit !== "string" || !COMMIT.test(preset.commit) ||
     typeof preset.profile_digest !== "string" || !SHA256.test(preset.profile_digest) ||
     generation === null || previous === null || previous.some((value) => value === null) ||
-    gameSettings === null
+    gameSettings === null || whitelist === null
   ) return null;
   const current = generation as WorldGeneration;
   const history = previous as ClosedWorldGeneration[];
@@ -343,5 +375,6 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     currentGeneration: current,
     previousGenerations: history,
     ...(gameSettings === undefined ? {} : { gameSettings }),
+    ...(whitelist === undefined ? {} : { whitelist }),
   };
 }

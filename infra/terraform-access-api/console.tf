@@ -64,16 +64,17 @@ resource "aws_ssm_document" "console" {
 
 data "aws_iam_policy_document" "access_api_console" {
   # The document and the instance are both resources of a SendCommand; this
-  # statement admits the one document and the configured host.
+  # statement admits Spawnpoint's own documents, the console's and the
+  # whitelist's (ADR-0066), and the configured host.
   statement {
-    sid       = "SendOnlyTheConsoleDocumentToTheConfiguredHost"
+    sid       = "SendOnlySpawnpointDocumentsToTheConfiguredHost"
     actions   = ["ssm:SendCommand"]
-    resources = [aws_ssm_document.console.arn, data.aws_instance.configured_host.arn]
+    resources = [aws_ssm_document.console.arn, aws_ssm_document.whitelist.arn, data.aws_instance.configured_host.arn]
   }
 
   # A launched host (ADR-0054) is admitted by its fleet tag, never by its id.
   statement {
-    sid       = "SendOnlyTheConsoleDocumentToLaunchedHosts"
+    sid       = "SendOnlySpawnpointDocumentsToLaunchedHosts"
     actions   = ["ssm:SendCommand"]
     resources = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
 

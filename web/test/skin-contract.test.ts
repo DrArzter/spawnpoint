@@ -6,7 +6,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { action, actionsOf, type Action } from "../src/core/actions.ts";
-import type { AccessModel, ConfirmationModel, ConsoleModel, CreateWorldModel, GameSettingsModel, InvitationModel, MetricsModel, ProfileModel, ReleasesModel, ShellModel, WorldModel, WorldsModel, WorldSettingsModel } from "../src/core/models.ts";
+import type { AccessModel, ConfirmationModel, ConsoleModel, CreateWorldModel, GameSettingsModel, InvitationModel, MetricsModel, ProfileModel, ReleasesModel, ShellModel, WhitelistModel, WorldModel, WorldsModel, WorldSettingsModel } from "../src/core/models.ts";
 import type { Game, World } from "../src/model.ts";
 import { SKINS } from "../src/skins/index.ts";
 
@@ -181,6 +181,17 @@ const confirmation: ConfirmationModel = { title: "Permanently delete Rostik?", d
 const connection = { placement: "fleet" as const, setPlacement: noop, fleetAvailable: true, connectivity: "raw" as const, setConnectivity: noop, dnsAvailable: true };
 const createWorld: CreateWorldModel = { game, presets: game.presets, presetId: "industrial", setPresetId: noop, preset: game.presets[0]!, name: "", setName: noop, release: "1.2", setRelease: noop, connection, valid: false, submit: spy("world.create", "Create world"), cancel: spy("sheet.close", "Close panel") };
 const worldSettings: WorldSettingsModel = { game, world, stopped: false, connection, valid: true, save: spy("world.settings.save", "Save settings"), cancel: spy("sheet.close", "Cancel") };
+const whitelist: WhitelistModel = {
+  world,
+  list: { status: "ready", value: { managed: true, updatedAt: "2026-10-09T11:00:00Z", updatedBy: "DrArzter", rows: [
+    { name: "DrArzter", remove: spy("whitelist.remove.DrArzter", "Remove", { danger: true }) },
+    { name: "Mira", remove: spy("whitelist.remove.Mira", "Remove", { danger: true }) },
+  ] } },
+  draft: "a",
+  setDraft: noop,
+  draftError: "3 to 16 letters, digits or underscores, as the player types it.",
+  add: spy("whitelist.add", "Add player", { disabled: true }),
+};
 const gameSettings: GameSettingsModel = {
   game, world, running: true,
   fields: [
@@ -249,6 +260,21 @@ for (const skin of SKINS) {
     // Without backup.download, the archive is listed and never offered.
     const noDownload = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "backups", backups: { ...worldPage.backups, download: null } } }));
     assert.doesNotMatch(noDownload, /data-action="backup\.download"/);
+  });
+
+  test(`${skin.name}: a world's whitelist draws add, each player's remove, and what it means when empty or not kept (ADR-0066)`, () => {
+    const tab = (model: WhitelistModel) => renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "whitelist", whitelist: model } }));
+    const kept = tab(whitelist);
+    checkSurface("Whitelist", kept, whitelist);
+    assert.match(kept, /aria-invalid="true"/, "a name the game would refuse is marked before it is sent");
+    assert.match(kept, /3 to 16 letters/);
+    assert.doesNotMatch(kept, /does not keep this world/);
+    const unkept = tab({ ...whitelist, list: { status: "ready", value: { managed: false, updatedAt: null, updatedBy: null, rows: [] } } });
+    assert.match(unkept, /does not keep this world/, "the first name replaces the server's own list, and the page says so");
+    const empty = tab({ ...whitelist, list: { status: "ready", value: { managed: true, updatedAt: null, updatedBy: null, rows: [] } } });
+    assert.match(empty, /Nobody can join/);
+    const failed = tab({ ...whitelist, list: { status: "error", error: "boom", kind: "failed", retry: spy("whitelist.retry", "Try again") } });
+    assert.match(failed, /data-action="whitelist\.retry"/);
   });
 
   test(`${skin.name}: the game settings sheet draws every kind of setting, its errors, save, defaults and cancel (ADR-0064)`, () => {

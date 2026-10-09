@@ -43,6 +43,10 @@ validate_world_catalog() {
         (.footprint.memory_mib | type == "number" and . == floor and . > 0) and
         (.footprint.cores | type == "number" and . > 0)
       ))
+      and ((has("whitelist") | not) or (
+        (.whitelist | type == "array") and
+        all(.whitelist[]; type == "string" and test("^[A-Za-z0-9_]{3,16}$"))
+      ))
       and ((has("game_settings") | not) or (
         (.game_settings | type == "object") and
         all(.game_settings[]; type | IN("string", "number", "boolean"))
@@ -130,6 +134,9 @@ load_world() {
   # The game settings the world sets (ADR-0064), as the registry recorded
   # them; configure_game_compose checks them against the game's definitions.
   WORLD_GAME_SETTINGS="$(jq -c '.game_settings // {}' <<<"${match}")"
+  # The whitelist the world keeps on its record (ADR-0066); empty when it keeps
+  # none, which is not the same as keeping an empty one.
+  WORLD_WHITELIST="$(jq -c 'if has("whitelist") then .whitelist else empty end' <<<"${match}")"
   WORLD_STORAGE_LAYOUT="$(jq -r '.storage_layout // "legacy"' <<<"${match}")"
   WORLD_GENERATION_ID="$(jq -r '.generation_id // empty' <<<"${match}")"
   WORLD_RELEASE="$(jq -r '.release // empty' <<<"${match}")"

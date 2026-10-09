@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { ControlPlaneSnapshot, Game, Preset, World } from "../model";
+import { worldSessionActive } from "../session";
 import type { Confirmation } from "../shell/actions";
 import { action } from "./actions";
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, WorldPlacement, WorldSettingsModel } from "./models";
@@ -71,14 +72,15 @@ export function useCreateWorldForm(game: Game, initialPreset: Preset | null, dep
 
 export function useWorldSettingsForm(game: Game, world: World, deployment: Deployment, opts: Readonly<{ busy: boolean; onSave: (placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game") => void; onClose: () => void }>): WorldSettingsModel {
   const connection = useConnectionFields(deployment, { placement: world.placement ?? (world.connectivity === "zerotier" ? "configured" : "fleet"), connectivity: world.connectivity });
-  const stopped = game.lifecycle === null || (game.lifecycle.activeSessionId === null && game.lifecycle.observedState === "stopped");
+  // Only this world's own session holds its hosting back (ADR-0062).
+  const stopped = !worldSessionActive(game, world);
   return {
     game,
     world,
     stopped,
     connection,
     valid: connection.valid,
-    save: action("world.settings.save", "Save settings", () => opts.onSave(connection.placement, connection.connectivity, connection.auth), { disabled: !connection.valid || !stopped || opts.busy, busy: opts.busy, hint: stopped ? undefined : "Stop this game's current session before changing hosting." }),
+    save: action("world.settings.save", "Save settings", () => opts.onSave(connection.placement, connection.connectivity, connection.auth), { disabled: !connection.valid || !stopped || opts.busy, busy: opts.busy, hint: stopped ? undefined : "Stop this world's session before changing hosting." }),
     cancel: action("sheet.close", "Cancel", opts.onClose, { disabled: opts.busy }),
   };
 }
@@ -91,8 +93,10 @@ function confirmationCopy(confirmation: Confirmation): { title: string; descript
         ? {
           title: "Start a billed AWS session?",
           description: world.materialization === "not_created"
-            ? `Spawnpoint will create ${world.displayName} from its ready preset, open wipe #1 and boot the shared host for ${game.displayName}. The first start may take several minutes, and the host is billed while it runs.`
-            : `Spawnpoint will boot the shared host and start ${world.displayName}. ${game.displayName} may take several minutes to become healthy, and the host is billed while it runs.`,
+            ? `Spawnpoint will create ${world.displayName} from its ready preset, open wipe #1 and ${world.placement === "fleet" ? "launch a fleet host for it" : `boot the shared host for ${game.displayName}`}. The first start may take several minutes, and the host is billed while it runs.`
+            : world.placement === "fleet"
+              ? `Spawnpoint will launch a fleet host for ${world.displayName}, or reuse one with room. Other worlds keep running. ${game.displayName} may take several minutes to become healthy, and the host is billed while it runs.`
+              : `Spawnpoint will boot the shared host and start ${world.displayName}. ${game.displayName} may take several minutes to become healthy, and the host is billed while it runs.`,
           label: "Start session",
           destructive: false,
         }

@@ -48,7 +48,13 @@ export type World = {
   };
   connectionAddress: string | null;
   release: ReleasePointer;
+  /**
+   * This world's session, wherever it lives (ADR-0062): a fleet world's own
+   * record, or its game's while that names it. Absent from older responses.
+   */
+  session?: WorldSession | null;
 };
+export type WorldSession = Omit<Lifecycle, "schemaVersion">;
 export type Lifecycle = {
   schemaVersion: 1;
   serverId: string;
@@ -72,7 +78,8 @@ export type Host = {
   launchedAt?: string | null;
   publicIp?: string | null;
 };
-export type Operation = { id: string; type: "start" | "stop" | "promote" | "world"; status: "running"; startedAt: string; providerRef?: string };
+/** `worldId` is the world the workflow's input names; null or absent blocks every world (ADR-0062). */
+export type Operation = { id: string; type: "start" | "stop" | "promote" | "world"; status: "running"; startedAt: string; worldId?: string | null; providerRef?: string };
 export type ControlPlaneSnapshot = {
   observedAt: string;
   games: readonly Game[];

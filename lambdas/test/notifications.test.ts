@@ -145,6 +145,16 @@ test("the Lifecycle V2 machines EventBridge routes are announced like their V1 n
   }
 });
 
+test("with two worlds of one game running, each message names its world", () => {
+  const input = { serverId: "world#minecraft-rostik-1a2b3c4d", gameId: "minecraft", worldId: "minecraft-rostik-1a2b3c4d", worldName: "Rostik", requestedBy: "identity:1" };
+  assert.match(renderNotification(event("spawnpoint-start-server-v2", "RUNNING", { input })) ?? "", /identity:1 requested Rostik\./);
+  assert.match(renderNotification(event("spawnpoint-start-server-v2", "SUCCEEDED", { input, output: { connectionAddress: "minecraft-rostik-1a2b3c4d.spawnpoint.example:25565" } })) ?? "", /^\[READY\] Rostik is up: /);
+  assert.match(renderNotification(event("spawnpoint-start-server-v2", "FAILED", { input })) ?? "", /Start of Rostik failed/);
+  assert.match(renderNotification(event("spawnpoint-idle-watchdog-v2", "SUCCEEDED", { input, output: { status: "stopped_idle" } })) ?? "", /^\[STOPPED\] Rostik: nobody online/);
+  assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server-v2", "SUCCEEDED", { input })), "minecraft.started", "a world's own record is not a game");
+  assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server-v2", "SUCCEEDED", { input: { ...input, gameId: undefined } })), "minecraft.started", "a key that is not a game falls back to the legacy rule");
+});
+
 test("a stop a player cancelled, or one for a session already gone, is not a failed backup", () => {
   assert.match(renderNotification(event("spawnpoint-stop-server-v2", "FAILED", { name: "panel-stop-1", error: "Spawnpoint.V2StopRefusedPlayersOnline" })) ?? "", /Players are online.*Nothing was lost/);
   assert.equal(renderNotification(event("spawnpoint-stop-server-v2", "FAILED", { name: "panel-start-1-watchdog-idle-3", error: "Spawnpoint.V2StopRefusedPlayersOnline" })), null, "the watchdog tries again");

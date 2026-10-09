@@ -90,19 +90,23 @@ export function notificationSubscriptionKey(event: ExecutionEvent): Notification
 
 export function renderNotification(event: ExecutionEvent): string | null {
   const requester = str(event.input, "requestedBy");
+  // Two worlds of one game can run at once (ADR-0062), so a message names its
+  // world when the workflow was given the name; older inputs carry none.
+  const world = str(event.input, "worldName") || null;
   const failed = event.status === "FAILED" || event.status === "TIMED_OUT" || event.status === "ABORTED";
 
   switch (event.machine) {
     case "spawnpoint-start-server": {
       if (CHILD_NAME.test(event.name)) return null;
       if (event.status === "RUNNING") {
-        return `[STARTING] ${requester ?? "the owner"} requested the server. Mods take a few minutes.`;
+        return `[STARTING] ${requester ?? "the owner"} requested ${world ?? "the server"}. Mods take a few minutes.`;
       }
       if (event.status === "SUCCEEDED") {
         const address = str(event.output, "connectionAddress") ?? str(event.output, "address");
-        return address === null ? "[READY] Server is up." : `[READY] Server is up: ${address}`;
+        const up = world === null ? "Server is up" : `${world} is up`;
+        return address === null ? `[READY] ${up}.` : `[READY] ${up}: ${address}`;
       }
-      return `[FAILED] Start failed (${event.name}). The owner can read the execution history.`;
+      return `[FAILED] ${world === null ? "Start" : `Start of ${world}`} failed (${event.name}). The owner can read the execution history.`;
     }
 
     case "spawnpoint-idle-watchdog": {
@@ -110,9 +114,13 @@ export function renderNotification(event: ExecutionEvent): string | null {
       if (event.status === "SUCCEEDED") {
         switch (str(event.output, "status")) {
           case "stopped_idle":
-            return "[STOPPED] Nobody online — server saved, backed up and stopped.";
+            return world === null
+              ? "[STOPPED] Nobody online — server saved, backed up and stopped."
+              : `[STOPPED] ${world}: nobody online — saved, backed up and stopped.`;
           case "stopped_session_cap":
-            return "[STOPPED] Session cap reached — server saved, backed up and stopped.";
+            return world === null
+              ? "[STOPPED] Session cap reached — server saved, backed up and stopped."
+              : `[STOPPED] ${world}: session cap reached — saved, backed up and stopped.`;
           default:
             return null;
         }

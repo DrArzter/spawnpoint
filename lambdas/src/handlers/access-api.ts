@@ -81,7 +81,8 @@ import {
 import { readControlPlaneSnapshot } from "../control-plane/read-model.ts";
 import type { ControlPlaneSources } from "../control-plane/read-model.ts";
 import type { WorldRecord } from "../control-plane/world-registry.ts";
-import { packRelease, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, worldLifecycleNeedsStop, type SessionAction, type SessionPlan } from "../control-plane/session-control.ts";
+import { packRelease, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, type SessionAction, type SessionPlan } from "../control-plane/session-control.ts";
+import { blockingOperations, holdsWorld, locateWorldSession, sessionLifecycleKey, type WorldPlacement } from "../control-plane/world-session.ts";
 import { issueSubscriptionTicket, subscriptionTicketItem, subscriptionTicketLifetimeSeconds } from "../control-plane/subscriptions.ts";
 import { worldIdForName } from "../control-plane/world-registry.ts";
 
@@ -634,24 +635,41 @@ async function createControlPlaneSubscription(identity: Identity): Promise<Respo
   });
 }
 
+// The record a world's session lives on: a fleet world's own, or its game's
+// (ADR-0062). Both are read for a fleet world, because a session begun under the
+// game's record before fleet worlds had their own still runs to its stop there.
+async function readWorldSession(gameId: string, worldId: string, placement: WorldPlacement) {
+  const [game, own] = await Promise.all([
+    awsControlPlaneSources.readLifecycle(gameId),
+    placement === "fleet" ? awsControlPlaneSources.readLifecycle(sessionLifecycleKey(gameId, worldId, placement)) : Promise.resolve(null),
+  ]);
+  return { ...locateWorldSession(gameId, worldId, placement, { game, own }), game };
+}
+
+function worldPlacements(catalog: ReturnType<typeof catalogWithPresets>): (worldId: string) => WorldPlacement | undefined {
+  const placements = new Map(catalog.flatMap((game) => game.worlds.map((world) => [world.id, world.placement ?? "configured"] as const)));
+  return (worldId) => placements.get(worldId);
+}
+
 async function controlSession(identity: Identity, action: SessionAction, gameId: string, worldId: string): Promise<Response> {
-  const [hosts, operations, presets, worldRecords, lifecycle] = await Promise.all([
+  const [hosts, allOperations, presets, worldRecords] = await Promise.all([
     awsControlPlaneSources.listHosts(),
     awsControlPlaneSources.listRunningOperations(),
     awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
     awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
-    awsControlPlaneSources.readLifecycle(gameId),
   ]);
   const effectiveCatalog = catalogWithPresets(presets, gameCatalog, worldRecords);
   const world = effectiveCatalog.find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
   const fleet = world?.placement === "fleet";
   if (action === "start" && fleet && process.env.SPAWNPOINT_LAUNCH !== "enabled") return response(409, { error: "fleet_unavailable" });
+  const located = await readWorldSession(gameId, worldId, fleet ? "fleet" : "configured");
+  const operations = blockingOperations(allOperations, worldId, worldPlacements(effectiveCatalog));
   const configuredHosts = hosts.filter((candidate) => candidate.provenance !== "launched");
   const plan = fleet
-    ? planFleetSessionOperation(gameId, worldId, action, operations, lifecycle, effectiveCatalog)
-    : planSessionOperation(gameId, worldId, action, configuredHosts, operations, effectiveCatalog);
+    ? planFleetSessionOperation(gameId, worldId, action, operations, located.record, effectiveCatalog)
+    : planSessionOperation(gameId, worldId, action, configuredHosts, operations, effectiveCatalog, located.record);
   if (plan.kind === "reject") return response(plan.reason === "unknown_world" ? 404 : 409, { error: plan.reason });
-  const recoverySessionId = action === "stop" && !fleet ? stoppedHostRecoverySession(worldId, configuredHosts, lifecycle) : null;
+  const recoverySessionId = action === "stop" && !fleet ? stoppedHostRecoverySession(worldId, configuredHosts, located.record) : null;
   if (plan.kind === "noop" && recoverySessionId === null) return response(200, { result: plan.reason });
   const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
   const requestedBy = `identity:${identity.id}`;
@@ -663,15 +681,21 @@ async function controlSession(identity: Identity, action: SessionAction, gameId:
   if (!hostId) return response(409, { error: "configured_host_unavailable" });
   if (action === "start") {
     // No address in the request: the host's session summary answers with it
-    // and the machine carries it back (ADR-0033).
-    await startSessionExecution(operationId, hostId, requestedBy, gameId, worldId, fleet ? "fleet" : "single");
+    // and the machine carries it back (ADR-0033). A new session always begins
+    // on the record its placement names.
+    await startSessionExecution({
+      operationId, instanceId: hostId, requestedBy, gameId, worldId,
+      serverId: sessionLifecycleKey(gameId, worldId, fleet ? "fleet" : "configured"),
+      worldName: world?.displayName ?? worldId,
+      placement: fleet ? "fleet" : "single",
+    });
   }
   else {
-    const activeSessionId = recoverySessionId ?? lifecycle?.activeSessionId;
+    const activeSessionId = recoverySessionId ?? located.record?.activeSessionId;
     if (activeSessionId === null || activeSessionId === undefined) {
       return response(409, { error: "active_session_unavailable" });
     }
-    await stopSessionExecution(operationId, hostId, requestedBy, gameId, activeSessionId, worldId);
+    await stopSessionExecution(operationId, hostId, requestedBy, located.serverId, activeSessionId, worldId);
   }
   return response(202, { result: "requested", operationId });
 }
@@ -740,11 +764,16 @@ async function updateWorldSettings(gameId: string, worldId: string, body: string
   try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
   const access = parseWorldAccess(parsed, false);
   if (access === null) return response(400, { error: "invalid_world_connectivity" });
-  const [lifecycle, operations] = await Promise.all([
+  // Only this world's own session holds its settings back (ADR-0062). Both
+  // records are read, so the answer holds for either placement.
+  const [game, own, operations] = await Promise.all([
     awsControlPlaneSources.readLifecycle(gameId),
+    awsControlPlaneSources.readLifecycle(sessionLifecycleKey(gameId, worldId, "fleet")),
     awsControlPlaneSources.listRunningOperations(),
   ]);
-  if (operations.length > 0 || (lifecycle && (lifecycle.activeSessionId !== null || lifecycle.observedState !== "stopped"))) {
+  const unnamed = game !== null && game.activeWorldId == null && game.activeSessionId !== null;
+  if (operations.some((operation) => operation.worldId === null || operation.worldId === worldId) ||
+      holdsWorld(game, worldId) || holdsWorld(own, worldId) || unnamed) {
     return response(409, { error: "world_session_active" });
   }
   const result = await replaceWorldAccess(gameId, worldId, access);
@@ -791,14 +820,17 @@ async function controlWorldLifecycle(
   if (action === "regenerate" && (release === undefined || !/^[0-9]+\.[0-9]+$/.test(release))) {
     return response(400, { error: "invalid_release" });
   }
-  const [hosts, operations, worldRecords, lifecycle] = await Promise.all([
+  const [hosts, allOperations, presets, worldRecords] = await Promise.all([
     awsControlPlaneSources.listHosts(),
     awsControlPlaneSources.listRunningOperations(),
+    awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
     awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
-    awsControlPlaneSources.readLifecycle(gameId),
   ]);
   const record = worldRecords.find((candidate) => candidate.gameId === gameId && candidate.worldId === worldId);
   if (record === undefined) return response(404, { error: "unknown_materialized_world" });
+  const placement: WorldPlacement = record.placement === "fleet" ? "fleet" : "configured";
+  const located = await readWorldSession(gameId, worldId, placement);
+  const operations = blockingOperations(allOperations, worldId, worldPlacements(catalogWithPresets(presets, gameCatalog, worldRecords)));
   if (action === "purge" && record.status !== "archived") return response(409, { error: "world_not_archived" });
   if (action === "restore" && backupKey !== undefined) {
     const restorable = await restorableRelease(record, backupKey, awsControlPlaneSources.readReleaseManifest);
@@ -812,12 +844,16 @@ async function controlWorldLifecycle(
     return response(409, { error: "host_transitioning" });
   }
   const operationId = `panel-world-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
-  const stopRequired = record.placement === "fleet"
-    ? record.status === "active" && lifecycle?.activeWorldId === worldId && lifecycle.observedState !== "stopped"
-    : worldLifecycleNeedsStop(record.status, host.state);
-  if (stopRequired && !lifecycle?.activeSessionId) return response(409, { error: "active_session_unavailable" });
+  // Only this world's own session is stopped first; another world of the
+  // game keeps running. A configured host that runs while its game's record
+  // names no session is running something nobody recorded: refuse, as before.
+  if (placement === "configured" && record.status === "active" && host.state === "running" && located.record === null && located.game?.activeSessionId == null) {
+    return response(409, { error: "active_session_unavailable" });
+  }
+  const stopRequired = record.status === "active" && located.record !== null;
+  if (stopRequired && !located.record?.activeSessionId) return response(409, { error: "active_session_unavailable" });
   await worldLifecycleExecution(
-    operationId, host.providerRef, `identity:${identity.id}`, gameId, lifecycle?.activeSessionId ?? "none", worldId, action, backupKey, release,
+    operationId, host.providerRef, `identity:${identity.id}`, located.serverId, located.record?.activeSessionId ?? "none", worldId, action, backupKey, release,
     stopRequired, record.currentGeneration.id,
   );
   return response(202, { result: "requested", operationId });

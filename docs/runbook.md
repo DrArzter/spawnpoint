@@ -804,9 +804,9 @@ exclude it; then, once the Parameter Store keys below exist and one launch has b
 to `enabled`. A revert is setting `SPAWNPOINT_PLACEMENT=single`; sessions already running finish as they began,
 because every host command carries the slot it started with.
 
-Two things `shared` cannot do yet, and should not surprise anyone: two worlds of the same game still take turns (one
-lifecycle record per game), and the legacy worlds run only on the configured host (they are bound to it in the
-catalog).
+Two things `shared` cannot do yet, and should not surprise anyone: two configured worlds of the same game still take
+turns, because they share the game's lifecycle record (fleet worlds have their own, ADR-0062), and the legacy worlds
+run only on the configured host (they are bound to it in the catalog).
 
 ## Launched hosts (ADR-0054, phase 12)
 

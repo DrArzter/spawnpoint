@@ -14,7 +14,7 @@ const sources: ControlPlaneSources = {
   readReleasePointer: async (worldId) => worldId === "world"
     ? { state: "available", generationId: null, desiredRelease: "1.1", activeRelease: "1.0" }
     : { state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null },
-  listRunningOperations: async () => [{ id: "start-1", type: "start", status: "running", startedAt: "2026-08-29T00:00:00.000Z", providerRef: "arn:execution" }],
+  listRunningOperations: async () => [{ id: "start-1", type: "start", status: "running", startedAt: "2026-08-29T00:00:00.000Z", providerRef: "arn:execution", worldId: null }],
 };
 
 test("retains the supplied projection observation timestamp", async () => {
@@ -172,6 +172,44 @@ test("a fleet world never borrows another running host's public address", async 
     readReleasePointer: async () => ({ state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null }),
   }, { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" }, fleetCatalog);
   assert.equal(snapshot.games[0]?.worlds[0]?.connectionAddress, null);
+});
+
+test("two fleet worlds of one game run at once, each with its own session and its own address", async () => {
+  const { acquireLease, beginSession, markSessionReady } = await import("../src/domain/lifecycle.ts");
+  const ready = (serverId: string, worldId: string, address: string) => {
+    const lease = acquireLease(initialLifecycleRecord(serverId, 100), "op", 100, 300);
+    return markSessionReady(beginSession(lease.record, lease.ownership, `session-${worldId}`, worldId, 101), lease.ownership, `session-${worldId}`, 102, address);
+  };
+  const fleetCatalog = [{
+    id: "minecraft", code: "MC", displayName: "Minecraft", connectPort: 25565,
+    worlds: [
+      { id: "rostik", displayName: "Rostik", profileId: "industrial", sessionControl: "v1" as const, connectivity: "route53" as const, placement: "fleet" as const },
+      { id: "magic", displayName: "Magic", profileId: "magic", sessionControl: "v1" as const, connectivity: "route53" as const, placement: "fleet" as const },
+      { id: "spare", displayName: "Spare", profileId: "vanilla", sessionControl: "v1" as const, connectivity: "route53" as const, placement: "fleet" as const },
+    ],
+  }];
+  const records: Record<string, ReturnType<typeof ready>> = {
+    "world#rostik": ready("world#rostik", "rostik", "rostik.games.example:25565"),
+    "world#magic": ready("world#magic", "magic", "magic.games.example:25565"),
+  };
+  const asked: string[] = [];
+  const snapshot = await readControlPlaneSnapshot({
+    listHosts: async () => [],
+    listRunningOperations: async () => [],
+    readLifecycle: async (serverId) => { asked.push(serverId); return records[serverId] ?? null; },
+    readReleasePointer: async () => ({ state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null }),
+  }, { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" }, fleetCatalog);
+  const worlds = new Map(snapshot.games[0]!.worlds.map((world) => [world.id, world]));
+  assert.deepEqual(asked.sort(), ["minecraft", "world#magic", "world#rostik", "world#spare"]);
+  assert.equal(worlds.get("rostik")?.session?.observedState, "ready");
+  assert.equal(worlds.get("rostik")?.session?.serverId, "world#rostik");
+  assert.equal(worlds.get("magic")?.session?.activeSessionId, "session-magic");
+  assert.equal(worlds.get("spare")?.session, null);
+  assert.equal(worlds.get("rostik")?.connectionAddress, "rostik.games.example:25565");
+  assert.equal(worlds.get("magic")?.connectionAddress, "magic.games.example:25565");
+  assert.equal(snapshot.games[0]?.lifecycle, null, "the game's own record holds neither");
+  const session = worlds.get("rostik")?.session as Record<string, unknown>;
+  assert.equal("lease" in session || "fencingToken" in session, false, "a viewer never reads the lease or the fence");
 });
 
 test("a ready session's address is the one the host reported, port and all; a stopped world's is composed", async () => {

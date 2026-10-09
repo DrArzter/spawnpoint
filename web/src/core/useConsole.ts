@@ -27,8 +27,14 @@ type ControlPlaneState =
 
 export function deriveServerState(game: Game | undefined, snapshot: ControlPlaneSnapshot | null): ServerState {
   if (snapshot?.deployment?.placement === "fleet") {
-    const observed = game?.lifecycle?.observedState;
-    return observed === "ready" ? "running" : observed ?? "stopped";
+    // Several worlds of a game may run at once, each on its own record
+    // (ADR-0062): the game is online while any of them is.
+    const observed = [game?.lifecycle?.observedState, ...(game?.worlds ?? []).map((world) => world.session?.observedState)];
+    if (observed.includes("ready")) return "running";
+    if (observed.includes("starting")) return "starting";
+    if (observed.includes("stopping")) return "stopping";
+    if (observed.includes("unknown")) return "unknown";
+    return "stopped";
   }
   const operation = snapshot?.operations[0];
   if (operation?.type === "start") return "starting";
@@ -76,6 +82,7 @@ function bootstrapOf(session: ActiveSession): OwnerBootstrap {
 // no session, is read as a fleet game on the Worlds page.
 function fleetOverviewOf(game: Game | undefined): boolean {
   if (!game) return false;
+  if (game.worlds.some((item) => item.placement === "fleet" && item.session?.activeSessionId)) return true;
   const active = game.worlds.find((item) => item.id === game.lifecycle?.activeWorldId);
   if (active) return active.placement === "fleet";
   return !game.lifecycle?.activeSessionId && game.worlds.some((item) => item.placement === "fleet");

@@ -2,7 +2,7 @@ import { hostStatus, sessionStatus, worldStatus, type StatusDescriptor } from ".
 import { commitUrl, formatDate, shortCommit } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Operation, ServerState, Wipe, World, WorldTab } from "../model";
 import { routeHash } from "../routing";
-import { playersOnline, sessionReason, sharedSessionOwnerLabel, worldOwnsSharedSession, type SessionReason, type SharedHostSession } from "../session";
+import { fleetPlayersOnline, fleetSessionOf, fleetWorldState, playersOnline, sessionReason, sharedSessionOwnerLabel, worldOwnsSharedSession, type SessionReason, type SharedHostSession } from "../session";
 import type { Pending, SessionAction, WorldActionKind } from "../shell/actions";
 import { pendingFor } from "../shell/actions";
 import { action, type Action } from "./actions";
@@ -26,7 +26,7 @@ export function releaseSummary(world: World): string {
 }
 
 export function sessionActionForWorld(world: World, game: Game, sharedSession: SharedHostSession, fleet = false): SessionAction {
-  if (fleet) return game.lifecycle?.activeWorldId === world.id && game.lifecycle.activeSessionId ? "stop" : "start";
+  if (fleet) return fleetSessionOf(game, world)?.activeSessionId ? "stop" : "start";
   return worldOwnsSharedSession(sharedSession, game, world) && sharedSession.state !== "stopped" ? "stop" : "start";
 }
 
@@ -39,12 +39,12 @@ function unavailableReason(world: World): string {
   return "This world is not connected to a session workflow yet.";
 }
 
-// A fleet world is refused for its own game's state, never for another game's.
-function fleetRefusal(world: World, game: Game, action: SessionAction): string | null {
-  const lifecycle = game.lifecycle;
+// A fleet world is refused for its own session's state, never for another
+// world's: each runs on a host launched for it (ADR-0062).
+function fleetRefusal(world: World, game: Game): string | null {
+  const observed = fleetSessionOf(game, world)?.observedState;
   if (world.connectivity === "zerotier") return "Fleet hosts do not join ZeroTier. Choose a public connection while this world is stopped.";
-  if (lifecycle?.observedState === "starting" || lifecycle?.observedState === "stopping" || lifecycle?.observedState === "unknown") return `This game is ${lifecycle.observedState}.`;
-  if (action === "start" && lifecycle?.activeSessionId) return "Another world of this game is already active. Stop it first.";
+  if (observed === "starting" || observed === "stopping" || observed === "unknown") return `This world is ${observed}.`;
   return null;
 }
 
@@ -60,13 +60,22 @@ function sharedRefusal(sharedSession: SharedHostSession, action: SessionAction):
   return null;
 }
 
-export function sessionControlAvailability(world: World, game: Game, sharedSession: SharedHostSession, permitted: boolean, controlBusy: boolean, fleet = false): SessionControl {
+export function sessionControlAvailability(
+  world: World,
+  game: Game,
+  sharedSession: SharedHostSession,
+  permitted: boolean,
+  controlBusy: boolean,
+  fleet = false,
+  /** The running operations that hold this world back; a fleet world waits for its own only. */
+  blocking: readonly Operation[] = [],
+): SessionControl {
   const action = sessionActionForWorld(world, game, sharedSession, fleet);
   const refuse = (hint: string): SessionControl => ({ action, disabled: true, hint });
   if (!world.sessionControlAvailable) return refuse(unavailableReason(world));
   if (!permitted) return refuse(`Your role cannot ${action} sessions.`);
-  if (controlBusy || sharedSession.operationRunning) return refuse("A control-plane operation is already in progress.");
-  const refusal = fleet ? fleetRefusal(world, game, action) : sharedRefusal(sharedSession, action);
+  if (controlBusy || (fleet ? blocking.length > 0 : sharedSession.operationRunning)) return refuse("A control-plane operation is already in progress.");
+  const refusal = fleet ? fleetRefusal(world, game) : sharedRefusal(sharedSession, action);
   if (refusal !== null) return refuse(refusal);
   if (fleet) return { action, disabled: false, hint: action === "start" ? "Launch or reuse a billed fleet host" : "Save and back up this session, then drain its host" };
   return { action, disabled: false, hint: action === "start" ? "Start a billed session on the shared host" : "Save, back up and stop this session" };
@@ -87,13 +96,23 @@ export function missingAddressLabel(world: World, serverState: ServerState): str
   return serverState === "running" ? "No address yet" : "Assigned while online";
 }
 
+function fleetWorlds(game: Game | undefined, state: ServerState): World[] {
+  return game?.worlds.filter((world) => world.placement === "fleet" && fleetWorldState(game, world) === state) ?? [];
+}
+
 function fleetReason(game: Game | undefined): string {
-  const state = game?.lifecycle?.observedState;
-  if (state === "ready") return "This game's world is running on a fleet host.";
-  if (state === "starting") return "A fleet host is being assigned or the game is starting.";
-  if (state === "stopping") return "The game is saving and its host is draining.";
-  if (state === "unknown") return "Spawnpoint cannot confirm this game's state.";
+  const running = fleetWorlds(game, "running");
+  if (fleetWorlds(game, "unknown").length > 0) return "Spawnpoint cannot confirm the state of every world.";
+  if (fleetWorlds(game, "starting").length > 0) return "A fleet host is being assigned or a world is starting.";
+  if (fleetWorlds(game, "stopping").length > 0) return "A world is saving and its host is draining.";
+  if (running.length > 1) return `${running.length} worlds are running, each on a fleet host of its own.`;
+  if (running.length === 1) return `${running[0]!.displayName} is running on a fleet host.`;
   return "No session for this game. Fleet hosts launch on demand.";
+}
+
+function sumKnown(values: readonly (number | null)[]): number | null {
+  const known = values.filter((value): value is number => value !== null);
+  return known.length === 0 ? null : known.reduce((total, value) => total + value, 0);
 }
 
 export function buildSessionOverview(game: Game | undefined, snapshot: ControlPlaneSnapshot | null, serverState: ServerState, sharedSession: SharedHostSession, fleet: boolean): SessionOverview {
@@ -102,17 +121,18 @@ export function buildSessionOverview(game: Game | undefined, snapshot: ControlPl
   const reason = sessionReason(sharedSession, game);
   const hosts = snapshot?.hosts ?? [];
   const activeGame = fleet ? game : sharedSession.activeGame ?? game;
-  const activeWorld = fleet ? game?.worlds.find((world) => world.id === game.lifecycle?.activeWorldId) ?? null : sharedSession.activeWorld;
+  const running = fleet ? fleetWorlds(game, "running") : [];
+  const activeWorld = fleet ? (running.length === 1 ? running[0]! : null) : sharedSession.activeWorld;
   const subject = activeWorld
     ? activeGame && activeGame.id !== game?.id ? `${activeWorld.displayName} (${activeGame.displayName})` : activeWorld.displayName
-    : game?.displayName ?? "Session";
+    : running.length > 1 ? `${running.length} worlds` : game?.displayName ?? "Session";
   return {
     fleet,
     state: serverState,
     status,
     headline: `${subject} ${status.label.toLowerCase()}`,
     reason: fleet ? { text: fleetReason(game), detail: reason.detail, attention: false } : reason,
-    players: playersOnline(activeGame),
+    players: fleet && game ? sumKnown(running.map((world) => fleetPlayersOnline(game, world))) : playersOnline(activeGame),
     observedAt: snapshot?.observedAt,
     host: host ? { name: host.name, status: hostStatus(host.state), instanceType: host.instanceType ?? null, zone: host.availabilityZone ?? null, launchedAt: host.launchedAt ?? null } : null,
     fleetHosts: {
@@ -181,20 +201,26 @@ export function worldMoreActions(game: Game, world: World, granted: ReadonlySet<
 }
 
 export function buildWorldRow(game: Game, world: World, opts: Readonly<{ fleet: boolean; sharedSession: SharedHostSession; serverState: ServerState; granted: ReadonlySet<string>; pending: Pending | null; callbacks: WorldCallbacks }>): WorldRow {
-  const active = opts.fleet
-    ? game.lifecycle?.activeWorldId === world.id && game.lifecycle.observedState === "ready"
-    : worldOwnsSharedSession(opts.sharedSession, game, world) && opts.sharedSession.state === "running";
+  // A fleet world's row tells its own session's state, so two of one game read apart.
+  const fleetWorld = world.placement === "fleet";
+  const state = fleetWorld ? fleetWorldState(game, world) : null;
+  const active = fleetWorld
+    ? state === "running"
+    : opts.fleet
+      ? game.lifecycle?.activeWorldId === world.id && game.lifecycle.observedState === "ready"
+      : worldOwnsSharedSession(opts.sharedSession, game, world) && opts.sharedSession.state === "running";
+  const moving = state === "starting" || state === "stopping";
   const wipe = world.wipes.find((item) => item.state === "current") ?? world.wipes.at(-1);
   return {
     world,
     href: routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: world.id }),
-    status: active ? sessionStatus("running") : worldStatus(world),
+    status: active ? sessionStatus("running") : moving ? sessionStatus(state) : worldStatus(world),
     presetName: presetOf(game, world)?.displayName ?? world.profileId,
     releaseSummary: releaseSummary(world),
     wipe: wipe ? { number: wipe.number } : null,
     wipeAbsent: world.worldLifecycleAvailable ? "No wipes yet" : "Legacy world",
     address: addressFacts(world),
-    addressAbsent: missingAddressLabel(world, opts.serverState),
+    addressAbsent: missingAddressLabel(world, state ?? opts.serverState),
     actions: rowActions(game, world, opts.granted, pendingFor(opts.pending, world.id) !== null, opts.callbacks),
   };
 }
@@ -211,7 +237,7 @@ type Host = ControlPlaneSnapshot["hosts"][number];
 
 function sessionHint(fleet: boolean, game: Game, world: World, reason: SessionReason): string {
   if (!fleet) return reason.text;
-  return game.lifecycle?.activeWorldId === world.id ? "This world owns the current game session." : "This world has no active session.";
+  return fleetSessionOf(game, world)?.activeSessionId ? "This world runs its own session on a fleet host." : "This world has no active session.";
 }
 
 function hostDetail(host: Host | undefined): Detail {
@@ -232,7 +258,7 @@ function launchedDetail(host: Host): Detail {
 export function sessionDetails(game: Game, world: World, sharedSession: SharedHostSession, snapshot: ControlPlaneSnapshot | null, serverState: ServerState, fleet: boolean): Detail[] {
   const host = snapshot?.hosts[0];
   const reason = sessionReason(sharedSession, game, world);
-  const players = playersOnline(game);
+  const players = fleet ? fleetPlayersOnline(game, world) : playersOnline(game);
   const running = snapshot?.hosts.filter((item) => item.provenance === "launched" && item.state === "running").length ?? 0;
   const details: Detail[] = [{
     label: "Session",

@@ -33,7 +33,7 @@ The name is a working title.
 | Capability | Detail |
 | --- | --- |
 | A server with no inbound ports | The security group has no inbound rules at all. The game is reachable only inside the ZeroTier overlay, and SSM reaches the host over its outbound connection. Connectivity is a per-world setting: the configured host offers ZeroTier; a world placed on a launched fleet host takes a raw public address or a Route 53 name instead, which opens exactly that game's port ([ADR-0033](docs/adr/0033-connectivity-as-a-strategy.md)). See [ADR-0024](docs/adr/0024-connectivity-modes.md) and [ADR-0007](docs/adr/0007-ssm-instead-of-ssh.md) |
-| Worlds that scale to zero on fleet hosts | Production runs `SPAWNPOINT_PLACEMENT=fleet` with `SPAWNPOINT_LAUNCH=enabled` since 2026-09-22. A start for a world created from a preset places it on a ready host with room, or asks EC2 Fleet for an instant host from a launch template with the footprint's memory and vCPU requirements at the lowest price, so no instance type or price lives in the code; the host bootstraps itself at the deploy's pinned commit, publishes `<world-id>.spawnpoint.drarzter.dev` in Route 53, and is drained and terminated after its last session, with orphaned hosts swept back. The two legacy Minecraft worlds stay bound to the configured host. See [ADR-0054](docs/adr/0054-place-a-session-on-a-host-with-room.md) and, phase by phase, [docs/capacity-allocation-rollout.md](docs/capacity-allocation-rollout.md) |
+| Worlds that scale to zero on fleet hosts | Production runs `SPAWNPOINT_PLACEMENT=fleet` with `SPAWNPOINT_LAUNCH=enabled` since 2026-09-22. A start for a world created from a preset places it on a ready host with room, or asks EC2 Fleet for an instant host from a launch template with the footprint's memory and vCPU requirements at the lowest price, so no instance type or price lives in the code; the host bootstraps itself at the deploy's pinned commit, publishes `<world-id>.spawnpoint.drarzter.dev` in Route 53, and is drained and terminated after its last session, with orphaned hosts swept back. Each fleet world keeps its session on a record of its own, so two worlds of one game run at once and start and stop independently ([ADR-0062](docs/adr/0062-give-each-fleet-world-a-session-record-of-its-own.md)). The two legacy Minecraft worlds stay bound to the configured host. See [ADR-0054](docs/adr/0054-place-a-session-on-a-host-with-room.md) and, phase by phase, [docs/capacity-allocation-rollout.md](docs/capacity-allocation-rollout.md) |
 | Rebuilt from Terraform | Eleven isolated roots — state bucket, guardrails, the storage that outlives the host, the host, releases, operations, access, access API, bot, web and the GitHub identities. Buckets live in separate state, so an ordinary host teardown cannot take the backups with it |
 | Backups that were actually restored | The world is archived to S3 and verified after upload. On 2026-08-13 an archive was downloaded by the instance role, restored onto a fresh volume, reconciled against release `1.0`, and a player joined the recovered world. Every backup now names the wipe and release that produced it |
 | Start and stop as durable operations | Step Functions Standard, composed by Lifecycle V2 since 2026-09-11: a fenced lease, one explicit session identity, and a verified stop that rechecks the player count, flushes the world, stops every session container and verifies an immutable backup before the instance stops. See [docs/lifecycle-v2-rollout.md](docs/lifecycle-v2-rollout.md) |
@@ -58,7 +58,6 @@ player-facing feature yet. Read the roadmap for the order.
 
 | Capability | Detail |
 | --- | --- |
-| Two worlds of one game at once | Worlds of different games already run side by side on their own fleet hosts. The lifecycle record is still one per game with one active session, so two worlds of the same game take turns; keying it by world is its own change ([docs/capacity-allocation-rollout.md](docs/capacity-allocation-rollout.md)) |
 | Updates you approve, not updates that happen | A scheduled check resolves every mod, diffs by hash, and opens a pull request. Five changed mods with changelogs is a decision; a server that updated itself is an incident. [ADR-0028](docs/adr/0028-update-proposals.md), proposed |
 | Preview environments per proposal | A pull request boots a throwaway server on a copy of the real world. Join it and look at your base before approving. [ADR-0029](docs/adr/0029-preview-environments.md), proposed |
 | A pack site with history | Every release published today carries its `client.zip`, presigned from the panel and `/pack`. The stable public URL, changelog and version history of [ADR-0013](docs/adr/0013-modpack-distribution.md) are not built |
@@ -224,7 +223,7 @@ production plan through a second, owner-gated role. See
 
 ## Decisions
 
-Sixty-one records, each with the alternatives that were rejected and why. Ten have been superseded, one was
+Sixty-two records, each with the alternatives that were rejected and why. Ten have been superseded, one was
 rejected the same day it was written and one is deferred, which is the process working rather than failing — as is
 [ADR-0040](docs/adr/0040-reusable-presets-and-world-wipes.md) replacing ADR-0039 four days after it, or
 [ADR-0032](docs/adr/0032-on-demand-single-instance.md) replacing ADR-0004 rather than editing it a ninth time.
@@ -299,6 +298,7 @@ Vocabulary does not live in them either. One word per thing, and what each one m
 | [0059](docs/adr/0059-separate-the-console-into-bones-and-skins.md) | Separate the console into bones and skins, and hold every skin to one contract | Accepted — implemented |
 | [0060](docs/adr/0060-expose-control-plane-through-a-local-mcp-adapter.md) | Expose the control plane through a local MCP adapter first | Superseded by 0061 |
 | [0061](docs/adr/0061-connect-agents-through-oauth.md) | Connect agents through OAuth | Accepted — implemented |
+| [0062](docs/adr/0062-give-each-fleet-world-a-session-record-of-its-own.md) | Give each fleet world a session record of its own | Accepted — implemented |
 
 Index, template and the decisions still to make: [docs/adr/README.md](docs/adr/README.md).
 
@@ -323,7 +323,7 @@ $129 a month. That is why a stop that silently fails is treated as an incident.
 | M3 | Versioned mod releases and the deployment pipeline | **In progress** — releases are built in AWS per preset, promotion round-tripped on V2 on 2026-09-11, and deliberate bad release `9.99` rolled itself back on 2026-09-13; the update proposals of ADR-0028 remain |
 | M4 | Telegram bot, shared identity/role authorization and client pack distribution | **Largely done** — the bot, the Mini App and the browser panel are deployed; people sign in with an email and password, Telegram or Google and link the others to one identity; an Owner approves and assigns roles; project and game invitations, notification subscriptions and an MCP connection for agents exist; a pack rides with every new release. Not built: the stable pack site of ADR-0013, Discord, the derived whitelist, a world picker in the bot |
 | M5 | Observability, alerting and cost guardrails | Session Grafana runs; the running-hours alarm and the budget publish to `spawnpoint-alert`, reaching email and Telegram. The remaining ADR-0015 signals, the forced-alarm tests and the first monthly cost check are not done |
-| M6 | Several worlds | **Largely done** — worlds are created from reusable presets, each with its own wipes, backups and hosting settings (ADR-0040); Factorio and Zomboid adapters exist; since 2026-09-22 a preset-born world runs on a fleet host launched for its session and terminated after it (ADR-0054); two worlds of the same game still take turns, the bot still operates one configured world, and content-addressed mod storage is not done |
+| M6 | Several worlds | **Largely done** — worlds are created from reusable presets, each with its own wipes, backups and hosting settings (ADR-0040); Factorio and Zomboid adapters exist; since 2026-09-22 a preset-born world runs on a fleet host launched for its session and terminated after it (ADR-0054); two worlds of one game run at once, each fleet world on a session record of its own (ADR-0062); the bot still operates one configured world, and content-addressed mod storage is not done |
 
 Definition of done per milestone: [docs/roadmap.md](docs/roadmap.md).
 

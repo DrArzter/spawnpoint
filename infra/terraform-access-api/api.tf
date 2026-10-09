@@ -117,6 +117,17 @@ data "aws_iam_policy_document" "access_api" {
     ]
   }
 
+  # A running operation's input names its world, so a start blocks only that
+  # world's operations, not every world's (ADR-0062).
+  statement {
+    sid     = "ReadRunningOperationWorlds"
+    actions = ["states:DescribeExecution"]
+    resources = [
+      for machine in local.operation_state_machines : "${replace(machine.arn, ":stateMachine:", ":execution:")}:*"
+      if contains(["start", "stop", "promote", "world"], machine.type)
+    ]
+  }
+
   statement {
     sid       = "ControlSupportedSession"
     actions   = ["states:StartExecution"]

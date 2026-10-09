@@ -85,6 +85,12 @@ export const worldsApi = {
         operation_in_progress: "Another control-plane operation is already running.",
         host_not_unique: "Spawnpoint could not select exactly one compatible host.",
         host_transitioning: "The compute host is already changing state. Refresh and try again shortly.",
+        host_already_running: "The configured host is running another session. Stop it first, or move this world to the fleet.",
+        session_transitioning: "This world's session is already starting, running or stopping.",
+        world_not_active: "This world is not the one running. Refresh to see which is.",
+        active_session_unavailable: "Spawnpoint has no session on record for this world.",
+        fleet_unavailable: "This deployment does not launch fleet hosts.",
+        configured_host_unavailable: "The configured host is not available.",
       };
       throw new Error(messages[body.error ?? ""] ?? `The ${action} request could not be accepted.`);
     }

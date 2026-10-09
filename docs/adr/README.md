@@ -121,6 +121,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0059](0059-separate-the-console-into-bones-and-skins.md) | Separate the console into bones and skins, and hold every skin to one contract | Accepted — implemented | M4 |
 | [0060](0060-expose-control-plane-through-a-local-mcp-adapter.md) | Expose the control plane through a local MCP adapter first | Superseded by [0061](0061-connect-agents-through-oauth.md) | M4 |
 | [0061](0061-connect-agents-through-oauth.md) | Connect agents through OAuth | Accepted — implemented | M4 |
+| [0062](0062-give-each-fleet-world-a-session-record-of-its-own.md) | Give each fleet world a session record of its own | Accepted — implemented | M6 |
 
 ## Decisions still to record
 

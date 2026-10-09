@@ -11,7 +11,7 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { GetCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
+import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 import { randomUUID } from "node:crypto";
 
 import type { BackupObject } from "./backups.ts";
@@ -27,6 +27,7 @@ import { parseDynamicProjection } from "./dynamic-projection.ts";
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildLifecycleStartInput, buildLifecycleStopInput, buildStopInput } from "../domain/telegram-bot.ts";
 import type { ControlPlaneSources, HostMetrics, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
+import { operationWorldId } from "./world-session.ts";
 
 type MachineType = OperationObservation["type"];
 type OperationMachine = Readonly<{ type: MachineType; arn: string }>;
@@ -215,17 +216,34 @@ function isSessionOperation(type: MachineType): type is OperationObservation["ty
   return type === "start" || type === "stop" || type === "promote" || type === "world";
 }
 
+// Every session workflow's input names its world. An operation whose world
+// cannot be read is attributed to none, and so blocks every world, as any
+// operation once did (ADR-0062).
+async function executionWorldId(executionArn: string): Promise<string | null> {
+  try {
+    const described = await sfn.send(new DescribeExecutionCommand({ executionArn }));
+    return operationWorldId(described.input);
+  } catch (error) {
+    console.warn("could not read the world of a running operation", executionArn, error);
+    return null;
+  }
+}
+
 async function listRunningOperations(): Promise<readonly OperationObservation[]> {
   const machines = operationMachines().filter((machine) => isSessionOperation(machine.type));
   const groups = await Promise.all(machines.map(async (machine) => {
     const response = await sfn.send(new ListExecutionsCommand({ stateMachineArn: machine.arn, statusFilter: "RUNNING", maxResults: 10 }));
-    return (response.executions ?? []).flatMap((execution) => execution.name && execution.startDate && execution.executionArn ? [{
+    const running = (response.executions ?? []).flatMap((execution) => execution.name && execution.startDate && execution.executionArn
+      ? [{ name: execution.name, startDate: execution.startDate, executionArn: execution.executionArn }]
+      : []);
+    return Promise.all(running.map(async (execution) => ({
       id: execution.name,
       type: machine.type as OperationObservation["type"],
       status: "running" as const,
       startedAt: execution.startDate.toISOString(),
       providerRef: execution.executionArn,
-    }] : []);
+      worldId: await executionWorldId(execution.executionArn),
+    })));
   }));
   return groups.flat().sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
@@ -340,19 +358,23 @@ function configuredPlacement(): "single" | "shared" | "fleet" {
   return placement === "shared" || placement === "fleet" ? placement : "single";
 }
 
-export async function startSessionExecution(
-  operationId: string,
-  instanceId: string,
-  requestedBy: string,
-  serverId: string,
-  worldId: string,
-  placement?: "single" | "shared" | "fleet",
-): Promise<string> {
+export async function startSessionExecution(args: Readonly<{
+  operationId: string;
+  instanceId: string;
+  requestedBy: string;
+  /** The lifecycle record's key: the game's, or a fleet world's own (ADR-0062). */
+  serverId: string;
+  gameId: string;
+  worldId: string;
+  worldName: string;
+  placement?: "single" | "shared" | "fleet";
+}>): Promise<string> {
+  const { operationId, instanceId, requestedBy, serverId, gameId, worldId, worldName, placement } = args;
   requireWorldId(worldId);
   const started = await sfn.send(new StartExecutionCommand({
     stateMachineArn: machineArn("start"), name: operationId,
     input: JSON.stringify(buildLifecycleStartInput({
-      serverId, operationId, sessionId: `session-${randomUUID()}`, instanceId, worldId, requestedBy,
+      serverId, gameId, worldName, operationId, sessionId: `session-${randomUUID()}`, instanceId, worldId, requestedBy,
       placement: placement ?? configuredPlacement(),
       launch: process.env.SPAWNPOINT_LAUNCH === "enabled" ? "enabled" : "disabled",
       appCommit: process.env.SPAWNPOINT_APP_COMMIT || "main",

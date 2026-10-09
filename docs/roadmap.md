@@ -222,8 +222,8 @@ operates one configured world. Content-addressed mod storage is not done.
 [ADR-0054](adr/0054-place-a-session-on-a-host-with-room.md) places a preset-born world on a ready host with room or
 launches an EC2 Fleet host that fits, names it in Route 53, drains and terminates it after its last session and sweeps
 orphaned hosts; the two legacy worlds stay on the configured host over the overlay. The first launches surfaced a
-bootstrap race and drain faults, fixed the next day. Two worlds of the same game still take turns, because the
-lifecycle record is one per game; the bot still operates one configured world; content-addressed mod storage is still
+bootstrap race and drain faults, fixed the next day. Since ADR-0062 two worlds of one game run at once, each fleet
+world on a session record of its own; the bot still operates one configured world; content-addressed mod storage is still
 not done. The phases and what the acceptance run should still record are in
 [docs/capacity-allocation-rollout.md](capacity-allocation-rollout.md).
 

@@ -132,7 +132,7 @@ export function WorldSettingsSheet({ model }: Readonly<{ model: WorldSettingsMod
       title={`Hosting · ${model.game.displayName}`}
     >
       <div className="t-form">
-        {!model.stopped && <p className="t-copy-line">Stop this game's current session before changing hosting.</p>}
+        {!model.stopped && <p className="t-copy-line">Stop this world's session before changing hosting.</p>}
         <ConnectionFields first model={model.connection} />
       </div>
     </Drawer>

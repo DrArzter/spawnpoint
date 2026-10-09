@@ -3,6 +3,7 @@ import { useSnackbar } from "../components/ui/Snackbar";
 import { buildStatus, sessionStatus, worldStatus } from "../components/ui/Status";
 import type { Game, World } from "../model";
 import { routeHash } from "../routing";
+import { fleetWorldState, operationsBlockingWorld } from "../session";
 import { pendingFor } from "../shell/actions";
 import type { Skin } from "../skins/skin";
 import { action, type Action } from "./actions";
@@ -82,7 +83,9 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
   const controlBusy = pending?.kind === "session" || pending?.kind === "lifecycle";
   const verb = sessionActionForWorld(world, game, sharedSession, fleet);
   const permitted = granted.has(verb === "start" ? "session.start" : "session.stop");
-  const control = sessionControlAvailability(world, game, sharedSession, permitted, controlBusy || busy, fleet);
+  const control = sessionControlAvailability(world, game, sharedSession, permitted, controlBusy || busy, fleet, operationsBlockingWorld(snapshot, world));
+  // A fleet world's page tells its own session, not the game's (ADR-0062).
+  const worldState = fleet ? fleetWorldState(game, world) : serverState;
   const operations = snapshot?.operations ?? [];
   const backups = useBackups(game.id, world, {
     canRead: granted.has("backup.read"),
@@ -110,8 +113,8 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     refresh: refreshAction(console),
     invite: granted.has("invitation.send") ? action("world.invite", "Invite players", () => worldCallbacks.onInvite(game, world), { icon: "send" }) : null,
     more: worldMoreActions(game, world, granted, busy, worldCallbacks),
-    sessionDetails: sessionDetails(game, world, sharedSession, snapshot, serverState, fleet),
-    worldDetails: worldDetails(game, world, serverState),
+    sessionDetails: sessionDetails(game, world, sharedSession, snapshot, worldState, fleet),
+    worldDetails: worldDetails(game, world, worldState),
     operations: operations.map((operation) => ({ operation, label: operationLabel(operation.type) })),
     wipes: [...world.wipes].reverse().map((wipe) => ({ wipe, showBackups: action("wipe.backups", "Backups", () => { backups.setFilter(wipe.id); navigate({ worldTab: "backups" }); }) })),
     backups,

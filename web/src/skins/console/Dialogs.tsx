@@ -120,7 +120,7 @@ export function WorldSettingsSheet({ model }: Readonly<{ model: WorldSettingsMod
       open
       title={`Hosting · ${model.game.displayName}`}
     >
-      {!model.stopped && <p className="secondary">Stop this game's current session before changing hosting.</p>}
+      {!model.stopped && <p className="secondary">Stop this world's session before changing hosting.</p>}
       <ConnectionFields model={model.connection} />
     </Sheet>
   );

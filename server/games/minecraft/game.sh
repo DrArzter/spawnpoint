@@ -41,8 +41,11 @@ game_query_players_raw() {
   rcon list
 }
 
+# The reply, or the transport's failure: its status is the caller's answer.
 game_console() {
-  rcon "$1"
+  local command="$1"
+  rcon "${command}"
+  return $?
 }
 
 game_save() {

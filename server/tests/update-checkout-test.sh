@@ -66,8 +66,10 @@ expect() {
   }
 }
 head_is() {
-  [[ "$(git -C "${host}" rev-parse HEAD)" == "$1" ]] || {
-    printf 'host is at %s, expected %s\n' "$(git -C "${host}" rev-parse HEAD)" "$1" >&2
+  local expected="$1" actual
+  actual="$(git -C "${host}" rev-parse HEAD)"
+  [[ "${actual}" == "${expected}" ]] || {
+    printf 'host is at %s, expected %s\n' "${actual}" "${expected}" >&2
     exit 1
   }
 }

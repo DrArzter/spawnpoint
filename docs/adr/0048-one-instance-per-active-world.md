@@ -178,3 +178,24 @@ hide behind a name, while Factorio and Project Zomboid are UDP and would show pl
   [ADR-0033](0033-connectivity-as-a-strategy.md) means a no-auth world may not move without a declaration. The ten-slot
   ceiling binds only worlds that stay on the overlay.
 - **Record TTL and client caching per game**, since a created instance takes a new address every session.
+
+## Amendment — a start opens the newest archive of the wipe (2026-10-09)
+
+"Start restores the current generation" was written and not built. A host prepared a world's directory from S3 only for
+a wipe made by a restore; any other start on a host without the directory began with an empty save. Every `cold`
+session ends with its host terminated, so the next session on a new host opened a new, empty world, while the real one
+sat in S3. The archives were never at risk; the world a player saw was.
+
+`prepare-world.sh` now asks S3 first. The newest archive of the current wipe, by the time in its name, is the world:
+
+- **No copy on this host:** restore that archive. A wipe with none yet starts from the backup a restore names, or empty.
+- **A copy that is that archive:** use it. Every copy records which archive it is
+  (`.spawnpoint-archive.json`), when it is prepared and after each verified upload, so the common case downloads nothing.
+- **A copy that is an older archive:** the world ran on another host since this one held it. The copy is moved aside,
+  never deleted, and the newest archive restored. A copy holds progress no backup has only while it is still the newest
+  archive's lineage, and then it is kept.
+- **A copy that records no archive:** prepared before copies recorded one. It is kept, and the start says so.
+- **The listing fails:** the start is refused. An empty world never stands in for an answer S3 did not give.
+
+The newest archive is the one taken last, never a fallback to an older one: an archive that fails verification refuses
+the start, and an operator restores an earlier backup by choice.

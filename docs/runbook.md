@@ -536,6 +536,24 @@ Automatic on a failed start. To roll back manually:
 Rollback is the same mechanism as a deploy, which is why it can be trusted. See
 [ADR-0008](adr/0008-versioned-mod-releases.md).
 
+## A world's copy on a host (ADR-0048, amended)
+
+Between sessions a generation world lives in S3. Each start lists the archives of the current wipe and opens the
+newest; a host's copy is used as it is only when its `.spawnpoint-archive.json` names that archive. Read which archive a
+host's copy is:
+
+```bash
+jq . /srv/spawnpoint/app/server/runtime/worlds/<worldId>/generations/<gen>/.spawnpoint-archive.json
+```
+
+- **`warning: this host held an older copy`** means the world ran on another host since this one held it. The older
+  copy is at `generations/.<gen>.superseded` beside the current one, until the next time it is superseded. It is the
+  place to look if a session ended without a backup on this host and its progress matters.
+- **`error: could not list the backups of world …; refusing to start without them`** means S3 did not answer. Nothing was
+  prepared; start again once S3 answers. A start never opens an empty world in place of an archive it could not list.
+- **`warning: keeping the copy … which predates archive records`** appears once per copy prepared before this check
+  existed. The next stop records its archive.
+
 ## Restore the world
 
 Practise this before it is needed. M1 includes a drill.

@@ -4,6 +4,7 @@
 - Date: 2026-09-10
 - Supersedes: [ADR-0039](0039-git-presets-instantiate-world-generations.md)
 - Amends: [ADR-0023](0023-multiple-worlds.md) and [ADR-0030](0030-desired-and-active-release.md)
+- Amended by: [ADR-0064](0064-let-a-world-carry-game-settings.md), for server settings only; mods stay in Git
 
 ## Context
 

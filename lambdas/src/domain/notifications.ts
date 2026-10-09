@@ -15,7 +15,17 @@ export type ExecutionEvent = Readonly<{
   cause: string | null;
 }>;
 
-export type NotificationSubscriptionKey = "minecraft.started" | "minecraft.stopped" | "factorio.started" | "factorio.stopped" | "invitation.broadcast" | "invitation.direct";
+export type NotificationSubscriptionKey = `${string}.started` | `${string}.stopped` | "invitation.broadcast" | "invitation.direct";
+
+// Lifecycle V2 composes the V1 machines and is what EventBridge routes here
+// since the cutover; its start, stop and watchdog say the same things to
+// players, so they are announced under their V1 names. The V1 machines now
+// run only as V2's children, and the rule does not route them.
+const ANNOUNCED_AS: Readonly<Record<string, string>> = {
+  "spawnpoint-start-server-v2": "spawnpoint-start-server",
+  "spawnpoint-stop-server-v2": "spawnpoint-stop-server",
+  "spawnpoint-idle-watchdog-v2": "spawnpoint-idle-watchdog",
+};
 
 export function parseExecutionEvent(detail: unknown): ExecutionEvent | null {
   if (typeof detail !== "object" || detail === null) return null;
@@ -23,7 +33,8 @@ export function parseExecutionEvent(detail: unknown): ExecutionEvent | null {
   if (typeof d.stateMachineArn !== "string" || typeof d.status !== "string" || typeof d.name !== "string") {
     return null;
   }
-  const machine = d.stateMachineArn.split(":").pop() ?? "";
+  const arnName = d.stateMachineArn.split(":").pop() ?? "";
+  const machine = ANNOUNCED_AS[arnName] ?? arnName;
   const parse = (raw: unknown): Record<string, unknown> | null => {
     if (typeof raw !== "string") return null;
     try {
@@ -53,10 +64,15 @@ const str = (record: Record<string, unknown> | null, key: string): string | null
 // children end in -stop / -restop / -rollback / -rollback-stop / -start.
 const CHILD_NAME = /-(idle|cap)-[0-9]+$|-(re)?stop$|-rollback(-stop)?$|-start$/;
 
-function eventGame(event: ExecutionEvent): "minecraft" | "factorio" {
-  const gameId = str(event.input, "gameId");
+const GAME_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
+
+// A V2 input names its game as the lifecycle's server id; a V1 input, the
+// legacy shape, named the world, and only Factorio's world was its game.
+function eventGame(event: ExecutionEvent): string {
+  const named = str(event.input, "gameId") ?? str(event.input, "serverId");
+  if (named !== null && GAME_ID.test(named)) return named;
   const worldId = str(event.input, "worldId") ?? str(event.input, "world");
-  return gameId === "factorio" || worldId === "factorio" ? "factorio" : "minecraft";
+  return worldId === "factorio" ? "factorio" : "minecraft";
 }
 
 export function notificationSubscriptionKey(event: ExecutionEvent): NotificationSubscriptionKey | null {
@@ -74,19 +90,24 @@ export function notificationSubscriptionKey(event: ExecutionEvent): Notification
 
 export function renderNotification(event: ExecutionEvent): string | null {
   const requester = str(event.input, "requestedBy");
+  // Two worlds of one game can run at once (ADR-0062), so a message names its
+  // world when the workflow was given the name; older inputs carry none.
+  const world = str(event.input, "worldName") || null;
   const failed = event.status === "FAILED" || event.status === "TIMED_OUT" || event.status === "ABORTED";
 
   switch (event.machine) {
     case "spawnpoint-start-server": {
       if (CHILD_NAME.test(event.name)) return null;
       if (event.status === "RUNNING") {
-        return `[STARTING] ${requester ?? "the owner"} requested the server. Mods take a few minutes.`;
+        return `[STARTING] ${requester ?? "the owner"} requested ${world ?? "the server"}. Mods take a few minutes.`;
       }
       if (event.status === "SUCCEEDED") {
         const address = str(event.output, "connectionAddress") ?? str(event.output, "address");
-        return address === null ? "[READY] Server is up." : `[READY] Server is up: ${address}`;
+        const up = world === null ? "Server is up" : `${world} is up`;
+        return address === null ? `[READY] ${up}.` : `[READY] ${up}: ${address}`;
       }
-      return `[FAILED] Start failed (${event.name}). The owner can read the execution history.`;
+      const start = world === null ? "Start" : `Start of ${world}`;
+      return `[FAILED] ${start} failed (${event.name}). The owner can read the execution history.`;
     }
 
     case "spawnpoint-idle-watchdog": {
@@ -94,9 +115,13 @@ export function renderNotification(event: ExecutionEvent): string | null {
       if (event.status === "SUCCEEDED") {
         switch (str(event.output, "status")) {
           case "stopped_idle":
-            return "[STOPPED] Nobody online — server saved, backed up and stopped.";
+            return world === null
+              ? "[STOPPED] Nobody online — server saved, backed up and stopped."
+              : `[STOPPED] ${world}: nobody online — saved, backed up and stopped.`;
           case "stopped_session_cap":
-            return "[STOPPED] Session cap reached — server saved, backed up and stopped.";
+            return world === null
+              ? "[STOPPED] Session cap reached — server saved, backed up and stopped."
+              : `[STOPPED] ${world}: session cap reached — saved, backed up and stopped.`;
           default:
             return null;
         }
@@ -109,6 +134,12 @@ export function renderNotification(event: ExecutionEvent): string | null {
       // prints its own result. A FAILED stop is a failed backup contract and
       // is always worth a message, child or not.
       if (!failed) return null;
+      // Not failures of the backup contract: a player came back during the
+      // final recheck, or the session had already ended. The world is safe.
+      if (event.error === "Spawnpoint.V2StaleSession") return null;
+      if (event.error === "Spawnpoint.V2StopRefusedPlayersOnline") {
+        return CHILD_NAME.test(event.name) ? null : "[STOP CANCELLED] Players are online, so the server keeps running. Nothing was lost.";
+      }
       if (event.error === "Spawnpoint.HostActivityUnknown") {
         return `[ALARM] The world was saved and its backup verified (${event.name}), but host activity could not be checked. EC2 may still be running.`;
       }

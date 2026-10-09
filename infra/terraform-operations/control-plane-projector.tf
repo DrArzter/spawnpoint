@@ -116,6 +116,12 @@ data "aws_iam_policy_document" "control_plane_projector" {
   }
 
   statement {
+    sid       = "ObserveOperationWorlds"
+    actions   = ["states:DescribeExecution"]
+    resources = [for machine in local.control_plane_operation_machines : "${replace(machine.arn, ":stateMachine:", ":execution:")}:*"]
+  }
+
+  statement {
     sid       = "RecoverOnlyThroughFencedStop"
     actions   = ["states:StartExecution"]
     resources = [local.lifecycle_v2_stop_arn]

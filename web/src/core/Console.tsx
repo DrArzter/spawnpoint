@@ -1,15 +1,20 @@
+import { useState } from "react";
+
+import type { ConsoleEntry } from "../api/contract";
 import type { ActiveSession } from "../auth";
 import { useSnackbar } from "../components/ui/Snackbar";
 import { buildStatus, sessionStatus, worldStatus } from "../components/ui/Status";
-import type { Game, World } from "../model";
+import type { StatusDescriptor } from "../components/ui/Status";
+import type { Game, World, WorldTab } from "../model";
 import { routeHash } from "../routing";
+import { fleetWorldState, operationsBlockingWorld, runningWorlds } from "../session";
 import { pendingFor } from "../shell/actions";
 import type { Skin } from "../skins/skin";
 import { action, type Action } from "./actions";
 import { useConsole, type ConsoleController } from "./useConsole";
-import { useBackups, useInvitation, useLoginAccounts, useMetrics, useNotifications, useRoles, useUsers } from "./data";
-import { useConfirmationForm, useCreateWorldForm, useWorldSettingsForm } from "./forms";
-import type { AccessModel, ConsoleModel, LookModel, ReleasesModel, WorldModel, WorldsModel } from "./models";
+import { useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
+import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
+import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, ReleasesModel, WorldModel, WorldsModel } from "./models";
 import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionActionForWorld, sessionControlAvailability, sessionDetails, worldDetails, worldMoreActions, worldNotices, worldTabs } from "./worlds";
 
 /*
@@ -32,6 +37,7 @@ export function ConsoleRoot({ session, skin, looks, continuesBootCard }: Readonl
       {console.invite && <InvitationController console={console} game={console.invite.game} skin={skin} world={console.invite.world} />}
       {console.creating && <CreateWorldController console={console} game={console.creating.game} preset={console.creating.preset} skin={skin} />}
       {console.editing && <WorldSettingsController console={console} game={console.editing.game} skin={skin} world={console.editing.world} />}
+      {console.editingGameSettings && <GameSettingsController console={console} game={console.editingGameSettings.game} skin={skin} world={console.editingGameSettings.world} />}
     </skin.Shell>
   );
 }
@@ -42,8 +48,6 @@ function CurrentPage({ console, skin, looks }: Controlled & Readonly<{ looks: Lo
   const { page, game, world } = console;
   if (page === "worlds" && game && world) return <WorldPage console={console} game={game} skin={skin} world={world} />;
   if (page === "worlds") return <WorldsPage console={console} skin={skin} />;
-  if (page === "metrics") return <MetricsPage console={console} skin={skin} />;
-  if (page === "console") return <skin.Console model={consoleModel(console)} />;
   if (page === "releases") return <skin.Releases model={releasesModel(console)} />;
   if (page === "access") return <AccessPage console={console} skin={skin} />;
   return <ProfilePage console={console} looks={looks} skin={skin} />;
@@ -75,21 +79,80 @@ function WorldsPage({ console, skin }: Controlled) {
   return <skin.Worlds model={model} />;
 }
 
-function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game: Game; world: World }>) {
-  const { snapshot, granted, pending, sharedSession, serverState, fleet, worldCallbacks, route, navigate } = console;
-  const rowPending = pendingFor(pending, world.id);
-  const busy = rowPending !== null;
+// Start or stop, and why it may be refused: a fleet world answers for its own
+// session, a configured one for the shared host (ADR-0062).
+function sessionVerb(console: ConsoleController, game: Game, world: World, busy: boolean, sessionBusy: boolean): Action {
+  const { snapshot, granted, pending, sharedSession, fleet } = console;
   const controlBusy = pending?.kind === "session" || pending?.kind === "lifecycle";
   const verb = sessionActionForWorld(world, game, sharedSession, fleet);
   const permitted = granted.has(verb === "start" ? "session.start" : "session.stop");
-  const control = sessionControlAvailability(world, game, sharedSession, permitted, controlBusy || busy, fleet);
+  const control = sessionControlAvailability(world, game, sharedSession, permitted, controlBusy || busy, fleet, operationsBlockingWorld(snapshot, world));
+  const stop = verb === "stop";
+  return action(`session.${verb}`, stop ? "Stop" : "Start", () => console.requestSession(game, world, verb), {
+    icon: stop ? "stop" : "play_arrow",
+    danger: stop,
+    disabled: control.disabled,
+    busy: sessionBusy,
+    hint: control.hint,
+  });
+}
+
+// The release a world starts with, whose server mods the Releases tab lists (ADR-0065).
+function modsSource(world: World, open: boolean): Readonly<{ presetId: string; version: string }> | null {
+  const version = world.release.desiredRelease ?? world.release.activeRelease;
+  return open && world.preset !== null && version !== null ? { presetId: world.preset.id, version } : null;
+}
+
+// A whitelist kept on the world's record (ADR-0066): a game that keeps one, a
+// live world with a record, a role and a deployment that manage it.
+function whitelistOffered(console: ConsoleController, game: Game, world: World): boolean {
+  return console.granted.has("whitelist.manage") && console.capabilities.has("whitelist") && game.whitelist === true &&
+    world.worldLifecycleAvailable && world.materialization !== "archived";
+}
+
+// The world page's tabs, and what each reads, only while it is open: a closed
+// tab costs no host a request.
+function useWorldTabs(console: ConsoleController, game: Game, world: World, notify: ReturnType<typeof useSnackbar>) {
+  const { granted, capabilities, route } = console;
+  const tabs = worldTabs(world, {
+    releases: granted.has("release.read"),
+    whitelist: whitelistOffered(console, game, world),
+    console: granted.has("console.use") && capabilities.has("consoleGateway"),
+    metrics: granted.has("metrics.read") && capabilities.has("worldMetrics"),
+  });
+  const offered = (tab: WorldTab) => tabs.some((item) => item.id === tab);
+  const open = (tab: WorldTab) => route.worldTab === tab && offered(tab);
+  const running = runningWorlds(game).some((item) => item.id === world.id);
+  const consoleModel = useWorldConsole(game, world, open("console"), running, notify);
+  const metrics = useWorldMetrics(open("metrics") ? game.id : undefined, world.id);
+  const whitelist = useWhitelist(game.id, world, open("whitelist"), notify);
+  const mods = useReleaseMods(game.id, modsSource(world, open("releases") && capabilities.has("releaseFiles")), (presetId, version, mod) => console.downloadMod(game, presetId, version, mod));
+  return {
+    tabs,
+    mods,
+    whitelist: offered("whitelist") ? whitelist : null,
+    console: offered("console") ? consoleModel : null,
+    metrics: offered("metrics") ? metrics : null,
+  };
+}
+
+function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game: Game; world: World }>) {
+  const { snapshot, granted, capabilities, pending, sharedSession, serverState, fleet, worldCallbacks, route, navigate } = console;
+  const notify = useSnackbar();
+  const rowPending = pendingFor(pending, world.id);
+  const busy = rowPending !== null;
+  // A fleet world's page tells its own session, not the game's (ADR-0062).
+  const worldState = fleet ? fleetWorldState(game, world) : serverState;
   const operations = snapshot?.operations ?? [];
+  const shown = useWorldTabs(console, game, world, notify);
+  const canDownload = granted.has("backup.download") && capabilities.has("backupDownloads");
   const backups = useBackups(game.id, world, {
     canRead: granted.has("backup.read"),
     canRestore: granted.has("backup.restore"),
     busy,
     settled: `${world.wipes.length}:${operations.length}`,
     onRestore: (entry) => worldCallbacks.onWorldAction(game, world, "restore", { key: entry.key, name: entry.archiveName }),
+    onDownload: canDownload ? (entry) => console.downloadBackup(game, world, entry) : null,
   });
   const model: WorldModel = {
     game,
@@ -97,36 +160,83 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     worldsHref: routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: null }),
     availability: worldStatus(world),
     notices: worldNotices(world, rowPending),
-    tabs: worldTabs(world, granted.has("release.read")),
+    tabs: shown.tabs,
     tab: route.worldTab,
     setTab: (tab) => navigate({ worldTab: tab }),
-    session: action(`session.${verb}`, verb === "stop" ? "Stop" : "Start", () => console.requestSession(game, world, verb), {
-      icon: verb === "stop" ? "stop" : "play_arrow",
-      danger: verb === "stop",
-      disabled: control.disabled,
-      busy: rowPending?.kind === "session",
-      hint: control.hint,
-    }),
+    session: sessionVerb(console, game, world, busy, rowPending?.kind === "session"),
     refresh: refreshAction(console),
     invite: granted.has("invitation.send") ? action("world.invite", "Invite players", () => worldCallbacks.onInvite(game, world), { icon: "send" }) : null,
     more: worldMoreActions(game, world, granted, busy, worldCallbacks),
-    sessionDetails: sessionDetails(game, world, sharedSession, snapshot, serverState, fleet),
-    worldDetails: worldDetails(game, world, serverState),
+    sessionDetails: sessionDetails(game, world, sharedSession, snapshot, worldState, fleet),
+    worldDetails: worldDetails(game, world, worldState),
     operations: operations.map((operation) => ({ operation, label: operationLabel(operation.type) })),
     wipes: [...world.wipes].reverse().map((wipe) => ({ wipe, showBackups: action("wipe.backups", "Backups", () => { backups.setFilter(wipe.id); navigate({ worldTab: "backups" }); }) })),
     backups,
-    releases: { rows: releaseRows(world, granted.has("connection.read"), busy, () => worldCallbacks.onDownloadPack(game, world)), state: world.release.state },
+    releases: { rows: releaseRows(world, granted.has("connection.read"), busy, () => worldCallbacks.onDownloadPack(game, world)), state: world.release.state, mods: shown.mods },
+    whitelist: shown.whitelist,
+    console: shown.console,
+    metrics: shown.metrics,
   };
   return <skin.World model={model} />;
 }
 
-function MetricsPage({ console, skin }: Controlled) {
-  const model = useMetrics(console.snapshot?.hosts[0]?.id, console.serverState === "running");
-  return <skin.Metrics model={model} />;
+// What each game's console is most often asked; Factorio's commands start with a slash.
+const QUICK_COMMANDS: Readonly<Record<string, readonly string[]>> = {
+  minecraft: ["list", "save-all", "say Server stops in 5 minutes"],
+  factorio: ["/players online", "/server-save", "/time"],
+  zomboid: ["players", "save", "servermsg \"Server stops in 5 minutes\""],
+};
+
+const consoleStatuses: Readonly<Record<ConsoleEntry["status"], StatusDescriptor>> = {
+  pending: { kind: "progress", label: "Waiting for the game" },
+  succeeded: { kind: "ok", label: "Answered" },
+  failed: { kind: "error", label: "No answer" },
+  unavailable: { kind: "warning", label: "No console on this host" },
+  timed_out: { kind: "error", label: "Timed out" },
+};
+
+function consoleLine(entry: ConsoleEntry): ConsoleLine {
+  return { id: entry.id, at: entry.at, who: entry.displayName, command: entry.command, status: consoleStatuses[entry.status], output: entry.output, pending: entry.status === "pending" };
 }
 
-function consoleModel(console: ConsoleController): ConsoleModel {
-  return { game: console.game, session: sessionStatus(console.serverState), online: console.serverState === "running", quickCommands: ["list", "save-all", "say Server stops in 5 minutes"] };
+// The log, newest last as a terminal prints it; none while the world runs nowhere.
+function consoleLog(entries: ConsoleGateway["entries"], running: boolean, retry: () => void): ConsoleModel["log"] {
+  if (!running) return null;
+  if (entries.status === "ready") return { status: "ready", value: [...entries.value].reverse().map(consoleLine) };
+  if (entries.status === "error") return { status: "error", error: entries.error, kind: entries.kind, retry: action("console.retry", "Try again", retry) };
+  return { status: "loading" };
+}
+
+// A world's own console (ADR-0063): it speaks to this world's session and to
+// no other, so several worlds of a game running at once never share one.
+function useWorldConsole(game: Game, world: World, open: boolean, running: boolean, notify: ReturnType<typeof useSnackbar>): ConsoleModel {
+  const [draft, setDraft] = useState("");
+  const gateway = useConsoleGateway(open && running ? game.id : undefined, world.id, notify);
+  const unavailable = running ? null : `${world.displayName} is not running. Start it to use its console.`;
+  const send = (command: string, clear: boolean) => {
+    void gateway.run(command).then((accepted) => { if (accepted && clear) setDraft(""); });
+  };
+  const entries = gateway.entries;
+  return {
+    game,
+    world,
+    session: sessionStatus(running ? "running" : "stopped"),
+    online: running,
+    log: consoleLog(entries, running, gateway.retry),
+    draft,
+    setDraft,
+    run: action("console.run", "Run", () => send(draft.trim(), true), {
+      icon: "keyboard_return",
+      disabled: unavailable !== null || draft.trim() === "" || gateway.sending,
+      busy: gateway.sending,
+      hint: unavailable ?? undefined,
+    }),
+    quickCommands: (QUICK_COMMANDS[game.id] ?? []).map((command) => action("console.quick", command, () => send(command, false), {
+      disabled: unavailable !== null || gateway.sending,
+      hint: unavailable ?? `Run ${command}`,
+    })),
+    unavailable,
+  };
 }
 
 function releasesModel(console: ConsoleController): ReleasesModel {
@@ -216,6 +326,17 @@ function WorldSettingsController({ console, skin, game, world }: Controlled & Re
     onClose: console.closeEditing,
   });
   return <skin.WorldSettingsSheet model={model} />;
+}
+
+// Mounted only while the sheet is open, so its drafts start from the world's
+// values each time it opens.
+function GameSettingsController({ console, skin, game, world }: Controlled & Readonly<{ game: Game; world: World }>) {
+  const model = useGameSettingsForm(game, world, {
+    busy: console.savingGameSettings,
+    onSave: (values) => void console.saveGameSettings(game, world, values),
+    onClose: console.closeEditingGameSettings,
+  });
+  return <skin.GameSettingsSheet model={model} />;
 }
 
 // Mounted only while the sheet is open, so its state is created when it opens

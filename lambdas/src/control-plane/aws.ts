@@ -9,24 +9,28 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { GetCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommandInvocationCommand, SendCommandCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
+import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 import { randomUUID } from "node:crypto";
 
 import type { BackupObject } from "./backups.ts";
-import { clientPackKey } from "./release-artifacts.ts";
+import { clientPackKey, releaseModKey } from "./release-artifacts.ts";
 import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts";
 import { gameCatalog } from "./catalog.ts";
 import { type ReleaseState } from "./release-state.ts";
 import { S3ReleaseStateStore } from "./s3-release-state-store.ts";
 import { S3WorldRepository } from "./s3-world-repository.ts";
-import { newWorldRecord, withWorldAccess, type WorldRecord } from "./world-registry.ts";
+import { newWorldRecord, withGameSettings, withWhitelist, withWorldAccess, type WorldGameSettings, type WorldRecord, type WorldWhitelist } from "./world-registry.ts";
 import { parseDynamicProjection } from "./dynamic-projection.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildLifecycleStartInput, buildLifecycleStopInput, buildStopInput } from "../domain/telegram-bot.ts";
 import type { ControlPlaneSources, HostMetrics, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
+import { operationWorldId } from "./world-session.ts";
+import type { ConsoleInvocation } from "./console.ts";
+import type { HostRecord } from "../domain/placement.ts";
 
 type MachineType = OperationObservation["type"];
 type OperationMachine = Readonly<{ type: MachineType; arn: string }>;
@@ -60,6 +64,7 @@ const s3 = new S3Client({});
 const cloudwatch = new CloudWatchClient({});
 const sfn = new SFNClient({});
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const ssm = new SSMClient({});
 
 function tag(instance: Instance, key: string): string | undefined {
   return instance.Tags?.find((candidate) => candidate.Key === key)?.Value;
@@ -215,17 +220,34 @@ function isSessionOperation(type: MachineType): type is OperationObservation["ty
   return type === "start" || type === "stop" || type === "promote" || type === "world";
 }
 
+// Every session workflow's input names its world. An operation whose world
+// cannot be read is attributed to none, and so blocks every world, as any
+// operation once did (ADR-0062).
+async function executionWorldId(executionArn: string): Promise<string | null> {
+  try {
+    const described = await sfn.send(new DescribeExecutionCommand({ executionArn }));
+    return operationWorldId(described.input);
+  } catch (error) {
+    console.warn("could not read the world of a running operation", executionArn, error);
+    return null;
+  }
+}
+
 async function listRunningOperations(): Promise<readonly OperationObservation[]> {
   const machines = operationMachines().filter((machine) => isSessionOperation(machine.type));
   const groups = await Promise.all(machines.map(async (machine) => {
     const response = await sfn.send(new ListExecutionsCommand({ stateMachineArn: machine.arn, statusFilter: "RUNNING", maxResults: 10 }));
-    return (response.executions ?? []).flatMap((execution) => execution.name && execution.startDate && execution.executionArn ? [{
+    const running = (response.executions ?? []).flatMap((execution) => execution.name && execution.startDate && execution.executionArn
+      ? [{ name: execution.name, startDate: execution.startDate, executionArn: execution.executionArn }]
+      : []);
+    return Promise.all(running.map(async (execution) => ({
       id: execution.name,
       type: machine.type as OperationObservation["type"],
       status: "running" as const,
       startedAt: execution.startDate.toISOString(),
       providerRef: execution.executionArn,
-    }] : []);
+      worldId: await executionWorldId(execution.executionArn),
+    })));
   }));
   return groups.flat().sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
@@ -340,19 +362,23 @@ function configuredPlacement(): "single" | "shared" | "fleet" {
   return placement === "shared" || placement === "fleet" ? placement : "single";
 }
 
-export async function startSessionExecution(
-  operationId: string,
-  instanceId: string,
-  requestedBy: string,
-  serverId: string,
-  worldId: string,
-  placement?: "single" | "shared" | "fleet",
-): Promise<string> {
+export async function startSessionExecution(args: Readonly<{
+  operationId: string;
+  instanceId: string;
+  requestedBy: string;
+  /** The lifecycle record's key: the game's, or a fleet world's own (ADR-0062). */
+  serverId: string;
+  gameId: string;
+  worldId: string;
+  worldName: string;
+  placement?: "single" | "shared" | "fleet";
+}>): Promise<string> {
+  const { operationId, instanceId, requestedBy, serverId, gameId, worldId, worldName, placement } = args;
   requireWorldId(worldId);
   const started = await sfn.send(new StartExecutionCommand({
     stateMachineArn: machineArn("start"), name: operationId,
     input: JSON.stringify(buildLifecycleStartInput({
-      serverId, operationId, sessionId: `session-${randomUUID()}`, instanceId, worldId, requestedBy,
+      serverId, gameId, worldName, operationId, sessionId: `session-${randomUUID()}`, instanceId, worldId, requestedBy,
       placement: placement ?? configuredPlacement(),
       launch: process.env.SPAWNPOINT_LAUNCH === "enabled" ? "enabled" : "disabled",
       appCommit: process.env.SPAWNPOINT_APP_COMMIT || "main",
@@ -423,9 +449,45 @@ export async function packDownloadUrl(gameId: string, presetId: string, release:
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: 3600 });
 }
 
-// Deliberately ListObjectsV2 and nothing else: the digest lives in the key and
-// the listing reports each object's checksum algorithm, so the panel can show
-// an inventory without this role ever being able to read a world archive.
+// A file the panel hands to someone, named as it is stored, so the browser
+// saves it under that name whatever characters it holds.
+function attachment(filename: string): string {
+  return `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
+/** One server mod of a release, presigned for this role's read of releases. */
+export function releaseModUrl(gameId: string, presetId: string, release: string, file: string, expiresIn: number): Promise<string> {
+  return getSignedUrl(s3, new GetObjectCommand({
+    Bucket: requiredEnv("RELEASE_BUCKET"),
+    Key: releaseModKey(gameId, presetId, release, file),
+    ResponseContentDisposition: attachment(file),
+  }), { expiresIn });
+}
+
+/**
+ * One world archive, presigned (ADR-0065). The caller has checked that the key
+ * is this world's; a key with no object is a normal answer, not an error.
+ */
+export async function backupArchiveUrl(key: string, expiresIn: number): Promise<Readonly<{ url: string; sizeBytes: number }> | null> {
+  const bucket = requiredEnv("BACKUP_BUCKET");
+  let sizeBytes: number;
+  try {
+    sizeBytes = (await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }))).ContentLength ?? 0;
+  } catch (error) {
+    if ((error as { name?: string }).name === "NotFound") return null;
+    throw error;
+  }
+  const url = await getSignedUrl(s3, new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    ResponseContentDisposition: attachment(key.slice(key.lastIndexOf("/") + 1)),
+  }), { expiresIn });
+  return { url, sizeBytes };
+}
+
+// The inventory is a listing: the digest lives in the key and the listing
+// reports each object's checksum algorithm, so listing never reads an archive.
+// Reading one is a download, which only backup.download may ask for.
 export async function listWorldBackups(worldId: string): Promise<readonly BackupObject[]> {
   const response = await s3.send(new ListObjectsV2Command({
     Bucket: requiredEnv("BACKUP_BUCKET"),
@@ -445,6 +507,44 @@ export async function readWorldRecord(worldId: string): Promise<WorldRecord | nu
   return (await new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET")).read(worldId))?.record ?? null;
 }
 
+/** A world's game settings (ADR-0064); a running world takes them at its next start. */
+export async function replaceWorldGameSettings(
+  gameId: string,
+  worldId: string,
+  gameSettings: WorldGameSettings,
+): Promise<"updated" | "missing" | "archived" | "conflict"> {
+  const worlds = new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET"));
+  const stored = await worlds.read(worldId);
+  if (stored?.record.gameId !== gameId) return "missing";
+  if (stored.record.status !== "active") return "archived";
+  try {
+    await worlds.replace(withGameSettings(stored.record, gameSettings), stored.etag);
+    return "updated";
+  } catch (error) {
+    if (preconditionFailed(error)) return "conflict";
+    throw error;
+  }
+}
+
+/** A world's whitelist (ADR-0066). The world keeps it from now on, on every host it lands. */
+export async function replaceWorldWhitelist(
+  gameId: string,
+  worldId: string,
+  whitelist: WorldWhitelist,
+): Promise<"updated" | "missing" | "archived" | "conflict"> {
+  const worlds = new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET"));
+  const stored = await worlds.read(worldId);
+  if (stored?.record.gameId !== gameId) return "missing";
+  if (stored.record.status !== "active") return "archived";
+  try {
+    await worlds.replace(withWhitelist(stored.record, whitelist), stored.etag);
+    return "updated";
+  } catch (error) {
+    if (preconditionFailed(error)) return "conflict";
+    throw error;
+  }
+}
+
 export async function replaceWorldAccess(
   gameId: string,
   worldId: string,
@@ -452,7 +552,7 @@ export async function replaceWorldAccess(
 ): Promise<"updated" | "missing" | "conflict"> {
   const worlds = new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET"));
   const stored = await worlds.read(worldId);
-  if (!stored || stored.record.gameId !== gameId) return "missing";
+  if (stored?.record.gameId !== gameId) return "missing";
   if (stored.record.status !== "active") return "conflict";
   const next = withWorldAccess(stored.record, access);
   if (next.placement === stored.record.placement && next.connectivity === stored.record.connectivity && next.auth === stored.record.auth) return "updated";
@@ -461,6 +561,78 @@ export async function replaceWorldAccess(
     return "updated";
   } catch (error) {
     if (preconditionFailed(error)) return "conflict";
+    throw error;
+  }
+}
+
+// --- The console gateway (ADR-0063) -------------------------------------------
+
+/** Which host and slot a session holds, from the host records beside the lifecycle. */
+export async function findSessionPlacement(sessionId: string): Promise<Readonly<{ hostId: string; slot: number }> | null> {
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const page = await document.send(new ScanCommand({
+      TableName: requiredEnv("LIFECYCLE_TABLE_NAME"),
+      FilterExpression: "begins_with(server_id, :prefix)",
+      ExpressionAttributeValues: { ":prefix": "host#" },
+      ProjectionExpression: "host",
+      ...(exclusiveStartKey ? { ExclusiveStartKey: exclusiveStartKey } : {}),
+    }));
+    for (const item of page.Items ?? []) {
+      const host = item.host as HostRecord | undefined;
+      const held = host?.reservations.find((reservation) => reservation.sessionId === sessionId);
+      if (host && held) return { hostId: host.hostId, slot: held.slot };
+    }
+    exclusiveStartKey = page.LastEvaluatedKey;
+  } while (exclusiveStartKey);
+  return null;
+}
+
+export async function sendConsoleCommand(args: Readonly<{ hostId: string; worldId: string; slot: string; encodedCommand: string }>): Promise<string> {
+  requireWorldId(args.worldId);
+  const sent = await ssm.send(new SendCommandCommand({
+    DocumentName: requiredEnv("CONSOLE_DOCUMENT_NAME"),
+    InstanceIds: [args.hostId],
+    Parameters: { worldId: [args.worldId], slot: [args.slot], command: [args.encodedCommand] },
+    TimeoutSeconds: 60,
+    Comment: `console ${args.worldId}`,
+  }));
+  const commandId = sent.Command?.CommandId;
+  if (!commandId) throw new Error("console command did not return an id");
+  return commandId;
+}
+
+/**
+ * Asks a running world's host to write the whitelist from the world's record
+ * and reload it (ADR-0066). Only the world and the slot travel: the host reads
+ * the names from S3 itself.
+ */
+export async function sendWhitelistReload(args: Readonly<{ hostId: string; worldId: string; slot: string }>): Promise<string> {
+  requireWorldId(args.worldId);
+  const sent = await ssm.send(new SendCommandCommand({
+    DocumentName: requiredEnv("WHITELIST_DOCUMENT_NAME"),
+    InstanceIds: [args.hostId],
+    Parameters: { worldId: [args.worldId], slot: [args.slot] },
+    TimeoutSeconds: 60,
+    Comment: `whitelist ${args.worldId}`,
+  }));
+  const commandId = sent.Command?.CommandId;
+  if (!commandId) throw new Error("whitelist reload did not return an id");
+  return commandId;
+}
+
+export async function readConsoleInvocation(commandId: string, hostId: string): Promise<ConsoleInvocation> {
+  try {
+    const invocation = await ssm.send(new GetCommandInvocationCommand({ CommandId: commandId, InstanceId: hostId }));
+    return {
+      status: invocation.Status ?? "Pending",
+      responseCode: invocation.ResponseCode ?? null,
+      output: invocation.StandardOutputContent ?? "",
+      error: invocation.StandardErrorContent ?? "",
+    };
+  } catch (error) {
+    // A command just sent may not have reached the host's invocation list yet.
+    if (error instanceof Error && error.name === "InvocationDoesNotExist") return { status: "Pending", responseCode: null, output: "", error: "" };
     throw error;
   }
 }

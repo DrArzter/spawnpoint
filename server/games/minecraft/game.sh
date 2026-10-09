@@ -31,9 +31,21 @@ GAME_DEFAULT_AUTH="none"
 # not on it. The container, not the JVM, is what the host counts.
 GAME_FOOTPRINT_MEMORY_MIB="7168"
 GAME_FOOTPRINT_CORES="1"
+# The server's level-name, which compose.yaml pins as LEVEL. The save lives in
+# this folder of the world's data directory. The world's name names its
+# backups, not this folder: each world has a data directory of its own, and a
+# world created from a preset has an id such as minecraft-rostik-1a2b3c4d.
+MINECRAFT_LEVEL_NAME="world"
 
 game_query_players_raw() {
   rcon list
+}
+
+# The reply, or the transport's failure: its status is the caller's answer.
+game_console() {
+  local command="$1"
+  rcon "${command}"
+  return $?
 }
 
 game_save() {
@@ -63,15 +75,15 @@ game_parse_player_count() {
   printf '%s\n' "${count}"
 }
 
-# The world and its dimension siblings (world_nether, ...), exactly as before.
+# The level and its dimension siblings (world_nether, ...).
 game_save_paths() {
-  local data_dir="$1" world_name="$2"
-  find "${data_dir}" -mindepth 1 -maxdepth 1 -type d -name "${world_name}*" -printf '%f\0' | sort -z
+  local data_dir="$1" _world_name="$2"
+  find "${data_dir}" -mindepth 1 -maxdepth 1 -type d -name "${MINECRAFT_LEVEL_NAME}*" -printf '%f\0' | sort -z
 }
 
 game_save_sentinel() {
-  local data_dir="$1" world_name="$2"
-  [[ -f "${data_dir}/${world_name}/level.dat" ]]
+  local data_dir="$1" _world_name="$2"
+  [[ -f "${data_dir}/${MINECRAFT_LEVEL_NAME}/level.dat" ]]
 }
 
 # Milliseconds per tick, as Forge reports it over RCON ("Overall: Mean tick
@@ -88,8 +100,51 @@ game_tick_time_ms() {
   printf '%s\n' "${tick_ms}"
 }
 
+# Offline mode (ADR-0022) keys a player by the UUID the server derives from the
+# name, Java's UUID.nameUUIDFromBytes("OfflinePlayer:" + name). A whitelist must
+# carry that UUID: a lookup by name returns the account's online one, which an
+# offline server never sees, and the player is turned away.
+minecraft_offline_uuid() {
+  local name="$1" hex byte6 byte8
+  # MD5 is what the game derives the UUID with; it protects nothing here.
+  hex="$(printf 'OfflinePlayer:%s' "${name}" | md5sum | cut -c1-32)" # NOSONAR
+  byte6=$(( (16#${hex:12:2} & 0x0f) | 0x30 ))
+  byte8=$(( (16#${hex:16:2} & 0x3f) | 0x80 ))
+  hex="${hex:0:12}$(printf '%02x' "${byte6}")${hex:14:2}$(printf '%02x' "${byte8}")${hex:18:14}"
+  printf '%s-%s-%s-%s-%s\n' "${hex:0:8}" "${hex:8:4}" "${hex:12:4}" "${hex:16:4}" "${hex:20:12}"
+  return 0
+}
+
+# The whitelist a world's record keeps (ADR-0066), written as whitelist.json in
+# its data directory: exactly these names, in place of what was there. The
+# image writes the file only when WHITELIST is set, which compose never does.
+game_render_whitelist() {
+  local data_dir="$1" names_json="$2" entries name
+  entries="[]"
+  while IFS= read -r name; do
+    [[ -n "${name}" ]] || continue
+    [[ "${name}" =~ ^[A-Za-z0-9_]{3,16}$ ]] || {
+      printf 'error: not a Minecraft name: %s\n' "${name}" >&2
+      return 1
+    }
+    entries="$(jq -c --arg uuid "$(minecraft_offline_uuid "${name}")" --arg name "${name}" '. + [{uuid: $uuid, name: $name}]' <<<"${entries}")"
+  done < <(jq -r '.[]' <<<"${names_json}")
+  mkdir -p -- "${data_dir}"
+  jq . <<<"${entries}" >"${data_dir}/.whitelist.json.next"
+  chmod 0644 -- "${data_dir}/.whitelist.json.next"
+  # The server rewrites the file when a name is added at its console.
+  chown --reference="${data_dir}" -- "${data_dir}/.whitelist.json.next" 2>/dev/null || true
+  mv -f -- "${data_dir}/.whitelist.json.next" "${data_dir}/whitelist.json"
+  return 0
+}
+
+game_reload_whitelist() {
+  rcon whitelist reload
+  return $?
+}
+
 # What a verified archive must contain to count as a save of this game.
 game_archive_sentinel_regex() {
-  local world_name="$1"
-  printf '^%s/level\\.dat$' "${world_name}"
+  local _world_name="$1"
+  printf '^%s/level\\.dat$' "${MINECRAFT_LEVEL_NAME}"
 }

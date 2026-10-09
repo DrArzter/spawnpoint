@@ -73,6 +73,8 @@ export type CatalogGame = Readonly<{
   // sessions take slot zero, where the ports are the game's own. Mirrors
   // GAME_SLOTTABLE in the game modules.
   slottable?: boolean;
+  /** The game keeps a whitelist the host can write from a world's record (ADR-0066). */
+  whitelist?: boolean;
   presets?: readonly CatalogPreset[];
   worlds: readonly CatalogWorld[];
 }>;
@@ -85,6 +87,7 @@ export const gameCatalog: readonly CatalogGame[] = [
     code: "MC",
     displayName: "Minecraft",
     connectPort: 25565,
+    whitelist: true,
     worlds: [
       { id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1", connectivity: "zerotier", hostBinding: "configured" },
       { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge", sessionControl: "v1", connectivity: "zerotier", footprint: { memoryMiB: 3 * 1024, cores: 0.5 }, hostBinding: "configured" },

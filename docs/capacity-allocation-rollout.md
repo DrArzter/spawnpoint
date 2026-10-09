@@ -58,9 +58,10 @@ phase-12 row. Still owed: the phase-10 acceptance run as a written report with i
 
 Limits of the placement modes today:
 
-- **A lifecycle record is one per game (`serverId`), with one active session.** Two worlds of different games share
-  the host; two worlds of the same game still take turns, because the second `beginSession` on the game's record is
-  a conflict. Keying the lifecycle by world is its own change, and not a small one.
+- **A fleet world has a lifecycle record of its own; a configured world shares its game's.** Since ADR-0062 two
+  worlds of one game run at once on fleet hosts, each on its own record (`world#<worldId>`), and an operation blocks
+  only its own world. The configured host still runs one session at a time, because its worlds share the game's
+  record.
 - **The two legacy worlds live on the configured host's volume.** They are bound to it in the catalog and are never
   launched for; `fleet` refuses them explicitly. A world created from a preset lives in S3 between sessions and may
   land on a launched host. Migrating the legacy data is required before the configured instance can be removed.

@@ -4,7 +4,7 @@ import test from "node:test";
 import type { PresetObservation } from "../src/control-plane/preset-catalog.ts";
 import {
   archiveWorldRecord, newWorldRecord, parseWorldRecord, regenerateWorldRecord,
-  purgeGenerationIds, restoreWorldRecord, withWorldAccess, worldIdForName, worldRecordDocument,
+  purgeGenerationIds, restoreWorldRecord, withGameSettings, withWhitelist, withWorldAccess, worldIdForName, worldRecordDocument,
 } from "../src/control-plane/world-registry.ts";
 
 const preset: PresetObservation = {
@@ -112,4 +112,46 @@ test("purge is possible only after archive and names every generation to clean",
     regenerated.currentGeneration.id,
     initial.currentGeneration.id,
   ]);
+});
+
+test("a world's game settings round-trip and outlive its wipes, restores and archive (ADR-0064)", () => {
+  const original = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
+  assert.equal(original.gameSettings, undefined, "a new world sets nothing");
+  assert.equal("game_settings" in worldRecordDocument(original), false);
+  const gameSettings = {
+    values: { difficulty: "hard", max_players: 8, pvp: false },
+    updatedAt: "2026-10-09T11:00:00.000Z",
+    updatedBy: { identityId: "identity-owner", displayName: "DrArzter" },
+  };
+  const set = withGameSettings(original, gameSettings);
+  assert.deepEqual(parseWorldRecord(worldRecordDocument(set)), set);
+  const wiped = regenerateWorldRecord(set, preset, "42.7", "22345678-1234-1234-1234-1234567890ab", "2026-10-09T12:00:00.000Z");
+  assert.deepEqual(wiped.gameSettings, gameSettings, "a new wipe keeps the world's settings");
+  assert.deepEqual(archiveWorldRecord(set).gameSettings, gameSettings);
+  const backup = { key: `worlds/${identity.worldId}/archives/${identity.worldId}-gen-123456781234123412341234567890ab-20260909T000000Z-${"c".repeat(64)}.tar.zst`, checksum: "c".repeat(64), generationId: "gen-123456781234123412341234567890ab" };
+  assert.deepEqual(restoreWorldRecord(wiped, backup, "32345678-1234-1234-1234-1234567890ab", "2026-10-09T13:00:00.000Z").gameSettings, gameSettings);
+
+  const document = worldRecordDocument(set) as Record<string, Record<string, unknown>>;
+  const settingsDocument = document.game_settings!;
+  assert.equal(parseWorldRecord({ ...document, game_settings: { ...settingsDocument, values: { "Max Players": 8 } } }), null);
+  assert.equal(parseWorldRecord({ ...document, game_settings: { ...settingsDocument, values: { max_players: [8] } } }), null);
+  assert.equal(parseWorldRecord({ ...document, game_settings: { ...settingsDocument, updated_by: null } }), null);
+});
+
+test("a world's whitelist round-trips, outlives its wipes and restores, and holds only names (ADR-0066)", () => {
+  const original = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
+  assert.equal(original.whitelist, undefined, "a new world keeps no whitelist; its server's own file is left alone");
+  const whitelist = { names: ["DrArzter", "Mira"], updatedAt: "2026-10-09T11:00:00.000Z", updatedBy: { identityId: "identity-owner", displayName: "DrArzter" } };
+  const kept = withWhitelist(original, whitelist);
+  assert.deepEqual(parseWorldRecord(worldRecordDocument(kept)), kept);
+  const empty = withWhitelist(original, { ...whitelist, names: [] });
+  assert.deepEqual(parseWorldRecord(worldRecordDocument(empty))?.whitelist?.names, [], "an empty list is kept, not dropped");
+  const wiped = regenerateWorldRecord(kept, preset, "42.7", "22345678-1234-1234-1234-1234567890ab", "2026-10-09T12:00:00.000Z");
+  assert.deepEqual(wiped.whitelist, whitelist, "a new wipe keeps the world's players");
+
+  const document = worldRecordDocument(kept) as Record<string, Record<string, unknown>>;
+  const whitelistDocument = document.whitelist!;
+  assert.equal(parseWorldRecord({ ...document, whitelist: { ...whitelistDocument, names: ["has space"] } }), null);
+  assert.equal(parseWorldRecord({ ...document, whitelist: { ...whitelistDocument, names: ["DrArzter", "drarzter"] } }), null);
+  assert.equal(parseWorldRecord({ ...document, whitelist: { ...whitelistDocument, updated_by: null } }), null);
 });

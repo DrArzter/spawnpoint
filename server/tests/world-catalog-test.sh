@@ -107,10 +107,11 @@ grep -Fq '/worlds/world/generations/gen-123456781234123412341234567890ab/data' <
 restore_checksum="$(printf 'restored level\n' | sha256sum | awk '{print $1}')"
 restore_source="gen-123456781234123412341234567890ab"
 restore_generation="gen-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-mkdir -p -- "${fixture}/restore-source/minecraft-creative" "${fixture}/s3/backups/worlds/minecraft-creative/archives"
-printf 'restored level\n' >"${fixture}/restore-source/minecraft-creative/level.dat"
+# The archive holds the server's level folder; the world id names only the key.
+mkdir -p -- "${fixture}/restore-source/world" "${fixture}/s3/backups/worlds/minecraft-creative/archives"
+printf 'restored level\n' >"${fixture}/restore-source/world/level.dat"
 restore_archive="${fixture}/s3/backups/worlds/minecraft-creative/archives/minecraft-creative-${restore_source}-20260908T100000Z-placeholder.tar.zst"
-tar --create --zstd --file "${restore_archive}" --directory "${fixture}/restore-source" minecraft-creative
+tar --create --zstd --file "${restore_archive}" --directory "${fixture}/restore-source" world
 restore_checksum="$(sha256sum "${restore_archive}" | awk '{print $1}')"
 restore_base64="$(openssl dgst -sha256 -binary "${restore_archive}" | base64 | tr -d '\n')"
 restore_key="worlds/minecraft-creative/archives/minecraft-creative-${restore_source}-20260908T100000Z-${restore_checksum}.tar.zst"
@@ -131,7 +132,7 @@ PATH="${fixture}/bin:${PATH}" FAKE_S3_ROOT="${fixture}/s3" BACKUP_BUCKET=backups
   SPAWNPOINT_WORLD_CATALOG="${fixture}/runtime-restored/world-catalog.json" \
   "${scripts}/prepare-world.sh" minecraft-creative >/dev/null
 grep -Fxq 'restored level' \
-  "${fixture}/worlds/minecraft-creative/generations/${restore_generation}/data/minecraft-creative/level.dat"
+  "${fixture}/worlds/minecraft-creative/generations/${restore_generation}/data/world/level.dat"
 jq -e --arg key "${restore_key}" '.restore.backup_key == $key' \
   "${fixture}/worlds/minecraft-creative/generations/${restore_generation}/.spawnpoint-world.json" >/dev/null
 

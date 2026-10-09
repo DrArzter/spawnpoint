@@ -186,9 +186,49 @@ export const demoApi: SpawnpointApi = {
     return store.backups(gameId, worldId);
   },
 
-  async loadHostMetrics(instanceId: string, range: MetricRange) {
+  async requestBackupDownload(gameId: string, worldId: string, key: string) {
     await demoLatency();
-    return store.hostMetrics(instanceId, range);
+    return store.backupLink(gameId, worldId, key);
+  },
+
+  async updateGameSettings(gameId: string, worldId: string, values) {
+    await demoLatency();
+    return store.updateGameSettings(gameId, worldId, values);
+  },
+
+  async loadWhitelist(gameId: string, worldId: string) {
+    await demoLatency();
+    return store.whitelist(gameId, worldId);
+  },
+
+  async updateWhitelist(gameId: string, worldId: string, names: readonly string[]) {
+    await demoLatency();
+    return store.updateWhitelist(gameId, worldId, names);
+  },
+
+  async loadReleaseMods(gameId: string, presetId: string, release: string) {
+    await demoLatency();
+    return store.releaseMods(gameId, presetId, release);
+  },
+
+  async requestModDownload(gameId: string, presetId: string, release: string, sha256: string) {
+    await demoLatency();
+    return store.modLink(gameId, presetId, release, sha256);
+  },
+
+  async loadWorldMetrics(gameId: string, worldId: string, range: MetricRange) {
+    await demoLatency();
+    return store.worldMetrics(gameId, worldId, range);
+  },
+
+  async loadConsole(gameId: string, worldId: string) {
+    await demoLatency();
+    return store.consoleHistory(gameId, worldId);
+  },
+
+  async runConsoleCommand(gameId: string, worldId: string, command: string) {
+    await demoLatency();
+    return store.runConsoleCommand(gameId, worldId, command);
   },
 
   async loadInvitationRecipients() {

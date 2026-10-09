@@ -110,6 +110,21 @@ expect_failure "an unpinned entry" \
   ' "${FACTORIO_DATA_DIR}/mods/mod-list.json" >/dev/null
 )
 
+# A world's mods directory sits beside its data. The list is written where the
+# release was reconciled, which is the directory the container reads as
+# /factorio/mods, and never into the data directory.
+(
+  export FACTORIO_DATA_DIR="${fixture}/world/data"
+  export SPAWNPOINT_WORLD_MODS_DIRECTORY="${fixture}/world/mods"
+  mkdir -p -- "${FACTORIO_DATA_DIR}" "${SPAWNPOINT_WORLD_MODS_DIRECTORY}"
+  cp -- "${FAKE_FACTORIO_ROOT}/blobs/"*.zip "${SPAWNPOINT_WORLD_MODS_DIRECTORY}/"
+  source "${GAMES}/factorio/game.sh"
+  game_prepare_session
+  jq -e '(.mods | map(.name)) == ["base", "even_more_distribution", "graftorio2"]' \
+    "${SPAWNPOINT_WORLD_MODS_DIRECTORY}/mod-list.json" >/dev/null
+  [[ ! -e "${FACTORIO_DATA_DIR}/mods" ]]
+)
+
 # --- the pack as a set: engine series, required dependencies, conflicts ---
 FACTORIO_TARGET_VERSION=2.0.77 "${resolver}" "${fixture}/factorio.list" "${fixture}/engine-ok" >/dev/null
 engine_output="$(FACTORIO_TARGET_VERSION=2.0 "${resolver}" "${fixture}/factorio.list" "${fixture}/engine-ok2")"

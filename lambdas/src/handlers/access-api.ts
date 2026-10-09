@@ -68,12 +68,20 @@ import { catalogWithPresets, findCatalogWorld, gameCatalog } from "../control-pl
 import { backupInventory } from "../control-plane/backups.ts";
 import {
   awsControlPlaneSources,
+  backupArchiveUrl,
   dashboardControlPlaneSources,
+  findSessionPlacement,
   listWorldBackups,
   materializePresetWorld,
   packDownloadUrl,
+  readConsoleInvocation,
   readWorldRecord,
+  releaseModUrl,
   replaceWorldAccess,
+  replaceWorldGameSettings,
+  replaceWorldWhitelist,
+  sendConsoleCommand,
+  sendWhitelistReload,
   startSessionExecution,
   stopSessionExecution,
   worldLifecycleExecution,
@@ -81,7 +89,11 @@ import {
 import { readControlPlaneSnapshot } from "../control-plane/read-model.ts";
 import type { ControlPlaneSources } from "../control-plane/read-model.ts";
 import type { WorldRecord } from "../control-plane/world-registry.ts";
-import { packRelease, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, worldLifecycleNeedsStop, type SessionAction, type SessionPlan } from "../control-plane/session-control.ts";
+import { packRelease, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, type SessionAction, type SessionPlan } from "../control-plane/session-control.ts";
+import { blockingOperations, holdsWorld, locateWorldSession, sessionLifecycleKey, worldHost, type WorldHost, type WorldPlacement, type WorldSession } from "../control-plane/world-session.ts";
+import { checkGameSettings } from "../control-plane/game-settings.ts";
+import { checkWhitelist } from "../control-plane/whitelist.ts";
+import { CONSOLE_RECORD_DAYS, checkConsoleCommand, consoleResult, encodeConsoleCommand, type ConsoleEntry, type ConsoleStatus } from "../control-plane/console.ts";
 import { issueSubscriptionTicket, subscriptionTicketItem, subscriptionTicketLifetimeSeconds } from "../control-plane/subscriptions.ts";
 import { worldIdForName } from "../control-plane/world-registry.ts";
 
@@ -345,12 +357,18 @@ async function hostMetrics(instanceId: string, range: string): Promise<Response>
 const capabilityRoutes: Readonly<Record<string, string>> = {
   releaseManifest: "GET /games/{gameId}/presets/{presetId}/releases/{version}",
   hostMetrics: "GET /hosts/{instanceId}/metrics",
+  worldMetrics: "GET /games/{gameId}/worlds/{worldId}/metrics",
   invitations: "POST /games/{gameId}/worlds/{worldId}/invitations",
   clientPacks: "GET /games/{gameId}/worlds/{worldId}/pack",
   backups: "GET /games/{gameId}/worlds/{worldId}/backups",
   worldLifecycle: "POST /games/{gameId}/worlds/{worldId}/wipe",
   accessManagement: "GET /access/identities",
   accessInvitations: "GET /access/invitations",
+  consoleGateway: "POST /games/{gameId}/worlds/{worldId}/console",
+  gameSettings: "PUT /games/{gameId}/worlds/{worldId}/game-settings",
+  releaseFiles: "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}",
+  backupDownloads: "POST /games/{gameId}/worlds/{worldId}/backups/download",
+  whitelist: "PUT /games/{gameId}/worlds/{worldId}/whitelist",
 };
 
 export function deployedCapabilities(): readonly string[] {
@@ -634,24 +652,41 @@ async function createControlPlaneSubscription(identity: Identity): Promise<Respo
   });
 }
 
+// The record a world's session lives on: a fleet world's own, or its game's
+// (ADR-0062). Both are read for a fleet world, because a session begun under the
+// game's record before fleet worlds had their own still runs to its stop there.
+async function readWorldSession(gameId: string, worldId: string, placement: WorldPlacement) {
+  const [game, own] = await Promise.all([
+    awsControlPlaneSources.readLifecycle(gameId),
+    placement === "fleet" ? awsControlPlaneSources.readLifecycle(sessionLifecycleKey(gameId, worldId, placement)) : Promise.resolve(null),
+  ]);
+  return { ...locateWorldSession(gameId, worldId, placement, { game, own }), game };
+}
+
+function worldPlacements(catalog: ReturnType<typeof catalogWithPresets>): (worldId: string) => WorldPlacement | undefined {
+  const placements = new Map(catalog.flatMap((game) => game.worlds.map((world) => [world.id, world.placement ?? "configured"] as const)));
+  return (worldId) => placements.get(worldId);
+}
+
 async function controlSession(identity: Identity, action: SessionAction, gameId: string, worldId: string): Promise<Response> {
-  const [hosts, operations, presets, worldRecords, lifecycle] = await Promise.all([
+  const [hosts, allOperations, presets, worldRecords] = await Promise.all([
     awsControlPlaneSources.listHosts(),
     awsControlPlaneSources.listRunningOperations(),
     awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
     awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
-    awsControlPlaneSources.readLifecycle(gameId),
   ]);
   const effectiveCatalog = catalogWithPresets(presets, gameCatalog, worldRecords);
   const world = effectiveCatalog.find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
   const fleet = world?.placement === "fleet";
   if (action === "start" && fleet && process.env.SPAWNPOINT_LAUNCH !== "enabled") return response(409, { error: "fleet_unavailable" });
+  const located = await readWorldSession(gameId, worldId, fleet ? "fleet" : "configured");
+  const operations = blockingOperations(allOperations, worldId, worldPlacements(effectiveCatalog));
   const configuredHosts = hosts.filter((candidate) => candidate.provenance !== "launched");
   const plan = fleet
-    ? planFleetSessionOperation(gameId, worldId, action, operations, lifecycle, effectiveCatalog)
-    : planSessionOperation(gameId, worldId, action, configuredHosts, operations, effectiveCatalog);
+    ? planFleetSessionOperation(gameId, worldId, action, operations, located.record, effectiveCatalog)
+    : planSessionOperation(gameId, worldId, action, configuredHosts, operations, effectiveCatalog, located.record);
   if (plan.kind === "reject") return response(plan.reason === "unknown_world" ? 404 : 409, { error: plan.reason });
-  const recoverySessionId = action === "stop" && !fleet ? stoppedHostRecoverySession(worldId, configuredHosts, lifecycle) : null;
+  const recoverySessionId = action === "stop" && !fleet ? stoppedHostRecoverySession(worldId, configuredHosts, located.record) : null;
   if (plan.kind === "noop" && recoverySessionId === null) return response(200, { result: plan.reason });
   const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
   const requestedBy = `identity:${identity.id}`;
@@ -663,15 +698,21 @@ async function controlSession(identity: Identity, action: SessionAction, gameId:
   if (!hostId) return response(409, { error: "configured_host_unavailable" });
   if (action === "start") {
     // No address in the request: the host's session summary answers with it
-    // and the machine carries it back (ADR-0033).
-    await startSessionExecution(operationId, hostId, requestedBy, gameId, worldId, fleet ? "fleet" : "single");
+    // and the machine carries it back (ADR-0033). A new session always begins
+    // on the record its placement names.
+    await startSessionExecution({
+      operationId, instanceId: hostId, requestedBy, gameId, worldId,
+      serverId: sessionLifecycleKey(gameId, worldId, fleet ? "fleet" : "configured"),
+      worldName: world?.displayName ?? worldId,
+      placement: fleet ? "fleet" : "single",
+    });
   }
   else {
-    const activeSessionId = recoverySessionId ?? lifecycle?.activeSessionId;
+    const activeSessionId = recoverySessionId ?? located.record?.activeSessionId;
     if (activeSessionId === null || activeSessionId === undefined) {
       return response(409, { error: "active_session_unavailable" });
     }
-    await stopSessionExecution(operationId, hostId, requestedBy, gameId, activeSessionId, worldId);
+    await stopSessionExecution(operationId, hostId, requestedBy, located.serverId, activeSessionId, worldId);
   }
   return response(202, { result: "requested", operationId });
 }
@@ -740,17 +781,105 @@ async function updateWorldSettings(gameId: string, worldId: string, body: string
   try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
   const access = parseWorldAccess(parsed, false);
   if (access === null) return response(400, { error: "invalid_world_connectivity" });
-  const [lifecycle, operations] = await Promise.all([
+  // Only this world's own session holds its settings back (ADR-0062). Both
+  // records are read, so the answer holds for either placement.
+  const [game, own, operations] = await Promise.all([
     awsControlPlaneSources.readLifecycle(gameId),
+    awsControlPlaneSources.readLifecycle(sessionLifecycleKey(gameId, worldId, "fleet")),
     awsControlPlaneSources.listRunningOperations(),
   ]);
-  if (operations.length > 0 || (lifecycle && (lifecycle.activeSessionId !== null || lifecycle.observedState !== "stopped"))) {
+  const unnamed = game !== null && game.activeWorldId == null && game.activeSessionId !== null;
+  if (operations.some((operation) => operation.worldId === null || operation.worldId === worldId) ||
+      holdsWorld(game, worldId) || holdsWorld(own, worldId) || unnamed) {
     return response(409, { error: "world_session_active" });
   }
   const result = await replaceWorldAccess(gameId, worldId, access);
   if (result === "missing") return response(404, { error: "unknown_world" });
   if (result === "conflict") return response(409, { error: "world_settings_conflict" });
   return response(200, { ...access, auth: access.auth ?? null });
+}
+
+// --- A world's game settings (ADR-0064) ----------------------------------------
+// Saved whether or not the world runs: the host reads the record when a session
+// starts, so a running game is never touched and takes them at its next start.
+
+async function updateGameSettings(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
+  let parsed: { values?: unknown };
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const check = checkGameSettings(gameId, parsed.values);
+  if (!check.ok) {
+    return response(check.error === "game_has_no_settings" ? 409 : 400, { error: check.error, ...(check.setting === undefined ? {} : { setting: check.setting }) });
+  }
+  const gameSettings = {
+    values: check.values,
+    updatedAt: new Date().toISOString(),
+    updatedBy: { identityId: identity.id, displayName: identity.displayName },
+  };
+  const result = await replaceWorldGameSettings(gameId, worldId, gameSettings);
+  if (result === "missing") return response(404, { error: "unknown_world" });
+  if (result === "archived") return response(409, { error: "world_archived" });
+  if (result === "conflict") return response(409, { error: "world_settings_conflict" });
+  return response(200, { values: gameSettings.values, updatedAt: gameSettings.updatedAt });
+}
+
+// --- A world's whitelist (ADR-0066) ---------------------------------------------
+// Kept on the world record, so it follows the world to every host. A running
+// world is asked to reload it at once; any start writes it anyway.
+
+function gameKeepsWhitelist(gameId: string): boolean {
+  return gameCatalog.find((game) => game.id === gameId)?.whitelist === true;
+}
+
+async function whitelistOf(gameId: string, worldId: string): Promise<Response> {
+  if (!gameKeepsWhitelist(gameId)) return response(409, { error: "game_has_no_whitelist" });
+  const record = await readWorldRecord(worldId);
+  if (record?.gameId !== gameId) return response(404, { error: "unknown_world" });
+  return response(200, record.whitelist === undefined
+    ? { managed: false, names: [], updatedAt: null, updatedBy: null }
+    : { managed: true, names: record.whitelist.names, updatedAt: record.whitelist.updatedAt, updatedBy: record.whitelist.updatedBy.displayName });
+}
+
+async function updateWhitelist(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
+  let parsed: { names?: unknown };
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  if (!gameKeepsWhitelist(gameId)) return response(409, { error: "game_has_no_whitelist" });
+  const check = checkWhitelist(parsed.names);
+  if (!check.ok) return response(400, { error: check.error, ...(check.name === undefined ? {} : { name: check.name }) });
+  const whitelist = {
+    names: check.names,
+    updatedAt: new Date().toISOString(),
+    updatedBy: { identityId: identity.id, displayName: identity.displayName },
+  };
+  const result = await replaceWorldWhitelist(gameId, worldId, whitelist);
+  if (result === "missing") return response(404, { error: "unknown_world" });
+  if (result === "archived") return response(409, { error: "world_archived" });
+  if (result === "conflict") return response(409, { error: "world_settings_conflict" });
+  return response(200, { managed: true, names: whitelist.names, updatedAt: whitelist.updatedAt, applied: await reloadRunningWhitelist(gameId, worldId) });
+}
+
+// Fire and forget: the record is saved, and a host that cannot be asked now
+// writes the list at the world's next start.
+async function reloadRunningWhitelist(gameId: string, worldId: string): Promise<"reloading" | "next_start"> {
+  try {
+    const [presets, worldRecords, hosts] = await Promise.all([
+      awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
+      awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
+      awsControlPlaneSources.listHosts(),
+    ]);
+    const world = catalogWithPresets(presets, gameCatalog, worldRecords)
+      .find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
+    if (world === undefined) return "next_start";
+    const placement: WorldPlacement = world.placement === "fleet" ? "fleet" : "configured";
+    const located = await readWorldSession(gameId, worldId, placement);
+    if (located.record?.observedState !== "ready") return "next_start";
+    const host = await locateWorldHost(placement, located.record, hosts);
+    if (host === null) return "next_start";
+    await sendWhitelistReload({ hostId: host.hostId, worldId, slot: host.slot });
+    return "reloading";
+  } catch (error) {
+    console.error(JSON.stringify({ event: "whitelist_reload_not_sent", worldId, error: error instanceof Error ? error.message : String(error) }));
+    return "next_start";
+  }
 }
 
 // A backup carries the generation it was taken from, and that generation names
@@ -791,14 +920,17 @@ async function controlWorldLifecycle(
   if (action === "regenerate" && (release === undefined || !/^[0-9]+\.[0-9]+$/.test(release))) {
     return response(400, { error: "invalid_release" });
   }
-  const [hosts, operations, worldRecords, lifecycle] = await Promise.all([
+  const [hosts, allOperations, presets, worldRecords] = await Promise.all([
     awsControlPlaneSources.listHosts(),
     awsControlPlaneSources.listRunningOperations(),
+    awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
     awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
-    awsControlPlaneSources.readLifecycle(gameId),
   ]);
   const record = worldRecords.find((candidate) => candidate.gameId === gameId && candidate.worldId === worldId);
   if (record === undefined) return response(404, { error: "unknown_materialized_world" });
+  const placement: WorldPlacement = record.placement === "fleet" ? "fleet" : "configured";
+  const located = await readWorldSession(gameId, worldId, placement);
+  const operations = blockingOperations(allOperations, worldId, worldPlacements(catalogWithPresets(presets, gameCatalog, worldRecords)));
   if (action === "purge" && record.status !== "archived") return response(409, { error: "world_not_archived" });
   if (action === "restore" && backupKey !== undefined) {
     const restorable = await restorableRelease(record, backupKey, awsControlPlaneSources.readReleaseManifest);
@@ -812,15 +944,134 @@ async function controlWorldLifecycle(
     return response(409, { error: "host_transitioning" });
   }
   const operationId = `panel-world-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
-  const stopRequired = record.placement === "fleet"
-    ? record.status === "active" && lifecycle?.activeWorldId === worldId && lifecycle.observedState !== "stopped"
-    : worldLifecycleNeedsStop(record.status, host.state);
-  if (stopRequired && !lifecycle?.activeSessionId) return response(409, { error: "active_session_unavailable" });
+  // Only this world's own session is stopped first; another world of the
+  // game keeps running. A configured host that runs while its game's record
+  // names no session is running something nobody recorded: refuse, as before.
+  if (placement === "configured" && record.status === "active" && host.state === "running" && located.record === null && located.game?.activeSessionId == null) {
+    return response(409, { error: "active_session_unavailable" });
+  }
+  const stopRequired = record.status === "active" && located.record !== null;
+  if (stopRequired && !located.record?.activeSessionId) return response(409, { error: "active_session_unavailable" });
   await worldLifecycleExecution(
-    operationId, host.providerRef, `identity:${identity.id}`, gameId, lifecycle?.activeSessionId ?? "none", worldId, action, backupKey, release,
+    operationId, host.providerRef, `identity:${identity.id}`, located.serverId, located.record?.activeSessionId ?? "none", worldId, action, backupKey, release,
     stopRequired, record.currentGeneration.id,
   );
   return response(202, { result: "requested", operationId });
+}
+
+// --- What runs a world: its host (ADR-0062, ADR-0063) ---------------------------
+
+async function locateWorldHost(
+  placement: WorldPlacement,
+  session: WorldSession["record"],
+  hosts: readonly Readonly<{ providerRef: string; provenance?: "configured" | "launched" }>[],
+): Promise<WorldHost | null> {
+  const placed = session?.activeSessionId ? await findSessionPlacement(session.activeSessionId) : null;
+  const configured = hosts.filter((host) => host.provenance !== "launched").map((host) => host.providerRef);
+  return worldHost(placement, session, placed, configured);
+}
+
+// A world's metrics are its host's: with several worlds running, each on a
+// host of its own, a game has no single answer (ADR-0062).
+async function worldMetrics(gameId: string, worldId: string, range: string): Promise<Response> {
+  const hours = METRIC_RANGES[range];
+  if (hours === undefined) return response(400, { error: "invalid_range" });
+  if (awsControlPlaneSources.readHostMetrics === undefined) return response(501, { error: "metrics_unavailable" });
+  const [presets, worldRecords, hosts] = await Promise.all([
+    awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
+    awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
+    awsControlPlaneSources.listHosts(),
+  ]);
+  const world = catalogWithPresets(presets, gameCatalog, worldRecords)
+    .find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
+  if (world === undefined) return response(404, { error: "unknown_world" });
+  const placement: WorldPlacement = world.placement === "fleet" ? "fleet" : "configured";
+  const located = await readWorldSession(gameId, worldId, placement);
+  const host = await locateWorldHost(placement, located.record, hosts);
+  if (host === null) return response(409, { error: "world_not_running" });
+  return response(200, { range, ...await awsControlPlaneSources.readHostMetrics(host.hostId, hours) });
+}
+
+// --- The console gateway (ADR-0063) -------------------------------------------
+// A command is sent and recorded at once; its answer is collected when the
+// history is next read, so no request waits on a host.
+
+const CONSOLE_HISTORY_LIMIT = 30;
+
+function consoleEntry(item: Record<string, unknown>): ConsoleEntry {
+  const text = (key: string) => (typeof item[key] === "string" ? item[key] as string : "");
+  return {
+    id: text("command_id"),
+    at: text("created_at"),
+    identityId: text("identity_id"),
+    displayName: text("display_name"),
+    worldId: text("world_id"),
+    command: text("command"),
+    status: (text("status") || "pending") as ConsoleStatus,
+    output: typeof item.output === "string" ? item.output : null,
+  };
+}
+
+async function runConsoleCommand(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
+  let parsed: { command?: unknown };
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const [presets, worldRecords, hosts] = await Promise.all([
+    awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
+    awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
+    awsControlPlaneSources.listHosts(),
+  ]);
+  const world = catalogWithPresets(presets, gameCatalog, worldRecords)
+    .find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
+  if (world === undefined) return response(404, { error: "unknown_world" });
+  const check = checkConsoleCommand(gameId, parsed.command);
+  if (!check.ok) return response(check.reason === "lifecycle_command" ? 409 : 400, { error: check.reason });
+
+  // The world's own session, ready: a console attaches to a game that answers.
+  const placement: WorldPlacement = world.placement === "fleet" ? "fleet" : "configured";
+  const located = await readWorldSession(gameId, worldId, placement);
+  const sessionId = located.record?.activeSessionId;
+  if (located.record?.observedState !== "ready" || !sessionId) return response(409, { error: "session_not_ready" });
+
+  const target = await locateWorldHost(placement, located.record, hosts);
+  if (target === null) return response(409, { error: "console_unavailable" });
+
+  const commandId = await sendConsoleCommand({ hostId: target.hostId, worldId, slot: target.slot, encodedCommand: encodeConsoleCommand(check.command) });
+  const at = new Date().toISOString();
+  await document.send(new PutCommand({ TableName: tableName, Item: {
+    pk: `CONSOLE#${worldId}`, sk: `${at}#${commandId}`, command_id: commandId, created_at: at,
+    identity_id: identity.id, display_name: identity.displayName, game_id: gameId, world_id: worldId,
+    session_id: sessionId, host_id: target.hostId, command: check.command, status: "pending",
+    ttl: Math.floor(Date.now() / 1000) + CONSOLE_RECORD_DAYS * 24 * 3600,
+  } }));
+  const entry: ConsoleEntry = { id: commandId, at, identityId: identity.id, displayName: identity.displayName, worldId, command: check.command, status: "pending", output: null };
+  return response(202, { entry });
+}
+
+async function consoleHistory(gameId: string, worldId: string): Promise<Response> {
+  const page = await document.send(new QueryCommand({
+    TableName: tableName, KeyConditionExpression: "pk = :pk", ExpressionAttributeValues: { ":pk": `CONSOLE#${worldId}` },
+    ScanIndexForward: false, Limit: CONSOLE_HISTORY_LIMIT,
+  }));
+  const items = (page.Items ?? []).filter((item) => item.game_id === gameId);
+  const settled = await Promise.all(items.map(async (item) => {
+    if (item.status !== "pending" || typeof item.command_id !== "string" || typeof item.host_id !== "string") return item;
+    const result = consoleResult(await readConsoleInvocation(item.command_id, item.host_id));
+    if (result.status === "pending") return item;
+    try {
+      await document.send(new UpdateCommand({
+        TableName: tableName, Key: { pk: item.pk, sk: item.sk },
+        UpdateExpression: "SET #status = :status, #output = :output, completed_at = :now",
+        ConditionExpression: "#status = :pending",
+        ExpressionAttributeNames: { "#status": "status", "#output": "output" },
+        ExpressionAttributeValues: { ":status": result.status, ":output": result.output, ":now": new Date().toISOString(), ":pending": "pending" },
+      }));
+    } catch (error) {
+      // Another reader settled it first; its answer is the same.
+      if (!(error instanceof Error && error.name === "ConditionalCheckFailedException")) throw error;
+    }
+    return { ...item, status: result.status, output: result.output };
+  }));
+  return response(200, { entries: settled.map(consoleEntry) });
 }
 
 function roles(identity: Identity): Response {
@@ -870,6 +1121,24 @@ async function updateAppearance(identity: Identity, body: string | undefined): P
 
 const RELEASE_ID = /^[a-z0-9][a-z0-9-]*$/;
 const RELEASE_VERSION = /^[0-9]+\.[0-9]+$/;
+
+const SHA256_DIGEST = /^[0-9a-f]{64}$/;
+const MOD_LINK_SECONDS = 900;
+
+// One server mod of a release (ADR-0065), by the digest its manifest records:
+// the digest names the file without putting a mod's name, whatever characters
+// it holds, into a path. Mods are what the release already publishes to every
+// host; whoever may read the release may have its files.
+async function releaseModDownload(gameId: string, presetId: string, version: string, sha256: string): Promise<Response> {
+  if (!RELEASE_ID.test(gameId) || !RELEASE_ID.test(presetId) || !RELEASE_VERSION.test(version) || !SHA256_DIGEST.test(sha256)) {
+    return response(400, { error: "invalid_release_reference" });
+  }
+  const manifest = await awsControlPlaneSources.readReleaseManifest?.(gameId, presetId, version) ?? null;
+  const mods = (manifest as { server?: { mods?: unknown } } | null)?.server?.mods;
+  const mod = Array.isArray(mods) ? (mods as { file?: unknown; sha256?: unknown }[]).find((entry) => entry.sha256 === sha256) : undefined;
+  if (mod === undefined || typeof mod.file !== "string" || !/^[^/\\]+\.(jar|zip)$/.test(mod.file)) return response(404, { error: "unknown_mod" });
+  return response(200, { file: mod.file, url: await releaseModUrl(gameId, presetId, version, mod.file, MOD_LINK_SECONDS), expiresIn: MOD_LINK_SECONDS });
+}
 
 // What a release contains, which until now lived only in S3 and in the mods
 // directory of whichever host last installed it. Shaped rather than echoed: the
@@ -1965,16 +2234,44 @@ async function packDownload(gameId: string, worldId: string): Promise<Response> 
   return response(200, { release: choice.release, url, expiresIn: 3600 });
 }
 
-// What a restore would have to choose between. The inventory is read from a
-// listing rather than by touching an archive, so this role cannot download a
-// world even though it can say which backups exist.
+// Whether the world exists for this game: a legacy world in the static
+// catalog, or a world record.
+async function knownWorld(gameId: string, worldId: string): Promise<boolean> {
+  if (gameCatalog.find((game) => game.id === gameId)?.worlds.some((candidate) => candidate.id === worldId)) return true;
+  return (await readWorldRecord(worldId))?.gameId === gameId;
+}
+
+// What a restore would have to choose between. The inventory is a listing,
+// read without touching an archive; reading one is a download.
 async function backups(gameId: string, worldId: string): Promise<Response> {
-  const legacyWorld = gameCatalog.find((game) => game.id === gameId)?.worlds.some((candidate) => candidate.id === worldId);
-  if (!legacyWorld) {
-    const record = await readWorldRecord(worldId);
-    if (record?.gameId !== gameId) return response(404, { error: "unknown_world" });
-  }
+  if (!await knownWorld(gameId, worldId)) return response(404, { error: "unknown_world" });
   return response(200, backupInventory(await listWorldBackups(worldId)));
+}
+
+const BACKUP_LINK_SECONDS = 300;
+const DOWNLOAD_RECORD_DAYS = 365;
+
+// A world's whole save, for whoever holds backup.download (ADR-0065). The key
+// must be one of this world's archives. Who asked is recorded before the link
+// is handed over, and the link lives five minutes.
+async function backupDownload(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
+  let parsed: { key?: unknown };
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const key = parsed.key;
+  if (typeof key !== "string" || !key.startsWith(`worlds/${worldId}/archives/`) || !/^worlds\/[a-z0-9][a-z0-9-]{0,31}\/archives\/[A-Za-z0-9._-]+\.tar\.zst$/.test(key)) {
+    return response(400, { error: "invalid_backup_key" });
+  }
+  if (!await knownWorld(gameId, worldId)) return response(404, { error: "unknown_world" });
+  const link = await backupArchiveUrl(key, BACKUP_LINK_SECONDS);
+  if (link === null) return response(404, { error: "unknown_backup" });
+  const at = new Date().toISOString();
+  await document.send(new PutCommand({ TableName: tableName, Item: {
+    pk: `DOWNLOAD#${worldId}`, sk: `${at}#${randomUUID()}`, created_at: at,
+    identity_id: identity.id, display_name: identity.displayName, game_id: gameId, world_id: worldId,
+    key, size_bytes: link.sizeBytes,
+    ttl: Math.floor(Date.now() / 1000) + DOWNLOAD_RECORD_DAYS * 24 * 3600,
+  } }));
+  return response(200, { key, url: link.url, expiresIn: BACKUP_LINK_SECONDS, sizeBytes: link.sizeBytes });
 }
 
 function me(identity: Identity): Response {
@@ -2483,6 +2780,8 @@ export const routes: Readonly<Record<string, Route>> = {
   "POST /access/invitations/{invitationId}/revoke": permissionRoute("access.invite", (_identity, event) => revokeAccessInvitation(event)),
   "GET /hosts/{instanceId}/metrics": permissionRoute("metrics.read", (_identity, event) =>
     hostMetrics(parameter(event, "instanceId"), event.queryStringParameters?.range ?? "24h")),
+  "GET /games/{gameId}/worlds/{worldId}/metrics": permissionRoute("metrics.read", (_identity, event) =>
+    worldMetrics(parameter(event, "gameId"), parameter(event, "worldId"), event.queryStringParameters?.range ?? "24h")),
   "GET /games/{gameId}/presets/{presetId}/releases/{version}": permissionRoute("release.read", (_identity, event) =>
     releaseManifest(parameter(event, "gameId"), parameter(event, "presetId"), parameter(event, "version"))),
   "GET /invitations/recipients": permissionRoute("invitation.send", (identity) => invitationRecipients(identity)),
@@ -2505,6 +2804,20 @@ export const routes: Readonly<Record<string, Route>> = {
 
   "GET /games/{gameId}/worlds/{worldId}/backups": permissionRoute("backup.read", (_identity, event) =>
     backups(parameter(event, "gameId"), parameter(event, "worldId"))),
+  "POST /games/{gameId}/worlds/{worldId}/backups/download": permissionRoute("backup.download", (identity, event) =>
+    backupDownload(identity, parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
+  "GET /games/{gameId}/worlds/{worldId}/whitelist": permissionRoute("whitelist.manage", (_identity, event) =>
+    whitelistOf(parameter(event, "gameId"), parameter(event, "worldId"))),
+  "PUT /games/{gameId}/worlds/{worldId}/whitelist": permissionRoute("whitelist.manage", (identity, event) =>
+    updateWhitelist(identity, parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
+  "PUT /games/{gameId}/worlds/{worldId}/game-settings": permissionRoute("world.manage", (identity, event) =>
+    updateGameSettings(identity, parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
+  "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}": permissionRoute("release.read", (_identity, event) =>
+    releaseModDownload(parameter(event, "gameId"), parameter(event, "presetId"), parameter(event, "version"), parameter(event, "sha256"))),
+  "POST /games/{gameId}/worlds/{worldId}/console": permissionRoute("console.use", (identity, event) =>
+    runConsoleCommand(identity, parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
+  "GET /games/{gameId}/worlds/{worldId}/console": permissionRoute("console.use", (_identity, event) =>
+    consoleHistory(parameter(event, "gameId"), parameter(event, "worldId"))),
   "POST /games/{gameId}/worlds/{worldId}/archive": permissionRoute("world.manage", (identity, event) =>
     controlWorldLifecycle(identity, "archive", parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
   "POST /games/{gameId}/worlds/{worldId}/wipe": permissionRoute("world.manage", (identity, event) =>

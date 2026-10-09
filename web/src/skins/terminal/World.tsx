@@ -3,12 +3,15 @@ import type { ReactNode } from "react";
 import type { BackupEntry } from "../../api/contract";
 import { Timestamp } from "../../components/ui/Timestamp";
 import { action } from "../../core/actions";
-import type { BackupsModel, Detail, DetailValue, ReleaseRow, WorldModel } from "../../core/models";
+import type { BackupsModel, Detail, DetailValue, ModRow, ModsModel, ReleaseRow, WorldModel } from "../../core/models";
 import { wipeStatus } from "../../core/worlds";
 import { Icon } from "../../icons";
 import { formatBytes, formatTime, shortDigest } from "../../lib/format";
 import { useMediaQuery } from "../../shell/hooks";
 import { Address, Choice, Choices, Col, DetailRow, DetailsGroup, Empty, Ghost, Indicator, Notice, Overflow, Page, Panel, State, Table, Tabs, Verb, Verbs } from "./ui";
+import { MetricsPanel } from "./Metrics";
+import { ConsolePanel } from "./Rcon";
+import { WhitelistPanel } from "./Whitelist";
 import { Notices } from "./Worlds";
 
 // One world: its name and state on the first line, its verbs on the second
@@ -49,7 +52,10 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
       </>}
       {model.tab === "wipes" && <WipesTab rows={model.wipes} worldName={world.displayName} />}
       {model.tab === "backups" && <BackupsTab model={model.backups} worldName={world.displayName} />}
-      {model.tab === "releases" && <ReleasesTab rows={model.releases.rows} worldName={world.displayName} />}
+      {model.tab === "releases" && <ReleasesTab releases={model.releases} worldName={world.displayName} />}
+      {model.tab === "whitelist" && model.whitelist && <WhitelistPanel model={model.whitelist} />}
+      {model.tab === "console" && model.console && <ConsolePanel model={model.console} />}
+      {model.tab === "metrics" && model.metrics && <MetricsPanel model={model.metrics} />}
       <span className="visually-hidden">{game.displayName}</span>
     </Page>
   );
@@ -121,8 +127,12 @@ function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldN
     { id: "wipe", label: "Wipe", width: "90px", render: (entry) => { const number = model.wipeNumber(entry.generationId); return number !== undefined ? <span>#{number}</span> : <Ghost>Legacy</Ghost>; } },
     { id: "stored", label: "Stored", width: "170px", render: (entry) => <Timestamp value={entry.storedAt} /> },
     { id: "size", label: "Size", width: "130px", align: "end", render: (entry) => formatBytes(entry.sizeBytes) },
-    { id: "checksum", label: "SHA-256", secondary: true, width: "180px", render: (entry) => <code className="t-checksum" title={entry.checksum}><span className="t-checksum-short">{shortDigest(entry.checksum)}</span><span className="t-checksum-full">{entry.checksum}</span></code> },
-    { id: "verbs", label: "Actions", verbs: true, corner: true, render: (entry) => <Overflow groups={[[copyValueAction(`backup.copy-archive.${entry.key}`, "Copy archive name", entry.archiveName), copyValueAction(`backup.copy-checksum.${entry.key}`, "Copy SHA-256", entry.checksum)], [model.restore(entry)]]} label={`Actions for ${entry.archiveName}`} size="small" /> },
+    { id: "checksum", label: "SHA-256", secondary: true, width: "180px", render: (entry) => <Digest value={entry.checksum} /> },
+    { id: "verbs", label: "Actions", verbs: true, corner: true, render: (entry) => <Overflow groups={[
+      [copyValueAction(`backup.copy-archive.${entry.key}`, "Copy archive name", entry.archiveName), copyValueAction(`backup.copy-checksum.${entry.key}`, "Copy SHA-256", entry.checksum)],
+      ...(model.download ? [[model.download(entry)]] : []),
+      [model.restore(entry)],
+    ]} label={`Actions for ${entry.archiveName}`} size="small" /> },
   ];
 
   if (!model.canRead) {
@@ -156,7 +166,12 @@ function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldN
   );
 }
 
-function ReleasesTab({ rows, worldName }: Readonly<{ rows: readonly ReleaseRow[]; worldName: string }>) {
+// A SHA-256: its start in a narrow column, all of it where there is room.
+function Digest({ value }: Readonly<{ value: string }>) {
+  return <code className="t-checksum" title={value}><span className="t-checksum-short">{shortDigest(value)}</span><span className="t-checksum-full">{value}</span></code>;
+}
+
+function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["releases"]; worldName: string }>) {
   const columns: readonly Col<ReleaseRow>[] = [
     { id: "release", label: "Release", render: (row) => <span className="t-release-line">
       {row.sourceHref ? <a className="t-source" href={row.sourceHref} rel="noreferrer" target="_blank" title="Open preset repository"><code>{row.name}</code><Icon name="open_in_new" size={14} /></a> : <code>{row.name}</code>}
@@ -164,9 +179,35 @@ function ReleasesTab({ rows, worldName }: Readonly<{ rows: readonly ReleaseRow[]
       {row.download && <Verb action={row.download} size="small" />}
     </span> },
   ];
-  return (
+  return <>
     <Panel flush>
-      <Table columns={columns} empty={<Empty title="No release" />} label={`Release pointer of ${worldName}`} rowKey={(row) => row.name} rows={rows} />
+      <Table columns={columns} empty={<Empty title="No release" />} label={`Release pointer of ${worldName}`} rowKey={(row) => row.name} rows={releases.rows} />
+    </Panel>
+    {releases.mods && <ModsPanel mods={releases.mods} worldName={worldName} />}
+  </>;
+}
+
+// The server mods of the release the world starts with (ADR-0065).
+function ModsPanel({ mods, worldName }: Readonly<{ mods: ModsModel; worldName: string }>) {
+  const columns: readonly Col<ModRow>[] = [
+    { id: "file", label: "File", render: (row) => <code className="t-clip" title={row.file}>{row.file}</code> },
+    { id: "size", label: "Size", width: "110px", align: "end", render: (row) => formatBytes(row.bytes) },
+    { id: "checksum", label: "SHA-256", secondary: true, width: "180px", render: (row) => <Digest value={row.sha256} /> },
+    { id: "verbs", label: "Actions", verbs: true, corner: true, render: (row) => <Verb action={row.download} size="small" /> },
+  ];
+  const files = mods.files;
+  return (
+    <Panel flush name={`Server mods · release ${mods.release}`}>
+      {files.status === "error"
+        ? <div className="t-inset"><Notice description={files.error} title="The mods are unavailable" tone="error" verbs={<Verb action={files.retry} size="small" />} /></div>
+        : <Table
+          columns={columns}
+          empty={<Empty title="This release has no server mods" />}
+          label={`Server mods of ${worldName}, release ${mods.release}`}
+          loading={files.status === "loading"}
+          rowKey={(row) => row.sha256}
+          rows={files.status === "ready" ? files.value : []}
+        />}
     </Panel>
   );
 }

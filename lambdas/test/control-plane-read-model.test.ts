@@ -14,7 +14,7 @@ const sources: ControlPlaneSources = {
   readReleasePointer: async (worldId) => worldId === "world"
     ? { state: "available", generationId: null, desiredRelease: "1.1", activeRelease: "1.0" }
     : { state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null },
-  listRunningOperations: async () => [{ id: "start-1", type: "start", status: "running", startedAt: "2026-08-29T00:00:00.000Z", providerRef: "arn:execution" }],
+  listRunningOperations: async () => [{ id: "start-1", type: "start", status: "running", startedAt: "2026-08-29T00:00:00.000Z", providerRef: "arn:execution", worldId: null }],
 };
 
 test("retains the supplied projection observation timestamp", async () => {
@@ -174,6 +174,44 @@ test("a fleet world never borrows another running host's public address", async 
   assert.equal(snapshot.games[0]?.worlds[0]?.connectionAddress, null);
 });
 
+test("two fleet worlds of one game run at once, each with its own session and its own address", async () => {
+  const { acquireLease, beginSession, markSessionReady } = await import("../src/domain/lifecycle.ts");
+  const ready = (serverId: string, worldId: string, address: string) => {
+    const lease = acquireLease(initialLifecycleRecord(serverId, 100), "op", 100, 300);
+    return markSessionReady(beginSession(lease.record, lease.ownership, `session-${worldId}`, worldId, 101), lease.ownership, `session-${worldId}`, 102, address);
+  };
+  const fleetCatalog = [{
+    id: "minecraft", code: "MC", displayName: "Minecraft", connectPort: 25565,
+    worlds: [
+      { id: "rostik", displayName: "Rostik", profileId: "industrial", sessionControl: "v1" as const, connectivity: "route53" as const, placement: "fleet" as const },
+      { id: "magic", displayName: "Magic", profileId: "magic", sessionControl: "v1" as const, connectivity: "route53" as const, placement: "fleet" as const },
+      { id: "spare", displayName: "Spare", profileId: "vanilla", sessionControl: "v1" as const, connectivity: "route53" as const, placement: "fleet" as const },
+    ],
+  }];
+  const records: Record<string, ReturnType<typeof ready>> = {
+    "world#rostik": ready("world#rostik", "rostik", "rostik.games.example:25565"),
+    "world#magic": ready("world#magic", "magic", "magic.games.example:25565"),
+  };
+  const asked: string[] = [];
+  const snapshot = await readControlPlaneSnapshot({
+    listHosts: async () => [],
+    listRunningOperations: async () => [],
+    readLifecycle: async (serverId) => { asked.push(serverId); return records[serverId] ?? null; },
+    readReleasePointer: async () => ({ state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null }),
+  }, { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" }, fleetCatalog);
+  const worlds = new Map(snapshot.games[0]!.worlds.map((world) => [world.id, world]));
+  assert.deepEqual(asked.sort(), ["minecraft", "world#magic", "world#rostik", "world#spare"]);
+  assert.equal(worlds.get("rostik")?.session?.observedState, "ready");
+  assert.equal(worlds.get("rostik")?.session?.serverId, "world#rostik");
+  assert.equal(worlds.get("magic")?.session?.activeSessionId, "session-magic");
+  assert.equal(worlds.get("spare")?.session, null);
+  assert.equal(worlds.get("rostik")?.connectionAddress, "rostik.games.example:25565");
+  assert.equal(worlds.get("magic")?.connectionAddress, "magic.games.example:25565");
+  assert.equal(snapshot.games[0]?.lifecycle, null, "the game's own record holds neither");
+  const session = worlds.get("rostik")?.session as Record<string, unknown>;
+  assert.equal("lease" in session || "fencingToken" in session, false, "a viewer never reads the lease or the fence");
+});
+
 test("a ready session's address is the one the host reported, port and all; a stopped world's is composed", async () => {
   const { acquireLease, beginSession, markSessionReady } = await import("../src/domain/lifecycle.ts");
   const acquired = acquireLease(initialLifecycleRecord("minecraft", 100), "op", 100, 300);
@@ -190,4 +228,25 @@ test("a ready session's address is the one the host reported, port and all; a st
     { includeInfrastructure: false, includeDesiredRelease: false },
   );
   assert.equal(withheld.games[0]!.worlds.find((world) => world.id === "vanilla")?.connectionAddress, null, "a caller who may not read an address reads none, observed or not");
+});
+
+test("each game carries its settings, and each world with a record what it sets (ADR-0064)", async () => {
+  const { newWorldRecord, withGameSettings } = await import("../src/control-plane/world-registry.ts");
+  const preset = {
+    id: "industrial", displayName: "Industrial", gameId: "minecraft",
+    repository: "https://github.com/DrArzter/config", commit: "a".repeat(40), profileDigest: "b".repeat(64),
+    buildStatus: "ready" as const, releases: ["1.2"], latestRelease: "1.2",
+  };
+  const created = newWorldRecord(preset, { worldId: "minecraft-rostik-1a2b3c4d", displayName: "Rostik", release: "1.2" }, "12345678-1234-1234-1234-1234567890ab", "2026-10-09T10:00:00.000Z");
+  const set = withGameSettings(created, { values: { max_players: 8 }, updatedAt: "2026-10-09T11:00:00.000Z", updatedBy: { identityId: "identity-owner", displayName: "DrArzter" } });
+  const snapshot = await readControlPlaneSnapshot({ ...sources, listPresets: async () => [preset], listWorldRecords: async () => [set] }, { includeInfrastructure: false, includeDesiredRelease: false });
+  const minecraft = snapshot.games.find((game) => game.id === "minecraft")!;
+  assert.ok(minecraft.settings.some((setting) => setting.id === "max_players"));
+  assert.equal("env" in minecraft.settings[0]!, false, "the host's variable names stay on the host");
+  assert.deepEqual(snapshot.games.find((game) => game.id === "factorio")?.settings, []);
+  assert.equal(minecraft.whitelist, true, "Minecraft keeps a whitelist a record can hold (ADR-0066)");
+  assert.equal(snapshot.games.find((game) => game.id === "factorio")?.whitelist, false);
+  const worlds = new Map(minecraft.worlds.map((world) => [world.id, world]));
+  assert.deepEqual(worlds.get("minecraft-rostik-1a2b3c4d")?.gameSettings, { values: { max_players: 8 }, updatedAt: "2026-10-09T11:00:00.000Z" });
+  assert.equal(worlds.get("vanilla")?.gameSettings, null, "a legacy world has no record to keep settings in");
 });

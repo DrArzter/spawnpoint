@@ -29,6 +29,7 @@ metadata=""
 checksum=""
 if_none_match=""
 destination=""
+prefix=""
 
 while (( $# > 0 )); do
   case "$1" in
@@ -54,6 +55,10 @@ while (( $# > 0 )); do
       ;;
     --if-none-match)
       if_none_match="$2"
+      shift 2
+      ;;
+    --prefix)
+      prefix="$2"
       shift 2
       ;;
     --checksum-mode | --checksum-algorithm | --query | --output | --server-side-encryption | --content-type)
@@ -110,6 +115,17 @@ case "${operation}" in
   delete-object)
     rm -f -- "${object}" "${metadata_file}"
     jq -n '{}'
+    ;;
+  list-objects-v2)
+    # FAKE_S3_LIST_FAIL stands for a listing S3 refuses or never answers.
+    [[ "${FAKE_S3_LIST_FAIL:-false}" != "true" ]] || exit 255
+    root="${FAKE_S3_ROOT}/${bucket}"
+    if [[ -d "${root}" ]]; then
+      (cd -- "${root}" && find . -type f ! -name '*.fake-metadata' -printf '%P\n') | sort |
+        jq -R --arg prefix "${prefix}" 'select(startswith($prefix))' | jq -s '{Contents: map({Key: .})}'
+    else
+      jq -n '{}'
+    fi
     ;;
   *)
     exit 64

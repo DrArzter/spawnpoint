@@ -38,6 +38,8 @@
 #   game_save                  flush the running game to durable storage
 #   game_save_paths            print NUL-separated paths under the data dir to archive
 #   game_save_sentinel         succeed only if the data dir holds a real save
+#                              (both take the data dir and the world's name; the name
+#                              names backups, and the game's own config names its save)
 #   game_prepare_runtime       optional: derive runtime inputs from a verified release manifest
 #   game_prepare_installed_runtime optional: restore those inputs for later lifecycle commands
 #   game_prepare_session       optional: last-mile files before the container starts

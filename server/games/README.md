@@ -75,7 +75,9 @@ module takes part by:
 
 - `game_save` flushes the live game using its own protocol. `game_save_paths`, `game_save_sentinel` and
   `game_archive_sentinel_regex` describe **this** game's save. A borrowed
-  sentinel passes tests and loses worlds.
+  sentinel passes tests and loses worlds. They receive the world's name, which names its backups; where the save
+  sits comes from the game's own settings, not from that name. Minecraft's folder is the `level-name` that
+  `compose.yaml` pins as `LEVEL`, and a world created from a preset has an id such as `minecraft-rostik-1a2b3c4d`.
 - The player probe's `key=value` output never varies by game; only what produces the values does.
 - `game_tick_time_ms` prints milliseconds per tick for `scripts/measure-tick.sh`, the reading the acceptance of
   [ADR-0054](../../docs/adr/0054-place-a-session-on-a-host-with-room.md) compares alone and beside a neighbour;

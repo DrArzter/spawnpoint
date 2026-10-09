@@ -38,6 +38,12 @@ FACTORIO_RCON_HOST="${FACTORIO_RCON_HOST:-127.0.0.1}"
 # The host side of the RCON mapping follows the slot (ADR-0054).
 FACTORIO_RCON_PORT="${FACTORIO_RCON_PORT:-${SPAWNPOINT_RCON_PORT:-27015}}"
 
+# Where the release's mods are reconciled and the container reads them
+# (/factorio/mods). Read when called, not when the module loads.
+factorio_mods_dir() {
+  printf '%s' "${SPAWNPOINT_WORLD_MODS_DIRECTORY:-${FACTORIO_DATA_DIR}/mods}"
+}
+
 # The preset release, not Spawnpoint, selects the immutable container image
 # that opens this save. Version metadata still has to agree with itself; the
 # digest-addressed image is carried independently as runtime.image.
@@ -63,7 +69,7 @@ game_prepare_runtime() {
 game_prepare_installed_runtime() {
   [[ -n "${SPAWNPOINT_GAME_IMAGE:-}" ]] && return 0
   local mods_dir manifest
-  mods_dir="${SPAWNPOINT_WORLD_MODS_DIRECTORY:-${FACTORIO_DATA_DIR}/mods}"
+  mods_dir="$(factorio_mods_dir)"
   manifest="${mods_dir}/.spawnpoint-release.json"
   [[ -f "${manifest}" && ! -L "${manifest}" ]] || {
     printf 'error: installed Factorio release manifest not found: %s\n' "${manifest}" >&2
@@ -163,7 +169,8 @@ game_archive_sentinel_regex() {
 # is generated at session preparation rather than carried in release payloads
 # — the manifest schema stays mods-only (ADR-0034's open question, answered).
 game_prepare_session() {
-  local mods_dir="${FACTORIO_DATA_DIR}/mods"
+  local mods_dir
+  mods_dir="$(factorio_mods_dir)"
   mkdir -p -- "${mods_dir}"
   local names=()
   local zip name

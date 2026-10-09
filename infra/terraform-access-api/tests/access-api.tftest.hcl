@@ -54,6 +54,28 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.access_api_console
+    values = { json = "{}" }
+  }
+
+  override_data {
+    target = data.aws_instance.configured_host
+    values = { arn = "arn:aws:ec2:eu-central-1:123456789012:instance/i-0123456789abcdef0" }
+  }
+
+  # The console's permission names the document by ARN, known only after
+  # apply; a fixed one lets the plan-time run read the statements.
+  override_resource {
+    target = aws_ssm_document.console
+    values = { arn = "arn:aws:ssm:eu-central-1:123456789012:document/spawnpoint-console" }
+  }
+
+  override_resource {
+    target = aws_ssm_document.whitelist
+    values = { arn = "arn:aws:ssm:eu-central-1:123456789012:document/spawnpoint-whitelist" }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.control_plane_subscriptions
     values = { json = "{}" }
   }
@@ -141,6 +163,67 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   assert {
     condition     = contains(local.access_routes, "POST /auth/telegram")
     error_message = "The browser must have one endpoint that exchanges a verified Telegram login for a Spawnpoint session."
+  }
+
+  assert {
+    condition     = contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/console") && contains(local.access_routes, "GET /games/{gameId}/worlds/{worldId}/console")
+    error_message = "The console gateway sends a command and reads the recorded results (ADR-0063)."
+  }
+
+  assert {
+    condition = alltrue([
+      jsondecode(aws_ssm_document.console.content).parameters.worldId.allowedPattern == "^[a-z0-9][a-z0-9-]{0,31}$",
+      jsondecode(aws_ssm_document.console.content).parameters.slot.allowedPattern == "^([0-9]{1,3})?$",
+      jsondecode(aws_ssm_document.console.content).parameters.command.allowedPattern == "^[A-Za-z0-9+/]{1,1400}={0,2}$",
+    ])
+    error_message = "Every value the console document puts in a shell is held to a pattern that admits no quote, space or metacharacter."
+  }
+
+  assert {
+    condition = alltrue([
+      jsondecode(aws_ssm_document.whitelist.content).parameters.worldId.allowedPattern == "^[a-z0-9][a-z0-9-]{0,31}$",
+      jsondecode(aws_ssm_document.whitelist.content).parameters.slot.allowedPattern == "^([0-9]{1,3})?$",
+      keys(jsondecode(aws_ssm_document.whitelist.content).parameters) == ["slot", "worldId"],
+      aws_lambda_function.access_api.environment[0].variables.WHITELIST_DOCUMENT_NAME == "spawnpoint-whitelist",
+    ])
+    error_message = "The whitelist document names only a world and a slot; the names come from the world's record on the host."
+  }
+
+  assert {
+    condition = alltrue([
+      for statement in data.aws_iam_policy_document.access_api_console.statement :
+      !contains(statement.actions, "ssm:SendCommand") || (
+        !anytrue([for resource in statement.resources : strcontains(resource, "AWS-RunShellScript")])
+      )
+    ])
+    error_message = "The API may send the console document only, never the generic shell document."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.access_api_console.statement :
+      statement.sid == "SendOnlySpawnpointDocumentsToLaunchedHosts" && anytrue([
+        for condition in statement.condition : condition.variable == "ssm:resourceTag/ManagedBy" && contains(condition.values, "spawnpoint-fleet")
+      ])
+    ])
+    error_message = "A launched host is admitted to the console by its fleet tag."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.access_api.statement : statement.sid == "DownloadWorldArchives"
+      ]) && alltrue([
+      for statement in data.aws_iam_policy_document.access_api.statement :
+      statement.actions == toset(["s3:GetObject"]) &&
+      statement.resources == toset(["arn:aws:s3:::spawnpoint-backups-123456789012/worlds/*/archives/*.tar.zst"])
+      if anytrue([for resource in statement.resources : startswith(resource, "arn:aws:s3:::spawnpoint-backups-123456789012/")])
+    ])
+    error_message = "The API reads world archives for backup.download and nothing else in the backup bucket, and writes none."
+  }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.CONSOLE_DOCUMENT_NAME == "spawnpoint-console"
+    error_message = "The API names the console document it may send."
   }
 
   assert {

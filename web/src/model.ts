@@ -1,4 +1,4 @@
-export type Page = "worlds" | "metrics" | "console" | "releases" | "access" | "profile";
+export type Page = "worlds" | "releases" | "access" | "profile";
 export type AccessTab = "users" | "roles" | "notifications";
 export type ServerState = "stopped" | "starting" | "running" | "stopping" | "unknown";
 
@@ -48,7 +48,27 @@ export type World = {
   };
   connectionAddress: string | null;
   release: ReleasePointer;
+  /**
+   * This world's session, wherever it lives (ADR-0062): a fleet world's own
+   * record, or its game's while that names it. Absent from older responses.
+   */
+  session?: WorldSession | null;
+  /**
+   * The game settings this world sets (ADR-0064); null when it has no record
+   * to keep them in, as a legacy world does. Absent from older responses.
+   */
+  gameSettings?: WorldGameSettings | null;
 };
+export type SettingValue = string | number | boolean;
+export type WorldGameSettings = { values: Readonly<Record<string, SettingValue>>; updatedAt: string | null };
+/** One setting a world of this game may set, as its game module defines it. */
+export type SettingDefinition = { id: string; label: string; hint?: string } & (
+  | { type: "choice"; default: string; choices: readonly { value: string; label: string }[] }
+  | { type: "integer"; default: number; min: number; max: number }
+  | { type: "boolean"; default: boolean }
+  | { type: "text"; default: string; maxLength: number; pattern: string }
+);
+export type WorldSession = Omit<Lifecycle, "schemaVersion">;
 export type Lifecycle = {
   schemaVersion: 1;
   serverId: string;
@@ -60,7 +80,18 @@ export type Lifecycle = {
   /** Present while a watchdog is registered for the session. */
   idle: { playersOnline: number | null; consecutiveEmpty: number; lastObservedAtEpochSeconds: number | null } | null;
 };
-export type Game = { id: string; code: string; displayName: string; lifecycle: Lifecycle | null; presets: readonly Preset[]; worlds: readonly World[] };
+export type Game = {
+  id: string;
+  code: string;
+  displayName: string;
+  lifecycle: Lifecycle | null;
+  /** What a world of this game may set (ADR-0064); absent from older responses. */
+  settings?: readonly SettingDefinition[];
+  /** The game keeps a whitelist a world's record can hold (ADR-0066). */
+  whitelist?: boolean;
+  presets: readonly Preset[];
+  worlds: readonly World[];
+};
 export type Host = {
   id: string;
   name: string;
@@ -72,7 +103,8 @@ export type Host = {
   launchedAt?: string | null;
   publicIp?: string | null;
 };
-export type Operation = { id: string; type: "start" | "stop" | "promote" | "world"; status: "running"; startedAt: string; providerRef?: string };
+/** `worldId` is the world the workflow's input names; null or absent blocks every world (ADR-0062). */
+export type Operation = { id: string; type: "start" | "stop" | "promote" | "world"; status: "running"; startedAt: string; worldId?: string | null; providerRef?: string };
 export type ControlPlaneSnapshot = {
   observedAt: string;
   games: readonly Game[];
@@ -81,7 +113,8 @@ export type ControlPlaneSnapshot = {
   deployment?: { placement: "single" | "shared" | "fleet"; launchEnabled: boolean; dnsAvailable: boolean };
 };
 
-export type WorldTab = "details" | "wipes" | "backups" | "releases";
+/** A world's console and metrics are its own: several worlds of a game can run at once (ADR-0062). */
+export type WorldTab = "details" | "wipes" | "backups" | "releases" | "whitelist" | "console" | "metrics";
 
 export type Role = { id: string; name: string; description: string; permissions: string[]; system?: boolean };
 export type LinkKind = "telegram" | "email" | "discord" | "minecraft" | "factorio" | "steam" | "zerotier";

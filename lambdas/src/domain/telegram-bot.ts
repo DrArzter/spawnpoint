@@ -139,6 +139,11 @@ export type LaunchMode = "disabled" | "enabled";
 
 export function buildLifecycleStartInput(args: Readonly<{
   serverId: string;
+  // The world's game and display name (ADR-0062). The server id is the
+  // lifecycle record's key, which for a fleet world is the world's own; the
+  // machine defaults the game to the server id when a caller sends neither.
+  gameId?: string;
+  worldName?: string;
   operationId: string;
   sessionId: string;
   instanceId: string;
@@ -155,6 +160,8 @@ export function buildLifecycleStartInput(args: Readonly<{
 }>) {
   return {
     serverId: args.serverId,
+    ...(args.gameId === undefined ? {} : { gameId: args.gameId }),
+    ...(args.worldName === undefined ? {} : { worldName: args.worldName }),
     operationId: args.operationId,
     sessionId: args.sessionId,
     leaseTtlSeconds: 1800,

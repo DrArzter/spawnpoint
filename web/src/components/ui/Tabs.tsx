@@ -1,6 +1,7 @@
-import type { KeyboardEvent } from "react";
+import { useRef, type KeyboardEvent } from "react";
 
 import { Icon, IconName } from "../../icons";
+import { useRevealSelectedTab } from "../../lib/revealTab";
 
 export type TabOption<T extends string> = { id: T; label: string; icon?: IconName; count?: number };
 
@@ -10,6 +11,9 @@ export function Tabs<T extends string>({ label, options, value, onChange }: {
   value: T;
   onChange: (value: T) => void;
 }) {
+  const strip = useRef<HTMLDivElement>(null);
+  useRevealSelectedTab(strip, value);
+
   function move(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
     event.preventDefault();
@@ -22,7 +26,7 @@ export function Tabs<T extends string>({ label, options, value, onChange }: {
   // behaviour, where the half-visible next tab is the affordance. The marker
   // tells the audit this scroller is deliberate.
   return (
-    <div aria-label={label} className="tabs" data-scroll="expected" role="tablist">
+    <div aria-label={label} className="tabs" data-scroll="expected" ref={strip} role="tablist">
       {options.map((option, index) => (
         <button
           aria-selected={value === option.id}

@@ -139,9 +139,28 @@ export type BackupsModel = Readonly<{
   inventory: Loading<Readonly<{ entries: readonly BackupEntry[]; unverified: number; truncated: boolean }>>;
   wipeNumber: (generationId: string | null) => number | undefined;
   restore: (entry: BackupEntry) => Action;
+  /** The archive itself (ADR-0065); null when the role or the deployment offers no download. */
+  download: ((entry: BackupEntry) => Action) | null;
 }>;
 
 export type ReleaseRow = Readonly<{ name: string; status: string; downloadable: boolean; sourceHref: string | null; download: Action | null }>;
+
+/** One player on a world's whitelist, and the way off it (ADR-0066). */
+export type WhitelistRow = Readonly<{ name: string; remove: Action }>;
+export type WhitelistModel = Readonly<{
+  world: World;
+  /** The names the world's record keeps; managed is false while it keeps none. */
+  list: Loading<Readonly<{ managed: boolean; rows: readonly WhitelistRow[]; updatedAt: string | null; updatedBy: string | null }>>;
+  draft: string;
+  setDraft: (value: string) => void;
+  /** Why the draft cannot be added; null while it is empty or can be. */
+  draftError: string | null;
+  add: Action;
+}>;
+
+/** One server mod of the release a world starts with, and its download (ADR-0065). */
+export type ModRow = Readonly<{ file: string; bytes: number; sha256: string; download: Action }>;
+export type ModsModel = Readonly<{ release: string; files: Loading<readonly ModRow[]> }>;
 
 export type WorldModel = Readonly<{
   game: Game;
@@ -163,27 +182,55 @@ export type WorldModel = Readonly<{
   operations: readonly Readonly<{ operation: Operation; label: string }>[];
   wipes: readonly Readonly<{ wipe: Wipe; showBackups: Action }>[];
   backups: BackupsModel;
-  releases: Readonly<{ rows: readonly ReleaseRow[]; state: World["release"]["state"] }>;
+  releases: Readonly<{
+    rows: readonly ReleaseRow[];
+    state: World["release"]["state"];
+    /** The server mods of the release the world starts with; null when none can be read. */
+    mods: ModsModel | null;
+  }>;
+  /** The players who may join; null when the role, the game or the world keeps no whitelist here. */
+  whitelist: WhitelistModel | null;
+  /** This world's console and its host's metrics; null when the role or the deployment offers neither tab. */
+  console: ConsoleModel | null;
+  metrics: MetricsModel | null;
 }>;
 
 // --- other console pages -----------------------------------------------------
 
+/** The host one world runs on, measured (ADR-0062): never another world's. */
 export type MetricsModel = Readonly<{
-  source: "cloudwatch" | "session";
-  setSource: (source: "cloudwatch" | "session") => void;
-  online: boolean;
-  instanceId: string | undefined;
   range: MetricRange;
   ranges: readonly Readonly<{ id: MetricRange; label: string }>[];
   setRange: (range: MetricRange) => void;
-  metrics: Loading<HostMetrics>;
+  /** Ready with null when the world runs on no host, as a stopped fleet world does. */
+  metrics: Loading<HostMetrics | null>;
+}>;
+
+/** One command in the console's log and what the game answered (ADR-0063). */
+export type ConsoleLine = Readonly<{
+  id: string;
+  at: string;
+  who: string;
+  command: string;
+  status: StatusDescriptor;
+  output: string | null;
+  pending: boolean;
 }>;
 
 export type ConsoleModel = Readonly<{
   game: Game | undefined;
+  /** The world the console speaks to, and its session's state. */
+  world: World | null;
   session: StatusDescriptor;
   online: boolean;
-  quickCommands: readonly string[];
+  /** Newest last, as a terminal prints; null while no world runs. */
+  log: Loading<readonly ConsoleLine[]> | null;
+  draft: string;
+  setDraft: (value: string) => void;
+  run: Action;
+  quickCommands: readonly Action[];
+  /** Why the console cannot be used right now, when it cannot. */
+  unavailable: string | null;
 }>;
 
 export type PresetRow = Readonly<{ preset: Preset; status: StatusDescriptor; createWorld: Action | null }>;
@@ -356,6 +403,25 @@ export type WorldSettingsModel = Readonly<{
   cancel: Action;
 }>;
 
+/** One game setting in the sheet (ADR-0064), drawn by its kind. */
+export type GameSettingField = Readonly<{ id: string; label: string; hint?: string } & (
+  | { kind: "choice"; value: string; options: readonly Readonly<{ value: string; label: string }>[]; set: (value: string) => void }
+  | { kind: "number"; value: string; min: number; max: number; set: (value: string) => void; error: string | null }
+  | { kind: "text"; value: string; maxLength: number; set: (value: string) => void; error: string | null }
+  | { kind: "toggle"; checked: boolean; toggle: Action }
+)>;
+
+export type GameSettingsModel = Readonly<{
+  game: Game;
+  world: World;
+  /** The world runs, so what is saved reaches it at its next start. */
+  running: boolean;
+  fields: readonly GameSettingField[];
+  save: Action;
+  restoreDefaults: Action;
+  cancel: Action;
+}>;
+
 export type InvitationModel = Readonly<{
   game: Game;
   world: World;
@@ -377,6 +443,7 @@ export type DialogsModel = Readonly<{
   confirmation: ConfirmationModel | null;
   createWorld: CreateWorldModel | null;
   worldSettings: WorldSettingsModel | null;
+  gameSettings: GameSettingsModel | null;
   invitation: InvitationModel | null;
 }>;
 
@@ -385,8 +452,6 @@ export type DialogsModel = Readonly<{
 export type PageModel =
   | Readonly<{ page: "worlds"; worlds: WorldsModel }>
   | Readonly<{ page: "world"; world: WorldModel }>
-  | Readonly<{ page: "metrics"; metrics: MetricsModel }>
-  | Readonly<{ page: "console"; console: ConsoleModel }>
   | Readonly<{ page: "releases"; releases: ReleasesModel }>
   | Readonly<{ page: "access"; access: AccessModel }>
   | Readonly<{ page: "profile"; profile: ProfileModel }>;

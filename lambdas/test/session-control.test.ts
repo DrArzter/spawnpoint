@@ -3,12 +3,12 @@ import test from "node:test";
 
 import type { HostObservation, OperationObservation } from "../src/control-plane/read-model.ts";
 import { catalogWithPresets } from "../src/control-plane/catalog.ts";
-import { packRelease, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, worldLifecycleNeedsStop } from "../src/control-plane/session-control.ts";
-import type { LifecycleRecord } from "../src/domain/lifecycle.ts";
+import { packRelease, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession } from "../src/control-plane/session-control.ts";
+import { acquireLease, beginSession, initialLifecycleRecord, type LifecycleRecord } from "../src/domain/lifecycle.ts";
 import { newWorldRecord } from "../src/control-plane/world-registry.ts";
 
 const host = (state: HostObservation["state"]): HostObservation => ({ id: "host", name: "Host", state, providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: null });
-const operation: OperationObservation = { id: "op", type: "start", status: "running", startedAt: "2026-08-29T00:00:00Z", providerRef: "arn:op" };
+const operation: OperationObservation = { id: "op", type: "start", status: "running", startedAt: "2026-08-29T00:00:00Z", providerRef: "arn:op", worldId: null };
 
 test("any world in the catalog can execute, because the machines take a world id", () => {
   const factorioPreset = {
@@ -111,8 +111,12 @@ test("a player is handed the pack for the release the world is running", () => {
   assert.deepEqual(packRelease(null), { kind: "none", reason: "no_release_pointer" });
 });
 
-test("only an active world can require a verified stop before a lifecycle mutation", () => {
-  assert.equal(worldLifecycleNeedsStop("active", "running"), true);
-  assert.equal(worldLifecycleNeedsStop("active", "stopped"), false);
-  assert.equal(worldLifecycleNeedsStop("archived", "running"), false, "another running world must not be stopped");
+test("a configured stop in the name of a world the host is not running is refused", () => {
+  // The caller located this world's session and found none: the running host
+  // runs another world, whose session a stop here would end.
+  assert.deepEqual(planSessionOperation("minecraft", "vanilla", "stop", [host("running")], [], undefined, null), { kind: "reject", reason: "world_not_active" });
+  const lease = acquireLease(initialLifecycleRecord("minecraft", 1), "start", 1, 60);
+  const record = beginSession(lease.record, lease.ownership, "s1", "vanilla", 2);
+  assert.equal(planSessionOperation("minecraft", "vanilla", "stop", [host("running")], [], undefined, record).kind, "execute");
+  assert.equal(planSessionOperation("minecraft", "vanilla", "stop", [host("running")], []).kind, "execute", "a caller that did not locate keeps the old answer");
 });

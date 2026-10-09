@@ -60,12 +60,16 @@ function operation(value: unknown): OperationObservation | null {
   const item = object(value);
   if (item === null || typeof item.id !== "string" || typeof item.type !== "string" || !OPERATION_TYPES.has(item.type) ||
       item.status !== "running" || typeof item.startedAt !== "string" || typeof item.providerRef !== "string") return null;
+  // A projection written before operations named their world names none.
+  const worldId = item.worldId === undefined ? null : nullableString(item.worldId);
+  if (worldId === undefined) return null;
   return {
     id: item.id,
     type: item.type as OperationObservation["type"],
     status: "running",
     startedAt: item.startedAt,
     providerRef: item.providerRef,
+    worldId,
   };
 }
 

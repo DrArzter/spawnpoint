@@ -48,7 +48,7 @@ test("only one expired stranded session on an observed stopped host can recover"
   });
   assert.equal(recoveryTarget([host], [], [stranded], 99), null);
   assert.equal(recoveryTarget([host], [], [stranded, { ...stranded, serverId: "minecraft" }], 101), null);
-  assert.equal(recoveryTarget([host], [{ id: "active", type: "start", status: "running", startedAt: "2026-09-15T00:00:00.000Z", providerRef: "arn:execution" }], [stranded], 101), null);
+  assert.equal(recoveryTarget([host], [{ id: "active", type: "start", status: "running", startedAt: "2026-09-15T00:00:00.000Z", providerRef: "arn:execution", worldId: null }], [stranded], 101), null);
   assert.equal(recoveryTarget([host], [], [{ ...stranded, observedState: "stopped", activeSessionId: null, activeWorldId: null }], 101), null);
 });
 

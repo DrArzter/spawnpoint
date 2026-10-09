@@ -1,6 +1,8 @@
 import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
-import type { HostMetrics, MetricRange } from "../api/contract";
-import type { ControlPlaneSnapshot, Preset, World } from "../model";
+import type { ConsoleEntry, FileLink, HostMetrics, MetricRange, ReleaseMods, SavedWhitelist, WorldWhitelist } from "../api/contract";
+import { settingValueValid } from "../core/settings";
+import { whitelistNameError } from "../core/whitelist";
+import type { ControlPlaneSnapshot, Preset, SettingValue, World, WorldGameSettings } from "../model";
 import { DemoState, initialState, Mutable } from "./data";
 
 // One in-memory control plane for the whole demo. Transitions are scheduled in
@@ -269,7 +271,7 @@ export function backups(gameId: string, worldId: string): BackupInventory {
 
 // A plausible evening: quiet, a session that starts, load while people play,
 // then nothing — the gap is the point, because a stopped host reports nothing.
-export function hostMetrics(instanceId: string, range: MetricRange): HostMetrics {
+function hostMetrics(instanceId: string, range: MetricRange): HostMetrics {
   settle();
   const hours = range === "6h" ? 6 : range === "24h" ? 24 : 168;
   const period = hours <= 6 ? 300 : hours <= 48 ? 900 : 3600;
@@ -302,21 +304,115 @@ export function hostMetrics(instanceId: string, range: MetricRange): HostMetrics
   };
 }
 
+// The demo runs every world on its one configured host. Like the API, it shows
+// that host only for the world that holds the session: another world's load is
+// not this one's.
+export function worldMetrics(gameId: string, worldId: string, range: MetricRange): HostMetrics | null {
+  settle();
+  const lifecycle = state.snapshot.games.find((game) => game.id === gameId)?.lifecycle;
+  const holds = lifecycle?.activeWorldId === worldId && lifecycle.observedState !== "stopped";
+  return holds ? hostMetrics(state.snapshot.hosts[0]?.id ?? "host-game", range) : null;
+}
+
+// The real console signs a short-lived S3 link; the demo runs in memory, so a
+// small text file stands in for whatever would download.
+function demoFile(title: string, facts: readonly string[], standsFor: string): string {
+  const body = [title, ``, ...facts, ``, `The real console signs a short-lived S3 link here. The demo runs in memory,`, `so this file stands in for ${standsFor}.`].join("\n");
+  return URL.createObjectURL(new Blob([body], { type: "text/plain" }));
+}
+
 export function packLink(gameId: string, worldId: string): { release: string; url: string } {
   settle();
   const target = world(gameId, worldId);
   const release = target.release.activeRelease;
   if (!release) throw new Error("This world has no release yet, so there is no pack to install.");
-  const body = [
-    `Spawnpoint demo client pack`,
-    ``,
-    `World:   ${target.displayName} (${target.id})`,
-    `Release: ${release}`,
-    ``,
-    `The real console signs a short-lived S3 link here. The demo runs in memory,`,
-    `so this file stands in for the mod pack archive.`,
-  ].join("\n");
-  return { release, url: URL.createObjectURL(new Blob([body], { type: "text/plain" })) };
+  return { release, url: demoFile("Spawnpoint demo client pack", [`World:   ${target.displayName} (${target.id})`, `Release: ${release}`], "the mod pack archive") };
+}
+
+// A release's server mods as its manifest lists them (ADR-0065). The demo has
+// no store, so every release holds a fixed set and each later one adds a mod.
+const DEMO_MODS: readonly (readonly [string, number])[] = [
+  ["create-1.20.1-0.5.1.j.jar", 14_221_830],
+  ["jei-1.20.1-forge-15.20.0.106.jar", 1_402_115],
+  ["Mekanism-1.20.1-10.4.15.75.jar", 11_096_402],
+  ["appliedenergistics2-forge-15.3.3.jar", 6_823_771],
+  ["ftb-quests-forge-2001.4.9.jar", 1_218_903],
+  ["sophisticatedbackpacks-1.20.1-3.21.2.1199.jar", 2_317_664],
+  ["Jade-1.20.1-Forge-11.12.3.jar", 734_020],
+  ["thermal_expansion-1.20.1-11.0.1.29.jar", 1_985_337],
+];
+
+// A stable stand-in for a SHA-256: 64 hex digits derived from the name.
+function demoDigest(text: string): string {
+  let hash = 2166136261;
+  let hex = "";
+  let round = 0;
+  while (hex.length < 64) {
+    for (const char of `${text}#${round}`) hash = Math.imul(hash ^ (char.codePointAt(0) ?? 0), 16777619) >>> 0;
+    hex += hash.toString(16).padStart(8, "0");
+    round += 1;
+  }
+  return hex.slice(0, 64);
+}
+
+export function releaseMods(gameId: string, presetId: string, release: string): ReleaseMods {
+  settle();
+  const preset = state.snapshot.games.find((game) => game.id === gameId)?.presets.find((candidate) => candidate.id === presetId);
+  if (!preset?.releases.includes(release)) throw new Error(`Release ${release} is not in the store.`);
+  const files = DEMO_MODS.slice(0, 5 + preset.releases.indexOf(release));
+  return { release, mods: files.map(([file, bytes]) => ({ file, bytes, sha256: demoDigest(file) })) };
+}
+
+export function modLink(gameId: string, presetId: string, release: string, sha256: string): FileLink {
+  const mod = releaseMods(gameId, presetId, release).mods.find((candidate) => candidate.sha256 === sha256);
+  if (!mod) throw new Error("This release no longer lists that mod.");
+  return { url: demoFile("Spawnpoint demo mod", [`File:    ${mod.file}`, `Release: ${presetId} ${release}`], "the mod's jar"), expiresIn: 900 };
+}
+
+export function backupLink(gameId: string, worldId: string, key: string): FileLink {
+  settle();
+  const entry = (state.backups[worldKey(gameId, worldId)] ?? []).find((candidate) => candidate.key === key);
+  if (!entry) throw new Error("This backup is no longer in the store. Refresh the list.");
+  return { url: demoFile("Spawnpoint demo world backup", [`World:   ${world(gameId, worldId).displayName}`, `Archive: ${entry.archiveName}`], "the world archive"), expiresIn: 300 };
+}
+
+// A world's whitelist (ADR-0066): kept on its record; a running world reloads it.
+export function whitelist(gameId: string, worldId: string): WorldWhitelist {
+  settle();
+  if (!world(gameId, worldId).worldLifecycleAvailable) throw new Error("This world has no record to keep a whitelist in.");
+  const kept = state.whitelists[worldKey(gameId, worldId)];
+  return kept ? { managed: true, names: [...kept.names], updatedAt: kept.updatedAt, updatedBy: kept.updatedBy } : { managed: false, names: [], updatedAt: null, updatedBy: null };
+}
+
+export function updateWhitelist(gameId: string, worldId: string, names: readonly string[]): SavedWhitelist {
+  settle();
+  const game = state.snapshot.games.find((item) => item.id === gameId);
+  if (!world(gameId, worldId).worldLifecycleAvailable) throw new Error("This world has no record to keep a whitelist in.");
+  names.forEach((name, index) => {
+    const error = whitelistNameError(name, names.slice(0, index));
+    if (error) throw new Error(`${name}: ${error}`);
+  });
+  const kept = { names: [...names], updatedAt: iso(), updatedBy: "DrArzter" };
+  state.whitelists[worldKey(gameId, worldId)] = kept;
+  const running = game?.lifecycle?.activeWorldId === worldId && game.lifecycle.observedState === "ready";
+  return { managed: true, ...kept, applied: running ? "reloading" : "next_start" };
+}
+
+// A world's game settings (ADR-0064): kept on its record, checked against its
+// game's definitions, taken by a running world at its next start.
+export function updateGameSettings(gameId: string, worldId: string, values: Readonly<Record<string, SettingValue>>): WorldGameSettings {
+  settle();
+  const definitions = state.snapshot.games.find((game) => game.id === gameId)?.settings ?? [];
+  const target = world(gameId, worldId);
+  if (!target.gameSettings) throw new Error("This world has no record to keep settings in.");
+  for (const [id, value] of Object.entries(values)) {
+    const setting = definitions.find((candidate) => candidate.id === id);
+    if (!setting || !settingValueValid(setting, value)) throw new Error(`${setting?.label ?? id} has a value the game does not accept.`);
+  }
+  const saved = { values: { ...values }, updatedAt: iso() };
+  target.gameSettings = saved;
+  state.snapshot.observedAt = iso();
+  return saved;
 }
 
 export function candidates(): AccessCandidate[] {
@@ -427,4 +523,52 @@ export function sendInvitation(gameId: string, worldId: string, audience: "broad
       ? { ...item, status, successCount: delivered, failureCount: targets - delivered }
       : item);
   }, DELIVERY_MS);
+}
+
+// --- console (ADR-0063) ----------------------------------------------------------
+// The demo answers the way a Minecraft server would, a moment later, so the
+// console shows a command waiting and then settling as it does live.
+
+const CONSOLE_REPLY_MS = 900;
+
+function demoReply(command: string): string {
+  const [verb = "", ...rest] = command.replace(/^\/+/, "").split(/\s+/);
+  switch (verb.toLowerCase()) {
+    case "list": return "There are 3 of a max of 20 players online: Alex, Mira, Kira";
+    case "say": return `[Server] ${rest.join(" ")}`;
+    case "save-all": return "Saving the game (this may take a moment!)\nSaved the game";
+    case "time": return rest[0] === "set" ? "Set the time to 1000" : "The time is 6000";
+    case "weather": return "Set the weather to clear";
+    case "help": return "/list, /say <message>, /save-all, /time set <value>, /weather <type>, /whitelist ...";
+    default: return `Unknown or incomplete command, see below for error\n${command}<--[HERE]`;
+  }
+}
+
+export function consoleHistory(gameId: string, worldId: string): ConsoleEntry[] {
+  settle();
+  return state.console[worldKey(gameId, worldId)] ?? [];
+}
+
+export function runConsoleCommand(gameId: string, worldId: string, command: string): ConsoleEntry {
+  settle();
+  const game = state.snapshot.games.find((item) => item.id === gameId);
+  const world = game?.worlds.find((item) => item.id === worldId);
+  if (!game || !world) throw new Error("Spawnpoint does not know this world. Refresh and try again.");
+  const trimmed = command.trim();
+  if (trimmed.length === 0 || trimmed.length > 256) throw new Error("A command is one line of at most 256 characters.");
+  if (["stop", "save-off"].includes((trimmed.replace(/^\/+/, "").split(/\s+/)[0] ?? "").toLowerCase())) {
+    throw new Error("Stopping the game here would skip the verified backup. Use Stop on the world page.");
+  }
+  if (game.lifecycle?.activeWorldId !== worldId || game.lifecycle.observedState !== "ready") throw new Error("This world is not running. Start it first.");
+  state.counter += 1;
+  const key = worldKey(gameId, worldId);
+  const entry: ConsoleEntry = { id: `console-${state.counter + 100}`, at: iso(), identityId: "identity-owner", displayName: "DrArzter", worldId, command: trimmed, status: "pending", output: null };
+  state.console[key] = [entry, ...(state.console[key] ?? [])].slice(0, 30);
+  window.setTimeout(() => {
+    const list = state.console[key];
+    const index = list?.findIndex((item) => item.id === entry.id) ?? -1;
+    if (!list || index < 0) return;
+    list[index] = { ...entry, status: "succeeded", output: demoReply(trimmed) };
+  }, CONSOLE_REPLY_MS);
+  return entry;
 }

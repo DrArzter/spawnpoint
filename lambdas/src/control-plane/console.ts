@@ -81,8 +81,26 @@ export type ConsoleEntry = Readonly<{
   at: string;
   identityId: string;
   displayName: string;
+  /** The MCP client that sent the command for the person, by its registered name; null from the panel. */
+  agent: string | null;
   worldId: string;
   command: string;
   status: ConsoleStatus;
   output: string | null;
 }>;
+
+/** A console record from the access table, as the API answers it. */
+export function consoleEntryFromItem(item: Readonly<Record<string, unknown>>): ConsoleEntry {
+  const text = (key: string) => (typeof item[key] === "string" ? item[key] as string : "");
+  return {
+    id: text("command_id"),
+    at: text("created_at"),
+    identityId: text("identity_id"),
+    displayName: text("display_name"),
+    agent: typeof item.agent_name === "string" ? item.agent_name : null,
+    worldId: text("world_id"),
+    command: text("command"),
+    status: (text("status") || "pending") as ConsoleStatus,
+    output: typeof item.output === "string" ? item.output : null,
+  };
+}

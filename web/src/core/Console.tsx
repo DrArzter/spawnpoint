@@ -195,8 +195,11 @@ const consoleStatuses: Readonly<Record<ConsoleEntry["status"], StatusDescriptor>
   timed_out: { kind: "error", label: "Timed out" },
 };
 
-function consoleLine(entry: ConsoleEntry): ConsoleLine {
-  return { id: entry.id, at: entry.at, who: entry.displayName, command: entry.command, status: consoleStatuses[entry.status], output: entry.output, pending: entry.status === "pending" };
+// A command an agent sent names the person and the agent, so the log shows
+// which commands nobody typed in the panel.
+export function consoleLine(entry: ConsoleEntry): ConsoleLine {
+  const who = entry.agent ? `${entry.displayName} via ${entry.agent}` : entry.displayName;
+  return { id: entry.id, at: entry.at, who, command: entry.command, status: consoleStatuses[entry.status], output: entry.output, pending: entry.status === "pending" };
 }
 
 // The log, newest last as a terminal prints it; none while the world runs nowhere.

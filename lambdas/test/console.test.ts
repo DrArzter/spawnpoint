@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CONSOLE_OUTPUT_LIMIT, checkConsoleCommand, consoleResult, encodeConsoleCommand } from "../src/control-plane/console.ts";
+import { CONSOLE_OUTPUT_LIMIT, checkConsoleCommand, consoleEntryFromItem, consoleResult, encodeConsoleCommand } from "../src/control-plane/console.ts";
 
 // The console gateway (ADR-0063): what an operator may type, and what the
 // host's answer means.
@@ -45,4 +45,16 @@ test("an invocation reads as the console's own status", () => {
   assert.deepEqual(consoleResult(invocation("TimedOut", null)), { status: "timed_out", output: null });
   const long = consoleResult(invocation("Success", 0, "x".repeat(CONSOLE_OUTPUT_LIMIT + 50)));
   assert.equal(long.output?.length, CONSOLE_OUTPUT_LIMIT + 2, "a long reply is clipped and says so");
+});
+
+test("a recorded command names the agent it came through, and none from the panel", () => {
+  const item = {
+    command_id: "c1", created_at: "2026-10-09T18:40:03.000Z", identity_id: "identity-owner", display_name: "DrArzter",
+    world_id: "minecraft-rostik-12345678", command: "list", status: "succeeded", output: "There are 0 players online",
+  };
+  assert.equal(consoleEntryFromItem(item).agent, null);
+  const fromAgent = consoleEntryFromItem({ ...item, agent_client_id: "client-123456", agent_name: "Claude" });
+  assert.equal(fromAgent.agent, "Claude");
+  assert.equal(fromAgent.displayName, "DrArzter");
+  assert.equal(consoleEntryFromItem({ ...item, status: undefined }).status, "pending");
 });

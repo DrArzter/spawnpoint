@@ -87,6 +87,18 @@ validate_world_catalog() {
   done < <(jq -c '.worlds[]' "${WORLD_CATALOG}")
 }
 
+# Which archive a world's copy on this host is (ADR-0048): written when the
+# copy is prepared and after each verified upload. A null key is a wipe that
+# began empty. prepare-world.sh compares it with the wipe's newest archive.
+record_world_archive() {
+  local directory="$1" key="$2" checksum="$3"
+  jq -n --arg key "${key}" --arg checksum "${checksum}" \
+    '{schema_version: 1, key: (if $key == "" then null else $key end), checksum: (if $checksum == "" then null else $checksum end)}' \
+    >"${directory}/.spawnpoint-archive.json.next"
+  chmod 0644 "${directory}/.spawnpoint-archive.json.next"
+  mv -f -- "${directory}/.spawnpoint-archive.json.next" "${directory}/.spawnpoint-archive.json"
+}
+
 load_world() {
   local requested_world_id="$1"
   [[ "${requested_world_id}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || {

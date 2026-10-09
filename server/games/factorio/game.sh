@@ -51,6 +51,13 @@ factorio_mods_dir() {
   return 0
 }
 
+# Where the release's mods are reconciled and the container reads them
+# (/factorio/mods). Read when called, not when the module loads.
+factorio_mods_dir() {
+  printf '%s' "${SPAWNPOINT_WORLD_MODS_DIRECTORY:-${FACTORIO_DATA_DIR}/mods}"
+  return 0
+}
+
 # The preset release, not Spawnpoint, selects the immutable container image
 # that opens this save. Version metadata still has to agree with itself; the
 # digest-addressed image is carried independently as runtime.image.

@@ -52,9 +52,9 @@ configure_game_compose
 if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
   export RELEASE_BUCKET="${RELEASE_BUCKET:-$(read_env_value RELEASE_BUCKET)}"
   "${SCRIPT_DIR}/reconcile-purged-worlds.sh" "${WORLD_ID}" >&2
-  if [[ -n "${WORLD_RESTORE_BACKUP_KEY:-}" ]]; then
-    export BACKUP_BUCKET="${BACKUP_BUCKET:-$(read_env_value BACKUP_BUCKET)}"
-  fi
+  # Every start consults the world's archives, not only a restore's: the newest
+  # one is the world wherever it last ran (ADR-0048).
+  export BACKUP_BUCKET="${BACKUP_BUCKET:-$(read_env_value BACKUP_BUCKET 2>/dev/null || true)}"
   "${SCRIPT_DIR}/prepare-world.sh" "${WORLD_ID}" >&2
 fi
 

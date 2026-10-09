@@ -55,6 +55,16 @@ run "plan_role_is_owner_reviewed_and_separate_from_deploy" {
   command = plan
 
   assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_plan_iam.statement :
+      statement.sid == "ReadOnlySpawnpointSsmDocuments" &&
+      alltrue([for action in statement.actions : startswith(action, "ssm:Describe") || startswith(action, "ssm:Get") || startswith(action, "ssm:List")]) &&
+      toset(statement.resources) == toset(["arn:aws:ssm:eu-central-1:123456789012:document/spawnpoint-*"])
+    ])
+    error_message = "The plan identity reads Spawnpoint's SSM documents and changes nothing."
+  }
+
+  assert {
     condition     = local.plan_subject == "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production-plan"
     error_message = "Pull request plans must use the immutable Spawnpoint repository identity and the production-plan environment."
   }
@@ -210,6 +220,17 @@ run "deployment_role_trusts_only_the_production_environment" {
       contains(statement.actions, "cloudfront:CreateResponseHeadersPolicy") && contains(statement.actions, "cloudfront:UpdateResponseHeadersPolicy")
     ])
     error_message = "The deploy identity must manage the panel's popup-compatible response headers policy."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      statement.sid == "ManageOnlySpawnpointSsmDocuments" &&
+      contains(statement.actions, "ssm:CreateDocument") && contains(statement.actions, "ssm:UpdateDocument") &&
+      !contains(statement.actions, "ssm:DeleteDocument") && !contains(statement.actions, "ssm:SendCommand") &&
+      toset(statement.resources) == toset(["arn:aws:ssm:eu-central-1:123456789012:document/spawnpoint-*"])
+    ])
+    error_message = "The deploy identity may create and update only Spawnpoint's own SSM documents, and may neither delete nor run them."
   }
 
   assert {

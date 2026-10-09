@@ -5,6 +5,7 @@ import { Tooltip } from "../../components/ui/Tooltip";
 import type { Action } from "../../core/actions";
 import { Icon, type IconName } from "../../icons";
 import { cx } from "../../lib/cx";
+import { useRevealSelectedTab } from "../../lib/revealTab";
 
 /*
  * The terminal's own vocabulary. Every control here is drawn from scratch in
@@ -209,12 +210,15 @@ export function Toggle({ action, checked, note, labelHidden = false, className }
 
 // --- fields -------------------------------------------------------------------
 
-export function Field({ label, hint, hideLabel = false, children, className }: Readonly<{ label: string; hint?: ReactNode; hideLabel?: boolean; children: ReactNode; className?: string }>) {
+// An error is why the value cannot be saved; the input it belongs to carries
+// aria-invalid. It stays under the hint, which often names what may be typed.
+export function Field({ label, hint, error = null, hideLabel = false, children, className }: Readonly<{ label: string; hint?: ReactNode; error?: string | null; hideLabel?: boolean; children: ReactNode; className?: string }>) {
   return (
     <label className={cx("t-field", className)}>
       <span className={cx("t-field-label", hideLabel && "visually-hidden")}>{label}</span>
       {children}
       {hint && <small className="t-field-hint">{hint}</small>}
+      {error && <small className="t-field-error">{error}</small>}
     </label>
   );
 }
@@ -323,6 +327,9 @@ export function Person({ name, detail, photoUrl, className }: Readonly<{ name: s
 export type TabOption<T extends string> = Readonly<{ id: T; label: string; count?: number }>;
 
 export function Tabs<T extends string>({ label, options, value, onChange, className }: Readonly<{ label: string; options: readonly TabOption<T>[]; value: T; onChange: (id: T) => void; className?: string }>) {
+  const strip = useRef<HTMLDivElement>(null);
+  useRevealSelectedTab(strip, value);
+
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
     const index = options.findIndex((option) => option.id === value);
@@ -334,7 +341,7 @@ export function Tabs<T extends string>({ label, options, value, onChange, classN
     }
   }
   return (
-    <div aria-label={label} className={cx("t-tabs", className)} data-scroll="expected" onKeyDown={onKeyDown} role="tablist" tabIndex={-1}>
+    <div aria-label={label} className={cx("t-tabs", className)} data-scroll="expected" onKeyDown={onKeyDown} ref={strip} role="tablist" tabIndex={-1}>
       {options.map((option) => (
         <button aria-selected={option.id === value} className="t-tab" key={option.id} onClick={() => onChange(option.id)} role="tab" tabIndex={option.id === value ? 0 : -1} type="button">
           {option.label}

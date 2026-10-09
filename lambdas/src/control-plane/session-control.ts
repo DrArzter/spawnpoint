@@ -17,9 +17,6 @@ export function stoppedHostRecoverySession(
   return lifecycle.activeSessionId;
 }
 
-export function worldLifecycleNeedsStop(worldStatus: "active" | "archived", hostState: HostObservation["state"]): boolean {
-  return worldStatus === "active" && hostState === "running";
-}
 export type SessionPlan =
   | Readonly<{ kind: "execute"; host: HostObservation; world: CatalogWorld }>
   | Readonly<{ kind: "noop"; reason: "already_stopped" }>
@@ -31,7 +28,8 @@ export type SessionPlan =
         | "operation_in_progress"
         | "host_not_unique"
         | "host_transitioning"
-        | "host_already_running";
+        | "host_already_running"
+        | "world_not_active";
     }>;
 
 export type FleetSessionPlan =
@@ -40,7 +38,9 @@ export type FleetSessionPlan =
   | Readonly<{ kind: "reject"; reason: "unknown_world" | "unsupported_world" | "operation_in_progress" | "session_transitioning" | "world_not_active" | "active_session_unavailable" }>;
 
 /** Fleet placement happens inside the start workflow, so zero or many EC2 hosts
- * are normal here. The lifecycle, not an arbitrary host, owns the stop. */
+ * are normal here. The lifecycle, not an arbitrary host, owns the stop. The
+ * record is this world's (see locateWorldSession) and the operations are the
+ * ones that block it, so another world of the same game never refuses it. */
 export function planFleetSessionOperation(
   gameId: string,
   worldId: string,
@@ -72,6 +72,8 @@ export function planSessionOperation(
   hosts: readonly HostObservation[],
   operations: readonly OperationObservation[],
   catalog: readonly CatalogGame[] = gameCatalog,
+  /** This world's session, when the caller has located it; undefined when unknown. */
+  session?: LifecycleRecord | null,
 ): SessionPlan {
   const world = catalog.find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
   if (!world) return { kind: "reject", reason: "unknown_world" };
@@ -83,11 +85,13 @@ export function planSessionOperation(
   if (host.state === "pending" || host.state === "stopping" || host.state === "unknown") {
     return { kind: "reject", reason: "host_transitioning" };
   }
-  // A start now names its world, so the machines can run any of them — but the
-  // host state alone does not say which world is up, and a second game beside a
-  // running one is memory nobody has measured (ADR-0023 keeps one world active
-  // at a time until that changes). Refuse rather than quietly co-tenant.
+  // The configured host runs one session at a time: its worlds share the
+  // game's record, and a second game beside a running one is memory nobody has
+  // measured. Fleet worlds are how two run at once (ADR-0062).
   if (action === "start" && host.state === "running") return { kind: "reject", reason: "host_already_running" };
+  // A running host may be running another world; stopping it in this world's
+  // name would stop the wrong session.
+  if (action === "stop" && session === null) return { kind: "reject", reason: "world_not_active" };
   return { kind: "execute", host, world };
 }
 

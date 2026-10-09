@@ -151,14 +151,14 @@ function Invitations({ model }: Readonly<{ model: InvitationsModel }>) {
   const list = model.list;
   return (
     <Panel name="Invite to Spawnpoint">
-      <form className="t-invite-form" onSubmit={(event) => { event.preventDefault(); model.create.run(); }}>
+      <form className="t-entry-form" onSubmit={(event) => { event.preventDefault(); model.create.run(); }}>
         {model.emailMode && (
           <Field label="Invite email">
             <TextInput autoComplete="email" onChange={(event) => model.setEmail(event.target.value)} placeholder="person@example.com" required type="email" value={model.email} />
           </Field>
         )}
         {model.emailMode === false && <p className="t-copy-line">This deployment has no email delivery. Share the one-time link yourself; the recipient signs in with an enabled provider.</p>}
-        <Verb action={model.create} className="t-invite-verb" tone="primary" type="submit" />
+        <Verb action={model.create} className="t-entry-verb" tone="primary" type="submit" />
       </form>
       {model.issued && <div className="t-invite-link">
         <p>{model.issued.email ? `This one-time link is for ${model.issued.email}. The recipient must verify that address.` : "This one-time link is not email-bound."} Copy it now; it will not be shown again.</p>

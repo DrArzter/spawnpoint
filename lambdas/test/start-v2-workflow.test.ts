@@ -190,7 +190,32 @@ test("placement bookkeeping records the host and slot zero, and never fails a st
   assert.equal(reserve.action, "reserveOnHost");
   assert.equal(reserve["sessionId.$"], "$.request.sessionId");
   assert.equal(reserve["worldId.$"], "$.request.worldId");
-  assert.equal(reserve["serverId.$"], "$.request.serverId");
+  assert.equal(reserve["gameId.$"], "$.request.gameId", "placement asks by game, never by the lifecycle key (ADR-0062)");
+  assert.equal(reserve["serverId.$"], undefined);
+});
+
+test("a start fills what its caller left out: the game from the server id, no world name, the configured host", async () => {
+  const definition = await loadDefinition();
+  const initialize = state(definition, "Initialize");
+  assert.equal(initialize.Next, "Apply Request Defaults");
+  assert.deepEqual(initialize.Parameters?.defaults, {
+    "gameId.$": "$.serverId", worldName: "", placement: "single", launch: "disabled", appCommit: "main",
+  });
+  const apply = state(definition, "Apply Request Defaults");
+  // The request comes second, so whatever the caller sent wins.
+  assert.equal(apply.Parameters?.["request.$"], "States.JsonMerge($.defaults, $.request, false)");
+  assert.equal(apply.Next, "Initialize Lifecycle");
+  for (const name of ["Place Fleet Session", "Place Session", "Reserve On Launched Host", "Reserve Slot Zero"]) {
+    const payload = state(definition, name).Parameters?.Payload as Record<string, unknown>;
+    assert.equal(payload["gameId.$"], "$.request.gameId", name);
+  }
+  for (const name of ["Initialize Lifecycle", "Acquire Start Lease", "Begin Session", "Mark Session Ready", "Release Start Lease"]) {
+    const payload = state(definition, name).Parameters?.Payload as Record<string, unknown>;
+    assert.equal(payload["serverId.$"], "$.request.serverId", `${name} works on the record the caller named`);
+  }
+  const watchdog = state(definition, "Start Session Watchdog").Parameters?.Input as Record<string, unknown>;
+  assert.equal(watchdog["gameId.$"], "$.request.gameId");
+  assert.equal(watchdog["worldName.$"], "$.request.worldName");
 });
 
 test("the stop releases the session's reservation after the verified stop, and tolerates one that never existed", async () => {

@@ -1179,6 +1179,10 @@ button.chip[aria-pressed="true"] {
   line-height: 16px;
 }
 
+.field small.field-error {
+  color: var(--error-ink);
+}
+
 .field .mono {
   font-family: var(--font-mono);
 }

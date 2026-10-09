@@ -69,8 +69,8 @@ jq -e '
 ' "${pointer}" >/dev/null
 
 # --- a second world importing the SAME pack reuses the release ---
-mkdir -p -- "${fixture}/data2/world_two"
-printf 'second level\n' >"${fixture}/data2/world_two/level.dat"
+mkdir -p -- "${fixture}/data2/world"
+printf 'second level\n' >"${fixture}/data2/world/level.dat"
 second_output="$(
   "${REPOSITORY_ROOT}/scripts/import-world.sh" \
     "${fixture}/data2" world_two "${fixture}/pack/mods" 1.0 1.20.1 47.4.0
@@ -85,8 +85,8 @@ expect_failure "re-importing an existing world" \
   "${fixture}/data" world "${fixture}/pack/mods" 1.1 1.20.1 47.4.0
 
 printf 'tampered\n' >>"${fixture}/pack/mods/beta.jar"
-mkdir -p -- "${fixture}/data3/world_three"
-printf 'third level\n' >"${fixture}/data3/world_three/level.dat"
+mkdir -p -- "${fixture}/data3/world"
+printf 'third level\n' >"${fixture}/data3/world/level.dat"
 expect_failure "same release version with different mod bytes" \
   "${REPOSITORY_ROOT}/scripts/import-world.sh" \
   "${fixture}/data3" world_three "${fixture}/pack/mods" 1.0 1.20.1 47.4.0

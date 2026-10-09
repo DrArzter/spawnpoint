@@ -57,6 +57,12 @@ if ${registry_record}; then
     (.preset.profile_digest | type == "string" and test("^[0-9a-f]{64}$")) and
     (.current_generation.id | type == "string" and test("^gen-[0-9a-f]{32}$")) and
     (.current_generation.release | type == "string" and test("^[0-9]+\\.[0-9]+$")) and
+    ((has("whitelist") | not) or (
+      (.whitelist.names | type == "array") and
+      all(.whitelist.names[]; type == "string" and test("^[A-Za-z0-9_]{3,16}$")))) and
+    ((has("game_settings") | not) or (
+      (.game_settings.values | type == "object") and
+      all(.game_settings.values[]; type | IN("string", "number", "boolean")))) and
     ((has("footprint") | not) or (
       (.footprint.memory_mib | type == "number" and . == floor and . > 0) and
       (.footprint.cores | type == "number" and . > 0))) and
@@ -86,6 +92,8 @@ if ${registry_record}; then
         source_generation_id: $record[0].current_generation.source.generation_id
       }
     } else {} end) + (if $record[0].footprint then {footprint: $record[0].footprint} else {} end)
+      + (if $record[0].game_settings then {game_settings: $record[0].game_settings.values} else {} end)
+      + (if $record[0].whitelist then {whitelist: $record[0].whitelist.names} else {} end)
     ])
   ' "${BASE_CATALOG}" >"${stage}"
 elif jq -e --arg id "${world_id}" 'any(.worlds[]; .id == $id)' "${BASE_CATALOG}" >/dev/null; then

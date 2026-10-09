@@ -98,6 +98,19 @@ upload_output="$(
     "${SCRIPT_DIR}/upload-world-backup.sh" "${archive}"
 )"
 
+# The copy on this host is now that archive. A later start here uses it only
+# while it is still the newest of the wipe (prepare-world.sh).
+if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
+  uploaded_key="$(awk -F= '$1 == "object_key" { print substr($0, index($0, "=") + 1) }' <<<"${upload_output}")"
+  uploaded_checksum="$(awk -F= '$1 == "checksum" { print substr($0, index($0, "=") + 1) }' <<<"${upload_output}")"
+  if [[ -n "${uploaded_key}" && -n "${uploaded_checksum}" ]]; then
+    record_world_archive "${WORLD_DIRECTORY}" "${uploaded_key}" "${uploaded_checksum}"
+  else
+    # The backup is safe in S3; only the shortcut for the next start is lost.
+    printf 'warning: upload reported no key; the next start here will restore from S3\n' >&2
+  fi
+fi
+
 printf '%s\n' "${archive_output}"
 printf '%s\n' "${upload_output}"
 if ! connectivity_retract; then

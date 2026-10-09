@@ -1,5 +1,5 @@
-import type { ControlPlaneSnapshot } from "../../model";
-import { apiFailure, type SessionOperation, type SpawnpointApi, type WorldLifecycleAction } from "../contract";
+import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../../model";
+import { apiFailure, type FileLink, type ReleaseMod, type ReleaseMods, type SavedWhitelist, type SessionOperation, type SpawnpointApi, type WorldLifecycleAction, type WorldWhitelist } from "../contract";
 import { authorizedFetch } from "./transport";
 
 function controlPlaneSubscription(onInvalidated: () => void): () => void {
@@ -85,6 +85,12 @@ export const worldsApi = {
         operation_in_progress: "Another control-plane operation is already running.",
         host_not_unique: "Spawnpoint could not select exactly one compatible host.",
         host_transitioning: "The compute host is already changing state. Refresh and try again shortly.",
+        host_already_running: "The configured host is running another session. Stop it first, or move this world to the fleet.",
+        session_transitioning: "This world's session is already starting, running or stopping.",
+        world_not_active: "This world is not the one running. Refresh to see which is.",
+        active_session_unavailable: "Spawnpoint has no session on record for this world.",
+        fleet_unavailable: "This deployment does not launch fleet hosts.",
+        configured_host_unavailable: "The configured host is not available.",
       };
       throw new Error(messages[body.error ?? ""] ?? `The ${action} request could not be accepted.`);
     }
@@ -165,6 +171,73 @@ export const worldsApi = {
       throw new Error(messages[body.error ?? ""] ?? "The pack link could not be created.");
     }
     return { release: body.release, url: body.url };
+  },
+
+  async updateGameSettings(gameId: string, worldId: string, values: Readonly<Record<string, SettingValue>>): Promise<WorldGameSettings> {
+    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/game-settings`, {
+      method: "PUT", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ values }),
+    });
+    const body = await response.json().catch(() => ({})) as { error?: string; setting?: string } & Partial<WorldGameSettings>;
+    if (response.ok && body.values !== undefined) return { values: body.values, updatedAt: body.updatedAt ?? null };
+    const messages: Record<string, string> = {
+      forbidden: "Your role cannot change this world's game settings.",
+      world_settings_conflict: "The world changed while you were editing. Refresh and try again.",
+      world_archived: "This world is archived. Restore a backup before changing its settings.",
+      unknown_world: "This world has no record to keep settings in.",
+      invalid_game_setting: `${body.setting ?? "A setting"} has a value the game does not accept.`,
+      unknown_game_setting: `${body.setting ?? "A setting"} is not one this game offers. Refresh and try again.`,
+    };
+    throw new Error(messages[body.error ?? ""] ?? "Game settings could not be saved.");
+  },
+
+  async loadWhitelist(gameId: string, worldId: string): Promise<WorldWhitelist> {
+    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/whitelist`);
+    const body = await response.json().catch(() => ({})) as { error?: string } & Partial<WorldWhitelist>;
+    if (!response.ok || body.names === undefined) {
+      throw await apiFailure(response, body.error === "forbidden" ? "Your role cannot manage whitelists." : "The whitelist could not be read.", body);
+    }
+    return { managed: body.managed === true, names: body.names, updatedAt: body.updatedAt ?? null, updatedBy: body.updatedBy ?? null };
+  },
+
+  async updateWhitelist(gameId: string, worldId: string, names: readonly string[]): Promise<SavedWhitelist> {
+    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/whitelist`, {
+      method: "PUT", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ names }),
+    });
+    const body = await response.json().catch(() => ({})) as { error?: string; name?: string } & Partial<SavedWhitelist>;
+    if (response.ok && body.names !== undefined) {
+      return { managed: true, names: body.names, updatedAt: body.updatedAt ?? null, updatedBy: body.updatedBy ?? null, applied: body.applied === "reloading" ? "reloading" : "next_start" };
+    }
+    const messages: Record<string, string> = {
+      forbidden: "Your role cannot manage whitelists.",
+      invalid_player_name: `${body.name ?? "That"} is not a Minecraft name: 3 to 16 letters, digits or underscores.`,
+      duplicate_player_name: `${body.name ?? "That name"} is already on the list.`,
+      whitelist_too_long: "A whitelist holds at most 200 names.",
+      world_archived: "This world is archived. Restore a backup before changing its whitelist.",
+      world_settings_conflict: "The world changed while you were editing. Refresh and try again.",
+    };
+    throw new Error(messages[body.error ?? ""] ?? "The whitelist could not be saved.");
+  },
+
+  async loadReleaseMods(gameId: string, presetId: string, release: string): Promise<ReleaseMods> {
+    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}`);
+    const body = await response.json().catch(() => ({})) as { error?: string; release?: string; mods?: ReleaseMod[] };
+    if (!response.ok || body.mods === undefined) {
+      const messages: Record<string, string> = { forbidden: "Your role cannot read releases.", unknown_release: `Release ${release} is not in the store.` };
+      throw await apiFailure(response, messages[body.error ?? ""] ?? "The release's mods could not be read.", body);
+    }
+    return { release: body.release ?? release, mods: body.mods };
+  },
+
+  async requestModDownload(gameId: string, presetId: string, release: string, sha256: string): Promise<FileLink> {
+    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}/mods/${encodeURIComponent(sha256)}`);
+    const body = await response.json().catch(() => ({})) as { error?: string; url?: string; expiresIn?: number };
+    if (!response.ok || body.url === undefined) {
+      const messages: Record<string, string> = { forbidden: "Your role cannot read releases.", unknown_mod: "This release no longer lists that mod." };
+      throw new Error(messages[body.error ?? ""] ?? "The download link could not be created.");
+    }
+    return { url: body.url, expiresIn: body.expiresIn ?? 0 };
   },
 
 } satisfies Partial<SpawnpointApi>;

@@ -6,9 +6,11 @@ export const permissions = [
   "invitation.send",
   "metrics.read",
   "console.use",
+  "whitelist.manage",
   "release.read",
   "release.promote",
   "backup.read",
+  "backup.download",
   "backup.restore",
   "world.manage",
   "access.read",
@@ -49,7 +51,7 @@ export const builtInRoles: Readonly<Record<BuiltInRoleId, Role>> = {
     name: "Operator",
     permissions: [
       "status.read", "connection.read", "session.start", "session.stop", "invitation.send",
-      "metrics.read", "console.use", "release.read", "backup.read",
+      "metrics.read", "console.use", "whitelist.manage", "release.read", "backup.read",
     ],
   },
   owner: {

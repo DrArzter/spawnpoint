@@ -96,6 +96,20 @@ raw_output="$(WORLD_ID=open SPAWNPOINT_WORLD_CATALOG="${fixture}/catalog.json" \
 [[ "$(jq -r .world <<<"${raw_output}")" == "open" ]]
 [[ "$(jq 'has("zerotier_network")' <<<"${raw_output}")" == "false" ]]
 
+# --- a world that keeps its whitelist on its record starts with exactly that list (ADR-0066) ---
+jq '.worlds[0].whitelist = ["DrArzter", "Alex_2"]' "${REPOSITORY_ROOT}/server/worlds/catalog.json" >"${fixture}/whitelist-catalog.json"
+mkdir -p -- "${fixture}/worlds/world/data"
+printf '[{"uuid":"00000000-0000-3000-8000-000000000000","name":"AddedByHand"}]\n' >"${fixture}/worlds/world/data/whitelist.json"
+WORLD_ID=world SPAWNPOINT_WORLD_CATALOG="${fixture}/whitelist-catalog.json" SPAWNPOINT_WORLDS_DIRECTORY="${fixture}/worlds" \
+  "${session}" >/dev/null 2>"${fixture}/whitelist.err"
+jq -e '[.[].name] == ["DrArzter", "Alex_2"] and .[0].uuid == "edf613ca-bf4d-31f0-a794-f21ac9c39769"' \
+  "${fixture}/worlds/world/data/whitelist.json" >/dev/null
+# A world that keeps none is left as it was.
+printf '[{"uuid":"00000000-0000-3000-8000-000000000000","name":"AddedByHand"}]\n' >"${fixture}/worlds/world/data/whitelist.json"
+WORLD_ID=world SPAWNPOINT_WORLD_CATALOG="${REPOSITORY_ROOT}/server/worlds/catalog.json" SPAWNPOINT_WORLDS_DIRECTORY="${fixture}/worlds" \
+  "${session}" >/dev/null 2>&1
+jq -e '[.[].name] == ["AddedByHand"]' "${fixture}/worlds/world/data/whitelist.json" >/dev/null
+
 # --- an unknown format is refused before anything runs ---
 if SESSION_FORMAT=yaml "${session}" >/dev/null 2>&1; then
   printf 'expected failure: unknown SESSION_FORMAT\n' >&2

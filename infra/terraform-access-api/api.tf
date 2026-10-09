@@ -90,6 +90,15 @@ data "aws_iam_policy_document" "access_api" {
     ]
   }
 
+  # A world archive, for the backup.download permission only (ADR-0065): the
+  # handler checks the key is the world's, records who asked, and presigns
+  # this read for five minutes. Archives only; nothing else in the bucket.
+  statement {
+    sid       = "DownloadWorldArchives"
+    actions   = ["s3:GetObject"]
+    resources = ["${data.aws_s3_bucket.backups.arn}/worlds/*/archives/*.tar.zst"]
+  }
+
   statement {
     sid       = "CreateWorldAndInitialReleasePointer"
     actions   = ["s3:PutObject"]
@@ -113,6 +122,17 @@ data "aws_iam_policy_document" "access_api" {
     actions = ["states:ListExecutions"]
     resources = [
       for machine in local.operation_state_machines : machine.arn
+      if contains(["start", "stop", "promote", "world"], machine.type)
+    ]
+  }
+
+  # A running operation's input names its world, so a start blocks only that
+  # world's operations, not every world's (ADR-0062).
+  statement {
+    sid     = "ReadRunningOperationWorlds"
+    actions = ["states:DescribeExecution"]
+    resources = [
+      for machine in local.operation_state_machines : "${replace(machine.arn, ":stateMachine:", ":execution:")}:*"
       if contains(["start", "stop", "promote", "world"], machine.type)
     ]
   }
@@ -187,6 +207,8 @@ resource "aws_lambda_function" "access_api" {
       RELEASE_BUCKET                   = data.aws_s3_bucket.releases.id
       BACKUP_BUCKET                    = data.aws_s3_bucket.backups.id
       CONNECTION_HOST                  = var.connection_host
+      CONSOLE_DOCUMENT_NAME            = aws_ssm_document.console.name
+      WHITELIST_DOCUMENT_NAME          = aws_ssm_document.whitelist.name
       SPAWNPOINT_PLACEMENT             = var.placement
       SPAWNPOINT_LAUNCH                = var.launch
       SPAWNPOINT_APP_COMMIT            = var.app_commit
@@ -271,10 +293,18 @@ locals {
     "GET /games/{gameId}/worlds/{worldId}/invitations",
     "GET /games/{gameId}/worlds/{worldId}/pack",
     "GET /games/{gameId}/worlds/{worldId}/backups",
+    "POST /games/{gameId}/worlds/{worldId}/backups/download",
+    "GET /games/{gameId}/worlds/{worldId}/console",
+    "GET /games/{gameId}/worlds/{worldId}/metrics",
+    "POST /games/{gameId}/worlds/{worldId}/console",
     "GET /hosts/{instanceId}/metrics",
     "GET /games/{gameId}/presets/{presetId}/releases/{version}",
+    "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}",
     "POST /games/{gameId}/presets/{presetId}/worlds",
     "PUT /games/{gameId}/worlds/{worldId}/settings",
+    "PUT /games/{gameId}/worlds/{worldId}/game-settings",
+    "GET /games/{gameId}/worlds/{worldId}/whitelist",
+    "PUT /games/{gameId}/worlds/{worldId}/whitelist",
     "POST /games/{gameId}/worlds/{worldId}/archive",
     "POST /games/{gameId}/worlds/{worldId}/wipe",
     "POST /games/{gameId}/worlds/{worldId}/restore",

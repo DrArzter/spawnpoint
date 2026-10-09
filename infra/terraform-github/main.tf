@@ -5,6 +5,7 @@ locals {
   deploy_subject  = "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production"
   plan_subject    = "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production-plan"
 
+  spawnpoint_ssm_documents         = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:document/spawnpoint-*"
   build_release_state_machine_arn  = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-build-release"
   build_release_execution_arn      = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:execution:spawnpoint-build-release:*"
   preset_catalog_state_machine_arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-publish-preset-catalog"
@@ -287,6 +288,24 @@ data "aws_iam_policy_document" "github_deploy_iam" {
     resources = ["*"]
   }
 
+  # Spawnpoint's own SSM documents, the console's and the whitelist's
+  # (ADR-0063, ADR-0066), and no other document. Removing one goes through
+  # the destroy allow-list like any other destroy.
+  statement {
+    sid    = "ManageOnlySpawnpointSsmDocuments"
+    effect = "Allow"
+    actions = [
+      "ssm:AddTagsToResource",
+      "ssm:CreateDocument",
+      "ssm:GetDocument",
+      "ssm:ListTagsForResource",
+      "ssm:RemoveTagsFromResource",
+      "ssm:UpdateDocument",
+      "ssm:UpdateDocumentDefaultVersion",
+    ]
+    resources = [local.spawnpoint_ssm_documents]
+  }
+
   # EC2 creates a default allow-all egress rule with every security group.
   # Terraform must revoke it before installing the reviewed game-port rules.
   statement {
@@ -556,6 +575,18 @@ data "aws_iam_policy_document" "github_plan_iam" {
       "sts:GetCallerIdentity",
     ]
     resources = ["*"]
+  }
+
+  statement {
+    sid    = "ReadOnlySpawnpointSsmDocuments"
+    effect = "Allow"
+    actions = [
+      "ssm:DescribeDocument",
+      "ssm:DescribeDocumentPermission",
+      "ssm:GetDocument",
+      "ssm:ListTagsForResource",
+    ]
+    resources = [local.spawnpoint_ssm_documents]
   }
 
   statement {

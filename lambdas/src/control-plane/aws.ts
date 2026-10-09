@@ -456,7 +456,7 @@ function attachment(filename: string): string {
 }
 
 /** One server mod of a release, presigned for this role's read of releases. */
-export async function releaseModUrl(gameId: string, presetId: string, release: string, file: string, expiresIn: number): Promise<string> {
+export function releaseModUrl(gameId: string, presetId: string, release: string, file: string, expiresIn: number): Promise<string> {
   return getSignedUrl(s3, new GetObjectCommand({
     Bucket: requiredEnv("RELEASE_BUCKET"),
     Key: releaseModKey(gameId, presetId, release, file),
@@ -515,7 +515,7 @@ export async function replaceWorldGameSettings(
 ): Promise<"updated" | "missing" | "archived" | "conflict"> {
   const worlds = new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET"));
   const stored = await worlds.read(worldId);
-  if (!stored || stored.record.gameId !== gameId) return "missing";
+  if (stored?.record.gameId !== gameId) return "missing";
   if (stored.record.status !== "active") return "archived";
   try {
     await worlds.replace(withGameSettings(stored.record, gameSettings), stored.etag);
@@ -533,7 +533,7 @@ export async function replaceWorldAccess(
 ): Promise<"updated" | "missing" | "conflict"> {
   const worlds = new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET"));
   const stored = await worlds.read(worldId);
-  if (!stored || stored.record.gameId !== gameId) return "missing";
+  if (stored?.record.gameId !== gameId) return "missing";
   if (stored.record.status !== "active") return "conflict";
   const next = withWorldAccess(stored.record, access);
   if (next.placement === stored.record.placement && next.connectivity === stored.record.connectivity && next.auth === stored.record.auth) return "updated";

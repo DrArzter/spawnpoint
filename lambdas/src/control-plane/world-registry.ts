@@ -309,7 +309,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     typeof preset.repository !== "string" || !preset.repository.startsWith("https://github.com/") ||
     typeof preset.commit !== "string" || !COMMIT.test(preset.commit) ||
     typeof preset.profile_digest !== "string" || !SHA256.test(preset.profile_digest) ||
-    generation === null || previous === null || previous.some((value) => value === null) ||
+    generation === null || previous === null || previous.includes(null) ||
     gameSettings === null
   ) return null;
   const current = generation as WorldGeneration;

@@ -345,9 +345,11 @@ const DEMO_MODS: readonly (readonly [string, number])[] = [
 function demoDigest(text: string): string {
   let hash = 2166136261;
   let hex = "";
-  for (let round = 0; hex.length < 64; round += 1) {
-    for (const char of `${text}#${round}`) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
+  let round = 0;
+  while (hex.length < 64) {
+    for (const char of `${text}#${round}`) hash = Math.imul(hash ^ (char.codePointAt(0) ?? 0), 16777619) >>> 0;
     hex += hash.toString(16).padStart(8, "0");
+    round += 1;
   }
   return hex.slice(0, 64);
 }

@@ -93,12 +93,22 @@ function draftOf(setting: SettingDefinition, value: SettingValue): SettingDraft 
   return setting.type === "boolean" ? value === true : String(value);
 }
 
+function draftValue(setting: SettingDefinition, draft: SettingDraft): SettingValue {
+  if (setting.type === "boolean") return draft === true;
+  if (setting.type !== "integer") return String(draft);
+  const text = typeof draft === "string" ? draft.trim() : "";
+  return /^-?\d+$/.test(text) ? Number(text) : Number.NaN;
+}
+
 // The value a draft stands for, or undefined when the game would not accept it.
 function parsedValue(setting: SettingDefinition, draft: SettingDraft): SettingValue | undefined {
-  const value: SettingValue = setting.type === "boolean" ? draft === true
-    : setting.type === "integer" ? (typeof draft === "string" && /^-?[0-9]+$/.test(draft.trim()) ? Number(draft.trim()) : Number.NaN)
-      : String(draft);
+  const value = draftValue(setting, draft);
   return settingValueValid(setting, value) ? value : undefined;
+}
+
+function saveHint(valid: boolean, changed: boolean): string | undefined {
+  if (!valid) return "Correct the marked settings first.";
+  return changed ? undefined : "Nothing has changed.";
 }
 
 function fieldError(setting: SettingDefinition, draft: SettingDraft): string | null {
@@ -158,7 +168,7 @@ export function useGameSettingsForm(game: Game, world: World, opts: Readonly<{ b
     save: action("game-settings.save", "Save settings", () => { if (valid && changed) opts.onSave(values); }, {
       disabled: !valid || !changed || opts.busy,
       busy: opts.busy,
-      hint: !valid ? "Correct the marked settings first." : !changed ? "Nothing has changed." : undefined,
+      hint: saveHint(valid, changed),
     }),
     restoreDefaults: action("game-settings.defaults", "Restore defaults", () => setDrafts(Object.fromEntries(definitions.map((setting) => [setting.id, draftOf(setting, setting.default)]))), { disabled: atDefaults || opts.busy }),
     cancel: action("sheet.close", "Cancel", opts.onClose, { disabled: opts.busy }),

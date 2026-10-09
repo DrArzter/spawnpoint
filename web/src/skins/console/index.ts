@@ -1,9 +1,7 @@
 import type { Skin } from "../skin";
 import { Access } from "./Access";
 import { ConfirmationDialog, CreateWorldSheet, InvitationSheet, ScopeDialog, WorldSettingsSheet } from "./Dialogs";
-import { Metrics } from "./Metrics";
 import { Profile } from "./Profile";
-import { Rcon } from "./Rcon";
 import { Releases } from "./Releases";
 import { Boot, Shell } from "./Shell";
 import { World } from "./World";
@@ -18,8 +16,6 @@ export const consoleSkin: Skin = {
   Boot,
   Worlds,
   World,
-  Metrics,
-  Console: Rcon,
   Releases,
   Access,
   Profile,

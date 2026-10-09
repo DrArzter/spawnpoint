@@ -1,4 +1,4 @@
-export type Page = "worlds" | "metrics" | "console" | "releases" | "access" | "profile";
+export type Page = "worlds" | "releases" | "access" | "profile";
 export type AccessTab = "users" | "roles" | "notifications";
 export type ServerState = "stopped" | "starting" | "running" | "stopping" | "unknown";
 
@@ -88,7 +88,8 @@ export type ControlPlaneSnapshot = {
   deployment?: { placement: "single" | "shared" | "fleet"; launchEnabled: boolean; dnsAvailable: boolean };
 };
 
-export type WorldTab = "details" | "wipes" | "backups" | "releases";
+/** A world's console and metrics are its own: several worlds of a game can run at once (ADR-0062). */
+export type WorldTab = "details" | "wipes" | "backups" | "releases" | "console" | "metrics";
 
 export type Role = { id: string; name: string; description: string; permissions: string[]; system?: boolean };
 export type LinkKind = "telegram" | "email" | "discord" | "minecraft" | "factorio" | "steam" | "zerotier";

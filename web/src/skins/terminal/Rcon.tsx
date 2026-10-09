@@ -1,23 +1,14 @@
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { ConsoleModel } from "../../core/models";
-import { Choice, Choices, Page, Skeleton, SkeletonGroup, State, Verb, Verbs } from "./ui";
+import { Skeleton, SkeletonGroup, State, Verb, Verbs } from "./ui";
 
-// The console page is the one place the two faces agree on: a terminal. Here
-// it is the whole screen's own grammar continued: the world in its head, who
-// typed what and what the game answered, the prompt, the quick commands as
-// keys (ADR-0063).
-export function Rcon({ model }: Readonly<{ model: ConsoleModel }>) {
+// This world's console (ADR-0063): the one place the two faces agree on a
+// terminal. The world in its head, who typed what and what the game
+// answered, the prompt, the quick commands as keys.
+export function ConsolePanel({ model }: Readonly<{ model: ConsoleModel }>) {
   const { game, world, session, log, unavailable } = model;
   return (
-    <Page>
-      <h1 className="visually-hidden">Console</h1>
-      {model.targets.length > 1 && (
-        <Choices label="World">
-          {model.targets.map((target) => (
-            <Choice data-action={target.choose.id} key={target.id} onClick={target.choose.run} pressed={target.current}>{target.name}</Choice>
-          ))}
-        </Choices>
-      )}
+    <>
       <section aria-label="RCON terminal" className="t-rcon">
         <header className="t-rcon-head">
           <strong>{world ? world.displayName : `${game?.displayName ?? "Game"} session`}</strong>
@@ -69,6 +60,6 @@ export function Rcon({ model }: Readonly<{ model: ConsoleModel }>) {
       <Verbs>
         {model.quickCommands.map((command) => <Verb action={command} key={command.label} size="small" />)}
       </Verbs>
-    </Page>
+    </>
   );
 }

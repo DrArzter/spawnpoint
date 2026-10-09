@@ -59,7 +59,7 @@ export const requestCreateWorld = (gameId: string, presetId: string, displayName
 export const requestUpdateWorldSettings = (gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external") => api.requestUpdateWorldSettings(gameId, worldId, placement, connectivity, auth);
 export const requestPackDownload = (gameId: string, worldId: string) => api.requestPackDownload(gameId, worldId);
 export const loadBackups = (gameId: string, worldId: string) => api.loadBackups(gameId, worldId);
-export const loadHostMetrics = (instanceId: string, range: MetricRange) => api.loadHostMetrics(instanceId, range);
+export const loadWorldMetrics = (gameId: string, worldId: string, range: MetricRange) => api.loadWorldMetrics(gameId, worldId, range);
 export const loadConsole = (gameId: string, worldId: string) => api.loadConsole(gameId, worldId);
 export const runConsoleCommand = (gameId: string, worldId: string, command: string) => api.runConsoleCommand(gameId, worldId, command);
 

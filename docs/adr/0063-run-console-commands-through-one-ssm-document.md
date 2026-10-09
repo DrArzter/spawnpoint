@@ -41,13 +41,19 @@ may use the console can read a world's history; it is how operators see what eac
 **Commands that end the game outside its lifecycle are refused**: `stop` and `save-off` for Minecraft, `quit` for
 Factorio and Project Zomboid. Stop is a verb of the world page, which saves, verifies a backup and closes the session.
 
-**The console speaks to one running world at a time.** With several worlds of a game running, the operator picks
-which. A world that is not running has no console.
+**The console belongs to the world, and so do its metrics.** Both are tabs of the world page, not pages of the panel:
+with several worlds of a game running, a game-wide console or chart would not say whose it is. The Console tab speaks
+to the host and slot this world's session holds. The Metrics tab reads that same host through
+`GET /games/{gameId}/worlds/{worldId}/metrics`. A world that holds no session has neither, even when its game's
+configured host runs another of its worlds: that load is not this world's. The rule is one function,
+`worldHost` in `control-plane/world-session.ts`, so the two tabs cannot disagree.
 
 ## Consequences
 
-- The console works on both faces and in the demo, and the `consoleGateway` capability now deploys, so the page appears
-  in production for roles with `console.use`.
+- The console works on both faces and in the demo, and the `consoleGateway` capability now deploys, so the world page
+  shows a Console tab in production for roles with `console.use`, and a Metrics tab for roles with `metrics.read`.
+- The panel's game-wide Metrics and Console pages are gone; their old links open the worlds page. The MCP tools still
+  read a host's metrics by its instance id.
 - The configured host runs whatever copy of the repository it has. Until that copy carries `console.sh`, the document
   answers that the host has no console script yet, and the panel shows it. A fleet host checks out the deployed commit
   when it launches, so it always has the script.

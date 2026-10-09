@@ -85,7 +85,7 @@ import { readControlPlaneSnapshot } from "../control-plane/read-model.ts";
 import type { ControlPlaneSources } from "../control-plane/read-model.ts";
 import type { WorldRecord } from "../control-plane/world-registry.ts";
 import { packRelease, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, type SessionAction, type SessionPlan } from "../control-plane/session-control.ts";
-import { blockingOperations, holdsWorld, locateWorldSession, sessionLifecycleKey, type WorldPlacement } from "../control-plane/world-session.ts";
+import { blockingOperations, holdsWorld, locateWorldSession, sessionLifecycleKey, worldHost, type WorldHost, type WorldPlacement, type WorldSession } from "../control-plane/world-session.ts";
 import { CONSOLE_RECORD_DAYS, checkConsoleCommand, consoleResult, encodeConsoleCommand, type ConsoleEntry, type ConsoleStatus } from "../control-plane/console.ts";
 import { issueSubscriptionTicket, subscriptionTicketItem, subscriptionTicketLifetimeSeconds } from "../control-plane/subscriptions.ts";
 import { worldIdForName } from "../control-plane/world-registry.ts";
@@ -350,6 +350,7 @@ async function hostMetrics(instanceId: string, range: string): Promise<Response>
 const capabilityRoutes: Readonly<Record<string, string>> = {
   releaseManifest: "GET /games/{gameId}/presets/{presetId}/releases/{version}",
   hostMetrics: "GET /hosts/{instanceId}/metrics",
+  worldMetrics: "GET /games/{gameId}/worlds/{worldId}/metrics",
   invitations: "POST /games/{gameId}/worlds/{worldId}/invitations",
   clientPacks: "GET /games/{gameId}/worlds/{worldId}/pack",
   backups: "GET /games/{gameId}/worlds/{worldId}/backups",
@@ -864,6 +865,39 @@ async function controlWorldLifecycle(
   return response(202, { result: "requested", operationId });
 }
 
+// --- What runs a world: its host (ADR-0062, ADR-0063) ---------------------------
+
+async function locateWorldHost(
+  placement: WorldPlacement,
+  session: WorldSession["record"],
+  hosts: readonly Readonly<{ providerRef: string; provenance?: "configured" | "launched" }>[],
+): Promise<WorldHost | null> {
+  const placed = session?.activeSessionId ? await findSessionPlacement(session.activeSessionId) : null;
+  const configured = hosts.filter((host) => host.provenance !== "launched").map((host) => host.providerRef);
+  return worldHost(placement, session, placed, configured);
+}
+
+// A world's metrics are its host's: with several worlds running, each on a
+// host of its own, a game has no single answer (ADR-0062).
+async function worldMetrics(gameId: string, worldId: string, range: string): Promise<Response> {
+  const hours = METRIC_RANGES[range];
+  if (hours === undefined) return response(400, { error: "invalid_range" });
+  if (awsControlPlaneSources.readHostMetrics === undefined) return response(501, { error: "metrics_unavailable" });
+  const [presets, worldRecords, hosts] = await Promise.all([
+    awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
+    awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
+    awsControlPlaneSources.listHosts(),
+  ]);
+  const world = catalogWithPresets(presets, gameCatalog, worldRecords)
+    .find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
+  if (world === undefined) return response(404, { error: "unknown_world" });
+  const placement: WorldPlacement = world.placement === "fleet" ? "fleet" : "configured";
+  const located = await readWorldSession(gameId, worldId, placement);
+  const host = await locateWorldHost(placement, located.record, hosts);
+  if (host === null) return response(409, { error: "world_not_running" });
+  return response(200, { range, ...await awsControlPlaneSources.readHostMetrics(host.hostId, hours) });
+}
+
 // --- The console gateway (ADR-0063) -------------------------------------------
 // A command is sent and recorded at once; its answer is collected when the
 // history is next read, so no request waits on a host.
@@ -904,14 +938,7 @@ async function runConsoleCommand(identity: Identity, gameId: string, worldId: st
   const sessionId = located.record?.activeSessionId;
   if (located.record?.observedState !== "ready" || !sessionId) return response(409, { error: "session_not_ready" });
 
-  // A placed session knows its host and slot; a configured session that was
-  // never placed runs unslotted on the one configured host.
-  const placed = await findSessionPlacement(sessionId);
-  let target: { hostId: string; slot: string } | null = placed === null ? null : { hostId: placed.hostId, slot: String(placed.slot) };
-  if (target === null && placement === "configured") {
-    const configured = hosts.filter((host) => host.provenance !== "launched");
-    if (configured.length === 1 && configured[0]!.state === "running") target = { hostId: configured[0]!.providerRef, slot: "" };
-  }
+  const target = await locateWorldHost(placement, located.record, hosts);
   if (target === null) return response(409, { error: "console_unavailable" });
 
   const commandId = await sendConsoleCommand({ hostId: target.hostId, worldId, slot: target.slot, encodedCommand: encodeConsoleCommand(check.command) });
@@ -2594,6 +2621,8 @@ export const routes: Readonly<Record<string, Route>> = {
   "POST /access/invitations/{invitationId}/revoke": permissionRoute("access.invite", (_identity, event) => revokeAccessInvitation(event)),
   "GET /hosts/{instanceId}/metrics": permissionRoute("metrics.read", (_identity, event) =>
     hostMetrics(parameter(event, "instanceId"), event.queryStringParameters?.range ?? "24h")),
+  "GET /games/{gameId}/worlds/{worldId}/metrics": permissionRoute("metrics.read", (_identity, event) =>
+    worldMetrics(parameter(event, "gameId"), parameter(event, "worldId"), event.queryStringParameters?.range ?? "24h")),
   "GET /games/{gameId}/presets/{presetId}/releases/{version}": permissionRoute("release.read", (_identity, event) =>
     releaseManifest(parameter(event, "gameId"), parameter(event, "presetId"), parameter(event, "version"))),
   "GET /invitations/recipients": permissionRoute("invitation.send", (identity) => invitationRecipients(identity)),

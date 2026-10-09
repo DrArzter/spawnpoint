@@ -186,9 +186,9 @@ export const demoApi: SpawnpointApi = {
     return store.backups(gameId, worldId);
   },
 
-  async loadHostMetrics(instanceId: string, range: MetricRange) {
+  async loadWorldMetrics(gameId: string, worldId: string, range: MetricRange) {
     await demoLatency();
-    return store.hostMetrics(instanceId, range);
+    return store.worldMetrics(gameId, worldId, range);
   },
 
   async loadConsole(gameId: string, worldId: string) {

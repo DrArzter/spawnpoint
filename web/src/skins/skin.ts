@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 
-import type { AccessModel, BootModel, ConfirmationModel, ConsoleModel, CreateWorldModel, InvitationModel, MetricsModel, ProfileModel, ReleasesModel, ScopeModel, ShellModel, WorldModel, WorldsModel, WorldSettingsModel } from "../core/models";
+import type { AccessModel, BootModel, ConfirmationModel, CreateWorldModel, InvitationModel, ProfileModel, ReleasesModel, ScopeModel, ShellModel, WorldModel, WorldsModel, WorldSettingsModel } from "../core/models";
 
 /**
  * A skin is every face the console can wear, as one set of views. The bones
@@ -16,9 +16,8 @@ export type Skin = Readonly<{
   Shell: ComponentType<{ model: ShellModel; children: ReactNode }>;
   Boot: ComponentType<{ model: BootModel }>;
   Worlds: ComponentType<{ model: WorldsModel }>;
+  /** A world, with its own console and its host's metrics as tabs (ADR-0062). */
   World: ComponentType<{ model: WorldModel }>;
-  Metrics: ComponentType<{ model: MetricsModel }>;
-  Console: ComponentType<{ model: ConsoleModel }>;
   Releases: ComponentType<{ model: ReleasesModel }>;
   Access: ComponentType<{ model: AccessModel }>;
   Profile: ComponentType<{ model: ProfileModel }>;

@@ -502,6 +502,13 @@
   opacity: 0.6;
 }
 
+/* A world's console tab: the terminal, then its quick commands. */
+.console-panel {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
 .quick-commands {
   display: flex;
   flex-wrap: wrap;

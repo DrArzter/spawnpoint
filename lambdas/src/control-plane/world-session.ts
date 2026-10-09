@@ -83,3 +83,24 @@ export function blockingOperations<Operation extends AttributedOperation>(
     return placement === "configured" && (placementOf(operation.worldId) ?? "configured") === "configured";
   });
 }
+
+export type WorldHost = Readonly<{ hostId: string; slot: string }>;
+
+/**
+ * The host a world runs on now, and its slot there (ADR-0062, ADR-0063). A
+ * world without a session runs nowhere, even when its game's configured host
+ * runs another of its worlds: that load is not this world's. A placed session
+ * names its host and slot; an unplaced session of a configured world runs
+ * unslotted on the one configured host.
+ */
+export function worldHost(
+  placement: WorldPlacement,
+  session: LifecycleRecord | null,
+  placed: Readonly<{ hostId: string; slot: number }> | null,
+  configuredHostIds: readonly string[],
+): WorldHost | null {
+  if (!session?.activeSessionId) return null;
+  if (placed !== null) return { hostId: placed.hostId, slot: String(placed.slot) };
+  if (placement !== "configured" || configuredHostIds.length !== 1) return null;
+  return { hostId: configuredHostIds[0]!, slot: "" };
+}

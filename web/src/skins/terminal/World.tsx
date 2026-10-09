@@ -9,6 +9,8 @@ import { Icon } from "../../icons";
 import { formatBytes, formatTime, shortDigest } from "../../lib/format";
 import { useMediaQuery } from "../../shell/hooks";
 import { Address, Choice, Choices, Col, DetailRow, DetailsGroup, Empty, Ghost, Indicator, Notice, Overflow, Page, Panel, State, Table, Tabs, Verb, Verbs } from "./ui";
+import { MetricsPanel } from "./Metrics";
+import { ConsolePanel } from "./Rcon";
 import { Notices } from "./Worlds";
 
 // One world: its name and state on the first line, its verbs on the second
@@ -50,6 +52,8 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
       {model.tab === "wipes" && <WipesTab rows={model.wipes} worldName={world.displayName} />}
       {model.tab === "backups" && <BackupsTab model={model.backups} worldName={world.displayName} />}
       {model.tab === "releases" && <ReleasesTab rows={model.releases.rows} worldName={world.displayName} />}
+      {model.tab === "console" && model.console && <ConsolePanel model={model.console} />}
+      {model.tab === "metrics" && model.metrics && <MetricsPanel model={model.metrics} />}
       <span className="visually-hidden">{game.displayName}</span>
     </Page>
   );

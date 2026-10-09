@@ -46,8 +46,10 @@ export function isRootHash(hash: string = window.location.hash): boolean {
 const pageByPath: Record<string, Page> = {
   overview: "worlds",
   worlds: "worlds",
-  metrics: "metrics",
-  console: "console",
+  // Console and metrics were game pages before they became a world's tabs;
+  // an old link lands on the worlds it was about.
+  metrics: "worlds",
+  console: "worlds",
   releases: "releases",
   access: "access",
   profile: "profile",
@@ -55,15 +57,13 @@ const pageByPath: Record<string, Page> = {
 
 const pathByPage: Record<Page, string> = {
   worlds: "worlds",
-  metrics: "metrics",
-  console: "console",
   releases: "releases",
   access: "access",
   profile: "profile",
 };
 
 const accessTabs = new Set<AccessTab>(["users", "roles", "notifications"]);
-const worldTabs = new Set<WorldTab>(["details", "wipes", "backups", "releases"]);
+const worldTabs = new Set<WorldTab>(["details", "wipes", "backups", "releases", "console", "metrics"]);
 
 function segment(value: string | undefined): string | null {
   if (!value) return null;

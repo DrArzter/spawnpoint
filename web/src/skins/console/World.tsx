@@ -18,6 +18,8 @@ import { formatBytes, formatTime, shortDigest } from "../../lib/format";
 import type { Wipe } from "../../model";
 import { useMediaQuery } from "../../shell/hooks";
 import { ActionButton, menuGroups, menuItems } from "./actions";
+import { MetricsPanel } from "./Metrics";
+import { ConsolePanel } from "./Rcon";
 import { ConnectionAddress, Notices } from "./Worlds";
 
 export function World({ model }: Readonly<{ model: WorldModel }>) {
@@ -54,6 +56,8 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
         {model.tab === "wipes" && <WipesTab rows={model.wipes} worldName={world.displayName} />}
         {model.tab === "backups" && <BackupsTab model={model.backups} worldName={world.displayName} />}
         {model.tab === "releases" && <ReleasesTab rows={model.releases.rows} worldName={world.displayName} />}
+        {model.tab === "console" && model.console && <ConsolePanel model={model.console} />}
+        {model.tab === "metrics" && model.metrics && <MetricsPanel model={model.metrics} />}
       </div>
       <span className="visually-hidden">{game.displayName}</span>
     </div>

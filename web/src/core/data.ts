@@ -4,7 +4,7 @@ import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, Ba
 import { failureKind } from "../api/contract";
 import {
   approveAccessCandidate, changePassword, createAccessInvitation, dismissAccessCandidate, googleOidcClientId, linkGoogle, linkPassword, linkTelegram, loadAccessCandidates, loadAccessIdentities, loadAccessInvitations,
-  loadAccessRoles, loadBackups, loadConsole, loadHostMetrics, loadInvitationHistory, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
+  loadAccessRoles, loadBackups, loadConsole, loadInvitationHistory, loadWorldMetrics, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
   runConsoleCommand, sendInvitation, telegramOidcClientId, updateIdentityRole, updateSubscriptions,
 } from "../auth";
 import type { SnackInput } from "../components/ui/Snackbar";
@@ -89,11 +89,11 @@ export const METRIC_RANGES: readonly { id: MetricRange; label: string }[] = [
   { id: "7d", label: "7 days" },
 ];
 
-export function useMetrics(instanceId: string | undefined, online: boolean): MetricsModel {
-  const [source, setSource] = useState<"session" | "cloudwatch">("cloudwatch");
+/** The host one world runs on, measured; read only while the tab is open. */
+export function useWorldMetrics(gameId: string | undefined, worldId: string | undefined): MetricsModel {
   const [range, setRange] = useState<MetricRange>("24h");
-  const [state, retry] = useLoad<HostMetrics>(instanceId === undefined ? null : () => loadHostMetrics(instanceId, range), [instanceId, range]);
-  return { source, setSource, online, instanceId, range, ranges: METRIC_RANGES, setRange, metrics: asLoading(state, retry, "metrics.retry") };
+  const [state, retry] = useLoad<HostMetrics | null>(gameId === undefined || worldId === undefined ? null : () => loadWorldMetrics(gameId, worldId, range), [gameId, worldId, range]);
+  return { range, ranges: METRIC_RANGES, setRange, metrics: asLoading(state, retry, "metrics.retry") };
 }
 
 // --- console (ADR-0063) --------------------------------------------------------

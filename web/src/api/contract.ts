@@ -263,7 +263,8 @@ export type SpawnpointApi = Readonly<{
   requestUpdateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external"): Promise<void>;
   requestPackDownload(gameId: string, worldId: string): Promise<{ release: string; url: string }>;
   loadBackups(gameId: string, worldId: string): Promise<BackupInventory>;
-  loadHostMetrics(instanceId: string, range: MetricRange): Promise<HostMetrics>;
+  /** The host this world's session runs on, measured; null while the world runs nowhere. */
+  loadWorldMetrics(gameId: string, worldId: string, range: MetricRange): Promise<HostMetrics | null>;
   /** The world's recent console commands, newest first; a pending one is settled on read. */
   loadConsole(gameId: string, worldId: string): Promise<readonly ConsoleEntry[]>;
   runConsoleCommand(gameId: string, worldId: string, command: string): Promise<ConsoleEntry>;

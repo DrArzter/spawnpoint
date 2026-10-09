@@ -1,26 +1,16 @@
 import { Button } from "../../components/ui/Button";
-import { ChoiceChip } from "../../components/ui/Chip";
 import { Status } from "../../components/ui/Status";
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { ConsoleModel } from "../../core/models";
 import { Icon } from "../../icons";
 
-// The console commits to the terminal grammar: who typed what, and what the
-// game answered (ADR-0063). Every line is a recorded command, so nothing here
-// is decoration standing in for a session.
-export function Rcon({ model }: Readonly<{ model: ConsoleModel }>) {
+// This world's console (ADR-0063), in the terminal grammar: who typed what,
+// and what the game answered. Every line is a recorded command, so nothing
+// here is decoration standing in for a session.
+export function ConsolePanel({ model }: Readonly<{ model: ConsoleModel }>) {
   const { game, world, session, log, unavailable } = model;
   return (
-    <div className="page">
-      <h1 className="visually-hidden">Console</h1>
-      {model.targets.length > 1 && (
-        <fieldset className="chip-row fieldset-plain">
-          <legend className="visually-hidden">World</legend>
-          {model.targets.map((target) => (
-            <ChoiceChip data-action={target.choose.id} key={target.id} onClick={target.choose.run} pressed={target.current}>{target.name}</ChoiceChip>
-          ))}
-        </fieldset>
-      )}
+    <div className="console-panel">
       <section aria-label="RCON terminal" className="terminal">
         <header className="terminal-bar">
           <Icon name="terminal" size={18} />

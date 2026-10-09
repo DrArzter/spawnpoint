@@ -164,19 +164,20 @@ export type WorldModel = Readonly<{
   wipes: readonly Readonly<{ wipe: Wipe; showBackups: Action }>[];
   backups: BackupsModel;
   releases: Readonly<{ rows: readonly ReleaseRow[]; state: World["release"]["state"] }>;
+  /** This world's console and its host's metrics; null when the role or the deployment offers neither tab. */
+  console: ConsoleModel | null;
+  metrics: MetricsModel | null;
 }>;
 
 // --- other console pages -----------------------------------------------------
 
+/** The host one world runs on, measured (ADR-0062): never another world's. */
 export type MetricsModel = Readonly<{
-  source: "cloudwatch" | "session";
-  setSource: (source: "cloudwatch" | "session") => void;
-  online: boolean;
-  instanceId: string | undefined;
   range: MetricRange;
   ranges: readonly Readonly<{ id: MetricRange; label: string }>[];
   setRange: (range: MetricRange) => void;
-  metrics: Loading<HostMetrics>;
+  /** Ready with null when the world runs on no host, as a stopped fleet world does. */
+  metrics: Loading<HostMetrics | null>;
 }>;
 
 /** One command in the console's log and what the game answered (ADR-0063). */
@@ -190,17 +191,12 @@ export type ConsoleLine = Readonly<{
   pending: boolean;
 }>;
 
-/** A running world the console can speak to. */
-export type ConsoleTarget = Readonly<{ id: string; name: string; current: boolean; choose: Action }>;
-
 export type ConsoleModel = Readonly<{
   game: Game | undefined;
   /** The world the console speaks to, and its session's state. */
   world: World | null;
   session: StatusDescriptor;
   online: boolean;
-  /** The scoped game's running worlds; more than one when several run at once (ADR-0062). */
-  targets: readonly ConsoleTarget[];
   /** Newest last, as a terminal prints; null while no world runs. */
   log: Loading<readonly ConsoleLine[]> | null;
   draft: string;
@@ -410,8 +406,6 @@ export type DialogsModel = Readonly<{
 export type PageModel =
   | Readonly<{ page: "worlds"; worlds: WorldsModel }>
   | Readonly<{ page: "world"; world: WorldModel }>
-  | Readonly<{ page: "metrics"; metrics: MetricsModel }>
-  | Readonly<{ page: "console"; console: ConsoleModel }>
   | Readonly<{ page: "releases"; releases: ReleasesModel }>
   | Readonly<{ page: "access"; access: AccessModel }>
   | Readonly<{ page: "profile"; profile: ProfileModel }>;

@@ -12,7 +12,7 @@ import { pendingFor } from "../shell/actions";
 import type { Skin } from "../skins/skin";
 import { action, type Action } from "./actions";
 import { useConsole, type ConsoleController } from "./useConsole";
-import { useBackups, useConsoleGateway, useInvitation, useLoginAccounts, useMetrics, useNotifications, useRoles, useUsers } from "./data";
+import { useBackups, useConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useRoles, useUsers, useWorldMetrics } from "./data";
 import { useConfirmationForm, useCreateWorldForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, ReleasesModel, WorldModel, WorldsModel } from "./models";
 import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionActionForWorld, sessionControlAvailability, sessionDetails, worldDetails, worldMoreActions, worldNotices, worldTabs } from "./worlds";
@@ -47,8 +47,6 @@ function CurrentPage({ console, skin, looks }: Controlled & Readonly<{ looks: Lo
   const { page, game, world } = console;
   if (page === "worlds" && game && world) return <WorldPage console={console} game={game} skin={skin} world={world} />;
   if (page === "worlds") return <WorldsPage console={console} skin={skin} />;
-  if (page === "metrics") return <MetricsPage console={console} skin={skin} />;
-  if (page === "console") return <ConsolePage console={console} skin={skin} />;
   if (page === "releases") return <skin.Releases model={releasesModel(console)} />;
   if (page === "access") return <AccessPage console={console} skin={skin} />;
   return <ProfilePage console={console} looks={looks} skin={skin} />;
@@ -81,7 +79,8 @@ function WorldsPage({ console, skin }: Controlled) {
 }
 
 function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game: Game; world: World }>) {
-  const { snapshot, granted, pending, sharedSession, serverState, fleet, worldCallbacks, route, navigate } = console;
+  const { snapshot, granted, capabilities, pending, sharedSession, serverState, fleet, worldCallbacks, route, navigate } = console;
+  const notify = useSnackbar();
   const rowPending = pendingFor(pending, world.id);
   const busy = rowPending !== null;
   const controlBusy = pending?.kind === "session" || pending?.kind === "lifecycle";
@@ -91,6 +90,18 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
   // A fleet world's page tells its own session, not the game's (ADR-0062).
   const worldState = fleet ? fleetWorldState(game, world) : serverState;
   const operations = snapshot?.operations ?? [];
+  const tabs = worldTabs(world, {
+    releases: granted.has("release.read"),
+    console: granted.has("console.use") && capabilities.has("consoleGateway"),
+    metrics: granted.has("metrics.read") && capabilities.has("worldMetrics"),
+  });
+  const offered = (tab: string) => tabs.some((item) => item.id === tab);
+  // Read only while their tab is open: a closed tab costs no host a request.
+  const running = runningWorlds(game).some((item) => item.id === world.id);
+  const consoleOpen = route.worldTab === "console" && offered("console");
+  const metricsOpen = route.worldTab === "metrics" && offered("metrics");
+  const consoleModel = useWorldConsole(game, world, consoleOpen, running, notify);
+  const metrics = useWorldMetrics(metricsOpen ? game.id : undefined, world.id);
   const backups = useBackups(game.id, world, {
     canRead: granted.has("backup.read"),
     canRestore: granted.has("backup.restore"),
@@ -104,7 +115,7 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     worldsHref: routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: null }),
     availability: worldStatus(world),
     notices: worldNotices(world, rowPending),
-    tabs: worldTabs(world, granted.has("release.read")),
+    tabs,
     tab: route.worldTab,
     setTab: (tab) => navigate({ worldTab: tab }),
     session: action(`session.${verb}`, verb === "stop" ? "Stop" : "Start", () => console.requestSession(game, world, verb), {
@@ -123,13 +134,10 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     wipes: [...world.wipes].reverse().map((wipe) => ({ wipe, showBackups: action("wipe.backups", "Backups", () => { backups.setFilter(wipe.id); navigate({ worldTab: "backups" }); }) })),
     backups,
     releases: { rows: releaseRows(world, granted.has("connection.read"), busy, () => worldCallbacks.onDownloadPack(game, world)), state: world.release.state },
+    console: offered("console") ? consoleModel : null,
+    metrics: offered("metrics") ? metrics : null,
   };
   return <skin.World model={model} />;
-}
-
-function MetricsPage({ console, skin }: Controlled) {
-  const model = useMetrics(console.snapshot?.hosts[0]?.id, console.serverState === "running");
-  return <skin.Metrics model={model} />;
 }
 
 // What each game's console is most often asked; Factorio's commands start with a slash.
@@ -151,30 +159,22 @@ function consoleLine(entry: ConsoleEntry): ConsoleLine {
   return { id: entry.id, at: entry.at, who: entry.displayName, command: entry.command, status: consoleStatuses[entry.status], output: entry.output, pending: entry.status === "pending" };
 }
 
-// The console speaks to one running world at a time (ADR-0063); with several
-// worlds of the game running (ADR-0062) the operator picks which.
-function ConsolePage({ console, skin }: Controlled) {
-  const notify = useSnackbar();
-  const { game, granted } = console;
-  const running = runningWorlds(game);
-  const [chosen, setChosen] = useState<string | null>(null);
-  const world = running.find((item) => item.id === chosen) ?? running[0] ?? null;
+// A world's own console (ADR-0063): it speaks to this world's session and to
+// no other, so several worlds of a game running at once never share one.
+function useWorldConsole(game: Game, world: World, open: boolean, running: boolean, notify: ReturnType<typeof useSnackbar>): ConsoleModel {
   const [draft, setDraft] = useState("");
-  const gateway = useConsoleGateway(world ? game?.id : undefined, world?.id, notify);
-  const unavailable = !granted.has("console.use")
-    ? "Your role cannot use the console."
-    : world === null ? `No world of ${game?.displayName ?? "this game"} is running. Start one from Worlds to use its console.` : null;
+  const gateway = useConsoleGateway(open && running ? game.id : undefined, world.id, notify);
+  const unavailable = running ? null : `${world.displayName} is not running. Start it to use its console.`;
   const send = (command: string, clear: boolean) => {
     void gateway.run(command).then((accepted) => { if (accepted && clear) setDraft(""); });
   };
   const entries = gateway.entries;
-  const model: ConsoleModel = {
+  return {
     game,
     world,
-    session: world ? sessionStatus("running") : sessionStatus(console.serverState),
-    online: world !== null,
-    targets: running.map((item) => ({ id: item.id, name: item.displayName, current: item.id === world?.id, choose: action("console.target", item.displayName, () => setChosen(item.id)) })),
-    log: world === null ? null
+    session: sessionStatus(running ? "running" : "stopped"),
+    online: running,
+    log: !running ? null
       : entries.status === "ready" ? { status: "ready", value: [...entries.value].reverse().map(consoleLine) }
         : entries.status === "error" ? { status: "error", error: entries.error, kind: entries.kind, retry: action("console.retry", "Try again", gateway.retry) }
           : { status: "loading" },
@@ -186,13 +186,12 @@ function ConsolePage({ console, skin }: Controlled) {
       busy: gateway.sending,
       hint: unavailable ?? undefined,
     }),
-    quickCommands: (QUICK_COMMANDS[game?.id ?? ""] ?? []).map((command) => action("console.quick", command, () => send(command, false), {
+    quickCommands: (QUICK_COMMANDS[game.id] ?? []).map((command) => action("console.quick", command, () => send(command, false), {
       disabled: unavailable !== null || gateway.sending,
       hint: unavailable ?? `Run ${command}`,
     })),
     unavailable,
   };
-  return <skin.Console model={model} />;
 }
 
 function releasesModel(console: ConsoleController): ReleasesModel {

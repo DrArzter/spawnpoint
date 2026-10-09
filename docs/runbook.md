@@ -142,7 +142,7 @@ stop produced a checked backup before EC2 stopped. If the watchdog itself fails,
 
 ## The console (ADR-0063)
 
-The panel's Console page sends one RCON command to a running world through the `spawnpoint-console` SSM document, which
+A world's Console tab in the panel sends one RCON command to that world through the `spawnpoint-console` SSM document, which
 runs `server/scripts/console.sh` and nothing else. Every command is recorded in the access table under
 `CONSOLE#<worldId>` with who sent it, the host, the command and up to 4,000 characters of the answer, for ninety days.
 

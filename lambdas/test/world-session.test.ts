@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { acquireLease, beginSession, beginStopping, initialLifecycleRecord, markSessionReady, type LifecycleRecord } from "../src/domain/lifecycle.ts";
-import { blockingOperations, holdsWorld, locateWorldSession, operationWorldId, sessionLifecycleKey } from "../src/control-plane/world-session.ts";
+import { blockingOperations, holdsWorld, locateWorldSession, operationWorldId, sessionLifecycleKey, worldHost } from "../src/control-plane/world-session.ts";
 
 // ADR-0062: a fleet world's sessions live on a record of its own, so two
 // worlds of one game run at once; configured worlds share their game's.
@@ -76,4 +76,22 @@ test("a fleet world waits only for its own operations; a configured world for an
   const promotion = { id: "promote", worldId: null };
   assert.deepEqual(blockingOperations([promotion], "rostik", placement), [promotion], "an operation that names no world blocks every world");
   assert.deepEqual(blockingOperations([{ id: "unknown", worldId: "gone" }], "world", placement).length, 1, "a world nobody knows is treated as the configured host's");
+});
+
+test("a world's host is the one its own session runs on, never another world's", () => {
+  const rostik = running("minecraft", "rostik");
+  const game = { game: rostik, own: null };
+  // The configured host runs Rostik; Vanilla, of the same game, runs nowhere.
+  const vanilla = locateWorldSession("minecraft", "vanilla", "configured", game).record;
+  assert.equal(worldHost("configured", vanilla, null, ["i-configured"]), null);
+  assert.deepEqual(worldHost("configured", locateWorldSession("minecraft", "rostik", "configured", game).record, null, ["i-configured"]), { hostId: "i-configured", slot: "" });
+
+  // Two fleet worlds of one game, each on the host and slot its session holds.
+  const a = running("world#a", "a", "session-a");
+  const b = running("world#b", "b", "session-b");
+  assert.deepEqual(worldHost("fleet", a, { hostId: "i-one", slot: 0 }, ["i-configured"]), { hostId: "i-one", slot: "0" });
+  assert.deepEqual(worldHost("fleet", b, { hostId: "i-one", slot: 1 }, ["i-configured"]), { hostId: "i-one", slot: "1" });
+  assert.equal(worldHost("fleet", a, null, ["i-configured"]), null, "an unplaced fleet session is never the configured host's");
+  assert.equal(worldHost("fleet", null, null, ["i-configured"]), null);
+  assert.equal(worldHost("configured", rostik, null, ["i-one", "i-two"]), null, "two configured hosts leave no single answer");
 });

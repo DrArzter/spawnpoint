@@ -87,7 +87,7 @@ const worldPage: WorldModel = {
   worldsHref: "#/worlds/minecraft",
   availability: { kind: "ready", label: "Ready" },
   notices: [{ id: "archived", tone: "warning", title: "This world is archived" }],
-  tabs: [{ id: "details", label: "Details" }, { id: "wipes", label: "Wipes", count: 1 }, { id: "backups", label: "Backups" }, { id: "releases", label: "Releases" }],
+  tabs: [{ id: "details", label: "Details" }, { id: "wipes", label: "Wipes", count: 1 }, { id: "backups", label: "Backups" }, { id: "releases", label: "Releases" }, { id: "console", label: "Console" }, { id: "metrics", label: "Metrics" }],
   tab: "details",
   setTab: noop,
   session: spy("session.stop", "Stop", { danger: true, hint: "Save, back up and stop" }),
@@ -109,18 +109,18 @@ const worldPage: WorldModel = {
     restore: () => spy("backup.restore", "Restore"),
   },
   releases: { rows: [{ name: "1.2", status: "Active", downloadable: true, sourceHref: "https://github.com/example/preset", download: spy("world.pack", "Download") }], state: "ready" },
+  // Drawn on their own tabs below; on the details tab neither is on screen.
+  console: null,
+  metrics: null,
 };
 
-const metrics: MetricsModel = { source: "cloudwatch", setSource: noop, online: true, instanceId: "i-1", range: "24h", ranges: [{ id: "24h", label: "24 hours" }], setRange: noop, metrics: { status: "error", error: "boom", kind: "failed", retry: spy("metrics.retry", "Try again") } };
+const metrics: MetricsModel = { range: "24h", ranges: [{ id: "24h", label: "24 hours" }], setRange: noop, metrics: { status: "error", error: "boom", kind: "failed", retry: spy("metrics.retry", "Try again") } };
+const metricsWithoutHost: MetricsModel = { ...metrics, metrics: { status: "ready", value: null } };
 const rcon: ConsoleModel = {
   game,
   world,
   session: { kind: "ok", label: "Online" },
   online: true,
-  targets: [
-    { id: world.id, name: world.displayName, current: true, choose: spy("console.target", world.displayName) },
-    { id: "magic", name: "Magic", current: false, choose: spy("console.target", "Magic") },
-  ],
   log: { status: "ready", value: [
     { id: "c1", at: "2026-10-09T18:40:03.000Z", who: "Alex", command: "list", status: { kind: "ok", label: "Answered" }, output: "There are 3 of a max of 20 players online: Alex, Mira, Kira", pending: false },
     { id: "c2", at: "2026-10-09T18:41:12.000Z", who: "DrArzter", command: "say hello", status: { kind: "progress", label: "Waiting for the game" }, output: null, pending: true },
@@ -221,10 +221,20 @@ for (const skin of SKINS) {
     checkSurface("World", details + wipes + backups + releasesTab, { ...worldPage, backups: { ...worldPage.backups, restore: worldPage.backups.restore(worldPage.backups.inventory.status === "ready" ? worldPage.backups.inventory.value.entries[0]! : (null as never)) } });
   });
 
-  test(`${skin.name}: metrics, console and releases draw their verbs`, () => {
-    checkSurface("Metrics", renderToStaticMarkup(createElement(skin.Metrics, { model: metrics })), metrics);
-    checkSurface("Console", renderToStaticMarkup(createElement(skin.Console, { model: rcon })), rcon);
-    checkSurface("Console", renderToStaticMarkup(createElement(skin.Console, { model: rconUnreadable })), rconUnreadable);
+  test(`${skin.name}: a world's console and metrics tabs draw their verbs, and only that world's`, () => {
+    // ADR-0062: several worlds of a game can run at once, so a console and a
+    // host's metrics belong to one world's page, never to the game's menu.
+    const worldTab = (model: Partial<WorldModel>) => renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, ...model } }));
+    checkSurface("World console", worldTab({ tab: "console", console: rcon }), rcon);
+    checkSurface("World console", worldTab({ tab: "console", console: rconUnreadable }), rconUnreadable);
+    checkSurface("World metrics", worldTab({ tab: "metrics", metrics }), metrics);
+    const noHost = worldTab({ tab: "metrics", metrics: metricsWithoutHost });
+    assert.match(noHost, /No host right now/, "a stopped fleet world shows no other world's host");
+    const console = worldTab({ tab: "console", console: rcon });
+    assert.match(console, new RegExp(world.displayName), "the console names the world it speaks to");
+  });
+
+  test(`${skin.name}: releases draw their verbs`, () => {
     checkSurface("Releases", renderToStaticMarkup(createElement(skin.Releases, { model: releases })), releases);
   });
 

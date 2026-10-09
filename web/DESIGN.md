@@ -313,7 +313,7 @@ Controls (buttons, fields, chips' pill, inline selects) use a 4px radius. Cards,
 - **Drawer (256px):** grouped nav items, 40px pill rows, active item gets `primary-container` fill and `on-primary-container` text; section labels are 12px/500 secondary ink; footer pinned to the bottom.
 - **Icon rail (960–1199px):** same drawer, collapsed to 72px, items become 48px circles, labels/sections/footer hidden until pinned open.
 - **Mobile drawer (<960px):** fixed modal panel sliding from the left over a scrim, `shadow-3` while open.
-- **Tabs:** underline pattern — 48px row, secondary ink at rest, blue text plus a 3px blue underline bar when selected; a pill count badge follows the label.
+- **Tabs:** underline pattern — 48px row, secondary ink at rest, blue text plus a 3px blue underline bar when selected; a pill count badge follows the label; on a narrow screen the row scrolls sideways and keeps the selected tab inside it, on both faces.
 - **Table:** 48px header and body rows, hairline rules, hover tint, row-actions column right-aligned and width-collapsed; below 600px width (container query) collapses to stacked label/value records per row with the action row last. A `decision` table (person, control, decision) takes the Medium step first: between 600 and 839px of table width the person has the first line and the control and decision share the second.
 - **Page header:** breadcrumb, `h1`, status beside the name, actions and the overflow menu in a second unbreakable group; `leading` holds what stands for the resource before its name — a person's 64px avatar on the profile page — and `subtitle` is the name's own second line (a handle, 14px/20px secondary ink), where `description` is a sentence about the page under the whole row. Every console page that shows a title uses it; list pages carry a visually hidden `h1` and let the drawer name the page.
 
@@ -328,7 +328,7 @@ Fixed-position popover with `::backdrop` transparent, 4px radius, `shadow-3`, 8p
 Fixed bottom-left host (bottom-full-width on phones), dark-on-light-theme inverted surface (`--snack-bg`/`--snack-ink`), 48px min-height, `shadow-3`, one action in `--snack-action` blue-tint; success/error variants tint only the leading icon.
 
 ### Terminal (signature component)
-A committed terminal grammar on the world Console tab: dark surface regardless of theme (`--term-bg`/`--term-ink`), header bar with an online/offline status dot, monospace output with muted/amber/blue line roles, a blinking block cursor, and an input row with quick-command chips. This is the one place the console departs from the light Material surface, by design, to read as a real shell.
+A committed terminal grammar on the world Console tab: dark surface regardless of theme (`--term-bg`/`--term-ink`), header bar with an online/offline status dot, monospace output with muted and amber line roles, and an input row with quick-command chips. The world's Metrics tab sits beside it and draws only the host that world's session runs on. This is the one place the console departs from the light Material surface, by design, to read as a real shell.
 
 ### A header earns its place
 A column heading is worth a line when the column would otherwise be ambiguous — `Status`, `Wipe`, `Stored`, `Size`.

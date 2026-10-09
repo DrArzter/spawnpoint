@@ -98,6 +98,8 @@ export type ConsoleController = Readonly<{
   session: ActiveSession;
   viewer: ViewerProfile;
   granted: ReadonlySet<string>;
+  /** What this deployment serves: a page or tab is offered only where its route exists. */
+  capabilities: ReadonlySet<string>;
   snapshot: ControlPlaneSnapshot | null;
   listStatus: "loading" | "ready" | "error";
   error: string;
@@ -339,6 +341,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     session,
     viewer,
     granted,
+    capabilities,
     snapshot,
     listStatus: listStatusOf(controlPlane),
     error: controlPlane.error,

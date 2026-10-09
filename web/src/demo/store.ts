@@ -269,7 +269,7 @@ export function backups(gameId: string, worldId: string): BackupInventory {
 
 // A plausible evening: quiet, a session that starts, load while people play,
 // then nothing — the gap is the point, because a stopped host reports nothing.
-export function hostMetrics(instanceId: string, range: MetricRange): HostMetrics {
+function hostMetrics(instanceId: string, range: MetricRange): HostMetrics {
   settle();
   const hours = range === "6h" ? 6 : range === "24h" ? 24 : 168;
   const period = hours <= 6 ? 300 : hours <= 48 ? 900 : 3600;
@@ -300,6 +300,16 @@ export function hostMetrics(instanceId: string, range: MetricRange): HostMetrics
       }),
     })),
   };
+}
+
+// The demo runs every world on its one configured host. Like the API, it shows
+// that host only for the world that holds the session: another world's load is
+// not this one's.
+export function worldMetrics(gameId: string, worldId: string, range: MetricRange): HostMetrics | null {
+  settle();
+  const lifecycle = state.snapshot.games.find((game) => game.id === gameId)?.lifecycle;
+  const holds = lifecycle?.activeWorldId === worldId && lifecycle.observedState !== "stopped";
+  return holds ? hostMetrics(state.snapshot.hosts[0]?.id ?? "host-game", range) : null;
 }
 
 export function packLink(gameId: string, worldId: string): { release: string; url: string } {

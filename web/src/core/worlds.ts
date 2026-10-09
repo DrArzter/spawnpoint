@@ -225,11 +225,14 @@ export function buildWorldRow(game: Game, world: World, opts: Readonly<{ fleet: 
   };
 }
 
-export function worldTabs(world: World, canReadReleases: boolean): { id: WorldTab; label: string; count?: number }[] {
+export function worldTabs(world: World, offered: Readonly<{ releases: boolean; console: boolean; metrics: boolean }>): { id: WorldTab; label: string; count?: number }[] {
   const tabs: { id: WorldTab; label: string; count?: number }[] = [{ id: "details", label: "Details" }];
   if (world.worldLifecycleAvailable) tabs.push({ id: "wipes", label: "Wipes", count: world.wipes.length });
   tabs.push({ id: "backups", label: "Backups" });
-  if (canReadReleases) tabs.push({ id: "releases", label: "Releases" });
+  if (offered.releases) tabs.push({ id: "releases", label: "Releases" });
+  // A world's own console and its own host's metrics (ADR-0062, ADR-0063).
+  if (offered.console) tabs.push({ id: "console", label: "Console" });
+  if (offered.metrics) tabs.push({ id: "metrics", label: "Metrics" });
   return tabs;
 }
 

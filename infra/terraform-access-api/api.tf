@@ -284,6 +284,7 @@ locals {
     "GET /games/{gameId}/worlds/{worldId}/pack",
     "GET /games/{gameId}/worlds/{worldId}/backups",
     "GET /games/{gameId}/worlds/{worldId}/console",
+    "GET /games/{gameId}/worlds/{worldId}/metrics",
     "POST /games/{gameId}/worlds/{worldId}/console",
     "GET /hosts/{instanceId}/metrics",
     "GET /games/{gameId}/presets/{presetId}/releases/{version}",

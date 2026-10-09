@@ -1,5 +1,5 @@
 import type { LoginProviderId } from "../lib/signin";
-import type { ControlPlaneSnapshot } from "../model";
+import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../model";
 
 export type { LoginProviderId } from "../lib/signin";
 
@@ -145,6 +145,20 @@ export type BackupEntry = {
 
 export type BackupInventory = { entries: BackupEntry[]; unverified: number; truncated: boolean };
 
+/** One server mod of a release, as its manifest records it (ADR-0065). */
+export type ReleaseMod = Readonly<{ file: string; sha256: string; bytes: number }>;
+export type ReleaseMods = Readonly<{ release: string; mods: readonly ReleaseMod[] }>;
+/**
+ * A world's whitelist (ADR-0066). Unmanaged: the world's record keeps none, and
+ * its server's own file is left alone. Managed: these names are the whole list.
+ */
+export type WorldWhitelist = Readonly<{ managed: boolean; names: readonly string[]; updatedAt: string | null; updatedBy: string | null }>;
+/** A saved whitelist, and whether a running server was asked to reload it now. */
+export type SavedWhitelist = WorldWhitelist & Readonly<{ applied: "reloading" | "next_start" }>;
+
+/** A link the browser opens once; it expires, and is never kept. */
+export type FileLink = Readonly<{ url: string; expiresIn: number }>;
+
 export type MetricRange = "6h" | "24h" | "7d";
 export type HostMetricPoint = Readonly<{ at: string; value: number | null }>;
 export type HostMetricSeries = Readonly<{ id: string; label: string; unit: string; points: readonly HostMetricPoint[] }>;
@@ -206,6 +220,18 @@ export type IssuedAccessInvitation = Readonly<{
  * implement it, so a screen cannot tell them apart and the demo cannot quietly
  * skip a call: leaving one out is a type error.
  */
+/** One console command and the game's answer, recorded against who ran it (ADR-0063). */
+export type ConsoleEntry = Readonly<{
+  id: string;
+  at: string;
+  identityId: string;
+  displayName: string;
+  worldId: string;
+  command: string;
+  status: "pending" | "succeeded" | "failed" | "unavailable" | "timed_out";
+  output: string | null;
+}>;
+
 export type SpawnpointApi = Readonly<{
   restoreSession(): Promise<AuthState>;
   /** Which ways in the deployment offers, and which accept anonymous registration. */
@@ -251,7 +277,22 @@ export type SpawnpointApi = Readonly<{
   requestUpdateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external"): Promise<void>;
   requestPackDownload(gameId: string, worldId: string): Promise<{ release: string; url: string }>;
   loadBackups(gameId: string, worldId: string): Promise<BackupInventory>;
-  loadHostMetrics(instanceId: string, range: MetricRange): Promise<HostMetrics>;
+  /** A short-lived link to one of the world's archives; the API records who asked. */
+  requestBackupDownload(gameId: string, worldId: string, key: string): Promise<FileLink>;
+  /** The game settings the world sets (ADR-0064); a running world takes them at its next start. */
+  updateGameSettings(gameId: string, worldId: string, values: Readonly<Record<string, SettingValue>>): Promise<WorldGameSettings>;
+  loadWhitelist(gameId: string, worldId: string): Promise<WorldWhitelist>;
+  /** The whole list; a running world is asked to reload it, any start writes it. */
+  updateWhitelist(gameId: string, worldId: string, names: readonly string[]): Promise<SavedWhitelist>;
+  /** A release's server mods, from its manifest. */
+  loadReleaseMods(gameId: string, presetId: string, release: string): Promise<ReleaseMods>;
+  /** A short-lived link to one server mod of a release, named by its digest. */
+  requestModDownload(gameId: string, presetId: string, release: string, sha256: string): Promise<FileLink>;
+  /** The host this world's session runs on, measured; null while the world runs nowhere. */
+  loadWorldMetrics(gameId: string, worldId: string, range: MetricRange): Promise<HostMetrics | null>;
+  /** The world's recent console commands, newest first; a pending one is settled on read. */
+  loadConsole(gameId: string, worldId: string): Promise<readonly ConsoleEntry[]>;
+  runConsoleCommand(gameId: string, worldId: string, command: string): Promise<ConsoleEntry>;
 
   loadInvitationRecipients(): Promise<InvitationRecipient[]>;
   loadInvitationHistory(gameId: string, worldId: string): Promise<InvitationSummary[]>;

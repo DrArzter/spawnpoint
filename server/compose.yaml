@@ -23,7 +23,6 @@ services:
       TYPE: "FORGE"
       VERSION: "1.20.1"
       MEMORY: "4096M"
-      DIFFICULTY: "2"
       ONLINE_MODE: "false"
       USE_MEOWICE_FLAGS: "true"
       TZ: "Europe/Warsaw"
@@ -46,6 +45,20 @@ services:
       # data directory of its own, so the folder is never the world's id.
       # Pinned here, not left to the image's default.
       LEVEL: "world"
+
+      # PROJECT: a world's game settings (games/minecraft/settings.json,
+      # ADR-0064). The host exports the ones the world sets; an entry with no
+      # value reaches the container only when exported, so a setting nobody
+      # changed leaves the server as it was. Difficulty keeps its old default.
+      DIFFICULTY: "${DIFFICULTY:-normal}"
+      MODE:
+      MAX_PLAYERS:
+      MOTD:
+      PVP:
+      ALLOW_FLIGHT:
+      SPAWN_MONSTERS:
+      VIEW_DISTANCE:
+      SIMULATION_DISTANCE:
 
     volumes:
       - "${SPAWNPOINT_WORLD_DATA_DIRECTORY:-./data}:/data"

@@ -78,6 +78,11 @@ module takes part by:
   sentinel passes tests and loses worlds. They receive the world's name, which names its backups; where the save
   sits comes from the game's own settings, not from that name. Minecraft's folder is the `level-name` that
   `compose.yaml` pins as `LEVEL`, and a world created from a preset has an id such as `minecraft-rostik-1a2b3c4d`.
+- `settings.json`, when a game offers game settings ([ADR-0064](../../docs/adr/0064-let-a-world-carry-game-settings.md)), lists
+  each one: id, label, kind (`choice`, `integer`, `boolean` or `text`), the values it may take, its default and `env`, the
+  container variable it becomes. Give every `env` an entry with no value in the game's compose file, so a setting
+  nobody set never reaches the container. Never list a setting the platform depends on: a port, RCON, the whitelist,
+  online mode, the save folder or memory. `server/tests/game-settings-test.sh` checks every definition file.
 - The player probe's `key=value` output never varies by game; only what produces the values does.
 - `game_tick_time_ms` prints milliseconds per tick for `scripts/measure-tick.sh`, the reading the acceptance of
   [ADR-0054](../../docs/adr/0054-place-a-session-on-a-host-with-room.md) compares alone and beside a neighbour;

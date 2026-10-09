@@ -35,6 +35,8 @@
 #                              game actually serves
 #   game_query_players_raw     transport: print the raw player query response
 #   game_parse_player_count    parser: raw on stdin -> integer on stdout
+#   game_console               one command an operator typed (ADR-0063), handed to
+#                              the game's own RCON as a single argument; print the reply
 #   game_save                  flush the running game to durable storage
 #   game_save_paths            print NUL-separated paths under the data dir to archive
 #   game_save_sentinel         succeed only if the data dir holds a real save
@@ -174,5 +176,46 @@ configure_game_compose() {
     export SERVER_COMPOSE_FILES="${compose_files}"
   fi
   export SERVER_COMPOSE_SERVICE="${SERVER_COMPOSE_SERVICE:-${GAME_COMPOSE_SERVICE}}"
+  export_game_settings
   return 0
+}
+
+# A world's game settings (ADR-0064) reach the container as the variables its
+# game's settings.json names. Only the settings the world sets are exported,
+# so compose passes nothing else and the server keeps what it had. Every
+# lifecycle command runs this, so each one renders the same configuration.
+# A setting this checkout does not define is skipped with a warning: the
+# configured host may run an older checkout than the panel. A defined setting
+# with an invalid value refuses the command.
+export_game_settings() {
+  local definitions="${GAMES_DIR}/${GAME_ID}/settings.json"
+  local values="${WORLD_GAME_SETTINGS:-}"
+  [[ -n "${values}" ]] || values='{}'
+  if [[ ! -f "${definitions}" ]]; then
+    [[ "${values}" == "{}" ]] || printf 'warning: %s defines no game settings; ignoring those of the world\n' "${GAME_ID}" >&2
+    return 0
+  fi
+  local unknown pairs name value
+  unknown="$(jq -r --argjson values "${values}" '($values | keys) - [.settings[].id] | join(" ")' "${definitions}")" || {
+    printf 'error: game settings are not a JSON object\n' >&2
+    exit 1
+  }
+  [[ -z "${unknown}" ]] || printf 'warning: ignoring game settings this checkout does not define: %s\n' "${unknown}" >&2
+  pairs="$(jq -r --argjson values "${values}" '
+    .settings[] | . as $setting | select($values | has($setting.id)) | $values[$setting.id] as $value
+    | if (
+        ($setting.type == "choice" and ($value | type) == "string" and ($value | IN($setting.choices[].value))) or
+        ($setting.type == "integer" and ($value | type) == "number" and $value == ($value | floor) and $value >= $setting.min and $value <= $setting.max) or
+        ($setting.type == "boolean" and ($value | type) == "boolean") or
+        ($setting.type == "text" and ($value | type) == "string" and ($value | length) >= 1 and ($value | length) <= $setting.max_length and ($value | test($setting.pattern)))
+      ) then [$setting.env, ($value | tostring)] | @tsv
+      else error("invalid value for game setting \($setting.id)") end
+  ' "${definitions}")" || {
+    printf 'error: refusing invalid game settings for world %s\n' "${WORLD_ID:-unknown}" >&2
+    exit 1
+  }
+  while IFS=$'\t' read -r name value; do
+    [[ -n "${name}" ]] || continue
+    export "${name}=${value}"
+  done <<<"${pairs}"
 }

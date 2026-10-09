@@ -1,7 +1,9 @@
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { catalogWithPresets, gameCatalog, type CatalogGame, worldAddress } from "./catalog.ts";
+import { locateWorldSession, sessionLifecycleKey } from "./world-session.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
 import type { WorldRecord } from "./world-registry.ts";
+import { gameSettingDefinitions, type SettingDefinition, type SettingValue } from "./game-settings.ts";
 
 export type HostObservation = Readonly<{
   id: string;
@@ -31,6 +33,8 @@ export type OperationObservation = Readonly<{
   status: "running";
   startedAt: string;
   providerRef: string;
+  /** The world the workflow's input names; null when it names none (ADR-0062). */
+  worldId: string | null;
 }>;
 
 export type HostMetricPoint = Readonly<{ at: string; value: number | null }>;
@@ -56,6 +60,10 @@ export type ControlPlaneSnapshot = Readonly<{
     code: string;
     displayName: string;
     lifecycle: LifecycleRecord | null;
+    /** What a world of this game may set (ADR-0064); empty when the game defines nothing. */
+    settings: readonly SettingDefinition[];
+    /** The game keeps a whitelist a world's record can hold (ADR-0066). */
+    whitelist: boolean;
     presets: ReadonlyArray<Readonly<{
       id: string;
       displayName: string;
@@ -87,6 +95,10 @@ export type ControlPlaneSnapshot = Readonly<{
         originRelease: string;
       }>>;
       release: ReleasePointerObservation;
+      /** This world's session, wherever it lives (ADR-0062); null when it has none. */
+      session: WorldSessionView | null;
+      /** The game settings this world sets; null when it has no record to keep them in. */
+      gameSettings: Readonly<{ values: Readonly<Record<string, SettingValue>>; updatedAt: string | null }> | null;
     }>>;
   }>>;
   hosts: ReadonlyArray<Readonly<{
@@ -103,9 +115,34 @@ export type ControlPlaneSnapshot = Readonly<{
     type: OperationObservation["type"];
     status: "running";
     startedAt: string;
+    worldId: string | null;
     providerRef?: string;
   }>>;
 }>;
+
+/** What a viewer may know of a world's session: never the lease or the fence. */
+export type WorldSessionView = Readonly<{
+  serverId: string;
+  desiredState: LifecycleRecord["desiredState"];
+  observedState: LifecycleRecord["observedState"];
+  activeSessionId: string | null;
+  activeWorldId: string | null;
+  idle: LifecycleRecord["idle"];
+  updatedAtEpochSeconds: number;
+}>;
+
+function sessionView(serverId: string, record: LifecycleRecord | null): WorldSessionView | null {
+  if (record === null) return null;
+  return {
+    serverId,
+    desiredState: record.desiredState,
+    observedState: record.observedState,
+    activeSessionId: record.activeSessionId,
+    activeWorldId: record.activeWorldId ?? null,
+    idle: record.idle,
+    updatedAtEpochSeconds: record.updatedAtEpochSeconds,
+  };
+}
 
 function observedAddress(lifecycle: LifecycleRecord | null, worldId: string): string | null {
   if (lifecycle?.activeWorldId !== worldId || lifecycle?.observedState !== "ready") return null;
@@ -132,11 +169,14 @@ export async function readControlPlaneSnapshot(
   const effectiveCatalog = catalogWithPresets(presets, catalog, worldRecords);
   const recordByWorld = new Map(worldRecords.map((record) => [record.worldId, record]));
   const worlds = effectiveCatalog.flatMap((game) => game.worlds);
-  const [observedAt, hosts, operations, lifecycles, pointers] = await Promise.all([
+  // A fleet world keeps its sessions on a record of its own (ADR-0062).
+  const fleetWorlds = effectiveCatalog.flatMap((game) => game.worlds.filter((world) => world.placement === "fleet").map((world) => ({ game, world })));
+  const [observedAt, hosts, operations, lifecycles, ownRecords, pointers] = await Promise.all([
     sources.readObservedAt?.() ?? Promise.resolve(null),
     sources.listHosts(),
     sources.listRunningOperations(),
     Promise.all(effectiveCatalog.map((game) => sources.readLifecycle(game.id))),
+    Promise.all(fleetWorlds.map(({ game, world }) => sources.readLifecycle(sessionLifecycleKey(game.id, world.id, "fleet")))),
     Promise.all(worlds.map((world) => sources.readReleasePointer(
       world.id,
       recordByWorld.get(world.id)?.currentGeneration.id ?? null,
@@ -146,6 +186,7 @@ export async function readControlPlaneSnapshot(
   // running instance holds right now, and nothing between sessions.
   const hostPublicIp = hosts.find((host) => host.state === "running" && host.publicIp !== null)?.publicIp ?? null;
   const pointerByWorld = new Map(worlds.map((world, index) => [world.id, pointers[index]!]));
+  const ownRecordByWorld = new Map(fleetWorlds.map(({ world }, index) => [world.id, ownRecords[index] ?? null]));
 
   return {
     observedAt: (observedAt ?? now()).toISOString(),
@@ -154,6 +195,8 @@ export async function readControlPlaneSnapshot(
       code: game.code,
       displayName: game.displayName,
       lifecycle: lifecycles[gameIndex] ?? null,
+      settings: gameSettingDefinitions(game.id),
+      whitelist: game.whitelist === true,
       presets: (game.presets ?? []).map((preset) => ({
         id: preset.id,
         displayName: preset.displayName,
@@ -165,6 +208,10 @@ export async function readControlPlaneSnapshot(
         latestRelease: preset.latestRelease,
       })),
       worlds: game.worlds.map((world) => {
+        const session = locateWorldSession(game.id, world.id, world.placement ?? "configured", {
+          game: lifecycles[gameIndex] ?? null,
+          own: ownRecordByWorld.get(world.id) ?? null,
+        });
         const release = pointerByWorld.get(world.id) ?? { state: "unavailable" as const, generationId: null, desiredRelease: null, activeRelease: null };
         const record = recordByWorld.get(world.id);
         const generations = record === undefined ? [] : [...record.previousGenerations, record.currentGeneration];
@@ -196,9 +243,11 @@ export async function readControlPlaneSnapshot(
           // altogether from a caller who may not read one.
           connectionAddress: connectionHost === null
             ? null
-            : observedAddress(lifecycles[gameIndex] ?? null, world.id)
+            : observedAddress(session.record, world.id)
               ?? (world.placement === "fleet" ? null : worldAddress(world.id, { connectionHost, publicIp: hostPublicIp }, effectiveCatalog)),
           release: options.includeDesiredRelease ? release : { ...release, desiredRelease: null },
+          session: sessionView(session.serverId, session.record),
+          gameSettings: record === undefined ? null : { values: record.gameSettings?.values ?? {}, updatedAt: record.gameSettings?.updatedAt ?? null },
         };
       }),
     })),
@@ -219,6 +268,7 @@ export async function readControlPlaneSnapshot(
       type: operation.type,
       status: operation.status,
       startedAt: operation.startedAt,
+      worldId: operation.worldId,
       ...(options.includeInfrastructure ? { providerRef: operation.providerRef } : {}),
     })),
   };

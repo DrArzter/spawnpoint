@@ -22,7 +22,7 @@ broker with Google.
 | Data volume | EBS, survives the instance | The world, the mod directory, configs |
 | Control-plane API | API Gateway + Lambda | The only thing allowed to change state. Owns every rule |
 | Operation orchestration | Step Functions, Standard workflows | Runs the long operations. The execution **is** the operation state, so there is no table for it. See [ADR-0025](adr/0025-step-functions-for-long-operations.md) |
-| Lifecycle automation | Step Functions + Lambda + DynamoDB | Lifecycle V2: a fenced lease and session record per server, one watchdog execution per session, and the verified stop it invokes. The interruption handler exists only if Spot is ever adopted |
+| Lifecycle automation | Step Functions + Lambda + DynamoDB | Lifecycle V2: a fenced lease and session record per game for the configured host and per world on the fleet (ADR-0062), one watchdog execution per session, and the verified stop it invokes. The interruption handler exists only if Spot is ever adopted |
 | Release store | S3, versioned | Immutable release artefacts per preset; world records and, per wipe, separate desired and active release state |
 | Backup store | S3, versioned, lifecycle rules | World archives |
 | Events | EventBridge + SNS | Step Functions and EC2 publish lifecycle observations; a projector records bounded event history and a current control-plane view. Alarms and the budget publish to the `spawnpoint-alert` SNS topic |

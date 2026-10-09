@@ -27,7 +27,7 @@ The panel is opened from Telegram on a phone and as a persistent browser tab on 
 - Email and password is the default way in; Telegram (Mini App and browser) and, where a deployment configures it, Google are alternatives, and every provider issues the same session.
 - Every action is subject to the same backend identity, role and permission checks regardless of client.
 - Games contain persistent worlds; sessions temporarily bind a selected world to disposable compute.
-- The interface exposes status, session controls, invitations, metrics, console, releases, backups, identities, roles, notification subscriptions and linked accounts only where the backend has real support.
+- The interface exposes status, session controls, invitations, metrics, console, releases, backups, game settings, mod and backup downloads, identities, roles, notification subscriptions and linked accounts only where the backend has real support.
 - Static CloudFront hosting uses hash routes so reload and browser history preserve navigation.
 - Light, dark and system theme behaviour must work in Telegram and ordinary browsers and survive reloads.
 - The same interface must remain effective on phones, ordinary desktops and 4K displays.

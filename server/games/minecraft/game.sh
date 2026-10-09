@@ -41,6 +41,13 @@ game_query_players_raw() {
   rcon list
 }
 
+# The reply, or the transport's failure: its status is the caller's answer.
+game_console() {
+  local command="$1"
+  rcon "${command}"
+  return $?
+}
+
 game_save() {
   local save_result
   rcon save-off >/dev/null
@@ -91,6 +98,49 @@ game_tick_time_ms() {
     return 1
   }
   printf '%s\n' "${tick_ms}"
+}
+
+# Offline mode (ADR-0022) keys a player by the UUID the server derives from the
+# name, Java's UUID.nameUUIDFromBytes("OfflinePlayer:" + name). A whitelist must
+# carry that UUID: a lookup by name returns the account's online one, which an
+# offline server never sees, and the player is turned away.
+minecraft_offline_uuid() {
+  local name="$1" hex byte6 byte8
+  # MD5 is what the game derives the UUID with; it protects nothing here.
+  hex="$(printf 'OfflinePlayer:%s' "${name}" | md5sum | cut -c1-32)" # NOSONAR
+  byte6=$(( (16#${hex:12:2} & 0x0f) | 0x30 ))
+  byte8=$(( (16#${hex:16:2} & 0x3f) | 0x80 ))
+  hex="${hex:0:12}$(printf '%02x' "${byte6}")${hex:14:2}$(printf '%02x' "${byte8}")${hex:18:14}"
+  printf '%s-%s-%s-%s-%s\n' "${hex:0:8}" "${hex:8:4}" "${hex:12:4}" "${hex:16:4}" "${hex:20:12}"
+  return 0
+}
+
+# The whitelist a world's record keeps (ADR-0066), written as whitelist.json in
+# its data directory: exactly these names, in place of what was there. The
+# image writes the file only when WHITELIST is set, which compose never does.
+game_render_whitelist() {
+  local data_dir="$1" names_json="$2" entries name
+  entries="[]"
+  while IFS= read -r name; do
+    [[ -n "${name}" ]] || continue
+    [[ "${name}" =~ ^[A-Za-z0-9_]{3,16}$ ]] || {
+      printf 'error: not a Minecraft name: %s\n' "${name}" >&2
+      return 1
+    }
+    entries="$(jq -c --arg uuid "$(minecraft_offline_uuid "${name}")" --arg name "${name}" '. + [{uuid: $uuid, name: $name}]' <<<"${entries}")"
+  done < <(jq -r '.[]' <<<"${names_json}")
+  mkdir -p -- "${data_dir}"
+  jq . <<<"${entries}" >"${data_dir}/.whitelist.json.next"
+  chmod 0644 -- "${data_dir}/.whitelist.json.next"
+  # The server rewrites the file when a name is added at its console.
+  chown --reference="${data_dir}" -- "${data_dir}/.whitelist.json.next" 2>/dev/null || true
+  mv -f -- "${data_dir}/.whitelist.json.next" "${data_dir}/whitelist.json"
+  return 0
+}
+
+game_reload_whitelist() {
+  rcon whitelist reload
+  return $?
 }
 
 # What a verified archive must contain to count as a save of this game.

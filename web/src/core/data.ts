@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, SubscriptionState } from "../api/contract";
+import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseMod, ReleaseMods, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
 import { failureKind } from "../api/contract";
 import {
   approveAccessCandidate, changePassword, createAccessInvitation, dismissAccessCandidate, googleOidcClientId, linkGoogle, linkPassword, linkTelegram, loadAccessCandidates, loadAccessIdentities, loadAccessInvitations,
-  loadAccessRoles, loadBackups, loadHostMetrics, loadInvitationHistory, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
-  sendInvitation, telegramOidcClientId, updateIdentityRole, updateSubscriptions,
+  loadAccessRoles, loadBackups, loadConsole, loadInvitationHistory, loadWorldMetrics, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadReleaseMods, loadWhitelist, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
+  runConsoleCommand, sendInvitation, telegramOidcClientId, updateIdentityRole, updateSubscriptions, updateWhitelist,
 } from "../auth";
 import type { SnackInput } from "../components/ui/Snackbar";
 import type { StatusKind } from "../components/ui/Status";
@@ -13,7 +13,8 @@ import { formatDateTime } from "../lib/format";
 import { GOOGLE_CLIENT_ID } from "../lib/signin";
 import type { Game, LinkKind, Member, OwnerBootstrap, Role, World } from "../model";
 import { action } from "./actions";
-import type { BackupsModel, CandidateRow, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, NotificationsModel, RolesModel, UsersModel } from "./models";
+import type { BackupsModel, CandidateRow, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, NotificationsModel, RolesModel, UsersModel, WhitelistModel } from "./models";
+import { whitelistNameError } from "./whitelist";
 
 /*
  * The data each page loads for itself and what may be done with it. Every
@@ -51,10 +52,11 @@ function asLoading<T>(state: LoadState<T>, retry: () => void, retryId: string): 
 
 // --- backups -----------------------------------------------------------------
 
-export function useBackups(gameId: string, world: World, opts: Readonly<{ canRead: boolean; canRestore: boolean; busy: boolean; settled: string; onRestore: (entry: BackupEntry) => void }>): BackupsModel {
+export function useBackups(gameId: string, world: World, opts: Readonly<{ canRead: boolean; canRestore: boolean; busy: boolean; settled: string; onRestore: (entry: BackupEntry) => void; onDownload: ((entry: BackupEntry) => void) | null }>): BackupsModel {
   const [filter, setFilter] = useState<string | null>(null);
   useEffect(() => { setFilter(null); }, [world.id]);
   const [state, retry] = useLoad<BackupInventory>(opts.canRead ? () => loadBackups(gameId, world.id) : null, [opts.canRead, gameId, world.id, opts.settled]);
+  const onDownload = opts.onDownload;
   const inventory = useMemo<Loading<{ entries: readonly BackupEntry[]; unverified: number; truncated: boolean }>>(() => {
     if (state.status !== "ready") return asLoading(state, retry, "backups.retry");
     return { status: "ready", value: { entries: state.value.entries.filter((entry) => filter === null || entry.generationId === filter), unverified: state.value.unverified, truncated: state.value.truncated } };
@@ -72,6 +74,75 @@ export function useBackups(gameId: string, world: World, opts: Readonly<{ canRea
       disabled: !world.worldLifecycleAvailable || !opts.canRestore || entry.generationId === null || opts.busy,
       hint: restoreHint(world, entry, opts.canRestore),
     }),
+    download: onDownload === null ? null : (entry) => action("backup.download", "Download archive", () => onDownload(entry), {
+      icon: "download",
+      hint: "A link that works for five minutes; the download is recorded against you",
+    }),
+  };
+}
+
+// --- whitelist (ADR-0066) ------------------------------------------------------
+
+/**
+ * A world's whitelist, read only while its tab is open. Every change saves the
+ * whole list; a running world reloads it at once, a stopped one at its start.
+ */
+export function useWhitelist(gameId: string, world: World, open: boolean, notify: Notify): WhitelistModel {
+  const [state, retry, update] = useLoad<WorldWhitelist>(open ? () => loadWhitelist(gameId, world.id) : null, [open, gameId, world.id]);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const names = state.status === "ready" ? state.value.names : [];
+  const name = draft.trim();
+  const draftError = name === "" ? null : whitelistNameError(name, names);
+  const when = (saved: SavedWhitelist) => saved.applied === "reloading" ? "The running server reloads its list now." : `${world.displayName} reads it at its next start.`;
+  const save = async (next: readonly string[], said: (saved: SavedWhitelist) => string): Promise<boolean> => {
+    setSaving(true);
+    try {
+      const saved = await updateWhitelist(gameId, world.id, next);
+      update(() => saved);
+      notify({ tone: "success", message: said(saved) });
+      return true;
+    } catch (error) {
+      notify({ tone: "error", message: error instanceof Error ? error.message : "The whitelist could not be saved." });
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+  const add = action("whitelist.add", "Add player", () => {
+    if (name === "" || draftError !== null) return;
+    void save([...names, name], (saved) => `${name} is on the whitelist. ${when(saved)}`).then((saved) => { if (saved) setDraft(""); });
+  }, { icon: "add", disabled: state.status !== "ready" || name === "" || draftError !== null || saving, busy: saving });
+  const list: WhitelistModel["list"] = state.status !== "ready" ? asLoading(state, retry, "whitelist.retry") : {
+    status: "ready",
+    value: {
+      managed: state.value.managed,
+      updatedAt: state.value.updatedAt,
+      updatedBy: state.value.updatedBy,
+      rows: state.value.names.map((player) => ({
+        name: player,
+        remove: action(`whitelist.remove.${player}`, "Remove", () => void save(names.filter((item) => item !== player), (saved) => `${player} is off the whitelist. ${when(saved)}`), {
+          danger: true, disabled: saving, hint: `Remove ${player} from the whitelist`,
+        }),
+      })),
+    },
+  };
+  return { world, list, draft, setDraft, draftError, add };
+}
+
+// --- release files (ADR-0065) -------------------------------------------------
+
+/** A release's server mods, read only while the tab that shows them is open. */
+export function useReleaseMods(gameId: string, release: Readonly<{ presetId: string; version: string }> | null, onDownload: (presetId: string, version: string, mod: ReleaseMod) => void): ModsModel | null {
+  const [state, retry] = useLoad<ReleaseMods>(release === null ? null : () => loadReleaseMods(gameId, release.presetId, release.version), [gameId, release?.presetId, release?.version]);
+  if (release === null) return null;
+  if (state.status !== "ready") return { release: release.version, files: asLoading(state, retry, "mods.retry") };
+  return {
+    release: release.version,
+    files: { status: "ready", value: state.value.mods.map((mod) => ({
+      ...mod,
+      download: action(`mod.download.${mod.sha256}`, "Download", () => onDownload(release.presetId, release.version, mod), { icon: "download" }),
+    })) },
   };
 }
 
@@ -89,11 +160,74 @@ export const METRIC_RANGES: readonly { id: MetricRange; label: string }[] = [
   { id: "7d", label: "7 days" },
 ];
 
-export function useMetrics(instanceId: string | undefined, online: boolean): MetricsModel {
-  const [source, setSource] = useState<"session" | "cloudwatch">("cloudwatch");
+/** The host one world runs on, measured; read only while the tab is open. */
+export function useWorldMetrics(gameId: string | undefined, worldId: string | undefined): MetricsModel {
   const [range, setRange] = useState<MetricRange>("24h");
-  const [state, retry] = useLoad<HostMetrics>(instanceId === undefined ? null : () => loadHostMetrics(instanceId, range), [instanceId, range]);
-  return { source, setSource, online, instanceId, range, ranges: METRIC_RANGES, setRange, metrics: asLoading(state, retry, "metrics.retry") };
+  const [state, retry] = useLoad<HostMetrics | null>(gameId === undefined || worldId === undefined ? null : () => loadWorldMetrics(gameId, worldId, range), [gameId, worldId, range]);
+  return { range, ranges: METRIC_RANGES, setRange, metrics: asLoading(state, retry, "metrics.retry") };
+}
+
+// --- console (ADR-0063) --------------------------------------------------------
+
+const CONSOLE_POLL_PENDING_MS = 1500;
+const CONSOLE_POLL_IDLE_MS = 5000;
+
+export type ConsoleGateway = Readonly<{
+  entries: LoadState<readonly ConsoleEntry[]>;
+  sending: boolean;
+  /** Resolves true when the command was accepted; a refusal reaches `notify`. */
+  run: (command: string) => Promise<boolean>;
+  retry: () => void;
+}>;
+
+/**
+ * A world's console history, kept fresh without flicker: the first read shows
+ * as loading, later reads replace the list in place. A command that waits for
+ * its answer is read again sooner than a quiet log.
+ */
+export function useConsoleGateway(gameId: string | undefined, worldId: string | undefined, notify: Notify): ConsoleGateway {
+  const [entries, setEntries] = useState<LoadState<readonly ConsoleEntry[]>>({ status: "loading" });
+  const [sending, setSending] = useState(false);
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    if (gameId === undefined || worldId === undefined) return;
+    let current = true;
+    setEntries({ status: "loading" });
+    loadConsole(gameId, worldId)
+      .then((value) => { if (current) setEntries({ status: "ready", value }); })
+      .catch((cause: unknown) => { if (current) setEntries({ status: "error", error: cause instanceof Error ? cause.message : "The console history could not be loaded.", kind: failureKind(cause) }); });
+    return () => { current = false; };
+  }, [gameId, worldId, revision]);
+
+  const pending = entries.status === "ready" && entries.value.some((entry) => entry.status === "pending");
+  useEffect(() => {
+    if (gameId === undefined || worldId === undefined || entries.status !== "ready") return;
+    let current = true;
+    const timer = window.setTimeout(() => {
+      loadConsole(gameId, worldId)
+        .then((value) => { if (current) setEntries({ status: "ready", value }); })
+        .catch(() => undefined);
+    }, pending ? CONSOLE_POLL_PENDING_MS : CONSOLE_POLL_IDLE_MS);
+    return () => { current = false; window.clearTimeout(timer); };
+  }, [gameId, worldId, entries, pending]);
+
+  const run = useCallback(async (command: string) => {
+    if (gameId === undefined || worldId === undefined) return false;
+    setSending(true);
+    try {
+      const entry = await runConsoleCommand(gameId, worldId, command);
+      setEntries((state) => state.status === "ready" ? { status: "ready", value: [entry, ...state.value.filter((item) => item.id !== entry.id)] } : state);
+      return true;
+    } catch (cause) {
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : "The command could not be sent." });
+      return false;
+    } finally {
+      setSending(false);
+    }
+  }, [gameId, worldId, notify]);
+
+  return { entries, sending, run, retry: () => setRevision((value) => value + 1) };
 }
 
 // --- access: users -------------------------------------------------------------

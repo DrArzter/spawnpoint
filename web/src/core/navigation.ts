@@ -5,8 +5,6 @@ import type { Page } from "../model";
 // capabilities without making an unfinished page visible in production.
 const navigation: readonly Readonly<{ id: Page; label: string; permission: string; capability?: string }>[] = [
   { id: "worlds", label: "Worlds", permission: "status.read" },
-  { id: "metrics", label: "Metrics", permission: "metrics.read", capability: "hostMetrics" },
-  { id: "console", label: "Console", permission: "console.use", capability: "consoleGateway" },
   { id: "releases", label: "Releases", permission: "release.read" },
   { id: "access", label: "Access", permission: "access.read" },
 ];

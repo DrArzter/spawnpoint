@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { Avatar } from "../../components/Avatar";
 import { LinkedAccounts } from "../../components/LinkedAccounts";
 import { Column, DataTable } from "../../components/ui/DataTable";
 import { Sheet } from "../../components/ui/Dialog";
@@ -17,6 +16,7 @@ import { formatDateTime, plural } from "../../lib/format";
 import { describePermission } from "../../lib/permissions";
 import type { Game, Role } from "../../model";
 import { ActionButton, menuItems } from "./actions";
+import { Person } from "./Person";
 
 export function Access({ model }: Readonly<{ model: AccessModel }>) {
   return (
@@ -49,15 +49,7 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
     {
       id: "user",
       label: "User",
-      render: (row) => (
-        <span className="user-cell">
-          <Avatar name={row.candidate.displayName} photoUrl={row.candidate.photoUrl} />
-          <span>
-            <strong>{row.candidate.displayName}</strong>
-            <small>{row.account} · {row.since}</small>
-          </span>
-        </span>
-      ),
+      render: (row) => <Person detail={<>{row.account} · {row.since}</>} name={row.candidate.displayName} photoUrl={row.candidate.photoUrl} />,
     },
     { id: "role", label: "Role", align: "end", width: "180px", render: (row) => <RoleSelect disabled={rolesBlocked} excludeOwner fallback="Loading roles…" label={`Role for ${row.candidate.displayName}`} onChange={row.setRoleId} roles={model.roles} value={row.roleId} /> },
     {
@@ -70,7 +62,7 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
   const columns: Column<MemberRow>[] = [
     // The identity id is not shown. It is an internal handle, and a table is
     // read to tell one person from another, which their name already does.
-    { id: "user", label: "User", render: (row) => <span className="user-cell"><Avatar name={row.member.name} /><strong>{row.member.name}</strong></span> },
+    { id: "user", label: "User", render: (row) => <Person name={row.member.name} /> },
     // Right-aligned against the actions beside it, so the control that changes
     // a role sits next to the one that opens their accounts rather than
     // stranded in the middle of the row.
@@ -142,7 +134,7 @@ function Invitations({ model }: Readonly<{ model: InvitationsModel }>) {
   const list = model.list;
   return (
     <Card title="Invite to Spawnpoint">
-      <form className="access-invite-form" onSubmit={(event) => { event.preventDefault(); model.create.run(); }}>
+      <form className="entry-form" onSubmit={(event) => { event.preventDefault(); model.create.run(); }}>
         {model.emailMode && <TextField autoComplete="email" label="Invite email" onChange={(event) => model.setEmail(event.target.value)} placeholder="person@example.com" required type="email" value={model.email} />}
         {model.emailMode === false && <p>This deployment has no email delivery. Share the one-time link yourself; the recipient signs in with an enabled provider.</p>}
         <ActionButton action={model.create} type="submit" variant="filled" />

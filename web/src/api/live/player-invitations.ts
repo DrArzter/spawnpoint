@@ -28,6 +28,8 @@ export const playerInvitationsApi = {
         forbidden: "Your role cannot invite players.",
         invalid_recipients: "One or more selected players are no longer available.",
         invitation_publish_failed: "The invitation was saved, but Telegram delivery could not be queued.",
+        world_archived: "This world is archived. Restore a backup before inviting players to it.",
+        unknown_world: "Spawnpoint does not know this world. Refresh and try again.",
       };
       throw new Error(messages[body.error ?? ""] ?? "The invitation could not be sent.");
     }

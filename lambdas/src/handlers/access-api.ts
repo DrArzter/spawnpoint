@@ -94,7 +94,7 @@ import { packRelease, planFleetSessionOperation, planSessionOperation, stoppedHo
 import { blockingOperations, holdsWorld, locateWorldSession, sessionLifecycleKey, worldHost, type WorldHost, type WorldPlacement, type WorldSession } from "../control-plane/world-session.ts";
 import { checkGameSettings } from "../control-plane/game-settings.ts";
 import { checkWhitelist } from "../control-plane/whitelist.ts";
-import { CONSOLE_RECORD_DAYS, checkConsoleCommand, consoleResult, encodeConsoleCommand, type ConsoleEntry, type ConsoleStatus } from "../control-plane/console.ts";
+import { CONSOLE_RECORD_DAYS, checkConsoleCommand, consoleEntryFromItem, consoleResult, encodeConsoleCommand, type ConsoleEntry } from "../control-plane/console.ts";
 import { issueSubscriptionTicket, subscriptionTicketItem, subscriptionTicketLifetimeSeconds } from "../control-plane/subscriptions.ts";
 import { worldIdForName } from "../control-plane/world-registry.ts";
 
@@ -999,21 +999,10 @@ async function worldMetrics(gameId: string, worldId: string, range: string): Pro
 
 const CONSOLE_HISTORY_LIMIT = 30;
 
-function consoleEntry(item: Record<string, unknown>): ConsoleEntry {
-  const text = (key: string) => (typeof item[key] === "string" ? item[key] as string : "");
-  return {
-    id: text("command_id"),
-    at: text("created_at"),
-    identityId: text("identity_id"),
-    displayName: text("display_name"),
-    worldId: text("world_id"),
-    command: text("command"),
-    status: (text("status") || "pending") as ConsoleStatus,
-    output: typeof item.output === "string" ? item.output : null,
-  };
-}
+/** The MCP client a command came through (ADR-0061), named as it registered. */
+type ConsoleAgent = Readonly<{ clientId: string; name: string }>;
 
-async function runConsoleCommand(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
+async function runConsoleCommand(identity: Identity, gameId: string, worldId: string, body: string | undefined, agent: ConsoleAgent | null = null): Promise<Response> {
   let parsed: { command?: unknown };
   try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
   const [presets, worldRecords, hosts] = await Promise.all([
@@ -1042,13 +1031,14 @@ async function runConsoleCommand(identity: Identity, gameId: string, worldId: st
     pk: `CONSOLE#${worldId}`, sk: `${at}#${commandId}`, command_id: commandId, created_at: at,
     identity_id: identity.id, display_name: identity.displayName, game_id: gameId, world_id: worldId,
     session_id: sessionId, host_id: target.hostId, command: check.command, status: "pending",
+    ...(agent === null ? {} : { agent_client_id: agent.clientId, agent_name: agent.name }),
     ttl: Math.floor(Date.now() / 1000) + CONSOLE_RECORD_DAYS * 24 * 3600,
   } }));
-  const entry: ConsoleEntry = { id: commandId, at, identityId: identity.id, displayName: identity.displayName, worldId, command: check.command, status: "pending", output: null };
+  const entry: ConsoleEntry = { id: commandId, at, identityId: identity.id, displayName: identity.displayName, agent: agent?.name ?? null, worldId, command: check.command, status: "pending", output: null };
   return response(202, { entry });
 }
 
-async function consoleHistory(gameId: string, worldId: string): Promise<Response> {
+async function consoleEntries(gameId: string, worldId: string): Promise<readonly ConsoleEntry[]> {
   const page = await document.send(new QueryCommand({
     TableName: tableName, KeyConditionExpression: "pk = :pk", ExpressionAttributeValues: { ":pk": `CONSOLE#${worldId}` },
     ScanIndexForward: false, Limit: CONSOLE_HISTORY_LIMIT,
@@ -1072,7 +1062,18 @@ async function consoleHistory(gameId: string, worldId: string): Promise<Response
     }
     return { ...item, status: result.status, output: result.output };
   }));
-  return response(200, { entries: settled.map(consoleEntry) });
+  return settled.map(consoleEntryFromItem);
+}
+
+async function consoleHistory(gameId: string, worldId: string): Promise<Response> {
+  return response(200, { entries: await consoleEntries(gameId, worldId) });
+}
+
+// One command's answer, for an agent that sent it: it has to be among the
+// world's recent commands, as the panel's history shows them.
+async function consoleCommandResult(gameId: string, worldId: string, commandId: string): Promise<Response> {
+  const entry = (await consoleEntries(gameId, worldId)).find((candidate) => candidate.id === commandId);
+  return entry === undefined ? response(404, { error: "unknown_command" }) : response(200, { entry });
 }
 
 function roles(identity: Identity): Response {
@@ -2593,7 +2594,14 @@ function profileToolResponse(identity: Identity): Response {
   return response(200, { structuredContent: profile, content: [{ type: "text", text: JSON.stringify(profile, null, 2) }] });
 }
 
-type McpToolCall = (identity: Identity, args: Record<string, unknown>) => Promise<Response> | Response | null;
+/** Who the call came through: the OAuth client the person connected. */
+type McpCaller = Readonly<{ identity: Identity; clientId: string }>;
+
+type McpToolCall = (identity: Identity, args: Record<string, unknown>, caller: McpCaller) => Promise<Response> | Response | null;
+
+async function consoleAgent(clientId: string): Promise<ConsoleAgent> {
+  return { clientId, name: (await oauthClient(clientId))?.name ?? clientId };
+}
 
 // Each tool runs the handler its web route runs; null means invalid arguments.
 const mcpToolCalls: Readonly<Record<McpToolName, McpToolCall>> = {
@@ -2623,6 +2631,16 @@ const mcpToolCalls: Readonly<Record<McpToolName, McpToolCall>> = {
     const worldArgs = worldToolArguments(args);
     return worldArgs === null || typeof args.key !== "string" ? null : backupDownload(identity, ...worldArgs, JSON.stringify({ key: args.key }));
   },
+  send_console_command: (identity, args, caller) => {
+    const worldArgs = worldToolArguments(args);
+    if (worldArgs === null || typeof args.command !== "string") return null;
+    const body = JSON.stringify({ command: args.command });
+    return consoleAgent(caller.clientId).then((agent) => runConsoleCommand(identity, ...worldArgs, body, agent));
+  },
+  get_console_result: (_identity, args) => {
+    const worldArgs = worldToolArguments(args);
+    return worldArgs === null || typeof args.commandId !== "string" ? null : consoleCommandResult(...worldArgs, args.commandId);
+  },
   start_world: (identity, args) => {
     const worldArgs = worldToolArguments(args);
     return worldArgs === null ? null : controlSession(identity, "start", ...worldArgs);
@@ -2633,12 +2651,13 @@ const mcpToolCalls: Readonly<Record<McpToolName, McpToolCall>> = {
   },
 };
 
-async function callMcpTool(identity: Identity, scopes: readonly OAuthScope[], name: string, args: Record<string, unknown>): Promise<Response> {
+async function callMcpTool(caller: McpCaller, scopes: readonly OAuthScope[], name: string, args: Record<string, unknown>): Promise<Response> {
+  const { identity } = caller;
   const tool = mcpTools.find((candidate) => candidate.name === name);
   if (tool === undefined) return mcpToolError(`Unknown tool: ${name}`);
   if (!scopes.includes(tool.scope)) return response(403, { error: "insufficient_scope" });
   if (!hasMcpToolPermission(identity, tool.permission)) return response(403, { error: "forbidden" });
-  const apiResponse = await mcpToolCalls[tool.name](identity, args);
+  const apiResponse = await mcpToolCalls[tool.name](identity, args, caller);
   if (apiResponse === null) return mcpToolError("Invalid tool arguments");
   const data = JSON.parse(apiResponse.body || "null") as unknown;
   return apiResponse.statusCode >= 200 && apiResponse.statusCode < 300
@@ -2652,13 +2671,13 @@ function mcpUnauthorized(): Response {
   });
 }
 
-async function authenticateRemoteMcp(event: Event): Promise<Readonly<{ identity: Identity; scopes: readonly OAuthScope[] }> | null> {
+async function authenticateRemoteMcp(event: Event): Promise<Readonly<{ identity: Identity; clientId: string; scopes: readonly OAuthScope[] }> | null> {
   const authorization = Object.entries(event.headers ?? {}).find(([key]) => key.toLowerCase() === "authorization")?.[1] ?? "";
   const bearer = /^Bearer ([A-Za-z0-9._-]+)$/.exec(authorization)?.[1];
   const subject = bearer ? verifyOAuthAccessToken(bearer, oauthIssuer, oauthResource, await sessionSigningSecret()) : null;
   if (subject === null) return null;
   const identity = await identityById(subject.identityId);
-  return identity === null ? null : { identity, scopes: subject.scopes };
+  return identity === null ? null : { identity, clientId: subject.clientId, scopes: subject.scopes };
 }
 
 function initializeMcp(request: McpRequest): Response {
@@ -2675,17 +2694,17 @@ function initializeMcp(request: McpRequest): Response {
 function listMcpTools(id: unknown): Response {
   return mcpJson(id, { tools: mcpTools.map((tool) => ({
     name: tool.name, title: tool.title, description: tool.description, inputSchema: tool.inputSchema,
-    annotations: { readOnlyHint: tool.readOnly, destructiveHint: false, openWorldHint: false },
+    annotations: { readOnlyHint: tool.readOnly, destructiveHint: tool.destructive, openWorldHint: false },
     securitySchemes: [{ type: "oauth2", scopes: [tool.scope] }],
     _meta: { securitySchemes: [{ type: "oauth2", scopes: [tool.scope] }], ...(tool.name === "get_profile" ? { "openai/profile": true } : {}) },
   })) });
 }
 
-async function callRemoteMcpTool(request: McpRequest, identity: Identity, scopes: readonly OAuthScope[]): Promise<Response> {
+async function callRemoteMcpTool(request: McpRequest, caller: McpCaller, scopes: readonly OAuthScope[]): Promise<Response> {
   const params = request.params !== null && typeof request.params === "object" ? request.params as Record<string, unknown> : {};
   const args = params.arguments !== null && typeof params.arguments === "object" ? params.arguments as Record<string, unknown> : {};
   const name = typeof params.name === "string" ? params.name : "";
-  const called = await callMcpTool(identity, scopes, name, args);
+  const called = await callMcpTool(caller, scopes, name, args);
   const payload = JSON.parse(called.body || "null") as unknown;
   return called.statusCode === 200 ? mcpJson(request.id, payload) : mcpJson(request.id, { ...mcpResult(payload), isError: true });
 }
@@ -2698,7 +2717,7 @@ async function remoteMcp(event: Event): Promise<Response> {
   if (request.method === "notifications/initialized") return { statusCode: 202, headers: {}, body: "" };
   if (request.method === "initialize") return initializeMcp(request);
   if (request.method === "tools/list") return listMcpTools(request.id);
-  if (request.method === "tools/call") return callRemoteMcpTool(request, authenticated.identity, authenticated.scopes);
+  if (request.method === "tools/call") return callRemoteMcpTool(request, authenticated, authenticated.scopes);
   return mcpError(request.id, -32601, "Method not found");
 }
 

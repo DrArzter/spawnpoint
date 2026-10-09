@@ -226,6 +226,8 @@ export type ConsoleEntry = Readonly<{
   at: string;
   identityId: string;
   displayName: string;
+  /** The MCP client that sent the command for the person; absent or null from the panel. */
+  agent?: string | null;
   worldId: string;
   command: string;
   status: "pending" | "succeeded" | "failed" | "unavailable" | "timed_out";

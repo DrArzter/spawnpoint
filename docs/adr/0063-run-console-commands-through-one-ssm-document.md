@@ -62,8 +62,8 @@ configured host runs another of its worlds: that load is not this world's. The r
   item; the scan reads the host records it could already get one by one.
 - Factorio's and Zomboid's RCON port is now read when a command is sent rather than when the module loads, so a session
   on a slot other than zero reaches its own port. Probes always had this fault; no session ran on such a slot yet.
-- The MCP tools do not offer the console. An agent with a console needs the narrower confirmation contract the MCP
-  README already asks for before it gets restore, wipe or purge.
+- The MCP tools did not offer the console at first; since 2026-10-09 they do — see
+  [the amendment](#amendment--the-console-through-mcp-2026-10-09).
 
 ## Alternatives
 
@@ -73,3 +73,20 @@ configured host runs another of its worlds: that load is not this world's. The r
 | A daemon on each host, reached over the network | A process that runs when nobody plays, an open port, and a credential to manage; ADR-0007 chose SSM so the host has no inbound path |
 | Wait for the answer inside the request | Ten seconds is not enough margin for SSM on a busy host; a slow answer would read as a failure |
 | An allow-list of commands | Operators use the console for the commands nobody listed; the refusal list names only what breaks the lifecycle |
+
+## Amendment — the console through MCP (2026-10-09)
+
+An MCP connection is an Identity's own (ADR-0061): every tool runs as the person who connected it, under that person's
+role. The owner decided that this binding, with the client's own prompt before each call, is the confirmation a console
+command needs. A per-command approval in Telegram or the panel was considered and not chosen.
+
+- `send_console_command` runs the panel's handler: permission `console.use`, scope `spawnpoint.operate`, the same
+  refusal list. It is marked `destructiveHint`, so a client asks the person before each call.
+- The record names the OAuth client as well as the person (`agent_client_id`, `agent_name`, the name the client
+  registered with). The panel shows such a command as "person via client".
+- `get_console_result` reads one command's answer from the world's recent commands, under `console.use` and
+  `spawnpoint.read`.
+- The local stdio adapter offers the same two tools. It signs in with the person's own session, so its commands are
+  recorded under the person only.
+- Spawnpoint cannot prove that a person approved each command; that depends on the client. A client that runs tools
+  without asking gives the agent the person's console.

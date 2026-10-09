@@ -103,6 +103,32 @@ export function createServer(client: SpawnpointClient): McpServer {
     { method: "POST", body: JSON.stringify({ key }) },
   )));
 
+  server.registerTool("send_console_command", {
+  title: "Send console command",
+  description: "Send one console command to a running world, as the connected person. Commands that stop the game outside its lifecycle are refused. Returns the command's id; read its answer with get_console_result.",
+  inputSchema: { gameId, worldId, command: z.string().min(1).max(256).describe("One line, as typed in the game's console") },
+  outputSchema: { data: z.unknown() },
+  annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+  }, async ({ gameId, worldId, command }) => result(await client.request(
+    `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/console`,
+    { method: "POST", body: JSON.stringify({ command }) },
+  )));
+
+  server.registerTool("get_console_result", {
+  title: "Get console result",
+  description: "Read the answer to one console command by the id send_console_command returned. Its status stays pending until the game answers.",
+  inputSchema: { gameId, worldId, commandId: z.string().min(1).max(128).describe("The id send_console_command returned") },
+  outputSchema: { data: z.unknown() },
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  }, async ({ gameId, worldId, commandId }) => {
+    // The API answers a world's recent commands; this picks the one asked for.
+    const history = await client.request(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/console`) as { entries?: { id?: unknown }[] };
+    const entry = history.entries?.find((candidate) => candidate.id === commandId);
+    return entry === undefined
+      ? { ...result({ error: "unknown_command" }), isError: true }
+      : result({ entry });
+  });
+
   server.registerTool("start_world", {
   title: "Start world",
   description: "Request that Spawnpoint start one world. The returned operation is asynchronous; poll get_control_plane for completion.",

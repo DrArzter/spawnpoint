@@ -24,3 +24,19 @@ test("download tools keep the permissions their web routes have (ADR-0065)", () 
   assert.deepEqual(byName.get("get_backup_download_link")?.inputSchema.required, ["gameId", "worldId", "key"]);
   assert.deepEqual(byName.get("get_release_mod_link")?.inputSchema.required, ["gameId", "presetId", "version", "sha256"]);
 });
+
+test("the console reaches an agent as the person, under the panel's permission (ADR-0063)", () => {
+  const send = mcpTools.find((tool) => tool.name === "send_console_command");
+  const read = mcpTools.find((tool) => tool.name === "get_console_result");
+  assert.equal(send?.permission, "console.use");
+  assert.equal(send?.scope, "spawnpoint.operate");
+  // Marked as a change that may destroy, so a client asks before each call.
+  assert.equal(send?.readOnly, false);
+  assert.equal(send?.destructive, true);
+  assert.deepEqual(send?.inputSchema.required, ["gameId", "worldId", "command"]);
+  assert.equal(read?.permission, "console.use");
+  assert.equal(read?.scope, "spawnpoint.read");
+  assert.equal(read?.readOnly, true);
+  // Every other tool changes nothing it cannot undo.
+  assert.deepEqual(mcpTools.filter((tool) => tool.destructive).map((tool) => tool.name), ["send_console_command"]);
+});

@@ -9,6 +9,9 @@ Spawnpoint exposes the same tool contract through the production remote MCP endp
 - `get_host_metrics`
 - `list_world_backups`
 - `get_world_pack`
+- `get_release` — a release's server mods with their SHA-256 digests
+- `get_release_mod_link` — a fifteen-minute link for one mod, by its digest (`release.read`)
+- `get_backup_download_link` — a five-minute link for one backup archive, by its key; needs `backup.download` and is recorded
 - `start_world`
 - `stop_world`
 

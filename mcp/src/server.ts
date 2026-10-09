@@ -9,6 +9,12 @@ import { SpawnpointClient } from "./client.js";
 
 const gameId = z.string().min(1).max(64).describe("Game ID from get_control_plane, for example minecraft");
 const worldId = z.string().min(1).max(255).describe("World ID from get_control_plane");
+const presetId = z.string().min(1).max(64).describe("Preset ID from get_control_plane");
+const version = z.string().min(1).max(32).describe("Release version from get_control_plane, for example 1.2");
+
+function releasePath(game: string, preset: string, release: string): string {
+  return `/games/${encodeURIComponent(game)}/presets/${encodeURIComponent(preset)}/releases/${encodeURIComponent(release)}`;
+}
 
 function result(data: unknown) {
   return {
@@ -69,6 +75,33 @@ export function createServer(client: SpawnpointClient): McpServer {
   outputSchema: { data: z.unknown() },
   annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async ({ gameId, worldId }) => result(await client.request(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/pack`)));
+
+  server.registerTool("get_release", {
+  title: "Get release",
+  description: "Read one release: its loader, runtime, source preset and server mods with their SHA-256 digests.",
+  inputSchema: { gameId, presetId, version },
+  outputSchema: { data: z.unknown() },
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  }, async ({ gameId, presetId, version }) => result(await client.request(releasePath(gameId, presetId, version))));
+
+  server.registerTool("get_release_mod_link", {
+  title: "Get release mod link",
+  description: "Create a download link, valid for fifteen minutes, for one server mod of a release, named by its SHA-256 digest from get_release.",
+  inputSchema: { gameId, presetId, version, sha256: z.string().regex(/^[0-9a-f]{64}$/).describe("The mod's SHA-256 digest from get_release") },
+  outputSchema: { data: z.unknown() },
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  }, async ({ gameId, presetId, version, sha256 }) => result(await client.request(`${releasePath(gameId, presetId, version)}/mods/${sha256}`)));
+
+  server.registerTool("get_backup_download_link", {
+  title: "Get backup download link",
+  description: "Create a download link, valid for five minutes, for one backup archive of a world, named by its key from list_world_backups. Who asked is recorded.",
+  inputSchema: { gameId, worldId, key: z.string().min(1).max(512).describe("The archive's key from list_world_backups") },
+  outputSchema: { data: z.unknown() },
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  }, async ({ gameId, worldId, key }) => result(await client.request(
+    `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/backups/download`,
+    { method: "POST", body: JSON.stringify({ key }) },
+  )));
 
   server.registerTool("start_world", {
   title: "Start world",

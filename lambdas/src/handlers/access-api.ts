@@ -59,6 +59,7 @@ import {
   verifyPkce,
   type OAuthScope,
 } from "../access/oauth.ts";
+import { mcpTools, type McpToolName } from "../access/mcp-tools.ts";
 import { requestBody } from "../access/request-body.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../domain/access-events.ts";
 import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
@@ -2544,15 +2545,6 @@ async function identityById(identityId: string): Promise<Identity | null> {
 
 type McpRequest = Readonly<{ jsonrpc?: unknown; id?: unknown; method?: unknown; params?: unknown }>;
 
-const mcpTools = [
-  { name: "get_profile", title: "Get Spawnpoint profile", description: "Read the connected Spawnpoint identity and role.", permission: null, scope: "spawnpoint.read", inputSchema: { type: "object", properties: {}, additionalProperties: false }, readOnly: true },
-  { name: "get_control_plane", title: "Get Spawnpoint control plane", description: "List games, worlds, sessions, hosts, releases, permissions, and current state.", permission: "status.read", scope: "spawnpoint.read", inputSchema: { type: "object", properties: {}, additionalProperties: false }, readOnly: true },
-  { name: "get_host_metrics", title: "Get host metrics", description: "Read recent metrics for one host.", permission: "metrics.read", scope: "spawnpoint.read", inputSchema: { type: "object", properties: { instanceId: { type: "string" }, range: { type: "string", enum: ["1h", "6h", "24h", "7d"], default: "24h" } }, required: ["instanceId"], additionalProperties: false }, readOnly: true },
-  { name: "list_world_backups", title: "List world backups", description: "List recoverable backups for one world.", permission: "backup.read", scope: "spawnpoint.read", inputSchema: { type: "object", properties: { gameId: { type: "string" }, worldId: { type: "string" } }, required: ["gameId", "worldId"], additionalProperties: false }, readOnly: true },
-  { name: "get_world_pack", title: "Get world client pack", description: "Create a temporary download link for the world's client pack.", permission: "connection.read", scope: "spawnpoint.read", inputSchema: { type: "object", properties: { gameId: { type: "string" }, worldId: { type: "string" } }, required: ["gameId", "worldId"], additionalProperties: false }, readOnly: true },
-  { name: "start_world", title: "Start world", description: "Request that Spawnpoint start one world.", permission: "session.start", scope: "spawnpoint.operate", inputSchema: { type: "object", properties: { gameId: { type: "string" }, worldId: { type: "string" } }, required: ["gameId", "worldId"], additionalProperties: false }, readOnly: false },
-  { name: "stop_world", title: "Stop world", description: "Request a verified backup and stop for one world.", permission: "session.stop", scope: "spawnpoint.operate", inputSchema: { type: "object", properties: { gameId: { type: "string" }, worldId: { type: "string" } }, required: ["gameId", "worldId"], additionalProperties: false }, readOnly: false },
-] as const satisfies readonly { name: string; title: string; description: string; permission: Permission | null; scope: OAuthScope; inputSchema: Record<string, unknown>; readOnly: boolean }[];
 
 function mcpJson(id: unknown, result: unknown): Response {
   return response(200, { jsonrpc: "2.0", id, result });
@@ -2589,31 +2581,64 @@ function metricsToolArguments(args: Record<string, unknown>): readonly [string, 
     : null;
 }
 
-async function invokeMcpTool(identity: Identity, name: string, args: Record<string, unknown>): Promise<Response | null> {
-  if (name === "get_profile") {
-    const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
-    const profile = { id: identity.id, name: identity.displayName, role: role?.name ?? identity.roleId, permissions: role?.permissions ?? identity.directGrants };
-    return response(200, { structuredContent: profile, content: [{ type: "text", text: JSON.stringify(profile, null, 2) }] });
-  }
-  if (name === "get_control_plane") return controlPlane(identity);
-  if (name === "get_host_metrics") {
+// The handlers check each value's format; here a value only has to be text.
+function releaseToolArguments(args: Record<string, unknown>): readonly [string, string, string] | null {
+  const { gameId, presetId, version } = args;
+  return typeof gameId === "string" && typeof presetId === "string" && typeof version === "string" ? [gameId, presetId, version] : null;
+}
+
+function profileToolResponse(identity: Identity): Response {
+  const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
+  const profile = { id: identity.id, name: identity.displayName, role: role?.name ?? identity.roleId, permissions: role?.permissions ?? identity.directGrants };
+  return response(200, { structuredContent: profile, content: [{ type: "text", text: JSON.stringify(profile, null, 2) }] });
+}
+
+type McpToolCall = (identity: Identity, args: Record<string, unknown>) => Promise<Response> | Response | null;
+
+// Each tool runs the handler its web route runs; null means invalid arguments.
+const mcpToolCalls: Readonly<Record<McpToolName, McpToolCall>> = {
+  get_profile: (identity) => profileToolResponse(identity),
+  get_control_plane: (identity) => controlPlane(identity),
+  get_host_metrics: (_identity, args) => {
     const metricsArgs = metricsToolArguments(args);
     return metricsArgs === null ? null : hostMetrics(...metricsArgs);
-  }
-  const worldArgs = worldToolArguments(args);
-  if (worldArgs === null) return null;
-  if (name === "list_world_backups") return backups(...worldArgs);
-  if (name === "get_world_pack") return packDownload(...worldArgs);
-  if (name === "start_world") return controlSession(identity, "start", ...worldArgs);
-  return controlSession(identity, "stop", ...worldArgs);
-}
+  },
+  list_world_backups: (_identity, args) => {
+    const worldArgs = worldToolArguments(args);
+    return worldArgs === null ? null : backups(...worldArgs);
+  },
+  get_world_pack: (_identity, args) => {
+    const worldArgs = worldToolArguments(args);
+    return worldArgs === null ? null : packDownload(...worldArgs);
+  },
+  get_release: (_identity, args) => {
+    const releaseArgs = releaseToolArguments(args);
+    return releaseArgs === null ? null : releaseManifest(...releaseArgs);
+  },
+  get_release_mod_link: (_identity, args) => {
+    const releaseArgs = releaseToolArguments(args);
+    return releaseArgs === null || typeof args.sha256 !== "string" ? null : releaseModDownload(...releaseArgs, args.sha256);
+  },
+  get_backup_download_link: (identity, args) => {
+    const worldArgs = worldToolArguments(args);
+    return worldArgs === null || typeof args.key !== "string" ? null : backupDownload(identity, ...worldArgs, JSON.stringify({ key: args.key }));
+  },
+  start_world: (identity, args) => {
+    const worldArgs = worldToolArguments(args);
+    return worldArgs === null ? null : controlSession(identity, "start", ...worldArgs);
+  },
+  stop_world: (identity, args) => {
+    const worldArgs = worldToolArguments(args);
+    return worldArgs === null ? null : controlSession(identity, "stop", ...worldArgs);
+  },
+};
 
 async function callMcpTool(identity: Identity, scopes: readonly OAuthScope[], name: string, args: Record<string, unknown>): Promise<Response> {
   const tool = mcpTools.find((candidate) => candidate.name === name);
   if (tool === undefined) return mcpToolError(`Unknown tool: ${name}`);
   if (!scopes.includes(tool.scope)) return response(403, { error: "insufficient_scope" });
   if (!hasMcpToolPermission(identity, tool.permission)) return response(403, { error: "forbidden" });
-  const apiResponse = await invokeMcpTool(identity, name, args);
+  const apiResponse = await mcpToolCalls[tool.name](identity, args);
   if (apiResponse === null) return mcpToolError("Invalid tool arguments");
   const data = JSON.parse(apiResponse.body || "null") as unknown;
   return apiResponse.statusCode >= 200 && apiResponse.statusCode < 300

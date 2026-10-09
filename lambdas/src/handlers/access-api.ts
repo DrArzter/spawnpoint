@@ -64,7 +64,7 @@ import { privateTelegramChatId, type AccessApprovedEvent } from "../domain/acces
 import type { InvitationAudience, InvitationEvent } from "../domain/invitations.ts";
 import type { EmailSender } from "../email/email-sender.ts";
 import { createResendEmailSender } from "../email/resend-email-sender.ts";
-import { catalogWithPresets, gameCatalog } from "../control-plane/catalog.ts";
+import { catalogWithPresets, findCatalogWorld, gameCatalog } from "../control-plane/catalog.ts";
 import { backupInventory } from "../control-plane/backups.ts";
 import {
   awsControlPlaneSources,
@@ -1255,20 +1255,39 @@ async function invitationRecipients(identity: Identity): Promise<Response> {
   return response(200, { recipients: recipients.sort((left, right) => left.displayName.localeCompare(right.displayName)) });
 }
 
-async function createInvitation(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
+type InvitationRequest =
+  | Readonly<{ ok: true; audience: InvitationAudience; recipientIdentityIds: readonly string[] }>
+  | Readonly<{ ok: false; error: "invalid_json" | "invalid_audience" | "invalid_recipients" }>;
+
+// What an invitation asks for: everyone, or the named people other than the sender.
+function invitationRequest(identity: Identity, body: string | undefined): InvitationRequest {
   let parsed: { audience?: unknown; recipientIdentityIds?: unknown };
-  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return { ok: false, error: "invalid_json" }; }
   const audience = parsed.audience;
-  if (audience !== "broadcast" && audience !== "direct") return response(400, { error: "invalid_audience" });
+  if (audience === "broadcast") return { ok: true, audience, recipientIdentityIds: [] };
+  if (audience !== "direct") return { ok: false, error: "invalid_audience" };
   const requested = parsed.recipientIdentityIds;
-  if (audience === "direct" && (!Array.isArray(requested) || requested.length === 0 || requested.length > 100 || !requested.every((id) => typeof id === "string" && /^[0-9a-f-]{36}$/.test(id)))) {
-    return response(400, { error: "invalid_recipients" });
+  if (!Array.isArray(requested) || requested.length === 0 || requested.length > 100 || !requested.every((id) => typeof id === "string" && /^[0-9a-f-]{36}$/.test(id))) {
+    return { ok: false, error: "invalid_recipients" };
   }
-  const recipientIdentityIds = audience === "direct" ? [...new Set(requested as string[])].filter((id) => id !== identity.id) : [];
-  if (audience === "direct" && recipientIdentityIds.length === 0) return response(400, { error: "invalid_recipients" });
-  const game = gameCatalog.find((candidate) => candidate.id === gameId);
-  const world = game?.worlds.find((candidate) => candidate.id === worldId);
-  if (game === undefined || world === undefined) return response(404, { error: "unknown_world" });
+  const recipientIdentityIds = [...new Set(requested as string[])].filter((id) => id !== identity.id);
+  return recipientIdentityIds.length === 0 ? { ok: false, error: "invalid_recipients" } : { ok: true, audience, recipientIdentityIds };
+}
+
+async function createInvitation(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
+  const request = invitationRequest(identity, body);
+  if (!request.ok) return response(400, { error: request.error });
+  const { audience, recipientIdentityIds } = request;
+  // Every world the panel lists, not only the two in the built-in catalog: a
+  // world created from a preset lives in the registry (ADR-0040).
+  const [presets, worldRecords] = await Promise.all([
+    awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
+    awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
+  ]);
+  const found = findCatalogWorld(catalogWithPresets(presets, gameCatalog, worldRecords), gameId, worldId);
+  if (found === null) return response(404, { error: "unknown_world" });
+  if (found.world.materialization === "archived") return response(409, { error: "world_archived" });
+  const { game, world } = found;
 
   if (audience === "direct") {
     const profiles = await Promise.all(recipientIdentityIds.map((id) => document.send(new GetCommand({
@@ -1281,7 +1300,7 @@ async function createInvitation(identity: Identity, gameId: string, worldId: str
   const invitationId = randomUUID();
   const now = new Date().toISOString();
   const detail: InvitationEvent = {
-    invitationId, audience: audience as InvitationAudience, gameId, gameName: game.displayName,
+    invitationId, audience, gameId, gameName: game.displayName,
     worldId, worldName: world.displayName, senderIdentityId: identity.id,
     senderDisplayName: identity.displayName, recipientIdentityIds,
   };

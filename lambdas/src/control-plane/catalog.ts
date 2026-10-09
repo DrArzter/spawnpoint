@@ -185,6 +185,13 @@ function gameOf(worldId: string, catalog: readonly CatalogGame[]): CatalogGame {
 // The footprint a session of this world is placed with: the world's own fields
 // over its game's. A game with no footprint anywhere is refused here, before
 // a start, rather than placed with a guess.
+/** A world and its game, from whichever catalog the caller built: the built-in one, or with presets and the registry. */
+export function findCatalogWorld(catalog: readonly CatalogGame[], gameId: string, worldId: string): Readonly<{ game: CatalogGame; world: CatalogWorld }> | null {
+  const game = catalog.find((candidate) => candidate.id === gameId);
+  const world = game?.worlds.find((candidate) => candidate.id === worldId);
+  return game === undefined || world === undefined ? null : { game, world };
+}
+
 export function footprintForWorld(worldId: string, catalog: readonly CatalogGame[] = gameCatalog): Footprint {
   const game = gameOf(worldId, catalog);
   const world = game.worlds.find((candidate) => candidate.id === worldId)!;

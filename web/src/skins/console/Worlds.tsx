@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 
 import { Column, DataTable } from "../../components/ui/DataTable";
 import { Ellipsis } from "../../components/ui/Ellipsis";
-import { Menu } from "../../components/ui/Menu";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { Status } from "../../components/ui/Status";
 import { Banner, Card, CopyButton, EmptyState, Ghost } from "../../components/ui/Surfaces";
@@ -12,7 +11,7 @@ import type { AddressFacts, Notice, SessionOverview, WorldRow, WorldsModel } fro
 import { Icon } from "../../icons";
 import { formatDateTime, plural } from "../../lib/format";
 import { useMediaQuery } from "../../shell/hooks";
-import { ActionButton, menuGroups, menuItems } from "./actions";
+import { ActionButton, ActionOverflow } from "./actions";
 
 export const worldColumns: Column<WorldRow>[] = [
   { id: "status", label: "Status", width: "15%", render: (row) => <Status kind={row.status.kind} label={row.status.label} /> },
@@ -43,7 +42,7 @@ export const worldColumns: Column<WorldRow>[] = [
     width: "25%",
     render: (row) => row.address ? <ConnectionAddress address={row.address} copyLabel={`Copy the address of ${row.world.displayName}`} /> : <Ghost>{row.addressAbsent}</Ghost>,
   },
-  { id: "actions", label: "Actions", actions: true, render: (row) => <Menu items={menuItems(row.actions)} label={`More actions for ${row.world.displayName}`} size="small" /> },
+  { id: "actions", label: "Actions", actions: true, render: (row) => <ActionOverflow groups={[row.actions]} label={`More actions for ${row.world.displayName}`} size="small" /> },
 ];
 
 export function Worlds({ model }: Readonly<{ model: WorldsModel }>) {
@@ -68,7 +67,7 @@ export function Worlds({ model }: Readonly<{ model: WorldsModel }>) {
       <Overview compact={narrow} loading={loading} overview={model.overview} />
       <Card
         actions={narrow
-          ? <Menu items={menuGroups([...(model.createWorld ? [model.createWorld] : []), model.refresh])} label="World actions" />
+          ? <>{model.createWorld && <ActionButton action={model.createWorld} variant="filled" />}<ActionOverflow groups={[[model.refresh]]} label="World actions" /></>
           : <><ActionButton action={model.refresh} variant="outlined" />{model.createWorld && <ActionButton action={model.createWorld} variant="filled" />}</>}
         flush
         title={model.game ? `Worlds of ${model.game.displayName}` : "Worlds"}

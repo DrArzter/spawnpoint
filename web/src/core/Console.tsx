@@ -170,7 +170,7 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     sessionDetails: sessionDetails(game, world, sharedSession, snapshot, worldState, fleet),
     worldDetails: worldDetails(game, world, worldState),
     operations: operations.map((operation) => ({ operation, label: operationLabel(operation.type) })),
-    wipes: [...world.wipes].reverse().map((wipe) => ({ wipe, showBackups: action("wipe.backups", "Backups", () => { backups.setFilter(wipe.id); navigate({ worldTab: "backups" }); }) })),
+    wipes: [...world.wipes].reverse().map((wipe) => ({ wipe, showBackups: action("wipe.backups", "Backups", () => { backups.setFilter(wipe.id); navigate({ worldTab: "backups" }); }, { icon: "backup" }) })),
     backups,
     releases: { rows: releaseRows(world, granted.has("connection.read"), busy, () => worldCallbacks.onDownloadPack(game, world)), state: world.release.state, mods: shown.mods },
     whitelist: shown.whitelist,

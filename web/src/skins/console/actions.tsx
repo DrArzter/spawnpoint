@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes } from "react";
 
-import { Button, type ButtonVariant } from "../../components/ui/Button";
-import type { MenuItem } from "../../components/ui/Menu";
+import { Button, IconButton, type ButtonVariant } from "../../components/ui/Button";
+import { Menu, type MenuItem } from "../../components/ui/Menu";
 import { Tooltip } from "../../components/ui/Tooltip";
 import type { Action } from "../../core/actions";
 
@@ -57,4 +57,31 @@ export function menuItems(actions: readonly Action[]): MenuItem[] {
 /** Menu items with a separator between two groups, when both have members. */
 export function menuGroups(...groups: readonly (readonly Action[])[]): (MenuItem | "separator")[] {
   return groups.filter((group) => group.length > 0).flatMap((group, index) => (index === 0 ? menuItems(group) : ["separator" as const, ...menuItems(group)]));
+}
+
+/** An action drawn as its icon alone; its name is the button's label and tooltip. */
+export function ActionIconButton({ action, size = "medium" }: Readonly<{ action: Action & { icon: NonNullable<Action["icon"]> }; size?: "small" | "medium" }>) {
+  return (
+    <IconButton
+      data-action={action.id}
+      disabled={action.disabled || action.busy}
+      icon={action.icon}
+      label={action.hint && action.disabled ? `${action.label}. ${action.hint}` : action.label}
+      onClick={action.run}
+      size={size}
+    />
+  );
+}
+
+/**
+ * Actions that do not earn a button of their own. Two or more share a menu;
+ * one is drawn as its icon, because a menu that holds one item only hides it
+ * behind a second tap. An action without an icon keeps the menu.
+ */
+export function ActionOverflow({ groups, label, size = "medium" }: Readonly<{ groups: readonly (readonly Action[])[]; label: string; size?: "small" | "medium" }>) {
+  const actions = groups.flat();
+  const only = actions.length === 1 ? actions[0] : undefined;
+  if (actions.length === 0) return null;
+  if (only?.icon) return <ActionIconButton action={{ ...only, icon: only.icon }} size={size} />;
+  return <Menu align="end" items={menuGroups(...groups)} label={label} size={size} />;
 }

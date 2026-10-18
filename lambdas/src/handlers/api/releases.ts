@@ -4,13 +4,29 @@ import { awsControlPlaneSources, releaseModUrl, packDownloadUrl } from "../../co
 import { packRelease } from "../../control-plane/session-control.ts";
 import { type Response, response } from "./http.ts";
 
+const RELEASE_ID = /^[a-z0-9][a-z0-9-]*$/;
+const RELEASE_VERSION = /^\d+\.\d+$/;
+const SHA256_DIGEST = /^[0-9a-f]{64}$/;
+const MOD_LINK_SECONDS = 900;
+
+type BuildRequest = Readonly<{ profileDigest: string; retryRelease?: string }>;
+
+function buildRequest(input: unknown): BuildRequest | null {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) return null;
+  const value = input as Readonly<Record<string, unknown>>;
+  if (typeof value.profileDigest !== "string" || !SHA256_DIGEST.test(value.profileDigest)) return null;
+  if (value.retryRelease === undefined) return { profileDigest: value.profileDigest };
+  if (typeof value.retryRelease !== "string" || !RELEASE_VERSION.test(value.retryRelease)) return null;
+  return { profileDigest: value.profileDigest, retryRelease: value.retryRelease };
+}
+
 export async function buildRelease(identity: Identity, gameId: string, presetId: string, body: string | undefined): Promise<Response> {
-  let expected: { profileDigest?: unknown; retryRelease?: unknown };
-  try { expected = body ? JSON.parse(body) as typeof expected : {}; } catch { return response(400, { error: "invalid_json" }); }
-  if (!expected || typeof expected !== "object" || typeof expected.profileDigest !== "string" || !/^[0-9a-f]{64}$/.test(expected.profileDigest) ||
-    (expected.retryRelease !== undefined && (typeof expected.retryRelease !== "string" || !/^[0-9]+\.[0-9]+$/.test(expected.retryRelease)))) return response(400, { error: "invalid_build_request" });
+  let parsed: unknown;
+  try { parsed = body ? JSON.parse(body) as unknown : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const expected = buildRequest(parsed);
+  if (expected === null) return response(400, { error: "invalid_build_request" });
   try {
-    const build = await startPresetBuild(gameId, presetId, identity.id, { profileDigest: expected.profileDigest, ...(typeof expected.retryRelease === "string" ? { retryRelease: expected.retryRelease } : {}) });
+    const build = await startPresetBuild(gameId, presetId, identity.id, expected);
     return response(202, { release: build.release, attempt: build.attempt });
   } catch (error) {
     const code = error instanceof Error ? error.message : "build_request_failed";
@@ -23,13 +39,10 @@ export async function buildRelease(identity: Identity, gameId: string, presetId:
   }
 }
 
-const RELEASE_ID = /^[a-z0-9][a-z0-9-]*$/;
-
-const RELEASE_VERSION = /^[0-9]+\.[0-9]+$/;
-
-const SHA256_DIGEST = /^[0-9a-f]{64}$/;
-
-const MOD_LINK_SECONDS = 900;
+// Manifest text is data, not an arbitrary object's string representation.
+function manifestText(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
 
 // One server mod of a release (ADR-0065), by the digest its manifest records:
 // the digest names the file without putting a mod's name, whatever characters
@@ -66,14 +79,14 @@ export async function releaseManifest(gameId: string, presetId: string, version:
     presetId,
     release: typeof value.release === "string" ? value.release : version,
     gameVersion: typeof value.minecraft_version === "string" ? value.minecraft_version : null,
-    loader: loader ? { type: String(loader.type ?? ""), version: String(loader.version ?? "") } : null,
+    loader: loader ? { type: manifestText(loader.type), version: manifestText(loader.version) } : null,
     createdAt: typeof value.created_at === "string" ? value.created_at : null,
     changelog: typeof value.changelog === "string" && value.changelog !== "" ? value.changelog : null,
     runtimeImage: typeof runtime?.image === "string" ? runtime.image : null,
-    source: profile ? { presetId: String(profile.id ?? ""), repository: String(profile.repository ?? ""), commit: String(profile.commit ?? "") } : null,
+    source: profile ? { presetId: manifestText(profile.id), repository: manifestText(profile.repository), commit: manifestText(profile.commit) } : null,
     mods: mods.map((entry) => {
       const mod = entry as Record<string, unknown>;
-      return { file: String(mod.file ?? ""), sha256: String(mod.sha256 ?? ""), bytes: Number(mod.bytes ?? 0) };
+      return { file: manifestText(mod.file), sha256: manifestText(mod.sha256), bytes: Number(mod.bytes ?? 0) };
     }),
   });
 }

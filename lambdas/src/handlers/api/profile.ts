@@ -7,7 +7,7 @@ import { document, tableName } from "./access-store.ts";
 
 export async function subscriptions(identity: Identity): Promise<Response> {
   const stored = await document.send(new GetCommand({ TableName: tableName, Key: { pk: `IDENTITY#${identity.id}`, sk: "SUBSCRIPTIONS" }, ConsistentRead: true }));
-  return response(200, { subscriptions: { ...defaultSubscriptions(), ...(stored.Item?.subscriptions as Record<string, boolean> | undefined ?? {}) } });
+  return response(200, { subscriptions: { ...defaultSubscriptions(), ...stored.Item?.subscriptions as Record<string, boolean> | undefined } });
 }
 
 export async function updateSubscriptions(identity: Identity, body: string | undefined): Promise<Response> {

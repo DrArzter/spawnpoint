@@ -10,6 +10,13 @@ import { document, tableName } from "./access-store.ts";
 import { emailDeliveryProvider, emailSender } from "./mail.ts";
 import { panelUrl } from "./origins.ts";
 import { observe, resolveIdentity, accountKey } from "./identity-store.ts";
+import { type Item } from "./access-store.ts";
+import { type EmailSender } from "../../email/email-sender.ts";
+
+function invitationStatus(item: Item): unknown {
+  if (accessInvitationUsable(item)) return "PENDING";
+  return item.status === "PENDING" ? "EXPIRED" : item.status;
+}
 
 export function accessInvitationKey(tokenHash: string): Record<string, string> {
   return { pk: `ACCESS_INVITATION#${tokenHash}`, sk: "TOKEN" };
@@ -37,7 +44,7 @@ export async function accessInvitations(): Promise<Response> {
   }));
   return response(200, { invitations: (result.Items ?? []).map((item) => ({
     id: item.token_hash,
-    status: accessInvitationUsable(item) ? "PENDING" : item.status === "PENDING" ? "EXPIRED" : item.status,
+    status: invitationStatus(item),
     createdAt: item.created_at,
     expiresAt: new Date(Number(item.expires_at) * 1000).toISOString(),
     usedAt: item.used_at ?? null,
@@ -70,21 +77,25 @@ export async function createAccessInvitation(identity: Identity, event: Event): 
     },
     ConditionExpression: "attribute_not_exists(pk)",
   }));
-  let delivery = email === null ? "not_requested" : "sent";
-  if (email !== null && sender !== null) {
-    try {
-      await sender.send(renderAccessInvitationEmail({ email, inviterName: identity.displayName, url, tokenHash: invitation.tokenHash }));
-    } catch (error) {
-      delivery = "failed";
-      console.error("access_invitation_email_failed", { errorName: error instanceof Error ? error.name : "UnknownError" });
-    }
-    await document.send(new UpdateCommand({
-      TableName: tableName, Key: accessInvitationKey(invitation.tokenHash),
-      UpdateExpression: "SET delivery = :delivery",
-      ExpressionAttributeValues: { ":delivery": delivery },
-    }));
-  }
+  const delivery = await deliverAccessInvitation(sender, email, identity.displayName, url, invitation.tokenHash);
   return response(201, { id: invitation.tokenHash, url, createdAt, expiresAt: new Date(invitation.expiresAtEpochSeconds * 1000).toISOString(), delivery });
+}
+
+async function deliverAccessInvitation(sender: EmailSender | null, email: string | null, inviterName: string, url: string, tokenHash: string): Promise<"not_requested" | "sent" | "failed"> {
+  if (email === null || sender === null) return "not_requested";
+  let delivery: "sent" | "failed" = "sent";
+  try {
+    await sender.send(renderAccessInvitationEmail({ email, inviterName, url, tokenHash }));
+  } catch (error) {
+    delivery = "failed";
+    console.error("access_invitation_email_failed", { errorName: error instanceof Error ? error.name : "UnknownError" });
+  }
+  await document.send(new UpdateCommand({
+    TableName: tableName, Key: accessInvitationKey(tokenHash),
+    UpdateExpression: "SET delivery = :delivery",
+    ExpressionAttributeValues: { ":delivery": delivery },
+  }));
+  return delivery;
 }
 
 export async function revokeAccessInvitation(event: Event): Promise<Response> {
@@ -138,6 +149,24 @@ export async function requestAccessInvitationProof(account: Caller, event: Event
   return response(202, { result: "proof_sent" });
 }
 
+type InvitationProof = Readonly<{ proofHash: string | null; error: Response | null }>;
+
+async function invitationProof(account: Caller, invitedEmail: unknown, suppliedProof: unknown, tokenHash: string): Promise<InvitationProof> {
+  const rejected = (status: number, error: string): InvitationProof => ({ proofHash: null, error: response(status, { error }) });
+  if (invitedEmail !== undefined && typeof invitedEmail !== "string") return rejected(400, "invalid_or_expired_invitation");
+  const emailBound = typeof invitedEmail === "string";
+  const passwordAccount = account.provider === passwordProviderId;
+  if (emailBound && passwordAccount && account.email !== invitedEmail) return rejected(403, "invited_email_mismatch");
+  if (!emailBound || passwordAccount) return { proofHash: null, error: null };
+  const proofHash = emailActionTokenHash(typeof suppliedProof === "string" ? suppliedProof : "");
+  if (proofHash === null) return rejected(403, "invited_email_verification_required");
+  const proof = await document.send(new GetCommand({ TableName: tableName, Key: accessInvitationProofKey(tokenHash, account), ConsistentRead: true }));
+  if (proof.Item?.proof_hash !== proofHash || proof.Item?.status !== "PENDING" || Number(proof.Item?.expires_at) <= Math.floor(Date.now() / 1000)) {
+    return rejected(403, "invalid_or_expired_invitation_proof");
+  }
+  return { proofHash, error: null };
+}
+
 export async function redeemAccessInvitation(account: Caller, event: Event): Promise<Response> {
   const parsed = objectBody(event);
   const tokenHash = accessInvitationTokenHash(parsed?.token);
@@ -146,18 +175,9 @@ export async function redeemAccessInvitation(account: Caller, event: Event): Pro
   if (await resolveIdentity(account, observed) !== null) return response(409, { error: "already_member" });
   const found = await document.send(new GetCommand({ TableName: tableName, Key: accessInvitationKey(tokenHash), ConsistentRead: true }));
   if (!accessInvitationUsable(found.Item)) return response(400, { error: "invalid_or_expired_invitation" });
-  const invitedEmail = found.Item?.delivery_email;
-  if (invitedEmail !== undefined && typeof invitedEmail !== "string") return response(400, { error: "invalid_or_expired_invitation" });
-  const emailBound = typeof invitedEmail === "string";
-  const passwordAccount = account.provider === passwordProviderId;
-  if (emailBound && passwordAccount && account.email !== invitedEmail) return response(403, { error: "invited_email_mismatch" });
-  const proofRequired = emailBound && !passwordAccount;
-  const proofHash = proofRequired ? emailActionTokenHash(typeof parsed?.proof === "string" ? parsed.proof : "") : null;
-  if (proofRequired && proofHash === null) return response(403, { error: "invited_email_verification_required" });
-  const proof = proofRequired ? await document.send(new GetCommand({ TableName: tableName, Key: accessInvitationProofKey(tokenHash, account), ConsistentRead: true })) : null;
-  if (proofRequired && (proof?.Item?.proof_hash !== proofHash || proof?.Item?.status !== "PENDING" || Number(proof?.Item?.expires_at) <= Math.floor(Date.now() / 1000))) {
-    return response(403, { error: "invalid_or_expired_invitation_proof" });
-  }
+  const proof = await invitationProof(account, found.Item?.delivery_email, parsed?.proof, tokenHash);
+  if (proof.error !== null) return proof.error;
+  const { proofHash } = proof;
   const identityId = randomUUID();
   const now = new Date().toISOString();
   const name = account.displayName;
@@ -170,7 +190,7 @@ export async function redeemAccessInvitation(account: Caller, event: Event): Pro
         ExpressionAttributeNames: { "#status": "status" },
         ExpressionAttributeValues: { ":used": "USED", ":pending": "PENDING", ":now": now, ":identityId": identityId, ":nowEpoch": Math.floor(Date.now() / 1000) },
       } },
-      ...(proofRequired && proofHash !== null ? [{ Update: {
+      ...(proofHash !== null ? [{ Update: {
         TableName: tableName, Key: accessInvitationProofKey(tokenHash, account),
         UpdateExpression: "SET #status = :used, used_at = :now",
         ConditionExpression: "#status = :pending AND proof_hash = :proofHash AND expires_at > :nowEpoch",

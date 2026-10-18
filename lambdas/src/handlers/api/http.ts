@@ -41,8 +41,12 @@ export function requestCookie(event: Event, name: string): string | null {
 }
 
 export function objectBody(event: Event): Readonly<Record<string, unknown>> | null {
+  return parseObjectBody(event.body);
+}
+
+export function parseObjectBody(body: string | undefined): Readonly<Record<string, unknown>> | null {
   try {
-    const parsed = event.body ? JSON.parse(event.body) as unknown : {};
+    const parsed = body ? JSON.parse(body) as unknown : {};
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
     return parsed as Readonly<Record<string, unknown>>;
   } catch {

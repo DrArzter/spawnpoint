@@ -1,5 +1,5 @@
 import { type Identity } from "../../access/domain.ts";
-import { type SessionAction, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, type SessionPlan } from "../../control-plane/session-control.ts";
+import { type SessionAction, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, type SessionPlan, type FleetSessionPlan } from "../../control-plane/session-control.ts";
 import { awsControlPlaneSources, startSessionExecution, stopSessionExecution, materializePresetWorld, replaceWorldAccess, replaceWorldGameSettings, readWorldRecord, replaceWorldWhitelist, sendWhitelistReload, worldLifecycleExecution } from "../../control-plane/aws.ts";
 import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
 import { blockingOperations, sessionLifecycleKey, holdsWorld, type WorldPlacement } from "../../control-plane/world-session.ts";
@@ -8,7 +8,7 @@ import { type WorldRecord, worldIdForName } from "../../control-plane/world-regi
 import { checkGameSettings } from "../../control-plane/game-settings.ts";
 import { checkWhitelist } from "../../control-plane/whitelist.ts";
 import { type ControlPlaneSources } from "../../control-plane/read-model.ts";
-import { type Response, response } from "./http.ts";
+import { type Response, response, parseObjectBody } from "./http.ts";
 import { readWorldSession, worldPlacements, locateWorldHost } from "./world-state.ts";
 
 export async function controlSession(identity: Identity, action: SessionAction, gameId: string, worldId: string): Promise<Response> {
@@ -31,13 +31,34 @@ export async function controlSession(identity: Identity, action: SessionAction, 
   if (plan.kind === "reject") return response(plan.reason === "unknown_world" ? 404 : 409, { error: plan.reason });
   const recoverySessionId = action === "stop" && !fleet ? stoppedHostRecoverySession(worldId, configuredHosts, located.record) : null;
   if (plan.kind === "noop" && recoverySessionId === null) return response(200, { result: plan.reason });
+  return executeSessionOperation({ identity, action, gameId, worldId, worldName: world?.displayName ?? worldId, fleet, plan, configuredHosts, located, recoverySessionId });
+}
+
+type SessionExecution = Readonly<{
+  identity: Identity;
+  action: SessionAction;
+  gameId: string;
+  worldId: string;
+  worldName: string;
+  fleet: boolean;
+  plan: SessionPlan | FleetSessionPlan;
+  configuredHosts: readonly Readonly<{ providerRef: string }>[];
+  located: Awaited<ReturnType<typeof readWorldSession>>;
+  recoverySessionId: string | null;
+}>;
+
+function plannedSessionHost(request: SessionExecution): string | undefined {
+  if (!request.fleet && request.plan.kind === "execute" && "host" in request.plan) return request.plan.host.providerRef;
+  return request.configuredHosts[0]?.providerRef;
+}
+
+async function executeSessionOperation(request: SessionExecution): Promise<Response> {
+  const { identity, action, gameId, worldId, worldName, fleet, located, recoverySessionId } = request;
   const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
   const requestedBy = `identity:${identity.id}`;
   // The fleet workflow places the session itself. Its legacy instanceId input
   // is only a fallback for a missing placement, never a host selection.
-  const hostId = fleet
-    ? configuredHosts[0]?.providerRef
-    : plan.kind === "execute" ? (plan as Extract<SessionPlan, { kind: "execute" }>).host.providerRef : configuredHosts[0]?.providerRef;
+  const hostId = plannedSessionHost(request);
   if (!hostId) return response(409, { error: "configured_host_unavailable" });
   if (action === "start") {
     // No address in the request: the host's session summary answers with it
@@ -46,7 +67,7 @@ export async function controlSession(identity: Identity, action: SessionAction, 
     await startSessionExecution({
       operationId, instanceId: hostId, requestedBy, gameId, worldId,
       serverId: sessionLifecycleKey(gameId, worldId, fleet ? "fleet" : "configured"),
-      worldName: world?.displayName ?? worldId,
+      worldName,
       placement: fleet ? "fleet" : "single",
     });
   }
@@ -66,19 +87,30 @@ type WorldAccess = Readonly<{
   auth?: WorldRecord["auth"];
 }>;
 
-function parseWorldAccess(input: Readonly<{ placement?: unknown; connectivity?: unknown; auth?: unknown }>, useDefaults: boolean): WorldAccess | null {
+type WorldAccessInput = Readonly<{ placement?: unknown; connectivity?: unknown; auth?: unknown }>;
+
+function worldAccessDefaults(input: WorldAccessInput, useDefaults: boolean): WorldAccessInput {
   let placement = input.placement;
   if (placement === undefined && useDefaults) placement = process.env.SPAWNPOINT_PLACEMENT === "fleet" ? "fleet" : "configured";
   let connectivity = input.connectivity;
   if (connectivity === undefined && useDefaults) connectivity = placement === "fleet" ? "raw" : "zerotier";
-  const auth = input.auth;
+  return { placement, connectivity, auth: input.auth };
+}
+
+function deploymentSupportsWorldAccess(placement: WorldAccess["placement"], connectivity: WorldAccess["connectivity"]): boolean {
+  if (placement === "fleet" && (connectivity === "zerotier" || process.env.SPAWNPOINT_LAUNCH !== "enabled")) return false;
+  if (placement === "configured" && connectivity !== "zerotier") return false;
+  if (connectivity === "route53" && !process.env.GAME_DNS_SUFFIX) return false;
+  return true;
+}
+
+function parseWorldAccess(input: WorldAccessInput, useDefaults: boolean): WorldAccess | null {
+  const { placement, connectivity, auth } = worldAccessDefaults(input, useDefaults);
   if (placement !== "configured" && placement !== "fleet") return null;
   if (connectivity !== "zerotier" && connectivity !== "raw" && connectivity !== "route53") return null;
   if (auth !== undefined && auth !== "game" && auth !== "external") return null;
   if (connectivity !== "zerotier" && auth === undefined) return null;
-  if (placement === "fleet" && (connectivity === "zerotier" || process.env.SPAWNPOINT_LAUNCH !== "enabled")) return null;
-  if (placement === "configured" && connectivity !== "zerotier") return null;
-  if (connectivity === "route53" && !process.env.GAME_DNS_SUFFIX) return null;
+  if (!deploymentSupportsWorldAccess(placement, connectivity)) return null;
   return { placement, connectivity, ...(auth === undefined ? {} : { auth }) };
 }
 
@@ -88,7 +120,7 @@ export async function createWorld(identity: Identity, gameId: string, presetId: 
   const displayName = typeof parsed.displayName === "string" ? parsed.displayName.trim() : "";
   const release = typeof parsed.release === "string" ? parsed.release : "";
   if (displayName.length < 1 || displayName.length > 80) return response(400, { error: "invalid_world_name" });
-  if (!/^[0-9]+\.[0-9]+$/.test(release)) return response(400, { error: "invalid_release" });
+  if (!/^\d+\.\d+$/.test(release)) return response(400, { error: "invalid_release" });
   const access = parseWorldAccess(parsed, true);
   if (access === null) return response(400, { error: "invalid_world_connectivity" });
   const presets = await (awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]));
@@ -244,24 +276,54 @@ export async function restorableRelease(
   return manifest === null ? "release_missing" : "ok";
 }
 
+type WorldLifecycleAction = "archive" | "regenerate" | "restore" | "purge";
+type LifecycleInput =
+  | Readonly<{ value: { backupKey: string | undefined; release: string | undefined }; error: null }>
+  | Readonly<{ value: null; error: Response }>;
+
+function lifecycleInput(action: WorldLifecycleAction, worldId: string, body: string | undefined): LifecycleInput {
+  const parsed = parseObjectBody(body);
+  if (parsed === null) return { value: null, error: response(400, { error: "invalid_json" }) };
+  const backupKey = action === "restore" && typeof parsed.backupKey === "string" ? parsed.backupKey : undefined;
+  const release = action === "regenerate" && typeof parsed.release === "string" ? parsed.release : undefined;
+  if (action === "restore" && !backupKey?.startsWith(`worlds/${worldId}/archives/`)) {
+    return { value: null, error: response(400, { error: "invalid_backup_key" }) };
+  }
+  if (action === "purge" && parsed.confirmation !== worldId) return { value: null, error: response(400, { error: "invalid_purge_confirmation" }) };
+  if (action === "regenerate" && (release === undefined || !/^\d+\.\d+$/.test(release))) {
+    return { value: null, error: response(400, { error: "invalid_release" }) };
+  }
+  return { value: { backupKey, release }, error: null };
+}
+
+function lifecycleSessionError(
+  record: WorldRecord,
+  host: Awaited<ReturnType<ControlPlaneSources["listHosts"]>>[number],
+  located: Awaited<ReturnType<typeof readWorldSession>>,
+): Response | null {
+  if (record.placement !== "fleet" && (host.state === "pending" || host.state === "stopping" || host.state === "unknown")) {
+    return response(409, { error: "host_transitioning" });
+  }
+  // Refuse an untracked configured session; never stop another world's game.
+  const configured = record.placement !== "fleet";
+  if (configured && record.status === "active" && host.state === "running" && located.record === null && located.game?.activeSessionId == null) {
+    return response(409, { error: "active_session_unavailable" });
+  }
+  const stopRequired = record.status === "active" && located.record !== null;
+  if (stopRequired && !located.record?.activeSessionId) return response(409, { error: "active_session_unavailable" });
+  return null;
+}
+
 export async function controlWorldLifecycle(
   identity: Identity,
-  action: "archive" | "regenerate" | "restore" | "purge",
+  action: WorldLifecycleAction,
   gameId: string,
   worldId: string,
   body: string | undefined,
 ): Promise<Response> {
-  let parsed: { backupKey?: unknown; confirmation?: unknown; release?: unknown } = {};
-  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
-  const backupKey = action === "restore" && typeof parsed.backupKey === "string" ? parsed.backupKey : undefined;
-  const release = action === "regenerate" && typeof parsed.release === "string" ? parsed.release : undefined;
-  if (action === "restore" && (backupKey === undefined || !backupKey.startsWith(`worlds/${worldId}/archives/`))) {
-    return response(400, { error: "invalid_backup_key" });
-  }
-  if (action === "purge" && parsed.confirmation !== worldId) return response(400, { error: "invalid_purge_confirmation" });
-  if (action === "regenerate" && (release === undefined || !/^[0-9]+\.[0-9]+$/.test(release))) {
-    return response(400, { error: "invalid_release" });
-  }
+  const input = lifecycleInput(action, worldId, body);
+  if (input.error !== null) return input.error;
+  const { backupKey, release } = input.value;
   const [hosts, allOperations, presets, worldRecords] = await Promise.all([
     awsControlPlaneSources.listHosts(),
     awsControlPlaneSources.listRunningOperations(),
@@ -282,18 +344,10 @@ export async function controlWorldLifecycle(
   const configuredHosts = hosts.filter((candidate) => candidate.provenance !== "launched");
   if (configuredHosts.length !== 1) return response(409, { error: "configured_host_unavailable" });
   const host = configuredHosts[0]!;
-  if (record.placement !== "fleet" && (host.state === "pending" || host.state === "stopping" || host.state === "unknown")) {
-    return response(409, { error: "host_transitioning" });
-  }
+  const sessionError = lifecycleSessionError(record, host, located);
+  if (sessionError !== null) return sessionError;
   const operationId = `panel-world-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
-  // Only this world's own session is stopped first; another world of the
-  // game keeps running. A configured host that runs while its game's record
-  // names no session is running something nobody recorded: refuse, as before.
-  if (placement === "configured" && record.status === "active" && host.state === "running" && located.record === null && located.game?.activeSessionId == null) {
-    return response(409, { error: "active_session_unavailable" });
-  }
   const stopRequired = record.status === "active" && located.record !== null;
-  if (stopRequired && !located.record?.activeSessionId) return response(409, { error: "active_session_unavailable" });
   await worldLifecycleExecution(
     operationId, host.providerRef, `identity:${identity.id}`, located.serverId, located.record?.activeSessionId ?? "none", worldId, action, backupKey, release,
     stopRequired, record.currentGeneration.id,

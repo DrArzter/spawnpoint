@@ -16,7 +16,7 @@ output_dir="${2:-}"
 [[ -n "${source_file}" && -n "${output_dir}" ]] ||
   die "usage: resolve-curseforge-modpack.sh <source.json> <new-output-directory>"
 
-for command in curl find jq realpath sha1sum stat unzip; do
+for command in curl find jq realpath sha1sum sha256sum sha512sum stat unzip zip; do
   require_command "${command}"
 done
 [[ -n "${CF_API_KEY:-}" ]] || die "CF_API_KEY is required"
@@ -30,7 +30,11 @@ jq -e '
   .schema_version == 1 and
   (.project_id | type == "number" and floor == . and . > 0) and
   (.file_id | type == "number" and floor == . and . > 0) and
-  (.server_pack_file_id | type == "number" and floor == . and . > 0)
+  (.server_pack_file_id | type == "number" and floor == . and . > 0) and
+  ((has("client_mirror") | not) or (
+    (.client_mirror.url | type == "string" and startswith("https://")) and
+    (.client_mirror | .sha512 | type == "string" and test("^[0-9a-f]{128}$")) and
+    (.client_mirror.bytes | type == "number" and floor == . and . > 0)))
 ' "${source_file}" >/dev/null || die "invalid CurseForge modpack source: ${source_file}"
 
 project_id="$(jq -r '.project_id' "${source_file}")"
@@ -46,19 +50,20 @@ trap cleanup EXIT
 
 cf_get() {
   local url="$1"
-  curl -fsSL -H "x-api-key: ${CF_API_KEY}" "${url}"
+  curl -fsSL --retry 3 --connect-timeout 20 --max-time 120 -H "x-api-key: ${CF_API_KEY}" "${url}"
 }
 
 file_metadata() {
-  local requested_id="$1" destination="$2"
+  local requested_id="$1" destination="$2" extension_pattern="${3:-zip}"
   cf_get "${api_base}/v1/mods/${project_id}/files/${requested_id}" >"${destination}" ||
     die "CurseForge file lookup failed for ${project_id}:${requested_id}"
   jq -e \
     --argjson project "${project_id}" \
+    --arg extension "${extension_pattern}" \
     --argjson file "${requested_id}" '
       .data.modId == $project and
       .data.id == $file and
-      (.data.fileName | type == "string" and test("^[^/\\\\]+\\.zip$"; "i")) and
+      (.data.fileName | type == "string" and test("^[^/\\\\\\t\\r\\n]+\\.(" + $extension + ")$"; "i")) and
       (.data.fileLength | type == "number" and floor == . and . > 0) and
       ((.data.downloadUrl // null) == null or
         (.data.downloadUrl | type == "string" and startswith("https://"))) and
@@ -83,10 +88,11 @@ file_download_url() {
 download_verified() {
   local metadata="$1" requested_id="$2" destination="$3" label="$4"
   local url expected_sha expected_bytes actual_sha actual_bytes
-  url="$(file_download_url "${metadata}" "${requested_id}")"
+  url="${5:-}"
+  [[ -n "${url}" ]] || url="$(file_download_url "${metadata}" "${requested_id}")"
   expected_sha="$(jq -r '[.data.hashes[] | select(.algo == 1)][0].value' "${metadata}")"
   expected_bytes="$(jq -r '.data.fileLength' "${metadata}")"
-  curl -fsSL -H "x-api-key: ${CF_API_KEY}" -o "${destination}" "${url}" ||
+  curl -fsSL --retry 3 --connect-timeout 20 --max-time 600 -o "${destination}" "${url}" ||
     die "CurseForge download failed for ${label}"
   # CurseForge exposes SHA-1 as its file-integrity field. The immutable file
   # id and exact byte length are checked alongside it; this is not a password
@@ -140,21 +146,158 @@ if [[ -n "${expected_minecraft_version}${expected_loader_type}${expected_loader_
     die "profile Minecraft/loader pin does not match the CurseForge client manifest"
 fi
 
-# Reject traversal and Windows-path tricks before extraction. Symlinks and
-# other special entries are rejected again against the extracted tree.
-while IFS= read -r member; do
-  [[ -n "${member}" ]] || continue
-  [[ "${member}" != /* && "${member}" != *\\* ]] || die "unsafe path in CurseForge server pack: ${member}"
-  IFS='/' read -r -a components <<<"${member}"
-  for component in "${components[@]}"; do
-    [[ -z "${component}" || ("${component}" != "." && "${component}" != "..") ]] ||
-      die "unsafe path in CurseForge server pack: ${member}"
-  done
-done < <(unzip -Z1 "${server_archive}")
+validate_archive_paths() {
+  local archive="$1" member component
+  while IFS= read -r member; do
+    [[ -n "${member}" ]] || continue
+    [[ "${member}" != /* && "${member}" != *\\* && "${member}" != *$'\t'* && "${member}" != *$'\r'* ]] ||
+      die "unsafe path in CurseForge archive: ${member}"
+    IFS='/' read -r -a components <<<"${member}"
+    for component in "${components[@]}"; do
+      [[ -z "${component}" || ("${component}" != "." && "${component}" != "..") ]] ||
+        die "unsafe path in CurseForge archive: ${member}"
+    done
+  done < <(unzip -Z1 "${archive}")
+  # Reject links before extraction, including links followed by nested files.
+  if unzip -Z -l "${archive}" | awk '$1 ~ /^[lbcps]/ { found=1 } END { exit !found }'; then
+    die "CurseForge archive contains a link or special file"
+  fi
+}
 
+validate_archive_paths "${client_archive}"
+validate_archive_paths "${server_archive}"
 extracted="${workspace}/extracted"
 mkdir -p -- "${extracted}"
 unzip -q "${server_archive}" -d "${extracted}"
+for archive_depth in 1 2 3; do
+  [[ -z "$(find "${extracted}" -maxdepth 5 -type d -name mods -print -quit)" ]] || break
+  mapfile -d '' nested_archives < <(find "${extracted}" -maxdepth 1 -type f -iname '*.zip' -print0)
+  (( ${#nested_archives[@]} == 1 )) || break
+  validate_archive_paths "${nested_archives[0]}"
+  next_extracted="${workspace}/server-layer-${archive_depth}"
+  mkdir -- "${next_extracted}"
+  unzip -q "${nested_archives[0]}" -d "${next_extracted}"
+  extracted="${next_extracted}"
+done
+client_tree="${workspace}/client-tree"
+mkdir -p -- "${client_tree}"
+unzip -q "${client_archive}" -d "${client_tree}"
+author_trees=("${extracted}" "${client_tree}")
+mirror_index=""
+if jq -e 'has("client_mirror")' "${source_file}" >/dev/null; then
+  mirror_archive="${workspace}/client-mirror.zip"
+  mirror_tree="${workspace}/client-mirror"
+  curl -fsSL --retry 3 --connect-timeout 20 --max-time 600 \
+    -o "${mirror_archive}" "$(jq -r '.client_mirror.url' "${source_file}")" || die "client mirror download failed"
+  mirror_sha="$(sha512sum -- "${mirror_archive}")"
+  [[ "${mirror_sha%% *}" == "$(jq -r '.client_mirror | .sha512' "${source_file}")" &&
+    "$(stat --format '%s' -- "${mirror_archive}")" == "$(jq -r '.client_mirror.bytes' "${source_file}")" ]] ||
+    die "client mirror does not match its pinned SHA-512 and size"
+  validate_archive_paths "${mirror_archive}"
+  mkdir -- "${mirror_tree}"
+  unzip -q "${mirror_archive}" -d "${mirror_tree}"
+  author_trees+=("${mirror_tree}")
+  [[ ! -f "${mirror_tree}/modrinth.index.json" ]] || mirror_index="${mirror_tree}/modrinth.index.json"
+fi
+jq -e '
+  .manifestType == "minecraftModpack" and .manifestVersion == 1 and
+  (.overrides | type == "string" and test("^[A-Za-z0-9_-]+$")) and
+  (.files | type == "array") and
+  all(.files[];
+    (.projectID | type == "number" and floor == . and . > 0) and
+    (.fileID | type == "number" and floor == . and . > 0)) and
+  ([.files[] | [.projectID, .fileID]] | length == (unique | length))
+' "${client_manifest}" >/dev/null || die "invalid CurseForge client manifest"
+client_overrides="${client_tree}/$(jq -r '.overrides' "${client_manifest}")"
+mkdir -p -- "${client_overrides}"
+client_entries="${workspace}/client-entries.jsonl"
+touch "${client_entries}"
+
+resolve_client_file() {
+  # Dynamic scope keeps every metadata/URL request bound to this dependency's
+  # project rather than the modpack project.
+  local project_id="$1" dependency_file_id="$2" metadata project category directory filename destination digest downloaded candidate expected_sha expected_bytes candidate_sha mirror_url
+  metadata="${workspace}/dependency-${project_id}-${dependency_file_id}.json"
+  file_metadata "${dependency_file_id}" "${metadata}" 'jar|zip'
+  project="$(cf_get "${api_base}/v1/mods/${project_id}")" || die "CurseForge project lookup failed: ${project_id}"
+  jq -e --argjson id "${project_id}" '.data.id == $id and .data.gameId == 432' <<<"${project}" >/dev/null ||
+    die "client dependency is not a Minecraft project: ${project_id}"
+  category="$(jq -r '.data.classId' <<<"${project}")"
+  case "${category}" in
+    6) directory=mods ;;
+    12) directory=resourcepacks ;;
+    6552) directory=shaderpacks ;;
+    6945) directory=datapacks ;;
+    *) die "unsupported CurseForge client dependency class ${category}: ${project_id}" ;;
+  esac
+  filename="$(jq -r '.data.fileName' "${metadata}")"
+  destination="${client_overrides}/${directory}/${filename}"
+  mkdir -p -- "$(dirname -- "${destination}")"
+  # mkdir is an atomic claim, including when two projects use the same filename.
+  mkdir -- "${workspace}/claims/${directory}-${filename}" 2>/dev/null ||
+    die "client dependencies collide: ${directory}/${filename}"
+  downloaded="${workspace}/download-${project_id}-${dependency_file_id}"
+  # The author may bundle a dependency in either archive while disabling its
+  # standalone API download. Reuse only byte-identical, provider-verified files
+  # from those already verified author archives.
+  expected_sha="$(jq -r '[.data.hashes[] | select(.algo == 1)][0].value' "${metadata}")"
+  expected_bytes="$(jq -r '.data.fileLength' "${metadata}")"
+  while IFS= read -r -d '' candidate; do
+    [[ "$(stat --format '%s' -- "${candidate}")" == "${expected_bytes}" ]] || continue
+    # Same provider integrity field as download_verified, not a signature.
+    candidate_sha="$(sha1sum -- "${candidate}")" # NOSONAR
+    [[ "${candidate_sha%% *}" == "${expected_sha}" ]] || continue
+    cp -- "${candidate}" "${downloaded}"
+    break
+  done < <(find "${author_trees[@]}" -type f -name "${filename}" -print0)
+  if [[ ! -f "${downloaded}" ]]; then
+    mirror_url=""
+    if [[ -n "${mirror_index}" ]]; then
+      mirror_url="$(jq -r --arg sha "${expected_sha}" --argjson bytes "${expected_bytes}" '
+        [.files[]? | select(.hashes.sha1 == $sha and .fileSize == $bytes) |
+          .downloads[]? | select(type == "string" and startswith("https://"))][0] // empty
+      ' "${mirror_index}")"
+    fi
+    download_verified "${metadata}" "${dependency_file_id}" "${downloaded}" \
+      "client dependency ${project_id}:${dependency_file_id} (${filename})" "${mirror_url}"
+  fi
+  # CurseForge applies author overrides after indexed files. Preserve that
+  # precedence when the author intentionally replaces a dependency's bytes.
+  [[ -e "${destination}" ]] || cp -- "${downloaded}" "${destination}"
+  digest="$(sha256sum -- "${destination}")"
+  jq -cn --argjson project "${project_id}" --argjson file "${dependency_file_id}" \
+    --arg path "${directory}/${filename}" --arg sha256 "${digest%% *}" \
+    '{project_id:$project,file_id:$file,path:$path,sha256:$sha256}' >>"${client_entries}"
+}
+mkdir -- "${workspace}/claims"
+client_jobs=()
+while IFS=$'\t' read -r dependency_project dependency_file; do
+  resolve_client_file "${dependency_project}" "${dependency_file}" &
+  client_jobs+=("$!")
+  if (( ${#client_jobs[@]} == 8 )); then
+    batch_failed=false
+    for client_job in "${client_jobs[@]}"; do wait "${client_job}" || batch_failed=true; done
+    [[ "${batch_failed}" == false ]] || die "client dependency resolution failed"
+    client_jobs=()
+  fi
+done < <(jq -r '.files[] | [.projectID,.fileID] | @tsv' "${client_manifest}")
+batch_failed=false
+for client_job in "${client_jobs[@]}"; do wait "${client_job}" || batch_failed=true; done
+[[ "${batch_failed}" == false ]] || die "client dependency resolution failed"
+
+# An importable CurseForge pack with every dependency already embedded in its
+# overrides. The launcher only installs the pinned Minecraft and loader.
+jq '.files = []' "${client_manifest}" >"${client_tree}/manifest.json"
+jq -s --argjson project "${project_id}" --argjson file "${file_id}" \
+  --slurpfile upstream "${client_manifest}" \
+  --slurpfile source "${source_file}" \
+  '{schema_version:1,project_id:$project,file_id:$file,source:$source[0],upstream_manifest:$upstream[0],files:sort_by(.path)}' \
+  "${client_entries}" >"${client_tree}/spawnpoint-client-lock.json"
+find "${client_tree}" -type f -exec touch -t 200001010000 {} +
+(cd "${client_tree}" && find . -type f | LC_ALL=C sort | zip -X -q "${workspace}/complete-client.zip" -@)
+
+# Reject traversal and Windows-path tricks before extraction. Symlinks and
+# other special entries are rejected again against the extracted tree.
 if find "${extracted}" -mindepth 1 \( -type l -o ! -type f -a ! -type d \) -print -quit | grep -q .; then
   die "CurseForge server pack contains a symbolic link or special file"
 fi
@@ -192,7 +335,7 @@ done
 mod_count="$(find "${workspace}/result/mods" -maxdepth 1 -type f -iname '*.jar' | wc -l)"
 (( mod_count > 0 )) || die "CurseForge server pack resolved to zero JARs"
 override_count="$(find "${workspace}/result/overrides" -type f | wc -l)"
-cp -- "${client_archive}" "${workspace}/result/client.zip"
+cp -- "${workspace}/complete-client.zip" "${workspace}/result/client.zip"
 mv -T -- "${workspace}/result" "${output_dir}"
 
 printf 'result=resolved\n'

@@ -612,6 +612,16 @@ The intended production sequence is:
 `scripts/cut-release.sh` remains only a manual bootstrap/diagnostic path. The accepted production contract is the
 GitHub-to-AWS builder above, and the game host never resolves CurseForge on boot.
 
+The presets table's **Source** is the last Git commit touching that preset's entire
+`profiles/<id>/` directory, not the latest repository commit. Publishers with full
+history include `profiles/.source-revisions.json` in the hash-verified snapshot;
+the catalog stores each entry as `source_commit`. This metadata lives outside
+profile directories and does not invalidate their digests or ready releases.
+Legacy publishers preserve the previous revision for unchanged profile digests.
+The catalog's top-level source revision and immutable release manifests retain
+the exact repository snapshot used for publishing/building; they are not rewritten
+to the narrower path revision.
+
 ### CurseForge modpack presets
 
 A Minecraft profile can pin a complete CurseForge client/server pair instead of listing individual mods. The pin is

@@ -1,5 +1,16 @@
 # Repository agent instructions
 
+## Backend API: functional ownership
+
+Before changing the HTTP API, read `lambdas/src/handlers/api/README.md`.
+Keep `access-api.ts` as the Lambda composition entry. Functional modules own
+their handlers and `*-routes.ts` declarations; `route-table.ts` composes them.
+Use the shared dispatcher for HTTP authentication and declared route authority.
+Do not introduce feature-local HTTP authentication gates, cyclic imports, or
+imports from feature handlers back into the route table or Lambda entry.
+MCP keeps its distinct OAuth audience/scope checks and reuses feature operations.
+Run the Lambda tests, typecheck, build, and `git diff --check` after API changes.
+
 ## Web UI: consistency is a contract
 
 Before changing anything under `web/`, read `web/PRODUCT.md` and `web/DESIGN.md`. They describe product truth and the visual systems. A screenshot is evidence, not the component contract.

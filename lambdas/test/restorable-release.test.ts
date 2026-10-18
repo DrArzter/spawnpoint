@@ -1,12 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-process.env.ACCESS_TABLE_NAME ??= "spawnpoint-access-test";
-process.env.BOT_TOKEN_PARAMETER ??= "/spawnpoint/bot/token";
-process.env.SESSION_SIGNING_SECRET_PARAMETER ??= "/spawnpoint/auth/session-signing-secret";
-process.env.CONTROL_PLANE_VIEW_TABLE ??= "spawnpoint-control-plane-view-test";
-process.env.CONTROL_PLANE_WEBSOCKET_URL ??= "wss://socket.example.test/live";
-const { restorableRelease } = await import("../src/handlers/access-api.ts");
+import { restorableRelease } from "../src/handlers/api/worlds.ts";
 
 const current = "gen-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const previous = "gen-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";

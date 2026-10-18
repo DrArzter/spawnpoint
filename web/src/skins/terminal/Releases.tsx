@@ -1,14 +1,14 @@
 import type { PointerRow, PresetRow, ReleasesModel } from "../../core/models";
 import { Icon } from "../../icons";
 import { commitUrl, repositoryName, shortCommit } from "../../lib/format";
-import { Col, Empty, Ghost, Indicator, Page, Panel, Table, Verb } from "./ui";
+import { Col, Empty, Ghost, Indicator, Overflow, Page, Panel, Table } from "./ui";
 
 const SHOWN_RELEASES = 3;
 
 export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
   const presetColumns: readonly Col<PresetRow>[] = [
     { id: "preset", label: "Preset", width: "26%", render: (row) => <strong>{row.preset.displayName}</strong> },
-    { id: "build", label: "Build", width: "80px", render: (row) => <Indicator kind={row.status.kind} label={row.status.label} /> },
+    { id: "build", label: "Build", width: "80px", render: (row) => <Indicator kind={row.status.kind} label={row.preset.build ? `${row.status.label}: ${row.preset.build.release}, attempt ${row.preset.build.attempt}` : row.status.label} /> },
     { id: "latest", label: "Latest build", width: "14%", render: (row) => (row.preset.latestRelease ? <code title="Immutable build ID, not the game version">{row.preset.latestRelease}</code> : <Ghost>None yet</Ghost>) },
     // The newest few, then a count: a preset accumulates releases forever.
     {
@@ -41,7 +41,7 @@ export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
         </a>
       ),
     },
-    { id: "verbs", label: "Actions", verbs: true, corner: true, render: (row) => (row.createWorld ? <Verb action={row.createWorld} size="small" /> : null) },
+    { id: "verbs", label: "Actions", verbs: true, corner: true, render: (row) => <Overflow groups={[[...(row.build ? [row.build] : []), ...(row.createWorld ? [row.createWorld] : [])]]} label={`Actions for ${row.preset.displayName}`} size="small" /> },
   ];
   const pointerColumns: readonly Col<PointerRow>[] = [
     { id: "world", label: "World", width: "26%", render: (row) => <span className="t-inline"><a className="t-row-link" href={row.href}>{row.world.displayName}</a><Indicator kind={row.world.release.activeRelease === row.world.release.desiredRelease ? "ok" : "pending"} label={row.summary} /></span> },

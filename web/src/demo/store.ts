@@ -52,6 +52,29 @@ function schedule(type: "start" | "stop" | "world", afterMs: number, apply: (sta
   return id;
 }
 
+export function buildRelease(gameId: string, presetId: string, profileDigest: string, retryRelease?: string): { release: string; attempt: number } {
+  settle();
+  const preset = game(gameId).presets.find((item) => item.id === presetId);
+  if (!preset) throw new Error("This preset is no longer available.");
+  if (retryRelease !== undefined
+    ? preset.build?.release !== retryRelease || (preset.build.profileDigest ?? preset.profileDigest) !== profileDigest || preset.build.state === "ready"
+    : preset.profileDigest !== profileDigest) throw new Error("The build changed. Refresh before trying again.");
+  if (preset.build?.state === "building") return preset.build;
+  const retry = preset.build?.state === "failed";
+  const resume = preset.build?.state === "starting";
+  const release = retry || resume ? preset.build!.release : `${Date.now()}.${++state.counter}`;
+  const attempt = resume ? preset.build!.attempt : retry ? preset.build!.attempt + 1 : 1;
+  preset.build = { release, attempt, state: "building", requestedAt: iso(), profileDigest };
+  preset.buildStatus = "building";
+  state.scheduled.push({ operationId: `build-${gameId}-${presetId}`, at: Date.now() + 6000, apply: () => {
+    preset.buildStatus = "ready";
+    preset.build!.state = "ready";
+    if (!preset.releases.includes(release)) preset.releases.push(release);
+    preset.latestRelease = release;
+  } });
+  return { release, attempt };
+}
+
 function game(gameId: string) {
   const found = state.snapshot.games.find((item) => item.id === gameId);
   if (!found) throw new Error("This game is no longer in the control plane.");
@@ -223,7 +246,7 @@ export function createWorld(gameId: string, presetId: string, displayName: strin
   const owner = game(gameId);
   const preset = owner.presets.find((item) => item.id === presetId) as Preset | undefined;
   if (!preset) throw new Error("This preset is no longer available.");
-  if (preset.buildStatus !== "ready") throw new Error("This preset has no ready release yet.");
+  if (preset.releases.length === 0) throw new Error("This preset has no ready release yet.");
   if (!preset.releases.includes(release)) throw new Error("The selected release is no longer available. Refresh and try again.");
   if (displayName.trim().length === 0 || displayName.trim().length > 80) throw new Error("Enter a name between 1 and 80 characters.");
 

@@ -129,7 +129,7 @@ export function newWorldRecord(
   const selectedAccess = access ?? { connectivity: "zerotier" };
   const placement = selectedAccess.placement ?? (selectedAccess.connectivity === "zerotier" ? "configured" : "fleet");
   if (
-    preset.buildStatus !== "ready" || !preset.releases.includes(identity.release) ||
+    !preset.releases.includes(identity.release) ||
     !ID.test(identity.worldId) || identity.displayName.length < 1 || identity.displayName.length > 80 ||
     !RELEASE.test(identity.release) || Number.isNaN(Date.parse(createdAt))
   ) throw new Error("invalid_world_creation");

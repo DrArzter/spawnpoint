@@ -31,7 +31,11 @@ test("world ids are generated from a display name and independent identity", () 
 });
 
 test("an unbuilt preset cannot create a world", () => {
-  assert.throws(() => newWorldRecord({ ...preset, buildStatus: "unbuilt", latestRelease: null }, identity, "12345678-1234-1234-1234-1234567890ab", new Date().toISOString()), /invalid_world_creation/);
+  assert.throws(() => newWorldRecord({ ...preset, releases: [], buildStatus: "unbuilt", latestRelease: null }, identity, "12345678-1234-1234-1234-1234567890ab", new Date().toISOString()), /invalid_world_creation/);
+});
+
+test("a failed later build does not invalidate an already published release", () => {
+  assert.doesNotThrow(() => newWorldRecord({ ...preset, buildStatus: "failed" }, identity, "12345678-1234-1234-1234-1234567890ab", new Date().toISOString()));
 });
 
 test("world creation keeps connectivity independent and requires explicit public auth", () => {

@@ -622,6 +622,33 @@ The catalog's top-level source revision and immutable release manifests retain
 the exact repository snapshot used for publishing/building; they are not rewritten
 to the narrower path revision.
 
+### Operator builds in the panel
+
+An Operator or Owner with `release.build` can open **Releases → preset actions**:
+
+- **Build release** creates an unpublished candidate from the catalog's verified source snapshot.
+- **Retry build** keeps the failed candidate's version and exact source snapshot; only its attempt counter changes.
+- **Resume build** recovers a request saved before dispatch was confirmed. It reuses the same AWS execution identity,
+  so a lost HTTP response cannot create another build.
+- **Build new release** is offered after publication. A published manifest is never overwritten, including when
+  later bookkeeping failed. Existing ready releases remain usable while another build runs or fails.
+
+The browser supplies its observed profile digest and, for retry/resume, the expected candidate. A stale confirmation
+is refused rather than silently building a different candidate. Concurrent GUI claims use an S3 conditional write.
+The API also refuses while a GitHub-initiated build of that preset is running. Build requests are kept separately
+under `preset-builds/<game>/<preset>.json`; they never change world pointers or start game sessions. The panel polls
+while builds run, so leaving and reopening it does not own or cancel AWS execution.
+
+Source snapshots must be cataloged by the current publisher (including `source.snapshot.key` and `sha256`). Legacy
+catalogs remain readable, but cannot request builds until republished. Preset authoring remains in Git; this feature
+does not write back into configuration repositories. The panel can adopt a historical GitHub attempt while its
+execution history remains available and its pinned commit is provably the current snapshot or the profile's last
+change. Adoption retains its release and source; it does not reinterpret unknown historical snapshots as current.
+
+There is deliberately no general “upgrade this world without a wipe” action: successful construction of a modpack
+does not prove save or world-generation compatibility. Assess compatibility before using the existing operator
+promotion tools; use a new wipe where a release is incompatible.
+
 ### CurseForge modpack presets
 
 A Minecraft profile can pin a complete CurseForge client/server pair instead of listing individual mods. The pin is

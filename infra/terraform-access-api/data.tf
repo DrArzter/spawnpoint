@@ -26,6 +26,7 @@ locals {
   custom_api_domain_enabled    = var.api_domain_name != null && var.api_domain_name != ""
   stop_state_machine_arn       = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-stop-server-v2"
   world_lifecycle_arn          = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-world-lifecycle"
+  build_release_arn            = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-build-release"
   control_plane_view_table_arn = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.control_plane_view_table_name}"
   operation_state_machines = [
     { type = "start", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-start-server-v2" },

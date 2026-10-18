@@ -12,6 +12,7 @@ const descriptions: Record<string, string> = {
   "console.use": "Run RCON commands, recorded against your identity.",
   "whitelist.manage": "Choose which players may join a world.",
   "release.read": "See presets and the releases built from them.",
+  "release.build": "Build releases and retry failed build attempts.",
   "release.promote": "Move a world onto another release.",
   "backup.read": "List the verified backups of a world.",
   "backup.download": "Download a world's backup archives, each recorded against your identity.",

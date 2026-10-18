@@ -17,6 +17,8 @@ export type Preset = {
   releases: readonly string[];
   buildStatus: "unbuilt" | "building" | "ready" | "failed";
   latestRelease: string | null;
+  buildAvailable?: boolean;
+  build?: { release: string; attempt: number; state: "starting" | "building" | "ready" | "failed"; requestedAt: string; profileDigest?: string };
 };
 export type Wipe = {
   id: string;

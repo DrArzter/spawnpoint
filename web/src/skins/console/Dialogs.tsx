@@ -85,7 +85,7 @@ function ConnectionFields({ model }: Readonly<{ model: ConnectionFieldsModel }>)
 }
 
 export function CreateWorldSheet({ model }: Readonly<{ model: CreateWorldModel }>) {
-  const readyPresets = model.presets.filter((preset) => preset.buildStatus === "ready");
+  const readyPresets = model.presets.filter((preset) => preset.releases.length > 0);
   return (
     <Sheet
       footer={<>
@@ -99,7 +99,7 @@ export function CreateWorldSheet({ model }: Readonly<{ model: CreateWorldModel }
     >
       <form className="page" onSubmit={(event) => { event.preventDefault(); model.submit.run(); }}>
         <SelectField hint={readyPresets.length === 0 ? "No preset of this game has a ready release." : undefined} label="Preset" onChange={(event) => model.setPresetId(event.target.value)} value={model.presetId}>
-          {model.presets.map((item) => <option disabled={item.buildStatus !== "ready"} key={item.id} value={item.id}>{item.displayName}{item.buildStatus !== "ready" ? ` (${item.buildStatus})` : ""}</option>)}
+          {model.presets.map((item) => <option disabled={item.releases.length === 0} key={item.id} value={item.id}>{item.displayName}{item.releases.length === 0 ? ` (${item.buildStatus})` : ""}</option>)}
         </SelectField>
         <TextField autoComplete="off" data-autofocus hint="1 to 80 characters. Shown in the worlds list and in Telegram." label="Name" maxLength={80} onChange={(event) => model.setName(event.target.value)} placeholder="For example, Rail world" value={model.name} />
         <SelectField disabled={!model.preset} label="Release" onChange={(event) => model.setRelease(event.target.value)} value={model.release}>

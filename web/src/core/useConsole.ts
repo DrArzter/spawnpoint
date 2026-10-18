@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { ReleaseMod } from "../api/contract";
+import { requestReleaseBuild } from "../auth";
 import { ActiveSession, endSession, loadAppearance, loadControlPlane, requestBackupDownload, requestCreateWorld, requestModDownload, requestPackDownload, requestSessionOperation, requestUpdateWorldSettings, requestWorldLifecycle, subscribeControlPlane, updateAppearance, updateGameSettings, type BackupEntry } from "../auth";
 import { sessionStatus } from "../components/ui/Status";
 import { formatDateTime } from "../lib/format";
@@ -11,6 +12,7 @@ import type { Confirmation, Pending, SessionAction, WorldActionKind } from "../s
 import { useAppearance, useBootCard, useRoute, useStoredState } from "../shell/hooks";
 import { initializeTelegram, openInBrowser, type ViewerProfile } from "../telegram";
 import { action } from "./actions";
+import { releaseBuildExpectation } from "./release-builds";
 import type { Notify } from "./data";
 import { openDownload } from "./download";
 import type { AppearanceModel, NavigationItem, ShellModel, WorldPlacement } from "./models";
@@ -124,6 +126,7 @@ export type ConsoleController = Readonly<{
   worldCallbacks: WorldCallbacks;
   requestSession: (game: Game, world: World, action: SessionAction) => void;
   requestCreateWorld: (game: Game, preset?: Preset | null) => void;
+  requestBuild: (game: Game, preset: Preset) => void;
   members: Member[];
   setMembers: (members: Member[]) => void;
   roles: Role[];
@@ -213,6 +216,19 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
 
   useEffect(() => { void refresh(true); }, [refresh]);
 
+  const building = games.some((item) => item.presets.some((preset) => preset.buildStatus === "building"));
+  useEffect(() => {
+    if (!building) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      await refresh(true);
+      if (!stopped) timer = setTimeout(() => void poll(), 5000);
+    };
+    timer = setTimeout(() => void poll(), 5000);
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [building, refresh]);
+
   // The browser painted from its own cache; the identity's choice outranks it.
   // A failure here is silent on purpose: a palette is not worth a banner.
   const { adopt } = appearance;
@@ -234,6 +250,19 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     setStoredGame(game.id);
     if (route.page !== "access" && route.page !== "profile" && route.gameId !== game.id) navigate({ gameId: game.id, worldId: route.worldId }, { replace: true });
   }, [game?.id, route.page, route.gameId]);
+
+  async function runBuild(target: Game, preset: Preset) {
+    setPending({ kind: "build", presetId: preset.id });
+    try {
+      const expected = releaseBuildExpectation(preset);
+      const result = await requestReleaseBuild(target.id, preset.id, expected.profileDigest, expected.retryRelease);
+      notify({ tone: "success", message: `Release ${result.release}: build attempt ${result.attempt} accepted.` });
+      await refresh(true);
+    } catch (error) {
+      notify({ tone: "error", message: error instanceof Error ? error.message : "The build could not be requested." });
+      await refresh(true);
+    } finally { setPending(null); }
+  }
 
   async function runSession(target: Game, targetWorld: World, sessionAction: SessionAction) {
     setPending({ kind: "session", worldId: targetWorld.id, action: sessionAction });
@@ -400,7 +429,8 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     refreshing: pending?.kind === "refresh",
     worldCallbacks,
     requestSession: (target, targetWorld, sessionAction) => setConfirmation({ kind: "session", action: sessionAction, game: target, world: targetWorld }),
-    requestCreateWorld: (target, preset) => setCreating({ game: target, preset: preset ?? target.presets.find((item) => item.buildStatus === "ready") ?? null }),
+    requestCreateWorld: (target, preset) => setCreating({ game: target, preset: preset ?? target.presets.find((item) => item.releases.length > 0) ?? null }),
+    requestBuild: (target, preset) => setConfirmation({ kind: "build", game: target, preset }),
     members,
     setMembers,
     roles,
@@ -413,6 +443,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     closeConfirmation: () => setConfirmation(null),
     runConfirmation: (item, release) => {
       setConfirmation(null);
+      if (item.kind === "build") void runBuild(item.game, item.preset);
       if (item.kind === "session") void runSession(item.game, item.world, item.action);
       if (item.kind === "archive") void runLifecycle(item.game, item.world, "archive");
       if (item.kind === "wipe") void runLifecycle(item.game, item.world, "wipe", undefined, release);

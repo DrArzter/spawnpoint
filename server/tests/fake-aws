@@ -79,6 +79,7 @@ metadata_file="${object}.fake-metadata"
 
 case "${operation}" in
   put-object)
+    [[ -z "${FAKE_S3_PUT_FAIL_KEY:-}" || "${key}" != "${FAKE_S3_PUT_FAIL_KEY}" ]] || exit 255
     [[ "${if_none_match}" != "*" || ! -f "${object}" ]] || exit 255
     mkdir -p -- "$(dirname -- "${object}")"
     cp -- "${body}" "${object}"

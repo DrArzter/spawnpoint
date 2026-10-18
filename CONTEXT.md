@@ -14,6 +14,8 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Upstream modpack**: A third-party launcher archive and its matching server pack, pinned by immutable provider file identities and used as dependencies while building a preset release. Spawnpoint normalizes their bytes into a client pack, server mods and managed server overrides; the upstream modpack is neither a Preset nor a Release, and is never fetched when a world starts.
 
+**Client pack**: The complete client-side content of a release: mods, configuration, resource packs, shader packs and every additional file supplied by the pack author. It carries the required game and loader versions for a launcher to install, but excludes a player's credentials, personal saves and local runtime caches.
+
 **World**: A named, persistent playable instance created from a preset, with its own generations and backup history. Several independent worlds may use the same preset. A world does not have one release for its entire lifetime; each generation carries its own release state.
 
 **World generation**: One save lineage in a world's history, created from a specific release and carrying its own desired and active release state. Regenerating a world closes the current generation with a recoverable final backup and starts a fresh generation from a selected release without reusing the previous save. Promoting a compatible release may update an existing generation without creating a new one. A generation may have many backups; it is not itself a backup.

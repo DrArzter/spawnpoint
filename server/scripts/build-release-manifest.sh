@@ -16,7 +16,7 @@ Environment:
   RELEASE_LOADER_TYPE Optional Minecraft loader type (default: forge)
   RELEASE_SERVER_OVERRIDES_DIR
                       Optional normalized server configuration tree
-  RELEASE_CLIENT_PACK Optional original launcher-importable client archive
+  RELEASE_CLIENT_PACK Optional complete launcher-importable client archive
 EOF
 }
 

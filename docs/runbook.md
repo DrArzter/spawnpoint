@@ -645,8 +645,22 @@ The loader version in that example is a profile pin, not a moving default; use t
 the selected client's `manifest.json`. The resolver refuses the build when the Minecraft or loader pin differs from
 that archive.
 
-The builder verifies both API records, their relationship, byte lengths and SHA-1 values. It publishes the untouched
-client archive as `client.zip`, hashes the server JARs into the release manifest, and carries only deterministic
+The builder verifies both API records, their relationship, byte lengths and SHA-1 values. It resolves every client
+manifest file into `mods`, `resourcepacks`, `shaderpacks` or `datapacks`, verifies those downloads, and preserves the complete
+author-provided overrides tree (including additional folders). The resulting `client.zip` is a complete CurseForge
+import archive: all pack content is embedded under the manifest's overrides directory, while the launcher installs
+the pinned Minecraft and loader versions. Its manifest has an empty `files` array because those files are already
+present; `spawnpoint-client-lock.json` preserves the upstream manifest and resolved file identities and hashes.
+Extract the overrides directory to obtain the pack-specific game folder, or import the ZIP in a compatible launcher.
+Files already bundled by the author in either archive can satisfy a dependency only when their provider hash and
+size match. An unavailable dependency fails the release rather than producing a partial client pack.
+
+When the author publishes an additional client archive containing files whose separate API downloads are disabled,
+the source pin may include `client_mirror: {url, sha512, bytes}`. Its HTTPS URL, exact SHA-512 and size are reviewed
+with the profile. The mirror only supplies candidates: each reused file still has to match the pinned CurseForge
+file metadata. It cannot silently substitute another mod version or change the author's CurseForge overrides.
+
+The builder hashes the server JARs into the release manifest and carries only deterministic
 configuration roots into `server.overrides`. Starts download the resulting S3 release and never call CurseForge.
 Archive launch scripts, worlds, logs, `server.properties`, operator lists and other mutable server state are ignored.
 

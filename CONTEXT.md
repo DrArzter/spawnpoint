@@ -46,6 +46,10 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Release**: An immutable, content-verified build of one preset containing the exact server configuration and mod versions. Its canonical identity is the preset plus a version unique within that preset, such as `industrial@2.1`; a bare version is meaningful only inside an already selected preset. When built from an Upstream modpack, its managed server overrides are authoritative release content, while worlds, player data and operator-owned server files remain outside the release.
 
+**Release candidate**: A proposed release with a fixed identity and preset snapshot that has not yet been successfully published. It is not deployable until its complete content has been verified and published.
+
+**Build attempt**: One effort to construct and publish a release candidate. Retrying a failed attempt retains the candidate's identity and source; it does not create another release.
+
 **Backup**: A recoverable point-in-time snapshot of one world generation, associated with the release that produced it. Restoring a backup creates a new generation from that saved state; it does not turn the backup into a world or release.
 
 **Desired release**: The release an open world generation is currently meant to run. It may differ from the active release while a deployment operation is in progress or has failed.

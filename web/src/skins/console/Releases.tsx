@@ -3,17 +3,18 @@ import { Column, DataTable } from "../../components/ui/DataTable";
 import { Status } from "../../components/ui/Status";
 import { Card, EmptyState, Ghost } from "../../components/ui/Surfaces";
 import { Tooltip } from "../../components/ui/Tooltip";
+import { Menu } from "../../components/ui/Menu";
 import type { PointerRow, PresetRow, ReleasesModel } from "../../core/models";
 import { Icon } from "../../icons";
 import { commitUrl, repositoryName, shortCommit } from "../../lib/format";
-import { ActionButton } from "./actions";
+import { menuItems } from "./actions";
 
 const SHOWN_RELEASES = 3;
 
 export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
   const presetColumns: Column<PresetRow>[] = [
     { id: "preset", label: "Preset", width: "28%", render: (row) => <strong>{row.preset.displayName}</strong> },
-    { id: "build", label: "Build", width: "16%", render: (row) => <Status kind={row.status.kind} label={row.status.label} /> },
+    { id: "build", label: "Build", width: "16%", render: (row) => <Tooltip text={row.preset.build ? `${row.preset.build.release}, attempt ${row.preset.build.attempt}` : row.status.label}><Status kind={row.status.kind} label={row.status.label} /></Tooltip> },
     { id: "latest", label: "Latest build", width: "16%", render: (row) => (row.preset.latestRelease ? <code title="Immutable build ID, not the game version">{row.preset.latestRelease}</code> : <Ghost>None yet</Ghost>) },
     // The newest few, then a count. A preset accumulates releases forever, and a
     // row that grows with them stops being a row.
@@ -47,7 +48,7 @@ export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
         </a>
       ),
     },
-    { id: "actions", label: "Actions", actions: true, render: (row) => (row.createWorld ? <ActionButton action={row.createWorld} size="small" variant="text" /> : null) },
+    { id: "actions", label: "Actions", actions: true, render: (row) => <Menu items={menuItems([...(row.build ? [row.build] : []), ...(row.createWorld ? [row.createWorld] : [])])} label={`Actions for ${row.preset.displayName}`} size="small" /> },
   ];
   const worldColumns: Column<PointerRow>[] = [
     { id: "world", label: "World", width: "28%", render: (row) => <span className="release-world"><a className="row-link" href={row.href}>{row.world.displayName}</a><Tooltip text={row.summary}><Icon className={row.world.release.activeRelease === row.world.release.desiredRelease ? "release-state-active" : "release-state-pending"} name={row.world.release.activeRelease === row.world.release.desiredRelease ? "verified" : "schedule"} size={18} /><span className="visually-hidden">{row.summary}</span></Tooltip></span> },

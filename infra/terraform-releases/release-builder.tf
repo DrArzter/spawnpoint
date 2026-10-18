@@ -182,7 +182,7 @@ resource "aws_codebuild_project" "release_builder" {
   name                   = "spawnpoint-release-builder"
   description            = "Resolve a pinned profile in AWS and publish an inert immutable release candidate."
   service_role           = aws_iam_role.release_builder.arn
-  build_timeout          = 30
+  build_timeout          = 60
   queued_timeout         = 60
   concurrent_build_limit = 3
 

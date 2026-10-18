@@ -11,6 +11,10 @@ process.env.CONTROL_PLANE_VIEW_TABLE ??= "spawnpoint-control-plane-view-test";
 process.env.CONTROL_PLANE_WEBSOCKET_URL ??= "wss://socket.example.test/live";
 const { routes, deployedCapabilities } = await import("../src/handlers/access-api.ts");
 
+test("requesting a billed build requires release.build, not merely release.read", () => {
+  assert.deepEqual(routes["POST /games/{gameId}/presets/{presetId}/builds"]?.access, { kind: "permission", permission: "release.build" });
+});
+
 // Authority used to be positional: the handler resolved a session, then an
 // identity, then crossed one access.manage gate, and a route inherited whatever
 // it was written beneath. It read well and hid a sharp edge — a route pasted one

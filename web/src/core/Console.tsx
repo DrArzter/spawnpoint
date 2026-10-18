@@ -11,6 +11,7 @@ import { fleetWorldState, operationsBlockingWorld, runningWorlds } from "../sess
 import { pendingFor } from "../shell/actions";
 import type { Skin } from "../skins/skin";
 import { action, type Action } from "./actions";
+import { releaseBuildCopy } from "./release-builds";
 import { useConsole, type ConsoleController } from "./useConsole";
 import { useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
@@ -61,7 +62,7 @@ function WorldsPage({ console, skin }: Controlled) {
   const { game, snapshot, listStatus, error, granted, pending, sharedSession, serverState, fleetOverview, worldCallbacks } = console;
   const loading = listStatus === "loading";
   const canManage = granted.has("world.manage");
-  const readyPreset = game?.presets.some((preset) => preset.buildStatus === "ready") ?? false;
+  const readyPreset = game?.presets.some((preset) => preset.releases.length > 0) ?? false;
   const model: WorldsModel = {
     status: listStatus,
     error,
@@ -250,11 +251,16 @@ function releasesModel(console: ConsoleController): ReleasesModel {
     loading: listStatus === "loading",
     presets: (game?.presets ?? []).map((preset) => ({
       preset,
-      status: buildStatus(preset.buildStatus),
+      status: preset.build?.state === "starting" ? { kind: "pending" as const, label: "Awaiting dispatch" } : buildStatus(preset.buildStatus),
       createWorld: game ? action("world.create", "Create world", () => console.requestCreateWorld(game, preset), {
         icon: "add",
-        disabled: !canManage || preset.buildStatus !== "ready" || pending?.kind === "create",
-        hint: createWorldHint(canManage, preset.buildStatus === "ready"),
+        disabled: !canManage || preset.releases.length === 0 || pending?.kind === "create",
+        hint: createWorldHint(canManage, preset.releases.length > 0),
+      }) : null,
+      build: game && console.capabilities.has("releaseBuilds") && granted.has("release.build") ? action("release.build", releaseBuildCopy(preset).label, () => console.requestBuild(game, preset), {
+        icon: "refresh", disabled: preset.buildAvailable !== true || (preset.buildStatus === "building" && preset.build?.state !== "starting") || pending?.kind === "build",
+        busy: pending?.kind === "build" && pending.presetId === preset.id,
+        hint: preset.buildAvailable !== true ? "The preset source snapshot is unavailable for building." : preset.buildStatus === "building" && preset.build?.state !== "starting" ? "A build is already running." : releaseBuildCopy(preset).hint,
       }) : null,
     })),
     pointers: (game?.worlds ?? []).map((world) => ({

@@ -34,8 +34,8 @@ export const demoSession: ActiveSession = {
   identity: { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [] },
   // Demo capabilities include unfinished prototypes so their screens remain
   // explorable without advertising those destinations in production.
-  capabilities: ["releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "backupDownloads", "whitelist"],
-  role: { id: "owner", name: "Owner", permissions: ["status.read", "connection.read", "session.start", "session.stop", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "release.read", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite"] },
+  capabilities: ["releaseBuilds", "releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "backupDownloads", "whitelist"],
+  role: { id: "owner", name: "Owner", permissions: ["status.read", "connection.read", "session.start", "session.stop", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "release.read", "release.build", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite"] },
   profile: { provider: "telegram", platformUserId: "1780660807", telegramId: "1780660807", username: "drarzter", email: null, photoUrl: null },
   bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "1780660807", claimedAt: "2026-08-28T18:24:00.000Z" },
 };
@@ -72,8 +72,8 @@ export function initialState(): DemoState {
           whitelist: true,
           lifecycle: { schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "session-42", activeWorldId: "minecraft-rostik-12345678", updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: { playersOnline: 3, consecutiveEmpty: 0, lastObservedAtEpochSeconds: Math.floor(Date.now() / 1000) - 45 } },
           presets: [
-            { id: "industrial", displayName: "Industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5", profileDigest: "41d9a8e0c73b5f26184ad0e9cb7f3520a6e81d4c95f27b03ea6d183c7b40f9e2", releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3" },
-            { id: "skyblock", displayName: "Skyblock", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "2b8e04f7a1c63d95e0847bf21a5d3906c7e4128b", profileDigest: "9c1e57a30b8d426fa9e271c04b5f83da6017e94b2c85fd30a7b16e2f48c0d95a", releases: [], buildStatus: "building", latestRelease: null },
+            { id: "industrial", displayName: "Industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5", profileDigest: "41d9a8e0c73b5f26184ad0e9cb7f3520a6e81d4c95f27b03ea6d183c7b40f9e2", releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3", buildAvailable: true },
+            { id: "skyblock", displayName: "Skyblock", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "2b8e04f7a1c63d95e0847bf21a5d3906c7e4128b", profileDigest: "9c1e57a30b8d426fa9e271c04b5f83da6017e94b2c85fd30a7b16e2f48c0d95a", releases: [], buildStatus: "failed", latestRelease: null, buildAvailable: true, build: { release: "1.0", attempt: 1, state: "failed", requestedAt: "2026-09-14T18:00:00Z" } },
           ],
           worlds: [
             {
@@ -140,7 +140,7 @@ export function initialState(): DemoState {
     roles: [
       { id: "viewer", name: "Viewer", description: "Can see public server status and request access to play.", permissions: ["status.read"], system: true },
       { id: "player", name: "Player", description: "Can view the server and control a game session.", permissions: ["status.read", "connection.read", "invitation.send", "session.start"], system: true },
-      { id: "operator", name: "Operator", description: "Can operate sessions, releases and the console.", permissions: ["status.read", "connection.read", "metrics.read", "console.use", "whitelist.manage", "release.read", "backup.read", "invitation.send", "session.start", "session.stop"], system: true },
+      { id: "operator", name: "Operator", description: "Can operate sessions, releases and the console.", permissions: ["status.read", "connection.read", "metrics.read", "console.use", "whitelist.manage", "release.read", "release.build", "backup.read", "invitation.send", "session.start", "session.stop"], system: true },
       { id: "owner", name: "Owner", description: "Full access to Spawnpoint and its identities.", permissions: [...OWNER_PERMISSIONS], system: true },
     ],
     identities: [

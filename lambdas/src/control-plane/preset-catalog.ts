@@ -1,3 +1,5 @@
+import type { BuildView } from "./release-builds.ts";
+
 export type PresetObservation = Readonly<{
   id: string;
   displayName: string;
@@ -8,6 +10,8 @@ export type PresetObservation = Readonly<{
   releases: readonly string[];
   latestRelease: string | null;
   buildStatus: "unbuilt" | "building" | "ready" | "failed";
+  buildAvailable?: boolean;
+  build?: BuildView;
 }>;
 
 type ObjectValue = Record<string, unknown>;

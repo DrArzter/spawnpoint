@@ -85,7 +85,9 @@ jq -s \
   --arg kind "${CONFIG_SOURCE_KIND}" \
   --arg origin "${source_origin}" \
   --arg revision "${source_revision}" \
-  '{schema_version: 2, game: $game, source: {kind: $kind, origin: $origin, revision: $revision, repository: $origin, commit: $revision}, presets: .}' \
+  --arg snapshot_key "${CONFIG_SOURCE_KEY}" \
+  --arg snapshot_sha256 "${CONFIG_SOURCE_SHA256}" \
+  '{schema_version: 2, game: $game, source: {kind: $kind, origin: $origin, revision: $revision, repository: $origin, commit: $revision, snapshot: {key: $snapshot_key, sha256: $snapshot_sha256}}, presets: .}' \
   "${entries}" >"${catalog}"
 
 # Preserve a successful build for an unchanged profile. A repository commit

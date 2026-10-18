@@ -4,6 +4,7 @@ import type { ControlPlaneSnapshot, Game, Preset, SettingDefinition, SettingValu
 import { worldSessionActive } from "../session";
 import type { Confirmation } from "../shell/actions";
 import { action } from "./actions";
+import { releaseBuildCopy } from "./release-builds";
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, WorldPlacement, WorldSettingsModel } from "./models";
 import { effectiveValue, settingDefinitions, settingValueValid } from "./settings";
 
@@ -44,7 +45,7 @@ function useConnectionFields(deployment: Deployment, initial: { placement: World
 }
 
 export function useCreateWorldForm(game: Game, initialPreset: Preset | null, deployment: Deployment, opts: Readonly<{ busy: boolean; onCreate: (preset: Preset, name: string, release: string, placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game") => void; onClose: () => void }>): CreateWorldModel {
-  const firstReady = game.presets.find((preset) => preset.buildStatus === "ready");
+  const firstReady = game.presets.find((preset) => preset.releases.length > 0);
   const [presetId, setPresetId] = useState(initialPreset?.id ?? firstReady?.id ?? "");
   const preset = game.presets.find((item) => item.id === presetId) ?? null;
   const [name, setName] = useState("");
@@ -53,7 +54,7 @@ export function useCreateWorldForm(game: Game, initialPreset: Preset | null, dep
     ? { placement: "fleet", connectivity: deployment.dnsAvailable ? "route53" : "raw" }
     : { placement: "configured", connectivity: "zerotier" });
   useEffect(() => setRelease(preset?.latestRelease ?? ""), [preset?.id, preset?.latestRelease]);
-  const valid = preset !== null && preset.buildStatus === "ready" && preset.releases.includes(release) && name.trim().length > 0 && name.trim().length <= 80 && connection.valid;
+  const valid = preset !== null && preset.releases.includes(release) && name.trim().length > 0 && name.trim().length <= 80 && connection.valid;
   return {
     game,
     presets: game.presets,
@@ -188,6 +189,9 @@ function startDescription(game: Game, world: World): string {
 }
 
 function confirmationCopy(confirmation: Confirmation): { title: string; description: string; label: string; destructive: boolean } {
+  if (confirmation.kind === "build") {
+    return { ...releaseBuildCopy(confirmation.preset), destructive: false };
+  }
   const { world, game } = confirmation;
   switch (confirmation.kind) {
     case "session":

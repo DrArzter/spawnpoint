@@ -97,6 +97,7 @@ import { checkWhitelist } from "../control-plane/whitelist.ts";
 import { CONSOLE_RECORD_DAYS, checkConsoleCommand, consoleEntryFromItem, consoleResult, encodeConsoleCommand, type ConsoleEntry } from "../control-plane/console.ts";
 import { issueSubscriptionTicket, subscriptionTicketItem, subscriptionTicketLifetimeSeconds } from "../control-plane/subscriptions.ts";
 import { worldIdForName } from "../control-plane/world-registry.ts";
+import { startPresetBuild } from "../control-plane/aws-release-builds.ts";
 
 type Event = Readonly<{
   requestContext?: { http?: { method?: string } };
@@ -370,6 +371,7 @@ const capabilityRoutes: Readonly<Record<string, string>> = {
   releaseFiles: "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}",
   backupDownloads: "POST /games/{gameId}/worlds/{worldId}/backups/download",
   whitelist: "PUT /games/{gameId}/worlds/{worldId}/whitelist",
+  releaseBuilds: "POST /games/{gameId}/presets/{presetId}/builds",
 };
 
 export function deployedCapabilities(): readonly string[] {
@@ -740,6 +742,25 @@ function parseWorldAccess(input: Readonly<{ placement?: unknown; connectivity?: 
   return { placement, connectivity, ...(auth === undefined ? {} : { auth }) };
 }
 
+async function buildRelease(identity: Identity, gameId: string, presetId: string, body: string | undefined): Promise<Response> {
+  let expected: { profileDigest?: unknown; retryRelease?: unknown };
+  try { expected = body ? JSON.parse(body) as typeof expected : {}; } catch { return response(400, { error: "invalid_json" }); }
+  if (!expected || typeof expected !== "object" || typeof expected.profileDigest !== "string" || !/^[0-9a-f]{64}$/.test(expected.profileDigest) ||
+    (expected.retryRelease !== undefined && (typeof expected.retryRelease !== "string" || !/^[0-9]+\.[0-9]+$/.test(expected.retryRelease)))) return response(400, { error: "invalid_build_request" });
+  try {
+    const build = await startPresetBuild(gameId, presetId, identity.id, { profileDigest: expected.profileDigest, ...(typeof expected.retryRelease === "string" ? { retryRelease: expected.retryRelease } : {}) });
+    return response(202, { release: build.release, attempt: build.attempt });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "build_request_failed";
+    if (code === "unknown_preset") return response(404, { error: code });
+    if (code === "build_in_progress") return response(409, { error: code });
+    if (code === "build_changed") return response(409, { error: code });
+    if (code === "build_not_available") return response(409, { error: code });
+    console.error("release_build_request_failed", { gameId, presetId, errorName: error instanceof Error ? error.name : "UnknownError" });
+    return response(503, { error: "build_request_failed" });
+  }
+}
+
 async function createWorld(identity: Identity, gameId: string, presetId: string, body: string | undefined): Promise<Response> {
   let parsed: { displayName?: unknown; release?: unknown; placement?: unknown; connectivity?: unknown; auth?: unknown };
   try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
@@ -752,7 +773,7 @@ async function createWorld(identity: Identity, gameId: string, presetId: string,
   const presets = await (awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]));
   const preset = presets.find((candidate) => candidate.gameId === gameId && candidate.id === presetId);
   if (preset === undefined) return response(404, { error: "unknown_preset" });
-  if (preset.buildStatus !== "ready" || preset.releases.length === 0) return response(409, { error: "preset_release_not_ready" });
+  if (preset.releases.length === 0) return response(409, { error: "preset_release_not_ready" });
   if (!preset.releases.includes(release)) return response(409, { error: "release_not_available" });
   const worldUuid = randomUUID();
   const worldId = worldIdForName(gameId, displayName, worldUuid);
@@ -2832,6 +2853,8 @@ export const routes: Readonly<Record<string, Route>> = {
 
   "POST /games/{gameId}/presets/{presetId}/worlds": permissionRoute("world.manage", (identity, event) =>
     createWorld(identity, parameter(event, "gameId"), parameter(event, "presetId"), event.body)),
+  "POST /games/{gameId}/presets/{presetId}/builds": permissionRoute("release.build", (identity, event) =>
+    buildRelease(identity, parameter(event, "gameId"), parameter(event, "presetId"), event.body)),
   "PUT /games/{gameId}/worlds/{worldId}/settings": permissionRoute("world.manage", (_identity, event) =>
     updateWorldSettings(parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
 

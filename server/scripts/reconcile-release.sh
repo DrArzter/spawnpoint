@@ -45,7 +45,7 @@ if ! jq -e '
   .schema_version == 1 and
   (.release | type == "string" and test("^[0-9]+\\.[0-9]+$")) and
   (.minecraft_version | type == "string" and length > 0) and
-  (((.game // "minecraft") == "minecraft" and .loader.type == "forge") or
+  (((.game // "minecraft") == "minecraft" and (.loader.type | IN("vanilla", "forge", "neoforge", "fabric", "quilt"))) or
    ((.game // "minecraft") == "factorio" and .loader.type == "factorio")) and
   (.loader.version | type == "string" and length > 0) and
   (if (.game // "minecraft") == "factorio"

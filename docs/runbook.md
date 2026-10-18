@@ -612,6 +612,44 @@ The intended production sequence is:
 `scripts/cut-release.sh` remains only a manual bootstrap/diagnostic path. The accepted production contract is the
 GitHub-to-AWS builder above, and the game host never resolves CurseForge on boot.
 
+### CurseForge modpack presets
+
+A Minecraft profile can pin a complete CurseForge client/server pair instead of listing individual mods. The pin is
+data inside the reviewed profile snapshot; changing either file ID is a new reviewed preset revision. For example,
+[Prominence II: Hasturian Era](https://www.curseforge.com/minecraft/modpacks/prominence-2-hasturian-era) v4.1.4 is
+project `466901`, client file `9184727`, and server-pack file `9184730`:
+
+```json
+{
+  "schema_version": 1,
+  "project_id": 466901,
+  "file_id": 9184727,
+  "server_pack_file_id": 9184730
+}
+```
+
+Point the profile at that file and select the modpack resolver:
+
+```json
+{
+  "minecraft_version": "1.20.1",
+  "loader": { "type": "fabric", "version": "0.19.3" },
+  "mods": {
+    "source": "extras/curseforge-modpack.json",
+    "resolver": "curseforge-modpack"
+  }
+}
+```
+
+The loader version in that example is a profile pin, not a moving default; use the exact primary loader recorded by
+the selected client's `manifest.json`. The resolver refuses the build when the Minecraft or loader pin differs from
+that archive.
+
+The builder verifies both API records, their relationship, byte lengths and SHA-1 values. It publishes the untouched
+client archive as `client.zip`, hashes the server JARs into the release manifest, and carries only deterministic
+configuration roots into `server.overrides`. Starts download the resulting S3 release and never call CurseForge.
+Archive launch scripts, worlds, logs, `server.properties`, operator lists and other mutable server state are ignored.
+
 Do not promote during an active session unless it is urgent — the stop refuses while players are online
 (`PromotionRefused`, pointer restored, nothing changed). Announce first.
 

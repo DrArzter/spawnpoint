@@ -23,10 +23,10 @@ profile_game_facts() {
   case "${game}" in
     minecraft)
       PROFILE_VERSION_FIELD="minecraft_version"
-      PROFILE_LOADER_TYPE="forge"
+      PROFILE_LOADER_TYPE="minecraft"
       PROFILE_LOADER_VERSIONED=true
       PROFILE_MOD_EXTENSION="jar"
-      PROFILE_RESOLVER="curseforge"
+      PROFILE_RESOLVER="curseforge-files"
       PROFILE_RUNTIME_IMAGE_REQUIRED=false
       ;;
     factorio)
@@ -67,8 +67,13 @@ validate_profile_metadata() {
     .schema_version == 1 and
     (.id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
     (.[$version_field] | type == "string" and length > 0) and
-    .loader.type == $loader_type and
-    (if $loader_versioned
+    (if $loader_type == "minecraft"
+      then (.loader.type | IN("vanilla", "forge", "neoforge", "fabric", "quilt"))
+      else .loader.type == $loader_type
+    end) and
+    (if $loader_type == "minecraft" and .loader.type == "vanilla"
+      then (.loader.version == null or (.loader.version | type == "string" and length > 0))
+      elif $loader_versioned
       then (.loader.version | type == "string" and length > 0)
       else .loader.version == null
     end) and
@@ -77,7 +82,10 @@ validate_profile_metadata() {
       else ((has("runtime") | not) or
         (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$")))
     end) and
-    (.mods.source == null or (.mods.source | type == "string" and length > 0))
+    (.mods.source == null or (.mods.source | type == "string" and length > 0)) and
+    ((.mods.resolver // null) == null or
+      ((.mods.resolver | type == "string") and (.mods.resolver | IN("curseforge-files", "curseforge-modpack", "factorio-portal")))) and
+    (if .mods.source == null then ((.mods.resolver // null) == null) else true end)
   ' "${profile}" >/dev/null || {
     printf 'error: unsupported or invalid profile metadata: %s\n' "${profile}" >&2
     exit 1

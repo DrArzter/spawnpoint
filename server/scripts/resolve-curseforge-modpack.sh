@@ -45,7 +45,8 @@ cleanup() {
 trap cleanup EXIT
 
 cf_get() {
-  curl -fsSL -H "x-api-key: ${CF_API_KEY}" "$1"
+  local url="$1"
+  curl -fsSL -H "x-api-key: ${CF_API_KEY}" "${url}"
 }
 
 file_metadata() {
@@ -87,7 +88,10 @@ download_verified() {
   expected_bytes="$(jq -r '.data.fileLength' "${metadata}")"
   curl -fsSL -H "x-api-key: ${CF_API_KEY}" -o "${destination}" "${url}" ||
     die "CurseForge download failed for ${label}"
-  actual_sha="$(sha1sum -- "${destination}")"
+  # CurseForge exposes SHA-1 as its file-integrity field. The immutable file
+  # id and exact byte length are checked alongside it; this is not a password
+  # or signature primitive.
+  actual_sha="$(sha1sum -- "${destination}")" # NOSONAR
   actual_sha="${actual_sha%% *}"
   actual_bytes="$(stat --format '%s' -- "${destination}")"
   [[ "${actual_sha}" == "${expected_sha}" && "${actual_bytes}" == "${expected_bytes}" ]] ||

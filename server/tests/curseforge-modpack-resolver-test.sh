@@ -39,7 +39,8 @@ file_json() {
   local id="$1" file="$2" extra="$3"
   local bytes sha
   bytes="$(stat --format '%s' "${fixture}/downloads/${file}")"
-  sha="$(sha1sum "${fixture}/downloads/${file}" | awk '{print $1}')"
+  # Fixture mirrors CurseForge's documented SHA-1 integrity field.
+  sha="$(sha1sum "${fixture}/downloads/${file}" | awk '{print $1}')" # NOSONAR
   jq -n \
     --argjson id "${id}" \
     --arg file "${file}" \

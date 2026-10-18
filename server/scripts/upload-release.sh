@@ -215,7 +215,8 @@ publish_pack() {
 # created_at and the changelog are descriptive, and two imports of the same
 # pack legitimately differ there (see server/releases/README.md).
 canonical_manifest() {
-  jq -S '{game: (.game // "minecraft"), release, minecraft_version, loader, runtime, server, client}' "$1"
+  local manifest_file="$1"
+  jq -S '{game: (.game // "minecraft"), release, minecraft_version, loader, runtime, server, client}' "${manifest_file}"
 }
 
 if head_release_object "${manifest_key}" >/dev/null 2>&1; then

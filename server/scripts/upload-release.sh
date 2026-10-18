@@ -240,6 +240,33 @@ if head_release_object "${manifest_key}" >/dev/null 2>&1; then
   exit 0
 fi
 
+# A modpack can contain thousands of small configs. Keep the per-object
+# checksum/HEAD contract, but avoid serial round trips dominating the build.
+upload_jobs=()
+await_uploads() {
+  local job failed=false
+  for job in "${upload_jobs[@]}"; do
+    wait "${job}" || failed=true
+  done
+  upload_jobs=()
+  [[ "${failed}" == false ]] || die "release payload publication failed"
+}
+queue_upload() {
+  upload_release_object "$@" &
+  upload_jobs+=("$!")
+  if (( ${#upload_jobs[@]} == 8 )); then
+    await_uploads
+  fi
+}
+# If validation fails with a batch in flight, let its readers finish before
+# the caller removes the staged payload. No manifest is committed on failure.
+finish_uploads() {
+  local exit_status=$?
+  wait || true
+  return "${exit_status}"
+}
+trap finish_uploads EXIT
+
 while IFS=$'\t' read -r filename expected_sha expected_bytes; do
   source_file="${source_dir}/mods/${filename}"
   [[ -f "${source_file}" && ! -L "${source_file}" ]] || die "release file is missing or is a symlink: ${source_file}"
@@ -250,7 +277,7 @@ while IFS=$'\t' read -r filename expected_sha expected_bytes; do
   actual_sha="${actual_sha%% *}"
   [[ "${actual_sha}" == "${expected_sha}" ]] || die "SHA-256 mismatch for ${filename}"
 
-  upload_release_object "${release_prefix}/mods/${filename}" "${source_file}" "${expected_sha}" "${filename}"
+  queue_upload "${release_prefix}/mods/${filename}" "${source_file}" "${expected_sha}" "${filename}"
 done < <(jq -r '.server.mods[] | [.file, .sha256, (.bytes | tostring)] | @tsv' "${manifest}")
 
 while IFS=$'\t' read -r path expected_sha expected_bytes; do
@@ -261,9 +288,10 @@ while IFS=$'\t' read -r path expected_sha expected_bytes; do
   actual_sha="$(sha256sum -- "${source_file}")"
   actual_sha="${actual_sha%% *}"
   [[ "${actual_sha}" == "${expected_sha}" ]] || die "SHA-256 mismatch for override ${path}"
-  upload_release_object "${release_prefix}/overrides/${path}" "${source_file}" "${expected_sha}" "$(basename -- "${path}")"
+  queue_upload "${release_prefix}/overrides/${path}" "${source_file}" "${expected_sha}" "$(basename -- "${path}")"
 done < <(jq -r '(.server.overrides // [])[] | [.path, .sha256, (.bytes | tostring)] | @tsv' "${manifest}")
 
+await_uploads
 pack_result="$(publish_pack)"
 upload_release_object "${manifest_key}" "${manifest}" "${manifest_digest}" "manifest.json"
 

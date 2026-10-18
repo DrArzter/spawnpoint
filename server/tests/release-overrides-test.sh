@@ -13,6 +13,9 @@ trap cleanup EXIT
 mkdir -p -- "${fixture}/payload/mods" "${fixture}/payload/overrides/config/pack" \
   "${fixture}/payload/overrides/kubejs/server_scripts" "${fixture}/client" "${fixture}/bin"
 printf 'fabric jar\n' >"${fixture}/payload/mods/example.jar"
+for index in {1..9}; do
+  printf 'additional mod %s\n' "${index}" >"${fixture}/payload/mods/extra-${index}.jar"
+done
 printf 'pack config\n' >"${fixture}/payload/overrides/config/pack/server.json"
 printf 'recipe\n' >"${fixture}/payload/overrides/kubejs/server_scripts/recipe.js"
 printf 'launcher manifest\n' >"${fixture}/client/manifest.json"
@@ -31,7 +34,7 @@ RELEASE_CLIENT_PACK="${fixture}/payload/client.zip" \
 
 jq -e '
   .loader == {type: "fabric", version: "0.19.3"} and
-  (.server.mods | length) == 1 and
+  (.server.mods | length) == 10 and
   (.server.overrides | length) == 2 and
   .client.kind == "curseforge-modpack" and
   .client.file == "client.zip"
@@ -47,6 +50,16 @@ release_root="${FAKE_S3_ROOT}/${RELEASE_BUCKET}/releases/minecraft/prominence/4.
 cmp -- "${fixture}/payload/overrides/config/pack/server.json" \
   "${release_root}/overrides/config/pack/server.json"
 cmp -- "${fixture}/payload/client.zip" "${release_root}/client.zip"
+
+# Failure in a parallel batch must never commit a complete release marker.
+if FAKE_S3_ROOT="${fixture}/failed-s3" \
+  FAKE_S3_PUT_FAIL_KEY=releases/minecraft/prominence/4.1/overrides/config/pack/server.json \
+  RELEASE_SOURCE_DIR="${fixture}/payload" "${scripts}/upload-release.sh" "${manifest}" >/dev/null 2>&1; then
+  printf 'expected failed payload upload to refuse publication\n' >&2
+  exit 1
+fi
+[[ ! -e "${fixture}/failed-s3/${RELEASE_BUCKET}/releases/minecraft/prominence/4.1/manifest.json" ]]
+[[ ! -e "${fixture}/failed-s3/${RELEASE_BUCKET}/releases/minecraft/prominence/4.1/client.zip" ]]
 
 "${scripts}/download-release.sh" minecraft prominence 4.1 "${fixture}/cache" >/dev/null
 cmp -- "${fixture}/payload/overrides/kubejs/server_scripts/recipe.js" \

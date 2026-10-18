@@ -36,6 +36,15 @@ test("parses a versioned per-game preset catalog", () => {
   }]);
 });
 
+test("uses each profile revision rather than the repository catalog revision", () => {
+  const commit = "a".repeat(40);
+  const preset = { ...document.presets[0], source_commit: commit };
+  assert.equal(parsePresetCatalog({ ...document, presets: [preset] }, "factorio")?.[0]?.commit, commit);
+  for (const source_commit of [null, "main", "", 123]) {
+    assert.equal(parsePresetCatalog({ ...document, presets: [{ ...preset, source_commit }] }, "factorio"), null);
+  }
+});
+
 test("a ready preset remains reusable after several worlds are materialized", () => {
   const preset = parsePresetCatalog({
     ...document,

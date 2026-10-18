@@ -67,6 +67,18 @@ materialize_preset_source() {
     return 1
   fi
 
+  # Optional provenance emitted by the trusted publisher from full Git history.
+  # Keep it outside profile directories so it never changes their content digest.
+  if [[ -e "${CONFIG_CHECKOUT}/profiles/.source-revisions.json" ]]; then
+    jq -e 'type == "object" and all(to_entries[];
+      (.key | test("^[a-z0-9][a-z0-9-]{0,31}$")) and
+      (.value | type == "string" and test("^[0-9a-f]{40}$")))' \
+      "${CONFIG_CHECKOUT}/profiles/.source-revisions.json" >/dev/null || {
+      printf 'error: invalid profile source revisions\n' >&2
+      return 1
+    }
+  fi
+
   export CONFIG_SOURCE_ORIGIN="${CONFIG_REPOSITORY_URL%.git}"
   export CONFIG_SOURCE_REVISION="${CONFIG_COMMIT}"
 }

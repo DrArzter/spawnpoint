@@ -76,4 +76,48 @@ jq -e '
   and (.presets[] | select(.id == "space-age") | .build_status == "unbuilt")
 ' "${catalog}" >/dev/null
 
+# An unrelated repository commit must not move an unchanged preset's Source.
+original_commit="${commit}"
+git -C "${config}" -c user.name=Test -c user.email=test@example.invalid commit --quiet --allow-empty -m unrelated
+commit="$(git -C "${config}" rev-parse HEAD)"
+source_key="config-sources/DrArzter/my-docker-factorio-server-config/${commit}.tar.gz"
+git -C "${config}" archive --format=tar.gz --output="${source_archive}" "${commit}" profiles
+source_sha256="$(sha256sum -- "${source_archive}" | awk '{print $1}')"
+cp -- "${source_archive}" "${FAKE_S3_ROOT}/spawnpoint-test-releases/${source_key}"
+run_builder >/dev/null
+jq -e --arg original "${original_commit}" --arg current "${commit}" '
+  .source.commit == $current and all(.presets[]; .source_commit == $original)
+' "${catalog}" >/dev/null
+
+# Full-history publishers can correct legacy catalog provenance independently
+# of readiness. Each profile gets its own path-specific revision.
+revisions="$(jq -cn --arg first "${original_commit}" --arg second "${commit}" '{"factorio-vanilla": $first, "space-age": $second}')"
+git -C "${config}" archive --format=tar.gz --output="${source_archive}" \
+  --add-virtual-file="profiles/.source-revisions.json:${revisions}" "${commit}" profiles
+source_sha256="$(sha256sum -- "${source_archive}" | awk '{print $1}')"
+cp -- "${source_archive}" "${FAKE_S3_ROOT}/spawnpoint-test-releases/${source_key}"
+run_builder >/dev/null
+jq -e --arg first "${original_commit}" --arg second "${commit}" '
+  (.presets[] | select(.id == "factorio-vanilla") | .source_commit == $first and .build_status == "ready" and .latest_release == "1.0")
+  and (.presets[] | select(.id == "space-age") | .source_commit == $second)
+' "${catalog}" >/dev/null
+
+git -C "${config}" archive --format=tar.gz --output="${source_archive}" \
+  --add-virtual-file='profiles/.source-revisions.json:{"space-age":"main"}' "${commit}" profiles
+source_sha256="$(sha256sum -- "${source_archive}" | awk '{print $1}')"
+cp -- "${source_archive}" "${FAKE_S3_ROOT}/spawnpoint-test-releases/${source_key}"
+if run_builder >/dev/null 2>&1; then
+  printf 'expected failure: invalid profile revision\n' >&2
+  exit 1
+fi
+
+git -C "${config}" archive --format=tar.gz --output="${source_archive}" \
+  --add-virtual-file="profiles/.source-revisions.json:{\"space-age\":\"${commit}\"}" "${commit}" profiles
+source_sha256="$(sha256sum -- "${source_archive}" | awk '{print $1}')"
+cp -- "${source_archive}" "${FAKE_S3_ROOT}/spawnpoint-test-releases/${source_key}"
+if run_builder >/dev/null 2>&1; then
+  printf 'expected failure: missing profile revision\n' >&2
+  exit 1
+fi
+
 printf 'result=passed\n'

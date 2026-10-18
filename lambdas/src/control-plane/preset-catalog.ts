@@ -40,6 +40,8 @@ export function parsePresetCatalog(value: unknown, expectedGameId: string): read
     if (preset === null || typeof preset.id !== "string" || !ID.test(preset.id) || ids.has(preset.id)) return null;
     if (typeof preset.display_name !== "string" || preset.display_name.length < 1 || preset.display_name.length > 80) return null;
     if (typeof preset.profile_digest !== "string" || !SHA256.test(preset.profile_digest)) return null;
+    const sourceCommit = preset.source_commit === undefined ? source.commit : preset.source_commit;
+    if (typeof sourceCommit !== "string" || !COMMIT.test(sourceCommit)) return null;
     const status = preset.build_status;
     if (status !== "unbuilt" && status !== "building" && status !== "ready" && status !== "failed") return null;
     const latestRelease = preset.latest_release;
@@ -56,7 +58,7 @@ export function parsePresetCatalog(value: unknown, expectedGameId: string): read
       displayName: preset.display_name,
       gameId: expectedGameId,
       repository: source.repository,
-      commit: source.commit,
+      commit: sourceCommit,
       profileDigest: preset.profile_digest,
       releases,
       latestRelease,

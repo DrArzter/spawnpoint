@@ -31,9 +31,7 @@ export async function buildRelease(identity: Identity, gameId: string, presetId:
   } catch (error) {
     const code = error instanceof Error ? error.message : "build_request_failed";
     if (code === "unknown_preset") return response(404, { error: code });
-    if (code === "build_in_progress") return response(409, { error: code });
-    if (code === "build_changed") return response(409, { error: code });
-    if (code === "build_not_available") return response(409, { error: code });
+    if (["build_in_progress", "build_changed", "build_not_available"].includes(code)) return response(409, { error: code });
     console.error("release_build_request_failed", { gameId, presetId, errorName: error instanceof Error ? error.name : "UnknownError" });
     return response(503, { error: "build_request_failed" });
   }

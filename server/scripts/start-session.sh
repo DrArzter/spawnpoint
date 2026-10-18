@@ -116,6 +116,11 @@ if [[ -n "${release_bucket}" ]]; then
       "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" \
         "${SPAWNPOINT_WORLD_MODS_DIRECTORY:-${SERVER_DIR}/games/${GAME_ID}/data/mods}" >&2
     fi
+    if [[ "${GAME_ID}" == "minecraft" ]]; then
+      overrides_target="${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${SERVER_DIR}/data}"
+      "${SCRIPT_DIR}/reconcile-server-overrides.sh" \
+        "${payload_dir}/manifest.json" "${overrides_target}" >&2
+    fi
     if declare -F game_prepare_runtime >/dev/null; then
       game_prepare_runtime "${payload_dir}/manifest.json"
     fi

@@ -106,7 +106,7 @@ jq '.server.mods[1].file = .server.mods[0].file' "${manifest}" >"${tampered_mani
 expect_failure "duplicate manifest entries" \
   "${SCRIPTS}/reconcile-release.sh" "${tampered_manifest}" "${target}"
 
-jq '.loader.type = "fabric"' "${manifest}" >"${tampered_manifest}"
+jq '.loader.type = "bukkit"' "${manifest}" >"${tampered_manifest}"
 expect_failure "wrong loader type" \
   "${SCRIPTS}/reconcile-release.sh" "${tampered_manifest}" "${target}"
 

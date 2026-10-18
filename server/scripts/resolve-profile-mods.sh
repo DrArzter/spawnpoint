@@ -12,8 +12,9 @@ usage() {
   cat >&2 <<'EOF'
 usage: resolve-profile-mods.sh <profile-directory> <new-output-directory>
 
-The profile's game (ADR-0034) selects the resolver: minecraft resolves CurseForge URLs through the pinned
-mc-image-helper image, factorio resolves portal pins through games/factorio/resolve-mods.sh. Absence means minecraft.
+The profile's game (ADR-0034) selects the resolver. Minecraft profiles default to individual CurseForge files through
+the pinned mc-image-helper image and may select curseforge-modpack for one pinned client/server archive pair.
+Factorio resolves portal pins through games/factorio/resolve-mods.sh. Absence means minecraft.
 
 Environment:
   CF_API_KEY       CurseForge Eternal API key; minecraft profiles only
@@ -78,6 +79,8 @@ profile_id="$(jq -r '.id' "${profile}")"
 game_version="$(jq -r --arg field "${PROFILE_VERSION_FIELD}" '.[$field]' "${profile}")"
 loader_type="$(jq -r '.loader.type' "${profile}")"
 mods_source="$(jq -r '.mods.source // empty' "${profile}")"
+mods_resolver="$(jq -r '.mods.resolver // empty' "${profile}")"
+[[ -n "${mods_resolver}" ]] || mods_resolver="${PROFILE_RESOLVER}"
 
 stage="$(mktemp -d "${output_parent}/.$(basename -- "${output_directory}").stage.XXXXXXXX")"
 download_stage="${stage}/download"
@@ -86,6 +89,9 @@ mkdir -p -- "${download_stage}" "${resolved_stage}"
 cleanup() {
   if [[ -n "${stage:-}" && "$(dirname -- "${stage}")" == "${output_parent}" ]]; then
     rm -rf -- "${stage}"
+  fi
+  if [[ "${sidecars_moved:-false}" == true ]]; then
+    rm -rf -- "${output_parent}/overrides" "${output_parent}/client.zip"
   fi
 }
 trap cleanup EXIT
@@ -103,8 +109,8 @@ if [[ -n "${mods_source}" ]]; then
   }
   mods_source="$(realpath --relative-to="${profile_directory}" -- "${source_file}")"
 
-  case "${PROFILE_RESOLVER}" in
-  curseforge)
+  case "${mods_resolver}" in
+  curseforge-files | curseforge-modpack)
     cf_api_key="${CF_API_KEY:-}"
     if [[ -z "${cf_api_key}" && -n "${PROFILE_ENV_FILE:-}" ]]; then
       env_file="$(realpath -e -- "${PROFILE_ENV_FILE}")"
@@ -127,25 +133,38 @@ if [[ -n "${mods_source}" ]]; then
       printf 'error: CF_API_KEY or PROFILE_ENV_FILE is required for %s\n' "${profile_id}" >&2
       exit 1
     }
-    command -v docker >/dev/null 2>&1 || {
-      printf 'error: required command not found: docker\n' >&2
-      exit 1
-    }
-
     export CF_API_KEY="${cf_api_key}"
-    docker run --rm \
-      --user "$(id -u):$(id -g)" \
-      --env CF_API_KEY \
-      --volume "${profile_directory}:/profile:ro" \
-      --volume "${download_stage}:/output" \
-      --entrypoint mc-image-helper \
-      "${resolver_image}" \
-      curseforge-files \
-        --disable-api-caching \
-        --game-version "${game_version}" \
-        --mod-loader "${loader_type}" \
-        --output-directory /output \
-        "@/profile/${mods_source}"
+    if [[ "${mods_resolver}" == "curseforge-files" ]]; then
+      command -v docker >/dev/null 2>&1 || {
+        printf 'error: required command not found: docker\n' >&2
+        exit 1
+      }
+      docker run --rm \
+        --user "$(id -u):$(id -g)" \
+        --env CF_API_KEY \
+        --volume "${profile_directory}:/profile:ro" \
+        --volume "${download_stage}:/output" \
+        --entrypoint mc-image-helper \
+        "${resolver_image}" \
+        curseforge-files \
+          --disable-api-caching \
+          --game-version "${game_version}" \
+          --mod-loader "${loader_type}" \
+          --output-directory /output \
+          "@/profile/${mods_source}"
+    else
+      modpack_resolver="${SCRIPT_DIR}/resolve-curseforge-modpack.sh"
+      [[ -f "${modpack_resolver}" ]] || {
+        printf 'error: CurseForge modpack resolution needs %s, which this bundle does not carry\n' "${modpack_resolver}" >&2
+        exit 1
+      }
+      rm -rf -- "${download_stage}"
+      loader_version="$(jq -r '.loader.version' "${profile}")"
+      CURSEFORGE_EXPECTED_MINECRAFT_VERSION="${game_version}" \
+      CURSEFORGE_EXPECTED_LOADER_TYPE="${loader_type}" \
+      CURSEFORGE_EXPECTED_LOADER_VERSION="${loader_version}" \
+        bash "${modpack_resolver}" "${source_file}" "${download_stage}" >&2
+    fi
     ;;
   factorio-portal)
     # The portal resolver is a game module, not a container: pins in, verified
@@ -160,7 +179,7 @@ if [[ -n "${mods_source}" ]]; then
       bash "${portal_resolver}" "${source_file}" "${download_stage}" >&2
     ;;
   *)
-    printf 'error: no resolver for %s\n' "${PROFILE_RESOLVER}" >&2
+    printf 'error: no resolver for %s\n' "${mods_resolver}" >&2
     exit 1
     ;;
   esac
@@ -168,7 +187,7 @@ if [[ -n "${mods_source}" ]]; then
   # Every resolver writes into <stage>/mods, whatever its transport.
   downloaded_mods="${download_stage}/mods"
   [[ -d "${downloaded_mods}" && ! -L "${downloaded_mods}" ]] || {
-    printf 'error: the %s resolver did not produce its mods directory\n' "${PROFILE_RESOLVER}" >&2
+    printf 'error: the %s resolver did not produce its mods directory\n' "${mods_resolver}" >&2
     exit 1
   }
   while IFS= read -r -d '' mod; do
@@ -183,9 +202,33 @@ if [[ -n "${mods_source}" ]]; then
   mod_count="$(find "${resolved_stage}" -maxdepth 1 -type f -name "*.${PROFILE_MOD_EXTENSION}" | wc -l)"
   (( mod_count > 0 )) || {
     printf 'error: %s resolution produced zero %s files for %s\n' \
-      "${PROFILE_RESOLVER}" "${PROFILE_MOD_EXTENSION}" "${profile_id}" >&2
+      "${mods_resolver}" "${PROFILE_MOD_EXTENSION}" "${profile_id}" >&2
     exit 1
   }
+
+  if [[ "${mods_resolver}" == "curseforge-modpack" ]]; then
+    overrides_source="${download_stage}/overrides"
+    client_source="${download_stage}/client.zip"
+    [[ -d "${overrides_source}" && ! -L "${overrides_source}" ]] || {
+      printf 'error: CurseForge modpack resolver produced no overrides directory\n' >&2
+      exit 1
+    }
+    [[ -f "${client_source}" && ! -L "${client_source}" ]] || {
+      printf 'error: CurseForge modpack resolver produced no client pack\n' >&2
+      exit 1
+    }
+    [[ ! -e "${output_parent}/overrides" && ! -L "${output_parent}/overrides" ]] || {
+      printf 'error: immutable resolver overrides already exist: %s\n' "${output_parent}/overrides" >&2
+      exit 1
+    }
+    [[ ! -e "${output_parent}/client.zip" && ! -L "${output_parent}/client.zip" ]] || {
+      printf 'error: immutable resolver client pack already exists: %s\n' "${output_parent}/client.zip" >&2
+      exit 1
+    }
+    mv -- "${overrides_source}" "${output_parent}/overrides"
+    mv -- "${client_source}" "${output_parent}/client.zip"
+    sidecars_moved=true
+  fi
 else
   mod_count=0
 fi
@@ -199,6 +242,7 @@ total_bytes="$(find "${resolved_stage}" -maxdepth 1 -type f -name "*.${PROFILE_M
 mv -T -- "${resolved_stage}" "${output_directory}"
 rm -rf -- "${stage}"
 stage=""
+sidecars_moved=false
 trap - EXIT
 
 printf 'result=resolved\n'

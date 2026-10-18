@@ -54,6 +54,11 @@ data "archive_file" "release_builder_source" {
     filename = "server/scripts/resolve-profile-mods.sh"
   }
 
+  source {
+    content  = file("${path.module}/../../server/scripts/resolve-curseforge-modpack.sh")
+    filename = "server/scripts/resolve-curseforge-modpack.sh"
+  }
+
   # The factorio resolver is a game module rather than a container, so the
   # bundle carries it the way it carries the shared scripts.
   source {

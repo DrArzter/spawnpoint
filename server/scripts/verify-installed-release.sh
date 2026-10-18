@@ -33,7 +33,7 @@ jq -e '
   .schema_version == 1 and
   (.release | type == "string" and test("^[0-9]+\\.[0-9]+$")) and
   (.minecraft_version | type == "string" and length > 0) and
-  (.loader.type == "forge") and
+  (.loader.type | IN("vanilla", "forge", "neoforge", "fabric", "quilt")) and
   (.loader.version | type == "string" and length > 0) and
   (.server.mods | type == "array") and
   all(.server.mods[];

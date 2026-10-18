@@ -51,11 +51,26 @@ jq -e '
     (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
     (.bytes | type == "number" and floor == . and . >= 0)
   ) and
-  (([.server.mods[].file] | unique | length) == (.server.mods | length))
+  (([.server.mods[].file] | unique | length) == (.server.mods | length)) and
+  ((.server.overrides // []) | type == "array") and
+  all((.server.overrides // [])[];
+    (.path | type == "string" and length > 0 and (startswith("/") | not) and (contains("\\") | not) and
+      (split("/") | all(. != "" and . != "." and . != "..")) and
+      (split("/")[0] | IN("config", "defaultconfigs", "kubejs", "scripts", "global_packs", "openloader"))) and
+    (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+    (.bytes | type == "number" and floor == . and . >= 0)
+  ) and
+  (([(.server.overrides // [])[].path] | unique | length) == ((.server.overrides // []) | length)) and
+  ((has("client") | not) or (
+    .client.file == "client.zip" and .client.kind == "curseforge-modpack" and
+    (.client.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+    (.client.bytes | type == "number" and floor == . and . > 0)
+  ))
 ' "${manifest}" >/dev/null || die "invalid release manifest: ${manifest}"
 
 release="$(jq -r '.release' "${manifest}")"
 mods_count="$(jq -r '.server.mods | length' "${manifest}")"
+overrides_count="$(jq -r '(.server.overrides // []) | length' "${manifest}")"
 game="$(jq -r '.game // "minecraft"' "${manifest}")"
 preset_id="$(jq -r '.source_profile.id' "${manifest}")"
 release_prefix="releases/${game}/${preset_id}/${release}"
@@ -167,7 +182,19 @@ publish_pack() {
     return 0
   fi
 
-  local pack_dir pack_zip pack_digest
+  local pack_dir pack_zip pack_digest expected_bytes
+  if jq -e 'has("client")' "${manifest}" >/dev/null; then
+    pack_zip="${source_dir}/client.zip"
+    [[ -f "${pack_zip}" && ! -L "${pack_zip}" ]] || die "release client pack is missing or is a symlink"
+    pack_digest="$(sha256sum -- "${pack_zip}" | awk '{print $1}')"
+    expected_bytes="$(jq -r '.client.bytes' "${manifest}")"
+    [[ "${pack_digest}" == "$(jq -r '.client.sha256' "${manifest}")" && "$(stat --format '%s' -- "${pack_zip}")" == "${expected_bytes}" ]] ||
+      die "release client pack does not match the manifest"
+    upload_release_object "${pack_key}" "${pack_zip}" "${pack_digest}" "client.zip"
+    printf 'uploaded'
+    return 0
+  fi
+
   pack_dir="$(mktemp -d)"
   pack_zip="${pack_dir}/pack.zip"
   mkdir -p -- "${pack_dir}/pack"
@@ -188,7 +215,8 @@ publish_pack() {
 # created_at and the changelog are descriptive, and two imports of the same
 # pack legitimately differ there (see server/releases/README.md).
 canonical_manifest() {
-  jq -S '{game: (.game // "minecraft"), release, minecraft_version, loader, runtime, server}' "$1"
+  local manifest_file="$1"
+  jq -S '{game: (.game // "minecraft"), release, minecraft_version, loader, runtime, server, client}' "${manifest_file}"
 }
 
 if head_release_object "${manifest_key}" >/dev/null 2>&1; then
@@ -206,6 +234,7 @@ if head_release_object "${manifest_key}" >/dev/null 2>&1; then
   printf 'release=%s\n' "${release}"
   printf 'manifest_key=%s\n' "${manifest_key}"
   printf 'mods=%s\n' "${mods_count}"
+  printf 'overrides=%s\n' "${overrides_count}"
   printf 'pack=%s\n' "${pack_result}"
   printf 'pack_key=%s\n' "${pack_key}"
   exit 0
@@ -224,13 +253,25 @@ while IFS=$'\t' read -r filename expected_sha expected_bytes; do
   upload_release_object "${release_prefix}/mods/${filename}" "${source_file}" "${expected_sha}" "${filename}"
 done < <(jq -r '.server.mods[] | [.file, .sha256, (.bytes | tostring)] | @tsv' "${manifest}")
 
-upload_release_object "${manifest_key}" "${manifest}" "${manifest_digest}" "manifest.json"
+while IFS=$'\t' read -r path expected_sha expected_bytes; do
+  source_file="${source_dir}/overrides/${path}"
+  [[ -f "${source_file}" && ! -L "${source_file}" ]] || die "release override is missing or is a symlink: ${source_file}"
+  actual_bytes="$(stat --format '%s' -- "${source_file}")"
+  [[ "${actual_bytes}" == "${expected_bytes}" ]] || die "size mismatch for override ${path}"
+  actual_sha="$(sha256sum -- "${source_file}")"
+  actual_sha="${actual_sha%% *}"
+  [[ "${actual_sha}" == "${expected_sha}" ]] || die "SHA-256 mismatch for override ${path}"
+  upload_release_object "${release_prefix}/overrides/${path}" "${source_file}" "${expected_sha}" "$(basename -- "${path}")"
+done < <(jq -r '(.server.overrides // [])[] | [.path, .sha256, (.bytes | tostring)] | @tsv' "${manifest}")
+
 pack_result="$(publish_pack)"
+upload_release_object "${manifest_key}" "${manifest}" "${manifest_digest}" "manifest.json"
 
 printf 'result=uploaded\n'
 printf 'bucket=%s\n' "${RELEASE_BUCKET}"
 printf 'release=%s\n' "${release}"
 printf 'manifest_key=%s\n' "${manifest_key}"
 printf 'mods=%s\n' "${mods_count}"
+printf 'overrides=%s\n' "${overrides_count}"
 printf 'pack=%s\n' "${pack_result}"
 printf 'pack_key=%s\n' "${pack_key}"

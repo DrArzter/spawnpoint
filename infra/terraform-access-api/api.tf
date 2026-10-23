@@ -144,6 +144,34 @@ data "aws_iam_policy_document" "access_api" {
   }
 
   statement {
+    sid       = "RequestReleaseBuild"
+    actions   = ["states:StartExecution"]
+    resources = [local.build_release_arn]
+  }
+  statement {
+    sid       = "ObserveReleaseBuild"
+    actions   = ["states:DescribeExecution"]
+    resources = ["${replace(local.build_release_arn, ":stateMachine:", ":execution:")}:*"]
+  }
+  statement {
+    sid       = "FindRunningReleaseBuilds"
+    actions   = ["states:ListExecutions"]
+    resources = [local.build_release_arn]
+  }
+  statement {
+    sid       = "KeepReleaseBuildAttempts"
+    actions   = ["s3:GetObject", "s3:PutObject"]
+    resources = ["${data.aws_s3_bucket.releases.arn}/preset-builds/*"]
+  }
+  # S3 returns 403, rather than NoSuchKey, without ListBucket. The build
+  # adapter must distinguish an absent first attempt/manifest from denied IO.
+  statement {
+    sid       = "DistinguishUnpublishedBuilds"
+    actions   = ["s3:ListBucket"]
+    resources = [data.aws_s3_bucket.releases.arn]
+  }
+
+  statement {
     sid     = "ReadAuthenticationSecrets"
     actions = ["ssm:GetParameter"]
     resources = [
@@ -205,6 +233,7 @@ resource "aws_lambda_function" "access_api" {
       CONTROL_PLANE_WEBSOCKET_URL      = "wss://${aws_apigatewayv2_api.control_plane.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.control_plane.name}"
       OPERATION_STATE_MACHINES         = jsonencode(local.operation_state_machines)
       RELEASE_BUCKET                   = data.aws_s3_bucket.releases.id
+      BUILD_RELEASE_STATE_MACHINE_ARN  = local.build_release_arn
       BACKUP_BUCKET                    = data.aws_s3_bucket.backups.id
       CONNECTION_HOST                  = var.connection_host
       CONSOLE_DOCUMENT_NAME            = aws_ssm_document.console.name
@@ -301,6 +330,7 @@ locals {
     "GET /games/{gameId}/presets/{presetId}/releases/{version}",
     "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}",
     "POST /games/{gameId}/presets/{presetId}/worlds",
+    "POST /games/{gameId}/presets/{presetId}/builds",
     "PUT /games/{gameId}/worlds/{worldId}/settings",
     "PUT /games/{gameId}/worlds/{worldId}/game-settings",
     "GET /games/{gameId}/worlds/{worldId}/whitelist",

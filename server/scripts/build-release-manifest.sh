@@ -13,6 +13,10 @@ Environment:
                       Optional all-or-nothing provenance for a source profile
   RELEASE_RUNTIME_IMAGE
                       Optional immutable container reference selected by the profile
+  RELEASE_LOADER_TYPE Optional Minecraft loader type (default: forge)
+  RELEASE_SERVER_OVERRIDES_DIR
+                      Optional normalized server configuration tree
+  RELEASE_CLIENT_PACK Optional complete launcher-importable client archive
 EOF
 }
 
@@ -35,7 +39,14 @@ release_game="${RELEASE_GAME:-minecraft}"
 case "${release_game}" in
   minecraft)
     mod_extension="jar"
-    loader_type="forge"
+    loader_type="${RELEASE_LOADER_TYPE:-forge}"
+    case "${loader_type}" in
+      vanilla | forge | neoforge | fabric | quilt) ;;
+      *)
+        printf 'error: unsupported Minecraft loader type: %s\n' "${loader_type}" >&2
+        exit 1
+        ;;
+    esac
     ;;
   factorio)
     mod_extension="zip"
@@ -54,6 +65,8 @@ profile_id="${RELEASE_PROFILE_ID:-}"
 profile_repository="${RELEASE_PROFILE_REPOSITORY:-}"
 profile_commit="${RELEASE_PROFILE_COMMIT:-}"
 runtime_image="${RELEASE_RUNTIME_IMAGE:-}"
+overrides_dir="${RELEASE_SERVER_OVERRIDES_DIR:-}"
+client_pack="${RELEASE_CLIENT_PACK:-}"
 
 command -v jq >/dev/null 2>&1 || {
   printf 'error: required command not found: jq\n' >&2
@@ -97,6 +110,20 @@ if [[ "${release_game}" == "factorio" && -z "${runtime_image}" ]]; then
   printf 'error: factorio releases require RELEASE_RUNTIME_IMAGE\n' >&2
   exit 1
 fi
+if [[ -n "${overrides_dir}" ]]; then
+  overrides_dir="$(realpath -e -- "${overrides_dir}")"
+  [[ -d "${overrides_dir}" && ! -L "${overrides_dir}" ]] || {
+    printf 'error: server overrides must be a regular directory\n' >&2
+    exit 1
+  }
+fi
+if [[ -n "${client_pack}" ]]; then
+  client_pack="$(realpath -e -- "${client_pack}")"
+  [[ -f "${client_pack}" && ! -L "${client_pack}" && "${client_pack}" == *.zip ]] || {
+    printf 'error: client pack must be a regular zip file\n' >&2
+    exit 1
+  }
+fi
 [[ ! -e "${output_manifest}" && ! -L "${output_manifest}" ]] || {
   printf 'error: immutable release manifest already exists: %s\n' "${output_manifest}" >&2
   exit 1
@@ -104,9 +131,10 @@ fi
 
 mkdir -p -- "$(dirname -- "${output_manifest}")"
 entries_file="$(mktemp)"
+overrides_file="$(mktemp)"
 output_tmp="$(mktemp "$(dirname -- "${output_manifest}")/.manifest.XXXXXX")"
 cleanup() {
-  rm -f -- "${entries_file}" "${output_tmp}"
+  rm -f -- "${entries_file}" "${overrides_file}" "${output_tmp}"
 }
 trap cleanup EXIT
 
@@ -129,7 +157,54 @@ while IFS= read -r -d '' mod; do
   count=$((count + 1))
 done < <(find "${mods_dir}" -maxdepth 1 -type f -name "*.${mod_extension}" -print0 | sort -z)
 
+override_count=0
+if [[ -n "${overrides_dir}" ]]; then
+  if find "${overrides_dir}" -mindepth 1 \( -type l -o ! -type f -a ! -type d \) -print -quit | grep -q .; then
+    printf 'error: server overrides contain a symbolic link or special file\n' >&2
+    exit 1
+  fi
+  while IFS= read -r -d '' override; do
+    relative="${override#"${overrides_dir}/"}"
+    [[ -n "${relative}" && "${relative}" != /* && "${relative}" != *\\* && "${relative}" != *$'\n'* && "${relative}" != *$'\t'* ]] || {
+      printf 'error: unsafe server override path: %q\n' "${relative}" >&2
+      exit 1
+    }
+    IFS='/' read -r -a components <<<"${relative}"
+    for component in "${components[@]}"; do
+      [[ -n "${component}" && "${component}" != "." && "${component}" != ".." ]] || {
+        printf 'error: unsafe server override path: %q\n' "${relative}" >&2
+        exit 1
+      }
+    done
+    case "${components[0]}" in
+      config | defaultconfigs | kubejs | scripts | global_packs | openloader) ;;
+      *)
+        printf 'error: unmanaged server override root: %s\n' "${components[0]}" >&2
+        exit 1
+        ;;
+    esac
+    sha256="$(sha256sum -- "${override}")"
+    sha256="${sha256%% *}"
+    bytes="$(stat --format '%s' -- "${override}")"
+    jq -cn \
+      --arg path "${relative}" \
+      --arg sha256 "${sha256}" \
+      --argjson bytes "${bytes}" \
+      '{path: $path, sha256: $sha256, bytes: $bytes}' >>"${overrides_file}"
+    override_count=$((override_count + 1))
+  done < <(find "${overrides_dir}" -type f -print0 | sort -z)
+fi
+
+client_sha256=""
+client_bytes=0
+if [[ -n "${client_pack}" ]]; then
+  client_sha256="$(sha256sum -- "${client_pack}")"
+  client_sha256="${client_sha256%% *}"
+  client_bytes="$(stat --format '%s' -- "${client_pack}")"
+fi
+
 jq -s \
+  --slurpfile overrides "${overrides_file}" \
   --arg release "${release}" \
   --arg minecraft_version "${minecraft_version}" \
   --arg loader_version "${loader_version}" \
@@ -142,6 +217,8 @@ jq -s \
   --arg profile_repository "${profile_repository}" \
   --arg profile_commit "${profile_commit}" \
   --arg runtime_image "${runtime_image}" \
+  --arg client_sha256 "${client_sha256}" \
+  --argjson client_bytes "${client_bytes}" \
   '({
     schema_version: 1,
     game: $game,
@@ -151,9 +228,11 @@ jq -s \
     created_at: $created_at,
     created_by: $created_by,
     changelog: $changelog,
-    server: {mods: .}
+    server: ({mods: .} + if ($overrides | length) == 0 then {} else {overrides: $overrides} end)
   } + if $runtime_image == "" then {} else {
     runtime: {image: $runtime_image}
+  } end + if $client_sha256 == "" then {} else {
+    client: {file: "client.zip", sha256: $client_sha256, bytes: $client_bytes, kind: "curseforge-modpack"}
   } end + if $profile_id == "" then {} else {
     source_profile: {
       id: $profile_id,
@@ -168,3 +247,4 @@ printf 'result=manifest_created\n'
 printf 'release=%s\n' "${release}"
 printf 'manifest=%s\n' "${output_manifest}"
 printf 'mods=%d\n' "${count}"
+printf 'overrides=%d\n' "${override_count}"

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
 // The handler reads its configuration when the module loads, so the table is
@@ -10,6 +10,10 @@ process.env.SESSION_SIGNING_SECRET_PARAMETER ??= "/spawnpoint/auth/session-signi
 process.env.CONTROL_PLANE_VIEW_TABLE ??= "spawnpoint-control-plane-view-test";
 process.env.CONTROL_PLANE_WEBSOCKET_URL ??= "wss://socket.example.test/live";
 const { routes, deployedCapabilities } = await import("../src/handlers/access-api.ts");
+
+test("requesting a billed build requires release.build, not merely release.read", () => {
+  assert.deepEqual(routes["POST /games/{gameId}/presets/{presetId}/builds"]?.access, { kind: "permission", permission: "release.build" });
+});
 
 // Authority used to be positional: the handler resolved a session, then an
 // identity, then crossed one access.manage gate, and a route inherited whatever
@@ -108,19 +112,16 @@ test("every route needs a permission unless it is deliberately self-scoped", () 
 });
 
 test("authority is decided by the dispatcher, never inside a route's handler", async () => {
-  const url = new URL("../src/handlers/access-api.ts", import.meta.url);
-  const source = await readFile(url, "utf8");
-  const guards = [...source.matchAll(/requirePermission\(/g)].length;
-
-  // The definition, the dispatcher's single call, and the two payload-dependent
-  // escalations in updateRole and approve, where granting the owner role needs
-  // more than the route's own permission.
-  assert.equal(
-    guards,
-    4,
-    "a handler that checks a permission itself is a second place where authority lives; " +
-      "move the route-level check into the table's access level",
-  );
+  const directory = new URL("../src/handlers/api/", import.meta.url);
+  const checks: Record<string, number> = {};
+  for (const file of (await readdir(directory)).filter((name) => name.endsWith(".ts")).sort()) {
+    const source = await readFile(new URL(file, directory), "utf8");
+    const count = [...source.matchAll(/requirePermission\(/g)].length;
+    if (count > 0) checks[file] = count;
+  }
+  // The sole definition, the dispatcher's gate, and exactly two payload-level
+  // owner-grant escalations. No feature route may grow a competing HTTP gate.
+  assert.deepEqual(checks, { "access.ts": 2, "dispatcher.ts": 1, "permissions.ts": 1 });
 });
 
 test("administrative routes all sit behind access.manage", () => {
@@ -154,7 +155,7 @@ test("every advertised capability names a route this API serves", () => {
 
 test("a capability is advertised only while its route exists", async () => {
   const deployed = await deployedRouteKeys();
-  const source = await readFile(new URL("../src/handlers/access-api.ts", import.meta.url), "utf8");
+  const source = await readFile(new URL("../src/handlers/api/capabilities.ts", import.meta.url), "utf8");
   const block = source.slice(source.indexOf("const capabilityRoutes"), source.indexOf("};", source.indexOf("const capabilityRoutes")));
   const named = [...block.matchAll(/"((?:GET|POST|PUT|DELETE) [^"]+)"/g)].map((match) => match[1]!);
   assert.ok(named.length >= 5, "expected to read the capability map");

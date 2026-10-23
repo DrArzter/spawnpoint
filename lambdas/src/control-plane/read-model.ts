@@ -73,6 +73,8 @@ export type ControlPlaneSnapshot = Readonly<{
       releases: readonly string[];
       buildStatus: "unbuilt" | "building" | "ready" | "failed";
       latestRelease: string | null;
+      buildAvailable?: PresetObservation["buildAvailable"];
+      build?: PresetObservation["build"];
     }>>;
     worlds: ReadonlyArray<Readonly<{
       id: string;
@@ -206,6 +208,8 @@ export async function readControlPlaneSnapshot(
         releases: preset.releases,
         buildStatus: preset.buildStatus,
         latestRelease: preset.latestRelease,
+        ...(preset.buildAvailable === undefined ? {} : { buildAvailable: preset.buildAvailable }),
+        ...(preset.build === undefined ? {} : { build: preset.build }),
       })),
       worlds: game.worlds.map((world) => {
         const session = locateWorldSession(game.id, world.id, world.placement ?? "configured", {

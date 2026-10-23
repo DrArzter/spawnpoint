@@ -12,6 +12,10 @@ let snapshotServed = false;
 // the live API does, so every screen, every error path and every navigation is
 // the shipped one. Only the data underneath is swapped.
 export const demoApi: SpawnpointApi = {
+  async requestReleaseBuild(gameId, presetId, profileDigest, retryRelease) {
+    await demoLatency();
+    return store.buildRelease(gameId, presetId, profileDigest, retryRelease);
+  },
   async restoreSession(): Promise<AuthState> {
     await demoLatency("boot");
     return { status: "authenticated", session: demoSession };

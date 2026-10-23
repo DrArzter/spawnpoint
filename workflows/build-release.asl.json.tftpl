@@ -21,10 +21,21 @@
             { "Variable": "$.configSourceSha256", "IsPresent": true },
             { "Variable": "$.configSourceSha256", "IsString": true }
           ],
-          "Next": "Build Immutable Release"
+          "Next": "Select Build Identity"
         }
       ],
       "Default": "Invalid Release Request"
+    },
+    "Select Build Identity": {
+      "Type": "Choice",
+      "Choices": [{ "And": [{ "Variable": "$.requestedBy", "IsPresent": true }, { "Variable": "$.requestedBy", "IsString": true }], "Next": "Build Immutable Release" }],
+      "Default": "Default Build Identity"
+    },
+    "Default Build Identity": {
+      "Type": "Pass",
+      "Result": "github-actions",
+      "ResultPath": "$.requestedBy",
+      "Next": "Build Immutable Release"
     },
     "Build Immutable Release": {
       "Type": "Task",
@@ -38,11 +49,11 @@
           { "Name": "CONFIG_REPOSITORY_URL", "Type": "PLAINTEXT", "Value.$": "$.configRepositoryUrl" },
           { "Name": "CONFIG_SOURCE_KEY", "Type": "PLAINTEXT", "Value.$": "$.configSourceKey" },
           { "Name": "CONFIG_SOURCE_SHA256", "Type": "PLAINTEXT", "Value.$": "$.configSourceSha256" },
-          { "Name": "RELEASE_CREATED_BY", "Type": "PLAINTEXT", "Value": "github-actions" }
+          { "Name": "RELEASE_CREATED_BY", "Type": "PLAINTEXT", "Value.$": "$.requestedBy" }
         ]
       },
       "ResultPath": null,
-      "TimeoutSeconds": 2100,
+      "TimeoutSeconds": 3900,
       "Retry": [{
         "ErrorEquals": ["CodeBuild.AccountLimitExceededException"],
         "IntervalSeconds": 10,

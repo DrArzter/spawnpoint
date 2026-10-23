@@ -66,11 +66,16 @@ for profile in "${profiles[@]}"; do
       printf '%s  %s\n' "$(sha256sum -- "${file}" | awk '{print $1}')" "${relative}"
     done < <(find "${directory}" -type f -print0 | sort -z)
   } | sha256sum | awk '{print $1}')"
+  profile_revision="${source_revision}"
+  if [[ -f "${checkout}/profiles/.source-revisions.json" ]]; then
+    profile_revision="$(jq -er --arg id "${directory_id}" '.[$id] // error("missing profile source revision")' "${checkout}/profiles/.source-revisions.json")"
+  fi
   jq -cn \
     --arg id "${directory_id}" \
     --arg display_name "$(jq -r '.display_name' "${profile}")" \
     --arg profile_digest "${digest}" \
-    '{id: $id, display_name: $display_name, profile_digest: $profile_digest, build_status: "unbuilt", releases: [], latest_release: null}' \
+    --arg source_commit "${profile_revision}" \
+    '{id: $id, display_name: $display_name, profile_digest: $profile_digest, source_commit: $source_commit, build_status: "unbuilt", releases: [], latest_release: null}' \
     >>"${entries}"
 done
 
@@ -80,7 +85,9 @@ jq -s \
   --arg kind "${CONFIG_SOURCE_KIND}" \
   --arg origin "${source_origin}" \
   --arg revision "${source_revision}" \
-  '{schema_version: 2, game: $game, source: {kind: $kind, origin: $origin, revision: $revision, repository: $origin, commit: $revision}, presets: .}' \
+  --arg snapshot_key "${CONFIG_SOURCE_KEY}" \
+  --arg snapshot_sha256 "${CONFIG_SOURCE_SHA256}" \
+  '{schema_version: 2, game: $game, source: {kind: $kind, origin: $origin, revision: $revision, repository: $origin, commit: $revision, snapshot: {key: $snapshot_key, sha256: $snapshot_sha256}}, presets: .}' \
   "${entries}" >"${catalog}"
 
 # Preserve a successful build for an unchanged profile. A repository commit
@@ -89,10 +96,11 @@ jq -s \
 existing="${workspace}/existing.json"
 catalog_key="presets/${game}/catalog.json"
 if aws s3api get-object --bucket "${RELEASE_BUCKET}" --key "${catalog_key}" "${existing}" >/dev/null 2>&1; then
-  jq --slurpfile old "${existing}" '
+  jq --slurpfile old "${existing}" --argjson has_revisions "$(if [[ -f "${checkout}/profiles/.source-revisions.json" ]]; then printf true; else printf false; fi)" '
     .presets |= map(. as $new |
       ([$old[0].presets[]? | select(.id == $new.id and .profile_digest == $new.profile_digest)] | first // null) as $previous |
       if $previous then
+        .source_commit = (if $has_revisions then .source_commit else ($previous.source_commit // $old[0].source.commit) end) |
         .build_status = $previous.build_status |
         .releases = ($previous.releases // (if $previous.latest_release == null then [] else [$previous.latest_release] end)) |
         .latest_release = $previous.latest_release

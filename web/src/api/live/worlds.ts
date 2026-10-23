@@ -65,6 +65,13 @@ function worldLifecyclePayload(action: WorldLifecycleAction, worldId: string, ba
 }
 
 export const worldsApi = {
+  async requestReleaseBuild(gameId: string, presetId: string, profileDigest: string, retryRelease?: string): Promise<{ release: string; attempt: number }> {
+    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/builds`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ profileDigest, retryRelease }) });
+    if (!response.ok) throw await apiFailure(response, response.status === 409 ? "The build or its source changed, or is unavailable. Refresh before trying again." : "The build could not be requested. Refresh to check whether it was accepted before retrying.");
+    const result = await response.json() as { release?: unknown; attempt?: unknown };
+    if (typeof result.release !== "string" || !/^[0-9]+\.[0-9]+$/.test(result.release) || typeof result.attempt !== "number" || !Number.isSafeInteger(result.attempt) || result.attempt < 1) throw new Error("Spawnpoint returned an invalid build response. Refresh to check the build state.");
+    return { release: result.release, attempt: result.attempt };
+  },
   async loadControlPlane(): Promise<ControlPlaneSnapshot> {
     const response = await authorizedFetch("/control-plane");
     if (!response.ok) throw await apiFailure(response, response.status === 403 ? "Your role cannot view server status." : "The control-plane state could not be loaded.");

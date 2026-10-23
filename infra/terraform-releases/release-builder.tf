@@ -54,6 +54,11 @@ data "archive_file" "release_builder_source" {
     filename = "server/scripts/resolve-profile-mods.sh"
   }
 
+  source {
+    content  = file("${path.module}/../../server/scripts/resolve-curseforge-modpack.sh")
+    filename = "server/scripts/resolve-curseforge-modpack.sh"
+  }
+
   # The factorio resolver is a game module rather than a container, so the
   # bundle carries it the way it carries the shared scripts.
   source {
@@ -177,7 +182,7 @@ resource "aws_codebuild_project" "release_builder" {
   name                   = "spawnpoint-release-builder"
   description            = "Resolve a pinned profile in AWS and publish an inert immutable release candidate."
   service_role           = aws_iam_role.release_builder.arn
-  build_timeout          = 30
+  build_timeout          = 60
   queued_timeout         = 60
   concurrent_build_limit = 3
 

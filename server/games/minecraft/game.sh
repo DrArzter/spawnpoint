@@ -37,6 +37,27 @@ GAME_FOOTPRINT_CORES="1"
 # world created from a preset has an id such as minecraft-rostik-1a2b3c4d.
 MINECRAFT_LEVEL_NAME="world"
 
+game_prepare_runtime() {
+  local manifest="$1" loader_type loader_version minecraft_version
+  loader_type="$(jq -r '.loader.type' "${manifest}")"
+  loader_version="$(jq -r '.loader.version' "${manifest}")"
+  minecraft_version="$(jq -r '.minecraft_version' "${manifest}")"
+  case "${loader_type}" in
+    vanilla | forge | neoforge | fabric | quilt) ;;
+    *)
+      printf 'error: unsupported Minecraft loader in release: %s\n' "${loader_type}" >&2
+      return 1
+      ;;
+  esac
+  [[ -n "${minecraft_version}" && -n "${loader_version}" ]] || {
+    printf 'error: Minecraft release is missing its game or loader version\n' >&2
+    return 1
+  }
+  export SPAWNPOINT_MINECRAFT_TYPE="${loader_type^^}"
+  export SPAWNPOINT_MINECRAFT_VERSION="${minecraft_version}"
+  export SPAWNPOINT_MINECRAFT_LOADER_VERSION="${loader_version}"
+}
+
 game_query_players_raw() {
   rcon list
 }

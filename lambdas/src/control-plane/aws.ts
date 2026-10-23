@@ -18,6 +18,7 @@ import { randomUUID } from "node:crypto";
 import type { BackupObject } from "./backups.ts";
 import { clientPackKey, releaseModKey } from "./release-artifacts.ts";
 import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts";
+import { presetBuildView, runningReleaseBuilds } from "./aws-release-builds.ts";
 import { gameCatalog } from "./catalog.ts";
 import { type ReleaseState } from "./release-state.ts";
 import { S3ReleaseStateStore } from "./s3-release-state-store.ts";
@@ -128,6 +129,10 @@ async function readReleasePointer(worldId: string, generationId: string | null):
 }
 
 async function listPresets(): Promise<readonly PresetObservation[]> {
+  const running = runningReleaseBuilds().catch((error: unknown) => {
+    console.error("release_builds_read_failed", { errorName: error instanceof Error ? error.name : "UnknownError" });
+    return null;
+  });
   const groups = await Promise.all(gameCatalog.map(async (game) => {
     try {
       const response = await s3.send(new GetObjectCommand({
@@ -136,9 +141,15 @@ async function listPresets(): Promise<readonly PresetObservation[]> {
       }));
       const body = await response.Body?.transformToString();
       if (!body) return [];
-      const parsed = parsePresetCatalog(JSON.parse(body), game.id);
+      const catalog: unknown = JSON.parse(body);
+      const parsed = parsePresetCatalog(catalog, game.id);
       if (parsed === null) throw new Error("invalid preset catalog");
-      return parsed;
+      const active = await running;
+      if (active === null) return parsed.map((preset) => ({ ...preset, buildAvailable: false }));
+      return await Promise.all(parsed.map((preset) => presetBuildView(preset, catalog, active).catch((error: unknown) => {
+        console.error("preset_build_read_failed", { gameId: game.id, presetId: preset.id, errorName: error instanceof Error ? error.name : "UnknownError" });
+        return { ...preset, buildAvailable: false };
+      })));
     } catch (error) {
       if (error instanceof NoSuchKey || (error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound"))) return [];
       console.error("preset_catalog_read_failed", { gameId: game.id, errorName: error instanceof Error ? error.name : "UnknownError" });

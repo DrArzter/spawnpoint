@@ -233,7 +233,7 @@ export type ConsoleModel = Readonly<{
   unavailable: string | null;
 }>;
 
-export type PresetRow = Readonly<{ preset: Preset; status: StatusDescriptor; createWorld: Action | null }>;
+export type PresetRow = Readonly<{ preset: Preset; status: StatusDescriptor; createWorld: Action | null; build?: Action | null }>;
 export type PointerRow = Readonly<{ world: World; href: string; presetName: string; summary: string }>;
 
 export type ReleasesModel = Readonly<{

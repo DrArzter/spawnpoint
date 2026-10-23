@@ -8,9 +8,11 @@ export type Pending =
   | { kind: "lifecycle"; worldId: string; action: WorldActionKind }
   | { kind: "pack"; worldId: string }
   | { kind: "create" }
+  | { kind: "build"; presetId: string }
   | { kind: "refresh" };
 
 export type Confirmation =
+  | { kind: "build"; game: Game; preset: Preset }
   | { kind: "session"; action: SessionAction; game: Game; world: World }
   | { kind: "archive"; game: Game; world: World }
   | { kind: "wipe"; game: Game; world: World; preset: Preset | null }

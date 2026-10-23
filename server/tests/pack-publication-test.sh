@@ -86,6 +86,7 @@ mkdir -p -- "${nozip}"
 for binary in /usr/bin/* /bin/*; do
   name="$(basename -- "${binary}")"
   [[ "${name}" != "zip" ]] || continue
+  [[ ! -e "${nozip}/${name}" && ! -L "${nozip}/${name}" ]] || continue
   ln -sf -- "${binary}" "${nozip}/${name}"
 done
 ln -sf -- "${REPOSITORY_ROOT}/server/tests/fake-aws" "${nozip}/aws"

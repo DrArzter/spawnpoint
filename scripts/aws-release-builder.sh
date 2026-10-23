@@ -37,7 +37,7 @@ done
   exit 1
 }
 # docker is a minecraft-resolver dependency, checked by the resolver itself.
-for command in awk aws find git grep jq realpath sha256sum sort tar; do
+for command in awk aws find git grep jq realpath sha256sum sort tar unzip; do
   command -v "${command}" >/dev/null 2>&1 || {
     printf 'error: required command not found: %s\n' "${command}" >&2
     exit 1

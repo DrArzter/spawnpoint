@@ -137,7 +137,7 @@ const rcon: ConsoleModel = {
   unavailable: null,
 };
 const rconUnreadable: ConsoleModel = { ...rcon, log: { status: "error", error: "boom", kind: "failed", retry: spy("console.retry", "Try again") } };
-const releases: ReleasesModel = { game, loading: false, presets: [{ preset: game.presets[0]!, status: { kind: "ok", label: "Ready" }, createWorld: spy("world.create", "Create world") }], pointers: [{ world, href: "#/w", presetName: "Industrial", summary: "Release 1.2" }] };
+const releases: ReleasesModel = { game, loading: false, presets: [{ preset: game.presets[0]!, status: { kind: "ok", label: "Ready" }, createWorld: spy("world.create", "Create world"), build: spy("release.build", "Build new release") }], pointers: [{ world, href: "#/w", presetName: "Industrial", summary: "Release 1.2" }] };
 
 const access: AccessModel = {
   tab: "users",

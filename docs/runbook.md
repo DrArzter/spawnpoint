@@ -612,6 +612,95 @@ The intended production sequence is:
 `scripts/cut-release.sh` remains only a manual bootstrap/diagnostic path. The accepted production contract is the
 GitHub-to-AWS builder above, and the game host never resolves CurseForge on boot.
 
+The presets table's **Source** is the last Git commit touching that preset's entire
+`profiles/<id>/` directory, not the latest repository commit. Publishers with full
+history include `profiles/.source-revisions.json` in the hash-verified snapshot;
+the catalog stores each entry as `source_commit`. This metadata lives outside
+profile directories and does not invalidate their digests or ready releases.
+Legacy publishers preserve the previous revision for unchanged profile digests.
+The catalog's top-level source revision and immutable release manifests retain
+the exact repository snapshot used for publishing/building; they are not rewritten
+to the narrower path revision.
+
+### Operator builds in the panel
+
+An Operator or Owner with `release.build` can open **Releases → preset actions**:
+
+- **Build release** creates an unpublished candidate from the catalog's verified source snapshot.
+- **Retry build** keeps the failed candidate's version and exact source snapshot; only its attempt counter changes.
+- **Resume build** recovers a request saved before dispatch was confirmed. It reuses the same AWS execution identity,
+  so a lost HTTP response cannot create another build.
+- **Build new release** is offered after publication. A published manifest is never overwritten, including when
+  later bookkeeping failed. Existing ready releases remain usable while another build runs or fails.
+
+The browser supplies its observed profile digest and, for retry/resume, the expected candidate. A stale confirmation
+is refused rather than silently building a different candidate. Concurrent GUI claims use an S3 conditional write.
+The API also refuses while a GitHub-initiated build of that preset is running. Build requests are kept separately
+under `preset-builds/<game>/<preset>.json`; they never change world pointers or start game sessions. The panel polls
+while builds run, so leaving and reopening it does not own or cancel AWS execution.
+
+Source snapshots must be cataloged by the current publisher (including `source.snapshot.key` and `sha256`). Legacy
+catalogs remain readable, but cannot request builds until republished. Preset authoring remains in Git; this feature
+does not write back into configuration repositories. The panel can adopt a historical GitHub attempt while its
+execution history remains available and its pinned commit is provably the current snapshot or the profile's last
+change. Adoption retains its release and source; it does not reinterpret unknown historical snapshots as current.
+
+There is deliberately no general “upgrade this world without a wipe” action: successful construction of a modpack
+does not prove save or world-generation compatibility. Assess compatibility before using the existing operator
+promotion tools; use a new wipe where a release is incompatible.
+
+### CurseForge modpack presets
+
+A Minecraft profile can pin a complete CurseForge client/server pair instead of listing individual mods. The pin is
+data inside the reviewed profile snapshot; changing either file ID is a new reviewed preset revision. For example,
+[Prominence II: Hasturian Era](https://www.curseforge.com/minecraft/modpacks/prominence-2-hasturian-era) v4.1.4 is
+project `466901`, client file `9184727`, and server-pack file `9184730`:
+
+```json
+{
+  "schema_version": 1,
+  "project_id": 466901,
+  "file_id": 9184727,
+  "server_pack_file_id": 9184730
+}
+```
+
+Point the profile at that file and select the modpack resolver:
+
+```json
+{
+  "minecraft_version": "1.20.1",
+  "loader": { "type": "fabric", "version": "0.19.3" },
+  "mods": {
+    "source": "extras/curseforge-modpack.json",
+    "resolver": "curseforge-modpack"
+  }
+}
+```
+
+The loader version in that example is a profile pin, not a moving default; use the exact primary loader recorded by
+the selected client's `manifest.json`. The resolver refuses the build when the Minecraft or loader pin differs from
+that archive.
+
+The builder verifies both API records, their relationship, byte lengths and SHA-1 values. It resolves every client
+manifest file into `mods`, `resourcepacks`, `shaderpacks` or `datapacks`, verifies those downloads, and preserves the complete
+author-provided overrides tree (including additional folders). The resulting `client.zip` is a complete CurseForge
+import archive: all pack content is embedded under the manifest's overrides directory, while the launcher installs
+the pinned Minecraft and loader versions. Its manifest has an empty `files` array because those files are already
+present; `spawnpoint-client-lock.json` preserves the upstream manifest and resolved file identities and hashes.
+Extract the overrides directory to obtain the pack-specific game folder, or import the ZIP in a compatible launcher.
+Files already bundled by the author in either archive can satisfy a dependency only when their provider hash and
+size match. An unavailable dependency fails the release rather than producing a partial client pack.
+
+When the author publishes an additional client archive containing files whose separate API downloads are disabled,
+the source pin may include `client_mirror: {url, sha512, bytes}`. Its HTTPS URL, exact SHA-512 and size are reviewed
+with the profile. The mirror only supplies candidates: each reused file still has to match the pinned CurseForge
+file metadata. It cannot silently substitute another mod version or change the author's CurseForge overrides.
+
+The builder hashes the server JARs into the release manifest and carries only deterministic
+configuration roots into `server.overrides`. Starts download the resulting S3 release and never call CurseForge.
+Archive launch scripts, worlds, logs, `server.properties`, operator lists and other mutable server state are ignored.
+
 Do not promote during an active session unless it is urgent — the stop refuses while players are online
 (`PromotionRefused`, pointer restored, nothing changed). Announce first.
 

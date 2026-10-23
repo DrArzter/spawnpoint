@@ -9,7 +9,6 @@ import { Chip, ChoiceChip } from "../../components/ui/Chip";
 import { TextField } from "../../components/ui/Fields";
 import { SkeletonRows } from "../../components/ui/Skeleton";
 import { useSnackbar } from "../../components/ui/Snackbar";
-import { Menu } from "../../components/ui/Menu";
 import { Banner, Card, EmptyState, PageHeader } from "../../components/ui/Surfaces";
 import { Tooltip } from "../../components/ui/Tooltip";
 import type { AppearanceModel, LoginAccountsModel, LookModel, ProfileModel } from "../../core/models";
@@ -17,7 +16,7 @@ import { Icon, type IconName } from "../../icons";
 import { PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../../lib/signin";
 import { DEFAULT_ACCENT, parseHex } from "../../styles/accent";
 import type { ThemePreference } from "../../telegram";
-import { ActionButton, menuItems } from "./actions";
+import { ActionButton, ActionOverflow } from "./actions";
 
 export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
   const { member, role, viewer } = model;
@@ -152,7 +151,7 @@ function LoginAccounts({ model }: Readonly<{ model: LoginAccountsModel }>) {
                   </span>
                   <span>{accountLine(account)}</span>
                 </span>
-                {rowActions.length > 0 && <div className="login-account-actions"><Menu items={menuItems(rowActions)} label={`Manage ${presentation.label}`} size="small" /></div>}
+                {rowActions.length > 0 && <div className="login-account-actions"><ActionOverflow groups={[rowActions]} label={`Manage ${presentation.label}`} size="small" /></div>}
               </li>
             );
           })}

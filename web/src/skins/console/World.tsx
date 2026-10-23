@@ -4,7 +4,6 @@ import type { BackupEntry } from "../../api/contract";
 import { Chip, ChoiceChip } from "../../components/ui/Chip";
 import { Column, DataTable } from "../../components/ui/DataTable";
 import { Ellipsis } from "../../components/ui/Ellipsis";
-import { Menu, type MenuItem } from "../../components/ui/Menu";
 import { Status } from "../../components/ui/Status";
 import { Banner, Card, DetailItem, DetailsGroup, EmptyState, Ghost, NotConnected, PageHeader } from "../../components/ui/Surfaces";
 import { Tabs } from "../../components/ui/Tabs";
@@ -17,7 +16,7 @@ import { Icon } from "../../icons";
 import { formatBytes, formatTime, shortDigest } from "../../lib/format";
 import type { Wipe } from "../../model";
 import { useMediaQuery } from "../../shell/hooks";
-import { ActionButton, menuGroups, menuItems } from "./actions";
+import { ActionButton, ActionOverflow } from "./actions";
 import { MetricsPanel } from "./Metrics";
 import { ConsolePanel } from "./Rcon";
 import { WhitelistPanel } from "./Whitelist";
@@ -29,7 +28,7 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
   // not worth three wrapped rows above the page, so they move into the overflow.
   const narrow = useMediaQuery("(max-width: 599px)");
   const secondary: Action[] = [model.refresh, ...(model.invite ? [model.invite] : [])];
-  const overflow: (MenuItem | "separator")[] = narrow ? menuGroups(secondary, model.more) : menuItems(model.more);
+  const overflow: readonly (readonly Action[])[] = narrow ? [secondary, model.more] : [model.more];
 
   return (
     <div className="page">
@@ -40,7 +39,7 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
           <ActionButton action={model.session} tooltipWhenDisabled variant="filled" />
         </>}
         breadcrumb={[{ label: "Worlds", href: model.worldsHref }]}
-        overflow={overflow.length > 0 ? <Menu align="end" items={overflow} label={`More actions for ${world.displayName}`} /> : undefined}
+        overflow={overflow.flat().length > 0 ? <ActionOverflow groups={overflow} label={`More actions for ${world.displayName}`} /> : undefined}
         status={<Status kind={model.availability.kind} label={model.availability.label} />}
         title={world.displayName}
       />
@@ -123,7 +122,7 @@ function WipesTab({ rows, worldName }: Readonly<{ rows: WorldModel["wipes"]; wor
     { id: "release", label: "Started on release", width: "140px", render: (row) => <code>{row.wipe.originRelease}</code> },
     { id: "opened", label: "Opened", render: (row) => <Timestamp value={row.wipe.createdAt} /> },
     { id: "closed", label: "Closed", render: (row) => (row.wipe.closedAt ? <Timestamp value={row.wipe.closedAt} /> : <Ghost>Open</Ghost>) },
-    { id: "actions", label: "Actions", actions: true, render: (row) => <Menu items={menuItems([row.showBackups])} label={`Actions for wipe ${row.wipe.number}`} size="small" /> },
+    { id: "actions", label: "Actions", actions: true, render: (row) => <ActionOverflow groups={[[row.showBackups]]} label={`Actions for wipe ${row.wipe.number}`} size="small" /> },
   ];
   return (
     <Card flush title="Wipes">
@@ -141,12 +140,12 @@ function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldN
     { id: "stored", label: "Stored", render: (entry) => <Timestamp value={entry.storedAt} /> },
     { id: "size", label: "Size", width: "110px", align: "num", render: (entry) => formatBytes(entry.sizeBytes) },
     { id: "checksum", label: "SHA-256", secondary: true, width: "210px", render: (entry) => <code title={entry.checksum}>{shortDigest(entry.checksum)}</code> },
-    { id: "actions", label: "Actions", actions: true, render: (entry) => <Menu items={menuItems([
+    { id: "actions", label: "Actions", actions: true, render: (entry) => <ActionOverflow groups={[[
       copyValueAction(`backup.copy-archive.${entry.key}`, "Copy archive name", entry.archiveName),
       copyValueAction(`backup.copy-checksum.${entry.key}`, "Copy SHA-256", entry.checksum),
       ...(model.download ? [model.download(entry)] : []),
       model.restore(entry),
-    ])} label={`Actions for ${entry.archiveName}`} size="small" /> },
+    ]]} label={`Actions for ${entry.archiveName}`} size="small" /> },
   ];
 
   if (!model.canRead) {

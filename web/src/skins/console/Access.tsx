@@ -5,7 +5,6 @@ import { Column, DataTable } from "../../components/ui/DataTable";
 import { Sheet } from "../../components/ui/Dialog";
 import { InlineSelect, Switch, TextField } from "../../components/ui/Fields";
 import { FilterBar, NoMatches, useFilter } from "../../components/ui/Filter";
-import { Menu } from "../../components/ui/Menu";
 import { SkeletonRows } from "../../components/ui/Skeleton";
 import { Status } from "../../components/ui/Status";
 import { Banner, Card, Details, EmptyState, Ghost, NotConnected } from "../../components/ui/Surfaces";
@@ -15,7 +14,7 @@ import { Icon } from "../../icons";
 import { formatDateTime, plural } from "../../lib/format";
 import { describePermission } from "../../lib/permissions";
 import type { Game, Role } from "../../model";
-import { ActionButton, menuItems } from "./actions";
+import { ActionButton, ActionOverflow } from "./actions";
 import { Person } from "./Person";
 
 export function Access({ model }: Readonly<{ model: AccessModel }>) {
@@ -56,7 +55,7 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
       id: "actions",
       label: "Actions",
       actions: true,
-      render: (row) => <Menu items={menuItems([row.approve, row.dismiss])} label={`Actions for ${row.candidate.displayName}`} size="small" />,
+      render: (row) => <ActionOverflow groups={[[row.approve, row.dismiss]]} label={`Actions for ${row.candidate.displayName}`} size="small" />,
     },
   ];
   const columns: Column<MemberRow>[] = [

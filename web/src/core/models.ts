@@ -6,6 +6,7 @@ import type { AccessTab, ControlPlaneSnapshot, Game, Member, Operation, OwnerBoo
 import type { SessionReason } from "../session";
 import type { Theme, ThemePreference, ViewerProfile } from "../telegram";
 import type { Action } from "./actions";
+import type { ModSide } from "./release-mods";
 
 /*
  * The bones hand each surface one of these. A model carries facts and
@@ -158,9 +159,10 @@ export type WhitelistModel = Readonly<{
   add: Action;
 }>;
 
-/** One server mod of the release a world starts with, and its download (ADR-0065). */
-export type ModRow = Readonly<{ file: string; bytes: number; sha256: string; download: Action }>;
-export type ModsModel = Readonly<{ release: string; files: Loading<readonly ModRow[]> }>;
+/** One mod of the release a world starts with, where it goes, and its download (ADR-0065, ADR-0069). */
+export type ModRow = Readonly<{ file: string; bytes: number; sha256: string; side: ModSide; sideLabel: string; download: Action }>;
+/** `split`: players install a set of their own, so each mod says where it goes. */
+export type ModsModel = Readonly<{ release: string; split: boolean; files: Loading<readonly ModRow[]> }>;
 
 export type WorldModel = Readonly<{
   game: Game;

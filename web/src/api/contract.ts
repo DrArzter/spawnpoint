@@ -147,7 +147,8 @@ export type BackupInventory = { entries: BackupEntry[]; unverified: number; trun
 
 /** One server mod of a release, as its manifest records it (ADR-0065). */
 export type ReleaseMod = Readonly<{ file: string; sha256: string; bytes: number }>;
-export type ReleaseMods = Readonly<{ release: string; mods: readonly ReleaseMod[] }>;
+/** A release's server mods, and the players' own set when it differs (ADR-0069); null when players install the server's. */
+export type ReleaseMods = Readonly<{ release: string; mods: readonly ReleaseMod[]; clientMods: readonly ReleaseMod[] | null }>;
 /**
  * A world's whitelist (ADR-0066). Unmanaged: the world's record keeps none, and
  * its server's own file is left alone. Managed: these names are the whole list.

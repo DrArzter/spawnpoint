@@ -187,23 +187,26 @@ function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["r
   </>;
 }
 
-// The server mods of the release the world starts with (ADR-0065).
+// The mods of the release the world starts with (ADR-0065); where each goes
+// when players install a set of their own (ADR-0069).
 function ModsPanel({ mods, worldName }: Readonly<{ mods: ModsModel; worldName: string }>) {
   const columns: readonly Col<ModRow>[] = [
     { id: "file", label: "File", render: (row) => <code className="t-clip" title={row.file}>{row.file}</code> },
+    ...(mods.split ? [{ id: "side", label: "Goes to", width: "150px", render: (row: ModRow) => row.sideLabel }] : []),
     { id: "size", label: "Size", width: "110px", align: "end", render: (row) => formatBytes(row.bytes) },
     { id: "checksum", label: "SHA-256", secondary: true, width: "180px", render: (row) => <Digest value={row.sha256} /> },
-    { id: "verbs", label: "Actions", verbs: true, corner: true, render: (row) => <Verb action={row.download} size="small" /> },
+    { id: "verbs", label: "Actions", verbs: true, corner: true, render: (row) => <Overflow groups={[[row.download]]} label={`Actions for ${row.file}`} size="small" /> },
   ];
   const files = mods.files;
+  const noun = mods.split ? "Mods" : "Server mods";
   return (
-    <Panel flush name={`Server mods · release ${mods.release}`}>
+    <Panel flush name={`${noun} · release ${mods.release}`}>
       {files.status === "error"
         ? <div className="t-inset"><Notice description={files.error} title="The mods are unavailable" tone="error" verbs={<Verb action={files.retry} size="small" />} /></div>
         : <Table
           columns={columns}
           empty={<Empty title="This release has no server mods" />}
-          label={`Server mods of ${worldName}, release ${mods.release}`}
+          label={`${noun} of ${worldName}, release ${mods.release}`}
           loading={files.status === "loading"}
           rowKey={(row) => row.sha256}
           rows={files.status === "ready" ? files.value : []}

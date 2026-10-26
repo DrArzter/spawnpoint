@@ -85,7 +85,13 @@ validate_profile_metadata() {
     (.mods.source == null or (.mods.source | type == "string" and length > 0)) and
     ((.mods.resolver // null) == null or
       ((.mods.resolver | type == "string") and (.mods.resolver | IN("curseforge-files", "curseforge-modpack", "factorio-portal")))) and
-    (if .mods.source == null then ((.mods.resolver // null) == null) else true end)
+    (if .mods.source == null then ((.mods.resolver // null) == null) else true end) and
+    all(.mods.server_only, .mods.client_only; . == null or (type == "string" and length > 0)) and
+    # Side lists (ADR-0069) sit beside one list of CurseForge files: a modpack
+    # brings its own client pack, and Factorio clients take the server mods.
+    (if (.mods.server_only // .mods.client_only // null) == null then true
+      else ($loader_type == "minecraft" and .mods.source != null and (.mods.resolver // "curseforge-files") == "curseforge-files")
+    end)
   ' "${profile}" >/dev/null || {
     printf 'error: unsupported or invalid profile metadata: %s\n' "${profile}" >&2
     exit 1

@@ -78,7 +78,7 @@ export function createServer(client: SpawnpointClient): McpServer {
 
   server.registerTool("get_release", {
   title: "Get release",
-  description: "Read one release: its loader, runtime, source preset and server mods with their SHA-256 digests.",
+  description: "Read one release: its loader, runtime, source preset, server mods and, when players install a different set, the players' mods, each with its SHA-256 digest.",
   inputSchema: { gameId, presetId, version },
   outputSchema: { data: z.unknown() },
   annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
@@ -86,7 +86,7 @@ export function createServer(client: SpawnpointClient): McpServer {
 
   server.registerTool("get_release_mod_link", {
   title: "Get release mod link",
-  description: "Create a download link, valid for fifteen minutes, for one server mod of a release, named by its SHA-256 digest from get_release.",
+  description: "Create a download link, valid for fifteen minutes, for one mod of a release, server or players', named by its SHA-256 digest from get_release.",
   inputSchema: { gameId, presetId, version, sha256: z.string().regex(/^[0-9a-f]{64}$/).describe("The mod's SHA-256 digest from get_release") },
   outputSchema: { data: z.unknown() },
   annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },

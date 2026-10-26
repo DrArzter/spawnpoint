@@ -1,6 +1,7 @@
 import { type Identity } from "../../access/domain.ts";
 import { startPresetBuild } from "../../control-plane/aws-release-builds.ts";
 import { awsControlPlaneSources, releaseModUrl, packDownloadUrl } from "../../control-plane/aws.ts";
+import { manifestClientMods, releaseModLocation } from "../../control-plane/release-artifacts.ts";
 import { packRelease } from "../../control-plane/session-control.ts";
 import { type Response, response } from "./http.ts";
 
@@ -42,19 +43,18 @@ function manifestText(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-// One server mod of a release (ADR-0065), by the digest its manifest records:
-// the digest names the file without putting a mod's name, whatever characters
-// it holds, into a path. Mods are what the release already publishes to every
-// host; whoever may read the release may have its files.
+// One mod of a release (ADR-0065), by the digest its manifest records: the
+// digest names the file without putting a mod's name, whatever characters it
+// holds, into a path. A players' own mod (ADR-0069) is as public as the client
+// pack it ships in; whoever may read the release may have its files.
 export async function releaseModDownload(gameId: string, presetId: string, version: string, sha256: string): Promise<Response> {
   if (!RELEASE_ID.test(gameId) || !RELEASE_ID.test(presetId) || !RELEASE_VERSION.test(version) || !SHA256_DIGEST.test(sha256)) {
     return response(400, { error: "invalid_release_reference" });
   }
   const manifest = await awsControlPlaneSources.readReleaseManifest?.(gameId, presetId, version) ?? null;
-  const mods = (manifest as { server?: { mods?: unknown } } | null)?.server?.mods;
-  const mod = Array.isArray(mods) ? (mods as { file?: unknown; sha256?: unknown }[]).find((entry) => entry.sha256 === sha256) : undefined;
-  if (mod === undefined || typeof mod.file !== "string" || !/^[^/\\]+\.(jar|zip)$/.test(mod.file)) return response(404, { error: "unknown_mod" });
-  return response(200, { file: mod.file, url: await releaseModUrl(gameId, presetId, version, mod.file, MOD_LINK_SECONDS), expiresIn: MOD_LINK_SECONDS });
+  const location = releaseModLocation(manifest, sha256);
+  if (location === null || !/^[^/\\]+\.(jar|zip)$/.test(location.file)) return response(404, { error: "unknown_mod" });
+  return response(200, { file: location.file, url: await releaseModUrl(gameId, presetId, version, location, MOD_LINK_SECONDS), expiresIn: MOD_LINK_SECONDS });
 }
 
 // What a release contains, which until now lived only in S3 and in the mods
@@ -86,6 +86,8 @@ export async function releaseManifest(gameId: string, presetId: string, version:
       const mod = entry as Record<string, unknown>;
       return { file: manifestText(mod.file), sha256: manifestText(mod.sha256), bytes: Number(mod.bytes ?? 0) };
     }),
+    // What players install when it is not the server's set (ADR-0069).
+    clientMods: manifestClientMods(manifest),
   });
 }
 

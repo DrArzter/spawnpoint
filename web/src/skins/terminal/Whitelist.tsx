@@ -1,6 +1,6 @@
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { WhitelistModel, WhitelistRow } from "../../core/models";
-import { Col, Empty, Field, Notice, Panel, Person, Table, TextInput, Verb } from "./ui";
+import { Col, Empty, Field, Notice, Overflow, Panel, Person, Table, TextInput, Verb } from "./ui";
 
 // A world's whitelist (ADR-0066): who may join, kept on the world's record so
 // it follows the world to every host.
@@ -8,7 +8,7 @@ export function WhitelistPanel({ model }: Readonly<{ model: WhitelistModel }>) {
   const list = model.list;
   const columns: readonly Col<WhitelistRow>[] = [
     { id: "player", label: "Player", render: (row) => <Person name={row.name} /> },
-    { id: "verbs", label: "Actions", verbs: true, corner: true, render: (row) => <Verb action={row.remove} size="small" tone="danger" /> },
+    { id: "verbs", label: "Actions", verbs: true, corner: true, render: (row) => <Overflow groups={[[row.remove]]} label={`Actions for ${row.name}`} size="small" /> },
   ];
   const changed = list.status === "ready" && list.value.updatedAt
     ? <>Changed by {list.value.updatedBy ?? "someone"} <Timestamp value={list.value.updatedAt} /></>

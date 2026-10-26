@@ -208,23 +208,26 @@ function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["r
   );
 }
 
-// The server mods of the release the world starts with (ADR-0065).
+// The mods of the release the world starts with (ADR-0065); where each goes
+// when players install a set of their own (ADR-0069).
 function ModsCard({ mods, worldName }: Readonly<{ mods: ModsModel; worldName: string }>) {
   const columns: Column<ModRow>[] = [
     { id: "file", label: "File", truncate: true, render: (row) => <Ellipsis mono tail={12} value={row.file} /> },
+    ...(mods.split ? [{ id: "side", label: "Goes to", width: "150px", render: (row: ModRow) => row.sideLabel }] : []),
     { id: "size", label: "Size", width: "110px", align: "num", render: (row) => formatBytes(row.bytes) },
     { id: "checksum", label: "SHA-256", secondary: true, width: "210px", render: (row) => <code title={row.sha256}>{shortDigest(row.sha256)}</code> },
     { id: "actions", label: "Actions", actions: true, render: (row) => <ActionButton action={row.download} size="small" variant="text" /> },
   ];
   const files = mods.files;
+  const noun = mods.split ? "Mods" : "Server mods";
   return (
-    <Card flush title={`Server mods · release ${mods.release}`}>
+    <Card flush title={`${noun} · release ${mods.release}`}>
       {files.status === "error"
         ? <div style={{ padding: 16 }}><Banner actions={<ActionButton action={files.retry} variant="text" />} description={files.error} title="The mods are unavailable" tone="error" /></div>
         : <DataTable
           columns={columns}
           empty={<EmptyState icon="inventory" title="This release has no server mods" />}
-          label={`Server mods of ${worldName}, release ${mods.release}`}
+          label={`${noun} of ${worldName}, release ${mods.release}`}
           loading={files.status === "loading"}
           rowKey={(row) => row.sha256}
           rows={files.status === "ready" ? files.value : []}

@@ -229,12 +229,12 @@ export const worldsApi = {
 
   async loadReleaseMods(gameId: string, presetId: string, release: string): Promise<ReleaseMods> {
     const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}`);
-    const body = await response.json().catch(() => ({})) as { error?: string; release?: string; mods?: ReleaseMod[] };
+    const body = await response.json().catch(() => ({})) as { error?: string; release?: string; mods?: ReleaseMod[]; clientMods?: ReleaseMod[] | null };
     if (!response.ok || body.mods === undefined) {
       const messages: Record<string, string> = { forbidden: "Your role cannot read releases.", unknown_release: `Release ${release} is not in the store.` };
       throw await apiFailure(response, messages[body.error ?? ""] ?? "The release's mods could not be read.", body);
     }
-    return { release: body.release ?? release, mods: body.mods };
+    return { release: body.release ?? release, mods: body.mods, clientMods: body.clientMods ?? null };
   },
 
   async requestModDownload(gameId: string, presetId: string, release: string, sha256: string): Promise<FileLink> {

@@ -14,6 +14,7 @@ import { GOOGLE_CLIENT_ID } from "../lib/signin";
 import type { Game, LinkKind, Member, OwnerBootstrap, Role, World } from "../model";
 import { action } from "./actions";
 import type { BackupsModel, CandidateRow, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, NotificationsModel, RolesModel, UsersModel, WhitelistModel } from "./models";
+import { modSideLabels, releaseModSides } from "./release-mods";
 import { whitelistNameError } from "./whitelist";
 
 /*
@@ -122,7 +123,7 @@ export function useWhitelist(gameId: string, world: World, open: boolean, notify
       rows: state.value.names.map((player) => ({
         name: player,
         remove: action(`whitelist.remove.${player}`, "Remove", () => void save(names.filter((item) => item !== player), (saved) => `${player} is off the whitelist. ${when(saved)}`), {
-          danger: true, disabled: saving, hint: `Remove ${player} from the whitelist`,
+          icon: "close", danger: true, disabled: saving, hint: `Remove ${player} from the whitelist`,
         }),
       })),
     },
@@ -132,15 +133,18 @@ export function useWhitelist(gameId: string, world: World, open: boolean, notify
 
 // --- release files (ADR-0065) -------------------------------------------------
 
-/** A release's server mods, read only while the tab that shows them is open. */
+/** A release's mods, read only while the tab that shows them is open; each says where it goes (ADR-0069). */
 export function useReleaseMods(gameId: string, release: Readonly<{ presetId: string; version: string }> | null, onDownload: (presetId: string, version: string, mod: ReleaseMod) => void): ModsModel | null {
   const [state, retry] = useLoad<ReleaseMods>(release === null ? null : () => loadReleaseMods(gameId, release.presetId, release.version), [gameId, release?.presetId, release?.version]);
   if (release === null) return null;
-  if (state.status !== "ready") return { release: release.version, files: asLoading(state, retry, "mods.retry") };
+  if (state.status !== "ready") return { release: release.version, split: false, files: asLoading(state, retry, "mods.retry") };
   return {
     release: release.version,
-    files: { status: "ready", value: state.value.mods.map((mod) => ({
+    split: state.value.clientMods !== null,
+    files: { status: "ready", value: releaseModSides(state.value).map(({ side, ...mod }) => ({
       ...mod,
+      side,
+      sideLabel: modSideLabels[side],
       download: action(`mod.download.${mod.sha256}`, "Download", () => onDownload(release.presetId, release.version, mod), { icon: "download" }),
     })) },
   };

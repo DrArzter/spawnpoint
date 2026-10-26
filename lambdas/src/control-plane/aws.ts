@@ -16,7 +16,7 @@ import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient, StartExecut
 import { randomUUID } from "node:crypto";
 
 import type { BackupObject } from "./backups.ts";
-import { clientPackKey, releaseModKey } from "./release-artifacts.ts";
+import { clientPackKey, releaseModKey, type ModStore } from "./release-artifacts.ts";
 import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts";
 import { presetBuildView, runningReleaseBuilds } from "./aws-release-builds.ts";
 import { gameCatalog } from "./catalog.ts";
@@ -466,12 +466,12 @@ function attachment(filename: string): string {
   return `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
-/** One server mod of a release, presigned for this role's read of releases. */
-export function releaseModUrl(gameId: string, presetId: string, release: string, file: string, expiresIn: number): Promise<string> {
+/** One mod of a release, from either set, presigned for this role's read of releases. */
+export function releaseModUrl(gameId: string, presetId: string, release: string, location: Readonly<{ file: string; store: ModStore }>, expiresIn: number): Promise<string> {
   return getSignedUrl(s3, new GetObjectCommand({
     Bucket: requiredEnv("RELEASE_BUCKET"),
-    Key: releaseModKey(gameId, presetId, release, file),
-    ResponseContentDisposition: attachment(file),
+    Key: releaseModKey(gameId, presetId, release, location.file, location.store),
+    ResponseContentDisposition: attachment(location.file),
   }), { expiresIn });
 }
 

@@ -128,6 +128,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0066](0066-keep-a-world-whitelist-on-its-record.md) | Keep a world's whitelist on its record | Accepted — implemented | M6 |
 | [0067](0067-bring-a-host-checkout-to-the-deployed-commit-at-session-start.md) | Bring a host's checkout to the deployed commit when a session starts | Accepted — implemented | M6 |
 | [0068](0068-normalize-upstream-modpacks-into-releases.md) | Normalize upstream modpacks into releases | Accepted — implemented | M3 |
+| [0069](0069-give-players-a-mod-set-of-their-own.md) | Give a preset's players a mod set of their own | Accepted — implemented | M6 |
 
 ## Decisions still to record
 

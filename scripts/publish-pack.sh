@@ -69,5 +69,27 @@ trap cleanup EXIT
 # the pack can only ever contain the release's own bytes.
 "${SERVER_SCRIPTS}/download-release.sh" "${game}" "${preset}" "${release}" "${staging}/payload" >&2
 
+# A players mod the server does not run is not part of the host payload
+# (ADR-0069), but the pack needs it: fetched here and held to its digest.
+payload_manifest="${staging}/payload/manifest.json"
+mkdir -p -- "${staging}/payload/client-mods"
+while IFS=$'\t' read -r file sha256; do
+  [[ "${file}" =~ ^[^/\\]+\.(jar|zip)$ ]] || {
+    printf 'error: unsafe players mod name in the manifest: %s\n' "${file}" >&2
+    exit 1
+  }
+  aws s3api get-object --bucket "${RELEASE_BUCKET}" \
+    --key "releases/${game}/${preset}/${release}/client-mods/${file}" \
+    "${staging}/payload/client-mods/${file}" >/dev/null
+  [[ "$(sha256sum -- "${staging}/payload/client-mods/${file}" | awk '{print $1}')" == "${sha256}" ]] || {
+    printf 'error: SHA-256 mismatch for players mod %s\n' "${file}" >&2
+    exit 1
+  }
+done < <(jq -r '
+  [.server.mods[].file] as $server |
+  (if .client.kind == "mod-set" then .client.mods else [] end)[] |
+  select(.file as $file | $server | index($file) | not) |
+  [.file, .sha256] | @tsv' "${payload_manifest}")
+
 RELEASE_SOURCE_DIR="${staging}/payload" \
   "${SERVER_SCRIPTS}/upload-release.sh" "${staging}/payload/manifest.json"

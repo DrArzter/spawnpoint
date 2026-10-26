@@ -66,6 +66,9 @@
   --gutter: 24px;
   --control-height: 36px;
   --row-height: 48px;
+  /* Where content starts inside a card: its title, its body, and the first and
+     last cells of a flush table, so every line in one card starts on one edge. */
+  --card-inset: 20px;
 
   --radius-indicator: 2px;
   --radius-tab-indicator: 3px;

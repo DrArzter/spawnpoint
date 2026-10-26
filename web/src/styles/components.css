@@ -208,6 +208,27 @@
   white-space: nowrap;
 }
 
+/* An icon-led line takes its baseline from its text, not from the icon in
+   front (an icon's baseline is its bottom edge), so a label beside it shares
+   the text's baseline. A zero-width strut comes first, aligned as the text is,
+   and lends the line that baseline; its margin gives back the gap it adds. */
+.status::before,
+.copy-value::before {
+  content: "\200b" / "";
+}
+
+.status::before {
+  margin-inline-end: -8px;
+}
+
+.status-large::before {
+  margin-inline-end: -12px;
+}
+
+.copy-value::before {
+  margin-inline-end: -2px;
+}
+
 .status .icon,
 .status .ring {
   flex: none;
@@ -357,7 +378,7 @@ button.chip[aria-pressed="true"] {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px 16px;
-  padding: 16px 20px 12px;
+  padding: 16px var(--card-inset) 12px;
 }
 
 .card-header h2 {
@@ -384,7 +405,7 @@ button.chip[aria-pressed="true"] {
 }
 
 .card-body {
-  padding: 4px 20px 20px;
+  padding: 4px var(--card-inset) 20px;
 }
 
 .card-body-flush {
@@ -641,10 +662,27 @@ button.chip[aria-pressed="true"] {
   height: var(--row-height);
 }
 
+/* The first and last cells keep the card's inset, so a table's first column
+   starts on the edge its card's title starts on. Only while the table is a
+   table; a stacked record takes the inset as its own padding. */
+@container (min-width: 600px) {
+  .table th:first-child,
+  .table td:first-child {
+    padding-left: var(--card-inset);
+  }
+
+  .table th:last-child,
+  .table td:last-child {
+    padding-right: var(--card-inset);
+  }
+}
+
 /* A long value that is copied rather than read gives up its width first: the
    cell refuses to grow, and the value inside it ends in an ellipsis. Only while
-   the table is a table — the stacked layout below has a whole line for it. */
-@media (min-width: 600px) {
+   the table is a table — the stacked layout below has a whole line for it. The
+   same container decides both: by the viewport, a card narrower than 600px
+   stacked its rows and still squeezed this cell to nothing. */
+@container (min-width: 600px) {
   .table td.cell-truncate {
     max-width: 0;
   }
@@ -653,7 +691,7 @@ button.chip[aria-pressed="true"] {
     max-width: 100%;
   }
 
-    .table td.cell-truncate code {
+  .table td.cell-truncate code {
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
@@ -791,7 +829,7 @@ button.chip[aria-pressed="true"] {
     grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
     column-gap: 16px;
-    padding: 8px 16px 12px;
+    padding: 8px var(--card-inset) 12px;
     border-bottom: 1px solid var(--outline);
   }
 
@@ -840,7 +878,7 @@ button.chip[aria-pressed="true"] {
   /* Each row is a card here, and its menu is placed against this corner. */
   .table tr {
     position: relative;
-    padding: 12px 16px;
+    padding: 12px var(--card-inset);
     border-bottom: 1px solid var(--outline);
   }
 
@@ -851,8 +889,7 @@ button.chip[aria-pressed="true"] {
   /* Label against the left rail, value against the right. Both packed into the
      first third left the rest of the card empty, and a pair with a gap between
      its halves reads as one line where two columns of ragged text do not.
-     Centred, not on the baseline: a value that starts with an icon has its
-     baseline at the icon's foot, which put its label below the text. */
+     The label shares the value's baseline, as a detail row's does. */
   .table td {
     display: grid;
     grid-template-columns: minmax(0, auto) minmax(0, 1fr);
@@ -861,7 +898,7 @@ button.chip[aria-pressed="true"] {
     min-height: 32px;
     padding: 4px 0;
     border: 0;
-    align-items: center;
+    align-items: baseline;
     justify-items: end;
     text-align: right;
   }
@@ -976,11 +1013,13 @@ button.chip[aria-pressed="true"] {
   font-size: 14px;
 }
 
+/* A label and its value share a baseline: text of two sizes centred on one
+   line still sits a pixel apart, and the eye reads the baselines. */
 .details-row {
   display: grid;
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
-  align-items: start;
+  align-items: baseline;
   min-height: 44px;
   padding: 10px 0;
   border-bottom: 1px solid var(--outline);
@@ -991,9 +1030,8 @@ button.chip[aria-pressed="true"] {
 }
 
 .details-flush .details-row {
-  align-items: center;
   min-height: var(--row-height);
-  padding: 8px 16px;
+  padding: 8px var(--card-inset);
 }
 
 .details dt {
@@ -1060,11 +1098,18 @@ button.chip[aria-pressed="true"] {
   line-height: 16px;
 }
 
+/* The row gap gives back the copy button's negative margin below, so a button
+   that wraps under its value no longer climbs into it. */
 .details .value-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
+  align-items: baseline;
+  gap: 6px 8px;
+}
+
+/* A button that is only an icon has no text to share the line's baseline. */
+.details .value-row > .icon-btn {
+  align-self: center;
 }
 
 .details .value-row .mono {
@@ -1121,16 +1166,10 @@ button.chip[aria-pressed="true"] {
      the 16px a stacked table row has at this step; without it the labels
      touched the card's edge while every row above them did not. */
   .details-flush .details-row {
-    align-items: start;
-    padding: 8px 16px;
+    padding: 8px var(--card-inset);
   }
 
-  /* The label stands on the value's first line, not on its baseline: a value
-     that starts with an icon, such as a status or an address, has its baseline
-     at the icon's foot, which put the label below the text. The label's box is
-     the 20px every value's first line takes, so its text centres on that line. */
   .details dt {
-    min-height: 20px;
     font-size: 12px;
     line-height: 16px;
   }
@@ -2048,7 +2087,7 @@ button.chip[aria-pressed="true"] {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 8px var(--card-inset);
   border-bottom: 1px solid var(--outline);
   color: var(--ink-secondary);
   font-size: 13px;
@@ -2095,6 +2134,10 @@ button.chip[aria-pressed="true"] {
 
   .details .value-row .icon-btn-small {
     margin-block: -10px;
+  }
+
+  .details .value-row {
+    row-gap: 10px;
   }
 
   .btn-small {

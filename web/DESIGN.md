@@ -127,6 +127,7 @@ spacing:
   gutter-mobile: "16px"
   control-height: "36px"
   row-height: "48px"
+  card-inset: "20px"
   bar-height: "64px"
   bar-height-mobile: "56px"
   drawer-width: "256px"
@@ -301,6 +302,8 @@ Controls (buttons, fields, chips' pill, inline selects) use a 4px radius. Cards,
 - **Background:** surface white (surface `#333333` dark), hairline border, no shadow.
 - **Shadow Strategy:** none at rest — see Elevation & Depth.
 - **Internal Padding:** header 16/20/12px, body 4/20/20px, footer 12/20px with a hairline top rule.
+- **One start edge (`--card-inset`, 20px):** the title, the body, a filter bar, a details row and the first and last
+  cells of a flush table all start 20px in, at every width. The breakpoint gate checks it (`offRail`).
 
 ### Inputs / Fields
 - **Style:** 40px min-height, hairline-strong border, 4px radius, white surface.

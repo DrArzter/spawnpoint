@@ -16,6 +16,7 @@ real records (`latency=0`, so the demo answers at once and the probe lands on th
 | Elevation | a shadow on a surface that is not menu, dialog, sheet or snackbar |
 | Faces | every font family in use, to hold the Three-Face Rule |
 | Text under a control | a text run or another control under a button, link or field it does not belong to |
+| Text over text | two text runs that share pixels, compared on the middle of each line, so tight leading is not a finding |
 | Row broke its line | a row that promises one line (`LAYOUT.oneLine`, such as the page header) wrapped |
 | Empty state off centre | an empty state more than 4px from the middle of its box |
 | Label off its value | a label beside its value (`LAYOUT.pairs`) more than 1px off the baseline of the value's first line |
@@ -51,8 +52,8 @@ The routes are listed at the top of `audit.mjs`. Add one whenever a screen is ad
 
 `scripts/check.sh ui` (CI job *Breakpoint gate*) builds the demo, serves it, and runs the audit with `--gate`: both
 skins at both sides of every step (360, 599, 600, 839, 840, 959, 960 and 1440px). It fails on any geometry finding —
-sideways scroll, past the viewport, text under a control, a broken line, off centre, off its value, off the card edge,
-a cut or ragged menu — that `accepted.txt` does not list. Touch targets and contrast stay in the report above, where a disabled
+sideways scroll, past the viewport, text under a control, text over text, a broken line, off centre, off its value,
+off the card edge, a cut or ragged menu — that `accepted.txt` does not list. Touch targets and contrast stay in the report above, where a disabled
 control is judged by eye.
 
 ```bash

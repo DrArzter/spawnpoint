@@ -69,8 +69,8 @@ For changes under `web/`:
 
 1. Run `npm test` and `npm run build` from `web/`.
 2. Run `scripts/check.sh ui`, the breakpoint gate: both skins at both sides of every step, failing on text under a
-   control, a broken one-line row, an off-centre empty state, a label off its value, or a cut menu. A primitive that
-   promises a layout adds its selector to `LAYOUT` in `web/tools/ui-audit/audit.mjs`.
+   control, text over text, a broken one-line row, an off-centre empty state, a label off its value, or a cut menu.
+   A primitive that promises a layout adds its selector to `LAYOUT` in `web/tools/ui-audit/audit.mjs`.
 3. Run `git diff --check`.
 4. Inspect the complete affected path once on desktop and mobile. Verify the shared component everywhere it appears, not only on the screenshot that exposed the problem.
 5. Check long values, empty/loading/error/disabled states, keyboard focus, tooltips, touch targets, and horizontal overflow as applicable.

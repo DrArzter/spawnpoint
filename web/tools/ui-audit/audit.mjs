@@ -107,6 +107,7 @@ const KINDS = [
   ["smallTargets", "target below the floor"],
   ["contrast", "contrast below 4.5"],
   ["overlaps", "text under a control"],
+  ["textOverText", "text over text"],
   ["wrapped", "row broke its line"],
   ["offCentre", "empty state off centre"],
   ["misaligned", "label off its value"],
@@ -117,7 +118,7 @@ const KINDS = [
 
 // What the gate fails on: geometry that is either right or broken. Targets
 // and contrast stay in the report, where a disabled control is judged by eye.
-const GATED = new Set(["sideways", "overflowing", "overlaps", "wrapped", "offCentre", "misaligned", "offRail", "menuClipped", "menuRagged"]);
+const GATED = new Set(["sideways", "overflowing", "overlaps", "textOverText", "wrapped", "offCentre", "misaligned", "offRail", "menuClipped", "menuRagged"]);
 
 function report(findings) {
   const totals = new Map(KINDS.map(([key]) => [key, 0]));
@@ -342,7 +343,7 @@ const PROBE = String.raw`(() => {
     return runs;
   };
   const cross = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 2 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 2;
-  result.overlaps = []; result.wrapped = []; result.offCentre = []; result.misaligned = []; result.offRail = [];
+  result.overlaps = []; result.textOverText = []; result.wrapped = []; result.offCentre = []; result.misaligned = []; result.offRail = [];
 
   // 8. Text under a control, or one control over another: the corner key a
   // short name ran under. A control's own text, and a control inside another
@@ -356,6 +357,26 @@ const PROBE = String.raw`(() => {
     const hit = runs.find((run) => !control.el.contains(run.node) && cross(control.r, run.r))
       ?? controls.find((other) => other !== control && !other.el.contains(control.el) && !control.el.contains(other.el) && cross(control.r, other.r));
     if (hit) result.overlaps.push({ sel: path(control.el), text: hit.text ?? path(hit.el) });
+  }
+
+  // 8b. Text over text: two text nodes that share pixels, as a badge laid over
+  // a title or a long value run into its neighbour. A run's box is the font's
+  // whole ascent and descent, taller than its glyphs, and two lines of tight
+  // leading share that margin by design; so each box is trimmed to the middle
+  // of its line before the pair is compared.
+  const cores = runs
+    .map((run) => { const inset = (run.r.bottom - run.r.top) * 0.2; return { ...run, c: { left: run.r.left, right: run.r.right, top: run.r.top + inset, bottom: run.r.bottom - inset } }; })
+    .sort((a, b) => a.c.top - b.c.top);
+  const reported = new Set();
+  for (let i = 0; i < cores.length; i++) {
+    for (let j = i + 1; j < cores.length && cores[j].c.top < cores[i].c.bottom; j++) {
+      const [a, b] = [cores[i], cores[j]];
+      if (a.node === b.node || !cross(a.c, b.c)) continue;
+      const sel = path(b.node.parentElement);
+      if (reported.has(sel)) continue;
+      reported.add(sel);
+      result.textOverText.push({ sel, by: "“" + b.text.slice(0, 12) + "” on “" + a.text.slice(0, 12) + "”" });
+    }
   }
 
   // 9. A row that promised one line and broke it.

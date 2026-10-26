@@ -9,7 +9,15 @@ export function releaseArtifactPrefix(gameId: string, presetId: string, release:
 }
 
 export function clientPackKey(gameId: string, presetId: string, release: string): string {
-  return `${releaseArtifactPrefix(gameId, presetId, release)}/client.zip`;
+  return releasePackKey(gameId, presetId, release, "client");
+}
+
+/** A release's packs: what players install, and, with side lists (ADR-0069), the server's set and every mod. */
+export const RELEASE_PACKS = ["client", "server", "full"] as const;
+export type ReleasePack = (typeof RELEASE_PACKS)[number];
+
+export function releasePackKey(gameId: string, presetId: string, release: string, pack: ReleasePack): string {
+  return `${releaseArtifactPrefix(gameId, presetId, release)}/${pack}.zip`;
 }
 
 /** Where a release stores a mod: the server's set, or the players' own (ADR-0069). */

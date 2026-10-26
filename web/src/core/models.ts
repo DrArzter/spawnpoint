@@ -6,7 +6,6 @@ import type { AccessTab, ControlPlaneSnapshot, Game, Member, Operation, OwnerBoo
 import type { SessionReason } from "../session";
 import type { Theme, ThemePreference, ViewerProfile } from "../telegram";
 import type { Action } from "./actions";
-import type { ModSide } from "./release-mods";
 
 /*
  * The bones hand each surface one of these. A model carries facts and
@@ -144,7 +143,8 @@ export type BackupsModel = Readonly<{
   download: ((entry: BackupEntry) => Action) | null;
 }>;
 
-export type ReleaseRow = Readonly<{ name: string; status: string; downloadable: boolean; sourceHref: string | null; download: Action | null }>;
+/** `downloads`: the client pack, or with side lists (ADR-0069) the client, server and full packs. */
+export type ReleaseRow = Readonly<{ name: string; status: string; downloadable: boolean; sourceHref: string | null; downloads: readonly Action[] }>;
 
 /** One player on a world's whitelist, and the way off it (ADR-0066). */
 export type WhitelistRow = Readonly<{ name: string; remove: Action }>;
@@ -159,9 +159,9 @@ export type WhitelistModel = Readonly<{
   add: Action;
 }>;
 
-/** One mod of the release a world starts with, where it goes, and its download (ADR-0065, ADR-0069). */
-export type ModRow = Readonly<{ file: string; bytes: number; sha256: string; side: ModSide; sideLabel: string; download: Action }>;
-/** `split`: players install a set of their own, so each mod says where it goes. */
+/** One mod of the release a world starts with, of either side, and its download (ADR-0065, ADR-0069). */
+export type ModRow = Readonly<{ file: string; bytes: number; sha256: string; download: Action }>;
+/** `split`: players install a set of their own, so the release offers its server and full packs too. */
 export type ModsModel = Readonly<{ release: string; split: boolean; files: Loading<readonly ModRow[]> }>;
 
 export type WorldModel = Readonly<{

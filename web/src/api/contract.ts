@@ -147,6 +147,7 @@ export type BackupInventory = { entries: BackupEntry[]; unverified: number; trun
 
 /** One server mod of a release, as its manifest records it (ADR-0065). */
 export type ReleaseMod = Readonly<{ file: string; sha256: string; bytes: number }>;
+export type ReleasePackName = "server" | "full";
 /** A release's server mods, and the players' own set when it differs (ADR-0069); null when players install the server's. */
 export type ReleaseMods = Readonly<{ release: string; mods: readonly ReleaseMod[]; clientMods: readonly ReleaseMod[] | null }>;
 /**
@@ -292,6 +293,8 @@ export type SpawnpointApi = Readonly<{
   loadReleaseMods(gameId: string, presetId: string, release: string): Promise<ReleaseMods>;
   /** A short-lived link to one server mod of a release, named by its digest. */
   requestModDownload(gameId: string, presetId: string, release: string, sha256: string): Promise<FileLink>;
+  /** The server's set or every mod of a release with side lists (ADR-0069). */
+  requestReleasePack(gameId: string, presetId: string, release: string, pack: ReleasePackName): Promise<FileLink>;
   /** The host this world's session runs on, measured; null while the world runs nowhere. */
   loadWorldMetrics(gameId: string, worldId: string, range: MetricRange): Promise<HostMetrics | null>;
   /** The world's recent console commands, newest first; a pending one is settled on read. */

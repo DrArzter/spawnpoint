@@ -8,7 +8,7 @@ export type {
   IssuedAccessInvitation, MetricRange, SessionOperation,
   SpawnpointApi, SpawnpointSession, SubscriptionState, VisitorSession, WorldLifecycleAction,
 } from "./api/contract";
-import type { MetricRange } from "./api/contract";
+import type { MetricRange, ReleasePackName } from "./api/contract";
 import type { SettingValue } from "./model";
 export { googleOidcClientId, telegramOidcClientId } from "./api/live";
 
@@ -67,6 +67,7 @@ export const loadWhitelist = (gameId: string, worldId: string) => api.loadWhitel
 export const updateWhitelist = (gameId: string, worldId: string, names: readonly string[]) => api.updateWhitelist(gameId, worldId, names);
 export const loadReleaseMods = (gameId: string, presetId: string, release: string) => api.loadReleaseMods(gameId, presetId, release);
 export const requestModDownload = (gameId: string, presetId: string, release: string, sha256: string) => api.requestModDownload(gameId, presetId, release, sha256);
+export const requestReleasePack = (gameId: string, presetId: string, release: string, pack: ReleasePackName) => api.requestReleasePack(gameId, presetId, release, pack);
 export const loadWorldMetrics = (gameId: string, worldId: string, range: MetricRange) => api.loadWorldMetrics(gameId, worldId, range);
 export const loadConsole = (gameId: string, worldId: string) => api.loadConsole(gameId, worldId);
 export const runConsoleCommand = (gameId: string, worldId: string, command: string) => api.runConsoleCommand(gameId, worldId, command);

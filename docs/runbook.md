@@ -662,7 +662,8 @@ format as `mods.source`, and name them in the profile:
 
 The server runs `source` + `server_only`; the client pack holds `source` + `client_only`. Either list is optional. A
 mod both sides need stays in `source`. The build refuses a side list that adds nothing, and a players' mod with the
-name of a server mod but other bytes. In the world's Releases tab each mod says where it goes.
+name of a server mod but other bytes. Such a release also publishes `server.zip` and `full.zip`; the world's Releases
+tab offers Client, Server and Full on the release row and lists every mod once.
 
 ### CurseForge modpack presets
 

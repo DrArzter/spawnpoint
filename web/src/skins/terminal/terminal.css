@@ -1274,7 +1274,7 @@ html[data-skin="terminal"] .t-release-line {
   width: 100%;
 }
 
-html[data-skin="terminal"] .t-release-line .t-verb {
+html[data-skin="terminal"] .t-release-line > .t-verbs {
   margin-inline-start: auto;
 }
 

@@ -1,5 +1,5 @@
 import type { AccessInvitation, AuthState, SpawnpointApi } from "../api/contract";
-import type { MetricRange } from "../api/contract";
+import type { MetricRange, ReleasePackName } from "../api/contract";
 import { demoSession } from "./data";
 import { clearDemoFlag, demoLatency } from "./flag";
 import * as store from "./store";
@@ -218,6 +218,11 @@ export const demoApi: SpawnpointApi = {
   async requestModDownload(gameId: string, presetId: string, release: string, sha256: string) {
     await demoLatency();
     return store.modLink(gameId, presetId, release, sha256);
+  },
+
+  async requestReleasePack(gameId: string, presetId: string, release: string, pack: ReleasePackName) {
+    await demoLatency();
+    return store.releasePackLink(gameId, presetId, release, pack);
   },
 
   async loadWorldMetrics(gameId: string, worldId: string, range: MetricRange) {

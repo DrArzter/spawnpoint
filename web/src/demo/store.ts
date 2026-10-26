@@ -1,5 +1,5 @@
 import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
-import type { ConsoleEntry, FileLink, HostMetrics, MetricRange, ReleaseMods, SavedWhitelist, WorldWhitelist } from "../api/contract";
+import type { ConsoleEntry, FileLink, HostMetrics, MetricRange, ReleaseMods, ReleasePackName, SavedWhitelist, WorldWhitelist } from "../api/contract";
 import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
 import type { ControlPlaneSnapshot, Preset, SettingValue, World, WorldGameSettings } from "../model";
@@ -404,6 +404,12 @@ export function modLink(gameId: string, presetId: string, release: string, sha25
   const mod = [...mods.mods, ...(mods.clientMods ?? [])].find((candidate) => candidate.sha256 === sha256);
   if (!mod) throw new Error("This release no longer lists that mod.");
   return { url: demoFile("Spawnpoint demo mod", [`File:    ${mod.file}`, `Release: ${presetId} ${release}`], "the mod's jar"), expiresIn: 900 };
+}
+
+export function releasePackLink(gameId: string, presetId: string, release: string, pack: ReleasePackName): FileLink {
+  const mods = releaseMods(gameId, presetId, release);
+  if (mods.clientMods === null) throw new Error(`Release ${release} has no ${pack} pack yet.`);
+  return { url: demoFile(`Spawnpoint demo ${pack} pack`, [`Preset:  ${presetId}`, `Release: ${release}`], `the ${pack} pack`), expiresIn: 900 };
 }
 
 export function backupLink(gameId: string, worldId: string, key: string): FileLink {

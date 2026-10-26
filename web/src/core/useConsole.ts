@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { ReleaseMod } from "../api/contract";
+import type { ReleaseMod, ReleasePackName } from "../api/contract";
 import { requestReleaseBuild } from "../auth";
-import { ActiveSession, endSession, loadAppearance, loadControlPlane, requestBackupDownload, requestCreateWorld, requestModDownload, requestPackDownload, requestSessionOperation, requestUpdateWorldSettings, requestWorldLifecycle, subscribeControlPlane, updateAppearance, updateGameSettings, type BackupEntry } from "../auth";
+import { ActiveSession, endSession, loadAppearance, loadControlPlane, requestBackupDownload, requestCreateWorld, requestModDownload, requestPackDownload, requestReleasePack, requestSessionOperation, requestUpdateWorldSettings, requestWorldLifecycle, subscribeControlPlane, updateAppearance, updateGameSettings, type BackupEntry } from "../auth";
 import { sessionStatus } from "../components/ui/Status";
 import { formatDateTime } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, SettingValue, World } from "../model";
@@ -156,6 +156,7 @@ export type ConsoleController = Readonly<{
   /** Short-lived links to a world's archive and a release's mod (ADR-0065). */
   downloadBackup: (game: Game, world: World, entry: BackupEntry) => void;
   downloadMod: (game: Game, presetId: string, release: string, mod: ReleaseMod) => void;
+  downloadReleasePack: (game: Game, presetId: string, release: string, pack: ReleasePackName) => void;
   notify: Notify;
 }>;
 
@@ -318,6 +319,13 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     );
   }
 
+  function downloadReleasePack(target: Game, presetId: string, release: string, pack: ReleasePackName) {
+    openDownload(() => requestReleasePack(target.id, presetId, release, pack)).then(
+      () => notify({ tone: "success", message: `The ${pack} pack of ${presetId} ${release} is downloading.` }),
+      (error: unknown) => notify({ tone: "error", message: error instanceof Error ? error.message : "The download link could not be created." }),
+    );
+  }
+
   async function saveGameSettings(target: Game, targetWorld: World, values: Readonly<Record<string, SettingValue>>) {
     setSavingGameSettings(true);
     try {
@@ -465,6 +473,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     savingGameSettings,
     downloadBackup,
     downloadMod,
+    downloadReleasePack,
     notify,
   };
 }

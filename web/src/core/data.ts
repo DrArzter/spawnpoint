@@ -14,7 +14,7 @@ import { GOOGLE_CLIENT_ID } from "../lib/signin";
 import type { Game, LinkKind, Member, OwnerBootstrap, Role, World } from "../model";
 import { action } from "./actions";
 import type { BackupsModel, CandidateRow, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, NotificationsModel, RolesModel, UsersModel, WhitelistModel } from "./models";
-import { modSideLabels, releaseModSides } from "./release-mods";
+import { releaseModUnion } from "./release-mods";
 import { whitelistNameError } from "./whitelist";
 
 /*
@@ -133,7 +133,7 @@ export function useWhitelist(gameId: string, world: World, open: boolean, notify
 
 // --- release files (ADR-0065) -------------------------------------------------
 
-/** A release's mods, read only while the tab that shows them is open; each says where it goes (ADR-0069). */
+/** A release's mods of both sides, read only while the tab that shows them is open (ADR-0065, ADR-0069). */
 export function useReleaseMods(gameId: string, release: Readonly<{ presetId: string; version: string }> | null, onDownload: (presetId: string, version: string, mod: ReleaseMod) => void): ModsModel | null {
   const [state, retry] = useLoad<ReleaseMods>(release === null ? null : () => loadReleaseMods(gameId, release.presetId, release.version), [gameId, release?.presetId, release?.version]);
   if (release === null) return null;
@@ -141,10 +141,8 @@ export function useReleaseMods(gameId: string, release: Readonly<{ presetId: str
   return {
     release: release.version,
     split: state.value.clientMods !== null,
-    files: { status: "ready", value: releaseModSides(state.value).map(({ side, ...mod }) => ({
+    files: { status: "ready", value: releaseModUnion(state.value).map((mod) => ({
       ...mod,
-      side,
-      sideLabel: modSideLabels[side],
       download: action(`mod.download.${mod.sha256}`, "Download", () => onDownload(release.presetId, release.version, mod), { icon: "download" }),
     })) },
   };

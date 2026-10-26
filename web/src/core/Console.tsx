@@ -16,7 +16,7 @@ import { useConsole, type ConsoleController } from "./useConsole";
 import { useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, ReleasesModel, WorldModel, WorldsModel } from "./models";
-import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionActionForWorld, sessionControlAvailability, sessionDetails, worldDetails, worldMoreActions, worldNotices, worldTabs } from "./worlds";
+import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionActionForWorld, sessionControlAvailability, sessionDetails, withReleasePacks, worldDetails, worldMoreActions, worldNotices, worldTabs } from "./worlds";
 
 /*
  * The controllers: each takes the console's bones, builds one page's model
@@ -173,7 +173,15 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     operations: operations.map((operation) => ({ operation, label: operationLabel(operation.type) })),
     wipes: [...world.wipes].reverse().map((wipe) => ({ wipe, showBackups: action("wipe.backups", "Backups", () => { backups.setFilter(wipe.id); navigate({ worldTab: "backups" }); }, { icon: "backup" }) })),
     backups,
-    releases: { rows: releaseRows(world, granted.has("connection.read"), busy, () => worldCallbacks.onDownloadPack(game, world)), state: world.release.state, mods: shown.mods },
+    releases: {
+      rows: withReleasePacks(
+        releaseRows(world, granted.has("connection.read"), busy, () => worldCallbacks.onDownloadPack(game, world)),
+        shown.mods?.split && world.preset ? shown.mods.release : null,
+        (release, pack) => { if (world.preset) console.downloadReleasePack(game, world.preset.id, release, pack); },
+      ),
+      state: world.release.state,
+      mods: shown.mods,
+    },
     whitelist: shown.whitelist,
     console: shown.console,
     metrics: shown.metrics,

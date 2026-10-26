@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { BackupEntry } from "../../api/contract";
+import { ActionRow } from "../../components/ui/Button";
 import { Chip, ChoiceChip } from "../../components/ui/Chip";
 import { Column, DataTable } from "../../components/ui/DataTable";
 import { Ellipsis } from "../../components/ui/Ellipsis";
@@ -195,7 +196,7 @@ function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["r
         <Icon className={row.status === "Desired" ? "release-state-pending" : "release-state-active"} name={row.status === "Desired" ? "schedule" : "verified"} size={18} />
         <span className="visually-hidden">{row.status}</span>
       </Tooltip>
-      {row.download && <ActionButton action={row.download} size="small" variant="text" />}
+      {row.downloads.length > 0 && <ActionRow>{row.downloads.map((pack) => <ActionButton action={pack} key={pack.id} size="small" variant="text" />)}</ActionRow>}
     </span> },
   ];
   return (
@@ -208,26 +209,24 @@ function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["r
   );
 }
 
-// The mods of the release the world starts with (ADR-0065); where each goes
-// when players install a set of their own (ADR-0069).
+// Every mod of the release the world starts with, of both sides (ADR-0065,
+// ADR-0069); the packs that sort them are on the release row.
 function ModsCard({ mods, worldName }: Readonly<{ mods: ModsModel; worldName: string }>) {
   const columns: Column<ModRow>[] = [
     { id: "file", label: "File", truncate: true, render: (row) => <Ellipsis mono tail={12} value={row.file} /> },
-    ...(mods.split ? [{ id: "side", label: "Goes to", width: "150px", render: (row: ModRow) => row.sideLabel }] : []),
     { id: "size", label: "Size", width: "110px", align: "num", render: (row) => formatBytes(row.bytes) },
     { id: "checksum", label: "SHA-256", secondary: true, width: "210px", render: (row) => <code title={row.sha256}>{shortDigest(row.sha256)}</code> },
     { id: "actions", label: "Actions", actions: true, render: (row) => <ActionButton action={row.download} size="small" variant="text" /> },
   ];
   const files = mods.files;
-  const noun = mods.split ? "Mods" : "Server mods";
   return (
-    <Card flush title={`${noun} · release ${mods.release}`}>
+    <Card flush title={`Mods · release ${mods.release}`}>
       {files.status === "error"
         ? <div style={{ padding: 16 }}><Banner actions={<ActionButton action={files.retry} variant="text" />} description={files.error} title="The mods are unavailable" tone="error" /></div>
         : <DataTable
           columns={columns}
-          empty={<EmptyState icon="inventory" title="This release has no server mods" />}
-          label={`${noun} of ${worldName}, release ${mods.release}`}
+          empty={<EmptyState icon="inventory" title="This release has no mods" />}
+          label={`Mods of ${worldName}, release ${mods.release}`}
           loading={files.status === "loading"}
           rowKey={(row) => row.sha256}
           rows={files.status === "ready" ? files.value : []}

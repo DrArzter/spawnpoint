@@ -1,7 +1,7 @@
 import { type Identity } from "../../access/domain.ts";
 import { startPresetBuild } from "../../control-plane/aws-release-builds.ts";
-import { awsControlPlaneSources, releaseModUrl, packDownloadUrl } from "../../control-plane/aws.ts";
-import { manifestClientMods, releaseModLocation } from "../../control-plane/release-artifacts.ts";
+import { awsControlPlaneSources, releaseModUrl, releasePackUrl, packDownloadUrl } from "../../control-plane/aws.ts";
+import { manifestClientMods, RELEASE_PACKS, releaseModLocation, type ReleasePack } from "../../control-plane/release-artifacts.ts";
 import { packRelease } from "../../control-plane/session-control.ts";
 import { type Response, response } from "./http.ts";
 
@@ -9,6 +9,7 @@ const RELEASE_ID = /^[a-z0-9][a-z0-9-]*$/;
 const RELEASE_VERSION = /^\d+\.\d+$/;
 const SHA256_DIGEST = /^[0-9a-f]{64}$/;
 const MOD_LINK_SECONDS = 900;
+const PACK_LINK_SECONDS = 900;
 
 type BuildRequest = Readonly<{ profileDigest: string; retryRelease?: string }>;
 
@@ -55,6 +56,16 @@ export async function releaseModDownload(gameId: string, presetId: string, versi
   const location = releaseModLocation(manifest, sha256);
   if (location === null || !/^[^/\\]+\.(jar|zip)$/.test(location.file)) return response(404, { error: "unknown_mod" });
   return response(200, { file: location.file, url: await releaseModUrl(gameId, presetId, version, location, MOD_LINK_SECONDS), expiresIn: MOD_LINK_SECONDS });
+}
+
+// One pack of a release by name (ADR-0069): the players' set, the server's set,
+// or every mod. Whoever may read the release may have its files, as with one mod.
+export async function releasePackDownload(gameId: string, presetId: string, version: string, pack: string): Promise<Response> {
+  if (!RELEASE_ID.test(gameId) || !RELEASE_ID.test(presetId) || !RELEASE_VERSION.test(version) || !(RELEASE_PACKS as readonly string[]).includes(pack)) {
+    return response(400, { error: "invalid_release_reference" });
+  }
+  const url = await releasePackUrl(gameId, presetId, version, pack as ReleasePack, PACK_LINK_SECONDS);
+  return url === null ? response(404, { error: "no_pack_published" }) : response(200, { pack, url, expiresIn: PACK_LINK_SECONDS });
 }
 
 // What a release contains, which until now lived only in S3 and in the mods

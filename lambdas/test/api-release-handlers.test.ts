@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { awsControlPlaneSources } from "../src/control-plane/aws.ts";
-import { buildRelease, releaseManifest } from "../src/handlers/api/releases.ts";
+import { buildRelease, releaseManifest, releasePackDownload } from "../src/handlers/api/releases.ts";
 
 const identity = { id: "operator", displayName: "Operator", roleId: "operator", directGrants: [] } as const;
 const sources = awsControlPlaneSources as Required<Pick<typeof awsControlPlaneSources, "readReleaseManifest">>;
@@ -62,5 +62,13 @@ test("build input rejects malformed JSON separately from an invalid pinned-build
     const result = await buildRelease(identity, "minecraft", "industrial", body);
     assert.equal(result.statusCode, 400);
     assert.deepEqual(JSON.parse(result.body), { error: "invalid_build_request" });
+  }
+});
+
+test("a release pack is one of client, server or full, and nothing reaches storage otherwise", async () => {
+  for (const [pack, version] of [["everything", "1.2"], ["../client", "1.2"], ["server", "latest"]]) {
+    const result = await releasePackDownload("minecraft", "industrial", version, pack);
+    assert.equal(result.statusCode, 400);
+    assert.deepEqual(JSON.parse(result.body), { error: "invalid_release_reference" });
   }
 });

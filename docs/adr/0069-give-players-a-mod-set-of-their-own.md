@@ -34,8 +34,14 @@ name with other bytes refuses the build, and so does a side list that adds nothi
 **The release records both sets.** `server.mods` stays the server's set, so hosts change nothing. A new client kind,
 `client: {kind: "mod-set", mods: [...]}`, lists every file players install with its SHA-256. A file both sets carry is
 stored once, under `mods/`; a players-only file is stored under `client-mods/`. The client pack is built from the
-players' set. The release API answers it as `clientMods`; the panel marks each mod "Server and players", "Server only"
-or "Players only", and a mod of either set can be downloaded by its digest.
+players' set.
+
+**A release with side lists publishes three packs:** `client.zip` (what players install), `server.zip` (what the
+server runs) and `full.zip` (every mod). They are built at publication, because no request can zip hundreds of
+megabytes, and each file is held to the manifest's digest. `GET /games/{gameId}/presets/{presetId}/releases/{version}/packs/{pack}`
+hands out any of them under `release.read`. The world's Releases tab offers Client, Server and Full on the release
+row, and lists every mod of both sides once; the release API answers the players' set as `clientMods`, and a mod of
+either set can be downloaded by its digest. A release without side lists keeps its one client pack and one Download.
 
 **Scope.** Side lists are accepted only for Minecraft presets of individual CurseForge files. A CurseForge modpack
 already brings the author's client pack (ADR-0068); adding our own mods to it is a separate decision. Factorio clients

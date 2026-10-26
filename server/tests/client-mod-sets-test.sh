@@ -128,8 +128,15 @@ release="${FAKE_S3_ROOT}/${RELEASE_BUCKET}/releases/minecraft/sides/1.0"
 pack="$(unzip -Z1 "${release}/client.zip" | sort | paste -sd ' ' -)"
 [[ "${pack}" == "INSTALL.txt lib.jar minimap.jar shared.jar" ]]
 [[ "$(unzip -p "${release}/client.zip" minimap.jar)" == "jar minimap" ]]
+# The server's set and every mod together, beside the players' pack.
+grep -qx 'server_pack=uploaded' <<<"${output}"
+grep -qx 'full_pack=uploaded' <<<"${output}"
+[[ "$(unzip -Z1 "${release}/server.zip" | sort | paste -sd ' ' -)" == "README.txt lib.jar shared.jar spark.jar" ]]
+[[ "$(unzip -Z1 "${release}/full.zip" | sort | paste -sd ' ' -)" == "README.txt lib.jar minimap.jar shared.jar spark.jar" ]]
+[[ "$(unzip -p "${release}/full.zip" minimap.jar)" == "jar minimap" ]]
 output="$(RELEASE_SOURCE_DIR="${fixture}/sides" "${scripts}/upload-release.sh" "${manifest}")"
 grep -qx 'result=already_present' <<<"${output}"
+grep -qx 'server_pack=already_present' <<<"${output}"
 
 # --- a pack built from the stored files alone: shared mods from the server's ---
 rm -- "${release}/client.zip"
@@ -146,6 +153,9 @@ grep -qx 'pack=uploaded' <<<"${output}"
 "${scripts}/build-profile-release.sh" "${config}/profiles/plain" 1.0 \
   "${fixture}/plain/mods" "${fixture}/plain/manifest.json" >/dev/null
 jq -e 'has("client") | not' "${fixture}/plain/manifest.json" >/dev/null
+output="$(RELEASE_SOURCE_DIR="${fixture}/plain" "${scripts}/upload-release.sh" "${fixture}/plain/manifest.json")"
+grep -qx 'server_pack=not_applicable' <<<"${output}"
+[[ ! -e "${FAKE_S3_ROOT}/${RELEASE_BUCKET}/releases/minecraft/plain/1.0/server.zip" ]]
 
 # --- refusals ---
 refuses "resolves shared.jar to other bytes" "a players mod with a server mod's name and other bytes" \

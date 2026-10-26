@@ -1,3 +1,4 @@
+import type { ReleasePackName } from "../api/contract";
 import { hostStatus, sessionStatus, worldStatus, type StatusDescriptor } from "../components/ui/Status";
 import { commitUrl, formatDate, shortCommit } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Operation, ServerState, Wipe, World, WorldTab } from "../model";
@@ -359,7 +360,7 @@ export function worldNotices(world: World, pending: Pending | null): Notice[] {
   return notices;
 }
 
-export function releaseRows(world: World, canDownload: boolean, busy: boolean, download: () => void): Array<{ name: string; status: string; downloadable: boolean; sourceHref: string | null; download: Action | null }> {
+export function releaseRows(world: World, canDownload: boolean, busy: boolean, download: () => void): Array<{ name: string; status: string; downloadable: boolean; sourceHref: string | null; downloads: readonly Action[] }> {
   const map = new Map<string, { name: string; status: string; downloadable: boolean }>();
   if (world.release.activeRelease) map.set(world.release.activeRelease, { name: world.release.activeRelease, status: "Active", downloadable: true });
   if (world.release.desiredRelease) {
@@ -372,8 +373,24 @@ export function releaseRows(world: World, canDownload: boolean, busy: boolean, d
   return [...map.values()].map((row) => ({
     ...row,
     sourceHref: world.preset?.repository ?? null,
-    download: row.downloadable && canDownload ? action("world.pack", "Download", download, { icon: "download", disabled: busy, hint: "Client pack for this release" }) : null,
+    downloads: row.downloadable && canDownload ? [action("world.pack", "Download", download, { icon: "download", disabled: busy, hint: "Client pack for this release" })] : [],
   }));
+}
+
+/**
+ * A release with side lists (ADR-0069) offers three packs where it offered one:
+ * the client pack players install, the server's set, and every mod together.
+ * `splitRelease` names the release whose manifest says so, once it is read.
+ */
+export function withReleasePacks<Row extends Readonly<{ name: string; downloads: readonly Action[] }>>(rows: readonly Row[], splitRelease: string | null, download: (release: string, pack: ReleasePackName) => void): Row[] {
+  return rows.map((row) => row.name !== splitRelease ? row : {
+    ...row,
+    downloads: [
+      ...row.downloads.map((client) => ({ ...client, label: "Client", hint: "What players install" })),
+      action("release.pack.server", "Server", () => download(row.name, "server"), { icon: "download", hint: "Every mod the server runs" }),
+      action("release.pack.full", "Full", () => download(row.name, "full"), { icon: "download", hint: "Every mod, server and players" }),
+    ],
+  });
 }
 
 export function wipeStatus(wipe: Wipe): StatusDescriptor {

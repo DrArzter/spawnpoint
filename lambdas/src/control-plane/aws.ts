@@ -16,7 +16,7 @@ import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient, StartExecut
 import { randomUUID } from "node:crypto";
 
 import type { BackupObject } from "./backups.ts";
-import { clientPackKey, releaseModKey } from "./release-artifacts.ts";
+import { clientPackKey, releaseModKey, releasePackKey, type ModStore, type ReleasePack } from "./release-artifacts.ts";
 import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts";
 import { presetBuildView, runningReleaseBuilds } from "./aws-release-builds.ts";
 import { gameCatalog } from "./catalog.ts";
@@ -460,18 +460,34 @@ export async function packDownloadUrl(gameId: string, presetId: string, release:
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: 3600 });
 }
 
+/** One pack of a release, by name, when it was published; named for the preset and release it holds. */
+export async function releasePackUrl(gameId: string, presetId: string, release: string, pack: ReleasePack, expiresIn: number): Promise<string | null> {
+  const bucket = requiredEnv("RELEASE_BUCKET");
+  const key = releasePackKey(gameId, presetId, release, pack);
+  try {
+    await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+  } catch {
+    return null;
+  }
+  return getSignedUrl(s3, new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    ResponseContentDisposition: attachment(`${presetId}-${release}-${pack}.zip`),
+  }), { expiresIn });
+}
+
 // A file the panel hands to someone, named as it is stored, so the browser
 // saves it under that name whatever characters it holds.
 function attachment(filename: string): string {
   return `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
-/** One server mod of a release, presigned for this role's read of releases. */
-export function releaseModUrl(gameId: string, presetId: string, release: string, file: string, expiresIn: number): Promise<string> {
+/** One mod of a release, from either set, presigned for this role's read of releases. */
+export function releaseModUrl(gameId: string, presetId: string, release: string, location: Readonly<{ file: string; store: ModStore }>, expiresIn: number): Promise<string> {
   return getSignedUrl(s3, new GetObjectCommand({
     Bucket: requiredEnv("RELEASE_BUCKET"),
-    Key: releaseModKey(gameId, presetId, release, file),
-    ResponseContentDisposition: attachment(file),
+    Key: releaseModKey(gameId, presetId, release, location.file, location.store),
+    ResponseContentDisposition: attachment(location.file),
   }), { expiresIn });
 }
 

@@ -1274,7 +1274,7 @@ html[data-skin="terminal"] .t-release-line {
   width: 100%;
 }
 
-html[data-skin="terminal"] .t-release-line .t-verb {
+html[data-skin="terminal"] .t-release-line > .t-verbs {
   margin-inline-start: auto;
 }
 
@@ -2122,6 +2122,11 @@ html[data-skin="terminal"] .t-filter-row {
   gap: 8px 16px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--outline);
+}
+
+html[data-skin="terminal"] .t-filter-row-plain {
+  padding: 0;
+  border-bottom: 0;
 }
 
 html[data-skin="terminal"] .t-filter-row .t-field {

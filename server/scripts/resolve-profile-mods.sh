@@ -23,6 +23,10 @@ Environment:
   FACTORIO_USERNAME, FACTORIO_TOKEN
                    factorio.com credentials; factorio profiles with pins only
 
+A Minecraft profile of CurseForge files may add mods.server_only and mods.client_only (ADR-0069): lists in the same
+format, resolved the same way. The server gets source plus server_only in the output directory; players get source plus
+client_only, written beside it as client-mods/.
+
 The output path must not exist. Downloads happen in a sibling staging directory and become visible only after every
 download succeeds. An empty-mod profile creates an empty output without contacting any mod source.
 EOF
@@ -81,6 +85,8 @@ loader_type="$(jq -r '.loader.type' "${profile}")"
 mods_source="$(jq -r '.mods.source // empty' "${profile}")"
 mods_resolver="$(jq -r '.mods.resolver // empty' "${profile}")"
 [[ -n "${mods_resolver}" ]] || mods_resolver="${PROFILE_RESOLVER}"
+server_only_list="$(jq -r '.mods.server_only // empty' "${profile}")"
+client_only_list="$(jq -r '.mods.client_only // empty' "${profile}")"
 
 stage="$(mktemp -d "${output_parent}/.$(basename -- "${output_directory}").stage.XXXXXXXX")"
 download_stage="${stage}/download"
@@ -91,23 +97,79 @@ cleanup() {
     rm -rf -- "${stage}"
   fi
   if [[ "${sidecars_moved:-false}" == true ]]; then
-    rm -rf -- "${output_parent}/overrides" "${output_parent}/client.zip"
+    rm -rf -- "${output_parent}/overrides" "${output_parent}/client.zip" "${output_parent}/client-mods"
   fi
 }
 trap cleanup EXIT
 
+# A list the profile names, as a path inside the profile: never a symlink, never
+# outside it, since its directory is what the resolver container mounts.
+checked_list() {
+  local relative="$1" candidate file
+  candidate="${profile_directory}/${relative}"
+  [[ ! -L "${candidate}" ]] || {
+    printf 'error: profile mod list must not be a symlink: %s\n' "${candidate}" >&2
+    exit 1
+  }
+  file="$(realpath -e -- "${candidate}")"
+  [[ "${file}" == "${profile_directory}/"* && -f "${file}" ]] || {
+    printf 'error: profile mod list is missing or unsafe: %s\n' "${file}" >&2
+    exit 1
+  }
+  realpath --relative-to="${profile_directory}" -- "${file}"
+}
+
+# Individual CurseForge files through the pinned mc-image-helper, into <stage>/mods.
+resolve_curseforge_files() {
+  local list="$1" target="$2"
+  mkdir -p -- "${target}"
+  docker run --rm \
+    --user "$(id -u):$(id -g)" \
+    --env CF_API_KEY \
+    --volume "${profile_directory}:/profile:ro" \
+    --volume "${target}:/output" \
+    --entrypoint mc-image-helper \
+    "${resolver_image}" \
+    curseforge-files \
+      --disable-api-caching \
+      --game-version "${game_version}" \
+      --mod-loader "${loader_type}" \
+      --output-directory /output \
+      "@/profile/${list}"
+}
+
+# Adds one side list's resolved mods to a set. A file both already carry with
+# the same bytes is a shared dependency and stays once; the same name with other
+# bytes is two different mods, which no folder can hold.
+merge_side_list() {
+  local label="$1" from="$2" into="$3" mod filename added=0
+  [[ -d "${from}" && ! -L "${from}" ]] || {
+    printf 'error: the %s list did not produce its mods directory\n' "${label}" >&2
+    exit 1
+  }
+  while IFS= read -r -d '' mod; do
+    filename="$(basename -- "${mod}")"
+    if [[ -e "${into}/${filename}" ]]; then
+      [[ "$(sha256sum -- "${mod}" | awk '{print $1}')" == "$(sha256sum -- "${into}/${filename}" | awk '{print $1}')" ]] || {
+        printf 'error: the %s list resolves %s to other bytes than the mods it joins\n' "${label}" "${filename}" >&2
+        exit 1
+      }
+      continue
+    fi
+    mv -- "${mod}" "${into}/${filename}"
+    added=$((added + 1))
+  done < <(find "${from}" -maxdepth 1 -type f -name "*.${PROFILE_MOD_EXTENSION}" -print0)
+  (( added > 0 )) || {
+    printf 'error: the %s list adds no mod the set does not already have\n' "${label}" >&2
+    exit 1
+  }
+}
+
 if [[ -n "${mods_source}" ]]; then
-  source_candidate="${profile_directory}/${mods_source}"
-  [[ ! -L "${source_candidate}" ]] || {
-    printf 'error: profile mod source must not be a symlink: %s\n' "${source_candidate}" >&2
-    exit 1
-  }
-  source_file="$(realpath -e -- "${source_candidate}")"
-  [[ "${source_file}" == "${profile_directory}/"* && -f "${source_file}" ]] || {
-    printf 'error: profile mod source is missing or unsafe: %s\n' "${source_file}" >&2
-    exit 1
-  }
-  mods_source="$(realpath --relative-to="${profile_directory}" -- "${source_file}")"
+  mods_source="$(checked_list "${mods_source}")"
+  source_file="${profile_directory}/${mods_source}"
+  [[ -z "${server_only_list}" ]] || server_only_list="$(checked_list "${server_only_list}")"
+  [[ -z "${client_only_list}" ]] || client_only_list="$(checked_list "${client_only_list}")"
 
   case "${mods_resolver}" in
   curseforge-files | curseforge-modpack)
@@ -139,19 +201,7 @@ if [[ -n "${mods_source}" ]]; then
         printf 'error: required command not found: docker\n' >&2
         exit 1
       }
-      docker run --rm \
-        --user "$(id -u):$(id -g)" \
-        --env CF_API_KEY \
-        --volume "${profile_directory}:/profile:ro" \
-        --volume "${download_stage}:/output" \
-        --entrypoint mc-image-helper \
-        "${resolver_image}" \
-        curseforge-files \
-          --disable-api-caching \
-          --game-version "${game_version}" \
-          --mod-loader "${loader_type}" \
-          --output-directory /output \
-          "@/profile/${mods_source}"
+      resolve_curseforge_files "${mods_source}" "${download_stage}"
     else
       modpack_resolver="${SCRIPT_DIR}/resolve-curseforge-modpack.sh"
       [[ -f "${modpack_resolver}" ]] || {
@@ -206,6 +256,32 @@ if [[ -n "${mods_source}" ]]; then
     exit 1
   }
 
+  # Side lists (ADR-0069): players get every mod both sides share plus their
+  # own; the server gets its own on top. Validation admitted them for
+  # CurseForge files only.
+  client_mod_count=0
+  if [[ -n "${server_only_list}${client_only_list}" ]]; then
+    client_stage="${stage}/client-mods"
+    mkdir -p -- "${client_stage}"
+    find "${resolved_stage}" -maxdepth 1 -type f -name "*.${PROFILE_MOD_EXTENSION}" -exec cp -p -- {} "${client_stage}/" \;
+    if [[ -n "${server_only_list}" ]]; then
+      resolve_curseforge_files "${server_only_list}" "${stage}/server-only"
+      merge_side_list server_only "${stage}/server-only/mods" "${resolved_stage}"
+      mod_count="$(find "${resolved_stage}" -maxdepth 1 -type f -name "*.${PROFILE_MOD_EXTENSION}" | wc -l)"
+    fi
+    if [[ -n "${client_only_list}" ]]; then
+      resolve_curseforge_files "${client_only_list}" "${stage}/client-only"
+      merge_side_list client_only "${stage}/client-only/mods" "${client_stage}"
+    fi
+    client_mod_count="$(find "${client_stage}" -maxdepth 1 -type f -name "*.${PROFILE_MOD_EXTENSION}" | wc -l)"
+    [[ ! -e "${output_parent}/client-mods" && ! -L "${output_parent}/client-mods" ]] || {
+      printf 'error: immutable resolver client mods already exist: %s\n' "${output_parent}/client-mods" >&2
+      exit 1
+    }
+    mv -- "${client_stage}" "${output_parent}/client-mods"
+    sidecars_moved=true
+  fi
+
   if [[ "${mods_resolver}" == "curseforge-modpack" ]]; then
     overrides_source="${download_stage}/overrides"
     client_source="${download_stage}/client.zip"
@@ -231,6 +307,7 @@ if [[ -n "${mods_source}" ]]; then
   fi
 else
   mod_count=0
+  client_mod_count=0
 fi
 
 if find "${resolved_stage}" -mindepth 1 -maxdepth 1 \( -type l -o ! -type f \) -print -quit | grep -q .; then
@@ -249,5 +326,6 @@ printf 'result=resolved\n'
 printf 'profile_id=%s\n' "${profile_id}"
 printf 'game=%s\n' "${game}"
 printf 'mods=%s\n' "${mod_count}"
+printf 'client_mods=%s\n' "${client_mod_count}"
 printf 'bytes=%s\n' "${total_bytes}"
 printf 'output=%s\n' "${output_directory}"

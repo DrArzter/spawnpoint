@@ -333,7 +333,8 @@
   width: 100%;
 }
 
-.release-line .button {
+/* The packs keep together, at the row's end; a phone gives them a line of their own. */
+.release-line > .btn-row {
   margin-inline-start: auto;
 }
 

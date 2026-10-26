@@ -3,12 +3,13 @@ import type { ReactNode } from "react";
 import type { BackupEntry } from "../../api/contract";
 import { Timestamp } from "../../components/ui/Timestamp";
 import { action } from "../../core/actions";
+import { useFilter } from "../../components/ui/Filter";
 import type { BackupsModel, Detail, DetailValue, ModRow, ModsModel, ReleaseRow, WorldModel } from "../../core/models";
 import { wipeStatus } from "../../core/worlds";
 import { Icon } from "../../icons";
 import { formatBytes, formatTime, shortDigest } from "../../lib/format";
 import { useMediaQuery } from "../../shell/hooks";
-import { Address, Choice, Choices, Col, DetailRow, DetailsGroup, Empty, Ghost, Indicator, Notice, Overflow, Page, Panel, State, Table, Tabs, Verb, Verbs } from "./ui";
+import { Address, Choice, Choices, Col, DetailRow, DetailsGroup, Empty, FilterRow, Ghost, Indicator, NoMatches, Notice, Overflow, Page, Panel, State, Table, Tabs, Verb, Verbs } from "./ui";
 import { MetricsPanel } from "./Metrics";
 import { ConsolePanel } from "./Rcon";
 import { WhitelistPanel } from "./Whitelist";
@@ -176,7 +177,7 @@ function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["r
     { id: "release", label: "Release", render: (row) => <span className="t-release-line">
       {row.sourceHref ? <a className="t-source" href={row.sourceHref} rel="noreferrer" target="_blank" title="Open preset repository"><code>{row.name}</code><Icon name="open_in_new" size={14} /></a> : <code>{row.name}</code>}
       <Indicator kind={row.status === "Desired" ? "pending" : "ok"} label={row.status === "Desired" ? "Desired, not yet active" : row.status} />
-      {row.download && <Verb action={row.download} size="small" />}
+      {row.downloads.length > 0 && <Verbs align="end">{row.downloads.map((pack) => <Verb action={pack} key={pack.id} size="small" />)}</Verbs>}
     </span> },
   ];
   return <>
@@ -187,27 +188,32 @@ function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["r
   </>;
 }
 
-// The server mods of the release the world starts with (ADR-0065).
+// Every mod of the release the world starts with, of both sides (ADR-0065,
+// ADR-0069); the packs that sort them are on the release row.
 function ModsPanel({ mods, worldName }: Readonly<{ mods: ModsModel; worldName: string }>) {
   const columns: readonly Col<ModRow>[] = [
     { id: "file", label: "File", render: (row) => <code className="t-clip" title={row.file}>{row.file}</code> },
     { id: "size", label: "Size", width: "110px", align: "end", render: (row) => formatBytes(row.bytes) },
     { id: "checksum", label: "SHA-256", secondary: true, width: "180px", render: (row) => <Digest value={row.sha256} /> },
-    { id: "verbs", label: "Actions", verbs: true, corner: true, render: (row) => <Verb action={row.download} size="small" /> },
+    { id: "verbs", label: "Actions", verbs: true, corner: true, render: (row) => <Overflow groups={[[row.download]]} label={`Actions for ${row.file}`} size="small" /> },
   ];
   const files = mods.files;
+  const filter = useFilter(files.status === "ready" ? files.value : [], (row) => [row.file]);
   return (
-    <Panel flush name={`Server mods · release ${mods.release}`}>
+    <Panel flush name={`Mods · release ${mods.release}`}>
       {files.status === "error"
         ? <div className="t-inset"><Notice description={files.error} title="The mods are unavailable" tone="error" verbs={<Verb action={files.retry} size="small" />} /></div>
-        : <Table
-          columns={columns}
-          empty={<Empty title="This release has no server mods" />}
-          label={`Server mods of ${worldName}, release ${mods.release}`}
-          loading={files.status === "loading"}
-          rowKey={(row) => row.sha256}
-          rows={files.status === "ready" ? files.value : []}
-        />}
+        : <>
+          <FilterRow disabled={files.status !== "ready"} filter={filter} label="Search mods" placeholder="Search by file name" />
+          <Table
+            columns={columns}
+            empty={filter.active ? <NoMatches filter={filter} noun="mods" /> : <Empty title="This release has no mods" />}
+            label={`Mods of ${worldName}, release ${mods.release}`}
+            loading={files.status === "loading"}
+            rowKey={(row) => row.sha256}
+            rows={filter.rows}
+          />
+        </>}
     </Panel>
   );
 }

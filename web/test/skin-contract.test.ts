@@ -110,9 +110,9 @@ const worldPage: WorldModel = {
     download: () => spy("backup.download", "Download archive"),
   },
   releases: {
-    rows: [{ name: "1.2", status: "Active", downloadable: true, sourceHref: "https://github.com/example/preset", download: spy("world.pack", "Download") }],
+    rows: [{ name: "1.2", status: "Active", downloadable: true, sourceHref: "https://github.com/example/preset", downloads: [spy("world.pack", "Client"), spy("release.pack.server", "Server"), spy("release.pack.full", "Full")] }],
     state: "ready",
-    mods: { release: "1.2", files: { status: "ready", value: [{ file: "create-1.20.1-0.5.1.j.jar", bytes: 14_221_830, sha256: "c".repeat(64), download: spy("mod.download.ccc", "Download") }] } },
+    mods: { release: "1.2", split: true, files: { status: "ready", value: [{ file: "create-1.20.1-0.5.1.j.jar", bytes: 14_221_830, sha256: "c".repeat(64), download: spy("mod.download.ccc", "Download") }] } },
   },
   // Drawn on their own tabs below; on the details tab neither is on screen.
   console: null,
@@ -255,7 +255,7 @@ for (const skin of SKINS) {
     assert.match(releasesTab, /create-1\.20\.1-0\.5\.1\.j\.jar/, "the mods of the release the world starts with");
     const withoutMods = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "releases", releases: { ...worldPage.releases, mods: null } } }));
     assert.doesNotMatch(withoutMods, /Server mods/);
-    const failed = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "releases", releases: { ...worldPage.releases, mods: { release: "1.2", files: { status: "error", error: "boom", kind: "failed", retry: spy("mods.retry", "Try again") } } } } }));
+    const failed = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "releases", releases: { ...worldPage.releases, mods: { release: "1.2", split: false, files: { status: "error", error: "boom", kind: "failed", retry: spy("mods.retry", "Try again") } } } } }));
     assert.match(failed, /data-action="mods\.retry"/);
     // Without backup.download, the archive is listed and never offered.
     const noDownload = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "backups", backups: { ...worldPage.backups, download: null } } }));

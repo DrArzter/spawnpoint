@@ -940,6 +940,20 @@ button.chip[aria-pressed="true"] {
     content: none;
   }
 
+  /* A cell that is a line of its own, such as a release and its packs: the
+     label above it and the value across the record, rather than a value
+     squeezed into the column beside its label. */
+  .table td.cell-block {
+    display: block;
+    justify-items: normal;
+    text-align: start;
+  }
+
+  .table td.cell-block::before {
+    display: block;
+    margin-bottom: 4px;
+  }
+
   .table td.cell-actions::before {
     display: none;
   }

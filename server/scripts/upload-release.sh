@@ -65,12 +65,27 @@ jq -e '
     .client.file == "client.zip" and .client.kind == "curseforge-modpack" and
     (.client.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
     (.client.bytes | type == "number" and floor == . and . > 0)
+  ) or (
+    # The players mod set (ADR-0069): a name the server also carries is the
+    # same file, stored once with the server mods.
+    .client.kind == "mod-set" and
+    (.client.mods | type == "array" and length > 0) and
+    all(.client.mods[];
+      (.file | type == "string" and test("^[^/\\\\]+\\.(jar|zip)$")) and
+      (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+      (.bytes | type == "number" and floor == . and . >= 0)
+    ) and
+    (([.client.mods[].file] | unique | length) == (.client.mods | length)) and
+    ((.server.mods | map({key: .file, value: .sha256}) | from_entries) as $server |
+      all(.client.mods[]; ($server[.file] // .sha256) == .sha256))
   ))
 ' "${manifest}" >/dev/null || die "invalid release manifest: ${manifest}"
 
 release="$(jq -r '.release' "${manifest}")"
 mods_count="$(jq -r '.server.mods | length' "${manifest}")"
 overrides_count="$(jq -r '(.server.overrides // []) | length' "${manifest}")"
+client_kind="$(jq -r '.client.kind // empty' "${manifest}")"
+client_mods_count="$(jq -r 'if .client.kind == "mod-set" then .client.mods | length else 0 end' "${manifest}")"
 game="$(jq -r '.game // "minecraft"' "${manifest}")"
 preset_id="$(jq -r '.source_profile.id' "${manifest}")"
 release_prefix="releases/${game}/${preset_id}/${release}"
@@ -79,7 +94,14 @@ pack_key="${release_prefix}/client.zip"
 # payload is uploaded, so a run cannot leave a published release with no pack.
 require_command zip
 manifest_key="${release_prefix}/manifest.json"
-manifest_digest="$(sha256sum -- "${manifest}" | awk '{print $1}')"
+# The hex SHA-256 of one file, as manifests record it.
+file_sha256() {
+  local file="$1" digest
+  digest="$(sha256sum -- "${file}")"
+  printf '%s' "${digest%% *}"
+}
+
+manifest_digest="$(file_sha256 "${manifest}")"
 
 head_release_object() {
   local key="$1"
@@ -183,10 +205,10 @@ publish_pack() {
   fi
 
   local pack_dir pack_zip pack_digest expected_bytes
-  if jq -e 'has("client")' "${manifest}" >/dev/null; then
+  if [[ "${client_kind}" == "curseforge-modpack" ]]; then
     pack_zip="${source_dir}/client.zip"
     [[ -f "${pack_zip}" && ! -L "${pack_zip}" ]] || die "release client pack is missing or is a symlink"
-    pack_digest="$(sha256sum -- "${pack_zip}" | awk '{print $1}')"
+    pack_digest="$(file_sha256 "${pack_zip}")"
     expected_bytes="$(jq -r '.client.bytes' "${manifest}")"
     [[ "${pack_digest}" == "$(jq -r '.client.sha256' "${manifest}")" && "$(stat --format '%s' -- "${pack_zip}")" == "${expected_bytes}" ]] ||
       die "release client pack does not match the manifest"
@@ -198,16 +220,72 @@ publish_pack() {
   pack_dir="$(mktemp -d)"
   pack_zip="${pack_dir}/pack.zip"
   mkdir -p -- "${pack_dir}/pack"
-  while IFS= read -r filename; do
-    cp -- "${source_dir}/mods/${filename}" "${pack_dir}/pack/${filename}"
-  done < <(jq -r '.server.mods[].file' "${manifest}")
+  if [[ "${client_kind}" == "mod-set" ]]; then
+    # The players set, every file held to the manifest's digest: the pack is
+    # what players install. A shared mod may be found with the server's.
+    local filename expected_sha candidate
+    while IFS=$'\t' read -r filename expected_sha; do
+      candidate="${source_dir}/client-mods/${filename}"
+      [[ -f "${candidate}" ]] || candidate="${source_dir}/mods/${filename}"
+      [[ -f "${candidate}" && ! -L "${candidate}" ]] || die "players mod is missing or is a symlink: ${filename}"
+      [[ "$(file_sha256 "${candidate}")" == "${expected_sha}" ]] ||
+        die "SHA-256 mismatch for players mod ${filename}"
+      cp -- "${candidate}" "${pack_dir}/pack/${filename}"
+    done < <(jq -r '.client.mods[] | [.file, .sha256] | @tsv' "${manifest}")
+  else
+    while IFS= read -r filename; do
+      cp -- "${source_dir}/mods/${filename}" "${pack_dir}/pack/${filename}"
+    done < <(jq -r '.server.mods[].file' "${manifest}")
+  fi
   write_install_notes "${pack_dir}/pack/INSTALL.txt"
 
   (cd "${pack_dir}/pack" && zip -qr "${pack_zip}" .)
-  pack_digest="$(sha256sum -- "${pack_zip}" | awk '{print $1}')"
+  pack_digest="$(file_sha256 "${pack_zip}")"
   upload_release_object "${pack_key}" "${pack_zip}" "${pack_digest}" "pack.zip"
   rm -rf -- "${pack_dir}"
   printf 'uploaded'
+}
+
+# A release with its own players set (ADR-0069) also offers the server's set
+# and every mod together. They are built here because no request can zip
+# hundreds of megabytes; each is published once and its files are held to the
+# manifest's digests. A shared file is stored with the server's mods.
+publish_set_pack() {
+  local name="$1" title="$2" filter="$3" key pack_dir pack_zip pack_digest filename expected_sha candidate
+  key="${release_prefix}/${name}.zip"
+  if head_release_object "${key}" >/dev/null 2>&1; then
+    printf 'already_present'
+    return 0
+  fi
+  pack_dir="$(mktemp -d)"
+  pack_zip="${pack_dir}/${name}.zip"
+  mkdir -p -- "${pack_dir}/pack"
+  while IFS=$'\t' read -r filename expected_sha; do
+    candidate="${source_dir}/mods/${filename}"
+    [[ -f "${candidate}" ]] || candidate="${source_dir}/client-mods/${filename}"
+    [[ -f "${candidate}" && ! -L "${candidate}" ]] || die "${name} pack file is missing or is a symlink: ${filename}"
+    [[ "$(file_sha256 "${candidate}")" == "${expected_sha}" ]] ||
+      die "SHA-256 mismatch for ${name} pack file ${filename}"
+    cp -- "${candidate}" "${pack_dir}/pack/${filename}"
+  done < <(jq -r "${filter}" "${manifest}")
+  printf '%s\n' "${title}" >"${pack_dir}/pack/README.txt"
+  (cd "${pack_dir}/pack" && zip -qr "${pack_zip}" .)
+  pack_digest="$(file_sha256 "${pack_zip}")"
+  upload_release_object "${key}" "${pack_zip}" "${pack_digest}" "${name}.zip"
+  rm -rf -- "${pack_dir}"
+  printf 'uploaded'
+}
+
+publish_set_packs() {
+  server_pack_result=not_applicable
+  full_pack_result=not_applicable
+  [[ "${client_kind}" == "mod-set" ]] || return 0
+  server_pack_result="$(publish_set_pack server \
+    "Spawnpoint ${preset_id} release ${release}: every mod the server runs. Players install the client pack." \
+    '.server.mods[] | [.file, .sha256] | @tsv')"
+  full_pack_result="$(publish_set_pack full \
+    "Spawnpoint ${preset_id} release ${release}: every mod, server and players together. Players install the client pack." \
+    '([.server.mods[], .client.mods[]] | unique_by(.file))[] | [.file, .sha256] | @tsv')"
 }
 
 # An existing manifest is the immutability gate. Identity is the deployment
@@ -229,14 +307,18 @@ if head_release_object "${manifest_key}" >/dev/null 2>&1; then
   [[ "$(canonical_manifest "${manifest}")" == "$(canonical_manifest "${remote_manifest}")" ]] ||
     die "release ${release} already exists with different content: s3://${RELEASE_BUCKET}/${manifest_key}"
   pack_result="$(publish_pack)"
+  publish_set_packs
   printf 'result=already_present\n'
   printf 'bucket=%s\n' "${RELEASE_BUCKET}"
   printf 'release=%s\n' "${release}"
   printf 'manifest_key=%s\n' "${manifest_key}"
   printf 'mods=%s\n' "${mods_count}"
   printf 'overrides=%s\n' "${overrides_count}"
+printf 'client_mods=%s\n' "${client_mods_count}"
   printf 'pack=%s\n' "${pack_result}"
   printf 'pack_key=%s\n' "${pack_key}"
+printf 'server_pack=%s\n' "${server_pack_result}"
+printf 'full_pack=%s\n' "${full_pack_result}"
   exit 0
 fi
 
@@ -291,8 +373,26 @@ while IFS=$'\t' read -r path expected_sha expected_bytes; do
   queue_upload "${release_prefix}/overrides/${path}" "${source_file}" "${expected_sha}" "$(basename -- "${path}")"
 done < <(jq -r '(.server.overrides // [])[] | [.path, .sha256, (.bytes | tostring)] | @tsv' "${manifest}")
 
+# A players mod the server does not run is stored beside the server mods, so a
+# single file can be handed out by its digest (ADR-0065) whichever set holds it.
+while IFS=$'\t' read -r filename expected_sha expected_bytes; do
+  source_file="${source_dir}/client-mods/${filename}"
+  [[ -f "${source_file}" && ! -L "${source_file}" ]] || die "players mod is missing or is a symlink: ${source_file}"
+  actual_bytes="$(stat --format '%s' -- "${source_file}")"
+  [[ "${actual_bytes}" == "${expected_bytes}" ]] || die "size mismatch for players mod ${filename}"
+  actual_sha="$(sha256sum -- "${source_file}")"
+  actual_sha="${actual_sha%% *}"
+  [[ "${actual_sha}" == "${expected_sha}" ]] || die "SHA-256 mismatch for players mod ${filename}"
+  queue_upload "${release_prefix}/client-mods/${filename}" "${source_file}" "${expected_sha}" "${filename}"
+done < <(jq -r '
+  [.server.mods[].file] as $server |
+  (if .client.kind == "mod-set" then .client.mods else [] end)[] |
+  select(.file as $file | $server | index($file) | not) |
+  [.file, .sha256, (.bytes | tostring)] | @tsv' "${manifest}")
+
 await_uploads
 pack_result="$(publish_pack)"
+publish_set_packs
 upload_release_object "${manifest_key}" "${manifest}" "${manifest_digest}" "manifest.json"
 
 printf 'result=uploaded\n'
@@ -301,5 +401,8 @@ printf 'release=%s\n' "${release}"
 printf 'manifest_key=%s\n' "${manifest_key}"
 printf 'mods=%s\n' "${mods_count}"
 printf 'overrides=%s\n' "${overrides_count}"
+printf 'client_mods=%s\n' "${client_mods_count}"
 printf 'pack=%s\n' "${pack_result}"
 printf 'pack_key=%s\n' "${pack_key}"
+printf 'server_pack=%s\n' "${server_pack_result}"
+printf 'full_pack=%s\n' "${full_pack_result}"

@@ -1,5 +1,5 @@
 import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../../model";
-import { apiFailure, type FileLink, type ReleaseMod, type ReleaseMods, type SavedWhitelist, type SessionOperation, type SpawnpointApi, type WorldLifecycleAction, type WorldWhitelist } from "../contract";
+import { apiFailure, type FileLink, type ReleaseMod, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type SessionOperation, type SpawnpointApi, type WorldLifecycleAction, type WorldWhitelist } from "../contract";
 import { authorizedFetch } from "./transport";
 
 function controlPlaneSubscription(onInvalidated: () => void): () => void {
@@ -229,12 +229,12 @@ export const worldsApi = {
 
   async loadReleaseMods(gameId: string, presetId: string, release: string): Promise<ReleaseMods> {
     const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}`);
-    const body = await response.json().catch(() => ({})) as { error?: string; release?: string; mods?: ReleaseMod[] };
+    const body = await response.json().catch(() => ({})) as { error?: string; release?: string; mods?: ReleaseMod[]; clientMods?: ReleaseMod[] | null };
     if (!response.ok || body.mods === undefined) {
       const messages: Record<string, string> = { forbidden: "Your role cannot read releases.", unknown_release: `Release ${release} is not in the store.` };
       throw await apiFailure(response, messages[body.error ?? ""] ?? "The release's mods could not be read.", body);
     }
-    return { release: body.release ?? release, mods: body.mods };
+    return { release: body.release ?? release, mods: body.mods, clientMods: body.clientMods ?? null };
   },
 
   async requestModDownload(gameId: string, presetId: string, release: string, sha256: string): Promise<FileLink> {
@@ -242,6 +242,16 @@ export const worldsApi = {
     const body = await response.json().catch(() => ({})) as { error?: string; url?: string; expiresIn?: number };
     if (!response.ok || body.url === undefined) {
       const messages: Record<string, string> = { forbidden: "Your role cannot read releases.", unknown_mod: "This release no longer lists that mod." };
+      throw new Error(messages[body.error ?? ""] ?? "The download link could not be created.");
+    }
+    return { url: body.url, expiresIn: body.expiresIn ?? 0 };
+  },
+
+  async requestReleasePack(gameId: string, presetId: string, release: string, pack: ReleasePackName): Promise<FileLink> {
+    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}/packs/${pack}`);
+    const body = await response.json().catch(() => ({})) as { error?: string; url?: string; expiresIn?: number };
+    if (!response.ok || body.url === undefined) {
+      const messages: Record<string, string> = { forbidden: "Your role cannot read releases.", no_pack_published: `Release ${release} has no ${pack} pack yet.` };
       throw new Error(messages[body.error ?? ""] ?? "The download link could not be created.");
     }
     return { url: body.url, expiresIn: body.expiresIn ?? 0 };

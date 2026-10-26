@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentPropsWithRef, type KeyboardEvent, type ReactNode, type SelectHTMLAttributes } from "react";
 
+import type { Filter } from "../../components/ui/Filter";
 import type { StatusKind } from "../../components/ui/Status";
 import { Tooltip } from "../../components/ui/Tooltip";
 import type { Action } from "../../core/actions";
@@ -293,6 +294,27 @@ export function Empty({ title, description, verbs, className }: Readonly<{ title
       <strong>{title}</strong>
       {description && <p>{description}</p>}
       {verbs}
+    </div>
+  );
+}
+
+/** A list a search emptied, not the directory: what was asked, and the way back to everything. */
+export function NoMatches({ filter, noun }: Readonly<{ filter: Pick<Filter<unknown>, "query" | "clear">; noun: string }>) {
+  return <Empty description={`Nothing matches "${filter.query}".`} title={`No matching ${noun}`} verbs={<Key label="Clear search" onClick={filter.clear} size="small" />} />;
+}
+
+/**
+ * The search above a list already in hand: one field, and once something is
+ * typed, how much of the list survived. `plain` drops the row's own padding and
+ * rule for content that is already spaced, such as a drawer.
+ */
+export function FilterRow<Row>({ filter, label, placeholder, disabled = false, plain = false }: Readonly<{ filter: Filter<Row>; label: string; placeholder: string; disabled?: boolean; plain?: boolean }>) {
+  return (
+    <div className={cx("t-filter-row", plain && "t-filter-row-plain")}>
+      <Field hideLabel label={label}>
+        <TextInput autoComplete="off" disabled={disabled} onChange={(event) => filter.setQuery(event.target.value)} placeholder={placeholder} ref={filter.field} type="search" value={filter.query} />
+      </Field>
+      {filter.active && <span aria-live="polite" className="t-filter-count" role="status">{filter.rows.length} of {filter.total}</span>}
     </div>
   );
 }

@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 
 import type { BackupEntry } from "../../api/contract";
+import { ActionRow } from "../../components/ui/Button";
 import { Chip, ChoiceChip } from "../../components/ui/Chip";
 import { Column, DataTable } from "../../components/ui/DataTable";
+import { FilterBar, NoMatches, useFilter } from "../../components/ui/Filter";
 import { Ellipsis } from "../../components/ui/Ellipsis";
 import { Status } from "../../components/ui/Status";
 import { Banner, Card, DetailItem, DetailsGroup, EmptyState, Ghost, NotConnected, PageHeader } from "../../components/ui/Surfaces";
@@ -24,18 +26,19 @@ import { ConnectionAddress, Notices } from "./Worlds";
 
 export function World({ model }: Readonly<{ model: WorldModel }>) {
   const { world, game } = model;
-  // A phone has room for one decision. Refresh and Invite are worth reaching,
-  // not worth three wrapped rows above the page, so they move into the overflow.
-  const narrow = useMediaQuery("(max-width: 599px)");
+  // Below the compact step, as in the terminal skin, the title row has room for
+  // the one decision. Refresh and Invite are worth reaching, not worth a second
+  // row of buttons under the title, so they move into the overflow.
+  const compact = useMediaQuery("(max-width: 839px)");
   const secondary: Action[] = [model.refresh, ...(model.invite ? [model.invite] : [])];
-  const overflow: readonly (readonly Action[])[] = narrow ? [secondary, model.more] : [model.more];
+  const overflow: readonly (readonly Action[])[] = compact ? [secondary, model.more] : [model.more];
 
   return (
     <div className="page">
       <PageHeader
         actions={<>
-          {!narrow && <ActionButton action={model.refresh} variant="outlined" />}
-          {!narrow && model.invite && <ActionButton action={model.invite} variant="outlined" />}
+          {!compact && <ActionButton action={model.refresh} variant="outlined" />}
+          {!compact && model.invite && <ActionButton action={model.invite} variant="outlined" />}
           <ActionButton action={model.session} tooltipWhenDisabled variant="filled" />
         </>}
         breadcrumb={[{ label: "Worlds", href: model.worldsHref }]}
@@ -189,13 +192,13 @@ function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldN
 
 function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["releases"]; worldName: string }>) {
   const columns: Column<ReleaseRow>[] = [
-    { id: "release", label: "Release", render: (row) => <span className="release-line">
+    { id: "release", label: "Release", compactBlock: true, render: (row) => <span className="release-line">
       {row.sourceHref ? <a className="preset-source" href={row.sourceHref} rel="noreferrer" target="_blank" title="Open preset repository"><code>{row.name}</code><Icon name="open_in_new" size={14} /></a> : <code>{row.name}</code>}
       <Tooltip text={row.status === "Desired" ? "Desired, not yet active" : row.status}>
         <Icon className={row.status === "Desired" ? "release-state-pending" : "release-state-active"} name={row.status === "Desired" ? "schedule" : "verified"} size={18} />
         <span className="visually-hidden">{row.status}</span>
       </Tooltip>
-      {row.download && <ActionButton action={row.download} size="small" variant="text" />}
+      {row.downloads.length > 0 && <ActionRow>{row.downloads.map((pack) => <ActionButton action={pack} key={pack.id} size="small" variant="outlined" />)}</ActionRow>}
     </span> },
   ];
   return (
@@ -208,7 +211,8 @@ function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["r
   );
 }
 
-// The server mods of the release the world starts with (ADR-0065).
+// Every mod of the release the world starts with, of both sides (ADR-0065,
+// ADR-0069); the packs that sort them are on the release row.
 function ModsCard({ mods, worldName }: Readonly<{ mods: ModsModel; worldName: string }>) {
   const columns: Column<ModRow>[] = [
     { id: "file", label: "File", truncate: true, render: (row) => <Ellipsis mono tail={12} value={row.file} /> },
@@ -217,18 +221,22 @@ function ModsCard({ mods, worldName }: Readonly<{ mods: ModsModel; worldName: st
     { id: "actions", label: "Actions", actions: true, render: (row) => <ActionButton action={row.download} size="small" variant="text" /> },
   ];
   const files = mods.files;
+  const filter = useFilter(files.status === "ready" ? files.value : [], (row) => [row.file]);
   return (
-    <Card flush title={`Server mods · release ${mods.release}`}>
+    <Card flush title={`Mods · release ${mods.release}`}>
       {files.status === "error"
         ? <div style={{ padding: 16 }}><Banner actions={<ActionButton action={files.retry} variant="text" />} description={files.error} title="The mods are unavailable" tone="error" /></div>
-        : <DataTable
-          columns={columns}
-          empty={<EmptyState icon="inventory" title="This release has no server mods" />}
-          label={`Server mods of ${worldName}, release ${mods.release}`}
-          loading={files.status === "loading"}
-          rowKey={(row) => row.sha256}
-          rows={files.status === "ready" ? files.value : []}
-        />}
+        : <>
+          <FilterBar disabled={files.status !== "ready"} filter={filter} label="Search mods" noun="mods" placeholder="Search by file name" />
+          <DataTable
+            columns={columns}
+            empty={filter.active ? <NoMatches filter={filter} icon="inventory" noun="mods" /> : <EmptyState icon="inventory" title="This release has no mods" />}
+            label={`Mods of ${worldName}, release ${mods.release}`}
+            loading={files.status === "loading"}
+            rowKey={(row) => row.sha256}
+            rows={filter.rows}
+          />
+        </>}
     </Card>
   );
 }

@@ -1,5 +1,5 @@
 import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
-import type { ConsoleEntry, FileLink, HostMetrics, MetricRange, ReleaseMods, SavedWhitelist, WorldWhitelist } from "../api/contract";
+import type { ConsoleEntry, FileLink, HostMetrics, MetricRange, ReleaseMods, ReleasePackName, SavedWhitelist, WorldWhitelist } from "../api/contract";
 import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
 import type { ControlPlaneSnapshot, Preset, SettingValue, World, WorldGameSettings } from "../model";
@@ -364,6 +364,11 @@ const DEMO_MODS: readonly (readonly [string, number])[] = [
   ["Jade-1.20.1-Forge-11.12.3.jar", 734_020],
   ["thermal_expansion-1.20.1-11.0.1.29.jar", 1_985_337],
 ];
+const DEMO_SERVER_ONLY_MOD: readonly [string, number] = ["spark-1.10.53-forge.jar", 1_642_208];
+const DEMO_PLAYERS_ONLY_MODS: readonly (readonly [string, number])[] = [
+  ["Xaeros_Minimap_24.6.1_Forge_1.20.jar", 1_103_552],
+  ["oculus-mc1.20.1-1.8.0.jar", 1_527_018],
+];
 
 // A stable stand-in for a SHA-256: 64 hex digits derived from the name.
 function demoDigest(text: string): string {
@@ -383,13 +388,28 @@ export function releaseMods(gameId: string, presetId: string, release: string): 
   const preset = state.snapshot.games.find((game) => game.id === gameId)?.presets.find((candidate) => candidate.id === presetId);
   if (!preset?.releases.includes(release)) throw new Error(`Release ${release} is not in the store.`);
   const files = DEMO_MODS.slice(0, 5 + preset.releases.indexOf(release));
-  return { release, mods: files.map(([file, bytes]) => ({ file, bytes, sha256: demoDigest(file) })) };
+  const mod = ([file, bytes]: readonly [string, number]) => ({ file, bytes, sha256: demoDigest(file) });
+  // From 1.2 the industrial preset keeps side lists (ADR-0069): a profiler only
+  // the server runs, and a minimap and shaders only players install.
+  if (presetId !== "industrial" || release === "1.1") return { release, mods: files.map(mod), clientMods: null };
+  return {
+    release,
+    mods: [...files, DEMO_SERVER_ONLY_MOD].map(mod),
+    clientMods: [...files, ...DEMO_PLAYERS_ONLY_MODS].map(mod),
+  };
 }
 
 export function modLink(gameId: string, presetId: string, release: string, sha256: string): FileLink {
-  const mod = releaseMods(gameId, presetId, release).mods.find((candidate) => candidate.sha256 === sha256);
+  const mods = releaseMods(gameId, presetId, release);
+  const mod = [...mods.mods, ...(mods.clientMods ?? [])].find((candidate) => candidate.sha256 === sha256);
   if (!mod) throw new Error("This release no longer lists that mod.");
   return { url: demoFile("Spawnpoint demo mod", [`File:    ${mod.file}`, `Release: ${presetId} ${release}`], "the mod's jar"), expiresIn: 900 };
+}
+
+export function releasePackLink(gameId: string, presetId: string, release: string, pack: ReleasePackName): FileLink {
+  const mods = releaseMods(gameId, presetId, release);
+  if (mods.clientMods === null) throw new Error(`Release ${release} has no ${pack} pack yet.`);
+  return { url: demoFile(`Spawnpoint demo ${pack} pack`, [`Preset:  ${presetId}`, `Release: ${release}`], `the ${pack} pack`), expiresIn: 900 };
 }
 
 export function backupLink(gameId: string, worldId: string, key: string): FileLink {

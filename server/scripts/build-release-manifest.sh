@@ -17,6 +17,9 @@ Environment:
   RELEASE_SERVER_OVERRIDES_DIR
                       Optional normalized server configuration tree
   RELEASE_CLIENT_PACK Optional complete launcher-importable client archive
+  RELEASE_CLIENT_MODS_DIR
+                      Optional players' mod set, when it differs from the server's (ADR-0069);
+                      not together with RELEASE_CLIENT_PACK
 EOF
 }
 
@@ -67,6 +70,7 @@ profile_commit="${RELEASE_PROFILE_COMMIT:-}"
 runtime_image="${RELEASE_RUNTIME_IMAGE:-}"
 overrides_dir="${RELEASE_SERVER_OVERRIDES_DIR:-}"
 client_pack="${RELEASE_CLIENT_PACK:-}"
+client_mods_dir="${RELEASE_CLIENT_MODS_DIR:-}"
 
 command -v jq >/dev/null 2>&1 || {
   printf 'error: required command not found: jq\n' >&2
@@ -124,6 +128,17 @@ if [[ -n "${client_pack}" ]]; then
     exit 1
   }
 fi
+if [[ -n "${client_mods_dir}" ]]; then
+  [[ -z "${client_pack}" ]] || {
+    printf 'error: a release has a client pack or a players mod set, not both\n' >&2
+    exit 1
+  }
+  client_mods_dir="$(realpath -e -- "${client_mods_dir}")"
+  [[ -d "${client_mods_dir}" && ! -L "${client_mods_dir}" ]] || {
+    printf 'error: client mods must be a regular directory\n' >&2
+    exit 1
+  }
+fi
 [[ ! -e "${output_manifest}" && ! -L "${output_manifest}" ]] || {
   printf 'error: immutable release manifest already exists: %s\n' "${output_manifest}" >&2
   exit 1
@@ -131,31 +146,56 @@ fi
 
 mkdir -p -- "$(dirname -- "${output_manifest}")"
 entries_file="$(mktemp)"
+client_entries_file="$(mktemp)"
 overrides_file="$(mktemp)"
 output_tmp="$(mktemp "$(dirname -- "${output_manifest}")/.manifest.XXXXXX")"
 cleanup() {
-  rm -f -- "${entries_file}" "${overrides_file}" "${output_tmp}"
+  rm -f -- "${entries_file}" "${client_entries_file}" "${overrides_file}" "${output_tmp}"
 }
 trap cleanup EXIT
 
-count=0
-while IFS= read -r -d '' mod; do
-  filename="$(basename -- "${mod}")"
-  [[ "${filename}" != *$'\n'* && "${filename}" != *$'\t'* ]] || {
-    printf 'error: mod filename contains a tab or newline: %q\n' "${filename}" >&2
+# One {file, sha256, bytes} line per mod file in a directory, in name order;
+# prints how many.
+mod_entries() {
+  local directory="$1" entries="$2" mod filename sha256 bytes count=0
+  while IFS= read -r -d '' mod; do
+    filename="$(basename -- "${mod}")"
+    [[ "${filename}" != *$'\n'* && "${filename}" != *$'\t'* ]] || {
+      printf 'error: mod filename contains a tab or newline: %q\n' "${filename}" >&2
+      exit 1
+    }
+
+    sha256="$(sha256sum -- "${mod}")"
+    sha256="${sha256%% *}"
+    bytes="$(stat --format '%s' -- "${mod}")"
+    jq -cn \
+      --arg file "${filename}" \
+      --arg sha256 "${sha256}" \
+      --argjson bytes "${bytes}" \
+      '{file: $file, sha256: $sha256, bytes: $bytes}' >>"${entries}"
+    count=$((count + 1))
+  done < <(find "${directory}" -maxdepth 1 -type f -name "*.${mod_extension}" -print0 | sort -z)
+  printf '%s' "${count}"
+}
+
+count="$(mod_entries "${mods_dir}" "${entries_file}")"
+client_count=0
+if [[ -n "${client_mods_dir}" ]]; then
+  client_count="$(mod_entries "${client_mods_dir}" "${client_entries_file}")"
+  (( client_count > 0 )) || {
+    printf 'error: a players mod set must hold at least one mod\n' >&2
     exit 1
   }
-
-  sha256="$(sha256sum -- "${mod}")"
-  sha256="${sha256%% *}"
-  bytes="$(stat --format '%s' -- "${mod}")"
-  jq -cn \
-    --arg file "${filename}" \
-    --arg sha256 "${sha256}" \
-    --argjson bytes "${bytes}" \
-    '{file: $file, sha256: $sha256, bytes: $bytes}' >>"${entries_file}"
-  count=$((count + 1))
-done < <(find "${mods_dir}" -maxdepth 1 -type f -name "*.${mod_extension}" -print0 | sort -z)
+  # A name both sets carry is one file, fetched from the server's mods: the
+  # same name with other bytes would be two mods a player could not tell apart.
+  jq -se --slurpfile server "${entries_file}" '
+    ($server | map({key: .file, value: .sha256}) | from_entries) as $by_file |
+    all(.[]; ($by_file[.file] // .sha256) == .sha256)
+  ' "${client_entries_file}" >/dev/null || {
+    printf 'error: a players mod shares a name with a server mod but not its bytes\n' >&2
+    exit 1
+  }
+fi
 
 override_count=0
 if [[ -n "${overrides_dir}" ]]; then
@@ -205,6 +245,7 @@ fi
 
 jq -s \
   --slurpfile overrides "${overrides_file}" \
+  --slurpfile client_mods "${client_entries_file}" \
   --arg release "${release}" \
   --arg minecraft_version "${minecraft_version}" \
   --arg loader_version "${loader_version}" \
@@ -233,6 +274,8 @@ jq -s \
     runtime: {image: $runtime_image}
   } end + if $client_sha256 == "" then {} else {
     client: {file: "client.zip", sha256: $client_sha256, bytes: $client_bytes, kind: "curseforge-modpack"}
+  } end + if ($client_mods | length) == 0 then {} else {
+    client: {kind: "mod-set", mods: $client_mods}
   } end + if $profile_id == "" then {} else {
     source_profile: {
       id: $profile_id,
@@ -247,4 +290,5 @@ printf 'result=manifest_created\n'
 printf 'release=%s\n' "${release}"
 printf 'manifest=%s\n' "${output_manifest}"
 printf 'mods=%d\n' "${count}"
+printf 'client_mods=%d\n' "${client_count}"
 printf 'overrides=%d\n' "${override_count}"

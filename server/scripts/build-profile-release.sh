@@ -103,8 +103,24 @@ loader_type="$(jq -r '.loader.type' "${profile}")"
 payload_root="$(dirname -- "${resolved_mods_directory}")"
 overrides_directory=""
 client_pack=""
+client_mods_directory=""
 [[ ! -d "${payload_root}/overrides" ]] || overrides_directory="${payload_root}/overrides"
 [[ ! -f "${payload_root}/client.zip" ]] || client_pack="${payload_root}/client.zip"
+[[ ! -d "${payload_root}/client-mods" ]] || client_mods_directory="${payload_root}/client-mods"
+# Players' own mod set exists exactly when the profile declares a side list
+# (ADR-0069); either without the other is a resolver output from another profile.
+side_lists="$(jq -r '[.mods.server_only, .mods.client_only] | map(select(. != null)) | length' "${profile}")"
+if (( side_lists > 0 )); then
+  [[ -n "${client_mods_directory}" ]] || {
+    printf 'error: profile %s declares side lists but the resolver produced no client-mods\n' "${profile_id}" >&2
+    exit 1
+  }
+else
+  [[ -z "${client_mods_directory}" ]] || {
+    printf 'error: profile %s declares no side lists but client-mods exists\n' "${profile_id}" >&2
+    exit 1
+  }
+fi
 # Every game's manifest carries its version in the minecraft_version field
 # (the recorded wart in ADR-0034), and a game that is its own loader repeats
 # the engine version there rather than inventing a second vocabulary.
@@ -124,6 +140,7 @@ RELEASE_RUNTIME_IMAGE="${runtime_image}" \
 RELEASE_LOADER_TYPE="${loader_type}" \
 RELEASE_SERVER_OVERRIDES_DIR="${overrides_directory}" \
 RELEASE_CLIENT_PACK="${client_pack}" \
+RELEASE_CLIENT_MODS_DIR="${client_mods_directory}" \
   "${SCRIPT_DIR}/build-release-manifest.sh" \
     "${release}" \
     "${game_version}" \

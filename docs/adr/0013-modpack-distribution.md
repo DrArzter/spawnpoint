@@ -148,4 +148,5 @@ An unusual amount of transfer is worth knowing about within hours, whichever of 
 - Whether the pack build reuses `packwiz`, which already produces both formats from a manifest, rather than
   writing the exporter. A tool at the edge of the system, not the core, so reuse is reasonable here.
 - Whether server-side-only mods are excluded automatically from the client pack, or marked by hand in the
-  release definition.
+  release definition. Answered by [ADR-0069](0069-give-players-a-mod-set-of-their-own.md): by hand, as side lists in
+  the preset.

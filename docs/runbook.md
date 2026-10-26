@@ -543,7 +543,8 @@ already offline-mode, nothing to do.
 
 **Minecraft, from a single-player save.** The save folder is a valid server world — copy it under `<data-dir>` and
 import as above. Two extra steps first. The single-player mods folder is the *client* set: strip client-only mods
-(maps, shader hooks — there is no reliable side metadata, this is a manual pass) and prove the subset with a local
+(maps, shader hooks — there is no reliable side metadata, this is a manual pass; they belong in the preset's
+`client_only` list) and prove the subset with a local
 session (ADR-0031) before importing. Then the same UUID remap, because a signed-in single-player character is keyed
 by the Mojang UUID.
 
@@ -648,6 +649,21 @@ change. Adoption retains its release and source; it does not reinterpret unknown
 There is deliberately no general “upgrade this world without a wipe” action: successful construction of a modpack
 does not prove save or world-generation compatibility. Assess compatibility before using the existing operator
 promotion tools; use a new wipe where a release is incompatible.
+
+### Server-only and players-only mods
+
+A Minecraft preset of individual CurseForge files can split its mods by side
+([ADR-0069](adr/0069-give-players-a-mod-set-of-their-own.md)). Put the extra mods in two more list files, in the same
+format as `mods.source`, and name them in the profile:
+
+```json
+"mods": { "source": "extras/cf-mods.txt", "server_only": "extras/server-only.txt", "client_only": "extras/client-only.txt" }
+```
+
+The server runs `source` + `server_only`; the client pack holds `source` + `client_only`. Either list is optional. A
+mod both sides need stays in `source`. The build refuses a side list that adds nothing, and a players' mod with the
+name of a server mod but other bytes. Such a release also publishes `server.zip` and `full.zip`; the world's Releases
+tab offers Client, Server and Full on the release row and lists every mod once.
 
 ### CurseForge modpack presets
 

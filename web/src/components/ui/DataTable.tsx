@@ -16,6 +16,10 @@ export type Column<Row> = {
   // Cut with an ellipsis rather than allowed to set the table's width. For a
   // value that is copied rather than read, such as a file name.
   truncate?: boolean;
+  // On a stacked record, the label above a value that takes the record's
+  // width: for a cell that is a line of its own, as the terminal skin's
+  // compactBlock column is.
+  compactBlock?: boolean;
 };
 
 export function DataTable<Row>({ columns, rows, rowKey, label, empty = "No items", loading = false, loadingRows = 3, selectedKey, className, hideHeader = false, decision = false }: {
@@ -42,7 +46,7 @@ export function DataTable<Row>({ columns, rows, rowKey, label, empty = "No items
    */
   decision?: boolean;
 }) {
-  const cellClass = (column: Column<Row>) => cx(column.actions && "cell-actions", column.align === "end" && "cell-end", column.align === "num" && "cell-num", column.secondary && "cell-secondary", column.truncate && "cell-truncate");
+  const cellClass = (column: Column<Row>) => cx(column.actions && "cell-actions", column.align === "end" && "cell-end", column.align === "num" && "cell-num", column.secondary && "cell-secondary", column.truncate && "cell-truncate", column.compactBlock && "cell-block");
   return (
     <div className={cx("table-wrap", decision && "table-decision", className)}>
       <table aria-busy={loading || undefined} aria-label={label} className="table">

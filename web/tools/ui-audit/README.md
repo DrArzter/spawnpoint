@@ -15,6 +15,12 @@ real records (`latency=0`, so the demo answers at once and the probe lands on th
 | Shapes | a border radius outside the shape scale |
 | Elevation | a shadow on a surface that is not menu, dialog, sheet or snackbar |
 | Faces | every font family in use, to hold the Three-Face Rule |
+| Text under a control | a text run or another control under a button, link or field it does not belong to |
+| Row broke its line | a row that promises one line (`LAYOUT.oneLine`, such as the page header) wrapped |
+| Empty state off centre | an empty state more than 4px from the middle of its box |
+| Label off its value | a label beside its value (`LAYOUT.pairs`) more than 1px off the baseline of the value's first line |
+| Start off the card edge | in one card or panel, a heading, search, table or detail row (`LAYOUT.rails`) whose content starts more than 1px from the others |
+| Menu label cut or ragged | in the first row menu, opened: a label past the menu's edge, or labels that do not begin on one edge |
 
 Run it against a dev server or a preview deployment:
 
@@ -40,6 +46,24 @@ Read the output as evidence, not as a verdict. These results are expected and we
 Everything else is worth explaining or fixing.
 
 The routes are listed at the top of `audit.mjs`. Add one whenever a screen is added, otherwise it is never measured.
+
+## The breakpoint gate
+
+`scripts/check.sh ui` (CI job *Breakpoint gate*) builds the demo, serves it, and runs the audit with `--gate`: both
+skins at both sides of every step (360, 599, 600, 839, 840, 959, 960 and 1440px). It fails on any geometry finding —
+sideways scroll, past the viewport, text under a control, a broken line, off centre, off its value, off the card edge,
+a cut or ragged menu — that `accepted.txt` does not list. Touch targets and contrast stay in the report above, where a disabled
+control is judged by eye.
+
+```bash
+npm run audit:ui:gate                                   # against a running dev server
+npm run audit:ui:gate -- --accept                       # write what this run found into accepted.txt
+```
+
+Fix a finding rather than accept it. A line in `accepted.txt` is a reviewed exception, and a line the gate no longer
+finds is reported so the list only shrinks. A primitive that promises a layout (one line, a level pair, a centred
+state, a start on the card edge) adds its selector to `LAYOUT` at the top of `audit.mjs`, so every page that uses it is
+held to the promise. A new screen adds its route, or the gate never opens it.
 
 What the probe cannot measure, where a control sits and whether the same control looks the same twice, is read by
 eye and written down per face under [`web/audits/`](../../audits/); the terminal skin's pass is

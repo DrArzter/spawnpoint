@@ -35,6 +35,22 @@ test("terminal decision tables expose their shared compact layout variant", () =
   assert.match(markup, /t-table-wrap t-table-decision/);
 });
 
+test("a terminal table column of long copied values is the truncating column, head and cells alike", () => {
+  const markup = renderToStaticMarkup(createElement(Table<{ id: string }>, {
+    columns: [
+      { id: "archive", label: "Archive", truncate: true, render: (row) => createElement("code", { className: "t-clip" }, row.id) },
+      { id: "size", label: "Size", render: () => "1 MiB" },
+    ],
+    empty: "Empty",
+    label: "Backups",
+    rowKey: (row) => row.id,
+    rows: [{ id: "world-2026-10-26.tar.zst" }],
+  }));
+  assert.match(markup, /<th class="t-truncate"[^>]*>Archive<\/th>/);
+  assert.match(markup, /<td class="t-truncate" data-label="Archive"><code class="t-clip">world-2026-10-26\.tar\.zst<\/code><\/td>/);
+  assert.match(markup, /<td class="" data-label="Size">/);
+});
+
 test("terminal address keeps network, value and copy key in one component", () => {
   const markup = renderToStaticMarkup(createElement(Address, {
     connectivity: "zerotier",

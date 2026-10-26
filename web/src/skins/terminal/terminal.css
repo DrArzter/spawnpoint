@@ -1165,9 +1165,11 @@ html[data-skin="terminal"] .t-inline {
   min-width: 0;
 }
 
+/* Items share the text baseline, so a label beside an address lines up with
+   its digits; the glyph has no baseline of its own and is centred. */
 html[data-skin="terminal"] .t-address {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 1ch;
   min-width: 0;
   min-height: var(--t-key-small);
@@ -1183,6 +1185,7 @@ html[data-skin="terminal"] .t-address-value {
 
 html[data-skin="terminal"] .t-address-net {
   display: inline-flex;
+  align-self: center;
   align-items: center;
   justify-content: center;
   width: 16px;
@@ -1355,20 +1358,40 @@ html[data-skin="terminal"] .t-table-state:hover td {
 }
 
 /* A monospace face is wider than Roboto; at the medium step the cells give
-   up half their side padding so a full row still fits a tablet. */
-@media (max-width: 839px) {
+   up half their side padding so a full row still fits a tablet. The table's
+   own width decides, as it does for the records below. */
+@container (min-width: 600px) and (max-width: 839px) {
   html[data-skin="terminal"] .t-table th,
   html[data-skin="terminal"] .t-table td {
     padding-left: 8px;
     padding-right: 8px;
   }
-}
 
-/* Between a phone and a desk a table is still a table but a narrow one: a
-   column worth reading but not worth the row scrolling steps out. */
-@container (min-width: 600px) and (max-width: 839px) {
+  /* Only the gaps between cells: the outer cells keep the panel's edge, which
+     the search above the table and the panel's other lines start on. */
+  html[data-skin="terminal"] .t-table th:first-child,
+  html[data-skin="terminal"] .t-table td:first-child {
+    padding-left: 16px;
+  }
+
+  html[data-skin="terminal"] .t-table th:last-child,
+  html[data-skin="terminal"] .t-table td:last-child {
+    padding-right: 16px;
+  }
+
+  /* Still a table but a narrow one: a column worth reading but not worth the
+     row scrolling steps out. */
   html[data-skin="terminal"] .t-table .t-optional {
     display: none;
+  }
+}
+
+/* A long value copied rather than read gives up its width first: the cell
+   refuses to grow and its `t-clip` ends in an ellipsis. Only while the table
+   is a table; a record below has a whole line for it. */
+@container (min-width: 600px) {
+  html[data-skin="terminal"] .t-table td.t-truncate {
+    max-width: 0;
   }
 }
 
@@ -1552,7 +1575,7 @@ html[data-skin="terminal"] .t-detail {
   display: grid;
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
-  align-items: start;
+  align-items: baseline;
   gap: 0 3ch;
   min-height: 44px;
   padding: 10px 0;
@@ -1569,10 +1592,6 @@ html[data-skin="terminal"] .t-detail {
     min-height: 0;
     padding: 8px 0;
   }
-
-  html[data-skin="terminal"] .t-detail dt {
-    padding-top: 0;
-  }
 }
 
 html[data-skin="terminal"] .t-detail:last-child {
@@ -1582,7 +1601,6 @@ html[data-skin="terminal"] .t-detail:last-child {
 html[data-skin="terminal"] .t-detail dt {
   display: flex;
   align-items: baseline;
-  padding-top: 2px;
 }
 
 html[data-skin="terminal"] .t-detail dd {
@@ -1601,7 +1619,7 @@ html[data-skin="terminal"] .t-detail dd small {
 html[data-skin="terminal"] .t-detail-value {
   display: inline-flex;
   flex-wrap: nowrap;
-  align-items: center;
+  align-items: baseline;
   gap: 1ch;
   min-width: 0;
   max-width: 100%;
@@ -1791,6 +1809,9 @@ html[data-skin="terminal"] .t-radio + .t-radio {
 
 /* --- the overflow menu: a list of verbs in the top layer --------------------------------- */
 
+/* The top layer draws the menu above everything, but it still inherits from
+   the cell it is mounted in: a row's menu read right-aligned and could not wrap
+   its detail, which cut the label off at the menu's edge. */
 html[data-skin="terminal"] .t-menu {
   position: fixed;
   inset: auto;
@@ -1799,6 +1820,8 @@ html[data-skin="terminal"] .t-menu {
   border: 1px solid var(--rule);
   background: var(--surface);
   color: var(--ink);
+  text-align: start;
+  white-space: normal;
 }
 
 html[data-skin="terminal"] .t-menu:not(:popover-open) {
@@ -1839,6 +1862,7 @@ html[data-skin="terminal"] .t-menu-item .t-bracket {
 html[data-skin="terminal"] .t-menu-copy {
   display: grid;
   gap: 2px;
+  min-width: 0;
 }
 
 html[data-skin="terminal"] .t-menu-item:hover:not(:disabled),

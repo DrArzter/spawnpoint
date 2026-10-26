@@ -391,7 +391,13 @@ export type Col<Row> = Readonly<{
   secondary?: boolean;
   /** Worth reading, not worth the row scrolling: dropped at the medium step. */
   optional?: boolean;
+  /** A long value copied rather than read: the column gives up its width first and its `t-clip` ends in an ellipsis. */
+  truncate?: boolean;
 }>;
+
+function cellClass<Row>(column: Col<Row>, head = false): string {
+  return cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col", column.corner && "t-corner-col", column.compactBlock && "t-compact-block", !head && column.secondary && "t-secondary", column.optional && "t-optional", column.truncate && "t-truncate");
+}
 
 function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1);
@@ -415,18 +421,18 @@ export function Table<Row>({ columns, rows, rowKey, label, loading = false, load
     <div className={cx("t-table-wrap", decision && "t-table-decision", className)}>
       <table aria-busy={loading || undefined} aria-label={loading ? `${label}. ${loadingLabel ?? `Loading ${lowerFirst(label)}`}` : label} aria-live={loading ? "polite" : undefined} className={cx("t-table", headless && "t-table-headless")}>
         <thead className={headless ? "visually-hidden" : undefined}>
-          <tr>{columns.map((column) => <th className={cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col", column.corner && "t-corner-col", column.compactBlock && "t-compact-block", column.optional && "t-optional")} key={column.id} scope="col" style={column.width ? { width: column.width } : undefined}>{column.verbs ? <span className="visually-hidden">{column.label}</span> : column.label}</th>)}</tr>
+          <tr>{columns.map((column) => <th className={cellClass(column, true)} key={column.id} scope="col" style={column.width ? { width: column.width } : undefined}>{column.verbs ? <span className="visually-hidden">{column.label}</span> : column.label}</th>)}</tr>
         </thead>
         <tbody>
           {loading && Array.from({ length: loadingRows }, (_, row) => (
             <tr aria-hidden="true" className="t-table-skeleton" key={`skeleton-${row}`}>
-              {columns.map((column, columnIndex) => <td className={cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col", column.corner && "t-corner-col", column.compactBlock && "t-compact-block", column.secondary && "t-secondary", column.optional && "t-optional")} data-label={column.verbs ? "" : column.label} key={column.id} style={column.width ? { width: column.width } : undefined}><Skeleton width={column.verbs ? "short" : (row + columnIndex) % 3 === 0 ? "long" : "medium"} /></td>)}
+              {columns.map((column, columnIndex) => <td className={cellClass(column)} data-label={column.verbs ? "" : column.label} key={column.id} style={column.width ? { width: column.width } : undefined}><Skeleton width={column.verbs ? "short" : (row + columnIndex) % 3 === 0 ? "long" : "medium"} /></td>)}
             </tr>
           ))}
           {!loading && rows.length === 0 && <tr className="t-table-state"><td colSpan={columns.length}>{empty}</td></tr>}
           {!loading && rows.map((row) => (
             <tr className={columns.some((column) => column.corner) ? "t-row-corner" : undefined} key={rowKey(row)}>
-              {columns.map((column) => <td className={cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col", column.corner && "t-corner-col", column.compactBlock && "t-compact-block", column.secondary && "t-secondary", column.optional && "t-optional")} data-label={column.verbs ? "" : column.label} key={column.id} style={column.width ? { width: column.width } : undefined}>{column.render(row)}</td>)}
+              {columns.map((column) => <td className={cellClass(column)} data-label={column.verbs ? "" : column.label} key={column.id} style={column.width ? { width: column.width } : undefined}>{column.render(row)}</td>)}
             </tr>
           ))}
         </tbody>

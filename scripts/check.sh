@@ -10,6 +10,7 @@
 #   scripts/check.sh app      Lambda tests and builds, web build, and MCP adapter
 #   scripts/check.sh server   container and compose server suites
 #   scripts/check.sh lambda-build | lambda-test-shard INDEX COUNT | web | mcp
+#   scripts/check.sh ui       the breakpoint gate: the demo build in headless Chrome
 #   scripts/check.sh server-suite-shard INDEX COUNT | server-compose
 #   scripts/check.sh terraform
 
@@ -89,6 +90,27 @@ check_web() {
 
 check_mcp() {
   (cd mcp && npm test)
+}
+
+# The breakpoint gate (web/tools/ui-audit): the demo build, served here and
+# probed in headless Chrome at both sides of every step, in both skins. It fails
+# on a layout finding web/tools/ui-audit/accepted.txt does not list.
+check_ui() {
+  local port=4173 server status=0
+  (cd web && npm run build >/dev/null)
+  if [[ -z "${CHROME_BIN:-}" ]]; then
+    CHROME_BIN="$(command -v google-chrome || command -v chromium || true)"
+    [[ -z "${CHROME_BIN}" ]] || export CHROME_BIN
+  fi
+  (cd web && exec npx vite preview --host 127.0.0.1 --port "${port}" --strictPort >/dev/null 2>&1) &
+  server=$!
+  for _ in $(seq 1 50); do
+    curl -fs "http://127.0.0.1:${port}/" >/dev/null && break
+    sleep 0.2
+  done
+  (cd web && node tools/ui-audit/audit.mjs --gate "http://127.0.0.1:${port}") || status=$?
+  kill "${server}" 2>/dev/null || true
+  return "${status}"
 }
 
 # The bot, notifier and access-api roots archive lambdas/dist/*, so a Terraform
@@ -174,6 +196,7 @@ run_static() {
 run_app() {
   step "node tests (lambdas)" check_node
   step "production build (mini app)" check_web
+  step "breakpoint gate (demo in headless Chrome)" check_ui
   step "MCP adapter tests and build" check_mcp
   step "lambda bundles" check_lambda_bundles
 }
@@ -211,6 +234,7 @@ case "${mode}" in
     step "lambda tests (shard ${2}/${3})" check_lambda_test_shard "$2" "$3"
     ;;
   web) step "production build and tests (mini app)" check_web ;;
+  ui) step "breakpoint gate (demo in headless Chrome)" check_ui ;;
   mcp) step "MCP adapter tests and build" check_mcp ;;
   server-suite-shard)
     validate_shard "${@:2}" || exit 2
@@ -229,7 +253,7 @@ case "${mode}" in
     step "terraform fmt+test (${2})" check_terraform_root "$2"
     ;;
   *)
-    printf 'usage: scripts/check.sh [full|fast|static|app|server|lambda-build|lambda-test-shard|web|mcp|server-suite-shard|server-compose|terraform]\n' >&2
+    printf 'usage: scripts/check.sh [full|fast|static|app|server|lambda-build|lambda-test-shard|web|ui|mcp|server-suite-shard|server-compose|terraform]\n' >&2
     exit 2
     ;;
 esac

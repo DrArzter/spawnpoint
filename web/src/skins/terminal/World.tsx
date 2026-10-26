@@ -101,7 +101,7 @@ function partialInventoryDescription(unverified: number, truncated: boolean): st
 
 const operationColumns: readonly Col<WorldModel["operations"][number]>[] = [
   { id: "operation", label: "Operation", render: (row) => <strong>{row.label}</strong> },
-  { id: "execution", label: "Execution", render: (row) => <code className="t-clip">{row.operation.id}</code> },
+  { id: "execution", label: "Execution", truncate: true, render: (row) => <code className="t-clip">{row.operation.id}</code> },
   { id: "started", label: "Started", width: "140px", render: (row) => <span>{formatTime(row.operation.startedAt)}</span> },
   { id: "status", label: "Status", width: "80px", render: () => <Indicator kind="progress" label="Running" /> },
 ];
@@ -124,11 +124,11 @@ function WipesTab({ rows, worldName }: Readonly<{ rows: WorldModel["wipes"]; wor
 
 function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldName: string }>) {
   const columns: readonly Col<BackupEntry>[] = [
-    { id: "archive", label: "Archive", width: "36%", render: (entry) => <code className="t-clip" title={entry.archiveName}>{entry.archiveName}</code> },
+    { id: "archive", label: "Archive", truncate: true, render: (entry) => <code className="t-clip" title={entry.archiveName}>{entry.archiveName}</code> },
     { id: "wipe", label: "Wipe", width: "90px", render: (entry) => { const number = model.wipeNumber(entry.generationId); return number !== undefined ? <span>#{number}</span> : <Ghost>Legacy</Ghost>; } },
     { id: "stored", label: "Stored", width: "170px", render: (entry) => <Timestamp value={entry.storedAt} /> },
     { id: "size", label: "Size", width: "130px", align: "end", render: (entry) => formatBytes(entry.sizeBytes) },
-    { id: "checksum", label: "SHA-256", secondary: true, width: "180px", render: (entry) => <Digest value={entry.checksum} /> },
+    { id: "checksum", label: "SHA-256", secondary: true, optional: true, width: "180px", render: (entry) => <Digest value={entry.checksum} /> },
     { id: "verbs", label: "Actions", verbs: true, corner: true, render: (entry) => <Overflow groups={[
       [copyValueAction(`backup.copy-archive.${entry.key}`, "Copy archive name", entry.archiveName), copyValueAction(`backup.copy-checksum.${entry.key}`, "Copy SHA-256", entry.checksum)],
       ...(model.download ? [[model.download(entry)]] : []),
@@ -192,7 +192,7 @@ function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["r
 // ADR-0069); the packs that sort them are on the release row.
 function ModsPanel({ mods, worldName }: Readonly<{ mods: ModsModel; worldName: string }>) {
   const columns: readonly Col<ModRow>[] = [
-    { id: "file", label: "File", render: (row) => <code className="t-clip" title={row.file}>{row.file}</code> },
+    { id: "file", label: "File", truncate: true, render: (row) => <code className="t-clip" title={row.file}>{row.file}</code> },
     { id: "size", label: "Size", width: "110px", align: "end", render: (row) => formatBytes(row.bytes) },
     { id: "checksum", label: "SHA-256", secondary: true, width: "180px", render: (row) => <Digest value={row.sha256} /> },
     { id: "verbs", label: "Actions", verbs: true, corner: true, render: (row) => <Overflow groups={[[row.download]]} label={`Actions for ${row.file}`} size="small" /> },

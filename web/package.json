@@ -8,7 +8,8 @@
     "test": "node --disable-warning=DEP0205 --import ./test/support/register.mjs --test test/*.test.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "audit:ui": "node tools/ui-audit/audit.mjs"
+    "audit:ui": "node tools/ui-audit/audit.mjs",
+    "audit:ui:gate": "node tools/ui-audit/audit.mjs --gate"
   },
   "dependencies": {
     "react": "19.2.8",

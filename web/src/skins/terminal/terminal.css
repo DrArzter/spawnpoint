@@ -2124,6 +2124,11 @@ html[data-skin="terminal"] .t-filter-row {
   border-bottom: 1px solid var(--outline);
 }
 
+html[data-skin="terminal"] .t-filter-row-plain {
+  padding: 0;
+  border-bottom: 0;
+}
+
 html[data-skin="terminal"] .t-filter-row .t-field {
   flex: 1 1 24ch;
 }

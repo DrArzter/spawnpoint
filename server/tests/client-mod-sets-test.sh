@@ -99,7 +99,8 @@ list without-source client-only.txt minimap
 commit
 
 files() {
-  find "$1" -maxdepth 1 -type f -name '*.jar' -printf '%f\n' | sort | paste -sd ' ' -
+  local directory="$1"
+  find "${directory}" -maxdepth 1 -type f -name '*.jar' -printf '%f\n' | sort | paste -sd ' ' -
 }
 
 # --- resolution: the server set and the players set, side by side ---

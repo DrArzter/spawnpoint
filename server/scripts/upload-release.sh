@@ -94,7 +94,14 @@ pack_key="${release_prefix}/client.zip"
 # payload is uploaded, so a run cannot leave a published release with no pack.
 require_command zip
 manifest_key="${release_prefix}/manifest.json"
-manifest_digest="$(sha256sum -- "${manifest}" | awk '{print $1}')"
+# The hex SHA-256 of one file, as manifests record it.
+file_sha256() {
+  local file="$1" digest
+  digest="$(sha256sum -- "${file}")"
+  printf '%s' "${digest%% *}"
+}
+
+manifest_digest="$(file_sha256 "${manifest}")"
 
 head_release_object() {
   local key="$1"
@@ -201,7 +208,7 @@ publish_pack() {
   if [[ "${client_kind}" == "curseforge-modpack" ]]; then
     pack_zip="${source_dir}/client.zip"
     [[ -f "${pack_zip}" && ! -L "${pack_zip}" ]] || die "release client pack is missing or is a symlink"
-    pack_digest="$(sha256sum -- "${pack_zip}" | awk '{print $1}')"
+    pack_digest="$(file_sha256 "${pack_zip}")"
     expected_bytes="$(jq -r '.client.bytes' "${manifest}")"
     [[ "${pack_digest}" == "$(jq -r '.client.sha256' "${manifest}")" && "$(stat --format '%s' -- "${pack_zip}")" == "${expected_bytes}" ]] ||
       die "release client pack does not match the manifest"
@@ -221,7 +228,7 @@ publish_pack() {
       candidate="${source_dir}/client-mods/${filename}"
       [[ -f "${candidate}" ]] || candidate="${source_dir}/mods/${filename}"
       [[ -f "${candidate}" && ! -L "${candidate}" ]] || die "players mod is missing or is a symlink: ${filename}"
-      [[ "$(sha256sum -- "${candidate}" | awk '{print $1}')" == "${expected_sha}" ]] ||
+      [[ "$(file_sha256 "${candidate}")" == "${expected_sha}" ]] ||
         die "SHA-256 mismatch for players mod ${filename}"
       cp -- "${candidate}" "${pack_dir}/pack/${filename}"
     done < <(jq -r '.client.mods[] | [.file, .sha256] | @tsv' "${manifest}")
@@ -233,7 +240,7 @@ publish_pack() {
   write_install_notes "${pack_dir}/pack/INSTALL.txt"
 
   (cd "${pack_dir}/pack" && zip -qr "${pack_zip}" .)
-  pack_digest="$(sha256sum -- "${pack_zip}" | awk '{print $1}')"
+  pack_digest="$(file_sha256 "${pack_zip}")"
   upload_release_object "${pack_key}" "${pack_zip}" "${pack_digest}" "pack.zip"
   rm -rf -- "${pack_dir}"
   printf 'uploaded'
@@ -257,13 +264,13 @@ publish_set_pack() {
     candidate="${source_dir}/mods/${filename}"
     [[ -f "${candidate}" ]] || candidate="${source_dir}/client-mods/${filename}"
     [[ -f "${candidate}" && ! -L "${candidate}" ]] || die "${name} pack file is missing or is a symlink: ${filename}"
-    [[ "$(sha256sum -- "${candidate}" | awk '{print $1}')" == "${expected_sha}" ]] ||
+    [[ "$(file_sha256 "${candidate}")" == "${expected_sha}" ]] ||
       die "SHA-256 mismatch for ${name} pack file ${filename}"
     cp -- "${candidate}" "${pack_dir}/pack/${filename}"
   done < <(jq -r "${filter}" "${manifest}")
   printf '%s\n' "${title}" >"${pack_dir}/pack/README.txt"
   (cd "${pack_dir}/pack" && zip -qr "${pack_zip}" .)
-  pack_digest="$(sha256sum -- "${pack_zip}" | awk '{print $1}')"
+  pack_digest="$(file_sha256 "${pack_zip}")"
   upload_release_object "${key}" "${pack_zip}" "${pack_digest}" "${name}.zip"
   rm -rf -- "${pack_dir}"
   printf 'uploaded'

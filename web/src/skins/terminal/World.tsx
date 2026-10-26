@@ -3,12 +3,13 @@ import type { ReactNode } from "react";
 import type { BackupEntry } from "../../api/contract";
 import { Timestamp } from "../../components/ui/Timestamp";
 import { action } from "../../core/actions";
+import { useFilter } from "../../components/ui/Filter";
 import type { BackupsModel, Detail, DetailValue, ModRow, ModsModel, ReleaseRow, WorldModel } from "../../core/models";
 import { wipeStatus } from "../../core/worlds";
 import { Icon } from "../../icons";
 import { formatBytes, formatTime, shortDigest } from "../../lib/format";
 import { useMediaQuery } from "../../shell/hooks";
-import { Address, Choice, Choices, Col, DetailRow, DetailsGroup, Empty, Ghost, Indicator, Notice, Overflow, Page, Panel, State, Table, Tabs, Verb, Verbs } from "./ui";
+import { Address, Choice, Choices, Col, DetailRow, DetailsGroup, Empty, FilterRow, Ghost, Indicator, NoMatches, Notice, Overflow, Page, Panel, State, Table, Tabs, Verb, Verbs } from "./ui";
 import { MetricsPanel } from "./Metrics";
 import { ConsolePanel } from "./Rcon";
 import { WhitelistPanel } from "./Whitelist";
@@ -197,18 +198,22 @@ function ModsPanel({ mods, worldName }: Readonly<{ mods: ModsModel; worldName: s
     { id: "verbs", label: "Actions", verbs: true, corner: true, render: (row) => <Overflow groups={[[row.download]]} label={`Actions for ${row.file}`} size="small" /> },
   ];
   const files = mods.files;
+  const filter = useFilter(files.status === "ready" ? files.value : [], (row) => [row.file]);
   return (
     <Panel flush name={`Mods · release ${mods.release}`}>
       {files.status === "error"
         ? <div className="t-inset"><Notice description={files.error} title="The mods are unavailable" tone="error" verbs={<Verb action={files.retry} size="small" />} /></div>
-        : <Table
-          columns={columns}
-          empty={<Empty title="This release has no mods" />}
-          label={`Mods of ${worldName}, release ${mods.release}`}
-          loading={files.status === "loading"}
-          rowKey={(row) => row.sha256}
-          rows={files.status === "ready" ? files.value : []}
-        />}
+        : <>
+          <FilterRow disabled={files.status !== "ready"} filter={filter} label="Search mods" placeholder="Search by file name" />
+          <Table
+            columns={columns}
+            empty={filter.active ? <NoMatches filter={filter} noun="mods" /> : <Empty title="This release has no mods" />}
+            label={`Mods of ${worldName}, release ${mods.release}`}
+            loading={files.status === "loading"}
+            rowKey={(row) => row.sha256}
+            rows={filter.rows}
+          />
+        </>}
     </Panel>
   );
 }

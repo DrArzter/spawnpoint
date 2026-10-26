@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, ScopeModel, WorldSettingsModel } from "../../core/models";
 import { plural } from "../../lib/format";
-import { Avatar, Drawer, Empty, Field, Key, Modal, Notice, Person, SelectInput, SkeletonRows, State, TextInput, Toggle, Verb } from "./ui";
+import { Avatar, Drawer, Empty, Field, Modal, NoMatches, Notice, Person, SelectInput, SkeletonRows, State, TextInput, Toggle, Verb } from "./ui";
 
 // The scope picker: choosing a game re-scopes the whole console.
 export function ScopeDialog({ model }: Readonly<{ model: ScopeModel }>) {
@@ -31,7 +31,7 @@ export function ScopeDialog({ model }: Readonly<{ model: ScopeModel }>) {
           );
         })}
       </div>
-      {visible.length === 0 && <Empty description={`Nothing matches "${query}".`} title="No matching games" verbs={<Key label="Clear search" onClick={() => setQuery("")} size="small" />} />}
+      {visible.length === 0 && <NoMatches filter={{ query, clear: () => setQuery("") }} noun="games" />}
     </Modal>
   );
 }
@@ -224,7 +224,7 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
             {recipients.status === "loading" && <SkeletonRows label="Loading approved players" rows={3} />}
             {recipients.status === "error" && <Notice title="Players could not be loaded" tone="error" verbs={<Verb action={recipients.retry} size="small" />} />}
             {recipients.status === "ready" && recipients.value.length === 0 && !model.query.trim() && <Empty description="Approve another player in Access before sending a direct invitation." title="No other approved players" />}
-            {recipients.status === "ready" && recipients.value.length === 0 && model.query.trim() && <Empty description={`Nothing matches "${model.query}".`} title="No matching players" verbs={<Key label="Clear search" onClick={() => model.setQuery("")} size="small" />} />}
+            {recipients.status === "ready" && recipients.value.length === 0 && model.query.trim() && <NoMatches filter={{ query: model.query, clear: () => model.setQuery("") }} noun="players" />}
             {recipients.status === "ready" && recipients.value.length > 0 && (
               <ul className="t-list">
                 {recipients.value.map((recipient) => (

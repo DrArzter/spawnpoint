@@ -6,7 +6,7 @@ import { Icon, type IconName } from "../../icons";
 import { formatDateTime, plural } from "../../lib/format";
 import { describePermission } from "../../lib/permissions";
 import type { Game, LinkKind, Member, Role } from "../../model";
-import { Col, Details, Drawer, Empty, Field, Ghost, Indicator, Key, Notice, Overflow, Page, Panel, Person, SelectInput, SkeletonRows, State, Table, Tabs, TextInput, Toggle, Verb } from "./ui";
+import { Col, Details, Drawer, Empty, Field, FilterRow, Ghost, Indicator, Key, NoMatches, Notice, Overflow, Page, Panel, Person, SelectInput, SkeletonRows, State, Table, Tabs, TextInput, Toggle, Verb } from "./ui";
 
 export function Access({ model }: Readonly<{ model: AccessModel }>) {
   return (
@@ -199,15 +199,10 @@ function Roles({ model }: Readonly<{ model: RolesModel }>) {
       {state.status === "error" && state.kind === "unavailable" && <Panel><Empty title="The access directory is not connected yet" /></Panel>}
       {state.status === "error" && state.kind !== "unavailable" && <Notice description={state.error} title={state.kind === "forbidden" ? "Your role cannot read this" : "Roles could not be loaded"} tone="error" verbs={state.kind === "forbidden" ? undefined : <Verb action={state.retry} size="small" />} />}
       {state.status !== "error" && <Panel flush>
-        <div className="t-filter-row">
-          <Field hideLabel label="Search roles">
-            <TextInput disabled={state.status !== "ready"} onChange={(event) => filter.setQuery(event.target.value)} placeholder="Search by role or description" ref={filter.field} type="search" value={filter.query} />
-          </Field>
-          {filter.active && <span className="t-filter-count">{filter.rows.length} of {filter.total}</span>}
-        </div>
+        <FilterRow disabled={state.status !== "ready"} filter={filter} label="Search roles" placeholder="Search by role or description" />
         <Table
           columns={columns}
-          empty={filter.active ? <Empty description={`Nothing matches "${filter.query}".`} title="No matching roles" verbs={<Key label="Clear search" onClick={filter.clear} size="small" />} /> : <Empty title="No roles" />}
+          empty={filter.active ? <NoMatches filter={filter} noun="roles" /> : <Empty title="No roles" />}
           label="Roles and permissions"
           loading={state.status === "loading"}
           rowKey={(role) => role.id}
@@ -243,13 +238,9 @@ function RolePermissions({ role }: Readonly<{ role: Role }>) {
   return (
     <div className="t-page">
       <p className="t-copy-line">{role.description}</p>
-      {permissions.length > SEARCHABLE_PERMISSIONS && (
-        <Field hideLabel label="Search permissions">
-          <TextInput onChange={(event) => filter.setQuery(event.target.value)} placeholder="Search by permission or description" ref={filter.field} type="search" value={filter.query} />
-        </Field>
-      )}
+      {permissions.length > SEARCHABLE_PERMISSIONS && <FilterRow filter={filter} label="Search permissions" placeholder="Search by permission or description" plain />}
       {filter.rows.length === 0
-        ? <Empty description={`Nothing matches "${filter.query}".`} title="No matching permissions" verbs={<Key label="Clear search" onClick={filter.clear} size="small" />} />
+        ? <NoMatches filter={filter} noun="permissions" />
         : <Details className="t-details-code" items={filter.rows.map((permission) => ({ label: permission, value: describePermission(permission) ?? <Ghost>No description recorded for this permission.</Ghost> }))} label="Permissions" />}
     </div>
   );

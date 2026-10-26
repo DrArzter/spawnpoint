@@ -66,7 +66,7 @@ test("build input rejects malformed JSON separately from an invalid pinned-build
 });
 
 test("a release pack is one of client, server or full, and nothing reaches storage otherwise", async () => {
-  for (const [pack, version] of [["everything", "1.2"], ["../client", "1.2"], ["server", "latest"]]) {
+  for (const [pack, version] of [["everything", "1.2"], ["../client", "1.2"], ["server", "latest"]] as const) {
     const result = await releasePackDownload("minecraft", "industrial", version, pack);
     assert.equal(result.statusCode, 400);
     assert.deepEqual(JSON.parse(result.body), { error: "invalid_release_reference" });

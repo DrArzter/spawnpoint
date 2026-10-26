@@ -399,6 +399,12 @@ function cellClass<Row>(column: Col<Row>, head = false): string {
   return cx(column.align === "end" && "t-end", column.verbs && "t-verbs-col", column.corner && "t-corner-col", column.compactBlock && "t-compact-block", !head && column.secondary && "t-secondary", column.optional && "t-optional", column.truncate && "t-truncate");
 }
 
+/** A placeholder as wide as the cell will be: short for verbs, otherwise a rough mix of long and medium. */
+function skeletonWidth<Row>(column: Col<Row>, cell: number): "short" | "medium" | "long" {
+  if (column.verbs) return "short";
+  return cell % 3 === 0 ? "long" : "medium";
+}
+
 function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1);
 }
@@ -426,7 +432,7 @@ export function Table<Row>({ columns, rows, rowKey, label, loading = false, load
         <tbody>
           {loading && Array.from({ length: loadingRows }, (_, row) => (
             <tr aria-hidden="true" className="t-table-skeleton" key={`skeleton-${row}`}>
-              {columns.map((column, columnIndex) => <td className={cellClass(column)} data-label={column.verbs ? "" : column.label} key={column.id} style={column.width ? { width: column.width } : undefined}><Skeleton width={column.verbs ? "short" : (row + columnIndex) % 3 === 0 ? "long" : "medium"} /></td>)}
+              {columns.map((column, columnIndex) => <td className={cellClass(column)} data-label={column.verbs ? "" : column.label} key={column.id} style={column.width ? { width: column.width } : undefined}><Skeleton width={skeletonWidth(column, row + columnIndex)} /></td>)}
             </tr>
           ))}
           {!loading && rows.length === 0 && <tr className="t-table-state"><td colSpan={columns.length}>{empty}</td></tr>}

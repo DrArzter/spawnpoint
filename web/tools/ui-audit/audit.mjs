@@ -21,7 +21,11 @@ const [base = "http://localhost:5173", detail = "-", scheme = "light"] = process
 const out = detail === "-" ? null : detail;
 // SKIN=terminal audits another face; the console is worn when it is unset. The
 // gate wears both unless SKIN names one.
-const skins = process.env.SKIN ? [process.env.SKIN] : gate ? ["console", "terminal"] : [""];
+function skinsToWear() {
+  if (process.env.SKIN) return [process.env.SKIN];
+  return gate ? ["console", "terminal"] : [""];
+}
+const skins = skinsToWear();
 const accepted = join(dirname(fileURLToPath(import.meta.url)), "accepted.txt");
 
 const ROUTES = [
@@ -120,6 +124,15 @@ const KINDS = [
 // and contrast stay in the report, where a disabled control is judged by eye.
 const GATED = new Set(["sideways", "overflowing", "overlaps", "textOverText", "wrapped", "offCentre", "misaligned", "offRail", "menuClipped", "menuRagged"]);
 
+// The measure beside a finding: a shift, a size or a contrast ratio.
+function detailOf(item) {
+  if (typeof item.by === "string") return item.by;
+  if (item.by !== undefined) return (item.by > 0 ? "+" : "") + item.by + "px";
+  if (item.w !== undefined) return item.w + "x" + item.h;
+  if (item.ratio !== undefined) return item.ratio.toFixed(2) + ":1";
+  return "";
+}
+
 function report(findings) {
   const totals = new Map(KINDS.map(([key]) => [key, 0]));
   const lines = [];
@@ -128,11 +141,7 @@ function report(findings) {
       for (const item of probe[key] ?? []) {
         totals.set(key, totals.get(key) + 1);
         const what = item.sel ?? item.selector ?? item.text ?? "";
-        const detail = typeof item.by === "string" ? item.by
-          : item.by !== undefined ? `${item.by > 0 ? "+" : ""}${item.by}px`
-          : item.w !== undefined ? `${item.w}x${item.h}`
-          : item.ratio !== undefined ? `${item.ratio.toFixed(2)}:1`
-          : "";
+        const detail = detailOf(item);
         lines.push(`  ${(probe.skin || "console").padEnd(8)} ${probe.route.padEnd(18)} ${String(probe.width).padStart(5)}px  ${label.padEnd(24)} ${detail.padEnd(10)} ${String(what).slice(-64)}`);
       }
     }
@@ -453,7 +462,7 @@ const PROBE = String.raw`(() => {
 
 // Menus are measured open: the first row menu of the page, where the clipped
 // Archive label was. Its labels must stay inside it and begin on one edge.
-const MENU_PROBE = String.raw`(async () => {
+const MENU_PROBE = `(async () => {
   const layout = __LAYOUT__;
   const trigger = Array.from(document.querySelectorAll("[aria-haspopup=menu][aria-controls]"))
     .find((el) => el.closest("table") && el.getBoundingClientRect().width > 0);
@@ -487,7 +496,7 @@ function findingKeys(findings) {
       for (const item of probe[kind] ?? []) keys.add(`${probe.skin || "console"} ${probe.route} ${probe.width} ${kind} ${item.sel ?? ""}`);
     }
   }
-  return [...keys].sort();
+  return [...keys].sort((a, b) => a.localeCompare(b));
 }
 
 // Fails on a finding the reviewed list does not hold; a listed finding that is
@@ -503,12 +512,13 @@ function judge(findings) {
   const known = new Set(existsSync(accepted) ? readFileSync(accepted, "utf8").split("\n").filter((line) => line && !line.startsWith("#")) : []);
   const fresh = found.filter((key) => !known.has(key));
   const gone = [...known].filter((key) => !found.includes(key));
-  if (gone.length > 0) console.log(`\n${gone.length} accepted findings no longer occur; remove them from accepted.txt:\n${gone.map((key) => `  ${key}`).join("\n")}`);
+  const listed = (keys) => keys.map((key) => "  " + key).join("\n");
+  if (gone.length > 0) console.log(`\n${gone.length} accepted findings no longer occur; remove them from accepted.txt:\n${listed(gone)}`);
   if (fresh.length === 0) {
     console.log(`\nbreakpoint gate: no new layout findings (${found.length} accepted)`);
     return 0;
   }
-  console.log(`\nbreakpoint gate: ${fresh.length} new layout findings\n${fresh.map((key) => `  ${key}`).join("\n")}`);
+  console.log(`\nbreakpoint gate: ${fresh.length} new layout findings\n${listed(fresh)}`);
   return 1;
 }
 
@@ -575,13 +585,13 @@ try {
         const loaded = new Promise((r) => { onLoad = r; });
         await send("Page.navigate", { url });
         await Promise.race([loaded, sleep(8000)]);
-        await sleep(gate ? 400 : 600);
+        await sleep(gate ? 400 : 600); // NOSONAR: one tab probes one page at a time; each step needs the one before
         // The runner knows which pointer it is emulating; the page does not have
         // to be asked, and in headless it answers unreliably.
-        const probe = await send("Runtime.evaluate", { expression: PROBE.replace("__COARSE__", String(mobile)).replace("__LAYOUT__", layout), returnByValue: true, awaitPromise: false });
+        const probe = await send("Runtime.evaluate", { expression: PROBE.replace("__COARSE__", String(mobile)).replace("__LAYOUT__", layout), returnByValue: true, awaitPromise: false }); // NOSONAR: sequential by design, as above
         const raw = probe.result?.result?.value;
         if (!raw) { findings.push({ skin, route: name, width, error: JSON.stringify(probe.result).slice(0, 300) }); continue; }
-        const menus = await send("Runtime.evaluate", { expression: MENU_PROBE.replace("__LAYOUT__", layout), returnByValue: true, awaitPromise: true });
+        const menus = await send("Runtime.evaluate", { expression: MENU_PROBE.replace("__LAYOUT__", layout), returnByValue: true, awaitPromise: true }); // NOSONAR: sequential by design, as above
         findings.push({ skin, route: name, width, mobile, ...JSON.parse(raw), ...JSON.parse(menus.result?.result?.value ?? "{}") });
       }
     }

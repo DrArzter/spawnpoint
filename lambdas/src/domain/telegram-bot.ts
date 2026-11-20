@@ -63,7 +63,7 @@ const POLL_TIMING = {
   commandPollSeconds: 15,
   maxInstancePolls: 30,
   maxSsmPolls: 30,
-  maxCommandPolls: 60,
+  maxCommandPolls: 160,
 } as const;
 
 const WATCHDOG_TIMING = {

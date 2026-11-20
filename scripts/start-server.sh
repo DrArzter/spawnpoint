@@ -123,7 +123,7 @@ input="$(
         commandPollSeconds: 15,
         maxInstancePolls: 30,
         maxSsmPolls: 30,
-        maxCommandPolls: 60
+        maxCommandPolls: 160
       },
       stopTiming: {
         instancePollSeconds: 10,
@@ -131,7 +131,7 @@ input="$(
         commandPollSeconds: 15,
         maxInstancePolls: 30,
         maxSsmPolls: 30,
-        maxCommandPolls: 60
+        maxCommandPolls: 160
       },
       watchdogTiming: {
         checkIntervalSeconds: 300,

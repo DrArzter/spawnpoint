@@ -121,11 +121,11 @@ input="$(
       watchdogStopLeaseTtlSeconds: 1800,
       startTiming: {
         instancePollSeconds: 10, ssmPollSeconds: 10, commandPollSeconds: 15,
-        maxInstancePolls: 30, maxSsmPolls: 30, maxCommandPolls: 60
+        maxInstancePolls: 30, maxSsmPolls: 30, maxCommandPolls: 160
       },
       stopTiming: {
         instancePollSeconds: 10, ssmPollSeconds: 10, commandPollSeconds: 15,
-        maxInstancePolls: 30, maxSsmPolls: 30, maxCommandPolls: 60
+        maxInstancePolls: 30, maxSsmPolls: 30, maxCommandPolls: 160
       },
       watchdogTiming: {
         checkIntervalSeconds: 300, emptyChecksRequired: 3, maxTotalChecks: 96,

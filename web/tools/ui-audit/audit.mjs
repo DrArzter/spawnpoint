@@ -530,11 +530,24 @@ const port = randomInt(9600, 9900);
 const proc = spawn(chrome, [
   "--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
   "--no-first-run", "--hide-scrollbars", "about:blank",
-], { stdio: "ignore" });
+], { stdio: ["ignore", "ignore", "pipe"] });
+
+// What chrome says about itself, kept for the failure message: a browser that
+// never answers and a browser that refused to launch used to be the same line.
+let complaints = "";
+proc.stderr.setEncoding("utf8");
+proc.stderr.on("data", (chunk) => { complaints = (complaints + chunk).slice(-2000); });
+let exit = null;
+proc.on("exit", (code, signal) => { exit = signal ?? code; });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function target() {
-  for (let i = 0; i < 100; i += 1) {
+  // A minute, not the ten seconds this waited before: a cold CI runner can
+  // spend longer than that getting chrome to the point of opening its
+  // debugging port, and the gate failed on the wait rather than on the UI. The
+  // budget costs nothing when chrome dies instead of dawdling, because an exit
+  // ends the wait immediately.
+  for (let i = 0; i < 600 && exit === null; i += 1) {
     try {
       const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
       const page = list.find((t) => t.type === "page");
@@ -542,7 +555,8 @@ async function target() {
     } catch { /* starting */ }
     await sleep(100);
   }
-  throw new Error("chrome did not start");
+  const why = exit === null ? "did not open its debugging port within 60s" : `exited with ${exit}`;
+  throw new Error(`chrome ${why}${complaints ? `\n${complaints.trimEnd()}` : ""}`);
 }
 
 const page = await target();

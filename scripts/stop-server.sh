@@ -153,7 +153,7 @@ input="$(
         commandPollSeconds: 15,
         instancePollSeconds: 10,
         maxSsmPolls: 30,
-        maxCommandPolls: 60,
+        maxCommandPolls: 160,
         maxInstancePolls: 30
       }
     }'

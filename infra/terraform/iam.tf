@@ -1,4 +1,9 @@
 locals {
+  # Kept beside the policy that may write to it; the same literal appears in
+  # workflows/start-server.asl.json and workflows/stop-server.asl.json, and a
+  # test in tests/core.tftest.hcl holds the three to each other.
+  session_command_log_group = "/spawnpoint/session-commands"
+
   game_host_release_resources = [
     "${data.aws_s3_bucket.releases.arn}/releases/*",
     "${data.aws_s3_bucket.releases.arn}/worlds/*",
@@ -64,6 +69,41 @@ resource "aws_iam_role_policy" "game_host_storage" {
   name   = "spawnpoint-game-host-storage"
   role   = aws_iam_role.game_host.id
   policy = data.aws_iam_policy_document.game_host_storage.json
+}
+
+# Where the output of a session command survives the host that produced it.
+# SSM hands an API caller at most 24,000 characters and a failed start's
+# evidence is the tail: the lines the host script prints about why the game
+# died. A start that fails terminates its host, so a log kept only there is a
+# log nobody reads. The name is also written into the machines' sendCommand
+# states, which are plain JSON and cannot interpolate a Terraform value.
+resource "aws_cloudwatch_log_group" "session_commands" {
+  name              = local.session_command_log_group
+  retention_in_days = 14
+
+  tags = {
+    Name = "spawnpoint-session-commands"
+  }
+}
+
+data "aws_iam_policy_document" "game_host_session_logs" {
+  statement {
+    sid = "WriteOnlySessionCommandOutput"
+    actions = [
+      "logs:CreateLogStream",
+      "logs:DescribeLogStreams",
+      "logs:PutLogEvents",
+    ]
+    # Composed rather than read off the group: the policy is then known at
+    # plan time, which is what lets tests/core.tftest.hcl assert on it.
+    resources = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.session_command_log_group}:*"]
+  }
+}
+
+resource "aws_iam_role_policy" "game_host_session_logs" {
+  name   = "spawnpoint-game-host-session-logs"
+  role   = aws_iam_role.game_host.id
+  policy = data.aws_iam_policy_document.game_host_session_logs.json
 }
 
 resource "aws_iam_instance_profile" "game_host" {

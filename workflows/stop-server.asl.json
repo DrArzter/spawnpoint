@@ -127,7 +127,11 @@
         "Parameters": {
           "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} SPAWNPOINT_SLOT={} /srv/spawnpoint/app/server/scripts/stop-session.sh', $.request.worldId, $.request.slot))"
         },
-        "TimeoutSeconds": 900
+        "TimeoutSeconds": 900,
+        "CloudWatchOutputConfig": {
+          "CloudWatchLogGroupName": "/spawnpoint/session-commands",
+          "CloudWatchOutputEnabled": true
+        }
       },
       "ResultPath": "$.observed.command",
       "Next": "Wait Before Command Poll"
@@ -141,7 +145,11 @@
         "Parameters": {
           "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} /srv/spawnpoint/app/server/scripts/stop-session.sh', $.request.worldId))"
         },
-        "TimeoutSeconds": 900
+        "TimeoutSeconds": 900,
+        "CloudWatchOutputConfig": {
+          "CloudWatchLogGroupName": "/spawnpoint/session-commands",
+          "CloudWatchOutputEnabled": true
+        }
       },
       "ResultPath": "$.observed.command",
       "Next": "Wait Before Command Poll"

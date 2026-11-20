@@ -54,6 +54,13 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.game_host_session_logs
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.step_functions_assume_role
     values = {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
@@ -205,6 +212,20 @@ run "start_workflow_is_standard_and_uses_direct_integrations" {
     condition     = !strcontains(aws_sfn_state_machine.start_server.definition, "$.request.connectionAddress")
     error_message = "No state may echo a caller-supplied address: a public world's address does not exist before the start."
   }
+
+  assert {
+    condition = alltrue([
+      for state in ["Start Fleet Session Command", "Start Placed Session Command", "Start Session Command"] :
+      jsondecode(aws_sfn_state_machine.start_server.definition).States[state].Parameters.CloudWatchOutputConfig.CloudWatchOutputEnabled == true
+      && jsondecode(aws_sfn_state_machine.start_server.definition).States[state].Parameters.CloudWatchOutputConfig.CloudWatchLogGroupName == aws_cloudwatch_log_group.session_commands.name
+    ])
+    error_message = "Every session command must send its output to the session command log group: a failed start terminates the host that holds the only other copy."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_group.session_commands.retention_in_days == 14
+    error_message = "Session command output must expire: it holds a failed start's whole console, and nothing reads it a fortnight later."
+  }
 }
 
 run "stop_workflow_is_standard_and_stops_only_after_backup_step" {
@@ -223,6 +244,14 @@ run "stop_workflow_is_standard_and_stops_only_after_backup_step" {
   assert {
     condition     = jsondecode(aws_sfn_state_machine.stop_server.definition).States["Stop Instance"].Resource == "arn:aws:states:::aws-sdk:ec2:stopInstances"
     error_message = "The workflow must stop EC2 directly rather than through a Lambda wrapper."
+  }
+
+  assert {
+    condition = alltrue([
+      for state in ["Stop Placed Session Command", "Stop Session Command"] :
+      jsondecode(aws_sfn_state_machine.stop_server.definition).States[state].Parameters.CloudWatchOutputConfig.CloudWatchLogGroupName == aws_cloudwatch_log_group.session_commands.name
+    ])
+    error_message = "A stop that refuses to archive must leave its reason somewhere other than the host it was about to stop."
   }
 }
 

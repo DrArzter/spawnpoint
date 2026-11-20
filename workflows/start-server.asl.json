@@ -210,7 +210,11 @@
         "Parameters": {
           "commands.$": "States.Array('set -euo pipefail', 'attempt=0; until test -f /etc/spawnpoint-fleet-ready && test -x /srv/spawnpoint/app/server/scripts/start-session.sh; do attempt=$((attempt + 1)); if [ \"$attempt\" -ge 60 ]; then echo \"fleet bootstrap not ready after 300 seconds\" >&2; exit 70; fi; sleep 5; done', 'update=/srv/spawnpoint/app/server/scripts/update-checkout.sh; if [ -x \"$update\" ]; then \"$update\" >&2 || true; fi', States.Format('WORLD_ID={} SPAWNPOINT_SLOT={} SESSION_FORMAT=json /srv/spawnpoint/app/server/scripts/start-session.sh', $.request.worldId, $.request.slot))"
         },
-        "TimeoutSeconds": 900
+        "TimeoutSeconds": 900,
+        "CloudWatchOutputConfig": {
+          "CloudWatchLogGroupName": "/spawnpoint/session-commands",
+          "CloudWatchOutputEnabled": true
+        }
       },
       "ResultPath": "$.observed.command",
       "Next": "Wait Before Command Poll"
@@ -224,7 +228,11 @@
         "Parameters": {
           "commands.$": "States.Array('set -euo pipefail', 'update=/srv/spawnpoint/app/server/scripts/update-checkout.sh; if [ -x \"$update\" ]; then \"$update\" >&2 || true; fi', States.Format('WORLD_ID={} SPAWNPOINT_SLOT={} SESSION_FORMAT=json /srv/spawnpoint/app/server/scripts/start-session.sh', $.request.worldId, $.request.slot))"
         },
-        "TimeoutSeconds": 900
+        "TimeoutSeconds": 900,
+        "CloudWatchOutputConfig": {
+          "CloudWatchLogGroupName": "/spawnpoint/session-commands",
+          "CloudWatchOutputEnabled": true
+        }
       },
       "ResultPath": "$.observed.command",
       "Next": "Wait Before Command Poll"
@@ -238,7 +246,11 @@
         "Parameters": {
           "commands.$": "States.Array('set -euo pipefail', 'update=/srv/spawnpoint/app/server/scripts/update-checkout.sh; if [ -x \"$update\" ]; then \"$update\" >&2 || true; fi', States.Format('WORLD_ID={} SESSION_FORMAT=json /srv/spawnpoint/app/server/scripts/start-session.sh', $.request.worldId))"
         },
-        "TimeoutSeconds": 900
+        "TimeoutSeconds": 900,
+        "CloudWatchOutputConfig": {
+          "CloudWatchLogGroupName": "/spawnpoint/session-commands",
+          "CloudWatchOutputEnabled": true
+        }
       },
       "ResultPath": "$.observed.command",
       "Next": "Wait Before Command Poll"

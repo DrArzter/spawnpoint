@@ -81,6 +81,21 @@ test("fleet starts retain their own lifecycle key instead of the configured game
   assert.equal(inputs[0]?.serverId, `world#${record.worldId}`);
 });
 
+test("a warm fleet world asks for a warm placement at start; a cold one and a configured one do not", async (t) => {
+  const fleet = { ...record, placement: "fleet" as const, connectivity: "raw" as const, auth: "game" as const };
+  const warm = scenario(t, { world: { ...fleet, warm: true } });
+  assert.equal((await controlSession(identity, "start", record.gameId, record.worldId)).statusCode, 202);
+  assert.equal(warm[0]?.policy, "warm");
+  t.mock.restoreAll();
+  const cold = scenario(t, { world: fleet });
+  assert.equal((await controlSession(identity, "start", record.gameId, record.worldId)).statusCode, 202);
+  assert.equal(cold[0]?.policy, "cold");
+  t.mock.restoreAll();
+  const configured = scenario(t);
+  assert.equal((await controlSession(identity, "start", record.gameId, record.worldId)).statusCode, 202);
+  assert.equal("policy" in (configured[0] ?? {}), false);
+});
+
 test("unsafe lifecycle inputs are rejected before any workflow can be dispatched", async (t) => {
   const inputs = scenario(t);
   assert.deepEqual(JSON.parse((await controlWorldLifecycle(identity, "restore", record.gameId, record.worldId, JSON.stringify({ backupKey: "worlds/other/archives/save.tar.zst" }))).body), { error: "invalid_backup_key" });
@@ -165,6 +180,16 @@ test("hosting settings keep a fleet world warm, and refuse warm for the configur
   const text = await updateWorldSettings("minecraft", record.worldId, JSON.stringify({ ...fleet, warm: "yes" }));
   assert.deepEqual(JSON.parse(text.body), { error: "invalid_world_warm" });
   assert.equal(written.length, 1, "a refused setting writes nothing");
+});
+
+test("changing only the warm choice is saved", async (t) => {
+  scenario(t);
+  const fleet = { placement: "fleet", connectivity: "raw", auth: "game" } as const;
+  const written = storedWorld(t, { ...record, ...fleet });
+  const result = await updateWorldSettings("minecraft", record.worldId, JSON.stringify({ ...fleet, warm: true }));
+  assert.equal(result.statusCode, 200);
+  assert.equal(written.length, 1, "a warm-only change writes the record");
+  assert.equal(written[0]?.warm, true);
 });
 
 test("a warm world that leaves the fleet is cold again", async (t) => {

@@ -85,13 +85,12 @@ test("cloud world: the header pill is the only state mark and the hero holds the
   assert.doesNotMatch(markup, /<dt><span>Launched/, "the hero's uptime says it");
 });
 
-test("cloud world: the World card draws hosting and game settings, the overflow the rest and refresh", () => {
+test("cloud world: the World card draws hosting and game settings, the overflow the rest; Refresh is the top bar's", () => {
   const markup = render();
-  for (const id of ["world.settings", "world.game-settings", "world.pack", "world.wipe", "world.purge", "refresh", "session.stop", "world.invite"]) {
+  for (const id of ["world.settings", "world.game-settings", "world.pack", "world.wipe", "world.purge", "session.stop", "world.invite"]) {
     assert.equal(count(markup, new RegExp(`data-action="${id.replace(".", "\\.")}"`)), 1, `${id} once`);
   }
-  const menu = markup.slice(markup.indexOf('role="menu"'));
-  assert.ok(menu.indexOf('data-action="world.purge"') < menu.indexOf('data-action="refresh"'), "Refresh is the last item, after the danger group");
+  assert.doesNotMatch(markup, /data-action="refresh"/, "one Refresh per page, in the top bar");
   assert.doesNotMatch(markup, /c-btn-primary[^>]*data-action="session\.stop"/, "Stop is never the primary or a red bar");
   assert.match(render({ session: spy("session.start", "Start") }), /c-btn-primary[^>]*data-action="session\.start"/);
 });

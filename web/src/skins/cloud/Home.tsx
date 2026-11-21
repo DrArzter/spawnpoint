@@ -32,12 +32,10 @@ export function withIcon(action: Action, icon: Action["icon"]): Action {
 export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Opens the list filtered by one state. */ onState: (label: string) => void }>) {
   const game = model.game;
   const list = model.views?.list ?? "#/worlds";
-  const refresh = <ActionButton action={withIcon(model.refresh, "refresh")} iconOnly />;
   const empty = model.status === "ready" && model.rows.length === 0;
   const header = (
     <PageHeader
       actions={<>
-        {refresh}
         <LinkButton href={list} icon="table_rows" label="All worlds" />
         {model.createWorld && !empty && <ActionButton action={model.createWorld} variant="primary" />}
       </>}

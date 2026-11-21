@@ -98,7 +98,7 @@ test("cloud: the worlds list filters by a pressed tile, never by a second status
   assert.match(bulk, /aria-haspopup="menu"/);
   assert.match(bulk, /aria-expanded="false"/);
   assert.match(markup, /Select worlds first/);
-  assert.match(markup, /data-action="refresh"/);
+  assert.doesNotMatch(markup, /data-action="refresh"/, "one Refresh per page, in the top bar");
 });
 
 test("cloud: the game home leaves out the requests card without the role, and offers one Create when there are no worlds", () => {

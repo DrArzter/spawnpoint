@@ -242,7 +242,7 @@ for (const skin of SKINS) {
   });
 
   test(`${skin.name}: the worlds list draws every row verb, refresh and create`, () => {
-    checkSurface("Worlds", renderToStaticMarkup(createElement(skin.Worlds, { model: worlds })), worlds);
+    checkSurface("Worlds", renderToStaticMarkup(createElement(skin.Worlds, { model: worlds })), worlds, skin.shellRefresh ? ["refresh"] : []);
   });
 
   test(`${skin.name}: the world page draws stop, invite, the overflow and each tab's verbs`, () => {
@@ -252,7 +252,7 @@ for (const skin of SKINS) {
     const backups = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "backups" } }));
     const releasesTab = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "releases" } }));
     const entry = worldPage.backups.inventory.status === "ready" ? worldPage.backups.inventory.value.entries[0]! : (null as never);
-    checkSurface("World", details + wipes + backups + releasesTab, { ...worldPage, backups: { ...worldPage.backups, restore: worldPage.backups.restore(entry), download: worldPage.backups.download!(entry) } });
+    checkSurface("World", details + wipes + backups + releasesTab, { ...worldPage, backups: { ...worldPage.backups, restore: worldPage.backups.restore(entry), download: worldPage.backups.download!(entry) } }, skin.shellRefresh ? ["refresh"] : []);
   });
 
   test(`${skin.name}: a world's files are its release's mods and its backup archives (ADR-0065)`, () => {

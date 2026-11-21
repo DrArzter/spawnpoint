@@ -29,6 +29,7 @@ export const cloudSkin: Skin = {
   WorldSettingsSheet,
   GameSettingsSheet,
   InvitationSheet,
+  shellRefresh: true,
   // The shell's flashbar draws the queue (useSnackbarQueue), so the default host is not drawn.
   renderSnackbar: () => null,
 };

@@ -28,6 +28,8 @@ export type Skin = Readonly<{
   WorldSettingsSheet: ComponentType<{ model: WorldSettingsModel }>;
   GameSettingsSheet: ComponentType<{ model: GameSettingsModel }>;
   InvitationSheet: ComponentType<{ model: InvitationModel }>;
+  /** The shell draws the one Refresh (`ShellModel.refreshAction`); a page draws its own `refresh` only as a retry. */
+  shellRefresh?: boolean;
   /** A skin that draws the notification queue itself; the default host is drawn when absent. */
   renderSnackbar?: (queue: SnackbarQueue) => ReactNode;
 }>;

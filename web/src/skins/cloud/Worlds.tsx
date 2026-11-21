@@ -202,7 +202,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
   if (rows.length === 0) {
     return (
       <div className="c-page">
-        {header(0, <ActionButton action={withIcon(model.refresh, "refresh")} iconOnly />, false)}
+        {header(0, undefined, false)}
         <Notices notices={model.notices} />
         <Card label="Worlds table">
           <Empty action={create} icon="public" message={create ? undefined : model.emptyDescription ?? undefined} title="No worlds" />
@@ -250,7 +250,6 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
           <FilterBar
             end={<>
               {paged.pages > 1 && <><Pager onPage={setPage} page={paged.page} pages={paged.pages} /><span aria-hidden="true" className="c-worlds-sep" /></>}
-              <ActionButton action={withIcon(model.refresh, "refresh")} iconOnly />
               <TablePreferences pageSize={{ value: size, set: setSize }} />
             </>}
             label="Filter worlds by property or text"

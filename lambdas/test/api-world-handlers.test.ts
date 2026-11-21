@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { SFNClient } from "@aws-sdk/client-sfn";
 import { initialLifecycleRecord, type LifecycleRecord } from "../src/domain/lifecycle.ts";
 import { awsControlPlaneSources } from "../src/control-plane/aws.ts";
 import { type ControlPlaneSources, type HostObservation } from "../src/control-plane/read-model.ts";
-import { type WorldRecord } from "../src/control-plane/world-registry.ts";
+import { type WorldRecord, worldRecordDocument } from "../src/control-plane/world-registry.ts";
 import { controlSession, controlWorldLifecycle, createWorld, updateWorldSettings } from "../src/handlers/api/worlds.ts";
 
 process.env.OPERATION_STATE_MACHINES = JSON.stringify(["start", "stop", "world"].map((type) => ({ type, arn: `arn:aws:states:eu-central-1:123456789012:stateMachine:${type}` })));
@@ -128,4 +129,49 @@ test("world connectivity validation keeps its creation defaults and explicit-upd
   assert.deepEqual(JSON.parse(missing.body), { error: "invalid_world_connectivity" });
   const invalid = await updateWorldSettings("minecraft", record.worldId, JSON.stringify({ placement: "configured", connectivity: "raw", auth: "game" }));
   assert.deepEqual(JSON.parse(invalid.body), { error: "invalid_world_connectivity" });
+});
+
+function storedWorld(t: TestContext, stored: WorldRecord) {
+  process.env.RELEASE_BUCKET = "releases";
+  const written: Record<string, unknown>[] = [];
+  t.mock.method(S3Client.prototype, "send", async (command: unknown) => {
+    if (command instanceof GetObjectCommand) {
+      return { ETag: "\"v1\"", Body: { transformToString: async () => JSON.stringify(worldRecordDocument(stored)) } };
+    }
+    if (command instanceof PutObjectCommand) {
+      assert.equal(command.input.IfMatch, "\"v1\"");
+      written.push(JSON.parse(String(command.input.Body)) as Record<string, unknown>);
+      return {};
+    }
+    throw new Error("unexpected S3 command");
+  });
+  return written;
+}
+
+test("hosting settings keep a fleet world warm, and refuse warm for the configured host or as a non-boolean", async (t) => {
+  scenario(t);
+  const written = storedWorld(t, record);
+  const fleet = { placement: "fleet", connectivity: "raw", auth: "game" };
+
+  const warm = await updateWorldSettings("minecraft", record.worldId, JSON.stringify({ ...fleet, warm: true }));
+  assert.equal(warm.statusCode, 200);
+  assert.deepEqual(JSON.parse(warm.body), { ...fleet, warm: true });
+  assert.equal(written.length, 1);
+  assert.equal(written[0]?.warm, true);
+  assert.equal(written[0]?.placement, "fleet");
+
+  const configured = await updateWorldSettings("minecraft", record.worldId, JSON.stringify({ placement: "configured", connectivity: "zerotier", warm: true }));
+  assert.deepEqual(JSON.parse(configured.body), { error: "invalid_world_warm" });
+  const text = await updateWorldSettings("minecraft", record.worldId, JSON.stringify({ ...fleet, warm: "yes" }));
+  assert.deepEqual(JSON.parse(text.body), { error: "invalid_world_warm" });
+  assert.equal(written.length, 1, "a refused setting writes nothing");
+});
+
+test("a warm world that leaves the fleet is cold again", async (t) => {
+  scenario(t);
+  const written = storedWorld(t, { ...record, placement: "fleet", connectivity: "raw", auth: "game", warm: true });
+  const result = await updateWorldSettings("minecraft", record.worldId, JSON.stringify({ placement: "configured", connectivity: "zerotier" }));
+  assert.equal(result.statusCode, 200);
+  assert.equal(written.length, 1);
+  assert.equal("warm" in (written[0] ?? {}), false);
 });

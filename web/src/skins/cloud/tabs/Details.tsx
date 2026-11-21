@@ -1,4 +1,5 @@
 import type { Detail, DetailKey, WorldModel } from "../../../core/models";
+import { useMediaQuery } from "../../../shell/hooks";
 import { ActionButton } from "../ui/ActionButton";
 import { Card } from "../ui/Card";
 import { DetailList } from "../ui/DetailList";
@@ -28,13 +29,15 @@ export function DetailsTab({ model }: Readonly<{ model: WorldModel }>) {
   if (model.availability.kind === "ready") omit.push("availability");
   if (live) omit.push("address");
   const settings = model.more.filter((item) => CARD_ACTIONS.includes(item.id));
+  // Spec §6.3.1: on a phone the card head keeps its title and shows these as icons, named and tooltipped by their labels.
+  const phone = useMediaQuery("(max-width: 759px)");
   return (
     <>
       <Grid kind="detail">
         {live === false
           ? <Empty icon="power_settings_new" size="sm" title="No session" />
           : session.length > 0 && <Card body="kv" title="Session"><DetailList columns="two" details={session} /></Card>}
-        <Card actions={settings.length > 0 ? settings.map((item) => <ActionButton action={item} key={item.id} size="sm" />) : undefined} body="kv" title="World">
+        <Card actions={settings.length > 0 ? settings.map((item) => <ActionButton action={item} iconOnly={phone} key={item.id} size="sm" />) : undefined} body="kv" title="World">
           <DetailList columns="two" details={activeOnly(model.worldDetails)} omit={omit} />
         </Card>
       </Grid>

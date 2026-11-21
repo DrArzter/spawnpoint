@@ -6,7 +6,7 @@ import { formatBytes } from "../../../lib/format";
 import { Card } from "../ui/Card";
 import { shortDateTime } from "../ui/DetailList";
 import { Empty, LoadError } from "../ui/Empty";
-import { Grid, GridCell } from "../ui/Grid";
+import { Grid } from "../ui/Grid";
 import { Segmented } from "../ui/Segmented";
 import { Skeleton, SkeletonGroup } from "../ui/Skeleton";
 import { StatCard } from "../ui/StatCard";
@@ -94,11 +94,7 @@ function Readings({ metrics, range, reveal }: Readonly<{ metrics: HostMetrics; r
         {metrics.series.map((series) => <Stat key={series.id} series={series} time={time} />)}
       </Grid>
       <Grid kind="metrics">
-        {metrics.series.map((series) => {
-          const chart = <Chart key={series.id} range={range} reveal={reveal} series={series} time={time} />;
-          // CPU and memory each span two columns from 900px, as the prototype does for CPU.
-          return series.id === "cpu" || series.id === "memory" ? <GridCell key={series.id} span="2">{chart}</GridCell> : chart;
-        })}
+        {metrics.series.map((series) => <Chart key={series.id} range={range} reveal={reveal} series={series} time={time} />)}
       </Grid>
     </>
   );

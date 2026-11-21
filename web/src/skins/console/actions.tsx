@@ -76,11 +76,12 @@ export function ActionIconButton({ action, size = "medium" }: Readonly<{ action:
 /**
  * Actions that do not earn a button of their own. Two or more share a menu;
  * one is drawn as its icon, because a menu that holds one item only hides it
- * behind a second tap. An action without an icon keeps the menu.
+ * behind a second tap. An action without an icon keeps the menu, and so does a
+ * column whose other rows hold more (`menu`), so the column has one control.
  */
-export function ActionOverflow({ groups, label, size = "medium" }: Readonly<{ groups: readonly (readonly Action[])[]; label: string; size?: "small" | "medium" }>) {
+export function ActionOverflow({ groups, label, size = "medium", menu = false }: Readonly<{ groups: readonly (readonly Action[])[]; label: string; size?: "small" | "medium"; menu?: boolean }>) {
   const actions = groups.flat();
-  const only = actions.length === 1 ? actions[0] : undefined;
+  const only = !menu && actions.length === 1 ? actions[0] : undefined;
   if (actions.length === 0) return null;
   if (only?.icon) return <ActionIconButton action={{ ...only, icon: only.icon }} size={size} />;
   return <Menu align="end" items={menuGroups(...groups)} label={label} size={size} />;

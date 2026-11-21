@@ -1,5 +1,5 @@
 import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
-import type { ConsoleEntry, FileLink, HostMetrics, MetricRange, ReleaseMods, ReleasePackName, SavedWhitelist, WorldWhitelist } from "../api/contract";
+import { identityDeletionRefusal, type ConsoleEntry, type FileLink, type HostMetrics, type MetricRange, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
 import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
 import type { ControlPlaneSnapshot, Preset, SettingValue, World, WorldGameSettings } from "../model";
@@ -502,6 +502,16 @@ export function setIdentityRole(identityId: string, roleId: string): void {
   if (identity.roleId === "owner") throw new Error("You cannot change your own Owner role.");
   if (!state.roles.some((role) => role.id === roleId)) throw new Error("This role no longer exists.");
   identity.roleId = roleId;
+}
+
+// The demo signs in as identity-owner; only the access part changes.
+export function deleteIdentity(identityId: string): void {
+  if (identityId === "identity-owner") throw new Error(identityDeletionRefusal(409, "self_delete_forbidden"));
+  const identity = state.identities.find((item) => item.id === identityId);
+  if (!identity) return;
+  if (identity.roleId === "owner" && state.identities.filter((item) => item.roleId === "owner").length <= 1) throw new Error(identityDeletionRefusal(409, "last_owner"));
+  state.identities = state.identities.filter((item) => item.id !== identityId);
+  delete state.delivery[identityId];
 }
 
 export function subscriptions(): SubscriptionState {

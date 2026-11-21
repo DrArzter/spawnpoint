@@ -331,6 +331,8 @@ export type MemberRow = Readonly<{
   setRoleId: (roleId: string) => void;
   changing: boolean;
   linkedAccounts: Action;
+  /** `access.delete`; null for the caller's own row and for an Owner the caller cannot remove. */
+  remove: Action | null;
 }>;
 
 export type InvitationsModel = Readonly<{
@@ -352,6 +354,8 @@ export type UsersModel = Readonly<{
   invitations: InvitationsModel | null;
   managed: Member | null;
   closeManaged: Action;
+  /** The open "Delete <name>?" dialog, if any. */
+  deletion: ConfirmationModel | null;
 }>;
 
 export type RolesModel = Readonly<{
@@ -435,6 +439,8 @@ export type ConfirmationModel = Readonly<{
   releaseChoice: Readonly<{ value: string; options: readonly Readonly<{ version: string; latest: boolean }>[]; set: (value: string) => void }> | null;
   /** `label` names what is typed: "World ID" for a purge. */
   typedConfirmation: Readonly<{ label: string; expected: string; value: string; set: (value: string) => void }> | null;
+  /** Why the last attempt was refused; the dialog stays open and shows it. */
+  error?: string | null;
 }>;
 
 export type WorldPlacement = "configured" | "fleet";

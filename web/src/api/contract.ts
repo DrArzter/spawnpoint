@@ -73,6 +73,14 @@ export async function apiFailure(response: Response, message: string, parsed?: R
   return new ApiError("failed", message);
 }
 
+/** Why the API refused to delete a person, in words the dialog can show. */
+export function identityDeletionRefusal(status: number, error: unknown): string {
+  if (status === 409 && error === "self_delete_forbidden") return "You cannot delete yourself.";
+  if (status === 409 && error === "last_owner") return "The last Owner cannot be deleted.";
+  if (status === 403) return "Your role cannot delete this user.";
+  return "This user could not be deleted.";
+}
+
 export type SpawnpointSession = ActiveSession | VisitorSession;
 
 export type AccessCandidate = Readonly<{
@@ -227,7 +235,8 @@ export type ConsoleEntry = Readonly<{
   id: string;
   at: string;
   identityId: string;
-  displayName: string;
+  /** Null once the person who sent it was deleted. */
+  displayName: string | null;
   /** The MCP client that sent the command for the person; absent or null from the panel. */
   agent?: string | null;
   worldId: string;
@@ -271,6 +280,8 @@ export type SpawnpointApi = Readonly<{
   loadAccessIdentities(): Promise<AccessIdentity[]>;
   loadAccessRoles(): Promise<AccessRole[]>;
   updateIdentityRole(identityId: string, roleId: string): Promise<void>;
+  /** Removes the person and everything that names them; a person already gone succeeds. */
+  deleteIdentity(identityId: string): Promise<void>;
 
   loadControlPlane(): Promise<ControlPlaneSnapshot>;
   /** Subscribe to invalidations only; the caller still reloads its permission-filtered snapshot. */

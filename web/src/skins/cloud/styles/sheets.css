@@ -1,13 +1,4 @@
-/* Dialog and side panel content (S7): the typed-confirmation cue, switch rows, the invitation count. */
-
-html[data-skin="cloud"] .c-sheet-expect {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--c-ink-2);
-  font-size: var(--c-fs-s);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* Dialog and side panel content (S7): switch rows, the invitation count. */
 
 html[data-skin="cloud"] .c-sheet-switch {
   display: flex;

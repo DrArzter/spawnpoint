@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import type { AccessInvitation } from "../../api/contract";
 import type { Action } from "../../core/actions";
-import type { AccessModel, CandidateRow, ConfirmationModel, InvitationsModel, MemberRow, NotificationsModel, RolesModel, UsersModel } from "../../core/models";
+import type { AccessModel, CandidateRow, InvitationsModel, MemberRow, NotificationsModel, RolesModel, UsersModel } from "../../core/models";
 import type { StatusDescriptor } from "../../core/status";
 import { Icon } from "../../icons";
 import { describePermission } from "../../lib/permissions";
@@ -20,6 +20,7 @@ import { Grid } from "./ui/Grid";
 import { Indicator } from "./ui/Indicator";
 import { ListColumn, ListItemIcon, ListItemPerson, type ListGroup } from "./ui/ListColumn";
 import { Notice } from "./ui/Notice";
+import { Overflow } from "./ui/Overflow";
 import { PageHeader, type Crumb } from "./ui/PageHeader";
 import { Person } from "./ui/Person";
 import { SidePanel } from "./ui/SidePanel";
@@ -34,10 +35,6 @@ import { TrackList, TrackTitle } from "./ui/TrackList";
  * invitation the pane shows is the skin's own, kept in the address after the
  * tab (#/access/users/people/<id>), which core's router ignores.
  */
-
-// M3 (slice C) adds these; until then the model gives neither and nothing is drawn.
-type Removable = MemberRow & Readonly<{ remove?: Action | null }>;
-type WithDeletion = UsersModel & Readonly<{ deletion?: ConfirmationModel | null }>;
 
 type Group = "requests" | "people" | "invitations";
 type Selection = Readonly<{ group: Group; id: string | null }> | null;
@@ -96,13 +93,12 @@ export function Access({ model }: Readonly<{ model: AccessModel }>) {
   else if (invitation) pane = <InvitationPane row={invitation} />;
   else pane = <UsersPane model={users} />;
 
-  const deletion = (users as WithDeletion).deletion ?? null;
   return (
     <>
       {/* Every pane stands alone under 1024px: the Users pane is the page there, and a detail pane returns to it (spec §6.5). */}
       <SplitPage list={<AccessList model={model} selection={detail ? chosen : null} />} selected>{pane}</SplitPage>
       {users.managed && <LinkedAccountsPanel close={users.closeManaged} member={users.managed} />}
-      {deletion && <ConfirmationDialog model={deletion} />}
+      <ConfirmationDialog model={users.deletion} />
     </>
   );
 }
@@ -188,7 +184,7 @@ function UsersPane({ model }: Readonly<{ model: UsersModel }>) {
     { id: "person", header: "Person", kind: "lead", render: (row) => <a href={itemHref("people", row.member.id)}><Person name={row.member.name} /></a> },
     { id: "accounts", header: "Accounts", kind: "wide", render: (row) => firstAccount(row.member) ?? <span className="c-faint">—</span> },
     { id: "role", header: "Role", render: (row) => <RoleSelect disabled={blocked || row.changing} label={`Role for ${row.member.name}`} onChange={row.setRoleId} roles={model.roles} value={row.roleId} /> },
-    { id: "actions", header: "Actions", kind: "act", render: (row) => { const remove = (row as Removable).remove; return <><ActionButton action={row.linkedAccounts} size="sm" />{remove && <ActionButton action={remove} size="sm" />}</>; } },
+    { id: "actions", header: "Actions", kind: "act", render: (row) => <Overflow actions={row.remove ? [row.linkedAccounts, row.remove] : [row.linkedAccounts]} label={`Actions for ${row.member.name}`} size="sm" /> },
   ];
   const showRequests = candidates.status !== "ready" || candidates.value.length > 0;
   return (
@@ -315,14 +311,13 @@ function RequestPane({ row, roles, rolesLoading }: Readonly<{ row: CandidateRow;
 }
 
 function PersonPane({ row, roles, rolesLoading }: Readonly<{ row: MemberRow; roles: readonly Role[]; rolesLoading: boolean }>) {
-  const remove = (row as Removable).remove;
   return (
     <>
       <PageHeader
         actions={<>
           <RoleSelect disabled={rolesLoading || row.changing} label="Role" onChange={row.setRoleId} roles={roles} value={row.roleId} />
           <ActionButton action={row.linkedAccounts} />
-          {remove && <ActionButton action={remove} />}
+          {row.remove && <ActionButton action={row.remove} />}
         </>}
         title={row.member.name}
         trail={[ACCESS, { label: "People", href: groupHref("people") }]}

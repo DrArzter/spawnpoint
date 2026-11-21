@@ -80,11 +80,12 @@ test("profile: the password form is a side panel with its fields and Actions", (
   assert.match(markup, /role="alert"[^>]*>.*The passwords differ\./);
 });
 
-test("confirmation: the typed field is named by the model and cued with the expected value", () => {
+test("confirmation: the typed field is named by the model and its placeholder is the expected value", () => {
   const model: ConfirmationModel = { title: "Delete Rostik?", description: "Deletes every backup.", destructive: true, confirm: spy("confirm", "Delete", { disabled: true }), cancel: spy("cancel", "Cancel"), releaseChoice: null, typedConfirmation: { label: "World ID", expected: world.id, value: "", set: noop } };
   const markup = renderToStaticMarkup(createElement(ConfirmationDialog, { model }));
   assert.match(markup, /<label[^>]*>World ID<\/label>/);
-  assert.match(markup, new RegExp(`Type <span class="c-mono">${world.id}</span> to confirm`));
+  assert.match(markup, new RegExp(`placeholder="${world.id}"`));
+  assert.doesNotMatch(markup, /to confirm/, "no second line restates the field");
   assert.match(markup, /class="c-btn c-btn-danger"/);
 });
 

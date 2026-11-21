@@ -38,10 +38,11 @@ export function ConfirmationDialog({ model }: Readonly<{ model: ConfirmationMode
         </Field>
       )}
       {typedConfirmation && (
-        <Field end={<span className="c-sheet-expect">Type <span className="c-mono">{typedConfirmation.expected}</span> to confirm</span>} label={typedConfirmation.label}>
-          <TextInput autoComplete="off" mono onChange={(event) => typedConfirmation.set(event.target.value)} spellCheck={false} value={typedConfirmation.value} />
+        <Field label={typedConfirmation.label}>
+          <TextInput autoComplete="off" mono onChange={(event) => typedConfirmation.set(event.target.value)} placeholder={typedConfirmation.expected} spellCheck={false} value={typedConfirmation.value} />
         </Field>
       )}
+      {model.error && <p className="c-field-error" role="alert">{model.error}</p>}
     </Dialog>
   );
 }

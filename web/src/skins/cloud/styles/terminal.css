@@ -1,0 +1,40 @@
+/* Terminal: the console log as a fixed table that scrolls inside its own region, newest at the bottom. */
+
+/* The log fills the viewport under the top bar, less the card head and the command line (two controls with their insets). */
+html[data-skin="cloud"] .c-terminal {
+  max-height: max(360px, calc(100dvh - var(--c-bar) - 2 * (var(--c-field) + 2 * var(--c-card-y)) - var(--c-gap)));
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+html[data-skin="cloud"] .c-terminal .c-term-time,
+html[data-skin="cloud"] .c-terminal .c-term-who {
+  width: 150px;
+}
+
+html[data-skin="cloud"] .c-terminal .c-term-command {
+  width: 28%;
+}
+
+/* 120px, not the spec's 110px: "Answered" with its icon needs 115px; longer states are cut and keep their title. */
+html[data-skin="cloud"] .c-terminal .c-term-status {
+  width: 120px;
+}
+
+html[data-skin="cloud"] .c-terminal .c-term-output .c-mono {
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-xs);
+}
+
+@media (max-width: 759px) {
+  html[data-skin="cloud"] .c-terminal {
+    max-height: none;
+  }
+
+  html[data-skin="cloud"] .c-terminal .c-term-time,
+  html[data-skin="cloud"] .c-terminal .c-term-who,
+  html[data-skin="cloud"] .c-terminal .c-term-command,
+  html[data-skin="cloud"] .c-terminal .c-term-status {
+    width: auto;
+  }
+}

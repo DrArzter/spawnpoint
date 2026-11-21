@@ -13,16 +13,25 @@ html[data-skin="cloud"] .c-stat-head {
 }
 
 html[data-skin="cloud"] .c-stat-label {
+  flex: none;
   color: var(--c-ink-2);
   font-size: var(--c-fs-s);
   font-weight: 600;
 }
 
+/* The detail's parts wrap to a second line at the end edge, each kept whole, rather than cut the average. */
 html[data-skin="cloud"] .c-stat-detail {
-  overflow: hidden;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0 12px;
+  min-width: 0;
   color: var(--c-ink-3);
   font-size: var(--c-fs-s);
-  text-overflow: ellipsis;
+  text-align: end;
+}
+
+html[data-skin="cloud"] .c-stat-detail > span {
   white-space: nowrap;
 }
 

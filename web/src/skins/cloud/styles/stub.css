@@ -6,12 +6,6 @@ html[data-skin="cloud"] .c-stub-actions {
   gap: 8px;
 }
 
-html[data-skin="cloud"] .c-stub-names {
-  margin: 0 0 12px;
-  padding-left: 18px;
-}
-
-html[data-skin="cloud"] .c-stub-form,
 html[data-skin="cloud"] .c-stub-field {
   display: flex;
   flex-direction: column;

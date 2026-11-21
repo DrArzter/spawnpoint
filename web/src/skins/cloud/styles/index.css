@@ -22,6 +22,8 @@
 @import "./filter.css";
 @import "./tiles.css";
 @import "./stat.css";
+@import "./chart.css";
+@import "./terminal.css";
 @import "./identity.css";
 @import "./dialog.css";
 @import "./panel.css";
@@ -32,4 +34,5 @@
 @import "./worlds.css";
 @import "./releases.css";
 @import "./access.css";
+@import "./world.css";
 @import "./stub.css";

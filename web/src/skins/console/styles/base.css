@@ -1,0 +1,173 @@
+/*
+ * The console skin's page ground: type, focus, the shared keyframes, the page
+ * transition (A1) and the reduced-motion rule (§2). Every selector starts with
+ * the skin's mark, so the other faces never see a rule from here.
+ */
+
+html[data-skin="console"] body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--c-bg);
+  color: var(--c-ink);
+  font: var(--c-fs-body) / 1.45 var(--c-font);
+  font-variant-numeric: tabular-nums;
+  -webkit-text-size-adjust: 100%;
+}
+
+html[data-skin="console"] button,
+html[data-skin="console"] input,
+html[data-skin="console"] select,
+html[data-skin="console"] textarea {
+  font: inherit;
+  color: inherit;
+}
+
+html[data-skin="console"] a {
+  color: var(--c-accent-text);
+  text-decoration: none;
+}
+
+html[data-skin="console"] a:hover {
+  text-decoration: underline;
+}
+
+html[data-skin="console"] :focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+html[data-skin="console"] code,
+html[data-skin="console"] .c-mono {
+  font-family: var(--c-font-mono);
+  font-size: .87em;
+}
+
+html[data-skin="console"] .c-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-spin {
+  animation: c-spin var(--c-loop-spin) linear infinite;
+}
+
+@keyframes c-spin { to { transform: rotate(360deg); } }
+@keyframes c-fade { from { opacity: 0; } }
+@keyframes c-rise { from { opacity: .55; transform: translateY(12px); } }
+@keyframes c-dialog-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+@keyframes c-up { from { opacity: 0; transform: translateY(24px); } }
+@keyframes c-flash-in { from { opacity: 0; transform: translateY(-10px); } }
+@keyframes c-pop { 0% { transform: scale(.9); } 55% { transform: scale(1.06); } 100% { transform: none; } }
+@keyframes c-ring { 0% { box-shadow: 0 0 0 0 currentColor; } 100% { box-shadow: 0 0 0 7px transparent; } }
+@keyframes c-unblur { from { opacity: .25; filter: blur(3px); } }
+@keyframes c-indet { from { transform: translateX(-100%); } to { transform: translateX(330%); } }
+@keyframes c-reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes c-shimmer { to { background-position: -200% 0; } }
+@keyframes c-shake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+@keyframes c-page-out { to { opacity: 0; transform: translateX(-32px) scale(.985); } }
+@keyframes c-page-in { from { transform: translateX(56px); } }
+@keyframes c-bump { 40% { color: var(--c-accent-text); transform: translateY(-2px); } }
+@keyframes c-row-in { from { opacity: 0; transform: translateY(-8px); background-color: var(--c-accent-soft); } }
+@keyframes c-pane-out { to { opacity: 0; transform: translateY(-16px); } }
+@keyframes c-pane-in { from { transform: translateY(32px); } }
+
+/* A8: a count that changed lifts once in the accent while it counts. */
+html[data-skin="console"] .c-tick {
+  display: inline-block;
+}
+
+html[data-skin="console"] .c-tick-moving {
+  animation: c-bump var(--c-d-tick) var(--c-ease);
+}
+
+/* A9: a row that was not there before arrives from above on an accent wash. */
+html[data-skin="console"] .c-arrived,
+html[data-skin="console"] .c-arrived > td {
+  animation: c-row-in var(--c-d3) var(--c-ease);
+}
+
+/* A1: the page area slides as a solid sheet; the bars are outside it, and the
+   notifications float above it with no snapshot of their own underneath. */
+html[data-skin="console"]::view-transition-group(c-page) {
+  animation-duration: var(--c-d3);
+  animation-timing-function: var(--c-ease);
+}
+
+html[data-skin="console"]::view-transition-old(c-page) {
+  animation: var(--c-d3) var(--c-ease) both c-page-out;
+}
+
+html[data-skin="console"]::view-transition-new(c-page) {
+  animation: var(--c-d3) var(--c-ease) both c-page-in;
+  box-shadow: -24px 0 48px -24px var(--c-page-edge);
+}
+
+/* A2: during a pane switch only the pane moves; the page area keeps still. */
+html[data-skin="console"][data-transition="pane"] .c-main {
+  view-transition-name: none;
+}
+
+html[data-skin="console"][data-transition="pane"] [data-pane] {
+  background: var(--c-bg);
+  view-transition-name: c-pane;
+}
+
+html[data-skin="console"]::view-transition-group(c-pane) {
+  animation-duration: var(--c-d3);
+  animation-timing-function: var(--c-ease);
+}
+
+html[data-skin="console"]::view-transition-old(c-pane) {
+  animation: var(--c-d3) var(--c-ease) both c-pane-out;
+}
+
+html[data-skin="console"]::view-transition-new(c-pane) {
+  animation: var(--c-d3) var(--c-ease) both c-pane-in;
+}
+
+html[data-skin="console"]::view-transition-old(c-page),
+html[data-skin="console"]::view-transition-new(c-page) {
+  height: auto;
+  width: 100%;
+  object-fit: none;
+  object-position: 0 0;
+}
+
+html[data-skin="console"]::view-transition-old(root),
+html[data-skin="console"]::view-transition-new(root),
+html[data-skin="console"]::view-transition-group(c-flash),
+html[data-skin="console"]::view-transition-group(c-toasts),
+html[data-skin="console"]::view-transition-new(c-flash),
+html[data-skin="console"]::view-transition-new(c-toasts) {
+  animation: none;
+}
+
+html[data-skin="console"]::view-transition-old(c-flash),
+html[data-skin="console"]::view-transition-old(c-toasts) {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin="console"] *,
+  html[data-skin="console"] *::before,
+  html[data-skin="console"] *::after {
+    animation-duration: var(--c-instant) !important;
+    animation-delay: var(--c-instant) !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: var(--c-instant) !important;
+  }
+
+  html[data-skin="console"] .c-spin {
+    animation: c-spin var(--c-loop-spin-reduced) linear infinite !important;
+  }
+
+  html[data-skin="console"]::view-transition-group(*),
+  html[data-skin="console"]::view-transition-old(*),
+  html[data-skin="console"]::view-transition-new(*) {
+    animation: none !important;
+  }
+}

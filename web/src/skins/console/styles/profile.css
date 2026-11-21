@@ -1,0 +1,50 @@
+/* Profile (S7): identity ID beside the name, sign-in method rows, the Appearance settings. */
+
+html[data-skin="console"] .c-profile-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: var(--c-fs-s);
+}
+
+html[data-skin="console"] .c-profile-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+html[data-skin="console"] .c-profile-method {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--c-ink);
+  font-weight: 800;
+}
+
+html[data-skin="console"] .c-profile-method svg {
+  flex: none;
+  color: var(--c-ink-2);
+}
+
+html[data-skin="console"] .c-profile-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+html[data-skin="console"] .c-profile-account-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-profile-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}

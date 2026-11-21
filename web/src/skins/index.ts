@@ -1,11 +1,10 @@
-import { cloudSkin } from "./cloud";
 import { consoleSkin } from "./console";
 import { CHOOSABLE_SKIN_IDS, DEFAULT_SKIN, SKIN_IDS, type Skin, type SkinId } from "./skin";
 import { terminalSkin } from "./terminal";
 
 export type { Skin, SkinId } from "./skin";
 
-const skins: Readonly<Record<SkinId, Skin>> = { console: consoleSkin, terminal: terminalSkin, cloud: cloudSkin };
+const skins: Readonly<Record<SkinId, Skin>> = { console: consoleSkin, terminal: terminalSkin };
 
 /** Every face the console can wear, each held to the skin contract. */
 export const SKINS: readonly Skin[] = SKIN_IDS.map((id) => skins[id]);
@@ -52,7 +51,7 @@ export function currentSkinId(): SkinId {
  */
 export function wearOnDocument(id: SkinId, worn: boolean): void {
   const root = document.documentElement;
-  if (worn && id !== DEFAULT_SKIN) root.dataset.skin = id;
+  if (worn) root.dataset.skin = id;
   else delete root.dataset.skin;
 }
 

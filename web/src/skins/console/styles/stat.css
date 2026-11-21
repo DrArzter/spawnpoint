@@ -1,0 +1,52 @@
+/* StatCard shell: label and detail on one row, the value under them. */
+
+html[data-skin="console"] .c-stat {
+  gap: 8px;
+  padding: var(--c-card-y) var(--c-card-x);
+}
+
+/* A detail that does not fit beside the label moves under it, at the end edge. */
+html[data-skin="console"] .c-stat-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 12px;
+}
+
+html[data-skin="console"] .c-stat-label {
+  flex: none;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  font-weight: 600;
+}
+
+/* The detail's parts wrap to a second line at the end edge, each kept whole, rather than cut the average. */
+html[data-skin="console"] .c-stat-detail {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0 12px;
+  margin-left: auto;
+  color: var(--c-ink-3);
+  font-size: var(--c-fs-s);
+  text-align: end;
+}
+
+html[data-skin="console"] .c-stat-detail > span {
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-stat-value {
+  font-size: var(--c-fs-stat);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.1;
+}
+
+html[data-skin="console"] .c-stat-unit {
+  margin-left: 4px;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-body);
+  font-weight: 600;
+}

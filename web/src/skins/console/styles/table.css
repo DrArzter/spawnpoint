@@ -1,0 +1,275 @@
+/*
+ * Table: one native table per list; columns drop by kind; records when narrow.
+ * The steps read the table's own width, not the viewport's, because a split
+ * page gives a table much less than the window: 960px ≈ a 1100px window with
+ * the rail, 760px ≈ an 880px one. `optional` also drops under 1040px.
+ */
+
+html[data-skin="console"] .c-table-wrap {
+  position: relative;
+  max-width: 100%;
+  overflow-x: auto;
+  container: c-table / inline-size;
+}
+
+html[data-skin="console"] .c-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--c-fs-m);
+}
+
+html[data-skin="console"] .c-table th {
+  height: var(--c-row-h);
+  padding: 0 12px;
+  border-bottom: 1px solid var(--c-line);
+  background: var(--c-surface-2);
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-xs);
+  font-weight: 800;
+  text-align: start;
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-table td {
+  height: var(--c-row);
+  padding: 0 12px;
+  border-bottom: 1px solid var(--c-line);
+  vertical-align: middle;
+  white-space: nowrap;
+  transition: background var(--c-d1);
+}
+
+html[data-skin="console"] .c-table th:first-child,
+html[data-skin="console"] .c-table td:first-child {
+  padding-left: var(--c-card-x);
+}
+
+html[data-skin="console"] .c-table th:last-child,
+html[data-skin="console"] .c-table td:last-child {
+  padding-right: var(--c-card-x);
+}
+
+html[data-skin="console"] .c-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+html[data-skin="console"] .c-table tbody tr:hover td {
+  background: var(--c-surface-2);
+}
+
+html[data-skin="console"] .c-table tr.c-row-selected td {
+  background: var(--c-accent-soft);
+}
+
+html[data-skin="console"] .c-table .c-table-empty td,
+html[data-skin="console"] .c-table tbody .c-table-empty:hover td {
+  height: auto;
+  padding: 0;
+  background: none;
+  white-space: normal;
+}
+
+html[data-skin="console"] .c-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+html[data-skin="console"] .c-sort:hover {
+  color: var(--c-ink);
+}
+
+html[data-skin="console"] .c-sort > svg {
+  opacity: .4;
+}
+
+html[data-skin="console"] .c-table th[aria-sort] .c-sort > svg {
+  color: var(--c-accent-text);
+  opacity: 1;
+}
+
+html[data-skin="console"] .c-table .c-col-num {
+  text-align: end;
+}
+
+html[data-skin="console"] .c-table .c-col-lead {
+  max-width: 32ch;
+  overflow: hidden;
+  font-weight: 800;
+  text-overflow: ellipsis;
+}
+
+html[data-skin="console"] .c-table .c-col-lead a {
+  color: var(--c-ink);
+}
+
+html[data-skin="console"] .c-table .c-col-lead a:hover {
+  color: var(--c-accent-text);
+}
+
+html[data-skin="console"] .c-table .c-col-check {
+  width: 44px;
+  padding-right: 0;
+}
+
+html[data-skin="console"] .c-table .c-col-act {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  width: 1%;
+  background: var(--c-surface);
+  /* A sticky cell loses its collapsed border in Chromium; the shadow draws the row rule. */
+  box-shadow: inset 0 -1px 0 var(--c-line);
+  text-align: end;
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-table tbody tr:last-child td.c-col-act {
+  box-shadow: none;
+}
+
+html[data-skin="console"] .c-table th.c-col-act {
+  background: var(--c-surface-2);
+}
+
+html[data-skin="console"] .c-table td.c-col-act > * + * {
+  margin-left: 6px;
+}
+
+html[data-skin="console"] .c-table-fixed {
+  table-layout: fixed;
+}
+
+html[data-skin="console"] .c-table-fixed td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (min-width: 1200px) and (max-width: 1439px) {
+  html[data-skin="console"] .c-table-split .c-col-optional {
+    display: none;
+  }
+}
+
+@container c-table (max-width: 1039px) {
+  html[data-skin="console"] .c-table .c-col-optional {
+    display: none;
+  }
+}
+
+@container c-table (max-width: 959px) {
+  html[data-skin="console"] .c-table .c-col-wide {
+    display: none;
+  }
+
+  html[data-skin="console"] .c-table th,
+  html[data-skin="console"] .c-table td {
+    padding: 0 10px;
+  }
+}
+
+@container c-table (max-width: 759px) {
+  html[data-skin="console"] .c-table:not(.c-table-matrix) thead {
+    display: none;
+  }
+
+  html[data-skin="console"] .c-table:not(.c-table-matrix),
+  html[data-skin="console"] .c-table:not(.c-table-matrix) tbody {
+    display: block;
+  }
+
+  html[data-skin="console"] .c-table:not(.c-table-matrix) tr {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-auto-flow: row dense;
+    gap: 2px 14px;
+    padding: 12px var(--c-card-x);
+    border-bottom: 1px solid var(--c-line);
+  }
+
+  html[data-skin="console"] .c-table:not(.c-table-matrix) tr:last-child {
+    border-bottom: 0;
+  }
+
+  html[data-skin="console"] .c-table:not(.c-table-matrix) td {
+    display: block;
+    height: auto;
+    min-width: 0;
+    padding: 4px 0;
+    border: 0;
+    white-space: normal;
+  }
+
+  html[data-skin="console"] .c-table:not(.c-table-matrix) td[data-label]::before {
+    display: block;
+    color: var(--c-ink-3);
+    font-size: var(--c-fs-xs);
+    font-weight: 600;
+    content: attr(data-label);
+  }
+
+  html[data-skin="console"] .c-table:not(.c-table-matrix) .c-col-lead {
+    grid-column: 1 / -1;
+    max-width: none;
+    font-size: 16px;
+  }
+
+  html[data-skin="console"] .c-table:not(.c-table-matrix) .c-col-lead a::after {
+    position: absolute;
+    inset: 0;
+    content: "";
+  }
+
+  html[data-skin="console"] .c-table:not(.c-table-matrix) .c-col-wide {
+    display: block;
+    grid-column: 1 / -1;
+  }
+
+  html[data-skin="console"] .c-table:not(.c-table-matrix) .c-col-num {
+    text-align: start;
+  }
+
+  html[data-skin="console"] .c-table:not(.c-table-matrix) .c-col-act {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    gap: 8px;
+    width: auto;
+    background: none;
+    box-shadow: none;
+  }
+
+  html[data-skin="console"] .c-table:not(.c-table-matrix) td.c-col-act > * + * {
+    margin-left: 0;
+  }
+
+  html[data-skin="console"] .c-table:not(.c-table-matrix) tr.c-row-selected {
+    background: var(--c-accent-soft);
+  }
+
+  html[data-skin="console"] .c-table:not(.c-table-matrix) tbody tr:hover td,
+  html[data-skin="console"] .c-table:not(.c-table-matrix) tr.c-row-selected td {
+    background: none;
+  }
+
+  html[data-skin="console"] .c-table-matrix {
+    font-size: var(--c-fs-s);
+  }
+
+  html[data-skin="console"] .c-table-matrix th,
+  html[data-skin="console"] .c-table-matrix td {
+    height: 44px;
+    padding: 0 6px;
+    white-space: normal;
+  }
+}

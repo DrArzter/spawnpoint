@@ -1,0 +1,83 @@
+/* Card: title and count at the start, actions at the end; content stays at the top (R11). */
+
+html[data-skin="console"] .c-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--c-line);
+  border-radius: var(--c-r);
+  background: var(--c-surface);
+  box-shadow: var(--c-shadow);
+}
+
+html[data-skin="console"] .c-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 60px;
+  padding: 12px var(--c-card-x);
+  border-bottom: 1px solid var(--c-line);
+}
+
+html[data-skin="console"] .c-card-head h2 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--c-fs-h2);
+  font-weight: 800;
+  letter-spacing: -.005em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-card-head h2 .c-count {
+  margin-left: 6px;
+  font-weight: 600;
+}
+
+html[data-skin="console"] .c-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+html[data-skin="console"] .c-card-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+html[data-skin="console"] .c-card-body-pad {
+  padding: var(--c-card-y) var(--c-card-x);
+}
+
+html[data-skin="console"] .c-card-body-flush {
+  padding: 0;
+}
+
+html[data-skin="console"] .c-card-body-kv {
+  padding: 2px 0;
+}
+
+@media (max-width: 1023px) {
+  html[data-skin="console"] .c-card-head {
+    flex-wrap: wrap;
+  }
+}
+
+html[data-skin="console"] .c-card-meta {
+  flex: none;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-card-meta::before {
+  margin-right: 8px;
+  color: var(--c-ink-3);
+  content: "·";
+}

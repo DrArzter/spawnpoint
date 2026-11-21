@@ -15,7 +15,7 @@ page, state and width. It uses raw Chrome DevTools Protocol (`cdp.mjs`) and has 
 
 | Input | Values |
 |---|---|
-| Skins | `cloud` and `terminal` (set `SKIN` for one) |
+| Skins | `console` and `terminal` (set `SKIN` for one) |
 | Page widths | 360, 599/600, 839/840, 959/960, 1199/1200, 1440 and 2560: both sides of every step in `web/DESIGN.md` |
 | Stride | every 40px from 360 to 1680 on each page, light theme, resized without a reload |
 | States | every entry in `states.mjs` at 360, 599, 600, 1440 and 2560 |
@@ -54,8 +54,8 @@ layer. The probe compares atoms only within one layer, and skips a pair that ano
 page under it inert, so a state measures only its surface. `data-layer="glyph"` marks decoration that is laid over its
 control on purpose (a select caret, the tab ink, a count badge); nothing else is exempt, `aria-hidden` marks included.
 
-**Markers.** The cloud primitives say what they promise with `data-layout`, `data-rail`, `data-col`, `data-status`,
-`data-scope` and `data-layer`, and `web/test/cloud-markers.test.ts` holds them to it. The terminal skin has no markers;
+**Markers.** The console primitives say what they promise with `data-layout`, `data-rail`, `data-col`, `data-status`,
+`data-scope` and `data-layer`, and `web/test/console-markers.test.ts` holds them to it. The terminal skin has no markers;
 `LAYOUT` at the top of `audit.mjs` lists its selectors. So the terminal gets the overlap, width, menu and layout checks
 (one line, pairs, rails, centred), but not the owner-rule checks, which read markers only. A new primitive that
 promises a layout emits the marker.
@@ -72,7 +72,7 @@ npm run build && npx vite preview --host 127.0.0.1 --port 4173   # in one termin
 node tools/ui-audit/audit.mjs --self-test                       # the fixtures: every miss caught
 npm run audit:ui:gate -- http://127.0.0.1:4173                  # the blocking gate
 npm run audit:ui -- http://127.0.0.1:4173                       # the gate and the advisory report
-SKIN=cloud AUDIT_ROUTES=world AUDIT_WIDTHS=360,1440 AUDIT_STRIDE=0 AUDIT_STATES= npm run audit:ui:gate -- http://127.0.0.1:4173
+SKIN=console AUDIT_ROUTES=world AUDIT_WIDTHS=360,1440 AUDIT_STRIDE=0 AUDIT_STATES= npm run audit:ui:gate -- http://127.0.0.1:4173
 ```
 
 `AUDIT_ROUTES`, `AUDIT_WIDTHS` and `AUDIT_STATES` narrow a run while you fix; `AUDIT_STRIDE=0` drops the stride;

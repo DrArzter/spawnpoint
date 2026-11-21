@@ -1,239 +1,208 @@
-import { useEffect, useState } from "react";
+import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, WorldPlacement, WorldSettingsModel } from "../../core/models";
+import type { World } from "../../model";
+import { routeHash } from "../../routing";
+import { ActionButton } from "./ui/ActionButton";
+import { Ago } from "./ui/Ago";
+import { Card } from "./ui/Card";
+import { Chip } from "./ui/Chip";
+import { Dialog } from "./ui/Dialog";
+import { Empty, LoadError } from "./ui/Empty";
+import { Checkbox, Field, NumberInput, RadioCards, Select, TextInput, Toggle, type RadioCardOption, type SelectOption } from "./ui/Fields";
+import { Indicator } from "./ui/Indicator";
+import { Notice } from "./ui/Notice";
+import { Person } from "./ui/Person";
+import { Segmented } from "./ui/Segmented";
+import { SidePanel } from "./ui/SidePanel";
+import { SkeletonRows } from "./ui/Skeleton";
+import { Status } from "./ui/Status";
+import { TrackList, TrackTitle, type Track } from "./ui/TrackList";
 
-import { Avatar } from "../../components/Avatar";
-import { Chip } from "../../components/ui/Chip";
-import { Dialog, Sheet } from "../../components/ui/Dialog";
-import { SearchField, SelectField, Switch, TextField } from "../../components/ui/Fields";
-import { NoMatches } from "../../components/ui/Filter";
-import { SkeletonRows } from "../../components/ui/Skeleton";
-import { Status } from "../../components/ui/Status";
-import { Banner, EmptyState } from "../../components/ui/Surfaces";
-import { Timestamp } from "../../components/ui/Timestamp";
-import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, ScopeModel, WorldSettingsModel } from "../../core/models";
-import { plural } from "../../lib/format";
-import { ActionButton } from "./actions";
-
-// The scope picker: choosing a game re-scopes the whole console.
-export function ScopeDialog({ model }: Readonly<{ model: ScopeModel }>) {
-  const [query, setQuery] = useState("");
-  useEffect(() => { if (model.open) setQuery(""); }, [model.open]);
-  const needle = query.trim().toLocaleLowerCase();
-  const visible = model.games.filter((game) => needle === "" || game.displayName.toLocaleLowerCase().includes(needle) || game.code.toLocaleLowerCase().includes(needle) || game.id.includes(needle));
-  return (
-    <Dialog actions={<ActionButton action={model.close} variant="text" />} className="scope-dialog" onClose={model.close.run} open={model.open} title="Select a game">
-      <SearchField autoComplete="off" className="scope-search" data-autofocus label="Search games" onChange={(event) => setQuery(event.target.value)} placeholder="Search games" value={query} />
-      <div aria-label="Games" className="scope-list" role="listbox">
-        {visible.map((game) => {
-          const status = model.statusOf(game);
-          return (
-            <button aria-selected={game.id === model.game?.id} className="scope-row" data-action="scope.select" key={game.id} onClick={() => model.select(game.id)} role="option" type="button">
-              <span aria-hidden="true" className="scope-code">{game.code}</span>
-              <span>
-                <strong>{game.displayName}</strong>
-                <small>{plural(game.worlds.length, "world")} · {plural(game.presets.length, "preset")}</small>
-              </span>
-              <Status kind={status.kind} label={status.label} />
-            </button>
-          );
-        })}
-      </div>
-      {visible.length === 0 && <NoMatches filter={{ query, clear: () => setQuery("") }} icon="sports_esports" noun="games" />}
-    </Dialog>
-  );
-}
+// Dialogs and side panels (spec §6.7). The scope dialog lives in Scope.tsx.
 
 export function ConfirmationDialog({ model }: Readonly<{ model: ConfirmationModel | null }>) {
-  if (model === null) return <Dialog onClose={() => undefined} open={false} title="" />;
+  if (model === null) return null;
+  const { releaseChoice, typedConfirmation } = model;
   return (
-    <Dialog
-      actions={<>
-        <ActionButton action={model.cancel} variant="text" />
-        <ActionButton action={model.confirm} variant="filled" />
-      </>}
-      dismissOnBackdrop={false}
-      onClose={model.cancel.run}
-      open
-      title={model.title}
-    >
-      <p>{model.description}</p>
-      {model.releaseChoice && (
-        <SelectField label="Release for the new wipe" onChange={(event) => model.releaseChoice?.set(event.target.value)} value={model.releaseChoice.value}>
-          <option disabled value="">Choose a release</option>
-          {model.releaseChoice.options.map((option) => <option key={option.version} value={option.version}>{option.version}{option.latest ? " (latest)" : ""}</option>)}
-        </SelectField>
+    <Dialog actions={<ActionButton action={model.confirm} variant={model.destructive ? "danger" : "primary"} />} cancel={model.cancel} title={model.title}>
+      {model.description && <p className="c-line">{model.description}</p>}
+      {releaseChoice && (
+        <Field label="Release">
+          <Select
+            onChange={(event) => releaseChoice.set(event.target.value)}
+            options={[
+              ...(releaseChoice.value === "" ? [{ value: "", label: "Choose a release", disabled: true }] : []),
+              ...releaseChoice.options.map((option) => ({ value: option.version, label: option.latest ? `${option.version} · latest` : option.version })),
+            ]}
+            value={releaseChoice.value}
+          />
+        </Field>
       )}
-      {model.typedConfirmation && <TextField autoComplete="off" data-autofocus label={model.typedConfirmation.label} mono onChange={(event) => model.typedConfirmation?.set(event.target.value)} placeholder={model.typedConfirmation.expected} value={model.typedConfirmation.value} />}
-      {model.error && <p className="boot-error" role="alert">{model.error}</p>}
+      {typedConfirmation && (
+        <Field label={typedConfirmation.label}>
+          <TextInput autoComplete="off" mono onChange={(event) => typedConfirmation.set(event.target.value)} placeholder={typedConfirmation.expected} spellCheck={false} value={typedConfirmation.value} />
+        </Field>
+      )}
+      {model.error && <p className="c-field-error" role="alert">{model.error}</p>}
     </Dialog>
   );
 }
 
 function ConnectionFields({ model }: Readonly<{ model: ConnectionFieldsModel }>) {
+  const fleet = model.placement === "fleet";
+  const hosting: readonly RadioCardOption<WorldPlacement>[] = [
+    { value: "configured", label: "Persistent", icon: "dns" },
+    { value: "fleet", label: "Fleet", icon: "bolt", disabled: !model.fleetAvailable, hint: "Fleet hosting is off in this deployment" },
+  ];
+  // A persistent host joins ZeroTier only; a fleet host is public only.
+  const connection: readonly RadioCardOption<World["connectivity"]>[] = [
+    { value: "zerotier", label: "ZeroTier", icon: "hub", disabled: fleet, hint: "Fleet hosts do not join ZeroTier" },
+    { value: "raw", label: "Public IP", icon: "public", disabled: !fleet, hint: "Persistent hosts connect through ZeroTier" },
+    ...(model.dnsAvailable ? [{ value: "route53" as const, label: "DNS", icon: "language" as const, disabled: !fleet, hint: "Persistent hosts connect through ZeroTier" }] : []),
+  ];
   return <>
-    <SelectField label="Hosting" onChange={(event) => model.setPlacement(event.target.value as "configured" | "fleet")} value={model.placement}>
-      <option value="configured">Persistent host · ZeroTier</option>
-      <option disabled={!model.fleetAvailable} value="fleet">On-demand fleet · public connection{model.fleetAvailable ? "" : " (not configured)"}</option>
-    </SelectField>
-    {model.placement === "fleet" && <SelectField hint="Fleet machines are disposable and never join ZeroTier." label="Connection" onChange={(event) => model.setConnectivity(event.target.value as "raw" | "route53")} value={model.connectivity}>
-      <option value="raw">Public IP and game port</option>
-      {model.dnsAvailable && <option value="route53">Public DNS</option>}
-    </SelectField>}
-    {model.placement === "fleet" && <p className="secondary">The game port is public. Set the game's password or allowlist yourself before sharing its address.</p>}
+    <RadioCards legend="Hosting" name="hosting" onChange={model.setPlacement} options={hosting} value={model.placement} />
+    <RadioCards legend="Connection" name="connection" onChange={model.setConnectivity} options={connection} value={model.connectivity} />
+    {model.connectivity !== "zerotier" && <Notice detail="tooltip" notice={{ id: "public-port", tone: "warning", title: "The game port is public.", description: "Set the game's password or allowlist before you share its address." }} />}
   </>;
 }
 
 export function CreateWorldSheet({ model }: Readonly<{ model: CreateWorldModel }>) {
-  const readyPresets = model.presets.filter((preset) => preset.releases.length > 0);
+  const ready = model.presets.some((preset) => preset.releases.length > 0);
+  const presets: readonly SelectOption[] = model.presets.map((preset) => ({ value: preset.id, label: preset.releases.length > 0 ? preset.displayName : `${preset.displayName} · ${preset.buildStatus}`, disabled: preset.releases.length === 0 }));
+  const releases: readonly SelectOption[] = [
+    ...(model.release === "" ? [{ value: "", label: "Choose a release", disabled: true }] : []),
+    ...[...(model.preset?.releases ?? [])].reverse().map((version) => ({ value: version, label: version === model.preset?.latestRelease ? `${version} · latest` : version })),
+  ];
+  const releasesHref = routeHash({ page: "releases", accessTab: "users", gameId: model.game.id, worldId: null });
   return (
-    <Sheet
-      footer={<>
-        <p>{model.preset ? `${model.preset.displayName} · ${plural(model.preset.releases.length, "release")}` : "Choose a preset"}</p>
-        <ActionButton action={model.submit} variant="filled" />
-      </>}
-      closeActionId={model.cancel.id}
-      onClose={model.cancel.run}
-      open
-      title="Create world"
-    >
-      <form className="page" onSubmit={(event) => { event.preventDefault(); model.submit.run(); }}>
-        <SelectField hint={readyPresets.length === 0 ? "No preset of this game has a ready release." : undefined} label="Preset" onChange={(event) => model.setPresetId(event.target.value)} value={model.presetId}>
-          {model.presets.map((item) => <option disabled={item.releases.length === 0} key={item.id} value={item.id}>{item.displayName}{item.releases.length === 0 ? ` (${item.buildStatus})` : ""}</option>)}
-        </SelectField>
-        <TextField autoComplete="off" data-autofocus hint="1 to 80 characters. Shown in the worlds list and in Telegram." label="Name" maxLength={80} onChange={(event) => model.setName(event.target.value)} placeholder="For example, Rail world" value={model.name} />
-        <SelectField disabled={!model.preset} label="Release" onChange={(event) => model.setRelease(event.target.value)} value={model.release}>
-          <option disabled value="">Choose a release</option>
-          {model.preset && [...model.preset.releases].reverse().map((version) => <option key={version} value={version}>{version}{version === model.preset?.latestRelease ? " (latest)" : ""}</option>)}
-        </SelectField>
-        <ConnectionFields model={model.connection} />
-      </form>
-    </Sheet>
+    <SidePanel actions={<ActionButton action={model.submit} variant="primary" />} cancel={model.cancel} title="Create world">
+      <Field label="Name">
+        <TextInput autoComplete="off" maxLength={80} onChange={(event) => model.setName(event.target.value)} value={model.name} />
+      </Field>
+      {ready
+        ? (
+          <Field label="Preset">
+            <Select onChange={(event) => model.setPresetId(event.target.value)} options={presets} value={model.presetId} />
+          </Field>
+        )
+        : (
+          <Field end={<a href={releasesHref}>Releases</a>} label="Preset">
+            <Select disabled options={[{ value: "", label: "No ready preset" }]} value="" />
+          </Field>
+        )}
+      {ready && (
+        <Field label="Release">
+          <Select disabled={!model.preset} onChange={(event) => model.setRelease(event.target.value)} options={releases} value={model.release} />
+        </Field>
+      )}
+      <ConnectionFields model={model.connection} />
+    </SidePanel>
   );
 }
 
 export function WorldSettingsSheet({ model }: Readonly<{ model: WorldSettingsModel }>) {
   return (
-    <Sheet
-      footer={<><ActionButton action={model.cancel} variant="text" /><ActionButton action={model.save} variant="filled" /></>}
-      onClose={model.cancel.run}
-      open
-      title={`Hosting · ${model.game.displayName}`}
-    >
-      {!model.stopped && <p className="secondary">Stop this world's session before changing hosting.</p>}
+    <SidePanel actions={<ActionButton action={model.save} variant="primary" />} cancel={model.cancel} title="Hosting & connection">
       <ConnectionFields model={model.connection} />
-    </Sheet>
-  );
-}
-
-// A world's game settings (ADR-0064): each drawn by its kind, saved together.
-export function GameSettingsSheet({ model }: Readonly<{ model: GameSettingsModel }>) {
-  return (
-    <Sheet
-      closeActionId={model.cancel.id}
-      description={`${model.game.displayName} · ${model.world.displayName}`}
-      footer={<><ActionButton action={model.restoreDefaults} variant="text" /><ActionButton action={model.cancel} variant="text" /><ActionButton action={model.save} variant="filled" /></>}
-      onClose={model.cancel.run}
-      open
-      title="Game settings"
-    >
-      <form className="page" onSubmit={(event) => { event.preventDefault(); model.save.run(); }}>
-        {model.running && <p className="secondary">{model.world.displayName} is running. Saved settings apply from its next start.</p>}
-        {model.fields.map((field) => <GameSettingInput field={field} key={field.id} />)}
-      </form>
-    </Sheet>
+    </SidePanel>
   );
 }
 
 function GameSettingInput({ field }: Readonly<{ field: GameSettingField }>) {
   switch (field.kind) {
     case "choice":
-      return <SelectField hint={field.hint} label={field.label} onChange={(event) => field.set(event.target.value)} value={field.value}>
-        {field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </SelectField>;
+      return (
+        <Field hint={field.hint} label={field.label}>
+          <Select onChange={(event) => field.set(event.target.value)} options={field.options} value={field.value} />
+        </Field>
+      );
     case "number":
-      return <TextField error={field.error} hint={field.hint} inputMode="numeric" label={field.label} max={field.max} min={field.min} onChange={(event) => field.set(event.target.value)} type="number" value={field.value} />;
+      return (
+        <Field error={field.error} hint={field.hint} label={field.label}>
+          <NumberInput max={field.max} min={field.min} onChange={(event) => field.set(event.target.value)} value={field.value} />
+        </Field>
+      );
     case "text":
-      return <TextField error={field.error} hint={field.hint} label={field.label} maxLength={field.maxLength} onChange={(event) => field.set(event.target.value)} value={field.value} />;
+      return (
+        <Field error={field.error} hint={field.hint} label={field.label}>
+          <TextInput maxLength={field.maxLength} onChange={(event) => field.set(event.target.value)} value={field.value} />
+        </Field>
+      );
     case "toggle":
-      return <Switch actionId={field.toggle.id} checked={field.checked} disabled={field.toggle.disabled ?? false} label={field.label} note={field.hint} onChange={field.toggle.run} />;
+      return (
+        <div className="c-sheet-switch">
+          <span className="c-field-label" data-tip={field.hint} tabIndex={field.hint ? 0 : undefined}>{field.label}</span>
+          <Toggle action={field.toggle} checked={field.checked} label={field.label} />
+        </div>
+      );
   }
 }
 
-export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>) {
-  const { game, world } = model;
-  const recipients = model.recipients;
-  const history = model.history;
-  const address = world.connectionAddress ? ` · ${world.connectionAddress}` : "";
-  const matches = recipients.status === "ready" ? recipients.value.length : 0;
-  const summary = model.query.trim() ? `${matches} matches` : `${model.reachable} reachable`;
+export function GameSettingsSheet({ model }: Readonly<{ model: GameSettingsModel }>) {
   return (
-    <Sheet
-      description={`${game.displayName} · ${world.displayName}${address}`}
-      footer={<ActionButton action={model.send} variant="filled" />}
-      closeActionId={model.close.id}
-      onClose={model.close.run}
-      open
-      title="Invite players"
+    <SidePanel
+      actions={<ActionButton action={model.save} variant="primary" />}
+      cancel={model.cancel}
+      start={<ActionButton action={model.restoreDefaults} variant="ghost" />}
+      title="Game settings"
     >
-      <fieldset className="audience">
-        <legend>Audience</legend>
-        <label aria-label="Everyone" className="audience-option">
-          <input checked={model.audience === "broadcast"} name="invite-audience" onChange={() => model.setAudience("broadcast")} type="radio" />
-          <strong>Everyone</strong>
-        </label>
-        <label aria-label="Specific people" className="audience-option">
-          <input checked={model.audience === "direct"} name="invite-audience" onChange={() => model.setAudience("direct")} type="radio" />
-          <strong>Specific people</strong>
-        </label>
-      </fieldset>
+      {model.fields.map((field) => <GameSettingInput field={field} key={field.id} />)}
+      {model.running && <p className="c-line">Saved settings apply from its next start.</p>}
+    </SidePanel>
+  );
+}
 
-      {model.audience === "direct" && (
-        <section aria-label="Players" className="recipients">
-          <SearchField autoComplete="off" label="Find a player" onChange={(event) => model.setQuery(event.target.value)} placeholder="Search by display name" value={model.query} />
-          <p className="secondary recipients-summary">
-            {summary}
-            {model.selectedCount > 0 && <ActionButton action={model.clearSelection} size="small" variant="text" />}
-          </p>
-          {recipients.status === "loading" && <SkeletonRows label="Loading approved players" rows={3} />}
-          {recipients.status === "error" && <Banner actions={<ActionButton action={recipients.retry} variant="text" />} title="Players could not be loaded" tone="error" />}
-          {recipients.status === "ready" && recipients.value.length === 0 && !model.query.trim() && <EmptyState description="Approve another player in Access before sending a direct invitation." icon="group" title="No other approved players" />}
-          {recipients.status === "ready" && recipients.value.length === 0 && model.query.trim() && <NoMatches filter={{ query: model.query, clear: () => model.setQuery("") }} icon="group" noun="players" />}
-          {recipients.status === "ready" && recipients.value.length > 0 && (
-            <ul className="recipient-list">
-              {recipients.value.map((recipient) => (
-                <li key={recipient.id}>
-                  <label className={recipient.ready ? "recipient" : "recipient recipient-unavailable"}>
-                    <input checked={recipient.selected} disabled={!recipient.ready} onChange={recipient.toggle} type="checkbox" />
-                    <Avatar name={recipient.displayName} photoUrl={recipient.photoUrl} />
-                    <span><strong>{recipient.displayName}</strong><small>{recipient.delivery}</small></span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
+type Recipient = InvitationModel["recipients"] extends infer L ? L extends { status: "ready"; value: readonly (infer R)[] } ? R : never : never;
+type Sent = InvitationModel["history"] extends infer L ? L extends { status: "ready"; value: readonly (infer R)[] } ? R : never : never;
 
-      <section aria-labelledby="invite-history-title" className="invite-history">
-        <header>
-          <h3 id="invite-history-title">Recent invitations</h3>
-          <ActionButton action={model.refreshHistory} size="small" variant="text" />
-        </header>
-        {history.status === "loading" && <SkeletonRows label="Loading recent invitation results" rows={2} />}
-        {history.status === "error" && <Banner actions={<ActionButton action={history.retry} variant="text" />} title="Delivery history could not be loaded" tone="error" />}
-        {history.status === "ready" && history.value.length === 0 && <EmptyState icon="person_add" title="No invitations yet" />}
-        {history.status === "ready" && history.value.length > 0 && (
-          <ul className="history-list">
-            {history.value.map((item) => (
-              <li key={item.id}>
-                <Status kind={item.status.kind} label={item.status.label} />
-                <span><Chip tone="tonal">{item.audience}</Chip></span>
-                <span className="secondary history-detail">{item.detail}</span>
-                <Timestamp className="secondary" value={item.createdAt} />
-              </li>
-            ))}
-          </ul>
+const recipientTracks: readonly Track<Recipient>[] = [
+  { id: "pick", header: "Select", width: "auto", quietHeader: true, kind: "plain", render: (row) => <Checkbox checked={row.selected} disabled={!row.ready} label={row.displayName} labelHidden onChange={() => row.toggle()} /> },
+  { id: "player", header: "Player", width: "minmax(0, 1fr)", kind: "stack", render: (row) => <Person name={row.displayName} photoUrl={row.photoUrl} /> },
+  { id: "reach", header: "Reach", width: "auto", quietHeader: true, kind: "end", render: (row) => (row.ready ? null : <Indicator status={{ kind: "absent", label: `No reachable channel · ${row.delivery}` }} />) },
+];
+
+const historyTracks: readonly Track<Sent>[] = [
+  { id: "status", header: "Status", width: "auto", compactWidth: "auto", kind: "plain", render: (row) => <Status status={row.status} /> },
+  { id: "detail", header: "Detail", width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle line={<Chip>{row.audience}</Chip>} title={row.detail} /> },
+  { id: "sent", header: "Sent", width: "auto", kind: "end", render: (row) => <Ago at={row.createdAt} /> },
+];
+
+export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>) {
+  const { recipients, history } = model;
+  const searching = model.query.trim() !== "";
+  return (
+    <SidePanel actions={<ActionButton action={model.send} variant="primary" />} cancel={model.close} title={`Invite players to ${model.world.displayName}`}>
+      <Segmented
+        label="Audience"
+        onChange={model.setAudience}
+        options={[{ value: "broadcast", label: "Broadcast" }, { value: "direct", label: "Direct" }]}
+        value={model.audience}
+      />
+      {model.audience === "direct" && <>
+        <Field
+          end={<span className="c-sheet-count"><span className="c-faint">{model.selectedCount} of {model.reachable}</span><ActionButton action={model.clearSelection} size="sm" variant="ghost" /></span>}
+          label="Players"
+        >
+          <TextInput autoComplete="off" onChange={(event) => model.setQuery(event.target.value)} type="search" value={model.query} />
+        </Field>
+        {recipients.status === "loading" && <SkeletonRows columns={2} rows={3} />}
+        {recipients.status === "error" && <LoadError error={recipients.error} kind={recipients.kind} retry={recipients.retry} size="sm" title="Players could not be loaded" verb="list players" />}
+        {recipients.status === "ready" && (
+          <TrackList
+            empty={<Empty icon={searching ? "search" : "group"} size="sm" title={searching ? "No matches" : "No players to invite"} />}
+            header={false}
+            label="Players"
+            rowKey={(row) => row.id}
+            rows={recipients.value}
+            tracks={recipientTracks}
+          />
         )}
-      </section>
-    </Sheet>
+      </>}
+      <Card actions={<ActionButton action={model.refreshHistory} size="sm" />} body="flush" title="History">
+        {history.status === "loading" && <SkeletonRows columns={3} rows={2} />}
+        {history.status === "error" && <LoadError error={history.error} kind={history.kind} retry={history.retry} size="sm" title="History could not be loaded" verb="read invitations" />}
+        {history.status === "ready" && <TrackList empty={<Empty icon="send" size="sm" title="No invitations yet" />} label="History" rowKey={(row) => row.id} rows={history.value} tracks={historyTracks} />}
+      </Card>
+    </SidePanel>
   );
 }

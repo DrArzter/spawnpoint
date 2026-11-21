@@ -13,8 +13,8 @@
 const WORLD = "/?demo&latency=0#/worlds/minecraft/minecraft-rostik-12345678";
 
 export const STATES = [
-  // The cloud top bar names every game at desktop widths; its scope dialog is the phone's.
-  { name: "scope", route: "/?demo&latency=0#/worlds/minecraft", steps: [{ action: "scope.show" }], phoneOnly: ["cloud"] },
+  // The console top bar names every game at desktop widths; its scope dialog is the phone's.
+  { name: "scope", route: "/?demo&latency=0#/worlds/minecraft", steps: [{ action: "scope.show" }], phoneOnly: ["console"] },
   { name: "create-world", route: "/?demo&latency=0#/worlds/minecraft", steps: [{ action: "world.create" }] },
   { name: "world-settings", route: WORLD, steps: [{ action: "world.settings" }] },
   { name: "game-settings", route: WORLD, steps: [{ action: "world.game-settings" }] },
@@ -27,10 +27,10 @@ export const STATES = [
   { name: "delete-user", route: "/?demo&latency=0#/access/users", steps: [{ action: "access.delete" }] },
   { name: "role", route: "/?demo&latency=0#/access/roles", steps: [{ action: "access.role.read" }] },
   // The terminal draws the password form in the page, not on a surface.
-  { name: "password", route: "/?demo&latency=0#/profile", steps: [{ action: "accounts.password.change" }], skins: ["cloud"] },
-  { name: "shortcuts", route: "/?demo&latency=0#/worlds/minecraft", steps: [{ key: "?" }], skins: ["cloud"] },
-  { name: "tooltip", route: WORLD, steps: [{ focus: "[data-tip]" }], skins: ["cloud"] },
-  { name: "toast", route: "/?demo&latency=0#/releases/minecraft", steps: [{ click: "[aria-disabled=true][data-action]" }], skins: ["cloud"] },
+  { name: "password", route: "/?demo&latency=0#/profile", steps: [{ action: "accounts.password.change" }], skins: ["console"] },
+  { name: "shortcuts", route: "/?demo&latency=0#/worlds/minecraft", steps: [{ key: "?" }], skins: ["console"] },
+  { name: "tooltip", route: WORLD, steps: [{ focus: "[data-tip]" }], skins: ["console"] },
+  { name: "toast", route: "/?demo&latency=0#/releases/minecraft", steps: [{ click: "[aria-disabled=true][data-action]" }], skins: ["console"] },
 ];
 
 // Every surface the skins draw, by file and by the function that draws it,
@@ -38,7 +38,7 @@ export const STATES = [
 // skins' sources: each Dialog, SidePanel, Modal and Drawer must sit in a
 // function listed here, with at least as many states as it draws surfaces.
 export const SURFACES = {
-  cloud: {
+  console: {
     "Shell.tsx": { Shell: ["shortcuts"] },
     "Access.tsx": { LinkedAccountsPanel: ["linked-accounts"], RolesPane: ["role"] },
     "Scope.tsx": { ScopeDialog: ["scope"] },

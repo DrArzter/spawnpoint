@@ -1,246 +1,75 @@
-import type { ReactNode } from "react";
+import type { WorldModel } from "../../core/models";
+import type { WorldTab } from "../../model";
+import type { IconName } from "../../icons";
+import { ActionButton } from "./ui/ActionButton";
+import { Notices } from "./ui/Notice";
+import { Overflow } from "./ui/Overflow";
+import { PageHeader } from "./ui/PageHeader";
+import { SplitPage } from "./ui/SplitPage";
+import { Status } from "./ui/Status";
+import { TabPanel, Tabs } from "./ui/Tabs";
+import { BackupsTab } from "./tabs/Backups";
+import { ConsoleTab } from "./tabs/Console";
+import { CARD_ACTIONS, DetailsTab } from "./tabs/Details";
+import { Hero } from "./tabs/Hero";
+import { MetricsTab } from "./tabs/Metrics";
+import { ReleasesTab } from "./tabs/Releases";
+import { Siblings } from "./tabs/Siblings";
+import { WhitelistTab } from "./tabs/Whitelist";
+import { WipesTab } from "./tabs/Wipes";
 
-import type { BackupEntry } from "../../api/contract";
-import { ActionRow } from "../../components/ui/Button";
-import { Chip, ChoiceChip } from "../../components/ui/Chip";
-import { Column, DataTable } from "../../components/ui/DataTable";
-import { FilterBar, NoMatches, useFilter } from "../../components/ui/Filter";
-import { Ellipsis } from "../../components/ui/Ellipsis";
-import { Status } from "../../components/ui/Status";
-import { Banner, Card, DetailItem, DetailsGroup, EmptyState, Ghost, NotConnected, PageHeader } from "../../components/ui/Surfaces";
-import { Tabs } from "../../components/ui/Tabs";
-import { Timestamp } from "../../components/ui/Timestamp";
-import { Tooltip } from "../../components/ui/Tooltip";
-import { action, type Action } from "../../core/actions";
-import type { BackupsModel, Detail, DetailValue, ModRow, ModsModel, ReleaseRow, WorldModel } from "../../core/models";
-import { wipeStatus } from "../../core/worlds";
-import { Icon } from "../../icons";
-import { formatBytes, formatTime, shortDigest } from "../../lib/format";
-import type { Wipe } from "../../model";
-import { useMediaQuery } from "../../shell/hooks";
-import { ActionButton, ActionOverflow } from "./actions";
-import { MetricsPanel } from "./Metrics";
-import { ConsolePanel } from "./Rcon";
-import { WhitelistPanel } from "./Whitelist";
-import { ConnectionAddress, Notices } from "./Worlds";
+const tabIcons: Readonly<Record<WorldTab, IconName>> = {
+  details: "info",
+  wipes: "layers",
+  backups: "cloud_done",
+  releases: "deployed_code",
+  whitelist: "verified_user",
+  console: "terminal",
+  metrics: "monitoring",
+};
 
+/**
+ * One world: the game's worlds in the list column (≥ 1024px), then the page.
+ * The breadcrumb is the title and the pill the only state mark; the verbs sit
+ * at the end edge, the hero holds the live session, the tabs the rest.
+ */
 export function World({ model }: Readonly<{ model: WorldModel }>) {
-  const { world, game } = model;
-  // Below the compact step, as in the terminal skin, the title row has room for
-  // the one decision. Refresh and Invite are worth reaching, not worth a second
-  // row of buttons under the title, so they move into the overflow.
-  const compact = useMediaQuery("(max-width: 839px)");
-  const secondary: Action[] = [model.refresh, ...(model.invite ? [model.invite] : [])];
-  const overflow: readonly (readonly Action[])[] = compact ? [secondary, model.more] : [model.more];
-
-  return (
-    <div className="page">
+  const siblings = model.siblings ?? [];
+  const more = model.more.filter((item) => !CARD_ACTIONS.includes(item.id));
+  const page = (
+    <div className="c-page">
       <PageHeader
-        actions={<>
-          {!compact && <ActionButton action={model.refresh} variant="outlined" />}
-          {!compact && model.invite && <ActionButton action={model.invite} variant="outlined" />}
-          <ActionButton action={model.session} tooltipWhenDisabled variant="filled" />
-        </>}
-        breadcrumb={[{ label: "Worlds", href: model.worldsHref }]}
-        overflow={overflow.flat().length > 0 ? <ActionOverflow groups={overflow} label={`More actions for ${world.displayName}`} /> : undefined}
-        status={<Status kind={model.availability.kind} label={model.availability.label} />}
-        title={world.displayName}
+        actions={(
+          <>
+            <ActionButton action={model.session} variant={model.session.id === "session.start" ? "primary" : "default"} />
+            {model.invite && <ActionButton action={model.invite} />}
+            <Overflow groups={[{ actions: more.filter((item) => !item.danger) }, { actions: more.filter((item) => item.danger) }]} label="More actions" />
+          </>
+        )}
+        after={<Status status={model.sessionStatus} variant="pill" />}
+        title={model.world.displayName}
+        trail={[{ label: model.game.displayName, href: model.worldsHref, game: true }, { label: "Worlds", href: model.worldsHref }]}
       />
       <Notices notices={model.notices} />
-
-      <div className="world-tabs">
-        <Tabs label="World sections" onChange={model.setTab} options={model.tabs} value={model.tab} />
-        {model.tab === "details" && <>
-          <Card><div className="details-columns"><DetailsGroup items={model.sessionDetails.map(detailItem)} level={2} title="Session" /><DetailsGroup items={model.worldDetails.map(detailItem)} level={2} title="World" /></div></Card>
-          <Card flush title="Operations">
-            <DataTable columns={operationColumns} empty={<EmptyState icon="sync" title="No operation in progress" />} label="Running operations" rowKey={(row) => `${row.operation.type}-${row.operation.id}`} rows={model.operations} />
-          </Card>
-        </>}
-        {model.tab === "wipes" && <WipesTab rows={model.wipes} worldName={world.displayName} />}
-        {model.tab === "backups" && <BackupsTab model={model.backups} worldName={world.displayName} />}
-        {model.tab === "releases" && <ReleasesTab releases={model.releases} worldName={world.displayName} />}
-        {model.tab === "whitelist" && model.whitelist && <WhitelistPanel model={model.whitelist} />}
-        {model.tab === "console" && model.console && <ConsolePanel model={model.console} />}
-        {model.tab === "metrics" && model.metrics && <MetricsPanel model={model.metrics} />}
-      </div>
-      <span className="visually-hidden">{game.displayName}</span>
+      {model.glance && <Hero glance={model.glance} label={`${model.sessionStatus.label} ${model.world.displayName}`} />}
+      <Tabs label="World" onChange={model.setTab} prefix="world" tabs={model.tabs.map((tab) => ({ ...tab, icon: tabIcons[tab.id] }))} value={model.tab} />
+      <TabPanel id={model.tab} prefix="world">
+        <Panel model={model} />
+      </TabPanel>
     </div>
   );
+  // The world is always the chosen item, so a narrow screen shows the page; the breadcrumb leads back to the list.
+  return siblings.length > 0 ? <SplitPage list={<Siblings model={model} rows={siblings} />} selected>{page}</SplitPage> : page;
 }
 
-function detailValue(value: DetailValue): ReactNode {
-  switch (value.type) {
-    case "text": return value.mono ? <code>{value.text}</code> : <span>{value.text}</span>;
-    case "absent": return <Ghost>{value.text}</Ghost>;
-    case "status": return <Status kind={value.status.kind} label={value.status.label} />;
-    case "time": return <Timestamp value={value.at} />;
-    case "number": return <strong className="num">{value.value}</strong>;
-    case "release": {
-      const aligned = value.active !== null && value.active === value.desired;
-      const label = aligned ? "Active and desired" : `Active ${value.active ?? "none"}; desired ${value.desired ?? "none"}`;
-      return <span className="release-world"><code>{value.desired ?? value.active ?? "none"}</code><Tooltip text={label}><Icon className={aligned ? "release-state-active" : "release-state-pending"} name={aligned ? "verified" : "schedule"} size={18} /><span className="visually-hidden">{label}</span></Tooltip></span>;
-    }
-    case "preset": return <>
-      <span>{value.name}</span>
-      {value.source && (
-        <a className="preset-source" href={value.source.href} rel="noreferrer" target="_blank" title={value.source.commit}>
-          <code>{value.source.short}</code>
-          <Icon name="open_in_new" size={14} />
-        </a>
-      )}
-    </>;
-    default: return <ConnectionAddress address={value.address} />;
+function Panel({ model }: Readonly<{ model: WorldModel }>) {
+  switch (model.tab) {
+    case "wipes": return <WipesTab model={model} />;
+    case "backups": return <BackupsTab model={model.backups} />;
+    case "releases": return <ReleasesTab model={model} />;
+    case "whitelist": return model.whitelist ? <WhitelistTab model={model.whitelist} /> : <DetailsTab model={model} />;
+    case "console": return model.console ? <ConsoleTab model={model.console} world={model.world.displayName} /> : <DetailsTab model={model} />;
+    case "metrics": return model.metrics ? <MetricsTab model={model.metrics} worldId={model.world.id} /> : <DetailsTab model={model} />;
+    default: return <DetailsTab model={model} />;
   }
-}
-
-function detailHint(detail: Detail): ReactNode {
-  if (detail.hintTime !== undefined) return <>{detail.hint} <Timestamp value={detail.hintTime} /></>;
-  if (!detail.hint) return undefined;
-  return <span className={detail.hintAttention ? "session-reason-attention" : undefined}>{detail.hint}</span>;
-}
-
-function detailItem(detail: Detail): DetailItem {
-  return { label: detail.label, value: detailValue(detail.value), hint: detailHint(detail), explain: detail.explain, copy: detail.copy };
-}
-
-// What the inventory could not show, in one sentence.
-function partialInventoryDescription(unverified: number, truncated: boolean): string {
-  const parts: string[] = [];
-  if (unverified > 0) parts.push(`${unverified} ${unverified === 1 ? "object" : "objects"} could not be verified and ${unverified === 1 ? "is" : "are"} not shown.`);
-  if (truncated) parts.push("Older backups exist beyond the newest shown.");
-  return parts.join(" ");
-}
-
-const operationColumns: Column<WorldModel["operations"][number]>[] = [
-  { id: "operation", label: "Operation", render: (row) => <strong>{row.label}</strong> },
-  { id: "execution", label: "Execution", truncate: true, render: (row) => <Ellipsis mono tail={12} value={row.operation.id} /> },
-  { id: "started", label: "Started", width: "140px", render: (row) => <span className="num">{formatTime(row.operation.startedAt)}</span> },
-  { id: "status", label: "Status", width: "140px", render: () => <Status kind="progress" label="Running" /> },
-];
-
-function WipesTab({ rows, worldName }: Readonly<{ rows: WorldModel["wipes"]; worldName: string }>) {
-  const columns: Column<WorldModel["wipes"][number]>[] = [
-    { id: "wipe", label: "Wipe", width: "120px", render: (row) => <strong className="num">#{row.wipe.number}</strong> },
-    { id: "status", label: "Status", width: "140px", render: (row) => (row.wipe.state === "current" ? <Chip tone="primary">Current</Chip> : <Chip tone="tonal">{wipeStatus(row.wipe).label}</Chip>) },
-    { id: "release", label: "Started on release", width: "140px", render: (row) => <code>{row.wipe.originRelease}</code> },
-    { id: "opened", label: "Opened", render: (row) => <Timestamp value={row.wipe.createdAt} /> },
-    { id: "closed", label: "Closed", render: (row) => (row.wipe.closedAt ? <Timestamp value={row.wipe.closedAt} /> : <Ghost>Open</Ghost>) },
-    { id: "actions", label: "Actions", actions: true, render: (row) => <ActionOverflow groups={[[row.showBackups]]} label={`Actions for wipe ${row.wipe.number}`} size="small" /> },
-  ];
-  return (
-    <Card flush title="Wipes">
-      <DataTable columns={columns} empty={<EmptyState icon="history" title="No wipes yet" />} label={`Wipes of ${worldName}`} rowKey={(row: { wipe: Wipe }) => row.wipe.id} rows={rows} />
-    </Card>
-  );
-}
-
-function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldName: string }>) {
-  const columns: Column<BackupEntry>[] = [
-    // The timestamp is the only part that tells two archives of one world apart,
-    // so it is the part that survives a narrow column.
-    { id: "archive", label: "Archive", truncate: true, width: "45%", render: (entry) => <Ellipsis mono tail={22} value={entry.archiveName} /> },
-    { id: "wipe", label: "Wipe", width: "100px", render: (entry) => { const number = model.wipeNumber(entry.generationId); return number !== undefined ? <span className="num">#{number}</span> : <Ghost>Legacy</Ghost>; } },
-    { id: "stored", label: "Stored", render: (entry) => <Timestamp value={entry.storedAt} /> },
-    { id: "size", label: "Size", width: "110px", align: "num", render: (entry) => formatBytes(entry.sizeBytes) },
-    { id: "checksum", label: "SHA-256", secondary: true, width: "210px", render: (entry) => <code title={entry.checksum}>{shortDigest(entry.checksum)}</code> },
-    { id: "actions", label: "Actions", actions: true, render: (entry) => <ActionOverflow groups={[[
-      copyValueAction(`backup.copy-archive.${entry.key}`, "Copy archive name", entry.archiveName),
-      copyValueAction(`backup.copy-checksum.${entry.key}`, "Copy SHA-256", entry.checksum),
-      ...(model.download ? [model.download(entry)] : []),
-      model.restore(entry),
-    ]]} label={`Actions for ${entry.archiveName}`} size="small" /> },
-  ];
-
-  if (!model.canRead) {
-    return <Card flush title="Backups"><EmptyState description="Ask an owner for the backup.read permission to list verified backups." icon="lock" title="Your role cannot read backups" /></Card>;
-  }
-  const inventory = model.inventory;
-  return (
-    <Card flush title="Backups">
-      {model.wipes.length > 0 && (
-        <div className="filter-bar">
-          <Icon name="filter_list" size={20} />
-          <fieldset className="chip-row fieldset-plain">
-            <legend className="visually-hidden">Filter backups by wipe</legend>
-            <ChoiceChip onClick={() => model.setFilter(null)} pressed={model.filter === null}>All wipes</ChoiceChip>
-            {[...model.wipes].reverse().map((wipe) => <ChoiceChip key={wipe.id} onClick={() => model.setFilter(wipe.id)} pressed={model.filter === wipe.id}>Wipe #{wipe.number}</ChoiceChip>)}
-          </fieldset>
-        </div>
-      )}
-      {inventory.status === "error" && inventory.kind === "unavailable" && <NotConnected title="The backup inventory is not connected yet" />}
-      {inventory.status === "error" && inventory.kind !== "unavailable" && <div style={{ padding: 16 }}><Banner actions={<ActionButton action={inventory.retry} variant="text" />} description={inventory.error} title="The inventory is unavailable" tone="error" /></div>}
-      {inventory.status !== "error" && <DataTable
-        columns={columns}
-        empty={<EmptyState icon="backup" title="No verified backups" />}
-        label={`Verified backups of ${worldName}`}
-        loading={inventory.status === "loading"}
-        rowKey={(entry) => entry.key}
-        rows={inventory.status === "ready" ? inventory.value.entries : []}
-      />}
-      {inventory.status === "ready" && (inventory.value.unverified > 0 || inventory.value.truncated) && (
-        <div style={{ padding: "0 16px 16px" }}>
-          <Banner
-            description={partialInventoryDescription(inventory.value.unverified, inventory.value.truncated)}
-            title="Inventory is partial"
-            tone="warning"
-          />
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["releases"]; worldName: string }>) {
-  const columns: Column<ReleaseRow>[] = [
-    { id: "release", label: "Release", compactBlock: true, render: (row) => <span className="release-line">
-      {row.sourceHref ? <a className="preset-source" href={row.sourceHref} rel="noreferrer" target="_blank" title="Open preset repository"><code>{row.name}</code><Icon name="open_in_new" size={14} /></a> : <code>{row.name}</code>}
-      <Tooltip text={row.status === "Desired" ? "Desired, not yet active" : row.status}>
-        <Icon className={row.status === "Desired" ? "release-state-pending" : "release-state-active"} name={row.status === "Desired" ? "schedule" : "verified"} size={18} />
-        <span className="visually-hidden">{row.status}</span>
-      </Tooltip>
-      {row.downloads.length > 0 && <ActionRow>{row.downloads.map((pack) => <ActionButton action={pack} key={pack.id} size="small" variant="outlined" />)}</ActionRow>}
-    </span> },
-  ];
-  return (
-    <div className="page">
-      <Card flush>
-        <DataTable columns={columns} empty={<EmptyState icon="inventory" title="No release" />} label={`Release pointer of ${worldName}`} rowKey={(row) => row.name} rows={releases.rows} />
-      </Card>
-      {releases.mods && <ModsCard mods={releases.mods} worldName={worldName} />}
-    </div>
-  );
-}
-
-// Every mod of the release the world starts with, of both sides (ADR-0065,
-// ADR-0069); the packs that sort them are on the release row.
-function ModsCard({ mods, worldName }: Readonly<{ mods: ModsModel; worldName: string }>) {
-  const columns: Column<ModRow>[] = [
-    { id: "file", label: "File", truncate: true, render: (row) => <Ellipsis mono tail={12} value={row.file} /> },
-    { id: "size", label: "Size", width: "110px", align: "num", render: (row) => formatBytes(row.bytes) },
-    { id: "checksum", label: "SHA-256", secondary: true, width: "210px", render: (row) => <code title={row.sha256}>{shortDigest(row.sha256)}</code> },
-    { id: "actions", label: "Actions", actions: true, render: (row) => <ActionButton action={row.download} size="small" variant="text" /> },
-  ];
-  const files = mods.files;
-  const filter = useFilter(files.status === "ready" ? files.value : [], (row) => [row.file]);
-  return (
-    <Card flush title={`Mods · release ${mods.release}`}>
-      {files.status === "error"
-        ? <div style={{ padding: 16 }}><Banner actions={<ActionButton action={files.retry} variant="text" />} description={files.error} title="The mods are unavailable" tone="error" /></div>
-        : <>
-          <FilterBar disabled={files.status !== "ready"} filter={filter} label="Search mods" noun="mods" placeholder="Search by file name" />
-          <DataTable
-            columns={columns}
-            empty={filter.active ? <NoMatches filter={filter} icon="inventory" noun="mods" /> : <EmptyState icon="inventory" title="This release has no mods" />}
-            label={`Mods of ${worldName}, release ${mods.release}`}
-            loading={files.status === "loading"}
-            rowKey={(row) => row.sha256}
-            rows={filter.rows}
-          />
-        </>}
-    </Card>
-  );
-}
-
-function copyValueAction(id: string, label: string, value: string): Action {
-  return action(id, label, () => { void navigator.clipboard?.writeText(value); }, { icon: "content_copy" });
 }

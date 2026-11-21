@@ -1,176 +1,198 @@
-import { useState } from "react";
+import type { ReactNode } from "react";
 
 import type { LinkedLoginAccount } from "../../api/contract";
-import { Avatar } from "../../components/Avatar";
 import { GoogleLoginButton } from "../../components/GoogleLogin";
 import { TelegramLoginButton } from "../../components/TelegramLogin";
-import { ActionRow, Button } from "../../components/ui/Button";
-import { Chip, ChoiceChip } from "../../components/ui/Chip";
-import { TextField } from "../../components/ui/Fields";
-import { SkeletonRows } from "../../components/ui/Skeleton";
-import { useSnackbar } from "../../components/ui/Snackbar";
-import { Banner, Card, EmptyState, PageHeader } from "../../components/ui/Surfaces";
-import { Tooltip } from "../../components/ui/Tooltip";
+import type { Action } from "../../core/actions";
 import type { AppearanceModel, LoginAccountsModel, LookModel, ProfileModel } from "../../core/models";
 import { Icon, type IconName } from "../../icons";
 import { PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../../lib/signin";
-import { DEFAULT_ACCENT, parseHex } from "../../styles/accent";
 import type { ThemePreference } from "../../telegram";
-import { ActionButton, ActionOverflow } from "./actions";
+import { ActionButton } from "./ui/ActionButton";
+import { Avatar } from "./ui/Avatar";
+import { Card } from "./ui/Card";
+import { Chip } from "./ui/Chip";
+import { Copy } from "./ui/Copy";
+import { LoadError } from "./ui/Empty";
+import { Field, RadioCards, TextInput } from "./ui/Fields";
+import { Grid } from "./ui/Grid";
+import { Indicator } from "./ui/Indicator";
+import { Notice } from "./ui/Notice";
+import { Overflow } from "./ui/Overflow";
+import { PageHeader } from "./ui/PageHeader";
+import { SidePanel } from "./ui/SidePanel";
+import { SkeletonRows } from "./ui/Skeleton";
+import { useToast } from "./ui/Toast";
+import { TrackList, TrackTitle, type Track } from "./ui/TrackList";
 
+// Profile (spec §6.6): the name at the start, the role last at the end edge (on a phone too); the skin's only theme control.
 export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
   const { member, role, viewer } = model;
   return (
-    <div className="page">
+    <div className="c-page">
       <PageHeader
         actions={<>
-          {model.openInBrowser && <ActionButton action={model.openInBrowser} variant="outlined" />}
-          <ActionButton action={model.signOut} variant="text" />
+          {model.openInBrowser && <ActionButton action={model.openInBrowser} />}
+          <ActionButton action={model.signOut} />
+          {role && <Chip icon="shield_person">{role.name}</Chip>}
         </>}
-        leading={<Avatar name={member.name} photoUrl={viewer.photoUrl} size="large" />}
-        status={<Chip icon="admin_panel_settings" tone="primary">{role?.name ?? "No role"}</Chip>}
-        subtitle={viewer.username ? `@${viewer.username}` : viewer.email ?? "Spawnpoint identity"}
+        after={(
+          <span className="c-profile-id">
+            <span className="c-mono c-faint" data-tip="Identity ID" tabIndex={0}>{member.id}</span>
+            <Copy value={member.id} what="identity ID" />
+          </span>
+        )}
+        lead={<Avatar name={member.name} photoUrl={viewer.photoUrl} size="xl" />}
         title={member.name}
       />
-      <Appearance look={model.look} model={model.appearance} />
-      <LoginAccounts model={model.loginAccounts} />
+      <Grid kind="profile">
+        <SignInMethods model={model.loginAccounts} />
+        <Appearance look={model.look} model={model.appearance} />
+      </Grid>
+      {model.loginAccounts.form && <PasswordPanel form={model.loginAccounts.form} />}
     </div>
   );
 }
 
-const THEMES: readonly { id: ThemePreference; label: string; icon: IconName }[] = [
-  { id: "system", label: "System", icon: "brightness_auto" },
-  { id: "light", label: "Light", icon: "light_mode" },
-  { id: "dark", label: "Dark", icon: "dark_mode" },
+const THEMES: readonly { value: ThemePreference; label: string; icon: IconName }[] = [
+  { value: "light", label: "Light", icon: "light_mode" },
+  { value: "dark", label: "Dark", icon: "dark_mode" },
+  { value: "system", label: "System", icon: "contrast" },
 ];
 
-/** A starting point, not a limit: the field below takes any colour. */
-
 function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: LookModel }>) {
-  const notify = useSnackbar();
-  const [draft, setDraft] = useState(model.accent);
-
-  function save(next: { theme?: ThemePreference; accent?: string }) {
-    // The panel has already repainted; the setters write through to the account.
-    // Storing is what makes the choice follow the person to another device, so
-    // only that failure is worth saying, and only here, where there is room.
-    const writes: Promise<void>[] = [];
-    if (next.theme) writes.push(model.setPreference(next.theme));
-    if (next.accent) writes.push(model.setAccent(next.accent));
-    Promise.all(writes).catch((error: unknown) => {
-      notify({ tone: "error", message: error instanceof Error ? error.message : "The appearance could not be saved to your profile." });
-    });
-  }
-
-  function commitAccent(value: string) {
-    setDraft(value);
-    if (parseHex(value) !== null) save({ accent: value.trim().toLowerCase() });
-  }
-
-  const valid = parseHex(draft) !== null;
+  const toast = useToast();
+  const choose = (next: ThemePreference) => {
+    model.setPreference(next).catch((error: unknown) => toast(error instanceof Error ? error.message : "The theme could not be saved.", "err"));
+  };
   return (
     <Card title="Appearance">
-      <div className="appearance">
-        <div className="appearance-group">
-          <span className="appearance-label" id="appearance-theme">Theme</span>
-          <fieldset aria-labelledby="appearance-theme" className="chip-row fieldset-plain">
-            {THEMES.map((option) => (
-              <ChoiceChip icon={option.icon} key={option.id} onClick={() => save({ theme: option.id })} pressed={model.preference === option.id}>{option.label}</ChoiceChip>
-            ))}
-          </fieldset>
-        </div>
-        <div className="appearance-group">
-          <span className="appearance-label" id="appearance-look">Look</span>
-          <fieldset aria-labelledby="appearance-look" className="chip-row fieldset-plain">
-            {look.options.map((option) => (
-              <ChoiceChip data-action={option.choose.id} key={option.id} onClick={option.choose.run} pressed={option.id === look.current} title={option.choose.hint}>{option.name}</ChoiceChip>
-            ))}
-          </fieldset>
-        </div>
-
-        <div className="appearance-group">
-          <span className="appearance-label" id="appearance-accent">Accent</span>
-          <fieldset aria-labelledby="appearance-accent" className="accent-row fieldset-plain">
-            <label className="accent-well">
-              <input aria-label="Pick an accent colour" onChange={(event) => commitAccent(event.target.value)} type="color" value={parseHex(draft) ? draft : model.accent} />
-            </label>
-            <TextField hideLabel hint={valid ? undefined : "Six hex digits, for example #1a73e8."} label="Accent colour, hex" mono onChange={(event) => commitAccent(event.target.value)} spellCheck={false} value={draft} />
-            <Button disabled={model.accent === DEFAULT_ACCENT} icon="restore" onClick={() => { setDraft(DEFAULT_ACCENT); save({ accent: DEFAULT_ACCENT }); }} variant="text">Reset</Button>
-          </fieldset>
-        </div>
+      <div className="c-profile-settings">
+        <RadioCards legend="Theme" name="theme" onChange={choose} options={THEMES} value={model.preference} />
+        {look.options.length > 0 && (
+          <RadioCards
+            legend="Look"
+            name="look"
+            onChange={() => undefined}
+            options={look.options.map((option) => ({ value: option.id, label: option.name, action: option.choose }))}
+            value={look.current}
+          />
+        )}
       </div>
     </Card>
   );
 }
 
-const providerPresentation: Readonly<Record<string, { label: string; icon: IconName }>> = {
-  password: { label: "Email and password", icon: "mail" },
+const providers: Readonly<Record<string, { label: string; icon: IconName }>> = {
+  password: { label: "Email", icon: "mail" },
   telegram: { label: "Telegram", icon: "send" },
   google: { label: "Google", icon: "account_circle" },
   discord: { label: "Discord", icon: "group" },
 };
 
-function presentProvider(provider: string): { label: string; icon: IconName } {
-  return providerPresentation[provider] ?? { label: provider.replaceAll(/[-_]/g, " ").replace(/^./, (letter) => letter.toUpperCase()), icon: "link" };
+function provider(id: string): { label: string; icon: IconName } {
+  return providers[id] ?? { label: id.replaceAll(/[-_]/g, " ").replace(/^./, (letter) => letter.toUpperCase()), icon: "link" };
 }
 
-function accountLine(account: LinkedLoginAccount): string {
-  return account.email ?? (account.username ? `@${account.username}` : account.displayName ?? account.subject);
+type MethodRow = Readonly<{
+  key: string;
+  provider: string;
+  account: LinkedLoginAccount | null;
+  actions: readonly Action[];
+  /** The provider's own sign-in widget, for a method not linked yet. */
+  widget?: ReactNode;
+}>;
+
+// Linked methods first, then each method the person can still add.
+function methodRows(model: LoginAccountsModel, accounts: readonly LinkedLoginAccount[]): MethodRow[] {
+  const rows: MethodRow[] = accounts.map((account) => ({
+    key: `${account.provider}:${account.subject}`,
+    provider: account.provider,
+    account,
+    actions: [...model.rowActions(account), ...(account.provider === "password" && model.addPassword ? [model.addPassword] : [])],
+  }));
+  const linked = new Set(accounts.map((account) => account.provider));
+  if (!linked.has("password") && model.addPassword) rows.push({ key: "password", provider: "password", account: null, actions: [model.addPassword] });
+  for (const id of model.linkable) {
+    if (linked.has(id)) continue;
+    const widget = id === "telegram" && model.connectTelegram
+      ? <TelegramLoginButton label="Link" onToken={model.connectTelegram} variant="outlined" />
+      : id === "google" && model.connectGoogle ? <GoogleLoginButton onToken={model.connectGoogle} /> : undefined;
+    rows.push({ key: id, provider: id, account: null, actions: [], widget });
+  }
+  return rows;
 }
 
-function LoginAccounts({ model }: Readonly<{ model: LoginAccountsModel }>) {
-  const accounts = model.accounts;
-  const offers = model.connectTelegram !== null || model.connectGoogle !== null || model.addPassword !== null;
+function accountText(account: LinkedLoginAccount | null): ReactNode {
+  if (!account) return <span className="c-faint">Not linked</span>;
+  const text = account.email ?? (account.username ? `@${account.username}` : account.displayName ?? "");
   return (
-    <Card
-      actions={offers ? <ActionRow>
-        {model.connectTelegram && <TelegramLoginButton className="telegram-login" label="Add Telegram" onToken={model.connectTelegram} />}
-        {model.connectGoogle && <GoogleLoginButton className="google-login" onToken={model.connectGoogle} />}
-        {model.addPassword && <ActionButton action={model.addPassword} variant="outlined" />}
-      </ActionRow> : undefined}
-      title="Sign-in methods"
-    >
-      {accounts.status === "loading" && <SkeletonRows label="Loading sign-in methods" rows={2} />}
-      {accounts.status === "error" && <Banner actions={<ActionButton action={accounts.retry} size="small" variant="outlined" />} description={accounts.error} title="Sign-in methods are unavailable" tone="error" />}
-      {accounts.status === "ready" && accounts.value.length === 0 && <EmptyState icon="link" title="No sign-in methods" />}
-      {accounts.status === "ready" && accounts.value.length > 0 && (
-        <ul className="login-account-list">
-          {accounts.value.map((account) => {
-            const presentation = presentProvider(account.provider);
-            const rowActions = model.rowActions(account);
-            return (
-              <li className="login-account-row" key={`${account.provider}:${account.subject}`}>
-                <span aria-hidden="true" className="link-icon"><Icon name={presentation.icon} size={20} /></span>
-                <span className="login-account-copy">
-                  <span className="login-account-title">
-                    <strong>{presentation.label}</strong>
-                    <Tooltip text={account.verified ? "Verified" : "Pending verification"}>
-                      <Icon name={account.verified ? "verified" : "pending"} size={18} />
-                      <span className="visually-hidden">{account.verified ? "Verified" : "Pending verification"}</span>
-                    </Tooltip>
-                  </span>
-                  <span>{accountLine(account)}</span>
-                </span>
-                {rowActions.length > 0 && <div className="login-account-actions"><ActionOverflow groups={[rowActions]} label={`Manage ${presentation.label}`} size="small" /></div>}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {model.form && (
-        <form className="account-form" onSubmit={(event) => { event.preventDefault(); model.form?.submit.run(); }}>
-          <h3>{model.form.kind === "add" ? "Add email and password" : "Change password"}</h3>
-          <TextField autoComplete="email" disabled={model.form.kind === "change" || model.form.busy} inputMode="email" label="Email" onChange={(event) => model.form?.setEmail(event.target.value)} required type="email" value={model.form.email} />
-          {model.form.kind === "change" && <TextField autoComplete="current-password" disabled={model.form.busy} label="Current password" maxLength={PASSWORD_MAXIMUM_LENGTH} onChange={(event) => model.form?.setCurrentPassword(event.target.value)} required type="password" value={model.form.currentPassword} />}
-          <TextField autoComplete="new-password" disabled={model.form.busy} hint={`At least ${PASSWORD_MINIMUM_LENGTH} characters.`} label={model.form.kind === "add" ? "Password" : "New password"} maxLength={PASSWORD_MAXIMUM_LENGTH} minLength={PASSWORD_MINIMUM_LENGTH} onChange={(event) => model.form?.setPassword(event.target.value)} required type="password" value={model.form.password} />
-          <TextField autoComplete="new-password" disabled={model.form.busy} label="Confirm password" maxLength={PASSWORD_MAXIMUM_LENGTH} minLength={PASSWORD_MINIMUM_LENGTH} onChange={(event) => model.form?.setConfirmation(event.target.value)} required type="password" value={model.form.confirmation} />
-          {model.form.error && <p className="boot-error" role="alert">{model.form.error}</p>}
-          <div className="btn-row">
-            <ActionButton action={model.form.cancel} variant="text" />
-            <ActionButton action={model.form.submit} type="submit" variant="filled" />
-          </div>
-        </form>
-      )}
+    <span className="c-profile-account">
+      <span className="c-profile-account-text" title={text}>{text}</span>
+      {!account.verified && <Indicator status={{ kind: "pending", label: "Pending verification" }} />}
+    </span>
+  );
+}
+
+function RowActions({ row }: Readonly<{ row: MethodRow }>) {
+  const [first, ...rest] = row.actions;
+  return (
+    <span className="c-profile-row-actions">
+      {row.widget}
+      {first && <ActionButton action={first} size="sm" />}
+      {rest.length > 0 && <Overflow actions={rest} label={`More for ${provider(row.provider).label}`} size="sm" />}
+    </span>
+  );
+}
+
+const tracks: readonly Track<MethodRow>[] = [
+  {
+    id: "method",
+    header: "Method",
+    width: "minmax(140px, auto)",
+    compactWidth: "minmax(0, 1fr)",
+    kind: "stack",
+    render: (row) => {
+      const look = provider(row.provider);
+      return <TrackTitle compactLine={accountText(row.account)} title={<span className="c-profile-method"><Icon name={look.icon} size={18} />{look.label}</span>} />;
+    },
+  },
+  { id: "account", header: "Account", width: "minmax(0, 1fr)", kind: "optional", render: (row) => accountText(row.account) },
+  { id: "action", header: "Action", width: "auto", kind: "end", quietHeader: true, render: (row) => <RowActions row={row} /> },
+];
+
+function SignInMethods({ model }: Readonly<{ model: LoginAccountsModel }>) {
+  const accounts = model.accounts;
+  return (
+    <Card body="flush" title="Sign-in methods">
+      {accounts.status === "loading" && <SkeletonRows columns={3} rows={3} />}
+      {accounts.status === "error" && <LoadError error={accounts.error} kind={accounts.kind} retry={accounts.retry} title="Sign-in methods could not be loaded" verb="read sign-in methods" />}
+      {accounts.status === "ready" && <TrackList label="Sign-in methods" rowKey={(row) => row.key} rows={methodRows(model, accounts.value)} tracks={tracks} />}
     </Card>
+  );
+}
+
+function PasswordPanel({ form }: Readonly<{ form: NonNullable<LoginAccountsModel["form"]> }>) {
+  const length = `${PASSWORD_MINIMUM_LENGTH} to ${PASSWORD_MAXIMUM_LENGTH} characters`;
+  return (
+    <SidePanel actions={<ActionButton action={form.submit} variant="primary" />} cancel={form.cancel} title={form.kind === "add" ? "Add email and password" : "Change password"}>
+      {form.kind === "add" && (
+        <Field label="Email">
+          <TextInput autoComplete="email" disabled={form.busy} inputMode="email" onChange={(event) => form.setEmail(event.target.value)} required type="email" value={form.email} />
+        </Field>
+      )}
+      {form.kind === "change" && (
+        <Field label="Current password">
+          <TextInput autoComplete="current-password" disabled={form.busy} maxLength={PASSWORD_MAXIMUM_LENGTH} onChange={(event) => form.setCurrentPassword(event.target.value)} required type="password" value={form.currentPassword} />
+        </Field>
+      )}
+      <Field label="New password">
+        <TextInput autoComplete="new-password" data-tip={length} disabled={form.busy} maxLength={PASSWORD_MAXIMUM_LENGTH} minLength={PASSWORD_MINIMUM_LENGTH} onChange={(event) => form.setPassword(event.target.value)} required type="password" value={form.password} />
+      </Field>
+      <Field label="Confirm password">
+        <TextInput autoComplete="new-password" disabled={form.busy} maxLength={PASSWORD_MAXIMUM_LENGTH} minLength={PASSWORD_MINIMUM_LENGTH} onChange={(event) => form.setConfirmation(event.target.value)} required type="password" value={form.confirmation} />
+      </Field>
+      {form.error && <Notice notice={{ id: "password-error", tone: "error", title: form.error }} />}
+    </SidePanel>
   );
 }

@@ -14,7 +14,7 @@ import { STATES } from "./states.mjs";
 // --accept    prints accepted.txt lines for what this run found; a reason is added by hand.
 // --self-test runs the probe on the fixtures in fixtures/ and fails on a miss it should catch.
 //
-// While fixing, narrow a run: SKIN=cloud AUDIT_ROUTES=world,worlds AUDIT_WIDTHS=360,600
+// While fixing, narrow a run: SKIN=console AUDIT_ROUTES=world,worlds AUDIT_WIDTHS=360,600
 // AUDIT_STATES=stop AUDIT_STRIDE=0. AUDIT_OUT names the report folder (default out/ui-audit).
 const flags = new Set(process.argv.slice(2).filter((arg) => arg.startsWith("--")));
 const gate = flags.has("--gate");
@@ -28,7 +28,7 @@ const reportDir = resolve(process.env.AUDIT_OUT ?? join(here, "../../out/ui-audi
 const PROBE_SOURCE = readFileSync(join(here, "probe.js"), "utf8");
 
 // The faces CI gates. The old console skin is not gated: S9 deletes it.
-const SKINS = process.env.SKIN ? process.env.SKIN.split(",") : ["cloud", "terminal"];
+const SKINS = process.env.SKIN ? process.env.SKIN.split(",") : ["console", "terminal"];
 
 const ROUTES = [
   ["landing", "/#/"],
@@ -69,7 +69,7 @@ const onlyWidths = process.env.AUDIT_WIDTHS ? new Set(process.env.AUDIT_WIDTHS.s
 const onlyStates = process.env.AUDIT_STATES !== undefined ? new Set(process.env.AUDIT_STATES.split(",").filter(Boolean)) : null;
 const widthOk = (width) => !onlyWidths || onlyWidths.has(width);
 
-// Selectors for faces that do not emit layout markers. The cloud skin's
+// Selectors for faces that do not emit layout markers. The console skin's
 // primitives emit data-layout, data-col, data-status and data-layer, and the
 // probe reads those; these lists hold the terminal skin to the same promises.
 const LAYOUT = {

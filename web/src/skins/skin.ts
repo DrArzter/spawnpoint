@@ -34,10 +34,10 @@ export type Skin = Readonly<{
   renderSnackbar?: (queue: SnackbarQueue) => ReactNode;
 }>;
 
-export type SkinId = "console" | "terminal" | "cloud";
+export type SkinId = "console" | "terminal";
 
 /** Every face, in the order the contract test and the registry know them. */
-export const SKIN_IDS: readonly SkinId[] = ["console", "terminal", "cloud"];
-/** The faces a person may choose on the profile page; cloud is reached by `?skin=cloud` until it replaces console. */
+export const SKIN_IDS: readonly SkinId[] = ["console", "terminal"];
+/** The faces a person may choose on the profile page. */
 export const CHOOSABLE_SKIN_IDS: readonly SkinId[] = ["console", "terminal"];
 export const DEFAULT_SKIN: SkinId = "console";

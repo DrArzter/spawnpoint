@@ -143,7 +143,8 @@
         }
       ],
       "Catch": [
-        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.concludeError", "Next": "Host Taken Back" }
+        { "ErrorEquals": ["PlacementConflict"], "ResultPath": "$.concludeError", "Next": "Host Taken Back" },
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.concludeError", "Next": "Drain Not Concluded" }
       ],
       "Next": "Terminate Host"
     },
@@ -197,7 +198,8 @@
         }
       ],
       "Catch": [
-        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.concludeError", "Next": "Host Taken Back" }
+        { "ErrorEquals": ["PlacementConflict"], "ResultPath": "$.concludeError", "Next": "Host Taken Back" },
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.concludeError", "Next": "Drain Not Concluded" }
       ],
       "Next": "Stop Host"
     },
@@ -254,6 +256,11 @@
       "Type": "Fail",
       "Error": "Spawnpoint.DrainKeptTooLong",
       "Cause": "An empty host was kept for longer than the bounded number of grace periods, most likely as the fleet's only headroom while sessions ran elsewhere the whole time. It is still billed; a person decides."
+    },
+    "Drain Not Concluded": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.DrainNotConcluded",
+      "Cause": "The coordinator could not record the drain's outcome for a reason other than a start taking the host. The host was not touched and is still billed; a person decides."
     },
     "Host Not Released": {
       "Type": "Fail",

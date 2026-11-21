@@ -11,7 +11,8 @@ type State = {
   Parameters?: Record<string, any>;
   ResultSelector?: Record<string, string>;
   Choices?: Array<Record<string, unknown>>;
-  Catch?: Array<{ Next: string }>;
+  Catch?: Array<{ ErrorEquals: string[]; Next: string }>;
+  Error?: string;
 };
 
 type Definition = { StartAt: string; QueryLanguage: string; States: Record<string, State> };
@@ -77,7 +78,6 @@ test("the drain waits, asks, and moves the record before it touches the machine"
   assert.equal(state(definition, "Conclude Termination").Parameters?.Payload.outcome, "terminate");
   assert.equal(state(definition, "Conclude Termination").Parameters?.Payload["expectedRevision.$"], "$.decision.revision");
   assert.equal(state(definition, "Conclude Termination").Next, "Terminate Host");
-  assert.equal(state(definition, "Conclude Termination").Catch?.[0]?.Next, "Host Taken Back");
   assert.equal(state(definition, "Terminate Host").Resource, "arn:aws:states:::aws-sdk:ec2:terminateInstances");
   assert.equal(state(definition, "Terminate Host").Catch?.[0]?.Next, "Host Not Released");
   assert.equal(state(definition, "Conclude Stop").Next, "Stop Host");
@@ -85,6 +85,23 @@ test("the drain waits, asks, and moves the record before it touches the machine"
   assert.equal(state(definition, "Stop Host").Resource, "arn:aws:states:::aws-sdk:ec2:stopInstances");
   assert.equal(state(definition, "Host Not Released").Type, "Fail");
   assert.equal(state(definition, "Host Taken Back").End, true);
+});
+
+test("only a conflict on the host record means a start took the host back", async () => {
+  const definition = await loadDefinition();
+  for (const name of ["Conclude Termination", "Conclude Stop"]) {
+    // PlacementConflict is the coordinator's error name (lambdas/src/domain/placement.ts).
+    assert.deepEqual(
+      state(definition, name).Catch?.map((handler) => [handler.ErrorEquals, handler.Next]),
+      [
+        [["PlacementConflict"], "Host Taken Back"],
+        [["States.ALL"], "Drain Not Concluded"],
+      ],
+      `${name}: any other error is a failure, not a quiet success`,
+    );
+  }
+  assert.equal(state(definition, "Drain Not Concluded").Type, "Fail");
+  assert.equal(state(definition, "Drain Not Concluded").Error, "Spawnpoint.DrainNotConcluded");
 });
 
 test("a failed start drains without grace or headroom, while still respecting a new reservation", async () => {

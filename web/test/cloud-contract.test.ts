@@ -88,6 +88,49 @@ test("cloud: the game home draws each world's start and each request's approve a
   drawn("Worlds list", renderToStaticMarkup(createElement(cloudSkin.Worlds, { model: { ...worlds, view: "list" } })), [worlds.rows[0]!.sessionAction!()]);
 });
 
+test("cloud: the worlds list filters by a pressed tile, never by a second status mark, and says why bulk Actions wait", () => {
+  const markup = renderToStaticMarkup(createElement(cloudSkin.Worlds, { model: { ...worlds, view: "list" } }));
+  assert.match(markup, /aria-label="Filter by status"/);
+  assert.match(markup, /<button aria-pressed="false" class="c-tile"/);
+  assert.doesNotMatch(markup, /c-filter-token-key">Status/);
+  const bulk = markup.match(/<button[^>]*data-action="worlds.bulk"[^>]*>/)?.[0] ?? "";
+  assert.match(bulk, /aria-disabled="true"/);
+  assert.match(bulk, /aria-haspopup="menu"/);
+  assert.match(bulk, /aria-expanded="false"/);
+  assert.match(markup, /Select worlds first/);
+  assert.match(markup, /data-action="refresh"/);
+});
+
+test("cloud: the game home leaves out the requests card without the role, and offers one Create when there are no worlds", () => {
+  const plain = renderToStaticMarkup(createElement(cloudSkin.Worlds, { model: { ...worlds, requests: null } }));
+  assert.doesNotMatch(plain, /Access requests/);
+  const empty = renderToStaticMarkup(createElement(cloudSkin.Worlds, { model: { ...worlds, rows: [] } }));
+  assert.equal(empty.match(/data-action="world.create"/g)?.length, 1);
+});
+
+test("cloud: the worlds-by-state bar fills each state kind on its own, so online and ready never merge", () => {
+  const online = { ...worlds.rows[0]!, world: { ...world, id: "a" }, status: { kind: "ok", label: "Online" } } as const;
+  const ready = { ...worlds.rows[0]!, world: { ...world, id: "b" }, status: { kind: "ready", label: "Ready" } } as const;
+  const markup = renderToStaticMarkup(createElement(cloudSkin.Worlds, { model: { ...worlds, rows: [online, ready] } }));
+  assert.match(markup, /class="c-bystate-seg c-bystate-ok"/);
+  assert.match(markup, /class="c-bystate-seg c-bystate-ready"/);
+  assert.match(markup, /class="c-bystate-seg c-bystate-key c-bystate-ready"/, "the legend key wears its segment's fill");
+});
+
+test("cloud: a state handed over by the game home belongs to that history entry only", () => {
+  // The test window keeps no history entries; stand one in.
+  const entry = window.history as unknown as { state: unknown };
+  entry.state = { cloudWorldsState: "Stopped" };
+  try {
+    const markup = renderToStaticMarkup(createElement(cloudSkin.Worlds, { model: { ...worlds, view: "list" } }));
+    assert.match(markup, /<button aria-pressed="true" class="c-tile"/);
+  } finally {
+    entry.state = null;
+  }
+  const later = renderToStaticMarkup(createElement(cloudSkin.Worlds, { model: { ...worlds, view: "list" } }));
+  assert.doesNotMatch(later, /aria-pressed="true" class="c-tile"/);
+});
+
 test("cloud: the palette, once open, draws each world's verbs and says why one is refused", () => {
   const markup = renderToStaticMarkup(createElement(Palette, { model: shell, onClose: noop }));
   const verbs = shell.worldActions!("rostik")!;

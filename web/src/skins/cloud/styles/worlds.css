@@ -1,0 +1,353 @@
+/* The game home and the Worlds list (spec §6.1, §6.2): world facts, the state bar, the table's page parts and the quick look. */
+
+html[data-skin="cloud"] .c-players {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+}
+
+html[data-skin="cloud"] .c-players svg {
+  color: var(--c-ink-3);
+}
+
+html[data-skin="cloud"] .c-home-decide {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+html[data-skin="cloud"] .c-bystate-bar {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  overflow: hidden;
+  border-radius: var(--c-r-pill);
+  background: var(--c-surface-2);
+}
+
+html[data-skin="cloud"] .c-main[data-first] .c-bystate-bar {
+  animation: c-reveal var(--c-d4) var(--c-ease) both;
+}
+
+html[data-skin="cloud"] .c-bystate-seg {
+  flex: 1 1 0;
+  background: var(--c-ink-3);
+  transition: flex-grow var(--c-d3) var(--c-ease);
+}
+
+/* Each kind has its own fill, so neighbouring states never merge into one colour. A stopped world reads "Ready", so here it takes the off tone, not ok. */
+html[data-skin="cloud"] .c-bystate-ok {
+  background: var(--c-ok);
+}
+
+html[data-skin="cloud"] .c-bystate-ready {
+  background: var(--c-off);
+}
+
+html[data-skin="cloud"] .c-bystate-progress,
+html[data-skin="cloud"] .c-bystate-pending,
+html[data-skin="cloud"] .c-bystate-info {
+  background: var(--c-busy);
+}
+
+html[data-skin="cloud"] .c-bystate-unknown,
+html[data-skin="cloud"] .c-bystate-warning {
+  background: var(--c-warn);
+}
+
+html[data-skin="cloud"] .c-bystate-error {
+  background: var(--c-err);
+}
+
+html[data-skin="cloud"] .c-bystate-archived {
+  background: var(--c-line-2);
+}
+
+/* Absent worlds read as a hatch, not as a colour alone. */
+html[data-skin="cloud"] .c-bystate-absent {
+  background: repeating-linear-gradient(45deg, var(--c-line-2) 0 3px, transparent 3px 6px);
+}
+
+html[data-skin="cloud"] .c-bystate-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 24px;
+  margin-top: 14px;
+}
+
+html[data-skin="cloud"] .c-bystate-legend a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  color: var(--c-ink);
+}
+
+/* A legend key: one segment's fill as a square, not a bar part. */
+html[data-skin="cloud"] .c-bystate-legend .c-bystate-key {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+html[data-skin="cloud"] .c-home-world {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+html[data-skin="cloud"] .c-home-world-address {
+  display: none;
+  max-width: 100%;
+}
+
+html[data-skin="cloud"] .c-bystate-legend b {
+  font-weight: 800;
+}
+
+@keyframes c-reveal { from { clip-path: inset(0 100% 0 0); } }
+
+html[data-skin="cloud"] .c-worlds-loading .c-tiles {
+  margin: 0;
+}
+
+html[data-skin="cloud"] .c-worlds-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  /* Not stretch (R11): the quick look is sticky and must keep its own height beside a long table. */
+  align-items: start;
+  gap: var(--c-gap);
+}
+
+html[data-skin="cloud"] .c-worlds-sep {
+  width: 1px;
+  height: 24px;
+  margin: 0 4px;
+  background: var(--c-line);
+}
+
+html[data-skin="cloud"] .c-worlds-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+html[data-skin="cloud"] .c-worlds-name a {
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-skin="cloud"] .c-worlds-hostmark {
+  display: none;
+}
+
+html[data-skin="cloud"] .c-worlds-release {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+html[data-skin="cloud"] .c-worlds-release .c-mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-skin="cloud"] .c-worlds-acts {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+html[data-skin="cloud"] .c-worlds-acts .c-icon-btn[aria-pressed="true"],
+html[data-skin="cloud"] .c-worlds-row .c-icon-btn[aria-pressed="true"] {
+  background: var(--c-accent-soft);
+  color: var(--c-accent-text);
+}
+
+html[data-skin="cloud"] .c-worlds-list {
+  display: none;
+}
+
+html[data-skin="cloud"] .c-worlds-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--c-line);
+}
+
+html[data-skin="cloud"] .c-worlds-row:last-child {
+  border-bottom: 0;
+}
+
+html[data-skin="cloud"] .c-worlds-row-selected {
+  background: var(--c-accent-soft);
+}
+
+html[data-skin="cloud"] .c-worlds-row .c-checkbox {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+}
+
+/* The standalone world row brings its own tracks; the page only places it between the checkbox and the quick look. */
+html[data-skin="cloud"] .c-worlds-row > .c-listitem-slot {
+  grid-column: 2;
+}
+
+html[data-skin="cloud"] .c-worlds-row .c-listitem {
+  border: 0;
+  background: none;
+}
+
+html[data-skin="cloud"] .c-worlds-scrim {
+  display: none;
+}
+
+html[data-skin="cloud"] .c-worlds-peek {
+  position: sticky;
+  top: calc(var(--c-bar) + 20px);
+  max-height: calc(100vh - var(--c-bar) - 40px);
+  overflow: auto;
+  border-radius: var(--c-r);
+  animation: c-peek-in var(--c-d3) var(--c-ease);
+}
+
+html[data-skin="cloud"] .c-worlds-peek .c-card-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--c-surface);
+}
+
+html[data-skin="cloud"] .c-worlds-peek-status {
+  display: none;
+}
+
+html[data-skin="cloud"] .c-worlds-peek-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px var(--c-card-x) 6px;
+}
+
+@keyframes c-peek-in { from { opacity: 0; transform: translateX(30px); } }
+
+@media (max-width: 1439px) {
+  html[data-skin="cloud"] .c-worlds-table .c-worlds-host {
+    display: none;
+  }
+
+  html[data-skin="cloud"] .c-worlds-hostmark {
+    display: inline-flex;
+  }
+
+  html[data-skin="cloud"] .c-worlds-name a {
+    max-width: 20ch;
+  }
+}
+
+@media (min-width: 1200px) {
+  html[data-skin="cloud"] .c-worlds-layout-open {
+    grid-template-columns: minmax(0, 1fr) 420px;
+  }
+}
+
+/* Beside the quick look the table keeps its decision columns; hosting moves beside the name and the address goes. */
+@media (min-width: 1200px) {
+  html[data-skin="cloud"] .c-worlds-layout-open .c-worlds-host,
+  html[data-skin="cloud"] .c-worlds-layout-open .c-worlds-table .c-col-optional {
+    display: none;
+  }
+
+  html[data-skin="cloud"] .c-worlds-layout-open .c-worlds-hostmark {
+    display: inline-flex;
+  }
+}
+
+@media (min-width: 2000px) {
+  html[data-skin="cloud"] .c-worlds-layout-open {
+    grid-template-columns: minmax(0, 1fr) 560px;
+  }
+}
+
+@media (max-width: 1199px) {
+  html[data-skin="cloud"] .c-worlds-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    display: block;
+    background: var(--c-scrim);
+    animation: c-fade var(--c-d2) var(--c-ease);
+  }
+
+  html[data-skin="cloud"] .c-worlds-peek {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 60;
+    max-height: 78vh;
+    border-radius: var(--c-r-dlg) var(--c-r-dlg) 0 0;
+    box-shadow: var(--c-shadow-pop);
+    animation: c-up var(--c-d3) var(--c-ease);
+  }
+
+  html[data-skin="cloud"] .c-worlds-peek .c-card {
+    border-radius: inherit;
+  }
+
+  html[data-skin="cloud"] .c-worlds-peek .c-card-head {
+    border-radius: inherit;
+  }
+
+  html[data-skin="cloud"] .c-worlds-peek-status {
+    display: inline-flex;
+  }
+}
+
+@media (min-width: 760px) and (max-width: 1199px) {
+  html[data-skin="cloud"] .c-worlds-peek {
+    right: 16px;
+    bottom: 16px;
+    left: auto;
+    width: min(520px, 92vw);
+    border-radius: var(--c-r-dlg);
+  }
+}
+
+@media (max-width: 1023px) {
+  html[data-skin="cloud"] .c-worlds-table {
+    display: none;
+  }
+
+  html[data-skin="cloud"] .c-worlds-list {
+    display: block;
+  }
+
+  html[data-skin="cloud"] .c-home-world-address {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 759px) {
+  html[data-skin="cloud"] .c-bystate-legend a {
+    min-height: var(--c-target);
+  }
+
+  html[data-skin="cloud"] .c-worlds-peek-acts .c-btn {
+    flex: 1;
+  }
+}

@@ -1,0 +1,143 @@
+/* The game switcher (spec §3.6): a pill group on the band from 1024px, one pill that opens the dialog under it. */
+
+html[data-skin="cloud"] .c-scope {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--c-r-pill);
+  background: var(--c-band-2);
+}
+
+html[data-skin="cloud"] .c-scope-game {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px 0 7px;
+  border: 0;
+  border-radius: var(--c-r-pill);
+  background: none;
+  color: var(--c-band-ink-2);
+  font-size: var(--c-fs-m);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--c-d1), color var(--c-d1);
+}
+
+html[data-skin="cloud"] .c-scope-game:hover {
+  background: var(--c-band-3);
+  color: var(--c-band-ink);
+}
+
+html[data-skin="cloud"] .c-scope-game:active {
+  transform: scale(.98);
+}
+
+html[data-skin="cloud"] .c-scope-game[aria-current="true"] {
+  background: var(--c-band-ink);
+  color: var(--c-band);
+}
+
+html[data-skin="cloud"] .c-scope-more {
+  padding: 0 8px 0 12px;
+}
+
+html[data-skin="cloud"] .c-scope-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--c-fs-xs);
+  /* No tone colour on the band, where it loses contrast; the icon shape carries the state. */
+  font-weight: 600;
+}
+
+html[data-skin="cloud"] .c-scope-pick {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 56vw;
+  height: var(--c-target);
+  padding: 0 10px 0 6px;
+  border: 0;
+  border-radius: var(--c-r-pill);
+  background: var(--c-band-2);
+  color: var(--c-band-ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+html[data-skin="cloud"] .c-scope-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-skin="cloud"] .c-scope-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0 -8px;
+}
+
+html[data-skin="cloud"] .c-scope-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 1px solid var(--c-line);
+  border-radius: var(--c-r-sm);
+  background: none;
+  color: var(--c-ink);
+  text-align: start;
+  cursor: pointer;
+  transition: background var(--c-d1);
+}
+
+html[data-skin="cloud"] .c-scope-row:last-child {
+  border-bottom: 0;
+}
+
+html[data-skin="cloud"] .c-scope-row:hover {
+  background: var(--c-surface-2);
+}
+
+html[data-skin="cloud"] .c-scope-row[aria-checked="true"] {
+  background: var(--c-accent-soft);
+}
+
+html[data-skin="cloud"] .c-scope-ring {
+  color: var(--c-ink-3);
+}
+
+html[data-skin="cloud"] .c-scope-row[aria-checked="true"] .c-scope-ring {
+  color: var(--c-accent);
+}
+
+html[data-skin="cloud"] .c-scope-row-name {
+  overflow: hidden;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1199px) {
+  html[data-skin="cloud"] .c-scope-state-label {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  html[data-skin="cloud"] .c-scope {
+    display: none;
+  }
+
+  html[data-skin="cloud"] .c-scope-pick {
+    display: flex;
+  }
+}

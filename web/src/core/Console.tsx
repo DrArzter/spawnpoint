@@ -337,9 +337,9 @@ function releasesModel(console: ConsoleController): ReleasesModel {
         hint: createWorldHint(canManage, preset.releases.length > 0),
       }) : null,
       build: game && console.capabilities.has("releaseBuilds") && granted.has("release.build") ? action("release.build", releaseBuildCopy(preset).label, () => console.requestBuild(game, preset), {
-        icon: "refresh", disabled: preset.buildAvailable !== true || (preset.buildStatus === "building" && preset.build?.state !== "starting") || pendingOf(pending, "build") !== null,
+        icon: "refresh", disabled: preset.buildAvailable !== true || buildRunning(preset) || pendingOf(pending, "build") !== null,
         busy: pendingOf(pending, "build")?.presetId === preset.id,
-        hint: preset.buildAvailable !== true ? "The preset source snapshot is unavailable for building." : preset.buildStatus === "building" && preset.build?.state !== "starting" ? "A build is already running." : releaseBuildCopy(preset).hint,
+        hint: buildHint(preset),
       }) : null,
     })),
     pointers: (game?.worlds ?? []).map((world) => ({
@@ -349,6 +349,16 @@ function releasesModel(console: ConsoleController): ReleasesModel {
       summary: releaseSummary(world),
     })),
   };
+}
+
+/** A build that is under way; a resumable "starting" build still accepts a request. */
+function buildRunning(preset: Preset): boolean {
+  return preset.buildStatus === "building" && preset.build?.state !== "starting";
+}
+
+function buildHint(preset: Preset): string {
+  if (preset.buildAvailable !== true) return "The preset source snapshot is unavailable for building.";
+  return buildRunning(preset) ? "A build is already running." : releaseBuildCopy(preset).hint;
 }
 
 function createWorldHint(canManage: boolean, ready: boolean): string {

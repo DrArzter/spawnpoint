@@ -292,7 +292,8 @@ export function useAccessRequests(enabled: boolean, notify: Notify): Readonly<{
       }
       update((current) => current.filter((item) => requestId(item) !== requestId(candidate)));
     } catch (cause) {
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : approve ? "This account could not be approved." : "This account could not be dismissed." });
+      const failure = approve ? "This account could not be approved." : "This account could not be dismissed.";
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : failure });
     } finally {
       setWorking(null);
     }

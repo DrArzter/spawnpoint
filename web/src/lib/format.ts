@@ -2,23 +2,26 @@ const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeS
 const time = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" });
 const date = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
-function parse(value: string | number | null | undefined): Date | null {
+/** A time as the API gives it: an ISO string, epoch seconds, or absent. */
+type Instant = string | number | null | undefined;
+
+function parse(value: Instant): Date | null {
   if (value === null || value === undefined || value === "") return null;
   const parsed = typeof value === "number" ? new Date(value * 1000) : new Date(value);
   return Number.isNaN(parsed.valueOf()) ? null : parsed;
 }
 
-export function formatDateTime(value: string | number | null | undefined, fallback = "Unknown time"): string {
+export function formatDateTime(value: Instant, fallback = "Unknown time"): string {
   const parsed = parse(value);
   return parsed ? dateTime.format(parsed) : fallback;
 }
 
-export function formatTime(value: string | number | null | undefined, fallback = "Unknown time"): string {
+export function formatTime(value: Instant, fallback = "Unknown time"): string {
   const parsed = parse(value);
   return parsed ? time.format(parsed) : fallback;
 }
 
-export function formatDate(value: string | number | null | undefined, fallback = "Unknown date"): string {
+export function formatDate(value: Instant, fallback = "Unknown date"): string {
   const parsed = parse(value);
   return parsed ? date.format(parsed) : fallback;
 }
@@ -28,7 +31,7 @@ const dateNoYear = new Intl.DateTimeFormat(undefined, { month: "short", day: "nu
 // A timestamp read in a column is two things that must each stay whole: the day
 // and the clock. Split here so the view can decide where a line may break, and
 // drop the year while it is the current one — `full` keeps what was dropped.
-export function formatStamp(value: string | number | null | undefined): Readonly<{ iso: string; date: string; time: string; full: string }> | null {
+export function formatStamp(value: Instant): Readonly<{ iso: string; date: string; time: string; full: string }> | null {
   const parsed = parse(value);
   if (parsed === null) return null;
   const thisYear = parsed.getFullYear() === new Date().getFullYear();

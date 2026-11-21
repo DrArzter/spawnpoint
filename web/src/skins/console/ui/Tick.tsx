@@ -44,7 +44,7 @@ export function useTick(value: number | null): Readonly<{ shown: number | null; 
 /** A count that ticks to a new value with a short lift in the accent (A8). `—` while unknown. */
 export function Tick({ value, className }: Readonly<{ value: number | null; className?: string }>) {
   const { shown, ticking } = useTick(value);
-  return <span className={cx("c-tick", ticking && "c-tick-moving", className)}>{shown === null ? "—" : shown}</span>;
+  return <span className={cx("c-tick", ticking && "c-tick-moving", className)}>{shown ?? "—"}</span>;
 }
 
 /**

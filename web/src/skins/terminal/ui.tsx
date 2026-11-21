@@ -72,6 +72,12 @@ export function Skeleton({ variant = "text", width = "medium", className }: Read
   );
 }
 
+/** The first cell of a list row is long; the others alternate by position. */
+function listWidth(row: number, column: number): "short" | "medium" | "long" {
+  if (column === 0) return "long";
+  return (row + column) % 2 === 0 ? "medium" : "short";
+}
+
 /** Repeated list-shaped placeholders. The column contract is intentionally
     small so lists, drawers and preference rows do not invent their own wait. */
 export function SkeletonRows({ label, rows = 3, columns = 2, className }: Readonly<{
@@ -85,7 +91,7 @@ export function SkeletonRows({ label, rows = 3, columns = 2, className }: Readon
       {Array.from({ length: rows }, (_, row) => (
         <span aria-hidden="true" className={cx("t-skeleton-row", `t-skeleton-cols-${columns}`)} key={row}>
           {Array.from({ length: columns }, (_, column) => (
-            <Skeleton key={column} width={column === 0 ? "long" : (row + column) % 2 === 0 ? "medium" : "short"} />
+            <Skeleton key={column} width={listWidth(row, column)} />
           ))}
         </span>
       ))}
@@ -409,6 +415,10 @@ function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
+function loadingCopy(label: string): string {
+  return `Loading ${lowerFirst(label)}`;
+}
+
 export function Table<Row>({ columns, rows, rowKey, label, loading = false, loadingLabel, loadingRows = 3, empty, headless = false, decision = false, className }: Readonly<{
   columns: readonly Col<Row>[];
   rows: readonly Row[];
@@ -425,13 +435,13 @@ export function Table<Row>({ columns, rows, rowKey, label, loading = false, load
 }>) {
   return (
     <div className={cx("t-table-wrap", decision && "t-table-decision", className)}>
-      <table aria-busy={loading || undefined} aria-label={loading ? `${label}. ${loadingLabel ?? `Loading ${lowerFirst(label)}`}` : label} aria-live={loading ? "polite" : undefined} className={cx("t-table", headless && "t-table-headless")}>
+      <table aria-busy={loading || undefined} aria-label={loading ? `${label}. ${loadingLabel ?? loadingCopy(label)}` : label} aria-live={loading ? "polite" : undefined} className={cx("t-table", headless && "t-table-headless")}>
         <thead className={headless ? "visually-hidden" : undefined}>
           <tr>{columns.map((column) => <th className={cellClass(column, true)} key={column.id} scope="col" style={column.width ? { width: column.width } : undefined}>{column.verbs ? <span className="visually-hidden">{column.label}</span> : column.label}</th>)}</tr>
         </thead>
         <tbody>
           {loading && Array.from({ length: loadingRows }, (_, row) => (
-            <tr aria-hidden="true" className="t-table-skeleton" key={`skeleton-${row}`}>
+            <tr aria-hidden="true" className="t-table-skeleton" key={`skeleton-${row}`} /* NOSONAR a row is not focusable and holds only placeholders */>
               {columns.map((column, columnIndex) => <td className={cellClass(column)} data-label={column.verbs ? "" : column.label} key={column.id} style={column.width ? { width: column.width } : undefined}><Skeleton width={skeletonWidth(column, row + columnIndex)} /></td>)}
             </tr>
           ))}

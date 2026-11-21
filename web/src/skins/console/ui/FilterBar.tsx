@@ -18,6 +18,44 @@ export function applyFilter<Row>(rows: readonly Row[], tokens: readonly FilterTo
 
 type Option = Readonly<{ key: string; label: string; count?: number; pick: () => void }>;
 
+type Pick = Readonly<{ add: (token: FilterToken) => void; choose: (property: FilterProperty) => void }>;
+
+/**
+ * What the menu offers: a chosen property's values, or free text first (so
+ * Enter searches what was typed even when it also matches a property's name,
+ * "re" in "Release") and then the properties.
+ */
+function filterOptions(properties: readonly FilterProperty[], property: FilterProperty | null, text: string, pick: Pick): Option[] {
+  const query = text.trim().toLowerCase();
+  if (property) {
+    return property.values
+      .filter((item) => item.value.toLowerCase().includes(query))
+      .map((item) => ({ key: `${property.id}=${item.value}`, label: item.value, count: item.count, pick: () => pick.add({ property: property.id, value: item.value }) }));
+  }
+  const free: Option[] = query ? [{ key: "text", label: `Text: ${text.trim()}`, pick: () => pick.add({ property: null, value: text.trim() }) }] : [];
+  const named = properties.filter((item) => item.label.toLowerCase().includes(query)).map((item) => ({ key: item.id, label: item.label, pick: () => pick.choose(item) }));
+  return [...free, ...named];
+}
+
+type KeyCommand = "down" | "up" | "pick" | "add-text" | "swallow" | "leave-property" | "close" | "drop-token" | "none";
+
+/** What a key does to the combobox, as data; the component applies it. */
+function keyCommand(key: string, now: Readonly<{ open: boolean; picks: boolean; typed: boolean; property: boolean; empty: boolean; tokens: number }>): KeyCommand {
+  switch (key) {
+    case "ArrowDown": return "down";
+    case "ArrowUp": return "up";
+    case "Enter":
+      if (now.open && now.picks) return "pick";
+      return now.typed && !now.property ? "add-text" : "swallow";
+    case "Escape": return now.property ? "leave-property" : "close";
+    case "Backspace":
+      if (!now.empty) return "none";
+      if (now.property) return "leave-property";
+      return now.tokens > 0 ? "drop-token" : "none";
+    default: return "none";
+  }
+}
+
 /**
  * The property filter: tokens such as "Hosting = Fleet" or "Text: pines"
  * and one combobox. The menu lists properties, then a property's values with
@@ -50,30 +88,40 @@ export function FilterBar({ label, properties, tokens, onChange, matches, end, p
     input.current?.focus();
   };
   const query = text.trim().toLowerCase();
-  // Free text comes first, so Enter searches what was typed even when it also
-  // matches a property's name ("re" in "Release").
-  const textOption: Option[] = !property && query ? [{ key: "text", label: `Text: ${text.trim()}`, pick: () => add({ property: null, value: text.trim() }) }] : [];
-  const options: Option[] = property
-    ? property.values.filter((item) => item.value.toLowerCase().includes(query)).map((item) => ({ key: `${property.id}=${item.value}`, label: item.value, count: item.count, pick: () => add({ property: property.id, value: item.value }) }))
-    : [...textOption, ...properties.filter((item) => item.label.toLowerCase().includes(query)).map((item) => ({ key: item.id, label: item.label, pick: () => { setProperty(item); setText(""); setActive(0); input.current?.focus(); } }))];
+  const choose = (item: FilterProperty) => { setProperty(item); setText(""); setActive(0); input.current?.focus(); };
+  const options = filterOptions(properties, property, text, { add, choose });
   const at = Math.min(active, Math.max(options.length - 1, 0));
   const labelOf = (id: string | null) => id === null ? "Text" : properties.find((item) => item.id === id)?.label ?? id;
 
   const onKey = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      setOpen(true);
-      if (options.length > 0) setActive((at + (event.key === "ArrowDown" ? 1 : options.length - 1)) % options.length);
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      if (open && options[at]) options[at].pick();
-      else if (query && !property) add({ property: null, value: text.trim() });
-    } else if (event.key === "Escape") {
-      if (property) setProperty(null);
-      else setOpen(false);
-    } else if (event.key === "Backspace" && text === "") {
-      if (property) setProperty(null);
-      else if (tokens.length > 0) onChange(tokens.slice(0, -1));
+    const command = keyCommand(event.key, { open, picks: options[at] !== undefined, typed: query !== "", property: property !== null, empty: text === "", tokens: tokens.length });
+    switch (command) {
+      case "down":
+      case "up":
+        event.preventDefault();
+        setOpen(true);
+        if (options.length > 0) setActive((at + (command === "down" ? 1 : options.length - 1)) % options.length);
+        break;
+      case "pick":
+        event.preventDefault();
+        options[at].pick();
+        break;
+      case "add-text":
+        event.preventDefault();
+        add({ property: null, value: text.trim() });
+        break;
+      case "swallow":
+        event.preventDefault();
+        break;
+      case "leave-property":
+        setProperty(null);
+        break;
+      case "close":
+        setOpen(false);
+        break;
+      case "drop-token":
+        onChange(tokens.slice(0, -1));
+        break;
     }
   };
 
@@ -108,7 +156,7 @@ export function FilterBar({ label, properties, tokens, onChange, matches, end, p
         </div>
         <div aria-label={property ? `${property.label} values` : "Filter by"} className="c-filter-menu" hidden={!open || options.length === 0} id={listId} role="listbox">
           <div aria-labelledby={`${listId}-label`} role="group">
-            <div className="c-filter-menu-label" id={`${listId}-label`} role="presentation">{property ? property.label : "Filter by"}</div>
+            <div className="c-filter-menu-label" id={`${listId}-label`}>{property ? property.label : "Filter by"}</div>
             {options.map((option, index) => (
               <div
                 aria-selected={index === at}
@@ -117,7 +165,7 @@ export function FilterBar({ label, properties, tokens, onChange, matches, end, p
                 key={option.key}
                 onMouseDown={(event) => { event.preventDefault(); option.pick(); }}
                 onMouseMove={() => setActive(index)}
-                role="option"
+                role="option" // NOSONAR options are chosen through aria-activedescendant; focus stays on the input
               >
                 <span>{option.label}</span>
                 {option.count !== undefined && <span className="c-filter-option-count">{option.count}</span>}

@@ -68,15 +68,25 @@ export function flashItems(model: ShellModel, queue: SnackbarQueue, worldId: str
 
 type ViewTransitionDocument = Document & { startViewTransition?: (update: () => Promise<void>) => unknown };
 
+type Arrival = { target: string; resolve: () => void };
+
+/** Moves to `href` and holds the transition until that view renders, or the motion time passes. */
+function navigateUntilArrived(arrived: RefObject<Arrival | null>, href: string, resolve: () => void): void {
+  const done = () => { arrived.current = null; resolve(); };
+  arrived.current = { target: viewKey(href), resolve: done };
+  window.setTimeout(done, MOTION["--c-d3"]);
+  window.location.hash = href.slice(1);
+}
+
 // A1: a link to another page swaps the page area inside a view transition.
 // A2: a link to another pane of a split page swaps only the pane (marked
 // data-pane), so the list column stays still. The update resolves once the
 // new view has rendered, so the old snapshot is never followed by a blank frame.
 function usePageTransition(key: string) {
-  const arrived = useRef<{ target: string; resolve: () => void } | null>(null);
+  const arrived = useRef<Arrival | null>(null);
   useLayoutEffect(() => {
     const waiting = arrived.current;
-    if (waiting && waiting.target === key) {
+    if (waiting?.target === key) {
       arrived.current = null;
       waiting.resolve();
     }
@@ -92,12 +102,7 @@ function usePageTransition(key: string) {
       event.preventDefault();
       const root = document.documentElement;
       root.dataset.transition = kind;
-      const finished = start.call(document, () => new Promise<void>((resolve) => {
-        const done = () => { arrived.current = null; resolve(); };
-        arrived.current = { target: viewKey(href), resolve: done };
-        window.setTimeout(done, MOTION["--c-d3"]);
-        window.location.hash = href.slice(1);
-      })) as { finished?: Promise<void> } | undefined;
+      const finished = start.call(document, () => new Promise<void>((resolve) => navigateUntilArrived(arrived, href, resolve))) as { finished?: Promise<void> } | undefined;
       const clear = () => { delete root.dataset.transition; };
       if (finished?.finished) finished.finished.then(clear, clear);
       else clear();
@@ -136,6 +141,15 @@ const SHORTCUTS: readonly (readonly [string, string])[] = [
   ["Esc", "Close"],
 ];
 
+const SHORTCUT_PAGES: Readonly<Record<string, string>> = { w: "worlds", r: "releases", a: "access" };
+
+/** Where "G then <letter>" goes; undefined for a letter that names no page. */
+function shortcutHref(model: ShellModel, letter: string): string | undefined {
+  if (letter === "h") return model.overview?.href;
+  if (letter === "p") return "#/profile";
+  return model.navigation.find((item) => item.id === SHORTCUT_PAGES[letter])?.href;
+}
+
 function useShortcuts(model: ShellModel, openPalette: () => void, openKeys: () => void) {
   const latest = useRef(model);
   latest.current = model;
@@ -143,9 +157,7 @@ function useShortcuts(model: ShellModel, openPalette: () => void, openKeys: () =
     let leader = 0;
     const go = (letter: string) => {
       const current = latest.current;
-      const href = letter === "h" ? current.overview?.href
-        : letter === "p" ? "#/profile"
-        : current.navigation.find((item) => item.id === ({ w: "worlds", r: "releases", a: "access" } as Record<string, string>)[letter])?.href;
+      const href = shortcutHref(current, letter);
       if (href) window.location.hash = href.slice(1);
     };
     const onKey = (event: KeyboardEvent) => {

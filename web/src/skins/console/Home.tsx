@@ -76,7 +76,7 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
   const online = model.rows.filter((row) => row.status.kind === "ok");
   const startable = model.rows.flatMap((row) => {
     const verb = row.sessionAction?.();
-    return verb && verb.id === "session.start" ? [{ row, verb }] : [];
+    return verb?.id === "session.start" ? [{ row, verb }] : [];
   });
   const operations = model.operations ?? [];
   const builds = model.builds ?? [];

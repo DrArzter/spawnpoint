@@ -2,7 +2,7 @@ import type { Detail, DetailKey, DetailValue } from "../../../core/models";
 import { Icon } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { Address } from "./Address";
-import { Ago } from "./Ago";
+import { Ago, instantMs } from "./Ago";
 import { Chip } from "./Chip";
 import { Copy } from "./Copy";
 import { Status } from "./Status";
@@ -11,7 +11,7 @@ const dayTime = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short
 
 /** `d MMM HH:mm`, or null for an unknown time. */
 export function shortDateTime(at: string | number | null | undefined): string | null {
-  const time = typeof at === "number" ? at : at ? Date.parse(at) : Number.NaN;
+  const time = instantMs(at);
   return Number.isNaN(time) ? null : dayTime.format(time);
 }
 
@@ -61,7 +61,7 @@ export function DetailList({ details, columns = "four", omit = [], spans = {}, l
   /** Facts this view shows elsewhere (R3), by key. */
   omit?: readonly DetailKey[];
   /** Wider entries, by key, or by label for a detail a page builds without a key. */
-  spans?: Readonly<Partial<Record<DetailKey | string, DetailSpan>>>;
+  spans?: Readonly<Partial<Record<string, DetailSpan>>>;
   label?: string;
 }>) {
   const shown = details.filter((detail) => detail.key === undefined || !omit.includes(detail.key));
@@ -73,7 +73,7 @@ export function DetailList({ details, columns = "four", omit = [], spans = {}, l
           <div className={cx("c-detail-item", span && `c-span-${span}`)} data-layout="pair" key={detail.key ?? detail.label}>
             <dt>
               <span>{detail.label}</span>
-              {detail.explain && <span aria-label={detail.explain} className="c-detail-explain" data-tip={detail.explain} role="img" tabIndex={0}><Icon name="info" size={15} /></span>}
+              {detail.explain && <span aria-label={detail.explain} className="c-detail-explain" data-tip={detail.explain} role="img" tabIndex={0 /* NOSONAR focusable tooltip trigger */}><Icon name="info" size={15} /></span>}
             </dt>
             <dd>
               <span className="c-detail-value">
@@ -81,7 +81,7 @@ export function DetailList({ details, columns = "four", omit = [], spans = {}, l
                 {detail.copy && <Copy value={detail.copy} what={detail.label} />}
               </span>
               {(detail.hint || (detail.hintTime !== undefined && detail.hintTime !== null)) && (
-                <span className={cx("c-detail-hint", detail.hintAttention && "c-tone-warn")} data-tip={detail.hint} tabIndex={detail.hint ? 0 : undefined}>
+                <span className={cx("c-detail-hint", detail.hintAttention && "c-tone-warn")} data-tip={detail.hint} tabIndex={detail.hint ? 0 : undefined /* NOSONAR focusable tooltip trigger */}>
                   {detail.hintAttention && <Icon name="warning" size={15} />}
                   <span className="c-detail-hint-text">
                     {detail.hint}

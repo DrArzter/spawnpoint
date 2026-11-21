@@ -12,10 +12,10 @@ export function stretch(source: string, length = 80): string {
   return source.repeat(Math.ceil(length / source.length)).slice(0, length);
 }
 
-export function stressState(): DemoState {
-  const state = initialState();
-  const games = state.snapshot.games;
-  const minecraft = games.find((game) => game.id === "minecraft")!;
+type Game = DemoState["snapshot"]["games"][number];
+
+/** Long names on the Minecraft worlds and presets, plus a dozen extra worlds to overflow the list. */
+function crowdMinecraft(minecraft: Game): void {
   const [rostik, vanilla] = minecraft.worlds;
   rostik.displayName = stretch(SPACED);
   vanilla.displayName = stretch(UNBROKEN);
@@ -28,12 +28,29 @@ export function stressState(): DemoState {
       materialization: index % 4 === 0 ? "archived" : "existing",
     });
   }
+}
+
+/** Long names on the people lists. */
+function crowdPeople(state: DemoState): void {
+  for (const identity of state.identities) identity.displayName = stretch(`${identity.displayName} `, identity.roleId === "player" ? 80 : 40);
+  for (const candidate of state.candidates) candidate.displayName = stretch(`${candidate.displayName}`, 80);
+}
+
+/** Long whitelists and console lines. */
+function crowdRecords(state: DemoState): void {
+  for (const list of Object.values(state.whitelists)) list.names = Array.from({ length: 24 }, (_, index) => `Player_${String(index).padStart(2, "0")}_long_name`.slice(0, 16));
+  for (const [key, entries] of Object.entries(state.console)) state.console[key] = entries.map((entry) => ({ ...entry, output: stretch(`${entry.output} `, 240) }));
+}
+
+export function stressState(): DemoState {
+  const state = initialState();
+  const games = state.snapshot.games;
+  const minecraft = games.find((game) => game.id === "minecraft")!;
+  crowdMinecraft(minecraft);
   for (const game of games) {
     for (const world of game.worlds) if (game !== minecraft) world.displayName = stretch(`${world.displayName} `, 80);
   }
-  for (const identity of state.identities) identity.displayName = stretch(`${identity.displayName} `, identity.roleId === "player" ? 80 : 40);
-  for (const candidate of state.candidates) candidate.displayName = stretch(`${candidate.displayName}`, 80);
-  for (const list of Object.values(state.whitelists)) list.names = Array.from({ length: 24 }, (_, index) => `Player_${String(index).padStart(2, "0")}_long_name`.slice(0, 16));
-  for (const [key, entries] of Object.entries(state.console)) state.console[key] = entries.map((entry) => ({ ...entry, output: stretch(`${entry.output} `, 240) }));
+  crowdPeople(state);
+  crowdRecords(state);
   return state;
 }

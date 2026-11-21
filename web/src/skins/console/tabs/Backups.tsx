@@ -13,7 +13,8 @@ const ALL = "all";
 
 /** What the inventory leaves out, as one faint line; null when it lists everything. */
 export function partialLine(unverified: number, truncated: boolean): string | null {
-  const parts = [unverified > 0 ? `${unverified} ${unverified === 1 ? "object" : "objects"} not shown` : null, truncated ? "older backups exist" : null].filter(Boolean);
+  const hidden = `${unverified} ${unverified === 1 ? "object" : "objects"} not shown`;
+  const parts = [unverified > 0 ? hidden : null, truncated ? "older backups exist" : null].filter(Boolean);
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
@@ -34,7 +35,7 @@ function Body({ model }: Readonly<{ model: BackupsModel }>) {
   const inventory = model.inventory;
   if (inventory.status === "error") return <LoadError error={inventory.error} kind={inventory.kind} retry={inventory.retry} title="Backups could not be loaded" verb="read backups" />;
   const ready = inventory.status === "ready" ? inventory.value : null;
-  if (ready && ready.entries.length === 0) return <Empty icon="cloud_off" title="No backups" />;
+  if (ready?.entries.length === 0) return <Empty icon="cloud_off" title="No backups" />;
   const download = model.download;
   const columns: Column<BackupEntry>[] = [
     { id: "time", header: "Time", kind: "lead", render: (entry) => <strong>{shortDateTime(entry.storedAt) ?? entry.storedAt}</strong> },

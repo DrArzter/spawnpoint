@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Icon } from "../../../icons";
+import { Icon, type IconName } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { ARRIVED, useArrivals } from "./Tick";
 import { SkeletonRows } from "./Skeleton";
@@ -97,13 +97,18 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
   );
 }
 
+function sortIcon(sort: SortDirection | null | undefined): IconName {
+  if (sort === "descending") return "arrow_downward";
+  return sort === "ascending" ? "arrow_upward" : "unfold_more";
+}
+
 function HeaderLabel<Row>({ column }: Readonly<{ column: Column<Row> }>) {
   if (column.kind === "act") return <span className="c-sr">{column.header}</span>;
   if (!column.onSort) return <>{column.header}</>;
   return (
     <button className="c-sort" onClick={column.onSort} type="button">
       <span>{column.header}</span>
-      <Icon name={column.sort === "descending" ? "arrow_downward" : column.sort === "ascending" ? "arrow_upward" : "unfold_more"} size={15} />
+      <Icon name={sortIcon(column.sort)} size={15} />
     </button>
   );
 }

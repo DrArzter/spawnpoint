@@ -14,6 +14,17 @@ function tabId(prefix: string, id: string): string {
   return `${prefix}-tab-${id}`;
 }
 
+/** The tab an arrow, Home or End key moves to from tab `at`; undefined for any other key. */
+function tabForKey<Id extends string>(tabs: readonly TabItem<Id>[], at: number, key: string): TabItem<Id> | undefined {
+  switch (key) {
+    case "ArrowRight": return tabs[(at + 1) % tabs.length];
+    case "ArrowLeft": return tabs[(at - 1 + tabs.length) % tabs.length];
+    case "Home": return tabs[0];
+    case "End": return tabs.at(-1);
+    default: return undefined;
+  }
+}
+
 /**
  * Tabs over one panel. The ink slides from the old tab to the new one (A3);
  * arrows, Home and End move between tabs; the active tab is kept in view and
@@ -57,11 +68,7 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
 
   const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
     const at = tabs.findIndex((tab) => tab.id === value);
-    const target = event.key === "ArrowRight" ? tabs[(at + 1) % tabs.length]
-      : event.key === "ArrowLeft" ? tabs[(at - 1 + tabs.length) % tabs.length]
-      : event.key === "Home" ? tabs[0]
-      : event.key === "End" ? tabs.at(-1)
-      : undefined;
+    const target = tabForKey(tabs, at, event.key);
     if (!target) return;
     event.preventDefault();
     onChange(target.id);
@@ -70,7 +77,7 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
 
   return (
     <div className="c-tabrow">
-      <div aria-label={label} className={cx("c-tabs", more && "c-tabs-more")} data-scroll="expected" onKeyDown={onKey} ref={strip} role="tablist">
+      <div aria-label={label} className={cx("c-tabs", more && "c-tabs-more")} data-scroll="expected" onKeyDown={onKey} ref={strip} role="tablist" /* NOSONAR roving tabindex: the selected tab carries the tab stop */>
         {tabs.map((tab) => {
           const selected = tab.id === value;
           return (

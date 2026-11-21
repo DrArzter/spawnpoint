@@ -216,7 +216,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
       id: "select",
       header: "Select",
       kind: "check",
-      headerCell: <Checkbox checked={onPage === 0 ? false : onPage === pageIds.length ? true : "mixed"} label="Select all on this page" labelHidden onChange={(on) => setChosen((current) => { const next = new Set(current); for (const id of pageIds) { if (on) next.add(id); else next.delete(id); } return next; })} />,
+      headerCell: <Checkbox checked={pageChecked(onPage, pageIds.length)} label="Select all on this page" labelHidden onChange={(on) => setChosen((current) => { const next = new Set(current); for (const id of pageIds) { if (on) next.add(id); else next.delete(id); } return next; })} />,
       render: (row) => <Checkbox checked={chosen.has(row.world.id)} label={`Select ${row.world.displayName}`} labelHidden onChange={(on) => toggle(row.world.id, on)} />,
     },
     { id: "name", header: "Name", kind: "lead", ...sortable("name"), render: (row) => <span className="c-worlds-name"><a href={row.href} title={row.world.displayName}>{row.world.displayName}</a><HostingMark className="c-worlds-hostmark" row={row} /></span> },
@@ -270,9 +270,9 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
             selected={(row) => chosen.has(row.world.id) || peekId === row.world.id}
             split={peek !== null}
           />
-          <div className="c-worlds-list" role="list">
-            {paged.rows.length === 0 ? noMatches : paged.rows.map((row) => (
-              <div className={cx("c-worlds-row", (chosen.has(row.world.id) || peekId === row.world.id) && "c-worlds-row-selected", arrived.has(row.world.id) && ARRIVED)} key={row.world.id}>
+          <div className="c-worlds-list">
+            {paged.rows.length === 0 ? noMatches : <ul className="c-worlds-rows">{paged.rows.map((row) => (
+              <li className={cx("c-worlds-row", (chosen.has(row.world.id) || peekId === row.world.id) && "c-worlds-row-selected", arrived.has(row.world.id) && ARRIVED)} key={row.world.id}>
                 <Checkbox checked={chosen.has(row.world.id)} label={`Select ${row.world.displayName}`} labelHidden onChange={(on) => toggle(row.world.id, on)} />
                 <ListItemWorld
                   address={row.address ? <Address address={row.address} /> : undefined}
@@ -286,8 +286,8 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
                   status={row.status}
                 />
                 <QuickLookButton onPeek={setPeekId} open={peekId === row.world.id} row={row} />
-              </div>
-            ))}
+              </li>
+            ))}</ul>}
           </div>
         </Card>
         {peek && <QuickLook model={model} onClose={() => setPeekId(null)} row={peek} />}
@@ -310,6 +310,18 @@ function QuickLookButton({ row, open, onPeek }: Readonly<{ row: WorldRow; open: 
   return <IconButton aria-pressed={open} className="c-icon-btn-sm" icon="view_sidebar" label={`Quick look at ${row.world.displayName}`} onClick={() => onPeek(open ? null : row.world.id)} />;
 }
 
+/** The header checkbox: none, all or some of the page selected. */
+function pageChecked(selected: number, total: number): boolean | "mixed" {
+  if (selected === 0) return false;
+  return selected === total ? true : "mixed";
+}
+
+/** Why a bulk action waits: nothing fits it, or more than one world does. */
+function bulkHint(count: number, none: string): string | undefined {
+  if (count === 0) return none;
+  return count > 1 ? "Select one world to confirm" : undefined;
+}
+
 /**
  * The bulk menu. Core confirms one world at a time (a second confirmation
  * replaces the first), so each item runs only when one selected world can
@@ -321,9 +333,9 @@ function BulkActions({ rows, clear }: Readonly<{ rows: readonly WorldRow[]; clea
     icon,
     detail: `${picked.length} of ${rows.length}`,
     disabled: picked.length !== 1,
-    hint: picked.length === 0 ? none : picked.length > 1 ? "Select one world to confirm" : undefined,
+    hint: bulkHint(picked.length, none),
   });
-  const usable = (candidate: Action | null | undefined, verb: string): candidate is Action => candidate !== null && candidate !== undefined && candidate.id === verb && !candidate.disabled;
+  const usable = (candidate: Action | null | undefined, verb: string): candidate is Action => candidate?.id === verb && !candidate.disabled;
   const starts = verbs.flatMap(({ session }) => usable(session, "session.start") ? [session] : []);
   const stops = verbs.flatMap(({ session }) => usable(session, "session.stop") ? [session] : []);
   const archives = rows.flatMap((row) => { const archive = row.actions.find((candidate) => candidate.id === "world.archive"); return usable(archive, "world.archive") ? [archive] : []; });

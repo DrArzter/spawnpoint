@@ -65,7 +65,9 @@ export function buildRelease(gameId: string, presetId: string, profileDigest: st
   const retry = preset.build?.state === "failed";
   const resume = preset.build?.state === "starting";
   const release = retry || resume ? preset.build!.release : `${Date.now()}.${++state.counter}`;
-  const attempt = resume ? preset.build!.attempt : retry ? preset.build!.attempt + 1 : 1;
+  let attempt = 1;
+  if (resume) attempt = preset.build!.attempt;
+  else if (retry) attempt = preset.build!.attempt + 1;
   preset.build = { release, attempt, state: "building", requestedAt: iso(), profileDigest };
   preset.buildStatus = "building";
   state.scheduled.push({ operationId: `build-${gameId}-${presetId}`, at: Date.now() + 6000, apply: () => {
@@ -145,6 +147,29 @@ export function snapshot(): ControlPlaneSnapshot {
   return state.snapshot;
 }
 
+/** Refuses a start the world cannot take: it already runs, or the shared host is busy. */
+function requireRoom(target: Mutable<World>, gameId: string, lifecycle: Mutable<WorldSession>): void {
+  const running = "This world is already running.";
+  if (target.placement === "fleet") {
+    if (target.session && (target.session.activeSessionId || target.session.observedState !== "stopped")) throw new Error(running);
+    return;
+  }
+  // The configured host runs one session at a time, kept on its game's record.
+  const busy = state.snapshot.games.find((item) => item.lifecycle?.observedState !== "stopped");
+  if (busy?.id === gameId && lifecycle.activeWorldId === target.id) throw new Error(running);
+  if (busy) throw new Error(`The shared host already runs ${busy.displayName}. Stop that session first.`);
+}
+
+/** A world that was never created gets its first wipe on its first start. */
+function materialize(target: Mutable<World>): void {
+  if (target.materialization !== "not_created") return;
+  target.materialization = "existing";
+  const release = target.preset?.latestRelease ?? target.release.desiredRelease ?? "1.0";
+  const generationId = newGeneration(state.counter + 3);
+  target.wipes = [{ id: generationId, number: 1, state: "current", createdAt: iso(), closedAt: null, originRelease: release }];
+  target.release = { state: "available", generationId, activeRelease: release, desiredRelease: release };
+}
+
 export function startSession(gameId: string, worldId: string): { result: "requested"; operationId: string } {
   settle();
   requireIdle(worldId);
@@ -153,22 +178,8 @@ export function startSession(gameId: string, worldId: string): { result: "reques
   const lifecycle = game(gameId).lifecycle;
   if (!lifecycle) throw new Error("This game has no session workflow.");
   const fleet = target.placement === "fleet";
-  if (fleet) {
-    if (target.session && (target.session.activeSessionId || target.session.observedState !== "stopped")) throw new Error("This world is already running.");
-  } else {
-    // The configured host runs one session at a time, kept on its game's record.
-    const busy = state.snapshot.games.find((item) => item.lifecycle?.observedState !== "stopped");
-    if (busy?.id === gameId && lifecycle.activeWorldId === worldId) throw new Error("This world is already running.");
-    if (busy) throw new Error(`The shared host already runs ${busy.displayName}. Stop that session first.`);
-  }
-
-  if (target.materialization === "not_created") {
-    target.materialization = "existing";
-    const release = target.preset?.latestRelease ?? target.release.desiredRelease ?? "1.0";
-    const generationId = newGeneration(state.counter + 3);
-    target.wipes = [{ id: generationId, number: 1, state: "current", createdAt: iso(), closedAt: null, originRelease: release }];
-    target.release = { state: "available", generationId, activeRelease: release, desiredRelease: release };
-  }
+  requireRoom(target, gameId, lifecycle);
+  materialize(target);
 
   const session: Mutable<WorldSession> = fleet
     ? { serverId: gameId, desiredState: "running", observedState: "starting", activeSessionId: null, activeWorldId: worldId, updatedAtEpochSeconds: 0, idle: null }
@@ -355,12 +366,18 @@ export function backups(gameId: string, worldId: string): BackupInventory {
   return { entries, unverified: entries.length > 2 ? 1 : 0, truncated: false };
 }
 
+const RANGE: Readonly<Record<MetricRange, { hours: number; period: number }>> = {
+  "6h": { hours: 6, period: 300 },
+  "24h": { hours: 24, period: 900 },
+  "7d": { hours: 168, period: 3600 },
+};
+
 // A plausible evening: quiet, a session that starts, load while people play,
 // then nothing — the gap is the point, because a stopped host reports nothing.
 function hostMetrics(instanceId: string, range: MetricRange): HostMetrics {
   settle();
-  const hours = range === "6h" ? 6 : range === "24h" ? 24 : 168;
-  const period = hours <= 6 ? 300 : hours <= 48 ? 900 : 3600;
+  const hours = RANGE[range].hours;
+  const period = RANGE[range].period;
   const end = Date.now();
   const count = Math.floor((hours * 3600) / period);
   const series = [

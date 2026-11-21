@@ -1,9 +1,15 @@
 import { formatDateTime } from "../../../lib/format";
 import { useNow } from "./Flashbar";
 
+/** Milliseconds since the epoch for a time given as milliseconds or an ISO string; NaN when unknown. */
+export function instantMs(at: string | number | null | undefined): number {
+  if (typeof at === "number") return at;
+  return at ? Date.parse(at) : Number.NaN;
+}
+
 /** "just now", "8 min ago", "3 h ago", "2 d ago"; empty when the time is unknown. */
 export function relativeTime(at: string | number | null | undefined, now: number): string {
-  const time = typeof at === "number" ? at : at ? Date.parse(at) : Number.NaN;
+  const time = instantMs(at);
   if (Number.isNaN(time)) return "";
   const seconds = Math.max(0, Math.round((now - time) / 1000));
   if (seconds < 45) return "just now";

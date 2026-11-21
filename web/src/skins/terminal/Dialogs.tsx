@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, ScopeModel, WorldSettingsModel } from "../../core/models";
 import { plural } from "../../lib/format";
-import { Avatar, Drawer, Empty, Field, Modal, NoMatches, Notice, Person, SelectInput, SkeletonRows, State, TextInput, Toggle, Verb } from "./ui";
+import { Drawer, Empty, Field, Modal, NoMatches, Notice, Person, SelectInput, SkeletonRows, State, TextInput, Toggle, Verb } from "./ui";
 
 // The scope picker: choosing a game re-scopes the whole console.
 export function ScopeDialog({ model }: Readonly<{ model: ScopeModel }>) {

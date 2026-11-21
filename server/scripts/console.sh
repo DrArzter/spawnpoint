@@ -53,8 +53,15 @@ declare -F game_console >/dev/null || {
   exit 4
 }
 
-if ! reply="$(game_console "${command}" 2>&1)"; then
+# What the operator reads is what the game said. The transport's own chatter —
+# Compose warnings, a container that is not there — belongs on stderr, where
+# the API shows it only when the command failed and the reply is empty.
+transport="$(mktemp)"
+trap 'rm -f -- "${transport}"' EXIT
+if ! reply="$(game_console "${command}" 2>"${transport}")"; then
   printf '%s\n' "${reply}"
+  cat -- "${transport}" >&2
   exit 3
 fi
+cat -- "${transport}" >&2
 printf '%s\n' "${reply}"

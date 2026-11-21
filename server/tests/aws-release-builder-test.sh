@@ -155,8 +155,9 @@ ln -s -- "${repository_root}/server/tests/fake-curl" "${fixture}/bin/curl"
 export FAKE_FACTORIO_ROOT="${fixture}/fake-portal"
 mkdir -p -- "${FAKE_FACTORIO_ROOT}/blobs"
 printf 'graftorio zip bytes\n' >"${FAKE_FACTORIO_ROOT}/blobs/graftorio2_0.4.20.zip"
+blob_sha1="$(sha1sum -- "${FAKE_FACTORIO_ROOT}/blobs/graftorio2_0.4.20.zip" | awk '{print $1}')" # NOSONAR test fixture
 jq -n \
-  --arg sha1 "$(sha1sum -- "${FAKE_FACTORIO_ROOT}/blobs/graftorio2_0.4.20.zip" | awk '{print $1}')" \
+  --arg sha1 "${blob_sha1}" \
   '{name: "graftorio2", releases: [{version: "0.4.20", file_name: "graftorio2_0.4.20.zip", sha1: $sha1,
      download_url: "/dl/graftorio2_0.4.20.zip",
      info_json: {factorio_version: "2.0", dependencies: ["base >= 2.0"]}}]}' \

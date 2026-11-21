@@ -43,14 +43,15 @@ printf 'even distribution bytes\n' >"${FAKE_FACTORIO_ROOT}/blobs/even_more_distr
 portal_fixture() {
   local name="$1" version="$2" file="$3" engine="${4:-2.0}"
   shift 4 2>/dev/null || shift $#
-  local dependencies
+  local dependencies blob_sha1
   dependencies="$(printf '%s\n' "$@" | jq -R . | jq -sc 'map(select(length > 0))')"
+  blob_sha1="$(sha1sum -- "${FAKE_FACTORIO_ROOT}/blobs/${file}" | awk '{print $1}')" # NOSONAR test fixture
   jq -n \
     --arg version "${version}" \
     --arg file "${file}" \
     --arg engine "${engine}" \
     --argjson dependencies "${dependencies}" \
-    --arg sha1 "$(sha1sum -- "${FAKE_FACTORIO_ROOT}/blobs/${file}" | awk '{print $1}')" \
+    --arg sha1 "${blob_sha1}" \
     '{name: "x", releases: [
        {version: "0.0.1", file_name: "ancient.zip", sha1: "0000000000000000000000000000000000000000",
         download_url: "/dl/ancient.zip", info_json: {factorio_version: "1.1", dependencies: []}},

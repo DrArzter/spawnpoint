@@ -23,7 +23,7 @@ resource "aws_instance" "game_host" {
   availability_zone                    = var.availability_zone
   subnet_id                            = aws_subnet.public.id
   vpc_security_group_ids               = [aws_security_group.game_host.id]
-  associate_public_ip_address          = true
+  associate_public_ip_address          = true # NOSONAR no NAT gateway; game ports only, ADR-0033
   iam_instance_profile                 = aws_iam_instance_profile.game_host.name
   disable_api_termination              = true
   instance_initiated_shutdown_behavior = "stop"

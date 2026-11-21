@@ -52,9 +52,12 @@ failure costs a few minutes of instance time. A wrong count in the other directi
 ## Share a probe transport, never a parser's trust
 
 A transport that more than one game speaks lives in [`_probes/`](_probes), with its own fake-server test: A2S in
-`a2s-client.py` and `a2s.sh` ([ADR-0075](../../docs/adr/0075-a2s-as-a-probe-transport.md)). Its parser makes two
-readings agree before it prints a count. A game with no RCON names its query port as `GAME_RCON_PORT`, so the port
-takes the slot's RCON place and stays on `127.0.0.1`.
+`a2s-client.py` and `a2s.sh` ([ADR-0075](../../docs/adr/0075-a2s-as-a-probe-transport.md)), HTTP in `http-client.py`
+and `http.sh` ([ADR-0076](../../docs/adr/0076-http-and-telnet-probe-transports.md)). Its parser makes two
+readings agree before it prints a count. A game with no RCON names its query or API port as `GAME_RCON_PORT`, so the
+port takes the slot's RCON place and stays on `127.0.0.1`. A transport's credential lives in the host's runtime
+`.env`, never in a world setting or a world's archive, and an HTTP game's transport reduces its replies to counts, so
+no player name or address reaches the probe's log.
 
 ## Read an egg, never run one
 

@@ -132,6 +132,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0070](0070-give-each-group-a-space-in-an-aws-account-it-brings.md) | Give each group a space, and run its game hosts in an AWS account it brings | Proposed | M7 |
 | [0074](0074-eggs-are-a-reference-not-a-runtime.md) | Eggs are a reference, not a runtime | Accepted | — |
 | [0075](0075-a2s-as-a-probe-transport.md) | A2S as a probe transport | Proposed — implemented for Valheim; two host tests open | — |
+| [0076](0076-http-and-telnet-probe-transports.md) | HTTP and telnet probe transports | Proposed — HTTP implemented for Palworld; telnet not built | — |
 
 ## Decisions still to record
 

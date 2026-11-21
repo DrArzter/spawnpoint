@@ -13,6 +13,7 @@ GAMES="${REPOSITORY_ROOT}/server/games"
 fixture="$(mktemp -d /tmp/spawnpoint-game-adapter-test.XXXXXXXX)"
 cleanup() {
   [[ -z "${ready_rcon_pid:-}" ]] || kill "${ready_rcon_pid}" 2>/dev/null || true
+  [[ -z "${palworld_rest_pid:-}" ]] || kill "${palworld_rest_pid}" 2>/dev/null || true
   rm -rf -- "${fixture}"
 }
 trap cleanup EXIT
@@ -626,6 +627,268 @@ cmp -- "${valheim_world}/adminlist.txt" "${fixture}/valheim-restored/adminlist.t
 expect_failure "archiving a valheim data dir with half a save" \
   env SPAWNPOINT_GAME=valheim SERVER_DATA_DIR="${fixture}/valheim-half" \
     SERVER_BACKUP_DIR="${fixture}/backups" WORLD_NAME=valheim \
+    "${SCRIPTS}/archive-world.sh"
+
+# --- palworld: the REST API (ADR-0076) for the count, the save and the console ---
+(
+  source "${GAMES}/palworld/game.sh"
+  [[ "$(game_parse_player_count <<<'current_players=0
+max_players=32
+listed_players=0')" == "0" ]]
+  [[ "$(game_parse_player_count <<<'current_players=3
+max_players=32
+listed_players=3')" == "3" ]]
+  # A count the list does not bear out is refused, never read as empty.
+  for raw in \
+    'current_players=2
+max_players=32
+listed_players=0' \
+    'current_players=0
+max_players=32
+listed_players=1' \
+    'current_players=0
+current_players=0
+listed_players=0' \
+    'current_players=0' \
+    'listed_players=0' \
+    'current_players=-1
+listed_players=-1' \
+    'info_players=0
+info_bots=0
+player_entries=0' \
+    'Players connected (0):' \
+    ''; do
+    if game_parse_player_count <<<"${raw}" >/dev/null 2>&1; then
+      printf 'palworld: expected refusal: %s\n' "${raw}" >&2
+      exit 1
+    fi
+  done
+  # Another game's parser does not read this one's reply either.
+  source "${GAMES}/valheim/game.sh"
+  if game_parse_player_count <<<'current_players=0
+listed_players=0' >/dev/null 2>&1; then exit 1; fi
+)
+(
+  source "${GAMES}/palworld/game.sh"
+  [[ "${GAME_CONNECT_PORT}" == "8211" && "${GAME_CONNECT_PROTOCOL}" == "udp" ]]
+  [[ "${GAME_RCON_PORT}" == "8212" && "${GAME_SLOTTABLE}" == "true" ]]
+  [[ "${GAME_DEFAULT_AUTH}" == "none" ]]
+  # The documented footprint, not one shrunk to fit a host.
+  [[ "${GAME_FOOTPRINT_MEMORY_MIB}" == "16384" ]]
+  for member in game_ready game_query_players_raw game_parse_player_count game_console game_save \
+    game_save_paths game_save_sentinel game_archive_sentinel_regex game_tick_time_ms; do
+    declare -F "${member}" >/dev/null || { printf 'palworld lacks %s\n' "${member}" >&2; exit 1; }
+  done
+)
+
+# A fake REST API with basic authentication. The scenario file says what it
+# answers; the request log says what reached it.
+cat >"${fixture}/fake-palworld.py" <<'FAKE_PALWORLD'
+import base64, http.server, json, sys
+
+directory = sys.argv[1]
+EXPECTED = "Basic " + base64.b64encode(b"admin:pal-secret").decode()
+PLAYER = {"name": "Lamball fan", "accountName": "fan", "playerId": "0" * 32, "userId": "steam_00000000000000000",
+          "ip": "192.0.2.10", "ping": 20.0, "location_x": 0.0, "location_y": 0.0, "level": 3, "building_count": 1}
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+    def answer(self, status, body=b""):
+        self.send_response(status)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def route(self, method):
+        length = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(length).decode() if length else ""
+        with open(directory + "/palworld-requests", "a") as log:
+            log.write(f"{method} {self.path} {body}\n")
+        if self.headers.get("Authorization") != EXPECTED:
+            return self.answer(401)
+        scenario = open(directory + "/palworld-scenario").read().split()
+        current, listed, shape = int(scenario[0]), int(scenario[1]), scenario[2]
+        if method == "GET" and self.path == "/v1/api/metrics":
+            metrics = {"serverfps": 60, "currentplayernum": current, "serverframetime": 16.6667,
+                       "maxplayernum": 32, "uptime": 120, "basecampnum": 0, "days": 1}
+            if shape == "nometrics":
+                metrics.pop("currentplayernum")
+            return self.answer(200, json.dumps(metrics).encode())
+        if method == "GET" and self.path == "/v1/api/players":
+            if shape == "noplayers":
+                return self.answer(200, b'{"error":"busy"}')
+            return self.answer(200, json.dumps({"players": [PLAYER] * listed}).encode())
+        if method == "GET" and self.path == "/v1/api/info":
+            return self.answer(200, b'{"version":"v0.0.0","servername":"Spawnpoint","description":"","worldguid":"' + b"A" * 32 + b'"}')
+        if method == "POST" and self.path == "/v1/api/save":
+            return self.answer(500 if shape == "savefails" else 200)
+        if method == "POST" and self.path == "/v1/api/announce":
+            return self.answer(200)
+        return self.answer(404)
+
+    def do_GET(self):
+        self.route("GET")
+
+    def do_POST(self):
+        self.route("POST")
+
+server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+open(directory + "/palworld-port", "w").write(str(server.server_address[1]))
+server.serve_forever()
+FAKE_PALWORLD
+printf '2 2 good\n' >"${fixture}/palworld-scenario"
+python3 "${fixture}/fake-palworld.py" "${fixture}" &
+palworld_rest_pid=$!
+for _ in $(seq 1 50); do
+  [[ -s "${fixture}/palworld-port" ]] && break
+  sleep 0.1
+done
+(
+  unset PALWORLD_REST_PORT SPAWNPOINT_RCON_PORT PALWORLD_ADMIN_PASSWORD
+  # The password comes from the host's runtime .env, as compose reads it.
+  printf 'PALWORLD_ADMIN_PASSWORD=pal-secret\n' >"${fixture}/palworld.env"
+  export SERVER_ENV_FILE="${fixture}/palworld.env"
+  source "${GAMES}/palworld/game.sh"
+  # The probe reads the slot's port when it runs, after the module has loaded.
+  export SPAWNPOINT_RCON_PORT
+  SPAWNPOINT_RCON_PORT="$(cat "${fixture}/palworld-port")"
+
+  raw="$(game_query_players_raw)"
+  [[ "${raw}" == "current_players=2
+max_players=32
+listed_players=2" ]]
+  # Counts only: no name, account, id or address leaves the transport.
+  if grep -Eq 'Lamball|fan|steam_|192\.0\.2' <<<"${raw}"; then exit 1; fi
+  [[ "$(game_parse_player_count <<<"${raw}")" == "2" ]]
+  game_ready healthy
+  game_ready none
+  if game_ready unhealthy; then exit 1; fi
+
+  # The two readings disagree: the transport reports both, the parser refuses.
+  printf '2 1 good\n' >"${fixture}/palworld-scenario"
+  raw="$(game_query_players_raw)"
+  if game_parse_player_count <<<"${raw}" >/dev/null 2>&1; then exit 1; fi
+  if game_ready none; then exit 1; fi
+  # A reply of another shape is not understood, and never a count.
+  for shape in nometrics noplayers; do
+    printf '0 0 %s\n' "${shape}" >"${fixture}/palworld-scenario"
+    status=0
+    game_query_players_raw >/dev/null 2>&1 || status=$?
+    [[ "${status}" == 4 ]] || { printf 'palworld shape %s: status %s\n' "${shape}" "${status}" >&2; exit 1; }
+  done
+  printf '0 0 good\n' >"${fixture}/palworld-scenario"
+  [[ "$(game_query_players_raw | game_parse_player_count)" == "0" ]]
+
+  # The save is the API's save call, and its failure is the save's failure.
+  [[ "$(game_save)" == "save=rest_api" ]]
+  grep -Fxq 'POST /v1/api/save ' "${fixture}/palworld-requests"
+  printf '0 0 savefails\n' >"${fixture}/palworld-scenario"
+  if game_save >/dev/null 2>&1; then exit 1; fi
+  printf '0 0 good\n' >"${fixture}/palworld-scenario"
+
+  [[ "$(game_tick_time_ms)" == "16.6667" ]]
+
+  # The console speaks the API's words; the message travels as JSON.
+  [[ "$(game_console metrics)" == *'"currentplayernum": 0'* ]]
+  [[ "$(game_console info)" == *'"servername":"Spawnpoint"'* ]]
+  [[ "$(game_console save)" == "saved" ]]
+  [[ "$(game_console 'announce Server stops "soon" in 5 minutes')" == "announced" ]]
+  grep -Fxq 'POST /v1/api/announce {"message":"Server stops \"soon\" in 5 minutes"}' "${fixture}/palworld-requests"
+  [[ "$(game_console 'announce')" == "usage: announce <message>" ]]
+  [[ "$(game_console 'shutdown 1')" == "unknown command: shutdown"* ]]
+  [[ "$(game_console 'stop')" == "unknown command: stop"* ]]
+  if grep -Eq '/v1/api/(shutdown|stop)' "${fixture}/palworld-requests"; then exit 1; fi
+
+  # A wrong password is refused by the server, and that is no answer to count.
+  printf 'PALWORLD_ADMIN_PASSWORD=wrong\n' >"${fixture}/palworld.env"
+  if game_query_players_raw >/dev/null 2>&1; then exit 1; fi
+  # No password at all is refused before any request.
+  : >"${fixture}/palworld.env"
+  status=0
+  game_query_players_raw >/dev/null 2>&1 || status=$?
+  [[ "${status}" == 2 ]]
+  # Nothing answers on this port: not ready, and no count.
+  printf 'PALWORLD_ADMIN_PASSWORD=pal-secret\n' >"${fixture}/palworld.env"
+  SPAWNPOINT_RCON_PORT="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
+  if game_ready none; then exit 1; fi
+)
+kill "${palworld_rest_pid}" 2>/dev/null || true
+wait "${palworld_rest_pid}" 2>/dev/null || true
+
+# The console script answers through the module, with the port of the slot.
+cat >"${fixture}/palworld-catalog.json" <<'EOF'
+{"schema_version":1,"profile_source":{"repository":"https://example.invalid/profiles","commit":"0000000000000000000000000000000000000000"},"worlds":[{"id":"palworld","display_name":"Palworld test","profile_id":"palworld-vanilla","game":"palworld"}]}
+EOF
+output="$(WORLD_ID=palworld SPAWNPOINT_WORLD_CATALOG="${fixture}/palworld-catalog.json" bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; configure_game_compose; printf '%s\n%s\n%s\n' \"\${GAME_ID}\" \"\${SERVER_COMPOSE_SERVICE}\" \"\${SERVER_COMPOSE_FILES}\"")"
+[[ "${output}" == "palworld
+palworld
+${REPOSITORY_ROOT}/server/observability/compose.yaml:${REPOSITORY_ROOT}/server/games/palworld/compose.yaml" ]]
+output="$(WORLD_ID=palworld WORLD_FOOTPRINT_MEMORY_MIB=16384 SPAWNPOINT_SLOT=2 SPAWNPOINT_WORLD_CATALOG="${fixture}/palworld-catalog.json" bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; configure_game_compose; printf '%s %s %s\n' \"\${SPAWNPOINT_GAME_PORT}\" \"\${SPAWNPOINT_RCON_PORT}\" \"\${SERVER_COMPOSE_FILES}\"")"
+[[ "${output}" == "30020 30021 ${REPOSITORY_ROOT}/server/games/palworld/compose.yaml:${REPOSITORY_ROOT}/server/games/palworld/compose.footprint.yaml" ]]
+
+# The save is the world GameUserSettings.ini names, with that file, and never
+# the rendered PalWorldSettings.ini, which holds the admin password.
+palworld_guid="0123456789ABCDEF0123456789ABCDEF"
+palworld_world="${fixture}/palworld-data"
+mkdir -p -- "${palworld_world}/SaveGames/0/${palworld_guid}/Players" "${palworld_world}/Config/LinuxServer" "${palworld_world}/Logs"
+printf 'level\n' >"${palworld_world}/SaveGames/0/${palworld_guid}/Level.sav"
+printf 'meta\n' >"${palworld_world}/SaveGames/0/${palworld_guid}/LevelMeta.sav"
+printf 'player\n' >"${palworld_world}/SaveGames/0/${palworld_guid}/Players/00000000000000000000000000000001.sav"
+printf '[/Script/Pal.PalGameLocalSettings]\nDedicatedServerName=%s\n' "${palworld_guid}" \
+  >"${palworld_world}/Config/LinuxServer/GameUserSettings.ini"
+printf '[/Script/Pal.PalGameWorldSettings]\nOptionSettings=(AdminPassword="not-for-backups")\n' \
+  >"${palworld_world}/Config/LinuxServer/PalWorldSettings.ini"
+printf 'log\n' >"${palworld_world}/Logs/Pal.log"
+(
+  source "${GAMES}/palworld/game.sh"
+  game_save_sentinel "${palworld_world}" palworld
+  game_save_sentinel "${palworld_world}" palworld-rostik-1a2b3c4d
+  paths="$(game_save_paths "${palworld_world}" palworld | tr '\0' ' ')"
+  [[ "${paths}" == "SaveGames Config/LinuxServer/GameUserSettings.ini " ]]
+
+  # A world without the file that names it, and a pointer to a world that is
+  # not there, are not saves.
+  mkdir -p -- "${fixture}/palworld-nameless/SaveGames/0/${palworld_guid}"
+  printf 'level\n' >"${fixture}/palworld-nameless/SaveGames/0/${palworld_guid}/Level.sav"
+  if game_save_sentinel "${fixture}/palworld-nameless" palworld; then exit 1; fi
+  mkdir -p -- "${fixture}/palworld-other/SaveGames/0/FEDCBA9876543210FEDCBA9876543210" "${fixture}/palworld-other/Config/LinuxServer"
+  printf 'level\n' >"${fixture}/palworld-other/SaveGames/0/FEDCBA9876543210FEDCBA9876543210/Level.sav"
+  cp -- "${palworld_world}/Config/LinuxServer/GameUserSettings.ini" "${fixture}/palworld-other/Config/LinuxServer/"
+  if game_save_sentinel "${fixture}/palworld-other" palworld; then exit 1; fi
+  # An empty level file is not a save.
+  mkdir -p -- "${fixture}/palworld-empty/SaveGames/0/${palworld_guid}" "${fixture}/palworld-empty/Config/LinuxServer"
+  : >"${fixture}/palworld-empty/SaveGames/0/${palworld_guid}/Level.sav"
+  cp -- "${palworld_world}/Config/LinuxServer/GameUserSettings.ini" "${fixture}/palworld-empty/Config/LinuxServer/"
+  if game_save_sentinel "${fixture}/palworld-empty" palworld; then exit 1; fi
+)
+
+palworld_archive_output="$(
+  SPAWNPOINT_GAME=palworld \
+  SERVER_DATA_DIR="${palworld_world}" \
+  SERVER_BACKUP_DIR="${fixture}/backups" \
+  WORLD_NAME=palworld \
+    "${SCRIPTS}/archive-world.sh"
+)"
+palworld_archive="$(awk -F= '$1 == "archive" { print $2 }' <<<"${palworld_archive_output}")"
+palworld_listing="$(tar --list --zstd --file "${palworld_archive}")"
+grep -qx "SaveGames/0/${palworld_guid}/Level.sav" <<<"${palworld_listing}"
+grep -qx "SaveGames/0/${palworld_guid}/Players/00000000000000000000000000000001.sav" <<<"${palworld_listing}"
+grep -qx 'Config/LinuxServer/GameUserSettings.ini' <<<"${palworld_listing}"
+if grep -q 'PalWorldSettings.ini\|^Logs' <<<"${palworld_listing}"; then exit 1; fi
+SPAWNPOINT_GAME=palworld WORLD_NAME=palworld "${SCRIPTS}/verify-archive.sh" "${palworld_archive}" >/dev/null
+expect_failure "a palworld archive judged by another game's sentinel" \
+  env SPAWNPOINT_GAME=valheim WORLD_NAME=palworld "${SCRIPTS}/verify-archive.sh" "${palworld_archive}"
+expect_failure "a valheim archive judged by palworld's sentinel" \
+  env SPAWNPOINT_GAME=palworld WORLD_NAME=valheim "${SCRIPTS}/verify-archive.sh" "${valheim_archive}"
+SPAWNPOINT_GAME=palworld WORLD_NAME=palworld \
+  "${SCRIPTS}/restore-world.sh" "${palworld_archive}" "${fixture}/palworld-restored" >/dev/null
+diff -r -- "${palworld_world}/SaveGames" "${fixture}/palworld-restored/SaveGames"
+cmp -- "${palworld_world}/Config/LinuxServer/GameUserSettings.ini" "${fixture}/palworld-restored/Config/LinuxServer/GameUserSettings.ini"
+expect_failure "archiving a palworld data dir whose world is not named" \
+  env SPAWNPOINT_GAME=palworld SERVER_DATA_DIR="${fixture}/palworld-nameless" \
+    SERVER_BACKUP_DIR="${fixture}/backups" WORLD_NAME=palworld \
     "${SCRIPTS}/archive-world.sh"
 
 printf 'game-adapter-test: ok\n'

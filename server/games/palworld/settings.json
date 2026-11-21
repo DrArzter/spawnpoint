@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "settings": [
+    {
+      "id": "server_name",
+      "label": "Server name",
+      "env": "SERVER_NAME",
+      "type": "text",
+      "default": "Default Palworld Server",
+      "max_length": 40,
+      "pattern": "^[A-Za-z0-9 .,!?'()&+#/:-]+$",
+      "hint": "Letters, digits, spaces and . , ! ? ' ( ) & + # / : -. It must not contain the server password."
+    },
+    {
+      "id": "max_players",
+      "label": "Player limit",
+      "env": "PLAYERS",
+      "type": "integer",
+      "default": 32,
+      "min": 1,
+      "max": 32
+    },
+    {
+      "id": "death_penalty",
+      "label": "Death penalty",
+      "env": "DEATH_PENALTY",
+      "type": "choice",
+      "default": "Item",
+      "choices": [
+        { "value": "None", "label": "Drop nothing" },
+        { "value": "Item", "label": "Drop items, keep equipment" },
+        { "value": "ItemAndEquipment", "label": "Drop items and equipment" },
+        { "value": "All", "label": "Drop items, equipment and team Pals" }
+      ]
+    }
+  ]
+}

@@ -5,11 +5,13 @@ html[data-skin="cloud"] .c-stat {
   padding: var(--c-card-y) var(--c-card-x);
 }
 
+/* A detail that does not fit beside the label moves under it, at the end edge. */
 html[data-skin="cloud"] .c-stat-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: 0 12px;
 }
 
 html[data-skin="cloud"] .c-stat-label {
@@ -25,7 +27,7 @@ html[data-skin="cloud"] .c-stat-detail {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0 12px;
-  min-width: 0;
+  margin-left: auto;
   color: var(--c-ink-3);
   font-size: var(--c-fs-s);
   text-align: end;

@@ -1328,8 +1328,34 @@ html[data-skin="terminal"] .t-table tbody tr:last-child td {
   border-bottom: 0;
 }
 
-html[data-skin="terminal"] .t-table tbody tr:hover td {
+html[data-skin="terminal"] .t-table tr {
+  position: relative;
+}
+
+html[data-skin="terminal"] .t-table tbody tr:is(:hover, :has(.t-row-link:focus-visible)) td {
   background: var(--surface-hover);
+}
+
+/* The row link stays a real anchor; its hit area and focus ring are the whole row. */
+html[data-skin="terminal"] .t-table .t-row-link::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+html[data-skin="terminal"] .t-table .t-row-link:focus-visible {
+  outline: 0;
+}
+
+html[data-skin="terminal"] .t-table .t-row-link:focus-visible::after {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+/* Keys, fields, tooltips and other links in a row keep their own target above the row link. */
+html[data-skin="terminal"] .t-table :is(button, select, label, input, .t-indicator, a:not(.t-row-link)) {
+  position: relative;
+  z-index: 1;
 }
 
 html[data-skin="terminal"] .t-table-skeleton:hover td {
@@ -1422,7 +1448,6 @@ html[data-skin="terminal"] .t-table-state:hover td {
   }
 
   html[data-skin="terminal"] .t-table tr {
-    position: relative;
     padding: 12px 16px;
     border-bottom: 1px solid var(--outline);
   }

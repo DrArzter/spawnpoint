@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { SFNClient } from "@aws-sdk/client-sfn";
+import { GetCommandInvocationCommand, SendCommandCommand, SSMClient } from "@aws-sdk/client-ssm";
+import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { initialLifecycleRecord, type LifecycleRecord } from "../src/domain/lifecycle.ts";
 import { awsControlPlaneSources } from "../src/control-plane/aws.ts";
 import { type ControlPlaneSources, type HostObservation } from "../src/control-plane/read-model.ts";
 import { type WorldRecord, worldRecordDocument } from "../src/control-plane/world-registry.ts";
-import { controlSession, controlWorldLifecycle, createWorld, updateWorldSettings } from "../src/handlers/api/worlds.ts";
+import { controlSession, controlWorldLifecycle, createWorld, updateWorldSettings, whitelistOf } from "../src/handlers/api/worlds.ts";
 
 process.env.OPERATION_STATE_MACHINES = JSON.stringify(["start", "stop", "world"].map((type) => ({ type, arn: `arn:aws:states:eu-central-1:123456789012:stateMachine:${type}` })));
 process.env.SPAWNPOINT_PLACEMENT = "single";
@@ -199,4 +201,64 @@ test("a warm world that leaves the fleet is cold again", async (t) => {
   assert.equal(result.statusCode, 200);
   assert.equal(written.length, 1);
   assert.equal("warm" in (written[0] ?? {}), false);
+});
+
+// --- Reading the server's whitelist when the world keeps none (ADR-0066) ---------
+
+function serverWhitelist(t: TestContext, reply: Readonly<{ status: string; output: string }>) {
+  process.env.CONSOLE_DOCUMENT_NAME = "spawnpoint-console";
+  process.env.LIFECYCLE_TABLE_NAME = "lifecycle";
+  const sent: SendCommandCommand["input"][] = [];
+  t.mock.method(SSMClient.prototype, "send", async (command: unknown) => {
+    if (command instanceof SendCommandCommand) {
+      sent.push(command.input);
+      return { Command: { CommandId: "command-1" } };
+    }
+    if (command instanceof GetCommandInvocationCommand) return { Status: reply.status, StandardOutputContent: reply.output, StandardErrorContent: "" };
+    throw new Error("unexpected SSM command");
+  });
+  // Only a lookup of the session's host; a console record would be a Put.
+  t.mock.method(DynamoDBDocumentClient.prototype, "send", async (command: unknown) => {
+    if (command instanceof ScanCommand) return { Items: [] };
+    throw new Error("the read must not write a console record");
+  });
+  return sent;
+}
+
+test("a world with no list of its own shows the running server's, and the read is not a console command", async (t) => {
+  scenario(t, { state: "running", game: running() });
+  storedWorld(t, record);
+  const sent = serverWhitelist(t, { status: "Success", output: "There are 2 whitelisted players: DrArzter, Mira\n" });
+  const reply = await whitelistOf("minecraft", record.worldId);
+  assert.equal(reply.statusCode, 200);
+  assert.deepEqual(JSON.parse(reply.body), { managed: false, names: ["DrArzter", "Mira"], updatedAt: null, updatedBy: null });
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0]?.Parameters?.command, [Buffer.from("whitelist list").toString("base64")]);
+});
+
+test("a world that keeps its own list never asks the server", async (t) => {
+  scenario(t, { state: "running", game: running() });
+  storedWorld(t, { ...record, whitelist: { names: ["Mira"], updatedAt: "2026-11-01T00:00:00.000Z", updatedBy: { identityId: "owner", displayName: "Owner" } } });
+  const sent = serverWhitelist(t, { status: "Success", output: "There are 1 whitelisted players: Other" });
+  const reply = await whitelistOf("minecraft", record.worldId);
+  assert.deepEqual(JSON.parse(reply.body), { managed: true, names: ["Mira"], updatedAt: "2026-11-01T00:00:00.000Z", updatedBy: "Owner" });
+  assert.equal(sent.length, 0);
+});
+
+test("a stopped world with no list shows none and asks no host", async (t) => {
+  scenario(t);
+  storedWorld(t, record);
+  const sent = serverWhitelist(t, { status: "Success", output: "" });
+  const reply = await whitelistOf("minecraft", record.worldId);
+  assert.deepEqual(JSON.parse(reply.body), { managed: false, names: [], updatedAt: null, updatedBy: null });
+  assert.equal(sent.length, 0);
+});
+
+test("a server that does not answer with a list is an error, never an empty list", async (t) => {
+  scenario(t, { state: "running", game: running() });
+  storedWorld(t, record);
+  serverWhitelist(t, { status: "Failed", output: "" });
+  const reply = await whitelistOf("minecraft", record.worldId);
+  assert.equal(reply.statusCode, 502);
+  assert.deepEqual(JSON.parse(reply.body), { error: "whitelist_unreadable" });
 });

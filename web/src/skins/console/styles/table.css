@@ -55,7 +55,12 @@ html[data-skin="console"] .c-table tbody tr:last-child td {
   border-bottom: 0;
 }
 
-html[data-skin="console"] .c-table tbody tr:hover td {
+html[data-skin="console"] .c-table tr {
+  position: relative;
+}
+
+/* The row is one target: hover or the lead link's focus shades all of it. */
+html[data-skin="console"] .c-table tbody tr:is(:hover, :has(.c-col-lead a:focus-visible)) td {
   background: var(--c-surface-2);
 }
 
@@ -112,8 +117,31 @@ html[data-skin="console"] .c-table .c-col-lead a {
   color: var(--c-ink);
 }
 
-html[data-skin="console"] .c-table .c-col-lead a:hover {
+html[data-skin="console"] .c-table tr:hover .c-col-lead a {
   color: var(--c-accent-text);
+}
+
+/* The lead link stays a real anchor; its hit area and focus ring are the whole row. */
+html[data-skin="console"] .c-table .c-col-lead a::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+html[data-skin="console"] .c-table .c-col-lead a:focus-visible {
+  outline: 0;
+}
+
+html[data-skin="console"] .c-table .c-col-lead a:focus-visible::after {
+  outline: 2px solid var(--c-accent);
+  outline-offset: -2px;
+}
+
+/* Controls, copy, tooltips and other links in a row keep their own target above the row link. */
+html[data-skin="console"] .c-table :is(button, select, label, input, [data-tip], .c-copy, a.c-btn),
+html[data-skin="console"] .c-table td:not(.c-col-lead) a {
+  position: relative;
+  z-index: 1;
 }
 
 /* A clip column takes the width the other columns leave and cuts its value only when that runs out. */
@@ -194,7 +222,6 @@ html[data-skin="console"] .c-table-fixed td {
   }
 
   html[data-skin="console"] .c-table:not(.c-table-matrix) tr {
-    position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-auto-flow: row dense;
@@ -233,12 +260,6 @@ html[data-skin="console"] .c-table-fixed td {
     grid-column: 1 / -1;
     max-width: none;
     font-size: 16px;
-  }
-
-  html[data-skin="console"] .c-table:not(.c-table-matrix) .c-col-lead a::after {
-    position: absolute;
-    inset: 0;
-    content: "";
   }
 
   html[data-skin="console"] .c-table:not(.c-table-matrix) .c-col-wide {

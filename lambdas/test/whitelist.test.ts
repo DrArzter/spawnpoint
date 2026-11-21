@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { builtInRoles } from "../src/access/domain.ts";
-import { checkWhitelist, WHITELIST_LIMIT } from "../src/control-plane/whitelist.ts";
+import { checkWhitelist, parseServerWhitelist, WHITELIST_LIMIT } from "../src/control-plane/whitelist.ts";
 
 // ADR-0066: a world's whitelist is a list of Minecraft names, kept on its
 // record. An offline server derives each player's UUID from the exact name.
@@ -23,4 +23,18 @@ test("operators and owners manage whitelists; players and viewers do not", () =>
   assert.ok(builtInRoles.owner.permissions.includes("whitelist.manage"));
   assert.ok(!builtInRoles.player.permissions.includes("whitelist.manage"));
   assert.ok(!builtInRoles.viewer.permissions.includes("whitelist.manage"));
+});
+
+test("a Minecraft whitelist reply gives its names, in any wording the server version uses", () => {
+  assert.deepEqual(parseServerWhitelist("There are 3 whitelisted players: DrArzter, Alex_2, Mira"), ["DrArzter", "Alex_2", "Mira"]);
+  assert.deepEqual(parseServerWhitelist("There are 2 whitelisted player(s): DrArzter, Mira\n"), ["DrArzter", "Mira"]);
+  assert.deepEqual(parseServerWhitelist("There are 1 whitelisted players: Mira"), ["Mira"]);
+  assert.deepEqual(parseServerWhitelist("There are no whitelisted players"), []);
+  assert.deepEqual(parseServerWhitelist("\u001b[0mThere are 1 whitelisted players: Mira\u001b[0m"), ["Mira"], "terminal colours are dropped");
+});
+
+test("a reply that cannot be trusted gives no names, so a partial list is never saved over the server's", () => {
+  for (const reply of ["", "Unknown command", "There are 3 whitelisted players: DrArzter, Mira", "There are 2 whitelisted players: Mira, mira", "There are 1 whitelisted players: not a name"]) {
+    assert.equal(parseServerWhitelist(reply), null, reply);
+  }
 });

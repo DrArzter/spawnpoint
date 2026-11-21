@@ -1,6 +1,7 @@
 import "./support/browser.ts";
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -192,6 +193,27 @@ test("Table: labels once in the header, one end-edge action column, records labe
   assert.match(html(createElement(Table<Row>, { label: "Worlds", rows: [], loading: true, rowKey: (row) => row.id, columns: [{ id: "n", header: "Name", render: (row) => row.name }] })), /<tbody aria-busy="true"/);
   assert.equal(nextSort("ascending"), "descending");
   assert.equal(nextSort(null), "ascending");
+});
+
+test("a row's primary link is a real anchor whose hit area is the row, and inner controls stay above it", () => {
+  const markup = html(createElement(Table<Row>, {
+    label: "Worlds",
+    rows: tableRows.slice(0, 1),
+    rowKey: (row) => row.id,
+    columns: [
+      { id: "name", header: "Name", kind: "lead", render: (row) => createElement("a", { href: `#/${row.id}` }, row.name) },
+      { id: "actions", header: "Actions", kind: "act", render: (row) => createElement(ActionButton, { action: row.act, size: "sm" }) },
+    ],
+  }));
+  assert.match(markup, /<td class="c-col-lead" data-rail=""><a href="#\/a">Rostik<\/a><\/td>/, "the link is an anchor in the lead cell");
+  assert.match(markup, /<td class="c-col-act"[^>]*><button[^>]*data-action="world.invite"/, "the action is a button in its own cell, not inside the link");
+  const table = readFileSync(new URL("../src/skins/console/styles/table.css", import.meta.url), "utf8");
+  assert.match(table, /\.c-table \.c-col-lead a::after \{\s*position: absolute;\s*inset: 0;/, "the lead link covers the row at every width");
+  assert.match(table, /\.c-table tr \{\s*position: relative;/, "the row is the containing block");
+  assert.match(table, /\.c-table :is\(button, select, label, input, \[data-tip\], \.c-copy, a\.c-btn\)[^{]*\{\s*position: relative;\s*z-index: 1;/, "controls stay above the row link");
+  const tracks = readFileSync(new URL("../src/skins/console/styles/tracklist.css", import.meta.url), "utf8");
+  assert.match(tracks, /\.c-tracklist-row a\.c-track-title::after \{\s*position: absolute;\s*inset: 0;/);
+  assert.match(tracks, /\.c-tracklist-row :is\(button, select, label, input, \[data-tip\], \.c-copy, a\.c-btn, a:not\(\.c-track-title\)\) \{\s*position: relative;\s*z-index: 1;/);
 });
 
 test("TrackList: one grid of shared tracks, the header once, rows as table rows", () => {

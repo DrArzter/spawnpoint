@@ -61,3 +61,7 @@ because the case changes the UUID. Two names that differ only in case are refuse
 | The image's `WHITELIST` variable | It looks names up online and stores the UUIDs an offline server never sees |
 | `whitelist add` and `whitelist remove` over the console gateway | The same online lookup, and a stopped world would not take the change |
 | Pass the names in the SSM command | Puts what a person typed into a host's shell parameters; reading the record keeps one source and no input on the command line |
+
+## Amendment — read the running server's list (2026-11-21)
+
+A world whose record keeps no list shows the running server's own whitelist (read with `whitelist list` through the console gateway, ADR-0063, and not recorded in the console history), so a name added to it keeps those players; the panel no longer says the list is not kept.

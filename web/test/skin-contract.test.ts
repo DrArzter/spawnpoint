@@ -274,8 +274,14 @@ for (const skin of SKINS) {
     assert.match(kept, /aria-invalid="true"/, "a name the game would refuse is marked before it is sent");
     assert.match(kept, /3 to 16 letters/);
     assert.doesNotMatch(kept, /does not keep this world/);
+    // No list of its own: the server's names show as rows, and nothing explains it (the owner's no-copy rule).
     const unkept = tab({ ...whitelist, list: { status: "ready", value: { managed: false, updatedAt: null, updatedBy: null, rows: [] } } });
-    assert.match(unkept, /does not keep this world/, "the first name replaces the server's own list, and the page says so");
+    assert.doesNotMatch(unkept, /does not keep this world|replaces the server/);
+    assert.match(unkept, /No names/, "a stopped world with no list shows the empty state");
+    const read = tab({ ...whitelist, list: { status: "ready", value: { managed: false, updatedAt: null, updatedBy: null, rows: whitelist.list.status === "ready" ? whitelist.list.value.rows : [] } } });
+    assert.match(read, /Mira/, "the running server's names show as rows");
+    assert.match(read, /data-action="whitelist\.remove\.Mira"/);
+    assert.doesNotMatch(read, /does not keep this world|replaces the server/);
     const empty = tab({ ...whitelist, list: { status: "ready", value: { managed: true, updatedAt: null, updatedBy: null, rows: [] } } });
     assert.match(empty, /Nobody can join/);
     const failed = tab({ ...whitelist, list: { status: "error", error: "boom", kind: "failed", retry: spy("whitelist.retry", "Try again") } });

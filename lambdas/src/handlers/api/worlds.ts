@@ -1,12 +1,13 @@
 import { type Identity } from "../../access/domain.ts";
 import { type SessionAction, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, type SessionPlan, type FleetSessionPlan } from "../../control-plane/session-control.ts";
-import { awsControlPlaneSources, startSessionExecution, stopSessionExecution, materializePresetWorld, replaceWorldAccess, replaceWorldGameSettings, readWorldRecord, replaceWorldWhitelist, sendWhitelistReload, worldLifecycleExecution } from "../../control-plane/aws.ts";
+import { awsControlPlaneSources, readConsoleInvocation, sendConsoleCommand, startSessionExecution, stopSessionExecution, materializePresetWorld, replaceWorldAccess, replaceWorldGameSettings, readWorldRecord, replaceWorldWhitelist, sendWhitelistReload, worldLifecycleExecution } from "../../control-plane/aws.ts";
 import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
-import { blockingOperations, sessionLifecycleKey, holdsWorld, type WorldPlacement } from "../../control-plane/world-session.ts";
+import { blockingOperations, sessionLifecycleKey, holdsWorld, type WorldHost, type WorldPlacement } from "../../control-plane/world-session.ts";
 import { randomUUID } from "node:crypto";
 import { type WorldRecord, worldIdForName } from "../../control-plane/world-registry.ts";
 import { checkGameSettings } from "../../control-plane/game-settings.ts";
-import { checkWhitelist } from "../../control-plane/whitelist.ts";
+import { checkWhitelist, parseServerWhitelist, SERVER_WHITELIST_COMMANDS } from "../../control-plane/whitelist.ts";
+import { consoleResult, encodeConsoleCommand } from "../../control-plane/console.ts";
 import { type ControlPlaneSources } from "../../control-plane/read-model.ts";
 import { type Response, response, parseObjectBody } from "./http.ts";
 import { readWorldSession, worldPlacements, locateWorldHost } from "./world-state.ts";
@@ -218,9 +219,61 @@ export async function whitelistOf(gameId: string, worldId: string): Promise<Resp
   if (!gameKeepsWhitelist(gameId)) return response(409, { error: "game_has_no_whitelist" });
   const record = await readWorldRecord(worldId);
   if (record?.gameId !== gameId) return response(404, { error: "unknown_world" });
-  return response(200, record.whitelist === undefined
-    ? { managed: false, names: [], updatedAt: null, updatedBy: null }
-    : { managed: true, names: record.whitelist.names, updatedAt: record.whitelist.updatedAt, updatedBy: record.whitelist.updatedBy.displayName });
+  if (record.whitelist !== undefined) {
+    return response(200, { managed: true, names: record.whitelist.names, updatedAt: record.whitelist.updatedAt, updatedBy: record.whitelist.updatedBy.displayName });
+  }
+  // No list of its own: show the running server's, so adding a name keeps those players.
+  const names = await readServerWhitelist(gameId, worldId);
+  if (names === null) return response(502, { error: "whitelist_unreadable" });
+  return response(200, { managed: false, names, updatedAt: null, updatedBy: null });
+}
+
+// The read goes through the console gateway's document (ADR-0063) but is not a
+// console command: nothing is recorded, so the history shows only what people ran.
+const SERVER_READ_POLL_MS = 800;
+// The API Lambda answers within ten seconds; the window leaves room for the lookups before it.
+const SERVER_READ_WINDOW_MS = 5600;
+
+/**
+ * The names a running server's own whitelist holds: [] when the world has no
+ * running session or its game cannot list. Null when the host did not answer
+ * with a list in time. A caller must not treat null as empty, because saving
+ * from an empty list would drop the server's players.
+ */
+export async function readServerWhitelist(gameId: string, worldId: string, pollMs = SERVER_READ_POLL_MS): Promise<readonly string[] | null> {
+  const command = SERVER_WHITELIST_COMMANDS[gameId];
+  if (command === undefined) return [];
+  try {
+    const host = await runningWorldHost(gameId, worldId);
+    if (host === null) return [];
+    const commandId = await sendConsoleCommand({ hostId: host.hostId, worldId, slot: host.slot, encodedCommand: encodeConsoleCommand(command) });
+    for (let waited = 0; waited < SERVER_READ_WINDOW_MS; waited += pollMs) {
+      await new Promise((resolve) => setTimeout(resolve, pollMs)); // NOSONAR each poll waits on the host, in order
+      const result = consoleResult(await readConsoleInvocation(commandId, host.hostId)); // NOSONAR each poll waits on the host, in order
+      if (result.status === "pending") continue;
+      return result.status === "succeeded" ? parseServerWhitelist(result.output ?? "") : null;
+    }
+    return null;
+  } catch (error) {
+    console.error(JSON.stringify({ event: "server_whitelist_not_read", worldId, error: error instanceof Error ? error.message : String(error) }));
+    return null;
+  }
+}
+
+/** The host and slot of a world's ready session; null when it has none. */
+async function runningWorldHost(gameId: string, worldId: string): Promise<WorldHost | null> {
+  const [presets, worldRecords, hosts] = await Promise.all([
+    awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
+    awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
+    awsControlPlaneSources.listHosts(),
+  ]);
+  const world = catalogWithPresets(presets, gameCatalog, worldRecords)
+    .find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
+  if (world === undefined) return null;
+  const placement: WorldPlacement = world.placement === "fleet" ? "fleet" : "configured";
+  const located = await readWorldSession(gameId, worldId, placement);
+  if (located.record?.observedState !== "ready") return null;
+  return locateWorldHost(placement, located.record, hosts);
 }
 
 export async function updateWhitelist(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
@@ -245,18 +298,7 @@ export async function updateWhitelist(identity: Identity, gameId: string, worldI
 // writes the list at the world's next start.
 async function reloadRunningWhitelist(gameId: string, worldId: string): Promise<"reloading" | "next_start"> {
   try {
-    const [presets, worldRecords, hosts] = await Promise.all([
-      awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
-      awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
-      awsControlPlaneSources.listHosts(),
-    ]);
-    const world = catalogWithPresets(presets, gameCatalog, worldRecords)
-      .find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
-    if (world === undefined) return "next_start";
-    const placement: WorldPlacement = world.placement === "fleet" ? "fleet" : "configured";
-    const located = await readWorldSession(gameId, worldId, placement);
-    if (located.record?.observedState !== "ready") return "next_start";
-    const host = await locateWorldHost(placement, located.record, hosts);
+    const host = await runningWorldHost(gameId, worldId);
     if (host === null) return "next_start";
     await sendWhitelistReload({ hostId: host.hostId, worldId, slot: host.slot });
     return "reloading";

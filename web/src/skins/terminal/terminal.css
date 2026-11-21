@@ -359,6 +359,8 @@ html[data-skin="terminal"] .t-main {
    line legible the moment it lands. Never a fade. */
 html[data-skin="terminal"] .t-page {
   display: grid;
+  /* One track no wider than the page: a long name or a wide row shrinks or wraps instead of widening the phone (UI gate M1, M6). */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--t-gap);
   min-width: 0;
 }
@@ -392,9 +394,11 @@ html[data-skin="terminal"] .t-page-verbs {
 }
 
 html[data-skin="terminal"] .t-page-title h1 {
+  min-width: 0;
   margin: 0;
   font-size: 22px;
   line-height: 28px;
+  overflow-wrap: anywhere;
 }
 
 html[data-skin="terminal"] .t-page-title-person {
@@ -1138,8 +1142,10 @@ html[data-skin="terminal"] .t-tag-primary {
   color: var(--primary-ink);
 }
 
+/* A name up to the form's 80 characters breaks rather than widening its table. */
 html[data-skin="terminal"] .t-row-link {
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 html[data-skin="terminal"] .t-source {
@@ -1365,6 +1371,12 @@ html[data-skin="terminal"] .t-table-state:hover td {
   html[data-skin="terminal"] .t-table td {
     padding-left: 8px;
     padding-right: 8px;
+  }
+
+  /* Short of room, a header label takes two lines rather than pushing the
+     verbs column past the panel (UI gate M3, 640-720px). */
+  html[data-skin="terminal"] .t-table th {
+    white-space: normal;
   }
 
   /* Only the gaps between cells: the outer cells keep the panel's edge, which

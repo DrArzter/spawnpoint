@@ -119,6 +119,7 @@ if [[ -n "${release_bucket}" ]]; then
   }
   if pointer_output="$("${SCRIPT_DIR}/read-release-pointer.sh" "${world_name}" "${WORLD_GENERATION_ID}")"; then
     desired_release="$(awk -F= '$1 == "desired_release" { print $2 }' <<<"${pointer_output}")"
+    mark_step release_pointer_read
     payload_dir="${SERVER_DIR}/releases/${GAME_ID}/${WORLD_PROFILE_ID}/${desired_release}"
     "${SCRIPT_DIR}/download-release.sh" "${GAME_ID}" "${WORLD_PROFILE_ID}" "${desired_release}" "${payload_dir}" >&2
     mark_step release_downloaded

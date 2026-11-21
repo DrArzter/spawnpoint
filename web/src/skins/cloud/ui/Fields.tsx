@@ -75,7 +75,7 @@ export function Select({ options, inline = false, className, ...rest }: Readonly
       <select className="c-input" {...controlProps(useWiring())} {...rest}>
         {options.map((option) => <option disabled={option.disabled} key={option.value} value={option.value}>{option.label}</option>)}
       </select>
-      <Icon className="c-select-chevron" name="expand_more" size={20} />
+      <Icon className="c-select-chevron" data-layer="glyph" name="expand_more" size={20} />
     </span>
   );
 }

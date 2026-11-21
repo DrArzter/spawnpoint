@@ -6,7 +6,7 @@ import { Tick } from "./Tick";
 
 /** Status count tiles above a list; they scroll sideways with snap on a phone. */
 export function Tiles({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
-  return <div aria-label={label} className="c-tiles" role="group">{children}</div>;
+  return <div aria-label={label} className="c-tiles" data-scroll="expected" role="group">{children}</div>;
 }
 
 /** One state and how many rows hold it; pressing it filters the list. Disabled at zero. */

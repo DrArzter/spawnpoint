@@ -70,7 +70,7 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
 
   return (
     <div className="c-tabrow">
-      <div aria-label={label} className={cx("c-tabs", more && "c-tabs-more")} onKeyDown={onKey} ref={strip} role="tablist">
+      <div aria-label={label} className={cx("c-tabs", more && "c-tabs-more")} data-scroll="expected" onKeyDown={onKey} ref={strip} role="tablist">
         {tabs.map((tab) => {
           const selected = tab.id === value;
           return (

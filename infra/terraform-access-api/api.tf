@@ -358,15 +358,37 @@ resource "aws_apigatewayv2_route" "access" {
   authorization_type = "NONE"
 }
 
+resource "aws_cloudwatch_log_group" "access_api_http_access" {
+  name              = "/aws/apigateway/spawnpoint-access-api"
+  retention_in_days = 14
+}
+
 resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.access.id
   name        = "$default"
   auto_deploy = true
 
+  # Records requests refused or throttled before the Lambda. No path or query
+  # string: OAuth and sign-in requests can carry tokens there.
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.access_api_http_access.arn
+    format = jsonencode({
+      requestId               = "$context.requestId"
+      sourceIp                = "$context.identity.sourceIp"
+      requestTime             = "$context.requestTime"
+      routeKey                = "$context.routeKey"
+      status                  = "$context.status"
+      integrationErrorMessage = "$context.integrationErrorMessage"
+    })
+  }
+
   # API Gateway validates every route_settings key during UpdateStage. Keep
   # the stage update behind route creation so a new throttled route cannot
   # race the stage and fail the apply with Route not found.
-  depends_on = [aws_apigatewayv2_route.access]
+  depends_on = [
+    aws_apigatewayv2_route.access,
+    aws_api_gateway_account.current,
+  ]
 
   dynamic "route_settings" {
     for_each = toset([

@@ -20,7 +20,7 @@ export function WipesTab({ model }: Readonly<{ model: WorldModel }>) {
           { id: "origin", header: "Origin release", render: (row) => <span className="c-mono">{row.wipe.originRelease}</span> },
           { id: "actions", header: "Actions", kind: "act", render: (row) => <ActionButton action={row.showBackups} size="sm" /> },
         ]}
-        empty={<Empty icon="history" title="No wipes" />}
+        empty={<Empty icon="layers" title="No wipes" />}
         label="Wipes"
         rowKey={(row) => row.wipe.id}
         rows={[...model.wipes].sort((a, b) => b.wipe.number - a.wipe.number)}

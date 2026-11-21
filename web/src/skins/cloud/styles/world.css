@@ -1,17 +1,4 @@
-/* The world page: the list column beside the pane, the hero, and the parts its tabs own. */
-
-html[data-skin="cloud"] .c-world {
-  min-width: 0;
-}
-
-html[data-skin="cloud"] .c-world-pane {
-  min-width: 0;
-}
-
-/* Under 1024px the pane is the page; the header's breadcrumb or back button returns to Worlds. */
-html[data-skin="cloud"] .c-world-split > .c-lcol {
-  display: none;
-}
+/* The world page: the hero and the parts its tabs own. SplitPage owns the list column beside it. */
 
 html[data-skin="cloud"] .c-hero {
   position: relative;
@@ -118,24 +105,6 @@ html[data-skin="cloud"] .c-wl-name > .c-mono {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-@media (min-width: 1024px) {
-  html[data-skin="cloud"] .c-world-split {
-    display: grid;
-    grid-template-columns: var(--c-lcol) minmax(0, 1fr);
-    min-height: calc(100vh - var(--c-bar));
-    /* The list column sits flush with the rail and the top bar, so the split takes back the main area's gutter. */
-    margin: -20px calc(var(--c-pad) * -1) -48px;
-  }
-
-  html[data-skin="cloud"] .c-world-split > .c-lcol {
-    display: flex;
-  }
-
-  html[data-skin="cloud"] .c-world-split > .c-world-pane {
-    padding: 20px var(--c-pad) 48px;
-  }
 }
 
 @media (max-width: 759px) {

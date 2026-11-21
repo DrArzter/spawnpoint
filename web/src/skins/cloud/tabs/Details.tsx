@@ -32,7 +32,7 @@ export function DetailsTab({ model }: Readonly<{ model: WorldModel }>) {
     <>
       <Grid kind="detail">
         {live === false
-          ? <Empty icon="stop_circle" size="sm" title="No session" />
+          ? <Empty icon="power_settings_new" size="sm" title="No session" />
           : session.length > 0 && <Card body="kv" title="Session"><DetailList columns="two" details={session} /></Card>}
         <Card actions={settings.length > 0 ? settings.map((item) => <ActionButton action={item} key={item.id} size="sm" />) : undefined} body="kv" title="World">
           <DetailList columns="two" details={activeOnly(model.worldDetails)} omit={omit} />

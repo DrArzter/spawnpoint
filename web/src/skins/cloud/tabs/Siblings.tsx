@@ -39,8 +39,8 @@ export function Siblings({ model, rows }: Readonly<{ model: WorldModel; rows: re
   return (
     <ListColumn
       chips={(Object.keys(shows) as Show[]).map((id) => ({ id, label: labels[id], count: rows.filter(shows[id]).length, pressed: show === id, onPress: () => setShow(id) }))}
-      empty={shown.length === 0 ? <Empty icon="filter_list" size="sm" title="No matches" /> : undefined}
-      end={<LinkButton href={model.worldsHref} icon="menu" label="Table" size="sm" />}
+      empty={shown.length === 0 ? <Empty icon="filter_alt_off" size="sm" title="No matches" /> : undefined}
+      end={<LinkButton href={model.worldsHref} icon="table_rows" iconOnly label="Table" size="sm" />}
       filter={{ value: query, set: setQuery, placeholder: "Filter worlds" }}
       groups={[{
         id: "worlds",
@@ -48,7 +48,7 @@ export function Siblings({ model, rows }: Readonly<{ model: WorldModel; rows: re
           <ListItemWorld
             address={row.address ? <Address address={row.address} /> : undefined}
             current={row.id === model.world.id}
-            hosting={row.placement === "fleet" ? <Chip icon="cloud">Fleet</Chip> : <Chip icon="dns">Persistent</Chip>}
+            hosting={row.placement === "fleet" ? <Chip icon="bolt">Fleet</Chip> : <Chip icon="dns">Persistent</Chip>}
             href={tabHref(row, model.tab)}
             key={row.id}
             line={row.wipe === null ? row.releaseSummary : `${row.releaseSummary} · #${row.wipe}`}

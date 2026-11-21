@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 
 import type { WhitelistModel } from "../../../core/models";
+import { cx } from "../../../lib/cx";
 import { ActionButton } from "../ui/ActionButton";
 import { Card } from "../ui/Card";
 import { shortDateTime } from "../ui/DetailList";
@@ -8,10 +9,12 @@ import { Empty, LoadError } from "../ui/Empty";
 import { TextInput } from "../ui/Fields";
 import { Grid } from "../ui/Grid";
 import { Skeleton, SkeletonGroup } from "../ui/Skeleton";
+import { ARRIVED, useArrivals } from "../ui/Tick";
 
 export function WhitelistTab({ model }: Readonly<{ model: WhitelistModel }>) {
   const list = model.list;
   const ready = list.status === "ready" ? list.value : null;
+  const fresh = useArrivals(ready?.rows.map((row) => row.name) ?? []);
   const changed = ready?.updatedAt ? [`Changed ${shortDateTime(ready.updatedAt) ?? ""}`, ready.updatedBy ? `by ${ready.updatedBy}` : null].filter(Boolean).join(" ") : undefined;
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -41,11 +44,11 @@ export function WhitelistTab({ model }: Readonly<{ model: WhitelistModel }>) {
         </SkeletonGroup>
       )}
       {ready && !ready.managed && <p className="c-line c-card-foot">Spawnpoint does not keep this world&apos;s whitelist yet; the first name replaces the server&apos;s list.</p>}
-      {ready && ready.managed && ready.rows.length === 0 && <Empty icon="verified" title="Nobody can join" />}
+      {ready && ready.managed && ready.rows.length === 0 && <Empty icon="verified_user" title="Nobody can join" />}
       {ready && ready.rows.length > 0 && (
         <Grid className="c-wl-names" kind="name" label="Players">
           {ready.rows.map((row) => (
-            <div className="c-wl-name" key={row.name}>
+            <div className={cx("c-wl-name", fresh.has(row.name) && ARRIVED)} key={row.name}>
               <span className="c-mono" title={row.name}>{row.name}</span>
               <ActionButton action={{ ...row.remove, label: `Remove ${row.name}` }} iconOnly size="sm" />
             </div>

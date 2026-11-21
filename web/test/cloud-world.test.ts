@@ -98,6 +98,9 @@ test("cloud world: the World card draws hosting and game settings, the overflow 
 
 test("cloud world: the list column keeps the tab and marks the current world; no live session has no hero", () => {
   const markup = render({ tab: "wipes" });
+  assert.match(markup, /class="c-split"[^>]*data-selected="true"/, "the page sits in the shared split, its pane chosen");
+  assert.match(markup, /data-pane=""/);
+  assert.doesNotMatch(render({ siblings: undefined }), /c-split/, "no list, no split");
   assert.match(markup, /aria-current="true"[^>]*href="#\/worlds\/minecraft\/rostik\/wipes"/);
   assert.match(markup, /href="#\/worlds\/minecraft\/cinder\/wipes"/);
   const stopped = render({ glance: { live: false, players: null, address: null, launchedAt: null, busy: false } });

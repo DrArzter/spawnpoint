@@ -2,6 +2,7 @@ import type { WorldGlance } from "../../../core/models";
 import { Address } from "../ui/Address";
 import { elapsed, useNow } from "../ui/Flashbar";
 import { ProgressBar } from "../ui/ProgressBar";
+import { Tick } from "../ui/Tick";
 
 /** How long a host has run: `h:mm:ss`, or `d h` past a day; null when the launch is unknown. */
 export function uptime(since: string | null | undefined, now: number): string | null {
@@ -37,7 +38,7 @@ export function Hero({ glance, label }: Readonly<{ glance: WorldGlance; label: s
         </div>
         <div className="c-hero-fact">
           <dt>Players online</dt>
-          <dd className="c-hero-big">{glance.players ?? <span className="c-faint">—</span>}</dd>
+          <dd className="c-hero-big">{glance.players === null ? <span className="c-faint">—</span> : <Tick value={glance.players} />}</dd>
         </div>
         <div className="c-hero-fact c-hero-address">
           <dt>Address</dt>

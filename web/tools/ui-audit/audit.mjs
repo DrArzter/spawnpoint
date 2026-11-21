@@ -230,7 +230,13 @@ async function open(tab, job, width) {
   const [path, hash = ""] = job.route.split("#");
   const joiner = path.includes("?") ? "&" : "?";
   await tab.goto(`${base}${path}${joiner}probe=${pass}&skin=${encodeURIComponent(job.skin)}${hash ? "#" + hash : ""}`);
+  // The front door mounts after its own boot: wait for the app before the page settles.
+  await tab.evaluate(`(async () => { const until = performance.now() + 5000; while (performance.now() < until && !document.getElementById("root")?.children.length) await new Promise((r) => setTimeout(r, 50)); })()`, true).catch(() => undefined);
   await settle(tab);
+  // A blank page or another skin has nothing wrong to find: say so, or the gate passes on nothing.
+  const worn = await tab.evaluate(`JSON.stringify({ mounted: (document.getElementById("root")?.children.length ?? 0) > 0, skin: document.documentElement.dataset.skin ?? null })`).then(JSON.parse);
+  if (!worn.mounted) throw new Error(`the app did not render ${job.route}`);
+  if (path.includes("demo") && worn.skin !== job.skin) throw new Error(`asked for skin ${job.skin}, the page wears ${worn.skin}`);
 }
 
 async function probe(tab, width, root = null) {
@@ -281,8 +287,9 @@ async function runState(tab, job) {
   const before = await tab.evaluate(`${SURFACES}.length`);
   for (const step of job.state.steps) {
     const outcome = await tab.evaluate(`${STEP}(${JSON.stringify(step)})`, true);
-    // A control a width does not show cannot be pressed there: not a finding.
-    if (outcome === "absent") return null;
+    // A control a width does not show cannot be pressed there. The run
+    // counts these and fails a state that is absent everywhere or at 1440.
+    if (outcome === "absent") return { absent: true };
     if (outcome !== "ok") return { error: `step ${JSON.stringify(step)}: ${outcome}` };
     await settle(tab);
   }
@@ -320,8 +327,9 @@ async function runJob(tab, job, records) {
       }
     } else {
       const result = await runState(tab, job);
-      if (result?.error) records.push(record(job, job.width, { error: [{ key: "state", sel: job.state.name, by: result.error }] }));
-      else if (result) records.push(record(job, job.width, result.found));
+      if (result.error) records.push(record(job, job.width, { error: [{ key: "state", sel: job.state.name, by: result.error }] }));
+      else if (result.absent) records.push(record(job, job.width, {}, { absent: true }));
+      else records.push(record(job, job.width, result.found));
     }
   } catch (error) {
     records.push(record(job, job.width ?? job.widths?.[0], { error: [{ key: "probe", sel: job.route, by: String(error.message ?? error).slice(0, 160) }] }));
@@ -353,6 +361,8 @@ function readAccepted() {
     const [pattern, reason = ""] = line.split(/\s+#\s+/, 2);
     if (!reason.trim()) { problems.push(`accepted.txt:${index + 1}: no reason after " # "`); continue; }
     const [skin, page, width, theme, kind, ...marker] = pattern.trim().split(/\s+/);
+    // A line that names neither a page nor a precise element would hide every match of its kind.
+    if (page === "*" && marker.join(" ").split(" ").length < 2) { problems.push(`accepted.txt:${index + 1}: a page "*" needs a marker of two parts or more`); continue; }
     rules.push({ line: pattern.trim(), skin, page, width, theme, kind, marker: marker.join(" "), used: false });
   }
   return { rules, problems };
@@ -507,7 +517,21 @@ try {
         await runJob(tab, job, records);
       }
     }));
-    const probes = records.length;
+    // A state whose control is gone at every width, or at the desktop width,
+    // has left the gate: that is a finding, not a skip.
+    const tried = new Map();
+    for (const r of records.filter((r) => r.name.startsWith("state:"))) {
+      const id = `${r.skin}|${r.name}`;
+      if (!tried.has(id)) tried.set(id, []);
+      tried.get(id).push(r);
+    }
+    for (const list of tried.values()) {
+      const desktop = list.filter((r) => r.width === 1440);
+      const phoneOnly = STATES.find((state) => `state:${state.name}` === list[0].name)?.phoneOnly?.includes(list[0].skin);
+      const lost = list.every((r) => r.absent) || (!phoneOnly && desktop.length > 0 && desktop.every((r) => r.absent));
+      if (lost) records.push({ ...list[0], width: list.every((r) => r.absent) ? "*" : 1440, theme: "*", absent: false, found: { error: [{ key: "state", sel: list[0].name, by: "no control opens this state" }] } });
+    }
+    const probes = records.filter((r) => !r.absent && !r.found?.error).length;
     if (process.env.AUDIT_JSON) writeFileSync(process.env.AUDIT_JSON, JSON.stringify(records, null, 1));
     const blocking = findings(records, KINDS);
     const advisory = advise ? findings(records, ADVISORY) : [];
@@ -522,6 +546,9 @@ try {
       writeReport(fresh, advisory, shots, summary);
       console.log(`report: ${join(reportDir, "report.md")} (${grouped(advisory).length} advisory groups)`);
     }
+    // A run that measured almost nothing has not checked the console.
+    const expected = jobs.filter((job) => job.type !== "state").length;
+    if (probes < expected) problems.push(`only ${probes} probes for ${expected} page jobs: the run did not reach the pages`);
     for (const problem of problems) console.log(problem);
     const unused = rules.filter((rule) => !rule.used);
     // A narrowed run does not see every finding, so it cannot call a line stale.

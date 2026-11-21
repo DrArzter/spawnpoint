@@ -121,10 +121,16 @@ check_ui() {
   (cd web && node tools/ui-audit/audit.mjs --self-test) || return 1
   (cd web && exec npx vite preview --host 127.0.0.1 --port "${port}" --strictPort >/dev/null 2>&1) &
   server=$!
+  local up=0
   for _ in $(seq 1 50); do
-    curl -fs "http://127.0.0.1:${port}/" >/dev/null && break
+    if curl -fs "http://127.0.0.1:${port}/" >/dev/null; then up=1; break; fi
     sleep 0.2
   done
+  if (( ! up )); then
+    printf 'the demo build did not answer on port %s\n' "${port}" >&2
+    kill "${server}" 2>/dev/null || true
+    return 1
+  fi
   local flags=(--gate)
   [[ "${UI_ADVISE:-}" != "1" ]] || flags+=(--advise)
   (cd web && node tools/ui-audit/audit.mjs "${flags[@]}" "http://127.0.0.1:${port}") || status=$?

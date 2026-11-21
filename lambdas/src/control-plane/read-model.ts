@@ -185,8 +185,9 @@ export async function readControlPlaneSnapshot(
     ))),
   ]);
   // Ephemeral by design: the address a public world publishes is whatever the
-  // running instance holds right now, and nothing between sessions.
-  const hostPublicIp = hosts.find((host) => host.state === "running" && host.publicIp !== null)?.publicIp ?? null;
+  // running instance holds right now, and nothing between sessions. Only the
+  // configured host's: a launched host holds fleet sessions, not this world.
+  const hostPublicIp = hosts.find((host) => host.provenance !== "launched" && host.state === "running" && host.publicIp !== null)?.publicIp ?? null;
   const pointerByWorld = new Map(worlds.map((world, index) => [world.id, pointers[index]!]));
   const ownRecordByWorld = new Map(fleetWorlds.map(({ world }, index) => [world.id, ownRecords[index] ?? null]));
 

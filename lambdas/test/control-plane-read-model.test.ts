@@ -174,6 +174,23 @@ test("a fleet world never borrows another running host's public address", async 
   assert.equal(snapshot.games[0]?.worlds[0]?.connectionAddress, null);
 });
 
+test("a configured world never borrows a launched host's public address", async () => {
+  const configuredCatalog = [{
+    id: "minecraft", code: "MC", displayName: "Minecraft", connectPort: 25565,
+    worlds: [{ id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1" as const, connectivity: "raw" as const }],
+  }];
+  const snapshot = await readControlPlaneSnapshot({
+    listHosts: async () => [
+      { id: "configured", name: "Persistent host", state: "stopped", providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: null, provenance: "configured" },
+      { id: "fleet-1", name: "Fleet host", state: "running", providerRef: "i-2", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: "198.51.100.7", provenance: "launched" },
+    ],
+    listRunningOperations: async () => [],
+    readLifecycle: async () => null,
+    readReleasePointer: async () => ({ state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null }),
+  }, { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" }, configuredCatalog);
+  assert.equal(snapshot.games[0]?.worlds[0]?.connectionAddress, null);
+});
+
 test("two fleet worlds of one game run at once, each with its own session and its own address", async () => {
   const { acquireLease, beginSession, markSessionReady } = await import("../src/domain/lifecycle.ts");
   const ready = (serverId: string, worldId: string, address: string) => {

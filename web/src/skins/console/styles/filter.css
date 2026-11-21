@@ -1,0 +1,187 @@
+/* FilterBar: tokens and a combobox; matches, Clear and the gear at the end edge. */
+
+html[data-skin="console"] .c-filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--c-line);
+}
+
+html[data-skin="console"] .c-filter {
+  position: relative;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+html[data-skin="console"] .c-filter-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--c-field);
+  padding: 4px 8px 4px 12px;
+  border: 1px solid var(--c-line-2);
+  border-radius: var(--c-r-ctl);
+  background: var(--c-surface);
+  color: var(--c-ink-3);
+}
+
+html[data-skin="console"] .c-filter-box:focus-within {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 1px var(--c-accent);
+}
+
+html[data-skin="console"] .c-filter-box input {
+  flex: 1;
+  min-width: 160px;
+  height: 32px;
+  border: 0;
+  background: none;
+  color: var(--c-ink);
+  outline: 0;
+}
+
+html[data-skin="console"] .c-filter-token {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 4px 0 11px;
+  border: 1px solid var(--c-accent-line);
+  border-radius: var(--c-r-pill);
+  background: var(--c-accent-soft);
+  color: var(--c-accent-text);
+  font-size: var(--c-fs-s);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-filter-token-key {
+  font-weight: 500;
+  opacity: .8;
+}
+
+html[data-skin="console"] .c-filter-token-draft {
+  padding-right: 11px;
+}
+
+html[data-skin="console"] .c-filter-token button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--c-r-pill);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+html[data-skin="console"] .c-filter-token button:hover {
+  background: var(--c-surface);
+}
+
+html[data-skin="console"] .c-filter-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 280px;
+  max-width: 100%;
+  max-height: 340px;
+  padding: 6px;
+  overflow: auto;
+  border: 1px solid var(--c-line-2);
+  border-radius: var(--c-r);
+  background: var(--c-surface-pop);
+  box-shadow: var(--c-shadow-pop);
+  animation: c-fade var(--c-d1) var(--c-ease);
+}
+
+html[data-skin="console"] .c-filter-menu[hidden] {
+  display: none;
+}
+
+html[data-skin="console"] .c-filter-menu-label {
+  padding: 8px 10px 4px;
+  color: var(--c-ink-3);
+  font-size: var(--c-fs-xs);
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+html[data-skin="console"] .c-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: var(--c-r-sm);
+  color: var(--c-ink);
+  cursor: pointer;
+}
+
+html[data-skin="console"] .c-filter-option[aria-selected="true"] {
+  background: var(--c-accent-soft);
+}
+
+html[data-skin="console"] .c-filter-option-count {
+  margin-left: auto;
+  color: var(--c-ink-3);
+  font-size: var(--c-fs-s);
+}
+
+html[data-skin="console"] .c-filterbar-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+html[data-skin="console"] .c-filter-matches {
+  color: var(--c-ink-3);
+  font-size: var(--c-fs-s);
+  white-space: nowrap;
+}
+
+@media (max-width: 759px) {
+  html[data-skin="console"] .c-filter {
+    flex-basis: 100%;
+  }
+
+  html[data-skin="console"] .c-filter-box {
+    flex-wrap: nowrap;
+    min-height: var(--c-target);
+    overflow-x: auto;
+  }
+
+  html[data-skin="console"] .c-filter-box input {
+    flex: 1 1 auto;
+    min-width: 100px;
+    height: 42px;
+  }
+
+  html[data-skin="console"] .c-filter-token button {
+    width: 36px;
+    height: 36px;
+    margin: -3px -2px -3px 0;
+  }
+
+  html[data-skin="console"] .c-filterbar-end {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  html[data-skin="console"] .c-filter-matches {
+    margin-right: auto;
+  }
+
+  html[data-skin="console"] .c-filter-option {
+    min-height: var(--c-target);
+  }
+}

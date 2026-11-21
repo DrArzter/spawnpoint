@@ -187,13 +187,21 @@ export function deriveAccent(accent: string, theme: Theme): DerivedAccent | null
 /** The shipped accent, and what "no choice made" means. */
 export const DEFAULT_ACCENT = "#1a73e8";
 
+/**
+ * Paints the accent's tokens on the root. `data-accent="chosen"` marks a colour
+ * the person picked, so a face with its own default accent (the console's iris)
+ * follows the pick and keeps its own colour otherwise.
+ */
 export function applyAccent(root: HTMLElement, accent: string, theme: Theme): DerivedAccent | null {
   const derived = deriveAccent(accent, theme);
   if (derived === null) return null;
   for (const [name, value] of Object.entries(derived.tokens)) root.style.setProperty(name, value);
+  if (accent.trim().toLowerCase() === DEFAULT_ACCENT) delete root.dataset.accent;
+  else root.dataset.accent = "chosen";
   return derived;
 }
 
 export function clearAccent(root: HTMLElement): void {
   for (const name of Object.keys(deriveAccent(DEFAULT_ACCENT, "light")?.tokens ?? {})) root.style.removeProperty(name);
+  delete root.dataset.accent;
 }

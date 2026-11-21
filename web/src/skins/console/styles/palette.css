@@ -1,0 +1,141 @@
+/* Palette: search and run. */
+
+html[data-skin="console"] .c-palette-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  background: var(--c-scrim);
+  animation: c-fade var(--c-d1) var(--c-ease);
+}
+
+html[data-skin="console"] .c-palette {
+  position: fixed;
+  top: 12vh;
+  left: 50%;
+  z-index: 86;
+  display: flex;
+  flex-direction: column;
+  width: min(660px, calc(100vw - 32px));
+  max-height: min(580px, 76vh);
+  overflow: hidden;
+  border: 1px solid var(--c-line-2);
+  border-radius: 16px;
+  background: var(--c-surface-pop);
+  box-shadow: var(--c-shadow-pop);
+  transform: translateX(-50%);
+  animation: c-fade var(--c-d2) var(--c-ease);
+}
+
+html[data-skin="console"] .c-palette-input {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  height: 58px;
+  padding: 0 14px 0 18px;
+  border-bottom: 1px solid var(--c-line);
+  color: var(--c-ink-3);
+}
+
+html[data-skin="console"] .c-palette-input input {
+  flex: 1;
+  min-width: 0;
+  height: 56px;
+  border: 0;
+  background: none;
+  color: var(--c-ink);
+  font-size: 17px;
+  outline: 0;
+}
+
+html[data-skin="console"] .c-palette-list {
+  padding: 6px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+html[data-skin="console"] .c-palette-group {
+  padding: 10px 12px 4px;
+  color: var(--c-ink-3);
+  font-size: var(--c-fs-xs);
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+html[data-skin="console"] .c-palette-option {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 0 12px;
+  border-radius: var(--c-r-ctl);
+  cursor: pointer;
+}
+
+html[data-skin="console"] .c-palette-option[aria-selected="true"] {
+  background: var(--c-accent-soft);
+}
+
+html[data-skin="console"] .c-palette-option[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+html[data-skin="console"] .c-palette-icon {
+  display: grid;
+  place-items: center;
+  color: var(--c-ink-2);
+}
+
+html[data-skin="console"] .c-palette-label {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-palette-option[aria-disabled="true"] .c-palette-label,
+html[data-skin="console"] .c-palette-option[aria-disabled="true"] .c-palette-icon {
+  color: var(--c-ink-3);
+}
+
+html[data-skin="console"] .c-palette-end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  max-width: min(300px, 45vw);
+  overflow: hidden;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-palette-why {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+html[data-skin="console"] .c-palette-refused {
+  animation: c-shake var(--c-shake) var(--c-ease) 2;
+}
+
+html[data-skin="console"] .c-palette-none {
+  padding: 24px 12px;
+  color: var(--c-ink-2);
+  text-align: center;
+}
+
+@media (max-width: 759px) {
+  html[data-skin="console"] .c-palette {
+    top: 8px;
+    max-height: calc(100vh - 16px);
+  }
+
+  html[data-skin="console"] .c-palette-option {
+    min-height: 48px;
+  }
+}

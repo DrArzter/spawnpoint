@@ -16,6 +16,11 @@ function readFlag(): boolean {
 /** In-memory mode: no network call leaves the tab, and nothing survives a reload. */
 export const demoEnabled = readFlag();
 
+/** `?fixture=stress` seeds the demo at the form limits (web/tools/ui-audit). */
+export function demoFixture(): string | null {
+  return new URLSearchParams(window.location.search).get("fixture");
+}
+
 export function demoUrl(): string {
   return `${window.location.pathname}?demo#/worlds`;
 }

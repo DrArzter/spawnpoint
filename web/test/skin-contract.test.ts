@@ -86,6 +86,7 @@ const worldPage: WorldModel = {
   world,
   worldsHref: "#/worlds/minecraft",
   availability: { kind: "ready", label: "Ready" },
+  sessionStatus: { kind: "ok", label: "Online" },
   notices: [{ id: "archived", tone: "warning", title: "This world is archived" }],
   tabs: [{ id: "details", label: "Details" }, { id: "wipes", label: "Wipes", count: 1 }, { id: "backups", label: "Backups" }, { id: "releases", label: "Releases" }, { id: "console", label: "Console" }, { id: "metrics", label: "Metrics" }],
   tab: "details",
@@ -147,12 +148,16 @@ const access: AccessModel = {
     bootstrap: { state: "unclaimed", telegramId: "1780660807" },
     bootstrapDescription: "Sign in with the configured account.",
     candidates: { status: "ready", value: [{ candidate: { platform: "telegram", platformUserId: "42", displayName: "Nikita", username: "nikita", email: null, photoUrl: null, status: "REQUESTED", requestedAt: "2026-09-14T18:10:00Z", lastSeenAt: "2026-09-14T18:10:00Z" }, account: "@nikita", since: "Requested access Sep 14", roleId: "viewer", setRoleId: noop, approve: spy("access.approve", "Approve"), dismiss: spy("access.dismiss", "Dismiss") }] },
-    members: [{ member: { id: "m1", name: "DrArzter", roleId: "owner", links: [] }, roleId: "owner", setRoleId: noop, changing: false, linkedAccounts: spy("access.linked", "Linked accounts") }],
+    members: [
+      { member: { id: "m1", name: "DrArzter", roleId: "owner", links: [] }, roleId: "owner", setRoleId: noop, changing: false, linkedAccounts: spy("access.linked", "Linked accounts"), remove: null },
+      { member: { id: "m2", name: "Mira", roleId: "viewer", links: [] }, roleId: "viewer", setRoleId: noop, changing: false, linkedAccounts: spy("access.linked", "Linked accounts"), remove: spy("access.delete", "Delete user", { danger: true, icon: "delete_forever" }) },
+    ],
     roles: [{ id: "owner", name: "Owner", description: "Everything", permissions: ["a"] }, { id: "viewer", name: "Viewer", description: "Reads", permissions: ["b"] }],
     rolesLoading: false,
     invitations: { emailMode: true, email: "", setEmail: noop, create: spy("invitation.create", "Create invitation"), issued: { url: "https://x/join?token=t", email: "", copy: spy("invitation.copy", "Copy link") }, list: { status: "ready", value: [{ invitation: { id: "i1", status: "PENDING", deliveryEmail: null, delivery: "none", createdAt: "2026-09-14T18:10:00Z", expiresAt: "2026-09-21T18:10:00Z" } as never, revoke: spy("invitation.revoke", "Revoke") }] } },
     managed: { id: "m1", name: "DrArzter", roleId: "owner", links: [] },
     closeManaged: spy("sheet.close", "Close panel"),
+    deletion: { title: "Delete Mira?", description: "Removes their sign-in methods, sessions and agent connections. This cannot be undone.", destructive: true, confirm: spy("access.delete.confirm", "Delete user", { danger: true, disabled: true }), cancel: spy("access.delete.cancel", "Cancel"), releaseChoice: null, typedConfirmation: { label: "User name", expected: "Mira", value: "", set: noop } },
   },
   roles: { roles: { status: "ready", value: [{ id: "owner", name: "Owner", description: "Everything", permissions: ["a"] }] }, reading: { id: "owner", name: "Owner", description: "Everything", permissions: ["a"] }, read: () => spy("access.role.read", "1 permission"), closeReading: spy("sheet.close.role", "Close panel") },
   notifications: { state: "error", error: "boom", retry: spy("notifications.retry", "Try again"), saveStatus: "", games: [game], subscriptions: {}, toggle: (id, label) => spy(`notifications.${id}`, label) },
@@ -177,7 +182,7 @@ const profile: ProfileModel = {
   },
 };
 
-const confirmation: ConfirmationModel = { title: "Permanently delete Rostik?", description: "Gone.", destructive: true, confirm: spy("confirm", "Delete forever", { danger: true }), cancel: spy("cancel", "Cancel"), releaseChoice: { value: "1.2", options: [{ version: "1.2", latest: true }], set: noop }, typedConfirmation: { expected: world.id, value: "", set: noop } };
+const confirmation: ConfirmationModel = { title: "Permanently delete Rostik?", description: "Gone.", destructive: true, confirm: spy("confirm", "Delete forever", { danger: true }), cancel: spy("cancel", "Cancel"), releaseChoice: { value: "1.2", options: [{ version: "1.2", latest: true }], set: noop }, typedConfirmation: { label: "World ID", expected: world.id, value: "", set: noop } };
 const connection = { placement: "fleet" as const, setPlacement: noop, fleetAvailable: true, connectivity: "raw" as const, setConnectivity: noop, dnsAvailable: true };
 const createWorld: CreateWorldModel = { game, presets: game.presets, presetId: "industrial", setPresetId: noop, preset: game.presets[0]!, name: "", setName: noop, release: "1.2", setRelease: noop, connection, valid: false, submit: spy("world.create", "Create world"), cancel: spy("sheet.close", "Close panel") };
 const worldSettings: WorldSettingsModel = { game, world, stopped: false, connection, valid: true, save: spy("world.settings.save", "Save settings"), cancel: spy("sheet.close", "Cancel") };
@@ -237,7 +242,7 @@ for (const skin of SKINS) {
   });
 
   test(`${skin.name}: the worlds list draws every row verb, refresh and create`, () => {
-    checkSurface("Worlds", renderToStaticMarkup(createElement(skin.Worlds, { model: worlds })), worlds);
+    checkSurface("Worlds", renderToStaticMarkup(createElement(skin.Worlds, { model: worlds })), worlds, skin.shellRefresh ? ["refresh"] : []);
   });
 
   test(`${skin.name}: the world page draws stop, invite, the overflow and each tab's verbs`, () => {
@@ -247,7 +252,7 @@ for (const skin of SKINS) {
     const backups = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "backups" } }));
     const releasesTab = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "releases" } }));
     const entry = worldPage.backups.inventory.status === "ready" ? worldPage.backups.inventory.value.entries[0]! : (null as never);
-    checkSurface("World", details + wipes + backups + releasesTab, { ...worldPage, backups: { ...worldPage.backups, restore: worldPage.backups.restore(entry), download: worldPage.backups.download!(entry) } });
+    checkSurface("World", details + wipes + backups + releasesTab, { ...worldPage, backups: { ...worldPage.backups, restore: worldPage.backups.restore(entry), download: worldPage.backups.download!(entry) } }, skin.shellRefresh ? ["refresh"] : []);
   });
 
   test(`${skin.name}: a world's files are its release's mods and its backup archives (ADR-0065)`, () => {
@@ -303,13 +308,17 @@ for (const skin of SKINS) {
     checkSurface("Releases", renderToStaticMarkup(createElement(skin.Releases, { model: releases })), releases);
   });
 
-  test(`${skin.name}: access draws approve, dismiss, roles, invitations and subscriptions on their tabs`, () => {
+  test(`${skin.name}: access draws approve, dismiss, delete, roles, invitations and subscriptions on their tabs`, () => {
     const users = renderToStaticMarkup(createElement(skin.Access, { model: access }));
     const roles = renderToStaticMarkup(createElement(skin.Access, { model: { ...access, tab: "roles" } }));
     const notifications = renderToStaticMarkup(createElement(skin.Access, { model: { ...access, tab: "notifications" } }));
     const toggles = { started: access.notifications.toggle("minecraft.started", "Minecraft started"), stopped: access.notifications.toggle("minecraft.stopped", "Minecraft stopped"), broadcast: access.notifications.toggle("invitation.broadcast", "Everyone"), direct: access.notifications.toggle("invitation.direct", "Me") };
     const role = access.roles.roles.status === "ready" ? access.roles.roles.value[0]! : (null as never);
     checkSurface("Access", users + roles + notifications, { ...access, toggles, read: access.roles.read(role) });
+    // Every identity row has the same menu, also the caller's own row without delete.
+    assert.match(users, /aria-label="Actions for DrArzter"/);
+    assert.match(users, /aria-label="Actions for Mira"/);
+    assert.doesNotMatch(users, /aria-label="Linked accounts"/, "linked accounts is a menu item on every row, never a lone button");
   });
 
   test(`${skin.name}: the profile draws sign out, the browser door and every sign-in method verb`, () => {
@@ -319,6 +328,11 @@ for (const skin of SKINS) {
 
   test(`${skin.name}: dialogs and sheets draw confirm, cancel, submit, save, send and close`, () => {
     checkSurface("Confirmation", renderToStaticMarkup(createElement(skin.ConfirmationDialog, { model: confirmation })), confirmation);
+    const typed = renderToStaticMarkup(createElement(skin.ConfirmationDialog, { model: { ...confirmation, typedConfirmation: { ...confirmation.typedConfirmation!, label: "User name" } } }));
+    assert.match(typed, /User name/, "the typed field is named by the model, not by the skin");
+    assert.doesNotMatch(typed, /to confirm/, "the field and its placeholder say what to type; no second line");
+    const refused = renderToStaticMarkup(createElement(skin.ConfirmationDialog, { model: { ...confirmation, error: "The last Owner cannot be deleted." } }));
+    assert.match(refused, /role="alert"[^>]*>The last Owner cannot be deleted\./, "a refusal is read inside the open dialog");
     checkSurface("CreateWorld", renderToStaticMarkup(createElement(skin.CreateWorldSheet, { model: createWorld })), createWorld);
     checkSurface("WorldSettings", renderToStaticMarkup(createElement(skin.WorldSettingsSheet, { model: worldSettings })), worldSettings);
     checkSurface("Invitation", renderToStaticMarkup(createElement(skin.InvitationSheet, { model: invitation })), invitation);

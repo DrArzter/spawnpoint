@@ -14,10 +14,6 @@
   gap: 8px;
 }
 
-.landing-bar-login {
-  display: contents;
-}
-
 .landing-avatar-pending {
   background: var(--surface-variant);
   animation: shimmer 1.4s linear infinite;
@@ -281,8 +277,11 @@ button.landing-link:hover {
   white-space: nowrap;
 }
 
+/* The address keeps one line inside its column and ends in an ellipsis rather than running under Stop (UI gate, 960px). */
 .shot-row code {
+  overflow: hidden;
   font-size: 12px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -511,4 +510,30 @@ button.landing-link:hover {
 
 .connect-scopes .icon {
   color: var(--success);
+}
+
+/* The demo badge in the front door bar */
+.demo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--radius-control);
+  background: var(--warning-container);
+  color: var(--warning-ink);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@media (max-width: 599px) {
+  .demo-badge span {
+    display: none;
+  }
+
+  .demo-badge {
+    padding: 0 6px;
+  }
 }

@@ -18,9 +18,8 @@
         try {
           const saved = localStorage.getItem("spawnpoint.theme");
           const telegram = window.Telegram?.WebApp;
-          const system = telegram?.initData
-            ? telegram.colorScheme
-            : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          const browser = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          const system = telegram?.initData ? telegram.colorScheme : browser;
           const theme = saved === "light" || saved === "dark" ? saved : system;
           document.documentElement.dataset.theme = theme;
           document.documentElement.style.colorScheme = theme;
@@ -29,14 +28,16 @@
           // its font is asked for now rather than when the shell mounts. The
           // front door never wears it; the app takes it off there.
           const asked = new URLSearchParams(location.search).get("skin");
-          const skin = asked === "terminal" || asked === "console" ? asked : localStorage.getItem("spawnpoint.skin");
-          if (skin === "terminal" && !location.hash.startsWith("#/welcome")) {
-            document.documentElement.dataset.skin = "terminal";
-            const font = document.createElement("link");
-            font.rel = "stylesheet";
-            font.href = "https://fonts.googleapis.com/css2?family=B612+Mono:wght@400;700&display=swap";
-            document.head.append(font);
-          }
+          const skin = (asked === "terminal" || asked === "console" ? asked : localStorage.getItem("spawnpoint.skin")) === "terminal" ? "terminal" : "console";
+          const fonts = {
+            terminal: "https://fonts.googleapis.com/css2?family=B612+Mono:wght@400;700&display=swap",
+            console: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap",
+          };
+          if (!location.hash.startsWith("#/welcome")) document.documentElement.dataset.skin = skin;
+          const font = document.createElement("link");
+          font.rel = "stylesheet";
+          font.href = fonts[skin];
+          document.head.append(font);
         } catch {}
       })();
     </script>

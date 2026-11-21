@@ -28,7 +28,7 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
         <div className="t-page-title">
           <a className="t-crumb" href={model.worldsHref}><span aria-hidden="true">&lt;</span> Worlds</a>
           <h1>{world.displayName}</h1>
-          <Indicator kind={model.availability.kind} label={model.availability.label} />
+          <Indicator kind={model.sessionStatus.kind} label={model.sessionStatus.label} />
         </div>
         <Verbs className="t-page-verbs">
           <Verb action={model.session} tone="primary" tooltipWhenDisabled />

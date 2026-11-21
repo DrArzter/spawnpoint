@@ -1,9 +1,11 @@
 import type { AccessTab, Page, WorldTab } from "./model";
 
-// Hash routes: #/worlds[/<game>[/<world>[/<tab>]]], #/metrics[/<game>], #/console[/<game>],
-// #/releases[/<game>], #/access/<tab>, #/profile. "overview" stays an alias of
-// "worlds" so links from the bot and older bookmarks keep working.
-export type AppRoute = Readonly<{ page: Page; accessTab: AccessTab; gameId: string | null; worldId: string | null; worldTab: WorldTab }>;
+// Hash routes: #/worlds[/<game>[/<world>[/<tab>]]], #/home[/<game>], #/metrics[/<game>],
+// #/console[/<game>], #/releases[/<game>], #/access/<tab>, #/profile. "overview" stays
+// an alias of "worlds" so links from the bot and older bookmarks keep working.
+// #/home is the worlds page as a game's overview, for a skin that draws one.
+export type WorldsView = "overview" | "list";
+export type AppRoute = Readonly<{ page: Page; accessTab: AccessTab; gameId: string | null; worldId: string | null; worldTab: WorldTab; worldsView: WorldsView }>;
 
 export const LANDING_HASH = "#/";
 
@@ -46,6 +48,7 @@ export function isRootHash(hash: string = window.location.hash): boolean {
 const pageByPath: Record<string, Page> = {
   overview: "worlds",
   worlds: "worlds",
+  home: "worlds",
   // Console and metrics were game pages before they became a world's tabs;
   // an old link lands on the worlds it was about.
   metrics: "worlds",
@@ -78,24 +81,29 @@ export function readRoute(): AppRoute {
   const [pagePath = "worlds", second, third, fourth] = window.location.hash.replace(/^#\/?/, "").split("/");
   const page = pageByPath[pagePath] ?? "worlds";
   if (page === "access") {
-    return { page, accessTab: accessTabs.has(second as AccessTab) ? (second as AccessTab) : "users", gameId: null, worldId: null, worldTab: "details" };
+    return { page, accessTab: accessTabs.has(second as AccessTab) ? (second as AccessTab) : "users", gameId: null, worldId: null, worldTab: "details", worldsView: "list" };
   }
-  if (page === "profile") return { page, accessTab: "users", gameId: null, worldId: null, worldTab: "details" };
+  if (page === "profile") return { page, accessTab: "users", gameId: null, worldId: null, worldTab: "details", worldsView: "list" };
+  if (pagePath === "home") return { page, accessTab: "users", gameId: segment(second), worldId: null, worldTab: "details", worldsView: "overview" };
   return {
     page,
     accessTab: "users",
     gameId: segment(second),
     worldId: page === "worlds" ? segment(third) : null,
     worldTab: page === "worlds" && worldTabs.has(fourth as WorldTab) ? (fourth as WorldTab) : "details",
+    worldsView: "list",
   };
 }
 
-// The tab is optional here: most links name a page, and a link that does not
-// name a tab means the one a world opens on.
-export function routeHash(route: Omit<AppRoute, "worldTab"> & { worldTab?: WorldTab }): string {
+// The tab and the view are optional here: most links name a page, and a link
+// that names neither means the world's first tab or the list of worlds.
+export function routeHash(route: Omit<AppRoute, "worldTab" | "worldsView"> & { worldTab?: WorldTab; worldsView?: WorldsView }): string {
   const path = pathByPage[route.page];
   if (route.page === "access") return `#/${path}/${route.accessTab}`;
   if (route.page === "profile") return `#/${path}`;
+  if (route.page === "worlds" && !route.worldId && route.worldsView === "overview") {
+    return route.gameId ? `#/home/${encodeURIComponent(route.gameId)}` : "#/home";
+  }
   const worldTab = route.page === "worlds" && route.worldId && route.worldTab !== "details" ? route.worldTab : null;
   const parts = [path, route.gameId, route.page === "worlds" ? route.worldId : null, worldTab]
     .filter((part): part is string => typeof part === "string" && part.length > 0)

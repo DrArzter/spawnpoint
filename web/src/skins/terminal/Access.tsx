@@ -6,6 +6,7 @@ import { Icon, type IconName } from "../../icons";
 import { formatDateTime, plural } from "../../lib/format";
 import { describePermission } from "../../lib/permissions";
 import type { Game, LinkKind, Member, Role } from "../../model";
+import { ConfirmationDialog } from "./Dialogs";
 import { Col, Details, Drawer, Empty, Field, FilterRow, Ghost, Indicator, Key, NoMatches, Notice, Overflow, Page, Panel, Person, SelectInput, SkeletonRows, State, Table, Tabs, TextInput, Toggle, Verb } from "./ui";
 
 export function Access({ model }: Readonly<{ model: AccessModel }>) {
@@ -47,7 +48,7 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
   const memberColumns: readonly Col<MemberRow>[] = [
     { id: "user", label: "User", render: (row) => <Person name={row.member.name} /> },
     { id: "role", label: "Role", align: "end", width: "180px", render: (row) => <RoleSelect disabled={rolesBlocked || row.changing} fallback={row.roleId} label={`Role for ${row.member.name}`} onChange={row.setRoleId} roles={model.roles} value={row.roleId} /> },
-    { id: "verbs", label: "Actions", verbs: true, width: "80px", render: (row) => <Overflow groups={[[row.linkedAccounts]]} label={`Actions for ${row.member.name}`} size="small" /> },
+    { id: "verbs", label: "Actions", verbs: true, width: "80px", render: (row) => <Overflow groups={[[row.linkedAccounts], row.remove ? [row.remove] : []]} label={`Actions for ${row.member.name}`} menu size="small" /> },
   ];
   const candidates = model.candidates;
   const managedRole = model.managed ? model.roles.find((role) => role.id === model.managed?.roleId)?.name ?? model.managed.roleId : "";
@@ -101,6 +102,8 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
       <Drawer cancel={model.closeManaged} cancelLabel="Close" closeActionId={model.closeManaged.id} description={model.managed ? `${model.managed.name} · ${managedRole}` : undefined} onClose={model.closeManaged.run} open={model.managed !== null} title="Linked accounts">
         {model.managed && <LinkedAccounts member={model.managed} />}
       </Drawer>
+
+      <ConfirmationDialog model={model.deletion} />
     </Page>
   );
 }

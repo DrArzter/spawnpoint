@@ -1,10 +1,4 @@
-/* App shell: sticky app bar, navigation drawer, content pane. */
-.shell {
-  display: flex;
-  flex-direction: column;
-  min-height: 100dvh;
-  background: var(--canvas);
-}
+/* The front door bar, the boot card and the sign-in doors. The console face draws its own frame (skins/console). */
 
 .appbar {
   position: sticky;
@@ -57,47 +51,6 @@
   display: block;
 }
 
-.appbar-divider {
-  width: 1px;
-  height: 24px;
-  margin: 0 8px;
-  background: var(--outline);
-  flex: none;
-}
-
-.appbar-scope {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: var(--control-height);
-  max-width: 320px;
-  padding: 0 8px 0 10px;
-  border: 1px solid var(--outline);
-  border-radius: var(--radius-control);
-  background: var(--surface);
-  color: var(--ink);
-  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
-}
-
-.appbar-scope:hover {
-  background: var(--surface-hover);
-}
-
-.appbar-scope:disabled {
-  color: var(--ink-disabled);
-}
-
-.appbar-scope > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 500;
-}
-
-.appbar-scope .icon:first-child {
-  color: var(--ink-secondary);
-}
-
 .appbar-spacer {
   flex: 1;
 }
@@ -121,289 +74,25 @@
   background: var(--surface-hover);
 }
 
-.shell-body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-}
-
-.drawer {
-  position: sticky;
-  top: var(--bar-height);
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  width: var(--drawer-width);
-  height: calc(100dvh - var(--bar-height));
-  overflow: hidden auto;
-  background: var(--surface);
-  border-right: 1px solid var(--outline);
-  transition: transform var(--dur) var(--ease);
-}
-
-.drawer nav {
-  display: grid;
-  gap: 2px;
-  padding: 8px;
-}
-
-.drawer-section {
-  padding: 12px 20px 4px;
-  color: var(--ink-secondary);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 16px;
-}
-
-.drawer-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: 40px;
-  padding: 0 12px;
-  border-radius: var(--radius-nav);
-  color: var(--ink);
-  font-weight: 500;
-  white-space: nowrap;
-  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
-}
-
-.drawer-item .icon {
-  color: var(--ink-secondary);
-}
-
-.drawer-item:hover {
-  background: var(--surface-hover);
-}
-
-.drawer-item[aria-current="page"] {
-  background: var(--primary-container);
-  color: var(--on-primary-container);
-}
-
-.drawer-item[aria-current="page"] .icon {
-  color: var(--on-primary-container);
-}
-
-.drawer-item span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: opacity var(--dur-fast) var(--ease);
-}
-
-.drawer hr {
-  margin: 6px 12px;
-  border: 0;
-  border-top: 1px solid var(--outline);
-}
-
-.drawer-footer {
-  margin-top: auto;
-  padding: 12px 20px 16px;
-  color: var(--ink-secondary);
-  font-size: 12px;
-  line-height: 16px;
-}
-
-.drawer-footer strong {
-  display: block;
-  color: var(--ink);
-  font-weight: 500;
-}
-
-.drawer-scrim {
-  display: none;
-}
-
-.shell[data-rail="true"] .drawer {
-  width: var(--rail-width);
-}
-
-.shell[data-rail="true"] .drawer-item {
-  width: 48px;
-  justify-content: center;
-  gap: 0;
-  padding: 0;
-  border-radius: 50%;
-  height: 48px;
-  margin: 0 auto;
-}
-
-.shell[data-rail="true"] .drawer-item span,
-.shell[data-rail="true"] .drawer-section,
-.shell[data-rail="true"] .drawer-footer {
-  display: none;
-}
-
 .main {
   flex: 1;
   min-width: 0;
   padding: var(--gutter) var(--gutter) 96px;
 }
 
-/* The stack of a page, a tab or a form. A grid item may shrink below its
-   content, so a long line scrolls inside its own surface. */
-.page {
-  display: grid;
-  gap: 16px;
-  align-content: start;
-  min-width: 0;
-}
-
-.page > .page-header {
-  margin-bottom: 4px;
-}
-
-/* Mobile: the drawer becomes a modal panel behind the menu button. */
+/* The front door bar on narrow screens. */
 @media (max-width: 959px) {
   .appbar-brand strong {
     font-size: 18px;
-  }
-
-  .appbar-divider {
-    display: none;
-  }
-
-  .appbar-scope {
-    max-width: 44vw;
-    padding: 0 6px 0 8px;
   }
 
   .appbar {
     gap: 0;
   }
 
-  .drawer {
-    position: fixed;
-    top: var(--bar-height);
-    bottom: 0;
-    left: 0;
-    z-index: 40;
-    width: min(var(--drawer-width), 85vw);
-    height: auto;
-    transform: translateX(-100%);
-    box-shadow: none;
-  }
-
-  .shell[data-drawer-open="true"] .drawer {
-    transform: translateX(0);
-    box-shadow: var(--shadow-3);
-  }
-
-  .shell[data-rail="true"] .drawer {
-    width: min(var(--drawer-width), 85vw);
-  }
-
-  .shell[data-rail="true"] .drawer-item {
-    width: auto;
-    justify-content: flex-start;
-    gap: 12px;
-    padding: 0 12px;
-    border-radius: var(--radius-nav);
-    height: 40px;
-    margin: 0;
-  }
-
-  .shell[data-rail="true"] .drawer-item span,
-  .shell[data-rail="true"] .drawer-section,
-  .shell[data-rail="true"] .drawer-footer {
-    display: initial;
-  }
-
-  .shell[data-rail="true"] .drawer-footer {
-    display: block;
-  }
-
-  .drawer-scrim {
-    display: block;
-    position: fixed;
-    inset: var(--bar-height) 0 0 0;
-    z-index: 35;
-    background: var(--scrim);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity var(--dur) var(--ease);
-  }
-
-  .shell[data-drawer-open="true"] .drawer-scrim {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
   .main {
     padding-bottom: 88px;
   }
-}
-
-/* Scope dialog: the game picker. */
-.scope-dialog {
-  width: min(560px, calc(100vw - 32px));
-}
-
-.scope-search {
-  margin: 4px 0 8px;
-}
-
-.scope-list {
-  display: grid;
-  gap: 2px;
-  margin: 0 -8px;
-}
-
-.scope-row {
-  display: grid;
-  grid-template-columns: 40px 1fr auto;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: 56px;
-  padding: 8px 12px;
-  border-radius: var(--radius-card);
-  color: var(--ink);
-  transition: background var(--dur-fast) var(--ease);
-}
-
-.scope-row:hover {
-  background: var(--surface-hover);
-}
-
-.scope-row[aria-selected="true"] {
-  background: var(--primary-container);
-  color: var(--on-primary-container);
-}
-
-.scope-row .scope-code {
-  display: inline-grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background: var(--surface-variant);
-  color: var(--ink);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.scope-row[aria-selected="true"] .scope-code {
-  background: var(--primary);
-  color: var(--on-primary);
-}
-
-.scope-row strong {
-  display: block;
-  font-weight: 500;
-}
-
-.scope-row small {
-  display: block;
-  color: var(--ink-secondary);
-  font-size: 12px;
-  line-height: 16px;
-}
-
-.scope-row[aria-selected="true"] small {
-  color: inherit;
 }
 
 /* Full-page states before the shell exists. */
@@ -618,7 +307,7 @@
   background: var(--outline);
 }
 
-/* Phones: the mark stands for the brand, the scope chip keeps its name. */
+/* Phones: the mark stands for the brand. */
 @media (max-width: 599px) {
   .appbar-brand {
     gap: 0;
@@ -627,10 +316,6 @@
 
   .appbar-brand strong {
     display: none;
-  }
-
-  .appbar-scope {
-    max-width: 46vw;
   }
 
   .appbar-actions {

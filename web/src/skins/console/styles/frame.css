@@ -1,0 +1,385 @@
+/* The frame: top bar, rail (760px and up), bottom bar (under 760px), page area. */
+
+html[data-skin="console"] .c-app {
+  min-height: 100vh;
+  background: var(--c-bg);
+}
+
+html[data-skin="console"] .c-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: var(--c-bar);
+  padding: 0 var(--c-pad);
+  background: var(--c-band);
+  color: var(--c-band-ink);
+}
+
+html[data-skin="console"] .c-topbar :focus-visible {
+  outline-color: var(--c-band-focus);
+}
+
+html[data-skin="console"] .c-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  color: var(--c-band-ink);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+
+html[data-skin="console"] .c-brand:hover {
+  text-decoration: none;
+}
+
+html[data-skin="console"] .c-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(140deg, var(--c-mark-from), var(--c-mark-to));
+  color: var(--c-band-ink);
+}
+
+html[data-skin="console"] .c-topbar-gap {
+  flex: 1;
+}
+
+html[data-skin="console"] .c-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  width: clamp(170px, 16vw, 360px);
+  height: 36px;
+  padding: 0 6px 0 12px;
+  border: 1px solid var(--c-band-3);
+  border-radius: var(--c-r-sm);
+  background: var(--c-band-2);
+  color: var(--c-band-ink-2);
+  cursor: pointer;
+  text-align: start;
+  transition: border-color var(--c-d1), background var(--c-d1);
+}
+
+html[data-skin="console"] .c-search:hover {
+  border-color: var(--c-band-ink-2);
+}
+
+html[data-skin="console"] .c-search-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--c-fs-m);
+}
+
+html[data-skin="console"] .c-search kbd {
+  border-color: var(--c-band-3);
+  background: transparent;
+  color: var(--c-band-ink-2);
+}
+
+html[data-skin="console"] kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--c-line-2);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--c-surface);
+  color: var(--c-ink-2);
+  font: 700 var(--c-fs-xs) var(--c-font);
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-topbar .c-search-icon {
+  display: none;
+}
+
+html[data-skin="console"] .c-refreshed {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--c-band-ink-2);
+  font-size: var(--c-fs-s);
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-refreshed-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+html[data-skin="console"] .c-demo {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--c-r-pill);
+  background: var(--c-band-2);
+  color: var(--c-band-ink);
+  font-size: var(--c-fs-xs);
+  font-weight: 700;
+}
+
+html[data-skin="console"] .c-account {
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: var(--c-r-pill);
+  background: none;
+  cursor: pointer;
+}
+
+html[data-skin="console"] .c-body {
+  display: grid;
+  grid-template-columns: var(--c-rail) minmax(0, 1fr);
+  min-height: calc(100vh - var(--c-bar));
+}
+
+html[data-skin="console"] .c-main {
+  min-width: 0;
+  padding: 20px var(--c-pad) 48px;
+  background: var(--c-bg);
+  view-transition-name: c-page;
+}
+
+html[data-skin="console"] .c-main[data-first] .c-card {
+  animation: c-rise var(--c-d2) var(--c-ease) both;
+}
+
+html[data-skin="console"] .c-rail {
+  position: sticky;
+  top: var(--c-bar);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  height: calc(100vh - var(--c-bar));
+  padding: 12px 0;
+  border-right: 1px solid var(--c-line);
+  background: var(--c-surface);
+}
+
+html[data-skin="console"] .c-rail-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+html[data-skin="console"] .c-rail-divider {
+  width: 44px;
+  margin: 6px 0 12px;
+  border: 0;
+  border-top: 1px solid var(--c-line-2);
+}
+
+html[data-skin="console"] .c-rail-item,
+html[data-skin="console"] .c-bottom-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-xs);
+  font-weight: 700;
+}
+
+html[data-skin="console"] .c-rail-item {
+  width: 72px;
+  padding: 4px 0;
+  border-radius: var(--c-r);
+}
+
+html[data-skin="console"] .c-rail-item:hover,
+html[data-skin="console"] .c-bottom-item:hover {
+  color: var(--c-ink);
+  text-decoration: none;
+}
+
+html[data-skin="console"] .c-nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 32px;
+  border-radius: var(--c-r-pill);
+  transition: background var(--c-d1);
+}
+
+html[data-skin="console"] .c-rail-item:hover .c-nav-icon {
+  background: var(--c-surface-2);
+}
+
+html[data-skin="console"] .c-rail-item:active .c-nav-icon,
+html[data-skin="console"] .c-bottom-item:active .c-nav-icon {
+  transform: scale(.95);
+}
+
+html[data-skin="console"] .c-rail-item[aria-current="page"],
+html[data-skin="console"] .c-bottom-item[aria-current="page"] {
+  color: var(--c-accent-text);
+}
+
+html[data-skin="console"] .c-rail-item[aria-current="page"] .c-nav-icon,
+html[data-skin="console"] .c-bottom-item[aria-current="page"] .c-nav-icon {
+  background: var(--c-accent-soft);
+}
+
+html[data-skin="console"] .c-badge {
+  position: absolute;
+  top: 0;
+  left: calc(50% + 6px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--c-r-pill);
+  background: var(--c-accent);
+  color: var(--c-accent-ink);
+  font-size: var(--c-fs-xs);
+  font-weight: 800;
+  line-height: 1;
+}
+
+html[data-skin="console"] .c-bottom {
+  display: none;
+}
+
+html[data-skin="console"] .c-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--c-gap);
+  min-width: 0;
+}
+
+html[data-skin="console"] .c-line {
+  margin: 0;
+  color: var(--c-ink-2);
+}
+
+html[data-skin="console"] .c-faint {
+  color: var(--c-ink-3);
+}
+
+html[data-skin="console"] .c-count {
+  margin-left: 8px;
+  color: var(--c-ink-3);
+  font-weight: 500;
+}
+
+html[data-skin="console"] .c-count::before {
+  content: "(";
+}
+
+html[data-skin="console"] .c-count::after {
+  content: ")";
+}
+
+html[data-skin="console"] .c-keys {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+html[data-skin="console"] .c-keys-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  border-bottom: 1px solid var(--c-line);
+  font-weight: 600;
+}
+
+html[data-skin="console"] .c-keys-row dd {
+  margin: 0;
+}
+
+@media (max-width: 1499px) {
+  html[data-skin="console"] .c-refreshed-text {
+    display: none;
+  }
+}
+
+@media (max-width: 1199px) {
+  html[data-skin="console"] .c-search kbd {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  html[data-skin="console"] .c-search {
+    display: none;
+  }
+
+  html[data-skin="console"] .c-topbar .c-search-icon {
+    display: grid;
+  }
+}
+
+@media (max-width: 759px) {
+  html[data-skin="console"] .c-topbar {
+    gap: 8px;
+  }
+
+  html[data-skin="console"] .c-brand {
+    min-width: var(--c-target);
+    min-height: var(--c-target);
+  }
+
+  html[data-skin="console"] .c-brand-name,
+  html[data-skin="console"] .c-rail,
+  html[data-skin="console"] .c-account {
+    display: none;
+  }
+
+  html[data-skin="console"] .c-body {
+    display: block;
+  }
+
+  html[data-skin="console"] .c-main {
+    padding-bottom: 96px;
+  }
+
+  html[data-skin="console"] .c-bottom {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    padding-bottom: env(safe-area-inset-bottom);
+    border-top: 1px solid var(--c-line);
+    background: var(--c-surface);
+  }
+
+  html[data-skin="console"] .c-bottom-item {
+    justify-content: center;
+    gap: 2px;
+    height: var(--c-bottom);
+  }
+
+  html[data-skin="console"] .c-bottom-item .c-badge {
+    top: 4px;
+    left: calc(50% + 8px);
+  }
+}

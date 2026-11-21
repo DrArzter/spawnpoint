@@ -3,17 +3,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseMod, ReleaseMods, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
 import { failureKind } from "../api/contract";
 import {
-  approveAccessCandidate, changePassword, createAccessInvitation, dismissAccessCandidate, googleOidcClientId, linkGoogle, linkPassword, linkTelegram, loadAccessCandidates, loadAccessIdentities, loadAccessInvitations,
+  approveAccessCandidate, changePassword, createAccessInvitation, deleteIdentity, dismissAccessCandidate, googleOidcClientId, linkGoogle, linkPassword, linkTelegram, loadAccessCandidates, loadAccessIdentities, loadAccessInvitations,
   loadAccessRoles, loadBackups, loadConsole, loadInvitationHistory, loadWorldMetrics, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadReleaseMods, loadWhitelist, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
   runConsoleCommand, sendInvitation, telegramOidcClientId, updateIdentityRole, updateSubscriptions, updateWhitelist,
 } from "../auth";
 import type { SnackInput } from "../components/ui/Snackbar";
-import type { StatusKind } from "../components/ui/Status";
+import type { StatusKind } from "./status";
 import { formatDateTime } from "../lib/format";
 import { GOOGLE_CLIENT_ID } from "../lib/signin";
 import type { Game, LinkKind, Member, OwnerBootstrap, Role, World } from "../model";
-import { action } from "./actions";
-import type { BackupsModel, CandidateRow, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, NotificationsModel, RolesModel, UsersModel, WhitelistModel } from "./models";
+import { action, type Action } from "./actions";
+import type { BackupsModel, CandidateRow, ConfirmationModel, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, NotificationsModel, RequestSummary, RolesModel, UsersModel, WhitelistModel } from "./models";
 import { releaseModUnion } from "./release-mods";
 import { whitelistNameError } from "./whitelist";
 
@@ -261,9 +261,108 @@ export function bootstrapDescription(bootstrap: OwnerBootstrap): string | undefi
   return `Sign in with the configured Telegram account${configuredAccount} to create the first Owner.`;
 }
 
-export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: boolean; members: Member[]; roles: Role[]; rolesLoading: boolean; onMembersChange: (members: Member[]) => void; notify: Notify }>): UsersModel {
+// The role an approval grants when nobody chose another.
+const DEFAULT_ROLE = "viewer";
+
+const requestId = (candidate: AccessCandidate) => `${candidate.platform}:${candidate.platformUserId}`;
+
+/**
+ * The people waiting for access (asked, or signed in and not approved), read on their own for a page that shows them
+ * beside other things (the console skin's game home). Approve grants the default
+ * role; the Access page is where another is chosen.
+ */
+export function useAccessRequests(enabled: boolean, notify: Notify): Readonly<{
+  requests: Loading<readonly RequestSummary[]> | null;
+  actions: (id: string) => Readonly<{ approve: Action; dismiss: Action }> | null;
+}> {
+  const [working, setWorking] = useState<string | null>(null);
+  const [state, retry, update] = useLoad<AccessCandidate[]>(enabled ? () => loadAccessCandidates() : null, [enabled]);
+  // Every candidate the Access page lists, so its count and this one agree.
+  const open = state.status === "ready" ? state.value : [];
+
+  async function settle(candidate: AccessCandidate, approve: boolean) {
+    setWorking(requestId(candidate));
+    try {
+      if (approve) {
+        const identity = await approveAccessCandidate(candidate.platform, candidate.platformUserId, DEFAULT_ROLE);
+        notify({ tone: "success", message: `${identity.displayName} approved.` });
+      } else {
+        await dismissAccessCandidate(candidate.platform, candidate.platformUserId);
+        notify({ message: `${candidate.displayName} dismissed.` });
+      }
+      update((current) => current.filter((item) => requestId(item) !== requestId(candidate)));
+    } catch (cause) {
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : approve ? "This account could not be approved." : "This account could not be dismissed." });
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  if (!enabled) return { requests: null, actions: () => null };
+  return {
+    requests: state.status !== "ready" ? asLoading(state, retry, "access.requests.retry") : {
+      status: "ready",
+      value: open.map((candidate) => ({ id: requestId(candidate), displayName: candidate.displayName, platform: candidate.platform, account: candidateAccount(candidate), since: candidate.requestedAt ?? candidate.lastSeenAt, photoUrl: candidate.photoUrl })),
+    },
+    actions: (id) => {
+      const candidate = open.find((item) => requestId(item) === id);
+      if (!candidate) return null;
+      const busy = working === id;
+      return {
+        approve: action("access.approve", "Approve", () => void settle(candidate, true), { icon: "check", disabled: working !== null, busy, hint: "Approve as Viewer" }),
+        dismiss: action("access.dismiss", "Dismiss", () => void settle(candidate, false), { icon: "close", disabled: working !== null }),
+      };
+    },
+  };
+}
+
+/** Who may delete whom: never yourself, and an Owner only with `access.owner.grant`. */
+export type DeletionAuthority = Readonly<{ selfId: string; canDelete: boolean; canDeleteOwner: boolean }>;
+
+export function memberRemoval(member: Member, authority: DeletionAuthority, open: (member: Member) => void): Action | null {
+  if (!authority.canDelete || member.id === authority.selfId) return null;
+  if (member.roleId === "owner" && !authority.canDeleteOwner) return null;
+  return action("access.delete", "Delete user", () => open(member), { danger: true, icon: "delete_forever" });
+}
+
+export function deletionConfirmation(member: Member, opts: Readonly<{ typed: string; setTyped: (value: string) => void; busy: boolean; error: string | null; confirm: () => void; cancel: () => void }>): ConfirmationModel {
+  const expected = member.name.trim();
+  return {
+    title: `Delete ${expected}?`,
+    description: "Removes their sign-in methods, sessions and agent connections. This cannot be undone.",
+    destructive: true,
+    confirm: action("access.delete.confirm", "Delete user", opts.confirm, { danger: true, disabled: opts.busy || opts.typed.trim() !== expected, busy: opts.busy }),
+    cancel: action("access.delete.cancel", "Cancel", opts.cancel, { disabled: opts.busy }),
+    releaseChoice: null,
+    typedConfirmation: { label: "User name", expected, value: opts.typed, set: opts.setTyped },
+    error: opts.error,
+  };
+}
+
+/**
+ * Deletes one person; on success the row goes and the panel showing them
+ * closes. A refusal changes nothing and is returned for the open dialog,
+ * which sits above any snackbar.
+ */
+export async function deleteMember(member: Member, deps: Readonly<{ remove: (identityId: string) => Promise<void>; members: readonly Member[]; onMembersChange: (members: Member[]) => void; managing: string | null; closeManaged: () => void; notify: Notify }>): Promise<string | null> {
+  try {
+    await deps.remove(member.id);
+  } catch (cause) {
+    return cause instanceof Error ? cause.message : "This user could not be deleted.";
+  }
+  deps.onMembersChange(deps.members.filter((item) => item.id !== member.id));
+  if (deps.managing === member.id) deps.closeManaged();
+  deps.notify({ tone: "success", message: `${member.name.trim()} was deleted.` });
+  return null;
+}
+
+export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: boolean; authority: DeletionAuthority; members: Member[]; roles: Role[]; rolesLoading: boolean; onMembersChange: (members: Member[]) => void; notify: Notify }>): UsersModel {
   const { members, roles, onMembersChange, notify } = opts;
   const [managing, setManaging] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [typed, setTyped] = useState("");
+  const [removing, setRemoving] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
   const [candidateRoles, setCandidateRoles] = useState<Record<string, string>>({});
   const [working, setWorking] = useState<string | null>(null);
   const [state, retry, update] = useLoad<AccessCandidate[]>(() => Promise.all([loadAccessCandidates(), loadAccessIdentities()]).then(([candidates, identities]) => {
@@ -291,7 +390,7 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
   }
 
   async function approve(candidate: AccessCandidate) {
-    const roleId = candidateRoles[candidate.platformUserId] ?? "viewer";
+    const roleId = candidateRoles[candidate.platformUserId] ?? DEFAULT_ROLE;
     setWorking(candidate.platformUserId);
     try {
       const identity = await approveAccessCandidate(candidate.platform, candidate.platformUserId, roleId);
@@ -319,7 +418,23 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
     }
   }
 
+  function openDeletion(member: Member) {
+    setTyped("");
+    setRefusal(null);
+    setDeleting(member.id);
+  }
+
+  async function confirmDeletion(member: Member) {
+    setRemoving(true);
+    setRefusal(null);
+    const refused = await deleteMember(member, { remove: deleteIdentity, members, onMembersChange, managing, closeManaged: () => setManaging(null), notify });
+    setRemoving(false);
+    if (refused === null) setDeleting(null);
+    else setRefusal(refused);
+  }
+
   const rolesReady = !opts.rolesLoading && roles.length > 0;
+  const target = members.find((member) => member.id === deleting) ?? null;
   const candidates: Loading<readonly CandidateRow[]> = state.status !== "ready"
     ? asLoading(state, retry, "access.candidates.retry")
     : {
@@ -328,7 +443,7 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
         candidate,
         account: candidateAccount(candidate),
         since: `${candidate.status === "REQUESTED" ? "Requested access" : "Signed in"} ${formatDateTime(candidate.status === "REQUESTED" ? candidate.requestedAt : candidate.lastSeenAt)}`,
-        roleId: candidateRoles[candidate.platformUserId] ?? "viewer",
+        roleId: candidateRoles[candidate.platformUserId] ?? DEFAULT_ROLE,
         setRoleId: (roleId: string) => setCandidateRoles((current) => ({ ...current, [candidate.platformUserId]: roleId })),
         approve: action("access.approve", "Approve", () => void approve(candidate), { disabled: !rolesReady, busy: working === candidate.platformUserId, hint: rolesReady ? "Approve with the chosen role" : "Roles are still loading" }),
         dismiss: action("access.dismiss", "Dismiss", () => void dismiss(candidate), { disabled: working === candidate.platformUserId }),
@@ -345,12 +460,14 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
       setRoleId: (roleId: string) => void changeRole(member, roleId),
       changing: working === member.id,
       linkedAccounts: action("access.linked", "Linked accounts", () => setManaging(member.id), { icon: "link" }),
+      remove: memberRemoval(member, opts.authority, openDeletion),
     })),
     roles,
     rolesLoading: opts.rolesLoading,
     invitations,
     managed: members.find((member) => member.id === managing) ?? null,
     closeManaged: action("sheet.close", "Close panel", () => setManaging(null)),
+    deletion: target === null ? null : deletionConfirmation(target, { typed, setTyped, busy: removing, error: refusal, confirm: () => void confirmDeletion(target), cancel: () => setDeleting(null) }),
   };
 }
 

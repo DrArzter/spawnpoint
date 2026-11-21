@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentPropsWithRef, type KeyboardEvent, type ReactNode, type SelectHTMLAttributes } from "react";
 
 import type { Filter } from "../../components/ui/Filter";
-import type { StatusKind } from "../../components/ui/Status";
+import type { StatusKind } from "../../core/status";
 import { Tooltip } from "../../components/ui/Tooltip";
 import type { Action } from "../../core/actions";
 import { Icon, type IconName } from "../../icons";
@@ -232,7 +232,7 @@ export function SelectInput({ className, children, ...props }: SelectHTMLAttribu
   return (
     <span className={cx("t-select-well", className)}>
       <select className="t-input t-select" {...props}>{children}</select>
-      <span aria-hidden="true" className="t-select-caret">▾</span>
+      <span aria-hidden="true" className="t-select-caret" data-layer="glyph">▾</span>
     </span>
   );
 }
@@ -492,7 +492,7 @@ export function Address({ value, connectivity, network, copyLabel, size = "mediu
 // --- overflow menu ---------------------------------------------------------------
 
 /** The overflow: a key that opens a list of verbs in the top layer, or the one verb as its own key. */
-export function Overflow({ label, groups, size = "medium", className }: Readonly<{ label: string; groups: readonly (readonly Action[])[]; size?: "small" | "medium"; className?: string }>) {
+export function Overflow({ label, groups, size = "medium", className, menu = false }: Readonly<{ label: string; groups: readonly (readonly Action[])[]; size?: "small" | "medium"; className?: string; menu?: boolean }>) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -505,15 +505,16 @@ export function Overflow({ label, groups, size = "medium", className }: Readonly
     if (!button || !menu) return;
     const rect = button.getBoundingClientRect();
     const width = 240;
-    const count = present.reduce((sum, group) => sum + group.length, 0);
-    const estimated = 16 + count * 40 + (present.length - 1) * 9;
     const anchored = rect.left + rect.width / 2 < window.innerWidth / 2 ? rect.left : rect.right - width;
     const left = Math.max(8, Math.min(anchored, window.innerWidth - width - 8));
     const below = rect.bottom + 4;
     menu.style.left = `${left}px`;
-    menu.style.top = below + estimated > window.innerHeight ? `${Math.max(8, rect.top - estimated - 4)}px` : `${below}px`;
+    menu.style.top = `${below}px`;
     menu.style.width = `${width}px`;
     if (typeof menu.showPopover === "function") menu.showPopover();
+    // Measured once open: a coarse pointer's taller items outgrow any estimate (UI gate menuCut).
+    const height = menu.offsetHeight;
+    if (below + height > window.innerHeight) menu.style.top = `${Math.max(8, rect.top - height - 4)}px`;
     setOpen(true);
     window.requestAnimationFrame(() => menu.querySelector<HTMLButtonElement>("[role=menuitem]:not(:disabled)")?.focus());
   }
@@ -546,8 +547,9 @@ export function Overflow({ label, groups, size = "medium", className }: Readonly
   }
 
   // One action is its own key: a menu that holds one item only hides it behind
-  // a second tap. An action without an icon keeps the menu.
-  const only = present.length === 1 && present[0]?.length === 1 ? present[0][0] : undefined;
+  // a second tap. An action without an icon keeps the menu, and so does a
+  // column whose other rows hold more (`menu`), so the column has one control.
+  const only = !menu && present.length === 1 && present[0]?.length === 1 ? present[0][0] : undefined;
   if (only?.icon) {
     return (
       <IconKey

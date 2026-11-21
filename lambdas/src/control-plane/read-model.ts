@@ -130,6 +130,8 @@ export type WorldSessionView = Readonly<{
   activeSessionId: string | null;
   activeWorldId: string | null;
   idle: LifecycleRecord["idle"];
+  /** When the session became ready; absent for a record that predates the field. */
+  readyAtEpochSeconds?: number | null;
   updatedAtEpochSeconds: number;
 }>;
 
@@ -142,6 +144,7 @@ function sessionView(serverId: string, record: LifecycleRecord | null): WorldSes
     activeSessionId: record.activeSessionId,
     activeWorldId: record.activeWorldId ?? null,
     idle: record.idle,
+    readyAtEpochSeconds: record.readyAtEpochSeconds ?? null,
     updatedAtEpochSeconds: record.updatedAtEpochSeconds,
   };
 }

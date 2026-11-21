@@ -207,3 +207,22 @@ test("the session's address is the host's answer, kept while the session is read
   assert.equal(stopped.activeSessionAddress, null);
   assert.throws(() => markSessionReady(starting, acquired.ownership, "session-1", NOW + 2, "  "), /connectionAddress/);
 });
+
+test("uptime starts when the session becomes ready, survives a refused stop and ends when it stops", () => {
+  const acquired = acquireLease(initialLifecycleRecord("minecraft", NOW), "start-op", NOW, 300);
+  const starting = beginSession(acquired.record, acquired.ownership, "session-1", "world-1", NOW + 1);
+  assert.equal(starting.readyAtEpochSeconds, null);
+  const ready = markSessionReady(starting, acquired.ownership, "session-1", NOW + 2);
+  assert.equal(ready.readyAtEpochSeconds, NOW + 2);
+  assert.equal(markSessionReady(ready, acquired.ownership, "session-1", NOW + 9, "172.29.23.24:30010").readyAtEpochSeconds, NOW + 2, "a repeated mark keeps the first time");
+  const stopping = beginStopping(ready, acquired.ownership, "session-1", NOW + 4);
+  assert.equal(cancelStopping(stopping, acquired.ownership, "session-1", NOW + 5).readyAtEpochSeconds, NOW + 2);
+  assert.equal(markStopped(stopping, acquired.ownership, "session-1", NOW + 6).readyAtEpochSeconds, null);
+});
+
+test("a ready record written before the field existed stays without a ready time", () => {
+  const acquired = acquireLease(initialLifecycleRecord("minecraft", NOW), "start-op", NOW, 300);
+  const starting = beginSession(acquired.record, acquired.ownership, "session-1", "world-1", NOW + 1);
+  const { readyAtEpochSeconds: _unused, ...legacy } = markSessionReady(starting, acquired.ownership, "session-1", NOW + 2);
+  assert.equal(markSessionReady(legacy, acquired.ownership, "session-1", NOW + 3), legacy);
+});

@@ -39,6 +39,12 @@ export type LifecycleRecord = Readonly<{
    * record written before this field existed reads as null.
    */
   activeSessionAddress?: string | null;
+  /**
+   * When the session became ready: the start of its uptime. Null while it is
+   * not ready or stopped; a record written before this field existed, or a
+   * session already ready when it was added, reads as absent.
+   */
+  readyAtEpochSeconds?: number | null;
   fencingToken: number;
   lease: Lease | null;
   idle: IdleState | null;
@@ -221,6 +227,7 @@ export function beginSession(
     activeSessionId: sessionId,
     activeWorldId: worldId,
     activeSessionAddress: null,
+    readyAtEpochSeconds: null,
     idle: null,
     updatedAtEpochSeconds: nowEpochSeconds,
   };
@@ -245,7 +252,13 @@ export function markSessionReady(
   if (record.observedState !== "starting" || record.desiredState !== "running") {
     throw new LifecycleConflict("only the starting session can become ready");
   }
-  return { ...record, observedState: "ready", activeSessionAddress: connectionAddress, updatedAtEpochSeconds: nowEpochSeconds };
+  return {
+    ...record,
+    observedState: "ready",
+    activeSessionAddress: connectionAddress,
+    readyAtEpochSeconds: nowEpochSeconds,
+    updatedAtEpochSeconds: nowEpochSeconds,
+  };
 }
 
 export function registerWatchdog(
@@ -393,6 +406,7 @@ export function markStopped(
     activeSessionId: null,
     activeWorldId: null,
     activeSessionAddress: null,
+    readyAtEpochSeconds: null,
     idle: null,
     updatedAtEpochSeconds: nowEpochSeconds,
   };

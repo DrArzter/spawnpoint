@@ -90,6 +90,7 @@ data "aws_iam_policy_document" "game_host_session_logs" {
   statement {
     sid = "WriteOnlySessionCommandOutput"
     actions = [
+      "logs:CreateLogGroup",
       "logs:CreateLogStream",
       "logs:DescribeLogStreams",
       "logs:PutLogEvents",
@@ -97,6 +98,16 @@ data "aws_iam_policy_document" "game_host_session_logs" {
     # Composed rather than read off the group: the policy is then known at
     # plan time, which is what lets tests/core.tftest.hcl assert on it.
     resources = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.session_command_log_group}:*"]
+  }
+
+  # DescribeLogGroups admits no resource: scoped to a group ARN the statement
+  # can never match, which is how the first attempt at this policy allowed
+  # every write and still delivered nothing. The SSM agent looks the group up
+  # before it writes, and that lookup is account-wide by construction.
+  statement {
+    sid       = "FindTheGroupBeforeWriting"
+    actions   = ["logs:DescribeLogGroups"]
+    resources = ["*"]
   }
 }
 

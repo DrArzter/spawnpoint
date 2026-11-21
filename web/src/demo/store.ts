@@ -2,7 +2,7 @@ import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry
 import type { ConsoleEntry, FileLink, HostMetrics, MetricRange, ReleaseMods, ReleasePackName, SavedWhitelist, WorldWhitelist } from "../api/contract";
 import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
-import type { ControlPlaneSnapshot, Preset, SettingValue, World, WorldGameSettings } from "../model";
+import type { ControlPlaneSnapshot, Preset, SettingValue, World, WorldGameSettings, WorldSession } from "../model";
 import { DemoState, initialState, Mutable } from "./data";
 
 // One in-memory control plane for the whole demo. Transitions are scheduled in
@@ -43,10 +43,10 @@ function settle(): void {
   state.snapshot.observedAt = iso();
 }
 
-function schedule(type: "start" | "stop" | "world", afterMs: number, apply: (state: DemoState) => void): string {
+function schedule(type: "start" | "stop" | "world", worldId: string, afterMs: number, apply: (state: DemoState) => void): string {
   state.counter += 1;
   const id = `op-${type}-${state.counter.toString().padStart(4, "0")}`;
-  state.snapshot.operations.push({ id, type, status: "running", startedAt: iso() });
+  state.snapshot.operations.push({ id, type, status: "running", startedAt: iso(), worldId });
   state.scheduled.push({ operationId: id, at: Date.now() + afterMs, apply });
   state.snapshot.observedAt = iso();
   return id;
@@ -87,12 +87,36 @@ function world(gameId: string, worldId: string): Mutable<World> {
   return found;
 }
 
-function host() {
-  return state.snapshot.hosts[0]!;
+function placementOf(worldId: string): "configured" | "fleet" {
+  for (const owner of state.snapshot.games) {
+    const found = owner.worlds.find((item) => item.id === worldId);
+    if (found) return found.placement ?? "configured";
+  }
+  return "configured";
 }
 
-function requireIdle(): void {
-  if (state.snapshot.operations.length > 0) throw new Error("Another control-plane operation is already running.");
+/** The one configured host; a host launched for a fleet world is never it (ADR-0054, ADR-0062). */
+function configuredHost() {
+  return state.snapshot.hosts.find((item) => item.provenance !== "launched")!;
+}
+
+const launchedHostId = (worldId: string) => `host-${worldId}`;
+
+/** The session this world holds: a fleet world's own record, or its game's while that names it. */
+function heldSession(gameId: string, target: Mutable<World>): Mutable<WorldSession> | null {
+  if (target.placement === "fleet") return target.session ?? null;
+  const lifecycle = game(gameId).lifecycle;
+  return lifecycle?.activeWorldId === target.id ? lifecycle : null;
+}
+
+// As the API's blockingOperations: an operation that names no world blocks
+// every world, a fleet world waits only for its own, and a configured world
+// for any on the configured host its siblings share.
+function requireIdle(worldId: string): void {
+  const placement = placementOf(worldId);
+  const blocking = state.snapshot.operations.filter((operation) => operation.worldId == null || operation.worldId === worldId ||
+    (placement === "configured" && placementOf(operation.worldId) === "configured"));
+  if (blocking.length > 0) throw new Error("Another control-plane operation is already running.");
 }
 
 function newGeneration(seed: number): string {
@@ -121,14 +145,20 @@ export function snapshot(): ControlPlaneSnapshot {
 
 export function startSession(gameId: string, worldId: string): { result: "requested"; operationId: string } {
   settle();
-  requireIdle();
+  requireIdle(worldId);
   const target = world(gameId, worldId);
   if (!target.sessionControlAvailable) throw new Error("This world is not connected to a session workflow yet.");
   const lifecycle = game(gameId).lifecycle;
   if (!lifecycle) throw new Error("This game has no session workflow.");
-  const busy = state.snapshot.games.find((item) => item.lifecycle?.observedState !== "stopped");
-  if (busy?.id === gameId && lifecycle.activeWorldId === worldId) throw new Error("This world is already running.");
-  if (busy) throw new Error(`The shared host already runs ${busy.displayName}. Stop that session first.`);
+  const fleet = target.placement === "fleet";
+  if (fleet) {
+    if (target.session && (target.session.activeSessionId || target.session.observedState !== "stopped")) throw new Error("This world is already running.");
+  } else {
+    // The configured host runs one session at a time, kept on its game's record.
+    const busy = state.snapshot.games.find((item) => item.lifecycle?.observedState !== "stopped");
+    if (busy?.id === gameId && lifecycle.activeWorldId === worldId) throw new Error("This world is already running.");
+    if (busy) throw new Error(`The shared host already runs ${busy.displayName}. Stop that session first.`);
+  }
 
   if (target.materialization === "not_created") {
     target.materialization = "existing";
@@ -138,23 +168,34 @@ export function startSession(gameId: string, worldId: string): { result: "reques
     target.release = { state: "available", generationId, activeRelease: release, desiredRelease: release };
   }
 
-  lifecycle.desiredState = "running";
-  lifecycle.observedState = "starting";
-  lifecycle.activeSessionId = `session-${state.counter + 100}`;
-  lifecycle.activeWorldId = worldId;
-  lifecycle.updatedAtEpochSeconds = Math.floor(Date.now() / 1000);
-  host().state = "pending";
+  const session: Mutable<WorldSession> = fleet
+    ? { serverId: gameId, desiredState: "running", observedState: "starting", activeSessionId: null, activeWorldId: worldId, updatedAtEpochSeconds: 0, idle: null }
+    : lifecycle;
+  session.desiredState = "running";
+  session.observedState = "starting";
+  session.activeSessionId = `session-${state.counter + 100}`;
+  session.activeWorldId = worldId;
+  session.updatedAtEpochSeconds = Math.floor(Date.now() / 1000);
+  if (fleet) {
+    target.session = session;
+    // A fleet start launches a host for this world alone.
+    state.snapshot.hosts.push({ id: launchedHostId(worldId), name: `${target.displayName} host`, state: "pending", provenance: "launched", instanceType: "m7i-flex.large", availabilityZone: "eu-central-1b", launchedAt: null, publicIp: null });
+  } else {
+    configuredHost().state = "pending";
+  }
 
-  const operationId = schedule("start", START_MS, (current) => {
-    const target = current.snapshot.games.find((item) => item.id === gameId)?.lifecycle;
-    if (target) {
-      target.observedState = "ready";
-      target.updatedAtEpochSeconds = Math.floor(Date.now() / 1000);
-    }
-    const box = current.snapshot.hosts[0];
+  const operationId = schedule("start", worldId, START_MS, (current) => {
+    session.observedState = "ready";
+    session.updatedAtEpochSeconds = Math.floor(Date.now() / 1000);
+    const box = current.snapshot.hosts.find((item) => item.id === (fleet ? launchedHostId(worldId) : configuredHost().id));
     if (box) {
       box.state = "running";
       box.launchedAt = iso();
+      if (fleet) {
+        current.counter += 1;
+        box.publicIp = `203.0.113.${60 + (current.counter % 180)}`;
+        if (target.connectivity === "raw") target.connectionAddress = `${box.publicIp}:${gamePort(gameId)}`;
+      }
     }
   });
   return { result: "requested", operationId };
@@ -162,43 +203,55 @@ export function startSession(gameId: string, worldId: string): { result: "reques
 
 export function stopSession(gameId: string, worldId: string): { result: "requested" | "already_stopped"; operationId?: string } {
   settle();
-  const lifecycle = game(gameId).lifecycle;
-  if (!lifecycle || lifecycle.observedState === "stopped") return { result: "already_stopped" };
-  requireIdle();
   const target = world(gameId, worldId);
-  lifecycle.observedState = "stopping";
-  lifecycle.desiredState = "stopped";
-  lifecycle.updatedAtEpochSeconds = Math.floor(Date.now() / 1000);
-  host().state = "stopping";
+  const fleet = target.placement === "fleet";
+  const session = fleet ? target.session ?? null : game(gameId).lifecycle;
+  if (!session || session.observedState === "stopped") return { result: "already_stopped" };
+  requireIdle(worldId);
+  if (session.activeWorldId !== worldId) throw new Error("This world is not the one running.");
+  session.observedState = "stopping";
+  session.desiredState = "stopped";
+  session.updatedAtEpochSeconds = Math.floor(Date.now() / 1000);
+  const box = fleet ? state.snapshot.hosts.find((item) => item.id === launchedHostId(worldId)) : configuredHost();
+  if (box) box.state = "stopping";
 
-  const operationId = schedule("stop", STOP_MS, (current) => {
-    const next = current.snapshot.games.find((item) => item.id === gameId)?.lifecycle;
-    if (next) {
-      next.observedState = "stopped";
-      next.activeSessionId = null;
-      next.activeWorldId = null;
-      next.updatedAtEpochSeconds = Math.floor(Date.now() / 1000);
-    }
-    const box = current.snapshot.hosts[0];
-    if (box) {
-      box.state = "stopped";
-      box.launchedAt = null;
+  const operationId = schedule("stop", worldId, STOP_MS, (current) => {
+    session.observedState = "stopped";
+    session.activeSessionId = null;
+    session.activeWorldId = null;
+    session.updatedAtEpochSeconds = Math.floor(Date.now() / 1000);
+    if (fleet) {
+      // A launched host ends with its session.
+      current.snapshot.hosts = current.snapshot.hosts.filter((item) => item.id !== launchedHostId(worldId));
+      if (target.connectivity === "raw") target.connectionAddress = null;
+    } else {
+      const shared = current.snapshot.hosts.find((item) => item.provenance !== "launched");
+      if (shared) {
+        shared.state = "stopped";
+        shared.launchedAt = null;
+      }
     }
     archive(gameId, target);
   });
   return { result: "requested", operationId };
 }
 
+/** The game's port, read from any world that has an address. */
+function gamePort(gameId: string): string {
+  const address = game(gameId).worlds.map((item) => item.connectionAddress).find((value) => value !== null);
+  return address?.split(":").at(-1) ?? "25565";
+}
+
 export function worldLifecycle(gameId: string, worldId: string, action: "archive" | "regenerate" | "restore" | "purge", backupKey?: string, release?: string): { result: "requested"; operationId: string } {
   settle();
-  requireIdle();
+  requireIdle(worldId);
   const target = world(gameId, worldId);
   if (action === "purge" && target.materialization !== "archived") throw new Error("Archive this world before permanently deleting it.");
   if (action === "regenerate" && !(target.preset?.releases.includes(release ?? "") ?? false)) throw new Error("The selected release is no longer available. Refresh and try again.");
   if (action === "restore" && !(state.backups[worldKey(gameId, worldId)] ?? []).some((entry) => entry.key === backupKey)) throw new Error("This backup does not belong to the selected world.");
 
   const duration = action === "archive" || action === "purge" ? ARCHIVE_MS : LIFECYCLE_MS;
-  const operationId = schedule("world", duration, (current) => {
+  const operationId = schedule("world", worldId, duration, (current) => {
     const owner = current.snapshot.games.find((item) => item.id === gameId);
     if (!owner) return;
     const next = owner.worlds.find((item) => item.id === worldId);
@@ -211,10 +264,14 @@ export function worldLifecycle(gameId: string, worldId: string, action: "archive
       next.connectionAddress = null;
       const lifecycle = owner.lifecycle;
       if (lifecycle?.activeWorldId === worldId) lifecycle.activeWorldId = null;
+      // Archive stops a fleet world's session, and its launched host goes with it.
+      if (next.session) Object.assign(next.session, { desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: null });
+      current.snapshot.hosts = current.snapshot.hosts.filter((item) => item.id !== launchedHostId(worldId));
       return;
     }
     if (action === "purge") {
       owner.worlds = owner.worlds.filter((item) => item.id !== worldId);
+      current.snapshot.hosts = current.snapshot.hosts.filter((item) => item.id !== launchedHostId(worldId));
       delete current.backups[worldKey(gameId, worldId)];
       delete current.invitations[worldKey(gameId, worldId)];
       return;
@@ -262,6 +319,7 @@ export function createWorld(gameId: string, presetId: string, displayName: strin
     worldLifecycleAvailable: true,
     connectivity,
     placement,
+    ...(placement === "fleet" ? { session: null } : {}),
     auth: auth ?? null,
     materialization: "existing",
     preset: { id: preset.id, repository: preset.repository, commit: preset.commit, profileDigest: preset.profileDigest, releases: [...preset.releases], buildStatus: preset.buildStatus, latestRelease: preset.latestRelease },
@@ -275,10 +333,13 @@ export function createWorld(gameId: string, presetId: string, displayName: strin
 
 export function updateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external"): void {
   settle();
-  requireIdle();
+  requireIdle(worldId);
   const owner = game(gameId);
-  if (owner.lifecycle?.activeSessionId) throw new Error("Stop the world before changing its settings.");
   const target = world(gameId, worldId);
+  if (heldSession(gameId, target)?.activeSessionId) throw new Error("Stop the world before changing its settings.");
+  // A fleet world keeps its own session record; a configured one reads its game's.
+  if (placement === "fleet") target.session = target.session ?? null;
+  else delete target.session;
   target.placement = placement;
   target.connectivity = connectivity;
   target.auth = auth ?? null;
@@ -327,14 +388,15 @@ function hostMetrics(instanceId: string, range: MetricRange): HostMetrics {
   };
 }
 
-// The demo runs every world on its one configured host. Like the API, it shows
-// that host only for the world that holds the session: another world's load is
-// not this one's.
+// Like the API, the demo shows a host only for the world whose session runs on
+// it: a fleet world its launched host, a configured world the shared host while
+// it holds the session. Another world's load is not this one's.
 export function worldMetrics(gameId: string, worldId: string, range: MetricRange): HostMetrics | null {
   settle();
-  const lifecycle = state.snapshot.games.find((game) => game.id === gameId)?.lifecycle;
-  const holds = lifecycle?.activeWorldId === worldId && lifecycle.observedState !== "stopped";
-  return holds ? hostMetrics(state.snapshot.hosts[0]?.id ?? "host-game", range) : null;
+  const target = world(gameId, worldId);
+  const session = heldSession(gameId, target);
+  if (!session || session.observedState === "stopped") return null;
+  return hostMetrics(target.placement === "fleet" ? launchedHostId(worldId) : configuredHost().id, range);
 }
 
 // The real console signs a short-lived S3 link; the demo runs in memory, so a
@@ -429,15 +491,15 @@ export function whitelist(gameId: string, worldId: string): WorldWhitelist {
 
 export function updateWhitelist(gameId: string, worldId: string, names: readonly string[]): SavedWhitelist {
   settle();
-  const game = state.snapshot.games.find((item) => item.id === gameId);
-  if (!world(gameId, worldId).worldLifecycleAvailable) throw new Error("This world has no record to keep a whitelist in.");
+  const target = world(gameId, worldId);
+  if (!target.worldLifecycleAvailable) throw new Error("This world has no record to keep a whitelist in.");
   names.forEach((name, index) => {
     const error = whitelistNameError(name, names.slice(0, index));
     if (error) throw new Error(`${name}: ${error}`);
   });
   const kept = { names: [...names], updatedAt: iso(), updatedBy: "DrArzter" };
   state.whitelists[worldKey(gameId, worldId)] = kept;
-  const running = game?.lifecycle?.activeWorldId === worldId && game.lifecycle.observedState === "ready";
+  const running = heldSession(gameId, target)?.observedState === "ready";
   return { managed: true, ...kept, applied: running ? "reloading" : "next_start" };
 }
 
@@ -602,7 +664,7 @@ export function runConsoleCommand(gameId: string, worldId: string, command: stri
   if (["stop", "save-off"].includes((trimmed.replace(/^\/+/, "").split(/\s+/)[0] ?? "").toLowerCase())) {
     throw new Error("Stopping the game here would skip the verified backup. Use Stop on the world page.");
   }
-  if (game.lifecycle?.activeWorldId !== worldId || game.lifecycle.observedState !== "ready") throw new Error("This world is not running. Start it first.");
+  if (heldSession(gameId, world)?.observedState !== "ready") throw new Error("This world is not running. Start it first.");
   state.counter += 1;
   const key = worldKey(gameId, worldId);
   const entry: ConsoleEntry = { id: `console-${state.counter + 100}`, at: iso(), identityId: "identity-owner", displayName: "DrArzter", worldId, command: trimmed, status: "pending", output: null };

@@ -180,11 +180,41 @@
     },
     "Stop Command Complete": {
       "Type": "Choice",
+      "Comment": "ADR-0073: a stop succeeds only on the line that says the world's archive is verified on this host. SSM Success alone is not that proof.",
       "Choices": [
         {
-          "Variable": "$.observed.invocation.Status",
-          "StringEquals": "Success",
+          "And": [
+            {
+              "Variable": "$.observed.invocation.Status",
+              "StringEquals": "Success"
+            },
+            {
+              "Or": [
+                {
+                  "Variable": "$.observed.invocation.StandardOutputContent",
+                  "StringMatches": "*result=session_stopped_and_backed_up*"
+                },
+                {
+                  "Variable": "$.observed.invocation.StandardOutputContent",
+                  "StringMatches": "*result=already_stopped_and_backed_up*"
+                }
+              ]
+            }
+          ],
           "Next": "Stop Instance"
+        },
+        {
+          "And": [
+            {
+              "Variable": "$.observed.invocation.Status",
+              "StringEquals": "Failed"
+            },
+            {
+              "Variable": "$.observed.invocation.ResponseCode",
+              "NumericEquals": 6
+            }
+          ],
+          "Next": "World Not On Host"
         },
         {
           "And": [
@@ -383,6 +413,11 @@
       "Type": "Fail",
       "Error": "Spawnpoint.SessionStopFailed",
       "Cause": "The host refused or failed save, shutdown or backup; EC2 remains running."
+    },
+    "World Not On Host": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.WorldNotOnHost",
+      "Cause": "The host has no data for this world, so it cannot verify the world's archive; EC2 remains running and the session is not released."
     },
     "Players Online": {
       "Type": "Fail",

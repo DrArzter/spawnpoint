@@ -51,6 +51,21 @@ data "aws_iam_policy_document" "idle_watchdog" {
     ]
   }
 
+  # The same reach as the V2 watchdog, for the same reason: a session on a
+  # launched host is probed on that host, and a denied probe reads as an
+  # unknown one.
+  statement {
+    sid       = "ProbeLaunchedHosts"
+    actions   = ["ssm:SendCommand"]
+    resources = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ssm:resourceTag/ManagedBy"
+      values   = ["spawnpoint-fleet"]
+    }
+  }
+
   statement {
     sid       = "StartOnlyVerifiedStop"
     actions   = ["states:StartExecution"]

@@ -114,6 +114,8 @@ html[data-skin="cloud"] {
   --c-dwell-toast: 3.6s;
   /* Relative times and elapsed counters change their text once per tick. */
   --c-clock: 1s;
+  /* How long G waits for its second key. */
+  --c-leader: 1.5s;
   --c-instant: .001ms;
 }
 

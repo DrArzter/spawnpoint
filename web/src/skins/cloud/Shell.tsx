@@ -22,10 +22,31 @@ function segments(hash: string): string[] {
   return hash.replace(/^#\/?/, "").split("?")[0]!.split("/");
 }
 
-/** Which page an address shows: a world's tab is not a page of its own. */
+/**
+ * Which page an address shows. A page is a section and its game; a world's
+ * page is one page whichever world it shows, and Access is one page whichever
+ * tab or item it shows. A world's tab is not a page of its own.
+ */
 export function pageKey(hash: string): string {
-  return segments(hash).slice(0, 3).join("/");
+  const [section = "", game = "", world = ""] = segments(hash);
+  if (section === "access" || section === "profile") return section;
+  return `${section}/${game}${section === "worlds" && world ? "/world" : ""}`;
 }
+
+/** Which pane a split page shows: the world, or the Access tab and item. */
+export function paneKey(hash: string): string {
+  const [section = "", , world = ""] = segments(hash);
+  if (section === "access") return segments(hash).slice(1).join("/");
+  return section === "worlds" ? world : "";
+}
+
+/** A1 for another page, A2 for another pane of the same page, nothing for a tab. */
+export function transitionKind(from: string, to: string): "page" | "pane" | null {
+  if (pageKey(from) !== pageKey(to)) return "page";
+  return paneKey(from) !== paneKey(to) ? "pane" : null;
+}
+
+const viewKey = (hash: string) => `${pageKey(hash)}|${paneKey(hash)}`;
 
 /** Flashbar items: the game's running operations, then the outcomes the snackbar queue holds. */
 export function flashItems(model: ShellModel, queue: SnackbarQueue, worldId: string | null): FlashItem[] {
@@ -48,8 +69,9 @@ export function flashItems(model: ShellModel, queue: SnackbarQueue, worldId: str
 type ViewTransitionDocument = Document & { startViewTransition?: (update: () => Promise<void>) => unknown };
 
 // A1: a link to another page swaps the page area inside a view transition.
-// The update resolves once the new page has rendered, so the old snapshot is
-// never followed by a blank frame.
+// A2: a link to another pane of a split page swaps only the pane (marked
+// data-pane), so the list column stays still. The update resolves once the
+// new view has rendered, so the old snapshot is never followed by a blank frame.
 function usePageTransition(key: string) {
   const arrived = useRef<{ target: string; resolve: () => void } | null>(null);
   useLayoutEffect(() => {
@@ -63,17 +85,22 @@ function usePageTransition(key: string) {
     const onClick = (event: MouseEvent) => {
       const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href^='#/']") : null;
       const start = (document as ViewTransitionDocument).startViewTransition;
-      if (!link || !start || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || reducedMotion()) return;
+      if (!link || !start || link.target || link.hasAttribute("download") || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || reducedMotion()) return;
       const href = link.getAttribute("href")!;
-      const target = pageKey(href);
-      if (target === pageKey(window.location.hash)) return;
+      const kind = transitionKind(window.location.hash, href);
+      if (kind === null || (kind === "pane" && !document.querySelector("[data-pane]"))) return;
       event.preventDefault();
-      start.call(document, () => new Promise<void>((resolve) => {
+      const root = document.documentElement;
+      root.dataset.transition = kind;
+      const finished = start.call(document, () => new Promise<void>((resolve) => {
         const done = () => { arrived.current = null; resolve(); };
-        arrived.current = { target, resolve: done };
+        arrived.current = { target: viewKey(href), resolve: done };
         window.setTimeout(done, MOTION["--c-d3"]);
         window.location.hash = href.slice(1);
-      }));
+      })) as { finished?: Promise<void> } | undefined;
+      const clear = () => { delete root.dataset.transition; };
+      if (finished?.finished) finished.finished.then(clear, clear);
+      else clear();
     };
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
@@ -113,7 +140,7 @@ function useShortcuts(model: ShellModel, openPalette: () => void, openKeys: () =
   const latest = useRef(model);
   latest.current = model;
   useEffect(() => {
-    let leader = false;
+    let leader = 0;
     const go = (letter: string) => {
       const current = latest.current;
       const href = letter === "h" ? current.overview?.href
@@ -128,13 +155,15 @@ function useShortcuts(model: ShellModel, openPalette: () => void, openKeys: () =
         return;
       }
       if (event.metaKey || event.ctrlKey || event.altKey || typing(event.target) || document.querySelector("dialog[open], .c-palette")) return;
+      if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(event.key)) return;
       const key = event.key.toLowerCase();
-      if (leader) {
-        leader = false;
+      if (leader && event.timeStamp - leader <= MOTION["--c-leader"]) {
+        leader = 0;
         go(key);
         return;
       }
-      if (key === "g") leader = true;
+      leader = 0;
+      if (key === "g") leader = event.timeStamp;
       else if (key === "/") { event.preventDefault(); openPalette(); }
       else if (key === "?") openKeys();
       else if (/^[1-9]$/.test(key)) {
@@ -158,7 +187,7 @@ export function Shell({ model, children }: Readonly<{ model: ShellModel; childre
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
   const key = pageKey(hash);
-  usePageTransition(key);
+  usePageTransition(viewKey(hash));
   const first = useArrival(key, main);
   const openPalette = useMemo(() => () => setPalette(true), []);
   const openKeys = useMemo(() => () => setKeys(true), []);

@@ -69,6 +69,8 @@ html[data-skin="cloud"] .c-spin {
 @keyframes c-shake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 @keyframes c-page-out { to { opacity: 0; transform: translateX(-32px) scale(.985); } }
 @keyframes c-page-in { from { transform: translateX(56px); } }
+@keyframes c-pane-out { to { opacity: 0; transform: translateY(-16px); } }
+@keyframes c-pane-in { from { transform: translateY(32px); } }
 
 /* A1: the page area slides as a solid sheet; the bars are outside it, and the
    notifications float above it with no snapshot of their own underneath. */
@@ -84,6 +86,29 @@ html[data-skin="cloud"]::view-transition-old(c-page) {
 html[data-skin="cloud"]::view-transition-new(c-page) {
   animation: var(--c-d3) var(--c-ease) both c-page-in;
   box-shadow: -24px 0 48px -24px var(--c-page-edge);
+}
+
+/* A2: during a pane switch only the pane moves; the page area keeps still. */
+html[data-skin="cloud"][data-transition="pane"] .c-main {
+  view-transition-name: none;
+}
+
+html[data-skin="cloud"][data-transition="pane"] [data-pane] {
+  background: var(--c-bg);
+  view-transition-name: c-pane;
+}
+
+html[data-skin="cloud"]::view-transition-group(c-pane) {
+  animation-duration: var(--c-d3);
+  animation-timing-function: var(--c-ease);
+}
+
+html[data-skin="cloud"]::view-transition-old(c-pane) {
+  animation: var(--c-d3) var(--c-ease) both c-pane-out;
+}
+
+html[data-skin="cloud"]::view-transition-new(c-pane) {
+  animation: var(--c-d3) var(--c-ease) both c-pane-in;
 }
 
 html[data-skin="cloud"]::view-transition-old(c-page),

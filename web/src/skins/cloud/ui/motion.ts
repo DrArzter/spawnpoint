@@ -13,6 +13,7 @@ export const MOTION = {
   "--c-dwell-copy": 1400,
   "--c-dwell-toast": 3600,
   "--c-clock": 1000,
+  "--c-leader": 1500,
 } as const;
 
 /** True when the person asked the system for less motion. */

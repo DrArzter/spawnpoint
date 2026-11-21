@@ -345,7 +345,6 @@ html[data-skin="cloud"] .c-keys-row dd {
   }
 
   html[data-skin="cloud"] .c-brand-name,
-  html[data-skin="cloud"] .c-refreshed,
   html[data-skin="cloud"] .c-rail,
   html[data-skin="cloud"] .c-account {
     display: none;

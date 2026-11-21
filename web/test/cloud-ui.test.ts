@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { action } from "../src/core/actions.ts";
 import type { ShellModel } from "../src/core/models.ts";
-import { flashItems, pageKey } from "../src/skins/cloud/Shell.tsx";
+import { flashItems, pageKey, transitionKind } from "../src/skins/cloud/Shell.tsx";
 import { ActionButton, LinkButton } from "../src/skins/cloud/ui/ActionButton.tsx";
 import { relativeTime } from "../src/skins/cloud/ui/Ago.tsx";
 import { Card } from "../src/skins/cloud/ui/Card.tsx";
@@ -128,6 +128,11 @@ test("Frame: Home is current on the overview and Worlds is not; Access carries t
 test("Shell helpers: a world's tab is not a page; operations and outcomes become flashbar items", () => {
   assert.equal(pageKey("#/worlds/mc/rostik/metrics"), pageKey("#/worlds/mc/rostik"));
   assert.notEqual(pageKey("#/worlds/mc"), pageKey("#/releases/mc"));
+  assert.equal(transitionKind("#/worlds/mc", "#/worlds/mc/rostik"), "page", "a world's page from the list is a page switch (A1)");
+  assert.equal(transitionKind("#/worlds/mc/rostik", "#/worlds/mc/cinder/metrics"), "pane", "another world beside the list column moves only the pane (A2)");
+  assert.equal(transitionKind("#/worlds/mc/rostik", "#/worlds/mc/rostik/metrics"), null, "a tab is not a page (A3 instead)");
+  assert.equal(transitionKind("#/access/users", "#/access/roles"), "pane");
+  assert.equal(transitionKind("#/home/mc", "#/worlds/mc"), "page");
   const shell = { flash: { operations: [{ id: "op1", label: "Starting session", worldName: "Rostik", worldId: "rostik", startedAt: "2026-11-21T10:00:00Z" }] } } as unknown as ShellModel;
   const items = flashItems(shell, { items: [{ id: 7, message: "Saved", tone: "error" }], dismiss: noop }, null);
   assert.deepEqual(items.map((item) => [item.kind, item.message]), [["busy", "Starting session · Rostik"], ["err", "Saved"]]);

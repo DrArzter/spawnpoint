@@ -4,11 +4,13 @@ import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
 import type { ControlPlaneSnapshot, Preset, SettingValue, World, WorldGameSettings } from "../model";
 import { DemoState, initialState, Mutable } from "./data";
+import { demoFixture } from "./flag";
+import { stressState } from "./stress";
 
 // One in-memory control plane for the whole demo. Transitions are scheduled in
 // time rather than run by timers, so any read settles whatever has come due —
 // the console's own polling is what makes a start look like a start.
-let state: DemoState = initialState();
+let state: DemoState = demoFixture() === "stress" ? stressState() : initialState();
 
 const START_MS = 7000;
 const STOP_MS = 6000;

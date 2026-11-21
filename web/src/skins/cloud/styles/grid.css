@@ -1,0 +1,96 @@
+/* Grid: auto kinds add columns with width; fixed kinds keep their accepted counts. Every kind stretches one row to one height (R11). */
+
+html[data-skin="cloud"] .c-grid {
+  --c-min: 360px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--c-min)), 1fr));
+  align-items: stretch;
+  gap: var(--c-gap);
+  min-width: 0;
+}
+
+html[data-skin="cloud"] .c-grid-chart {
+  --c-min: 440px;
+}
+
+html[data-skin="cloud"] .c-grid-stat {
+  --c-min: 200px;
+}
+
+html[data-skin="cloud"] .c-grid-name {
+  --c-min: 200px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--c-min)), 1fr));
+}
+
+html[data-skin="cloud"] .c-grid-perm {
+  --c-min: 220px;
+}
+
+html[data-skin="cloud"] .c-grid-home,
+html[data-skin="cloud"] .c-grid-metrics,
+html[data-skin="cloud"] .c-grid-profile,
+html[data-skin="cloud"] .c-grid-stack {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+html[data-skin="cloud"] .c-grid-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+html[data-skin="cloud"] .c-grid-cell > * {
+  flex: 1 1 auto;
+}
+
+html[data-skin="cloud"] .c-span-full {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 900px) {
+  html[data-skin="cloud"] .c-grid-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  html[data-skin="cloud"] .c-grid-metrics > .c-span-2 {
+    grid-column: span 2;
+  }
+}
+
+@media (min-width: 1024px) {
+  html[data-skin="cloud"] .c-grid-home {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  html[data-skin="cloud"] .c-grid-home > .c-span-2 {
+    grid-column: span 2;
+  }
+}
+
+@media (min-width: 1200px) {
+  html[data-skin="cloud"] .c-grid-home {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1600px) {
+  html[data-skin="cloud"] .c-grid-profile {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
+@media (min-width: 1900px) {
+  html[data-skin="cloud"] .c-grid-metrics {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 2000px) {
+  html[data-skin="cloud"] .c-grid-home {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  html[data-skin="cloud"] .c-grid-home > .c-span-2-wide {
+    grid-column: span 2;
+  }
+}

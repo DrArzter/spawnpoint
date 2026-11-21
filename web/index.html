@@ -29,12 +29,16 @@
           // its font is asked for now rather than when the shell mounts. The
           // front door never wears it; the app takes it off there.
           const asked = new URLSearchParams(location.search).get("skin");
-          const skin = asked === "terminal" || asked === "console" ? asked : localStorage.getItem("spawnpoint.skin");
-          if (skin === "terminal" && !location.hash.startsWith("#/welcome")) {
-            document.documentElement.dataset.skin = "terminal";
+          const skin = asked === "terminal" || asked === "console" || asked === "cloud" ? asked : localStorage.getItem("spawnpoint.skin");
+          const fonts = {
+            terminal: "https://fonts.googleapis.com/css2?family=B612+Mono:wght@400;700&display=swap",
+            cloud: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap",
+          };
+          if (fonts[skin] && !location.hash.startsWith("#/welcome")) {
+            document.documentElement.dataset.skin = skin;
             const font = document.createElement("link");
             font.rel = "stylesheet";
-            font.href = "https://fonts.googleapis.com/css2?family=B612+Mono:wght@400;700&display=swap";
+            font.href = fonts[skin];
             document.head.append(font);
           }
         } catch {}

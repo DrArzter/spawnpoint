@@ -1,0 +1,48 @@
+/* Skeleton: placeholders at the final geometry inside one announced region; ProgressBar (A11). */
+
+html[data-skin="cloud"] .c-skeleton-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+html[data-skin="cloud"] .c-skeleton {
+  display: block;
+  max-width: 100%;
+  border-radius: var(--c-r-sm);
+  background: linear-gradient(90deg, var(--c-surface-2), var(--c-surface-3), var(--c-surface-2));
+  background-size: 200% 100%;
+  animation: c-shimmer var(--c-loop-shimmer) linear infinite;
+}
+
+html[data-skin="cloud"] .c-progress {
+  position: relative;
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--c-surface-3);
+}
+
+html[data-skin="cloud"] .c-progress-run {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 30%;
+  border-radius: 4px;
+  background: var(--c-busy);
+  animation: c-indet var(--c-loop-bar) var(--c-ease) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin="cloud"] .c-skeleton {
+    animation: none !important;
+  }
+
+  html[data-skin="cloud"] .c-progress-run {
+    width: 100%;
+    opacity: .35;
+    animation: none !important;
+  }
+}

@@ -1,0 +1,109 @@
+/* Dialog (centred; docked to the bottom on a phone) and the shared surface of a modal. */
+
+html[data-skin="cloud"] .c-dialog,
+html[data-skin="cloud"] .c-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 1px solid var(--c-line-2);
+  background: var(--c-surface-pop);
+  color: var(--c-ink);
+  box-shadow: var(--c-shadow-pop);
+  animation: c-dialog-in var(--c-d2) var(--c-ease);
+}
+
+html[data-skin="cloud"] .c-dialog:not([open]),
+html[data-skin="cloud"] .c-panel:not([open]) {
+  display: none;
+}
+
+html[data-skin="cloud"] .c-dialog::backdrop,
+html[data-skin="cloud"] .c-panel::backdrop {
+  background: var(--c-scrim);
+  animation: c-fade var(--c-d2) var(--c-ease);
+}
+
+html[data-skin="cloud"] .c-dialog:focus-visible,
+html[data-skin="cloud"] .c-panel:focus-visible {
+  outline: none;
+}
+
+html[data-skin="cloud"] .c-dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  border-radius: var(--c-r-dlg);
+}
+
+html[data-skin="cloud"] .c-dialog-wide {
+  width: min(760px, calc(100vw - 32px));
+}
+
+html[data-skin="cloud"] .c-dialog-head,
+html[data-skin="cloud"] .c-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+}
+
+html[data-skin="cloud"] .c-dialog-head {
+  padding: 20px 22px 8px;
+}
+
+html[data-skin="cloud"] .c-dialog-head h2,
+html[data-skin="cloud"] .c-panel-head h2 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--c-fs-dialog);
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-skin="cloud"] .c-dialog-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+}
+
+html[data-skin="cloud"] .c-dialog-body > * {
+  flex: none;
+}
+
+html[data-skin="cloud"] .c-dialog > .c-dialog-body {
+  padding: 8px 22px;
+}
+
+html[data-skin="cloud"] .c-dialog-foot,
+html[data-skin="cloud"] .c-panel-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: none;
+}
+
+html[data-skin="cloud"] .c-dialog-foot {
+  padding: 16px 22px 20px;
+}
+
+html[data-skin="cloud"] .c-dialog-cancel {
+  display: contents;
+}
+
+@media (max-width: 759px) {
+  html[data-skin="cloud"] .c-dialog {
+    width: 100vw;
+    max-width: 100vw;
+    margin: auto 0 0;
+    border-radius: var(--c-r-dlg) var(--c-r-dlg) 0 0;
+  }
+
+  html[data-skin="cloud"] .c-dialog-foot {
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  }
+}

@@ -1,0 +1,190 @@
+/*
+ * The cloud skin's tokens (C+A). Every colour, size and motion value the
+ * skin's CSS reads is defined here and nowhere else; component sheets read
+ * only these. The theme block is written once: the app always stamps the
+ * resolved theme on data-theme, System included.
+ */
+
+html[data-skin="cloud"] {
+  color-scheme: light;
+  --c-bg: #F2F3F3;
+  --c-surface: #FFFFFF;
+  --c-surface-2: #F4F5F6;
+  --c-surface-3: #E7EAED;
+  --c-surface-pop: #FFFFFF;
+  --c-line: #E3E6E9;
+  --c-line-2: #C6CBD1;
+  --c-ink: #0F141A;
+  --c-ink-2: #56626F;
+  --c-ink-3: #6B7684;
+  --c-accent: #5B47D6;
+  --c-accent-ink: #FFFFFF;
+  --c-accent-soft: #EFECFC;
+  --c-accent-text: #4936BE;
+  --c-accent-line: #C9BFF7;
+  --c-band: #161D26;
+  --c-band-2: #232D3A;
+  --c-band-3: #313D4C;
+  --c-band-ink: #FFFFFF;
+  --c-band-ink-2: #B6BEC9;
+  --c-band-focus: #C9BFFF;
+  --c-ok: #1D7A35;
+  --c-ok-bg: #E6F4EA;
+  --c-warn: #8A5A00;
+  --c-warn-bg: #FDF3DC;
+  --c-err: #C3361B;
+  --c-err-bg: #FCEBE7;
+  --c-err-ink: #FFFFFF;
+  --c-busy: #1C68C4;
+  --c-busy-bg: #E5EFFB;
+  --c-off: #56626F;
+  --c-off-bg: #EDEFF1;
+  --c-run: color-mix(in srgb, var(--c-ok) 62%, var(--c-surface));
+  --c-flash-busy: #1C68C4;
+  --c-flash-ok: #1D7A35;
+  --c-flash-err: #C3361B;
+  --c-flash-ink: #FFFFFF;
+  --c-flash-line: rgb(255 255 255 / .75);
+  --c-flash-hover: rgb(255 255 255 / .15);
+  --c-tip: #161D26;
+  --c-tip-ink: #FFFFFF;
+  --c-scrim: rgb(10 15 21 / .55);
+  --c-page-edge: rgb(10 15 21 / .25);
+  --c-shadow: 0 1px 2px rgb(30 20 50 / .06), 0 1px 1px rgb(30 20 50 / .04);
+  --c-shadow-pop: 0 12px 32px rgb(30 20 50 / .18), 0 2px 6px rgb(30 20 50 / .08);
+  --c-mark-from: #8F7BFF;
+  --c-mark-to: #5B47D6;
+  --c-avatar: #6E57EB;
+  --c-avatar-ink: #FFFFFF;
+  --c-g-minecraft: #17917A;
+  --c-g-factorio: #C9701C;
+  --c-g-zomboid: #A8385A;
+  --c-g-other: #56626F;
+  --c-g-ink: #FFFFFF;
+
+  --c-font: Manrope, system-ui, sans-serif;
+  --c-font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --c-fs-xs: 12px;
+  --c-fs-s: 13px;
+  --c-fs-m: 14px;
+  --c-fs-body: 15px;
+  --c-fs-h2: 16px;
+  --c-fs-empty: 17px;
+  --c-fs-dialog: 19px;
+  --c-fs-crumb: 22px;
+  --c-fs-h1: 28px;
+  --c-fs-stat: 26px;
+
+  --c-pad: clamp(16px, 2vw, 40px);
+  --c-gap: 16px;
+  --c-card-x: 18px;
+  --c-card-y: 16px;
+  --c-r: 12px;
+  --c-r-ctl: 10px;
+  --c-r-sm: 8px;
+  --c-r-dlg: 18px;
+  --c-r-pill: 999px;
+  --c-bar: 56px;
+  --c-rail: 80px;
+  --c-bottom: 60px;
+  --c-lcol: clamp(320px, 21vw, 400px);
+  --c-row: 52px;
+  --c-row-h: 42px;
+  --c-gl-row: 60px;
+  --c-tile: 52px;
+  --c-ctl: 40px;
+  --c-ctl-sm: 34px;
+  --c-field: 42px;
+  --c-target: 44px;
+  --c-icon-btn: 40px;
+
+  --c-d1: 140ms;
+  --c-d2: 240ms;
+  --c-d3: 420ms;
+  --c-d4: 900ms;
+  --c-ease: cubic-bezier(.22, 1, .36, 1);
+  --c-ease-spring: cubic-bezier(.34, 1.45, .64, 1);
+  --c-d-tick: 660ms;
+  --c-loop-bar: 1.6s;
+  --c-loop-spin: 1s;
+  --c-loop-spin-reduced: 3s;
+  --c-loop-shimmer: 1.2s;
+  --c-shake: 250ms;
+  --c-dwell-copy: 1.4s;
+  --c-dwell-toast: 3.6s;
+  /* Relative times and elapsed counters change their text once per tick. */
+  --c-clock: 1s;
+  --c-instant: .001ms;
+}
+
+html[data-skin="cloud"][data-theme="dark"] {
+  color-scheme: dark;
+  --c-bg: #0E1319;
+  --c-surface: #161D26;
+  --c-surface-2: #1C2430;
+  --c-surface-3: #28323F;
+  --c-surface-pop: #202A37;
+  --c-line: #26303D;
+  --c-line-2: #3A4655;
+  --c-ink: #E8ECF0;
+  --c-ink-2: #AEB8C4;
+  --c-ink-3: #8B96A4;
+  --c-accent: #A897FF;
+  --c-accent-ink: #1A1235;
+  --c-accent-soft: #2A2450;
+  --c-accent-text: #C2B7FF;
+  --c-accent-line: #4C4190;
+  --c-band: #0A0F15;
+  --c-band-2: #1A222D;
+  --c-band-3: #2A3442;
+  --c-band-ink-2: #A9B3BF;
+  --c-ok: #4CC47A;
+  --c-ok-bg: #12301E;
+  --c-warn: #F0C45A;
+  --c-warn-bg: #352A0E;
+  --c-err: #FF7A66;
+  --c-err-bg: #3A1913;
+  --c-err-ink: #2A0A06;
+  --c-busy: #6AB0FF;
+  --c-busy-bg: #13283F;
+  --c-off: #AEB8C4;
+  --c-off-bg: #222B36;
+  --c-tip: #2A3442;
+  --c-shadow: 0 1px 2px rgb(0 0 0 / .3);
+  --c-shadow-pop: 0 16px 40px rgb(0 0 0 / .5), 0 2px 6px rgb(0 0 0 / .3);
+  --c-g-minecraft: #35C3A6;
+  --c-g-factorio: #F0A04B;
+  --c-g-zomboid: #E06C8E;
+  --c-g-other: #AEB8C4;
+  --c-g-ink: #0E1319;
+}
+
+@media (max-width: 759px) {
+  html[data-skin="cloud"] {
+    --c-gap: 12px;
+    --c-card-x: 14px;
+    --c-fs-h1: 24px;
+    --c-fs-stat: 22px;
+    --c-ctl: 44px;
+    --c-ctl-sm: 44px;
+    --c-field: 44px;
+    --c-icon-btn: 44px;
+    --c-tile: 56px;
+  }
+}
+
+@media (pointer: coarse) {
+  html[data-skin="cloud"] {
+    --c-ctl: 44px;
+    --c-ctl-sm: 44px;
+    --c-field: 44px;
+    --c-icon-btn: 44px;
+  }
+}
+
+html[data-skin="cloud"][data-density="compact"] {
+  --c-row: 40px;
+  --c-row-h: 36px;
+  --c-gl-row: 46px;
+  --c-tile: 44px;
+}

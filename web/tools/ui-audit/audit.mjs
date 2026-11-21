@@ -371,7 +371,8 @@ function line(f, kinds) {
 }
 
 // Draws each finding's box on the page it came from and keeps the picture.
-async function shoot(tab, list, prefix) {
+// The pages are shared out over every tab; at most 120 pictures.
+async function shoot(tabs, list, prefix) {
   const shots = new Map();
   const byPage = new Map();
   for (const f of list) {
@@ -380,39 +381,41 @@ async function shoot(tab, list, prefix) {
     if (!byPage.has(id)) byPage.set(id, []);
     byPage.get(id).push(f);
   }
-  let count = 0;
-  for (const [id, group] of byPage) {
-    if (count >= 120) break;
-    count += 1;
-    const r = group[0].record;
-    const routeName = r.name.replace(/\+stress$/, "").replace(/ menu$/, "");
-    const route = ROUTES.find(([name]) => name === routeName)?.[1] ?? STATES.find((s) => `state:${s.name}` === routeName)?.route;
-    if (!route) continue;
-    const job = { skin: r.skin, theme: r.theme, route: r.name.includes("+stress") ? route.replace("?demo", "?demo&fixture=stress") : route };
-    try {
-      await open(tab, job, r.width);
-      const state = STATES.find((s) => `state:${s.name}` === routeName);
-      if (state) for (const step of state.steps) { await tab.evaluate(`${STEP}(${JSON.stringify(step)})`, true); await settle(tab); }
-      const boxes = group.map((f) => f.item.box).filter(Boolean);
-      await tab.evaluate(`(() => {
-        const layer = document.createElement("div");
-        layer.style.cssText = "position:absolute;left:0;top:0;pointer-events:none;z-index:2147483647";
-        for (const b of ${JSON.stringify(boxes)}) {
-          const mark = document.createElement("div");
-          mark.style.cssText = "position:absolute;outline:2px solid #e00;outline-offset:1px;background:rgba(255,0,0,.08)";
-          Object.assign(mark.style, { left: (b.x + scrollX) + "px", top: (b.y + scrollY) + "px", width: b.w + "px", height: b.h + "px" });
-          layer.appendChild(mark);
-        }
-        (document.querySelector("dialog[open]") ?? document.body).appendChild(layer);
-      })()`);
-      const png = await tab.screenshot();
-      if (!png) continue;
-      const file = `${prefix}-${id.replace(/[^a-z0-9+]+/gi, "-")}.png`;
-      writeFileSync(join(reportDir, file), png);
-      for (const f of group) shots.set(f.key, file);
-    } catch { /* a picture is a convenience; the finding stands without it */ }
-  }
+  const pages = [...byPage].slice(0, 120);
+  await Promise.all(tabs.map(async (tab, index) => {
+    for (const page of pages.filter((_, at) => at % tabs.length === index)) await shootPage(tab, page, prefix, shots);
+  }));
   return shots;
+}
+
+async function shootPage(tab, [id, group], prefix, shots) {
+  const r = group[0].record;
+  const routeName = r.name.replace(/\+stress$/, "").replace(/ menu$/, "");
+  const route = ROUTES.find(([name]) => name === routeName)?.[1] ?? STATES.find((s) => `state:${s.name}` === routeName)?.route;
+  if (!route) return;
+  const job = { skin: r.skin, theme: r.theme, route: r.name.includes("+stress") ? route.replace("?demo", "?demo&fixture=stress") : route };
+  try {
+    await open(tab, job, r.width);
+    const state = STATES.find((s) => `state:${s.name}` === routeName);
+    if (state) for (const step of state.steps) { await tab.evaluate(`${STEP}(${JSON.stringify(step)})`, true); await settle(tab); }
+    const boxes = group.map((f) => f.item.box).filter(Boolean);
+    await tab.evaluate(`(() => {
+      const layer = document.createElement("div");
+      layer.style.cssText = "position:absolute;left:0;top:0;pointer-events:none;z-index:2147483647";
+      for (const b of ${JSON.stringify(boxes)}) {
+        const mark = document.createElement("div");
+        mark.style.cssText = "position:absolute;outline:2px solid #e00;outline-offset:1px;background:rgba(255,0,0,.08)";
+        Object.assign(mark.style, { left: (b.x + scrollX) + "px", top: (b.y + scrollY) + "px", width: b.w + "px", height: b.h + "px" });
+        layer.appendChild(mark);
+      }
+      (document.querySelector("dialog[open]") ?? document.body).appendChild(layer);
+    })()`);
+    const png = await tab.screenshot();
+    if (!png) return;
+    const file = `${prefix}-${id.replace(/[^a-z0-9+]+/gi, "-")}.png`;
+    writeFileSync(join(reportDir, file), png);
+    for (const f of group) shots.set(f.key, file);
+  } catch { /* a picture is a convenience; the finding stands without it */ }
 }
 
 // One row per element and kind, with the pages and widths that show it.
@@ -515,7 +518,7 @@ try {
     if (advise) {
       // A picture per page for what blocks, and one per advisory group.
       const firsts = grouped(advisory).map((g) => g.first).filter((f) => f.item.box);
-      const shots = await shoot(tabs[0], [...fresh, ...firsts], "shot");
+      const shots = await shoot(tabs, [...fresh, ...firsts], "shot");
       writeReport(fresh, advisory, shots, summary);
       console.log(`report: ${join(reportDir, "report.md")} (${grouped(advisory).length} advisory groups)`);
     }

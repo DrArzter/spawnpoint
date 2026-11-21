@@ -6,7 +6,8 @@
 - Amended on 2026-11-21: the data-volume alarm applies to the configured host only. A launched host keeps nothing
   that outlives its session ([ADR-0054](0054-place-a-session-on-a-host-with-room.md)). The start, stop, drain, watchdog
   V2 and world lifecycle machines alarm on a failed or timed-out execution, and a failed V1 stop is the "backup did not
-  complete" alarm. One egress alarm sums the traffic of every host.
+  complete" alarm, except when its error is `Spawnpoint.PlayersOnline`: a player joined and the stop was correctly
+  refused. The stop alarms also fire then, and their description says so. One egress alarm sums the traffic of every host.
 
 ## Context
 

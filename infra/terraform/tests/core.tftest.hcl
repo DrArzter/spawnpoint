@@ -425,3 +425,16 @@ run "egress_alarm_sums_every_host" {
     error_message = "More than 10 GiB in one hour alarms the guardrails topic; no host running is healthy."
   }
 }
+
+run "a_stop_refused_for_a_player_is_named_in_the_stop_alarm" {
+  command = plan
+
+  assert {
+    condition = (
+      strcontains(aws_cloudwatch_metric_alarm.workflow["spawnpoint-stop-server-failed"].alarm_description, "Spawnpoint.PlayersOnline") &&
+      !strcontains(aws_cloudwatch_metric_alarm.workflow["spawnpoint-start-server-failed"].alarm_description, "PlayersOnline") &&
+      !strcontains(aws_cloudwatch_metric_alarm.workflow["spawnpoint-stop-server-timed-out"].alarm_description, "PlayersOnline")
+    )
+    error_message = "A stop refused because a player joined also fails the execution; the stop alarm must say that it needs no action."
+  }
+}

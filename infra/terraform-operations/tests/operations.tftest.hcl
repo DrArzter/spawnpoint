@@ -484,3 +484,15 @@ run "v2_workflows_alarm_on_failed_and_timed_out_executions" {
     error_message = "One failed or timed-out execution alarms the guardrails topic; no execution is healthy."
   }
 }
+
+run "a_v2_stop_refused_for_a_player_is_named_in_the_stop_alarm" {
+  command = plan
+
+  assert {
+    condition = (
+      strcontains(aws_cloudwatch_metric_alarm.workflow["spawnpoint-stop-server-v2-failed"].alarm_description, "Spawnpoint.V2StopRefusedPlayersOnline") &&
+      !strcontains(aws_cloudwatch_metric_alarm.workflow["spawnpoint-drain-host-v2-failed"].alarm_description, "PlayersOnline")
+    )
+    error_message = "A V2 stop refused because a player joined also fails the execution; the stop alarm must say that it needs no action."
+  }
+}

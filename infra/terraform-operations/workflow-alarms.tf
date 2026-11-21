@@ -22,8 +22,12 @@ locals {
 resource "aws_cloudwatch_metric_alarm" "workflow" {
   for_each = local.workflow_alarms
 
-  alarm_name        = each.key
-  alarm_description = "An execution of spawnpoint-${each.value.machine} ${replace(each.value.outcome, "-", " ")}. Open it in the Step Functions console to see the failed state."
+  alarm_name = each.key
+  alarm_description = join(" ", compact([
+    "An execution of spawnpoint-${each.value.machine} ${replace(each.value.outcome, "-", " ")}. Open it in the Step Functions console to see the failed state.",
+    # A player who joins after the idle check makes a stop refuse, which is correct.
+    each.value.machine == "stop-server-v2" && each.value.metric == "ExecutionsFailed" ? "If its error is Spawnpoint.V2StopRefusedPlayersOnline, a player joined and the stop was refused: no action is needed." : "",
+  ]))
 
   namespace   = "AWS/States"
   metric_name = each.value.metric

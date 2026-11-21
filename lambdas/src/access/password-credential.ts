@@ -107,7 +107,14 @@ function parseStoredHash(stored: string): StoredHash | null {
   if ((parameters.cost & (parameters.cost - 1)) !== 0) return null;
   const saltBytes = Buffer.from(salt, "base64url");
   const keyBytes = Buffer.from(key, "base64url");
-  if (saltBytes.length < 8 || keyBytes.length < 16) return null;
+  // Exactly what this module writes, not merely enough of it. A key read at
+  // whatever length the stored string happens to decode to is then derived at
+  // that length, and scrypt's output is stable in its prefix: a hash with one
+  // extra character decodes to one extra byte, the first thirty-two still
+  // match, and the comparison comes down to a single byte that agrees about
+  // once in 256 attempts. The test that asserts a mangled hash never verifies
+  // failed that often, which is how this was found.
+  if (saltBytes.length !== scryptSaltBytes || keyBytes.length !== scryptKeyLength) return null;
   return {
     parameters: { cost: parameters.cost, blockSize: parameters.blockSize, parallelism: parameters.parallelism },
     salt: saltBytes,

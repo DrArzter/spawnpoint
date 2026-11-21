@@ -88,6 +88,23 @@ test("cloud: the game home draws each world's start and each request's approve a
   drawn("Worlds list", renderToStaticMarkup(createElement(cloudSkin.Worlds, { model: { ...worlds, view: "list" } })), [worlds.rows[0]!.sessionAction!()]);
 });
 
+test("cloud: the worlds list filters by a pressed tile, never by a second status mark, and says why bulk Actions wait", () => {
+  const markup = renderToStaticMarkup(createElement(cloudSkin.Worlds, { model: { ...worlds, view: "list" } }));
+  assert.match(markup, /aria-label="Filter by status"/);
+  assert.match(markup, /<button aria-pressed="false" class="c-tile"/);
+  assert.doesNotMatch(markup, /c-filter-token-key">Status/);
+  assert.match(markup, /aria-disabled="true"[^>]*data-action="worlds.bulk"/);
+  assert.match(markup, /Select worlds first/);
+  assert.match(markup, /data-action="refresh"/);
+});
+
+test("cloud: the game home leaves out the requests card without the role, and offers one Create when there are no worlds", () => {
+  const plain = renderToStaticMarkup(createElement(cloudSkin.Worlds, { model: { ...worlds, requests: null } }));
+  assert.doesNotMatch(plain, /Access requests/);
+  const empty = renderToStaticMarkup(createElement(cloudSkin.Worlds, { model: { ...worlds, rows: [] } }));
+  assert.equal(empty.match(/data-action="world.create"/g)?.length, 1);
+});
+
 test("cloud: the palette, once open, draws each world's verbs and says why one is refused", () => {
   const markup = renderToStaticMarkup(createElement(Palette, { model: shell, onClose: noop }));
   const verbs = shell.worldActions!("rostik")!;

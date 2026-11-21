@@ -10,6 +10,8 @@ set -Eeuo pipefail
 REPOSITORY_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPTS="${REPOSITORY_ROOT}/server/scripts"
 GAMES="${REPOSITORY_ROOT}/server/games"
+# shellcheck disable=SC2016 # awk program, not a shell expansion
+AWK_ARCHIVE_LINE='$1 == "archive" { print $2 }'
 fixture="$(mktemp -d /tmp/spawnpoint-game-adapter-test.XXXXXXXX)"
 cleanup() {
   [[ -z "${ready_rcon_pid:-}" ]] || kill "${ready_rcon_pid}" 2>/dev/null || true
@@ -226,7 +228,7 @@ mc_output="$(
   WORLD_NAME="${mc_world}" \
     "${SCRIPTS}/archive-world.sh"
 )"
-mc_archive="$(awk -F= '$1 == "archive" { print $2 }' <<<"${mc_output}")"
+mc_archive="$(awk -F= "${AWK_ARCHIVE_LINE}" <<<"${mc_output}")"
 [[ "$(basename -- "${mc_archive}")" == "${mc_world}-"*.tar.zst ]]
 mc_listing="$(tar --list --zstd --file "${mc_archive}")"
 grep -qx 'world/level.dat' <<<"${mc_listing}"
@@ -245,7 +247,7 @@ archive_output="$(
   WORLD_NAME=factorio \
     "${SCRIPTS}/archive-world.sh"
 )"
-archive="$(awk -F= '$1 == "archive" { print $2 }' <<<"${archive_output}")"
+archive="$(awk -F= "${AWK_ARCHIVE_LINE}" <<<"${archive_output}")"
 listing="$(tar --list --zstd --file "${archive}")"
 grep -qx 'saves/spawnpoint.zip' <<<"${listing}"
 
@@ -420,7 +422,7 @@ zomboid_archive_output="$(
   WORLD_NAME=zomboid \
     "${SCRIPTS}/archive-world.sh"
 )"
-zomboid_archive="$(awk -F= '$1 == "archive" { print $2 }' <<<"${zomboid_archive_output}")"
+zomboid_archive="$(awk -F= "${AWK_ARCHIVE_LINE}" <<<"${zomboid_archive_output}")"
 zomboid_listing="$(tar --list --zstd --file "${zomboid_archive}")"
 grep -qx 'Saves/Multiplayer/servertest/map_10_20.bin' <<<"${zomboid_listing}"
 grep -qx 'Saves/Multiplayer/servertest/players.db' <<<"${zomboid_listing}"
@@ -609,7 +611,7 @@ valheim_archive_output="$(
   WORLD_NAME=valheim \
     "${SCRIPTS}/archive-world.sh"
 )"
-valheim_archive="$(awk -F= '$1 == "archive" { print $2 }' <<<"${valheim_archive_output}")"
+valheim_archive="$(awk -F= "${AWK_ARCHIVE_LINE}" <<<"${valheim_archive_output}")"
 valheim_listing="$(tar --list --zstd --file "${valheim_archive}")"
 grep -qx 'worlds_local/spawnpoint.fwl' <<<"${valheim_listing}"
 grep -qx 'worlds_local/spawnpoint.db' <<<"${valheim_listing}"
@@ -871,7 +873,7 @@ palworld_archive_output="$(
   WORLD_NAME=palworld \
     "${SCRIPTS}/archive-world.sh"
 )"
-palworld_archive="$(awk -F= '$1 == "archive" { print $2 }' <<<"${palworld_archive_output}")"
+palworld_archive="$(awk -F= "${AWK_ARCHIVE_LINE}" <<<"${palworld_archive_output}")"
 palworld_listing="$(tar --list --zstd --file "${palworld_archive}")"
 grep -qx "SaveGames/0/${palworld_guid}/Level.sav" <<<"${palworld_listing}"
 grep -qx "SaveGames/0/${palworld_guid}/Players/00000000000000000000000000000001.sav" <<<"${palworld_listing}"

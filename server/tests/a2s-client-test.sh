@@ -158,6 +158,10 @@ python3 "${PROBES}/a2s-client.py" 127.0.0.1 "${closed_port}" >/dev/null 2>&1 || 
 status=0
 python3 "${PROBES}/a2s-client.py" 127.0.0.1 >/dev/null 2>&1 || status=$?
 [[ "${status}" == 2 ]]
+# A host that is not a loopback address is refused before any packet is sent.
+status=0
+python3 "${PROBES}/a2s-client.py" 192.0.2.1 "${closed_port}" >/dev/null 2>&1 || status=$?
+[[ "${status}" == 2 ]]
 
 # --- the parser alone: every key once, as a small integer ---
 [[ "$(a2s_parse_player_count <<<'info_players=1

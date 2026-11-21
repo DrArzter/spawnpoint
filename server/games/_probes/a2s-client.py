@@ -18,6 +18,7 @@ treats every non-zero as "unavailable", which the watchdog counts as
 not-empty: fail closed.
 """
 
+import ipaddress
 import socket
 import struct
 import sys
@@ -132,15 +133,31 @@ def read_player_entries(sock: socket.socket) -> int:
     return count
 
 
+def is_loopback(host: str) -> bool:
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return host == "localhost"
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print("usage: a2s-client.py <host> <port>", file=sys.stderr)
         return 2
-    host, port = sys.argv[1], int(sys.argv[2])
+    host = sys.argv[1]
+    # The game server runs on this host; any other address is refused (SSRF guard).
+    if not is_loopback(host):
+        print("error: only a loopback address is accepted", file=sys.stderr)
+        return 2
+    try:
+        port = int(sys.argv[2])
+    except ValueError:
+        print("error: the port must be a number", file=sys.stderr)
+        return 2
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.settimeout(TIMEOUT_SECONDS)
-            sock.connect((host, port))
+            sock.connect((host, port))  # NOSONAR(pythonsecurity:S8703) host is checked loopback-only above
             info = read_info(sock)
             entries = read_player_entries(sock)
     except NotUnderstood as error:

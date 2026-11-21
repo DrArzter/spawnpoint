@@ -20,7 +20,6 @@ as not-empty: fail closed.
 
 import base64
 import os
-import socket
 import sys
 import urllib.error
 import urllib.parse
@@ -41,7 +40,13 @@ def usage() -> int:
     return 2
 
 
-def main() -> int:
+def fail(code: int, message: str) -> int:
+    print(f"error: {message}", file=sys.stderr)
+    return code
+
+
+def read_settings():
+    """Return (method, url, body, user, password, timeout), or an exit code."""
     if len(sys.argv) not in (3, 4):
         return usage()
     method, url = sys.argv[1], sys.argv[2]
@@ -50,26 +55,36 @@ def main() -> int:
         return usage()
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme != "http" or parsed.hostname not in LOOPBACK_HOSTS or parsed.port is None:
-        print("error: only http on a loopback address and an explicit port is accepted", file=sys.stderr)
-        return 2
+        return fail(2, "only http on a loopback address and an explicit port is accepted")
     user = os.environ.get("HTTP_PROBE_USER", "")
     password = os.environ.get("HTTP_PROBE_PASSWORD", "")
     if not user or not password:
-        print("error: HTTP_PROBE_USER and HTTP_PROBE_PASSWORD must be set", file=sys.stderr)
-        return 2
+        return fail(2, "HTTP_PROBE_USER and HTTP_PROBE_PASSWORD must be set")
     try:
         timeout = float(os.environ.get("HTTP_PROBE_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS))
     except ValueError:
         return usage()
+    return method, url, body, user, password, timeout
 
-    data = None
-    request = urllib.request.Request(url, method=method)
+
+def build_request(method: str, url: str, user: str, password: str):
+    # The URL was checked as loopback-only in read_settings.
+    request = urllib.request.Request(url, method=method)  # NOSONAR(pythonsecurity:S8703) loopback-only check above
     token = base64.b64encode(f"{user}:{password}".encode("utf-8")).decode("ascii")
     request.add_header("Authorization", f"Basic {token}")
     request.add_header("Accept", "application/json")
     if method == "POST":
-        data = (body if body is not None else "").encode("utf-8")
         request.add_header("Content-Type", "application/json")
+    return request
+
+
+def main() -> int:
+    settings = read_settings()
+    if isinstance(settings, int):
+        return settings
+    method, url, body, user, password, timeout = settings
+    request = build_request(method, url, user, password)
+    data = (body or "").encode("utf-8") if method == "POST" else None
 
     # No proxy: an http_proxy in the environment would carry the password off the host.
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect)
@@ -77,14 +92,11 @@ def main() -> int:
         with opener.open(request, data=data, timeout=timeout) as response:
             content = response.read(MAX_BODY_BYTES + 1)
     except urllib.error.HTTPError as error:
-        print(f"error: http status {error.code}", file=sys.stderr)
-        return 4
-    except (urllib.error.URLError, socket.timeout, ConnectionError, OSError) as error:
-        print(f"error: http request failed: {error}", file=sys.stderr)
-        return 3
+        return fail(4, f"http status {error.code}")
+    except OSError as error:  # URLError, timeouts and connection errors
+        return fail(3, f"http request failed: {error}")
     if len(content) > MAX_BODY_BYTES:
-        print("error: response body is too large", file=sys.stderr)
-        return 4
+        return fail(4, "response body is too large")
     sys.stdout.write(content.decode("utf-8", errors="replace"))
     return 0
 

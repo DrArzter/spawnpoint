@@ -25,10 +25,10 @@ export function Card({ title, meta, count, titleTip, actions, body = "pad", clas
   children: ReactNode;
 }>) {
   return (
-    <section aria-label={title ? undefined : label} className={cx("c-card", className)}>
+    <section aria-label={title ? undefined : label} className={cx("c-card", className)} data-layout="rail" data-scope="">
       {title && (
-        <header className="c-card-head">
-          <h2 data-tip={titleTip} tabIndex={titleTip ? 0 : undefined}>
+        <header className="c-card-head" data-layout={actions ? "spread" : undefined}>
+          <h2 data-rail="" data-tip={titleTip} tabIndex={titleTip ? 0 : undefined}>
             {title}
             {count !== undefined && <span className="c-count"><Tick value={count} /></span>}
           </h2>

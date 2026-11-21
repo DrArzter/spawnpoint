@@ -54,20 +54,20 @@ export function TrackList<Row>({ label, tracks, rows, rowKey, empty, header = tr
   } as CSSProperties;
   if (rows.length === 0 && empty !== undefined) return <>{empty}</>;
   return (
-    <div aria-label={label} className={cx("c-tracklist", className)} role="table" style={style}>
+    <div aria-label={label} className={cx("c-tracklist", className)} data-layout="rows" role="table" style={style}>
       {header && (
         <div className="c-tracklist-head" role="row">
-          {tracks.map((track) => (
-            <span className={cx("c-track", track.kind && `c-track-${track.kind}`)} key={track.id} role="columnheader">
+          {tracks.map((track, index) => (
+            <span className={cx("c-track", track.kind && `c-track-${track.kind}`)} data-rail={index === 0 ? "" : undefined} key={track.id} role="columnheader">
               {track.quietHeader ? <span className="c-sr">{track.header}</span> : track.header}
             </span>
           ))}
         </div>
       )}
       {rows.map((row) => (
-        <div className={cx("c-tracklist-row", fresh.has(rowKey(row)) && ARRIVED)} key={rowKey(row)} role="row">
-          {tracks.map((track) => (
-            <span className={cx("c-track", track.kind && `c-track-${track.kind}`)} key={track.id} role="cell">{track.render(row)}</span>
+        <div className={cx("c-tracklist-row", fresh.has(rowKey(row)) && ARRIVED)} data-from="1024" data-layout="one-line" key={rowKey(row)} role="row">
+          {tracks.map((track, index) => (
+            <span className={cx("c-track", track.kind && `c-track-${track.kind}`)} data-rail={index === 0 ? "" : undefined} key={track.id} role="cell">{track.render(row)}</span>
           ))}
         </div>
       ))}

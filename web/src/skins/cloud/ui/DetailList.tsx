@@ -70,7 +70,7 @@ export function DetailList({ details, columns = "four", omit = [], spans = {}, l
       {shown.map((detail) => {
         const span = (detail.key ? spans[detail.key] : undefined) ?? spans[detail.label];
         return (
-          <div className={cx("c-detail-item", span && `c-span-${span}`)} key={detail.key ?? detail.label}>
+          <div className={cx("c-detail-item", span && `c-span-${span}`)} data-layout="pair" key={detail.key ?? detail.label}>
             <dt>
               <span>{detail.label}</span>
               {detail.explain && <span aria-label={detail.explain} className="c-detail-explain" data-tip={detail.explain} role="img" tabIndex={0}><Icon name="info" size={15} /></span>}

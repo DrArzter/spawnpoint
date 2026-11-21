@@ -12,7 +12,7 @@ export function Indicator(props: Readonly<({ status: StatusDescriptor } | { icon
   const label = "status" in props ? props.status.label : props.label;
   const tone = "status" in props ? `c-tone-${statusTone(props.status.kind)}` : "c-indicator-quiet";
   return (
-    <span aria-label={label} className={cx("c-indicator", tone, props.className)} data-tip={label} role="img" tabIndex={0}>
+    <span aria-label={label} className={cx("c-indicator", tone, props.className)} data-status={"status" in props ? props.status.kind : undefined} data-tip={label} role="img" tabIndex={0}>
       {"status" in props ? <StatusIcon kind={props.status.kind} size={17} /> : <Icon name={props.icon} size={17} />}
     </span>
   );

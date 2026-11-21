@@ -86,9 +86,9 @@ test("PageHeader: the breadcrumb is the title, with a back button for the phone"
 
 test("Card and Grid: the title at the start, actions at the end, a grid that stretches", () => {
   const card = html(createElement(Card, { title: "Session", count: 2, actions: "a", body: "flush" }, "body"));
-  assert.match(card, /<section class="c-card"><header class="c-card-head"><h2>Session<span class="c-count"><span class="c-tick">2<\/span><\/span><\/h2><div class="c-card-actions">a<\/div>/);
+  assert.match(card, /<section class="c-card" data-layout="rail" data-scope=""><header class="c-card-head" data-layout="spread"><h2 data-rail="">Session<span class="c-count"><span class="c-tick">2<\/span><\/span><\/h2><div class="c-card-actions">a<\/div>/);
   assert.match(card, /c-card-body c-card-body-flush/);
-  assert.match(html(createElement(Card, { label: "Hero" }, "x")), /<section aria-label="Hero" class="c-card">/);
+  assert.match(html(createElement(Card, { label: "Hero" }, "x")), /<section aria-label="Hero" class="c-card" data-layout="rail" data-scope="">/);
   assert.match(html(createElement(Grid, { kind: "chart" }, "x")), /class="c-grid c-grid-chart"/);
 });
 
@@ -104,7 +104,7 @@ test("Notice, Empty and LoadError: one line, one title, at most one Action", () 
   assert.match(notice, /role="alert"/);
   assert.match(notice, /data-action="refresh.notice"/);
   const empty = html(createElement(Empty, { icon: "public", title: "No worlds" }));
-  assert.match(empty, /<div class="c-empty">/);
+  assert.match(empty, /<div class="c-empty" data-layout="centred">/);
   assert.doesNotMatch(empty, /<p[\s>]/, "an empty state carries no description");
   const failed = html(createElement(LoadError, { title: "Backups could not be loaded", verb: "read backups", error: "boom", kind: "failed", retry: action("backups.retry", "Try again", noop) }));
   assert.match(failed, /role="alert"/);
@@ -178,7 +178,7 @@ test("Table: labels once in the header, one end-edge action column, records labe
       { id: "actions", header: "Actions", kind: "act", render: (row) => createElement(ActionButton, { action: row.act, size: "sm" }) },
     ],
   }));
-  assert.match(markup, /<table aria-label="Worlds" class="c-table">/);
+  assert.match(markup, /<table aria-label="Worlds" class="c-table" data-layout="rows">/);
   assert.equal((markup.match(/<th /g) ?? []).length, 3, "labels once, in the header");
   assert.match(markup, /aria-sort="ascending"/);
   assert.match(markup, /<button class="c-sort"/);
@@ -266,7 +266,7 @@ test("Address, Copy, Person and Indicator: one line, names for every icon", () =
   const person = html(createElement(Person, { name: "Nikita Example", detail: "@nikita", detailIcon: "send" }));
   assert.match(person, /<span aria-hidden="true" class="c-avatar c-avatar-sm">NE<\/span>/);
   assert.match(person, /c-person-detail/);
-  assert.match(html(createElement(Indicator, { status: { kind: "ok", label: "Granted" } })), /aria-label="Granted" class="c-indicator c-tone-ok" data-tip="Granted" role="img"/);
+  assert.match(html(createElement(Indicator, { status: { kind: "ok", label: "Granted" } })), /aria-label="Granted" class="c-indicator c-tone-ok" data-status="ok" data-tip="Granted" role="img"/);
 });
 
 test("Segmented and Tabs: one value chosen, tied to its panel", () => {
@@ -391,5 +391,5 @@ test("A8 and A9 reach the counts and the rows: tiles and card counts tick, and a
   assert.match(markup, /<tr class="c-arrived"><td[^>]*>Cinder/, "the row the page says arrived is marked");
   assert.doesNotMatch(markup, /<tr class="c-arrived"><td[^>]*>Rostik/);
   const list = html(createElement(TrackList<Row>, { label: "Ops", rows: tableRows, rowKey: (row) => row.id, arrivals: new Set(["a"]), tracks: [{ id: "n", header: "Name", width: "1fr", render: (row) => row.name }] }));
-  assert.match(list, /class="c-tracklist-row c-arrived" role="row"><span class="c-track" role="cell">Rostik/);
+  assert.match(list, /class="c-tracklist-row c-arrived" data-from="1024" data-layout="one-line" role="row"><span class="c-track" data-rail="" role="cell">Rostik/);
 });

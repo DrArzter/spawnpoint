@@ -26,7 +26,7 @@ export function ToastProvider({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div aria-live="polite" className="c-toasts" role="status">
+      <div aria-live="polite" className="c-toasts" data-layer="toast" role="status">
         {toasts.map((toast) => <ToastItem key={toast.id} onDone={() => setToasts((current) => current.filter((item) => item.id !== toast.id))} toast={toast} />)}
       </div>
     </ToastContext.Provider>

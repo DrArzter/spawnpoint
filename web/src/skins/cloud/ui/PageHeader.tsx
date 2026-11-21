@@ -21,7 +21,7 @@ export function PageHeader({ trail = [], title, count, lead, after, actions }: R
 }>) {
   const back = trail.at(-1);
   return (
-    <header className="c-page-header">
+    <header className="c-page-header" data-from="760" data-layout="one-line spread">
       <div className="c-page-title">
         {back && (
           <a aria-label={`Back to ${back.label}`} className="c-page-back" href={back.href}>
@@ -29,7 +29,7 @@ export function PageHeader({ trail = [], title, count, lead, after, actions }: R
           </a>
         )}
         {lead}
-        <nav aria-label="Breadcrumb" className="c-crumbs">
+        <nav aria-label="Breadcrumb" className="c-crumbs" data-layout="crumbs">
           {trail.map((crumb) => (
             <span className={crumb.game ? "c-crumb c-crumb-game" : "c-crumb"} key={crumb.href}>
               <a href={crumb.href}>{crumb.label}</a>

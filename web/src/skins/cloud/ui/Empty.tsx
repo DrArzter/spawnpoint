@@ -17,7 +17,7 @@ export function Empty({ icon, title, action, size = "md", tone = "plain", messag
   message?: string;
 }>) {
   return (
-    <div className={cx("c-empty", size === "sm" && "c-empty-sm", tone === "error" && "c-empty-error")} role={tone === "error" ? "alert" : undefined}>
+    <div className={cx("c-empty", size === "sm" && "c-empty-sm", tone === "error" && "c-empty-error")} data-layout="centred" role={tone === "error" ? "alert" : undefined}>
       <span aria-hidden="true" className="c-empty-icon"><Icon name={icon} size={size === "sm" ? 22 : 28} /></span>
       <strong className="c-empty-title">{title}</strong>
       {message && message !== title && <span className="c-empty-message">{message}</span>}

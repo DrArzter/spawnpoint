@@ -10,7 +10,7 @@ import { cx } from "../../../lib/cx";
 export type GridKind = "detail" | "chart" | "stat" | "name" | "perm" | "home" | "metrics" | "profile" | "stack";
 
 export function Grid({ kind, className, children, label }: Readonly<{ kind: GridKind; className?: string; label?: string; children: ReactNode }>) {
-  return <div aria-label={label} className={cx("c-grid", `c-grid-${kind}`, className)} role={label ? "group" : undefined}>{children}</div>;
+  return <div aria-label={label} className={cx("c-grid", `c-grid-${kind}`, className)} data-layout="grid" role={label ? "group" : undefined}>{children}</div>;
 }
 
 /** How many columns of a fixed grid a cell spans. */

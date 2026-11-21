@@ -65,11 +65,11 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
   const fresh = typeof arrivals === "object" ? arrivals : tracked;
   return (
     <div className={cx("c-table-wrap", split && "c-table-split", className)}>
-      <table aria-label={label} className={cx("c-table", variant !== "default" && `c-table-${variant}`)}>
+      <table aria-label={label} className={cx("c-table", variant !== "default" && `c-table-${variant}`)} data-layout="rows">
         <thead>
           <tr>
-            {columns.map((column) => (
-              <th aria-sort={column.sort ?? undefined} className={cx(column.kind && `c-col-${column.kind}`, column.className)} key={column.id} scope="col">
+            {columns.map((column, index) => (
+              <th aria-sort={column.sort ?? undefined} className={cx(column.kind && `c-col-${column.kind}`, column.className)} data-col={column.kind === "act" ? "actions" : undefined} data-rail={index === 0 ? "" : undefined} key={column.id} scope="col">
                 {column.headerCell ?? <HeaderLabel column={column} />}
               </th>
             ))}
@@ -80,8 +80,8 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
             {rows.length === 0 && empty !== undefined && <tr className="c-table-empty"><td colSpan={columns.length}>{empty}</td></tr>}
             {rows.map((row) => (
               <tr className={cx(selected?.(row) && "c-row-selected", fresh.has(rowKey(row)) && ARRIVED) || undefined} key={rowKey(row)}>
-                {columns.map((column) => (
-                  <td className={cx(column.kind && `c-col-${column.kind}`, column.className)} data-label={column.kind === "act" || column.kind === "lead" || column.kind === "check" ? undefined : column.header} key={column.id}>
+                {columns.map((column, index) => (
+                  <td className={cx(column.kind && `c-col-${column.kind}`, column.className)} data-col={column.kind === "act" ? "actions" : undefined} data-rail={index === 0 ? "" : undefined} data-label={column.kind === "act" || column.kind === "lead" || column.kind === "check" ? undefined : column.header} key={column.id}>
                     {column.render(row)}
                   </td>
                 ))}

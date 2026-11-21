@@ -91,7 +91,7 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
             </button>
           );
         })}
-        <span aria-hidden="true" className="c-tab-ink" ref={ink} />
+        <span aria-hidden="true" className="c-tab-ink" data-layer="glyph" ref={ink} />
       </div>
       {end && <div className="c-tabrow-end">{end}</div>}
     </div>

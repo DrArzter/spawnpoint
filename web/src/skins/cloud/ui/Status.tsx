@@ -42,7 +42,7 @@ export function Status({ status, variant = "text", className }: Readonly<{ statu
   const changed = useChanged(status);
   const tone = statusTone(status.kind);
   return (
-    <span className={cx("c-status", `c-status-${variant}`, `c-tone-${tone}`, className)}>
+    <span className={cx("c-status", `c-status-${variant}`, `c-tone-${tone}`, className)} data-status={status.kind}>
       <span className={cx("c-status-mark", changed && "c-status-changed")} key={`${status.kind}:${status.label}`}>
         <StatusIcon kind={status.kind} size={variant === "pill" ? 17 : 18} />
         <span className="c-status-label">{status.label}</span>

@@ -67,7 +67,7 @@ export function Menu({ id, label, groups, open, anchor, onClose }: Readonly<{ id
   const visible = groups.filter((group) => group.actions.length > 0);
 
   return (
-    <div aria-label={label} className="c-menu" hidden={!open} id={id} onKeyDown={onKey} ref={menu} role="menu">
+    <div aria-label={label} className="c-menu" data-layer="menu" hidden={!open} id={id} onKeyDown={onKey} ref={menu} role="menu">
       {visible.map((group, index) => (
         <div className={cx("c-menu-group", index > 0 && "c-menu-group-split")} key={group.label ?? index} role="group" aria-label={group.label}>
           {group.label && <div aria-hidden="true" className="c-menu-label">{group.label}</div>}

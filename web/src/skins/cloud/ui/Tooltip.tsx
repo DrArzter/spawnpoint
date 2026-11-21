@@ -73,5 +73,5 @@ export function TooltipLayer() {
     element.style.top = `${top}px`;
   }, [placed]);
 
-  return <div className="c-tip" hidden={placed === null} id={TIP_ID} ref={tip} role="tooltip">{placed?.text}</div>;
+  return <div className="c-tip" data-layer="tip" hidden={placed === null} id={TIP_ID} ref={tip} role="tooltip">{placed?.text}</div>;
 }

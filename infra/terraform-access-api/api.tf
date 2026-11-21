@@ -28,8 +28,6 @@ data "aws_iam_policy_document" "access_api" {
       "dynamodb:ConditionCheckItem",
       # Identity deletion (ADR-0071): plain deletes and Delete inside a transaction.
       "dynamodb:DeleteItem",
-      # A ConditionCheck inside a transaction is authorised by its own action.
-      "dynamodb:ConditionCheckItem",
     ]
     resources = [
       data.aws_dynamodb_table.access.arn,

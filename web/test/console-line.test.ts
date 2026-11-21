@@ -19,3 +19,8 @@ test("a command typed in the panel names the person", () => {
 test("a command an agent sent names the person and the agent (ADR-0063)", () => {
   assert.equal(consoleLine({ ...entry, agent: "Claude" }).who, "DrArzter via Claude");
 });
+
+test("a command from a deleted person keeps its line and loses the name", () => {
+  assert.equal(consoleLine({ ...entry, displayName: null }).who, "Deleted user");
+  assert.equal(consoleLine({ ...entry, displayName: null, agent: "Claude" }).who, "Deleted user via Claude");
+});

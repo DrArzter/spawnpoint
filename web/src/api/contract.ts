@@ -227,7 +227,8 @@ export type ConsoleEntry = Readonly<{
   id: string;
   at: string;
   identityId: string;
-  displayName: string;
+  /** Null once the person who sent it was deleted. */
+  displayName: string | null;
   /** The MCP client that sent the command for the person; absent or null from the panel. */
   agent?: string | null;
   worldId: string;

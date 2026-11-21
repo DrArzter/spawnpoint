@@ -31,7 +31,7 @@ import { buildLifecycleStartInput, buildLifecycleStopInput, buildStopInput } fro
 import type { ControlPlaneSources, HostMetrics, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 import { operationWorldId } from "./world-session.ts";
 import type { ConsoleInvocation } from "./console.ts";
-import type { HostRecord } from "../domain/placement.ts";
+import type { HostRecord, SessionPolicy } from "../domain/placement.ts";
 
 type MachineType = OperationObservation["type"];
 type OperationMachine = Readonly<{ type: MachineType; arn: string }>;
@@ -407,8 +407,10 @@ export async function startSessionExecution(args: Readonly<{
   worldId: string;
   worldName: string;
   placement?: "single" | "shared" | "fleet";
+  /** A fleet world's warm choice (ADR-0048); left out, the machine places it cold. */
+  policy?: SessionPolicy;
 }>): Promise<string> {
-  const { operationId, instanceId, requestedBy, serverId, gameId, worldId, worldName, placement } = args;
+  const { operationId, instanceId, requestedBy, serverId, gameId, worldId, worldName, placement, policy } = args;
   requireWorldId(worldId);
   const started = await sfn.send(new StartExecutionCommand({
     stateMachineArn: machineArn("start"), name: operationId,
@@ -417,6 +419,7 @@ export async function startSessionExecution(args: Readonly<{
       placement: placement ?? configuredPlacement(),
       launch: process.env.SPAWNPOINT_LAUNCH === "enabled" ? "enabled" : "disabled",
       appCommit: process.env.SPAWNPOINT_APP_COMMIT || "main",
+      ...(policy === undefined ? {} : { policy }),
     })),
   }));
   if (!started.executionArn) throw new Error("start execution did not return an ARN");
@@ -599,14 +602,14 @@ export async function replaceWorldWhitelist(
 export async function replaceWorldAccess(
   gameId: string,
   worldId: string,
-  access: Readonly<{ placement: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"] }>,
+  access: Readonly<{ placement: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"]; warm?: boolean }>,
 ): Promise<"updated" | "missing" | "conflict"> {
   const worlds = new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET"));
   const stored = await worlds.read(worldId);
   if (stored?.record.gameId !== gameId) return "missing";
   if (stored.record.status !== "active") return "conflict";
   const next = withWorldAccess(stored.record, access);
-  if (next.placement === stored.record.placement && next.connectivity === stored.record.connectivity && next.auth === stored.record.auth) return "updated";
+  if (next.placement === stored.record.placement && next.connectivity === stored.record.connectivity && next.auth === stored.record.auth && next.warm === stored.record.warm) return "updated";
   try {
     await worlds.replace(next, stored.etag);
     return "updated";

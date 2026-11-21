@@ -54,6 +54,34 @@ test("hosting and connection can change without changing the world generation", 
   assert.throws(() => withWorldAccess(original, { placement: "fleet", connectivity: "zerotier" }), /invalid_world_connectivity/);
 });
 
+test("a fleet world can keep its host warm; the choice survives other hosting changes and leaves with the fleet", () => {
+  const original = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
+  assert.equal(original.warm, undefined, "a new world is cold");
+  assert.equal("warm" in worldRecordDocument(original), false, "a cold record keeps its document unchanged");
+
+  const warm = withWorldAccess(original, { placement: "fleet", connectivity: "raw", auth: "game", warm: true });
+  assert.equal(warm.warm, true);
+  assert.equal(worldRecordDocument(warm).warm, true);
+  assert.deepEqual(parseWorldRecord(worldRecordDocument(warm)), warm);
+
+  assert.equal(withWorldAccess(warm, { placement: "fleet", connectivity: "route53", auth: "game" }).warm, true, "left out: kept");
+  assert.equal(withWorldAccess(warm, { placement: "fleet", connectivity: "raw", auth: "game", warm: false }).warm, undefined);
+  assert.deepEqual(withWorldAccess(warm, { placement: "configured", connectivity: "zerotier" }), original);
+  assert.throws(() => withWorldAccess(original, { placement: "configured", connectivity: "zerotier", warm: true }), /invalid_world_warm/);
+});
+
+test("the record parser reads warm as a boolean and nothing else", () => {
+  const fleet = withWorldAccess(
+    newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z"),
+    { placement: "fleet", connectivity: "raw", auth: "game" },
+  );
+  const document = worldRecordDocument(fleet);
+  assert.deepEqual(parseWorldRecord({ ...document, warm: true }), { ...fleet, warm: true });
+  assert.deepEqual(parseWorldRecord({ ...document, warm: false }), fleet);
+  assert.equal(parseWorldRecord({ ...document, warm: "yes" }), null);
+  assert.equal(parseWorldRecord({ ...document, warm: 1 }), null);
+});
+
 test("registry parsing fails closed", () => {
   const record = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
   const document = worldRecordDocument(record);

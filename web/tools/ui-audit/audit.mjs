@@ -4,7 +4,7 @@ import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { launch, sleep } from "./cdp.mjs";
+import { launch } from "./cdp.mjs";
 import { STATES } from "./states.mjs";
 
 // usage: audit.mjs [--gate] [--advise] [--accept] [--self-test] [base-url]
@@ -21,7 +21,7 @@ const gate = flags.has("--gate");
 const advise = flags.has("--advise");
 const accept = flags.has("--accept");
 const selfTest = flags.has("--self-test");
-const [base = "http://127.0.0.1:5173"] = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
+const base = process.argv.slice(2).find((arg) => !arg.startsWith("--")) ?? "http://127.0.0.1:5173";
 const here = dirname(fileURLToPath(import.meta.url));
 const accepted = join(here, "accepted.txt");
 const reportDir = resolve(process.env.AUDIT_OUT ?? join(here, "../../out/ui-audit"));
@@ -58,12 +58,17 @@ const ROUTES = [
 const PAGE_WIDTHS = [360, 599, 600, 759, 760, 839, 840, 959, 960, 1023, 1024, 1199, 1200, 1440, 2560];
 // Dialogs dock to the bottom under 760px (console) and 600px (terminal).
 const OVERLAY_WIDTHS = [360, 599, 600, 759, 760, 1440, 2560];
-const DARK_WIDTHS = [360, 1440];
-const STRESS_WIDTHS = [360, 840, 1440];
+const DARK_WIDTHS = new Set([360, 1440]);
+const STRESS_WIDTHS = new Set([360, 840, 1440]);
 // A table changes layout at its container's width, not the viewport's: a 40px
 // stride finds what falls between the steps. Light only, resized in place.
 const STRIDE = process.env.AUDIT_STRIDE === "0" ? [] : Array.from({ length: 34 }, (_, i) => 360 + i * 40);
-const heightOf = (width) => (width >= 2560 ? 1440 : width >= 1920 ? 1080 : width >= 960 ? 900 : width >= 600 ? 1024 : 844);
+function heightOf(width) {
+  if (width >= 2560) return 1440;
+  if (width >= 1920) return 1080;
+  if (width >= 960) return 900;
+  return width >= 600 ? 1024 : 844;
+}
 const mobileAt = (width) => width < 960;
 
 const onlyRoutes = process.env.AUDIT_ROUTES ? new Set(process.env.AUDIT_ROUTES.split(",")) : null;
@@ -119,31 +124,46 @@ const ADVISORY = {
 
 // ---- Jobs ------------------------------------------------------------------
 
+// The page at each width of the set: light, dark where listed, stress data where listed.
+function pageJobs(skin, name, route) {
+  const jobs = [];
+  for (const width of PAGE_WIDTHS.filter(widthOk)) {
+    jobs.push({ type: "page", skin, name, route, width, theme: "light", menus: OVERLAY_WIDTHS.includes(width) });
+    if (DARK_WIDTHS.has(width)) jobs.push({ type: "page", skin, name, route, width, theme: "dark", menus: false });
+    if (STRESS_WIDTHS.has(width) && name !== "landing") jobs.push({ type: "page", skin, name: `${name}+stress`, route: route.replace("?demo", "?demo&fixture=stress"), width, theme: "light", menus: false });
+  }
+  return jobs;
+}
+
+// The widths between the steps, resized in place: one job for phones, one for the rest.
+function strideJobs(skin, name, route) {
+  if (name === "landing") return [];
+  const stride = STRIDE.filter((width) => widthOk(width) && !PAGE_WIDTHS.includes(width));
+  return [true, false]
+    .map((mobile) => ({ type: "stride", skin, name, route, widths: stride.filter((width) => mobileAt(width) === mobile), theme: "light" }))
+    .filter((job) => job.widths.length > 0);
+}
+
+function stateJobs(skin) {
+  const jobs = [];
+  for (const state of STATES) {
+    if (state.skins && !state.skins.includes(skin)) continue;
+    if (onlyStates && !onlyStates.has(state.name)) continue;
+    if (onlyRoutes && !onlyStates) continue;
+    for (const width of OVERLAY_WIDTHS.filter(widthOk)) {
+      jobs.push({ type: "state", skin, name: `state:${state.name}`, state, route: state.route, width, theme: "light" });
+      if (DARK_WIDTHS.has(width)) jobs.push({ type: "state", skin, name: `state:${state.name}`, state, route: state.route, width, theme: "dark" });
+    }
+  }
+  return jobs;
+}
+
 function plan() {
   const jobs = [];
   const routes = ROUTES.filter(([name]) => !onlyRoutes || onlyRoutes.has(name));
   for (const skin of SKINS) {
-    for (const [name, route] of routes) {
-      for (const width of PAGE_WIDTHS.filter(widthOk)) {
-        jobs.push({ type: "page", skin, name, route, width, theme: "light", menus: OVERLAY_WIDTHS.includes(width) });
-        if (DARK_WIDTHS.includes(width)) jobs.push({ type: "page", skin, name, route, width, theme: "dark", menus: false });
-        if (STRESS_WIDTHS.includes(width) && name !== "landing") jobs.push({ type: "page", skin, name: `${name}+stress`, route: route.replace("?demo", "?demo&fixture=stress"), width, theme: "light", menus: false });
-      }
-      const stride = STRIDE.filter((width) => widthOk(width) && !PAGE_WIDTHS.includes(width));
-      for (const mobile of [true, false]) {
-        const widths = stride.filter((width) => mobileAt(width) === mobile);
-        if (widths.length > 0 && name !== "landing") jobs.push({ type: "stride", skin, name, route, widths, theme: "light" });
-      }
-    }
-    for (const state of STATES) {
-      if (state.skins && !state.skins.includes(skin)) continue;
-      if (onlyStates && !onlyStates.has(state.name)) continue;
-      if (onlyRoutes && !onlyStates) continue;
-      for (const width of OVERLAY_WIDTHS.filter(widthOk)) {
-        jobs.push({ type: "state", skin, name: `state:${state.name}`, state, route: state.route, width, theme: "light" });
-        if (DARK_WIDTHS.includes(width)) jobs.push({ type: "state", skin, name: `state:${state.name}`, state, route: state.route, width, theme: "dark" });
-      }
-    }
+    for (const [name, route] of routes) jobs.push(...pageJobs(skin, name, route), ...strideJobs(skin, name, route));
+    jobs.push(...stateJobs(skin));
   }
   // Long jobs first, so the workers finish together.
   return jobs.sort((a, b) => (b.type === "stride") - (a.type === "stride"));
@@ -243,7 +263,34 @@ async function open(tab, job, width) {
 
 async function probe(tab, width, root = null) {
   const options = { width, coarse: mobileAt(width), layout: LAYOUT, advise, root };
-  return tab.evaluate(`(${PROBE_SOURCE})(${JSON.stringify(options)})`);
+  // probe.js declares helpers beside `probe`: it runs as one script, then `probe` is called.
+  return tab.evaluate(`(() => {\n${PROBE_SOURCE}\nreturn probe(${JSON.stringify(options)});\n})()`);
+}
+
+// Opens the menu of one trigger; returns the trigger's label, or null when it is gone.
+async function openMenu(tab, i) {
+  return tab.evaluate(`(() => {
+    const trigger = document.querySelector("[data-audit-trigger='${i}']");
+    if (!trigger) return null;
+    document.querySelectorAll("[data-audit-root]").forEach((el) => el.removeAttribute("data-audit-root"));
+    trigger.scrollIntoView({ block: "center" });
+    trigger.click();
+    const menu = document.getElementById(trigger.getAttribute("aria-controls"));
+    if (menu) menu.setAttribute("data-audit-root", "");
+    return trigger.getAttribute("aria-label") || trigger.textContent.trim();
+  })()`);
+}
+
+async function closeMenu(tab, i) {
+  await tab.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await tab.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await tab.evaluate(`(() => {
+    const trigger = document.querySelector("[data-audit-trigger='${i}']");
+    const menu = trigger && document.getElementById(trigger.getAttribute("aria-controls"));
+    if (menu && !menu.hidden && menu.getBoundingClientRect().width > 0) trigger.click();
+    window.scrollTo(0, 0);
+  })()`);
+  await settle(tab, 40);
 }
 
 // Opens every menu on the page in turn and measures it on its own.
@@ -255,30 +302,14 @@ async function walkMenus(tab, width) {
     triggers.forEach((el, i) => el.setAttribute("data-audit-trigger", String(i)));
     return triggers.length;
   })()`);
+  // NOSONAR below: one menu is open at a time on one tab; the steps stay in order.
   for (let i = 0; i < count; i += 1) {
-    const label = await tab.evaluate(`(() => {
-      const trigger = document.querySelector("[data-audit-trigger='${i}']");
-      if (!trigger) return null;
-      document.querySelectorAll("[data-audit-root]").forEach((el) => el.removeAttribute("data-audit-root"));
-      trigger.scrollIntoView({ block: "center" });
-      trigger.click();
-      const menu = document.getElementById(trigger.getAttribute("aria-controls"));
-      if (menu) menu.setAttribute("data-audit-root", "");
-      return trigger.getAttribute("aria-label") || trigger.textContent.trim();
-    })()`);
+    const label = await openMenu(tab, i); // NOSONAR one tab, menus one at a time
     if (label === null) continue;
-    await settle(tab, 40);
-    const found = await probe(tab, width, "[data-audit-root]");
+    await settle(tab, 40); // NOSONAR one tab, menus one at a time
+    const found = await probe(tab, width, "[data-audit-root]"); // NOSONAR one tab, menus one at a time
     results.push({ label, found });
-    await tab.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-    await tab.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-    await tab.evaluate(`(() => {
-      const trigger = document.querySelector("[data-audit-trigger='${i}']");
-      const menu = trigger && document.getElementById(trigger.getAttribute("aria-controls"));
-      if (menu && !menu.hidden && menu.getBoundingClientRect().width > 0) trigger.click();
-      window.scrollTo(0, 0);
-    })()`);
-    await settle(tab, 40);
+    await closeMenu(tab, i); // NOSONAR one tab, menus one at a time
   }
   return results;
 }
@@ -288,12 +319,12 @@ async function runState(tab, job) {
   if (job.route) await open(tab, job, job.width);
   const before = await tab.evaluate(`${SURFACES}.length`);
   for (const step of job.state.steps) {
-    const outcome = await tab.evaluate(`${STEP}(${JSON.stringify(step)})`, true);
+    const outcome = await tab.evaluate(`${STEP}(${JSON.stringify(step)})`, true); // NOSONAR steps run in order on one tab
     // A control a width does not show cannot be pressed there. The run
     // counts these and fails a state that is absent everywhere or at 1440.
     if (outcome === "absent") return { absent: true };
     if (outcome !== "ok") return { error: `step ${JSON.stringify(step)}: ${outcome}` };
-    await settle(tab);
+    await settle(tab); // NOSONAR steps run in order on one tab
   }
   const opened = await tab.evaluate(`(() => {
     const open = ${SURFACES};
@@ -312,6 +343,12 @@ function record(job, width, found, extra = {}) {
   return { skin: job.skin, name: job.name, width, theme: job.theme, ...extra, found };
 }
 
+async function probeAt(tab, width) {
+  await setWidth(tab, width);
+  await settle(tab, 40);
+  return probe(tab, width);
+}
+
 async function runJob(tab, job, records) {
   try {
     if (job.type === "page") {
@@ -323,9 +360,8 @@ async function runJob(tab, job, records) {
     } else if (job.type === "stride") {
       await open(tab, job, job.widths[0]);
       for (const width of job.widths) {
-        await setWidth(tab, width);
-        await settle(tab, 40);
-        records.push(record({ ...job, name: `${job.name}` }, width, await probe(tab, width), { stride: true }));
+        const found = await probeAt(tab, width); // NOSONAR one tab, resized in place, width by width
+        records.push(record(job, width, found, { stride: true }));
       }
     } else {
       const result = await runState(tab, job);
@@ -342,13 +378,19 @@ async function runJob(tab, job, records) {
 
 // One line per finding, stable across runs and class renames: skin, page or
 // state, width, theme, kind and the element's markers.
-const keyOf = (r, kind, item) => `${r.skin} ${r.name.replace(/ /g, "_")} ${r.width} ${r.theme} ${kind} ${item.key}`;
+const keyOf = (r, kind, item) => `${r.skin} ${r.name.replaceAll(" ", "_")} ${r.width} ${r.theme} ${kind} ${item.key}`;
 
 function findings(records, kinds) {
   const list = [];
   for (const r of records) for (const kind of Object.keys(kinds)) for (const item of r.found?.[kind] ?? []) list.push({ key: keyOf(r, kind, item), kind, record: r, item });
   const seenKeys = new Set();
   return list.filter((f) => !seenKeys.has(f.key) && seenKeys.add(f.key));
+}
+
+// `pattern # reason`: the reason follows the first "#" that has a space on both sides.
+function splitReason(line) {
+  const at = line.search(/\s#\s/);
+  return at < 0 ? [line, ""] : [line.slice(0, at), line.slice(at + 3)];
 }
 
 // accepted.txt: `skin page width theme kind marker  # reason`. `*` matches any
@@ -360,7 +402,7 @@ function readAccepted() {
   for (const [index, raw] of readFileSync(accepted, "utf8").split("\n").entries()) {
     const line = raw.trim();
     if (!line || line.startsWith("#")) continue;
-    const [pattern, reason = ""] = line.split(/\s+#\s+/, 2);
+    const [pattern, reason] = splitReason(line);
     if (!reason.trim()) { problems.push(`accepted.txt:${index + 1}: no reason after " # "`); continue; }
     const [skin, page, width, theme, kind, ...marker] = pattern.trim().split(/\s+/);
     // A line that names neither a page nor a precise element would hide every match of its kind.
@@ -395,9 +437,16 @@ async function shoot(tabs, list, prefix) {
   }
   const pages = [...byPage].slice(0, 120);
   await Promise.all(tabs.map(async (tab, index) => {
-    for (const page of pages.filter((_, at) => at % tabs.length === index)) await shootPage(tab, page, prefix, shots);
+    for (const page of pages.filter((_, at) => at % tabs.length === index)) await shootPage(tab, page, prefix, shots); // NOSONAR a tab shoots one page at a time
   }));
   return shots;
+}
+
+async function replaySteps(tab, steps) {
+  for (const step of steps) {
+    await tab.evaluate(`${STEP}(${JSON.stringify(step)})`, true); // NOSONAR steps run in order on one tab
+    await settle(tab); // NOSONAR steps run in order on one tab
+  }
 }
 
 async function shootPage(tab, [id, group], prefix, shots) {
@@ -409,7 +458,7 @@ async function shootPage(tab, [id, group], prefix, shots) {
   try {
     await open(tab, job, r.width);
     const state = STATES.find((s) => `state:${s.name}` === routeName);
-    if (state) for (const step of state.steps) { await tab.evaluate(`${STEP}(${JSON.stringify(step)})`, true); await settle(tab); }
+    if (state) await replaySteps(tab, state.steps);
     const boxes = group.map((f) => f.item.box).filter(Boolean);
     await tab.evaluate(`(() => {
       const layer = document.createElement("div");
@@ -446,11 +495,12 @@ function grouped(list) {
 }
 
 function writeReport(blocking, advisory, shots, summary) {
-  const cell = (value) => String(value).replace(/\|/g, "/").replace(/\n/g, " ");
+  const cell = (value) => String(value).replaceAll("|", "/").replaceAll("\n", " ");
+  const link = (shot) => (shot ? `[shot](${shot})` : "");
   const rows = (list, kinds) => grouped(list).map((g) => {
     const f = g.first;
     const shot = g.keys.map((key) => shots.get(key)).find(Boolean);
-    return `| ${f.record.skin} | ${kinds[f.kind]} | ${cell(f.item.by ?? f.item.text ?? "")} | \`${f.item.key}\` | ${cell([...g.pages].join(", "))} | ${[...g.widths].join(", ")} | ${shot ? `[shot](${shot})` : ""} |`;
+    return `| ${f.record.skin} | ${kinds[f.kind]} | ${cell(f.item.by ?? f.item.text ?? "")} | \`${f.item.key}\` | ${cell([...g.pages].join(", "))} | ${[...g.widths].join(", ")} | ${link(shot)} |`;
   }).join("\n");
   const head = "| Skin | Finding | Measure | Marker | Pages and states | Widths | Screenshot |\n|---|---|---|---|---|---|---|";
   writeFileSync(join(reportDir, "report.md"), [
@@ -464,33 +514,45 @@ function writeReport(blocking, advisory, shots, summary) {
 
 // ---- Self-test ---------------------------------------------------------------
 
+// The probe records of one fixture at one width; a menu fixture adds one record per menu.
+async function fixtureRecords(tab, fixture, width) {
+  await setWidth(tab, width);
+  await tab.goto(pathToFileURL(join(here, "fixtures", fixture.file)).href);
+  await settle(tab);
+  if (fixture.state) {
+    const state = { skin: "fixture", route: null, width, theme: "light", state: fixture.state, name: fixture.file };
+    const result = await runState(tab, state).catch((error) => ({ error: String(error) }));
+    return [{ width, found: result?.found ?? { error: [{ key: "state", by: result?.error ?? "absent" }] } }];
+  }
+  const records = [{ width, found: await probe(tab, width) }];
+  if (fixture.menus) for (const menu of await walkMenus(tab, width)) records.push({ width, found: menu.found });
+  return records;
+}
+
+// One fixture: the finding kinds it shows, and the verdict against what it must show.
+async function runFixture(tab, fixture) {
+  await tab.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "light" }] });
+  const records = [];
+  for (const width of fixture.widths) records.push(...(await fixtureRecords(tab, fixture, width))); // NOSONAR one tab, width by width
+  const kinds = new Set(records.flatMap((r) => Object.entries(r.found).filter(([, items]) => items.length > 0).map(([kind]) => kind)));
+  const missing = fixture.expect.filter((kind) => !kinds.has(kind));
+  const unwanted = (fixture.clean ?? []).filter((kind) => kinds.has(kind));
+  const ok = missing.length === 0 && unwanted.length === 0;
+  const notes = [];
+  if (missing.length > 0) notes.push(`missed ${missing.join(", ")}`);
+  if (unwanted.length > 0) notes.push(`false ${unwanted.join(", ")}`);
+  const verdict = notes.map((note) => `; ${note}`).join("");
+  console.log(`${ok ? "ok  " : "FAIL"} ${fixture.miss.padEnd(4)} ${fixture.file.padEnd(28)} expects ${fixture.expect.join(", ")}${verdict}`);
+  return ok;
+}
+
 // Each fixture reproduces one miss of the old gate; the probe must name it.
 async function runSelfTest(browser) {
   const { FIXTURES } = await import("./fixtures/fixtures.mjs");
   const tab = await browser.open();
   let failed = 0;
   for (const fixture of FIXTURES) {
-    const job = { theme: "light" };
-    await tab.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: job.theme }] });
-    const records = [];
-    for (const width of fixture.widths) {
-      await setWidth(tab, width);
-      await tab.goto(pathToFileURL(join(here, "fixtures", fixture.file)).href);
-      await settle(tab);
-      if (fixture.state) {
-        const result = await runState(tab, { skin: "fixture", route: null, width, theme: "light", state: fixture.state, name: fixture.file }).catch((error) => ({ error: String(error) }));
-        records.push({ width, found: result?.found ?? { error: [{ key: "state", by: result?.error ?? "absent" }] } });
-      } else {
-        records.push({ width, found: await probe(tab, width) });
-        if (fixture.menus) for (const menu of await walkMenus(tab, width)) records.push({ width, found: menu.found });
-      }
-    }
-    const kinds = (records.flatMap((r) => Object.entries(r.found).filter(([, items]) => items.length > 0).map(([kind]) => kind)));
-    const missing = fixture.expect.filter((kind) => !kinds.includes(kind));
-    const unwanted = (fixture.clean ?? []).filter((kind) => kinds.includes(kind));
-    const ok = missing.length === 0 && unwanted.length === 0;
-    if (!ok) failed += 1;
-    console.log(`${ok ? "ok  " : "FAIL"} ${fixture.miss.padEnd(4)} ${fixture.file.padEnd(28)} expects ${fixture.expect.join(", ")}${missing.length ? `; missed ${missing.join(", ")}` : ""}${unwanted.length ? `; false ${unwanted.join(", ")}` : ""}`);
+    if (!(await runFixture(tab, fixture))) failed += 1; // NOSONAR one tab, fixture by fixture
   }
   console.log(failed === 0 ? `self-test: ${FIXTURES.length} fixtures, every miss caught` : `self-test: ${failed} of ${FIXTURES.length} fixtures failed`);
   return failed === 0 ? 0 : 1;
@@ -499,79 +561,107 @@ async function runSelfTest(browser) {
 // ---- Main --------------------------------------------------------------------
 
 const started = Date.now();
+
+// A state whose control is gone at every width, or at the desktop width,
+// has left the gate: that is a finding, not a skip.
+function addLostStates(records) {
+  const tried = new Map();
+  for (const r of records.filter((r) => r.name.startsWith("state:"))) {
+    const id = `${r.skin}|${r.name}`;
+    if (!tried.has(id)) tried.set(id, []);
+    tried.get(id).push(r);
+  }
+  for (const list of tried.values()) {
+    const desktop = list.filter((r) => r.width === 1440);
+    const phoneOnly = STATES.find((state) => `state:${state.name}` === list[0].name)?.phoneOnly?.includes(list[0].skin);
+    const everywhere = list.every((r) => r.absent);
+    const lost = everywhere || (!phoneOnly && desktop.length > 0 && desktop.every((r) => r.absent));
+    if (lost) records.push({ ...list[0], width: everywhere ? "*" : 1440, theme: "*", absent: false, found: { error: [{ key: "state", sel: list[0].name, by: "no control opens this state" }] } });
+  }
+}
+
+// Each worker tab takes the next job until none is left.
+async function runJobs(tabs, jobs) {
+  const records = [];
+  let next = 0;
+  await Promise.all(tabs.map(async (tab) => {
+    while (next < jobs.length) {
+      const job = jobs[next];
+      next += 1;
+      await runJob(tab, job, records); // NOSONAR one tab runs its jobs in turn
+    }
+  }));
+  return records;
+}
+
+function summaryOf(probes, jobs, workers, blocking, fresh, advisory) {
+  const advisoryNote = advise ? `, ${advisory.length} advisory` : "";
+  const seconds = Math.round((Date.now() - started) / 1000);
+  return `${probes} probes (${jobs.length} jobs, ${workers} tabs) in ${seconds}s: ${SKINS.join(" and ")}; ${blocking.length} blocking findings, ${blocking.length - fresh.length} accepted${advisoryNote}.`;
+}
+
+function printVerdict(fresh) {
+  if (accept) {
+    const lines = fresh.map((f) => `${f.key}  # `).join("\n");
+    console.log(`\nlines for accepted.txt (add a reason after " # " to each):\n${lines}`);
+  } else if (fresh.length > 0) {
+    console.log(`\nbreakpoint gate: ${fresh.length} new findings`);
+    for (const f of fresh) console.log(line(f, KINDS));
+    const keys = fresh.map((f) => `  ${f.key}`).join("\n");
+    console.log(`\nkeys:\n${keys}`);
+  } else {
+    console.log("\nbreakpoint gate: no new findings");
+  }
+}
+
+async function runAudit(browser) {
+  // A fresh report each run: no picture from an older one stays behind.
+  if (advise) rmSync(reportDir, { recursive: true, force: true });
+  mkdirSync(reportDir, { recursive: true });
+  const jobs = plan();
+  const workers = Math.max(1, Number(process.env.AUDIT_WORKERS ?? Math.min(4, availableParallelism())));
+  const tabs = await Promise.all(Array.from({ length: workers }, () => browser.open()));
+  const records = await runJobs(tabs, jobs);
+  addLostStates(records);
+  const probes = records.filter((r) => !r.absent && !r.found?.error).length;
+  if (process.env.AUDIT_JSON) writeFileSync(process.env.AUDIT_JSON, JSON.stringify(records, null, 1));
+  const blocking = findings(records, KINDS);
+  const advisory = advise ? findings(records, ADVISORY) : [];
+  const { rules, problems } = readAccepted();
+  const fresh = blocking.filter((f) => {
+    const rule = acceptedBy(rules, f);
+    if (!rule) return true;
+    rule.used = true;
+    return false;
+  });
+  const summary = summaryOf(probes, jobs, workers, blocking, fresh, advisory);
+  console.log(summary);
+  if (advise) {
+    // A picture per page for what blocks, and one per advisory group.
+    const firsts = grouped(advisory).map((g) => g.first).filter((f) => f.item.box);
+    const shots = await shoot(tabs, [...fresh, ...firsts], "shot");
+    writeReport(fresh, advisory, shots, summary);
+    console.log(`report: ${join(reportDir, "report.md")} (${grouped(advisory).length} advisory groups)`);
+  }
+  // A run that measured almost nothing has not checked the console.
+  const expected = jobs.filter((job) => job.type !== "state").length;
+  if (probes < expected) problems.push(`only ${probes} probes for ${expected} page jobs: the run did not reach the pages`);
+  for (const problem of problems) console.log(problem);
+  const unused = rules.filter((rule) => !rule.used);
+  // A narrowed run does not see every finding, so it cannot call a line stale.
+  const narrowed = onlyRoutes || onlyWidths || onlyStates || process.env.SKIN || process.env.AUDIT_STRIDE === "0";
+  if (unused.length > 0 && !narrowed) {
+    const stale = unused.map((rule) => `  ${rule.line}`).join("\n");
+    console.log(`\n${unused.length} accepted lines no longer match; remove them from accepted.txt:\n${stale}`);
+  }
+  printVerdict(fresh);
+  if (gate) process.exitCode = fresh.length > 0 || problems.length > 0 ? 1 : 0;
+}
+
 const browser = await launch();
 try {
-  if (selfTest) {
-    process.exitCode = await runSelfTest(browser);
-  } else {
-    // A fresh report each run: no picture from an older one stays behind.
-    if (advise) rmSync(reportDir, { recursive: true, force: true });
-    mkdirSync(reportDir, { recursive: true });
-    const jobs = plan();
-    const workers = Math.max(1, Number(process.env.AUDIT_WORKERS ?? Math.min(4, availableParallelism())));
-    const tabs = await Promise.all(Array.from({ length: workers }, () => browser.open()));
-    const records = [];
-    let next = 0;
-    await Promise.all(tabs.map(async (tab) => {
-      while (next < jobs.length) {
-        const job = jobs[next];
-        next += 1;
-        await runJob(tab, job, records);
-      }
-    }));
-    // A state whose control is gone at every width, or at the desktop width,
-    // has left the gate: that is a finding, not a skip.
-    const tried = new Map();
-    for (const r of records.filter((r) => r.name.startsWith("state:"))) {
-      const id = `${r.skin}|${r.name}`;
-      if (!tried.has(id)) tried.set(id, []);
-      tried.get(id).push(r);
-    }
-    for (const list of tried.values()) {
-      const desktop = list.filter((r) => r.width === 1440);
-      const phoneOnly = STATES.find((state) => `state:${state.name}` === list[0].name)?.phoneOnly?.includes(list[0].skin);
-      const lost = list.every((r) => r.absent) || (!phoneOnly && desktop.length > 0 && desktop.every((r) => r.absent));
-      if (lost) records.push({ ...list[0], width: list.every((r) => r.absent) ? "*" : 1440, theme: "*", absent: false, found: { error: [{ key: "state", sel: list[0].name, by: "no control opens this state" }] } });
-    }
-    const probes = records.filter((r) => !r.absent && !r.found?.error).length;
-    if (process.env.AUDIT_JSON) writeFileSync(process.env.AUDIT_JSON, JSON.stringify(records, null, 1));
-    const blocking = findings(records, KINDS);
-    const advisory = advise ? findings(records, ADVISORY) : [];
-    const { rules, problems } = readAccepted();
-    const fresh = blocking.filter((f) => {
-      const rule = acceptedBy(rules, f);
-      if (!rule) return true;
-      rule.used = true;
-      return false;
-    });
-    const summary = `${probes} probes (${jobs.length} jobs, ${workers} tabs) in ${Math.round((Date.now() - started) / 1000)}s: ${SKINS.join(" and ")}; ${blocking.length} blocking findings, ${blocking.length - fresh.length} accepted${advise ? `, ${advisory.length} advisory` : ""}.`;
-    console.log(summary);
-    if (advise) {
-      // A picture per page for what blocks, and one per advisory group.
-      const firsts = grouped(advisory).map((g) => g.first).filter((f) => f.item.box);
-      const shots = await shoot(tabs, [...fresh, ...firsts], "shot");
-      writeReport(fresh, advisory, shots, summary);
-      console.log(`report: ${join(reportDir, "report.md")} (${grouped(advisory).length} advisory groups)`);
-    }
-    // A run that measured almost nothing has not checked the console.
-    const expected = jobs.filter((job) => job.type !== "state").length;
-    if (probes < expected) problems.push(`only ${probes} probes for ${expected} page jobs: the run did not reach the pages`);
-    for (const problem of problems) console.log(problem);
-    const unused = rules.filter((rule) => !rule.used);
-    // A narrowed run does not see every finding, so it cannot call a line stale.
-    const narrowed = onlyRoutes || onlyWidths || onlyStates || process.env.SKIN || process.env.AUDIT_STRIDE === "0";
-    if (unused.length > 0 && !narrowed) console.log(`\n${unused.length} accepted lines no longer match; remove them from accepted.txt:\n${unused.map((rule) => `  ${rule.line}`).join("\n")}`);
-    if (accept) {
-      console.log(`\nlines for accepted.txt (add a reason after " # " to each):\n${fresh.map((f) => `${f.key}  # `).join("\n")}`);
-    } else if (fresh.length > 0) {
-      console.log(`\nbreakpoint gate: ${fresh.length} new findings`);
-      for (const f of fresh) console.log(line(f, KINDS));
-      console.log(`\nkeys:\n${fresh.map((f) => `  ${f.key}`).join("\n")}`);
-    } else {
-      console.log("\nbreakpoint gate: no new findings");
-    }
-    if (gate) process.exitCode = fresh.length > 0 || problems.length > 0 ? 1 : 0;
-  }
+  if (selfTest) process.exitCode = await runSelfTest(browser);
+  else await runAudit(browser);
 } finally {
   browser.close();
 }

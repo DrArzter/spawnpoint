@@ -34,12 +34,14 @@ export async function launch() {
   let endpoint = null;
   for (let i = 0; i < 600 && state.exit === null && endpoint === null; i += 1) {
     try {
-      endpoint = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).webSocketDebuggerUrl;
-    } catch { await sleep(100); }
+      const reply = await fetch(`http://127.0.0.1:${port}/json/version`); // NOSONAR polling: each try waits for the last
+      endpoint = (await reply.json()).webSocketDebuggerUrl; // NOSONAR polling: each try waits for the last
+    } catch { await sleep(100); } // NOSONAR polling: each try waits for the last
   }
   if (!endpoint) {
     const why = state.exit === null ? "did not open its debugging port within 60s" : `exited with ${state.exit}`;
-    throw new Error(`chrome ${why}${complaints ? `\n${complaints.trimEnd()}` : ""}`);
+    const detail = complaints ? "\n" + complaints.trimEnd() : "";
+    throw new Error(`chrome ${why}${detail}`);
   }
 
   // Dial the local port with the browser id alone; nothing else of the reply is used.

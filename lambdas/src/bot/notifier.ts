@@ -21,6 +21,17 @@ type SnsEvent = Readonly<{
 }>;
 type EventBridgeEvent = Readonly<{ source?: string; "detail-type"?: string; detail?: unknown }>;
 
+// Shape only: a detail can carry display names and chat ids, and a log group
+// is not a place to keep them.
+function eventShape(event: EventBridgeEvent): string {
+  const detail = event.detail;
+  return JSON.stringify({
+    source: event.source ?? null,
+    detailType: event["detail-type"] ?? null,
+    detailKeys: typeof detail === "object" && detail !== null ? Object.keys(detail).sort() : [],
+  });
+}
+
 async function configuredChatIds(): Promise<readonly number[]> {
   return parseChatIds(await parameter(env("CHAT_IDS_PARAMETER"), 60));
 }
@@ -109,7 +120,7 @@ export async function handler(event: SnsEvent | EventBridgeEvent): Promise<void>
   if (eventBridge.source === "spawnpoint.access" && eventBridge["detail-type"] === "Access Approved") {
     const approval = parseAccessApprovedEvent(eventBridge.detail);
     if (approval === null) {
-      console.error("unparseable access approval", JSON.stringify(event).slice(0, 500));
+      console.error("unparseable access approval", eventShape(eventBridge));
       return;
     }
     const miniAppUrl = env("MINI_APP_URL");
@@ -125,7 +136,7 @@ export async function handler(event: SnsEvent | EventBridgeEvent): Promise<void>
   if (eventBridge.source === "spawnpoint.access" && eventBridge["detail-type"] === "Game Invitation") {
     const invitation = parseInvitationEvent(eventBridge.detail);
     if (invitation === null) {
-      console.error("unparseable invitation", JSON.stringify(event).slice(0, 500));
+      console.error("unparseable invitation", eventShape(eventBridge));
       return;
     }
     if (!await claimInvitationDelivery(invitation.invitationId)) return;
@@ -158,7 +169,7 @@ export async function handler(event: SnsEvent | EventBridgeEvent): Promise<void>
 
   const parsed = parseExecutionEvent(eventBridge.detail);
   if (parsed === null) {
-    console.error("unparseable event", JSON.stringify(event).slice(0, 500));
+    console.error("unparseable event", eventShape(eventBridge));
     return;
   }
   const text = renderNotification(parsed);

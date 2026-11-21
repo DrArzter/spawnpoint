@@ -27,7 +27,7 @@ const accepted = join(here, "accepted.txt");
 const reportDir = resolve(process.env.AUDIT_OUT ?? join(here, "../../out/ui-audit"));
 const PROBE_SOURCE = readFileSync(join(here, "probe.js"), "utf8");
 
-// The faces CI gates. The old console skin is not gated: S9 deletes it.
+// The faces CI gates.
 const SKINS = process.env.SKIN ? process.env.SKIN.split(",") : ["console", "terminal"];
 
 const ROUTES = [
@@ -51,11 +51,12 @@ const ROUTES = [
   ["profile", "/?demo&latency=0#/profile"],
 ];
 
-// Both sides of every step in web/DESIGN.md (599/600, 839/840, 959/960,
-// 1199/1200), the smallest phone, a desktop and a 4K screen at 150%.
-const PAGE_WIDTHS = [360, 599, 600, 839, 840, 959, 960, 1199, 1200, 1440, 2560];
-// Dialogs dock to the bottom at the Compact step.
-const OVERLAY_WIDTHS = [360, 599, 600, 1440, 2560];
+// Both sides of every step in web/DESIGN.md: the console's (759/760,
+// 1023/1024, 1199/1200) and the terminal's (599/600, 839/840, 959/960); the
+// smallest phone, a desktop and a 4K screen at 150%.
+const PAGE_WIDTHS = [360, 599, 600, 759, 760, 839, 840, 959, 960, 1023, 1024, 1199, 1200, 1440, 2560];
+// Dialogs dock to the bottom under 760px (console) and 600px (terminal).
+const OVERLAY_WIDTHS = [360, 599, 600, 759, 760, 1440, 2560];
 const DARK_WIDTHS = [360, 1440];
 const STRESS_WIDTHS = [360, 840, 1440];
 // A table changes layout at its container's width, not the viewport's: a 40px

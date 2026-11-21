@@ -16,10 +16,10 @@ page, state and width. It uses raw Chrome DevTools Protocol (`cdp.mjs`) and has 
 | Input | Values |
 |---|---|
 | Skins | `console` and `terminal` (set `SKIN` for one) |
-| Page widths | 360, 599/600, 839/840, 959/960, 1199/1200, 1440 and 2560: both sides of every step in `web/DESIGN.md` |
+| Page widths | 360, 599/600, 759/760, 839/840, 959/960, 1023/1024, 1199/1200, 1440 and 2560: both sides of every step in `web/DESIGN.md` (console and terminal) |
 | Stride | every 40px from 360 to 1680 on each page, light theme, resized without a reload |
-| States | every entry in `states.mjs` at 360, 599, 600, 1440 and 2560 |
-| Menus | every menu on a page, opened one at a time, at the same five widths |
+| States | every entry in `states.mjs` at 360, 599, 600, 759, 760, 1440 and 2560 |
+| Menus | every menu on a page, opened one at a time, at the same seven widths |
 | Themes | light everywhere; dark at 360 and 1440 |
 | Data | the demo, and `?demo&fixture=stress` (80-character names, more rows) at 360, 840 and 1440 |
 

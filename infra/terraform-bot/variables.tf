@@ -97,3 +97,9 @@ variable "email_reply_to" {
     error_message = "email_reply_to must be empty or one email address."
   }
 }
+
+variable "adopt_lambda_log_groups" {
+  description = "Import the log groups Lambda already created for the bot and the notifier. Set false in an account where neither function has run."
+  type        = bool
+  default     = true
+}

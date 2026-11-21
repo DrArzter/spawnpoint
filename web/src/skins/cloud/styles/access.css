@@ -12,16 +12,6 @@ html[data-skin="cloud"] .c-access-pane {
   padding: 20px var(--c-pad) 48px;
 }
 
-html[data-skin="cloud"] .c-access-badge {
-  min-width: 20px;
-  padding: 0 6px;
-  border-radius: var(--c-r-pill);
-  background: var(--c-accent);
-  color: var(--c-accent-ink);
-  text-align: center;
-  letter-spacing: 0;
-}
-
 html[data-skin="cloud"] .c-access-invite {
   display: flex;
   flex-wrap: wrap;

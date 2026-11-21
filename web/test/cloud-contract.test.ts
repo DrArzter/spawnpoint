@@ -133,6 +133,13 @@ test("cloud: access draws Delete user only when the model gives it (slice C), in
   }
 });
 
+test("cloud: a roles matrix header names what it opens and labels its member count", () => {
+  const roles = { ...access.roles, roles: { status: "ready", value: access.users.roles } } as AccessModel["roles"];
+  const markup = renderToStaticMarkup(createElement(cloudSkin.Access, { model: { ...access, tab: "roles", roles } }));
+  assert.match(markup, /data-action="access.role.read"[^>]*>(<[^>]+>)*Player permissions/);
+  assert.match(markup, /aria-label="1 person"/);
+});
+
 test("cloud: the access list column is navigation only; its rows carry no Actions", () => {
   const markup = renderToStaticMarkup(createElement(cloudSkin.Access, { model: access }));
   const column = markup.slice(markup.indexOf('class="c-lcol"'), markup.indexOf('class="c-access-pane"'));

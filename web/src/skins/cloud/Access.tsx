@@ -13,7 +13,7 @@ import { ActionButton } from "./ui/ActionButton";
 import { Ago } from "./ui/Ago";
 import { Card } from "./ui/Card";
 import { Chip } from "./ui/Chip";
-import { DetailList } from "./ui/DetailList";
+import { DetailList, shortDateTime } from "./ui/DetailList";
 import { Empty, LoadError } from "./ui/Empty";
 import { Field, Select, TextInput, Toggle } from "./ui/Fields";
 import { Grid } from "./ui/Grid";
@@ -97,7 +97,7 @@ export function Access({ model }: Readonly<{ model: AccessModel }>) {
 
   const deletion = (users as WithDeletion).deletion ?? null;
   return (
-    <div className={model.tab === "users" && !detail ? "c-access c-access-home" : "c-access"}>
+    <div className="c-access">
       <AccessList model={model} selection={detail ? chosen : null} />
       <div className="c-access-pane">
         <div className="c-page">{pane}</div>
@@ -124,7 +124,7 @@ function AccessList({ model, selection }: Readonly<{ model: AccessModel; selecti
     ...(candidates.length > 0 ? [{
       id: "requests",
       label: "Requests",
-      end: <span className="c-access-badge">{candidates.length}</span>,
+      end: <span>{candidates.length}</span>,
       items: candidates.map((row) => <ListItemPerson account={row.account} accountIcon={providerIcon(row.candidate.platform)} current={current("requests", candidateId(row))} href={itemHref("requests", candidateId(row))} key={candidateId(row)} meta={<Ago at={row.candidate.requestedAt ?? row.candidate.firstSeenAt} />} name={row.candidate.displayName} photoUrl={row.candidate.photoUrl} tone="request" />),
     }] : []),
     {
@@ -222,7 +222,7 @@ function InviteCard({ model }: Readonly<{ model: InvitationsModel }>) {
             <TextInput autoComplete="email" onChange={(event) => model.setEmail(event.target.value)} type="email" value={model.email} />
           </Field>
         )}
-        <ActionButton action={model.create} variant="primary" />
+        <ActionButton action={model.create} size="sm" />
       </form>
       {model.issued && (
         <div className="c-access-issued">
@@ -258,11 +258,9 @@ function InvitationsCard({ model }: Readonly<{ model: InvitationsModel }>) {
   );
 }
 
-const dateTime = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-
 function DateTime({ at }: Readonly<{ at: string | null }>) {
-  const time = at ? Date.parse(at) : Number.NaN;
-  return Number.isNaN(time) ? <span className="c-faint">—</span> : <time dateTime={at!}>{dateTime.format(time)}</time>;
+  const text = shortDateTime(at);
+  return text === null ? <span className="c-faint">—</span> : <time dateTime={at!}>{text}</time>;
 }
 
 // --- detail panes -------------------------------------------------------------------
@@ -409,7 +407,8 @@ function RolesPane({ model, users }: Readonly<{ model: RolesModel; users: UsersM
         id: role.id,
         header: role.name,
         className: "c-access-cell",
-        headerCell: <span className="c-access-role-head"><ActionButton action={{ ...read, label: role.name, icon: undefined }} size="sm" variant="ghost" /><span className="c-faint">{holders(role)}</span></span>,
+        // The button says what it opens; the count is labelled for a screen reader, as its column header reads only the role.
+        headerCell: <span className="c-access-role-head"><ActionButton action={{ ...read, label: `${role.name} permissions`, icon: undefined }} size="sm" variant="ghost" /><span aria-label={`${holders(role)} ${holders(role) === 1 ? "person" : "people"}`} className="c-faint" role="img">{holders(role)}</span></span>,
         render: (permission) => role.permissions.includes(permission)
           ? <Indicator status={{ kind: "ok", label: "Granted" }} />
           : <span aria-label="Not granted" className="c-faint" role="img">—</span>,

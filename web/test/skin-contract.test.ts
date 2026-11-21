@@ -86,6 +86,7 @@ const worldPage: WorldModel = {
   world,
   worldsHref: "#/worlds/minecraft",
   availability: { kind: "ready", label: "Ready" },
+  sessionStatus: { kind: "ok", label: "Online" },
   notices: [{ id: "archived", tone: "warning", title: "This world is archived" }],
   tabs: [{ id: "details", label: "Details" }, { id: "wipes", label: "Wipes", count: 1 }, { id: "backups", label: "Backups" }, { id: "releases", label: "Releases" }, { id: "console", label: "Console" }, { id: "metrics", label: "Metrics" }],
   tab: "details",
@@ -177,7 +178,7 @@ const profile: ProfileModel = {
   },
 };
 
-const confirmation: ConfirmationModel = { title: "Permanently delete Rostik?", description: "Gone.", destructive: true, confirm: spy("confirm", "Delete forever", { danger: true }), cancel: spy("cancel", "Cancel"), releaseChoice: { value: "1.2", options: [{ version: "1.2", latest: true }], set: noop }, typedConfirmation: { expected: world.id, value: "", set: noop } };
+const confirmation: ConfirmationModel = { title: "Permanently delete Rostik?", description: "Gone.", destructive: true, confirm: spy("confirm", "Delete forever", { danger: true }), cancel: spy("cancel", "Cancel"), releaseChoice: { value: "1.2", options: [{ version: "1.2", latest: true }], set: noop }, typedConfirmation: { label: "World ID", expected: world.id, value: "", set: noop } };
 const connection = { placement: "fleet" as const, setPlacement: noop, fleetAvailable: true, connectivity: "raw" as const, setConnectivity: noop, dnsAvailable: true };
 const createWorld: CreateWorldModel = { game, presets: game.presets, presetId: "industrial", setPresetId: noop, preset: game.presets[0]!, name: "", setName: noop, release: "1.2", setRelease: noop, connection, valid: false, submit: spy("world.create", "Create world"), cancel: spy("sheet.close", "Close panel") };
 const worldSettings: WorldSettingsModel = { game, world, stopped: false, connection, valid: true, save: spy("world.settings.save", "Save settings"), cancel: spy("sheet.close", "Cancel") };
@@ -319,6 +320,8 @@ for (const skin of SKINS) {
 
   test(`${skin.name}: dialogs and sheets draw confirm, cancel, submit, save, send and close`, () => {
     checkSurface("Confirmation", renderToStaticMarkup(createElement(skin.ConfirmationDialog, { model: confirmation })), confirmation);
+    const typed = renderToStaticMarkup(createElement(skin.ConfirmationDialog, { model: { ...confirmation, typedConfirmation: { ...confirmation.typedConfirmation!, label: "User name" } } }));
+    assert.match(typed, /User name/, "the typed field is named by the model, not by the skin");
     checkSurface("CreateWorld", renderToStaticMarkup(createElement(skin.CreateWorldSheet, { model: createWorld })), createWorld);
     checkSurface("WorldSettings", renderToStaticMarkup(createElement(skin.WorldSettingsSheet, { model: worldSettings })), worldSettings);
     checkSurface("Invitation", renderToStaticMarkup(createElement(skin.InvitationSheet, { model: invitation })), invitation);

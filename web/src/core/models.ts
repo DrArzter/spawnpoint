@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 
 import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, HostMetrics, LinkedLoginAccount, MetricRange, SubscriptionState } from "../api/contract";
-import type { StatusDescriptor } from "../components/ui/Status";
+import type { StatusDescriptor } from "./status";
 import type { AccessTab, ControlPlaneSnapshot, Game, Member, Operation, OwnerBootstrap, Page, Preset, Role, ServerState, Wipe, World, WorldTab } from "../model";
+import type { WorldsView } from "../routing";
 import type { SessionReason } from "../session";
 import type { Theme, ThemePreference, ViewerProfile } from "../telegram";
 import type { Action } from "./actions";
@@ -42,6 +43,14 @@ export type AppearanceModel = Readonly<{
   setAccent: (next: string) => Promise<void>;
 }>;
 
+/** A world of the scoped game, as data a frame can list and link to; its verbs are asked for through `ShellModel.worldActions`. */
+export type ShellWorld = Readonly<{ id: string; name: string; href: string; status: StatusDescriptor }>;
+
+/*
+ * The optional fields below serve a skin that draws more than the list of
+ * worlds (the cloud skin). Actions there are asked for through functions, so
+ * a skin that ignores them is never asked to draw them.
+ */
 export type ShellModel = Readonly<{
   navigation: readonly NavigationItem[];
   page: Page;
@@ -50,6 +59,16 @@ export type ShellModel = Readonly<{
   demo: boolean;
   observedAt: string | undefined;
   openProfile: Action;
+  /** The scoped game's home: the worlds page as an overview. `navigation` keeps its Worlds item current there too. */
+  overview?: NavigationItem;
+  /** The snapshot's own time, for a relative "refreshed" line. */
+  observedAtIso?: string;
+  worlds?: readonly ShellWorld[];
+  /** People waiting for access, as the Access page lists them, when they were read; null or absent while unknown. */
+  requests?: number | null;
+  refreshAction?: () => Action;
+  /** Start or stop and invite for one world of the scoped game; null for a world it does not list. */
+  worldActions?: (worldId: string) => Readonly<{ session: Action; invite: Action | null }> | null;
 }>;
 
 // --- worlds -----------------------------------------------------------------
@@ -91,7 +110,19 @@ export type WorldRow = Readonly<{
   address: AddressFacts | null;
   addressAbsent: string;
   actions: readonly Action[];
+  /** Players on this world's own session; null when unknown or none runs. */
+  players?: number | null;
+  /** When the host this world runs on was launched, where core can tell. */
+  launchedAt?: string | null;
+  /** Start or stop, with the reason it may be refused (the world page's verb). */
+  sessionAction?: () => Action;
 }>;
+
+/** One running operation of the game, named by the world it holds. */
+export type OperationRow = Readonly<{ operation: Operation; label: string; worldName: string; href: string }>;
+
+/** One person asking for access, as data (`since` is an ISO time); approve and dismiss come from `WorldsModel.requestActions`. */
+export type RequestSummary = Readonly<{ id: string; displayName: string; platform: AccessCandidate["platform"]; account: string; since: string; photoUrl: string | null }>;
 
 export type WorldsModel = Readonly<{
   status: "loading" | "ready" | "error";
@@ -102,9 +133,18 @@ export type WorldsModel = Readonly<{
   notices: readonly Notice[];
   overview: SessionOverview;
   rows: readonly WorldRow[];
-  emptyDescription: string;
+  /** Why the list is empty and no world can be created; null when Create world says enough. */
+  emptyDescription: string | null;
   refresh: Action;
   createWorld: Action | null;
+  /** Absent means "list". */
+  view?: WorldsView;
+  views?: Readonly<{ overview: string; list: string }>;
+  operations?: readonly OperationRow[];
+  builds?: readonly Readonly<{ preset: Preset; status: StatusDescriptor }>[];
+  /** People waiting for access, as the Access page lists them; null without the role to manage access. */
+  requests?: Loading<readonly RequestSummary[]> | null;
+  requestActions?: (id: string) => Readonly<{ approve: Action; dismiss: Action }> | null;
 }>;
 
 // --- one world ---------------------------------------------------------------
@@ -120,7 +160,11 @@ export type DetailValue =
   /** A preset's name and, when it was built from Git, the commit it came from. */
   | Readonly<{ type: "preset"; name: string; source: Readonly<{ commit: string; short: string; href: string }> | null }>;
 
+/** What a detail is about, so a skin that shows a fact elsewhere can leave it out here. */
+export type DetailKey = "session" | "host" | "launched" | "players" | "observed" | "world-id" | "availability" | "preset" | "release" | "wipe" | "address" | "hosting" | "connection" | "game-settings";
+
 export type Detail = Readonly<{
+  key?: DetailKey;
   label: string;
   value: DetailValue;
   hint?: string;
@@ -169,6 +213,8 @@ export type WorldModel = Readonly<{
   world: World;
   worldsHref: string;
   availability: StatusDescriptor;
+  /** This world's own session, never the game's (ADR-0062). */
+  sessionStatus: StatusDescriptor;
   notices: readonly Notice[];
   tabs: readonly Readonly<{ id: WorldTab; label: string; count?: number }>[];
   tab: WorldTab;
@@ -195,7 +241,25 @@ export type WorldModel = Readonly<{
   /** This world's console and its host's metrics; null when the role or the deployment offers neither tab. */
   console: ConsoleModel | null;
   metrics: MetricsModel | null;
+  /** Every world of the game, this one included, as data. */
+  siblings?: readonly SiblingRow[];
+  glance?: WorldGlance;
 }>;
+
+export type SiblingRow = Readonly<{
+  id: string;
+  name: string;
+  href: string;
+  status: StatusDescriptor;
+  releaseSummary: string;
+  wipe: number | null;
+  players: number | null;
+  placement: WorldPlacement;
+  address: AddressFacts | null;
+}>;
+
+/** This world's session in a few facts; `busy` while an operation holds it. */
+export type WorldGlance = Readonly<{ live: boolean; players: number | null; address: AddressFacts | null; launchedAt: string | null; busy: boolean }>;
 
 // --- other console pages -----------------------------------------------------
 
@@ -365,7 +429,8 @@ export type ConfirmationModel = Readonly<{
   confirm: Action;
   cancel: Action;
   releaseChoice: Readonly<{ value: string; options: readonly Readonly<{ version: string; latest: boolean }>[]; set: (value: string) => void }> | null;
-  typedConfirmation: Readonly<{ expected: string; value: string; set: (value: string) => void }> | null;
+  /** `label` names what is typed: "World ID" for a purge. */
+  typedConfirmation: Readonly<{ label: string; expected: string; value: string; set: (value: string) => void }> | null;
 }>;
 
 export type WorldPlacement = "configured" | "fleet";
@@ -465,6 +530,6 @@ export type ConsoleShellModel = Readonly<{
   snapshot: ControlPlaneSnapshot | null;
 }>;
 
-export type BootModel = Readonly<{ title: string; description: string }>;
+export type BootModel = Readonly<{ title: string; description?: string }>;
 
 export type Rendered = ReactNode;

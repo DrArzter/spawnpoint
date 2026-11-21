@@ -176,16 +176,9 @@ export function useGameSettingsForm(game: Game, world: World, opts: Readonly<{ b
   };
 }
 
-// What a start does, in the words of where the world will run.
-function startDescription(game: Game, world: World): string {
-  if (world.materialization === "not_created") {
-    const host = world.placement === "fleet" ? "launch a fleet host for it" : `boot the shared host for ${game.displayName}`;
-    return `Spawnpoint will create ${world.displayName} from its ready preset, open wipe #1 and ${host}. The first start may take several minutes, and the host is billed while it runs.`;
-  }
-  if (world.placement === "fleet") {
-    return `Spawnpoint will launch a fleet host for ${world.displayName}, or reuse one with room. Other worlds keep running. ${game.displayName} may take several minutes to become healthy, and the host is billed while it runs.`;
-  }
-  return `Spawnpoint will boot the shared host and start ${world.displayName}. ${game.displayName} may take several minutes to become healthy, and the host is billed while it runs.`;
+// What a start does, in one line: a first start also creates the world.
+function startDescription(world: World): string {
+  return world.materialization === "not_created" ? "Creates wipe #1 and starts a billed host." : "Starts a billed host. It may take a few minutes.";
 }
 
 function confirmationCopy(confirmation: Confirmation): { title: string; description: string; label: string; destructive: boolean } {
@@ -198,19 +191,19 @@ function confirmationCopy(confirmation: Confirmation): { title: string; descript
       return confirmation.action === "start"
         ? {
           title: "Start a billed AWS session?",
-          description: startDescription(game, world),
+          description: startDescription(world),
           label: "Start session",
           destructive: false,
         }
-        : { title: "Save, back up and stop this session?", description: "Spawnpoint refuses while players are online, then saves the world, takes a verified backup and stops the host.", label: "Stop session", destructive: true };
+        : { title: "Save, back up and stop this session?", description: "Saves and backs up, then stops the host. Refused while players are online.", label: "Stop session", destructive: true };
     case "archive":
-      return { title: `Archive ${world.displayName}?`, description: "Spawnpoint will safely stop and back up an active session, then hide this world from session control. Its wipes and backups stay intact.", label: "Archive world", destructive: false };
+      return { title: `Archive ${world.displayName}?`, description: "Stops and backs up, then hides it from session control. Wipes and backups stay.", label: "Archive world", destructive: false };
     case "wipe":
-      return { title: `Start a new wipe of ${world.displayName}?`, description: `Spawnpoint will safely stop and back up the current wipe, close it, and open an empty wipe from the selected ${confirmation.preset?.displayName ?? "preset"} release.`, label: "Start new wipe", destructive: true };
+      return { title: `Start a new wipe of ${world.displayName}?`, description: "Backs up and closes the current wipe, then opens an empty one from the chosen release.", label: "Start new wipe", destructive: true };
     case "purge":
-      return { title: `Permanently delete ${world.displayName}?`, description: "This deletes the world registry, the release pointer and every version of every S3 backup. It cannot be undone from the console.", label: "Delete forever", destructive: true };
+      return { title: `Permanently delete ${world.displayName}?`, description: "Deletes the world, its release pointer and every backup. This cannot be undone.", label: "Delete forever", destructive: true };
     default:
-      return { title: `Restore ${confirmation.backupName}?`, description: `Spawnpoint will safely stop and back up the current wipe, then restore ${confirmation.backupName} as a new wipe.`, label: "Restore backup", destructive: true };
+      return { title: `Restore ${confirmation.backupName}?`, description: "Backs up the current wipe, then restores this backup as a new wipe.", label: "Restore backup", destructive: true };
   }
 }
 
@@ -232,6 +225,6 @@ export function useConfirmationForm(confirmation: Confirmation | null, opts: Rea
     confirm: action("confirm", copy.label, () => opts.onConfirm(confirmation, confirmation.kind === "wipe" ? release : undefined), { disabled: blocked, danger: copy.destructive }),
     cancel: action("cancel", "Cancel", opts.onClose),
     releaseChoice: preset ? { value: release, options: [...preset.releases].reverse().map((version) => ({ version, latest: version === preset.latestRelease })), set: setRelease } : null,
-    typedConfirmation: confirmation.kind === "purge" ? { expected: confirmation.world.id, value: typed, set: setTyped } : null,
+    typedConfirmation: confirmation.kind === "purge" ? { label: "World ID", expected: confirmation.world.id, value: typed, set: setTyped } : null,
   };
 }

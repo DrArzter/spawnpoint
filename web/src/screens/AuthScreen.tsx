@@ -64,12 +64,12 @@ export function AuthScreen({ auth, onChange }: { auth: AuthState; onChange: (sta
   );
 }
 
-export function BootScreen({ title, description }: { title: string; description: string }) {
+export function BootScreen({ title, description }: { title: string; description?: string }) {
   return (
     <main aria-busy="true" aria-live="polite" className="boot" role="status">
       <section className="boot-card">
         <div className="boot-brand"><SpawnpointMark size={48} /><strong>Spawnpoint</strong></div>
-        <div className="boot-copy"><h1>{title}</h1><p>{description}</p></div>
+        <div className="boot-copy"><h1>{title}</h1>{description && <p>{description}</p>}</div>
         <div aria-hidden="true" className="boot-progress" />
       </section>
     </main>

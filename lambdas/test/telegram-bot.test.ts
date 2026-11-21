@@ -216,6 +216,8 @@ test("the Lifecycle V2 builders reproduce their committed examples verbatim", as
     instanceId: start.instanceId,
     worldId: start.worldId,
   }), start);
+  assert.equal("policy" in start, false, "the example names no policy, so the machine places it cold");
+  assert.equal(buildLifecycleStartInput({ ...start, policy: "warm" }).policy, "warm");
 
   const stopUrl = new URL("../../workflows/stop-server-v2.input.example.json", import.meta.url);
   const stop = JSON.parse(await readFile(stopUrl, "utf8"));

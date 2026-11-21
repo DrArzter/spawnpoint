@@ -8,6 +8,8 @@
 // enforces it — so the bot, the owner scripts and the examples cannot drift
 // apart silently.
 
+import type { SessionPolicy } from "./placement.ts";
+
 // Fail closed by failing loudly: a malformed allow-list is a misconfiguration,
 // and silently denying everybody would read as a mystery, not a fault.
 export function parseAllowList(raw: string): readonly number[] {
@@ -157,6 +159,8 @@ export function buildLifecycleStartInput(args: Readonly<{
   // template, and which commit of this repository that host checks out.
   launch?: LaunchMode;
   appCommit?: string;
+  // The world's warm choice (ADR-0048). Left out, the machine places it cold.
+  policy?: SessionPolicy;
 }>) {
   return {
     serverId: args.serverId,
@@ -172,6 +176,7 @@ export function buildLifecycleStartInput(args: Readonly<{
     placement: args.placement ?? "single",
     launch: args.launch ?? "disabled",
     appCommit: args.appCommit ?? "main",
+    ...(args.policy === undefined ? {} : { policy: args.policy }),
     ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
     startTiming: POLL_TIMING,
     stopTiming: POLL_TIMING,

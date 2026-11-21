@@ -11,6 +11,9 @@ export const FIXTURES = [
   { miss: "M8", file: "m8-icon.html", widths: [840], expect: ["overlaps"] },
   { miss: "M9", file: "m9-dialog.html", widths: [360, 1440], state: { name: "create", steps: [{ click: "[data-action='world.create']" }] }, expect: ["overlaps"] },
   { miss: "M9", file: "m9-clean.html", widths: [360, 1440], state: { name: "create", steps: [{ click: "[data-action='world.create']" }] }, expect: [], clean: ["overlaps", "textOverText", "error"] },
+  { miss: "H0", file: "h0-past-left.html", widths: [360], expect: ["overflowing"] },
+  { miss: "G1", file: "g1-menu.html", widths: [360], menus: true, expect: ["menuCut", "menuClipped", "menuRagged"] },
+  { miss: "G2", file: "g2-layout.html", widths: [840], expect: ["wrapped", "offCentre", "offRail"] },
   { miss: "R2-8", file: "rules.html", widths: [1440], expect: ["packed", "stateTwice", "columns", "repeatedLabel", "iconOffLine", "crumbRepeat", "cardHeights", "gridEdge"] },
   { miss: "none", file: "clean.html", widths: [360, 1440], expect: [], clean: ["wider", "overflowing", "sideways", "overlaps", "textOverText", "wrapped", "offCentre", "misaligned", "packed", "columns", "repeatedLabel", "iconOffLine", "crumbRepeat", "gridEdge", "cardHeights", "stateTwice"] },
 ];

@@ -356,9 +356,10 @@ function probe(options) {
   const railOf = (el) => el.closest(["[data-layout~=rail]", layout.rails.containers].filter(Boolean).join(", "));
   for (const container of railContainers) {
     const edges = [];
+    // Every marked start counts; a terminal selector counts its first match.
     for (const selector of railStarts) {
-      const el = Array.from(container.querySelectorAll(selector)).find((candidate) => railOf(candidate) === container && visible(candidate));
-      if (el) edges.push({ what: selector, x: Math.round(start(el)) });
+      const found = Array.from(container.querySelectorAll(selector)).filter((candidate) => railOf(candidate) === container && visible(candidate));
+      for (const el of selector === "[data-rail]" ? found : found.slice(0, 1)) edges.push({ what: selector === "[data-rail]" ? mark(el) : selector, x: Math.round(start(el)) });
     }
     if (edges.length < 2) continue;
     const edge = edges[0].x;

@@ -21,6 +21,7 @@ function releaseFacts(model: WorldModel): Detail[] {
   return facts;
 }
 
+/** The Release card says which release is active or desired; a download row names its release only (a state shown once). */
 export function ReleasesTab({ model }: Readonly<{ model: WorldModel }>) {
   const rows = model.releases.rows;
   return (
@@ -33,7 +34,7 @@ export function ReleasesTab({ model }: Readonly<{ model: WorldModel }>) {
             rowKey={(row) => row.name}
             rows={rows}
             tracks={[
-              { id: "release", header: "Release", width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle line={row.status} title={<span className="c-mono">{row.name}</span>} /> },
+              { id: "release", header: "Release", width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle title={<span className="c-mono">{row.name}</span>} /> },
               { id: "source", header: "Source", width: "120px", kind: "optional", render: (row) => row.sourceHref ? <a href={row.sourceHref} rel="noreferrer" target="_blank">Source</a> : <span className="c-faint">—</span> },
               { id: "download", header: "Download", width: "auto", compactWidth: "auto", kind: "end", quietHeader: true, render: (row) => <>{row.downloads.map((item) => <ActionButton action={item} key={item.id} size="sm" />)}</> },
             ]}

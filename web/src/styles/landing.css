@@ -281,8 +281,11 @@ button.landing-link:hover {
   white-space: nowrap;
 }
 
+/* The address keeps one line inside its column and ends in an ellipsis rather than running under Stop (UI gate, 960px). */
 .shot-row code {
+  overflow: hidden;
   font-size: 12px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

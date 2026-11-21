@@ -12,9 +12,9 @@ const OPEN = `gen-${"a".repeat(32)}`;
 const CLOSED = `gen-${"b".repeat(32)}`;
 let digests = 0;
 
-function archive(generation: string | null, storedAt: string, algorithms: string[] = ["SHA256"]): ArchiveObject {
+function archive(generation: string | null, storedAt: string, algorithms: string[] = ["SHA256"], archivedAt = storedAt): ArchiveObject {
   digests += 1;
-  const stamp = storedAt.replaceAll("-", "").replaceAll(":", "").slice(0, 15) + "Z";
+  const stamp = archivedAt.replaceAll("-", "").replaceAll(":", "").slice(0, 15) + "Z";
   const name = generation === null ? `world-${stamp}` : `world-${generation}-${stamp}`;
   return {
     key: `worlds/world/archives/${name}-${digests.toString(16).padStart(64, "0")}.tar.zst`,
@@ -76,6 +76,17 @@ test("the newest verified archive of the open generation is protected, not only 
   const keys = protectedKeys(world(), backupInventory([older, newestUnverified, newest, closedNewer], Number.POSITIVE_INFINITY).entries);
 
   assert.deepEqual([...keys], [newest.key]);
+});
+
+test("the archive the next start resumes from by name is kept when a later upload outruns it", () => {
+  // Archived at 20:00 and uploaded at 09:00; an older archive's retried upload landed at 21:00.
+  const resume = archive(OPEN, "2026-11-12T09:00:00.000Z", ["SHA256"], "2026-11-12T20:00:00.000Z");
+  const retried = archive(OPEN, "2026-11-12T21:00:00.000Z", ["SHA256"], "2026-11-12T10:00:00.000Z");
+
+  const keys = protectedKeys(world(), backupInventory([resume, retried], Number.POSITIVE_INFINITY).entries, [resume.key, retried.key]);
+
+  assert.deepEqual([...keys].sort(), [resume.key, retried.key].sort());
+  assert.deepEqual(archivesToRemove(world(), [resume, retried]), [], "by upload time alone, one a day keeps only the retried archive");
 });
 
 test("an archive a generation was restored from is never removed", () => {

@@ -39,22 +39,36 @@ function requiredEnv(name: string): string {
   return value;
 }
 
-/** Keys no plan may remove: the newest verified archive of the open generation, and every archive a generation was restored from. */
-export function protectedKeys(record: WorldRecord, entries: readonly BackupEntry[]): ReadonlySet<string> {
-  const keys = new Set<string>();
+const RESUMABLE = /-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{64}\.tar\.zst$/;
+
+/** The archive the next start resumes from: the greatest key of the open generation, as server/scripts/prepare-world.sh picks it. */
+export function resumeKey(record: WorldRecord, keys: readonly string[]): string | undefined {
+  const prefix = `worlds/${record.worldId}/archives/${record.worldId}-${record.currentGeneration.id}-`;
+  return keys.filter((key) => key.startsWith(prefix) && RESUMABLE.test(key)).sort().at(-1);
+}
+
+/**
+ * Keys no plan may remove: the newest verified archive of the open generation by
+ * upload time and the one the next start resumes from by name (a retried upload
+ * can make the two differ), and every archive a generation was restored from.
+ */
+export function protectedKeys(record: WorldRecord, entries: readonly BackupEntry[], keys: readonly string[] = entries.map((entry) => entry.key)): ReadonlySet<string> {
+  const protect = new Set<string>();
   const open = entries
     .filter((entry) => entry.generationId === record.currentGeneration.id)
     .sort((left, right) => right.storedAt.localeCompare(left.storedAt))[0];
-  if (open !== undefined) keys.add(open.key);
+  if (open !== undefined) protect.add(open.key);
+  const resume = resumeKey(record, keys);
+  if (resume !== undefined) protect.add(resume);
   for (const generation of [record.currentGeneration, ...record.previousGenerations]) {
-    if (generation.source.kind === "backup") keys.add(generation.source.key);
+    if (generation.source.kind === "backup") protect.add(generation.source.key);
   }
-  return keys;
+  return protect;
 }
 
 export function archivesToRemove(record: WorldRecord, objects: readonly ArchiveObject[]): readonly string[] {
   const entries = backupInventory(objects, Number.POSITIVE_INFINITY).entries;
-  const keep = protectedKeys(record, entries);
+  const keep = protectedKeys(record, entries, objects.map((object) => object.key));
   const byGeneration = new Map<string, BackupEntry[]>();
   for (const entry of entries) {
     const generation = entry.generationId ?? "none";

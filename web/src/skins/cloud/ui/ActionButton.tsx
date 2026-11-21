@@ -1,4 +1,4 @@
-import type { MouseEvent } from "react";
+import { forwardRef, type MouseEvent } from "react";
 
 import type { Action } from "../../../core/actions";
 import { Icon, ProgressRing, type IconName } from "../../../icons";
@@ -20,46 +20,58 @@ export function actionTip(action: Action, iconOnly = false): string | undefined 
   return iconOnly ? action.hint ?? action.label : action.hint;
 }
 
+/** Props a button takes when it opens a menu: the menu's id and whether it is open. */
+export type MenuTrigger = Readonly<{ id: string; expanded: boolean }>;
+
 /**
  * Draws one Action. It stays focusable while refused, says why in its tooltip
  * and its accessible name, and a press on it shows the reason instead of
- * running anything.
+ * running anything. `name` replaces the accessible name where the label alone
+ * is ambiguous ("Remove Mira" for a row's Remove); `menu` marks a button that
+ * opens a menu.
  */
-export function ActionButton({ action, iconOnly = false, ...look }: Readonly<{ action: Action; iconOnly?: boolean } & Look>) {
-  const toast = useToast();
-  const refused = action.disabled === true;
-  const onClick = (event: MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    if (refused) {
-      if (action.hint) toast(action.hint, "why");
-      return;
-    }
-    if (!action.busy) action.run();
-  };
-  return (
-    <button
-      aria-busy={action.busy || undefined}
-      aria-disabled={refused || undefined}
-      aria-label={iconOnly ? action.label : undefined}
-      className={buttonClass(look, iconOnly)}
-      data-action={action.id}
-      data-tip={actionTip(action, iconOnly)}
-      onClick={onClick}
-      type="button"
-    >
-      {action.busy ? <ProgressRing className="c-spin" size={18} /> : action.icon && <Icon name={action.icon} size={18} />}
-      {!iconOnly && <span>{action.label}</span>}
-      {refused && action.hint && <span className="c-sr">, unavailable: {action.hint}</span>}
-    </button>
-  );
-}
+export const ActionButton = forwardRef<HTMLButtonElement, Readonly<{ action: Action; iconOnly?: boolean; name?: string; menu?: MenuTrigger } & Look>>(
+  function ActionButton({ action, iconOnly = false, name, menu, ...look }, ref) {
+    const toast = useToast();
+    const refused = action.disabled === true;
+    const onClick = (event: MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      if (refused) {
+        if (action.hint) toast(action.hint, "why");
+        return;
+      }
+      if (!action.busy) action.run();
+    };
+    return (
+      <button
+        aria-busy={action.busy || undefined}
+        aria-controls={menu?.id}
+        aria-disabled={refused || undefined}
+        aria-expanded={menu ? menu.expanded : undefined}
+        aria-haspopup={menu ? "menu" : undefined}
+        aria-label={name ?? (iconOnly ? action.label : undefined)}
+        className={buttonClass(look, iconOnly)}
+        data-action={action.id}
+        data-tip={actionTip(action, iconOnly)}
+        onClick={onClick}
+        ref={ref}
+        type="button"
+      >
+        {action.busy ? <ProgressRing className="c-spin" size={18} /> : action.icon && <Icon name={action.icon} size={18} />}
+        {!iconOnly && <span>{action.label}</span>}
+        {menu && !iconOnly && <Icon className="c-btn-caret" name="expand_more" size={18} />}
+        {refused && action.hint && <span className="c-sr">, unavailable: {action.hint}</span>}
+      </button>
+    );
+  },
+);
 
-/** A link that looks like a button: All worlds, Open, Releases. */
-export function LinkButton({ href, label, icon, ...look }: Readonly<{ href: string; label: string; icon?: IconName } & Look>) {
+/** A link that looks like a button: All worlds, Open, Releases. `iconOnly` keeps the label as its name and tooltip. */
+export function LinkButton({ href, label, icon, iconOnly = false, ...look }: Readonly<{ href: string; label: string; icon?: IconName; iconOnly?: boolean } & Look>) {
   return (
-    <a className={buttonClass(look, false)} href={href}>
+    <a aria-label={iconOnly ? label : undefined} className={buttonClass(look, iconOnly)} data-tip={iconOnly ? label : undefined} href={href}>
       {icon && <Icon name={icon} size={18} />}
-      <span>{label}</span>
+      {!iconOnly && <span>{label}</span>}
     </a>
   );
 }

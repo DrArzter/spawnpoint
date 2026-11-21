@@ -10,15 +10,20 @@ const looks: Readonly<Record<NoticeModel["tone"], Readonly<{ tone: string; icon:
   success: { tone: "ok", icon: "check_circle" },
 };
 
-/** One line above the content: what is wrong or going on, and the one thing to do about it at the end edge. */
-export function Notice({ notice }: Readonly<{ notice: NoticeModel }>) {
+/**
+ * One line above the content: what is wrong or going on, and the one thing to
+ * do about it at the end edge. `detail: "tooltip"` keeps the description off
+ * the line and puts it on an info mark (spec §9.3: details in a tooltip).
+ */
+export function Notice({ notice, detail = "line" }: Readonly<{ notice: NoticeModel; detail?: "line" | "tooltip" }>) {
   const look = looks[notice.tone];
   return (
     <div className={cx("c-notice", `c-tone-${look.tone}`)} role={notice.tone === "error" ? "alert" : "status"}>
       <Icon name={look.icon} size={20} />
       <span className="c-notice-text">
         <strong>{notice.title}</strong>
-        {notice.description && <span className="c-notice-detail">{notice.description}</span>}
+        {notice.description && detail === "line" && <span className="c-notice-detail">{notice.description}</span>}
+        {notice.description && detail === "tooltip" && <span aria-label={notice.description} className="c-notice-more" data-tip={notice.description} role="img" tabIndex={0}><Icon name="info" size={17} /></span>}
       </span>
       {notice.action && <ActionButton action={notice.action} size="sm" />}
     </div>

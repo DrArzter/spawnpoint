@@ -67,3 +67,17 @@ html[data-skin="cloud"] .c-card-body-kv {
     flex-wrap: wrap;
   }
 }
+
+html[data-skin="cloud"] .c-card-meta {
+  flex: none;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+html[data-skin="cloud"] .c-card-meta::before {
+  margin-right: 8px;
+  color: var(--c-ink-3);
+  content: "·";
+}

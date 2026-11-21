@@ -1,0 +1,41 @@
+/* StatCard shell: label and detail on one row, the value under them. */
+
+html[data-skin="cloud"] .c-stat {
+  gap: 8px;
+  padding: var(--c-card-y) var(--c-card-x);
+}
+
+html[data-skin="cloud"] .c-stat-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+html[data-skin="cloud"] .c-stat-label {
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  font-weight: 600;
+}
+
+html[data-skin="cloud"] .c-stat-detail {
+  overflow: hidden;
+  color: var(--c-ink-3);
+  font-size: var(--c-fs-s);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-skin="cloud"] .c-stat-value {
+  font-size: var(--c-fs-stat);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.1;
+}
+
+html[data-skin="cloud"] .c-stat-unit {
+  margin-left: 4px;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-body);
+  font-weight: 600;
+}

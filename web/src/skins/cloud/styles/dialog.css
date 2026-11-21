@@ -107,3 +107,9 @@ html[data-skin="cloud"] .c-dialog-cancel {
     padding-bottom: calc(20px + env(safe-area-inset-bottom));
   }
 }
+
+html[data-skin="cloud"] .c-dialog-start {
+  display: flex;
+  align-items: center;
+  margin-right: auto;
+}

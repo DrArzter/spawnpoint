@@ -41,6 +41,8 @@ type Surface = Readonly<{
   cancel: Action;
   /** The footer's end: the primary or danger Action after Cancel. */
   actions?: ReactNode;
+  /** The footer's start: a secondary control such as Restore defaults. */
+  start?: ReactNode;
   children?: ReactNode;
 }>;
 
@@ -49,7 +51,7 @@ const parts = {
   panel: { root: "c-panel", head: "c-panel-head", foot: "c-panel-foot" },
 } as const;
 
-export function DialogFrame({ kind, title, cancel, actions, children, className }: Surface & Readonly<{ kind: keyof typeof parts; className?: string }>) {
+export function DialogFrame({ kind, title, cancel, actions, start, children, className }: Surface & Readonly<{ kind: keyof typeof parts; className?: string }>) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useModal(ref, cancel);
@@ -62,6 +64,7 @@ export function DialogFrame({ kind, title, cancel, actions, children, className 
       </div>
       <div className="c-dialog-body">{children}</div>
       <div className={part.foot}>
+        {start && <span className="c-dialog-start">{start}</span>}
         <span data-cancel="" className="c-dialog-cancel"><ActionButton action={cancel} /></span>
         {actions}
       </div>

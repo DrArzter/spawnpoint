@@ -28,8 +28,8 @@ export function StubPage({ title, trail, after, model, more = [], children }: Re
   return (
     <div className="c-page">
       <PageHeader after={after} title={title} trail={trail} />
-      <Card label={title}>
-        {children}
+      {children}
+      <Card label="Actions">
         <ActionList actions={[...actionsOf(model), ...more]} />
       </Card>
     </div>

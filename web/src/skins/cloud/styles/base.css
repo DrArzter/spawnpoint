@@ -69,8 +69,25 @@ html[data-skin="cloud"] .c-spin {
 @keyframes c-shake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 @keyframes c-page-out { to { opacity: 0; transform: translateX(-32px) scale(.985); } }
 @keyframes c-page-in { from { transform: translateX(56px); } }
+@keyframes c-bump { 40% { color: var(--c-accent-text); transform: translateY(-2px); } }
+@keyframes c-row-in { from { opacity: 0; transform: translateY(-8px); background-color: var(--c-accent-soft); } }
 @keyframes c-pane-out { to { opacity: 0; transform: translateY(-16px); } }
 @keyframes c-pane-in { from { transform: translateY(32px); } }
+
+/* A8: a count that changed lifts once in the accent while it counts. */
+html[data-skin="cloud"] .c-tick {
+  display: inline-block;
+}
+
+html[data-skin="cloud"] .c-tick-moving {
+  animation: c-bump var(--c-d-tick) var(--c-ease);
+}
+
+/* A9: a row that was not there before arrives from above on an accent wash. */
+html[data-skin="cloud"] .c-arrived,
+html[data-skin="cloud"] .c-arrived > td {
+  animation: c-row-in var(--c-d3) var(--c-ease);
+}
 
 /* A1: the page area slides as a solid sheet; the bars are outside it, and the
    notifications float above it with no snapshot of their own underneath. */

@@ -105,3 +105,115 @@ html[data-skin="cloud"] .c-glyph-lg .c-glyph-letter {
     border-radius: var(--c-r-ctl);
   }
 }
+
+/* Address, Copy and Person: one centreline for glyph, text and button (R5). */
+
+html[data-skin="cloud"] .c-address {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+html[data-skin="cloud"] .c-address-glyph {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  color: var(--c-ink-3);
+  border-radius: var(--c-r-sm);
+}
+
+html[data-skin="cloud"] .c-address-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-skin="cloud"] .c-copy {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--c-r-sm);
+  background: none;
+  color: var(--c-ink-3);
+  cursor: pointer;
+  transition: background var(--c-d1), color var(--c-d1);
+}
+
+html[data-skin="cloud"] .c-copy:hover {
+  background: var(--c-surface-2);
+  color: var(--c-ink);
+}
+
+html[data-skin="cloud"] .c-copy:active {
+  transform: scale(.92);
+}
+
+html[data-skin="cloud"] .c-copy-done,
+html[data-skin="cloud"] .c-copy-done:hover {
+  color: var(--c-ok);
+}
+
+html[data-skin="cloud"] .c-flash .c-copy {
+  color: var(--c-flash-ink);
+}
+
+html[data-skin="cloud"] .c-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+html[data-skin="cloud"] .c-person-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+html[data-skin="cloud"] .c-person-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+html[data-skin="cloud"] .c-person-name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-skin="cloud"] .c-person-detail {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  white-space: nowrap;
+}
+
+html[data-skin="cloud"] .c-person-detail > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 759px) {
+  html[data-skin="cloud"] .c-copy {
+    width: var(--c-target);
+    height: var(--c-target);
+  }
+}

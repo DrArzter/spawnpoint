@@ -15,6 +15,7 @@ import { formatDateTime, plural } from "../../lib/format";
 import { describePermission } from "../../lib/permissions";
 import type { Game, Role } from "../../model";
 import { ActionButton, ActionOverflow } from "./actions";
+import { ConfirmationDialog } from "./Dialogs";
 import { Person } from "./Person";
 
 export function Access({ model }: Readonly<{ model: AccessModel }>) {
@@ -66,7 +67,7 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
     // a role sits next to the one that opens their accounts rather than
     // stranded in the middle of the row.
     { id: "role", label: "Role", align: "end", width: "180px", render: (row) => <RoleSelect disabled={rolesBlocked || row.changing} fallback={row.roleId} label={`Role for ${row.member.name}`} onChange={row.setRoleId} roles={model.roles} value={row.roleId} /> },
-    { id: "actions", label: "Actions", actions: true, render: (row) => <ActionButton action={row.linkedAccounts} aria-expanded={row.member.id === model.managed?.id} size="small" variant="text" /> },
+    { id: "actions", label: "Actions", actions: true, render: (row) => <ActionOverflow groups={[[row.linkedAccounts], row.remove ? [row.remove] : []]} label={`Actions for ${row.member.name}`} size="small" /> },
   ];
   const candidates = model.candidates;
   const managedRole = model.managed ? model.roles.find((role) => role.id === model.managed?.roleId)?.name ?? model.managed.roleId : "";
@@ -125,6 +126,8 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
       <Sheet closeActionId={model.closeManaged.id} description={model.managed ? `${model.managed.name} · ${managedRole}` : undefined} onClose={model.closeManaged.run} open={model.managed !== null} title="Linked accounts">
         {model.managed && <LinkedAccounts bare member={model.managed} />}
       </Sheet>
+
+      <ConfirmationDialog model={model.deletion} />
     </div>
   );
 }

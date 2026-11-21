@@ -33,3 +33,25 @@ test("the MCP resource challenges an unauthenticated client with its metadata UR
   assert.equal(result.statusCode, 401);
   assert.equal(result.headers["www-authenticate"], 'Bearer resource_metadata="https://api.spawnpoint.example/.well-known/oauth-protected-resource/mcp"');
 });
+
+test("an OAuth access token of a deleted identity is refused", async (t) => {
+  const { accessTable } = await import("./access-table.ts");
+  const { document, ssm } = await import("../src/handlers/api/clients.ts");
+  const { issueOAuthAccessToken } = await import("../src/access/oauth.ts");
+  const secret = "test-secret-that-is-long-enough";
+  t.mock.method(ssm, "send", async () => ({ Parameter: { Value: secret } }));
+  const identityId = "00000000-0000-4000-8000-0000000000b1";
+  const token = issueOAuthAccessToken({
+    identityId, clientId: "client-1", audience: "https://api.spawnpoint.example/mcp", scopes: ["spawnpoint.read"],
+  }, "https://api.spawnpoint.example", secret);
+  const request = {
+    routeKey: "POST /mcp", headers: { authorization: `Bearer ${token}` },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize" }),
+  };
+  const { table } = accessTable(t, document, [
+    { pk: `IDENTITY#${identityId}`, sk: "PROFILE", identity_id: identityId, display_name: "Agent owner", role_id: "operator", direct_grants: [], status: "ACTIVE" },
+  ]);
+  assert.equal((await handler(request)).statusCode, 200);
+  table.clear();
+  assert.equal((await handler(request)).statusCode, 401);
+});

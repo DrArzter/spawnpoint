@@ -7,6 +7,7 @@ import { buildSessionOverview, buildWorldRow, sessionControlAvailability } from 
 import { deriveServerState } from "../src/core/useConsole.ts";
 import type { ControlPlaneSnapshot, Game, World, WorldSession } from "../src/model.ts";
 import { deriveSharedHostSession, fleetSessionOf, fleetWorldState, operationsBlockingWorld, worldSessionActive } from "../src/session.ts";
+import { NO_PENDING } from "../src/shell/actions.ts";
 
 // ADR-0062: two fleet worlds of one game run at once, each on a host launched
 // for it and a session record of its own. Neither refuses the other.
@@ -42,7 +43,12 @@ function snapshot(operations: ControlPlaneSnapshot["operations"] = []): ControlP
   return {
     observedAt: "2026-10-09T00:00:00.000Z",
     games: [game],
-    hosts: [],
+    // Production shape: the configured host stopped, each running fleet world on a host launched for it.
+    hosts: [
+      { id: "i-shared", name: "Shared host", state: "stopped", provenance: "configured" },
+      { id: "i-rostik", name: "fleet-rostik", state: "running", provenance: "launched" },
+      { id: "i-magic", name: "fleet-magic", state: "running", provenance: "launched" },
+    ],
     operations,
     deployment: { placement: "fleet", launchEnabled: true, dnsAvailable: true },
   };
@@ -74,13 +80,14 @@ test("a fleet world waits only for operations that are its own or name no world"
   const refused = sessionControlAvailability(magic, game, deriveSharedHostSession(snapshot([starting])), true, false, true, operationsBlockingWorld(snapshot([starting]), magic));
   assert.equal(refused.disabled, true);
   assert.equal(deriveSharedHostSession(snapshot([starting])).operationRunning, false, "a fleet start never makes the configured host look busy");
+  assert.equal(deriveSharedHostSession(snapshot()).state, "stopped", "running launched hosts never make the configured host look busy");
 });
 
 test("rows tell each world's own state, and the overview says how many run", () => {
   const starting = fleetWorld("spare", "Spare", session("spare", "starting"));
   const busyGame: Game = { ...game, worlds: [rostik, magic, starting] };
   const shared = deriveSharedHostSession(snapshot());
-  const row = (world: World) => buildWorldRow(busyGame, world, { fleet: true, sharedSession: shared, serverState: "running", granted: new Set(), pending: null, callbacks: { onWorldAction: () => undefined, onInvite: () => undefined, onDownloadPack: () => undefined } });
+  const row = (world: World) => buildWorldRow(busyGame, world, { fleet: true, sharedSession: shared, granted: new Set(), pending: NO_PENDING, callbacks: { onWorldAction: () => undefined, onInvite: () => undefined, onDownloadPack: () => undefined } });
   assert.equal(row(rostik).status.label, "Online");
   assert.equal(row(magic).status.label, "Online");
   assert.equal(row(starting).status.label, "Starting");

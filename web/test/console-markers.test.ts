@@ -18,7 +18,6 @@ import { PageHeader } from "../src/skins/console/ui/PageHeader.tsx";
 import { Status } from "../src/skins/console/ui/Status.tsx";
 import { Table } from "../src/skins/console/ui/Table.tsx";
 import { Tabs } from "../src/skins/console/ui/Tabs.tsx";
-import { Toolbar } from "../src/skins/console/ui/Toolbar.tsx";
 import { TrackList } from "../src/skins/console/ui/TrackList.tsx";
 
 /*
@@ -72,11 +71,10 @@ test("markers: a track list is rows, one line from 1024px", () => {
   assert.match(markup, /data-from="1024" data-layout="one-line" role="row"/);
 });
 
-test("markers: details are pairs, an empty state is centred, a grid is a grid, a toolbar spreads", () => {
+test("markers: details are pairs, an empty state is centred, a grid is a grid", () => {
   assert.match(html(createElement(DetailList, { details: [{ label: "Address", value: { type: "text", text: "a" } }] })), /class="c-detail-item" data-layout="pair"/);
   assert.match(html(createElement(Empty, { icon: "info", title: "No worlds" })), /class="c-empty" data-layout="centred"/);
   assert.match(html(createElement(Grid, { kind: "home" }, "x")), /class="c-grid c-grid-home" data-layout="grid"/);
-  assert.match(html(createElement(Toolbar, { start: "a", end: "b" })), /class="c-toolbar" data-layout="spread"/);
 });
 
 test("markers: a status and a status indicator name their state; a plain fact does not", () => {

@@ -1,4 +1,4 @@
-/* PageHeader (the breadcrumb is the title) and Toolbar. */
+/* PageHeader: the breadcrumb is the title. */
 
 /* One line from the tablet step: the title gives way (the h1 truncates), the actions never wrap. */
 html[data-skin="console"] .c-page-header {
@@ -91,37 +91,12 @@ html[data-skin="console"] .c-page-actions {
   margin-left: auto;
 }
 
-html[data-skin="console"] .c-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--c-line);
-}
-
-html[data-skin="console"] .c-toolbar-start {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1 1 320px;
-  min-width: 0;
-}
-
-html[data-skin="console"] .c-toolbar-end {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
 /*
  * A header narrower than its trail, title, status and actions (a split pane
  * from the tablet step) keeps one line: the trail becomes the back button, as
  * on a phone, and the title may truncate to its first letters.
  */
-@container c-head (max-width: 760px) {
+@container c-head (max-width: 759px) {
   html[data-skin="console"] .c-page-back {
     display: grid;
     place-items: center;

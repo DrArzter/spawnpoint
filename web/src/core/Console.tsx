@@ -157,6 +157,7 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     world,
     worldsHref: routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: null }),
     availability: worldStatus(world),
+    sessionStatus: sessionStatus(state),
     notices: worldNotices(world, rowPending),
     tabs: shown.tabs,
     tab: route.worldTab,

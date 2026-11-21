@@ -169,6 +169,8 @@ export type WorldModel = Readonly<{
   world: World;
   worldsHref: string;
   availability: StatusDescriptor;
+  /** This world's own session, never the game's (ADR-0062). */
+  sessionStatus: StatusDescriptor;
   notices: readonly Notice[];
   tabs: readonly Readonly<{ id: WorldTab; label: string; count?: number }>[];
   tab: WorldTab;
@@ -365,7 +367,8 @@ export type ConfirmationModel = Readonly<{
   confirm: Action;
   cancel: Action;
   releaseChoice: Readonly<{ value: string; options: readonly Readonly<{ version: string; latest: boolean }>[]; set: (value: string) => void }> | null;
-  typedConfirmation: Readonly<{ expected: string; value: string; set: (value: string) => void }> | null;
+  /** `label` names what is typed: "World ID" for a purge. */
+  typedConfirmation: Readonly<{ label: string; expected: string; value: string; set: (value: string) => void }> | null;
 }>;
 
 export type WorldPlacement = "configured" | "fleet";

@@ -232,6 +232,6 @@ export function useConfirmationForm(confirmation: Confirmation | null, opts: Rea
     confirm: action("confirm", copy.label, () => opts.onConfirm(confirmation, confirmation.kind === "wipe" ? release : undefined), { disabled: blocked, danger: copy.destructive }),
     cancel: action("cancel", "Cancel", opts.onClose),
     releaseChoice: preset ? { value: release, options: [...preset.releases].reverse().map((version) => ({ version, latest: version === preset.latestRelease })), set: setRelease } : null,
-    typedConfirmation: confirmation.kind === "purge" ? { expected: confirmation.world.id, value: typed, set: setTyped } : null,
+    typedConfirmation: confirmation.kind === "purge" ? { label: "World ID", expected: confirmation.world.id, value: typed, set: setTyped } : null,
   };
 }

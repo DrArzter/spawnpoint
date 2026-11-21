@@ -75,7 +75,7 @@ async function versionedObjects(bucket: string, prefix: string, exactKey?: strin
   let keyMarker: string | undefined;
   let versionIdMarker: string | undefined;
   do {
-    const page = await s3.send(new ListObjectVersionsCommand({
+    const page = await s3.send(new ListObjectVersionsCommand({ // NOSONAR paginated: the next token comes from the previous page
       Bucket: bucket, Prefix: prefix, KeyMarker: keyMarker, VersionIdMarker: versionIdMarker,
     }));
     for (const object of [...(page.Versions ?? []), ...(page.DeleteMarkers ?? [])]) {
@@ -93,7 +93,7 @@ async function permanentlyDelete(bucket: string, prefix: string, exactKey?: stri
   const objects = await versionedObjects(bucket, prefix, exactKey);
   for (let offset = 0; offset < objects.length; offset += 1000) {
     const page = objects.slice(offset, offset + 1000);
-    const deleted = await s3.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: page, Quiet: true } }));
+    const deleted = await s3.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: page, Quiet: true } })); // NOSONAR ordered, fail-fast purge batches
     if ((deleted.Errors ?? []).length > 0) throw new Error("purge_delete_failed");
   }
 }
@@ -108,41 +108,55 @@ function purgeMarker(value: Record<string, unknown>, worldId: string, targetGene
   return { status: value.status, generations: generations as string[] };
 }
 
+type StoredJson = Awaited<ReturnType<typeof jsonObject>>;
+type PurgeMarker = Readonly<{ stored: StoredJson; generations: readonly string[]; completed: boolean }>;
+
+// The world's record now names another generation: the purge either finished
+// earlier or the operation id belongs to something else.
+function supersededPurge(input: Input, targetGenerationId: string, marker: StoredJson | null) {
+  if (marker !== null && purgeMarker(marker.value, input.worldId, targetGenerationId).status === "completed") {
+    return { result: "already_applied", worldId: input.worldId, generationId: targetGenerationId };
+  }
+  throw new Error("operation_id_conflict");
+}
+
+// Reads the purge marker, or writes the pending one that fixes which generations go.
+async function openPurgeMarker(
+  input: Input, releaseBucket: string, markerKey: string, existing: StoredJson | null, record: WorldRecord | null,
+): Promise<PurgeMarker> {
+  const targetGenerationId = input.targetGenerationId!;
+  if (existing !== null) {
+    const parsed = purgeMarker(existing.value, input.worldId, targetGenerationId);
+    return { stored: existing, generations: parsed.generations, completed: parsed.status === "completed" };
+  }
+  if (record?.worldId !== input.worldId) throw new Error("invalid_world_record");
+  const generations = purgeGenerationIds(record);
+  const document = {
+    schema_version: 1, world_id: input.worldId, target_generation_id: targetGenerationId,
+    status: "pending", generation_ids: generations, requested_at: input.requestedAt, requested_by: input.requestedBy,
+  };
+  await s3.send(new PutObjectCommand({
+    Bucket: releaseBucket, Key: markerKey, IfNoneMatch: "*", ContentType: "application/json",
+    ServerSideEncryption: "AES256", Body: JSON.stringify(document),
+  }));
+  return { stored: await jsonObject(releaseBucket, markerKey), generations, completed: false };
+}
+
 async function purgeWorld(input: Input, releaseBucket: string) {
   const targetGenerationId = input.targetGenerationId!;
   const markerKey = `worlds/${input.worldId}/purges/${targetGenerationId}.json`;
   const recordKey = `worlds/${input.worldId}/world.json`;
-  let marker = await optionalJsonObject(releaseBucket, markerKey);
+  const existingMarker = await optionalJsonObject(releaseBucket, markerKey);
   const storedRecord = await optionalJsonObject(releaseBucket, recordKey);
   const currentRecord = storedRecord === null ? null : parseWorldRecord(storedRecord.value);
   if (storedRecord !== null && currentRecord === null) throw new Error("invalid_world_record");
   if (currentRecord !== null && currentRecord.currentGeneration.id !== targetGenerationId) {
-    if (marker !== null && purgeMarker(marker.value, input.worldId, targetGenerationId).status === "completed") {
-      return { result: "already_applied", worldId: input.worldId, generationId: targetGenerationId };
-    }
-    throw new Error("operation_id_conflict");
+    return supersededPurge(input, targetGenerationId, existingMarker);
   }
-  let generations: readonly string[];
-  if (marker === null) {
-    if (storedRecord === null) throw new Error("invalid_world_record");
-    if (currentRecord!.worldId !== input.worldId) throw new Error("invalid_world_record");
-    generations = purgeGenerationIds(currentRecord!);
-    const document = {
-      schema_version: 1, world_id: input.worldId, target_generation_id: targetGenerationId,
-      status: "pending", generation_ids: generations, requested_at: input.requestedAt, requested_by: input.requestedBy,
-    };
-    await s3.send(new PutObjectCommand({
-      Bucket: releaseBucket, Key: markerKey, IfNoneMatch: "*", ContentType: "application/json",
-      ServerSideEncryption: "AES256", Body: JSON.stringify(document),
-    }));
-    marker = await jsonObject(releaseBucket, markerKey);
-  } else {
-    const parsed = purgeMarker(marker.value, input.worldId, targetGenerationId);
-    if (parsed.status === "completed") {
-      if (storedRecord !== null) await permanentlyDelete(releaseBucket, recordKey, recordKey);
-      return { result: storedRecord === null ? "already_applied" : "purge", worldId: input.worldId, generationId: targetGenerationId };
-    }
-    generations = parsed.generations;
+  const marker = await openPurgeMarker(input, releaseBucket, markerKey, existingMarker, currentRecord);
+  if (marker.completed) {
+    if (storedRecord !== null) await permanentlyDelete(releaseBucket, recordKey, recordKey);
+    return { result: storedRecord === null ? "already_applied" : "purge", worldId: input.worldId, generationId: targetGenerationId };
   }
 
   const backupBucket = requiredEnv("BACKUP_BUCKET");
@@ -150,11 +164,11 @@ async function purgeWorld(input: Input, releaseBucket: string) {
   await permanentlyDelete(releaseBucket, `worlds/${input.worldId}/generations/`);
   await permanentlyDelete(releaseBucket, `worlds/${input.worldId}/release.json`, `worlds/${input.worldId}/release.json`);
   await s3.send(new PutObjectCommand({
-    Bucket: releaseBucket, Key: markerKey, IfMatch: marker.etag, ContentType: "application/json",
-    ServerSideEncryption: "AES256", Body: JSON.stringify({ ...marker.value, status: "completed", purged_at: input.requestedAt }),
+    Bucket: releaseBucket, Key: markerKey, IfMatch: marker.stored.etag, ContentType: "application/json",
+    ServerSideEncryption: "AES256", Body: JSON.stringify({ ...marker.stored.value, status: "completed", purged_at: input.requestedAt }),
   }));
   await permanentlyDelete(releaseBucket, recordKey, recordKey);
-  return { result: "purge", worldId: input.worldId, generationId: targetGenerationId, generations };
+  return { result: "purge", worldId: input.worldId, generationId: targetGenerationId, generations: marker.generations };
 }
 
 async function verifiedBackups(worldId: string) {
@@ -210,6 +224,42 @@ async function writeInitialReleaseState(record: WorldRecord, input: Input): Prom
   }
 }
 
+// Did an earlier attempt of this operation already apply it?
+function appliedEarlier(input: Input, record: WorldRecord, expectedGenerationId: string | null): boolean {
+  if (input.action === "archive") return record.status === "archived";
+  if (record.currentGeneration.id !== expectedGenerationId) return false;
+  if (input.action === "restore" && (record.currentGeneration.source.kind !== "backup" || record.currentGeneration.source.key !== input.backupKey)) {
+    throw new Error("operation_id_conflict");
+  }
+  return true;
+}
+
+type Backups = Awaited<ReturnType<typeof verifiedBackups>>;
+
+async function nextRecord(input: Input, record: WorldRecord, backups: Backups): Promise<WorldRecord> {
+  if (input.action === "archive") return archiveWorldRecord(record);
+  if (input.action === "regenerate") {
+    const release = input.release!;
+    const preset = await latestPreset(record);
+    if (!preset.releases.includes(release)) throw new Error("release_not_available");
+    return regenerateWorldRecord(record, preset, release, input.generationUuid!, input.requestedAt);
+  }
+  const backup = backups.find((candidate) => candidate.key === input.backupKey);
+  if (backup === undefined || backup.generationId === null) throw new Error("backup_not_verified");
+  return restoreWithPublishedRelease(record, {
+    key: backup.key, checksum: backup.checksum, generationId: backup.generationId,
+  }, input.generationUuid!, input.requestedAt, publishedReleaseExists);
+}
+
+// A generation that ran a release must have a verified backup before it is replaced.
+async function requireCurrentGenerationBackup(record: WorldRecord, backups: Backups, releaseStates: S3ReleaseStateStore): Promise<void> {
+  const currentRelease = await releaseStates.readOrMigrateLegacy({ worldId: record.worldId, generationId: record.currentGeneration.id });
+  const ran = (currentRelease?.state.activeRelease ?? null) !== null;
+  if (ran && !backups.some((backup) => backup.generationId === record.currentGeneration.id)) {
+    throw new Error("current_generation_backup_missing");
+  }
+}
+
 export async function handler(event: unknown) {
   const input = parseInput(event);
   const releaseBucket = requiredEnv("RELEASE_BUCKET");
@@ -220,41 +270,12 @@ export async function handler(event: unknown) {
   const record = stored.record;
 
   const expectedGenerationId = input.generationUuid ? `gen-${input.generationUuid.replaceAll("-", "")}` : null;
-  const releaseStates = new S3ReleaseStateStore(s3, releaseBucket);
-  let next: WorldRecord;
-  let changed = true;
-  if (input.action === "archive" && record.status === "archived") {
-    next = record;
-    changed = false;
-  } else if (input.action !== "archive" && record.currentGeneration.id === expectedGenerationId) {
-    if (input.action === "restore" && (record.currentGeneration.source.kind !== "backup" || record.currentGeneration.source.key !== input.backupKey)) {
-      throw new Error("operation_id_conflict");
-    }
-    next = record;
-    changed = false;
-  } else {
-    const backups = await verifiedBackups(record.worldId);
-    const currentRelease = await releaseStates.readOrMigrateLegacy({ worldId: record.worldId, generationId: record.currentGeneration.id });
-    if (currentRelease !== null && currentRelease.state.activeRelease !== null && !backups.some((backup) => backup.generationId === record.currentGeneration.id)) {
-      throw new Error("current_generation_backup_missing");
-    }
-    if (input.action === "archive") {
-      next = archiveWorldRecord(record);
-    } else if (input.action === "regenerate") {
-      const release = input.release!;
-      const preset = await latestPreset(record);
-      if (!preset.releases.includes(release)) throw new Error("release_not_available");
-      next = regenerateWorldRecord(record, preset, release, input.generationUuid!, input.requestedAt);
-    } else {
-      const backup = backups.find((candidate) => candidate.key === input.backupKey);
-      if (backup === undefined || backup.generationId === null) throw new Error("backup_not_verified");
-      next = await restoreWithPublishedRelease(record, {
-        key: backup.key, checksum: backup.checksum, generationId: backup.generationId,
-      }, input.generationUuid!, input.requestedAt, publishedReleaseExists);
-    }
-  }
-
+  let next = record;
+  const changed = !appliedEarlier(input, record, expectedGenerationId);
   if (changed) {
+    const backups = await verifiedBackups(record.worldId);
+    await requireCurrentGenerationBackup(record, backups, new S3ReleaseStateStore(s3, releaseBucket));
+    next = await nextRecord(input, record, backups);
     await worlds.replace(next, stored.etag);
   }
   if (input.action !== "archive") await writeInitialReleaseState(next, input);

@@ -358,9 +358,10 @@ export async function controlWorldLifecycle(
   if (sessionError !== null) return sessionError;
   const operationId = `panel-world-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
   const stopRequired = record.status === "active" && located.record !== null;
-  await worldLifecycleExecution(
-    operationId, host.providerRef, `identity:${identity.id}`, located.serverId, located.record?.activeSessionId ?? "none", worldId, action, backupKey, release,
-    stopRequired, record.currentGeneration.id,
-  );
+  await worldLifecycleExecution({
+    operationId, instanceId: host.providerRef, requestedBy: `identity:${identity.id}`, serverId: located.serverId,
+    sessionId: located.record?.activeSessionId ?? "none", worldId, action, backupKey, release,
+    stopRequired, targetGenerationId: record.currentGeneration.id,
+  });
   return response(202, { result: "requested", operationId });
 }

@@ -28,7 +28,7 @@ async function matchingTypes(client: EC2Client, requirements: LaunchRequirements
   const types: string[] = [];
   let nextToken: string | undefined;
   do {
-    const page = await client.send(new GetInstanceTypesFromInstanceRequirementsCommand({
+    const page = await client.send(new GetInstanceTypesFromInstanceRequirementsCommand({ // NOSONAR paginated: the next token comes from the previous page
       ArchitectureTypes: ["x86_64"],
       VirtualizationTypes: ["hvm"],
       InstanceRequirements: {
@@ -47,8 +47,8 @@ async function matchingTypes(client: EC2Client, requirements: LaunchRequirements
 
 const client = new EC2Client({});
 let failures = 0;
-for (const entry of worlds) {
-  const types = await matchingTypes(client, entry.requirements);
+const matches = await Promise.all(worlds.map(async (entry) => ({ entry, types: await matchingTypes(client, entry.requirements) })));
+for (const { entry, types } of matches) {
   if (types.length === 0) {
     failures += 1;
     console.error(`FAIL ${entry.world}: no instance type in the allowed families meets ${JSON.stringify(entry.requirements)}`);

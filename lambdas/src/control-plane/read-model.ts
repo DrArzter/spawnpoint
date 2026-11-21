@@ -48,7 +48,7 @@ export type ControlPlaneSources = Readonly<{
   readReleasePointer: (worldId: string, generationId: string | null) => Promise<ReleasePointerObservation>;
   listRunningOperations: () => Promise<readonly OperationObservation[]>;
   listPresets?: () => Promise<readonly PresetObservation[]>;
-  readReleaseManifest?: (gameId: string, presetId: string, version: string) => Promise<unknown | null>;
+  readReleaseManifest?: (gameId: string, presetId: string, version: string) => Promise<unknown>;
   readHostMetrics?: (instanceId: string, hours: number) => Promise<HostMetrics>;
   listWorldRecords?: () => Promise<readonly WorldRecord[]>;
 }>;
@@ -220,6 +220,16 @@ export async function readControlPlaneSnapshot(
         const release = pointerByWorld.get(world.id) ?? { state: "unavailable" as const, generationId: null, desiredRelease: null, activeRelease: null };
         const record = recordByWorld.get(world.id);
         const generations = record === undefined ? [] : [...record.previousGenerations, record.currentGeneration];
+        // The address the host reported when this world's session became
+        // ready is the truth: it carries the session's slot and the host it
+        // landed on (ADR-0054). Composed only while nothing is observed — the
+        // strategy's host part plus the game's own port — and withheld
+        // altogether from a caller who may not read one.
+        let connectionAddress: string | null = null;
+        if (connectionHost !== null) {
+          connectionAddress = observedAddress(session.record, world.id)
+            ?? (world.placement === "fleet" ? null : worldAddress(world.id, { connectionHost, publicIp: hostPublicIp }, effectiveCatalog));
+        }
         return {
           id: world.id,
           displayName: world.displayName,
@@ -241,15 +251,7 @@ export async function readControlPlaneSnapshot(
               : null,
             originRelease: generation.release,
           })),
-          // The address the host reported when this world's session became
-          // ready is the truth: it carries the session's slot and the host it
-          // landed on (ADR-0054). Composed only while nothing is observed — the
-          // strategy's host part plus the game's own port — and withheld
-          // altogether from a caller who may not read one.
-          connectionAddress: connectionHost === null
-            ? null
-            : observedAddress(session.record, world.id)
-              ?? (world.placement === "fleet" ? null : worldAddress(world.id, { connectionHost, publicIp: hostPublicIp }, effectiveCatalog)),
+          connectionAddress,
           release: options.includeDesiredRelease ? release : { ...release, desiredRelease: null },
           session: sessionView(session.serverId, session.record),
           gameSettings: record === undefined ? null : { values: record.gameSettings?.values ?? {}, updatedAt: record.gameSettings?.updatedAt ?? null },

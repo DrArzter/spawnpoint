@@ -55,38 +55,49 @@ function unwrap(expression: string): string {
   return trimmed;
 }
 
+type Terms = Readonly<{ attribute: (name: string) => unknown; values: Record<string, unknown> }>;
+
+// Tried in order; the first pattern that matches a term evaluates it.
+const TERMS: ReadonlyArray<readonly [RegExp, (match: RegExpExecArray, terms: Terms) => boolean]> = [
+  [/^attribute_exists\((\S+)\)$/, (match, { attribute }) => attribute(match[1]!) !== undefined],
+  [/^attribute_not_exists\((\S+)\)$/, (match, { attribute }) => attribute(match[1]!) === undefined],
+  [/^begins_with\((\S+), (:\w+)\)$/, (match, { attribute, values }) => {
+    const value = attribute(match[1]!);
+    return typeof value === "string" && value.startsWith(String(values[match[2]!]));
+  }],
+  [/^(\S+) IN \(([^)]*)\)$/, (match, { attribute, values }) => match[2]!.split(",").map((value) => values[value.trim()]).includes(attribute(match[1]!))],
+  [/^(\S+) ([<>]) (:\w+)$/, (match, { attribute, values }) => {
+    const [left, right] = [attribute(match[1]!), values[match[3]!]] as [number, number];
+    if (typeof left !== "number") return false;
+    return match[2] === "<" ? left < right : left > right;
+  }],
+  [/^(\S+) = (:\w+)$/, (match, { attribute, values }) => attribute(match[1]!) !== undefined && attribute(match[1]!) === values[match[2]!]],
+];
+
+function term(text: string, terms: Terms): boolean {
+  for (const [pattern, evaluate] of TERMS) {
+    const match = pattern.exec(text);
+    if (match) return evaluate(match, terms);
+  }
+  throw new Error(`unsupported expression: ${text}`);
+}
+
 export function holds(item: Item | undefined, expression: string | undefined, input: Input): boolean {
   if (expression === undefined) return true;
   const names = input.ExpressionAttributeNames ?? {};
-  const values = input.ExpressionAttributeValues ?? {};
-  const attribute = (name: string) => item?.[names[name] ?? name];
-  const term = (text: string): boolean => {
-    let match = /^attribute_exists\((\S+)\)$/.exec(text);
-    if (match) return attribute(match[1]!) !== undefined;
-    match = /^attribute_not_exists\((\S+)\)$/.exec(text);
-    if (match) return attribute(match[1]!) === undefined;
-    match = /^begins_with\((\S+), (:\w+)\)$/.exec(text);
-    if (match) return typeof attribute(match[1]!) === "string" && (attribute(match[1]!) as string).startsWith(String(values[match[2]!]));
-    match = /^(\S+) IN \(([^)]*)\)$/.exec(text);
-    if (match) return match[2]!.split(",").map((value) => values[value.trim()]).includes(attribute(match[1]!));
-    match = /^(\S+) (<|>) (:\w+)$/.exec(text);
-    if (match) {
-      const [left, right] = [attribute(match[1]!), values[match[3]!]] as [number, number];
-      return typeof left === "number" && (match[2] === "<" ? left < right : left > right);
-    }
-    match = /^(\S+) = (:\w+)$/.exec(text);
-    if (match) return attribute(match[1]!) !== undefined && attribute(match[1]!) === values[match[2]!];
-    throw new Error(`unsupported expression: ${text}`);
-  };
-  return splitTop(expression, " OR ").some((part) => splitTop(unwrap(part), " AND ").every((text) => term(unwrap(text))));
+  const terms: Terms = { attribute: (name) => item?.[names[name] ?? name], values: input.ExpressionAttributeValues ?? {} };
+  return splitTop(expression, " OR ").some((part) => splitTop(unwrap(part), " AND ").every((text) => term(unwrap(text), terms)));
 }
 
 function applyUpdate(item: Item, input: Input): void {
   const expression = String(input.UpdateExpression);
   const names = input.ExpressionAttributeNames ?? {};
   const values = input.ExpressionAttributeValues ?? {};
-  for (const [, action, body] of expression.matchAll(/(SET|REMOVE)\s+(.*?)(?=\s+(?:SET|REMOVE)\s+|$)/g)) {
-    for (const part of body!.split(",").map((text) => text.trim())) {
+  // One clause per SET or REMOVE keyword.
+  for (const clause of expression.split(/ (?=SET |REMOVE )/)) {
+    const space = clause.indexOf(" ");
+    const action = clause.slice(0, space);
+    for (const part of clause.slice(space + 1).split(",").map((text) => text.trim())) {
       if (action === "REMOVE") delete item[names[part] ?? part];
       else {
         const [name, value] = part.split(" = ").map((text) => text.trim());

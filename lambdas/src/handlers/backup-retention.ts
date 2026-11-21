@@ -42,7 +42,10 @@ function requiredEnv(name: string): string {
 const RESUMABLE = /-\d{8}T\d{6}Z-[0-9a-f]{64}\.tar\.zst$/;
 
 // Keys sort by code unit, as jq's sort in prepare-world.sh picks the newest.
-const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+function byCodeUnit(a: string, b: string): number {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
 
 /** The archive the next start resumes from: the greatest key of the open generation, as server/scripts/prepare-world.sh picks it. */
 export function resumeKey(record: WorldRecord, keys: readonly string[]): string | undefined {
@@ -91,13 +94,13 @@ export async function applyBackupRetention(store: RetentionStore): Promise<reado
     try {
       // A world with no record has nothing to say which generation is open,
       // so nothing of it is touched.
-      const record = await store.readWorld(worldId);
+      const record = await store.readWorld(worldId); // NOSONAR one world at a time: a failure is recorded per world
       if (record === null) {
         results.push({ worldId, result: "no_world_record", removed: [] });
         continue;
       }
-      const removed = archivesToRemove(record, await store.listArchives(worldId));
-      for (const key of removed) await store.deleteArchive(key);
+      const removed = archivesToRemove(record, await store.listArchives(worldId)); // NOSONAR one world at a time: a failure is recorded per world
+      for (const key of removed) await store.deleteArchive(key); // NOSONAR ordered, fail-fast deletes
       results.push({ worldId, result: "applied", removed });
     } catch (error) {
       console.error("backup_retention_failed", { worldId, errorName: error instanceof Error ? error.name : "UnknownError" });
@@ -113,7 +116,7 @@ export function s3RetentionStore(s3: S3Send, backupBucket: string, worlds: Pick<
       const ids: string[] = [];
       let token: string | undefined;
       do {
-        const page = await s3.send(new ListObjectsV2Command({
+        const page = await s3.send(new ListObjectsV2Command({ // NOSONAR paginated: the next token comes from the previous page
           Bucket: backupBucket, Prefix: "worlds/", Delimiter: "/", ...(token ? { ContinuationToken: token } : {}),
         }));
         for (const prefix of page.CommonPrefixes ?? []) {
@@ -128,7 +131,7 @@ export function s3RetentionStore(s3: S3Send, backupBucket: string, worlds: Pick<
       const objects: ArchiveObject[] = [];
       let token: string | undefined;
       do {
-        const page = await s3.send(new ListObjectsV2Command({
+        const page = await s3.send(new ListObjectsV2Command({ // NOSONAR paginated: the next token comes from the previous page
           Bucket: backupBucket, Prefix: `worlds/${worldId}/archives/`, ...(token ? { ContinuationToken: token } : {}),
         }));
         for (const object of page.Contents ?? []) {

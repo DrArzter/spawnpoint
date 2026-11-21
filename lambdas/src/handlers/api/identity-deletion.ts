@@ -46,7 +46,7 @@ async function queryAll(input: QueryCommandInput): Promise<Item[]> {
   const items: Item[] = [];
   let cursor: Record<string, unknown> | undefined;
   do {
-    const page = await document.send(new QueryCommand({ ...input, ExclusiveStartKey: cursor }));
+    const page = await document.send(new QueryCommand({ ...input, ExclusiveStartKey: cursor })); // NOSONAR paginated: the next token comes from the previous page
     items.push(...(page.Items ?? []));
     cursor = page.LastEvaluatedKey;
   } while (cursor !== undefined);
@@ -57,7 +57,7 @@ async function scanAll(input: ScanCommandInput): Promise<Item[]> {
   const items: Item[] = [];
   let cursor: Record<string, unknown> | undefined;
   do {
-    const page = await document.send(new ScanCommand({ ...input, ExclusiveStartKey: cursor }));
+    const page = await document.send(new ScanCommand({ ...input, ExclusiveStartKey: cursor })); // NOSONAR paginated: the next token comes from the previous page
     items.push(...(page.Items ?? []));
     cursor = page.LastEvaluatedKey;
   } while (cursor !== undefined);
@@ -65,7 +65,7 @@ async function scanAll(input: ScanCommandInput): Promise<Item[]> {
 }
 
 async function inBatches<T>(items: readonly T[], run: (item: T) => Promise<unknown>): Promise<void> {
-  for (let start = 0; start < items.length; start += 10) await Promise.all(items.slice(start, start + 10).map(run));
+  for (let start = 0; start < items.length; start += 10) await Promise.all(items.slice(start, start + 10).map(run)); // NOSONAR batches of 10 run one after another to bound the write rate
 }
 
 function conditionFailed(error: unknown): boolean {
@@ -130,6 +130,11 @@ async function loginSessions(accounts: readonly Account[]): Promise<Item[]> {
   return pages.flat();
 }
 
+// ":subject0, :subject1, ..." for an IN list.
+function placeholders(prefix: string, count: number): string {
+  return Array.from({ length: count }, (_, index) => `${prefix}${index}`).join(", ");
+}
+
 type Secondary = Readonly<{
   oauth: Item[]; emailActions: Item[]; invitee: Item[]; proofs: Item[]; playerInvitations: Item[];
   pendingInvitations: Item[]; console: Item[]; downloads: Item[]; bootstrap: Item | null;
@@ -145,11 +150,11 @@ async function secondaryRecords(identityId: string, accounts: readonly Account[]
   if (passwordSubjects.length > 0) {
     passwordSubjects.forEach((subject, index) => { values[`:subject${index}`] = subject; });
     values[":emailAction"] = "EMAIL_ACTION#";
-    filters.push(`(begins_with(pk, :emailAction) AND subject IN (${passwordSubjects.map((_, index) => `:subject${index}`).join(", ")}))`);
+    filters.push(`(begins_with(pk, :emailAction) AND subject IN (${placeholders(":subject", passwordSubjects.length)}))`);
   }
   if (proofKeys.length > 0) {
     proofKeys.forEach((key, index) => { values[`:proof${index}`] = key; });
-    filters.push(`sk IN (${proofKeys.map((_, index) => `:proof${index}`).join(", ")})`);
+    filters.push(`sk IN (${placeholders(":proof", proofKeys.length)})`);
   }
   const items = await scanAll({
     TableName: tableName, FilterExpression: filters.join(" OR "), ExpressionAttributeValues: values, ConsistentRead: true,
@@ -246,6 +251,123 @@ async function anonymiseWorlds(identityId: string, worlds: WorldStore): Promise<
 }
 
 type Cancellation = Error & { CancellationReasons?: readonly { Code?: string }[] };
+type Transaction = NonNullable<TransactWriteCommandInput["TransactItems"]>;
+
+type Deletion = Readonly<{
+  identityId: string; roleId: string; partition: readonly Item[]; accounts: readonly Account[];
+  credentials: readonly Item[]; bootstrap: Item | null;
+}>;
+
+// Only an Owner may delete an Owner, and never the last active one.
+async function ownerDeletionRefusal(caller: Identity, roleId: string): Promise<Response | null> {
+  if (roleId !== "owner") return null;
+  const forbidden = requirePermission(caller, "access.owner.grant");
+  if (forbidden !== null) return forbidden;
+  if (await activeOwnerCount() <= 1) return response(409, { error: "last_owner" });
+  return null;
+}
+
+// The caller check keeps an Owner when two Owners delete each other:
+// the second transaction finds its caller gone, or conflicts with the first.
+function deletionTransaction(caller: Identity, deletion: Deletion): Transaction {
+  const { identityId, roleId, partition, accounts, credentials, bootstrap } = deletion;
+  const targetIsOwner = roleId === "owner";
+  const transaction: Transaction = [{ ConditionCheck: {
+    TableName: tableName, Key: { pk: `IDENTITY#${caller.id}`, sk: "PROFILE" },
+    ConditionExpression: targetIsOwner ? "#status = :active AND role_id = :owner" : "#status = :active",
+    ExpressionAttributeNames: { "#status": "status" },
+    ExpressionAttributeValues: targetIsOwner ? { ":active": "ACTIVE", ":owner": "owner" } : { ":active": "ACTIVE" },
+  } }];
+  for (const item of partition) {
+    transaction.push({ Delete: item.sk === "PROFILE"
+      ? { TableName: tableName, Key: keyOf(item), ConditionExpression: "attribute_exists(pk) AND role_id = :role", ExpressionAttributeValues: { ":role": roleId } }
+      : { TableName: tableName, Key: keyOf(item) } });
+  }
+  for (const account of accounts) {
+    transaction.push({ Delete: { TableName: tableName, Key: account.key, ConditionExpression: "identity_id = :id", ExpressionAttributeValues: { ":id": identityId } } });
+  }
+  for (const credential of credentials) {
+    transaction.push({ Delete: { TableName: tableName, Key: keyOf(credential), ConditionExpression: "subject = :subject", ExpressionAttributeValues: { ":subject": credential.subject } } });
+  }
+  if (bootstrap !== null) {
+    // Kept, so the configured Telegram account can never claim Owner again.
+    transaction.push({ Update: {
+      TableName: tableName, Key: { pk: "SYSTEM", sk: "BOOTSTRAP" },
+      UpdateExpression: "REMOVE telegram_id, identity_id SET owner_removed_at = :now",
+      ConditionExpression: "identity_id = :id",
+      ExpressionAttributeValues: { ":id": identityId, ":now": new Date().toISOString() },
+    } });
+  }
+  return transaction;
+}
+
+async function cancellationResponse(error: Cancellation, deletion: Deletion): Promise<Response> {
+  const reasons = error.CancellationReasons ?? [];
+  const failed = (index: number) => reasons[index]?.Code === "ConditionalCheckFailed";
+  if (failed(0)) return response(409, { error: "caller_changed" });
+  // Index 0 is the caller check; the partition's items follow it.
+  const profileIndex = 1 + deletion.partition.findIndex((item) => item.sk === "PROFILE");
+  if (failed(profileIndex)) {
+    const current = await document.send(new GetCommand({
+      TableName: tableName, Key: { pk: `IDENTITY#${deletion.identityId}`, sk: "PROFILE" }, ConsistentRead: true,
+    }));
+    return current.Item === undefined ? response(204, null) : response(409, { error: "identity_changed" });
+  }
+  if (reasons.some((reason) => reason.Code === "ConditionalCheckFailed")) return response(409, { error: "identity_changed" });
+  return response(409, { error: "deletion_conflict" });
+}
+
+// Returns the refusal when the transaction was cancelled, or null once committed.
+async function commitDeletion(caller: Identity, deletion: Deletion): Promise<Response | null> {
+  try {
+    await document.send(new TransactWriteCommand({ TransactItems: deletionTransaction(caller, deletion) }));
+    return null;
+  } catch (error) {
+    if (!(error instanceof Error && error.name === "TransactionCanceledException")) throw error;
+    return cancellationResponse(error as Cancellation, deletion);
+  }
+}
+
+async function deleteLateAccounts(identityId: string, accounts: readonly Account[], counts: Counts): Promise<void> {
+  await inBatches(accounts, async (account) => {
+    try {
+      await document.send(new DeleteCommand({
+        TableName: tableName, Key: account.key, ConditionExpression: "identity_id = :id", ExpressionAttributeValues: { ":id": identityId },
+      }));
+      counts.removed.accounts += 1;
+    } catch (error) {
+      if (!conditionFailed(error)) throw error;
+    }
+  });
+}
+
+// Sweep 2. Access is already gone, so a failure is logged and the call
+// still succeeds; what is left is pseudonymous or expires.
+async function sweepRemainder(identityId: string, accounts: readonly Account[], counts: Counts, worlds: () => WorldStore): Promise<"complete" | "incomplete"> {
+  try {
+    counts.removed.loginSessions += await remove(await loginSessions(accounts));
+    const leftover = await partitionItems(identityId);
+    const lateAccounts = await linkedAccounts(identityId, leftover);
+    await remove(leftover);
+    await deleteLateAccounts(identityId, lateAccounts, counts);
+    const after = await secondaryRecords(identityId, [...accounts, ...lateAccounts]);
+    counts.removed.oauth += await remove(after.oauth);
+    counts.removed.emailActions += await remove(after.emailActions);
+    counts.removed.invitations += await remove([...after.invitee, ...after.proofs]);
+    counts.removed.playerInvitations += await remove(after.playerInvitations);
+    counts.revoked.accessInvitations += await revokePending(after.pendingInvitations);
+    counts.anonymised.console += await forgetName(after.console);
+    counts.anonymised.downloads += await forgetName(after.downloads);
+    counts.anonymised.worlds += await anonymiseWorlds(identityId, worlds());
+    return "complete";
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: "identity_deletion_sweep_incomplete", deletedIdentityId: identityId,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    }));
+    return "incomplete";
+  }
+}
 
 export async function deleteIdentity(caller: Identity, identityId: string, worlds: () => WorldStore = worldsInReleaseBucket): Promise<Response> {
   if (identityId === caller.id) return response(409, { error: "self_delete_forbidden" });
@@ -254,12 +376,8 @@ export async function deleteIdentity(caller: Identity, identityId: string, world
   }))).Item;
   if (profile === undefined) return response(204, null);
   const roleId = String(profile.role_id);
-  const targetIsOwner = roleId === "owner";
-  if (targetIsOwner) {
-    const forbidden = requirePermission(caller, "access.owner.grant");
-    if (forbidden !== null) return forbidden;
-    if (await activeOwnerCount() <= 1) return response(409, { error: "last_owner" });
-  }
+  const refusal = await ownerDeletionRefusal(caller, roleId);
+  if (refusal !== null) return refusal;
 
   // Read.
   const partition = await partitionItems(identityId);
@@ -278,89 +396,14 @@ export async function deleteIdentity(caller: Identity, identityId: string, world
   counts.removed.oauth += await remove(before.oauth);
   counts.removed.emailActions += await remove(before.emailActions);
 
-  // Commit. The caller check keeps an Owner when two Owners delete each other:
-  // the second transaction finds its caller gone, or conflicts with the first.
-  const transaction: NonNullable<TransactWriteCommandInput["TransactItems"]> = [{ ConditionCheck: {
-    TableName: tableName, Key: { pk: `IDENTITY#${caller.id}`, sk: "PROFILE" },
-    ConditionExpression: targetIsOwner ? "#status = :active AND role_id = :owner" : "#status = :active",
-    ExpressionAttributeNames: { "#status": "status" },
-    ExpressionAttributeValues: targetIsOwner ? { ":active": "ACTIVE", ":owner": "owner" } : { ":active": "ACTIVE" },
-  } }];
-  for (const item of partition) {
-    transaction.push({ Delete: item.sk === "PROFILE"
-      ? { TableName: tableName, Key: keyOf(item), ConditionExpression: "attribute_exists(pk) AND role_id = :role", ExpressionAttributeValues: { ":role": roleId } }
-      : { TableName: tableName, Key: keyOf(item) } });
-  }
-  const profileIndex = 1 + partition.findIndex((item) => item.sk === "PROFILE");
-  for (const account of accounts) {
-    transaction.push({ Delete: { TableName: tableName, Key: account.key, ConditionExpression: "identity_id = :id", ExpressionAttributeValues: { ":id": identityId } } });
-  }
-  for (const credential of credentials) {
-    transaction.push({ Delete: { TableName: tableName, Key: keyOf(credential), ConditionExpression: "subject = :subject", ExpressionAttributeValues: { ":subject": credential.subject } } });
-  }
-  if (before.bootstrap !== null) {
-    // Kept, so the configured Telegram account can never claim Owner again.
-    transaction.push({ Update: {
-      TableName: tableName, Key: { pk: "SYSTEM", sk: "BOOTSTRAP" },
-      UpdateExpression: "REMOVE telegram_id, identity_id SET owner_removed_at = :now",
-      ConditionExpression: "identity_id = :id",
-      ExpressionAttributeValues: { ":id": identityId, ":now": new Date().toISOString() },
-    } });
-  }
-  try {
-    await document.send(new TransactWriteCommand({ TransactItems: transaction }));
-  } catch (error) {
-    if (!(error instanceof Error && error.name === "TransactionCanceledException")) throw error;
-    const reasons = (error as Cancellation).CancellationReasons ?? [];
-    const failed = (index: number) => reasons[index]?.Code === "ConditionalCheckFailed";
-    if (failed(0)) return response(409, { error: "caller_changed" });
-    if (failed(profileIndex)) {
-      const current = await document.send(new GetCommand({
-        TableName: tableName, Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" }, ConsistentRead: true,
-      }));
-      return current.Item === undefined ? response(204, null) : response(409, { error: "identity_changed" });
-    }
-    if (reasons.some((reason) => reason.Code === "ConditionalCheckFailed")) return response(409, { error: "identity_changed" });
-    return response(409, { error: "deletion_conflict" });
-  }
+  // Commit.
+  const cancelled = await commitDeletion(caller, { identityId, roleId, partition, accounts, credentials, bootstrap: before.bootstrap });
+  if (cancelled !== null) return cancelled;
   counts.removed.accounts += accounts.length;
   counts.removed.credentials += credentials.length;
   counts.anonymised.bootstrap += before.bootstrap === null ? 0 : 1;
 
-  // Sweep 2. Access is already gone, so a failure is logged and the call
-  // still succeeds; what is left is pseudonymous or expires.
-  let sweep2: "complete" | "incomplete" = "complete";
-  try {
-    counts.removed.loginSessions += await remove(await loginSessions(accounts));
-    const leftover = await partitionItems(identityId);
-    const lateAccounts = await linkedAccounts(identityId, leftover);
-    await remove(leftover);
-    await inBatches(lateAccounts, async (account) => {
-      try {
-        await document.send(new DeleteCommand({
-          TableName: tableName, Key: account.key, ConditionExpression: "identity_id = :id", ExpressionAttributeValues: { ":id": identityId },
-        }));
-        counts.removed.accounts += 1;
-      } catch (error) {
-        if (!conditionFailed(error)) throw error;
-      }
-    });
-    const after = await secondaryRecords(identityId, [...accounts, ...lateAccounts]);
-    counts.removed.oauth += await remove(after.oauth);
-    counts.removed.emailActions += await remove(after.emailActions);
-    counts.removed.invitations += await remove([...after.invitee, ...after.proofs]);
-    counts.removed.playerInvitations += await remove(after.playerInvitations);
-    counts.revoked.accessInvitations += await revokePending(after.pendingInvitations);
-    counts.anonymised.console += await forgetName(after.console);
-    counts.anonymised.downloads += await forgetName(after.downloads);
-    counts.anonymised.worlds += await anonymiseWorlds(identityId, worlds());
-  } catch (error) {
-    sweep2 = "incomplete";
-    console.error(JSON.stringify({
-      event: "identity_deletion_sweep_incomplete", deletedIdentityId: identityId,
-      errorName: error instanceof Error ? error.name : "UnknownError",
-    }));
-  }
+  const sweep2 = await sweepRemainder(identityId, accounts, counts, worlds);
 
   // The only record of the deletion. Ids and counts; never a name, address,
   // provider subject or Telegram id.

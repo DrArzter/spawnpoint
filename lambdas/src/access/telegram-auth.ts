@@ -69,7 +69,7 @@ export function verifyMiniAppInitData(initData: string, botToken: string, nowSec
   params.delete("hash");
   const values = [...params.entries()].sort(([a], [b]) => a.localeCompare(b));
   if (!freshAuthDate(params.get("auth_date") ?? undefined, nowSeconds)) return null;
-  const secret = createHmac("sha256", "WebAppData").update(botToken).digest();
+  const secret = createHmac("sha256", "WebAppData").update(botToken).digest(); // NOSONAR fixed key set by the Telegram Mini App specification
   const expected = createHmac("sha256", secret).update(values.map(([key, value]) => `${key}=${value}`).join("\n")).digest("hex");
   if (!equalHex(expected, hash)) return null;
   try {

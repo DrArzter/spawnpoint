@@ -327,9 +327,41 @@ export function worldRecordDocument(record: WorldRecord): ObjectValue {
   };
 }
 
+function defaultPlacement(connectivity: unknown): "configured" | "fleet" {
+  return connectivity === "zerotier" ? "configured" : "fleet";
+}
+
+// A ZeroTier world lives on a configured host; every other world is a fleet world.
+function placementConflicts(placement: unknown, connectivity: unknown): boolean {
+  const effective = placement ?? defaultPlacement(connectivity);
+  if (effective === "fleet") return connectivity === "zerotier";
+  return effective === "configured" && connectivity !== "zerotier";
+}
+
+function parseRecordPreset(value: unknown): WorldRecord["preset"] | null {
+  const preset = object(value);
+  if (
+    preset === null || typeof preset.id !== "string" || !ID.test(preset.id) ||
+    typeof preset.repository !== "string" || !preset.repository.startsWith("https://github.com/") ||
+    typeof preset.commit !== "string" || !COMMIT.test(preset.commit) ||
+    typeof preset.profile_digest !== "string" || !SHA256.test(preset.profile_digest)
+  ) return null;
+  return { id: preset.id, repository: preset.repository, commit: preset.commit, profileDigest: preset.profile_digest };
+}
+
+type BackupSource = Extract<WorldGeneration["source"], { kind: "backup" }>;
+
+// A restore source is one of this world's own archives, named for the closed generation it came from.
+function backupSourceBelongs(worldId: string, source: BackupSource, history: readonly ClosedWorldGeneration[]): boolean {
+  return source.key.startsWith(`worlds/${worldId}/archives/`) &&
+    source.key.endsWith(`-${source.checksum}.tar.zst`) &&
+    source.key.includes(`-${source.generationId}-`) &&
+    history.some((item) => item.id === source.generationId);
+}
+
 export function parseWorldRecord(value: unknown): WorldRecord | null {
   const root = object(value);
-  const preset = object(root?.preset);
+  const preset = parseRecordPreset(root?.preset);
   const generation = parseGeneration(root?.current_generation, false);
   const previousValues = root?.previous_generations ?? [];
   const previous = Array.isArray(previousValues) ? previousValues.map((value) => parseGeneration(value, true)) : null;
@@ -346,12 +378,8 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     (root.connectivity !== "zerotier" && root.auth === undefined) ||
     (root.placement !== undefined && root.placement !== "configured" && root.placement !== "fleet") ||
     (root.warm !== undefined && typeof root.warm !== "boolean") ||
-    ((root.placement ?? (root.connectivity === "zerotier" ? "configured" : "fleet")) === "fleet" && root.connectivity === "zerotier") ||
-    ((root.placement ?? (root.connectivity === "zerotier" ? "configured" : "fleet")) === "configured" && root.connectivity !== "zerotier") ||
-    preset === null || typeof preset.id !== "string" || !ID.test(preset.id) ||
-    typeof preset.repository !== "string" || !preset.repository.startsWith("https://github.com/") ||
-    typeof preset.commit !== "string" || !COMMIT.test(preset.commit) ||
-    typeof preset.profile_digest !== "string" || !SHA256.test(preset.profile_digest) ||
+    placementConflicts(root.placement, root.connectivity) ||
+    preset === null ||
     generation === null || previous === null || previous.includes(null) ||
     gameSettings === null || whitelist === null
   ) return null;
@@ -362,28 +390,18 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
   if (
     new Set(ids).size !== ids.length ||
     history.some((item) => Date.parse(item.closedAt) < Date.parse(item.createdAt)) ||
-    (backupSource !== null && (
-      !backupSource.key.startsWith(`worlds/${root.world_id}/archives/`) ||
-      !backupSource.key.endsWith(`-${backupSource.checksum}.tar.zst`) ||
-      !backupSource.key.includes(`-${backupSource.generationId}-`) ||
-      !history.some((item) => item.id === backupSource.generationId)
-    ))
+    (backupSource !== null && !backupSourceBelongs(root.world_id, backupSource, history))
   ) return null;
   return {
     worldId: root.world_id,
     gameId: root.game,
     displayName: root.display_name,
     status: root.status,
-    placement: (root.placement ?? (root.connectivity === "zerotier" ? "configured" : "fleet")) as WorldRecord["placement"],
+    placement: (root.placement ?? defaultPlacement(root.connectivity)) as WorldRecord["placement"],
     connectivity: root.connectivity,
     ...(root.auth === undefined ? {} : { auth: root.auth }),
     ...(root.warm === true ? { warm: true as const } : {}),
-    preset: {
-      id: preset.id,
-      repository: preset.repository,
-      commit: preset.commit,
-      profileDigest: preset.profile_digest,
-    },
+    preset,
     currentGeneration: current,
     previousGenerations: history,
     ...(gameSettings === undefined ? {} : { gameSettings }),

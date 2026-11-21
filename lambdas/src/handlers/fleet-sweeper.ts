@@ -29,14 +29,14 @@ async function runningDrainHosts(drainArn: string): Promise<Set<string>> {
   const hosts = new Set<string>();
   let nextToken: string | undefined;
   do {
-    const page = await states.send(new ListExecutionsCommand({
+    const page = await states.send(new ListExecutionsCommand({ // NOSONAR paginated: the next token comes from the previous page
       stateMachineArn: drainArn,
       statusFilter: "RUNNING",
       ...(nextToken ? { nextToken } : {}),
     }));
-    for (const execution of page.executions ?? []) {
-      if (!execution.executionArn) continue;
-      const detail = await states.send(new DescribeExecutionCommand({ executionArn: execution.executionArn }));
+    const arns = (page.executions ?? []).flatMap((execution) => execution.executionArn ? [execution.executionArn] : []);
+    const details = await Promise.all(arns.map((executionArn) => states.send(new DescribeExecutionCommand({ executionArn })))); // NOSONAR one page at a time, within the paginated listing
+    for (const detail of details) {
       if (!detail.input) continue;
       const input: unknown = JSON.parse(detail.input);
       if (typeof input === "object" && input !== null && "hostId" in input && typeof input.hostId === "string") {
@@ -105,7 +105,7 @@ export async function handler(): Promise<void> {
   const instances: Instance[] = [];
   let nextToken: string | undefined;
   do {
-    const page = await ec2.send(new DescribeInstancesCommand({
+    const page = await ec2.send(new DescribeInstancesCommand({ // NOSONAR paginated: the next token comes from the previous page
       Filters: [
         { Name: "tag:ManagedBy", Values: ["spawnpoint-fleet"] },
         { Name: "instance-state-name", Values: ["pending", "running", "stopping", "stopped"] },

@@ -126,7 +126,7 @@ export async function activeOwnerCount(): Promise<number> {
   let count = 0;
   let cursor: Record<string, unknown> | undefined;
   do {
-    const page = await document.send(new QueryCommand({
+    const page = await document.send(new QueryCommand({ // NOSONAR paginated: the next token comes from the previous page
       TableName: tableName,
       IndexName: "gsi1",
       KeyConditionExpression: "gsi1pk = :state",

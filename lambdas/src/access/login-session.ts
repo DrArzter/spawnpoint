@@ -102,7 +102,7 @@ export function issueRefreshCredential(loginSessionId: string = randomUUID()): R
   return {
     loginSessionId,
     token: `${loginSessionId}.${secret}`,
-    tokenHash: createHmac("sha256", "spawnpoint-refresh-credential-v1").update(secret).digest("base64url"),
+    tokenHash: createHmac("sha256", "spawnpoint-refresh-credential-v1").update(secret).digest("base64url"), // NOSONAR domain-separation label, not a secret; changing it ends every login session
   };
 }
 
@@ -111,7 +111,7 @@ export function parseRefreshCredential(token: string): Omit<RefreshCredential, "
   if (!loginSessionId || !secret || extra !== undefined || !/^[0-9a-f-]{36}$/.test(loginSessionId) || !/^[A-Za-z0-9_-]{43}$/.test(secret)) return null;
   return {
     loginSessionId,
-    tokenHash: createHmac("sha256", "spawnpoint-refresh-credential-v1").update(secret).digest("base64url"),
+    tokenHash: createHmac("sha256", "spawnpoint-refresh-credential-v1").update(secret).digest("base64url"), // NOSONAR domain-separation label, not a secret; changing it ends every login session
   };
 }
 

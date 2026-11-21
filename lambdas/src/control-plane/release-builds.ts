@@ -45,41 +45,51 @@ export async function observeBuild(request: BuildRequest, ports: ReleaseBuildPor
   };
 }
 
-export async function requestReleaseBuild(
-  input: Readonly<{ gameId: string; profileId: string; profileDigest: string; source: BuildSource; requestedBy: string; now: Date; nonce: string; retryRelease?: string }>,
-  ports: ReleaseBuildPorts,
-): Promise<BuildRequest> {
+type BuildInput = Readonly<{ gameId: string; profileId: string; profileDigest: string; source: BuildSource; requestedBy: string; now: Date; nonce: string }>;
+type RequestInput = BuildInput & Readonly<{ retryRelease?: string }>;
+// `claim: false` means the stored attempt stands and nothing new is claimed.
+type Decision = Readonly<{ request: BuildRequest; claim: boolean }>;
+
+// The same profile digest: the stored attempt is kept, recovered or retried.
+async function decideForSameProfile(input: RequestInput, previous: StoredBuild, ports: ReleaseBuildPorts): Promise<Decision> {
+  const view = await observeBuild(previous.request, ports);
+  if (input.retryRelease !== undefined && view.state === "ready") throw new Error("build_changed");
+  if (view.state === "building") return { request: previous.request, claim: false };
+  if (view.state === "starting") {
+    // Recover a claim whose caller died before StartExecution. Reusing the
+    // persisted name AND input is idempotent, including a lost HTTP response.
+    await ports.start(previous.request);
+    return { request: previous.request, claim: false };
+  }
+  const request = view.state === "failed"
+    ? { ...previous.request, attempt: previous.request.attempt + 1, name: `panel-build-${input.nonce}`, requestedBy: input.requestedBy, requestedAt: input.now.toISOString() }
+    : freshRequest(input);
+  return { request, claim: true };
+}
+
+// A changed preset cannot replace an in-flight attempt, even if that
+// attempt belongs to the preceding source revision.
+async function decideForChangedProfile(input: RequestInput, previous: StoredBuild | null, ports: ReleaseBuildPorts): Promise<Decision> {
+  if (previous !== null) {
+    const view = await observeBuild(previous.request, ports);
+    if (view.state === "starting" || view.state === "building") throw new Error("build_in_progress");
+  }
+  return { request: freshRequest(input), claim: true };
+}
+
+export async function requestReleaseBuild(input: RequestInput, ports: ReleaseBuildPorts): Promise<BuildRequest> {
   const previous = await ports.read();
   if (input.retryRelease !== undefined && (previous?.request.release !== input.retryRelease || previous.request.profileDigest !== input.profileDigest)) throw new Error("build_changed");
-  let request: BuildRequest;
-  if (previous !== null && previous.request.profileDigest === input.profileDigest) {
-    const view = await observeBuild(previous.request, ports);
-    if (input.retryRelease !== undefined && view.state === "ready") throw new Error("build_changed");
-    if (view.state === "building") return previous.request;
-    if (view.state === "starting") {
-      // Recover a claim whose caller died before StartExecution. Reusing the
-      // persisted name AND input is idempotent, including a lost HTTP response.
-      await ports.start(previous.request);
-      return previous.request;
-    }
-    request = view.state === "failed"
-      ? { ...previous.request, attempt: previous.request.attempt + 1, name: `panel-build-${input.nonce}`, requestedBy: input.requestedBy, requestedAt: input.now.toISOString() }
-      : freshRequest(input);
-  } else {
-    // A changed preset cannot replace an in-flight attempt, even if that
-    // attempt belongs to the preceding source revision.
-    if (previous !== null) {
-      const view = await observeBuild(previous.request, ports);
-      if (view.state === "starting" || view.state === "building") throw new Error("build_in_progress");
-    }
-    request = freshRequest(input);
-  }
+  const { request, claim } = previous !== null && previous.request.profileDigest === input.profileDigest
+    ? await decideForSameProfile(input, previous, ports)
+    : await decideForChangedProfile(input, previous, ports);
+  if (!claim) return request;
   if (!await ports.claim(request, previous?.etag ?? null)) throw new Error("build_in_progress");
   await ports.start(request);
   return request;
 }
 
-function freshRequest(input: Readonly<{ gameId: string; profileId: string; profileDigest: string; source: BuildSource; requestedBy: string; now: Date; nonce: string }>): BuildRequest {
+function freshRequest(input: BuildInput): BuildRequest {
   // Epoch milliseconds plus a UUID-derived numeric suffix: accepted by the
   // existing release grammar, independent of GitHub run IDs, no user input.
   return {

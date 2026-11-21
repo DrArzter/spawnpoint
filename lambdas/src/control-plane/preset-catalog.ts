@@ -25,6 +25,49 @@ function object(value: unknown): ObjectValue | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as ObjectValue : null;
 }
 
+type CatalogSource = Readonly<{ repository: string; commit: string }>;
+
+function parseSource(value: unknown): CatalogSource | null {
+  const source = object(value);
+  if (source === null || typeof source.repository !== "string" || !source.repository.startsWith("https://github.com/")) return null;
+  if (typeof source.commit !== "string" || !COMMIT.test(source.commit)) return null;
+  return { repository: source.repository, commit: source.commit };
+}
+
+function parseReleases(value: unknown): string[] | null {
+  if (!Array.isArray(value) || !value.every((release) => typeof release === "string" && RELEASE.test(release))) return null;
+  const releases = value as string[];
+  return new Set(releases).size === releases.length ? releases : null;
+}
+
+function parsePreset(candidate: unknown, source: CatalogSource, gameId: string, ids: ReadonlySet<string>): PresetObservation | null {
+  const preset = object(candidate);
+  if (preset === null || typeof preset.id !== "string" || !ID.test(preset.id) || ids.has(preset.id)) return null;
+  if (typeof preset.display_name !== "string" || preset.display_name.length < 1 || preset.display_name.length > 80) return null;
+  if (typeof preset.profile_digest !== "string" || !SHA256.test(preset.profile_digest)) return null;
+  const sourceCommit = preset.source_commit === undefined ? source.commit : preset.source_commit;
+  if (typeof sourceCommit !== "string" || !COMMIT.test(sourceCommit)) return null;
+  const status = preset.build_status;
+  if (status !== "unbuilt" && status !== "building" && status !== "ready" && status !== "failed") return null;
+  const latestRelease = preset.latest_release;
+  if (latestRelease !== null && (typeof latestRelease !== "string" || !RELEASE.test(latestRelease))) return null;
+  const releases = parseReleases(preset.releases);
+  if (releases === null) return null;
+  if (status === "ready" && (latestRelease === null || !releases.includes(latestRelease))) return null;
+  if (status !== "ready" && latestRelease !== null && !releases.includes(latestRelease)) return null;
+  return {
+    id: preset.id,
+    displayName: preset.display_name,
+    gameId,
+    repository: source.repository,
+    commit: sourceCommit,
+    profileDigest: preset.profile_digest,
+    releases,
+    latestRelease,
+    buildStatus: status,
+  };
+}
+
 // Catalog documents are produced by the reviewed AWS builder, but they are
 // still storage input to the control plane. Parse them as hostile data: one
 // malformed game catalog is omitted rather than turning its arbitrary shape
@@ -32,42 +75,16 @@ function object(value: unknown): ObjectValue | null {
 export function parsePresetCatalog(value: unknown, expectedGameId: string): readonly PresetObservation[] | null {
   const root = object(value);
   if (root?.schema_version !== 2 || root.game !== expectedGameId) return null;
-  const source = object(root.source);
-  if (source === null || typeof source.repository !== "string" || !source.repository.startsWith("https://github.com/")) return null;
-  if (typeof source.commit !== "string" || !COMMIT.test(source.commit)) return null;
-  if (!Array.isArray(root.presets)) return null;
+  const source = parseSource(root.source);
+  if (source === null || !Array.isArray(root.presets)) return null;
 
   const result: PresetObservation[] = [];
   const ids = new Set<string>();
   for (const candidate of root.presets) {
-    const preset = object(candidate);
-    if (preset === null || typeof preset.id !== "string" || !ID.test(preset.id) || ids.has(preset.id)) return null;
-    if (typeof preset.display_name !== "string" || preset.display_name.length < 1 || preset.display_name.length > 80) return null;
-    if (typeof preset.profile_digest !== "string" || !SHA256.test(preset.profile_digest)) return null;
-    const sourceCommit = preset.source_commit === undefined ? source.commit : preset.source_commit;
-    if (typeof sourceCommit !== "string" || !COMMIT.test(sourceCommit)) return null;
-    const status = preset.build_status;
-    if (status !== "unbuilt" && status !== "building" && status !== "ready" && status !== "failed") return null;
-    const latestRelease = preset.latest_release;
-    if (latestRelease !== null && (typeof latestRelease !== "string" || !RELEASE.test(latestRelease))) return null;
-    if (!Array.isArray(preset.releases) || !preset.releases.every((release) => typeof release === "string" && RELEASE.test(release))) return null;
-    const releases = preset.releases as string[];
-    if (new Set(releases).size !== releases.length) return null;
-    if (status === "ready" && (latestRelease === null || !releases.includes(latestRelease))) return null;
-    if (status !== "ready" && latestRelease !== null && !releases.includes(latestRelease)) return null;
-
+    const preset = parsePreset(candidate, source, expectedGameId, ids);
+    if (preset === null) return null;
     ids.add(preset.id);
-    result.push({
-      id: preset.id,
-      displayName: preset.display_name,
-      gameId: expectedGameId,
-      repository: source.repository,
-      commit: sourceCommit,
-      profileDigest: preset.profile_digest,
-      releases,
-      latestRelease,
-      buildStatus: status,
-    });
+    result.push(preset);
   }
   return result;
 }

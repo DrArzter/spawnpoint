@@ -28,7 +28,7 @@ function eventShape(event: EventBridgeEvent): string {
   return JSON.stringify({
     source: event.source ?? null,
     detailType: event["detail-type"] ?? null,
-    detailKeys: typeof detail === "object" && detail !== null ? Object.keys(detail).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)) : [],
+    detailKeys: typeof detail === "object" && detail !== null ? Object.keys(detail).sort((a, b) => a.localeCompare(b)) : [],
   });
 }
 
@@ -113,7 +113,7 @@ async function notifyAlerts(records: NonNullable<SnsEvent["Records"]>): Promise<
   if (alerts.length === 0) return;
   const chatIds = await configuredChatIds();
   // In order, so a burst of alerts reads in the order the topic sent it.
-  for (const alert of alerts) await sendToTargets(alert, chatIds);
+  for (const alert of alerts) await sendToTargets(alert, chatIds); // NOSONAR sequential on purpose: keeps alert order
 }
 
 async function notifyAccessApproved(event: EventBridgeEvent): Promise<void> {

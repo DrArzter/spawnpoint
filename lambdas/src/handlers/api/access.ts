@@ -88,6 +88,39 @@ function accountHandle(account: Item): string | null {
   return typeof account.email === "string" ? account.email : null;
 }
 
+// Returns the conflict response, or null when the role changed.
+async function commitRoleChange(callerIdentity: Identity, identityId: string, roleId: string, targetRoleId: string): Promise<Response | null> {
+  // The target must still hold the role read above, and the caller must still
+  // be active, and an Owner when an Owner is demoted. Two Owners who demote
+  // each other at once cannot both succeed, so one Owner remains.
+  const callerCondition = targetRoleId === "owner" ? "#status = :active AND role_id = :owner" : "#status = :active";
+  try {
+    await document.send(new TransactWriteCommand({ TransactItems: [
+      { ConditionCheck: {
+        TableName: tableName,
+        Key: { pk: `IDENTITY#${callerIdentity.id}`, sk: "PROFILE" },
+        ConditionExpression: callerCondition,
+        ExpressionAttributeNames: { "#status": "status" },
+        ExpressionAttributeValues: targetRoleId === "owner" ? { ":active": "ACTIVE", ":owner": "owner" } : { ":active": "ACTIVE" },
+      } },
+      { Update: {
+        TableName: tableName,
+        Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" },
+        UpdateExpression: "SET role_id = :roleId, updated_at = :now, updated_by = :by",
+        ConditionExpression: "attribute_exists(pk) AND #status = :active AND role_id = :current",
+        ExpressionAttributeNames: { "#status": "status" },
+        ExpressionAttributeValues: {
+          ":roleId": roleId, ":now": new Date().toISOString(), ":by": callerIdentity.id, ":active": "ACTIVE", ":current": targetRoleId,
+        },
+      } },
+    ] }));
+  } catch (error) {
+    if (error instanceof Error && error.name === "TransactionCanceledException") return response(409, { error: "role_change_conflict" });
+    throw error;
+  }
+  return null;
+}
+
 export async function updateRole(callerIdentity: Identity, identityId: string, body: string | undefined): Promise<Response> {
   let parsed: { roleId?: unknown };
   try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
@@ -102,34 +135,8 @@ export async function updateRole(callerIdentity: Identity, identityId: string, b
     if (forbidden !== null) return forbidden;
   }
   if (target.roleId === "owner" && roleId !== "owner" && await activeOwnerCount() <= 1) return response(409, { error: "last_owner" });
-  // The target must still hold the role read above, and the caller must still
-  // be active, and an Owner when an Owner is demoted. Two Owners who demote
-  // each other at once cannot both succeed, so one Owner remains.
-  const callerCondition = target.roleId === "owner" ? "#status = :active AND role_id = :owner" : "#status = :active";
-  try {
-    await document.send(new TransactWriteCommand({ TransactItems: [
-      { ConditionCheck: {
-        TableName: tableName,
-        Key: { pk: `IDENTITY#${callerIdentity.id}`, sk: "PROFILE" },
-        ConditionExpression: callerCondition,
-        ExpressionAttributeNames: { "#status": "status" },
-        ExpressionAttributeValues: target.roleId === "owner" ? { ":active": "ACTIVE", ":owner": "owner" } : { ":active": "ACTIVE" },
-      } },
-      { Update: {
-        TableName: tableName,
-        Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" },
-        UpdateExpression: "SET role_id = :roleId, updated_at = :now, updated_by = :by",
-        ConditionExpression: "attribute_exists(pk) AND #status = :active AND role_id = :current",
-        ExpressionAttributeNames: { "#status": "status" },
-        ExpressionAttributeValues: {
-          ":roleId": roleId, ":now": new Date().toISOString(), ":by": callerIdentity.id, ":active": "ACTIVE", ":current": target.roleId,
-        },
-      } },
-    ] }));
-  } catch (error) {
-    if (error instanceof Error && error.name === "TransactionCanceledException") return response(409, { error: "role_change_conflict" });
-    throw error;
-  }
+  const conflict = await commitRoleChange(callerIdentity, identityId, roleId, target.roleId);
+  if (conflict !== null) return conflict;
   return response(200, { identityId, roleId });
 }
 

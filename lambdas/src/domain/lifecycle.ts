@@ -81,8 +81,7 @@ function requireOwnership(
   requireEpoch("nowEpochSeconds", nowEpochSeconds);
   const lease = record.lease;
   if (
-    lease === null ||
-    lease.ownerOperationId !== ownership.ownerOperationId ||
+    lease?.ownerOperationId !== ownership.ownerOperationId ||
     lease.fencingToken !== ownership.fencingToken ||
     lease.expiresAtEpochSeconds <= nowEpochSeconds
   ) {

@@ -18,10 +18,23 @@ cat >"${fixture}/bin/docker" <<'EOF'
 
 [[ "$1" == "compose" ]] || exit 90
 shift
+# The env file Compose was handed, so a test can read what it would have
+# interpolated.
+if [[ -n "${FAKE_ENV_FILE_RECORD:-}" ]]; then
+  previous=""
+  for word in "$@"; do
+    [[ "${previous}" == "--env-file" ]] && printf '%s' "${word}" >"${FAKE_ENV_FILE_RECORD}"
+    previous="${word}"
+  done
+fi
 for argument in "$@"; do
   case "${argument}" in
     config) exit 0 ;;
     exec)
+      # Compose itself talks on stderr; an operator must never read it as the
+      # game's answer.
+      [[ -z "${FAKE_COMPOSE_NOISE:-}" ]] ||
+        printf 'time="2026-11-21T01:44:01Z" level=warning msg="The \\"Hbxz9\\" variable is not set. Defaulting to a blank string."\n' >&2
       # Everything after `rcon-cli` is what the game would receive.
       seen=0
       : >"${FAKE_ARGUMENTS_FILE}"
@@ -109,5 +122,35 @@ set -e
 export FAKE_RCON_FAIL=1
 output="$(run_console 3 'list')"
 grep -Fq 'connection refused' <<<"${output}"
+unset FAKE_RCON_FAIL
+
+# The transport's own noise is not the reply. Compose warns on stderr for every
+# invocation when a value in the env file holds a dollar sign, and those lines
+# used to be printed beside the game's answer.
+export FAKE_COMPOSE_NOISE=1
+export FAKE_RCON_RESPONSE='There are 0 of a max of 20 players online:'
+reply="$(CONSOLE_COMMAND_B64="$(printf '%s' list | base64 | tr -d '\n')" "${console}" 2>/dev/null)"
+[[ "${reply}" == "${FAKE_RCON_RESPONSE}" ]] || {
+  printf 'the reply carried the transport'"'"'s noise:\n%s\n' "${reply}" >&2
+  exit 1
+}
+unset FAKE_COMPOSE_NOISE
+
+# A value holding a dollar sign reaches the container as written: Compose is
+# handed an escaped copy, and the file the host's own scripts read is untouched.
+env_file="${fixture}/host.env"
+printf 'CF_API_KEY=$2a$10$Hbxz9Ybl\nRELEASE_BUCKET=spawnpoint-releases-1\n' >"${env_file}"
+SERVER_ENV_FILE="${env_file}" FAKE_ENV_FILE_RECORD="${fixture}/env-file-used" \
+  CONSOLE_COMMAND_B64="$(printf '%s' list | base64 | tr -d '\n')" "${console}" >/dev/null 2>&1
+used="$(cat -- "${fixture}/env-file-used")"
+[[ "${used}" != "${env_file}" ]] || { printf 'Compose was handed the raw env file\n' >&2; exit 1; }
+grep -Fqx 'CF_API_KEY=$$2a$$10$$Hbxz9Ybl' -- "${used}" || {
+  printf 'the dollar signs were not escaped for Compose:\n%s\n' "$(cat -- "${used}")" >&2
+  exit 1
+}
+grep -Fqx 'CF_API_KEY=$2a$10$Hbxz9Ybl' -- "${env_file}" || {
+  printf 'the host env file was rewritten\n' >&2
+  exit 1
+}
 
 printf 'PASS console-test.sh\n'

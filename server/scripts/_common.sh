@@ -37,6 +37,37 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
 }
 
+# Compose interpolates the values it reads from an env file, so a value holding
+# a dollar sign is read as a reference to a variable nobody set: the value
+# reaches the container blank and every single invocation prints a warning for
+# it. A CurseForge key is a bcrypt-shaped string, which is three such
+# references, and the warnings have been loud enough to fill the 24,000
+# characters SSM returns and to sit under every line of the panel's console.
+#
+# The host's own scripts read the same file and need the value as written, so
+# the escaped form is made for Compose alone, beside the file it comes from and
+# refreshed whenever that file is newer. Writing it is a convenience, not a
+# contract: where the directory is read-only the raw file is used, and the only
+# cost is the warnings coming back.
+compose_env_file() {
+  local escaped="${ENV_FILE}.compose" staged
+  if [[ -f "${escaped}" && "${escaped}" -nt "${ENV_FILE}" ]]; then
+    printf '%s\n' "${escaped}"
+    return 0
+  fi
+  staged="$(mktemp "${ENV_FILE}.compose.XXXXXX" 2>/dev/null)" || {
+    printf '%s\n' "${ENV_FILE}"
+    return 0
+  }
+  if ! sed 's/\$/$$/g' -- "${ENV_FILE}" >"${staged}" || ! chmod 0600 -- "${staged}" ||
+    ! mv -f -- "${staged}" "${escaped}"; then
+    rm -f -- "${staged}"
+    printf '%s\n' "${ENV_FILE}"
+    return 0
+  fi
+  printf '%s\n' "${escaped}"
+}
+
 compose() {
   local args=(--project-directory "${SERVER_DIR}")
   # A placed session is its own Compose project, named for its world, so two
@@ -51,7 +82,7 @@ compose() {
   done
 
   if [[ -f "${ENV_FILE}" ]]; then
-    args+=(--env-file "${ENV_FILE}")
+    args+=(--env-file "$(compose_env_file)")
   fi
 
   docker compose "${args[@]}" "$@"

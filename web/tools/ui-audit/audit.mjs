@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 // The detail file is opt-in: pass a path to keep the raw findings, otherwise the
 // run prints its report and leaves nothing behind.
 //
-// --gate is the breakpoint guard CI runs: both skins at both sides of every
+// --gate is the breakpoint guard CI runs: every skin at both sides of every
 // step, failing on any layout finding accepted.txt does not list. --accept
 // rewrites accepted.txt with what this run found, for a reviewed exception.
 const flags = new Set(process.argv.slice(2).filter((arg) => arg.startsWith("--")));
@@ -20,10 +20,10 @@ const accept = flags.has("--accept");
 const [base = "http://localhost:5173", detail = "-", scheme = "light"] = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
 const out = detail === "-" ? null : detail;
 // SKIN=terminal audits another face; the console is worn when it is unset. The
-// gate wears both unless SKIN names one.
+// gate wears every face unless SKIN names one.
 function skinsToWear() {
   if (process.env.SKIN) return [process.env.SKIN];
-  return gate ? ["console", "terminal"] : [""];
+  return gate ? ["console", "terminal", "cloud"] : [""];
 }
 const skins = skinsToWear();
 const accepted = join(dirname(fileURLToPath(import.meta.url)), "accepted.txt");
@@ -85,22 +85,23 @@ const onlyWidths = process.env.AUDIT_WIDTHS ? new Set(process.env.AUDIT_WIDTHS.s
 const LAYOUT = {
   // PageHeader and the terminal page head: who this is and what can be done
   // about it share one line from the phone step up.
-  oneLine: [[".page-title-row", 600], [".t-page-head", 600]],
+  oneLine: [[".page-title-row", 600], [".t-page-head", 600], [".c-page-header", 760]],
   // Details rows: a label beside its value shares the baseline of the value's first line.
   pairs: [".details-row", ".t-detail"],
   // Cards and panels: what starts a line inside one starts on one edge — the
   // title, a search field, a table's first column, the detail labels. A
   // nested card keeps its own edge.
   rails: {
-    containers: ".card, .t-panel",
+    containers: ".card, .t-panel, .c-card",
     // An empty table's one cell is its state, centred across the table, not a column.
     starts: [".card-header h2", ".filter-bar .search", ".table th:first-child", ".table td:first-child:not(.table-empty)", ".details-row > dt",
-      ".t-filter-row .t-field", ".t-table th:first-child", ".t-table tr:not(.t-table-state) > td:first-child", ".t-detail > dt"],
+      ".t-filter-row .t-field", ".t-table th:first-child", ".t-table tr:not(.t-table-state) > td:first-child", ".t-detail > dt",
+      ".c-card-head h2"],
   },
   // EmptyState and the terminal Empty sit in the middle of their box.
-  centred: [".empty", ".t-empty"],
+  centred: [".empty", ".t-empty", ".c-empty"],
   // Menu and Overflow: where each item's label begins.
-  menuLabels: ".menu-item > span, .t-menu-copy",
+  menuLabels: ".menu-item > span, .t-menu-copy, .c-menu-item > span:first-of-type",
 };
 
 

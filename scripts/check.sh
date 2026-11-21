@@ -10,7 +10,7 @@
 #   scripts/check.sh app      Lambda tests and builds, web build, and MCP adapter
 #   scripts/check.sh server   container and compose server suites
 #   scripts/check.sh lambda-build | lambda-test-shard INDEX COUNT | web | mcp
-#   scripts/check.sh ui       the breakpoint gate: the demo build in headless Chrome
+#   scripts/check.sh ui       the UI gate: the demo build in headless Chrome
 #   scripts/check.sh server-suite-shard INDEX COUNT | server-compose
 #   scripts/check.sh terraform
 
@@ -92,23 +92,42 @@ check_mcp() {
   (cd mcp && npm test)
 }
 
-# The breakpoint gate (web/tools/ui-audit): the demo build, served here and
-# probed in headless Chrome at both sides of every step, in both skins. It fails
-# on a layout finding web/tools/ui-audit/accepted.txt does not list.
+# The UI gate (web/tools/ui-audit): the demo build, served here and probed in
+# headless Chrome in both skins: pages at both sides of every step and on a
+# 40px stride, every dialog, panel and menu opened, both themes, and the
+# stress fixture. It fails on a finding web/tools/ui-audit/accepted.txt does
+# not list. UI_BASE (a commit) skips it when nothing under web/ or this gate's
+# own wiring changed since then; UI_PORT serves elsewhere than 4173; UI_ADVISE=1
+# also writes the advisory report with screenshots to web/out/ui-audit.
+ui_changed() {
+  local changed
+  [[ -n "${UI_BASE:-}" ]] || return 0
+  # A base git cannot compare with runs the gate rather than skipping it.
+  changed="$(git diff --name-only "${UI_BASE}...HEAD" -- web scripts/check.sh .github/workflows/check.yml)" || return 0
+  [[ -n "${changed}" ]]
+}
+
 check_ui() {
-  local port=4173 server status=0
+  local port="${UI_PORT:-4173}" server status=0
+  if ! ui_changed; then
+    printf 'no change under web/ since %s; the UI gate has nothing to check\n' "${UI_BASE}"
+    return 0
+  fi
   (cd web && npm run build >/dev/null)
   if [[ -z "${CHROME_BIN:-}" ]]; then
     CHROME_BIN="$(command -v google-chrome || command -v chromium || true)"
     [[ -z "${CHROME_BIN}" ]] || export CHROME_BIN
   fi
+  (cd web && node tools/ui-audit/audit.mjs --self-test) || return 1
   (cd web && exec npx vite preview --host 127.0.0.1 --port "${port}" --strictPort >/dev/null 2>&1) &
   server=$!
   for _ in $(seq 1 50); do
     curl -fs "http://127.0.0.1:${port}/" >/dev/null && break
     sleep 0.2
   done
-  (cd web && node tools/ui-audit/audit.mjs --gate "http://127.0.0.1:${port}") || status=$?
+  local flags=(--gate)
+  [[ "${UI_ADVISE:-}" != "1" ]] || flags+=(--advise)
+  (cd web && node tools/ui-audit/audit.mjs "${flags[@]}" "http://127.0.0.1:${port}") || status=$?
   kill "${server}" 2>/dev/null || true
   return "${status}"
 }

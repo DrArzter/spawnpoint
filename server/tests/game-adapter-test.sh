@@ -131,7 +131,7 @@ grep -q "authentication refused" <<<"${wrong}"
 
 # A host that is not a loopback address is refused before any connection.
 status=0
-python3 "${GAMES}/factorio/rcon-client.py" 192.0.2.1 "${rcon_port}" "any" "/players online" >/dev/null 2>&1 || status=$?
+python3 "${GAMES}/factorio/rcon-client.py" 192.0.2.1 "${rcon_port}" "any" "/time" >/dev/null 2>&1 || status=$?
 [[ "${status}" == 2 ]]
 
 response="$(python3 "${GAMES}/factorio/rcon-client.py" 127.0.0.1 "${rcon_port}" "correct-password" "/players online")"

@@ -3,10 +3,10 @@ import { hostStatus, sessionStatus, worldStatus, type StatusDescriptor } from ".
 import { commitUrl, formatDate, shortCommit } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Operation, ServerState, Wipe, World, WorldTab } from "../model";
 import { routeHash } from "../routing";
-import { fleetPlayersOnline, fleetSessionOf, fleetWorldState, playersOnline, sessionReason, sharedSessionOwnerLabel, worldOwnsSharedSession, type SessionReason, type SharedHostSession } from "../session";
-import type { Pending, SessionAction, WorldActionKind } from "../shell/actions";
+import { configuredHosts, fleetPlayersOnline, fleetSessionOf, fleetWorldState, operationsBlockingWorld, playersOnline, sessionReason, sharedSessionOwnerLabel, worldOwnsSharedSession, worldState, type SessionReason, type SharedHostSession } from "../session";
+import type { Pending, PendingMap, SessionAction, WorldActionKind } from "../shell/actions";
 import { changedSettings, settingsAvailable } from "./settings";
-import { pendingFor } from "../shell/actions";
+import { controlPending, pendingFor } from "../shell/actions";
 import { action, type Action } from "./actions";
 import type { AddressFacts, Detail, Notice, SessionOverview, WorldRow } from "./models";
 
@@ -83,6 +83,23 @@ export function sessionControlAvailability(
   return { action, disabled: false, hint: action === "start" ? "Start a billed session on the shared host" : "Save, back up and stop this session" };
 }
 
+// A request in flight holds its own world, and a configured world also holds
+// its game's other configured worlds, which share one host. A fleet world is
+// never held by another's (ADR-0062).
+function heldByPending(game: Game, world: World, pending: PendingMap): boolean {
+  if (world.placement === "fleet") return controlPending(pending, [world]);
+  return controlPending(pending, game.worlds.filter((item) => item.placement !== "fleet"));
+}
+
+/** Start or stop for one world, and why it may be refused, from the console's state. */
+export function worldSessionControl(game: Game, world: World, inputs: Readonly<{ snapshot: ControlPlaneSnapshot | null; sharedSession: SharedHostSession; granted: ReadonlySet<string>; pending: PendingMap; busy: boolean }>): SessionControl {
+  const fleet = world.placement === "fleet";
+  const verb = sessionActionForWorld(world, game, inputs.sharedSession, fleet);
+  const permitted = inputs.granted.has(verb === "start" ? "session.start" : "session.stop");
+  const controlBusy = heldByPending(game, world, inputs.pending) || inputs.busy;
+  return sessionControlAvailability(world, game, inputs.sharedSession, permitted, controlBusy, fleet, operationsBlockingWorld(inputs.snapshot, world));
+}
+
 export function addressFacts(world: World): AddressFacts | null {
   if (!world.connectionAddress) return null;
   const zerotier = world.connectivity === "zerotier";
@@ -126,7 +143,7 @@ function sessionSubject(game: Game | undefined, activeGame: Game | undefined, ac
 }
 
 export function buildSessionOverview(game: Game | undefined, snapshot: ControlPlaneSnapshot | null, serverState: ServerState, sharedSession: SharedHostSession, fleet: boolean): SessionOverview {
-  const host = snapshot?.hosts[0];
+  const host = configuredHosts(snapshot)[0];
   const status = sessionStatus(serverState);
   const reason = sessionReason(sharedSession, game);
   const hosts = snapshot?.hosts ?? [];
@@ -229,7 +246,7 @@ function rowStatus(world: World, active: boolean, state: ServerState | null): St
   return worldStatus(world);
 }
 
-export function buildWorldRow(game: Game, world: World, opts: Readonly<{ fleet: boolean; sharedSession: SharedHostSession; serverState: ServerState; granted: ReadonlySet<string>; pending: Pending | null; callbacks: WorldCallbacks }>): WorldRow {
+export function buildWorldRow(game: Game, world: World, opts: Readonly<{ fleet: boolean; sharedSession: SharedHostSession; granted: ReadonlySet<string>; pending: PendingMap; callbacks: WorldCallbacks }>): WorldRow {
   // A fleet world's row tells its own session's state, so two of one game read apart.
   const fleetWorld = world.placement === "fleet";
   const state = fleetWorld ? fleetWorldState(game, world) : null;
@@ -244,7 +261,7 @@ export function buildWorldRow(game: Game, world: World, opts: Readonly<{ fleet: 
     wipe: wipe ? { number: wipe.number } : null,
     wipeAbsent: world.worldLifecycleAvailable ? "No wipes yet" : "Legacy world",
     address: addressFacts(world),
-    addressAbsent: missingAddressLabel(world, state ?? opts.serverState),
+    addressAbsent: missingAddressLabel(world, worldState(game, world, opts.sharedSession)),
     actions: rowActions(game, world, opts.granted, pendingFor(opts.pending, world.id) !== null, opts.callbacks),
   };
 }
@@ -284,18 +301,16 @@ function launchedDetail(host: Host): Detail {
 }
 
 export function sessionDetails(game: Game, world: World, sharedSession: SharedHostSession, snapshot: ControlPlaneSnapshot | null, serverState: ServerState, fleet: boolean): Detail[] {
-  const host = snapshot?.hosts[0];
+  const host = configuredHosts(snapshot)[0];
   const reason = sessionReason(sharedSession, game, world);
-  const players = fleet ? fleetPlayersOnline(game, world) : playersOnline(game);
-  const running = snapshot?.hosts.filter((item) => item.provenance === "launched" && item.state === "running").length ?? 0;
+  const players = fleet ? fleetPlayersOnline(game, world) : worldOwnsSharedSession(sharedSession, game, world) ? playersOnline(game) : null;
   const details: Detail[] = [{
     label: "Session",
     value: { type: "status", status: sessionStatus(serverState) },
     explain: sessionHint(fleet, game, world, reason),
   }];
-  if (fleet) {
-    details.push({ label: "Fleet", value: { type: "text", text: `${running} running hosts` } });
-  } else {
+  // A fleet world's host is its own; the fleet-wide count belongs to the Worlds overview.
+  if (!fleet) {
     details.push(hostDetail(host));
     if (host) details.push(launchedDetail(host));
   }

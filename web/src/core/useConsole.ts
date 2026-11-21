@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ReleaseMod, ReleasePackName } from "../api/contract";
 import { requestReleaseBuild } from "../auth";
@@ -7,8 +7,8 @@ import { sessionStatus } from "../components/ui/Status";
 import { formatDateTime } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, SettingValue, World } from "../model";
 import { routeHash, type AppRoute } from "../routing";
-import { deriveSharedHostSession, worldSessionActive, type SharedHostSession } from "../session";
-import type { Confirmation, Pending, SessionAction, WorldActionKind } from "../shell/actions";
+import { configuredHosts, deriveSharedHostSession, gameOperations, worldSessionActive, type SharedHostSession } from "../session";
+import { NO_PENDING, pendingOf, withoutPending, withPending, type Confirmation, type Pending, type PendingMap, type SessionAction, type WorldActionKind } from "../shell/actions";
 import { useAppearance, useBootCard, useRoute, useStoredState } from "../shell/hooks";
 import { initializeTelegram, openInBrowser, type ViewerProfile } from "../telegram";
 import { action } from "./actions";
@@ -42,7 +42,7 @@ function fleetServerState(game: Game | undefined): ServerState {
 
 // With no record to go by, the shared host's own state is the answer.
 function hostServerState(snapshot: ControlPlaneSnapshot | null): ServerState {
-  const hostStates = snapshot?.hosts.map((host) => host.state) ?? [];
+  const hostStates = configuredHosts(snapshot).map((host) => host.state);
   if (hostStates.includes("pending")) return "starting";
   if (hostStates.includes("stopping")) return "stopping";
   if (hostStates.includes("running")) return "unknown";
@@ -51,12 +51,35 @@ function hostServerState(snapshot: ControlPlaneSnapshot | null): ServerState {
 
 export function deriveServerState(game: Game | undefined, snapshot: ControlPlaneSnapshot | null): ServerState {
   if (snapshot?.deployment?.placement === "fleet") return fleetServerState(game);
-  const operation = snapshot?.operations[0];
+  const operation = gameOperations(game, snapshot)[0];
   if (operation?.type === "start") return "starting";
   if (operation?.type === "stop") return "stopping";
   const observed = game?.lifecycle?.observedState;
   if (observed === "ready") return "running";
   return observed ?? hostServerState(snapshot);
+}
+
+/**
+ * Orders control-plane reads: a response is kept only when no later read has
+ * been kept already, so a slow earlier read never overwrites a newer snapshot.
+ */
+export function createLoadSequence() {
+  let issued = 0;
+  let kept = 0;
+  return {
+    begin: () => ++issued,
+    keep: (ticket: number) => {
+      if (ticket < kept) return false;
+      kept = ticket;
+      return true;
+    },
+  };
+}
+
+// A fleet world has no fixed host, so the answer names the world.
+export function sessionAcceptedMessage(world: World, sessionAction: SessionAction, result: "requested" | "already_stopped"): string {
+  if (result === "already_stopped") return `${world.displayName} is already stopped.`;
+  return `${sessionAction === "start" ? "Start" : "Stop"} of ${world.displayName} accepted. It appears in Operations while it runs.`;
 }
 
 const lifecycleLabels: Record<WorldActionKind, string> = { wipe: "New wipe", archive: "Archive", restore: "Restore", purge: "Delete" };
@@ -120,7 +143,7 @@ export type ConsoleController = Readonly<{
   fleetOverview: boolean;
   serverState: ServerState;
   sharedSession: SharedHostSession;
-  pending: Pending | null;
+  pending: PendingMap;
   refresh: (silent?: boolean) => Promise<void>;
   refreshing: boolean;
   worldCallbacks: WorldCallbacks;
@@ -170,7 +193,10 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
   const [controlPlane, setControlPlane] = useState<ControlPlaneState>({ status: "loading", snapshot: null, error: "" });
   const [booted, setBooted] = useState(false);
   const { visible: bootVisible, publish } = useBootCard(continuesBootCard);
-  const [pending, setPending] = useState<Pending | null>(null);
+  const [pending, setPending] = useState<PendingMap>(NO_PENDING);
+  const loads = useRef(createLoadSequence());
+  const holdPending = (item: Pending) => setPending((current) => withPending(current, item));
+  const releasePending = (item: Pending) => setPending((current) => withoutPending(current, item));
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [invite, setInvite] = useState<{ game: Game; world: World } | null>(null);
   const [creating, setCreating] = useState<{ game: Game; preset: Preset | null } | null>(null);
@@ -202,16 +228,18 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
   useEffect(() => initializeTelegram(), []);
 
   const refresh = useCallback(async (silent = false) => {
-    if (!silent) setPending({ kind: "refresh" });
+    const mine: Pending = { kind: "refresh" };
+    if (!silent) setPending((current) => withPending(current, mine));
     setControlPlane((current) => (silent || current.snapshot ? { status: "loading", snapshot: current.snapshot, error: "" } : { status: "loading", snapshot: null, error: "" }));
+    const ticket = loads.current.begin();
     try {
       const next = await loadControlPlane();
-      setControlPlane({ status: "ready", snapshot: next, error: "" });
+      if (loads.current.keep(ticket)) setControlPlane({ status: "ready", snapshot: next, error: "" });
     } catch (error) {
-      setControlPlane((current) => ({ status: "error", snapshot: current.snapshot, error: error instanceof Error ? error.message : "The control-plane state could not be loaded." }));
+      if (loads.current.keep(ticket)) setControlPlane((current) => ({ status: "error", snapshot: current.snapshot, error: error instanceof Error ? error.message : "The control-plane state could not be loaded." }));
     } finally {
       publish(() => setBooted(true));
-      if (!silent) setPending((current) => (current?.kind === "refresh" ? null : current));
+      if (!silent) setPending((current) => withoutPending(current, mine));
     }
   }, [publish]);
 
@@ -242,7 +270,8 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
   // EventBridge updates the projection and the socket carries only an
   // invalidation. Permission-filtered state still comes from the HTTP API.
   useEffect(() => subscribeControlPlane(() => {
-    loadControlPlane().then((next) => setControlPlane({ status: "ready", snapshot: next, error: "" })).catch(() => undefined);
+    const ticket = loads.current.begin();
+    loadControlPlane().then((next) => { if (loads.current.keep(ticket)) setControlPlane({ status: "ready", snapshot: next, error: "" }); }).catch(() => undefined);
   }), []);
 
   // Keep the scope in the hash and remember it for the next visit.
@@ -253,7 +282,8 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
   }, [game?.id, route.page, route.gameId]);
 
   async function runBuild(target: Game, preset: Preset) {
-    setPending({ kind: "build", presetId: preset.id });
+    const mine: Pending = { kind: "build", presetId: preset.id };
+    holdPending(mine);
     try {
       const expected = releaseBuildExpectation(preset);
       const result = await requestReleaseBuild(target.id, preset.id, expected.profileDigest, expected.retryRelease);
@@ -262,25 +292,26 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : "The build could not be requested." });
       await refresh(true);
-    } finally { setPending(null); }
+    } finally { releasePending(mine); }
   }
 
   async function runSession(target: Game, targetWorld: World, sessionAction: SessionAction) {
-    setPending({ kind: "session", worldId: targetWorld.id, action: sessionAction });
+    const mine: Pending = { kind: "session", worldId: targetWorld.id, action: sessionAction };
+    holdPending(mine);
     try {
       const result = await requestSessionOperation(target.id, targetWorld.id, sessionAction);
-      const verb = sessionAction === "start" ? "Start" : "Stop";
-      notify({ tone: "success", message: result.result === "already_stopped" ? "The host is already stopped." : `${verb} of ${targetWorld.displayName} accepted. It appears in Operations while it runs.` });
+      notify({ tone: "success", message: sessionAcceptedMessage(targetWorld, sessionAction, result.result) });
       await refresh(true);
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : `The ${sessionAction} request failed.` });
     } finally {
-      setPending(null);
+      releasePending(mine);
     }
   }
 
   async function runLifecycle(target: Game, targetWorld: World, kind: WorldActionKind, backupKey?: string, release?: string) {
-    setPending({ kind: "lifecycle", worldId: targetWorld.id, action: kind });
+    const mine: Pending = { kind: "lifecycle", worldId: targetWorld.id, action: kind };
+    holdPending(mine);
     try {
       await requestWorldLifecycle(target.id, targetWorld.id, kind === "wipe" ? "regenerate" : kind, backupKey, release);
       notify({ tone: "success", message: `${lifecycleLabel(kind)} of ${targetWorld.displayName} accepted. It appears in Operations while it runs.` });
@@ -289,19 +320,20 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : `The ${kind} request failed.` });
     } finally {
-      setPending(null);
+      releasePending(mine);
     }
   }
 
   async function downloadPack(target: Game, targetWorld: World) {
-    setPending({ kind: "pack", worldId: targetWorld.id });
+    const mine: Pending = { kind: "pack", worldId: targetWorld.id };
+    holdPending(mine);
     try {
       const { release } = await openDownload(() => requestPackDownload(target.id, targetWorld.id));
       notify({ tone: "success", message: `Pack for release ${release} is downloading.` });
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : "The pack link failed." });
     } finally {
-      setPending(null);
+      releasePending(mine);
     }
   }
 
@@ -344,7 +376,8 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
   }
 
   async function createWorld(target: Game, preset: Preset, displayName: string, release: string, placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game") {
-    setPending({ kind: "create" });
+    const mine: Pending = { kind: "create" };
+    holdPending(mine);
     try {
       const created = await requestCreateWorld(target.id, preset.id, displayName, release, placement, connectivity, auth);
       notify({ tone: "success", message: `${created.displayName} was created from ${preset.displayName} ${release}.` });
@@ -354,7 +387,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : "The world could not be created." });
     } finally {
-      setPending(null);
+      releasePending(mine);
     }
   }
 
@@ -434,7 +467,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     sharedSession,
     pending,
     refresh,
-    refreshing: pending?.kind === "refresh",
+    refreshing: pendingOf(pending, "refresh") !== null,
     worldCallbacks,
     requestSession: (target, targetWorld, sessionAction) => setConfirmation({ kind: "session", action: sessionAction, game: target, world: targetWorld }),
     requestCreateWorld: (target, preset) => setCreating({ game: target, preset: preset ?? target.presets.find((item) => item.releases.length > 0) ?? null }),

@@ -162,10 +162,10 @@ export const METRIC_RANGES: readonly { id: MetricRange; label: string }[] = [
   { id: "7d", label: "7 days" },
 ];
 
-/** The host one world runs on, measured; read only while the tab is open. */
-export function useWorldMetrics(gameId: string | undefined, worldId: string | undefined): MetricsModel {
+/** The host one world runs on, measured; read only while the tab is open, and again when its session starts or ends. */
+export function useWorldMetrics(gameId: string | undefined, worldId: string | undefined, sessionId: string | null): MetricsModel {
   const [range, setRange] = useState<MetricRange>("24h");
-  const [state, retry] = useLoad<HostMetrics | null>(gameId === undefined || worldId === undefined ? null : () => loadWorldMetrics(gameId, worldId, range), [gameId, worldId, range]);
+  const [state, retry] = useLoad<HostMetrics | null>(gameId === undefined || worldId === undefined ? null : () => loadWorldMetrics(gameId, worldId, range), [gameId, worldId, range, sessionId]);
   return { range, ranges: METRIC_RANGES, setRange, metrics: asLoading(state, retry, "metrics.retry") };
 }
 

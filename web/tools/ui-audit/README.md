@@ -8,7 +8,7 @@ page, state and width. It uses raw Chrome DevTools Protocol (`cdp.mjs`) and has 
 | `audit.mjs` | The runner: routes, widths, states, the menu walker, keys, `accepted.txt`, the report |
 | `probe.js` | The probe that runs in the page and returns the findings |
 | `states.mjs` | Every dialog, side panel, drawer, tooltip and toast the gate opens, and the skin files that draw them |
-| `fixtures/` | One page per miss of the old gate, a clean page and a clean dialog, for `--self-test` |
+| `fixtures/` | One page per miss of the old gate and per check that has no other proof, a clean page and a clean dialog, for `--self-test` |
 | `accepted.txt` | Findings accepted with a reason (optional) |
 
 ## What it runs
@@ -44,7 +44,7 @@ The runner waits for fonts and finished animations before it probes. It runs 4 t
 | `iconOffLine` | rule 5: an icon beside its text more than 1px off the text's centreline |
 | `crumbRepeat` | rule 6: more than one h1 beside a `data-layout="crumbs"` trail, or a heading or tab that repeats the title |
 | `gridEdge`, `cardHeights` | rule 8: from 1440px a grid row short of the grid's end edge; cards of one grid row of different heights |
-| `error` | a state that opened no surface, or a probe that failed |
+| `error` | a page that did not render or wore another skin, a state that opened no surface, a state whose control is absent at every width or at 1440, or a probe that failed |
 
 The rest goes to the advisory report: packed rows anywhere, explanatory copy (rule 1), stretched cards, touch targets,
 contrast and text cut with no ellipsis. A reviewer judges these; they do not fail the gate.
@@ -56,11 +56,13 @@ control on purpose (a select caret, the tab ink, a count badge); nothing else is
 
 **Markers.** The cloud primitives say what they promise with `data-layout`, `data-rail`, `data-col`, `data-status`,
 `data-scope` and `data-layer`, and `web/test/cloud-markers.test.ts` holds them to it. The terminal skin has no markers;
-`LAYOUT` at the top of `audit.mjs` lists its selectors. A new primitive that promises a layout emits the marker.
+`LAYOUT` at the top of `audit.mjs` lists its selectors. So the terminal gets the overlap, width, menu and layout checks
+(one line, pairs, rails, centred), but not the owner-rule checks, which read markers only. A new primitive that
+promises a layout emits the marker.
 
 **States.** A state is a route and steps: `{ action: id }` presses the control for that Action, or opens the menu that
-holds it. `web/test/ui-audit-states.test.ts` fails when a skin file draws a `Dialog`, `SidePanel`, `Modal` or `Drawer`
-that `SURFACES` in `states.mjs` does not name. A control that a width does not show is skipped at that width; a state
+holds it. `web/test/ui-audit-states.test.ts` fails when a skin function draws a `Dialog`, `SidePanel`, `Modal` or
+`Drawer` that `SURFACES` in `states.mjs` does not name, or draws more surfaces than it names states. A control that a width does not show is skipped at that width; a state
 that opens no surface is a finding.
 
 ## Run it
@@ -92,7 +94,9 @@ terminal world-wipes 680 light sideways div  # the wipes table scrolls at this o
 
 A key is `skin page width theme kind marker`. The marker is built from `data-*` markers and roles, never from a class
 path, so a class rename keeps the key. `*` matches any skin, page, width or theme. A line without a reason after ` # `
-fails the gate. A line that no longer matches is reported so the list only shrinks.
+fails the gate, and so does a line with page `*` and a one-part marker, which would hide every match of its kind. A line
+that no longer matches is reported so the list only shrinks. The gate also fails when the demo does not answer, or when
+the run measured fewer pages than it planned.
 
 What the probe cannot measure, where a control sits and whether the same control looks the same twice, is read by eye
 and written down per face under [`web/audits/`](../../audits/).

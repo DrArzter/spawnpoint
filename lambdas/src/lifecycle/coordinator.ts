@@ -114,18 +114,21 @@ export function createLifecycleCoordinator(
     throw new LifecycleConflict("lifecycle changed repeatedly during conditional write");
   }
 
+  // Creates the record once; a lost race returns the winner's record.
+  async function initialize(serverId: string): Promise<CoordinatorOutput> {
+    for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
+      const current = await store.read(serverId);
+      if (current !== null) return current;
+      const record = initialLifecycleRecord(serverId, nowEpochSeconds());
+      if (await store.create(serverId, record)) return { revision: 1, record };
+    }
+    throw new LifecycleConflict("lifecycle initialization did not converge");
+  }
+
   return async (input: CoordinatorInput): Promise<CoordinatorOutput> => {
     requireServerId(input.serverId);
 
-    if (input.action === "initialize") {
-      for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
-        const current = await store.read(input.serverId);
-        if (current !== null) return current;
-        const record = initialLifecycleRecord(input.serverId, nowEpochSeconds());
-        if (await store.create(input.serverId, record)) return { revision: 1, record };
-      }
-      throw new LifecycleConflict("lifecycle initialization did not converge");
-    }
+    if (input.action === "initialize") return initialize(input.serverId);
 
     if (input.action === "get") return loadRequired(input.serverId);
 

@@ -158,6 +158,14 @@
           "BackoffRate": 2
         }
       ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Comment": "A check that cannot see the host is a failed probe: it counts towards Watchdog Blind and never towards idle.",
+          "ResultPath": "$.observed.probeError",
+          "Next": "Record Synthetic Unknown"
+        }
+      ],
       "Next": "Host Still Running"
     },
     "Host Still Running": {
@@ -273,6 +281,12 @@
           "ErrorEquals": ["Ssm.InvocationDoesNotExistException"],
           "ResultPath": "$.observed.lookupError",
           "Next": "Increment Probe Poll"
+        },
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Comment": "A result that cannot be read is an unknown probe, as a failed command is. It never fails the watchdog and never counts as empty.",
+          "ResultPath": "$.observed.probeError",
+          "Next": "Record Command Unknown"
         }
       ],
       "Next": "Route Probe Result"

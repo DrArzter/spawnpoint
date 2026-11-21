@@ -10,7 +10,7 @@ type State = {
   Resource?: string;
   Parameters?: Record<string, unknown>;
   Choices?: Array<Record<string, unknown>>;
-  Catch?: Array<{ Next: string }>;
+  Catch?: Array<{ ErrorEquals?: string[]; ResultPath?: string; Next: string }>;
 };
 
 type Definition = { StartAt: string; States: Record<string, State> };
@@ -91,6 +91,26 @@ test("unknown probes cannot enter the idle-stop eligibility path", async () => {
   assert.notEqual(state(definition, "Probe Failure Limit Reached").Default, "Check Idle Eligibility");
   assert.equal(state(definition, "Record Successful Observation").Next, "Count Successful Probe");
   assert.equal(state(definition, "Count Successful Probe").Next, "Check Idle Eligibility");
+});
+
+test("a probe step that errors counts as a failed probe instead of failing the watchdog", async () => {
+  const definition = await loadDefinition();
+  const failure = (name: string) => {
+    const caught = state(definition, name).Catch ?? [];
+    const last = caught.at(-1);
+    assert.deepEqual(last?.ErrorEquals, ["States.ALL"], `${name} catches every error last`);
+    assert.equal(last?.ResultPath, "$.observed.probeError", `${name} keeps the request and counters`);
+    return last?.Next;
+  };
+
+  // The command was sent: its id is the observation, as for an unknown status.
+  assert.equal(failure("Get Probe Result"), "Record Command Unknown");
+  assert.equal(state(definition, "Get Probe Result").Catch?.[0]?.Next, "Increment Probe Poll", "a result not yet there is polled again");
+  // No command was sent: a synthetic observation, as for a failed send.
+  assert.equal(failure("Describe Host"), "Record Synthetic Unknown");
+  for (const name of ["Send Placed Probe", "Send Structured Probe"]) assert.equal(failure(name), "Record Synthetic Unknown");
+  assert.equal(state(definition, "Record Command Unknown").Next, "Count Probe Failure");
+  assert.equal(state(definition, "Record Synthetic Unknown").Next, "Count Probe Failure");
 });
 
 test("idle and capped stops target only the V2 session-scoped stop machine", async () => {

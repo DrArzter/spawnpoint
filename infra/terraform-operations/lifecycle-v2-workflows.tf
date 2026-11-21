@@ -318,6 +318,23 @@ data "aws_iam_policy_document" "lifecycle_v2_watchdog" {
     ]
   }
 
+  # A session placed on a launched host is probed on that host, which does not
+  # exist when this policy is written. Without this the watchdog is denied at
+  # its first probe, goes blind after the consecutive-failure budget and dies —
+  # and a fleet session then has nothing to stop it but the running-hours
+  # alarm. The start and stop machines reach the same hosts the same way.
+  statement {
+    sid       = "ProbeLaunchedHosts"
+    actions   = ["ssm:SendCommand"]
+    resources = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ssm:resourceTag/ManagedBy"
+      values   = ["spawnpoint-fleet"]
+    }
+  }
+
   statement {
     sid       = "StartOnlyFencedStop"
     actions   = ["states:StartExecution"]

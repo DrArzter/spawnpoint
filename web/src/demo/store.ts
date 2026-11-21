@@ -264,10 +264,14 @@ export function worldLifecycle(gameId: string, worldId: string, action: "archive
       next.connectionAddress = null;
       const lifecycle = owner.lifecycle;
       if (lifecycle?.activeWorldId === worldId) lifecycle.activeWorldId = null;
+      // Archive stops a fleet world's session, and its launched host goes with it.
+      if (next.session) Object.assign(next.session, { desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: null });
+      current.snapshot.hosts = current.snapshot.hosts.filter((item) => item.id !== launchedHostId(worldId));
       return;
     }
     if (action === "purge") {
       owner.worlds = owner.worlds.filter((item) => item.id !== worldId);
+      current.snapshot.hosts = current.snapshot.hosts.filter((item) => item.id !== launchedHostId(worldId));
       delete current.backups[worldKey(gameId, worldId)];
       delete current.invitations[worldKey(gameId, worldId)];
       return;

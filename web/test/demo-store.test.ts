@@ -65,7 +65,7 @@ test("two fleet worlds of a game start one after the other, each on a host of it
 
 test("a fleet world waits only for its own operation", () => {
   store.stopSession(GAME, CREATIVE);
-  assert.throws(() => store.startSession(GAME, CREATIVE), /already running/);
+  assert.throws(() => store.startSession(GAME, CREATIVE), /Another control-plane operation/);
   assert.throws(() => store.worldLifecycle(GAME, CREATIVE, "archive"), /Another control-plane operation/);
   // Another fleet world and the configured worlds are not held back by it.
   assert.doesNotThrow(() => store.updateWhitelist(GAME, skyline, ["Steve"]));
@@ -92,4 +92,27 @@ test("a configured sibling is refused while another configured world of the game
   assert.equal(configuredHosts(snapshot)[0]?.state, "stopped");
   // With the configured host free, the sibling starts there.
   assert.doesNotThrow(() => store.startSession(GAME, VANILLA));
+});
+
+test("archiving a running fleet world stops its session and removes its launched host", () => {
+  mock.timers.tick(7000);
+  assert.equal(stateOf(store.snapshot(), skyline), "running");
+
+  store.worldLifecycle(GAME, skyline, "archive");
+  mock.timers.tick(4000);
+  let snapshot = store.snapshot();
+  const archived = snapshot.games.find((item) => item.id === GAME)!.worlds.find((item) => item.id === skyline)!;
+  assert.equal(archived.materialization, "archived");
+  assert.equal(archived.session?.observedState, "stopped");
+  assert.equal(archived.session?.activeSessionId, null);
+  assert.equal(stateOf(snapshot, skyline), "stopped");
+  assert.equal(snapshot.hosts.some((host) => host.id === `host-${skyline}`), false);
+  assert.equal(store.worldMetrics(GAME, skyline, "6h"), null);
+
+  // Purge never leaves a launched host behind either.
+  store.worldLifecycle(GAME, skyline, "purge");
+  mock.timers.tick(4000);
+  snapshot = store.snapshot();
+  assert.equal(snapshot.games.find((item) => item.id === GAME)!.worlds.some((item) => item.id === skyline), false);
+  assert.equal(snapshot.hosts.some((host) => host.id === `host-${skyline}`), false);
 });

@@ -1,4 +1,5 @@
 import type { Detail, ModsModel, WorldModel } from "../../../core/models";
+import { formatBytes } from "../../../lib/format";
 import { ActionButton } from "../ui/ActionButton";
 import { Card } from "../ui/Card";
 import { Chip } from "../ui/Chip";
@@ -8,7 +9,6 @@ import { Empty, LoadError } from "../ui/Empty";
 import { Grid } from "../ui/Grid";
 import { Table } from "../ui/Table";
 import { TrackList, TrackTitle } from "../ui/TrackList";
-import { sizeText } from "./Backups";
 
 const pointerStates = { unconfigured: "Unconfigured", unavailable: "Unavailable" } as const;
 
@@ -61,7 +61,7 @@ function Mods({ mods }: Readonly<{ mods: ModsModel }>) {
           <Table
             columns={[
               { id: "mod", header: "Mod", kind: "lead", render: (row) => <strong title={row.file}>{row.file}</strong> },
-              { id: "size", header: "Size", kind: "num", render: (row) => sizeText(row.bytes) },
+              { id: "size", header: "Size", kind: "num", render: (row) => formatBytes(row.bytes) },
               { id: "sha", header: "SHA-256", kind: "wide", render: (row) => <span className="c-sum"><span className="c-mono" title={row.sha256}>{row.sha256.slice(0, 12)}</span><Copy value={row.sha256} what="SHA-256" /></span> },
               { id: "actions", header: "Actions", kind: "act", render: (row) => <ActionButton action={row.download} size="sm" /> },
             ]}

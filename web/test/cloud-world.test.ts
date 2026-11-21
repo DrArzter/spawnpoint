@@ -9,7 +9,7 @@ import { action, type Action } from "../src/core/actions.ts";
 import type { WorldModel } from "../src/core/models.ts";
 import type { Game, World } from "../src/model.ts";
 import { cloudSkin } from "../src/skins/cloud/index.ts";
-import { partialLine, sizeText } from "../src/skins/cloud/tabs/Backups.tsx";
+import { partialLine } from "../src/skins/cloud/tabs/Backups.tsx";
 import { uptime } from "../src/skins/cloud/tabs/Hero.tsx";
 
 /*
@@ -102,9 +102,7 @@ test("cloud world: the list column keeps the tab and marks the current world; no
   assert.match(stopped, /<dt><span>Address/, "without a hero the World card keeps the address");
 });
 
-test("cloud world: backup sizes, the partial line and uptime read as the spec says", () => {
-  assert.equal(sizeText(1024), "1 KB");
-  assert.equal(sizeText(1_331_439_861), "1.24 GB");
+test("cloud world: the partial backup line and uptime read as the spec says", () => {
   assert.equal(partialLine(0, false), null);
   assert.equal(partialLine(2, true), "2 objects not shown · older backups exist");
   const start = Date.parse("2026-11-21T08:00:00Z");

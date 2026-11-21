@@ -1,5 +1,6 @@
 import type { BackupEntry } from "../../../api/contract";
 import type { BackupsModel } from "../../../core/models";
+import { formatBytes } from "../../../lib/format";
 import { ActionButton } from "../ui/ActionButton";
 import { Card } from "../ui/Card";
 import { Copy } from "../ui/Copy";
@@ -9,19 +10,6 @@ import { Segmented } from "../ui/Segmented";
 import { Table, type Column } from "../ui/Table";
 
 const ALL = "all";
-
-/** A size in the largest unit that keeps it above one: "1.24 GB", "380 MB". */
-export function sizeText(bytes: number): string {
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  const digits = unit >= 3 ? 2 : unit === 2 ? 1 : 0;
-  return `${value.toFixed(digits).replace(/\.0+$/, "")} ${units[unit]}`;
-}
 
 /** What the inventory leaves out, as one faint line; null when it lists everything. */
 export function partialLine(unverified: number, truncated: boolean): string | null {
@@ -54,7 +42,7 @@ function Body({ model }: Readonly<{ model: BackupsModel }>) {
       const number = model.wipeNumber(entry.generationId);
       return number === undefined ? <span className="c-faint">—</span> : `#${number}`;
     } }] : []),
-    { id: "size", header: "Size", kind: "num", render: (entry) => sizeText(entry.sizeBytes) },
+    { id: "size", header: "Size", kind: "num", render: (entry) => formatBytes(entry.sizeBytes) },
     { id: "checksum", header: "Checksum", kind: "wide", render: (entry) => (
       <span className="c-sum">
         <span className="c-mono" title={entry.checksum}>{entry.checksum.slice(0, 12)}</span>

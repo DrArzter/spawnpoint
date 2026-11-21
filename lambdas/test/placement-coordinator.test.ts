@@ -246,3 +246,30 @@ test("a Zomboid world and a public world take slot zero only; the second of them
   assert.equal(worldNeedsSlotZero("knox", "zomboid"), true);
   assert.equal(worldNeedsSlotZero("base", "factorio"), true);
 });
+
+test("a warm placement keeps its launched host stopped for the world; a cold one lets it go; any other policy is refused", async () => {
+  const fleet = new MemoryFleet();
+  const coordinate = coordinator(fleet);
+  await coordinate({ action: "registerHost", hostId: "i-warm", shape: LARGE, ready: true, provenance: "launched" });
+  await coordinate({ action: "registerHost", hostId: "i-cold", shape: LARGE, ready: true, provenance: "launched" });
+
+  const warm = await coordinate({ action: "reserveOnHost", hostId: "i-warm", sessionId: "s1", worldId: "world-a", serverId: "minecraft", policy: "warm" });
+  assert.equal(warm.placement?.kind, "reuse");
+  assert.equal(fleet.hosts.get("i-warm")?.record.reservations[0]?.policy, "warm");
+  await coordinate({ action: "releasePlacement", hostId: "i-warm", sessionId: "s1" });
+  assert.equal(fleet.hosts.get("i-warm")?.record.keptWorldId, "world-a");
+  assert.equal((await coordinate({ action: "decideDrain", hostId: "i-warm", gracePeriodSeconds: 0 })).drain, "stop");
+
+  await coordinate({ action: "reserveOnHost", hostId: "i-cold", sessionId: "s2", worldId: "world-b", serverId: "minecraft" });
+  assert.equal(fleet.hosts.get("i-cold")?.record.reservations[0]?.policy, "cold", "a start that names no policy is cold");
+  await coordinate({ action: "releasePlacement", hostId: "i-cold", sessionId: "s2" });
+  assert.equal((await coordinate({ action: "decideDrain", hostId: "i-cold", gracePeriodSeconds: 0 })).drain, "terminate");
+
+  const placed = await coordinate({ action: "placeSession", sessionId: "s3", worldId: "world-c", serverId: "minecraft", policy: "warm", eligibleProvenance: "launched" });
+  assert.equal(placed.placement?.kind, "reuse");
+  const host = [...fleet.hosts.values()].find((candidate) => candidate.record.reservations.some((reservation) => reservation.sessionId === "s3"));
+  assert.equal(host?.record.reservations.find((reservation) => reservation.sessionId === "s3")?.policy, "warm");
+
+  await assert.rejects(coordinate({ action: "placeSession", sessionId: "s4", worldId: "world-d", serverId: "minecraft", policy: "hot" as never }), /policy must be cold or warm/);
+  await assert.rejects(coordinate({ action: "reserveOnHost", hostId: "i-cold", sessionId: "s5", worldId: "world-e", serverId: "minecraft", policy: "" as never }), /policy must be cold or warm/);
+});

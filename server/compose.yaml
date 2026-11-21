@@ -6,11 +6,18 @@
 services:
   mc:
     # PROJECT: `stable` moves, so a start that breaks cannot be attributed.
-    # This digest is the amd64 image that passed the owner's local lifecycle and
-    # restored-world smoke tests. Mods themselves persist in the volume —
-    # REMOVE_OLD_MODS is false by default — so they do not re-resolve per boot;
-    # the exposure is on a rebuild, not on a restart. See ADR-0008.
-    image: itzg/minecraft-server@sha256:7423a4cf59ec510a58294f853fc7b07cdf0a50c5bc4618ee172327d7913941eb
+    # Mods themselves persist in the volume — REMOVE_OLD_MODS is false by
+    # default — so they do not re-resolve per boot; the exposure is on a
+    # rebuild, not on a restart. See ADR-0008.
+    #
+    # PROJECT: the java17 image, not the previous digest. That one carries
+    # Temurin 25, on which spark's bundled async-profiler takes the JVM down
+    # with a SIGSEGV in libasyncProfiler moments after the world loads —
+    # reproduced locally on the same digest with the Prominence server pack.
+    # Every Minecraft world here is 1.20.1, which wants Java 17 regardless.
+    # The resolver in scripts/resolve-profile-mods.sh keeps its own pin: it
+    # runs mc-image-helper to resolve mods and never starts a game.
+    image: itzg/minecraft-server@sha256:313ccff00f77a538374f424d49c6bb5643195c6f351604888be8b9acea950ff3
     tty: true
     stdin_open: true
     ports:

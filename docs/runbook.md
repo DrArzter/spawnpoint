@@ -35,7 +35,7 @@ Fill in at M1 and keep current. This block is what somebody needs when something
 | Backup bucket | `spawnpoint-backups-${ACCOUNT_ID}` |
 | Mini App | `https://dwk99t8cin0cf.cloudfront.net/` via CloudFront `E1UUZEI6NMXTB7`; private origin `spawnpoint-web-${ACCOUNT_ID}` |
 | Panel URL | Grafana at `http://172.29.23.24:3000` inside ZeroTier |
-| Container image | `itzg/minecraft-server` pinned by digest in `server/compose.yaml`, never `latest` |
+| Container image | `itzg/minecraft-server` pinned by digest in `server/compose.yaml`, never `latest`. The digest must be a **java17** one: 1.20.1 wants Java 17, and on a Java 25 image `spark`'s async-profiler segfaults the JVM shortly after the world loads |
 | Minecraft and loader version | Minecraft 1.20.1, Forge, immutable release `1.0` with 111 JARs |
 | World ids | `world` (Minecraft, profile `main`), `vanilla`, `factorio`, `zomboid` — the ids the panel, the bot and `--world` all use |
 | Addresses | Composed, never configured: the strategy's host part — the overlay address for `zerotier` worlds, the instance's current public IPv4 for `raw` ones — plus the game's own port: `world` 25565, `factorio` 34197/udp, `zomboid` 16261/udp. The start machine carries the host's answer back; a `raw` world has no address between sessions |

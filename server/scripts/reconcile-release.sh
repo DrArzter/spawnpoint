@@ -105,15 +105,14 @@ while IFS=$'\t' read -r filename expected_sha expected_bytes; do
 
   actual_bytes="$(stat --format '%s' -- "${source_file}")"
   [[ "${actual_bytes}" == "${expected_bytes}" ]] || die "size mismatch for ${filename}: expected ${expected_bytes}, got ${actual_bytes}"
-  actual_sha="$(sha256sum -- "${source_file}")"
-  actual_sha="${actual_sha%% *}"
-  [[ "${actual_sha}" == "${expected_sha}" ]] || die "SHA-256 mismatch for ${filename}"
 
+  # One hash per file: the staged copy is what the game reads, so it is the
+  # copy that is held to the manifest.
   cp --reflink=auto --preserve=mode,timestamps -- "${source_file}" "${stage_dir}/${filename}"
   chmod 0644 -- "${stage_dir}/${filename}"
   copied_sha="$(sha256sum -- "${stage_dir}/${filename}")"
   copied_sha="${copied_sha%% *}"
-  [[ "${copied_sha}" == "${expected_sha}" ]] || die "copied file failed verification: ${filename}"
+  [[ "${copied_sha}" == "${expected_sha}" ]] || die "SHA-256 mismatch for ${filename}"
 done < <(jq -r '.server.mods[] | [.file, .sha256, (.bytes | tostring)] | @tsv' "${manifest}")
 
 actual_count="$(find "${stage_dir}" -maxdepth 1 -type f \( -name '*.jar' -o -name '*.zip' \) | wc -l)"

@@ -275,7 +275,7 @@ function PermissionList({ permissions }: Readonly<{ permissions: readonly string
       {[...permissions].sort((a, b) => a.localeCompare(b)).map((permission) => (
         <li className="c-perm" key={permission}>
           <Icon name="check" size={18} />
-          <span className="c-mono" data-tip={describePermission(permission)} tabIndex={describePermission(permission) ? 0 : undefined}>{permission}</span>
+          <span className="c-mono" data-tip={describePermission(permission)} tabIndex={describePermission(permission) ? 0 : undefined /* NOSONAR focusable tooltip trigger */}>{permission}</span>
         </li>
       ))}
     </ul>

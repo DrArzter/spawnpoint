@@ -20,7 +20,7 @@ export function ScopeSwitcher({ model }: Readonly<{ model: ScopeModel }>) {
   const games = model.games.length > SHOWN ? [current] : model.games;
   return (
     <>
-      <div aria-label="Game" className="c-scope" role="group">
+      <div aria-label="Game" className="c-scope" role="group" /* NOSONAR a labelled set of game buttons; <fieldset> adds a frame and a legend */>
         {games.map((game) => {
           const status = model.statusOf(game);
           return (
@@ -57,9 +57,11 @@ export function ScopeSwitcher({ model }: Readonly<{ model: ScopeModel }>) {
   );
 }
 
+const STEPS: Readonly<Record<string, number>> = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
+
 // Arrow keys move between the games of the radio group; Enter or Space chooses one.
 function moveFocus(event: KeyboardEvent<HTMLDivElement>) {
-  const step = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 0;
+  const step = STEPS[event.key] ?? 0;
   if (step === 0) return;
   event.preventDefault();
   const rows = [...event.currentTarget.querySelectorAll<HTMLElement>("[role=radio]")];
@@ -72,7 +74,7 @@ export function ScopeDialog({ model }: Readonly<{ model: ScopeModel }>) {
   if (!model.open) return null;
   return (
     <Dialog cancel={model.close} title="Game">
-      <div aria-label="Game" className="c-scope-list" onKeyDown={moveFocus} role="radiogroup">
+      <div aria-label="Game" className="c-scope-list" onKeyDown={moveFocus} role="radiogroup" /* NOSONAR roving tabindex: the chosen row carries the tab stop */>
         {model.games.map((game) => {
           const checked = game.id === model.game?.id;
           return (

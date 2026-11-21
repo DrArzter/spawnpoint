@@ -58,16 +58,16 @@ export function Tooltip({ text, children, className }: Readonly<{ text: string; 
   }, [placement]);
 
   return (
-    <span
+    <span // NOSONAR the tooltip anchor is focusable on purpose; its handlers only show and hide the tip
       aria-describedby={placement ? id : undefined}
       className={cx("tip-anchor", className)}
       onBlur={close}
-      onClick={() => { if (placement) close(); else place(); }}
+      onClick={() => { if (placement) close(); else place(); }} // NOSONAR touch toggle; focus and hover already show the tip
       onFocus={open}
       onMouseEnter={open}
       onMouseLeave={close}
       ref={anchor}
-      tabIndex={0}
+      tabIndex={0} // NOSONAR keyboard users reach the tip through focus
     >
       {children}
       {placement && createPortal(

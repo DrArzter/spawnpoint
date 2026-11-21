@@ -28,8 +28,10 @@ export function paletteOptions(model: ShellModel): Option[] {
     if (item.id === "profile") continue;
     go.push({ key: `go.${item.id}`, group: "Go to", label: item.label, icon: pageIcons[item.id] ?? "chevron_right", href: item.href });
     if (item.id === "access") {
-      go.push({ key: "go.access.roles", group: "Go to", label: "Access › Roles", icon: "admin_panel_settings", href: "#/access/roles" });
-      go.push({ key: "go.access.notifications", group: "Go to", label: "Access › My notifications", icon: "notifications", href: "#/access/notifications" });
+      go.push(
+        { key: "go.access.roles", group: "Go to", label: "Access › Roles", icon: "admin_panel_settings", href: "#/access/roles" },
+        { key: "go.access.notifications", group: "Go to", label: "Access › My notifications", icon: "notifications", href: "#/access/notifications" },
+      );
     }
   }
   go.push({ key: "go.profile", group: "Go to", label: "Profile", icon: "person", href: "#/profile" });
@@ -109,7 +111,7 @@ export function Palette({ model, onClose }: Readonly<{ model: ShellModel; onClos
   return (
     <>
       <div aria-hidden="true" className="c-palette-scrim" onPointerDown={onClose} />
-      <div aria-label="Search and run" aria-modal="true" className="c-palette" role="dialog">
+      <div aria-label="Search and run" aria-modal="true" className="c-palette" role="dialog" /* NOSONAR the palette keeps focus in its input and draws its own scrim; <dialog> would take focus */>
         <div className="c-palette-input">
           <Icon name="search" size={20} />
           <input
@@ -147,7 +149,7 @@ export function Palette({ model, onClose }: Readonly<{ model: ShellModel; onClos
                     key={refused?.key === option.key ? `${option.key}:${refused.at}` : option.key}
                     onMouseDown={(event) => { event.preventDefault(); run(option); }}
                     onMouseMove={() => setActive(mine)}
-                    role="option"
+                    role="option" // NOSONAR options are chosen through aria-activedescendant; focus stays on the input
                   >
                     <span className="c-palette-icon">{disabled ? <Icon name="lock" size={18} /> : <Icon name={option.icon} size={18} />}</span>
                     <span className="c-palette-label">{option.label}</span>

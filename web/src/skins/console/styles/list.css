@@ -104,6 +104,15 @@ html[data-skin="console"] .c-lcol-group {
   grid-template-columns: minmax(0, 1fr) 48px 124px;
 }
 
+html[data-skin="console"] .c-lcol-items {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 html[data-skin="console"] .c-lcol-group-label {
   display: flex;
   grid-column: 1 / -1;

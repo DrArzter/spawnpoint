@@ -117,7 +117,7 @@ test("Notice, Empty and LoadError: one line, one title, at most one Action", () 
 
 test("Skeleton: one announced region, placeholders hidden from assistive technology", () => {
   const markup = html(createElement(SkeletonGroup, null, createElement(Skeleton, { height: 52 })));
-  assert.match(markup, /aria-busy="true" aria-label="Loading" class="c-skeleton-group" role="status"/);
+  assert.match(markup, /<output aria-busy="true" aria-label="Loading" class="c-skeleton-group">/);
   assert.match(markup, /aria-hidden="true" class="c-skeleton" style="width:100%;height:52px"/);
 });
 

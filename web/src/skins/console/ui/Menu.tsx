@@ -74,9 +74,9 @@ export function Menu({ id, label, groups, open, anchor, onClose }: Readonly<{ id
   const visible = groups.filter((group) => group.actions.length > 0);
 
   return (
-    <div aria-label={label} className="c-menu" data-layer="menu" hidden={!open} id={id} popover="manual" onKeyDown={onKey} ref={menu} role="menu">
+    <div aria-label={label} className="c-menu" data-layer="menu" hidden={!open} id={id} popover="manual" onKeyDown={onKey} ref={menu} role="menu" /* NOSONAR focus moves to the items, which carry the tab stop */>
       {visible.map((group, index) => (
-        <div className={cx("c-menu-group", index > 0 && "c-menu-group-split")} key={group.label ?? index} role="group" aria-label={group.label}>
+        <div className={cx("c-menu-group", index > 0 && "c-menu-group-split")} key={group.label ?? index} role="group" aria-label={group.label} /* NOSONAR a labelled group of menu items; <fieldset> is not valid inside a menu */>
           {group.label && <div aria-hidden="true" className="c-menu-label">{group.label}</div>}
           {group.actions.map((action) => (
             <button

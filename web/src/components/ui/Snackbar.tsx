@@ -79,13 +79,15 @@ function SnackTimer({ snack, onDismiss }: Readonly<{ snack: Snack; onDismiss: ()
 
 function SnackbarItem({ snack, onDismiss }: Readonly<{ snack: Snack; onDismiss: () => void }>) {
   useDwell(snack, onDismiss);
+  // An error interrupts (alert); anything else is polite, which <output> is.
+  const Live = snack.tone === "error" ? "div" : "output";
   return (
-    <div className={cx("snackbar", `snackbar-${snack.tone}`)} role={snack.tone === "error" ? "alert" : "status"}>
+    <Live className={cx("snackbar", `snackbar-${snack.tone}`)} role={snack.tone === "error" ? "alert" : undefined}>
       {snack.tone === "error" && <Icon name="error" size={20} />}
       {snack.tone === "success" && <Icon name="check_circle" size={20} />}
       <p>{snack.message}</p>
       {snack.action && <Button onClick={() => { snack.action?.onClick(); onDismiss(); }} size="small" variant="text">{snack.action.label}</Button>}
       <IconButton icon="close" label="Dismiss" onClick={onDismiss} size="small" />
-    </div>
+    </Live>
   );
 }

@@ -1,4 +1,4 @@
-import { createContext, useContext, useId, type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { createContext, useContext, useId, useMemo, type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
 import type { Action } from "../../../core/actions";
 import { Icon, type IconName } from "../../../icons";
@@ -33,13 +33,15 @@ export function Field({ label, error, hint, end, className, children }: Readonly
 }>) {
   const id = useId();
   const errorId = error ? `${id}-error` : undefined;
+  const invalid = Boolean(error);
+  const wiring = useMemo(() => ({ id, errorId, invalid }), [id, errorId, invalid]);
   return (
-    <FieldContext.Provider value={{ id, errorId, invalid: Boolean(error) }}>
+    <FieldContext.Provider value={wiring}>
       <div className={cx("c-field", className)}>
         <span className="c-field-label-row">
           <span className="c-field-label-start">
             <label className="c-field-label" htmlFor={id}>{label}</label>
-            {hint && <span aria-label={hint} className="c-field-hint" data-tip={hint} role="img" tabIndex={0}><Icon name="info" size={15} /></span>}
+            {hint && <span aria-label={hint} className="c-field-hint" data-tip={hint} role="img" tabIndex={0 /* NOSONAR focusable tooltip trigger */}><Icon name="info" size={15} /></span>}
           </span>
           {end}
         </span>

@@ -52,7 +52,7 @@ export function Dialog({ open, onClose, title, children, actions, className, dis
     <dialog
       aria-labelledby={titleId}
       className={cx("dialog", className)}
-      onClick={(event) => { if (dismissOnBackdrop && event.target === event.currentTarget) onClose(); }}
+      onClick={(event) => { if (dismissOnBackdrop && event.target === event.currentTarget) onClose(); }} // NOSONAR backdrop click is a pointer shortcut; Escape closes the native dialog
       ref={ref}
     >
       {open && (

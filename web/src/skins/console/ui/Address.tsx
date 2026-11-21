@@ -9,7 +9,7 @@ const glyphs: Readonly<Record<AddressFacts["connectivity"], IconName>> = { raw: 
 export function Address({ address, copy = false, className }: Readonly<{ address: AddressFacts; copy?: boolean; className?: string }>) {
   return (
     <span className={cx("c-address", className)}>
-      <span aria-label={address.network} className="c-address-glyph" data-tip={address.network} role="img" tabIndex={0}>
+      <span aria-label={address.network} className="c-address-glyph" data-tip={address.network} role="img" tabIndex={0 /* NOSONAR focusable tooltip trigger */}>
         <Icon name={glyphs[address.connectivity]} size={17} />
       </span>
       <span className="c-mono c-address-value" title={address.value}>{address.value}</span>

@@ -7,6 +7,11 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_sns_topic.alerts
+    values = { arn = "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert" }
+  }
+
+  override_data {
     target = data.aws_route53_zone.api
     values = { zone_id = "Z123456789" }
   }
@@ -590,5 +595,35 @@ run "http_api_stage_logs_requests_without_tokens" {
       !strcontains(aws_apigatewayv2_stage.default.access_log_settings[0].format, "query")
     )
     error_message = "The HTTP API access log must never record the request path or query string, which can carry tokens."
+  }
+}
+
+run "world_lifecycle_alarms_on_failed_and_timed_out_executions" {
+  command = plan
+
+  variables {
+    bootstrap_owner_telegram_id      = "123456789"
+    panel_url                        = "https://panel.example.dev/"
+    session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
+  }
+
+  assert {
+    condition = toset([for alarm in aws_cloudwatch_metric_alarm.world_lifecycle : alarm.alarm_name]) == toset([
+      "spawnpoint-world-lifecycle-failed",
+      "spawnpoint-world-lifecycle-timed-out",
+    ])
+    error_message = "The world lifecycle machine needs a failed and a timed-out alarm."
+  }
+
+  assert {
+    condition = alltrue([
+      for metric, alarm in aws_cloudwatch_metric_alarm.world_lifecycle :
+      alarm.namespace == "AWS/States" && alarm.metric_name == metric &&
+      alarm.dimensions.StateMachineArn == "arn:aws:states:eu-central-1:123456789012:stateMachine:spawnpoint-world-lifecycle" &&
+      alarm.threshold == 0 && alarm.comparison_operator == "GreaterThanThreshold" &&
+      alarm.treat_missing_data == "notBreaching" &&
+      alarm.alarm_actions == toset(["arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"])
+    ])
+    error_message = "One failed or timed-out world lifecycle execution alarms the guardrails topic."
   }
 }

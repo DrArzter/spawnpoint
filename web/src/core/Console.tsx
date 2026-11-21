@@ -7,8 +7,8 @@ import { buildStatus, sessionStatus, worldStatus } from "../components/ui/Status
 import type { StatusDescriptor } from "../components/ui/Status";
 import type { Game, World, WorldTab } from "../model";
 import { routeHash } from "../routing";
-import { fleetWorldState, operationsBlockingWorld, runningWorlds } from "../session";
-import { pendingFor } from "../shell/actions";
+import { operationsBlockingWorld, runningWorlds, worldSessionId, worldState } from "../session";
+import { pendingFor, pendingOf } from "../shell/actions";
 import type { Skin } from "../skins/skin";
 import { action, type Action } from "./actions";
 import { releaseBuildCopy } from "./release-builds";
@@ -16,7 +16,7 @@ import { useConsole, type ConsoleController } from "./useConsole";
 import { useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, ReleasesModel, WorldModel, WorldsModel } from "./models";
-import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionActionForWorld, sessionControlAvailability, sessionDetails, withReleasePacks, worldDetails, worldMoreActions, worldNotices, worldTabs } from "./worlds";
+import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionDetails, withReleasePacks, worldDetails, worldMoreActions, worldNotices, worldSessionControl, worldTabs } from "./worlds";
 
 /*
  * The controllers: each takes the console's bones, builds one page's model
@@ -72,7 +72,7 @@ function WorldsPage({ console, skin }: Controlled) {
       ...(listStatus === "error" ? [{ id: "load", tone: "error" as const, title: "Current state could not be loaded", description: error, action: action("refresh", "Try again", () => void console.refresh()) }] : []),
     ],
     overview: buildSessionOverview(game, snapshot, serverState, sharedSession, fleetOverview),
-    rows: game ? game.worlds.map((world) => buildWorldRow(game, world, { fleet: fleetOverview, sharedSession, serverState, granted, pending, callbacks: worldCallbacks })) : [],
+    rows: game ? game.worlds.map((world) => buildWorldRow(game, world, { fleet: fleetOverview, sharedSession, granted, pending, callbacks: worldCallbacks })) : [],
     emptyDescription: canManage && readyPreset ? "Create the first world from a ready preset." : "Worlds appear here once a preset has a ready release and a world is created.",
     refresh: refreshAction(console),
     createWorld: canManage && readyPreset && game ? action("world.create", "Create world", () => console.requestCreateWorld(game), { icon: "add" }) : null,
@@ -83,11 +83,9 @@ function WorldsPage({ console, skin }: Controlled) {
 // Start or stop, and why it may be refused: a fleet world answers for its own
 // session, a configured one for the shared host (ADR-0062).
 function sessionVerb(console: ConsoleController, game: Game, world: World, busy: boolean, sessionBusy: boolean): Action {
-  const { snapshot, granted, pending, sharedSession, fleet } = console;
-  const controlBusy = pending?.kind === "session" || pending?.kind === "lifecycle";
-  const verb = sessionActionForWorld(world, game, sharedSession, fleet);
-  const permitted = granted.has(verb === "start" ? "session.start" : "session.stop");
-  const control = sessionControlAvailability(world, game, sharedSession, permitted, controlBusy || busy, fleet, operationsBlockingWorld(snapshot, world));
+  const { snapshot, granted, pending, sharedSession } = console;
+  const control = worldSessionControl(game, world, { snapshot, sharedSession, granted, pending, busy });
+  const verb = control.action;
   const stop = verb === "stop";
   return action(`session.${verb}`, stop ? "Stop" : "Start", () => console.requestSession(game, world, verb), {
     icon: stop ? "stop" : "play_arrow",
@@ -125,7 +123,7 @@ function useWorldTabs(console: ConsoleController, game: Game, world: World, noti
   const open = (tab: WorldTab) => route.worldTab === tab && offered(tab);
   const running = runningWorlds(game).some((item) => item.id === world.id);
   const consoleModel = useWorldConsole(game, world, open("console"), running, notify);
-  const metrics = useWorldMetrics(open("metrics") ? game.id : undefined, world.id);
+  const metrics = useWorldMetrics(open("metrics") ? game.id : undefined, world.id, worldSessionId(game, world));
   const whitelist = useWhitelist(game.id, world, open("whitelist"), notify);
   const mods = useReleaseMods(game.id, modsSource(world, open("releases") && capabilities.has("releaseFiles")), (presetId, version, mod) => console.downloadMod(game, presetId, version, mod));
   return {
@@ -138,13 +136,13 @@ function useWorldTabs(console: ConsoleController, game: Game, world: World, noti
 }
 
 function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game: Game; world: World }>) {
-  const { snapshot, granted, capabilities, pending, sharedSession, serverState, fleet, worldCallbacks, route, navigate } = console;
+  const { snapshot, granted, capabilities, pending, sharedSession, fleet, worldCallbacks, route, navigate } = console;
   const notify = useSnackbar();
   const rowPending = pendingFor(pending, world.id);
   const busy = rowPending !== null;
-  // A fleet world's page tells its own session, not the game's (ADR-0062).
-  const worldState = fleet ? fleetWorldState(game, world) : serverState;
-  const operations = snapshot?.operations ?? [];
+  // The page tells this world's own session, never the game's (ADR-0062).
+  const state = worldState(game, world, sharedSession);
+  const operations = operationsBlockingWorld(snapshot, world);
   const shown = useWorldTabs(console, game, world, notify);
   const canDownload = granted.has("backup.download") && capabilities.has("backupDownloads");
   const backups = useBackups(game.id, world, {
@@ -168,8 +166,8 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     refresh: refreshAction(console),
     invite: granted.has("invitation.send") ? action("world.invite", "Invite players", () => worldCallbacks.onInvite(game, world), { icon: "send" }) : null,
     more: worldMoreActions(game, world, granted, busy, worldCallbacks),
-    sessionDetails: sessionDetails(game, world, sharedSession, snapshot, worldState, fleet),
-    worldDetails: worldDetails(game, world, worldState),
+    sessionDetails: sessionDetails(game, world, sharedSession, snapshot, state, fleet),
+    worldDetails: worldDetails(game, world, state),
     operations: operations.map((operation) => ({ operation, label: operationLabel(operation.type) })),
     wipes: [...world.wipes].reverse().map((wipe) => ({ wipe, showBackups: action("wipe.backups", "Backups", () => { backups.setFilter(wipe.id); navigate({ worldTab: "backups" }); }, { icon: "backup" }) })),
     backups,
@@ -266,12 +264,12 @@ function releasesModel(console: ConsoleController): ReleasesModel {
       status: preset.build?.state === "starting" ? { kind: "pending" as const, label: "Awaiting dispatch" } : buildStatus(preset.buildStatus),
       createWorld: game ? action("world.create", "Create world", () => console.requestCreateWorld(game, preset), {
         icon: "add",
-        disabled: !canManage || preset.releases.length === 0 || pending?.kind === "create",
+        disabled: !canManage || preset.releases.length === 0 || pendingOf(pending, "create") !== null,
         hint: createWorldHint(canManage, preset.releases.length > 0),
       }) : null,
       build: game && console.capabilities.has("releaseBuilds") && granted.has("release.build") ? action("release.build", releaseBuildCopy(preset).label, () => console.requestBuild(game, preset), {
-        icon: "refresh", disabled: preset.buildAvailable !== true || (preset.buildStatus === "building" && preset.build?.state !== "starting") || pending?.kind === "build",
-        busy: pending?.kind === "build" && pending.presetId === preset.id,
+        icon: "refresh", disabled: preset.buildAvailable !== true || (preset.buildStatus === "building" && preset.build?.state !== "starting") || pendingOf(pending, "build") !== null,
+        busy: pendingOf(pending, "build")?.presetId === preset.id,
         hint: preset.buildAvailable !== true ? "The preset source snapshot is unavailable for building." : preset.buildStatus === "building" && preset.build?.state !== "starting" ? "A build is already running." : releaseBuildCopy(preset).hint,
       }) : null,
     })),
@@ -333,7 +331,7 @@ function ConfirmationController({ console, skin }: Controlled) {
 
 function CreateWorldController({ console, skin, game, preset }: Controlled & Readonly<{ game: Game; preset: Game["presets"][number] | null }>) {
   const model = useCreateWorldForm(game, preset, console.snapshot?.deployment, {
-    busy: console.pending?.kind === "create",
+    busy: pendingOf(console.pending, "create") !== null,
     onCreate: (chosen, name, release, placement, connectivity, auth) => void console.createWorld(game, chosen, name, release, placement, connectivity, auth),
     onClose: console.closeCreating,
   });

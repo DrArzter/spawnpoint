@@ -12,10 +12,15 @@ export const CONSOLE_RECORD_DAYS = 90;
 // A command that ends the game outside its lifecycle skips the verified backup
 // and leaves the record saying the session still runs. Stop is a verb of the
 // world page; the console refuses it. Factorio's commands start with a slash.
+// Valheim takes no command from outside the game, so its host answers every
+// one with "has no console"; nothing reaches the server to refuse.
+// Palworld's console speaks its REST API, whose shutdown and stop end the game.
 const LIFECYCLE_COMMANDS: Readonly<Record<string, readonly string[]>> = {
   minecraft: ["stop", "save-off"],
   factorio: ["quit"],
   zomboid: ["quit"],
+  valheim: [],
+  palworld: ["shutdown", "stop"],
 };
 
 export type ConsoleCommandCheck =

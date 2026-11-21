@@ -444,3 +444,55 @@ run "launched_hosts_are_placed_drained_and_let_go_by_tag" {
     error_message = "The start may launch, pass only the host role, and terminate only what carries the fleet tag."
   }
 }
+
+run "v2_workflows_alarm_on_failed_and_timed_out_executions" {
+  command = plan
+
+  assert {
+    condition = toset(keys(aws_cloudwatch_metric_alarm.workflow)) == toset([
+      "spawnpoint-start-server-v2-failed",
+      "spawnpoint-start-server-v2-timed-out",
+      "spawnpoint-stop-server-v2-failed",
+      "spawnpoint-stop-server-v2-timed-out",
+      "spawnpoint-drain-host-v2-failed",
+      "spawnpoint-drain-host-v2-timed-out",
+      "spawnpoint-idle-watchdog-v2-failed",
+      "spawnpoint-idle-watchdog-v2-timed-out",
+    ])
+    error_message = "Start, stop, drain and watchdog V2 each need a failed and a timed-out alarm."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_cloudwatch_metric_alarm.workflow["spawnpoint-start-server-v2-failed"].dimensions.StateMachineArn == "arn:aws:states:eu-central-1:123456789012:stateMachine:spawnpoint-start-server-v2",
+      aws_cloudwatch_metric_alarm.workflow["spawnpoint-stop-server-v2-timed-out"].dimensions.StateMachineArn == "arn:aws:states:eu-central-1:123456789012:stateMachine:spawnpoint-stop-server-v2",
+      aws_cloudwatch_metric_alarm.workflow["spawnpoint-drain-host-v2-failed"].dimensions.StateMachineArn == "arn:aws:states:eu-central-1:123456789012:stateMachine:spawnpoint-drain-host-v2",
+      aws_cloudwatch_metric_alarm.workflow["spawnpoint-idle-watchdog-v2-timed-out"].dimensions.StateMachineArn == "arn:aws:states:eu-central-1:123456789012:stateMachine:spawnpoint-idle-watchdog-v2",
+    ])
+    error_message = "Each alarm must watch the machine it is named for."
+  }
+
+  assert {
+    condition = alltrue([
+      for alarm in aws_cloudwatch_metric_alarm.workflow :
+      alarm.namespace == "AWS/States" &&
+      contains(["ExecutionsFailed", "ExecutionsTimedOut"], alarm.metric_name) &&
+      alarm.threshold == 0 && alarm.comparison_operator == "GreaterThanThreshold" &&
+      alarm.treat_missing_data == "notBreaching" &&
+      alarm.alarm_actions == toset(["arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"])
+    ])
+    error_message = "One failed or timed-out execution alarms the guardrails topic; no execution is healthy."
+  }
+}
+
+run "a_v2_stop_refused_for_a_player_is_named_in_the_stop_alarm" {
+  command = plan
+
+  assert {
+    condition = (
+      strcontains(aws_cloudwatch_metric_alarm.workflow["spawnpoint-stop-server-v2-failed"].alarm_description, "Spawnpoint.V2StopRefusedPlayersOnline") &&
+      !strcontains(aws_cloudwatch_metric_alarm.workflow["spawnpoint-drain-host-v2-failed"].alarm_description, "PlayersOnline")
+    )
+    error_message = "A V2 stop refused because a player joined also fails the execution; the stop alarm must say that it needs no action."
+  }
+}

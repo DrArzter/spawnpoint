@@ -151,6 +151,8 @@ jobs:
                     allowed) allowed="${value}" ;;
                     stale) stale="${value}" ;;
                     result) result="${value}" ;;
+                    # Ignore new fields so the comment survives a change in the summary script.
+                    *) ;;
                   esac
                 done
                 detail=""

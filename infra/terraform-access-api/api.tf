@@ -24,11 +24,23 @@ data "aws_iam_policy_document" "access_api" {
       "dynamodb:Query",
       "dynamodb:TransactWriteItems",
       "dynamodb:UpdateItem",
+      # A ConditionCheck inside a transaction is authorised by its own action.
+      "dynamodb:ConditionCheckItem",
+      # Identity deletion (ADR-0071): plain deletes and Delete inside a transaction.
+      "dynamodb:DeleteItem",
     ]
     resources = [
       data.aws_dynamodb_table.access.arn,
       "${data.aws_dynamodb_table.access.arn}/index/gsi1",
     ]
+  }
+
+  # OAuth credentials, email actions and player invitations have no index by
+  # identity, so a deletion scans the table for them. The table only.
+  statement {
+    sid       = "ScanAccessDirectoryForIdentityDeletion"
+    actions   = ["dynamodb:Scan"]
+    resources = [data.aws_dynamodb_table.access.arn]
   }
 
   statement {
@@ -346,6 +358,7 @@ locals {
     "POST /access/candidates/{platform}/{platformUserId}/approve",
     "POST /access/candidates/{platform}/{platformUserId}/dismiss",
     "POST /access/identities/{identityId}/role",
+    "POST /access/identities/{identityId}/delete",
   ])
 }
 
@@ -358,15 +371,37 @@ resource "aws_apigatewayv2_route" "access" {
   authorization_type = "NONE"
 }
 
+resource "aws_cloudwatch_log_group" "access_api_http_access" {
+  name              = "/aws/apigateway/spawnpoint-access-api"
+  retention_in_days = 14
+}
+
 resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.access.id
   name        = "$default"
   auto_deploy = true
 
+  # Records requests refused or throttled before the Lambda. No path or query
+  # string: OAuth and sign-in requests can carry tokens there.
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.access_api_http_access.arn
+    format = jsonencode({
+      requestId               = "$context.requestId"
+      sourceIp                = "$context.identity.sourceIp"
+      requestTime             = "$context.requestTime"
+      routeKey                = "$context.routeKey"
+      status                  = "$context.status"
+      integrationErrorMessage = "$context.integrationErrorMessage"
+    })
+  }
+
   # API Gateway validates every route_settings key during UpdateStage. Keep
   # the stage update behind route creation so a new throttled route cannot
   # race the stage and fail the apply with Route not found.
-  depends_on = [aws_apigatewayv2_route.access]
+  depends_on = [
+    aws_apigatewayv2_route.access,
+    aws_api_gateway_account.current,
+  ]
 
   dynamic "route_settings" {
     for_each = toset([

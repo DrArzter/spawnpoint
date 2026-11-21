@@ -1,7 +1,7 @@
 import { releaseStateDocument, type ReleaseState } from "./release-state.ts";
 
 function validateRelease(release: string): void {
-  if (!/^[0-9]+\.[0-9]+$/.test(release)) throw new Error("invalid_release");
+  if (!/^\d+\.\d+$/.test(release)) throw new Error("invalid_release");
 }
 
 function changed(

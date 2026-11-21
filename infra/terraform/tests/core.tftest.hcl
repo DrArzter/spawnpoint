@@ -380,3 +380,61 @@ run "fleet_host_is_a_template_that_names_no_type_and_keeps_nothing" {
     error_message = "The configured host keeps termination protection whatever the fleet does."
   }
 }
+
+run "v1_workflows_alarm_on_failed_and_timed_out_executions" {
+  command = plan
+
+  assert {
+    condition = toset(keys(aws_cloudwatch_metric_alarm.workflow)) == toset([
+      "spawnpoint-start-server-failed",
+      "spawnpoint-start-server-timed-out",
+      "spawnpoint-stop-server-failed",
+      "spawnpoint-stop-server-timed-out",
+    ])
+    error_message = "Both V1 machines need a failed and a timed-out alarm; a failed V1 stop is the backup-failed signal of ADR-0015."
+  }
+
+  assert {
+    condition = alltrue([
+      for alarm in aws_cloudwatch_metric_alarm.workflow :
+      alarm.namespace == "AWS/States" &&
+      contains(["ExecutionsFailed", "ExecutionsTimedOut"], alarm.metric_name) &&
+      alarm.threshold == 0 && alarm.comparison_operator == "GreaterThanThreshold" &&
+      alarm.treat_missing_data == "notBreaching" &&
+      alarm.alarm_actions == toset(["arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"])
+    ])
+    error_message = "One failed or timed-out execution alarms the guardrails topic; no execution is healthy."
+  }
+}
+
+run "egress_alarm_sums_every_host" {
+  command = plan
+
+  assert {
+    condition     = one(aws_cloudwatch_metric_alarm.egress.metric_query).expression == "SELECT SUM(NetworkOut) FROM SCHEMA(\"AWS/EC2\", InstanceId)"
+    error_message = "Launched hosts come and go; the egress alarm must sum every host, not name one."
+  }
+
+  assert {
+    condition = (
+      aws_cloudwatch_metric_alarm.egress.threshold == 10 * 1073741824 &&
+      one(aws_cloudwatch_metric_alarm.egress.metric_query).period == 3600 &&
+      aws_cloudwatch_metric_alarm.egress.treat_missing_data == "notBreaching" &&
+      contains(aws_cloudwatch_metric_alarm.egress.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert")
+    )
+    error_message = "More than 10 GiB in one hour alarms the guardrails topic; no host running is healthy."
+  }
+}
+
+run "a_stop_refused_for_a_player_is_named_in_the_stop_alarm" {
+  command = plan
+
+  assert {
+    condition = (
+      strcontains(aws_cloudwatch_metric_alarm.workflow["spawnpoint-stop-server-failed"].alarm_description, "Spawnpoint.PlayersOnline") &&
+      !strcontains(aws_cloudwatch_metric_alarm.workflow["spawnpoint-start-server-failed"].alarm_description, "PlayersOnline") &&
+      !strcontains(aws_cloudwatch_metric_alarm.workflow["spawnpoint-stop-server-timed-out"].alarm_description, "PlayersOnline")
+    )
+    error_message = "A stop refused because a player joined also fails the execution; the stop alarm must say that it needs no action."
+  }
+}

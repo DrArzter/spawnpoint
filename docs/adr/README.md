@@ -129,7 +129,13 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0067](0067-bring-a-host-checkout-to-the-deployed-commit-at-session-start.md) | Bring a host's checkout to the deployed commit when a session starts | Accepted — implemented | M6 |
 | [0068](0068-normalize-upstream-modpacks-into-releases.md) | Normalize upstream modpacks into releases | Accepted — implemented | M3 |
 | [0069](0069-give-players-a-mod-set-of-their-own.md) | Give a preset's players a mod set of their own | Accepted — implemented | M6 |
+| [0070](0070-give-each-group-a-space-in-an-aws-account-it-brings.md) | Give each group a space, and run its game hosts in an AWS account it brings | Proposed | M7 |
+| [0071](0071-delete-an-identity-and-everything-that-names-it.md) | Delete an Identity and every record that names it | Proposed | M4 |
 | [0072](0072-draw-the-console-in-the-c-a-grammar.md) | Draw the console in the C+A grammar | Accepted — implemented | M4 |
+| [0073](0073-a-stop-succeeds-only-when-the-worlds-archive-is-verified-on-its-host.md) | A stop succeeds only when the world's archive is verified on its host | Accepted — implemented | M4 |
+| [0074](0074-eggs-are-a-reference-not-a-runtime.md) | Eggs are a reference, not a runtime | Accepted | — |
+| [0075](0075-a2s-as-a-probe-transport.md) | A2S as a probe transport | Proposed — implemented for Valheim; two host tests open | — |
+| [0076](0076-http-and-telnet-probe-transports.md) | HTTP and telnet probe transports | Proposed — HTTP implemented for Palworld; telnet not built | — |
 
 ## Decisions still to record
 

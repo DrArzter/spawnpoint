@@ -7,6 +7,11 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_sns_topic.alerts
+    values = { arn = "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert" }
+  }
+
+  override_data {
     target = data.aws_route53_zone.api
     values = { zone_id = "Z123456789" }
   }
@@ -230,6 +235,18 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
       if anytrue([for resource in statement.resources : startswith(resource, "arn:aws:s3:::spawnpoint-backups-123456789012/")])
     ])
     error_message = "The API reads world archives for backup.download and nothing else in the backup bucket, and writes none."
+  }
+
+  assert {
+    condition = contains(local.access_routes, "POST /access/identities/{identityId}/delete") && anytrue([
+      for statement in data.aws_iam_policy_document.access_api.statement :
+      statement.sid == "ReadAndManageAccessDirectory" && contains(statement.actions, "dynamodb:DeleteItem") && contains(statement.actions, "dynamodb:ConditionCheckItem")
+      ]) && alltrue([
+      for statement in data.aws_iam_policy_document.access_api.statement :
+      statement.resources == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-access"])
+      if contains(statement.actions, "dynamodb:Scan")
+    ])
+    error_message = "Identity deletion is routed, may delete and condition-check access items, and scans the access table only, never an index or another table."
   }
 
   assert {
@@ -562,5 +579,63 @@ run "registration_can_open_without_changing_password_login" {
   assert {
     condition     = aws_lambda_function.access_api.environment[0].variables.EMAIL_DELIVERY_PROVIDER == "resend" && aws_lambda_function.access_api.environment[0].variables.EMAIL_FROM == "Spawnpoint <auth@example.dev>"
     error_message = "Registration must receive its email adapter through deployment configuration, never a code constant."
+  }
+}
+
+run "http_api_stage_logs_requests_without_tokens" {
+  command = plan
+
+  variables {
+    bootstrap_owner_telegram_id      = "1780660807"
+    panel_url                        = "https://panel.example.dev/"
+    session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
+  }
+
+  assert {
+    condition = (
+      aws_cloudwatch_log_group.access_api_http_access.name == "/aws/apigateway/spawnpoint-access-api" &&
+      aws_cloudwatch_log_group.access_api_http_access.retention_in_days == 14 &&
+      length(aws_apigatewayv2_stage.default.access_log_settings) == 1
+    )
+    error_message = "The HTTP API stage must record requests that never reach the Lambda, such as throttled sign-in attempts, for a bounded time."
+  }
+
+  assert {
+    condition = (
+      keys(jsondecode(aws_apigatewayv2_stage.default.access_log_settings[0].format)) == ["integrationErrorMessage", "requestId", "requestTime", "routeKey", "sourceIp", "status"] &&
+      !strcontains(aws_apigatewayv2_stage.default.access_log_settings[0].format, "path") &&
+      !strcontains(aws_apigatewayv2_stage.default.access_log_settings[0].format, "query")
+    )
+    error_message = "The HTTP API access log must never record the request path or query string, which can carry tokens."
+  }
+}
+
+run "world_lifecycle_alarms_on_failed_and_timed_out_executions" {
+  command = plan
+
+  variables {
+    bootstrap_owner_telegram_id      = "123456789"
+    panel_url                        = "https://panel.example.dev/"
+    session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
+  }
+
+  assert {
+    condition = toset([for alarm in aws_cloudwatch_metric_alarm.world_lifecycle : alarm.alarm_name]) == toset([
+      "spawnpoint-world-lifecycle-failed",
+      "spawnpoint-world-lifecycle-timed-out",
+    ])
+    error_message = "The world lifecycle machine needs a failed and a timed-out alarm."
+  }
+
+  assert {
+    condition = alltrue([
+      for metric, alarm in aws_cloudwatch_metric_alarm.world_lifecycle :
+      alarm.namespace == "AWS/States" && alarm.metric_name == metric &&
+      alarm.dimensions.StateMachineArn == "arn:aws:states:eu-central-1:123456789012:stateMachine:spawnpoint-world-lifecycle" &&
+      alarm.threshold == 0 && alarm.comparison_operator == "GreaterThanThreshold" &&
+      alarm.treat_missing_data == "notBreaching" &&
+      alarm.alarm_actions == toset(["arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"])
+    ])
+    error_message = "One failed or timed-out world lifecycle execution alarms the guardrails topic."
   }
 }

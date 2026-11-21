@@ -48,6 +48,15 @@ function previousState(value: unknown, ref: WorldRef): ReleaseState {
   return state;
 }
 
+function transition(request: Input, current: ReleaseState, ref: WorldRef, at: string): ReleaseState {
+  switch (request.action) {
+    case "prepare": return preparePromotion(current, request.release!, at, request.operationId);
+    case "commit": return commitPromotion(current, request.release!, at, request.operationId);
+    case "restore": return restorePromotion(current, previousState(request.previous, ref), at, request.operationId);
+    default: return rollbackPromotion(current, at, request.operationId);
+  }
+}
+
 export async function handler(event: unknown) {
   const request = input(event);
   const ref = { worldId: request.worldId, generationId: request.generationId };
@@ -60,13 +69,7 @@ export async function handler(event: unknown) {
   }
 
   const at = new Date().toISOString();
-  const next = request.action === "prepare"
-    ? preparePromotion(stored.state, request.release!, at, request.operationId)
-    : request.action === "commit"
-      ? commitPromotion(stored.state, request.release!, at, request.operationId)
-      : request.action === "restore"
-        ? restorePromotion(stored.state, previousState(request.previous, ref), at, request.operationId)
-        : rollbackPromotion(stored.state, at, request.operationId);
+  const next = transition(request, stored.state, ref, at);
   await store.replace(next, stored.etag);
   return {
     status: request.action === "prepare" ? "prepared" : request.action,

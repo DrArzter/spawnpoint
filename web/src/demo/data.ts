@@ -60,9 +60,11 @@ export function initialState(): DemoState {
   return {
     snapshot: {
       observedAt: new Date().toISOString(),
-      deployment: { placement: "single", launchEnabled: false, dnsAvailable: false },
+      // Fleet by default (ADR-0062): a new world gets a host of its own. Rostik and
+      // Vanilla stay configured, so the demo still shows the one shared host.
+      deployment: { placement: "fleet", launchEnabled: true, dnsAvailable: false },
       operations: [],
-      hosts: [{ id: "host-game", name: "Shared game host", state: "running", instanceType: "m7i-flex.large", availabilityZone: "eu-central-1a", launchedAt: "2026-09-14T18:32:00.000Z", publicIp: "203.0.113.42" }],
+      hosts: [{ id: "host-game", name: "Shared game host", state: "running", provenance: "configured", instanceType: "m7i-flex.large", availabilityZone: "eu-central-1a", launchedAt: "2026-09-14T18:32:00.000Z", publicIp: "203.0.113.42" }],
       games: [
         {
           id: "minecraft",
@@ -83,6 +85,7 @@ export function initialState(): DemoState {
               sessionControlAvailable: true,
               worldLifecycleAvailable: true,
               connectivity: "zerotier",
+              placement: "configured",
               materialization: "existing",
               preset: { id: "industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5", profileDigest: "41d9a8e0c73b5f26184ad0e9cb7f3520a6e81d4c95f27b03ea6d183c7b40f9e2", releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3" },
               wipes: [
@@ -100,6 +103,7 @@ export function initialState(): DemoState {
               sessionControlAvailable: true,
               worldLifecycleAvailable: false,
               connectivity: "zerotier",
+              placement: "configured",
               materialization: "existing",
               preset: null,
               wipes: [],
@@ -107,6 +111,23 @@ export function initialState(): DemoState {
               release: { state: "available", generationId: null, activeRelease: "1.21", desiredRelease: "1.21" },
               // A legacy world has no record to keep settings in.
               gameSettings: null,
+            },
+            {
+              id: "minecraft-creative-5e1c9a07",
+              displayName: "Creative",
+              profileId: "industrial",
+              sessionControlAvailable: true,
+              worldLifecycleAvailable: true,
+              connectivity: "raw",
+              placement: "fleet",
+              materialization: "existing",
+              preset: { id: "industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5", profileDigest: "41d9a8e0c73b5f26184ad0e9cb7f3520a6e81d4c95f27b03ea6d183c7b40f9e2", releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3" },
+              wipes: [{ id: "gen-5e1c9a07d3b84f26a0c71e95b8f2d430", number: 1, state: "current", createdAt: "2026-10-02T12:00:00.000Z", closedAt: null, originRelease: "1.3" }],
+              // A stopped fleet world has no host, so no address.
+              connectionAddress: null,
+              release: { state: "available", generationId: "gen-5e1c9a07d3b84f26a0c71e95b8f2d430", activeRelease: "1.3", desiredRelease: "1.3" },
+              session: null,
+              gameSettings: { values: { game_mode: "creative" }, updatedAt: "2026-10-02T12:00:00.000Z" },
             },
           ],
         },

@@ -21,7 +21,10 @@ test("a command that stops the game outside its lifecycle is refused, per game",
   }
   assert.deepEqual(checkConsoleCommand("factorio", "/quit"), { ok: false, reason: "lifecycle_command" });
   assert.deepEqual(checkConsoleCommand("zomboid", "quit"), { ok: false, reason: "lifecycle_command" });
-  for (const [game, raw] of [["minecraft", "say stop"], ["minecraft", "save-all flush"], ["minecraft", "stopsound @a"], ["factorio", "/players online"], ["zomboid", "players"], ["factorio", "stop"]] as const) {
+  for (const raw of ["shutdown", "shutdown 30", "Stop", "/stop"]) {
+    assert.deepEqual(checkConsoleCommand("palworld", raw), { ok: false, reason: "lifecycle_command" }, raw);
+  }
+  for (const [game, raw] of [["minecraft", "say stop"], ["minecraft", "save-all flush"], ["minecraft", "stopsound @a"], ["factorio", "/players online"], ["zomboid", "players"], ["factorio", "stop"], ["valheim", "save"], ["palworld", "save"], ["palworld", "announce Server stops soon"], ["palworld", "metrics"]] as const) {
     assert.equal(checkConsoleCommand(game, raw).ok, true, `${game}: ${raw}`);
   }
 });
@@ -57,4 +60,24 @@ test("a recorded command names the agent it came through, and none from the pane
   assert.equal(fromAgent.agent, "Claude");
   assert.equal(fromAgent.displayName, "DrArzter");
   assert.equal(consoleEntryFromItem({ ...item, status: undefined }).status, "pending");
+});
+
+test("the history answers a deleted person's command with no name", async (t) => {
+  process.env.ACCESS_TABLE_NAME ??= "access-api-test";
+  const { accessTable } = await import("./access-table.ts");
+  const { document } = await import("../src/handlers/api/access-store.ts");
+  const { consoleHistory } = await import("../src/handlers/api/console.ts");
+  const record = {
+    pk: "CONSOLE#minecraft-rostik-12345678", command_id: "c1", identity_id: "identity-gone", game_id: "minecraft",
+    world_id: "minecraft-rostik-12345678", command: "list", status: "succeeded", output: "There are 0 players online",
+  };
+  accessTable(t, document, [
+    { ...record, sk: "2026-10-09T18:40:03.000Z#c1", created_at: "2026-10-09T18:40:03.000Z" },
+    { ...record, sk: "2026-10-09T18:41:03.000Z#c2", command_id: "c2", identity_id: "identity-owner", display_name: "DrArzter" },
+  ]);
+  const result = await consoleHistory("minecraft", "minecraft-rostik-12345678");
+  const entries = (JSON.parse(result.body) as { entries: { id: string; displayName: string | null; identityId: string }[] }).entries;
+  assert.deepEqual(entries.map((entry) => [entry.id, entry.identityId, entry.displayName]).sort(), [
+    ["c1", "identity-gone", null], ["c2", "identity-owner", "DrArzter"],
+  ]);
 });

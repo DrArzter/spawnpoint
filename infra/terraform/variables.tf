@@ -61,6 +61,17 @@ variable "running_hours_alarm_hours" {
 }
 
 
+variable "egress_alarm_gib_per_hour" {
+  description = "GiB all game hosts may send in one hour before the egress alarm fires. A session sends tens of MB per player-hour; a backup upload sends a few GiB once."
+  type        = number
+  default     = 10
+
+  validation {
+    condition     = var.egress_alarm_gib_per_hour > 0
+    error_message = "An egress threshold of zero fires on every session."
+  }
+}
+
 variable "repository_url" {
   description = "Where a launched host checks this repository out from at first boot (ADR-0054, phase 12). Public, so the host needs no credential to read it."
   type        = string

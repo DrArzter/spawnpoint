@@ -27,6 +27,12 @@ export function contextIsAuthorized(ctx: Context): boolean {
   return (ctx as SpawnpointAccessContext).spawnpointAccess?.authorized === true;
 }
 
+function declaredPermission(interactions: InteractionPermissions, command: string | null, callback: string | undefined): Permission {
+  if (command !== null) return interactions.commands.get(command) ?? "status.read";
+  if (callback === undefined) return "status.read";
+  return interactions.callbacks.get(callback) ?? "status.read";
+}
+
 export function authMiddleware(resolvePermission: PermissionResolver, interactions: InteractionPermissions) {
   return async (ctx: Context, next: NextFunction): Promise<void> => {
     const isCommand = ctx.has("message:entities:bot_command");
@@ -46,9 +52,7 @@ export function authMiddleware(resolvePermission: PermissionResolver, interactio
       return next();
     }
 
-    const permission = command !== null
-      ? interactions.commands.get(command) ?? "status.read"
-      : callback === undefined ? "status.read" : interactions.callbacks.get(callback) ?? "status.read";
+    const permission = declaredPermission(interactions, command, callback);
     const authorized = await resolvePermission(userId, permission);
     (ctx as SpawnpointAccessContext).spawnpointAccess = { authorized };
     if (!authorized) {

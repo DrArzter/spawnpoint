@@ -1,4 +1,6 @@
 import minecraftDefinitions from "../../../server/games/minecraft/settings.json" with { type: "json" };
+import palworldDefinitions from "../../../server/games/palworld/settings.json" with { type: "json" };
+import valheimDefinitions from "../../../server/games/valheim/settings.json" with { type: "json" };
 
 /*
  * A world's game settings (ADR-0064). The definitions are the game module's
@@ -41,6 +43,8 @@ function definition(raw: RawDefinition): SettingDefinition {
 
 const definitionsByGame: Readonly<Record<string, readonly SettingDefinition[]>> = {
   minecraft: (minecraftDefinitions.settings as RawDefinition[]).map(definition),
+  valheim: (valheimDefinitions.settings as RawDefinition[]).map(definition),
+  palworld: (palworldDefinitions.settings as RawDefinition[]).map(definition),
 };
 
 export function gameSettingDefinitions(gameId: string): readonly SettingDefinition[] {

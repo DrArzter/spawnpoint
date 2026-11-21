@@ -59,32 +59,72 @@ export SERVER_PROJECT_DIRECTORY="${SERVER_DIR}"
 # shellcheck source=_common.sh
 source "${SCRIPT_DIR}/_common.sh"
 
+data_dir="${SERVER_DATA_DIR:-${SERVER_DIR}/data}"
+world_name="${WORLD_NAME:-world}"
+# Which archive the copy here is (record_world_archive). A generation keeps it
+# beside its data; the legacy layout keeps it in its data directory.
+if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
+  archive_record_dir="${WORLD_DIRECTORY}"
+else
+  archive_record_dir="${data_dir}"
+fi
+archive_record="${archive_record_dir}/.spawnpoint-archive.json"
+
+# True when the save has changed since the archive the record names, or when
+# no record says which archive the copy is.
+world_changed_since_upload() {
+  [[ -f "${archive_record}" ]] || return 0
+  [[ "$(jq -r '.key // empty' "${archive_record}")" != "" ]] || return 0
+  local paths=() path changed
+  mapfile -d '' paths < <(game_save_paths "${data_dir}" "${world_name}")
+  for path in "${paths[@]}"; do
+    changed="$(find "${data_dir}/${path}" -newer "${archive_record}" -print -quit)"
+    [[ -z "${changed}" ]] || return 0
+  done
+  return 1
+}
+
 state="$(container_state)"
 if [[ "${state}" == "absent" || "${state}" == "exited" ]]; then
   # Make the whole session invariant true even if the game was stopped by a
   # previous attempt while an exporter remained alive.
   compose stop >/dev/null
-  printf 'result=already_stopped\n'
-  exit 0
+  # A stopped game is not a backed-up world (ADR-0073). An earlier attempt may
+  # have failed its upload, or the game may have exited alone.
+  if [[ ! -d "${data_dir}" ]] || ! game_save_sentinel "${data_dir}" "${world_name}" 2>/dev/null; then
+    # A wipe that began empty and never saved has nothing to lose.
+    if [[ -f "${archive_record}" && "$(jq -r '.key // empty' "${archive_record}")" == "" ]]; then
+      printf 'result=already_stopped_and_backed_up\n'
+      exit 0
+    fi
+    printf 'result=world_not_on_host\n'
+    printf 'error: world %s has no data on this host; its archive cannot be verified here\n' "${world_name}" >&2
+    exit 6
+  fi
+  if ! world_changed_since_upload; then
+    printf 'result=already_stopped_and_backed_up\n'
+    exit 0
+  fi
+else
+  [[ "${state}" == "running" ]] || {
+    printf 'error: game container is in unexpected state: %s\n' "${state}" >&2
+    exit 1
+  }
+
+  players="$(game_query_players_raw)"
+  player_count="$(game_parse_player_count <<<"${players}")" || {
+    printf 'error: refusing to stop on an unreadable player count: %s\n' "${players}" >&2
+    exit 1
+  }
+  [[ "${player_count}" == "0" ]] || {
+    printf 'error: refusing to stop while players are online: %s\n' "${players}" >&2
+    # A player raced the earlier idle observation. This is a normal refusal,
+    # distinct from save, archive and upload failures.
+    exit 3
+  }
+
+  "${SCRIPT_DIR}/stop.sh"
 fi
-[[ "${state}" == "running" ]] || {
-  printf 'error: game container is in unexpected state: %s\n' "${state}" >&2
-  exit 1
-}
-
-players="$(game_query_players_raw)"
-player_count="$(game_parse_player_count <<<"${players}")" || {
-  printf 'error: refusing to stop on an unreadable player count: %s\n' "${players}" >&2
-  exit 1
-}
-[[ "${player_count}" == "0" ]] || {
-  printf 'error: refusing to stop while players are online: %s\n' "${players}" >&2
-  # A player raced the earlier idle observation. This is a normal refusal,
-  # distinct from save, archive and upload failures.
-  exit 3
-}
-
-"${SCRIPT_DIR}/stop.sh"
 archive_output="$("${SCRIPT_DIR}/archive-world.sh")"
 archive="$(awk -F= '$1 == "archive" { print substr($0, index($0, "=") + 1) }' <<<"${archive_output}")"
 [[ -n "${archive}" ]] || {
@@ -99,16 +139,18 @@ upload_output="$(
 )"
 
 # The copy on this host is now that archive. A later start here uses it only
-# while it is still the newest of the wipe (prepare-world.sh).
-if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
-  uploaded_key="$(awk -F= '$1 == "object_key" { print substr($0, index($0, "=") + 1) }' <<<"${upload_output}")"
-  uploaded_checksum="$(awk -F= '$1 == "checksum" { print substr($0, index($0, "=") + 1) }' <<<"${upload_output}")"
-  if [[ -n "${uploaded_key}" && -n "${uploaded_checksum}" ]]; then
-    record_world_archive "${WORLD_DIRECTORY}" "${uploaded_key}" "${uploaded_checksum}"
-  else
-    # The backup is safe in S3; only the shortcut for the next start is lost.
-    printf 'warning: upload reported no key; the next start here will restore from S3\n' >&2
-  fi
+# while it is still the newest of the wipe (prepare-world.sh), and a later stop
+# archives again only when the save has changed since.
+uploaded_key="$(awk -F= '$1 == "object_key" { print substr($0, index($0, "=") + 1) }' <<<"${upload_output}")"
+uploaded_checksum="$(awk -F= '$1 == "checksum" { print substr($0, index($0, "=") + 1) }' <<<"${upload_output}")"
+if ! declare -F record_world_archive >/dev/null; then
+  # No WORLD_ID, so no catalog: the next stop here archives again.
+  :
+elif [[ -n "${uploaded_key}" && -n "${uploaded_checksum}" ]]; then
+  record_world_archive "${archive_record_dir}" "${uploaded_key}" "${uploaded_checksum}"
+else
+  # The backup is safe in S3; only the shortcut for the next start or stop is lost.
+  printf 'warning: upload reported no key; the next start or stop here will not trust the local copy\n' >&2
 fi
 
 printf '%s\n' "${archive_output}"

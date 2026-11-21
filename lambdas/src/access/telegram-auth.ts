@@ -25,8 +25,14 @@ function equalHex(expected: string, actual: string): boolean {
   return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(actual, "hex"));
 }
 
+// Telegram user ids fit in 52 bits, so a JSON number holds one exactly.
+function telegramId(value: unknown): string {
+  if (typeof value === "number") return Number.isSafeInteger(value) ? String(value) : "";
+  return typeof value === "string" ? value : "";
+}
+
 function profileFromValues(values: Readonly<Record<string, string>>): TelegramProfile | null {
-  if (!/^[1-9][0-9]{4,19}$/.test(values.id ?? "")) return null;
+  if (!/^[1-9]\d{4,19}$/.test(values.id ?? "")) return null;
   const firstName = (values.first_name ?? "").trim();
   const lastName = (values.last_name ?? "").trim();
   const displayName = [firstName, lastName].filter(Boolean).join(" ") || `Telegram ${values.id}`;
@@ -70,7 +76,7 @@ export function verifyMiniAppInitData(initData: string, botToken: string, nowSec
     const user = JSON.parse(params.get("user") ?? "null") as Record<string, unknown> | null;
     if (user === null) return null;
     const profileValues: Record<string, string> = {
-      id: String(user.id ?? ""),
+      id: telegramId(user.id),
       first_name: typeof user.first_name === "string" ? user.first_name : "",
       last_name: typeof user.last_name === "string" ? user.last_name : "",
       username: typeof user.username === "string" ? user.username : "",
@@ -83,10 +89,8 @@ export function verifyMiniAppInitData(initData: string, botToken: string, nowSec
 }
 
 function oidcProfile(claims: OidcClaims): TelegramProfile | null {
-  const id = typeof claims.id === "number" && Number.isSafeInteger(claims.id)
-    ? String(claims.id)
-    : typeof claims.id === "string" ? claims.id : "";
-  if (!/^[1-9][0-9]{4,19}$/.test(id)) return null;
+  const id = telegramId(claims.id);
+  if (!/^[1-9]\d{4,19}$/.test(id)) return null;
   return profileFromValues({
     id,
     first_name: typeof claims.name === "string" ? claims.name : "",

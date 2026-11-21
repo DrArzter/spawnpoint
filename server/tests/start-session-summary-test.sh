@@ -65,6 +65,17 @@ with_generation="$(WORLD_GENERATION_ID="${generation}" SESSION_FORMAT=json "${se
 [[ "$(jq -r .generation_id <<<"${with_generation}")" == "${generation}" ]]
 grep -Fxq 'container chatter on stdout' "${fixture}/json.err"
 
+# --- step timestamps go to stderr in both formats, never into the summary ---
+for err in "${fixture}/text.err" "${fixture}/json.err"; do
+  for step in session_start connectivity_prepared game_starting game_ready address_published; do
+    grep -Eq "^step=${step} at=[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z elapsed_seconds=[0-9]+$" "${err}"
+  done
+done
+if grep -q '^step=' <<<"${text_output}"; then
+  printf 'expected no step line in the text summary\n' >&2
+  exit 1
+fi
+
 # --- the gate follows the world's record, not the compose default ---
 # A world that keeps names is gated by them; one that keeps none, or keeps an
 # empty list, is not gated at all. The alternative is a server nobody can join

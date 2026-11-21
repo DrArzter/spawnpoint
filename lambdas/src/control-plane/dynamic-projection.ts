@@ -79,13 +79,13 @@ export function parseDynamicProjection(
   maxAgeMilliseconds = 10 * 60 * 1000,
 ): DynamicControlPlaneProjection | null {
   const item = object(value);
-  if (item === null || item.schema_version !== 1 || !Number.isSafeInteger(item.observed_at_epoch_ms) ||
+  if (item?.schema_version !== 1 || !Number.isSafeInteger(item.observed_at_epoch_ms) ||
       !Array.isArray(item.hosts) || !Array.isArray(item.operations)) return null;
   const observedAt = item.observed_at_epoch_ms as number;
   if (observedAt > nowEpochMilliseconds + 60_000 || nowEpochMilliseconds - observedAt > maxAgeMilliseconds) return null;
   const hosts = item.hosts.map(host);
   const operations = item.operations.map(operation);
-  if (hosts.some((entry) => entry === null) || operations.some((entry) => entry === null)) return null;
+  if (hosts.includes(null) || operations.includes(null)) return null;
   return {
     schemaVersion: 1,
     observedAtEpochMilliseconds: observedAt,

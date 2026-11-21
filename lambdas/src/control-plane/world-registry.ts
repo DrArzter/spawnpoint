@@ -55,7 +55,7 @@ const ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const GENERATION_ID = /^gen-[0-9a-f]{32}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
-const RELEASE = /^[0-9]+\.[0-9]+$/;
+const RELEASE = /^\d+\.\d+$/;
 const SETTING_ID = /^[a-z][a-z0-9_]{0,31}$/;
 const BACKUP_KEY = /^worlds\/[a-z0-9][a-z0-9-]{0,31}\/archives\/[A-Za-z0-9._-]+\.tar\.zst$/;
 
@@ -326,7 +326,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
   const gameSettings = root?.game_settings === undefined ? undefined : parseGameSettings(root.game_settings);
   const whitelist = root?.whitelist === undefined ? undefined : parseWhitelist(root.whitelist);
   if (
-    root === null || root.schema_version !== 1 || root.storage_layout !== "generation" ||
+    root?.schema_version !== 1 || root.storage_layout !== "generation" ||
     typeof root.world_id !== "string" || !ID.test(root.world_id) ||
     typeof root.game !== "string" || !ID.test(root.game) ||
     typeof root.display_name !== "string" || root.display_name.length < 1 || root.display_name.length > 80 ||

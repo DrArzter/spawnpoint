@@ -10,9 +10,10 @@ export async function session(account: Caller, capabilities: readonly string[]):
   if (identity !== null) {
     const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
     const bootstrap = await document.send(new GetCommand({ TableName: tableName, Key: { pk: "SYSTEM", sk: "BOOTSTRAP" } }));
+    // The Owner's Telegram id is personal data that no member needs once the claim is made.
     return response(200, { state: "active", identity, role, capabilities, profile: accountProfile(account, observed),
       bootstrap: bootstrap.Item === undefined ? { state: "unclaimed" } : {
-        state: "claimed", ownerId: bootstrap.Item.identity_id, telegramId: bootstrap.Item.telegram_id, claimedAt: bootstrap.Item.claimed_at,
+        state: "claimed", ownerId: bootstrap.Item.identity_id, telegramId: null, claimedAt: bootstrap.Item.claimed_at,
       } });
   }
   return response(200, { state: "visitor", candidate: {

@@ -7,6 +7,7 @@ import { apiUrl, panelUrl } from "./origins.ts";
 import { type Event, type Response, response, responseWithHeaders } from "./http.ts";
 import { document, tableName } from "./access-store.ts";
 import { sessionSigningSecret } from "./secrets.ts";
+import { identityById } from "./identity-store.ts";
 
 // --- Remote MCP authorization and transport ---------------------------------
 export const oauthResource = `${apiUrl}/mcp`;
@@ -145,6 +146,8 @@ export async function inspectOAuthAuthorization(event: Event): Promise<Response>
 }
 
 async function issueOAuthTokens(subject: { identityId: string; clientId: string; resource: string; scopes: readonly OAuthScope[] }): Promise<Response> {
+  // A deleted or inactive identity keeps no connection, whatever credential it held.
+  if (await identityById(subject.identityId) === null) return oauthError(400, "invalid_grant");
   const secret = await sessionSigningSecret();
   const refresh = issueOpaqueCredential();
   const now = Math.floor(Date.now() / 1000);

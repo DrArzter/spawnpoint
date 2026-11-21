@@ -1,0 +1,50 @@
+# Valheim session. The image is reused packaging (ADR-0005): it installs the
+# dedicated server with SteamCMD at start, runs it under supervisord, and on
+# SIGTERM sends the server SIGINT, which saves the world before it exits. That
+# is what makes our stop contract safe here.
+# lloesche/valheim-server, built 2026-10-20 from commit 0ab6cdc; amd64 only.
+services:
+  valheim:
+    image: lloesche/valheim-server@sha256:fde7829b12d39203e155b6209689b70234f8a27d12c4d48baf890cc2ae2c2df3
+    ports:
+      # The host port is the session's slot (ADR-0054); the container's is fixed.
+      - "${SPAWNPOINT_GAME_PORT:-2456}:2456/udp"
+      # The Steam query port stays host-local: the probe's transport (ADR-0075),
+      # never a player surface. It takes the slot's RCON port, the game port + 1.
+      - "127.0.0.1:${SPAWNPOINT_RCON_PORT:-2457}:2457/udp"
+    environment:
+      # Game settings (ADR-0064): no value, so one a world never set never
+      # reaches the container. See settings.json.
+      SERVER_NAME:
+      # The save's name, which the backup contract archives; see game.sh.
+      WORLD_NAME: "spawnpoint"
+      # Optional, from the host's runtime .env. Empty means no password. A
+      # password is not identity: GAME_DEFAULT_AUTH stays none either way.
+      SERVER_PASS: "${VALHEIM_SERVER_PASSWORD:-}"
+      # Unlisted, and no PlayFab relay: a player arrives at the address the
+      # connectivity strategy publishes, or not at all.
+      SERVER_PUBLIC: "false"
+      CROSSPLAY: "false"
+      # The image splits this string into server arguments. Pinned empty, so no
+      # argument such as -crossplay reaches the server.
+      SERVER_ARGS: ""
+      # A session is one run: no update or restart inside it, and no copies of
+      # the world beside the one our backup takes.
+      UPDATE_CRON: ""
+      RESTART_CRON: ""
+      BACKUPS: "false"
+      STATUS_HTTP: "false"
+      SUPERVISOR_HTTP: "false"
+    volumes:
+      # The server's save directory: worlds_local/ and the admin, ban and
+      # permitted lists all live in it, so one archive holds the whole world.
+      - "${SPAWNPOINT_WORLD_DATA_DIRECTORY:-./games/valheim/data}:/config"
+      - "valheim-server-files:/opt/valheim"
+    restart: "no" # same reasoning as every other game service: a restart policy
+    # would fight the idle stop and hide a crash loop.
+    # The image waits 29 s after SIGINT before it escalates; a large world
+    # needs that time to write.
+    stop_grace_period: 120s
+
+volumes:
+  valheim-server-files:

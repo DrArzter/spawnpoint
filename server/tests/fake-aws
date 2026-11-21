@@ -18,6 +18,59 @@ while (( $# > 0 )); do
   esac
 done
 
+# FAKE_AWS_CALL_LOG records each call, so a test can count the requests.
+[[ -z "${FAKE_AWS_CALL_LOG:-}" ]] || printf '%s\n' "$*" >>"${FAKE_AWS_CALL_LOG}"
+
+# `s3 cp --recursive s3://bucket/prefix/ dir/` with ordered --exclude and
+# --include globs, the last match deciding, as the real CLI does.
+if [[ "${1:-}" == "s3" ]]; then
+  [[ "${2:-}" == "cp" ]] || exit 64
+  shift 2
+  recursive=false
+  filters=()
+  paths=()
+  while (( $# > 0 )); do
+    case "$1" in
+      --recursive)
+        recursive=true
+        shift
+        ;;
+      --only-show-errors)
+        shift
+        ;;
+      --exclude | --include)
+        filters+=("$1" "$2")
+        shift 2
+        ;;
+      --*)
+        exit 64
+        ;;
+      *)
+        paths+=("$1")
+        shift
+        ;;
+    esac
+  done
+  [[ "${recursive}" == true && ${#paths[@]} -eq 2 && "${paths[0]}" == s3://* ]] || exit 64
+  source_path="${paths[0]#s3://}"
+  source_root="${FAKE_S3_ROOT}/${source_path%/}"
+  destination_root="${paths[1]%/}"
+  [[ -d "${source_root}" ]] || exit 0
+  while IFS= read -r relative; do
+    included=true
+    for ((index = 0; index < ${#filters[@]}; index += 2)); do
+      # shellcheck disable=SC2053 # the filter is a glob on purpose
+      if [[ "${relative}" == ${filters[index + 1]} ]]; then
+        [[ "${filters[index]}" == --include ]] && included=true || included=false
+      fi
+    done
+    [[ "${included}" == true ]] || continue
+    mkdir -p -- "$(dirname -- "${destination_root}/${relative}")"
+    cp -- "${source_root}/${relative}" "${destination_root}/${relative}"
+  done < <(cd -- "${source_root}" && find . -type f ! -name '*.fake-metadata' -printf '%P\n' | sort)
+  exit 0
+fi
+
 [[ "${1:-}" == "s3api" ]] || exit 64
 operation="${2:-}"
 shift 2

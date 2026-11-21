@@ -8,7 +8,7 @@ import { type Response, response, type Event, parameter } from "./http.ts";
 import { document, tableName, type Item } from "./access-store.ts";
 import { requirePermission } from "./permissions.ts";
 import { events } from "./clients.ts";
-import { accountKeyFor } from "./identity-store.ts";
+import { accountKeyFor, activeOwnerCount, identityById } from "./identity-store.ts";
 import { passwordCredentials } from "./credentials.ts";
 
 export function roles(identity: Identity): Response {
@@ -94,18 +94,42 @@ export async function updateRole(callerIdentity: Identity, identityId: string, b
   const roleId = typeof parsed.roleId === "string" ? parsed.roleId : "";
   if (!isBuiltInRoleId(roleId)) return response(400, { error: "unknown_role" });
   if (identityId === callerIdentity.id && roleId !== callerIdentity.roleId) return response(409, { error: "self_role_change_forbidden" });
-  if (roleId === "owner") {
+  const target = await identityById(identityId);
+  if (target === null) return response(404, { error: "identity_not_found" });
+  const touchesOwner = roleId === "owner" || target.roleId === "owner";
+  if (touchesOwner) {
     const forbidden = requirePermission(callerIdentity, "access.owner.grant");
     if (forbidden !== null) return forbidden;
   }
-  await document.send(new UpdateCommand({
-    TableName: tableName,
-    Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" },
-    UpdateExpression: "SET role_id = :roleId, updated_at = :now, updated_by = :by",
-    ConditionExpression: "attribute_exists(pk) AND #status = :active",
-    ExpressionAttributeNames: { "#status": "status" },
-    ExpressionAttributeValues: { ":roleId": roleId, ":now": new Date().toISOString(), ":by": callerIdentity.id, ":active": "ACTIVE" },
-  }));
+  if (target.roleId === "owner" && roleId !== "owner" && await activeOwnerCount() <= 1) return response(409, { error: "last_owner" });
+  // The target must still hold the role read above, and the caller must still
+  // be active, and an Owner when an Owner is demoted. Two Owners who demote
+  // each other at once cannot both succeed, so one Owner remains.
+  const callerCondition = target.roleId === "owner" ? "#status = :active AND role_id = :owner" : "#status = :active";
+  try {
+    await document.send(new TransactWriteCommand({ TransactItems: [
+      { ConditionCheck: {
+        TableName: tableName,
+        Key: { pk: `IDENTITY#${callerIdentity.id}`, sk: "PROFILE" },
+        ConditionExpression: callerCondition,
+        ExpressionAttributeNames: { "#status": "status" },
+        ExpressionAttributeValues: target.roleId === "owner" ? { ":active": "ACTIVE", ":owner": "owner" } : { ":active": "ACTIVE" },
+      } },
+      { Update: {
+        TableName: tableName,
+        Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" },
+        UpdateExpression: "SET role_id = :roleId, updated_at = :now, updated_by = :by",
+        ConditionExpression: "attribute_exists(pk) AND #status = :active AND role_id = :current",
+        ExpressionAttributeNames: { "#status": "status" },
+        ExpressionAttributeValues: {
+          ":roleId": roleId, ":now": new Date().toISOString(), ":by": callerIdentity.id, ":active": "ACTIVE", ":current": target.roleId,
+        },
+      } },
+    ] }));
+  } catch (error) {
+    if (error instanceof Error && error.name === "TransactionCanceledException") return response(409, { error: "role_change_conflict" });
+    throw error;
+  }
   return response(200, { identityId, roleId });
 }
 

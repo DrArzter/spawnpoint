@@ -572,7 +572,7 @@ function probe(options) {
     };
     const contrastSeen = new Set();
     for (const run of runs) {
-      if (contrastSeen.has(run.el) || run.el.closest("[disabled], [aria-disabled=true]")) continue;
+      if (contrastSeen.has(run.el) || run.el.closest("[disabled], [aria-disabled=true], [aria-hidden=true]")) continue;
       contrastSeen.add(run.el);
       const cs = style(run.el);
       const fg = toRgb(cs.color);
@@ -600,7 +600,7 @@ function probe(options) {
     }
     // Rule 1: a long or multi-line sentence outside a recovery slot.
     for (const el of all) {
-      if (!visible(el) || !inScope(el) || el.closest("[data-copy=recovery], [role=alert], table, [role=table], pre, code, [data-layer=terminal], .c-terminal, .t-console")) continue;
+      if (!visible(el) || hiddenByTechnique(el) || !inScope(el) || el.closest("[data-copy=recovery], [role=alert], [role=log], [role=tooltip], table, [role=table], pre, code")) continue;
       const own = Array.from(el.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim();
       if (own.length > 55 && /\s/.test(own) && /[a-z]/.test(own)) finding("copy", el, { text: own.slice(0, 60) });
     }

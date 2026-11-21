@@ -1,5 +1,5 @@
 // Runtime UI audit: every route, state and width, probed in the page.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -149,20 +149,31 @@ function plan() {
 
 // ---- In-page helpers ---------------------------------------------------------
 
-// Fonts loaded, then animations finished (a spinner's endless loop excepted),
-// then two frames. Bounded, so a page that never settles is still measured.
-const SETTLE = `(async () => {
+// Fonts loaded, then a page that has stopped changing: no finite animation
+// running and no DOM change for `quiet` ms (120 after a load, when rows may
+// still arrive; 40 after a resize or a menu), so rows are measured at rest.
+// Bounded at 3s, so a page that never settles is still measured.
+const SETTLE = `(async (quiet) => {
   await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1500))]);
-  const until = performance.now() + 1500;
+  const until = performance.now() + 3000;
+  let changed = performance.now();
+  const observer = new MutationObserver(() => { changed = performance.now(); });
+  observer.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
   const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
+  const running = () => document.getAnimations().filter((a) => a.playState === "running" && a.effect && a.effect.getTiming().iterations !== Infinity);
   while (performance.now() < until) {
-    const running = document.getAnimations().filter((a) => a.playState === "running" && a.effect && a.effect.getTiming().iterations !== Infinity);
-    if (running.length === 0) break;
-    await Promise.race([Promise.all(running.map((a) => a.finished.catch(() => undefined))), new Promise((r) => setTimeout(r, 100))]);
+    const busy = running();
+    if (busy.length > 0) {
+      await Promise.race([Promise.all(busy.map((a) => a.finished.catch(() => undefined))), new Promise((r) => setTimeout(r, 100))]);
+      continue;
+    }
+    if (performance.now() - changed >= quiet) break;
+    await new Promise((r) => setTimeout(r, 40));
   }
+  observer.disconnect();
   await frame(); await frame();
   return true;
-})()`;
+})`;
 
 // The surfaces open now: their elements, tagged so the probe can find them.
 const SURFACES = `(() => {
@@ -200,8 +211,8 @@ const STEP = `(async (step) => {
 
 // ---- Running a job ---------------------------------------------------------
 
-async function settle(tab) {
-  await tab.evaluate(SETTLE, true).catch(() => undefined);
+async function settle(tab, quiet = 120) {
+  await tab.evaluate(`${SETTLE}(${quiet})`, true).catch(() => undefined);
 }
 
 async function setWidth(tab, width) {
@@ -248,7 +259,7 @@ async function walkMenus(tab, width) {
       return trigger.getAttribute("aria-label") || trigger.textContent.trim();
     })()`);
     if (label === null) continue;
-    await settle(tab);
+    await settle(tab, 40);
     const found = await probe(tab, width, "[data-audit-root]");
     results.push({ label, found });
     await tab.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
@@ -259,7 +270,7 @@ async function walkMenus(tab, width) {
       if (menu && !menu.hidden && menu.getBoundingClientRect().width > 0) trigger.click();
       window.scrollTo(0, 0);
     })()`);
-    await settle(tab);
+    await settle(tab, 40);
   }
   return results;
 }
@@ -304,7 +315,7 @@ async function runJob(tab, job, records) {
       await open(tab, job, job.widths[0]);
       for (const width of job.widths) {
         await setWidth(tab, width);
-        await settle(tab);
+        await settle(tab, 40);
         records.push(record({ ...job, name: `${job.name}` }, width, await probe(tab, width), { stride: true }));
       }
     } else {
@@ -404,15 +415,36 @@ async function shoot(tab, list, prefix) {
   return shots;
 }
 
+// One row per element and kind, with the pages and widths that show it.
+function grouped(list) {
+  const groups = new Map();
+  for (const f of list) {
+    const r = f.record;
+    const id = `${r.skin} ${f.kind} ${f.item.key} ${String(f.item.text ?? "").slice(0, 30)}`;
+    if (!groups.has(id)) groups.set(id, { first: f, pages: new Set(), widths: new Set(), keys: [] });
+    const g = groups.get(id);
+    g.pages.add(r.name + (r.menu ? ` (${r.menu})` : ""));
+    g.widths.add(`${r.width}${r.theme === "dark" ? " dark" : ""}`);
+    g.keys.push(f.key);
+  }
+  return [...groups.values()];
+}
+
 function writeReport(blocking, advisory, shots, summary) {
-  const rows = (list, kinds) => list.map((f) => `| ${f.record.skin} | ${f.record.name}${f.record.menu ? ` (${f.record.menu})` : ""} | ${f.record.width} | ${f.record.theme} | ${kinds[f.kind]} | ${String(f.item.by ?? f.item.text ?? "").replace(/\|/g, "/")} | \`${f.item.key}\` | ${shots.has(f.key) ? `[shot](${shots.get(f.key)})` : ""} |`).join("\n");
-  const head = "| Skin | Page or state | Width | Theme | Finding | Measure | Marker | Screenshot |\n|---|---|---|---|---|---|---|---|";
+  const cell = (value) => String(value).replace(/\|/g, "/").replace(/\n/g, " ");
+  const rows = (list, kinds) => grouped(list).map((g) => {
+    const f = g.first;
+    const shot = g.keys.map((key) => shots.get(key)).find(Boolean);
+    return `| ${f.record.skin} | ${kinds[f.kind]} | ${cell(f.item.by ?? f.item.text ?? "")} | \`${f.item.key}\` | ${cell([...g.pages].join(", "))} | ${[...g.widths].join(", ")} | ${shot ? `[shot](${shot})` : ""} |`;
+  }).join("\n");
+  const head = "| Skin | Finding | Measure | Marker | Pages and states | Widths | Screenshot |\n|---|---|---|---|---|---|---|";
   writeFileSync(join(reportDir, "report.md"), [
     "# UI audit report", "", summary, "",
-    `## Blocking (${blocking.length})`, "", blocking.length ? `${head}\n${rows(blocking, KINDS)}` : "None.", "",
-    `## Advisory (${advisory.length})`, "", "A reviewer judges these; they do not fail the gate.", "", advisory.length ? `${head}\n${rows(advisory, ADVISORY)}` : "None.", "",
+    `## Blocking (${blocking.length} findings, ${grouped(blocking).length} groups)`, "", blocking.length ? `${head}\n${rows(blocking, KINDS)}` : "None.", "",
+    `## Advisory (${advisory.length} findings, ${grouped(advisory).length} groups)`, "", "A reviewer judges these; they do not fail the gate.", "", advisory.length ? `${head}\n${rows(advisory, ADVISORY)}` : "None.", "",
   ].join("\n"));
-  writeFileSync(join(reportDir, "report.json"), JSON.stringify({ blocking: blocking.map(({ record, ...f }) => ({ ...f, skin: record.skin, name: record.name, width: record.width, theme: record.theme })), advisory: advisory.map(({ record, ...f }) => ({ ...f, skin: record.skin, name: record.name, width: record.width, theme: record.theme })) }, null, 1));
+  const flat = (list) => list.map(({ record, ...f }) => ({ ...f, skin: record.skin, name: record.name, width: record.width, theme: record.theme, menu: record.menu }));
+  writeFileSync(join(reportDir, "report.json"), JSON.stringify({ blocking: flat(blocking), advisory: flat(advisory) }, null, 1));
 }
 
 // ---- Self-test ---------------------------------------------------------------
@@ -457,6 +489,8 @@ try {
   if (selfTest) {
     process.exitCode = await runSelfTest(browser);
   } else {
+    // A fresh report each run: no picture from an older one stays behind.
+    if (advise) rmSync(reportDir, { recursive: true, force: true });
     mkdirSync(reportDir, { recursive: true });
     const jobs = plan();
     const workers = Math.max(1, Number(process.env.AUDIT_WORKERS ?? Math.min(4, availableParallelism())));
@@ -479,10 +513,11 @@ try {
     const summary = `${probes} probes (${jobs.length} jobs, ${workers} tabs) in ${Math.round((Date.now() - started) / 1000)}s: ${SKINS.join(" and ")}; ${blocking.length} blocking findings, ${blocking.length - fresh.length} accepted${advise ? `, ${advisory.length} advisory` : ""}.`;
     console.log(summary);
     if (advise) {
-      const shots = await shoot(tabs[0], [...fresh, ...advisory.filter((f) => f.item.box)].slice(0, 400), "shot");
+      // A picture per page for what blocks, and one per advisory group.
+      const firsts = grouped(advisory).map((g) => g.first).filter((f) => f.item.box);
+      const shots = await shoot(tabs[0], [...fresh, ...firsts], "shot");
       writeReport(fresh, advisory, shots, summary);
-      console.log(`report: ${join(reportDir, "report.md")}`);
-      for (const f of advisory) console.log(line(f, ADVISORY));
+      console.log(`report: ${join(reportDir, "report.md")} (${grouped(advisory).length} advisory groups)`);
     }
     for (const problem of problems) console.log(problem);
     const unused = rules.filter((rule) => !rule.used);

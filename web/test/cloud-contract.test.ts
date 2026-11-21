@@ -93,7 +93,10 @@ test("cloud: the worlds list filters by a pressed tile, never by a second status
   assert.match(markup, /aria-label="Filter by status"/);
   assert.match(markup, /<button aria-pressed="false" class="c-tile"/);
   assert.doesNotMatch(markup, /c-filter-token-key">Status/);
-  assert.match(markup, /aria-disabled="true"[^>]*data-action="worlds.bulk"/);
+  const bulk = markup.match(/<button[^>]*data-action="worlds.bulk"[^>]*>/)?.[0] ?? "";
+  assert.match(bulk, /aria-disabled="true"/);
+  assert.match(bulk, /aria-haspopup="menu"/);
+  assert.match(bulk, /aria-expanded="false"/);
   assert.match(markup, /Select worlds first/);
   assert.match(markup, /data-action="refresh"/);
 });

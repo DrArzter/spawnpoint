@@ -3,6 +3,7 @@ import type { StatusDescriptor, StatusKind } from "../../core/status";
 import { Icon } from "../../icons";
 import { Chip } from "./ui/Chip";
 import { useNow } from "./ui/Flashbar";
+import { Indicator } from "./ui/Indicator";
 
 /*
  * Facts about a world that the game home, the Worlds list and the quick
@@ -32,7 +33,7 @@ export function hostingLabel(row: WorldRow): string {
   return row.world.placement === "fleet" ? "Fleet" : "Persistent";
 }
 
-const hostingIcon = (row: WorldRow) => row.world.placement === "fleet" ? "cloud" : "dns";
+const hostingIcon = (row: WorldRow) => row.world.placement === "fleet" ? "bolt" : "dns";
 
 export function HostingChip({ row }: Readonly<{ row: WorldRow }>) {
   return <Chip icon={hostingIcon(row)}>{hostingLabel(row)}</Chip>;
@@ -40,11 +41,7 @@ export function HostingChip({ row }: Readonly<{ row: WorldRow }>) {
 
 /** The hosting as an icon alone, its word in the tooltip; it follows a name where the Hosting column drops. */
 export function HostingMark({ row, className }: Readonly<{ row: WorldRow; className?: string }>) {
-  return (
-    <span aria-label={hostingLabel(row)} className={className} data-tip={hostingLabel(row)} role="img" tabIndex={0}>
-      <Icon name={hostingIcon(row)} size={17} />
-    </span>
-  );
+  return <Indicator className={className} icon={hostingIcon(row)} label={hostingLabel(row)} />;
 }
 
 /** "Release 1.2 · wipe #3"; the absent wipe as core words it. */

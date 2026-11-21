@@ -15,6 +15,7 @@ import { PageHeader } from "./ui/PageHeader";
 import { Person } from "./ui/Person";
 import { SkeletonRows } from "./ui/Skeleton";
 import { Status } from "./ui/Status";
+import { Tick } from "./ui/Tick";
 import { TrackList, TrackTitle } from "./ui/TrackList";
 import { providerIcon } from "./providers";
 
@@ -37,7 +38,7 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
     <PageHeader
       actions={<>
         {refresh}
-        <LinkButton href={list} icon="menu" label="All worlds" />
+        <LinkButton href={list} icon="table_rows" label="All worlds" />
         {model.createWorld && !empty && <ActionButton action={model.createWorld} variant="primary" />}
       </>}
       lead={game && <GameGlyph game={game} size="lg" />}
@@ -91,17 +92,16 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
       <Grid kind="home">
         <GridCell span="2">
           <Card
-            actions={<>
-              {known.length > 0 && <span className="c-home-meta">{players} {players === 1 ? "player" : "players"}</span>}
-              <LinkButton href={list} label="Worlds" size="sm" variant="ghost" />
-            </>}
+            actions={<LinkButton href={list} label="Worlds" size="sm" variant="ghost" />}
             body="flush"
             count={online.length}
+            meta={known.length > 0 && <><Tick value={players} /> {players === 1 ? "player" : "players"}</>}
             title="Online now"
           >
             {loading ? <SkeletonRows columns={4} rows={3} /> : (
               <TrackList
-                empty={<Empty icon="dark_mode" size="sm" title="Nothing online" />}
+                arrivals
+                empty={<Empty icon="bedtime" size="sm" title="Nothing online" />}
                 label="Online now"
                 rowKey={(row) => row.world.id}
                 rows={online}
@@ -132,7 +132,8 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
         </Card>
         <Card body="flush" count={operations.length} title="Operations">
           <TrackList
-            empty={<Empty icon="check_circle" size="sm" title="No operations running" />}
+            arrivals
+            empty={<Empty icon="done_all" size="sm" title="No operations running" />}
             label="Operations"
             rowKey={(row) => row.operation.id}
             rows={operations}
@@ -184,7 +185,8 @@ function Requests({ model, requests }: Readonly<{ model: WorldsModel; requests: 
         {requests.status === "error" && <LoadError error={requests.error} kind={requests.kind} retry={requests.retry} size="sm" title="Requests could not be loaded" verb="read requests" />}
         {requests.status === "ready" && (
           <TrackList
-            empty={<Empty icon="person_add" size="sm" title="No requests" />}
+            arrivals
+            empty={<Empty icon="how_to_reg" size="sm" title="No requests" />}
             label="Access requests"
             rowKey={(row) => row.id}
             rows={requests.value}

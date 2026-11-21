@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { action, type Action } from "../../core/actions";
 import type { Detail, WorldRow, WorldsModel } from "../../core/models";
@@ -15,7 +15,7 @@ import { applyFilter, FilterBar, type FilterProperty, type FilterToken } from ".
 import { elapsed, useNow } from "./ui/Flashbar";
 import { IconButton } from "./ui/IconButton";
 import { ListItemWorld } from "./ui/ListColumn";
-import { Menu } from "./ui/Menu";
+import { MenuButton } from "./ui/MenuButton";
 import { Notices } from "./ui/Notice";
 import { Overflow } from "./ui/Overflow";
 import { PageHeader } from "./ui/PageHeader";
@@ -230,7 +230,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
     },
   ];
   const states = statesOf(rows);
-  const noMatches = <Empty action={action("worlds.filter.clear", "Clear filters", clear, { icon: "filter_list" })} icon="filter_list" title="No matches" />;
+  const noMatches = <Empty action={action("worlds.filter.clear", "Clear filters", clear, { icon: "filter_alt_off" })} icon="filter_alt_off" title="No matches" />;
 
   return (
     <div className="c-page">
@@ -278,6 +278,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
                   line={releaseLine(row)}
                   name={row.world.displayName}
                   players={row.players ?? null}
+                  standalone
                   status={row.status}
                 />
                 <QuickLookButton onPeek={setPeekId} open={peekId === row.world.id} row={row} />
@@ -302,7 +303,7 @@ function ReleaseCell({ row }: Readonly<{ row: WorldRow }>) {
 }
 
 function QuickLookButton({ row, open, onPeek }: Readonly<{ row: WorldRow; open: boolean; onPeek: (id: string | null) => void }>) {
-  return <IconButton aria-pressed={open} className="c-icon-btn-sm" icon="info" label={`Quick look at ${row.world.displayName}`} onClick={() => onPeek(open ? null : row.world.id)} />;
+  return <IconButton aria-pressed={open} className="c-icon-btn-sm" icon="view_sidebar" label={`Quick look at ${row.world.displayName}`} onClick={() => onPeek(open ? null : row.world.id)} />;
 }
 
 /**
@@ -311,19 +312,6 @@ function QuickLookButton({ row, open, onPeek }: Readonly<{ row: WorldRow; open: 
  * take it, and says so when more can.
  */
 function BulkActions({ rows, clear }: Readonly<{ rows: readonly WorldRow[]; clear: () => void }>) {
-  const [open, setOpen] = useState(false);
-  const wrap = useRef<HTMLSpanElement>(null);
-  const anchor = useRef<HTMLElement | null>(null);
-  const id = useId();
-  const close = useCallback(() => setOpen(false), []);
-  // ActionButton takes no menu wiring, so the trigger gets it here (see the S3 summary).
-  useLayoutEffect(() => {
-    const button = wrap.current?.querySelector("button") ?? null;
-    anchor.current = button;
-    button?.setAttribute("aria-haspopup", "menu");
-    button?.setAttribute("aria-controls", id);
-    button?.setAttribute("aria-expanded", String(open));
-  });
   const verbs = rows.map((row) => ({ row, session: row.sessionAction?.() ?? null }));
   const item = (key: string, label: string, icon: Action["icon"], picked: readonly Action[], none: string) => action(`worlds.bulk.${key}`, label, () => picked[0]?.run(), {
     icon,
@@ -335,25 +323,17 @@ function BulkActions({ rows, clear }: Readonly<{ rows: readonly WorldRow[]; clea
   const starts = verbs.flatMap(({ session }) => usable(session, "session.start") ? [session] : []);
   const stops = verbs.flatMap(({ session }) => usable(session, "session.stop") ? [session] : []);
   const archives = rows.flatMap((row) => { const archive = row.actions.find((candidate) => candidate.id === "world.archive"); return usable(archive, "world.archive") ? [archive] : []; });
-  const trigger = action("worlds.bulk", rows.length > 0 ? `Actions (${rows.length})` : "Actions", () => setOpen((value) => !value), {
-    disabled: rows.length === 0,
-    hint: rows.length === 0 ? "Select worlds first" : undefined,
-  });
   return (
-    <span className="c-worlds-bulk" ref={wrap}>
-      <ActionButton action={trigger} />
-      <Menu
-        anchor={anchor}
-        groups={[
-          { actions: [item("start", "Start", "play_arrow", starts, "No selected world can start"), item("stop", "Stop", "stop", stops, "No selected world is online"), item("archive", "Archive", "archive", archives, "Only stopped worlds can be archived")] },
-          { actions: [action("worlds.bulk.clear", "Clear selection", clear, { icon: "close" })] },
-        ]}
-        id={id}
-        label="Actions on selected worlds"
-        onClose={close}
-        open={open}
-      />
-    </span>
+    <MenuButton
+      disabled={rows.length === 0}
+      groups={[
+        { actions: [item("start", "Start", "play_arrow", starts, "No selected world can start"), item("stop", "Stop", "stop", stops, "No selected world is online"), item("archive", "Archive", "archive", archives, "Only stopped worlds can be archived")] },
+        { actions: [action("worlds.bulk.clear", "Clear selection", clear, { icon: "close" })] },
+      ]}
+      hint={rows.length === 0 ? "Select worlds first" : undefined}
+      id="worlds.bulk"
+      label={rows.length > 0 ? `Actions (${rows.length})` : "Actions"}
+    />
   );
 }
 
@@ -408,7 +388,7 @@ function QuickLook({ model, row, onClose }: Readonly<{ model: WorldsModel; row: 
             {row.sessionAction && <ActionButton action={row.sessionAction()} size="sm" />}
             <LinkButton href={row.href} icon="open_in_new" label="Open" size="sm" />
           </div>
-          <DetailList columns="two" details={details} label={`${row.world.displayName} at a glance`} spans={{ address: "full" }} />
+          <DetailList columns="two" details={details} label={`${row.world.displayName} at a glance`} spans={{ address: "full", Operation: "full" }} />
         </Card>
       </aside>
     </>

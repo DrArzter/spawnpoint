@@ -11,13 +11,6 @@ html[data-skin="cloud"] .c-players svg {
   color: var(--c-ink-3);
 }
 
-html[data-skin="cloud"] .c-home-meta {
-  color: var(--c-ink-3);
-  font-size: var(--c-fs-s);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
 html[data-skin="cloud"] .c-home-decide {
   display: inline-flex;
   align-items: center;
@@ -133,7 +126,6 @@ html[data-skin="cloud"] .c-worlds-name a {
 
 html[data-skin="cloud"] .c-worlds-hostmark {
   display: none;
-  color: var(--c-ink-3);
 }
 
 html[data-skin="cloud"] .c-worlds-release {
@@ -188,19 +180,14 @@ html[data-skin="cloud"] .c-worlds-row .c-checkbox {
   height: 44px;
 }
 
-/* ListItemWorld lays out on the list column's tracks; here it stands between the checkbox and the quick look, so it brings its own. */
+/* The standalone world row brings its own tracks; the page only places it between the checkbox and the quick look. */
 html[data-skin="cloud"] .c-worlds-row > .c-listitem-slot {
   grid-column: 2;
-  grid-template-columns: minmax(0, 1fr) 40px 128px;
 }
 
 html[data-skin="cloud"] .c-worlds-row .c-listitem {
   border: 0;
   background: none;
-}
-
-html[data-skin="cloud"] .c-worlds-bulk {
-  display: inline-flex;
 }
 
 html[data-skin="cloud"] .c-worlds-scrim {
@@ -331,10 +318,6 @@ html[data-skin="cloud"] .c-worlds-peek-acts {
 }
 
 @media (max-width: 759px) {
-  html[data-skin="cloud"] .c-worlds-row > .c-listitem-slot {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
   html[data-skin="cloud"] .c-bystate-legend a {
     min-height: var(--c-target);
   }

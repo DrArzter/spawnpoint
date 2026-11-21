@@ -29,3 +29,11 @@ html[data-skin="cloud"] .c-notice-detail {
   color: var(--c-ink-2);
   font-weight: 500;
 }
+
+html[data-skin="cloud"] .c-notice-more {
+  display: inline-grid;
+  place-items: center;
+  align-self: center;
+  border-radius: var(--c-r-pill);
+  color: inherit;
+}

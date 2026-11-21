@@ -110,6 +110,10 @@ html[data-skin="cloud"] .c-chip-text {
   text-overflow: ellipsis;
 }
 
+html[data-skin="cloud"] .c-indicator-quiet {
+  color: var(--c-ink-3);
+}
+
 html[data-skin="cloud"] .c-indicator {
   display: inline-grid;
   place-items: center;

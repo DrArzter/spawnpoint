@@ -166,3 +166,7 @@ html[data-skin="cloud"] .c-overflow {
     height: var(--c-target);
   }
 }
+
+html[data-skin="cloud"] .c-btn-caret {
+  margin-right: -6px;
+}

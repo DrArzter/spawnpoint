@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 
 import { cx } from "../../../lib/cx";
+import { ARRIVED, useArrivals } from "./Tick";
 
 /**
  * A track's role:
@@ -28,7 +29,7 @@ export type Track<Row> = Readonly<{
  * subgrid, labels once in the header. Under 1024px the row's title link
  * covers the row (link it with `TrackTitle`); controls in a row stay above it.
  */
-export function TrackList<Row>({ label, tracks, rows, rowKey, empty, header = true, className }: Readonly<{
+export function TrackList<Row>({ label, tracks, rows, rowKey, empty, header = true, arrivals = false, className }: Readonly<{
   label: string;
   tracks: readonly Track<Row>[];
   rows: readonly Row[];
@@ -36,8 +37,11 @@ export function TrackList<Row>({ label, tracks, rows, rowKey, empty, header = tr
   empty?: ReactNode;
   /** Draw the header row; a list of one obvious shape may leave it out. */
   header?: boolean;
+  /** Rows added while the list is shown arrive with a highlight (A9). */
+  arrivals?: boolean;
   className?: string;
 }>) {
+  const fresh = useArrivals(arrivals ? rows.map(rowKey) : []);
   const style = {
     "--c-tracks": tracks.map((track) => track.width).join(" "),
     "--c-tracks-compact": tracks.filter((track) => track.kind !== "optional").map((track) => track.compactWidth ?? track.width).join(" "),
@@ -55,7 +59,7 @@ export function TrackList<Row>({ label, tracks, rows, rowKey, empty, header = tr
         </div>
       )}
       {rows.map((row) => (
-        <div className="c-tracklist-row" key={rowKey(row)} role="row">
+        <div className={cx("c-tracklist-row", fresh.has(rowKey(row)) && ARRIVED)} key={rowKey(row)} role="row">
           {tracks.map((track) => (
             <span className={cx("c-track", track.kind && `c-track-${track.kind}`)} key={track.id} role="cell">{track.render(row)}</span>
           ))}
@@ -70,12 +74,14 @@ export function TrackTitle({ title, href, line, compactLine }: Readonly<{ title:
   return (
     <span className="c-track-stack-body">
       {href ? <a className="c-track-title" href={href}>{title}</a> : <span className="c-track-title">{title}</span>}
-      {(line || compactLine) && (
+      {line && (
         <span className="c-track-line">
           {line}
           {compactLine && <span className="c-track-compact">{compactLine}</span>}
         </span>
       )}
+      {/* Only the narrow layout has a second line: none is drawn from 1024px up. */}
+      {!line && compactLine && <span className="c-track-line c-track-compact">{compactLine}</span>}
     </span>
   );
 }

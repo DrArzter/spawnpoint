@@ -9,8 +9,10 @@ export type CardBody = "pad" | "flush" | "kv";
  * end. The body keeps its content at the top, so cards of one grid row share
  * one height without centring anything (R11).
  */
-export function Card({ title, count, titleTip, actions, body = "pad", className, label, children }: Readonly<{
+export function Card({ title, meta, count, titleTip, actions, body = "pad", className, label, children }: Readonly<{
   title?: string;
+  /** A fact after the title on the same line: "· 3 players". */
+  meta?: ReactNode;
   count?: number;
   /** A short definition of the title, shown as its tooltip. */
   titleTip?: string;
@@ -29,6 +31,7 @@ export function Card({ title, count, titleTip, actions, body = "pad", className,
             {title}
             {count !== undefined && <span className="c-count">{count}</span>}
           </h2>
+          {meta && <span className="c-card-meta">{meta}</span>}
           {actions && <div className="c-card-actions">{actions}</div>}
         </header>
       )}

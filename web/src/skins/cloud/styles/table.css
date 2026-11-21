@@ -177,6 +177,7 @@ html[data-skin="cloud"] .c-table-fixed td {
     position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-auto-flow: row dense;
     gap: 2px 14px;
     padding: 12px var(--c-card-x);
     border-bottom: 1px solid var(--c-line);

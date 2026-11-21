@@ -51,22 +51,24 @@ export type DetailSpan = "w2" | "full";
 
 /**
  * Key-value facts in equal columns: four (two under 1200px), always two, or
- * as many 220px columns as fit. A label sits above its value; a hint follows
- * the value on its line, an explanation is the tooltip of an info mark.
+ * as many 220px columns as fit. A label sits above its value; a hint is a
+ * faint line under the value, cut with an ellipsis and whole in its tooltip;
+ * an explanation is the tooltip of an info mark.
  */
 export function DetailList({ details, columns = "four", omit = [], spans = {}, label }: Readonly<{
   details: readonly Detail[];
   columns?: DetailColumns;
   /** Facts this view shows elsewhere (R3), by key. */
   omit?: readonly DetailKey[];
-  spans?: Readonly<Partial<Record<DetailKey, DetailSpan>>>;
+  /** Wider entries, by key, or by label for a detail a page builds without a key. */
+  spans?: Readonly<Partial<Record<DetailKey | string, DetailSpan>>>;
   label?: string;
 }>) {
   const shown = details.filter((detail) => detail.key === undefined || !omit.includes(detail.key));
   return (
     <dl aria-label={label} className={cx("c-detail", `c-detail-${columns}`)}>
       {shown.map((detail) => {
-        const span = detail.key ? spans[detail.key] : undefined;
+        const span = (detail.key ? spans[detail.key] : undefined) ?? spans[detail.label];
         return (
           <div className={cx("c-detail-item", span && `c-span-${span}`)} key={detail.key ?? detail.label}>
             <dt>
@@ -74,13 +76,18 @@ export function DetailList({ details, columns = "four", omit = [], spans = {}, l
               {detail.explain && <span aria-label={detail.explain} className="c-detail-explain" data-tip={detail.explain} role="img" tabIndex={0}><Icon name="info" size={15} /></span>}
             </dt>
             <dd>
-              <DetailValueView value={detail.value} />
-              {detail.copy && <Copy value={detail.copy} what={detail.label} />}
-              {(detail.hint || detail.hintTime) && (
-                <span className={cx("c-detail-hint", detail.hintAttention && "c-tone-warn")} data-tip={detail.hint}>
+              <span className="c-detail-value">
+                <DetailValueView value={detail.value} />
+                {detail.copy && <Copy value={detail.copy} what={detail.label} />}
+              </span>
+              {(detail.hint || (detail.hintTime !== undefined && detail.hintTime !== null)) && (
+                <span className={cx("c-detail-hint", detail.hintAttention && "c-tone-warn")} data-tip={detail.hint} tabIndex={detail.hint ? 0 : undefined}>
                   {detail.hintAttention && <Icon name="warning" size={15} />}
-                  {detail.hint && <span>{detail.hint}</span>}
-                  {detail.hintTime !== undefined && detail.hintTime !== null && <Ago at={detail.hintTime} />}
+                  <span className="c-detail-hint-text">
+                    {detail.hint}
+                    {detail.hint && detail.hintTime !== undefined && detail.hintTime !== null && " "}
+                    {detail.hintTime !== undefined && detail.hintTime !== null && <Ago at={detail.hintTime} />}
+                  </span>
                 </span>
               )}
             </dd>

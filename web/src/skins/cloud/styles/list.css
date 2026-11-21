@@ -296,3 +296,25 @@ html[data-skin="cloud"] .c-listitem-account > span {
     height: var(--c-target);
   }
 }
+
+html[data-skin="cloud"] .c-listitem-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--c-r-pill);
+  background: var(--c-surface-3);
+  color: var(--c-ink-2);
+}
+
+/* A world row outside the list column keeps the column's tracks on its own. */
+html[data-skin="cloud"] .c-listitem-standalone {
+  grid-template-columns: minmax(0, 1fr) 48px 124px;
+}
+
+@media (max-width: 759px) {
+  html[data-skin="cloud"] .c-listitem-standalone {
+    grid-template-columns: minmax(0, 1fr) 116px;
+  }
+}

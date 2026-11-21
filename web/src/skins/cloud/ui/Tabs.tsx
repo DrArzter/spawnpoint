@@ -40,11 +40,19 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
     ink.current.style.left = `${active.offsetLeft}px`;
     ink.current.style.width = `${active.offsetWidth}px`;
     if (active.offsetLeft < row.scrollLeft || active.offsetLeft + active.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = active.offsetLeft - 16;
+    const place = () => {
+      if (!ink.current) return;
+      ink.current.style.left = `${active.offsetLeft}px`;
+      ink.current.style.width = `${active.offsetWidth}px`;
+    };
     const measure = () => setMore(row.scrollLeft + row.clientWidth < row.scrollWidth - 1);
     measure();
+    // A font that loads late or a resize changes the tab widths; the ink follows.
+    const resized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => { place(); measure(); });
+    resized?.observe(row);
+    resized?.observe(active);
     row.addEventListener("scroll", measure);
-    window.addEventListener("resize", measure);
-    return () => { row.removeEventListener("scroll", measure); window.removeEventListener("resize", measure); };
+    return () => { row.removeEventListener("scroll", measure); resized?.disconnect(); };
   }, [value, tabs]);
 
   const onKey = (event: KeyboardEvent<HTMLDivElement>) => {

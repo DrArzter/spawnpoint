@@ -50,9 +50,12 @@ export function FilterBar({ label, properties, tokens, onChange, matches, end, p
     input.current?.focus();
   };
   const query = text.trim().toLowerCase();
+  // Free text comes first, so Enter searches what was typed even when it also
+  // matches a property's name ("re" in "Release").
+  const textOption: Option[] = !property && query ? [{ key: "text", label: `Text: ${text.trim()}`, pick: () => add({ property: null, value: text.trim() }) }] : [];
   const options: Option[] = property
     ? property.values.filter((item) => item.value.toLowerCase().includes(query)).map((item) => ({ key: `${property.id}=${item.value}`, label: item.value, count: item.count, pick: () => add({ property: property.id, value: item.value }) }))
-    : properties.filter((item) => item.label.toLowerCase().includes(query)).map((item) => ({ key: item.id, label: item.label, pick: () => { setProperty(item); setText(""); setActive(0); input.current?.focus(); } }));
+    : [...textOption, ...properties.filter((item) => item.label.toLowerCase().includes(query)).map((item) => ({ key: item.id, label: item.label, pick: () => { setProperty(item); setText(""); setActive(0); input.current?.focus(); } }))];
   const at = Math.min(active, Math.max(options.length - 1, 0));
   const labelOf = (id: string | null) => id === null ? "Text" : properties.find((item) => item.id === id)?.label ?? id;
 
@@ -103,22 +106,24 @@ export function FilterBar({ label, properties, tokens, onChange, matches, end, p
             value={text}
           />
         </div>
-        <div className="c-filter-menu" hidden={!open || options.length === 0} id={listId} role="listbox">
-          <div className="c-filter-menu-label" role="presentation">{property ? property.label : "Properties"}</div>
-          {options.map((option, index) => (
-            <div
-              aria-selected={index === at}
-              className="c-filter-option"
-              id={`${listId}-${index}`}
-              key={option.key}
-              onMouseDown={(event) => { event.preventDefault(); option.pick(); }}
-              onMouseMove={() => setActive(index)}
-              role="option"
-            >
-              <span>{option.label}</span>
-              {option.count !== undefined && <span className="c-filter-option-count">{option.count}</span>}
-            </div>
-          ))}
+        <div aria-label={property ? `${property.label} values` : "Filter by"} className="c-filter-menu" hidden={!open || options.length === 0} id={listId} role="listbox">
+          <div aria-labelledby={`${listId}-label`} role="group">
+            <div className="c-filter-menu-label" id={`${listId}-label`} role="presentation">{property ? property.label : "Filter by"}</div>
+            {options.map((option, index) => (
+              <div
+                aria-selected={index === at}
+                className="c-filter-option"
+                id={`${listId}-${index}`}
+                key={option.key}
+                onMouseDown={(event) => { event.preventDefault(); option.pick(); }}
+                onMouseMove={() => setActive(index)}
+                role="option"
+              >
+                <span>{option.label}</span>
+                {option.count !== undefined && <span className="c-filter-option-count">{option.count}</span>}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
       <div className="c-filterbar-end">

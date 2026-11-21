@@ -61,9 +61,10 @@ export function ListColumn({ label, filter, end, chips = [], groups, empty }: Re
 /**
  * A world in the list column, on three shared tracks: name / players /
  * hosting; status / release and wipe; the address. Under 760px the name keeps
- * the first line beside the hosting chip.
+ * the first line beside the hosting chip. `standalone` carries its own tracks,
+ * for a list of worlds outside the list column (the phone Worlds list).
  */
-export function ListItemWorld({ href, current, name, players, hosting, status, line, address }: Readonly<{
+export function ListItemWorld({ href, current, name, players, hosting, status, line, address, standalone = false }: Readonly<{
   href: string;
   current: boolean;
   name: string;
@@ -74,9 +75,10 @@ export function ListItemWorld({ href, current, name, players, hosting, status, l
   /** Release and wipe: "1.2 · wipe #3". */
   line: string;
   address?: ReactNode;
+  standalone?: boolean;
 }>) {
   return (
-    <div className="c-listitem-slot" role="listitem">
+    <div className={cx("c-listitem-slot", standalone && "c-listitem-standalone")} role="listitem">
       <a aria-current={current || undefined} className="c-listitem c-listitem-world" href={href}>
         <span className="c-listitem-name" title={name}>{name}</span>
         <span className="c-listitem-players">{players === null ? "" : <><Icon name="group" size={15} /><span>{players}</span></>}</span>
@@ -109,6 +111,22 @@ export function ListItemPerson({ href, current, name, photoUrl, meta, account, a
         </span>
         <span className="c-listitem-meta">{meta}</span>
         {account && <span className="c-listitem-account" title={account}>{accountIcon && <Icon name={accountIcon} size={15} />}<span>{account}</span></span>}
+      </a>
+    </div>
+  );
+}
+
+/** A place in the list column that is not a person or a world: All users, Roles, My notifications. */
+export function ListItemIcon({ href, current, icon, name, meta, line }: Readonly<{ href: string; current: boolean; icon: IconName; name: string; meta?: ReactNode; line?: string }>) {
+  return (
+    <div className="c-listitem-slot" role="listitem">
+      <a aria-current={current || undefined} className="c-listitem c-listitem-person" href={href}>
+        <span className="c-listitem-who">
+          <span aria-hidden="true" className="c-listitem-icon"><Icon name={icon} size={18} /></span>
+          <span className="c-listitem-name" title={name}>{name}</span>
+        </span>
+        <span className="c-listitem-meta">{meta}</span>
+        {line && <span className="c-listitem-account" title={line}><span>{line}</span></span>}
       </a>
     </div>
   );

@@ -18,6 +18,19 @@ html[data-skin="cloud"] .c-field-label-row {
   gap: 8px;
 }
 
+html[data-skin="cloud"] .c-field-label-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+html[data-skin="cloud"] .c-field-hint {
+  display: inline-grid;
+  place-items: center;
+  color: var(--c-ink-3);
+  border-radius: var(--c-r-pill);
+}
+
 html[data-skin="cloud"] .c-field-label {
   padding: 0;
   font-size: var(--c-fs-m);
@@ -182,17 +195,16 @@ html[data-skin="cloud"] .c-checkbox input {
 }
 
 html[data-skin="cloud"] .c-radios-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(var(--c-radio-count, 2), minmax(0, 1fr));
   gap: 10px;
 }
 
 html[data-skin="cloud"] .c-radio {
   display: flex;
-  flex: 1;
   align-items: center;
   gap: 10px;
-  min-width: 150px;
+  min-width: 0;
   min-height: 48px;
   padding: 0 14px;
   border: 1px solid var(--c-line-2);
@@ -237,6 +249,13 @@ html[data-skin="cloud"] .c-radio input:focus-visible {
   outline: none;
 }
 
+html[data-skin="cloud"] .c-radio-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 html[data-skin="cloud"] .c-radio-disabled {
   cursor: not-allowed;
   opacity: .55;
@@ -245,6 +264,12 @@ html[data-skin="cloud"] .c-radio-disabled {
 html[data-skin="cloud"] .c-radio-icon {
   margin-left: auto;
   color: var(--c-ink-3);
+}
+
+@media (max-width: 479px) {
+  html[data-skin="cloud"] .c-radios-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (pointer: coarse) {

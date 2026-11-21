@@ -45,21 +45,30 @@ html[data-skin="cloud"] .c-detail-explain {
 
 html[data-skin="cloud"] .c-detail dd {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   min-width: 0;
-  min-height: 30px;
   margin: 0;
   font-weight: 600;
+}
+
+html[data-skin="cloud"] .c-detail-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 30px;
   white-space: nowrap;
 }
 
-html[data-skin="cloud"] .c-detail dd > * {
+html[data-skin="cloud"] .c-detail-value > * {
   min-width: 0;
 }
 
-/* The value keeps its width; the hint after it gives way first. */
-html[data-skin="cloud"] .c-detail dd > .c-status {
+/* The value keeps its status mark whole; text values give way with an ellipsis. */
+html[data-skin="cloud"] .c-detail-value > .c-status {
   flex: none;
 }
 
@@ -78,25 +87,26 @@ html[data-skin="cloud"] .c-detail-preset {
 }
 
 html[data-skin="cloud"] .c-detail-hint {
-  display: inline-flex;
-  flex: 0 1 auto;
+  display: flex;
   align-items: center;
   gap: 4px;
-  overflow: hidden;
+  max-width: 100%;
+  min-width: 0;
   color: var(--c-ink-3);
   font-size: var(--c-fs-s);
   font-weight: 500;
-}
-
-html[data-skin="cloud"] .c-detail-hint > :not(svg) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  border-radius: 4px;
 }
 
 html[data-skin="cloud"] .c-detail-hint.c-tone-warn {
   color: var(--c-warn);
+}
+
+html[data-skin="cloud"] .c-detail-hint-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 1199px) {

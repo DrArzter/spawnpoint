@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { Icon } from "../../../icons";
 import { cx } from "../../../lib/cx";
+import { ARRIVED, useArrivals } from "./Tick";
 import { SkeletonRows } from "./Skeleton";
 
 /**
@@ -39,7 +40,7 @@ export type TableVariant = "default" | "fixed" | "matrix";
  * it stays a table and drops columns by kind; under it each row becomes a
  * record whose cells carry their header as a label. `matrix` stays a table.
  */
-export function Table<Row>({ label, columns, rows, rowKey, selected, empty, loading = false, variant = "default", split = false, className }: Readonly<{
+export function Table<Row>({ label, columns, rows, rowKey, selected, empty, loading = false, variant = "default", split = false, arrivals = false, className }: Readonly<{
   label: string;
   columns: readonly Column<Row>[];
   rows: readonly Row[];
@@ -51,8 +52,11 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
   variant?: TableVariant;
   /** The table shares its width with a split panel. */
   split?: boolean;
+  /** Rows added while the table is shown arrive with a highlight (A9). */
+  arrivals?: boolean;
   className?: string;
 }>) {
+  const fresh = useArrivals(arrivals ? rows.map(rowKey) : []);
   return (
     <div className={cx("c-table-wrap", split && "c-table-split", className)}>
       <table aria-label={label} className={cx("c-table", variant !== "default" && `c-table-${variant}`)}>
@@ -69,7 +73,7 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
           <tbody>
             {rows.length === 0 && empty !== undefined && <tr className="c-table-empty"><td colSpan={columns.length}>{empty}</td></tr>}
             {rows.map((row) => (
-              <tr className={selected?.(row) ? "c-row-selected" : undefined} key={rowKey(row)}>
+              <tr className={cx(selected?.(row) && "c-row-selected", fresh.has(rowKey(row)) && ARRIVED) || undefined} key={rowKey(row)}>
                 {columns.map((column) => (
                   <td className={cx(column.kind && `c-col-${column.kind}`, column.className)} data-label={column.kind === "act" || column.kind === "lead" || column.kind === "check" ? undefined : column.header} key={column.id}>
                     {column.render(row)}
@@ -90,7 +94,7 @@ function HeaderLabel<Row>({ column }: Readonly<{ column: Column<Row> }>) {
   return (
     <button className="c-sort" onClick={column.onSort} type="button">
       <span>{column.header}</span>
-      <Icon name={column.sort === "descending" ? "arrow_downward" : "arrow_upward"} size={15} />
+      <Icon name={column.sort === "descending" ? "arrow_downward" : column.sort === "ascending" ? "arrow_upward" : "unfold_more"} size={15} />
     </button>
   );
 }

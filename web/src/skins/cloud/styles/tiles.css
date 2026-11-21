@@ -98,8 +98,11 @@ html[data-skin="cloud"] .c-prefs-menu {
 }
 
 @media (max-width: 759px) {
+  /* Equal columns across the row; sideways scroll only when they do not fit. */
   html[data-skin="cloud"] .c-tiles {
-    display: flex;
+    grid-auto-columns: minmax(132px, 1fr);
+    grid-auto-flow: column;
+    grid-template-columns: none;
     margin: 0 calc(var(--c-pad) * -1);
     padding: 0 var(--c-pad) 4px;
     overflow-x: auto;
@@ -108,8 +111,6 @@ html[data-skin="cloud"] .c-prefs-menu {
   }
 
   html[data-skin="cloud"] .c-tile {
-    flex: none;
-    min-width: 132px;
     scroll-snap-align: start;
   }
 

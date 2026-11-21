@@ -102,7 +102,8 @@ export type WorldsModel = Readonly<{
   notices: readonly Notice[];
   overview: SessionOverview;
   rows: readonly WorldRow[];
-  emptyDescription: string;
+  /** Why the list is empty and no world can be created; null when Create world says enough. */
+  emptyDescription: string | null;
   refresh: Action;
   createWorld: Action | null;
 }>;
@@ -468,6 +469,6 @@ export type ConsoleShellModel = Readonly<{
   snapshot: ControlPlaneSnapshot | null;
 }>;
 
-export type BootModel = Readonly<{ title: string; description: string }>;
+export type BootModel = Readonly<{ title: string; description?: string }>;
 
 export type Rendered = ReactNode;

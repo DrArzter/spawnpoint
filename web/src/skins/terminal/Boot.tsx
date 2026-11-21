@@ -18,7 +18,7 @@ export function Boot({ model }: Readonly<{ model: BootModel }>) {
         <div className="t-panel-body t-boot-body">
           <div className="t-boot-brand"><SpawnpointMark size={24} /><strong>Spawnpoint</strong></div>
           <h1 className="t-boot-title" id="t-boot-title"><State kind="progress" label={model.title} size="large" /></h1>
-          <p>{model.description}</p>
+          {model.description && <p>{model.description}</p>}
           <div aria-hidden="true" className="t-track" />
         </div>
       </section>

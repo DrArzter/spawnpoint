@@ -3,7 +3,7 @@ import { commitUrl, formatDate, shortCommit } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Operation, ServerState, Wipe, World, WorldTab } from "../model";
 import { routeHash } from "../routing";
 import { configuredHosts, fleetPlayersOnline, fleetSessionOf, fleetWorldState, operationsBlockingWorld, playersOnline, sessionReason, sharedSessionOwnerLabel, worldOwnsSharedSession, worldState, type SessionReason, type SharedHostSession } from "../session";
-import type { Pending, PendingMap, SessionAction, WorldActionKind } from "../shell/actions";
+import type { PendingMap, SessionAction, WorldActionKind } from "../shell/actions";
 import { changedSettings, settingsAvailable } from "./settings";
 import { controlPending, pendingFor } from "../shell/actions";
 import { action, type Action } from "./actions";
@@ -365,13 +365,10 @@ export function operationLabel(type: Operation["type"]): string {
   return operationLabels[type];
 }
 
-export function worldNotices(world: World, pending: Pending | null): Notice[] {
+export function worldNotices(world: World): Notice[] {
   const notices: Notice[] = [];
-  if (world.materialization === "archived") notices.push({ id: "archived", tone: "warning", title: "This world is archived", description: "Restore one of its backups to open a new wipe, or delete it permanently from the actions menu." });
-  if (pending?.kind === "lifecycle") {
-    const operation = pending.action === "wipe" ? "a new wipe" : pending.action;
-    notices.push({ id: "operation", tone: "info", title: "World operation in progress", description: `Spawnpoint is requesting ${operation}. The operation appears in the table below once accepted.` });
-  }
+  // A request in flight shows on its busy verb and in Operations, not as a notice.
+  if (world.materialization === "archived") notices.push({ id: "archived", tone: "warning", title: "This world is archived" });
   return notices;
 }
 

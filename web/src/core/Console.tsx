@@ -28,7 +28,7 @@ export type LookChoices = Readonly<{ current: string; options: readonly Readonly
 export function ConsoleRoot({ session, skin, looks, continuesBootCard }: Readonly<{ session: ActiveSession; skin: Skin; looks: LookChoices; continuesBootCard: boolean }>) {
   const notify = useSnackbar();
   const console = useConsole(session, continuesBootCard, notify);
-  if (!console.booted) return console.bootVisible ? <skin.Boot model={{ title: "Preparing the console", description: "Reading games, worlds and the current AWS state." }} /> : null;
+  if (!console.booted) return console.bootVisible ? <skin.Boot model={{ title: "Preparing the console" }} /> : null;
   return (
     <skin.Shell model={console.shell}>
       <CurrentPage console={console} looks={looks} skin={skin} />
@@ -66,13 +66,13 @@ function WorldsPage({ console, skin }: Controlled) {
     status: listStatus,
     error,
     game,
-    unavailable: !loading && !game ? { failed: listStatus === "error", description: listStatus === "error" ? "Spawnpoint could not read games, worlds and the compute host." : "The control plane lists no games yet. Games and their presets are declared in Git." } : null,
+    unavailable: !loading && !game ? { failed: listStatus === "error", description: listStatus === "error" ? "Spawnpoint could not read games, worlds and the compute host." : "No games yet. Declare them in Git." } : null,
     notices: [
       ...(listStatus === "error" ? [{ id: "load", tone: "error" as const, title: "Current state could not be loaded", description: error, action: action("refresh", "Try again", () => void console.refresh()) }] : []),
     ],
     overview: buildSessionOverview(game, snapshot, serverState, sharedSession, fleetOverview),
     rows: game ? game.worlds.map((world) => buildWorldRow(game, world, { fleet: fleetOverview, sharedSession, granted, pending, callbacks: worldCallbacks })) : [],
-    emptyDescription: canManage && readyPreset ? "Create the first world from a ready preset." : "Worlds appear here once a preset has a ready release and a world is created.",
+    emptyDescription: canManage && readyPreset ? null : "Worlds appear here once a preset has a ready release.",
     refresh: refreshAction(console),
     createWorld: canManage && readyPreset && game ? action("world.create", "Create world", () => console.requestCreateWorld(game), { icon: "add" }) : null,
   };
@@ -158,7 +158,7 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     worldsHref: routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: null }),
     availability: worldStatus(world),
     sessionStatus: sessionStatus(state),
-    notices: worldNotices(world, rowPending),
+    notices: worldNotices(world),
     tabs: shown.tabs,
     tab: route.worldTab,
     setTab: (tab) => navigate({ worldTab: tab }),

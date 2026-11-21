@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { action, type Action } from "../../core/actions";
 import type { Detail, WorldRow, WorldsModel } from "../../core/models";
+import { cx } from "../../lib/cx";
 import { Home, withIcon } from "./Home";
 import { HostingChip, HostingMark, Players, hostingLabel, releaseLine, statesOf, statusRank, uptimeText } from "./WorldFacts";
 import { ActionButton, LinkButton } from "./ui/ActionButton";
@@ -24,6 +25,7 @@ import { TablePreferences, usePageSize } from "./ui/Preferences";
 import { Skeleton, SkeletonGroup } from "./ui/Skeleton";
 import { Status } from "./ui/Status";
 import { nextSort, Table, type Column, type SortDirection } from "./ui/Table";
+import { ARRIVED, useArrivals } from "./ui/Tick";
 import { Tile, Tiles } from "./ui/Tile";
 
 /*
@@ -128,6 +130,8 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
   }, [rows, tokens, state, sort]);
   const [page, setPage] = usePage(shown.length);
   const paged = pageOf(shown, page, size);
+  // A9 over every world of the game, not the shown page: a page turn or a filter change brings no "new" rows.
+  const arrived = useArrivals(rows.map((row) => row.world.id));
   // Bulk Actions reach only what the person can see: a filter or a tile hides a selected world from them too.
   const selected = shown.filter((row) => chosen.has(row.world.id));
   const peek = rows.find((row) => row.world.id === peekId) ?? null;
@@ -262,13 +266,14 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
             empty={noMatches}
             label="Worlds"
             rowKey={(row) => row.world.id}
+            arrivals={arrived}
             rows={paged.rows}
             selected={(row) => chosen.has(row.world.id) || peekId === row.world.id}
             split={peek !== null}
           />
           <div className="c-worlds-list" role="list">
             {paged.rows.length === 0 ? noMatches : paged.rows.map((row) => (
-              <div className={chosen.has(row.world.id) || peekId === row.world.id ? "c-worlds-row c-worlds-row-selected" : "c-worlds-row"} key={row.world.id}>
+              <div className={cx("c-worlds-row", (chosen.has(row.world.id) || peekId === row.world.id) && "c-worlds-row-selected", arrived.has(row.world.id) && ARRIVED)} key={row.world.id}>
                 <Checkbox checked={chosen.has(row.world.id)} label={`Select ${row.world.displayName}`} labelHidden onChange={(on) => toggle(row.world.id, on)} />
                 <ListItemWorld
                   address={row.address ? <Address address={row.address} /> : undefined}

@@ -492,7 +492,7 @@ export function Address({ value, connectivity, network, copyLabel, size = "mediu
 // --- overflow menu ---------------------------------------------------------------
 
 /** The overflow: a key that opens a list of verbs in the top layer, or the one verb as its own key. */
-export function Overflow({ label, groups, size = "medium", className }: Readonly<{ label: string; groups: readonly (readonly Action[])[]; size?: "small" | "medium"; className?: string }>) {
+export function Overflow({ label, groups, size = "medium", className, menu = false }: Readonly<{ label: string; groups: readonly (readonly Action[])[]; size?: "small" | "medium"; className?: string; menu?: boolean }>) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -546,8 +546,9 @@ export function Overflow({ label, groups, size = "medium", className }: Readonly
   }
 
   // One action is its own key: a menu that holds one item only hides it behind
-  // a second tap. An action without an icon keeps the menu.
-  const only = present.length === 1 && present[0]?.length === 1 ? present[0][0] : undefined;
+  // a second tap. An action without an icon keeps the menu, and so does a
+  // column whose other rows hold more (`menu`), so the column has one control.
+  const only = !menu && present.length === 1 && present[0]?.length === 1 ? present[0][0] : undefined;
   if (only?.icon) {
     return (
       <IconKey

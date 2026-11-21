@@ -67,7 +67,7 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
     // a role sits next to the one that opens their accounts rather than
     // stranded in the middle of the row.
     { id: "role", label: "Role", align: "end", width: "180px", render: (row) => <RoleSelect disabled={rolesBlocked || row.changing} fallback={row.roleId} label={`Role for ${row.member.name}`} onChange={row.setRoleId} roles={model.roles} value={row.roleId} /> },
-    { id: "actions", label: "Actions", actions: true, render: (row) => <ActionOverflow groups={[[row.linkedAccounts], row.remove ? [row.remove] : []]} label={`Actions for ${row.member.name}`} size="small" /> },
+    { id: "actions", label: "Actions", actions: true, render: (row) => <ActionOverflow groups={[[row.linkedAccounts], row.remove ? [row.remove] : []]} label={`Actions for ${row.member.name}`} menu size="small" /> },
   ];
   const candidates = model.candidates;
   const managedRole = model.managed ? model.roles.find((role) => role.id === model.managed?.roleId)?.name ?? model.managed.roleId : "";

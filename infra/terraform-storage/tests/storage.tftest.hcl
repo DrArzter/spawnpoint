@@ -76,3 +76,35 @@ run "persistent_storage_is_private_versioned_and_recoverable" {
     error_message = "The control-plane view must be durable, encrypted, on-demand and able to expire bounded event history."
   }
 }
+
+run "release_versions_expire_but_no_release_can_be_deleted" {
+  command = plan
+
+  assert {
+    condition = anytrue([
+      for rule in aws_s3_bucket_lifecycle_configuration.releases.rule :
+      rule.status == "Enabled" &&
+      one(rule.filter).prefix == "releases/" &&
+      one(rule.noncurrent_version_expiration).noncurrent_days == 30 &&
+      length(rule.expiration) == 0
+      if rule.id == "expire-noncurrent-release-versions"
+    ])
+    error_message = "Noncurrent versions of release objects expire after 30 days, and no current release object ever expires."
+  }
+
+  assert {
+    condition = alltrue([
+      for rule in aws_s3_bucket_lifecycle_configuration.releases.rule : length(rule.expiration) == 0
+    ])
+    error_message = "No rule may expire a current object in the release store: a generation may name it (ADR-0052)."
+  }
+
+  assert {
+    condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.releases_bucket.statement : statement.effect if statement.sid == "DenyReleaseDeletion"]) == "Deny",
+      one([for statement in data.aws_iam_policy_document.releases_bucket.statement : statement.actions if statement.sid == "DenyReleaseDeletion"]) == toset(["s3:DeleteObject", "s3:DeleteObjectVersion"]),
+      one([for statement in data.aws_iam_policy_document.releases_bucket.statement : statement.resources if statement.sid == "DenyReleaseDeletion"]) == toset(["arn:aws:s3:::spawnpoint-releases-123456789012/releases/*"]),
+    ])
+    error_message = "No principal may delete a release object, so expiring noncurrent versions can never remove the last copy of a release."
+  }
+}

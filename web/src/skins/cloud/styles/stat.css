@@ -13,12 +13,14 @@ html[data-skin="cloud"] .c-stat-head {
 }
 
 html[data-skin="cloud"] .c-stat-label {
+  flex: none;
   color: var(--c-ink-2);
   font-size: var(--c-fs-s);
   font-weight: 600;
 }
 
 html[data-skin="cloud"] .c-stat-detail {
+  min-width: 0;
   overflow: hidden;
   color: var(--c-ink-3);
   font-size: var(--c-fs-s);

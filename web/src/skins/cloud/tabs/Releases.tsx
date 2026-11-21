@@ -47,12 +47,8 @@ export function ReleasesTab({ model }: Readonly<{ model: WorldModel }>) {
 
 function Mods({ mods }: Readonly<{ mods: ModsModel }>) {
   const files = mods.files;
-  const head = (
-    <>
-      <Chip icon="dns" tip={`Release ${mods.release}`}>Server</Chip>
-      {mods.split && <Chip icon="group" tip="Players install their own set">Split</Chip>}
-    </>
-  );
+  // Whether players install their own set is a fact about the release, so it lives in the chip's tooltip.
+  const head = <Chip icon="dns" tip={mods.split ? `Release ${mods.release} · Players install their own set` : `Release ${mods.release}`}>Server</Chip>;
   return (
     <Card actions={head} body="flush" count={files.status === "ready" ? files.value.length : undefined} title="Mods">
       {files.status === "error"

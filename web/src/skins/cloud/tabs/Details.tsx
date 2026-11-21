@@ -10,8 +10,10 @@ import { Elapsed } from "./Hero";
 /** The overflow items the World card draws instead of the header menu. */
 export const CARD_ACTIONS: readonly string[] = ["world.settings", "world.game-settings"];
 
-// The header pill shows the state, the hero the players, the top bar the observed time (R3).
-const SHOWN_ELSEWHERE: readonly DetailKey[] = ["session", "players", "observed"];
+// The header pill shows the state and the top bar the observed time; while the
+// hero shows, it holds the players and the uptime, which says what Launched says (R3).
+const SHOWN_ELSEWHERE: readonly DetailKey[] = ["session", "observed"];
+const IN_HERO: readonly DetailKey[] = ["players", "launched"];
 
 /** The release as it runs now: the promotion notice names the desired one. */
 function activeOnly(details: readonly Detail[]): Detail[] {
@@ -20,7 +22,8 @@ function activeOnly(details: readonly Detail[]): Detail[] {
 
 export function DetailsTab({ model }: Readonly<{ model: WorldModel }>) {
   const live = model.glance?.live;
-  const session = model.sessionDetails.filter((detail) => detail.key === undefined || !SHOWN_ELSEWHERE.includes(detail.key));
+  const hidden = live ? [...SHOWN_ELSEWHERE, ...IN_HERO] : SHOWN_ELSEWHERE;
+  const session = model.sessionDetails.filter((detail) => detail.key === undefined || !hidden.includes(detail.key));
   const omit: DetailKey[] = [];
   if (model.availability.kind === "ready") omit.push("availability");
   if (live) omit.push("address");
@@ -29,7 +32,7 @@ export function DetailsTab({ model }: Readonly<{ model: WorldModel }>) {
     <>
       <Grid kind="detail">
         {live === false
-          ? <Card label="Session"><Empty icon="stop_circle" size="sm" title="No session" /></Card>
+          ? <Empty icon="stop_circle" size="sm" title="No session" />
           : session.length > 0 && <Card body="kv" title="Session"><DetailList columns="two" details={session} /></Card>}
         <Card actions={settings.length > 0 ? settings.map((item) => <ActionButton action={item} key={item.id} size="sm" />) : undefined} body="kv" title="World">
           <DetailList columns="two" details={activeOnly(model.worldDetails)} omit={omit} />

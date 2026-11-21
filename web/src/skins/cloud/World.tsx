@@ -46,7 +46,7 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
             <>
               <ActionButton action={model.session} variant={model.session.id === "session.start" ? "primary" : "default"} />
               {model.invite && <ActionButton action={model.invite} />}
-              <Overflow groups={[{ actions: more.filter((item) => !item.danger) }, { actions: [model.refresh] }, { actions: more.filter((item) => item.danger) }]} label="More actions" />
+              <Overflow groups={[{ actions: more.filter((item) => !item.danger) }, { actions: more.filter((item) => item.danger) }, { actions: [model.refresh] }]} label="More actions" />
             </>
           )}
           after={<Status status={model.sessionStatus} variant="pill" />}

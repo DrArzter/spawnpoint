@@ -43,6 +43,7 @@ const model: WorldModel = {
   sessionDetails: [
     { key: "session", label: "Session", value: { type: "status", status: { kind: "ok", label: "Online" } } },
     { key: "host", label: "Compute host", value: { type: "text", text: "fleet-1" } },
+    { key: "launched", label: "Launched", value: { type: "time", at: "2026-11-21T08:00:00Z" } },
     { key: "players", label: "Players online", value: { type: "number", value: 3 } },
     { key: "observed", label: "Last observed", value: { type: "time", at: "2026-11-21T10:00:00Z" } },
   ],
@@ -81,6 +82,7 @@ test("cloud world: the header pill is the only state mark and the hero holds the
   assert.doesNotMatch(markup, /<dt><span>Availability/, "Ready says nothing the pill does not");
   assert.equal(count(markup, /203\.0\.113\.7:25565"/), 2, "the address once in the hero, once in the list column");
   assert.doesNotMatch(markup, /→ 1\.3/, "the World card shows the active release only");
+  assert.doesNotMatch(markup, /<dt><span>Launched/, "the hero's uptime says it");
 });
 
 test("cloud world: the World card draws hosting and game settings, the overflow the rest and refresh", () => {
@@ -88,6 +90,8 @@ test("cloud world: the World card draws hosting and game settings, the overflow 
   for (const id of ["world.settings", "world.game-settings", "world.pack", "world.wipe", "world.purge", "refresh", "session.stop", "world.invite"]) {
     assert.equal(count(markup, new RegExp(`data-action="${id.replace(".", "\\.")}"`)), 1, `${id} once`);
   }
+  const menu = markup.slice(markup.indexOf('role="menu"'));
+  assert.ok(menu.indexOf('data-action="world.purge"') < menu.indexOf('data-action="refresh"'), "Refresh is the last item, after the danger group");
   assert.doesNotMatch(markup, /c-btn-primary[^>]*data-action="session\.stop"/, "Stop is never the primary or a red bar");
   assert.match(render({ session: spy("session.start", "Start") }), /c-btn-primary[^>]*data-action="session\.start"/);
 });
@@ -99,6 +103,8 @@ test("cloud world: the list column keeps the tab and marks the current world; no
   const stopped = render({ glance: { live: false, players: null, address: null, launchedAt: null, busy: false } });
   assert.doesNotMatch(stopped, /Session at a glance/);
   assert.match(stopped, /No session/);
+  assert.doesNotMatch(stopped, /aria-label="Session"/, "the empty state stands in place of the card");
+  assert.match(render({ glance: undefined }), /<dt><span>Launched/, "without a hero the Session card keeps the launch");
   assert.match(stopped, /<dt><span>Address/, "without a hero the World card keeps the address");
 });
 

@@ -330,6 +330,7 @@ for (const skin of SKINS) {
     checkSurface("Confirmation", renderToStaticMarkup(createElement(skin.ConfirmationDialog, { model: confirmation })), confirmation);
     const typed = renderToStaticMarkup(createElement(skin.ConfirmationDialog, { model: { ...confirmation, typedConfirmation: { ...confirmation.typedConfirmation!, label: "User name" } } }));
     assert.match(typed, /User name/, "the typed field is named by the model, not by the skin");
+    assert.doesNotMatch(typed, /to confirm/, "the field and its placeholder say what to type; no second line");
     const refused = renderToStaticMarkup(createElement(skin.ConfirmationDialog, { model: { ...confirmation, error: "The last Owner cannot be deleted." } }));
     assert.match(refused, /role="alert"[^>]*>The last Owner cannot be deleted\./, "a refusal is read inside the open dialog");
     checkSurface("CreateWorld", renderToStaticMarkup(createElement(skin.CreateWorldSheet, { model: createWorld })), createWorld);

@@ -14,6 +14,22 @@ type Case = [
   text: string | null,
 ];
 
+// A child stop (a player's stop or an idle stop) never announces a refusal: the parent speaks for it.
+function childStopCases(name: string): Case[] {
+  const failed = `[ALARM] A stop failed (${name}) — the world may be unsaved or the backup unverified, and EC2 may still be running.`;
+  return [
+    ["spawnpoint-stop-server-v2", "RUNNING", name, {}, null],
+    ["spawnpoint-stop-server-v2", "SUCCEEDED", name, {}, null],
+    ["spawnpoint-stop-server-v2", "FAILED", name, {}, failed],
+    ["spawnpoint-stop-server-v2", "TIMED_OUT", name, {}, failed],
+    ["spawnpoint-stop-server-v2", "ABORTED", name, {}, failed],
+    ["spawnpoint-stop-server-v2", "FAILED", name, { error: "Spawnpoint.V2StaleSession" }, null],
+    ["spawnpoint-stop-server-v2", "FAILED", name, { error: "Spawnpoint.V2StopRefusedPlayersOnline" }, null],
+    ["spawnpoint-stop-server-v2", "FAILED", name, { error: "Spawnpoint.HostActivityUnknown" }, `[ALARM] The world was saved and its backup verified (${name}), but host activity could not be checked. EC2 may still be running.`],
+    ["spawnpoint-stop-server-v2", "FAILED", name, { error: "States.TaskFailed" }, failed],
+  ];
+}
+
 const CASES: readonly Case[] = [
   ["spawnpoint-start-server-v2", "RUNNING", "op-1", {}, "[STARTING] the owner requested the server. Mods take a few minutes."],
   ["spawnpoint-start-server-v2", "FAILED", "op-1", {}, "[FAILED] Start failed (op-1). The owner can read the execution history."],
@@ -71,24 +87,8 @@ const CASES: readonly Case[] = [
   ["spawnpoint-stop-server-v2", "FAILED", "op-1", {"error": "Spawnpoint.V2StopRefusedPlayersOnline"}, "[STOP CANCELLED] Players are online, so the server keeps running. Nothing was lost."],
   ["spawnpoint-stop-server-v2", "FAILED", "op-1", {"error": "Spawnpoint.HostActivityUnknown"}, "[ALARM] The world was saved and its backup verified (op-1), but host activity could not be checked. EC2 may still be running."],
   ["spawnpoint-stop-server-v2", "FAILED", "op-1", {"error": "States.TaskFailed"}, "[ALARM] A stop failed (op-1) — the world may be unsaved or the backup unverified, and EC2 may still be running."],
-  ["spawnpoint-stop-server-v2", "RUNNING", "op-1-stop", {}, null],
-  ["spawnpoint-stop-server-v2", "SUCCEEDED", "op-1-stop", {}, null],
-  ["spawnpoint-stop-server-v2", "FAILED", "op-1-stop", {}, "[ALARM] A stop failed (op-1-stop) — the world may be unsaved or the backup unverified, and EC2 may still be running."],
-  ["spawnpoint-stop-server-v2", "TIMED_OUT", "op-1-stop", {}, "[ALARM] A stop failed (op-1-stop) — the world may be unsaved or the backup unverified, and EC2 may still be running."],
-  ["spawnpoint-stop-server-v2", "ABORTED", "op-1-stop", {}, "[ALARM] A stop failed (op-1-stop) — the world may be unsaved or the backup unverified, and EC2 may still be running."],
-  ["spawnpoint-stop-server-v2", "FAILED", "op-1-stop", {"error": "Spawnpoint.V2StaleSession"}, null],
-  ["spawnpoint-stop-server-v2", "FAILED", "op-1-stop", {"error": "Spawnpoint.V2StopRefusedPlayersOnline"}, null],
-  ["spawnpoint-stop-server-v2", "FAILED", "op-1-stop", {"error": "Spawnpoint.HostActivityUnknown"}, "[ALARM] The world was saved and its backup verified (op-1-stop), but host activity could not be checked. EC2 may still be running."],
-  ["spawnpoint-stop-server-v2", "FAILED", "op-1-stop", {"error": "States.TaskFailed"}, "[ALARM] A stop failed (op-1-stop) — the world may be unsaved or the backup unverified, and EC2 may still be running."],
-  ["spawnpoint-stop-server-v2", "RUNNING", "op-1-idle-1", {}, null],
-  ["spawnpoint-stop-server-v2", "SUCCEEDED", "op-1-idle-1", {}, null],
-  ["spawnpoint-stop-server-v2", "FAILED", "op-1-idle-1", {}, "[ALARM] A stop failed (op-1-idle-1) — the world may be unsaved or the backup unverified, and EC2 may still be running."],
-  ["spawnpoint-stop-server-v2", "TIMED_OUT", "op-1-idle-1", {}, "[ALARM] A stop failed (op-1-idle-1) — the world may be unsaved or the backup unverified, and EC2 may still be running."],
-  ["spawnpoint-stop-server-v2", "ABORTED", "op-1-idle-1", {}, "[ALARM] A stop failed (op-1-idle-1) — the world may be unsaved or the backup unverified, and EC2 may still be running."],
-  ["spawnpoint-stop-server-v2", "FAILED", "op-1-idle-1", {"error": "Spawnpoint.V2StaleSession"}, null],
-  ["spawnpoint-stop-server-v2", "FAILED", "op-1-idle-1", {"error": "Spawnpoint.V2StopRefusedPlayersOnline"}, null],
-  ["spawnpoint-stop-server-v2", "FAILED", "op-1-idle-1", {"error": "Spawnpoint.HostActivityUnknown"}, "[ALARM] The world was saved and its backup verified (op-1-idle-1), but host activity could not be checked. EC2 may still be running."],
-  ["spawnpoint-stop-server-v2", "FAILED", "op-1-idle-1", {"error": "States.TaskFailed"}, "[ALARM] A stop failed (op-1-idle-1) — the world may be unsaved or the backup unverified, and EC2 may still be running."],
+  ...childStopCases("op-1-stop"),
+  ...childStopCases("op-1-idle-1"),
   ["spawnpoint-drain-host-v2", "RUNNING", "op-1", {"input": {"hostId": "i-0abc"}}, null],
   ["spawnpoint-drain-host-v2", "RUNNING", "op-1-stop", {}, null],
   ["spawnpoint-drain-host-v2", "SUCCEEDED", "op-1", {"input": {"hostId": "i-0abc"}}, null],

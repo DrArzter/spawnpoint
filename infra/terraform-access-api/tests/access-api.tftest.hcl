@@ -233,6 +233,18 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition = contains(local.access_routes, "POST /access/identities/{identityId}/delete") && anytrue([
+      for statement in data.aws_iam_policy_document.access_api.statement :
+      statement.sid == "ReadAndManageAccessDirectory" && contains(statement.actions, "dynamodb:DeleteItem")
+      ]) && alltrue([
+      for statement in data.aws_iam_policy_document.access_api.statement :
+      statement.resources == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-access"])
+      if contains(statement.actions, "dynamodb:Scan")
+    ])
+    error_message = "Identity deletion is routed, may delete access items, and scans the access table only, never an index or another table."
+  }
+
+  assert {
     condition     = aws_lambda_function.access_api.environment[0].variables.CONSOLE_DOCUMENT_NAME == "spawnpoint-console"
     error_message = "The API names the console document it may send."
   }

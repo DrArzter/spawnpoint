@@ -26,11 +26,21 @@ data "aws_iam_policy_document" "access_api" {
       "dynamodb:UpdateItem",
       # A ConditionCheck inside a transaction is authorised by its own action.
       "dynamodb:ConditionCheckItem",
+      # Identity deletion (ADR-0071): plain deletes and Delete inside a transaction.
+      "dynamodb:DeleteItem",
     ]
     resources = [
       data.aws_dynamodb_table.access.arn,
       "${data.aws_dynamodb_table.access.arn}/index/gsi1",
     ]
+  }
+
+  # OAuth credentials, email actions and player invitations have no index by
+  # identity, so a deletion scans the table for them. The table only.
+  statement {
+    sid       = "ScanAccessDirectoryForIdentityDeletion"
+    actions   = ["dynamodb:Scan"]
+    resources = [data.aws_dynamodb_table.access.arn]
   }
 
   statement {
@@ -348,6 +358,7 @@ locals {
     "POST /access/candidates/{platform}/{platformUserId}/approve",
     "POST /access/candidates/{platform}/{platformUserId}/dismiss",
     "POST /access/identities/{identityId}/role",
+    "POST /access/identities/{identityId}/delete",
   ])
 }
 

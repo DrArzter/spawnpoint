@@ -1,5 +1,6 @@
 import { permissionRoute, type Route } from "./routing.ts";
 import { roles, candidates, identities, withCandidateAddress, approve, dismiss, updateRole } from "./access.ts";
+import { deleteIdentity } from "./identity-deletion.ts";
 import { parameter, response } from "./http.ts";
 
 export const accessRoutes: Readonly<Record<string, Route>> = {
@@ -14,5 +15,10 @@ export const accessRoutes: Readonly<Record<string, Route>> = {
     const identityId = parameter(event, "identityId");
     if (!/^[0-9a-f-]{36}$/.test(identityId)) return response(400, { error: "invalid_identity_id" });
     return updateRole(identity, identityId, event.body);
+  }),
+  "POST /access/identities/{identityId}/delete": permissionRoute("access.manage", (identity, event) => {
+    const identityId = parameter(event, "identityId");
+    if (!/^[0-9a-f-]{36}$/.test(identityId)) return response(400, { error: "invalid_identity_id" });
+    return deleteIdentity(identity, identityId);
   })
 };

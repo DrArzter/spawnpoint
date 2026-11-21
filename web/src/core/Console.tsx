@@ -271,7 +271,9 @@ const consoleStatuses: Readonly<Record<ConsoleEntry["status"], StatusDescriptor>
 // A command an agent sent names the person and the agent, so the log shows
 // which commands nobody typed in the panel.
 export function consoleLine(entry: ConsoleEntry): ConsoleLine {
-  const who = entry.agent ? `${entry.displayName} via ${entry.agent}` : entry.displayName;
+  // A deleted person's commands keep their id and lose their name.
+  const name = entry.displayName ?? "Deleted user";
+  const who = entry.agent ? `${name} via ${entry.agent}` : name;
   return { id: entry.id, at: entry.at, who, command: entry.command, status: consoleStatuses[entry.status], output: entry.output, pending: entry.status === "pending" };
 }
 
@@ -350,9 +352,10 @@ function createWorldHint(canManage: boolean, ready: boolean): string {
 }
 
 function AccessPage({ console, skin }: Controlled) {
-  const { games, members, setMembers, roles, setRoles, bootstrap, granted, route, navigate, notify } = console;
+  const { games, members, setMembers, roles, setRoles, bootstrap, granted, session, route, navigate, notify } = console;
   const rolesModel = useRoles(setRoles);
-  const users = useUsers({ bootstrap, canInvite: granted.has("access.invite"), members, roles, rolesLoading: rolesModel.loading, onMembersChange: setMembers, notify });
+  const authority = { selfId: session.identity.id, canDelete: granted.has("access.manage"), canDeleteOwner: granted.has("access.owner.grant") };
+  const users = useUsers({ bootstrap, canInvite: granted.has("access.invite"), authority, members, roles, rolesLoading: rolesModel.loading, onMembersChange: setMembers, notify });
   const notifications = useNotifications(games, notify);
   const candidates = users.candidates;
   const requestCount = candidates.status === "ready" ? candidates.value.length : null;

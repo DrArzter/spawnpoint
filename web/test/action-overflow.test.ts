@@ -15,8 +15,8 @@ const archive = action("world.archive", "Archive", noop, { icon: "archive" });
 const plain = action("world.open", "View details", noop);
 
 const skins = [
-  ["console", (groups: readonly (readonly ReturnType<typeof action>[])[]) => createElement(ActionOverflow, { groups, label: "World actions" })],
-  ["terminal", (groups: readonly (readonly ReturnType<typeof action>[])[]) => createElement(Overflow, { groups, label: "World actions" })],
+  ["console", (groups: readonly (readonly ReturnType<typeof action>[])[], menu = false) => createElement(ActionOverflow, { groups, label: "World actions", menu })],
+  ["terminal", (groups: readonly (readonly ReturnType<typeof action>[])[], menu = false) => createElement(Overflow, { groups, label: "World actions", menu })],
 ] as const;
 
 for (const [skin, overflow] of skins) {
@@ -35,6 +35,13 @@ for (const [skin, overflow] of skins) {
     assert.match(markup, /role="menu"/);
     assert.match(markup, /data-action="refresh"/);
     assert.match(markup, /data-action="world.archive"/);
+  });
+
+  test(`${skin}: a column that asks for the menu keeps it for one action with an icon`, () => {
+    const markup = renderToStaticMarkup(overflow([[refresh], []], true));
+    assert.match(markup, /aria-haspopup="menu"/);
+    assert.match(markup, /aria-label="World actions"/);
+    assert.match(markup, /data-action="refresh"/);
   });
 
   test(`${skin}: one action without an icon keeps the menu`, () => {

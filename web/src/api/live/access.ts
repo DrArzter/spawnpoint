@@ -1,4 +1,4 @@
-import { apiFailure, type AccessCandidate, type AccessIdentity, type AccessInvitation, type AccessRole, type SpawnpointApi } from "../contract";
+import { apiFailure, identityDeletionRefusal, type AccessCandidate, type AccessIdentity, type AccessInvitation, type AccessRole, type SpawnpointApi } from "../contract";
 import { authorizedFetch, publicPost } from "./transport";
 
 // Project membership and roles. Player-to-player invitations belong to the
@@ -90,5 +90,12 @@ export const accessApi = {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ roleId }),
     });
     if (!response.ok) throw await apiFailure(response, response.status === 409 ? "You cannot change your own Owner role." : "The role could not be changed.");
+  },
+
+  async deleteIdentity(identityId: string): Promise<void> {
+    const response = await authorizedFetch(`/access/identities/${encodeURIComponent(identityId)}/delete`, { method: "POST" });
+    if (response.ok) return;
+    const body = await response.json().catch(() => null) as { error?: unknown } | null;
+    throw await apiFailure(response, identityDeletionRefusal(response.status, body?.error), body);
   },
 } satisfies Partial<SpawnpointApi>;

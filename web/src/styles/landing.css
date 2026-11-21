@@ -515,3 +515,29 @@ button.landing-link:hover {
 .connect-scopes .icon {
   color: var(--success);
 }
+
+/* The demo badge in the front door bar */
+.demo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--radius-control);
+  background: var(--warning-container);
+  color: var(--warning-ink);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@media (max-width: 599px) {
+  .demo-badge span {
+    display: none;
+  }
+
+  .demo-badge {
+    padding: 0 6px;
+  }
+}

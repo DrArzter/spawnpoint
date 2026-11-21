@@ -38,7 +38,7 @@ export function ListColumn({ label, filter, end, chips = [], groups, empty }: Re
           {end}
         </div>
         {chips.length > 0 && (
-          <div aria-label="Show" className="c-lcol-chips" role="group">
+          <div aria-label="Show" className="c-lcol-chips" role="group" /* NOSONAR a labelled set of toggle buttons; <fieldset> adds a frame and a legend */>
             {chips.map((chip) => (
               <button aria-pressed={chip.pressed} className="c-lcol-chip" key={chip.id} onClick={chip.onPress} type="button">
                 <span>{chip.label}</span>
@@ -49,9 +49,9 @@ export function ListColumn({ label, filter, end, chips = [], groups, empty }: Re
         )}
       </div>
       {empty ?? groups.map((group) => (
-        <div className="c-lcol-group" key={group.id} role="list">
-          {group.label && <div className="c-lcol-group-label" role="presentation"><span>{group.label}</span>{group.end}</div>}
-          {group.items}
+        <div className="c-lcol-group" key={group.id}>
+          {group.label && <div className="c-lcol-group-label"><span>{group.label}</span>{group.end}</div>}
+          <ul className="c-lcol-items">{group.items}</ul>
         </div>
       ))}
     </nav>
@@ -77,8 +77,10 @@ export function ListItemWorld({ href, current, name, players, hosting, status, l
   address?: ReactNode;
   standalone?: boolean;
 }>) {
+  // A standalone row sits inside a list item of its page; in the column it is one.
+  const Slot = standalone ? "div" : "li";
   return (
-    <div className={cx("c-listitem-slot", standalone && "c-listitem-standalone")} role="listitem">
+    <Slot className={cx("c-listitem-slot", standalone && "c-listitem-standalone")}>
       <a aria-current={current || undefined} className="c-listitem c-listitem-world" href={href}>
         <span className="c-listitem-name" title={name}>{name}</span>
         <span className="c-listitem-players">{players === null ? "" : <><Icon name="group" size={15} /><span>{players}</span></>}</span>
@@ -87,7 +89,7 @@ export function ListItemWorld({ href, current, name, players, hosting, status, l
         <span className="c-listitem-line" title={line}>{line}</span>
         {address && <span className="c-listitem-address">{address}</span>}
       </a>
-    </div>
+    </Slot>
   );
 }
 
@@ -103,7 +105,7 @@ export function ListItemPerson({ href, current, name, photoUrl, meta, account, a
   tone?: "person" | "request";
 }>) {
   return (
-    <div className="c-listitem-slot" role="listitem">
+    <li className="c-listitem-slot">
       <a aria-current={current || undefined} className={cx("c-listitem", "c-listitem-person")} href={href}>
         <span className="c-listitem-who">
           <Avatar name={name} photoUrl={photoUrl} size="sm" tone={tone} />
@@ -112,14 +114,14 @@ export function ListItemPerson({ href, current, name, photoUrl, meta, account, a
         <span className="c-listitem-meta">{meta}</span>
         {account && <span className="c-listitem-account" title={account}>{accountIcon && <Icon name={accountIcon} size={15} />}<span>{account}</span></span>}
       </a>
-    </div>
+    </li>
   );
 }
 
 /** A place in the list column that is not a person or a world: All users, Roles, My notifications. */
 export function ListItemIcon({ href, current, icon, name, meta, line }: Readonly<{ href: string; current: boolean; icon: IconName; name: string; meta?: ReactNode; line?: string }>) {
   return (
-    <div className="c-listitem-slot" role="listitem">
+    <li className="c-listitem-slot">
       <a aria-current={current || undefined} className="c-listitem c-listitem-person" href={href}>
         <span className="c-listitem-who">
           <span aria-hidden="true" className="c-listitem-icon"><Icon name={icon} size={18} /></span>
@@ -128,6 +130,6 @@ export function ListItemIcon({ href, current, icon, name, meta, line }: Readonly
         <span className="c-listitem-meta">{meta}</span>
         {line && <span className="c-listitem-account" title={line}><span>{line}</span></span>}
       </a>
-    </div>
+    </li>
   );
 }

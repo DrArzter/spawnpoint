@@ -40,7 +40,7 @@ export function stripRuns(mask: readonly boolean[]): StripRun[] {
   const runs: { on: boolean; from: number; length: number }[] = [];
   mask.forEach((on, index) => {
     const last = runs.at(-1);
-    if (last && last.on === on) last.length += 1;
+    if (last?.on === on) last.length += 1;
     else runs.push({ on, from: index, length: 1 });
   });
   return runs;
@@ -62,7 +62,7 @@ export function MetricsTab({ model, worldId }: Readonly<{ model: MetricsModel; w
           value={model.range}
         />
         {value && (
-          <span className="c-metrics-window" data-tip={`${Math.round(value.periodSeconds / 60)}-minute readings`} tabIndex={0}>
+          <span className="c-metrics-window" data-tip={`${Math.round(value.periodSeconds / 60)}-minute readings`} tabIndex={0 /* NOSONAR focusable tooltip trigger */}>
             {shortDateTime(value.startedAt)} – {shortDateTime(value.endedAt)}
           </span>
         )}

@@ -104,7 +104,7 @@ export function Icon({ name, size = 20, className, ...rest }: Readonly<{ name: I
 // Indeterminate progress ring: the one continuous motion in the console.
 export function ProgressRing({ size = 20, className, label }: Readonly<{ size?: number; className?: string; label?: string }>) {
   return (
-    <svg aria-hidden={label ? undefined : "true"} aria-label={label} className={cx("ring", className)} focusable="false" height={size} role={label ? "img" : undefined} viewBox="0 0 24 24" width={size}>
+    <svg aria-hidden={label ? undefined : "true"} aria-label={label} className={cx("ring", className)} focusable="false" height={size} role={label ? "img" : undefined} viewBox="0 0 24 24" width={size} /* NOSONAR an inline svg has no <img> form */>
       <circle cx="12" cy="12" fill="none" r="9" stroke="currentColor" strokeDasharray="40 17" strokeLinecap="round" strokeWidth="2.5" />
     </svg>
   );

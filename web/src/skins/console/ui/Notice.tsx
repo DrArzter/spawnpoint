@@ -17,16 +17,18 @@ const looks: Readonly<Record<NoticeModel["tone"], Readonly<{ tone: string; icon:
  */
 export function Notice({ notice, detail = "line" }: Readonly<{ notice: NoticeModel; detail?: "line" | "tooltip" }>) {
   const look = looks[notice.tone];
+  // An error interrupts (alert); anything else is polite, which <output> is.
+  const Live = notice.tone === "error" ? "div" : "output";
   return (
-    <div className={cx("c-notice", `c-tone-${look.tone}`)} role={notice.tone === "error" ? "alert" : "status"}>
+    <Live className={cx("c-notice", `c-tone-${look.tone}`)} role={notice.tone === "error" ? "alert" : undefined}>
       <Icon name={look.icon} size={20} />
       <span className="c-notice-text">
         <strong>{notice.title}</strong>
         {notice.description && detail === "line" && <span className="c-notice-detail">{notice.description}</span>}
-        {notice.description && detail === "tooltip" && <span aria-label={notice.description} className="c-notice-more" data-tip={notice.description} role="img" tabIndex={0}><Icon name="info" size={17} /></span>}
+        {notice.description && detail === "tooltip" && <span aria-label={notice.description} className="c-notice-more" data-tip={notice.description} role="img" tabIndex={0 /* NOSONAR focusable tooltip trigger */}><Icon name="info" size={17} /></span>}
       </span>
       {notice.action && <ActionButton action={notice.action} size="sm" />}
-    </div>
+    </Live>
   );
 }
 

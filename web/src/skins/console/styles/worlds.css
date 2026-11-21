@@ -178,6 +178,12 @@ html[data-skin="console"] .c-worlds-list {
   display: none;
 }
 
+html[data-skin="console"] .c-worlds-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 html[data-skin="console"] .c-worlds-row {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) 44px;

@@ -94,6 +94,12 @@ export function chartSummary(points: readonly ChartPoint[]): Readonly<{ latest: 
   return { latest: known.at(-1)!.value, peak, average: known.reduce((sum, point) => sum + point.value, 0) / known.length, count: known.length };
 }
 
+/** The announced reading: its time, then its value or "No reading" for a gap. */
+function readingText(at: ChartPoint | null, time: (at: string) => string, format: (value: number) => string): string {
+  if (!at) return "";
+  return `${time(at.at)}: ${at.value === null ? "No reading" : format(at.value)}`;
+}
+
 /**
  * A measured series over time, drawn in SVG. Missing readings are hatched
  * gaps, never joined. A pointer or touch moves a crosshair with the time and
@@ -120,7 +126,7 @@ export function TimeSeriesChart({ label, range, points, format, time, percent = 
   const summary = chartSummary(points);
   const name = [label, range, summary ? `latest ${format(summary.latest)}` : "no readings", summary ? `peak ${format(summary.peak.value)}` : null].filter(Boolean).join(", ");
   const at = cursor === null ? null : points[cursor] ?? null;
-  const reading = at ? `${time(at.at)}: ${at.value === null ? "No reading" : format(at.value)}` : "";
+  const reading = readingText(at, time, format);
 
   const onPointer = (event: PointerEvent<HTMLDivElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
@@ -143,7 +149,7 @@ export function TimeSeriesChart({ label, range, points, format, time, percent = 
         <div aria-hidden="true" className="c-chart-axis">
           {[max, max / 2, 0].map((tick) => <span key={tick}>{format(tick)}</span>)}
         </div>
-        <div
+        <div // NOSONAR a focusable chart region: the arrow keys and pointer move a cursor through the readings
           aria-label={name}
           aria-roledescription="chart"
           className="c-chart-area"
@@ -153,7 +159,7 @@ export function TimeSeriesChart({ label, range, points, format, time, percent = 
           onPointerLeave={(event) => { if (event.pointerType === "mouse") setCursor(null); }}
           onPointerMove={onPointer}
           role="group"
-          tabIndex={0}
+          tabIndex={0} // NOSONAR the region is the keyboard stop for the cursor
         >
           <svg aria-hidden="true" className="c-chart-svg" preserveAspectRatio="none" viewBox={`0 0 ${PLOT.width} ${PLOT.height}`}>
             <defs>

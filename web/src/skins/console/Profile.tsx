@@ -41,7 +41,7 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
           <>
           {role && <Chip icon="shield_person">{role.name}</Chip>}
           <span className="c-profile-id">
-            <span className="c-mono c-faint" data-tip="Identity ID" tabIndex={0}>{member.id}</span>
+            <span className="c-mono c-faint" data-tip="Identity ID" tabIndex={0 /* NOSONAR focusable tooltip trigger */}>{member.id}</span>
             <Copy value={member.id} what="identity ID" />
           </span>
           </>
@@ -122,6 +122,13 @@ type MethodRow = Readonly<{
   widget?: ReactNode;
 }>;
 
+/** The provider's own sign-in widget for a method not linked yet; none for a provider without one. */
+function linkWidget(id: string, model: LoginAccountsModel): ReactNode {
+  if (id === "telegram" && model.connectTelegram) return <TelegramLoginButton label="Link" onToken={model.connectTelegram} variant="outlined" />;
+  if (id === "google" && model.connectGoogle) return <GoogleLoginButton onToken={model.connectGoogle} />;
+  return undefined;
+}
+
 // Linked methods first, then each method the person can still add.
 function methodRows(model: LoginAccountsModel, accounts: readonly LinkedLoginAccount[]): MethodRow[] {
   const rows: MethodRow[] = accounts.map((account) => ({
@@ -134,10 +141,7 @@ function methodRows(model: LoginAccountsModel, accounts: readonly LinkedLoginAcc
   if (!linked.has("password") && model.addPassword) rows.push({ key: "password", provider: "password", account: null, actions: [model.addPassword] });
   for (const id of model.linkable) {
     if (linked.has(id)) continue;
-    const widget = id === "telegram" && model.connectTelegram
-      ? <TelegramLoginButton label="Link" onToken={model.connectTelegram} variant="outlined" />
-      : id === "google" && model.connectGoogle ? <GoogleLoginButton onToken={model.connectGoogle} /> : undefined;
-    rows.push({ key: id, provider: id, account: null, actions: [], widget });
+    rows.push({ key: id, provider: id, account: null, actions: [], widget: linkWidget(id, model) });
   }
   return rows;
 }

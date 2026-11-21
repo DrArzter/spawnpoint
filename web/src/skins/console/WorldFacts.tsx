@@ -46,7 +46,8 @@ export function HostingMark({ row, className }: Readonly<{ row: WorldRow; classN
 
 /** "Release 1.2 · wipe #3"; the absent wipe as core words it. */
 export function releaseLine(row: WorldRow): string {
-  return `${row.releaseSummary} · ${row.wipe ? `#${row.wipe.number}` : row.wipeAbsent}`;
+  const wipe = row.wipe ? `#${row.wipe.number}` : row.wipeAbsent;
+  return `${row.releaseSummary} · ${wipe}`;
 }
 
 /** How long since `since`: h:mm:ss under a day, "2 d 5 h" past it. */

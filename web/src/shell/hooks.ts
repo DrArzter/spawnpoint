@@ -38,6 +38,11 @@ function afterOneTap(now: ThemePreference, showing: Theme): ThemePreference {
 /** What the control plane is told when the person changes something. */
 export type AppearanceSync = (next: { theme: ThemePreference; accent: string }) => Promise<unknown>;
 
+function themeLabel(preference: ThemePreference, theme: Theme): string {
+  if (preference === "system") return `System theme (${theme})`;
+  return preference === "dark" ? "Dark theme" : "Light theme";
+}
+
 /**
  * Theme and accent, painted at once and remembered twice: in this browser, so
  * the panel has its colours before the session answers, and against the
@@ -51,7 +56,7 @@ export type AppearanceSync = (next: { theme: ThemePreference; accent: string }) 
  */
 export function useAppearance({ sync }: { sync?: AppearanceSync } = {}) {
   const [preference, setPreference] = useState<ThemePreference>(getThemePreference);
-  const [accent, setAccentState] = useState<string>(() => getStoredAccent() ?? DEFAULT_ACCENT);
+  const [accent, setAccent] = useState<string>(() => getStoredAccent() ?? DEFAULT_ACCENT);
   const [theme, setTheme] = useState<Theme>(() => resolveTheme(getThemePreference()));
   // The latest values, readable inside stable callbacks: the account wants the
   // whole preference on every write, not the half that changed.
@@ -77,9 +82,9 @@ export function useAppearance({ sync }: { sync?: AppearanceSync } = {}) {
   useEffect(() => applyTheme(theme), [theme]);
   useEffect(() => { applyAccent(document.documentElement, accent, theme); }, [accent, theme]);
 
-  const setAccent = useCallback((next: string): Promise<void> => {
+  const chooseAccent = useCallback((next: string): Promise<void> => {
     persistAccent(next);
-    setAccentState(next);
+    setAccent(next);
     return push({ theme: current.current.preference, accent: next });
   }, [push]);
 
@@ -87,7 +92,7 @@ export function useAppearance({ sync }: { sync?: AppearanceSync } = {}) {
   const adopt = useCallback((remote: { theme: ThemePreference; accent: string }) => {
     setPreference(remote.theme);
     persistAccent(remote.accent);
-    setAccentState(remote.accent);
+    setAccent(remote.accent);
   }, []);
 
   // The bar's one-tap toggle. Its write to the account fails quietly: a palette
@@ -96,8 +101,8 @@ export function useAppearance({ sync }: { sync?: AppearanceSync } = {}) {
     void choosePreference(afterOneTap(current.current.preference, theme)).catch(() => undefined);
   }, [theme, choosePreference]);
 
-  const label = preference === "system" ? `System theme (${theme})` : `${preference === "dark" ? "Dark" : "Light"} theme`;
-  return { preference, setPreference: choosePreference, theme, accent, setAccent, adopt, cycle, label };
+  const label = themeLabel(preference, theme);
+  return { preference, setPreference: choosePreference, theme, accent, setAccent: chooseAccent, adopt, cycle, label };
 }
 
 export function useMediaQuery(query: string): boolean {

@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 
 import { Icon, IconName } from "../../icons";
-import { cx } from "../../lib/cx";
 import { Avatar } from "../Avatar";
 import { IconButton } from "./Button";
 
@@ -84,8 +83,8 @@ export function Menu({ label, icon = "more_vert", items, align = "end", size = "
     <>
       {avatar && <button aria-controls={id} aria-expanded={open} aria-haspopup="menu" aria-label={label} className="appbar-avatar" onClick={() => (open ? hide() : show())} ref={trigger} title={label} type="button"><Avatar name={avatar.name} photoUrl={avatar.photoUrl} /></button>}
       {!avatar && <IconButton aria-controls={id} aria-expanded={open} aria-haspopup="menu" icon={icon} label={label} onClick={() => (open ? hide() : show())} ref={trigger} size={size} />}
-      <div className="menu" data-open={open || undefined} id={id} onKeyDown={onKeyDown} popover="auto" ref={panel} role="menu">
-        {items.map((item, index) => item === "separator" ? <hr key={`separator-${index}`} /> : (
+      <div className="menu" data-open={open || undefined} id={id} onKeyDown={onKeyDown} popover="auto" ref={panel} role="menu" /* NOSONAR focus moves to the items, which carry the tab stop */>
+        {items.map((item, index) => item === "separator" ? <hr key={`separator-${index}`} /> : ( // NOSONAR separators have no id; the list is rebuilt whole
           <button
             className="menu-item"
             data-action={item.actionId}

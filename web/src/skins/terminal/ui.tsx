@@ -58,11 +58,13 @@ export function SkeletonGroup({ label, children, className }: Readonly<{ label: 
   );
 }
 
+type SkeletonWidth = "short" | "medium" | "long";
+
 /** Geometry-only loading content. A plot uses discrete terminal traces; text
     uses a quiet block sized by the same small vocabulary everywhere. */
 export function Skeleton({ variant = "text", width = "medium", className }: Readonly<{
   variant?: "text" | "plot";
-  width?: "short" | "medium" | "long";
+  width?: SkeletonWidth;
   className?: string;
 }>) {
   return (
@@ -70,6 +72,12 @@ export function Skeleton({ variant = "text", width = "medium", className }: Read
       {variant === "plot" && Array.from({ length: 7 }, (_, index) => <span className="t-skeleton-trace" key={index} />)}
     </span>
   );
+}
+
+/** The first cell of a list row is long; the others alternate by position. */
+function listWidth(row: number, column: number): SkeletonWidth {
+  if (column === 0) return "long";
+  return (row + column) % 2 === 0 ? "medium" : "short";
 }
 
 /** Repeated list-shaped placeholders. The column contract is intentionally
@@ -85,7 +93,7 @@ export function SkeletonRows({ label, rows = 3, columns = 2, className }: Readon
       {Array.from({ length: rows }, (_, row) => (
         <span aria-hidden="true" className={cx("t-skeleton-row", `t-skeleton-cols-${columns}`)} key={row}>
           {Array.from({ length: columns }, (_, column) => (
-            <Skeleton key={column} width={column === 0 ? "long" : (row + column) % 2 === 0 ? "medium" : "short"} />
+            <Skeleton key={column} width={listWidth(row, column)} />
           ))}
         </span>
       ))}
@@ -400,13 +408,17 @@ function cellClass<Row>(column: Col<Row>, head = false): string {
 }
 
 /** A placeholder as wide as the cell will be: short for verbs, otherwise a rough mix of long and medium. */
-function skeletonWidth<Row>(column: Col<Row>, cell: number): "short" | "medium" | "long" {
+function skeletonWidth<Row>(column: Col<Row>, cell: number): SkeletonWidth {
   if (column.verbs) return "short";
   return cell % 3 === 0 ? "long" : "medium";
 }
 
 function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+function loadingCopy(label: string): string {
+  return `Loading ${lowerFirst(label)}`;
 }
 
 export function Table<Row>({ columns, rows, rowKey, label, loading = false, loadingLabel, loadingRows = 3, empty, headless = false, decision = false, className }: Readonly<{
@@ -425,13 +437,13 @@ export function Table<Row>({ columns, rows, rowKey, label, loading = false, load
 }>) {
   return (
     <div className={cx("t-table-wrap", decision && "t-table-decision", className)}>
-      <table aria-busy={loading || undefined} aria-label={loading ? `${label}. ${loadingLabel ?? `Loading ${lowerFirst(label)}`}` : label} aria-live={loading ? "polite" : undefined} className={cx("t-table", headless && "t-table-headless")}>
+      <table aria-busy={loading || undefined} aria-label={loading ? `${label}. ${loadingLabel ?? loadingCopy(label)}` : label} aria-live={loading ? "polite" : undefined} className={cx("t-table", headless && "t-table-headless")}>
         <thead className={headless ? "visually-hidden" : undefined}>
           <tr>{columns.map((column) => <th className={cellClass(column, true)} key={column.id} scope="col" style={column.width ? { width: column.width } : undefined}>{column.verbs ? <span className="visually-hidden">{column.label}</span> : column.label}</th>)}</tr>
         </thead>
         <tbody>
           {loading && Array.from({ length: loadingRows }, (_, row) => (
-            <tr aria-hidden="true" className="t-table-skeleton" key={`skeleton-${row}`}>
+            <tr aria-hidden="true" className="t-table-skeleton" key={`skeleton-${row}`} /* NOSONAR a row is not focusable and holds only placeholders */>
               {columns.map((column, columnIndex) => <td className={cellClass(column)} data-label={column.verbs ? "" : column.label} key={column.id} style={column.width ? { width: column.width } : undefined}><Skeleton width={skeletonWidth(column, row + columnIndex)} /></td>)}
             </tr>
           ))}

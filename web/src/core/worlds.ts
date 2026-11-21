@@ -1,5 +1,5 @@
 import type { ReleasePackName } from "../api/contract";
-import { commitUrl, formatDate, shortCommit } from "../lib/format";
+import { commitUrl, shortCommit } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Operation, ServerState, Wipe, World, WorldTab } from "../model";
 import { routeHash } from "../routing";
 import { configuredHosts, fleetPlayersOnline, fleetSessionOf, fleetWorldState, operationsBlockingWorld, playersOnline, sessionReason, sharedSessionOwnerLabel, worldOwnsSharedSession, worldState, type SessionReason, type SharedHostSession } from "../session";

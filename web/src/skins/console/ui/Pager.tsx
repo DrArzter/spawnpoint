@@ -28,11 +28,12 @@ function numbers(page: number, pages: number): (number | "gap")[] {
 /** Previous, numbered pages and next; drawn only when there is more than one page. */
 export function Pager({ page, pages, onPage, label = "Pages" }: Readonly<{ page: number; pages: number; onPage: (page: number) => void; label?: string }>) {
   if (pages <= 1) return null;
+  const items = numbers(page, pages);
   return (
     <nav aria-label={label} className="c-pager">
       <IconButton className="c-icon-btn-sm" disabled={page === 1} icon="chevron_left" label="Previous page" onClick={() => onPage(page - 1)} />
-      {numbers(page, pages).map((item, index) => item === "gap"
-        ? <span aria-hidden="true" className="c-pager-gap" key={`gap-${index}`}>…</span>
+      {items.map((item, index) => item === "gap"
+        ? <span aria-hidden="true" className="c-pager-gap" key={`gap-after-${items[index - 1]}`}>…</span>
         : <button aria-current={item === page ? "page" : undefined} aria-label={`Page ${item}`} className="c-pager-page" key={item} onClick={() => onPage(item)} type="button">{item}</button>)}
       <IconButton className="c-icon-btn-sm" disabled={page === pages} icon="chevron_right" label="Next page" onClick={() => onPage(page + 1)} />
     </nav>

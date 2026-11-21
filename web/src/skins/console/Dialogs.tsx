@@ -131,7 +131,7 @@ function GameSettingInput({ field }: Readonly<{ field: GameSettingField }>) {
     case "toggle":
       return (
         <div className="c-sheet-switch">
-          <span className="c-field-label" data-tip={field.hint} tabIndex={field.hint ? 0 : undefined}>{field.label}</span>
+          <span className="c-field-label" data-tip={field.hint} tabIndex={field.hint ? 0 : undefined /* NOSONAR focusable tooltip trigger */}>{field.label}</span>
           <Toggle action={field.toggle} checked={field.checked} label={field.label} />
         </div>
       );

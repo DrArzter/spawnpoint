@@ -51,6 +51,12 @@ export function contrast(a: Rgb, b: Rgb): number {
   return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
 }
 
+/** The hue in sixths of the wheel, from the channel that holds the maximum. */
+function hueSector(red: number, green: number, blue: number, max: number, span: number): number {
+  if (max === red) return (green - blue) / span + (green < blue ? 6 : 0);
+  return max === green ? (blue - red) / span + 2 : (red - green) / span + 4;
+}
+
 export function toHsl([r, g, b]: Rgb): readonly [number, number, number] {
   const red = r / 255, green = g / 255, blue = b / 255;
   const max = Math.max(red, green, blue), min = Math.min(red, green, blue);
@@ -58,10 +64,7 @@ export function toHsl([r, g, b]: Rgb): readonly [number, number, number] {
   if (max === min) return [0, 0, lightness];
   const span = max - min;
   const saturation = lightness > 0.5 ? span / (2 - max - min) : span / (max + min);
-  const hue = max === red
-    ? ((green - blue) / span + (green < blue ? 6 : 0))
-    : max === green ? (blue - red) / span + 2 : (red - green) / span + 4;
-  return [hue / 6, saturation, lightness];
+  return [hueSector(red, green, blue, max, span) / 6, saturation, lightness];
 }
 
 export function fromHsl([h, s, l]: readonly [number, number, number]): Rgb {
@@ -110,7 +113,7 @@ export function readableOn(colour: Rgb, backgrounds: Rgb | readonly Rgb[], targe
   // The walk ran out of lightness, which only happens against a mid grey. Black
   // or white is then the only honest answer.
   const ends: Rgb[] = [[0, 0, 0], [255, 255, 255]];
-  return { colour: ends.reduce((a, b) => (worst(a) >= worst(b) ? a : b)), adjusted: true };
+  return { colour: ends.reduce((a, b) => (worst(a) >= worst(b) ? a : b), ends[0]), adjusted: true };
 }
 
 const rgba = (colour: Rgb, alpha: number) => `rgba(${colour[0]}, ${colour[1]}, ${colour[2]}, ${alpha})`;

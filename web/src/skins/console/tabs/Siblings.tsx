@@ -10,14 +10,14 @@ import { ListColumn, ListItemWorld } from "../ui/ListColumn";
 
 type Show = "all" | "live" | "stopped" | "other";
 
-const LIVE: readonly StatusKind[] = ["ok", "progress", "pending"];
-const STOPPED: readonly StatusKind[] = ["off", "ready"];
+const LIVE: ReadonlySet<StatusKind> = new Set(["ok", "progress", "pending"]);
+const STOPPED: ReadonlySet<StatusKind> = new Set(["off", "ready"]);
 
 const shows: Readonly<Record<Show, (row: SiblingRow) => boolean>> = {
   all: () => true,
-  live: (row) => LIVE.includes(row.status.kind),
-  stopped: (row) => STOPPED.includes(row.status.kind),
-  other: (row) => !LIVE.includes(row.status.kind) && !STOPPED.includes(row.status.kind),
+  live: (row) => LIVE.has(row.status.kind),
+  stopped: (row) => STOPPED.has(row.status.kind),
+  other: (row) => !LIVE.has(row.status.kind) && !STOPPED.has(row.status.kind),
 };
 
 const labels: Readonly<Record<Show, string>> = { all: "All", live: "Live", stopped: "Stopped", other: "Other" };

@@ -39,12 +39,15 @@ function requiredEnv(name: string): string {
   return value;
 }
 
-const RESUMABLE = /-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{64}\.tar\.zst$/;
+const RESUMABLE = /-\d{8}T\d{6}Z-[0-9a-f]{64}\.tar\.zst$/;
+
+// Keys sort by code unit, as jq's sort in prepare-world.sh picks the newest.
+const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /** The archive the next start resumes from: the greatest key of the open generation, as server/scripts/prepare-world.sh picks it. */
 export function resumeKey(record: WorldRecord, keys: readonly string[]): string | undefined {
   const prefix = `worlds/${record.worldId}/archives/${record.worldId}-${record.currentGeneration.id}-`;
-  return keys.filter((key) => key.startsWith(prefix) && RESUMABLE.test(key)).sort().at(-1);
+  return keys.filter((key) => key.startsWith(prefix) && RESUMABLE.test(key)).sort(byCodeUnit).at(-1);
 }
 
 /**
@@ -79,7 +82,7 @@ export function archivesToRemove(record: WorldRecord, objects: readonly ArchiveO
     const plan = planBackupRetention(generation.map((entry) => ({ key: entry.key, lastModified: entry.storedAt })));
     remove.push(...plan.remove.map((backup) => backup.key).filter((key) => !keep.has(key)));
   }
-  return remove.sort();
+  return remove.sort(byCodeUnit);
 }
 
 export async function applyBackupRetention(store: RetentionStore): Promise<readonly WorldRetention[]> {

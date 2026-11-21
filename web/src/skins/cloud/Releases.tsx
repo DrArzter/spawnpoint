@@ -34,7 +34,7 @@ export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
   ];
   const pointers: Column<PointerRow>[] = [
     { id: "world", header: "World", kind: "lead", className: "c-releases-world", render: (row) => <a href={row.href} title={row.world.displayName}>{row.world.displayName}</a> },
-    { id: "preset", header: "Preset", render: (row) => row.presetName },
+    { id: "preset", header: "Preset", className: "c-releases-preset", render: (row) => <span title={row.presetName}>{row.presetName}</span> },
     { id: "release", header: "Release", render: (row) => <PointerRelease row={row} /> },
     { id: "wipe", header: "Wipe", kind: "num", render: (row) => { const wipe = row.world.wipes.find((item) => item.state === "current"); return wipe ? `#${wipe.number}` : <span className="c-faint">—</span>; } },
   ];

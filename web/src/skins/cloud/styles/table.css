@@ -1,9 +1,15 @@
-/* Table: one native table per list; columns drop by kind; records on a phone. */
+/*
+ * Table: one native table per list; columns drop by kind; records when narrow.
+ * The steps read the table's own width, not the viewport's, because a split
+ * page gives a table much less than the window: 960px ≈ a 1100px window with
+ * the rail, 760px ≈ an 880px one. `optional` also drops under 1040px.
+ */
 
 html[data-skin="cloud"] .c-table-wrap {
   position: relative;
   max-width: 100%;
   overflow-x: auto;
+  container: c-table / inline-size;
 }
 
 html[data-skin="cloud"] .c-table {
@@ -152,7 +158,13 @@ html[data-skin="cloud"] .c-table-fixed td {
   }
 }
 
-@media (max-width: 1023px) {
+@container c-table (max-width: 1039px) {
+  html[data-skin="cloud"] .c-table .c-col-optional {
+    display: none;
+  }
+}
+
+@container c-table (max-width: 959px) {
   html[data-skin="cloud"] .c-table .c-col-wide {
     display: none;
   }
@@ -163,7 +175,7 @@ html[data-skin="cloud"] .c-table-fixed td {
   }
 }
 
-@media (max-width: 759px) {
+@container c-table (max-width: 759px) {
   html[data-skin="cloud"] .c-table:not(.c-table-matrix) thead {
     display: none;
   }

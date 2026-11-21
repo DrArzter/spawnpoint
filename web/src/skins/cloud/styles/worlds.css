@@ -157,6 +157,7 @@ html[data-skin="cloud"] .c-worlds-release {
 }
 
 html[data-skin="cloud"] .c-worlds-release .c-mono {
+  max-width: 24ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

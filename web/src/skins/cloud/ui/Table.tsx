@@ -10,8 +10,8 @@ import { SkeletonRows } from "./Skeleton";
  * - `lead`: the row's identity; on a phone it spans the record and its link covers the row;
  * - `num`: right-aligned;
  * - `act`: the one end-edge action column (one button style), sticky when the table scrolls;
- * - `wide`: drops under 1024px;
- * - `optional`: drops under 1440px when the table sits beside a split panel (`split`);
+ * - `wide`: drops when the table is under 960px wide;
+ * - `optional`: drops when the table is under 1040px wide, and under a 1440px window beside a split panel (`split`);
  * - `check`: a selection checkbox.
  */
 export type ColumnKind = "lead" | "num" | "act" | "wide" | "optional" | "check";
@@ -36,9 +36,10 @@ export type TableVariant = "default" | "fixed" | "matrix";
 
 /**
  * One native table for one list: labels once in the header, every row on
- * the same column tracks, one action column at the end edge. At 760px and up
- * it stays a table and drops columns by kind; under it each row becomes a
- * record whose cells carry their header as a label. `matrix` stays a table.
+ * the same column tracks, one action column at the end edge. At 760px of its
+ * own width and up it stays a table and drops columns by kind; under it each
+ * row becomes a record whose cells carry their header as a label. `matrix`
+ * stays a table.
  */
 export function Table<Row>({ label, columns, rows, rowKey, selected, empty, loading = false, variant = "default", split = false, arrivals = false, className }: Readonly<{
   label: string;

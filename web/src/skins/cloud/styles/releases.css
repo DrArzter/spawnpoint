@@ -2,7 +2,7 @@
 
 html[data-skin="cloud"] .c-releases-source {
   display: inline-block;
-  max-width: 32ch;
+  max-width: 24ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -11,6 +11,12 @@ html[data-skin="cloud"] .c-releases-source {
 
 html[data-skin="cloud"] .c-releases-world {
   width: 40%;
+}
+
+html[data-skin="cloud"] .c-releases-preset {
+  max-width: 32ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 html[data-skin="cloud"] .c-releases-release {

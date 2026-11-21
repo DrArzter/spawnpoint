@@ -88,3 +88,24 @@ html[data-skin="cloud"] .c-access-owner-id {
   align-items: center;
   gap: 8px;
 }
+
+/* A narrow matrix stands its role names on end, so four roles fit beside the permission on a phone. */
+@container c-table (max-width: 599px) {
+  html[data-skin="cloud"] .c-table-matrix th.c-access-cell {
+    height: auto;
+    padding: 8px 4px;
+    vertical-align: bottom;
+  }
+
+  html[data-skin="cloud"] .c-access-role-head {
+    flex-direction: column-reverse;
+    gap: 6px;
+  }
+
+  html[data-skin="cloud"] .c-access-role-head > .c-btn {
+    height: auto;
+    padding: 6px 2px;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+  }
+}

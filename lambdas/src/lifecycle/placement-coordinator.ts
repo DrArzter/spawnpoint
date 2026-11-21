@@ -97,6 +97,11 @@ function requireId(name: string, value: unknown): string {
   return value;
 }
 
+// A world's warm choice arrives from the start input; anything else is refused, never read as cold.
+function requirePolicy(value: unknown): void {
+  if (value !== undefined && value !== "cold" && value !== "warm") throw new Error("policy must be cold or warm");
+}
+
 // The footprint a session is placed with: what the caller says, else the
 // world's catalog entry, else its game's default. A world nobody can size is
 // refused here, before a host is chosen for it.
@@ -234,6 +239,7 @@ function noCandidateOutcome(request: SessionRequest, footprint: Footprint): Plac
 async function placeSession(context: CoordinatorContext, request: SessionRequest): Promise<PlacementOutput> {
   requireId("sessionId", request.sessionId);
   requireId("worldId", request.worldId);
+  requirePolicy(request.policy);
   const footprint = resolveFootprint(request);
   for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
     const hosts = await context.store.listHosts();
@@ -254,6 +260,7 @@ async function reserveOnHost(
   const hostId = requireId("hostId", input.hostId);
   requireId("sessionId", input.sessionId);
   requireId("worldId", input.worldId);
+  requirePolicy(input.policy);
   const footprint = resolveFootprint(input);
   for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
     const current = await loadRequired(context, hostId);

@@ -74,7 +74,7 @@ export function MetricsTab({ model, worldId }: Readonly<{ model: MetricsModel; w
         </SkeletonGroup>
       )}
       {metrics.status === "error" && <Card label="Metrics"><LoadError error={metrics.error} kind={metrics.kind} retry={metrics.retry} title="Metrics could not be loaded" verb="read metrics" /></Card>}
-      {metrics.status === "ready" && value === null && <Card label="Metrics"><Empty icon="bar_chart" title="No host right now" /></Card>}
+      {metrics.status === "ready" && value === null && <Card label="Metrics"><Empty icon="monitoring" title="No host right now" /></Card>}
       {value && <Readings metrics={value} range={rangeLabel} reveal={reveal} />}
     </>
   );
@@ -127,7 +127,7 @@ function Chart({ series, range, reveal, time }: Readonly<{ series: HostMetricSer
     <Card actions={known ? legend : undefined} title={series.label}>
       {known
         ? <TimeSeriesChart format={metricFormat(series.unit)} label={series.label} percent={series.unit === "percent"} points={series.points} range={range} reveal={reveal} time={time} />
-        : <Empty icon="bar_chart" size="sm" title="The host reported nothing in this window." />}
+        : <Empty icon="monitoring" size="sm" title="The host reported nothing in this window." />}
     </Card>
   );
 }

@@ -1,5 +1,4 @@
 import type { ReleasePackName } from "../api/contract";
-import { hostStatus, sessionStatus, worldStatus, type StatusDescriptor } from "../components/ui/Status";
 import { commitUrl, formatDate, shortCommit } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Operation, ServerState, Wipe, World, WorldTab } from "../model";
 import { routeHash } from "../routing";
@@ -8,6 +7,7 @@ import type { Pending, PendingMap, SessionAction, WorldActionKind } from "../she
 import { changedSettings, settingsAvailable } from "./settings";
 import { controlPending, pendingFor } from "../shell/actions";
 import { action, type Action } from "./actions";
+import { hostStatus, sessionStatus, worldStatus, type StatusDescriptor } from "./status";
 import type { AddressFacts, Detail, Notice, SessionOverview, WorldRow } from "./models";
 
 /*

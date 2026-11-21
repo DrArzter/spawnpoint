@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, HostMetrics, LinkedLoginAccount, MetricRange, SubscriptionState } from "../api/contract";
-import type { StatusDescriptor } from "../components/ui/Status";
+import type { StatusDescriptor } from "./status";
 import type { AccessTab, ControlPlaneSnapshot, Game, Member, Operation, OwnerBootstrap, Page, Preset, Role, ServerState, Wipe, World, WorldTab } from "../model";
 import type { SessionReason } from "../session";
 import type { Theme, ThemePreference, ViewerProfile } from "../telegram";

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentPropsWithRef, type KeyboardEvent, type ReactNode, type SelectHTMLAttributes } from "react";
 
 import type { Filter } from "../../components/ui/Filter";
-import type { StatusKind } from "../../components/ui/Status";
+import type { StatusKind } from "../../core/status";
 import { Tooltip } from "../../components/ui/Tooltip";
 import type { Action } from "../../core/actions";
 import { Icon, type IconName } from "../../icons";

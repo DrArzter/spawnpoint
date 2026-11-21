@@ -126,16 +126,13 @@ html[data-skin="console"] .c-page-actions {
     flex-wrap: wrap;
   }
 
-  html[data-skin="console"] .c-page-actions {
-    flex-wrap: wrap;
-  }
-
   html[data-skin="console"] .c-page-title {
     flex-basis: 100%;
     gap: 8px;
   }
 
   html[data-skin="console"] .c-page-actions {
+    flex-wrap: wrap;
     width: 100%;
   }
 

@@ -185,7 +185,7 @@ function confirmationCopy(confirmation: Confirmation): { title: string; descript
   if (confirmation.kind === "build") {
     return { ...releaseBuildCopy(confirmation.preset), destructive: false };
   }
-  const { world, game } = confirmation;
+  const { world } = confirmation;
   switch (confirmation.kind) {
     case "session":
       return confirmation.action === "start"

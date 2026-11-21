@@ -27,22 +27,25 @@ export async function launch() {
   let complaints = "";
   proc.stderr.setEncoding("utf8");
   proc.stderr.on("data", (chunk) => { complaints = (complaints + chunk).slice(-2000); });
-  let exit = null;
-  proc.on("exit", (code, signal) => { exit = signal ?? code; });
+  const state = { exit: null };
+  proc.on("exit", (code, signal) => { state.exit = signal ?? code; });
 
   // A minute: a cold CI runner can take that long to open the debugging port.
   let endpoint = null;
-  for (let i = 0; i < 600 && exit === null && endpoint === null; i += 1) {
+  for (let i = 0; i < 600 && state.exit === null && endpoint === null; i += 1) {
     try {
       endpoint = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).webSocketDebuggerUrl;
     } catch { await sleep(100); }
   }
   if (!endpoint) {
-    const why = exit === null ? "did not open its debugging port within 60s" : `exited with ${exit}`;
+    const why = state.exit === null ? "did not open its debugging port within 60s" : `exited with ${state.exit}`;
     throw new Error(`chrome ${why}${complaints ? `\n${complaints.trimEnd()}` : ""}`);
   }
 
-  const ws = new WebSocket(endpoint);
+  // Only the local debugging port may be dialled.
+  const target = new URL(endpoint);
+  if (target.protocol !== "ws:" || target.hostname !== "127.0.0.1" || target.port !== String(port)) throw new Error(`chrome offered an unexpected endpoint: ${target.origin}`);
+  const ws = new WebSocket(target.href);
   await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
   let nextId = 0;
   const pending = new Map();

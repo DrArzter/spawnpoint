@@ -7,7 +7,7 @@
 // - surface: a dialog, panel or menu is open; only its layer is measured.
 // eslint-disable-next-line no-unused-vars
 function probe(options) {
-  const { width, coarse, layout, advise, surface } = options;
+  const { width, coarse, layout, advise } = options;
   // A menu is measured on its own: only what is inside it.
   const root = options.root ? document.querySelector(options.root) : null;
   const all = Array.from(document.querySelectorAll("body *"));
@@ -235,7 +235,7 @@ function probe(options) {
         if (!cross(a.r, b.r)) continue;
         if (hidden(a, b)) continue;
         const kind = a.kind === "text" && b.kind === "text" ? "textOverText" : "overlaps";
-        const at = b.kind === "text" ? b.el : b.el;
+        const at = b.el;
         const key = mark(at) + "|" + mark(a.el);
         if (reported.has(key)) continue;
         reported.add(key);

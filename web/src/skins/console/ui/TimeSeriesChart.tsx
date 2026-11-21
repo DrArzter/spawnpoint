@@ -90,7 +90,7 @@ export function nextCursor(key: string, cursor: number | null, count: number): n
 export function chartSummary(points: readonly ChartPoint[]): Readonly<{ latest: number; peak: ChartPoint & { value: number }; average: number; count: number }> | null {
   const known = points.filter((point): point is ChartPoint & { value: number } => point.value !== null);
   if (known.length === 0) return null;
-  const peak = known.reduce((best, point) => (point.value > best.value ? point : best));
+  const peak = known.reduce((best, point) => (point.value > best.value ? point : best), known[0]);
   return { latest: known.at(-1)!.value, peak, average: known.reduce((sum, point) => sum + point.value, 0) / known.length, count: known.length };
 }
 

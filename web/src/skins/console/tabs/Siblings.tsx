@@ -33,7 +33,7 @@ export function Siblings({ model, rows }: Readonly<{ model: WorldModel; rows: re
   const [show, setShow] = useState<Show>("all");
   const text = query.trim().toLowerCase();
   const shown = rows
-    .filter(shows[show])
+    .filter((row) => shows[show](row))
     .filter((row) => text === "" || `${row.name} ${row.releaseSummary}`.toLowerCase().includes(text))
     .sort((a, b) => a.name.localeCompare(b.name));
   return (

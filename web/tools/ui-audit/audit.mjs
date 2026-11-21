@@ -538,7 +538,12 @@ try {
     const blocking = findings(records, KINDS);
     const advisory = advise ? findings(records, ADVISORY) : [];
     const { rules, problems } = readAccepted();
-    const fresh = blocking.filter((f) => { const rule = acceptedBy(rules, f); if (rule) rule.used = true; return !rule; });
+    const fresh = blocking.filter((f) => {
+      const rule = acceptedBy(rules, f);
+      if (!rule) return true;
+      rule.used = true;
+      return false;
+    });
     const summary = `${probes} probes (${jobs.length} jobs, ${workers} tabs) in ${Math.round((Date.now() - started) / 1000)}s: ${SKINS.join(" and ")}; ${blocking.length} blocking findings, ${blocking.length - fresh.length} accepted${advise ? `, ${advisory.length} advisory` : ""}.`;
     console.log(summary);
     if (advise) {

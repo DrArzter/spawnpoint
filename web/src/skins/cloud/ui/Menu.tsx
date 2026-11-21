@@ -10,8 +10,9 @@ export type MenuGroup = Readonly<{ label?: string; actions: readonly Action[] }>
 
 /**
  * A menu of Actions at its anchor's end edge, flipped up when it would leave
- * the viewport. Its items stay in the DOM while it is closed, so every Action
- * in it is reachable markup. Arrows move, Escape and Tab close it, and focus
+ * the viewport. It opens in the top layer (a manual popover), so a transformed
+ * page under it cannot move it. Its items stay in the DOM while it is closed,
+ * so every Action in it is reachable markup. Arrows move, Escape and Tab close it, and focus
  * goes back to the anchor.
  */
 export function Menu({ id, label, groups, open, anchor, onClose }: Readonly<{ id: string; label: string; groups: readonly MenuGroup[]; open: boolean; anchor: RefObject<HTMLElement | null>; onClose: () => void }>) {
@@ -22,7 +23,13 @@ export function Menu({ id, label, groups, open, anchor, onClose }: Readonly<{ id
   useLayoutEffect(() => {
     const element = menu.current;
     const target = anchor.current;
-    if (!open || !element || !target) return;
+    if (!element) return;
+    const shown = typeof element.showPopover === "function" && element.matches(":popover-open");
+    if (!open || !target) {
+      if (shown) element.hidePopover();
+      return;
+    }
+    if (!shown && typeof element.showPopover === "function") element.showPopover();
     const rect = target.getBoundingClientRect();
     const height = element.offsetHeight;
     const width = element.offsetWidth;
@@ -67,7 +74,7 @@ export function Menu({ id, label, groups, open, anchor, onClose }: Readonly<{ id
   const visible = groups.filter((group) => group.actions.length > 0);
 
   return (
-    <div aria-label={label} className="c-menu" data-layer="menu" hidden={!open} id={id} onKeyDown={onKey} ref={menu} role="menu">
+    <div aria-label={label} className="c-menu" data-layer="menu" hidden={!open} id={id} popover="manual" onKeyDown={onKey} ref={menu} role="menu">
       {visible.map((group, index) => (
         <div className={cx("c-menu-group", index > 0 && "c-menu-group-split")} key={group.label ?? index} role="group" aria-label={group.label}>
           {group.label && <div aria-hidden="true" className="c-menu-label">{group.label}</div>}
@@ -84,7 +91,7 @@ export function Menu({ id, label, groups, open, anchor, onClose }: Readonly<{ id
               type="button"
             >
               {action.icon && <Icon name={action.icon} size={20} />}
-              <span>{action.label}</span>
+              <span className="c-menu-text">{action.label}</span>
               {action.detail && <span className="c-menu-end">{action.detail}</span>}
               {action.disabled && action.hint && <span className="c-sr">, unavailable: {action.hint}</span>}
             </button>

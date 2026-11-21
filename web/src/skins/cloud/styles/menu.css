@@ -2,7 +2,11 @@
 
 html[data-skin="cloud"] .c-menu {
   position: fixed;
+  inset: auto;
   z-index: 80;
+  margin: 0;
+  overflow: visible;
+  color: var(--c-ink);
   min-width: 240px;
   max-width: min(360px, calc(100vw - 16px));
   padding: 6px;
@@ -67,9 +71,19 @@ html[data-skin="cloud"] .c-menu-item[aria-disabled="true"] {
   cursor: not-allowed;
 }
 
+/* The label keeps one line; a long detail gives way with an ellipsis, so the icon stays on the label's line. */
+html[data-skin="cloud"] .c-menu-text {
+  flex: none;
+  white-space: nowrap;
+}
+
 html[data-skin="cloud"] .c-menu-end {
+  min-width: 0;
+  overflow: hidden;
   margin-left: auto;
   padding-left: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--c-ink-3);
   font-size: var(--c-fs-s);
   font-weight: 600;

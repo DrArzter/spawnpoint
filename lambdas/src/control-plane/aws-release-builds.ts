@@ -82,10 +82,15 @@ export async function runningReleaseBuilds(): Promise<readonly RunningBuild[]> {
   return builds;
 }
 
+// A game without an entry here gets a repository name no catalog source matches.
+const CONFIG_REPOSITORY_GAMES: ReadonlyMap<string, string> = new Map([
+  ["minecraft", "minecraft"], ["factorio", "factorio"], ["zomboid", "zomboid"],
+]);
+
 export function catalogBuildSource(value: unknown, gameId: string): BuildSource | null {
   if (parsePresetCatalog(value, gameId) === null) return null;
   const source = (value as { source: { repository: string; commit: string; snapshot?: { key?: unknown; sha256?: unknown } } }).source;
-  const repository = `DrArzter/my-docker-${gameId === "minecraft" ? "minecraft" : gameId === "factorio" ? "factorio" : gameId === "zomboid" ? "zomboid" : "invalid"}-server-config`;
+  const repository = `DrArzter/my-docker-${CONFIG_REPOSITORY_GAMES.get(gameId) ?? "invalid"}-server-config`;
   if (source.repository.replace(/\.git$/, "") !== `https://github.com/${repository}`) return null;
   const snapshot = source.snapshot;
   if (snapshot?.key !== `config-sources/${repository}/${source.commit}.tar.gz` || typeof snapshot.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(snapshot.sha256)) return null;

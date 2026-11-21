@@ -93,7 +93,7 @@
     },
     "Find Placement": {
       "Type": "Task",
-      "Comment": "ADR-0054: a stop is told a session and finds its host and slot itself. A session placed nowhere, or a lookup that fails, stops the requested instance as before.",
+      "Comment": "ADR-0054: a stop is told a session and finds its host and slot itself. ADR-0073: a lookup that keeps failing ends the stop; it never guesses a host.",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
         "FunctionName": "${coordinator_function_arn}",
@@ -106,11 +106,24 @@
         "placement.$": "$.Payload.placement"
       },
       "ResultPath": "$.placementLookup",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.placementFailure",
-          "Next": "Adopt Requested Host"
+          "Next": "Placement Lookup Failed"
         }
       ],
       "Next": "Route Found Placement"
@@ -121,10 +134,22 @@
         {
           "Variable": "$.placementLookup.placement",
           "IsNull": true,
-          "Next": "Adopt Requested Host"
+          "Next": "Route Unplaced Session"
         }
       ],
       "Default": "Adopt Found Placement"
+    },
+    "Route Unplaced Session": {
+      "Type": "Choice",
+      "Comment": "ADR-0073: only a configured world runs on the configured host without a placement. A fleet world's record is its own (world#, ADR-0062), and a fleet session with no placement has no host that can verify its archive.",
+      "Choices": [
+        {
+          "Variable": "$.request.serverId",
+          "StringMatches": "world#*",
+          "Next": "Fleet Session Unplaced"
+        }
+      ],
+      "Default": "Adopt Requested Host"
     },
     "Adopt Found Placement": {
       "Type": "Pass",
@@ -338,6 +363,16 @@
       "Type": "Fail",
       "Error": "Spawnpoint.V2StaleSession",
       "Cause": "The stop request does not belong to the active server session."
+    },
+    "Placement Lookup Failed": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.V2PlacementLookupFailed",
+      "Cause": "The session's placement could not be read, so no host can be asked to verify its archive. The exact session remains stopping. Retry after the lease expires."
+    },
+    "Fleet Session Unplaced": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.V2FleetSessionUnplaced",
+      "Cause": "A fleet session has no placement, so no host can verify its archive. The configured host is never asked in its place. The exact session remains stopping."
     },
     "Verified Stop Failed": {
       "Type": "Fail",

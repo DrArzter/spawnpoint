@@ -24,7 +24,7 @@ export type Permission = typeof permissions[number];
 export type BuiltInRoleId = "viewer" | "player" | "operator" | "owner";
 
 export type Role = Readonly<{
-  id: BuiltInRoleId | string;
+  id: string;
   name: string;
   permissions: readonly Permission[];
 }>;

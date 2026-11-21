@@ -23,11 +23,11 @@ function widgetPayload(overrides: Record<string, string> = {}): Record<string, s
   return { ...values, hash: createHmac("sha256", secret).update(check).digest("hex") };
 }
 
-function miniAppInitData(includeTelegramSignature = false): string {
+function miniAppInitData(includeTelegramSignature = false, id: unknown = 1780660807): string {
   const params = new URLSearchParams({
     auth_date: String(now),
     query_id: "AAEAA-test",
-    user: JSON.stringify({ id: 1780660807, first_name: "DrArzter", username: "drarzter" }),
+    user: JSON.stringify({ id, first_name: "DrArzter", username: "drarzter" }),
   });
   if (includeTelegramSignature) {
     params.set("signature", "telegram-third-party-ed25519-signature");
@@ -94,6 +94,13 @@ test("verifies Telegram Mini App initData with the WebAppData key derivation", (
   assert.equal(verifyMiniAppInitData(miniAppInitData(), botToken, now)?.telegramId, "1780660807");
   assert.equal(verifyMiniAppInitData(miniAppInitData(true), botToken, now)?.telegramId, "1780660807");
   assert.equal(verifyMiniAppInitData(`${miniAppInitData()}x`, botToken, now), null);
+});
+
+test("a signed Mini App user.id that is not a numeric Telegram id is refused", () => {
+  assert.equal(verifyMiniAppInitData(miniAppInitData(false, "1780660807"), botToken, now)?.telegramId, "1780660807");
+  for (const id of [{ id: 1780660807 }, [1780660807], "1780660807x", "abcdefgh", true, null, 1780660807.5, 2 ** 53]) {
+    assert.equal(verifyMiniAppInitData(miniAppInitData(false, id), botToken, now), null, JSON.stringify(id));
+  }
 });
 
 test("verifies a Telegram OIDC ID token against JWKS and its claims", async () => {

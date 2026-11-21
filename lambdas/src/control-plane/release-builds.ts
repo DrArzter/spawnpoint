@@ -28,14 +28,20 @@ export interface ReleaseBuildPorts {
   start(request: BuildRequest): Promise<void>;
 }
 
-export async function observeBuild(request: BuildRequest, ports: ReleaseBuildPorts): Promise<BuildView> {
+function buildState(published: boolean, execution: Awaited<ReturnType<ReleaseBuildPorts["execution"]>>): BuildState {
+  if (execution === "RUNNING") return "building";
   // A workflow may fail after uploading its commit marker (e.g. catalog update).
   // Never turn that into permission to overwrite an already published release.
+  if (published) return "ready";
+  if (execution === null) return "starting";
+  return "failed";
+}
+
+export async function observeBuild(request: BuildRequest, ports: ReleaseBuildPorts): Promise<BuildView> {
   const [published, execution] = await Promise.all([ports.published(request), ports.execution(request.name)]);
-  const state = execution === "RUNNING" ? execution : published ? "ready" : execution;
   return {
     release: request.release, attempt: request.attempt, requestedAt: request.requestedAt, profileDigest: request.profileDigest,
-    state: state === "ready" ? "ready" : state === null ? "starting" : state === "RUNNING" ? "building" : "failed",
+    state: buildState(published, execution),
   };
 }
 

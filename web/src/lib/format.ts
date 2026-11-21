@@ -3,7 +3,7 @@ const time = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-di
 const date = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
 /** A time as the API gives it: an ISO string, epoch seconds, or absent. */
-type Instant = string | number | null | undefined;
+export type Instant = string | number | null | undefined;
 
 function parse(value: Instant): Date | null {
   if (value === null || value === undefined || value === "") return null;

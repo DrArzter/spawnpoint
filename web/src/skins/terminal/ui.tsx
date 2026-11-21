@@ -58,11 +58,13 @@ export function SkeletonGroup({ label, children, className }: Readonly<{ label: 
   );
 }
 
+type SkeletonWidth = "short" | "medium" | "long";
+
 /** Geometry-only loading content. A plot uses discrete terminal traces; text
     uses a quiet block sized by the same small vocabulary everywhere. */
 export function Skeleton({ variant = "text", width = "medium", className }: Readonly<{
   variant?: "text" | "plot";
-  width?: "short" | "medium" | "long";
+  width?: SkeletonWidth;
   className?: string;
 }>) {
   return (
@@ -73,7 +75,7 @@ export function Skeleton({ variant = "text", width = "medium", className }: Read
 }
 
 /** The first cell of a list row is long; the others alternate by position. */
-function listWidth(row: number, column: number): "short" | "medium" | "long" {
+function listWidth(row: number, column: number): SkeletonWidth {
   if (column === 0) return "long";
   return (row + column) % 2 === 0 ? "medium" : "short";
 }
@@ -406,7 +408,7 @@ function cellClass<Row>(column: Col<Row>, head = false): string {
 }
 
 /** A placeholder as wide as the cell will be: short for verbs, otherwise a rough mix of long and medium. */
-function skeletonWidth<Row>(column: Col<Row>, cell: number): "short" | "medium" | "long" {
+function skeletonWidth<Row>(column: Col<Row>, cell: number): SkeletonWidth {
   if (column.verbs) return "short";
   return cell % 3 === 0 ? "long" : "medium";
 }

@@ -1,6 +1,7 @@
 import type { Detail, DetailKey, DetailValue } from "../../../core/models";
 import { Icon } from "../../../icons";
 import { cx } from "../../../lib/cx";
+import type { Instant } from "../../../lib/format";
 import { Address } from "./Address";
 import { Ago, instantMs } from "./Ago";
 import { Chip } from "./Chip";
@@ -10,7 +11,7 @@ import { Status } from "./Status";
 const dayTime = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 /** `d MMM HH:mm`, or null for an unknown time. */
-export function shortDateTime(at: string | number | null | undefined): string | null {
+export function shortDateTime(at: Instant): string | null {
   const time = instantMs(at);
   return Number.isNaN(time) ? null : dayTime.format(time);
 }

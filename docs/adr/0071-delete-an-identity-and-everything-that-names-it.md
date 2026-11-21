@@ -1,6 +1,6 @@
 # ADR-0071 — Delete an Identity and every record that names it
 
-- Status: Accepted
+- Status: Proposed
 - Date: 2026-11-21
 - Milestone: M4
 - Extends: [ADR-0036](0036-observed-visitors-and-owner-approved-access.md),
@@ -106,8 +106,9 @@ The handler writes one structured log line to the access API log group (14 days)
 It holds the actor's Identity id, because it is the accountability record and the actor is a current Owner. It
 holds no name, handle, email address, provider, provider subject, Telegram id or IP address.
 
-The access API Lambda gets `dynamodb:DeleteItem` on the access table, and `dynamodb:Scan` on the table only, not on
-its index. Its current S3 rights already cover the world-record rewrite.
+The access API Lambda gets `dynamodb:DeleteItem` and `dynamodb:ConditionCheckItem` on the access table, and
+`dynamodb:Scan` on the table only, not on its index. DynamoDB authorises each item of a transaction by its own
+action, so the caller's `ConditionCheck` needs `dynamodb:ConditionCheckItem`. Its current S3 rights already cover the world-record rewrite.
 
 MCP does not expose the operation. The OAuth scopes (`spawnpoint.read`, `spawnpoint.operate`) do not cover access
 administration, and erasure is an action a person takes in the console after typing the name. The only MCP impact:
@@ -164,6 +165,15 @@ for an Owner row when the caller does not hold `access.owner.grant`.
 | Answer `207` or `500` when sweep 2 fails | The person has no access after the commit, so a retry prompt adds nothing. The log line records `sweep2: incomplete`. |
 
 ## Still open
+
+The owner has not yet answered these three questions. The decision above follows the recommendation for each:
+
+- Q-P1. Is a 14-day log line enough as the audit trail, or is a permanent `AUDIT#identity-deletion` item needed?
+  May the line hold the actor's Identity id? Recommended: the log line, with the actor id.
+- Q-P2. Revoke the pending access invitations that the deleted person created? Recommended: yes.
+- Q-P3. Answer `204` when sweep 2 fails after the commit? Recommended: yes, and log it.
+
+Later work:
 
 - Expire noncurrent versions under `worlds/` in the releases bucket, and stop storing names in world records.
   This is a later infrastructure slice.

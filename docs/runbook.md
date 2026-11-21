@@ -304,6 +304,30 @@ Users choose ordinary server lifecycle notifications in **Access → My notifica
 and guardrail alerts. Edit the parameter with `put-parameter --overwrite`; it takes effect within a minute. One
 unreachable target never blocks the rest.
 
+### Remove a deleted person's chat id
+
+Do this step when you delete a person who used Telegram. The `chat-ids` parameter is set by hand, so no deletion in
+the panel or the API changes it. A person's direct chat id is the same number as their Telegram user id.
+
+1. Read the current value:
+
+```bash
+aws ssm get-parameter --name /spawnpoint/bot/chat-ids --query Parameter.Value --output text --profile spawnpoint --region eu-central-1
+```
+
+2. If the person's Telegram user id is in the list, write the list again without it. Keep every other id and the
+   order of the ids:
+
+```bash
+aws ssm put-parameter --name /spawnpoint/bot/chat-ids --type String --overwrite --value '<group id>,<other dm id>,...' --profile spawnpoint --region eu-central-1
+```
+
+3. Read the value again and make sure that the id is not there. The notifier reads the new value within a minute.
+
+Do not remove a negative id: it is a group, not a person. Do not leave the list empty: the notifier then fails on
+every event. If the person's id is the only id, put the owner's id or a group id in its place. The bot and notifier
+logs can also hold the id; they expire after 14 days and you cannot delete one person's lines.
+
 Guardrail alerts arrive in the same chat: the notifier is subscribed to `spawnpoint-alert`, so the budget, cost
 anomalies and the running-hours alarm all speak Telegram — and email on the same topic remains the out-of-band path
 that works even when the notifier does not (ADR-0020). An unrecognised alert format is delivered raw rather than

@@ -31,7 +31,9 @@ export async function controlSession(identity: Identity, action: SessionAction, 
   if (plan.kind === "reject") return response(plan.reason === "unknown_world" ? 404 : 409, { error: plan.reason });
   const recoverySessionId = action === "stop" && !fleet ? stoppedHostRecoverySession(worldId, configuredHosts, located.record) : null;
   if (plan.kind === "noop" && recoverySessionId === null) return response(200, { result: plan.reason });
-  return executeSessionOperation({ identity, action, gameId, worldId, worldName: world?.displayName ?? worldId, fleet, plan, configuredHosts, located, recoverySessionId });
+  // A fleet world kept warm asks placement to keep its launched host after the stop (ADR-0048).
+  const warm = fleet && worldRecords.find((record) => record.worldId === worldId)?.warm === true;
+  return executeSessionOperation({ identity, action, gameId, worldId, worldName: world?.displayName ?? worldId, fleet, warm, plan, configuredHosts, located, recoverySessionId });
 }
 
 type SessionExecution = Readonly<{
@@ -41,6 +43,7 @@ type SessionExecution = Readonly<{
   worldId: string;
   worldName: string;
   fleet: boolean;
+  warm: boolean;
   plan: SessionPlan | FleetSessionPlan;
   configuredHosts: readonly Readonly<{ providerRef: string }>[];
   located: Awaited<ReturnType<typeof readWorldSession>>;
@@ -53,7 +56,7 @@ function plannedSessionHost(request: SessionExecution): string | undefined {
 }
 
 async function executeSessionOperation(request: SessionExecution): Promise<Response> {
-  const { identity, action, gameId, worldId, worldName, fleet, located, recoverySessionId } = request;
+  const { identity, action, gameId, worldId, worldName, fleet, warm, located, recoverySessionId } = request;
   const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
   const requestedBy = `identity:${identity.id}`;
   // The fleet workflow places the session itself. Its legacy instanceId input
@@ -69,6 +72,7 @@ async function executeSessionOperation(request: SessionExecution): Promise<Respo
       serverId: sessionLifecycleKey(gameId, worldId, fleet ? "fleet" : "configured"),
       worldName,
       placement: fleet ? "fleet" : "single",
+      ...(fleet ? { policy: warm ? "warm" as const : "cold" as const } : {}),
     });
   }
   else {
@@ -152,10 +156,15 @@ export async function createWorld(identity: Identity, gameId: string, presetId: 
 }
 
 export async function updateWorldSettings(gameId: string, worldId: string, body: string | undefined): Promise<Response> {
-  let parsed: { placement?: unknown; connectivity?: unknown; auth?: unknown };
+  let parsed: { placement?: unknown; connectivity?: unknown; auth?: unknown; warm?: unknown };
   try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
   const access = parseWorldAccess(parsed, false);
   if (access === null) return response(400, { error: "invalid_world_connectivity" });
+  // Left out, the world keeps its choice. Only a launched host can be kept warm (ADR-0048).
+  const { warm } = parsed;
+  if ((warm !== undefined && typeof warm !== "boolean") || (warm === true && access.placement !== "fleet")) {
+    return response(400, { error: "invalid_world_warm" });
+  }
   // Only this world's own session holds its settings back (ADR-0062). Both
   // records are read, so the answer holds for either placement.
   const [game, own, operations] = await Promise.all([
@@ -168,10 +177,11 @@ export async function updateWorldSettings(gameId: string, worldId: string, body:
       holdsWorld(game, worldId) || holdsWorld(own, worldId) || unnamed) {
     return response(409, { error: "world_session_active" });
   }
-  const result = await replaceWorldAccess(gameId, worldId, access);
+  const hosting = warm === undefined ? access : { ...access, warm };
+  const result = await replaceWorldAccess(gameId, worldId, hosting);
   if (result === "missing") return response(404, { error: "unknown_world" });
   if (result === "conflict") return response(409, { error: "world_settings_conflict" });
-  return response(200, { ...access, auth: access.auth ?? null });
+  return response(200, { ...hosting, auth: access.auth ?? null });
 }
 
 // --- A world's game settings (ADR-0064) ----------------------------------------

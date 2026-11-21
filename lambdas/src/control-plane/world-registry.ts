@@ -37,6 +37,8 @@ export type WorldRecord = Readonly<{
   placement: "configured" | "fleet";
   connectivity: "zerotier" | "raw" | "route53";
   auth?: "game" | "external";
+  /** Keep a launched host stopped for this world between sessions (ADR-0048). Absent: cold. */
+  warm?: true;
   preset: Readonly<{
     id: string;
     repository: string;
@@ -179,7 +181,7 @@ export function archiveWorldRecord(record: WorldRecord): WorldRecord {
 
 export function withWorldAccess(
   record: WorldRecord,
-  access: Readonly<{ placement: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"] }>,
+  access: Readonly<{ placement: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"]; warm?: boolean }>,
 ): WorldRecord {
   if (
     (access.placement !== "configured" && access.placement !== "fleet") ||
@@ -189,8 +191,15 @@ export function withWorldAccess(
     (access.placement === "fleet" && access.connectivity === "zerotier") ||
     (access.placement === "configured" && access.connectivity !== "zerotier")
   ) throw new Error("invalid_world_connectivity");
-  const { auth: _previousAuth, ...withoutAuth } = record;
-  return { ...withoutAuth, placement: access.placement, connectivity: access.connectivity, ...(access.auth === undefined ? {} : { auth: access.auth }) };
+  if (access.warm === true && access.placement !== "fleet") throw new Error("invalid_world_warm");
+  // Only a launched host can be kept for a world; leaving the fleet drops the choice.
+  const warm = access.placement === "fleet" && (access.warm ?? record.warm === true);
+  const { auth: _previousAuth, warm: _previousWarm, ...rest } = record;
+  return {
+    ...rest, placement: access.placement, connectivity: access.connectivity,
+    ...(access.auth === undefined ? {} : { auth: access.auth }),
+    ...(warm ? { warm: true as const } : {}),
+  };
 }
 
 export function purgeGenerationIds(record: WorldRecord): readonly string[] {
@@ -295,6 +304,7 @@ export function worldRecordDocument(record: WorldRecord): ObjectValue {
     placement: record.placement,
     connectivity: record.connectivity,
     ...(record.auth === undefined ? {} : { auth: record.auth }),
+    ...(record.warm ? { warm: true } : {}),
     storage_layout: "generation",
     preset: {
       id: record.preset.id,
@@ -335,6 +345,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     (root.auth !== undefined && root.auth !== "game" && root.auth !== "external") ||
     (root.connectivity !== "zerotier" && root.auth === undefined) ||
     (root.placement !== undefined && root.placement !== "configured" && root.placement !== "fleet") ||
+    (root.warm !== undefined && typeof root.warm !== "boolean") ||
     ((root.placement ?? (root.connectivity === "zerotier" ? "configured" : "fleet")) === "fleet" && root.connectivity === "zerotier") ||
     ((root.placement ?? (root.connectivity === "zerotier" ? "configured" : "fleet")) === "configured" && root.connectivity !== "zerotier") ||
     preset === null || typeof preset.id !== "string" || !ID.test(preset.id) ||
@@ -366,6 +377,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     placement: (root.placement ?? (root.connectivity === "zerotier" ? "configured" : "fleet")) as WorldRecord["placement"],
     connectivity: root.connectivity,
     ...(root.auth === undefined ? {} : { auth: root.auth }),
+    ...(root.warm === true ? { warm: true as const } : {}),
     preset: {
       id: preset.id,
       repository: preset.repository,

@@ -12,7 +12,8 @@
           "worldName": "",
           "placement": "single",
           "launch": "disabled",
-          "appCommit": "main"
+          "appCommit": "main",
+          "policy": "cold"
         },
         "coordination": {
           "forcedStopPolls": 0
@@ -22,7 +23,7 @@
     },
     "Apply Request Defaults": {
       "Type": "Pass",
-      "Comment": "What a caller leaves out. ADR-0062: serverId is the lifecycle record's key, a fleet world's own or its game's; a caller that predates the split sends no gameId, and its serverId is the game. Promotion's nested starts name no placement, and the configured host is the only one they can mean.",
+      "Comment": "What a caller leaves out. ADR-0062: serverId is the lifecycle record's key, a fleet world's own or its game's; a caller that predates the split sends no gameId, and its serverId is the game. Promotion's nested starts name no placement, and the configured host is the only one they can mean. A caller that names no policy places the session cold (ADR-0048).",
       "Parameters": {
         "request.$": "States.JsonMerge($.defaults, $.request, false)",
         "coordination.$": "$.coordination"
@@ -151,6 +152,7 @@
           "sessionId.$": "$.request.sessionId",
           "worldId.$": "$.request.worldId",
           "gameId.$": "$.request.gameId",
+          "policy.$": "$.request.policy",
           "eligibleProvenance": "launched"
         }
       },
@@ -289,7 +291,8 @@
           "action": "placeSession",
           "sessionId.$": "$.request.sessionId",
           "worldId.$": "$.request.worldId",
-          "gameId.$": "$.request.gameId"
+          "gameId.$": "$.request.gameId",
+          "policy.$": "$.request.policy"
         }
       },
       "ResultSelector": {
@@ -473,7 +476,8 @@
           "hostId.$": "$.launched.instanceId",
           "sessionId.$": "$.request.sessionId",
           "worldId.$": "$.request.worldId",
-          "gameId.$": "$.request.gameId"
+          "gameId.$": "$.request.gameId",
+          "policy.$": "$.request.policy"
         }
       },
       "ResultSelector": {
@@ -793,7 +797,8 @@
           "hostId.$": "$.request.instanceId",
           "sessionId.$": "$.request.sessionId",
           "worldId.$": "$.request.worldId",
-          "gameId.$": "$.request.gameId"
+          "gameId.$": "$.request.gameId",
+          "policy.$": "$.request.policy"
         }
       },
       "ResultSelector": {

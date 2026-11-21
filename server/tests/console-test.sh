@@ -34,7 +34,7 @@ for argument in "$@"; do
       # Compose itself talks on stderr; an operator must never read it as the
       # game's answer.
       [[ -z "${FAKE_COMPOSE_NOISE:-}" ]] ||
-        printf 'time="2026-11-21T01:44:01Z" level=warning msg="The \\"Hbxz9\\" variable is not set. Defaulting to a blank string."\n' >&2
+        printf 'time="2026-11-21T01:44:01Z" level=warning msg="The \\"FakeKeyX\\" variable is not set. Defaulting to a blank string."\n' >&2
       # Everything after `rcon-cli` is what the game would receive.
       seen=0
       : >"${FAKE_ARGUMENTS_FILE}"
@@ -139,16 +139,16 @@ unset FAKE_COMPOSE_NOISE
 # A value holding a dollar sign reaches the container as written: Compose is
 # handed an escaped copy, and the file the host's own scripts read is untouched.
 env_file="${fixture}/host.env"
-printf 'CF_API_KEY=$2a$10$Hbxz9Ybl\nRELEASE_BUCKET=spawnpoint-releases-1\n' >"${env_file}"
+printf 'CF_API_KEY=$2a$10$FakeKeyX\nRELEASE_BUCKET=spawnpoint-releases-1\n' >"${env_file}"
 SERVER_ENV_FILE="${env_file}" FAKE_ENV_FILE_RECORD="${fixture}/env-file-used" \
   CONSOLE_COMMAND_B64="$(printf '%s' list | base64 | tr -d '\n')" "${console}" >/dev/null 2>&1
 used="$(cat -- "${fixture}/env-file-used")"
 [[ "${used}" != "${env_file}" ]] || { printf 'Compose was handed the raw env file\n' >&2; exit 1; }
-grep -Fqx 'CF_API_KEY=$$2a$$10$$Hbxz9Ybl' -- "${used}" || {
+grep -Fqx 'CF_API_KEY=$$2a$$10$$FakeKeyX' -- "${used}" || {
   printf 'the dollar signs were not escaped for Compose:\n%s\n' "$(cat -- "${used}")" >&2
   exit 1
 }
-grep -Fqx 'CF_API_KEY=$2a$10$Hbxz9Ybl' -- "${env_file}" || {
+grep -Fqx 'CF_API_KEY=$2a$10$FakeKeyX' -- "${env_file}" || {
   printf 'the host env file was rewritten\n' >&2
   exit 1
 }

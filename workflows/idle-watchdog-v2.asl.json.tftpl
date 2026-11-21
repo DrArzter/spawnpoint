@@ -27,6 +27,19 @@
       },
       "ResultSelector": { "ownership.$": "$.Payload.ownership" },
       "ResultPath": "$.coordination.lease",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Register This Watchdog"
     },
     "Register This Watchdog": {
@@ -43,6 +56,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -64,6 +90,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Watchdog Registration Rejected"
     },
     "Watchdog Registration Rejected": {
@@ -83,6 +122,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Wait Between Checks"
     },
     "Wait Between Checks": {
@@ -95,6 +147,25 @@
       "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
       "Parameters": { "InstanceIds.$": "States.Array($.request.instanceId)" },
       "ResultPath": "$.observed.instance",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Comment": "A check that cannot see the host is a failed probe: it counts towards Watchdog Blind and never towards idle.",
+          "ResultPath": "$.observed.probeError",
+          "Next": "Record Synthetic Unknown"
+        }
+      ],
       "Next": "Host Still Running"
     },
     "Host Still Running": {
@@ -132,6 +203,16 @@
         "TimeoutSeconds": 300
       },
       "ResultPath": "$.observed.command",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ssm.ThrottlingException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -153,6 +234,16 @@
         "TimeoutSeconds": 300
       },
       "ResultPath": "$.observed.command",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ssm.ThrottlingException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -175,11 +266,27 @@
         "InstanceId.$": "$.request.instanceId"
       },
       "ResultPath": "$.observed.invocation",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ssm.ThrottlingException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["Ssm.InvocationDoesNotExistException"],
           "ResultPath": "$.observed.lookupError",
           "Next": "Increment Probe Poll"
+        },
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Comment": "A result that cannot be read is an unknown probe, as a failed command is. It never fails the watchdog and never counts as empty.",
+          "ResultPath": "$.observed.probeError",
+          "Next": "Record Command Unknown"
         }
       ],
       "Next": "Route Probe Result"
@@ -270,6 +377,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Count Successful Probe"
     },
     "Count Successful Probe": {
@@ -302,6 +422,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Count Probe Failure"
     },
     "Record Synthetic Unknown": {
@@ -319,6 +452,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Count Probe Failure"
     },
     "Count Probe Failure": {
@@ -362,6 +508,19 @@
       },
       "ResultSelector": { "eligible.$": "$.Payload.idleStopEligible" },
       "ResultPath": "$.coordination.idle",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Idle Stop Eligible"
     },
     "Idle Stop Eligible": {

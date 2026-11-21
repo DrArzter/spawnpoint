@@ -1,0 +1,32 @@
+/* Boot: the mark, the title and a travelling bar on the page ground. */
+
+html[data-skin="cloud"] .c-boot {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: var(--c-pad);
+  background: var(--c-bg);
+}
+
+html[data-skin="cloud"] .c-boot-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: min(360px, 100%);
+  padding: 28px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--c-r);
+  background: var(--c-surface);
+  box-shadow: var(--c-shadow);
+}
+
+html[data-skin="cloud"] .c-boot-card h1 {
+  margin: 0;
+  font-size: var(--c-fs-dialog);
+  font-weight: 800;
+}
+
+html[data-skin="cloud"] .c-boot-card .c-progress {
+  align-self: stretch;
+}

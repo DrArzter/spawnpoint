@@ -80,6 +80,7 @@ function shellModel(console: ConsoleController): ShellModel {
     ...console.shell,
     worlds: rows.map((row) => ({ id: row.world.id, name: row.world.displayName, href: row.href, status: row.status })),
     refreshAction: () => refreshAction(console),
+    flash: { operations: gameOperationRows(game, console.snapshot).map((row) => ({ id: row.operation.id, label: row.label, worldName: row.worldName, worldId: row.operation.worldId ?? "", startedAt: row.operation.startedAt })) },
     worldActions: (worldId) => {
       const world = game?.worlds.find((item) => item.id === worldId);
       if (!game || !world) return null;

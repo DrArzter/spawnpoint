@@ -69,7 +69,11 @@ export type ShellModel = Readonly<{
   refreshAction?: () => Action;
   /** Start or stop and invite for one world of the scoped game; null for a world it does not list. */
   worldActions?: (worldId: string) => Readonly<{ session: Action; invite: Action | null }> | null;
+  /** The scoped game's running operations, for a skin's notification area. */
+  flash?: Readonly<{ operations: readonly FlashOperation[] }>;
 }>;
+
+export type FlashOperation = Readonly<{ id: string; label: string; worldName: string; worldId: string; startedAt: string }>;
 
 // --- worlds -----------------------------------------------------------------
 

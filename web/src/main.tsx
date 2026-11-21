@@ -11,6 +11,7 @@ import "./styles/components.css";
 import "./styles/screens.css";
 import "./styles/landing.css";
 import "./skins/terminal/terminal.css";
+import "./skins/cloud/styles/index.css";
 
 // The remembered accent is painted before the first frame, not in an effect
 // after it: a colour that arrives a frame late is a flash of the default on

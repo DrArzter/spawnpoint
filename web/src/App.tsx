@@ -77,5 +77,5 @@ export function App() {
   if (atLanding) return <LandingScreen auth={auth} onChange={handleAuth} />;
   if (auth.status !== "authenticated") return <LandingScreen auth={auth} onChange={handleAuth} />;
   if (auth.session.state !== "active") return <AuthScreen auth={auth} onChange={handleAuth} />;
-  return <SnackbarProvider><ConsoleRoot continuesBootCard={bootVisible} looks={looks} session={auth.session} skin={skin} /></SnackbarProvider>;
+  return <SnackbarProvider render={skin.renderSnackbar}><ConsoleRoot continuesBootCard={bootVisible} looks={looks} session={auth.session} skin={skin} /></SnackbarProvider>;
 }

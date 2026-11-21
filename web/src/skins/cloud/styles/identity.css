@@ -1,0 +1,107 @@
+/* Avatar and GameGlyph: who and which game, never a status. */
+
+html[data-skin="cloud"] .c-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: var(--c-r-pill);
+  background: var(--c-avatar);
+  color: var(--c-avatar-ink);
+  font-weight: 800;
+  object-fit: cover;
+}
+
+html[data-skin="cloud"] .c-avatar-sm {
+  width: 30px;
+  height: 30px;
+  font-size: 11.5px;
+}
+
+html[data-skin="cloud"] .c-avatar-md {
+  width: 34px;
+  height: 34px;
+  font-size: var(--c-fs-s);
+}
+
+html[data-skin="cloud"] .c-avatar-lg {
+  width: 44px;
+  height: 44px;
+  font-size: var(--c-fs-body);
+}
+
+html[data-skin="cloud"] .c-avatar-xl {
+  width: 56px;
+  height: 56px;
+  font-size: 20px;
+}
+
+html[data-skin="cloud"] .c-avatar-request {
+  background: var(--c-off);
+}
+
+html[data-skin="cloud"] .c-avatar-quiet {
+  background: var(--c-surface-3);
+  color: var(--c-ink-2);
+}
+
+html[data-skin="cloud"] .c-glyph {
+  --c-glyph: 24px;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--c-glyph);
+  height: var(--c-glyph);
+  vertical-align: middle;
+  border-radius: 7px;
+  background: var(--c-g-other);
+  color: var(--c-g-ink);
+}
+
+html[data-skin="cloud"] .c-glyph svg {
+  display: block;
+  width: 68%;
+  height: 68%;
+}
+
+html[data-skin="cloud"] .c-glyph-sm {
+  --c-glyph: 20px;
+  border-radius: 6px;
+}
+
+html[data-skin="cloud"] .c-glyph-lg {
+  --c-glyph: 44px;
+  border-radius: var(--c-r);
+}
+
+html[data-skin="cloud"] .c-glyph-minecraft {
+  background: var(--c-g-minecraft);
+}
+
+html[data-skin="cloud"] .c-glyph-factorio {
+  background: var(--c-g-factorio);
+}
+
+html[data-skin="cloud"] .c-glyph-zomboid {
+  background: var(--c-g-zomboid);
+}
+
+html[data-skin="cloud"] .c-glyph-letter {
+  font-size: .6em;
+  font-weight: 800;
+}
+
+html[data-skin="cloud"] .c-glyph-lg .c-glyph-letter {
+  font-size: 20px;
+}
+
+@media (max-width: 759px) {
+  html[data-skin="cloud"] .c-topbar .c-avatar-md {
+    width: var(--c-target);
+    height: var(--c-target);
+  }
+
+  html[data-skin="cloud"] .c-glyph-lg {
+    --c-glyph: 36px;
+    border-radius: var(--c-r-ctl);
+  }
+}

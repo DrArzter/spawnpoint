@@ -64,7 +64,7 @@ export type ShellModel = Readonly<{
   /** The snapshot's own time, for a relative "refreshed" line. */
   observedAtIso?: string;
   worlds?: readonly ShellWorld[];
-  /** Open access requests, when they were read; null or absent while unknown. */
+  /** People waiting for access, as the Access page lists them, when they were read; null or absent while unknown. */
   requests?: number | null;
   refreshAction?: () => Action;
   /** Start or stop and invite for one world of the scoped game; null for a world it does not list. */
@@ -142,7 +142,7 @@ export type WorldsModel = Readonly<{
   views?: Readonly<{ overview: string; list: string }>;
   operations?: readonly OperationRow[];
   builds?: readonly Readonly<{ preset: Preset; status: StatusDescriptor }>[];
-  /** Open access requests; null without the role to manage access. */
+  /** People waiting for access, as the Access page lists them; null without the role to manage access. */
   requests?: Loading<readonly RequestSummary[]> | null;
   requestActions?: (id: string) => Readonly<{ approve: Action; dismiss: Action }> | null;
 }>;

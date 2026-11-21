@@ -355,7 +355,7 @@ function AccessPage({ console, skin }: Controlled) {
   const users = useUsers({ bootstrap, canInvite: granted.has("access.invite"), members, roles, rolesLoading: rolesModel.loading, onMembersChange: setMembers, notify });
   const notifications = useNotifications(games, notify);
   const candidates = users.candidates;
-  const requestCount = candidates.status === "ready" ? candidates.value.filter((row) => row.candidate.status === "REQUESTED").length : null;
+  const requestCount = candidates.status === "ready" ? candidates.value.length : null;
   const { setRequestCount } = console;
   useEffect(() => { if (requestCount !== null) setRequestCount(requestCount); }, [requestCount, setRequestCount]);
   const model: AccessModel = {

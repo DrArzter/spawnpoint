@@ -267,7 +267,7 @@ const DEFAULT_ROLE = "viewer";
 const requestId = (candidate: AccessCandidate) => `${candidate.platform}:${candidate.platformUserId}`;
 
 /**
- * The open access requests, read on their own for a page that shows them
+ * The people waiting for access (asked, or signed in and not approved), read on their own for a page that shows them
  * beside other things (the cloud skin's game home). Approve grants the default
  * role; the Access page is where another is chosen.
  */
@@ -277,7 +277,8 @@ export function useAccessRequests(enabled: boolean, notify: Notify): Readonly<{
 }> {
   const [working, setWorking] = useState<string | null>(null);
   const [state, retry, update] = useLoad<AccessCandidate[]>(enabled ? () => loadAccessCandidates() : null, [enabled]);
-  const open = state.status === "ready" ? state.value.filter((candidate) => candidate.status === "REQUESTED") : [];
+  // Every candidate the Access page lists, so its count and this one agree.
+  const open = state.status === "ready" ? state.value : [];
 
   async function settle(candidate: AccessCandidate, approve: boolean) {
     setWorking(requestId(candidate));

@@ -39,8 +39,36 @@ html[data-skin="cloud"] .c-main[data-first] .c-bystate-bar {
 
 html[data-skin="cloud"] .c-bystate-seg {
   flex: 1 1 0;
-  background: currentColor;
+  background: var(--c-ink-3);
   transition: flex-grow var(--c-d3) var(--c-ease);
+}
+
+/* Each kind has its own fill, so neighbouring states never merge into one colour. A stopped world reads "Ready", so here it takes the off tone, not ok. */
+html[data-skin="cloud"] .c-bystate-ok {
+  background: var(--c-ok);
+}
+
+html[data-skin="cloud"] .c-bystate-ready {
+  background: var(--c-off);
+}
+
+html[data-skin="cloud"] .c-bystate-progress,
+html[data-skin="cloud"] .c-bystate-pending,
+html[data-skin="cloud"] .c-bystate-info {
+  background: var(--c-busy);
+}
+
+html[data-skin="cloud"] .c-bystate-unknown,
+html[data-skin="cloud"] .c-bystate-warning {
+  background: var(--c-warn);
+}
+
+html[data-skin="cloud"] .c-bystate-error {
+  background: var(--c-err);
+}
+
+html[data-skin="cloud"] .c-bystate-archived {
+  background: var(--c-line-2);
 }
 
 /* Absent worlds read as a hatch, not as a colour alone. */
@@ -77,6 +105,7 @@ html[data-skin="cloud"] .c-worlds-loading .c-tiles {
 html[data-skin="cloud"] .c-worlds-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  /* Not stretch (R11): the quick look is sticky and must keep its own height beside a long table. */
   align-items: start;
   gap: var(--c-gap);
 }
@@ -228,7 +257,7 @@ html[data-skin="cloud"] .c-worlds-peek-acts {
 }
 
 /* Beside the quick look the table keeps its decision columns; hosting moves beside the name and the address goes. */
-@media (min-width: 1200px) and (max-width: 1599px) {
+@media (min-width: 1200px) {
   html[data-skin="cloud"] .c-worlds-layout-open .c-worlds-host,
   html[data-skin="cloud"] .c-worlds-layout-open .c-worlds-table .c-col-optional {
     display: none;

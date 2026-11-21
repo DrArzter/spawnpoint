@@ -49,9 +49,8 @@ html[data-skin="cloud"] .c-scope-state {
   align-items: center;
   gap: 4px;
   font-size: var(--c-fs-xs);
+  /* No tone colour on the band, where it loses contrast; the icon shape carries the state. */
   font-weight: 600;
-  /* Tone colours lose contrast on the band; the icon shape carries the state. */
-  opacity: .85;
 }
 
 html[data-skin="cloud"] .c-scope-pick {

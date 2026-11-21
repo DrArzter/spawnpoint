@@ -105,6 +105,28 @@ test("cloud: the game home leaves out the requests card without the role, and of
   assert.equal(empty.match(/data-action="world.create"/g)?.length, 1);
 });
 
+test("cloud: the worlds-by-state bar fills each state kind on its own, so online and ready never merge", () => {
+  const online = { ...worlds.rows[0]!, world: { ...world, id: "a" }, status: { kind: "ok", label: "Online" } } as const;
+  const ready = { ...worlds.rows[0]!, world: { ...world, id: "b" }, status: { kind: "ready", label: "Ready" } } as const;
+  const markup = renderToStaticMarkup(createElement(cloudSkin.Worlds, { model: { ...worlds, rows: [online, ready] } }));
+  assert.match(markup, /class="c-bystate-seg c-bystate-ok"/);
+  assert.match(markup, /class="c-bystate-seg c-bystate-ready"/);
+});
+
+test("cloud: a state handed over by the game home belongs to that history entry only", () => {
+  // The test window keeps no history entries; stand one in.
+  const entry = window.history as unknown as { state: unknown };
+  entry.state = { cloudWorldsState: "Stopped" };
+  try {
+    const markup = renderToStaticMarkup(createElement(cloudSkin.Worlds, { model: { ...worlds, view: "list" } }));
+    assert.match(markup, /<button aria-pressed="true" class="c-tile"/);
+  } finally {
+    entry.state = null;
+  }
+  const later = renderToStaticMarkup(createElement(cloudSkin.Worlds, { model: { ...worlds, view: "list" } }));
+  assert.doesNotMatch(later, /aria-pressed="true" class="c-tile"/);
+});
+
 test("cloud: the palette, once open, draws each world's verbs and says why one is refused", () => {
   const markup = renderToStaticMarkup(createElement(Palette, { model: shell, onClose: noop }));
   const verbs = shell.worldActions!("rostik")!;

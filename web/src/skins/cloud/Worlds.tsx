@@ -26,12 +26,34 @@ import { Status } from "./ui/Status";
 import { nextSort, Table, type Column, type SortDirection } from "./ui/Table";
 import { Tile, Tiles } from "./ui/Tile";
 
-// A state the game home hands to the list it opens (the Worlds by state legend).
-let handedState: string | null = null;
+/*
+ * A state the game home hands to the list it opens (the Worlds by state
+ * legend). It rides on the history entry the link creates, so it belongs to
+ * that one visit: Back restores it, a link opened in a new tab has none, and
+ * a later visit starts unfiltered. Core's router reads no query, so the hash
+ * cannot carry it.
+ */
+const HANDED = "cloudWorldsState";
+
+const HANDED_EVENT = "c-worlds-state";
+
+// The list may render before the entry carries the state, so it is told once the state is there.
+function handState(label: string) {
+  window.addEventListener("hashchange", () => {
+    window.history.replaceState({ ...(window.history.state as object | null), [HANDED]: label }, "");
+    window.dispatchEvent(new Event(HANDED_EVENT));
+  }, { once: true });
+}
+
+function handedState(): string | null {
+  if (typeof window === "undefined") return null;
+  const value = (window.history.state as Record<string, unknown> | null)?.[HANDED];
+  return typeof value === "string" ? value : null;
+}
 
 /** The worlds page draws the game home on the overview route and the list everywhere else (M5). */
 export function Worlds({ model }: Readonly<{ model: WorldsModel }>) {
-  if (model.view === "overview") return <Home model={model} onState={(label) => { handedState = label; }} />;
+  if (model.view === "overview") return <Home model={model} onState={handState} />;
   return <WorldsList model={model} />;
 }
 
@@ -76,7 +98,13 @@ const PROPERTIES: readonly Readonly<{ id: string; label: string }>[] = [
  * 1024px the table gives way to the list rows.
  */
 function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
-  const [state, setState] = useState<string | null>(() => { const handed = handedState; handedState = null; return handed; });
+  const [state, setState] = useState<string | null>(handedState);
+  useEffect(() => {
+    const take = () => { const handed = handedState(); if (handed !== null) setState(handed); };
+    take();
+    window.addEventListener(HANDED_EVENT, take);
+    return () => window.removeEventListener(HANDED_EVENT, take);
+  }, []);
   const [tokens, setTokens] = useState<readonly FilterToken[]>([]);
   const [sort, setSort] = useState<Sort>({ key: "name", direction: "ascending" });
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
@@ -100,7 +128,8 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
   }, [rows, tokens, state, sort]);
   const [page, setPage] = usePage(shown.length);
   const paged = pageOf(shown, page, size);
-  const selected = rows.filter((row) => chosen.has(row.world.id));
+  // Bulk Actions reach only what the person can see: a filter or a tile hides a selected world from them too.
+  const selected = shown.filter((row) => chosen.has(row.world.id));
   const peek = rows.find((row) => row.world.id === peekId) ?? null;
 
   const properties: FilterProperty[] = PROPERTIES.map((property) => {
@@ -336,14 +365,19 @@ function BulkActions({ rows, clear }: Readonly<{ rows: readonly WorldRow[]; clea
 function QuickLook({ model, row, onClose }: Readonly<{ model: WorldsModel; row: WorldRow; onClose: () => void }>) {
   const now = useNow(Boolean(row.launchedAt) || (model.operations ?? []).some((item) => item.operation.worldId === row.world.id));
   const panel = useRef<HTMLElement>(null);
-  const opener = useRef<Element | null>(null);
+  // The opener is kept from the first open only: moving the panel to another row keeps focus where the person put it.
   useEffect(() => {
-    opener.current = document.activeElement;
+    const opener = document.activeElement;
     if (window.matchMedia?.("(max-width: 1199px)").matches) panel.current?.querySelector<HTMLElement>(".c-worlds-peek-close")?.focus();
-    return () => { if (opener.current instanceof HTMLElement && opener.current.isConnected) opener.current.focus(); };
-  }, [row.world.id]);
+    return () => { if (opener instanceof HTMLElement && opener.isConnected) opener.focus(); };
+  }, []);
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      // A menu, dialog or field takes its own Escape first.
+      if (event.target instanceof Element && event.target.closest("[role=menu], [role=listbox], dialog, input, textarea, select")) return;
+      onClose();
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);

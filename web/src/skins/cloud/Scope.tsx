@@ -1,3 +1,5 @@
+import type { KeyboardEvent } from "react";
+
 import type { ScopeModel } from "../../core/models";
 import { Icon } from "../../icons";
 import { Dialog } from "./ui/Dialog";
@@ -55,16 +57,26 @@ export function ScopeSwitcher({ model }: Readonly<{ model: ScopeModel }>) {
   );
 }
 
+// Arrow keys move between the games of the radio group; Enter or Space chooses one.
+function moveFocus(event: KeyboardEvent<HTMLDivElement>) {
+  const step = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 0;
+  if (step === 0) return;
+  event.preventDefault();
+  const rows = [...event.currentTarget.querySelectorAll<HTMLElement>("[role=radio]")];
+  const at = rows.indexOf(document.activeElement as HTMLElement);
+  rows[(at + step + rows.length) % rows.length]?.focus();
+}
+
 /** Every game, its state at the end edge; a choice selects the game and closes. */
 export function ScopeDialog({ model }: Readonly<{ model: ScopeModel }>) {
   if (!model.open) return null;
   return (
     <Dialog cancel={model.close} title="Game">
-      <div aria-label="Game" className="c-scope-list" role="radiogroup">
+      <div aria-label="Game" className="c-scope-list" onKeyDown={moveFocus} role="radiogroup">
         {model.games.map((game) => {
           const checked = game.id === model.game?.id;
           return (
-            <button aria-checked={checked} className="c-scope-row" key={game.id} onClick={() => model.select(game.id)} role="radio" type="button">
+            <button aria-checked={checked} className="c-scope-row" key={game.id} onClick={() => model.select(game.id)} role="radio" tabIndex={checked || !model.game ? 0 : -1} type="button">
               <Icon className="c-scope-ring" name={checked ? "check_circle" : "radio_button_unchecked"} size={20} />
               <GameGlyph game={game} size="sm" />
               <span className="c-scope-row-name">{game.displayName}</span>

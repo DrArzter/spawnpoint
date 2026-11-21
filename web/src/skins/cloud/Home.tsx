@@ -14,7 +14,7 @@ import { Notices } from "./ui/Notice";
 import { PageHeader } from "./ui/PageHeader";
 import { Person } from "./ui/Person";
 import { SkeletonRows } from "./ui/Skeleton";
-import { Status, statusTone } from "./ui/Status";
+import { Status } from "./ui/Status";
 import { TrackList, TrackTitle } from "./ui/TrackList";
 import { providerIcon } from "./providers";
 
@@ -209,7 +209,7 @@ function ByState({ rows, list, onState }: Readonly<{ rows: readonly WorldRow[]; 
   return (
     <div className="c-bystate">
       <div aria-label={states.map(({ status, count }) => `${count} ${status.label}`).join(", ")} className="c-bystate-bar" role="img">
-        {states.map(({ status, count }) => <i className={`c-bystate-seg c-tone-${statusTone(status.kind)} c-bystate-${status.kind}`} key={status.label} style={{ flexGrow: count }} />)}
+        {states.map(({ status, count }) => <i className={`c-bystate-seg c-bystate-${status.kind}`} key={status.label} style={{ flexGrow: count }} />)}
       </div>
       <div className="c-bystate-legend">
         {states.map(({ status, count }) => (

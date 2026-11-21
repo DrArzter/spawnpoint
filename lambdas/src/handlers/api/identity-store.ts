@@ -120,6 +120,27 @@ export async function identityAccounts(identity: Identity): Promise<Item[]> {
   return (result.Items ?? []).filter((item) => item.sk === "ACCOUNT");
 }
 
+// Read from the index, so it can lag a write. A change that must keep an Owner
+// also guards the caller's own profile in its transaction.
+export async function activeOwnerCount(): Promise<number> {
+  let count = 0;
+  let cursor: Record<string, unknown> | undefined;
+  do {
+    const page = await document.send(new QueryCommand({
+      TableName: tableName,
+      IndexName: "gsi1",
+      KeyConditionExpression: "gsi1pk = :state",
+      FilterExpression: "role_id = :owner",
+      ExpressionAttributeValues: { ":state": "IDENTITY#ACTIVE", ":owner": "owner" },
+      Select: "COUNT",
+      ExclusiveStartKey: cursor,
+    }));
+    count += page.Count ?? 0;
+    cursor = page.LastEvaluatedKey;
+  } while (cursor !== undefined);
+  return count;
+}
+
 export async function identityById(identityId: string): Promise<Identity | null> {
   const item = (await document.send(new GetCommand({
     TableName: tableName, Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" }, ConsistentRead: true,

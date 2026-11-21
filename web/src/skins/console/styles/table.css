@@ -14,7 +14,9 @@ html[data-skin="console"] .c-table-wrap {
 
 html[data-skin="console"] .c-table {
   width: 100%;
-  border-collapse: collapse;
+  /* Separate borders, so the sticky action cell keeps the same row rule as its row. */
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: var(--c-fs-m);
 }
 
@@ -114,6 +116,18 @@ html[data-skin="console"] .c-table .c-col-lead a:hover {
   color: var(--c-accent-text);
 }
 
+/* A clip column takes the width the other columns leave and cuts its value only when that runs out. */
+html[data-skin="console"] .c-table .c-col-clip {
+  width: 100%;
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+html[data-skin="console"] .c-table td.c-col-clip > * {
+  max-width: 100%;
+}
+
 html[data-skin="console"] .c-table .c-col-check {
   width: 44px;
   padding-right: 0;
@@ -125,14 +139,8 @@ html[data-skin="console"] .c-table .c-col-act {
   z-index: 1;
   width: 1%;
   background: var(--c-surface);
-  /* A sticky cell loses its collapsed border in Chromium; the shadow draws the row rule. */
-  box-shadow: inset 0 -1px 0 var(--c-line);
   text-align: end;
   white-space: nowrap;
-}
-
-html[data-skin="console"] .c-table tbody tr:last-child td.c-col-act {
-  box-shadow: none;
 }
 
 html[data-skin="console"] .c-table th.c-col-act {
@@ -216,6 +224,11 @@ html[data-skin="console"] .c-table-fixed td {
     content: attr(data-label);
   }
 
+  html[data-skin="console"] .c-table:not(.c-table-matrix) td.c-col-clip {
+    width: auto;
+    max-width: none;
+  }
+
   html[data-skin="console"] .c-table:not(.c-table-matrix) .c-col-lead {
     grid-column: 1 / -1;
     max-width: none;
@@ -246,7 +259,6 @@ html[data-skin="console"] .c-table-fixed td {
     gap: 8px;
     width: auto;
     background: none;
-    box-shadow: none;
   }
 
   html[data-skin="console"] .c-table:not(.c-table-matrix) td.c-col-act > * + * {

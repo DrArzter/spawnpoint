@@ -28,6 +28,8 @@ export type Column<Row> = Readonly<{
   onSort?: () => void;
   /** A width class the page owns, for a column that must not squeeze. */
   className?: string;
+  /** A long value: the column takes the width the others leave, and the value is cut with an ellipsis only when that runs out. */
+  clip?: boolean;
   /** Header content when it is not text, such as a select-all checkbox. */
   headerCell?: ReactNode;
 }>;
@@ -70,7 +72,7 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
         <thead>
           <tr>
             {columns.map((column, index) => (
-              <th aria-sort={column.sort ?? undefined} className={cx(column.kind && `c-col-${column.kind}`, column.className)} data-col={column.kind === "act" ? "actions" : undefined} data-rail={index === 0 ? "" : undefined} key={column.id} scope="col">
+              <th aria-sort={column.sort ?? undefined} className={cx(column.kind && `c-col-${column.kind}`, column.clip && "c-col-clip", column.className)} data-col={column.kind === "act" ? "actions" : undefined} data-rail={index === 0 ? "" : undefined} key={column.id} scope="col">
                 {column.headerCell ?? <HeaderLabel column={column} />}
               </th>
             ))}
@@ -82,7 +84,7 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
             {rows.map((row) => (
               <tr className={cx(selected?.(row) && "c-row-selected", fresh.has(rowKey(row)) && ARRIVED) || undefined} key={rowKey(row)}>
                 {columns.map((column, index) => (
-                  <td className={cx(column.kind && `c-col-${column.kind}`, column.className)} data-col={column.kind === "act" ? "actions" : undefined} data-rail={index === 0 ? "" : undefined} data-label={column.kind === "act" || column.kind === "lead" || column.kind === "check" ? undefined : column.header} key={column.id}>
+                  <td className={cx(column.kind && `c-col-${column.kind}`, column.clip && "c-col-clip", column.className)} data-col={column.kind === "act" ? "actions" : undefined} data-rail={index === 0 ? "" : undefined} data-label={column.kind === "act" || column.kind === "lead" || column.kind === "check" ? undefined : column.header} key={column.id}>
                     {column.render(row)}
                   </td>
                 ))}

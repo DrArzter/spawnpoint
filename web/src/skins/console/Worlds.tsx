@@ -222,7 +222,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
     { id: "name", header: "Name", kind: "lead", ...sortable("name"), render: (row) => <span className="c-worlds-name"><a href={row.href} title={row.world.displayName}>{row.world.displayName}</a><HostingMark className="c-worlds-hostmark" row={row} /></span> },
     { id: "status", header: "Status", ...sortable("status"), render: (row) => <Status status={row.status} /> },
     { id: "players", header: "Players", kind: "num", ...sortable("players"), render: (row) => <Players count={row.players} /> },
-    { id: "release", header: "Preset · release", ...sortable("release"), render: (row) => <ReleaseCell row={row} /> },
+    { id: "release", header: "Preset · release", clip: true, ...sortable("release"), render: (row) => <ReleaseCell row={row} /> },
     { id: "wipe", header: "Wipe", kind: "num", ...sortable("wipe"), render: (row) => row.wipe ? `#${row.wipe.number}` : <span className="c-faint">{row.wipeAbsent}</span> },
     { id: "hosting", header: "Hosting", className: "c-worlds-host", render: (row) => <HostingChip row={row} /> },
     { id: "address", header: "Address", kind: "optional", render: (row) => row.address ? <Address address={row.address} copy /> : <span className="c-faint">{row.addressAbsent}</span> },

@@ -29,12 +29,12 @@ export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
     { id: "build", header: "Build", render: (row) => <Status status={row.status} /> },
     { id: "latest", header: "Latest release", render: (row) => row.preset.latestRelease ? <span className="c-mono">{row.preset.latestRelease}</span> : <span className="c-faint">—</span> },
     { id: "releases", header: "Releases", kind: "num", render: (row) => row.preset.releases.length },
-    { id: "source", header: "Source", kind: "wide", render: (row) => <SourceRef row={row} /> },
+    { id: "source", header: "Source", kind: "wide", clip: true, render: (row) => <SourceRef row={row} /> },
     { id: "actions", header: "Actions", kind: "act", render: (row) => <>{row.build && <ActionButton action={row.build} size="sm" />}{row.createWorld && <ActionButton action={row.createWorld} size="sm" />}</> },
   ];
   const pointers: Column<PointerRow>[] = [
     { id: "world", header: "World", kind: "lead", className: "c-releases-world", render: (row) => <a href={row.href} title={row.world.displayName}>{row.world.displayName}</a> },
-    { id: "preset", header: "Preset", className: "c-releases-preset", render: (row) => <span title={row.presetName}>{row.presetName}</span> },
+    { id: "preset", header: "Preset", clip: true, render: (row) => <span title={row.presetName}>{row.presetName}</span> },
     { id: "release", header: "Release", render: (row) => <PointerRelease row={row} /> },
     { id: "wipe", header: "Wipe", kind: "num", render: (row) => { const wipe = row.world.wipes.find((item) => item.state === "current"); return wipe ? `#${wipe.number}` : <span className="c-faint">—</span>; } },
   ];

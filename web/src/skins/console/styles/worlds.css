@@ -110,8 +110,6 @@ html[data-skin="console"] .c-bystate-legend b {
   font-weight: 800;
 }
 
-@keyframes c-reveal { from { clip-path: inset(0 100% 0 0); } }
-
 html[data-skin="console"] .c-worlds-loading .c-tiles {
   margin: 0;
 }
@@ -154,10 +152,11 @@ html[data-skin="console"] .c-worlds-release {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  vertical-align: middle;
 }
 
 html[data-skin="console"] .c-worlds-release .c-mono {
-  max-width: 24ch;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

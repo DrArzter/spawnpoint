@@ -3,6 +3,8 @@
 - Status: Proposed
 - Date: 2026-09-16
 - Milestone: M4
+- Stop-gate rule ("every session stop takes a verified archive") is now recorded in
+  [ADR-0073](0073-a-stop-succeeds-only-when-the-worlds-archive-is-verified-on-its-host.md)
 - Amends: [ADR-0006](0006-on-demand-start-and-idle-shutdown.md), which keeps on-demand start and idle shutdown, and
   loses "every session stop powers the host down" as an unconditional step
 - Relates: [ADR-0010](0010-world-persistence-and-backups.md) (the verified archive every stop still takes, and its

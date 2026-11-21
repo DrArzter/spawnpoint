@@ -106,6 +106,23 @@ second_output="$("${SCRIPTS}/download-release.sh" minecraft main 1.0 "${host}/re
 grep -qx 'downloaded=0' <<<"${second_output}"
 grep -qx 'kept=2' <<<"${second_output}"
 
+# --- a killed start leaves temporary files; the next download removes them ---
+payload="${host}/releases/minecraft/main/1.0"
+mkdir -p -- "${payload}/.fetch.stale/mods"
+printf 'half a release\n' >"${payload}/.fetch.stale/mods/alpha.jar"
+printf 'half a link\n' >"${payload}/mods/.reuse.stale"
+printf '{}\n' >"${payload}/.manifest.stale"
+"${SCRIPTS}/download-release.sh" minecraft main 1.0 "${payload}" >/dev/null
+[[ ! -e "${payload}/.fetch.stale" && ! -e "${payload}/mods/.reuse.stale" && ! -e "${payload}/.manifest.stale" ]]
+
+# --- a second download of the same release waits for the first ---
+lock="${host}/releases/minecraft/main/.1.0.download.lock"
+exec 8>"${lock}"
+flock 8
+expect_failure "a download while another holds the release lock" \
+  env DOWNLOAD_LOCK_WAIT_SECONDS=0 "${SCRIPTS}/download-release.sh" minecraft main 1.0 "${payload}"
+exec 8>&-
+
 # --- self-healing: a tampered cache entry is refetched, not trusted ---
 printf 'corrupted\n' >>"${host}/releases/minecraft/main/1.0/mods/alpha.jar"
 heal_output="$("${SCRIPTS}/download-release.sh" minecraft main 1.0 "${host}/releases/minecraft/main/1.0")"

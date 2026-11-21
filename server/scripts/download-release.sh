@@ -23,6 +23,7 @@ payload_dir="${4:-}"
 require_command aws
 require_command jq
 require_command sha256sum
+require_command flock
 [[ -n "${RELEASE_BUCKET:-}" ]] || die "RELEASE_BUCKET is required"
 [[ "${game}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || die "invalid game id: ${game}"
 [[ "${preset_id}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || die "invalid preset id: ${preset_id}"
@@ -34,6 +35,14 @@ mkdir -p -- "${payload_dir}/mods" "${payload_dir}/overrides"
 if find "${payload_dir}/overrides" -mindepth 1 -type l -print -quit | grep -q .; then
   die "release cache contains a symbolic-link override"
 fi
+
+# One download per release at a time. Under the lock, temporary files left by
+# a start that was killed (no EXIT trap ran) belong to nobody and are removed.
+lock_file="$(dirname -- "${payload_dir}")/.$(basename -- "${payload_dir}").download.lock"
+exec 9>"${lock_file}"
+flock -w "${DOWNLOAD_LOCK_WAIT_SECONDS:-900}" 9 || die "another download of release ${release} is still running"
+rm -rf -- "${payload_dir}"/.fetch.* "${payload_dir}"/.manifest.*
+find "${payload_dir}/mods" "${payload_dir}/overrides" -name '.reuse.*' -type f -delete
 
 release_prefix="releases/${game}/${preset_id}/${release}"
 manifest_key="${release_prefix}/manifest.json"
@@ -68,6 +77,7 @@ jq -e '
     (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
     (.bytes | type == "number")
   ) and
+  (([.server.mods[].file] | unique | length) == (.server.mods | length)) and
   ((.server.overrides // []) | type == "array") and
   all((.server.overrides // [])[];
     (.path | type == "string" and length > 0 and (startswith("/") | not) and (contains("\\") | not) and
@@ -75,7 +85,8 @@ jq -e '
       (split("/")[0] | IN("config", "defaultconfigs", "kubejs", "scripts", "global_packs", "openloader"))) and
     (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
     (.bytes | type == "number" and floor == . and . >= 0)
-  )
+  ) and
+  (([(.server.overrides // [])[].path] | unique | length) == ((.server.overrides // []) | length))
 ' "${manifest_tmp}" >/dev/null || die "invalid manifest for release ${release}"
 [[ "$(jq -r '.release' "${manifest_tmp}")" == "${release}" ]] || die "manifest names a different release"
 [[ "$(jq -r '.game' "${manifest_tmp}")" == "${game}" ]] || die "manifest names a different game"
@@ -144,7 +155,10 @@ reuse_cached() {
     rm -f -- "${link_tmp}"
     return 1
   fi
-  mv -- "${link_tmp}" "${target}"
+  mv -- "${link_tmp}" "${target}" || {
+    rm -f -- "${link_tmp}"
+    return 1
+  }
   log "reused ${relative} from another cached release"
 }
 

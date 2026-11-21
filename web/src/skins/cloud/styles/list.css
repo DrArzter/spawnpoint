@@ -315,6 +315,6 @@ html[data-skin="cloud"] .c-listitem-standalone {
 
 @media (max-width: 759px) {
   html[data-skin="cloud"] .c-listitem-standalone {
-    grid-template-columns: minmax(0, 1fr) 116px;
+    grid-template-columns: minmax(0, 1fr) 124px;
   }
 }

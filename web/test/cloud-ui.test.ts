@@ -86,7 +86,7 @@ test("PageHeader: the breadcrumb is the title, with a back button for the phone"
 
 test("Card and Grid: the title at the start, actions at the end, a grid that stretches", () => {
   const card = html(createElement(Card, { title: "Session", count: 2, actions: "a", body: "flush" }, "body"));
-  assert.match(card, /<section class="c-card"><header class="c-card-head"><h2>Session<span class="c-count">2<\/span><\/h2><div class="c-card-actions">a<\/div>/);
+  assert.match(card, /<section class="c-card"><header class="c-card-head"><h2>Session<span class="c-count"><span class="c-tick">2<\/span><\/span><\/h2><div class="c-card-actions">a<\/div>/);
   assert.match(card, /c-card-body c-card-body-flush/);
   assert.match(html(createElement(Card, { label: "Hero" }, "x")), /<section aria-label="Hero" class="c-card">/);
   assert.match(html(createElement(Grid, { kind: "chart" }, "x")), /class="c-grid c-grid-chart"/);
@@ -382,4 +382,14 @@ test("DetailList: a hint is its own faint line, and a detail without a key spans
   }));
   assert.match(markup, /<span class="c-detail-value">.*Running.*<\/span><span class="c-detail-hint" data-tip="Shared game host · m7i-flex.large in eu-central-1a" tabindex="0"><span class="c-detail-hint-text">/);
   assert.match(markup, /c-detail-item c-span-full/);
+});
+
+test("A8 and A9 reach the counts and the rows: tiles and card counts tick, and a page hands its own arrivals to a table", () => {
+  assert.match(html(createElement(Tile, { status: { kind: "ok", label: "Online" }, count: 2, pressed: false, onPress: noop })), /<span class="c-tick c-tile-count">2<\/span>/);
+  assert.match(html(createElement(Card, { title: "Online now", count: 1 }, "x")), /<span class="c-count"><span class="c-tick">1<\/span><\/span>/);
+  const markup = html(createElement(Table<Row>, { label: "Worlds", rows: tableRows, rowKey: (row) => row.id, arrivals: new Set(["b"]), columns: [{ id: "n", header: "Name", render: (row) => row.name }] }));
+  assert.match(markup, /<tr class="c-arrived"><td[^>]*>Cinder/, "the row the page says arrived is marked");
+  assert.doesNotMatch(markup, /<tr class="c-arrived"><td[^>]*>Rostik/);
+  const list = html(createElement(TrackList<Row>, { label: "Ops", rows: tableRows, rowKey: (row) => row.id, arrivals: new Set(["a"]), tracks: [{ id: "n", header: "Name", width: "1fr", render: (row) => row.name }] }));
+  assert.match(list, /class="c-tracklist-row c-arrived" role="row"><span class="c-track" role="cell">Rostik/);
 });

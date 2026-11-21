@@ -37,11 +37,17 @@ export function TrackList<Row>({ label, tracks, rows, rowKey, empty, header = tr
   empty?: ReactNode;
   /** Draw the header row; a list of one obvious shape may leave it out. */
   header?: boolean;
-  /** Rows added while the list is shown arrive with a highlight (A9). */
-  arrivals?: boolean;
+  /**
+   * Rows that arrived while the view is open (A9). `true` works them out from
+   * the rows shown, for a list that shows every row; a paged or filtered list
+   * passes the set from `useArrivals` over all of the model's rows, so a page
+   * turn or a cleared filter marks nothing.
+   */
+  arrivals?: boolean | ReadonlySet<string>;
   className?: string;
 }>) {
-  const fresh = useArrivals(arrivals ? rows.map(rowKey) : []);
+  const tracked = useArrivals(arrivals === true ? rows.map(rowKey) : []);
+  const fresh = typeof arrivals === "object" ? arrivals : tracked;
   const style = {
     "--c-tracks": tracks.map((track) => track.width).join(" "),
     "--c-tracks-compact": tracks.filter((track) => track.kind !== "optional").map((track) => track.compactWidth ?? track.width).join(" "),

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cx } from "../../../lib/cx";
+import { Tick } from "./Tick";
 
 export type CardBody = "pad" | "flush" | "kv";
 
@@ -29,7 +30,7 @@ export function Card({ title, meta, count, titleTip, actions, body = "pad", clas
         <header className="c-card-head">
           <h2 data-tip={titleTip} tabIndex={titleTip ? 0 : undefined}>
             {title}
-            {count !== undefined && <span className="c-count">{count}</span>}
+            {count !== undefined && <span className="c-count"><Tick value={count} /></span>}
           </h2>
           {meta && <span className="c-card-meta">{meta}</span>}
           {actions && <div className="c-card-actions">{actions}</div>}

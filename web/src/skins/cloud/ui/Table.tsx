@@ -52,11 +52,17 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
   variant?: TableVariant;
   /** The table shares its width with a split panel. */
   split?: boolean;
-  /** Rows added while the table is shown arrive with a highlight (A9). */
-  arrivals?: boolean;
+  /**
+   * Rows that arrived while the view is open (A9). `true` works them out from
+   * the rows shown, for a table that shows every row; a paged or filtered table
+   * passes the set from `useArrivals` over all of the model's rows, so a page
+   * turn or a cleared filter marks nothing.
+   */
+  arrivals?: boolean | ReadonlySet<string>;
   className?: string;
 }>) {
-  const fresh = useArrivals(arrivals ? rows.map(rowKey) : []);
+  const tracked = useArrivals(arrivals === true ? rows.map(rowKey) : []);
+  const fresh = typeof arrivals === "object" ? arrivals : tracked;
   return (
     <div className={cx("c-table-wrap", split && "c-table-split", className)}>
       <table aria-label={label} className={cx("c-table", variant !== "default" && `c-table-${variant}`)}>

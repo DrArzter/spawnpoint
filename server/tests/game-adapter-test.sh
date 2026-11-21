@@ -484,4 +484,148 @@ done
 wait "${console_rcon_pid}"
 [[ "$(cat "${fixture}/console-rcon-command")" == "/players online" ]]
 
+# --- valheim: the A2S probe (ADR-0075), a two-file save, and no console ---
+(
+  source "${GAMES}/valheim/game.sh"
+  [[ "$(game_parse_player_count <<<'info_players=0
+info_max_players=10
+info_bots=0
+player_entries=0')" == "0" ]]
+  [[ "$(game_parse_player_count <<<'info_players=2
+info_max_players=10
+info_bots=0
+player_entries=2')" == "2" ]]
+  # A count the list does not bear out is refused, never read as empty.
+  if game_parse_player_count <<<'info_players=2
+info_max_players=10
+info_bots=0
+player_entries=0' >/dev/null 2>&1; then exit 1; fi
+  if game_parse_player_count <<<'Players connected (0):' >/dev/null 2>&1; then exit 1; fi
+  if game_parse_player_count <<<'Online players (0):' >/dev/null 2>&1; then exit 1; fi
+  # Another game's parser does not read this one's reply either.
+  source "${GAMES}/zomboid/game.sh"
+  if game_parse_player_count <<<'info_players=0
+info_bots=0
+player_entries=0' >/dev/null 2>&1; then exit 1; fi
+)
+(
+  source "${GAMES}/valheim/game.sh"
+  [[ "${GAME_CONNECT_PORT}" == "2456" && "${GAME_CONNECT_PROTOCOL}" == "udp" ]]
+  [[ "${GAME_RCON_PORT}" == "$((GAME_CONNECT_PORT + 1))" ]]
+  [[ "${GAME_DEFAULT_AUTH}" == "none" ]]
+  if declare -F game_console >/dev/null; then exit 1; fi
+  status=0
+  game_tick_time_ms 2>/dev/null || status=$?
+  [[ "${status}" == 2 ]]
+  [[ "$(game_save)" == "save_deferred=graceful_shutdown" ]]
+)
+
+# The probe speaks to the slot's query port, read when it runs: every entry
+# script loads the game before configure_game_compose exports the slot's ports.
+python3 - "$fixture" <<'VALHEIM_A2S' &
+import socket, struct, sys
+HEADER = b"\xff\xff\xff\xff"
+server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+server.bind(("127.0.0.1", 0))
+open(sys.argv[1] + "/valheim-a2s-port", "w").write(str(server.getsockname()[1]))
+while True:
+    data, peer = server.recvfrom(2048)
+    if data[4:5] == b"T":
+        body = b"I\x11Spawnpoint\x00spawnpoint\x00valheim\x00Valheim\x00" + struct.pack("<h", 0)
+        server.sendto(HEADER + body + bytes([1, 10, 0]) + b"dl\x01\x00" + b"1.0\x00", peer)
+    elif data[5:] != b"\x01\x02\x03\x04":
+        server.sendto(HEADER + b"A\x01\x02\x03\x04", peer)
+    else:
+        server.sendto(HEADER + b"D\x01" + b"\x00Viking\x00" + struct.pack("<if", 0, 1.0), peer)
+VALHEIM_A2S
+valheim_a2s_pid=$!
+for _ in $(seq 1 50); do
+  [[ -s "${fixture}/valheim-a2s-port" ]] && break
+  sleep 0.1
+done
+(
+  unset VALHEIM_QUERY_PORT SPAWNPOINT_RCON_PORT
+  source "${GAMES}/valheim/game.sh"
+  export SPAWNPOINT_RCON_PORT
+  SPAWNPOINT_RCON_PORT="$(cat "${fixture}/valheim-a2s-port")"
+  [[ "$(game_query_players_raw | game_parse_player_count)" == "1" ]]
+  game_ready none
+  game_ready healthy
+  if game_ready unhealthy; then exit 1; fi
+  # Nothing answers on this port: not ready, and no count.
+  SPAWNPOINT_RCON_PORT="$(python3 -c 'import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
+  if game_ready none; then exit 1; fi
+)
+kill "${valheim_a2s_pid}" 2>/dev/null || true
+wait "${valheim_a2s_pid}" 2>/dev/null || true
+
+# Dispatch through the catalog, and the files a session runs.
+cat >"${fixture}/valheim-catalog.json" <<'EOF'
+{"schema_version":1,"profile_source":{"repository":"https://example.invalid/profiles","commit":"0000000000000000000000000000000000000000"},"worlds":[{"id":"valheim","display_name":"Valheim test","profile_id":"valheim-vanilla","game":"valheim"}]}
+EOF
+output="$(WORLD_ID=valheim SPAWNPOINT_WORLD_CATALOG="${fixture}/valheim-catalog.json" bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; configure_game_compose; printf '%s\n%s\n%s\n' \"\${GAME_ID}\" \"\${SERVER_COMPOSE_SERVICE}\" \"\${SERVER_COMPOSE_FILES}\"")"
+[[ "${output}" == "valheim
+valheim
+${REPOSITORY_ROOT}/server/observability/compose.yaml:${REPOSITORY_ROOT}/server/games/valheim/compose.yaml" ]]
+output="$(WORLD_ID=valheim WORLD_FOOTPRINT_MEMORY_MIB=4096 SPAWNPOINT_SLOT=3 SPAWNPOINT_WORLD_CATALOG="${fixture}/valheim-catalog.json" bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; configure_game_compose; printf '%s %s %s\n' \"\${SPAWNPOINT_GAME_PORT}\" \"\${SPAWNPOINT_RCON_PORT}\" \"\${SERVER_COMPOSE_FILES}\"")"
+[[ "${output}" == "30030 30031 ${REPOSITORY_ROOT}/server/games/valheim/compose.yaml:${REPOSITORY_ROOT}/server/games/valheim/compose.footprint.yaml" ]]
+
+# The save is the world's two files, named by the server's own setting and
+# never by the world's id, with the lists that belong to the world.
+valheim_world="${fixture}/valheim-data"
+mkdir -p -- "${valheim_world}/worlds_local" "${valheim_world}/backups"
+printf 'seed\n' >"${valheim_world}/worlds_local/spawnpoint.fwl"
+printf 'buildings\n' >"${valheim_world}/worlds_local/spawnpoint.db"
+printf 'previous\n' >"${valheim_world}/worlds_local/spawnpoint.db.old"
+printf '// List admin players ID  ONE per line\n' >"${valheim_world}/adminlist.txt"
+printf '// List banned players ID  ONE per line\n' >"${valheim_world}/bannedlist.txt"
+printf 'an image backup\n' >"${valheim_world}/backups/worlds-20261121.zip"
+(
+  source "${GAMES}/valheim/game.sh"
+  game_save_sentinel "${valheim_world}" valheim
+  game_save_sentinel "${valheim_world}" valheim-rostik-1a2b3c4d
+  paths="$(game_save_paths "${valheim_world}" valheim | tr '\0' ' ')"
+  [[ "${paths}" == "worlds_local adminlist.txt bannedlist.txt " ]]
+
+  # Either file alone restores a different world, so neither is a save.
+  mkdir -p -- "${fixture}/valheim-half/worlds_local"
+  printf 'seed\n' >"${fixture}/valheim-half/worlds_local/spawnpoint.fwl"
+  if game_save_sentinel "${fixture}/valheim-half" valheim; then exit 1; fi
+  rm -- "${fixture}/valheim-half/worlds_local/spawnpoint.fwl"
+  printf 'buildings\n' >"${fixture}/valheim-half/worlds_local/spawnpoint.db"
+  if game_save_sentinel "${fixture}/valheim-half" valheim; then exit 1; fi
+  # A world of another name is not this server's save.
+  mkdir -p -- "${fixture}/valheim-other/worlds_local"
+  printf 'seed\n' >"${fixture}/valheim-other/worlds_local/Dedicated.fwl"
+  printf 'buildings\n' >"${fixture}/valheim-other/worlds_local/Dedicated.db"
+  if game_save_sentinel "${fixture}/valheim-other" valheim; then exit 1; fi
+)
+
+valheim_archive_output="$(
+  SPAWNPOINT_GAME=valheim \
+  SERVER_DATA_DIR="${valheim_world}" \
+  SERVER_BACKUP_DIR="${fixture}/backups" \
+  WORLD_NAME=valheim \
+    "${SCRIPTS}/archive-world.sh"
+)"
+valheim_archive="$(awk -F= '$1 == "archive" { print $2 }' <<<"${valheim_archive_output}")"
+valheim_listing="$(tar --list --zstd --file "${valheim_archive}")"
+grep -qx 'worlds_local/spawnpoint.fwl' <<<"${valheim_listing}"
+grep -qx 'worlds_local/spawnpoint.db' <<<"${valheim_listing}"
+grep -qx 'adminlist.txt' <<<"${valheim_listing}"
+if grep -q '^backups' <<<"${valheim_listing}"; then exit 1; fi
+SPAWNPOINT_GAME=valheim WORLD_NAME=valheim "${SCRIPTS}/verify-archive.sh" "${valheim_archive}" >/dev/null
+expect_failure "a valheim archive judged by another game's sentinel" \
+  env SPAWNPOINT_GAME=zomboid WORLD_NAME=valheim "${SCRIPTS}/verify-archive.sh" "${valheim_archive}"
+expect_failure "a factorio archive judged by valheim's sentinel" \
+  env SPAWNPOINT_GAME=valheim WORLD_NAME=factorio "${SCRIPTS}/verify-archive.sh" "${archive}"
+SPAWNPOINT_GAME=valheim WORLD_NAME=valheim \
+  "${SCRIPTS}/restore-world.sh" "${valheim_archive}" "${fixture}/valheim-restored" >/dev/null
+diff -r -- "${valheim_world}/worlds_local" "${fixture}/valheim-restored/worlds_local"
+cmp -- "${valheim_world}/adminlist.txt" "${fixture}/valheim-restored/adminlist.txt"
+expect_failure "archiving a valheim data dir with half a save" \
+  env SPAWNPOINT_GAME=valheim SERVER_DATA_DIR="${fixture}/valheim-half" \
+    SERVER_BACKUP_DIR="${fixture}/backups" WORLD_NAME=valheim \
+    "${SCRIPTS}/archive-world.sh"
+
 printf 'game-adapter-test: ok\n'

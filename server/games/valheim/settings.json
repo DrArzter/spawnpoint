@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "settings": [
+    {
+      "id": "server_name",
+      "label": "Server name",
+      "env": "SERVER_NAME",
+      "type": "text",
+      "default": "My Server",
+      "max_length": 40,
+      "pattern": "^[A-Za-z0-9 .,!?'()&+#/:-]+$",
+      "hint": "Letters, digits, spaces and . , ! ? ' ( ) & + # / : -. It must not contain the server password."
+    }
+  ]
+}

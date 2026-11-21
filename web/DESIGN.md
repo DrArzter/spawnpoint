@@ -1,401 +1,300 @@
 ---
 name: Spawnpoint Console
-description: A resource console in the Google Cloud console grammar — scope chip, drawer, worlds list opening into a world page.
+description: A resource console in the C+A grammar, an AWS-console flavour without its brand, on a content grid that uses the full width. ADR-0072.
 colors:
-  canvas: "#f8f9fa"
-  surface: "#ffffff"
-  surface-variant: "#f1f3f4"
-  outline: "#dadce0"
-  outline-strong: "#80868b"
-  ink: "#202124"
-  ink-secondary: "#5f6368"
-  primary: "#1a73e8"
-  primary-hover: "#1967d2"
-  primary-pressed: "#185abc"
-  primary-container: "#e8f0fe"
-  success: "#1e8e3e"
-  warning: "#f9ab00"
-  error: "#d93025"
-  info: "#1a73e8"
+  bg: "#F2F3F3"
+  surface: "#FFFFFF"
+  surface-2: "#F4F5F6"
+  surface-3: "#E7EAED"
+  line: "#E3E6E9"
+  line-2: "#C6CBD1"
+  ink: "#0F141A"
+  ink-2: "#56626F"
+  ink-3: "#6B7684"
+  accent: "#5B47D6"
+  accent-soft: "#EFECFC"
+  accent-text: "#4936BE"
+  band: "#161D26"
+  ok: "#1D7A35"
+  warn: "#8A5A00"
+  err: "#C3361B"
+  busy: "#1C68C4"
+  off: "#56626F"
+colors-dark:
+  bg: "#0E1319"
+  surface: "#161D26"
+  surface-2: "#1C2430"
+  ink: "#E8ECF0"
+  ink-2: "#AEB8C4"
+  accent: "#A897FF"
+  band: "#0A0F15"
+  ok: "#4CC47A"
+  warn: "#F0C45A"
 typography:
-  display-hero:
-    fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
-    fontSize: "44px"
-    fontWeight: 400
-    lineHeight: "52px"
-    letterSpacing: "-0.01em"
-  display-hero-phone:
-    fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
-    fontSize: "32px"
-    fontWeight: 400
-    lineHeight: "40px"
-  display:
-    fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
-    fontSize: "28px"
-    fontWeight: 400
-    lineHeight: "36px"
-  title:
-    fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
-    fontSize: "24px"
-    fontWeight: 400
-    lineHeight: "32px"
-  title-dialog:
-    fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
-    fontSize: "22px"
-    fontWeight: 400
-    lineHeight: "28px"
-  title-sheet:
-    fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
-    fontSize: "20px"
-    fontWeight: 500
-    lineHeight: "28px"
-  headline:
-    fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
-    fontSize: "18px"
-    fontWeight: 400
-    lineHeight: "24px"
-  subtitle:
-    fontFamily: "Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
-    fontSize: "16px"
-    fontWeight: 500
-    lineHeight: "24px"
-  app-bar-title:
-    fontFamily: "Google Sans Flex, Google Sans, Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
-    fontSize: "20px"
-    fontWeight: 500
-    lineHeight: "24px"
-  group-title:
-    fontFamily: "Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
-    fontSize: "14px"
-    fontWeight: 500
-    lineHeight: "20px"
   body:
-    fontFamily: "Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
-    fontSize: "14px"
-    fontWeight: 400
-    lineHeight: "20px"
-  body-reading:
-    fontFamily: "Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
-    fontSize: "14px"
-    fontWeight: 400
-    lineHeight: "22px"
-  label:
-    fontFamily: "Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
-    fontSize: "13px"
-    fontWeight: 500
-    lineHeight: "18px"
-  caption:
-    fontFamily: "Roboto, Helvetica Neue, Arial, system-ui, sans-serif"
-    fontSize: "12px"
-    fontWeight: 400
-    lineHeight: "16px"
+    fontFamily: "Manrope, system-ui, sans-serif"
+    fontSize: "15px"
+    lineHeight: "1.45"
   mono:
-    fontFamily: "Roboto Mono, ui-monospace, SF Mono, Menlo, Consolas, monospace"
-    fontSize: "13px"
-    fontWeight: 400
-    lineHeight: "20px"
-    fontFeature: "tabular-nums"
-  mono-small:
-    fontFamily: "Roboto Mono, ui-monospace, SF Mono, Menlo, Consolas, monospace"
-    fontSize: "12px"
-    fontWeight: 400
-    lineHeight: "16px"
-    fontFeature: "tabular-nums"
-  terminal-title:
-    fontFamily: "B612 Mono, ui-monospace, SF Mono, Menlo, Consolas, monospace"
-    fontSize: "18px"
-    fontWeight: 700
-    lineHeight: "24px"
-  terminal-label:
-    fontFamily: "B612 Mono, ui-monospace, SF Mono, Menlo, Consolas, monospace"
-    fontSize: "12px"
-    fontWeight: 700
-    lineHeight: "20px"
-    letterSpacing: "0.08em"
-    textTransform: "uppercase"
+    fontFamily: "JetBrains Mono, ui-monospace, monospace"
+    fontSize: "0.87em"
+  title:
+    fontSize: "28px"
+    fontWeight: 800
+    letterSpacing: "-0.02em"
+  crumb:
+    fontSize: "22px"
+    fontWeight: 600
+  card-title:
+    fontSize: "16px"
+    fontWeight: 800
 rounded:
-  indicator: "2px"
-  tab-indicator: "3px"
-  control: "4px"
-  card: "8px"
-  switch: "10px"
-  dialog: "12px"
-  nav-item: "20px"
+  card: "12px"
+  control: "10px"
+  small: "8px"
+  dialog: "18px"
   pill: "999px"
 spacing:
-  gutter: "24px"
-  gutter-mobile: "16px"
-  control-height: "36px"
-  row-height: "48px"
-  card-inset: "20px"
-  bar-height: "64px"
-  bar-height-mobile: "56px"
-  drawer-width: "256px"
-  rail-width: "72px"
-components:
-  button-filled:
-    backgroundColor: "{colors.primary}"
-    textColor: "#ffffff"
-    rounded: "{rounded.control}"
-    height: "{spacing.control-height}"
-    padding: "0 16px"
-  button-filled-hover:
-    backgroundColor: "{colors.primary-hover}"
-  button-outlined:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.primary}"
-    rounded: "{rounded.control}"
-    height: "{spacing.control-height}"
-  button-text:
-    backgroundColor: "transparent"
-    textColor: "{colors.primary}"
-    rounded: "{rounded.control}"
-  button-danger:
-    backgroundColor: "{colors.error}"
-    textColor: "#ffffff"
-    rounded: "{rounded.control}"
-  chip:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.pill}"
-    height: "28px"
-  card:
-    backgroundColor: "{colors.surface}"
-    rounded: "{rounded.card}"
-    padding: "16px 20px"
+  gutter: "clamp(16px, 2vw, 40px)"
+  gap: "16px"
+  gap-phone: "12px"
+  card-x: "18px"
+  card-y: "16px"
+motion:
+  d1: "140ms"
+  d2: "240ms"
+  d3: "420ms"
+  d4: "900ms"
+  ease: "cubic-bezier(.22, 1, .36, 1)"
+  ease-spring: "cubic-bezier(.34, 1.45, .64, 1)"
 ---
 
 # Design System: Spawnpoint Console
 
 ## Overview
 
-**Creative North Star: "The Hosting Panel"**
+The console is a resource console in the **C+A** grammar ([ADR-0072](../docs/adr/0072-draw-the-console-in-the-c-a-grammar.md)).
+It has the flavour of the AWS console without its brand: bold card headers with counts, tinted table headers with sort,
+key-value sections in equal columns, icon plus coloured text for status, a flashbar for operations and one primary
+button per page. It has no AWS logo, orange, font or names. Spawnpoint stays recognisable through its mark, its names
+and its game content.
 
-Spawnpoint is played straight in the Google Cloud console grammar: an app bar carrying a scope chip, a navigation drawer, a worlds list that opens into a world page, and every fact placed on a labelled detail row. It is a resource console, not a game dashboard — it refuses neon stat cards around a giant Start button, and it refuses the discarded incumbent's single-world command surface behind a breadcrumb picker. Depth is conveyed by hairline borders and tonal fills, not by neumorphic or offset shadows; the one reserved shadow is functional, not decorative, and appears only on temporary top-layer surfaces (menu, dialog, sheet, snackbar).
+The views live in `web/src/skins/console`. The models are core's
+([ADR-0059](../docs/adr/0059-separate-the-console-into-bones-and-skins.md)): a skin changes how a page is drawn, never
+what it offers. The source of the look is the prototype `~/.clowder/prototypes/ca/index.html` and the C+A skin
+specification of 2026-11-21.
 
-The content pane has no max width by design: it fills wide and 4K viewports the way the real Cloud console's resource tables do. Density comes from a 48px table row rhythm, an underline-tab pattern, and status rows that never rely on colour alone.
+The front door (landing, sign-in, join, email action and connect screens) is outside every skin. It keeps the base
+sheets in `web/src/styles` (`tokens.css`, `base.css`, `shell.css`, `components.css`, `landing.css`) and the shared
+parts in `web/src/components/ui`.
 
-**Key Characteristics:**
-- White app bar and drawer over a Grey-50 canvas, hairline borders throughout.
-- Google Blue reserved for actions, links and selection only — never decoration.
-- Status is always an icon plus a label; unlit states (Archived, Not created) are drawn on purpose, not left blank.
-- Flat surfaces at rest; one shadow vocabulary for transient top-layer chrome only.
-- No content-pane max-width: tables and detail pages fill the viewport.
+## Owner rules
 
-## Colors
+Every page keeps these rules. The UI gate (`scripts/check.sh ui`) and the contract tests check the ones that a
+machine can check.
 
-The palette is a light, hairline-bordered neutral field with a single blue accent; the dark theme swaps in the same roles at inverted lightness, never new hues.
+| # | Rule | What it means |
+|---|---|---|
+| R1 | No explanatory copy | A page title, card title or tab label stands alone. Text appears only where a person must decide or recover, and it is one line. A refusal reason is first the tooltip of the refused control. |
+| R2 | Nothing packed at one side | In a row, header or card head, identity is at the start edge and status, count or actions are at the end edge. |
+| R3 | A state shown once | One status mark per subject per view. The observed time shows only in the top bar. A desired release shows only while it differs from the active one. |
+| R4 | Aligned row columns | Rows of one list share column tracks (one `table`, or a grid with `subgrid`). Labels once, in a header row. One end-edge action column, one button style. |
+| R5 | Icons on the text centreline | An icon beside text sits in one `inline-flex` group with it, within 1px of the text's centre. |
+| R6 | The breadcrumb is the title | One page header. Earlier segments are quiet links; the last segment is the `h1`. No other heading repeats a segment. |
+| R7 | No theme control in the top bar | Theme is only in Profile › Appearance. |
+| R8 | Full width used | Card grids add columns with width. No content column is capped, except text inputs and dialogs. |
+| R9 | Motion with meaning | Only what the motion inventory lists moves. |
+| R10 | No flash on a page switch | A page switch never shows an empty frame or a skeleton. Notifications do not move during it. |
+| R11 | Cards in one grid row have one height | Every card grid stretches its rows. Card content stays at the top. |
+| R12 | AWS flavour without its brand | See the overview. |
+| R13 | Light and dark | Every colour is a token in `styles/tokens.css`. |
 
-### Primary
-- **Google Blue** (`#1a73e8`; `#8ab4f8` in dark): actions, links, selection, focus rings, active drawer item, active tab underline. Confined to controls and state — not used as a page background or card fill.
+Decisions on top of the rules: one Refresh per page, in the top bar; the iris accent is the default and a colour picked
+in Profile overrides it.
 
-### Neutral
-- **Canvas Grey** (`#f8f9fa`; `#222222` in dark): page background, distinct from surface white.
-- **Surface White** (`#ffffff`; `#333333` in dark): app bar, drawer, cards, dialogs, tables.
-- **Surface Variant** (`#f1f3f4`; `#3d3d3d` in dark): table-group header rows, code chips, empty-state icon well.
-- **Hairline Outline** (`#dadce0`; `#414141` in dark): every card border, table rule, divider.
-- **Ink** (`#202124`; `#f5f5f5` in dark) / **Ink Secondary** (`#5f6368`; `#aaaaaa` in dark): primary and secondary text, always this pairing — no third grey step.
+## Colours
 
-### Status roles (paired with Material icon + label, never colour alone)
-- **Success** (`#1e8e3e`; `#81c995` dark): ok / running.
-- **Warning** (`#f9ab00`; `#fdd663` dark): warning, the demo-mode badge in the app bar. Warning text on the warning container is a darker ink (`#9e5200`), chosen so 12px labels clear 4.5:1.
-- **Error** (`#d93025`; `#f28b82` dark): error, destructive actions.
-- **Info** (`#1a73e8`; `#8ab4f8` dark): info banners — shares the primary hue by design.
-- **Unlit** (ink-secondary): off, unknown, ready, archived, absent, pending statuses render in secondary ink with a dedicated Material glyph — never as empty text.
+All tokens live in `skins/console/styles/tokens.css` with the `--c-` prefix, scoped to `html[data-skin="console"]`.
+The dark block is `html[data-skin="console"][data-theme="dark"]`. Component sheets read only tokens; the
+`console-css` test refuses a raw colour, time or easing outside `tokens.css`.
 
-### Named Rules
-**The Icon-Plus-Label Rule.** Every status (`ok`, `progress`, `off`, `unknown`, `ready`, `error`, `warning`, `info`, `archived`, `absent`, `pending`) pairs a Material filled glyph with a text label (`.status`, `Status.tsx`). Colour alone never carries meaning.
+| Group | Tokens | Role |
+|---|---|---|
+| Ground | `--c-bg`, `--c-surface`, `--c-surface-2`, `--c-surface-3`, `--c-surface-pop` | Page, card, table header and hover, track and skeleton, dialog and menu |
+| Lines | `--c-line`, `--c-line-2` | Hairlines, control borders |
+| Ink | `--c-ink`, `--c-ink-2`, `--c-ink-3` | Text, labels, faint text (at least 4.5:1 on a surface) |
+| Accent | `--c-accent`, `--c-accent-ink`, `--c-accent-soft`, `--c-accent-text`, `--c-accent-line` | Primary button, focus ring, tab ink, chart line; text on accent; selected row; links; pressed chip |
+| Band | `--c-band`, `--c-band-2`, `--c-band-3`, `--c-band-ink`, `--c-band-ink-2`, `--c-band-focus` | The ink top bar and its controls |
+| Status | `--c-ok`, `--c-warn`, `--c-err`, `--c-busy`, `--c-off`, each with `-bg` | Status text and tints |
+| Flashbar | `--c-flash-busy`, `--c-flash-ok`, `--c-flash-err`, `--c-flash-ink` | Operation fills, the same in both themes |
+| Games | `--c-g-minecraft`, `--c-g-factorio`, `--c-g-zomboid`, `--c-g-other` | Game identity tint, never a status |
 
-**The Drawn Unlit State Rule.** Archived (`do_not_disturb_on`) and Not created (`add_circle_outline`) are designed ghost states with their own icon and secondary-ink colour, not a blank table cell. Ghost text (`.ghost`, `.secondary`) uses ink-secondary, never a lighter opacity trick.
+- **Accent.** The default accent is iris (`#5B47D6`, dark `#A897FF`). When a person picks a colour in Profile,
+  `styles/accent.ts` derives each role with its contrast checked and marks the root `data-accent="chosen"`; the
+  accent roles then follow the derived tokens. Reset returns to iris.
+- **Status is never the accent.** The accent never means "ok". Status is always an icon and a label, never colour
+  alone.
 
 ## Typography
 
-**Display/Title Font:** Google Sans Flex 400/500 (falls back to Google Sans, then Roboto).
-**Body Font:** Roboto 400/500/700.
-**Mono Font:** Roboto Mono 400/500, tabular figures.
+Manrope (400–800) for everything read, JetBrains Mono (400, 500) for IDs, addresses, releases and commands, at `.87em`
+of its context. `index.html` asks for both fonts before the first paint. Body is 15px/1.45 with tabular numbers.
 
-All three load from Google Fonts in `index.html`; system sans/monospace stacks are the fallback chain, not a substitute identity.
+| Token | Size | Use |
+|---|---|---|
+| `--c-fs-xs` | 12px | Table header, chip, badge, axis, group label (uppercase, 800) |
+| `--c-fs-s` | 13px | Secondary line, key label, pill |
+| `--c-fs-m` | 14px | Table cell, small button, menu item |
+| `--c-fs-body` | 15px | Body, field |
+| `--c-fs-h2` | 16px / 800 | Card title |
+| `--c-fs-dialog` | 19px / 800 | Dialog title |
+| `--c-fs-crumb` | 22px / 600 | Earlier breadcrumb segments, the title's count |
+| `--c-fs-h1` | 28px / 800 | Page title; 24px under 760px |
+| `--c-fs-stat` | 26px / 800 | Hero and stat card value; 22px under 760px |
 
-**Character:** Google Sans Flex carries page and dialog titles at a calm, unweighted 400; Roboto carries every control, label and body line; Roboto Mono marks anything that must be compared or copied precisely — IDs, addresses, checksums, timestamps.
-
-### Hierarchy
-- **Display, front door only** (Google Sans Flex 400, 44px/52px, tracking -0.01em; 32px/40px under 960px): the single headline of the landing page (`.landing-copy h1`). No console page uses it.
-- **Title** (Google Sans Flex 400, 24px/32px `h1`; 500 at 20px/28px for sheet headers; 22px/28px for dialog headers): page and world titles.
-- **Headline** (Google Sans Flex 400, 18px/24px `h2`): card and section headers, empty-state headline.
-- **Subtitle** (Roboto 500, 16px/24px `h3`): card-header titles. Detail-group titles inside a card step down to 14px/20px, and the app-bar wordmark is Google Sans Flex 500 at 20px/24px (18px under 960px, hidden under 600px).
-- **Body** (Roboto 400, 14px/20px): default body copy, details values, dialog content (max 60–80ch). The one variant is 14px/22px for running paragraphs in a measured column (`.landing-facts dd`), where 20px sets too tight.
-- **Label** (Roboto 500, 12–13px): field labels, table headers, drawer section labels, chip text.
-- **Mono/Data** (Roboto Mono 400/500, 12–13px, tabular-nums): IDs, addresses, checksums, terminal grammar, world-name subtitles.
-
-### Named Rules
-**The Three-Face Rule.** Titles are Google Sans Flex, everything functional is Roboto, everything precise is Roboto Mono. No component borrows a fourth face or a system display font.
+Icon sizes: 20 by default; 18 in a status and a button; 17 in a pill, an address and a copy button; 15–16 in a chip
+and dense rows; 28 in an empty state.
 
 ## Layout
 
-The shell is app bar (sticky, 64px; 56px under 959px) over a body split into drawer and content pane. The drawer is 256px wide and full height; between 960px and 1199px it collapses to a 72px icon rail (`data-rail`) until the user chooses to pin it open; under 959px it becomes a fixed modal panel behind a scrim, triggered by the menu button, with the icon-rail state expanding back to a labelled 256px list inside the modal.
+| Token | Value | Use |
+|---|---|---|
+| `--c-pad` | `clamp(16px, 2vw, 40px)` | Page gutter |
+| `--c-gap` | 16px, 12px under 760px | Grid gap |
+| `--c-card-x` / `--c-card-y` | 18px / 16px (14px x under 760px) | Card body inset |
+| `--c-bar` / `--c-rail` / `--c-bottom` | 56px / 80px / 60px | Top bar, rail, phone bottom bar |
+| `--c-lcol` | `clamp(320px, 21vw, 400px)` | List column of a split page |
+| `--c-row` / `--c-row-h` / `--c-gl-row` | 52px / 42px / 60px (compact 40 / 36 / 46) | Table row, table header, shared-track row |
+| `--c-ctl` / `--c-ctl-sm` / `--c-field` | 40px / 34px / 42px | Button, small button, field |
+| `--c-target` | 44px | Smallest touch target under 760px and on a coarse pointer |
 
-The content pane (`.main`) has **no max-width**: it fills the available viewport by design, from a narrow phone to a 4K desktop, matching the real Cloud console's resource-table pages. Page gutter is 24px (16px under 959px).
+Density (Comfortable or Compact) is set on `html[data-density]` from the table preferences menu. It changes only the
+row tokens and the tile height.
 
-**What fills the pane and what does not.** Tables and detail rows fill it: a row of facts is read across, and a
-wide table shows more of a column, not a longer line. Everything read as running text or as a shape keeps a measure
-whatever the viewport does — a card or page description at `72ch`, a dialog paragraph at `60ch`, the `.not-connected`
-line and the appearance note at `72ch`, a sparkline row and its scale at `960px`. A 4K monitor at its usual 150–200%
-scaling is a 1920–2560px viewport; the audit probes 2560 and 3840 so a measure that is missing shows up as a line that
-runs the width of the screen.
+### Grid
 
-The front door (`#/`, `LandingScreen`) is the one surface with a measure: its content sits in a centred `min(1120px, 100% - 2 * gutter)` column under the same app bar, with the sign-in button or the signed-in avatar menu at the bar's right and no drawer. Its product shot (`.shot`) is a still of the console built from the console's own status, card and avatar components, captioned as example data; nothing inside it is interactive.
-
-Tables run a 48px row rhythm with hairline rules between rows. Below 600px, each `.table-wrap` (a `container-type: inline-size` container) switches its table to a stacked record layout: the header row hides, each cell becomes a label/value pair from `data-label`, and the action row moves to the end of the stack. This is a container query, not a page media query — it fires per-table regardless of viewport.
-
-Touch targets grow twice: under 959px `.icon-btn-small` and `.btn-small` gain height; under any coarse pointer (`@media (pointer: coarse)`), buttons, icon buttons, inline selects, tabs and menu items step up to a 44px minimum (fields to 44px with 16px font, to avoid iOS zoom).
+One `Grid` primitive: `repeat(auto-fit, minmax(min(100%, var(--c-min)), 1fr))`, `align-items: stretch` (R11). Kinds:
+`detail` 360px, `chart` 440px, `stat` 200px, `name` 200px, `perm` 220px. Fixed grids keep the column counts the owner
+accepted: `home` 1, 2 from 1024px, 3 from 1200px, 4 from 2000px; `metrics` 1, 2 from 900px, 4 from 1900px; `profile`
+1, then `3fr 2fr` from 1600px; Releases stacked.
 
 ### Breakpoints
-Four steps, and no others. Every one-off breakpoint invented for a single component is invisible to the next person,
-who then invents a fifth — which is how this panel ended up with 599, 719, 959, 1099 and 1279 in play at once.
 
-| Step | Range | What changes |
-| --- | --- | --- |
-| **Compact** | `max-width: 599px` | Tables become stacked cards, actions take the full width and divide it evenly, dialogs dock to the bottom edge |
-| **Medium** | `max-width: 839px` | Rows with a control and a decision on them split into two lines: the person keeps the first, the control and the decision share the second, packed against the end. `DataTable decision` opts a table in (the access request); it is a container query on `.table-wrap`, like the Compact stacking, so it fires per table between 600 and 839px of table width |
-| **Shell** | `max-width: 959px` | The navigation drawer stops holding a column and overlays with a scrim; touch targets grow; type in fields reaches 16px so iOS stops zooming |
-| **Large** | `max-width: 1199px` | Columns that are worth reading but never worth the actions column scrolling away are dropped; the drawer defaults to its rail |
+| Step | What changes |
+|---|---|
+| 760px | Phone below: bottom bar instead of the rail, back button instead of the trail, dialogs dock to the bottom, 44px targets |
+| 1024px | Split pages show their list column; the scope switcher becomes a segmented group; the search field shows |
+| 1200px | The worlds quick look sits beside the table instead of as a sheet |
+| 1280px | The breadcrumb shows the game segment |
+| 1500px | The top bar shows the "Refreshed" text beside its Refresh button |
+| 2000px | The game home grid takes 4 columns |
 
-The shell step is 959 rather than 839 because it is where the drawer's column stops paying for itself, and it is
-matched in JavaScript — `useMediaQuery("(max-width: 959px)")` — so the layout and the behaviour cannot disagree. Any
-media query in the stylesheets must use one of these four numbers.
+Two primitives step by their own width, not the window's, because a split page gives them much less than the window
+(container queries):
 
-**The audit probes both sides of every step** (`web/tools/ui-audit`), because a rule that fires one pixel early is
-invisible to a list of round numbers.
+- **Table**: `optional` columns drop under 1040px of table width, `wide` columns under 960px, and under 760px each row
+  becomes a record whose cells carry their header as a label. The roles `matrix` stays a table and stands its role
+  names on end under 600px.
+- **PageHeader**: under 760px of header width the trail becomes the back button and the title may truncate, so the
+  header keeps one line with its actions at the end edge. On a phone the actions take a row of their own.
 
-## Elevation & Depth
+## Elevation and shape
 
-Surfaces are flat at rest: cards, tables and the app bar carry a hairline border, never a shadow. Depth is reserved for transient top-layer chrome only — the popover menu, the native `<dialog>`, the right-docked sheet and the snackbar each carry one of two shadow tokens. Buttons and switches use a small `shadow-1` only on hover/thumb, never at rest.
+Level 0 is the page (`--c-bg`). Level 1 is a card, the rail and the list column (`--c-surface`, `--c-shadow`). Level 3
+is a menu, dialog, palette, flashbar, toast and tooltip (`--c-surface-pop` or `--c-tip`, `--c-shadow-pop`); in dark it
+is one surface step lighter with a `--c-line-2` border. Menus and dialogs open in the top layer, so a moving page
+cannot carry them.
 
-### Shadow Vocabulary
-- **shadow-1** (`0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15)`; dark uses black at higher opacity): filled-button hover, switch thumb.
-- **shadow-3** (`0 1px 3px 0 rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.15)`; dark equivalent): menu popover, dialog, sheet, snackbar, and the mobile drawer only while it is open over the scrim.
+Radii: card, flashbar and toast 12px; field, tile and radio card 10px; copy button, menu item and tooltip 8px; dialog
+and bottom sheet 18px; button, pill, chip and segmented control 999px.
 
-### Named Rules
-**The Flat-By-Default Rule.** Persistent surfaces (app bar, drawer, cards, tables, banners) are flat with a hairline border. Shadow appears only on menu, dialog, sheet and snackbar — surfaces that float over the page and disappear on dismiss.
+## Motion
 
-## Shapes
+Tokens: `--c-d1` 140ms (hover, press, colour), `--c-d2` 240ms (small surfaces), `--c-d3` 420ms (panels, page moves),
+`--c-d4` 900ms (drawing), `--c-ease`, `--c-ease-spring`, and the named loops and dwells (`--c-d-tick`,
+`--c-loop-bar`, `--c-loop-spin`, `--c-loop-shimmer`, `--c-shake`, `--c-dwell-copy`, `--c-dwell-toast`). Timers in
+TypeScript read `ui/motion.ts`, which the `console-css` test holds equal to the tokens.
 
-Controls (buttons, fields, chips' pill, inline selects) use a 4px radius. Cards, banners, table-adjacent containers and the audience/recipient list use an 8px radius. Pills (chips, tab counts, scrollbar thumb) use a 999px full radius. Dialogs use 12px; the sheet is a right-docked full-height panel with 0 radius (edge-to-edge). Avatars, the mark, icon buttons and the empty-state icon well are circular.
+An element moves only when the movement tells a person something: a state changed, a thing arrived, or where a thing
+came from. Under `prefers-reduced-motion: reduce` every transition is instant and only colour and text change.
 
-## Components
+| # | Element | Trigger | Motion |
+|---|---|---|---|
+| A1 | Page switch | Navigation to another page | View Transition on the page area only: the new page slides in from 56px as an opaque sheet, the old one slides back and fades |
+| A2 | Pane switch | Navigation inside a split page | As A1 on the pane only, vertical |
+| A3 | Tab switch | Tab activation | The panel fades up 8px; the tab ink slides |
+| A4 | Card entrance | First view of a page in the session | All cards rise 12px together; no stagger |
+| A5 | Chart draw-in | First view of Metrics; a range change | Reveal from the left |
+| A6 | Strip and worlds-by-state bar | First view; a count change | Reveal; segments move |
+| A7 | Status change | A world's status value changed | Pop and a one-time ring |
+| A8 | Number tick | A count changed | Counts to the new value with a small lift |
+| A9 | Row arrival | A new row key while the page is open | Fades in with a soft accent background that clears |
+| A10–A12 | Flashbar, busy bar, spinner | An operation starts, changes or ends | Item springs in and collapses out; indeterminate bar; spinner |
+| A13–A17 | Quick look, dialog, menu and palette, toast, tooltip | Open | Slide or fade at their anchor |
+| A18–A21 | Hover and press, toggle, refused-action shake, copy check | Pointer, change, refusal, copy | Colour, a small press, a two-pass shake, a check icon |
 
-### Buttons
-- **Shape:** 4px radius, 36px height (32px `btn-small`, 44px on coarse pointers).
-- **Filled:** Google Blue background, white text; hover darkens to `#1967d2` with `shadow-1`; pressed darkens further with no shadow.
-- **Outlined:** hairline border, blue text, blue-tinted hover fill (`primary-state`).
-- **Text:** no border, blue text, blue-tinted hover/active fill.
-- **Danger / Danger-text:** same shapes, error red in place of blue.
-- **Busy:** label goes transparent, a spinning `ProgressRing` centres over the button (`aria-busy`).
+Never animated: the top bar, rail and bottom bar; the flashbar and toasts during a page switch (they float above the
+transition); content re-rendered by polling or refresh (only A7–A9 react to a real change); unchanged numbers; table
+rows on sort or filter; focus rings; skeletons on a page switch; any attention pulse on an idle element.
 
-### Chips
-- **Style:** pill (999px), hairline border, white surface by default.
-- **Tonal/primary/success/warning/error:** borderless, filled with the matching container tone.
-- **State:** toggle chips (`button.chip[aria-pressed="true"]`) switch to the primary-container fill.
+## Frame
 
-### Cards / Containers
-- **Corner Style:** 8px.
-- **Background:** surface white (surface `#333333` dark), hairline border, no shadow.
-- **Shadow Strategy:** none at rest — see Elevation & Depth.
-- **Internal Padding:** header 16/20/12px, body 4/20/20px, footer 12/20px with a hairline top rule.
-- **One start edge (`--card-inset`, 20px):** the title, the body, a filter bar, a details row and the first and last
-  cells of a flush table all start 20px in, at every width. The breakpoint gate checks it (`offRail`).
+- **Top bar** (ink band): brand, the game as a pill switcher with its own status, search (`/` or Ctrl K), the
+  Refreshed time with the one Refresh button, the Demo chip and the account avatar. No theme control.
+- **Rail** (760px and up): Home, Worlds, Releases, a divider, Access with its request badge, Profile. On a phone the
+  same items are a bottom bar.
+- **Page header**: the breadcrumb is the title; status after it; actions at the end edge of the same row.
+- **Flashbar**: operations and outcomes, fixed at the end edge; it never pushes the page.
+- **Toast**: refusal reasons and short outcomes, bottom centre.
 
-### Inputs / Fields
-- **Style:** 40px min-height, hairline-strong border, 4px radius, white surface.
-- **Focus:** border turns blue with an inset 1px blue ring (no glow/blur).
-- **Disabled:** ink-disabled text, hairline border, transparent background.
-- **Select:** native appearance removed, custom chevron SVG swapped per theme.
-- **Error:** the field's `error` prop, a line in `--error-ink` under the hint, which stays because it often names what
-  may be typed; the input carries `aria-invalid`. Both faces' field primitives draw it, so no form styles its own. The
-  game settings sheet is the first user: one field per setting, drawn by its kind (select, number, text or switch).
-- **Entry form:** one value and the button that submits it, on one line (`.entry-form`, and `.t-entry-form` in the
-  terminal): an invitation's email, a player's name on a world's whitelist. The button is centred on the input whatever
-  hint or error the field shows under it, and takes its own line on a phone.
-- **Person:** the avatar, the name and an optional second line, in the access tables and the whitelist. One component
-  per face (`skins/console/Person.tsx`, `Person` in the terminal's `ui.tsx`); no table builds the cell by hand.
+## Primitives
 
-### Navigation
-- **App bar (64px, 56px mobile):** menu button, mark (32px rounded-square, blue fill), title (Google Sans Flex 500/20px), divider, scope chip (outlined pill-like control naming the active game), spacer, theme toggle, avatar (40px circle).
-- **Drawer (256px):** grouped nav items, 40px pill rows, active item gets `primary-container` fill and `on-primary-container` text; section labels are 12px/500 secondary ink; footer pinned to the bottom.
-- **Icon rail (960–1199px):** same drawer, collapsed to 72px, items become 48px circles, labels/sections/footer hidden until pinned open.
-- **Mobile drawer (<960px):** fixed modal panel sliding from the left over a scrim, `shadow-3` while open.
-- **Tabs:** underline pattern — 48px row, secondary ink at rest, blue text plus a 3px blue underline bar when selected; a pill count badge follows the label; on a narrow screen the row scrolls sideways and keeps the selected tab inside it, on both faces.
-- **Table:** 48px header and body rows, hairline rules, hover tint, row-actions column right-aligned and width-collapsed; below 600px width (container query) collapses to stacked label/value records per row with the action row last. A `decision` table (person, control, decision) takes the Medium step first: between 600 and 839px of table width the person has the first line and the control and decision share the second.
-- **Page header:** breadcrumb, `h1`, status beside the name, actions and the overflow menu in a second unbreakable group; `leading` holds what stands for the resource before its name — a person's 64px avatar on the profile page — and `subtitle` is the name's own second line (a handle, 14px/20px secondary ink), where `description` is a sentence about the page under the whole row. Every console page that shows a title uses it; list pages carry a visually hidden `h1` and let the drawer name the page.
+One file per primitive in `skins/console/ui/`, styles in `skins/console/styles/<primitive>.css`, classes
+`c-<primitive>[-part]`. Every control that runs an `Action` renders `data-action`, `aria-disabled` while refused (it
+stays focusable and shows the hint) and `aria-busy` while busy. Contract tests: `test/console-ui.test.ts`,
+`test/console-markers.test.ts`, `test/console-contract.test.ts`.
 
-### Menu (popover)
-Fixed-position popover with `::backdrop` transparent, 4px radius, `shadow-3`, 8px vertical padding, 40px-min-height items with a leading secondary-ink icon; entrance is a 180ms fade/scale-up from the anchor. Two triggers share it: the overflow icon button and the app-bar avatar.
+| Primitive | Use |
+|---|---|
+| `ActionButton`, `IconButton` | One Action. Variants `primary` (one per page), `default`, `danger` (confirmation footer only), `ghost` (card-head links); sizes `md` 40px and `sm` 34px, 44px under 760px |
+| `Overflow`, `Menu`, `MenuButton` | The row and page "more" menu. Always a menu, so a column has one control; danger items in a last group under a rule |
+| `Card`, `Grid`, `SplitPage`, `ListColumn` | Surfaces and layout |
+| `PageHeader`, `Tabs`, `Toolbar` | Page structure |
+| `Table`, `TrackList`, `DetailList` | Rows on shared tracks; key-value sections in equal columns |
+| `Status`, `Indicator`, `Chip`, `Tile`, `Tick` | State: icon and label; icon with the label in the tooltip; facts; status count tiles; ticking counts |
+| `Notice`, `Empty`, `Skeleton`, `ProgressBar` | One-line notices; empty and error states; loading at the final geometry; indeterminate work |
+| `Dialog`, `SidePanel`, `Palette`, `Flashbar`, `Toast`, `Tooltip` | Layers |
+| `Field`, `TextInput`, `NumberInput`, `ColourInput`, `Select`, `Toggle`, `RadioCards`, `Checkbox`, `Segmented`, `FilterBar`, `Pager`, `Preferences` | Input |
+| `Address`, `Copy`, `Person`, `Avatar`, `GameGlyph`, `Ago` | Facts with a fixed form |
+| `StatCard`, `TimeSeriesChart`, `Terminal` | Metrics and the world console |
 
-### Dialog and Sheet
-- **Dialog:** native `<dialog>`, 520px max width, 12px radius, `shadow-3`, scrim backdrop, 24px body padding, actions right-aligned.
-- **Sheet:** native `<dialog>` docked to the right edge, full height, 480px max width, 0 radius, header/body/footer split with hairline rules, slides in from the right (24px translate, 180ms).
+A primitive that promises a layout emits its marker (`data-layout`, `data-rail`, `data-col`, `data-status`,
+`data-scope`, `data-layer`); the UI gate reads them (`web/tools/ui-audit/README.md`).
 
-### Snackbar
-Fixed bottom-left host (bottom-full-width on phones), dark-on-light-theme inverted surface (`--snack-bg`/`--snack-ink`), 48px min-height, `shadow-3`, one action in `--snack-action` blue-tint; success/error variants tint only the leading icon.
+## States
 
-### Terminal (signature component)
-A committed terminal grammar on the world Console tab: dark surface regardless of theme (`--term-bg`/`--term-ink`), header bar with an online/offline status dot, monospace output with muted and amber line roles, and an input row with quick-command chips. The world's Metrics tab sits beside it and draws only the host that world's session runs on. This is the one place the console departs from the light Material surface, by design, to read as a real shell.
-
-### A header earns its place
-A column heading is worth a line when the column would otherwise be ambiguous — `Status`, `Wipe`, `Stored`, `Size`.
-It is noise above a column that says what it is: a person with an avatar, a select already showing `Owner`, a pair of
-buttons. Those tables pass `hideHeader`, which keeps the row in the markup for anybody reading the table aloud and
-stops it taking a line on screen.
-
-The same test applies to a card's description. If it restates the columns beneath it, delete it; keep it only for a
-fact that appears nowhere else — that nothing here is overwritten, that a pack link expires in an hour, that these
-fields are read-only because an Owner manages them.
-
-### Three kinds of nothing
-A screen with nothing on it is saying one of three different things, and they must not look alike.
-
-| The reader sees | It means | How it is drawn |
-| --- | --- | --- |
-| **Empty** | The feature works. There is nothing to show yet. | `EmptyState`, with the icon of the thing that is missing — a backup, a world, a role — and a sentence about what would put something here |
-| **Waiting on a condition** | The feature works. Something has to happen first. | `EmptyState` with the same domain icon, plus the action that satisfies the condition where one exists |
-| **Not connected** | The feature does not exist in this deployment yet. | `NotConnected`, which draws the closed sign `do_not_disturb_on` and offers no retry, because nothing the reader does today will make it answer |
-
-An empty state wears **the icon of its own feature**, the same one the rail or the tab carries, so the screen still says
-where you are when it has nothing to say: `public` for worlds, `inventory` for presets and releases, `backup` for
-backups, `history` for wipes, `admin_panel_settings` for roles, `person_add` for access requests, `group` for players,
-`link` for linked accounts, `sync` for operations.
-
-Two icons are deliberately not the feature's, because they report something other than emptiness. `lock` says *your role
-may not*. `do_not_disturb_on` says *this is not open yet*. Reaching for the wrong one tells somebody to go and ask for a
-permission that would not help them — and giving a closed feature its own icon would blur it back into an empty one,
-which is the distinction this section exists to draw.
-
-`NotConnected` has two shapes, and the choice is about **how much is missing**, not about where it sits. The full
-state — big sign, heading, sentence — is for a whole page or feature that is absent: there is nothing else to look at.
-`inline` draws a strip, for a feature that works while one part of it does not: the links are all there and listed, only
-adding and removing them is unbuilt. Using the full state for a missing part writes "nothing here" over something that
-is plainly there.
-
-Which of the three applies is not a judgement made in the screen. `unavailable` from the transport means not connected;
-anything else that yields no rows is an empty state. See [ADR-0053](../docs/adr/0053-tell-not-built-apart-from-broken.md).
+- **Boot**: a centred card with the mark, one title and an indeterminate bar.
+- **Loading**: the region's skeleton at its final geometry; the header, tabs and card heads draw at once.
+- **Empty**: one icon, one title, at most one Action.
+- **Error**: the empty state's error variant with the reason as one line and Retry. A refused role shows a lock and
+  no Retry.
 
 ## Skins
 
-Since [ADR-0059](../docs/adr/0059-separate-the-console-into-bones-and-skins.md) everything above describes one skin,
-`console`, the default face. A skin is a set of views over the same models; it may not change what a page offers,
-only how it is drawn. Every skin keeps the colour roles in this file: the owner wants the palette recognisable across
-their projects, so a skin changes type, shape, motion and chrome, never the hue of a status or the blue of an action.
-The front door and sign-in are outside the skin and always wear the console face. The boot screens wear the remembered
-skin from the first frame: `index.html` stamps `html[data-skin]` from `spawnpoint.skin` (or `?skin=`) before anything
-is painted and asks for the skin's font, `main.tsx` paints the remembered accent and theme before the first render, and
-`App` confirms or removes the stamp for the surface it shows (`wearOnDocument`).
+A skin is a set of views over the same models; it may not change what a page offers, only how it is drawn
+([ADR-0059](../docs/adr/0059-separate-the-console-into-bones-and-skins.md)). Two skins ship: `console`, the default,
+described above, and `terminal`. A person picks one in Profile › Appearance › Look, or tries one with `?skin=`.
+
+`index.html` stamps `html[data-skin]` from `spawnpoint.skin` (or `?skin=`, else `console`) before the first paint and
+asks for the skin's fonts. `main.tsx` paints the remembered accent and theme before the first render, and `App`
+confirms or removes the stamp for the surface it shows (`wearOnDocument`): the front door never wears a skin.
 
 ### Terminal
 
 `skins/terminal` draws the console as one monospace screen: a top row, a menu row, then the grid, every row the full
 width on a phone as on a 4K monitor. Every view is the face's own, built from its own vocabulary in `ui.tsx` (panel,
 verb, mark and state, table, tabs, field, toggle, details, overflow, modal, drawer) and styled only by `terminal.css`
-in its own `t-*` classes; the console's components and stylesheet play no part in it. The rules apply while the
+in its own `t-*` classes; the console face's primitives and sheets play no part in it. The rules apply while the
 document carries `html[data-skin="terminal"]`, which `index.html` stamps before the first paint and `App` keeps true.
 
 - **One face.** B612 Mono for everything, loaded on demand when the skin mounts. Two weights, 400 and 700, and
@@ -461,7 +360,7 @@ document carries `html[data-skin="terminal"]`, which `index.html` stamps before 
   web shimmer; text uses a small fixed vocabulary of widths. The metrics wells stay at their final 120px height so
   nothing moves when the numbers land. Reduced motion freezes every trace. Simple waits and boot sequences may still
   use one `[~]` line when there is no useful final geometry to show.
-- **Spacing.** The page gutter and the gap between panels are the console's (24px, 16px on a phone); a named panel
+- **Spacing.** The page gutter and the gap between panels come from the base tokens (`--gutter`: 24px, 16px on a phone); a named panel
   keeps 10px more above it for the name on its rule, 20px when its verbs sit there too, an unnamed one does not. Cells are 16px in from the rule, 12px at
   the medium step so the worlds table fits a tablet in the wider face. Under a coarse pointer the frame's controls
   (scope, avatar, menu words) are 36px tall inside their 40px rows and a chip is 32px.
@@ -471,15 +370,19 @@ document carries `html[data-skin="terminal"]`, which `index.html` stamps before 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** pair every status with a Material filled icon and a label (`ok`, `progress`, `off`, `unknown`, `ready`, `error`, `warning`, `info`, `archived`, `absent`, `pending`) — never colour alone.
-- **Do** draw unlit states (Archived, Not created, no address) as their own icon-and-label state, not an empty cell.
-- **Do** tell "nothing yet" apart from "not built yet": an empty state carries the icon of what is missing, a closed feature carries `do_not_disturb_on`.
-- **Do** keep the content pane unconstrained in width; it is a resource console, not a centred marketing column.
-- **Do** reserve shadow for menu, dialog, sheet and snackbar; every other surface stays flat with a hairline border.
-- **Do** use Google Sans Flex only for titles; Roboto for everything functional; Roboto Mono for anything precise or comparable.
+- **Do** pair every status with its icon and a label; never colour alone.
+- **Do** put identity at the start edge and status, counts and actions at the end edge of every row.
+- **Do** draw a list as one table or one shared-track grid, with labels once and one action column.
+- **Do** let card grids add columns with width, and stretch the cards of one row to one height.
+- **Do** keep the one Refresh in the top bar; a page shows its own refresh only as Retry in an error state.
+- **Do** put a refusal reason in the refused control's tooltip first.
+- **Do** read every colour, time and easing from `skins/console/styles/tokens.css`.
 
 ### Don't:
-- **Don't** use Google Blue as a background fill outside containers, selection and controls — it marks action and state, not decoration.
-- **Don't** add a shadow to a persistent surface (card, table, app bar, drawer) to fake depth; use the hairline border and tonal fill instead.
-- **Don't** cap the content pane's width; the 4K and wide-viewport case is a design target, not an overflow to hide.
-- **Don't** introduce a kicker/eyebrow label, a hard-offset neobrutalist shadow, or a system display face; none exist in the build and none should be added.
+- **Don't** add a subtitle, helper line or section intro (R1).
+- **Don't** say a state twice in one view (R3).
+- **Don't** repeat the page title in a heading, card title or tab (R6).
+- **Don't** put a theme control in the top bar (R7).
+- **Don't** cap the content width; the 4K case is a design target.
+- **Don't** animate anything the motion inventory does not list, or move notifications during a page switch.
+- **Don't** use AWS names, its logo, its orange or its font.

@@ -149,6 +149,11 @@ export const demoApi: SpawnpointApi = {
     store.setIdentityRole(identityId, roleId);
   },
 
+  async deleteIdentity(identityId: string) {
+    await demoLatency();
+    store.deleteIdentity(identityId);
+  },
+
   async loadControlPlane() {
     await demoLatency(snapshotServed ? "call" : "boot");
     snapshotServed = true;

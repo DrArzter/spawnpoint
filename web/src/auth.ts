@@ -51,6 +51,7 @@ export const dismissAccessCandidate = (platform: string, platformUserId: string)
 export const loadAccessIdentities = () => api.loadAccessIdentities();
 export const loadAccessRoles = () => api.loadAccessRoles();
 export const updateIdentityRole = (identityId: string, roleId: string) => api.updateIdentityRole(identityId, roleId);
+export const deleteIdentity = (identityId: string) => api.deleteIdentity(identityId);
 
 export const loadControlPlane = () => api.loadControlPlane();
 export const subscribeControlPlane = (onInvalidated: () => void) => api.subscribeControlPlane(onInvalidated);

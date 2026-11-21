@@ -62,8 +62,18 @@ export async function resolveIdentity(principal: Caller, accountItem?: Item): Pr
   return profile.Item === undefined ? null : identityFromItem(profile.Item);
 }
 
+async function bootstrapClaimed(): Promise<boolean> {
+  const claim = await document.send(new GetCommand({
+    TableName: tableName, Key: { pk: "SYSTEM", sk: "BOOTSTRAP" }, ConsistentRead: true,
+  }));
+  return claim.Item !== undefined;
+}
+
+// The bootstrap is claimed once. After that the configured account is an
+// ordinary visitor, also when its Owner identity was deleted.
 export async function bootstrapOwner(account: Caller): Promise<Identity | null> {
   if (account.provider !== "telegram" || account.subject !== bootstrapOwnerTelegramId) return null;
+  if (await bootstrapClaimed()) return null;
   const identityId = randomUUID();
   const now = new Date().toISOString();
   const name = account.displayName;
@@ -91,6 +101,7 @@ export async function bootstrapOwner(account: Caller): Promise<Identity | null> 
   } catch (error) {
     const existing = await resolveIdentity(account);
     if (existing !== null) return existing;
+    if (await bootstrapClaimed()) return null;
     console.error("owner_bootstrap_failed", {
       errorName: error instanceof Error ? error.name : "UnknownError",
       message: error instanceof Error ? error.message : "Unknown DynamoDB transaction failure",

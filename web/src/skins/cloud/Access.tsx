@@ -407,7 +407,7 @@ function RolesPane({ model, users }: Readonly<{ model: RolesModel; users: UsersM
         header: role.name,
         className: "c-access-cell",
         // The button says what it opens; the count is labelled for a screen reader, as its column header reads only the role.
-        headerCell: <span className="c-access-role-head"><ActionButton action={{ ...read, label: `${role.name} permissions`, icon: undefined }} size="sm" variant="ghost" /><span aria-label={`${holders(role)} ${holders(role) === 1 ? "person" : "people"}`} className="c-faint" role="img">{holders(role)}</span></span>,
+        headerCell: <span className="c-access-role-head"><ActionButton action={{ ...read, label: role.name, icon: undefined }} name={`${role.name} permissions`} size="sm" variant="ghost" /><span aria-label={`${holders(role)} ${holders(role) === 1 ? "person" : "people"}`} className="c-faint" role="img">{holders(role)}</span></span>,
         render: (permission) => role.permissions.includes(permission)
           ? <Indicator status={{ kind: "ok", label: "Granted" }} />
           : <span aria-label="Not granted" className="c-faint" role="img">—</span>,

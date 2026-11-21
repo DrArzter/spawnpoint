@@ -136,7 +136,9 @@ test("cloud: access draws Delete user only when the model gives it (slice C), in
 test("cloud: a roles matrix header names what it opens and labels its member count", () => {
   const roles = { ...access.roles, roles: { status: "ready", value: access.users.roles } } as AccessModel["roles"];
   const markup = renderToStaticMarkup(createElement(cloudSkin.Access, { model: { ...access, tab: "roles", roles } }));
-  assert.match(markup, /data-action="access.role.read"[^>]*>(<[^>]+>)*Player permissions/);
+  const head = markup.match(/<button[^>]*data-action="access.role.read"[^>]*>.*?<\/button>/)?.[0] ?? "";
+  assert.match(head, /aria-label="Player permissions"/);
+  assert.match(head, />Player</, "the visible text is the role alone; the Permission column already says what the cells are");
   assert.match(markup, /aria-label="1 person"/);
 });
 

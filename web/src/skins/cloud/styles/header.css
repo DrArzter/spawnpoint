@@ -1,8 +1,10 @@
 /* PageHeader (the breadcrumb is the title) and Toolbar. */
 
+/* One line from the tablet step: the title gives way (the h1 truncates), the actions never wrap. */
 html[data-skin="cloud"] .c-page-header {
   display: flex;
-  flex-wrap: wrap;
+  container: c-head / inline-size;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px 16px;
@@ -81,7 +83,8 @@ html[data-skin="cloud"] .c-crumbs h1 .c-count {
 
 html[data-skin="cloud"] .c-page-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex: none;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
@@ -113,18 +116,12 @@ html[data-skin="cloud"] .c-toolbar-end {
   margin-left: auto;
 }
 
-@media (max-width: 1279px) {
-  html[data-skin="cloud"] .c-crumb-game {
-    display: none;
-  }
-}
-
-@media (max-width: 759px) {
-  html[data-skin="cloud"] .c-page-title {
-    flex-basis: 100%;
-    gap: 8px;
-  }
-
+/*
+ * A header narrower than its trail, title, status and actions (a split pane
+ * from the tablet step) keeps one line: the trail becomes the back button, as
+ * on a phone, and the title may truncate to its first letters.
+ */
+@container c-head (max-width: 760px) {
   html[data-skin="cloud"] .c-page-back {
     display: grid;
     place-items: center;
@@ -136,6 +133,31 @@ html[data-skin="cloud"] .c-toolbar-end {
 
   html[data-skin="cloud"] .c-crumb {
     display: none;
+  }
+
+  html[data-skin="cloud"] .c-crumbs h1 {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 1279px) {
+  html[data-skin="cloud"] .c-crumb-game {
+    display: none;
+  }
+}
+
+@media (max-width: 759px) {
+  html[data-skin="cloud"] .c-page-header {
+    flex-wrap: wrap;
+  }
+
+  html[data-skin="cloud"] .c-page-actions {
+    flex-wrap: wrap;
+  }
+
+  html[data-skin="cloud"] .c-page-title {
+    flex-basis: 100%;
+    gap: 8px;
   }
 
   html[data-skin="cloud"] .c-page-actions {

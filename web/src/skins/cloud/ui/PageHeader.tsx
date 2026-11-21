@@ -7,9 +7,9 @@ export type Crumb = Readonly<{ label: string; href: string; /** The game segment
 /**
  * The page header. The breadcrumb is the title: earlier segments are quiet
  * links on the title's baseline, the last one is the h1 with its count.
- * Status and chips follow the title; actions sit at the end edge and wrap to
- * the end of a second row when space is short. On a phone the trail becomes
- * one back button.
+ * Status and chips follow the title; actions sit at the end edge on the same
+ * line, and the title truncates to make room. On a phone the trail becomes one
+ * back button and the actions take a row of their own.
  */
 export function PageHeader({ trail = [], title, count, lead, after, actions }: Readonly<{
   trail?: readonly Crumb[];

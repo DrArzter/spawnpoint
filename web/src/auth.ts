@@ -1,5 +1,5 @@
 import { demoApi, demoEnabled } from "./demo";
-import type { AppearancePreference, SpawnpointApi, SubscriptionState } from "./api/contract";
+import type { AppearancePreference, MetricRange, ReleasePackName, SpawnpointApi, SubscriptionState } from "./api/contract";
 import { liveApi, liveAuthConfigured } from "./api/live";
 
 export type {
@@ -8,7 +8,6 @@ export type {
   IssuedAccessInvitation, MetricRange, SessionOperation,
   SpawnpointApi, SpawnpointSession, SubscriptionState, VisitorSession, WorldLifecycleAction,
 } from "./api/contract";
-import type { MetricRange, ReleasePackName } from "./api/contract";
 import type { SettingValue } from "./model";
 export { googleOidcClientId, telegramOidcClientId } from "./api/live";
 

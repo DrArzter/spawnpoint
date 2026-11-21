@@ -5,7 +5,7 @@ import { cx } from "../../lib/cx";
 
 export type ChipTone = "outlined" | "tonal" | "primary" | "success" | "warning" | "error";
 
-export function Chip({ children, icon, tone = "outlined", className }: { children: ReactNode; icon?: IconName; tone?: ChipTone; className?: string }) {
+export function Chip({ children, icon, tone = "outlined", className }: Readonly<{ children: ReactNode; icon?: IconName; tone?: ChipTone; className?: string }>) {
   return (
     <span className={cx("chip", tone !== "outlined" && `chip-${tone}`, className)}>
       {icon && <Icon name={icon} size={16} />}

@@ -4,7 +4,7 @@ import { cx } from "../../lib/cx";
 
 // An error is why the value cannot be saved; it stays under the hint, which
 // often names what the value may hold.
-export function TextField({ label, hideLabel = false, hint, error = null, className, mono = false, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string; hideLabel?: boolean; hint?: ReactNode; error?: string | null; mono?: boolean }) {
+export function TextField({ label, hideLabel = false, hint, error = null, className, mono = false, ...props }: Readonly<InputHTMLAttributes<HTMLInputElement> & { label: string; hideLabel?: boolean; hint?: ReactNode; error?: string | null; mono?: boolean }>) {
   const errorId = useId();
   return (
     <label className={cx("field", className)}>

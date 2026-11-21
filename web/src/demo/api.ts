@@ -1,5 +1,4 @@
-import type { AccessInvitation, AuthState, SpawnpointApi } from "../api/contract";
-import type { MetricRange, ReleasePackName } from "../api/contract";
+import type { AccessInvitation, AuthState, MetricRange, ReleasePackName, SpawnpointApi } from "../api/contract";
 import { demoSession } from "./data";
 import { clearDemoFlag, demoLatency } from "./flag";
 import * as store from "./store";

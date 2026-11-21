@@ -7,7 +7,7 @@ export type BannerTone = "neutral" | "info" | "warning" | "error" | "success";
 
 const bannerIcon: Record<BannerTone, IconName> = { neutral: "info", info: "info", warning: "warning", error: "error", success: "check_circle" };
 
-export function Banner({ title, description, tone = "neutral", actions }: { title: ReactNode; description?: ReactNode; tone?: BannerTone; actions?: ReactNode }) {
+export function Banner({ title, description, tone = "neutral", actions }: Readonly<{ title: ReactNode; description?: ReactNode; tone?: BannerTone; actions?: ReactNode }>) {
   return (
     <div className={cx("banner", tone !== "neutral" && `banner-${tone}`)} role={tone === "error" ? "alert" : "status"}>
       <Icon name={bannerIcon[tone]} size={20} />
@@ -20,6 +20,6 @@ export function Banner({ title, description, tone = "neutral", actions }: { titl
   );
 }
 
-export function Ghost({ children }: { children: ReactNode }) {
+export function Ghost({ children }: Readonly<{ children: ReactNode }>) {
   return <span className="ghost">{children}</span>;
 }

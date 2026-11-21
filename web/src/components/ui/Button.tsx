@@ -13,7 +13,7 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   ref?: Ref<HTMLButtonElement>;
 };
 
-export function Button({ children, className, icon, loading = false, size = "medium", variant = "outlined", disabled, ref, type = "button", ...props }: ButtonProps) {
+export function Button({ children, className, icon, loading = false, size = "medium", variant = "outlined", disabled, ref, type = "button", ...props }: Readonly<ButtonProps>) {
   return (
     <button
       aria-busy={loading || undefined}
@@ -38,7 +38,7 @@ type IconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 // Every icon button carries its name: aria-label for readers, title for pointers.
-export function IconButton({ label, icon, size = "medium", className, ref, type = "button", ...props }: IconButtonProps) {
+export function IconButton({ label, icon, size = "medium", className, ref, type = "button", ...props }: Readonly<IconButtonProps>) {
   return (
     <button aria-label={label} className={cx("icon-btn", size === "small" && "icon-btn-small", className)} ref={ref} title={label} type={type} {...props}>
       <Icon name={icon} size={size === "small" ? 18 : 22} />
@@ -50,6 +50,6 @@ export function IconButton({ label, icon, size = "medium", className, ref, type 
 // width runs out they stop lining up on the right and share the full width
 // evenly. Only buttons stretch — a chip or a status line in the same row keeps
 // its own size, because it is not an action.
-export function ActionRow({ children, className }: { children: ReactNode; className?: string }) {
+export function ActionRow({ children, className }: Readonly<{ children: ReactNode; className?: string }>) {
   return <div className={cx("btn-row", className)}>{children}</div>;
 }

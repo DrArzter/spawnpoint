@@ -37,7 +37,7 @@ export function useSnackbar(): (snack: SnackInput) => void {
 // Outcomes arrive at the bottom edge and leave on their own; errors stay
 // until dismissed because they name a recovery. A skin that draws the queue
 // itself passes `render`, and the default host is not drawn.
-export function SnackbarProvider({ children, render }: { children: ReactNode; render?: (queue: SnackbarQueue) => ReactNode }) {
+export function SnackbarProvider({ children, render }: Readonly<{ children: ReactNode; render?: (queue: SnackbarQueue) => ReactNode }>) {
   const [queue, setQueue] = useState<Snack[]>([]);
   const counter = useRef(0);
   const dismiss = useCallback((id: number) => setQueue((current) => dropSnack(current, id)), []);
@@ -53,9 +53,9 @@ export function SnackbarProvider({ children, render }: { children: ReactNode; re
       <QueueContext.Provider value={shared}>
         {children}
         {render ? render(shared) : (
-          <div aria-live="polite" className="snackbar-host" role="region" aria-label="Notifications">
+          <section aria-label="Notifications" aria-live="polite" className="snackbar-host">
             {queue.map((snack) => <SnackbarItem key={snack.id} onDismiss={() => dismiss(snack.id)} snack={snack} />)}
-          </div>
+          </section>
         )}
         {render && queue.map((snack) => <SnackTimer key={snack.id} onDismiss={() => dismiss(snack.id)} snack={snack} />)}
       </QueueContext.Provider>
@@ -72,12 +72,12 @@ function useDwell(snack: Snack, onDismiss: () => void) {
 }
 
 // The queue keeps its own time when a skin draws it, so no skin keeps a timer for it.
-function SnackTimer({ snack, onDismiss }: { snack: Snack; onDismiss: () => void }) {
+function SnackTimer({ snack, onDismiss }: Readonly<{ snack: Snack; onDismiss: () => void }>) {
   useDwell(snack, onDismiss);
   return null;
 }
 
-function SnackbarItem({ snack, onDismiss }: { snack: Snack; onDismiss: () => void }) {
+function SnackbarItem({ snack, onDismiss }: Readonly<{ snack: Snack; onDismiss: () => void }>) {
   useDwell(snack, onDismiss);
   return (
     <div className={cx("snackbar", `snackbar-${snack.tone}`)} role={snack.tone === "error" ? "alert" : "status"}>

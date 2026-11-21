@@ -18,9 +18,8 @@
         try {
           const saved = localStorage.getItem("spawnpoint.theme");
           const telegram = window.Telegram?.WebApp;
-          const system = telegram?.initData
-            ? telegram.colorScheme
-            : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          const browser = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          const system = telegram?.initData ? telegram.colorScheme : browser;
           const theme = saved === "light" || saved === "dark" ? saved : system;
           document.documentElement.dataset.theme = theme;
           document.documentElement.style.colorScheme = theme;

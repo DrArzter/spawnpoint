@@ -25,16 +25,16 @@ import { SkeletonRows } from "./ui/Skeleton";
 import { useToast } from "./ui/Toast";
 import { TrackList, TrackTitle, type Track } from "./ui/TrackList";
 
-// Profile (spec §6.6): the name at the start, the role at the end edge; the skin's only theme control.
+// Profile (spec §6.6): the name at the start, the role last at the end edge (on a phone too); the skin's only theme control.
 export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
   const { member, role, viewer } = model;
   return (
     <div className="c-page">
       <PageHeader
         actions={<>
-          <Chip icon="admin_panel_settings">{role?.name ?? "No role"}</Chip>
           {model.openInBrowser && <ActionButton action={model.openInBrowser} />}
           <ActionButton action={model.signOut} />
+          {role && <Chip icon="admin_panel_settings">{role.name}</Chip>}
         </>}
         after={(
           <span className="c-profile-id">
@@ -68,7 +68,7 @@ function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: Lo
   return (
     <Card title="Appearance">
       <div className="c-profile-settings">
-        <RadioCards legend="Theme" name="theme" onChange={choose} options={THEMES} value={model.preference} />
+        <RadioCards className="c-radios-even" legend="Theme" name="theme" onChange={choose} options={THEMES} value={model.preference} />
         {look.options.length > 0 && (
           <fieldset className="c-profile-look">
             <legend className="c-field-label">Look</legend>

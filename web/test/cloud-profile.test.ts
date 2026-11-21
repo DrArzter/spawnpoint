@@ -6,9 +6,9 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { action, type Action } from "../src/core/actions.ts";
-import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingsModel, ProfileModel, WorldSettingsModel } from "../src/core/models.ts";
+import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingsModel, InvitationModel, ProfileModel, WorldSettingsModel } from "../src/core/models.ts";
 import type { Game, World } from "../src/model.ts";
-import { ConfirmationDialog, CreateWorldSheet, GameSettingsSheet, WorldSettingsSheet } from "../src/skins/cloud/Dialogs.tsx";
+import { ConfirmationDialog, CreateWorldSheet, GameSettingsSheet, InvitationSheet, WorldSettingsSheet } from "../src/skins/cloud/Dialogs.tsx";
 import { Profile } from "../src/skins/cloud/Profile.tsx";
 
 const noop = () => undefined;
@@ -45,11 +45,13 @@ const profile: ProfileModel = {
 const fleet: ConnectionFieldsModel = { placement: "fleet", setPlacement: noop, fleetAvailable: true, connectivity: "raw", setConnectivity: noop, dnsAvailable: true };
 const persistent: ConnectionFieldsModel = { ...fleet, placement: "configured", connectivity: "zerotier" };
 
-test("profile: the name is the title at the start, the role chip leads the end-edge actions", () => {
+test("profile: the name is the title at the start, the role chip is last at the end edge", () => {
   const markup = renderToStaticMarkup(createElement(Profile, { model: profile }));
   assert.match(markup, /<h1[^>]*>Kai Ashby/);
-  assert.match(markup, /class="c-page-actions"><span class="c-chip"[^>]*>.*?Owner/);
+  assert.match(markup, /class="c-page-actions">.*data-action="profile\.signout".*<span class="c-chip"[^>]*>.*?Owner.*?<\/span><\/div><\/header>/);
   assert.match(markup, /aria-label="Copy identity ID"/);
+  const roleless = renderToStaticMarkup(createElement(Profile, { model: { ...profile, role: undefined } }));
+  assert.doesNotMatch(roleless, /c-chip/, "no role, no chip");
 });
 
 test("profile: Appearance holds the theme as three radio cards and the looks as Actions", () => {
@@ -108,4 +110,45 @@ test("game settings: Restore defaults leads the footer, the switch carries its A
   assert.match(markup, /class="c-btn c-btn-ghost c-sheet-defaults"[^>]*data-action="game-settings\.defaults"/);
   assert.match(markup, /data-action="game-settings\.pvp"[^>]*role="switch"/);
   assert.doesNotMatch(markup, /apply from its next start/, "the line shows only while the world runs");
+});
+
+test("game settings: a running world gets the one line about its next start", () => {
+  const model: GameSettingsModel = { game, world, running: true, fields: [], save: spy("game-settings.save", "Save settings"), restoreDefaults: spy("game-settings.defaults", "Restore defaults"), cancel: spy("sheet.close", "Cancel") };
+  assert.match(renderToStaticMarkup(createElement(GameSettingsSheet, { model })), /<p class="c-line">Saved settings apply from its next start\.<\/p>/);
+});
+
+test("confirmation: a release choice is a Select with the latest marked, and a blank value asks for one", () => {
+  const base: ConfirmationModel = { title: "Start a new wipe?", description: "", destructive: false, confirm: spy("confirm", "Start new wipe"), cancel: spy("cancel", "Cancel"), releaseChoice: { value: "1.2", options: [{ version: "1.2", latest: true }, { version: "1.1", latest: false }], set: noop }, typedConfirmation: null };
+  const chosen = renderToStaticMarkup(createElement(ConfirmationDialog, { model: base }));
+  assert.match(chosen, /<option value="1\.2"[^>]*>1\.2 · latest<\/option>/);
+  assert.match(chosen, /class="c-btn c-btn-primary"/);
+  assert.doesNotMatch(chosen, /<p class="c-line">/, "no empty description line");
+  const blank = renderToStaticMarkup(createElement(ConfirmationDialog, { model: { ...base, releaseChoice: { ...base.releaseChoice!, value: "" } } }));
+  assert.match(blank, /<option disabled="" value=""[^>]*>Choose a release<\/option>/);
+});
+
+test("invitation: direct lists players with a checkbox, marks the unreachable, and keeps history with its refresh", () => {
+  const model: InvitationModel = {
+    game, world, audience: "direct", setAudience: noop, query: "", setQuery: noop,
+    recipients: { status: "ready", value: [
+      { id: "r1", displayName: "Lena", ready: true, delivery: "Telegram", selected: true, toggle: noop },
+      { id: "r2", displayName: "Mira", ready: false, delivery: "No Telegram chat", selected: false, toggle: noop },
+    ] },
+    reachable: 1, selectedCount: 1,
+    clearSelection: spy("invitation.clear", "Clear selection"),
+    history: { status: "ready", value: [{ id: "h1", status: { kind: "ok", label: "Delivered" }, audience: "Everyone", detail: "2/2 delivered", createdAt: "2026-11-20T10:00:00Z" }] },
+    refreshHistory: spy("invitation.history.refresh", "Refresh"),
+    send: spy("invitation.send", "Send invitation"),
+    close: spy("sheet.close", "Cancel"),
+  };
+  const markup = renderToStaticMarkup(createElement(InvitationSheet, { model }));
+  assert.match(markup, /aria-checked="true"[^>]*role="radio"[^>]*><span>Direct/);
+  assert.equal(markup.match(/type="checkbox"/g)?.length, 2);
+  assert.match(markup, /disabled=""[^>]*type="checkbox"|type="checkbox"[^>]*disabled=""/, "an unreachable player cannot be picked");
+  assert.match(markup, /aria-label="No reachable channel · No Telegram chat"/);
+  assert.match(markup, /1 of 1/);
+  assert.match(markup, /2\/2 delivered/);
+  for (const id of ["invitation.clear", "invitation.history.refresh", "invitation.send"]) assert.match(markup, new RegExp(`data-action="${id.replaceAll(".", "\\.")}"`));
+  const broadcast = renderToStaticMarkup(createElement(InvitationSheet, { model: { ...model, audience: "broadcast" } }));
+  assert.doesNotMatch(broadcast, /type="checkbox"/, "broadcast has no player list");
 });

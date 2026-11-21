@@ -59,8 +59,8 @@ function ConnectionFields({ model }: Readonly<{ model: ConnectionFieldsModel }>)
     ...(model.dnsAvailable ? [{ value: "route53" as const, label: "DNS", icon: "language" as const, disabled: !fleet, hint: "Persistent hosts connect through ZeroTier" }] : []),
   ];
   return <>
-    <RadioCards legend="Hosting" name="hosting" onChange={model.setPlacement} options={hosting} value={model.placement} />
-    <RadioCards legend="Connection" name="connection" onChange={model.setConnectivity} options={connection} value={model.connectivity} />
+    <RadioCards className="c-radios-even" legend="Hosting" name="hosting" onChange={model.setPlacement} options={hosting} value={model.placement} />
+    <RadioCards className="c-radios-even" legend="Connection" name="connection" onChange={model.setConnectivity} options={connection} value={model.connectivity} />
     {model.connectivity !== "zerotier" && <Notice notice={{ id: "public-port", tone: "warning", title: "The game port is public." }} />}
   </>;
 }

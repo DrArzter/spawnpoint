@@ -94,7 +94,7 @@ test("the API stage waits for routes before applying route settings", async () =
     source.indexOf('resource "aws_lambda_permission" "access_api"'),
   );
 
-  assert.match(stage, /depends_on\s*=\s*\[aws_apigatewayv2_route\.access\]/);
+  assert.match(stage, /depends_on\s*=\s*\[[^\]]*\baws_apigatewayv2_route\.access\b[^\]]*\]/);
 });
 
 test("every route needs a permission unless it is deliberately self-scoped", () => {

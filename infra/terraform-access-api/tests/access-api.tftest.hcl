@@ -564,3 +564,31 @@ run "registration_can_open_without_changing_password_login" {
     error_message = "Registration must receive its email adapter through deployment configuration, never a code constant."
   }
 }
+
+run "http_api_stage_logs_requests_without_tokens" {
+  command = plan
+
+  variables {
+    bootstrap_owner_telegram_id      = "1780660807"
+    panel_url                        = "https://panel.example.dev/"
+    session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
+  }
+
+  assert {
+    condition = (
+      aws_cloudwatch_log_group.access_api_http_access.name == "/aws/apigateway/spawnpoint-access-api" &&
+      aws_cloudwatch_log_group.access_api_http_access.retention_in_days == 14 &&
+      length(aws_apigatewayv2_stage.default.access_log_settings) == 1
+    )
+    error_message = "The HTTP API stage must record requests that never reach the Lambda, such as throttled sign-in attempts, for a bounded time."
+  }
+
+  assert {
+    condition = (
+      keys(jsondecode(aws_apigatewayv2_stage.default.access_log_settings[0].format)) == ["integrationErrorMessage", "requestId", "requestTime", "routeKey", "sourceIp", "status"] &&
+      !strcontains(aws_apigatewayv2_stage.default.access_log_settings[0].format, "path") &&
+      !strcontains(aws_apigatewayv2_stage.default.access_log_settings[0].format, "query")
+    )
+    error_message = "The HTTP API access log must never record the request path or query string, which can carry tokens."
+  }
+}

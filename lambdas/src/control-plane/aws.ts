@@ -176,14 +176,18 @@ async function readReleaseManifest(gameId: string, presetId: string, version: st
   }
 }
 
-// Basic EC2 monitoring publishes these free at five-minute grain, which is the
-// grain a reader of "was it busy last night" actually needs. A gap is kept as a
-// null rather than dropped: an instance that was stopped has no datapoints, and
-// that absence is the most informative thing on the chart.
+// Basic EC2 monitoring publishes the first group free at five-minute grain, which
+// is the grain a reader of "was it busy last night" actually needs. EC2 has no
+// memory metric, so the idle watchdog publishes one beside its player probe
+// (ADR-0015). A series with no readings stays empty: an instance that was
+// stopped, or a session whose host predates the probe, has none, and that
+// absence is the most informative thing on the chart.
+const HOST_METRICS_NAMESPACE = "Spawnpoint/Host";
 const HOST_SERIES = [
-  { id: "cpu", label: "CPU", unit: "percent", metric: "CPUUtilization", statistic: "Average" },
-  { id: "networkIn", label: "Network in", unit: "bytes", metric: "NetworkIn", statistic: "Sum" },
-  { id: "networkOut", label: "Network out", unit: "bytes", metric: "NetworkOut", statistic: "Sum" },
+  { id: "cpu", label: "CPU", unit: "percent", namespace: "AWS/EC2", metric: "CPUUtilization", statistic: "Average" },
+  { id: "memory", label: "Memory", unit: "percent", namespace: HOST_METRICS_NAMESPACE, metric: "MemoryUsedPercent", statistic: "Average" },
+  { id: "networkIn", label: "Network in", unit: "bytes", namespace: "AWS/EC2", metric: "NetworkIn", statistic: "Sum" },
+  { id: "networkOut", label: "Network out", unit: "bytes", namespace: "AWS/EC2", metric: "NetworkOut", statistic: "Sum" },
 ] as const;
 
 function metricPeriodSeconds(hours: number): number {
@@ -202,7 +206,7 @@ async function readHostMetrics(instanceId: string, hours: number): Promise<HostM
     MetricDataQueries: HOST_SERIES.map((series) => ({
       Id: series.id,
       MetricStat: {
-        Metric: { Namespace: "AWS/EC2", MetricName: series.metric, Dimensions: [{ Name: "InstanceId", Value: instanceId }] },
+        Metric: { Namespace: series.namespace, MetricName: series.metric, Dimensions: [{ Name: "InstanceId", Value: instanceId }] },
         Period: period,
         Stat: series.statistic,
       },

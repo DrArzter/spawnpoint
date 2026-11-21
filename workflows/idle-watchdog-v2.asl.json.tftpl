@@ -357,6 +357,7 @@
         "coordination.$": "$.coordination",
         "observed": {
           "command.$": "$.observed.command",
+          "probe.$": "$.observed.probe",
           "playersOnline.$": "$.observed.probe.playersOnline"
         }
       },
@@ -388,6 +389,43 @@
           "IntervalSeconds": 2,
           "MaxAttempts": 3,
           "BackoffRate": 2
+        }
+      ],
+      "Next": "Has Memory Reading"
+    },
+    "Has Memory Reading": {
+      "Type": "Choice",
+      "Comment": "A host that predates the memory probe reports none. That is no failure; it simply publishes nothing.",
+      "Choices": [
+        {
+          "Variable": "$.observed.probe.memory.usedPercent",
+          "IsPresent": true,
+          "Next": "Publish Memory Reading"
+        }
+      ],
+      "Default": "Count Successful Probe"
+    },
+    "Publish Memory Reading": {
+      "Type": "Task",
+      "Comment": "ADR-0015: EC2 has no memory metric, so the host's own figure is published for the panel to chart. Best effort: the player observation is already recorded, and a failure here never counts as a failed probe.",
+      "Resource": "arn:aws:states:::aws-sdk:cloudwatch:putMetricData",
+      "Parameters": {
+        "Namespace": "Spawnpoint/Host",
+        "MetricData": [
+          {
+            "MetricName": "MemoryUsedPercent",
+            "Dimensions": [{ "Name": "InstanceId", "Value.$": "$.request.instanceId" }],
+            "Unit": "Percent",
+            "Value.$": "$.observed.probe.memory.usedPercent"
+          }
+        ]
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": null,
+          "Next": "Count Successful Probe"
         }
       ],
       "Next": "Count Successful Probe"

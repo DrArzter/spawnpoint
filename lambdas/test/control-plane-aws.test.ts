@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { CloudWatchClient, GetMetricDataCommand } from "@aws-sdk/client-cloudwatch";
 import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient } from "@aws-sdk/client-sfn";
 import { awsControlPlaneSources } from "../src/control-plane/aws.ts";
 
@@ -49,4 +50,25 @@ test("a world that could not be read is not cached", async (t) => {
   assert.equal((await awsControlPlaneSources.listRunningOperations())[0]?.worldId, null);
   assert.equal((await awsControlPlaneSources.listRunningOperations())[0]?.worldId, "world-flaky");
   assert.equal(attempts, 2);
+});
+
+test("host metrics add memory from the watchdog's namespace beside the free EC2 series", async (t) => {
+  let queries: NonNullable<GetMetricDataCommand["input"]["MetricDataQueries"]> = [];
+  t.mock.method(CloudWatchClient.prototype, "send", async (command: unknown) => {
+    assert.ok(command instanceof GetMetricDataCommand);
+    queries = command.input.MetricDataQueries ?? [];
+    return { MetricDataResults: [{ Id: "memory", Timestamps: [new Date(Date.UTC(2026, 10, 21, 12))], Values: [41.5] }] };
+  });
+
+  const metrics = await awsControlPlaneSources.readHostMetrics!("i-0abc", 6);
+
+  const memory = queries.find((query) => query.Id === "memory")?.MetricStat;
+  assert.equal(memory?.Metric?.Namespace, "Spawnpoint/Host");
+  assert.equal(memory?.Metric?.MetricName, "MemoryUsedPercent");
+  assert.deepEqual(memory?.Metric?.Dimensions, [{ Name: "InstanceId", Value: "i-0abc" }]);
+  assert.equal(memory?.Stat, "Average");
+  assert.equal(queries.find((query) => query.Id === "cpu")?.MetricStat?.Metric?.Namespace, "AWS/EC2");
+  assert.deepEqual(metrics.series.map((series) => series.id), ["cpu", "memory", "networkIn", "networkOut"]);
+  assert.deepEqual(metrics.series.find((series) => series.id === "memory")?.points, [{ at: "2026-11-21T12:00:00.000Z", value: 41.5 }]);
+  assert.deepEqual(metrics.series.find((series) => series.id === "cpu")?.points, []);
 });

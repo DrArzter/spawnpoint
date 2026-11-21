@@ -50,10 +50,6 @@ html[data-skin="console"] .c-span-full {
   html[data-skin="console"] .c-grid-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  html[data-skin="console"] .c-grid-metrics > .c-span-2 {
-    grid-column: span 2;
-  }
 }
 
 @media (min-width: 1024px) {

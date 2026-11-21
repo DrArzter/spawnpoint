@@ -199,6 +199,7 @@ export function startSession(gameId: string, worldId: string): { result: "reques
 
   const operationId = schedule("start", worldId, START_MS, (current) => {
     session.observedState = "ready";
+    session.readyAtEpochSeconds = Math.floor(Date.now() / 1000);
     session.updatedAtEpochSeconds = Math.floor(Date.now() / 1000);
     const box = current.snapshot.hosts.find((item) => item.id === (fleet ? launchedHostId(worldId) : configuredHost().id));
     if (box) {
@@ -232,6 +233,7 @@ export function stopSession(gameId: string, worldId: string): { result: "request
     session.observedState = "stopped";
     session.activeSessionId = null;
     session.activeWorldId = null;
+    session.readyAtEpochSeconds = null;
     session.updatedAtEpochSeconds = Math.floor(Date.now() / 1000);
     if (fleet) {
       // A launched host ends with its session.
@@ -278,7 +280,7 @@ export function worldLifecycle(gameId: string, worldId: string, action: "archive
       const lifecycle = owner.lifecycle;
       if (lifecycle?.activeWorldId === worldId) lifecycle.activeWorldId = null;
       // Archive stops a fleet world's session, and its launched host goes with it.
-      if (next.session) Object.assign(next.session, { desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: null });
+      if (next.session) Object.assign(next.session, { desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, readyAtEpochSeconds: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: null });
       current.snapshot.hosts = current.snapshot.hosts.filter((item) => item.id !== launchedHostId(worldId));
       return;
     }
@@ -382,6 +384,7 @@ function hostMetrics(instanceId: string, range: MetricRange): HostMetrics {
   const count = Math.floor((hours * 3600) / period);
   const series = [
     { id: "cpu", label: "CPU", unit: "percent", peak: 62 },
+    { id: "memory", label: "Memory", unit: "percent", peak: 71 },
     { id: "networkIn", label: "Network in", unit: "bytes", peak: 4_800_000 },
     { id: "networkOut", label: "Network out", unit: "bytes", peak: 9_200_000 },
   ];

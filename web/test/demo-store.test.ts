@@ -60,6 +60,9 @@ test("two fleet worlds of a game start one after the other, each on a host of it
   assert.equal(stateOf(snapshot, skyline), "running");
   assert.ok(snapshot.hosts.filter((host) => host.provenance === "launched").every((host) => host.state === "running" && host.publicIp));
   assert.notEqual(store.worldMetrics(GAME, skyline, "6h"), null);
+  assert.ok(store.worldMetrics(GAME, skyline, "6h")?.series.some((series) => series.id === "memory"), "the demo draws memory beside CPU");
+  const fleetWorld = snapshot.games.find((item) => item.id === GAME)!.worlds.find((item) => item.id === skyline)!;
+  assert.equal(fleetWorld.session?.readyAtEpochSeconds, Date.parse("2026-11-21T12:00:07.000Z") / 1000, "a session says when it became ready");
   assert.throws(() => store.startSession(GAME, CREATIVE), /already running/);
 });
 

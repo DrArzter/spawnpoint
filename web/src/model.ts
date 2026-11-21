@@ -78,6 +78,8 @@ export type Lifecycle = {
   observedState: "stopped" | "starting" | "ready" | "stopping" | "unknown";
   activeSessionId: string | null;
   activeWorldId: string | null;
+  /** When the session became ready: its uptime starts here. Absent on a record that predates the field. */
+  readyAtEpochSeconds?: number | null;
   updatedAtEpochSeconds: number;
   /** Present while a watchdog is registered for the session. */
   idle: { playersOnline: number | null; consecutiveEmpty: number; lastObservedAtEpochSeconds: number | null } | null;

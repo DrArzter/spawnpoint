@@ -42,9 +42,10 @@ export function MetricsPanel({ model }: Readonly<{ model: MetricsModel }>) {
 }
 
 // The labels and final chart geometry are already useful while the readings
-// arrive. One group announces the wait; the three plots do not repeat it.
+// arrive. One group announces the wait; the four plots do not repeat it.
 const waitingSeries = [
   { id: "cpu", label: "CPU" },
+  { id: "memory", label: "Memory" },
   { id: "in", label: "Network in" },
   { id: "out", label: "Network out" },
 ] as const;

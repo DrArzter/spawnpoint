@@ -252,8 +252,14 @@ export function worldPlayers(game: Game, world: World, sharedSession: SharedHost
   return worldOwnsSharedSession(sharedSession, game, world) ? playersOnline(game) : null;
 }
 
-// The snapshot names no fleet world's host, so only the shared host's launch is told.
+// When the world's own session became ready: the start of its uptime. A session
+// record from before the field existed has none, and a fleet world then has no
+// other clock, as the snapshot names no fleet world's host. A configured world
+// falls back to the shared host's launch.
 export function worldLaunchedAt(game: Game, world: World, sharedSession: SharedHostSession, snapshot: ControlPlaneSnapshot | null): string | null {
+  const own = world.placement === "fleet" ? fleetSessionOf(game, world) : game.lifecycle;
+  const readyAt = own?.activeWorldId === world.id && own.observedState === "ready" ? own.readyAtEpochSeconds : null;
+  if (readyAt != null) return new Date(readyAt * 1000).toISOString();
   if (world.placement === "fleet" || !worldOwnsSharedSession(sharedSession, game, world) || sharedSession.state === "stopped") return null;
   return configuredHosts(snapshot)[0]?.launchedAt ?? null;
 }

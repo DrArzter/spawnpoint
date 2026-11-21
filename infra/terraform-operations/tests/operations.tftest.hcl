@@ -337,6 +337,14 @@ run "lifecycle_v2_workflows_are_additive_standard_and_session_scoped" {
     }), "recordPlayerObservation")
     error_message = "V2 watchdog must persist observations through the coordinator."
   }
+
+  assert {
+    condition = alltrue([
+      contains(flatten([for statement in data.aws_iam_policy_document.lifecycle_v2_watchdog.statement : tolist(statement.actions) if statement.sid == "PublishHostMemory"]), "cloudwatch:PutMetricData"),
+      contains([for condition in flatten([for statement in data.aws_iam_policy_document.lifecycle_v2_watchdog.statement : statement.condition if statement.sid == "PublishHostMemory"]) : "${condition.variable}=${join(",", condition.values)}"], "cloudwatch:namespace=Spawnpoint/Host"),
+    ])
+    error_message = "The watchdog may publish host memory and only into the Spawnpoint/Host namespace."
+  }
 }
 
 run "control_plane_projection_is_event_driven_scoped_and_recoverable" {

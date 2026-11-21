@@ -219,6 +219,7 @@ test("two fleet worlds of one game run at once, each with its own session and it
   const worlds = new Map(snapshot.games[0]!.worlds.map((world) => [world.id, world]));
   assert.deepEqual(asked.sort(), ["minecraft", "world#magic", "world#rostik", "world#spare"]);
   assert.equal(worlds.get("rostik")?.session?.observedState, "ready");
+  assert.equal(worlds.get("rostik")?.session?.readyAtEpochSeconds, 102, "a session says when it became ready");
   assert.equal(worlds.get("rostik")?.session?.serverId, "world#rostik");
   assert.equal(worlds.get("magic")?.session?.activeSessionId, "session-magic");
   assert.equal(worlds.get("spare")?.session, null);

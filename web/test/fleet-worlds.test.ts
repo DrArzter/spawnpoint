@@ -3,7 +3,7 @@ import "./support/browser.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildSessionOverview, buildWorldRow, sessionControlAvailability, sessionDetails, siblingRow, worldDetails } from "../src/core/worlds.ts";
+import { buildSessionOverview, buildWorldRow, sessionControlAvailability, sessionDetails, siblingRow, worldDetails, worldLaunchedAt } from "../src/core/worlds.ts";
 import { deriveServerState } from "../src/core/useConsole.ts";
 import type { ControlPlaneSnapshot, Game, World, WorldSession } from "../src/model.ts";
 import { deriveSharedHostSession, fleetSessionOf, fleetWorldState, operationsBlockingWorld, worldSessionActive } from "../src/session.ts";
@@ -118,10 +118,31 @@ test("a row and its data-only sibling carry the world's own players; no fleet ho
   const row = buildWorldRow(game, rostik, options);
   assert.equal(row.players, 3);
   assert.equal(buildWorldRow(game, spare, options).players, null);
-  assert.equal(row.launchedAt, null, "the snapshot names no fleet world's host");
+  assert.equal(row.launchedAt, null, "a session record with no ready time tells no uptime");
   const sibling = siblingRow(row);
   assert.deepEqual({ id: sibling.id, players: sibling.players, placement: sibling.placement }, { id: "rostik", players: 3, placement: "fleet" });
   assert.equal(Object.values(sibling).some((value) => typeof value === "object" && value !== null && "run" in value), false, "a sibling carries no action");
+});
+
+test("uptime starts at the session's ready time: a fleet world's own, a configured world's too, else the shared host's launch", () => {
+  const shared = deriveSharedHostSession(snapshot());
+  const readyAt = Date.UTC(2026, 9, 8, 21, 30) / 1000;
+  const running = fleetWorld("rostik", "Rostik", { ...session("rostik", "ready", 3), readyAtEpochSeconds: readyAt });
+  const fleet: Game = { ...game, worlds: [running, spare] };
+  assert.equal(worldLaunchedAt(fleet, running, shared, snapshot()), "2026-10-08T21:30:00.000Z");
+  assert.equal(worldLaunchedAt(fleet, spare, shared, snapshot()), null);
+  const starting = fleetWorld("rostik", "Rostik", { ...session("rostik", "starting"), readyAtEpochSeconds: readyAt });
+  assert.equal(worldLaunchedAt({ ...game, worlds: [starting] }, starting, shared, snapshot()), null, "a session that is not ready has no uptime");
+
+  const configured: World = { ...spare, id: "vanilla", placement: "configured", session: undefined };
+  const host = { id: "i-shared", name: "Shared host", state: "running" as const, provenance: "configured" as const, launchedAt: "2026-10-01T00:00:00.000Z" };
+  const lifecycle = (extra: Partial<WorldSession>): WorldSession => ({ ...session("vanilla", "ready"), serverId: "minecraft", ...extra });
+  const sharedSnapshot = { ...snapshot(), hosts: [host] };
+  for (const [extra, expected] of [[{ readyAtEpochSeconds: readyAt }, "2026-10-08T21:30:00.000Z"], [{}, "2026-10-01T00:00:00.000Z"]] as const) {
+    const held: Game = { ...game, worlds: [configured], lifecycle: { schemaVersion: 1, ...lifecycle(extra) } };
+    const heldShared = deriveSharedHostSession({ ...sharedSnapshot, games: [held] });
+    assert.equal(worldLaunchedAt(held, configured, heldShared, { ...sharedSnapshot, games: [held] }), expected);
+  }
 });
 
 test("every session and world detail names what it is about", () => {

@@ -6,7 +6,7 @@ import { formatBytes } from "../../../lib/format";
 import { Card } from "../ui/Card";
 import { shortDateTime } from "../ui/DetailList";
 import { Empty, LoadError } from "../ui/Empty";
-import { Grid, GridCell } from "../ui/Grid";
+import { Grid } from "../ui/Grid";
 import { Segmented } from "../ui/Segmented";
 import { Skeleton, SkeletonGroup } from "../ui/Skeleton";
 import { StatCard } from "../ui/StatCard";
@@ -27,10 +27,15 @@ export function metricTime(range: MetricRange): (at: string) => string {
   return (at) => range === "7d" ? shortDateTime(at) ?? at : clock.format(Date.parse(at));
 }
 
-/** Whether a host ran at each reading: any series reported a value then. */
+/**
+ * Whether a host ran at each reading: any series reported a value then. Memory
+ * is left out: the watchdog publishes it, not EC2, so its readings do not line
+ * up with the host's own and say nothing about when the host ran.
+ */
 export function hostRunning(metrics: HostMetrics): boolean[] {
-  const length = Math.max(0, ...metrics.series.map((series) => series.points.length));
-  return Array.from({ length }, (_, index) => metrics.series.some((series) => series.points[index]?.value != null));
+  const series = metrics.series.filter((item) => item.id !== "memory");
+  const length = Math.max(0, ...series.map((item) => item.points.length));
+  return Array.from({ length }, (_, index) => series.some((item) => item.points[index]?.value != null));
 }
 
 export type StripRun = Readonly<{ on: boolean; from: number; length: number }>;
@@ -69,8 +74,8 @@ export function MetricsTab({ model, worldId }: Readonly<{ model: MetricsModel; w
       </div>
       {metrics.status === "loading" && (
         <SkeletonGroup className="c-metrics-loading">
-          <Grid kind="stat">{[0, 1, 2].map((cell) => <Skeleton height={96} key={cell} />)}</Grid>
-          <Grid kind="metrics">{[0, 1, 2].map((cell) => <Skeleton height={300} key={cell} />)}</Grid>
+          <Grid kind="stat">{[0, 1, 2, 3].map((cell) => <Skeleton height={96} key={cell} />)}</Grid>
+          <Grid kind="metrics">{[0, 1, 2, 3].map((cell) => <Skeleton height={300} key={cell} />)}</Grid>
         </SkeletonGroup>
       )}
       {metrics.status === "error" && <Card label="Metrics"><LoadError error={metrics.error} kind={metrics.kind} retry={metrics.retry} title="Metrics could not be loaded" verb="read metrics" /></Card>}
@@ -89,11 +94,7 @@ function Readings({ metrics, range, reveal }: Readonly<{ metrics: HostMetrics; r
         {metrics.series.map((series) => <Stat key={series.id} series={series} time={time} />)}
       </Grid>
       <Grid kind="metrics">
-        {metrics.series.map((series, index) => {
-          const chart = <Chart key={series.id} range={range} reveal={reveal} series={series} time={time} />;
-          // The first series (CPU) spans two columns from 900px, as the prototype does.
-          return index === 0 ? <GridCell key={series.id} span="2">{chart}</GridCell> : chart;
-        })}
+        {metrics.series.map((series) => <Chart key={series.id} range={range} reveal={reveal} series={series} time={time} />)}
       </Grid>
     </>
   );

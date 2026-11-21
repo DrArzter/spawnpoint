@@ -19,6 +19,9 @@ export const gameFootprints: Readonly<Record<string, Footprint>> = {
   zomboid: { memoryMiB: 8 * 1024, cores: 1 },
   // Documented, not yet measured: the egg catalogue and the image both name 4 GiB.
   valheim: { memoryMiB: 4 * 1024, cores: 1 },
+  // Documented, not yet measured: Pocketpair recommends 16 GB and 4 cores, and
+  // memory growth over a long session is reported. Not shrunk to fit a host.
+  palworld: { memoryMiB: 16 * 1024, cores: 4 },
 };
 
 // The instance families a launch may draw from, as EC2 Fleet AllowedInstanceTypes
@@ -115,6 +118,13 @@ export const gameCatalog: readonly CatalogGame[] = [
     code: "VH",
     displayName: "Valheim",
     connectPort: 2456,
+    worlds: [],
+  },
+  {
+    id: "palworld",
+    code: "PW",
+    displayName: "Palworld",
+    connectPort: 8211,
     worlds: [],
   },
 ];

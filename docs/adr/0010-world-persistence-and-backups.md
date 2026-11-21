@@ -5,6 +5,9 @@
 - Milestone: M1
 - Unchanged: [ADR-0026](0026-tiered-backups.md) proposed replacing the per-session archive with an incremental snapshot
   and was **rejected on measurement**. This ADR stands exactly as written
+- Amended on 2026-11-21: retention applies **per world generation**. A daily Lambda keeps 5/2/2 of each generation's
+  verified archives. It never deletes the newest verified archive of the open generation, the archive the next start
+  resumes from, or an archive a generation was restored from. A deleted archive stays as a noncurrent version for 30 days
 
 > **A challenge was raised and did not survive.** [ADR-0026](0026-tiered-backups.md) argued that a full archive after
 > every session would dominate the bill and add billed upload time. That holds for a world of tens of gigabytes; the

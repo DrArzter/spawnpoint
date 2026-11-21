@@ -48,6 +48,16 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.backup_retention_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.backup_retention
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.fleet_sweeper_assume
     values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
@@ -170,6 +180,14 @@ mock_provider "archive" {
     target = data.archive_file.control_plane_projector
     values = {
       output_path         = "control-plane-projector.zip"
+      output_base64sha256 = "test"
+    }
+  }
+
+  override_data {
+    target = data.archive_file.backup_retention
+    values = {
+      output_path         = "backup-retention.zip"
       output_base64sha256 = "test"
     }
   }
@@ -494,5 +512,52 @@ run "a_v2_stop_refused_for_a_player_is_named_in_the_stop_alarm" {
       !strcontains(aws_cloudwatch_metric_alarm.workflow["spawnpoint-drain-host-v2-failed"].alarm_description, "PlayersOnline")
     )
     error_message = "A V2 stop refused because a player joined also fails the execution; the stop alarm must say that it needs no action."
+  }
+}
+
+run "backup_retention_runs_daily_and_may_delete_only_current_archives" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      aws_cloudwatch_event_rule.backup_retention.schedule_expression == "cron(30 4 * * ? *)",
+      aws_cloudwatch_event_target.backup_retention.rule == aws_cloudwatch_event_rule.backup_retention.name,
+      aws_lambda_permission.backup_retention.principal == "events.amazonaws.com",
+      aws_lambda_function.backup_retention.environment[0].variables["BACKUP_BUCKET"] == "spawnpoint-backups-123456789012",
+      aws_lambda_function.backup_retention.environment[0].variables["RELEASE_BUCKET"] == "spawnpoint-releases-123456789012",
+    ])
+    error_message = "Retention runs once a day against the backup bucket and reads world records from the release bucket."
+  }
+
+  assert {
+    condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.backup_retention.statement : statement.actions if statement.sid == "DeleteOnlyArchives"]) == toset(["s3:DeleteObject"]),
+      one([for statement in data.aws_iam_policy_document.backup_retention.statement : statement.resources if statement.sid == "DeleteOnlyArchives"]) == toset(["arn:aws:s3:::spawnpoint-backups-123456789012/worlds/*/archives/*"]),
+    ])
+    error_message = "Retention may delete a current archive version, never a version and never outside the archive prefix."
+  }
+
+  assert {
+    condition     = alltrue([for statement in data.aws_iam_policy_document.backup_retention.statement : !contains(statement.actions, "s3:DeleteObjectVersion")])
+    error_message = "Retention must never delete a version; the 30-day noncurrent version is the safety net."
+  }
+
+  assert {
+    condition     = one([for statement in data.aws_iam_policy_document.backup_retention.statement : statement.resources if statement.sid == "ReadWorldRecords"]) == toset(["arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*/world.json"])
+    error_message = "Retention reads world records and nothing else of the release bucket."
+  }
+
+  assert {
+    condition     = toset(one(one([for statement in data.aws_iam_policy_document.backup_retention.statement : statement.condition if statement.sid == "ListWorldArchives"])).values) == toset(["worlds/", "worlds/*/archives/*"])
+    error_message = "Retention lists the world prefixes and their archives only."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_cloudwatch_metric_alarm.backup_retention_failed.metric_name == "Errors",
+      aws_cloudwatch_metric_alarm.backup_retention_failed.dimensions.FunctionName == "spawnpoint-backup-retention",
+      contains(aws_cloudwatch_metric_alarm.backup_retention_failed.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"),
+    ])
+    error_message = "A failed retention run must alarm the guardrails topic."
   }
 }

@@ -164,9 +164,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "backups" {
       expired_object_delete_marker = true
     }
 
-    # Retention selects the live 5/2/2 recovery points. Versioning then gives a
-    # month to recover from a buggy or accidental deletion without retaining
-    # every deleted archive forever.
+    # spawnpoint-backup-retention (../terraform-operations) deletes current
+    # archives outside 5/2/2. Versioning then gives a month to recover from a
+    # buggy or accidental deletion without retaining every deleted archive forever.
     noncurrent_version_expiration {
       noncurrent_days = 30
     }

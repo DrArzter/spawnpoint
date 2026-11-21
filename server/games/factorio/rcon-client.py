@@ -68,7 +68,7 @@ def main() -> int:
             if body and not body.endswith(b"\n"):
                 sys.stdout.write("\n")
             return 0
-    except (OSError, ConnectionError) as error:
+    except OSError as error:
         print(f"error: rcon connection failed: {error}", file=sys.stderr)
         return 3
 

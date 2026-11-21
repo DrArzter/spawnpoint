@@ -1,0 +1,48 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directories:
+      - /web
+      - /lambdas
+      - /mcp
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      npm:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: terraform
+    directories:
+      - /infra/terraform
+      - /infra/terraform-access
+      - /infra/terraform-access-api
+      - /infra/terraform-bootstrap
+      - /infra/terraform-bot
+      - /infra/terraform-domain
+      - /infra/terraform-github
+      - /infra/terraform-guardrails
+      - /infra/terraform-identity-admin
+      - /infra/terraform-operations
+      - /infra/terraform-releases
+      - /infra/terraform-storage
+      - /infra/terraform-web
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      terraform:
+        patterns:
+          - "*"

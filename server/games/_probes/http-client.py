@@ -66,7 +66,8 @@ def read_settings():
         timeout = float(os.environ.get("HTTP_PROBE_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS))
     except ValueError:
         return usage()
-    url = f"http://{LOOPBACK_HOSTS[parsed.hostname]}:{parsed.port}{parsed.path}"
+    # Plain http is deliberate: the address is loopback, so nothing leaves the host.
+    url = f"http://{LOOPBACK_HOSTS[parsed.hostname]}:{parsed.port}{parsed.path}"  # NOSONAR
     if parsed.query:
         url += f"?{parsed.query}"
     return method, url, body, user, password, timeout

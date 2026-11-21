@@ -85,7 +85,7 @@ export function parseDynamicProjection(
   if (observedAt > nowEpochMilliseconds + 60_000 || nowEpochMilliseconds - observedAt > maxAgeMilliseconds) return null;
   const hosts = item.hosts.map(host);
   const operations = item.operations.map(operation);
-  if (hosts.some((entry) => entry === null) || operations.some((entry) => entry === null)) return null;
+  if (hosts.includes(null) || operations.includes(null)) return null;
   return {
     schemaVersion: 1,
     observedAtEpochMilliseconds: observedAt,

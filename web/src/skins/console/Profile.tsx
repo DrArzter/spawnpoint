@@ -9,6 +9,7 @@ import { Icon, type IconName } from "../../icons";
 import { PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../../lib/signin";
 import { DEFAULT_ACCENT, parseHex } from "../../styles/accent";
 import type { ThemePreference } from "../../telegram";
+import { IRIS } from "./ui/accent";
 import { ActionButton } from "./ui/ActionButton";
 import { Avatar } from "./ui/Avatar";
 import { Card } from "./ui/Card";
@@ -72,6 +73,8 @@ function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: Lo
     model.setAccent(next.trim().toLowerCase()).catch((error: unknown) => toast(error instanceof Error ? error.message : "The accent could not be saved.", "err"));
   };
   const chosen = model.accent.toLowerCase() !== DEFAULT_ACCENT;
+  // Without a pick the well shows what the console draws: its own iris.
+  const shown = chosen && parseHex(model.accent) ? model.accent : IRIS;
   const reset = action("appearance.accent.reset", "Reset", () => pick(DEFAULT_ACCENT), { icon: "restore", disabled: !chosen, hint: chosen ? undefined : "The default accent is in use" });
   return (
     <Card title="Appearance">
@@ -88,7 +91,7 @@ function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: Lo
         )}
         <Field label="Accent">
           <span className="c-profile-accent">
-            <ColourInput onChange={(event) => pick(event.target.value)} value={parseHex(model.accent) ? model.accent : DEFAULT_ACCENT} />
+            <ColourInput onChange={(event) => pick(event.target.value)} value={shown} />
             <ActionButton action={reset} size="sm" />
           </span>
         </Field>

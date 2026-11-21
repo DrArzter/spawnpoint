@@ -70,6 +70,7 @@ test("profile: the accent well shows the picked colour, and Reset is refused whi
   assert.doesNotMatch(picked.match(/<button[^>]*data-action="appearance\.accent\.reset"[^>]*>/)?.[0] ?? "", /aria-disabled/);
   const plain = renderToStaticMarkup(createElement(Profile, { model: { ...profile, appearance: { ...profile.appearance, accent: "#1a73e8" } } }));
   assert.match(plain.match(/<button[^>]*data-action="appearance\.accent\.reset"[^>]*>/)?.[0] ?? "", /aria-disabled="true"/);
+  assert.match(plain, /type="color"[^>]*value="#5b47d6"|value="#5b47d6"[^>]*type="color"/, "without a pick the well shows the iris");
 });
 
 test("profile: sign-in methods share one track list with one action column", () => {

@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
+import { IRIS } from "../src/skins/console/ui/accent.ts";
 import { MOTION } from "../src/skins/console/ui/motion.ts";
 
 // The console skin's sheets keep the rules AGENTS.md sets for a face's CSS and
@@ -144,4 +145,9 @@ test("the timers in motion.ts equal their tokens", () => {
   }
   const timers = sources(join(root, "skins/console")).filter((text) => /set(Timeout|Interval)\([^,]+,\s*\d/.test(text));
   assert.equal(timers.length, 0, "a console timer reads its length from motion.ts");
+});
+
+test("the Profile accent well's default equals the iris token", () => {
+  const tokens = sheets.find((sheet) => sheet.name === "tokens.css")!.text;
+  assert.equal(tokens.match(/--c-accent:\s*(#[0-9A-Fa-f]{6})/)?.[1]?.toLowerCase(), IRIS);
 });

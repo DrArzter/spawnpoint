@@ -57,6 +57,22 @@ test("a hash verifies its own password and nothing else", async () => {
   assert.equal(await verifyPassword("correct horse battery staple", ""), false);
 });
 
+// The case above used to pass by luck. A key that decodes to the wrong length
+// was derived at that length, and scrypt's prefix-stable output left a single
+// byte to disagree — it agreed about once in 256 runs, which is what made the
+// suite fail on main without anything having changed.
+test("a hash whose key or salt is not the length this module writes is refused", async () => {
+  const stored = await hashPassword("correct horse battery staple");
+  const [scheme, cost, blockSize, parallelism, salt, key] = stored.split("$") as [string, string, string, string, string, string];
+  const longer = Buffer.concat([Buffer.from(key, "base64url"), Buffer.from([0])]).toString("base64url");
+  const shorter = Buffer.from(key, "base64url").subarray(0, 31).toString("base64url");
+  const shortSalt = Buffer.from(salt, "base64url").subarray(0, 15).toString("base64url");
+  for (const candidate of [longer, shorter]) {
+    assert.equal(await verifyPassword("correct horse battery staple", [scheme, cost, blockSize, parallelism, salt, candidate].join("$")), false);
+  }
+  assert.equal(await verifyPassword("correct horse battery staple", [scheme, cost, blockSize, parallelism, shortSalt, key].join("$")), false);
+});
+
 test("two hashes of one password differ by salt and both verify", async () => {
   const [first, second] = await Promise.all([hashPassword("correct horse battery staple"), hashPassword("correct horse battery staple")]);
   assert.notEqual(first, second);

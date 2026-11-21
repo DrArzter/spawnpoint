@@ -5,13 +5,16 @@
 //   { click: selector }   press the first visible match
 //   { focus: selector }   focus the first visible match (a tooltip shows)
 //   { key: "?" }          press a key on the page
+// `phoneOnly` names the skins whose control shows only under 960px, so the
+// gate does not expect it at 1440.
 // Row and page menus need no entry: the gate opens every menu on every page.
 // test/ui-audit-states.test.ts holds every surface in the skins to an entry here.
 
 const WORLD = "/?demo&latency=0#/worlds/minecraft/minecraft-rostik-12345678";
 
 export const STATES = [
-  { name: "scope", route: "/?demo&latency=0#/worlds/minecraft", steps: [{ action: "scope.show" }] },
+  // The cloud top bar names every game at desktop widths; its scope dialog is the phone's.
+  { name: "scope", route: "/?demo&latency=0#/worlds/minecraft", steps: [{ action: "scope.show" }], phoneOnly: ["cloud"] },
   { name: "create-world", route: "/?demo&latency=0#/worlds/minecraft", steps: [{ action: "world.create" }] },
   { name: "world-settings", route: WORLD, steps: [{ action: "world.settings" }] },
   { name: "game-settings", route: WORLD, steps: [{ action: "world.game-settings" }] },
@@ -30,19 +33,33 @@ export const STATES = [
   { name: "toast", route: "/?demo&latency=0#/releases/minecraft", steps: [{ click: "[aria-disabled=true][data-action]" }], skins: ["cloud"] },
 ];
 
-// The component that draws each surface, per skin, and the state that opens
-// it. The contract test reads the skins' sources for every Dialog, SidePanel,
-// Modal and Drawer and fails on one that is missing here.
+// Every surface the skins draw, by file and by the function that draws it,
+// and the states that open it. web/test/ui-audit-states.test.ts reads the
+// skins' sources: each Dialog, SidePanel, Modal and Drawer must sit in a
+// function listed here, with at least as many states as it draws surfaces.
 export const SURFACES = {
   cloud: {
-    "Shell.tsx": ["shortcuts"],
-    "Access.tsx": ["linked-accounts", "role"],
-    "Scope.tsx": ["scope"],
-    "Profile.tsx": ["password"],
-    "Dialogs.tsx": ["stop", "archive", "wipe", "restore", "delete-user", "create-world", "world-settings", "game-settings", "invite"],
+    "Shell.tsx": { Shell: ["shortcuts"] },
+    "Access.tsx": { LinkedAccountsPanel: ["linked-accounts"], RolesPane: ["role"] },
+    "Scope.tsx": { ScopeDialog: ["scope"] },
+    "Profile.tsx": { PasswordPanel: ["password"] },
+    "Dialogs.tsx": {
+      ConfirmationDialog: ["stop", "archive", "wipe", "restore", "delete-user"],
+      CreateWorldSheet: ["create-world"],
+      WorldSettingsSheet: ["world-settings"],
+      GameSettingsSheet: ["game-settings"],
+      InvitationSheet: ["invite"],
+    },
   },
   terminal: {
-    "Access.tsx": ["linked-accounts", "role"],
-    "Dialogs.tsx": ["scope", "stop", "archive", "wipe", "restore", "delete-user", "create-world", "world-settings", "game-settings", "invite"],
+    "Access.tsx": { Users: ["linked-accounts"], Roles: ["role"] },
+    "Dialogs.tsx": {
+      ScopeDialog: ["scope"],
+      ConfirmationDialog: ["stop", "archive", "wipe", "restore", "delete-user"],
+      CreateWorldSheet: ["create-world"],
+      WorldSettingsSheet: ["world-settings"],
+      GameSettingsSheet: ["game-settings"],
+      InvitationSheet: ["invite"],
+    },
   },
 };

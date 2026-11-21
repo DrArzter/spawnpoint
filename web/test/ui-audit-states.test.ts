@@ -6,28 +6,55 @@ import { STATES, SURFACES } from "../tools/ui-audit/states.mjs";
 
 /*
  * The UI gate opens every surface the skins can show (web/tools/ui-audit).
- * A skin file that draws a Dialog, SidePanel, Modal or Drawer must name the
- * states that open it, so a new surface cannot ship without the gate seeing it.
+ * Each Dialog, SidePanel, Modal or Drawer a skin draws belongs to the
+ * function that draws it, and that function must name a state for each
+ * surface, so a new surface cannot ship without the gate seeing it.
  */
 
-const SURFACE = /<(Dialog|SidePanel|Modal|Drawer)\b/;
+const SURFACE = /<(Dialog|SidePanel|Modal|Drawer)\b/g;
+const FUNCTION = /^(?:export )?(?:default )?function (\w+)/;
 
-for (const skin of ["cloud", "terminal"] as const) {
+/** The surfaces in a source file, counted by the top-level function that draws them. */
+function surfacesOf(source: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  let owner = "(module)";
+  for (const line of source.split("\n")) {
+    owner = FUNCTION.exec(line)?.[1] ?? owner;
+    const found = line.match(SURFACE)?.length ?? 0;
+    if (found > 0) counts.set(owner, (counts.get(owner) ?? 0) + found);
+  }
+  return counts;
+}
+
+for (const skin of Object.keys(SURFACES) as (keyof typeof SURFACES)[]) {
   test(`ui-audit states: every ${skin} surface is opened by a state`, () => {
     const folder = new URL(`../src/skins/${skin}/`, import.meta.url);
-    const drawing = readdirSync(folder).filter((file) => file.endsWith(".tsx") && SURFACE.test(readFileSync(new URL(file, folder), "utf8")));
-    const listed: Record<string, readonly string[]> = SURFACES[skin];
-    assert.deepEqual(drawing.filter((file) => !listed[file]), [], `add these ${skin} files to SURFACES in states.mjs`);
-    for (const [file, names] of Object.entries(listed)) {
-      assert.ok(drawing.includes(file), `${skin}/${file} draws no surface any more; remove it from SURFACES`);
-      for (const name of names) {
-        const state = STATES.find((candidate) => candidate.name === name);
-        assert.ok(state, `state ${name} is not in STATES`);
-        assert.ok(!state.skins || state.skins.includes(skin), `state ${name} does not run on ${skin}`);
+    const listed: Record<string, Record<string, readonly string[]>> = SURFACES[skin];
+    const drawn = new Map(readdirSync(folder).filter((file) => file.endsWith(".tsx")).map((file) => [file, surfacesOf(readFileSync(new URL(file, folder), "utf8"))] as const));
+    for (const [file, owners] of drawn) {
+      for (const [owner, count] of owners) {
+        const names = listed[file]?.[owner];
+        assert.ok(names, `${skin}/${file}: ${owner} draws ${count} surface(s); name its states in SURFACES in states.mjs`);
+        assert.ok(names.length >= count, `${skin}/${file}: ${owner} draws ${count} surfaces but names ${names.length} states`);
+      }
+    }
+    for (const [file, owners] of Object.entries(listed)) {
+      for (const [owner, names] of Object.entries(owners)) {
+        assert.ok(drawn.get(file)?.has(owner), `${skin}/${file}: ${owner} draws no surface any more; remove it from SURFACES`);
+        for (const name of names) {
+          const state = STATES.find((candidate) => candidate.name === name);
+          assert.ok(state, `state ${name} is not in STATES`);
+          assert.ok(!state.skins || state.skins.includes(skin), `state ${name} does not run on ${skin}`);
+        }
       }
     }
   });
 }
+
+test("ui-audit states: a second surface in a listed function needs a second state", () => {
+  const counts = surfacesOf("export function Sheets() {\n  return <><Dialog title=\"a\" /><SidePanel title=\"b\" /></>;\n}\n");
+  assert.equal(counts.get("Sheets"), 2);
+});
 
 test("ui-audit states: names are unique and every step is one the walker knows", () => {
   assert.equal(new Set(STATES.map((state) => state.name)).size, STATES.length);

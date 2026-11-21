@@ -189,6 +189,23 @@ resource "aws_s3_bucket_lifecycle_configuration" "releases" {
     }
   }
 
+  # Only noncurrent versions expire, never a current object, so a release that
+  # is in the store stays. A release becomes noncurrent only when deleted, and
+  # the bucket policy denies that (ADR-0052). What this frees is the older
+  # copies a repeated upload of the same release leaves behind.
+  rule {
+    id     = "expire-noncurrent-release-versions"
+    status = "Enabled"
+
+    filter {
+      prefix = "releases/"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+
   depends_on = [aws_s3_bucket_versioning.releases]
 }
 
@@ -217,6 +234,22 @@ data "aws_iam_policy_document" "backups_bucket" {
 }
 
 data "aws_iam_policy_document" "releases_bucket" {
+  # A world's archives open only with the release their generation names
+  # (ADR-0052), and nothing computes that named set yet. Until a cleanup that
+  # does exists, no principal may delete a release object.
+  statement {
+    sid     = "DenyReleaseDeletion"
+    effect  = "Deny"
+    actions = ["s3:DeleteObject", "s3:DeleteObjectVersion"]
+
+    resources = ["arn:aws:s3:::${aws_s3_bucket.releases.bucket}/releases/*"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+  }
+
   statement {
     sid     = "DenyInsecureTransport"
     effect  = "Deny"

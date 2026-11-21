@@ -24,6 +24,8 @@ data "aws_iam_policy_document" "access_api" {
       "dynamodb:Query",
       "dynamodb:TransactWriteItems",
       "dynamodb:UpdateItem",
+      # A ConditionCheck inside a transaction is authorised by its own action.
+      "dynamodb:ConditionCheckItem",
     ]
     resources = [
       data.aws_dynamodb_table.access.arn,

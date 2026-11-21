@@ -25,10 +25,11 @@ test("stop workflow stops EC2 only after the host command succeeds", async () =>
   const definition = await loadDefinition();
   const choice = definition.States["Stop Command Complete"];
   assert.ok(choice);
-  const success = choice.Choices?.find((candidate) => candidate.StringEquals === "Success");
-  const playerRace = choice.Choices?.find((candidate) => JSON.stringify(candidate).includes("ResponseCode"));
+  const toStop = choice.Choices?.filter((candidate) => candidate.Next === "Stop Instance") ?? [];
+  const playerRace = choice.Choices?.find((candidate) => JSON.stringify(candidate).includes('"NumericEquals":3'));
 
-  assert.equal(success?.Next, "Stop Instance");
+  assert.equal(toStop.length, 1);
+  assert.match(JSON.stringify(toStop[0]), /"StringEquals":"Success"/);
   assert.equal(playerRace?.Next, "Players Online");
   assert.match(JSON.stringify(definition.States["Players Online"]), /Spawnpoint\.PlayersOnline/);
   assert.equal(choice.Default, "Session Stop Failed");
@@ -42,6 +43,34 @@ test("stop workflow stops EC2 only after the host command succeeds", async () =>
     JSON.stringify(definition.States["Session Stop Failed"]),
     /EC2 remains running/,
   );
+});
+
+test("SSM Success alone never stops the host; the verified-archive line does (ADR-0073)", async () => {
+  const definition = await loadDefinition();
+  const choice = definition.States["Stop Command Complete"];
+  assert.ok(choice);
+  const toStop = choice.Choices?.find((candidate) => candidate.Next === "Stop Instance") as Record<string, any>;
+  const [status, line] = toStop.And as [Record<string, any>, Record<string, any>];
+
+  assert.deepEqual(status, { Variable: "$.observed.invocation.Status", StringEquals: "Success" });
+  assert.deepEqual(
+    (line.Or as Array<Record<string, string>>).map((candidate) => [candidate.Variable, candidate.StringMatches]),
+    [
+      ["$.observed.invocation.StandardOutputContent", "*result=session_stopped_and_backed_up*"],
+      ["$.observed.invocation.StandardOutputContent", "*result=already_stopped_and_backed_up*"],
+    ],
+  );
+  assert.equal(
+    choice.Choices?.some((candidate) => candidate.StringEquals === "Success"),
+    false,
+    "a bare Success, such as an old already_stopped, falls to Session Stop Failed",
+  );
+  assert.equal(choice.Default, "Session Stop Failed");
+
+  const elsewhere = choice.Choices?.find((candidate) => JSON.stringify(candidate).includes('"NumericEquals":6'));
+  assert.equal(elsewhere?.Next, "World Not On Host");
+  assert.equal(definition.States["World Not On Host"]?.Type, "Fail");
+  assert.match(JSON.stringify(definition.States["World Not On Host"]), /Spawnpoint\.WorldNotOnHost/);
 });
 
 test("the host stops only when nothing else on it is being played", async () => {

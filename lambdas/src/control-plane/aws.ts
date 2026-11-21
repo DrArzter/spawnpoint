@@ -231,26 +231,46 @@ function isSessionOperation(type: MachineType): type is OperationObservation["ty
   return type === "start" || type === "stop" || type === "promote" || type === "world";
 }
 
+// An execution's input never changes, so its world is read once per ARN.
+// Failed reads are not kept, so the next listing tries again.
+const worldByExecution = new Map<string, string | null>();
+
 // Every session workflow's input names its world. An operation whose world
 // cannot be read is attributed to none, and so blocks every world, as any
 // operation once did (ADR-0062).
 async function executionWorldId(executionArn: string): Promise<string | null> {
+  if (worldByExecution.has(executionArn)) return worldByExecution.get(executionArn)!;
   try {
     const described = await sfn.send(new DescribeExecutionCommand({ executionArn }));
-    return operationWorldId(described.input);
+    const worldId = operationWorldId(described.input);
+    worldByExecution.set(executionArn, worldId);
+    return worldId;
   } catch (error) {
     console.warn("could not read the world of a running operation", executionArn, error);
     return null;
   }
 }
 
+// Every page: a running operation past the first page still blocks its world.
+async function runningExecutions(stateMachineArn: string) {
+  const running: Array<Readonly<{ name: string; startDate: Date; executionArn: string }>> = [];
+  let nextToken: string | undefined;
+  do {
+    const page = await sfn.send(new ListExecutionsCommand({ stateMachineArn, statusFilter: "RUNNING", maxResults: 100, ...(nextToken ? { nextToken } : {}) }));
+    for (const execution of page.executions ?? []) {
+      if (execution.name && execution.startDate && execution.executionArn) {
+        running.push({ name: execution.name, startDate: execution.startDate, executionArn: execution.executionArn });
+      }
+    }
+    nextToken = page.nextToken;
+  } while (nextToken);
+  return running;
+}
+
 async function listRunningOperations(): Promise<readonly OperationObservation[]> {
   const machines = operationMachines().filter((machine) => isSessionOperation(machine.type));
   const groups = await Promise.all(machines.map(async (machine) => {
-    const response = await sfn.send(new ListExecutionsCommand({ stateMachineArn: machine.arn, statusFilter: "RUNNING", maxResults: 10 }));
-    const running = (response.executions ?? []).flatMap((execution) => execution.name && execution.startDate && execution.executionArn
-      ? [{ name: execution.name, startDate: execution.startDate, executionArn: execution.executionArn }]
-      : []);
+    const running = await runningExecutions(machine.arn);
     return Promise.all(running.map(async (execution) => ({
       id: execution.name,
       type: machine.type as OperationObservation["type"],
@@ -260,7 +280,11 @@ async function listRunningOperations(): Promise<readonly OperationObservation[]>
       worldId: await executionWorldId(execution.executionArn),
     })));
   }));
-  return groups.flat().sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  const operations = groups.flat();
+  // Keep the cache to executions still running.
+  const listed = new Set(operations.map((operation) => operation.providerRef));
+  for (const executionArn of worldByExecution.keys()) if (!listed.has(executionArn)) worldByExecution.delete(executionArn);
+  return operations.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
 
 export const awsControlPlaneSources: ControlPlaneSources = {

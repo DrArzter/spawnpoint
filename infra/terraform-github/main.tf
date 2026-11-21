@@ -359,6 +359,24 @@ data "aws_iam_policy_document" "github_deploy_iam" {
     ]
   }
 
+  # API Gateway sends a stage's access log through CloudWatch Logs vended
+  # delivery. UpdateStage checks these on the caller, and they take no
+  # resource-level scope.
+  statement {
+    sid    = "DeliverApiGatewayAccessLogs"
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogDelivery",
+      "logs:DeleteLogDelivery",
+      "logs:DescribeResourcePolicies",
+      "logs:GetLogDelivery",
+      "logs:ListLogDeliveries",
+      "logs:PutResourcePolicy",
+      "logs:UpdateLogDelivery",
+    ]
+    resources = ["*"]
+  }
+
   statement {
     sid    = "ManageOnlySpawnpointIdentities"
     effect = "Allow"

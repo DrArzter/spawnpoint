@@ -1,5 +1,5 @@
 const ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
-const RELEASE = /^[0-9]+\.[0-9]+$/;
+const RELEASE = /^\d+\.\d+$/;
 
 export function releaseArtifactPrefix(gameId: string, presetId: string, release: string): string {
   if (!ID.test(gameId)) throw new Error("invalid_game_id");

@@ -65,7 +65,7 @@ function parseInput(value: unknown): Input {
     (input.action !== "archive" && input.action !== "purge" && (typeof input.generationUuid !== "string" || !UUID.test(input.generationUuid))) ||
     (input.action === "purge" && (typeof input.targetGenerationId !== "string" || !GENERATION_ID.test(input.targetGenerationId))) ||
     (input.action === "restore" && typeof input.backupKey !== "string") ||
-    (input.action === "regenerate" && (typeof input.release !== "string" || !/^[0-9]+\.[0-9]+$/.test(input.release)))
+    (input.action === "regenerate" && (typeof input.release !== "string" || !/^\d+\.\d+$/.test(input.release)))
   ) throw new Error("invalid_input");
   return input as Input;
 }

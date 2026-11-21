@@ -18,7 +18,7 @@ type ObjectValue = Record<string, unknown>;
 
 const ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
-const RELEASE = /^[0-9]+\.[0-9]+$/;
+const RELEASE = /^\d+\.\d+$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 
 function object(value: unknown): ObjectValue | null {

@@ -13,7 +13,7 @@ export type ReleaseState = Readonly<{
 type ObjectValue = Record<string, unknown>;
 const WORLD_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const GENERATION_ID = /^gen-[0-9a-f]{32}$/;
-const RELEASE = /^[0-9]+\.[0-9]+$/;
+const RELEASE = /^\d+\.\d+$/;
 
 function object(value: unknown): ObjectValue | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as ObjectValue : null;

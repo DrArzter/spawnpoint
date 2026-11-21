@@ -55,7 +55,7 @@ const ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const GENERATION_ID = /^gen-[0-9a-f]{32}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
-const RELEASE = /^[0-9]+\.[0-9]+$/;
+const RELEASE = /^\d+\.\d+$/;
 const SETTING_ID = /^[a-z][a-z0-9_]{0,31}$/;
 const BACKUP_KEY = /^worlds\/[a-z0-9][a-z0-9-]{0,31}\/archives\/[A-Za-z0-9._-]+\.tar\.zst$/;
 

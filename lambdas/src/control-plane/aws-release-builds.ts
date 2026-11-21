@@ -43,7 +43,7 @@ export function legacyBuildCandidate(preset: PresetObservation, catalog: unknown
   const candidates = history.flatMap((entry) => {
     let value: Record<string, unknown>;
     try { value = JSON.parse(entry.input ?? "null") as typeof value; } catch { return []; }
-    if (!value || value.profileId !== preset.id || typeof value.release !== "string" || !/^[0-9]+\.[0-9]+$/.test(value.release) ||
+    if (!value || value.profileId !== preset.id || typeof value.release !== "string" || !/^\d+\.\d+$/.test(value.release) ||
       !entry.name || !entry.startDate) return [];
     const source = catalogBuildSource({ schema_version: 2, game: preset.gameId, presets: [], source: {
       repository: value.configRepositoryUrl, commit: value.configCommit,
@@ -110,7 +110,7 @@ function ports(gameId: string, profileId: string): ReleaseBuildPorts {
         // Private build records are written only by this adapter. Fail closed
         // on a wrong key or shape instead of dispatching arbitrary SFN input.
         if (request.gameId !== gameId || request.profileId !== profileId || !/^[0-9a-f]{64}$/.test(request.profileDigest) ||
-          !/^[0-9]+\.[0-9]+$/.test(request.release) || !/^[A-Za-z0-9_-]{1,80}$/.test(request.name) ||
+          !/^\d+\.\d+$/.test(request.release) || !/^[A-Za-z0-9_-]{1,80}$/.test(request.name) ||
           !Number.isSafeInteger(request.attempt) || request.attempt < 1 || !result.ETag ||
           typeof request.requestedBy !== "string" || request.requestedBy.length === 0 || source === null ||
           Number.isNaN(Date.parse(request.requestedAt))) throw new Error("invalid_build_record");

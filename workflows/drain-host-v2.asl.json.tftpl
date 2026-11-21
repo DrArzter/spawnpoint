@@ -129,6 +129,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         { "ErrorEquals": ["States.ALL"], "ResultPath": "$.concludeError", "Next": "Host Taken Back" }
       ],
@@ -141,6 +154,17 @@
         "InstanceIds.$": "States.Array($.request.hostId)"
       },
       "ResultPath": "$.terminated",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         { "ErrorEquals": ["States.ALL"], "ResultPath": "$.terminateError", "Next": "Host Not Released" }
       ],
@@ -159,6 +183,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         { "ErrorEquals": ["States.ALL"], "ResultPath": "$.concludeError", "Next": "Host Taken Back" }
       ],
@@ -171,6 +208,17 @@
         "InstanceIds.$": "States.Array($.request.hostId)"
       },
       "ResultPath": "$.stopped",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         { "ErrorEquals": ["States.ALL"], "ResultPath": "$.stopError", "Next": "Host Not Released" }
       ],

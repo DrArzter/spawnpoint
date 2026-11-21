@@ -152,10 +152,15 @@ export async function createWorld(identity: Identity, gameId: string, presetId: 
 }
 
 export async function updateWorldSettings(gameId: string, worldId: string, body: string | undefined): Promise<Response> {
-  let parsed: { placement?: unknown; connectivity?: unknown; auth?: unknown };
+  let parsed: { placement?: unknown; connectivity?: unknown; auth?: unknown; warm?: unknown };
   try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
   const access = parseWorldAccess(parsed, false);
   if (access === null) return response(400, { error: "invalid_world_connectivity" });
+  // Left out, the world keeps its choice. Only a launched host can be kept warm (ADR-0048).
+  const { warm } = parsed;
+  if ((warm !== undefined && typeof warm !== "boolean") || (warm === true && access.placement !== "fleet")) {
+    return response(400, { error: "invalid_world_warm" });
+  }
   // Only this world's own session holds its settings back (ADR-0062). Both
   // records are read, so the answer holds for either placement.
   const [game, own, operations] = await Promise.all([
@@ -168,10 +173,11 @@ export async function updateWorldSettings(gameId: string, worldId: string, body:
       holdsWorld(game, worldId) || holdsWorld(own, worldId) || unnamed) {
     return response(409, { error: "world_session_active" });
   }
-  const result = await replaceWorldAccess(gameId, worldId, access);
+  const hosting = warm === undefined ? access : { ...access, warm };
+  const result = await replaceWorldAccess(gameId, worldId, hosting);
   if (result === "missing") return response(404, { error: "unknown_world" });
   if (result === "conflict") return response(409, { error: "world_settings_conflict" });
-  return response(200, { ...access, auth: access.auth ?? null });
+  return response(200, { ...hosting, auth: access.auth ?? null });
 }
 
 // --- A world's game settings (ADR-0064) ----------------------------------------

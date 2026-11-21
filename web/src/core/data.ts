@@ -12,8 +12,8 @@ import type { StatusKind } from "./status";
 import { formatDateTime } from "../lib/format";
 import { GOOGLE_CLIENT_ID } from "../lib/signin";
 import type { Game, LinkKind, Member, OwnerBootstrap, Role, World } from "../model";
-import { action } from "./actions";
-import type { BackupsModel, CandidateRow, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, NotificationsModel, RolesModel, UsersModel, WhitelistModel } from "./models";
+import { action, type Action } from "./actions";
+import type { BackupsModel, CandidateRow, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, NotificationsModel, RequestSummary, RolesModel, UsersModel, WhitelistModel } from "./models";
 import { releaseModUnion } from "./release-mods";
 import { whitelistNameError } from "./whitelist";
 
@@ -261,6 +261,60 @@ export function bootstrapDescription(bootstrap: OwnerBootstrap): string | undefi
   return `Sign in with the configured Telegram account${configuredAccount} to create the first Owner.`;
 }
 
+// The role an approval grants when nobody chose another.
+const DEFAULT_ROLE = "viewer";
+
+const requestId = (candidate: AccessCandidate) => `${candidate.platform}:${candidate.platformUserId}`;
+
+/**
+ * The open access requests, read on their own for a page that shows them
+ * beside other things (the cloud skin's game home). Approve grants the default
+ * role; the Access page is where another is chosen.
+ */
+export function useAccessRequests(enabled: boolean, notify: Notify): Readonly<{
+  requests: Loading<readonly RequestSummary[]> | null;
+  actions: (id: string) => Readonly<{ approve: Action; dismiss: Action }> | null;
+}> {
+  const [working, setWorking] = useState<string | null>(null);
+  const [state, retry, update] = useLoad<AccessCandidate[]>(enabled ? () => loadAccessCandidates() : null, [enabled]);
+  const open = state.status === "ready" ? state.value.filter((candidate) => candidate.status === "REQUESTED") : [];
+
+  async function settle(candidate: AccessCandidate, approve: boolean) {
+    setWorking(requestId(candidate));
+    try {
+      if (approve) {
+        const identity = await approveAccessCandidate(candidate.platform, candidate.platformUserId, DEFAULT_ROLE);
+        notify({ tone: "success", message: `${identity.displayName} approved.` });
+      } else {
+        await dismissAccessCandidate(candidate.platform, candidate.platformUserId);
+        notify({ message: `${candidate.displayName} dismissed.` });
+      }
+      update((current) => current.filter((item) => requestId(item) !== requestId(candidate)));
+    } catch (cause) {
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : approve ? "This account could not be approved." : "This account could not be dismissed." });
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  if (!enabled) return { requests: null, actions: () => null };
+  return {
+    requests: state.status !== "ready" ? asLoading(state, retry, "access.requests.retry") : {
+      status: "ready",
+      value: open.map((candidate) => ({ id: requestId(candidate), displayName: candidate.displayName, platform: candidate.platform, account: candidateAccount(candidate), since: candidate.requestedAt ?? candidate.lastSeenAt, photoUrl: candidate.photoUrl })),
+    },
+    actions: (id) => {
+      const candidate = open.find((item) => requestId(item) === id);
+      if (!candidate) return null;
+      const busy = working === id;
+      return {
+        approve: action("access.approve", "Approve", () => void settle(candidate, true), { icon: "check", disabled: working !== null, busy, hint: "Approve as Viewer" }),
+        dismiss: action("access.dismiss", "Dismiss", () => void settle(candidate, false), { icon: "close", disabled: working !== null }),
+      };
+    },
+  };
+}
+
 export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: boolean; members: Member[]; roles: Role[]; rolesLoading: boolean; onMembersChange: (members: Member[]) => void; notify: Notify }>): UsersModel {
   const { members, roles, onMembersChange, notify } = opts;
   const [managing, setManaging] = useState<string | null>(null);
@@ -291,7 +345,7 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
   }
 
   async function approve(candidate: AccessCandidate) {
-    const roleId = candidateRoles[candidate.platformUserId] ?? "viewer";
+    const roleId = candidateRoles[candidate.platformUserId] ?? DEFAULT_ROLE;
     setWorking(candidate.platformUserId);
     try {
       const identity = await approveAccessCandidate(candidate.platform, candidate.platformUserId, roleId);
@@ -328,7 +382,7 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
         candidate,
         account: candidateAccount(candidate),
         since: `${candidate.status === "REQUESTED" ? "Requested access" : "Signed in"} ${formatDateTime(candidate.status === "REQUESTED" ? candidate.requestedAt : candidate.lastSeenAt)}`,
-        roleId: candidateRoles[candidate.platformUserId] ?? "viewer",
+        roleId: candidateRoles[candidate.platformUserId] ?? DEFAULT_ROLE,
         setRoleId: (roleId: string) => setCandidateRoles((current) => ({ ...current, [candidate.platformUserId]: roleId })),
         approve: action("access.approve", "Approve", () => void approve(candidate), { disabled: !rolesReady, busy: working === candidate.platformUserId, hint: rolesReady ? "Approve with the chosen role" : "Roles are still loading" }),
         dismiss: action("access.dismiss", "Dismiss", () => void dismiss(candidate), { disabled: working === candidate.platformUserId }),

@@ -3,7 +3,7 @@ import "./support/browser.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildSessionOverview, buildWorldRow, sessionControlAvailability } from "../src/core/worlds.ts";
+import { buildSessionOverview, buildWorldRow, sessionControlAvailability, sessionDetails, siblingRow, worldDetails } from "../src/core/worlds.ts";
 import { deriveServerState } from "../src/core/useConsole.ts";
 import type { ControlPlaneSnapshot, Game, World, WorldSession } from "../src/model.ts";
 import { deriveSharedHostSession, fleetSessionOf, fleetWorldState, operationsBlockingWorld, worldSessionActive } from "../src/session.ts";
@@ -110,4 +110,23 @@ test("an older response with no per-world sessions still finds a fleet session o
     lifecycle: { schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "s1", activeWorldId: "spare", updatedAtEpochSeconds: 1, idle: null },
   };
   assert.equal(fleetWorldState(legacy, legacyWorld), "running");
+});
+
+test("a row and its data-only sibling carry the world's own players; no fleet host's launch is guessed", () => {
+  const shared = deriveSharedHostSession(snapshot());
+  const options = { fleet: true, sharedSession: shared, granted: new Set<string>(), pending: NO_PENDING, callbacks: { onWorldAction: () => undefined, onInvite: () => undefined, onDownloadPack: () => undefined }, snapshot: snapshot() };
+  const row = buildWorldRow(game, rostik, options);
+  assert.equal(row.players, 3);
+  assert.equal(buildWorldRow(game, spare, options).players, null);
+  assert.equal(row.launchedAt, null, "the snapshot names no fleet world's host");
+  const sibling = siblingRow(row);
+  assert.deepEqual({ id: sibling.id, players: sibling.players, placement: sibling.placement }, { id: "rostik", players: 3, placement: "fleet" });
+  assert.equal(Object.values(sibling).some((value) => typeof value === "object" && value !== null && "run" in value), false, "a sibling carries no action");
+});
+
+test("every session and world detail names what it is about", () => {
+  const shared = deriveSharedHostSession(snapshot());
+  const details = [...sessionDetails(game, rostik, shared, snapshot(), "running", true), ...worldDetails(game, rostik, "running")];
+  assert.deepEqual(details.filter((detail) => detail.key === undefined).map((detail) => detail.label), []);
+  assert.ok(details.some((detail) => detail.key === "players"));
 });

@@ -146,6 +146,8 @@ export type ConsoleController = Readonly<{
   pending: PendingMap;
   refresh: (silent?: boolean) => Promise<void>;
   refreshing: boolean;
+  /** The open access requests a page last read, for the shell's count. */
+  setRequestCount: (count: number | null) => void;
   worldCallbacks: WorldCallbacks;
   requestSession: (game: Game, world: World, action: SessionAction) => void;
   requestCreateWorld: (game: Game, preset?: Preset | null) => void;
@@ -204,6 +206,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
   const [savingWorldSettings, setSavingWorldSettings] = useState(false);
   const [editingGameSettings, setEditingGameSettings] = useState<{ game: Game; world: World } | null>(null);
   const [savingGameSettings, setSavingGameSettings] = useState(false);
+  const [requestCount, setRequestCount] = useState<number | null>(null);
 
   const granted = useMemo(() => new Set([...(session.role?.permissions ?? []), ...session.identity.directGrants]), [session]);
   const capabilities = useMemo(() => new Set(session.capabilities), [session]);
@@ -442,6 +445,9 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     demo: session.demo === true,
     observedAt: snapshot ? formatDateTime(snapshot.observedAt) : undefined,
     openProfile: action("shell.profile", "Open my profile", () => navigate({ page: "profile" }), { hint: viewer.displayName }),
+    overview: { id: "worlds", label: "Home", href: routeHash({ page: "worlds", accessTab: route.accessTab, gameId: game?.id ?? null, worldId: null, worldsView: "overview" }), current: page === "worlds" && !route.worldId && route.worldsView === "overview" },
+    ...(snapshot ? { observedAtIso: snapshot.observedAt } : {}),
+    requests: granted.has("access.manage") ? requestCount : null,
   };
 
   return {
@@ -468,6 +474,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     pending,
     refresh,
     refreshing: pendingOf(pending, "refresh") !== null,
+    setRequestCount,
     worldCallbacks,
     requestSession: (target, targetWorld, sessionAction) => setConfirmation({ kind: "session", action: sessionAction, game: target, world: targetWorld }),
     requestCreateWorld: (target, preset) => setCreating({ game: target, preset: preset ?? target.presets.find((item) => item.releases.length > 0) ?? null }),

@@ -21,7 +21,7 @@ test("a command that stops the game outside its lifecycle is refused, per game",
   }
   assert.deepEqual(checkConsoleCommand("factorio", "/quit"), { ok: false, reason: "lifecycle_command" });
   assert.deepEqual(checkConsoleCommand("zomboid", "quit"), { ok: false, reason: "lifecycle_command" });
-  for (const [game, raw] of [["minecraft", "say stop"], ["minecraft", "save-all flush"], ["minecraft", "stopsound @a"], ["factorio", "/players online"], ["zomboid", "players"], ["factorio", "stop"]] as const) {
+  for (const [game, raw] of [["minecraft", "say stop"], ["minecraft", "save-all flush"], ["minecraft", "stopsound @a"], ["factorio", "/players online"], ["zomboid", "players"], ["factorio", "stop"], ["valheim", "save"]] as const) {
     assert.equal(checkConsoleCommand(game, raw).ok, true, `${game}: ${raw}`);
   }
 });

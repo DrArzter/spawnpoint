@@ -17,6 +17,8 @@ export const gameFootprints: Readonly<Record<string, Footprint>> = {
   // The image defaults to a 6 GiB heap (MEMORY_XMX_GB), and a Java server's
   // process is larger than its heap.
   zomboid: { memoryMiB: 8 * 1024, cores: 1 },
+  // Documented, not yet measured: the egg catalogue and the image both name 4 GiB.
+  valheim: { memoryMiB: 4 * 1024, cores: 1 },
 };
 
 // The instance families a launch may draw from, as EC2 Fleet AllowedInstanceTypes
@@ -106,6 +108,13 @@ export const gameCatalog: readonly CatalogGame[] = [
     displayName: "Project Zomboid",
     connectPort: 16261,
     slottable: false,
+    worlds: [],
+  },
+  {
+    id: "valheim",
+    code: "VH",
+    displayName: "Valheim",
+    connectPort: 2456,
     worlds: [],
   },
 ];

@@ -18,6 +18,17 @@ test("the API offers the settings the game module defines, and nothing the platf
   assert.deepEqual(gameSettingDefinitions("factorio"), [], "a game with no list has no settings");
 });
 
+test("Valheim offers its server name, and never its password, world name, port, listing or crossplay", () => {
+  const onDisk = JSON.parse(readFileSync(new URL("../../server/games/valheim/settings.json", import.meta.url), "utf8")) as { settings: { id: string; env: string }[] };
+  const definitions = gameSettingDefinitions("valheim");
+  assert.deepEqual(definitions.map((setting) => setting.id), onDisk.settings.map((setting) => setting.id));
+  for (const reserved of ["SERVER_PASS", "WORLD_NAME", "SERVER_PORT", "SERVER_PUBLIC", "CROSSPLAY", "SERVER_ARGS"]) {
+    assert.equal(onDisk.settings.some((setting) => setting.env === reserved), false, `${reserved} is the platform's`);
+  }
+  assert.deepEqual(checkGameSettings("valheim", { server_name: "Long ships" }), { ok: true, values: { server_name: "Long ships" } });
+  assert.deepEqual(checkGameSettings("valheim", { server_name: "-crossplay $(id)" }), { ok: false, error: "invalid_game_setting", setting: "server_name" });
+});
+
 test("each value is checked against its definition", () => {
   assert.deepEqual(checkGameSettings("minecraft", { difficulty: "hard", max_players: 8, pvp: false, motd: "Rostik's world: no griefing!" }), {
     ok: true, values: { difficulty: "hard", max_players: 8, pvp: false, motd: "Rostik's world: no griefing!" },

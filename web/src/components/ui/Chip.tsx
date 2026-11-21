@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Icon, IconName } from "../../icons";
 import { cx } from "../../lib/cx";
 
-export type ChipTone = "outlined" | "tonal" | "primary" | "success" | "warning" | "error";
+export type ChipTone = "outlined" | "tonal";
 
 export function Chip({ children, icon, tone = "outlined", className }: Readonly<{ children: ReactNode; icon?: IconName; tone?: ChipTone; className?: string }>) {
   return (

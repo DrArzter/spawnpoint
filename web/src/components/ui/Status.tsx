@@ -1,28 +1,15 @@
-import { Icon, IconName, ProgressRing } from "../../icons";
+import { Icon, IconName } from "../../icons";
 import { cx } from "../../lib/cx";
-import type { StatusKind } from "../../core/status";
 
-const icons: Record<Exclude<StatusKind, "progress">, IconName> = {
-  ok: "check_circle",
-  off: "stop_circle",
-  unknown: "help",
-  ready: "check_circle",
-  error: "error",
-  warning: "warning",
-  info: "info",
-  archived: "do_not_disturb_on",
-  absent: "add_circle_outline",
-  pending: "pending",
-};
+/** The front door shows only these states (the landing page's console picture). */
+export type FrontDoorStatus = "ok" | "ready";
 
-export function StatusIcon({ kind, size = 20 }: Readonly<{ kind: StatusKind; size?: number }>) {
-  return kind === "progress" ? <ProgressRing size={size} /> : <Icon name={icons[kind]} size={size} />;
-}
+const icons: Record<FrontDoorStatus, IconName> = { ok: "check_circle", ready: "check_circle" };
 
-export function Status({ kind, label, size = "medium", className }: Readonly<{ kind: StatusKind; label: string; size?: "medium" | "large"; className?: string }>) {
+export function Status({ kind, label, size = "medium", className }: Readonly<{ kind: FrontDoorStatus; label: string; size?: "medium" | "large"; className?: string }>) {
   return (
     <span className={cx("status", `status-${kind}`, size === "large" && "status-large", className)}>
-      <StatusIcon kind={kind} size={size === "large" ? 28 : 20} />
+      <Icon name={icons[kind]} size={size === "large" ? 28 : 20} />
       <span>{label}</span>
     </span>
   );

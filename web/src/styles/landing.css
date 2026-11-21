@@ -14,10 +14,6 @@
   gap: 8px;
 }
 
-.landing-bar-login {
-  display: contents;
-}
-
 .landing-avatar-pending {
   background: var(--surface-variant);
   animation: shimmer 1.4s linear infinite;

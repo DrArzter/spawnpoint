@@ -3,9 +3,9 @@ import type { ReactNode } from "react";
 import { Icon, IconName } from "../../icons";
 import { cx } from "../../lib/cx";
 
-export type BannerTone = "neutral" | "info" | "warning" | "error" | "success";
+export type BannerTone = "neutral" | "error";
 
-const bannerIcon: Record<BannerTone, IconName> = { neutral: "info", info: "info", warning: "warning", error: "error", success: "check_circle" };
+const bannerIcon: Record<BannerTone, IconName> = { neutral: "info", error: "error" };
 
 export function Banner({ title, description, tone = "neutral", actions }: Readonly<{ title: ReactNode; description?: ReactNode; tone?: BannerTone; actions?: ReactNode }>) {
   return (

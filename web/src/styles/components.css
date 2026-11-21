@@ -62,32 +62,13 @@
   box-shadow: none;
 }
 
-.btn-danger {
-  background: var(--error);
-  color: var(--on-error);
-}
-
-.btn-danger:hover {
-  background: var(--error-hover);
-  box-shadow: var(--shadow-1);
-}
-
-.btn-danger-text {
-  color: var(--error-ink);
-}
-
-.btn-danger-text:hover {
-  background: var(--error-state);
-}
-
 .btn:disabled {
   color: var(--ink-disabled);
   background: transparent;
   box-shadow: none;
 }
 
-.btn-filled:disabled,
-.btn-danger:disabled {
+.btn-filled:disabled {
   background: var(--surface-variant);
 }
 
@@ -107,13 +88,8 @@
   color: var(--primary-ink);
 }
 
-.btn-filled[aria-busy="true"] .ring,
-.btn-danger[aria-busy="true"] .ring {
+.btn-filled[aria-busy="true"] .ring {
   color: var(--on-primary);
-}
-
-.btn-danger-text[aria-busy="true"] .ring {
-  color: var(--error-ink);
 }
 
 .btn-small {
@@ -213,19 +189,15 @@
    the text's baseline. A zero-width strut comes first, aligned as the text is,
    and lends the line that baseline; its margin gives back the gap it adds. */
 .status::before {
-  content: "\200b" / "";
-}
-
-.status::before {
   margin-inline-end: -8px;
+  content: "\200b" / "";
 }
 
 .status-large::before {
   margin-inline-end: -12px;
 }
 
-.status .icon,
-.status .ring {
+.status .icon {
   flex: none;
 }
 
@@ -233,33 +205,7 @@
   color: var(--success-ink);
 }
 
-.status-progress .ring {
-  color: var(--primary);
-}
-
-.status-off .icon,
-.status-unknown .icon,
-.status-ready .icon,
-.status-archived .icon,
-.status-absent .icon,
-.status-pending .icon {
-  color: var(--ink-secondary);
-}
-
-.status-error .icon {
-  color: var(--error-ink);
-}
-
-.status-warning .icon {
-  color: var(--warning-ink);
-}
-
-.status-info .icon {
-  color: var(--info);
-}
-
-.status-absent,
-.status-archived {
+.status-ready .icon {
   color: var(--ink-secondary);
 }
 
@@ -296,30 +242,6 @@
   background: var(--surface-variant);
 }
 
-.chip-primary {
-  border-color: transparent;
-  background: var(--primary-container);
-  color: var(--on-primary-container);
-}
-
-.chip-success {
-  border-color: transparent;
-  background: var(--success-container);
-  color: var(--success-ink);
-}
-
-.chip-warning {
-  border-color: transparent;
-  background: var(--warning-container);
-  color: var(--warning-ink);
-}
-
-.chip-error {
-  border-color: transparent;
-  background: var(--error-container);
-  color: var(--error-ink);
-}
-
 button.chip {
   transition: background var(--dur-fast) var(--ease);
 }
@@ -332,13 +254,6 @@ button.chip[aria-pressed="true"] {
   border-color: transparent;
   background: var(--primary-container);
   color: var(--on-primary-container);
-}
-
-.chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
 }
 
 /* Cards */
@@ -527,14 +442,6 @@ button.chip[aria-pressed="true"] {
   color: var(--ink-disabled);
 }
 
-.menu-item-danger {
-  color: var(--error-ink);
-}
-
-.menu-item-danger .icon {
-  color: var(--error-ink);
-}
-
 .menu-item small {
   display: block;
   color: var(--ink-secondary);
@@ -550,8 +457,12 @@ button.chip[aria-pressed="true"] {
 
 /* Dialog and sheet */
 .dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
   padding: 0;
   border: 0;
+  border-radius: var(--radius-dialog);
   background: var(--surface);
   color: var(--ink);
   box-shadow: var(--shadow-3);
@@ -559,13 +470,6 @@ button.chip[aria-pressed="true"] {
 
 .dialog::backdrop {
   background: var(--scrim);
-}
-
-.dialog {
-  width: min(520px, calc(100vw - 32px));
-  max-width: none;
-  max-height: calc(100dvh - 32px);
-  border-radius: var(--radius-dialog);
 }
 
 .dialog-body {
@@ -676,24 +580,6 @@ button.chip[aria-pressed="true"] {
   margin: -6px -8px -6px 0;
 }
 
-.banner-info {
-  background: var(--info-container);
-  border-color: transparent;
-}
-
-.banner-info .icon {
-  color: var(--info);
-}
-
-.banner-warning {
-  background: var(--warning-container);
-  border-color: transparent;
-}
-
-.banner-warning .icon {
-  color: var(--warning-ink);
-}
-
 .banner-error {
   background: var(--error-container);
   border-color: transparent;
@@ -701,15 +587,6 @@ button.chip[aria-pressed="true"] {
 
 .banner-error .icon {
   color: var(--error-ink);
-}
-
-.banner-success {
-  background: var(--success-container);
-  border-color: transparent;
-}
-
-.banner-success .icon {
-  color: var(--success-ink);
 }
 
 @media (max-width: 599px) {

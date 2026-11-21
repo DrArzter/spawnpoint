@@ -3,7 +3,7 @@ import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import { Icon, IconName, ProgressRing } from "../../icons";
 import { cx } from "../../lib/cx";
 
-export type ButtonVariant = "text" | "outlined" | "filled" | "danger" | "danger-text";
+export type ButtonVariant = "text" | "outlined" | "filled";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   icon?: IconName;

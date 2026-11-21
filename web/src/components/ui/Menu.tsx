@@ -12,7 +12,6 @@ export type MenuItem = {
   label: string;
   detail?: string;
   icon?: IconName;
-  danger?: boolean;
   disabled?: boolean;
   title?: string;
   onSelect: () => void;
@@ -88,7 +87,7 @@ export function Menu({ label, icon = "more_vert", items, align = "end", size = "
       <div className="menu" data-open={open || undefined} id={id} onKeyDown={onKeyDown} popover="auto" ref={panel} role="menu">
         {items.map((item, index) => item === "separator" ? <hr key={`separator-${index}`} /> : (
           <button
-            className={cx("menu-item", item.danger && "menu-item-danger")}
+            className="menu-item"
             data-action={item.actionId}
             disabled={item.disabled}
             key={item.id}

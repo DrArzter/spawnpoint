@@ -141,7 +141,22 @@ json="$(PROBE_FORMAT=json run_probe 2)"
 jq -e '.result == "unavailable" and .activity == "unknown" and .playersOnline == null and .reason == "rcon_unavailable"' \
   >/dev/null <<<"${json}"
 
+# --- memory rides on the same document, read from the kernel's own figures ---
+printf 'MemTotal:       8000000 kB\nMemFree:         100000 kB\nMemAvailable:   2000000 kB\n' >"${fixture}/meminfo"
 export FAKE_RCON_FAIL=0
+export FAKE_RCON_RESPONSE='There are 1 of a max of 20 players online: Alice'
+json="$(MEMINFO_FILE="${fixture}/meminfo" PROBE_FORMAT=json run_probe 0)"
+jq -e '.memory == {totalKb: 8000000, availableKb: 2000000, usedPercent: 75}' >/dev/null <<<"${json}"
+output="$(MEMINFO_FILE="${fixture}/meminfo" run_probe 0)"
+assert_line "${output}" 'memory_used_percent=75.0'
+
+# A host that cannot say reports no memory, and the probe still answers.
+json="$(MEMINFO_FILE="${fixture}/missing" PROBE_FORMAT=json run_probe 0)"
+jq -e '.playersOnline == 1 and (has("memory") | not)' >/dev/null <<<"${json}"
+printf 'MemTotal:       8000000 kB\n' >"${fixture}/meminfo-old"
+json="$(MEMINFO_FILE="${fixture}/meminfo-old" PROBE_FORMAT=json run_probe 0)"
+jq -e 'has("memory") | not' >/dev/null <<<"${json}"
+
 if PROBE_FORMAT=yaml "${probe}" >/dev/null 2>&1; then
   printf 'expected failure: an unknown PROBE_FORMAT\n' >&2
   exit 1

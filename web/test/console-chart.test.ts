@@ -87,6 +87,31 @@ test("the host strip is running wherever any series reported, joined into runs",
   assert.equal(metricFormat("bytes")(2048), "2 KiB");
 });
 
+test("memory is the watchdog's reading and never says when the host ran", () => {
+  const metrics: HostMetrics = {
+    range: "6h", startedAt: at(0), endedAt: at(3), periodSeconds: 300,
+    series: [
+      { id: "cpu", label: "CPU", unit: "percent", points: series([null, 5, null, null]) },
+      { id: "memory", label: "Memory", unit: "percent", points: series([40, 41, 42, null]) },
+    ],
+  };
+  assert.deepEqual(hostRunning(metrics), [false, true, false, false]);
+});
+
+test("the metrics tab draws the memory series with its own stat card and a chart", () => {
+  const value: HostMetrics = {
+    range: "6h", startedAt: at(0), endedAt: at(3), periodSeconds: 300,
+    series: [
+      { id: "cpu", label: "CPU", unit: "percent", points: series([null, 20, 40, 30]) },
+      { id: "memory", label: "Memory", unit: "percent", points: series([null, 50, 60, 55]) },
+    ],
+  };
+  const model: MetricsModel = { range: "6h", ranges: [{ id: "6h", label: "6 hours" }], setRange: noop, metrics: { status: "ready", value } };
+  const markup = renderToStaticMarkup(createElement(MetricsTab, { model, worldId: "rostik" }));
+  assert.match(markup, /Peak 60 % at \d\d:02/);
+  assert.match(markup, /aria-label="Memory, 6 hours, latest 55 %, peak 60 %"/);
+});
+
 test("the metrics tab draws the strip, a stat card and a chart per series, and the empty series' one line", () => {
   const value: HostMetrics = {
     range: "6h", startedAt: at(0), endedAt: at(3), periodSeconds: 300,

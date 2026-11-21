@@ -8,6 +8,10 @@
   V2 and world lifecycle machines alarm on a failed or timed-out execution, and a failed V1 stop is the "backup did not
   complete" alarm, except when its error is `Spawnpoint.PlayersOnline`: a player joined and the stop was correctly
   refused. The stop alarms also fire then, and their description says so. One egress alarm sums the traffic of every host.
+- Amended on 2026-11-21: EC2 has no memory metric, so the watchdog V2 publishes `MemoryUsedPercent` (dimension
+  `InstanceId`) to the `Spawnpoint/Host` namespace from the memory figures its probe reads on the host, and the panel's
+  Metrics tab charts it; its IAM grant is limited by the `cloudwatch:namespace` condition, and a host that predates the
+  probe shows no memory until its next start.
 
 ## Context
 

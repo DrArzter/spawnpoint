@@ -345,6 +345,21 @@ data "aws_iam_policy_document" "lifecycle_v2_watchdog" {
     }
   }
 
+  # EC2 has no memory metric. The probe reads memory on the host and the watchdog
+  # publishes it (ADR-0015). PutMetricData takes no resource, so the namespace
+  # condition is the whole limit: the watchdog cannot write any other metric.
+  statement {
+    sid       = "PublishHostMemory"
+    actions   = ["cloudwatch:PutMetricData"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "cloudwatch:namespace"
+      values   = ["Spawnpoint/Host"]
+    }
+  }
+
   statement {
     sid       = "StartOnlyFencedStop"
     actions   = ["states:StartExecution"]

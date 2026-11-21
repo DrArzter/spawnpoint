@@ -89,7 +89,7 @@ test("unknown probes cannot enter the idle-stop eligibility path", async () => {
   assert.equal(state(definition, "Record Synthetic Unknown").Next, "Count Probe Failure");
   assert.equal(state(definition, "Count Probe Failure").Next, "Probe Failure Limit Reached");
   assert.notEqual(state(definition, "Probe Failure Limit Reached").Default, "Check Idle Eligibility");
-  assert.equal(state(definition, "Record Successful Observation").Next, "Count Successful Probe");
+  assert.equal(state(definition, "Record Successful Observation").Next, "Has Memory Reading");
   assert.equal(state(definition, "Count Successful Probe").Next, "Check Idle Eligibility");
 });
 
@@ -147,4 +147,22 @@ test("a placed session is probed on its slot; a request with no slot is probed a
   assert.match(JSON.stringify(placed.Parameters), /SPAWNPOINT_SLOT=\{\} PROBE_FORMAT=json/);
   assert.equal(placed.Next, state(definition, "Send Structured Probe").Next);
   assert.equal(placed.Catch?.[0]?.Next, state(definition, "Send Structured Probe").Catch?.[0]?.Next);
+});
+
+test("the host's memory is published after the observation, and never fails or counts as a probe", async () => {
+  const definition = await loadDefinition();
+  const gate = state(definition, "Has Memory Reading");
+  assert.deepEqual(gate.Choices?.map((choice) => [choice.Variable, choice.IsPresent, choice.Next]), [["$.observed.probe.memory.usedPercent", true, "Publish Memory Reading"]]);
+  assert.equal(gate.Default, "Count Successful Probe", "a host that reports no memory is counted as before");
+  assert.equal(state(definition, "Extract Player Count").Parameters?.observed && (state(definition, "Extract Player Count").Parameters?.observed as Record<string, unknown>)["probe.$"], "$.observed.probe");
+
+  const publish = state(definition, "Publish Memory Reading");
+  assert.equal(publish.Resource, "arn:aws:states:::aws-sdk:cloudwatch:putMetricData");
+  const parameters = publish.Parameters as { Namespace: string; MetricData: Array<Record<string, unknown>> };
+  assert.equal(parameters.Namespace, "Spawnpoint/Host");
+  assert.equal(parameters.MetricData[0]?.MetricName, "MemoryUsedPercent");
+  assert.deepEqual(parameters.MetricData[0]?.Dimensions, [{ Name: "InstanceId", "Value.$": "$.request.instanceId" }]);
+  assert.equal(parameters.MetricData[0]?.["Value.$"], "$.observed.probe.memory.usedPercent");
+  assert.equal(publish.Next, "Count Successful Probe");
+  assert.deepEqual(publish.Catch?.map((caught) => [caught.ErrorEquals, caught.Next]), [[["States.ALL"], "Count Successful Probe"]], "a failed publish is not a probe failure");
 });

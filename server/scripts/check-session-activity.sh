@@ -30,19 +30,41 @@ case "${probe_format}" in
     ;;
 esac
 
+# Memory as the kernel counts it: what is not available is used. The host is
+# the only place that knows it, so the watchdog collects it with the players
+# and publishes it (ADR-0015). A host without it reports none; a missing figure
+# never fails the probe, because the probe's job is the player count.
+# Prints one JSON object, empty when the figures cannot be read.
+memory_json() {
+  awk '
+    $1 == "MemTotal:" { total = $2 }
+    $1 == "MemAvailable:" { available = $2 }
+    END {
+      if (total > 0 && available != "" && available <= total) {
+        printf "{\"totalKb\":%d,\"availableKb\":%d,\"usedPercent\":%.1f}", total, available, (total - available) * 100 / total
+      } else {
+        printf "{}"
+      }
+    }' "${MEMINFO_FILE:-/proc/meminfo}" 2>/dev/null || printf '{}'
+}
+
 # No trailing newline in JSON mode: the machine reads the invocation output
 # whole, and a document is easier to trust than a document plus whitespace.
 report() {
   local result="$1" activity="$2" state="$3" players="$4" reason="$5"
+  local memory
+  memory="$(memory_json)"
   if [[ "${probe_format}" == "json" ]]; then
     jq -cn \
+      --argjson memory "${memory}" \
       --arg result "${result}" \
       --arg activity "${activity}" \
       --arg containerState "${state}" \
       --arg reason "${reason}" \
       --argjson playersOnline "${players}" \
       '{result: $result, activity: $activity, containerState: $containerState, playersOnline: $playersOnline}
-       + (if $reason == "" then {} else {reason: $reason} end)' | tr -d '\n'
+       + (if $reason == "" then {} else {reason: $reason} end)
+       + (if $memory == {} then {} else {memory: $memory} end)' | tr -d '\n'
     return 0
   fi
   printf 'result=%s\n' "${result}"
@@ -52,6 +74,9 @@ report() {
     printf 'reason=%s\n' "${reason}"
   else
     printf 'players_online=%s\n' "${players}"
+  fi
+  if [[ "${memory}" != "{}" ]]; then
+    printf 'memory_used_percent=%s\n' "$(jq -r '.usedPercent' <<<"${memory}")"
   fi
 }
 

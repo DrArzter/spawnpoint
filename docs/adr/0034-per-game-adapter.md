@@ -9,6 +9,8 @@
 - Relates: [ADR-0023](0023-multiple-worlds.md) (worlds as units, one active at a time — a game rides the same axis),
   [ADR-0033](0033-connectivity-as-a-strategy.md) (the connectivity slice of the same idea),
   [ADR-0005](0005-containerised-game-server.md) (reused packaging per game)
+- Amended by: [ADR-0074](0074-eggs-are-a-reference-not-a-runtime.md) — a Pterodactyl egg is a reference for writing a
+  module by hand, never a runtime; the egg row under "Alternatives considered" is answered there
 
 ## Context
 

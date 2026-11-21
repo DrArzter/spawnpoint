@@ -49,6 +49,12 @@ make the parser **self-checking** rather than optimistic: read the count one way
 and refuse unless they agree. A refusal is read as "not idle" by the probe and as a refusal by the stop, so the
 failure costs a few minutes of instance time. A wrong count in the other direction stops a server with people on it.
 
+## Read an egg, never run one
+
+A Pterodactyl or Pelican egg is research for the person who writes the module
+([ADR-0074](../../docs/adr/0074-eggs-are-a-reference-not-a-runtime.md)). Check each fact from it, never copy its stop
+value or its defaults unchecked, and keep the MIT notice beside any text copied from it.
+
 ## Run on a slot, or say why not
 
 A placed session ([ADR-0054](../../docs/adr/0054-place-a-session-on-a-host-with-room.md)) arrives with

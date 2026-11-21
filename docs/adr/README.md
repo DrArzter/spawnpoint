@@ -130,6 +130,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0068](0068-normalize-upstream-modpacks-into-releases.md) | Normalize upstream modpacks into releases | Accepted — implemented | M3 |
 | [0069](0069-give-players-a-mod-set-of-their-own.md) | Give a preset's players a mod set of their own | Accepted — implemented | M6 |
 | [0070](0070-give-each-group-a-space-in-an-aws-account-it-brings.md) | Give each group a space, and run its game hosts in an AWS account it brings | Proposed | M7 |
+| [0074](0074-eggs-are-a-reference-not-a-runtime.md) | Eggs are a reference, not a runtime | Accepted | — |
 
 ## Decisions still to record
 

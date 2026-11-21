@@ -120,26 +120,38 @@ function ports(gameId: string, profileId: string): ReleaseBuildPorts {
           typeof request.requestedBy !== "string" || request.requestedBy.length === 0 || source === null ||
           Number.isNaN(Date.parse(request.requestedAt))) throw new Error("invalid_build_record");
         return { request, etag: result.ETag };
-      } catch (error) { if (missing(error)) return null; throw error; }
+      } catch (error) {
+        if (missing(error)) return null;
+        throw error;
+      }
     },
     async claim(request, etag) {
       try {
         await s3.send(new PutObjectCommand({ Bucket, Key, Body: JSON.stringify(request), ContentType: "application/json", ServerSideEncryption: "AES256", ...(etag ? { IfMatch: etag } : { IfNoneMatch: "*" }) }));
         return true;
-      } catch (error) { if (conflict(error)) return false; throw error; }
+      } catch (error) {
+        if (conflict(error)) return false;
+        throw error;
+      }
     },
     async execution(name) {
       try {
         const result = await sfn.send(new DescribeExecutionCommand({ executionArn: executionArn(name) }));
         if (!result.status || result.status === "PENDING_REDRIVE") throw new Error("build_status_unavailable");
         return result.status;
-      } catch (error) { if (missing(error)) return null; throw error; }
+      } catch (error) {
+        if (missing(error)) return null;
+        throw error;
+      }
     },
     async published(request) {
       try {
         await s3.send(new HeadObjectCommand({ Bucket, Key: `releases/${gameId}/${profileId}/${request.release}/manifest.json` }));
         return true;
-      } catch (error) { if (missing(error)) return false; throw error; }
+      } catch (error) {
+        if (missing(error)) return false;
+        throw error;
+      }
     },
     async start(request) {
       const { profileId: profile, release, source } = request;

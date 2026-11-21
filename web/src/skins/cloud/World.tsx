@@ -1,10 +1,7 @@
-import { actionsOf } from "../../core/actions";
 import type { WorldModel } from "../../core/models";
 import type { WorldTab } from "../../model";
 import type { IconName } from "../../icons";
-import { ActionList } from "./Stub";
 import { ActionButton } from "./ui/ActionButton";
-import { Card } from "./ui/Card";
 import { Notices } from "./ui/Notice";
 import { Overflow } from "./ui/Overflow";
 import { PageHeader } from "./ui/PageHeader";
@@ -12,8 +9,10 @@ import { SplitPage } from "./ui/SplitPage";
 import { Status } from "./ui/Status";
 import { TabPanel, Tabs } from "./ui/Tabs";
 import { BackupsTab } from "./tabs/Backups";
+import { ConsoleTab } from "./tabs/Console";
 import { CARD_ACTIONS, DetailsTab } from "./tabs/Details";
 import { Hero } from "./tabs/Hero";
+import { MetricsTab } from "./tabs/Metrics";
 import { ReleasesTab } from "./tabs/Releases";
 import { Siblings } from "./tabs/Siblings";
 import { WhitelistTab } from "./tabs/Whitelist";
@@ -69,14 +68,8 @@ function Panel({ model }: Readonly<{ model: WorldModel }>) {
     case "backups": return <BackupsTab model={model.backups} />;
     case "releases": return <ReleasesTab model={model} />;
     case "whitelist": return model.whitelist ? <WhitelistTab model={model.whitelist} /> : <DetailsTab model={model} />;
-    case "console":
-    case "metrics": {
-      // S5 stand-in: S5 draws the console and the metrics here.
-      const tab = model.tab === "console" ? model.console : model.metrics;
-      if (!tab) return <DetailsTab model={model} />;
-      const noHost = model.metrics?.metrics.status === "ready" && model.metrics.metrics.value === null;
-      return <Card label={model.tab}>{model.tab === "metrics" && noHost && <strong>No host right now</strong>}<ActionList actions={actionsOf(tab)} /></Card>;
-    }
+    case "console": return model.console ? <ConsoleTab model={model.console} world={model.world.displayName} /> : <DetailsTab model={model} />;
+    case "metrics": return model.metrics ? <MetricsTab model={model.metrics} worldId={model.world.id} /> : <DetailsTab model={model} />;
     default: return <DetailsTab model={model} />;
   }
 }

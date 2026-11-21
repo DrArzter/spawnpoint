@@ -107,6 +107,103 @@ html[data-skin="cloud"] .c-wl-name > .c-mono {
   white-space: nowrap;
 }
 
+html[data-skin="cloud"] .c-console-quick {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+html[data-skin="cloud"] .c-console-line {
+  display: flex;
+  gap: 10px;
+  padding: 14px var(--c-card-x);
+  border-top: 1px solid var(--c-line);
+}
+
+html[data-skin="cloud"] .c-console-line .c-input {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+html[data-skin="cloud"] .c-metrics-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+html[data-skin="cloud"] .c-metrics-window {
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+html[data-skin="cloud"] .c-metrics-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--c-gap);
+}
+
+html[data-skin="cloud"] .c-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+html[data-skin="cloud"] .c-strip-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  font-weight: 600;
+}
+
+html[data-skin="cloud"] .c-strip-label strong {
+  color: var(--c-ink);
+  font-size: var(--c-fs-m);
+  font-weight: 800;
+}
+
+html[data-skin="cloud"] .c-strip-track {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--c-surface-3);
+}
+
+/* A6: the track is revealed from the start of the window on the first view. */
+html[data-skin="cloud"] .c-strip-reveal {
+  animation: c-reveal var(--c-d4) var(--c-ease) both;
+}
+
+html[data-skin="cloud"] .c-strip-run {
+  flex-basis: 0;
+  min-width: 2px;
+  transition: filter var(--c-d1);
+}
+
+html[data-skin="cloud"] .c-strip-on {
+  background: var(--c-run);
+}
+
+html[data-skin="cloud"] .c-strip-on:hover {
+  filter: brightness(1.15);
+}
+
+html[data-skin="cloud"] .c-strip-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--c-ink-3);
+  font-size: var(--c-fs-xs);
+}
+
 @media (max-width: 759px) {
   html[data-skin="cloud"] .c-hero-facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));

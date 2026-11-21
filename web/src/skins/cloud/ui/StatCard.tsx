@@ -10,7 +10,7 @@ export function StatCard({ label, value, unit, detail, children }: Readonly<{ la
     <section aria-label={label} className="c-card c-stat">
       <div className="c-stat-head">
         <span className="c-stat-label">{label}</span>
-        {detail && <span className="c-stat-detail">{detail}</span>}
+        {detail && <span className="c-stat-detail" data-tip={typeof detail === "string" ? detail : undefined}>{detail}</span>}
       </div>
       <div className="c-stat-value">
         {value === null ? <span className="c-faint">—</span> : <>{value}{unit && <span className="c-stat-unit">{unit}</span>}</>}

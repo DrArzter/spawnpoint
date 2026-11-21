@@ -65,6 +65,7 @@ html[data-skin="cloud"] .c-spin {
 @keyframes c-ring { 0% { box-shadow: 0 0 0 0 currentColor; } 100% { box-shadow: 0 0 0 7px transparent; } }
 @keyframes c-unblur { from { opacity: .25; filter: blur(3px); } }
 @keyframes c-indet { from { transform: translateX(-100%); } to { transform: translateX(330%); } }
+@keyframes c-reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @keyframes c-shimmer { to { background-position: -200% 0; } }
 @keyframes c-shake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 @keyframes c-page-out { to { opacity: 0; transform: translateX(-32px) scale(.985); } }

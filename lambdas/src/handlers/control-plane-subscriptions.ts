@@ -78,14 +78,14 @@ async function publishInvalidation(event: ProjectionEvent): Promise<void> {
   const nowEpochSeconds = Math.floor(Date.now() / 1000);
   let exclusiveStartKey: Record<string, unknown> | undefined;
   do {
-    const page = await document.send(new QueryCommand({
+    const page = await document.send(new QueryCommand({ // NOSONAR paginated: the next token comes from the previous page
       TableName: viewTable,
       KeyConditionExpression: "pk = :pk",
       FilterExpression: "expires_at > :now",
       ExpressionAttributeValues: { ":pk": "SUBSCRIPTIONS#CONTROL_PLANE", ":now": nowEpochSeconds },
       ExclusiveStartKey: exclusiveStartKey,
     }));
-    await Promise.all((page.Items ?? []).map(async (item) => {
+    await Promise.all((page.Items ?? []).map(async (item) => { // NOSONAR one page of items at a time, within the paginated scan
       const connectionId = item.connection_id;
       if (typeof connectionId !== "string") return;
       try {

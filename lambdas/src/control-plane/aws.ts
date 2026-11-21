@@ -5,7 +5,6 @@ import {
   HeadObjectCommand,
   ListObjectsV2Command,
   NoSuchKey,
-  PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -162,7 +161,7 @@ async function listPresets(): Promise<readonly PresetObservation[]> {
 // The manifest is the only record of what a release contains. It is small, it
 // is immutable once written, and it is read fresh: a cached answer here would
 // be a claim about bytes somebody may be about to install.
-async function readReleaseManifest(gameId: string, presetId: string, version: string): Promise<unknown | null> {
+async function readReleaseManifest(gameId: string, presetId: string, version: string): Promise<unknown> {
   try {
     const response = await s3.send(new GetObjectCommand({
       Bucket: requiredEnv("RELEASE_BUCKET"),
@@ -187,10 +186,15 @@ const HOST_SERIES = [
   { id: "networkOut", label: "Network out", unit: "bytes", metric: "NetworkOut", statistic: "Sum" },
 ] as const;
 
+function metricPeriodSeconds(hours: number): number {
+  if (hours <= 6) return 300;
+  return hours <= 48 ? 900 : 3600;
+}
+
 async function readHostMetrics(instanceId: string, hours: number): Promise<HostMetrics> {
   const end = new Date();
   const start = new Date(end.getTime() - hours * 3_600_000);
-  const period = hours <= 6 ? 300 : hours <= 48 ? 900 : 3600;
+  const period = metricPeriodSeconds(hours);
   const response = await cloudwatch.send(new GetMetricDataCommand({
     StartTime: start,
     EndTime: end,
@@ -256,7 +260,7 @@ async function runningExecutions(stateMachineArn: string) {
   const running: Array<Readonly<{ name: string; startDate: Date; executionArn: string }>> = [];
   let nextToken: string | undefined;
   do {
-    const page = await sfn.send(new ListExecutionsCommand({ stateMachineArn, statusFilter: "RUNNING", maxResults: 100, ...(nextToken ? { nextToken } : {}) }));
+    const page = await sfn.send(new ListExecutionsCommand({ stateMachineArn, statusFilter: "RUNNING", maxResults: 100, ...(nextToken ? { nextToken } : {}) })); // NOSONAR paginated: the next token comes from the previous page
     for (const execution of page.executions ?? []) {
       if (execution.name && execution.startDate && execution.executionArn) {
         running.push({ name: execution.name, startDate: execution.startDate, executionArn: execution.executionArn });
@@ -357,7 +361,7 @@ export async function materializePresetWorld(
   } catch (error) {
     if (!preconditionFailed(error)) throw error;
     const existing = await releaseStates.read({ worldId: proposed.worldId, generationId: proposed.currentGeneration.id });
-    if (existing === null || existing.state.desiredRelease !== proposed.currentGeneration.release) {
+    if (existing?.state.desiredRelease !== proposed.currentGeneration.release) {
       throw new Error("world_release_pointer_conflict");
     }
   }
@@ -369,7 +373,7 @@ export async function materializePresetWorld(
     if (!preconditionFailed(error)) throw error;
     const existing = (await worlds.read(proposed.worldId))?.record ?? null;
     if (
-      existing === null || existing.worldId !== proposed.worldId || existing.gameId !== proposed.gameId ||
+      existing?.worldId !== proposed.worldId || existing.gameId !== proposed.gameId ||
       existing.displayName !== proposed.displayName || existing.preset.id !== proposed.preset.id ||
       existing.preset.profileDigest !== proposed.preset.profileDigest ||
       existing.currentGeneration.release !== proposed.currentGeneration.release
@@ -443,19 +447,20 @@ export async function stopSessionExecution(
   return stopped.executionArn;
 }
 
-export async function worldLifecycleExecution(
-  operationId: string,
-  instanceId: string,
-  requestedBy: string,
-  serverId: string,
-  sessionId: string,
-  worldId: string,
-  action: "archive" | "regenerate" | "restore" | "purge",
-  backupKey: string | undefined,
-  release: string | undefined,
-  stopRequired: boolean,
-  targetGenerationId: string,
-): Promise<string> {
+export async function worldLifecycleExecution(args: Readonly<{
+  operationId: string;
+  instanceId: string;
+  requestedBy: string;
+  serverId: string;
+  sessionId: string;
+  worldId: string;
+  action: "archive" | "regenerate" | "restore" | "purge";
+  backupKey: string | undefined;
+  release: string | undefined;
+  stopRequired: boolean;
+  targetGenerationId: string;
+}>): Promise<string> {
+  const { operationId, instanceId, requestedBy, serverId, sessionId, worldId, action, backupKey, release, stopRequired, targetGenerationId } = args;
   requireWorldId(worldId);
   const stop = buildStopInput({ operationId, instanceId, requestedBy, worldId });
   const started = await sfn.send(new StartExecutionCommand({

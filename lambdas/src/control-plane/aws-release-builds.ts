@@ -22,8 +22,8 @@ async function buildHistory(fresh: boolean): Promise<readonly DescribeExecutionC
     const results: DescribeExecutionCommandOutput[] = [];
     let nextToken: string | undefined;
     do {
-      const page = await sfn.send(new ListExecutionsCommand({ stateMachineArn, maxResults: 100, ...(nextToken ? { nextToken } : {}) }));
-      results.push(...await Promise.all((page.executions ?? []).map((entry) => sfn.send(new DescribeExecutionCommand({ executionArn: entry.executionArn! })))));
+      const page = await sfn.send(new ListExecutionsCommand({ stateMachineArn, maxResults: 100, ...(nextToken ? { nextToken } : {}) })); // NOSONAR paginated: the next token comes from the previous page
+      results.push(...await Promise.all((page.executions ?? []).map((entry) => sfn.send(new DescribeExecutionCommand({ executionArn: entry.executionArn! }))))); // NOSONAR paginated: the next token comes from the previous page
       nextToken = page.nextToken;
     } while (nextToken);
     return results;
@@ -69,8 +69,8 @@ export async function runningReleaseBuilds(): Promise<readonly RunningBuild[]> {
   const builds: RunningBuild[] = [];
   let nextToken: string | undefined;
   do {
-    const page = await sfn.send(new ListExecutionsCommand({ stateMachineArn, statusFilter: "RUNNING", maxResults: 100, ...(nextToken ? { nextToken } : {}) }));
-    const descriptions = await Promise.all((page.executions ?? []).map((entry) => sfn.send(new DescribeExecutionCommand({ executionArn: entry.executionArn! }))));
+    const page = await sfn.send(new ListExecutionsCommand({ stateMachineArn, statusFilter: "RUNNING", maxResults: 100, ...(nextToken ? { nextToken } : {}) })); // NOSONAR paginated: the next token comes from the previous page
+    const descriptions = await Promise.all((page.executions ?? []).map((entry) => sfn.send(new DescribeExecutionCommand({ executionArn: entry.executionArn! })))); // NOSONAR paginated: the next token comes from the previous page
     for (const entry of descriptions) {
       const input: unknown = JSON.parse(entry.input ?? "{}");
       if (!input || typeof input !== "object" || !("profileId" in input) || !("configRepositoryUrl" in input) ||

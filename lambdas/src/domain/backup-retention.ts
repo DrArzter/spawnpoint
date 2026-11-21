@@ -84,7 +84,7 @@ export function planBackupRetention(backups: readonly BackupObject[]): BackupRet
 
     const timestamp = Date.parse(backup.lastModified);
     if (!Number.isFinite(timestamp)) {
-      throw new Error(`invalid lastModified for ${backup.key}: ${backup.lastModified}`);
+      throw new TypeError(`invalid lastModified for ${backup.key}: ${backup.lastModified}`);
     }
     return { ...backup, timestamp };
   });

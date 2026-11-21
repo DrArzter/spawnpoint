@@ -154,7 +154,7 @@ async function cleanTerminalHostDns(event: ControlPlaneEvent): Promise<void> {
   const key = { server_id: `dns-host#${instanceId}` };
   const result = await document.send(new GetCommand({ TableName: lifecycleTable, Key: key }));
   if (!result.Item) return;
-  for (const record of dnsLedgerRecords(result.Item, dnsZoneId, dnsSuffix)) await deleteDnsRecord(record);
+  for (const record of dnsLedgerRecords(result.Item, dnsZoneId, dnsSuffix)) await deleteDnsRecord(record); // NOSONAR sequential to stay inside the Route 53 change rate
   await document.send(new DeleteCommand({ TableName: lifecycleTable, Key: key }));
 }
 

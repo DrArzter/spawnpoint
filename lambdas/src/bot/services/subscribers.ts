@@ -60,7 +60,7 @@ async function subscriptionItems(): Promise<Item[]> {
   const items: Item[] = [];
   let cursor: Key | undefined;
   do {
-    const page = await database().send(new ScanCommand({
+    const page = await database().send(new ScanCommand({ // NOSONAR paginated: the next token comes from the previous page
       TableName: requiredEnv("ACCESS_TABLE_NAME"),
       FilterExpression: "sk = :subscriptions",
       ExpressionAttributeValues: { ":subscriptions": "SUBSCRIPTIONS" },
@@ -76,7 +76,7 @@ async function identityAccounts(identityId: string): Promise<Item[]> {
   const items: Item[] = [];
   let cursor: Key | undefined;
   do {
-    const page = await database().send(new QueryCommand({
+    const page = await database().send(new QueryCommand({ // NOSONAR paginated: the next token comes from the previous page
       TableName: requiredEnv("ACCESS_TABLE_NAME"),
       IndexName: "gsi1",
       KeyConditionExpression: "gsi1pk = :identity",

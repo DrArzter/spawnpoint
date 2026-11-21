@@ -121,19 +121,9 @@ export function buildWatchdogInput(args: Readonly<{
   };
 }
 
-export function buildStopInput(args: Readonly<{
-  operationId: string;
-  instanceId: string;
-  worldId: string;
-  requestedBy?: string;
-}>) {
-  return {
-    operationId: args.operationId,
-    instanceId: args.instanceId,
-    worldId: args.worldId,
-    ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
-    timing: POLL_TIMING,
-  };
+// The stop machine takes the same input as the start machine.
+export function buildStopInput(args: Parameters<typeof buildStartInput>[0]): ReturnType<typeof buildStartInput> {
+  return buildStartInput(args);
 }
 
 export type PlacementMode = "single" | "shared" | "fleet";

@@ -267,7 +267,7 @@ async function reserveOnHost(
     const already = existingReservation([current], input.sessionId);
     if (already) return { host: current, placement: already };
     const taken = await reserveOnFirst(context, [current], input, footprint);
-    if (taken) return { host: await loadRequired(context, hostId), placement: taken };
+    if (taken) return { host: await loadRequired(context, hostId), placement: taken }; // NOSONAR compare-and-swap retry: each attempt reads the result of the last
   }
   throw new PlacementConflict(`host ${hostId} changed repeatedly while reserving`);
 }

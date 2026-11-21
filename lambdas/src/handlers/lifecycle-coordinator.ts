@@ -110,7 +110,7 @@ const placementStore: PlacementStore = {
     const hosts: VersionedHost[] = [];
     let startKey: Record<string, unknown> | undefined;
     do {
-      const response = await documentClient.send(
+      const response = await documentClient.send( // NOSONAR paginated: the next token comes from the previous page
         new ScanCommand({
           TableName: tableName,
           ConsistentRead: true,

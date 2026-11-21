@@ -3,10 +3,11 @@ import type { ReactNode } from "react";
 import type { LinkedLoginAccount } from "../../api/contract";
 import { GoogleLoginButton } from "../../components/GoogleLogin";
 import { TelegramLoginButton } from "../../components/TelegramLogin";
-import type { Action } from "../../core/actions";
+import { action, type Action } from "../../core/actions";
 import type { AppearanceModel, LoginAccountsModel, LookModel, ProfileModel } from "../../core/models";
 import { Icon, type IconName } from "../../icons";
 import { PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../../lib/signin";
+import { DEFAULT_ACCENT, parseHex } from "../../styles/accent";
 import type { ThemePreference } from "../../telegram";
 import { ActionButton } from "./ui/ActionButton";
 import { Avatar } from "./ui/Avatar";
@@ -14,7 +15,7 @@ import { Card } from "./ui/Card";
 import { Chip } from "./ui/Chip";
 import { Copy } from "./ui/Copy";
 import { LoadError } from "./ui/Empty";
-import { Field, RadioCards, TextInput } from "./ui/Fields";
+import { ColourInput, Field, RadioCards, TextInput } from "./ui/Fields";
 import { Grid } from "./ui/Grid";
 import { Indicator } from "./ui/Indicator";
 import { Notice } from "./ui/Notice";
@@ -65,6 +66,13 @@ function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: Lo
   const choose = (next: ThemePreference) => {
     model.setPreference(next).catch((error: unknown) => toast(error instanceof Error ? error.message : "The theme could not be saved.", "err"));
   };
+  // The iris is the face's own accent; a colour picked here overrides it until Reset.
+  const pick = (next: string) => {
+    if (parseHex(next) === null) return;
+    model.setAccent(next.trim().toLowerCase()).catch((error: unknown) => toast(error instanceof Error ? error.message : "The accent could not be saved.", "err"));
+  };
+  const chosen = model.accent.toLowerCase() !== DEFAULT_ACCENT;
+  const reset = action("appearance.accent.reset", "Reset", () => pick(DEFAULT_ACCENT), { icon: "restore", disabled: !chosen, hint: chosen ? undefined : "The default accent is in use" });
   return (
     <Card title="Appearance">
       <div className="c-profile-settings">
@@ -78,6 +86,12 @@ function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: Lo
             value={look.current}
           />
         )}
+        <Field label="Accent">
+          <span className="c-profile-accent">
+            <ColourInput onChange={(event) => pick(event.target.value)} value={parseHex(model.accent) ? model.accent : DEFAULT_ACCENT} />
+            <ActionButton action={reset} size="sm" />
+          </span>
+        </Field>
       </div>
     </Card>
   );

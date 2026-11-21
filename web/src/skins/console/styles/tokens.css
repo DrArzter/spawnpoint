@@ -190,3 +190,12 @@ html[data-skin="console"][data-density="compact"] {
   --c-gl-row: 46px;
   --c-tile: 44px;
 }
+
+/* A colour picked in Profile overrides the iris; styles/accent.ts derives each role with its contrast checked. */
+html[data-skin="console"][data-accent="chosen"] {
+  --c-accent: var(--primary);
+  --c-accent-ink: var(--on-primary);
+  --c-accent-soft: var(--primary-container);
+  --c-accent-text: var(--primary-ink);
+  --c-accent-line: var(--primary-state-strong);
+}

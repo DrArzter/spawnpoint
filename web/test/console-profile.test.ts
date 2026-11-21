@@ -63,6 +63,15 @@ test("profile: Appearance holds the theme and the looks as radio cards, each loo
   assert.match(onTerminal, /checked=""[^>]*data-action="look\.terminal"|data-action="look\.terminal"[^>]*checked=""|checked=""[^>]*name="look"/, "the current look reads as chosen");
 });
 
+test("profile: the accent well shows the picked colour, and Reset is refused while the default is in use", () => {
+  const picked = renderToStaticMarkup(createElement(Profile, { model: profile }));
+  assert.match(picked, /<label[^>]*>Accent<\/label>/);
+  assert.match(picked, /type="color"[^>]*value="#5b47d6"|value="#5b47d6"[^>]*type="color"/);
+  assert.doesNotMatch(picked.match(/<button[^>]*data-action="appearance\.accent\.reset"[^>]*>/)?.[0] ?? "", /aria-disabled/);
+  const plain = renderToStaticMarkup(createElement(Profile, { model: { ...profile, appearance: { ...profile.appearance, accent: "#1a73e8" } } }));
+  assert.match(plain.match(/<button[^>]*data-action="appearance\.accent\.reset"[^>]*>/)?.[0] ?? "", /aria-disabled="true"/);
+});
+
 test("profile: sign-in methods share one track list with one action column", () => {
   const markup = renderToStaticMarkup(createElement(Profile, { model: profile }));
   assert.equal(markup.match(/class="c-tracklist"/g)?.length, 1);

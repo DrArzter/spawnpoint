@@ -62,6 +62,11 @@ export function NumberInput({ className, ...rest }: Readonly<Omit<InputHTMLAttri
   return <input className={cx("c-input", "c-input-number", className)} inputMode="numeric" type="number" {...controlProps(useWiring())} {...rest} />;
 }
 
+/** A native colour well at the field's height, for a colour the person picks (the accent). */
+export function ColourInput({ className, ...rest }: Readonly<Omit<InputHTMLAttributes<HTMLInputElement>, "type">>) {
+  return <input className={cx("c-input", "c-input-colour", className)} type="color" {...controlProps(useWiring())} {...rest} />;
+}
+
 export function TextArea({ className, ...rest }: Readonly<TextareaHTMLAttributes<HTMLTextAreaElement>>) {
   return <textarea className={cx("c-input", "c-textarea", className)} {...controlProps(useWiring())} {...rest} />;
 }

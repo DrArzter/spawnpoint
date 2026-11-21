@@ -48,6 +48,12 @@ html[data-skin="console"] .c-input {
   transition: border-color var(--c-d1);
 }
 
+html[data-skin="console"] .c-input-colour {
+  width: 96px;
+  padding: 4px;
+  cursor: pointer;
+}
+
 html[data-skin="console"] .c-input:hover {
   border-color: var(--c-ink-3);
 }

@@ -14,6 +14,12 @@ html[data-skin="console"] .c-profile-settings {
   gap: 20px;
 }
 
+html[data-skin="console"] .c-profile-accent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 html[data-skin="console"] .c-profile-method {
   display: inline-flex;
   align-items: center;

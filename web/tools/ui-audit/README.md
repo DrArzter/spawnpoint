@@ -16,7 +16,7 @@ page, state and width. It uses raw Chrome DevTools Protocol (`cdp.mjs`) and has 
 | Input | Values |
 |---|---|
 | Skins | `console` and `terminal` (set `SKIN` for one) |
-| Page widths | 360, 599/600, 759/760, 839/840, 959/960, 1023/1024, 1199/1200, 1440 and 2560: both sides of every step in `web/DESIGN.md` (console and terminal) |
+| Page widths | 360, 599/600, 759/760, 839/840, 959/960, 1023/1024, 1199/1200, 1440 and 2560: both sides of the steps where the frame, tables and dialogs change (`web/DESIGN.md`, console and terminal). The 40px stride (360–1680) crosses the smaller steps 900, 1280, 1500 and 1600; 2560 shows the grids past 1900 and 2000 |
 | Stride | every 40px from 360 to 1680 on each page, light theme, resized without a reload |
 | States | every entry in `states.mjs` at 360, 599, 600, 759, 760, 1440 and 2560 |
 | Menus | every menu on a page, opened one at a time, at the same seven widths |

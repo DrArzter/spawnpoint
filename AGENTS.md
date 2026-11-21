@@ -22,7 +22,7 @@ Consistency does **not** mean that two elements happen to look similar. It means
 1. Search for the existing semantic primitive before writing markup or CSS.
    - Console primitives live in `web/src/skins/console/ui/` (one file each) and are styled in `web/src/skins/console/styles/` (one sheet each, `c-*` classes under `html[data-skin="console"]`).
    - Terminal primitives live in `web/src/skins/terminal/ui.tsx` and are styled in `web/src/skins/terminal/terminal.css`.
-   - The front door's shared parts (sign-in, landing, boot) live in `web/src/components/ui/` and `web/src/styles/`. No skin uses them for its own views.
+   - The front door's parts (sign-in, landing, boot) live in `web/src/components/ui/` and `web/src/styles/`. A skin draws none of its views with them; it may use the shared behaviour there: the snackbar queue (both skins), and `Timestamp`, `Tooltip` and `useFilter` (terminal).
 2. If the intent already exists, use its component. Do not reproduce its DOM, brackets, icon, tooltip, padding, status colour, table layout, or breakpoint behavior locally.
 3. If the same intent appears at least three times and no primitive fits, add or extend a narrowly named shared component or variant. Do not create a generic abstraction for unrelated elements that only look alike.
 4. Migrate every equivalent occurrence in the touched flow. A fix is incomplete when one screen uses the contract and a neighboring screen still carries a lookalike implementation.

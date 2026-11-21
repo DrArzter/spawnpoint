@@ -81,12 +81,12 @@ and its game content.
 
 The views live in `web/src/skins/console`. The models are core's
 ([ADR-0059](../docs/adr/0059-separate-the-console-into-bones-and-skins.md)): a skin changes how a page is drawn, never
-what it offers. The source of the look is the prototype `~/.clowder/prototypes/ca/index.html` and the C+A skin
-specification of 2026-11-21.
+what it offers.
 
 The front door (landing, sign-in, join, email action and connect screens) is outside every skin. It keeps the base
-sheets in `web/src/styles` (`tokens.css`, `base.css`, `shell.css`, `components.css`, `landing.css`) and the shared
-parts in `web/src/components/ui`.
+sheets in `web/src/styles` (`tokens.css`, `base.css`, `shell.css`, `components.css`, `landing.css`) and the parts in
+`web/src/components/ui`. Some of those parts are behaviour that the skins share too: the snackbar queue
+(`Snackbar`), which both skins read, and `Timestamp`, `Tooltip` and `useFilter`, which the terminal skin uses.
 
 ## Owner rules
 
@@ -259,7 +259,7 @@ stays focusable and shows the hint) and `aria-busy` while busy. Contract tests: 
 | `ActionButton`, `IconButton` | One Action. Variants `primary` (one per page), `default`, `danger` (confirmation footer only), `ghost` (card-head links); sizes `md` 40px and `sm` 34px, 44px under 760px |
 | `Overflow`, `Menu`, `MenuButton` | The row and page "more" menu. Always a menu, so a column has one control; danger items in a last group under a rule |
 | `Card`, `Grid`, `SplitPage`, `ListColumn` | Surfaces and layout |
-| `PageHeader`, `Tabs`, `Toolbar` | Page structure |
+| `PageHeader`, `Tabs` | Page structure |
 | `Table`, `TrackList`, `DetailList` | Rows on shared tracks; key-value sections in equal columns |
 | `Status`, `Indicator`, `Chip`, `Tile`, `Tick` | State: icon and label; icon with the label in the tooltip; facts; status count tiles; ticking counts |
 | `Notice`, `Empty`, `Skeleton`, `ProgressBar` | One-line notices; empty and error states; loading at the final geometry; indeterminate work |
@@ -297,7 +297,7 @@ verb, mark and state, table, tabs, field, toggle, details, overflow, modal, draw
 in its own `t-*` classes; the console face's primitives and sheets play no part in it. The rules apply while the
 document carries `html[data-skin="terminal"]`, which `index.html` stamps before the first paint and `App` keeps true.
 
-- **One face.** B612 Mono for everything, loaded on demand when the skin mounts. Two weights, 400 and 700, and
+- **One face.** B612 Mono for everything. `index.html` asks for it before the first paint, and the shell makes sure it has loaded. Two weights, 400 and 700, and
   inversion carry emphasis; whatever the console sets to medium is bold here. Lines sit on the 4px grid: 16px under
   12px type (labels, column headings, small print), 20px under 13px and 14px (everything read), 24px under the 18px
   page title, 28px under the 22px host headline. A panel's name sits in its top rule as a tracked uppercase label.

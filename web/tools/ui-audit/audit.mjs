@@ -51,9 +51,10 @@ const ROUTES = [
   ["profile", "/?demo&latency=0#/profile"],
 ];
 
-// Both sides of every step in web/DESIGN.md: the console's (759/760,
-// 1023/1024, 1199/1200) and the terminal's (599/600, 839/840, 959/960); the
-// smallest phone, a desktop and a 4K screen at 150%.
+// Both sides of the steps where the frame, tables and dialogs change: the
+// console's (759/760, 1023/1024, 1199/1200) and the terminal's (599/600,
+// 839/840, 959/960); the smallest phone, a desktop and a 4K screen at 150%.
+// The stride crosses the smaller steps up to 1680; 2560 shows the rest.
 const PAGE_WIDTHS = [360, 599, 600, 759, 760, 839, 840, 959, 960, 1023, 1024, 1199, 1200, 1440, 2560];
 // Dialogs dock to the bottom under 760px (console) and 600px (terminal).
 const OVERLAY_WIDTHS = [360, 599, 600, 759, 760, 1440, 2560];

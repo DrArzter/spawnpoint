@@ -327,6 +327,8 @@ export type MemberRow = Readonly<{
   setRoleId: (roleId: string) => void;
   changing: boolean;
   linkedAccounts: Action;
+  /** `access.delete`; null for the caller's own row and for an Owner the caller cannot remove. */
+  remove: Action | null;
 }>;
 
 export type InvitationsModel = Readonly<{
@@ -348,6 +350,8 @@ export type UsersModel = Readonly<{
   invitations: InvitationsModel | null;
   managed: Member | null;
   closeManaged: Action;
+  /** The open "Delete <name>?" dialog, if any. */
+  deletion: ConfirmationModel | null;
 }>;
 
 export type RolesModel = Readonly<{

@@ -62,7 +62,7 @@ const str = (record: Record<string, unknown> | null, key: string): string | null
 
 // A watchdog child stop is named <op>-idle-N / <op>-cap-N; promotion's
 // children end in -stop / -restop / -rollback / -rollback-stop / -start.
-const CHILD_NAME = /-(idle|cap)-[0-9]+$|-(re)?stop$|-rollback(-stop)?$|-start$/;
+const CHILD_NAME = /-(idle|cap)-\d+$|-(re)?stop$|-rollback(-stop)?$|-start$/;
 
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 
@@ -88,92 +88,105 @@ export function notificationSubscriptionKey(event: ExecutionEvent): Notification
   return null;
 }
 
-export function renderNotification(event: ExecutionEvent): string | null {
-  const requester = str(event.input, "requestedBy");
-  // Two worlds of one game can run at once (ADR-0062), so a message names its
-  // world when the workflow was given the name; older inputs carry none.
-  const world = str(event.input, "worldName") || null;
-  const failed = event.status === "FAILED" || event.status === "TIMED_OUT" || event.status === "ABORTED";
+// What a renderer reads besides the event: the requester and, when the
+// workflow was given one, the world's name. Two worlds of one game can run at
+// once (ADR-0062), so a message names its world; older inputs carry none.
+type RenderContext = Readonly<{ requester: string | null; world: string | null; failed: boolean }>;
+type Renderer = (event: ExecutionEvent, context: RenderContext) => string | null;
 
-  switch (event.machine) {
-    case "spawnpoint-start-server": {
-      if (CHILD_NAME.test(event.name)) return null;
-      if (event.status === "RUNNING") {
-        return `[STARTING] ${requester ?? "the owner"} requested ${world ?? "the server"}. Mods take a few minutes.`;
-      }
-      if (event.status === "SUCCEEDED") {
-        const address = str(event.output, "connectionAddress") ?? str(event.output, "address");
-        const up = world === null ? "Server is up" : `${world} is up`;
-        return address === null ? `[READY] ${up}.` : `[READY] ${up}: ${address}`;
-      }
-      const start = world === null ? "Start" : `Start of ${world}`;
-      return `[FAILED] ${start} failed (${event.name}). The owner can read the execution history.`;
-    }
+function renderStart(event: ExecutionEvent, { requester, world }: RenderContext): string | null {
+  if (CHILD_NAME.test(event.name)) return null;
+  if (event.status === "RUNNING") {
+    return `[STARTING] ${requester ?? "the owner"} requested ${world ?? "the server"}. Mods take a few minutes.`;
+  }
+  if (event.status === "SUCCEEDED") {
+    const address = str(event.output, "connectionAddress") ?? str(event.output, "address");
+    const up = world === null ? "Server is up" : `${world} is up`;
+    return address === null ? `[READY] ${up}.` : `[READY] ${up}: ${address}`;
+  }
+  const start = world === null ? "Start" : `Start of ${world}`;
+  return `[FAILED] ${start} failed (${event.name}). The owner can read the execution history.`;
+}
 
-    case "spawnpoint-idle-watchdog": {
-      if (event.status === "RUNNING") return null;
-      if (event.status === "SUCCEEDED") {
-        switch (str(event.output, "status")) {
-          case "stopped_idle":
-            return world === null
-              ? "[STOPPED] Nobody online — server saved, backed up and stopped."
-              : `[STOPPED] ${world}: nobody online — saved, backed up and stopped.`;
-          case "stopped_session_cap":
-            return world === null
-              ? "[STOPPED] Session cap reached — server saved, backed up and stopped."
-              : `[STOPPED] ${world}: session cap reached — saved, backed up and stopped.`;
-          default:
-            return null;
-        }
-      }
-      return `[ALARM] The idle watchdog died (${event.name}). If the server is up, it will not stop itself — the running-hours alarm is the backstop.`;
-    }
-
-    case "spawnpoint-stop-server": {
-      // Successes are announced by whoever ordered the stop; the owner CLI
-      // prints its own result. A FAILED stop is a failed backup contract and
-      // is always worth a message, child or not.
-      if (!failed) return null;
-      // Not failures of the backup contract: a player came back during the
-      // final recheck, or the session had already ended. The world is safe.
-      if (event.error === "Spawnpoint.V2StaleSession") return null;
-      if (event.error === "Spawnpoint.V2StopRefusedPlayersOnline") {
-        return CHILD_NAME.test(event.name) ? null : "[STOP CANCELLED] Players are online, so the server keeps running. Nothing was lost.";
-      }
-      if (event.error === "Spawnpoint.HostActivityUnknown") {
-        return `[ALARM] The world was saved and its backup verified (${event.name}), but host activity could not be checked. EC2 may still be running.`;
-      }
-      return `[ALARM] A stop failed (${event.name}) — the world may be unsaved or the backup unverified, and EC2 may still be running.`;
-    }
-
-    case "spawnpoint-drain-host-v2": {
-      if (!failed) return null;
-      const hostId = str(event.input, "hostId") ?? "unknown host";
-      return `[ALARM] Fleet drain failed for ${hostId} (${event.name}). EC2 may still be billed; the scheduled Fleet sweep will retry or flag it for review.`;
-    }
-
-    case "spawnpoint-promote-release": {
-      if (CHILD_NAME.test(event.name)) return null;
-      const release = str(event.input, "release");
-      if (event.status === "RUNNING") {
-        return `[DEPLOYING] Release ${release ?? "?"} is being promoted.`;
-      }
-      if (event.status === "SUCCEEDED") {
-        switch (str(event.output, "status")) {
-          case "promoted":
-            return `[DEPLOYED] Release ${release ?? "?"} is live${str(event.output, "server") === "running" ? " and the server is up" : ""}. /pack for the new archive.`;
-          case "rolled_back":
-            return `[ROLLED BACK] Release ${release ?? "?"} failed its health check and was rolled back to ${str(event.output, "active_release") ?? "the previous release"}. Nothing to update.`;
-          case "already_active":
-            return null;
-          default:
-            return null;
-        }
-      }
-      return `[FAILED] Promotion of ${release ?? "?"} failed (${event.name}). The pointer tells the truth; see the runbook.`;
-    }
-
+function renderWatchdogStop(world: string | null, status: string | null): string | null {
+  switch (status) {
+    case "stopped_idle":
+      return world === null
+        ? "[STOPPED] Nobody online — server saved, backed up and stopped."
+        : `[STOPPED] ${world}: nobody online — saved, backed up and stopped.`;
+    case "stopped_session_cap":
+      return world === null
+        ? "[STOPPED] Session cap reached — server saved, backed up and stopped."
+        : `[STOPPED] ${world}: session cap reached — saved, backed up and stopped.`;
     default:
       return null;
   }
+}
+
+function renderWatchdog(event: ExecutionEvent, { world }: RenderContext): string | null {
+  if (event.status === "RUNNING") return null;
+  if (event.status === "SUCCEEDED") return renderWatchdogStop(world, str(event.output, "status"));
+  return `[ALARM] The idle watchdog died (${event.name}). If the server is up, it will not stop itself — the running-hours alarm is the backstop.`;
+}
+
+function renderStop(event: ExecutionEvent, { failed }: RenderContext): string | null {
+  // Successes are announced by whoever ordered the stop; the owner CLI
+  // prints its own result. A FAILED stop is a failed backup contract and
+  // is always worth a message, child or not.
+  if (!failed) return null;
+  switch (event.error) {
+    // Not failures of the backup contract: a player came back during the
+    // final recheck, or the session had already ended. The world is safe.
+    case "Spawnpoint.V2StaleSession":
+      return null;
+    case "Spawnpoint.V2StopRefusedPlayersOnline":
+      return CHILD_NAME.test(event.name) ? null : "[STOP CANCELLED] Players are online, so the server keeps running. Nothing was lost.";
+    case "Spawnpoint.HostActivityUnknown":
+      return `[ALARM] The world was saved and its backup verified (${event.name}), but host activity could not be checked. EC2 may still be running.`;
+    default:
+      return `[ALARM] A stop failed (${event.name}) — the world may be unsaved or the backup unverified, and EC2 may still be running.`;
+  }
+}
+
+function renderDrain(event: ExecutionEvent, { failed }: RenderContext): string | null {
+  if (!failed) return null;
+  const hostId = str(event.input, "hostId") ?? "unknown host";
+  return `[ALARM] Fleet drain failed for ${hostId} (${event.name}). EC2 may still be billed; the scheduled Fleet sweep will retry or flag it for review.`;
+}
+
+function renderPromotionResult(event: ExecutionEvent, release: string): string | null {
+  switch (str(event.output, "status")) {
+    case "promoted":
+      return `[DEPLOYED] Release ${release} is live${str(event.output, "server") === "running" ? " and the server is up" : ""}. /pack for the new archive.`;
+    case "rolled_back":
+      return `[ROLLED BACK] Release ${release} failed its health check and was rolled back to ${str(event.output, "active_release") ?? "the previous release"}. Nothing to update.`;
+    default:
+      return null;
+  }
+}
+
+function renderPromotion(event: ExecutionEvent): string | null {
+  if (CHILD_NAME.test(event.name)) return null;
+  const release = str(event.input, "release") ?? "?";
+  if (event.status === "RUNNING") return `[DEPLOYING] Release ${release} is being promoted.`;
+  if (event.status === "SUCCEEDED") return renderPromotionResult(event, release);
+  return `[FAILED] Promotion of ${release} failed (${event.name}). The pointer tells the truth; see the runbook.`;
+}
+
+const RENDERERS: Readonly<Record<string, Renderer>> = {
+  "spawnpoint-start-server": renderStart,
+  "spawnpoint-idle-watchdog": renderWatchdog,
+  "spawnpoint-stop-server": renderStop,
+  "spawnpoint-drain-host-v2": renderDrain,
+  "spawnpoint-promote-release": renderPromotion,
+};
+
+export function renderNotification(event: ExecutionEvent): string | null {
+  const renderer = Object.hasOwn(RENDERERS, event.machine) ? RENDERERS[event.machine] : undefined;
+  if (renderer === undefined) return null;
+  return renderer(event, {
+    requester: str(event.input, "requestedBy"),
+    world: str(event.input, "worldName") || null,
+    failed: event.status === "FAILED" || event.status === "TIMED_OUT" || event.status === "ABORTED",
+  });
 }

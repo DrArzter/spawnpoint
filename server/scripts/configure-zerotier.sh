@@ -43,7 +43,8 @@ mountpoint -q "${STATE_TARGET}" || mount --bind "${STATE_SOURCE}" "${STATE_TARGE
 if ! command -v zerotier-cli >/dev/null 2>&1; then
   installer="$(mktemp /tmp/zerotier-install.XXXXXX)"
   trap 'rm -f -- "${installer:-}"' EXIT
-  curl --fail --silent --show-error --location https://install.zerotier.com -o "${installer}"
+  curl --fail --silent --show-error --proto '=https' --tlsv1.2 --location \
+    https://install.zerotier.com -o "${installer}"
   bash "${installer}"
 fi
 

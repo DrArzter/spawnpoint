@@ -1,0 +1,90 @@
+/* Access (spec §6.5): the invitation form, permission lists and the roles matrix. The split page is SplitPage's. */
+
+html[data-skin="cloud"] .c-access-invite {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+html[data-skin="cloud"] .c-access-invite .c-field {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+html[data-skin="cloud"] .c-access-issued {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--c-line);
+}
+
+html[data-skin="cloud"] .c-perms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 0 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+html[data-skin="cloud"] .c-perm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 44px;
+}
+
+html[data-skin="cloud"] .c-perm svg {
+  flex: none;
+  color: var(--c-ok);
+}
+
+html[data-skin="cloud"] .c-perm .c-mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-skin="cloud"] .c-access-provider {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+html[data-skin="cloud"] .c-access-cell {
+  text-align: center;
+}
+
+html[data-skin="cloud"] .c-access-role-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+html[data-skin="cloud"] .c-access-role {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+html[data-skin="cloud"] .c-access-owner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
+}
+
+html[data-skin="cloud"] .c-access-owner-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}

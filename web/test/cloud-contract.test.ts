@@ -6,7 +6,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { action, type Action } from "../src/core/actions.ts";
-import type { ShellModel, WorldsModel } from "../src/core/models.ts";
+import type { AccessModel, ShellModel, WorldsModel } from "../src/core/models.ts";
 import type { Game, World } from "../src/model.ts";
 import { cloudSkin } from "../src/skins/cloud/index.ts";
 import { Palette } from "../src/skins/cloud/ui/Palette.tsx";
@@ -95,4 +95,56 @@ test("cloud: the palette, once open, draws each world's verbs and says why one i
   assert.match(markup, /aria-disabled="true"[^>]*data-action="session.stop"/);
   assert.match(markup, /Players are online\./);
   assert.match(markup, /role="combobox"/);
+});
+
+const member = { id: "m2", name: "Alex", roleId: "player", links: [{ id: "l1", kind: "telegram", value: "42", verified: true }] };
+const access: AccessModel = {
+  tab: "users",
+  setTab: noop,
+  roleCount: 1,
+  users: {
+    bootstrap: { state: "unclaimed", telegramId: null },
+    bootstrapDescription: undefined,
+    candidates: { status: "ready", value: [] },
+    members: [{ member, roleId: "player", setRoleId: noop, changing: false, linkedAccounts: spy("access.linked", "Linked accounts") }],
+    roles: [{ id: "player", name: "Player", description: "Plays", permissions: ["status.read"] }],
+    rolesLoading: false,
+    invitations: null,
+    managed: null,
+    closeManaged: spy("sheet.close", "Close panel"),
+  },
+  roles: { roles: { status: "loading" }, reading: null, read: () => spy("access.role.read", "Read"), closeReading: spy("sheet.close.role", "Close panel") },
+  notifications: { state: "ready", error: "", retry: null, saveStatus: "", games: [], subscriptions: {}, toggle: (id, label) => spy(`notifications.${id}`, label) },
+};
+
+test("cloud: access draws Delete user only when the model gives it (slice C), in the people table and on the person", () => {
+  assert.doesNotMatch(renderToStaticMarkup(createElement(cloudSkin.Access, { model: access })), /Delete user/);
+  const remove = spy("access.delete", "Delete user");
+  const users = { ...access.users, members: [{ ...access.users.members[0]!, remove }] } as AccessModel["users"];
+  const pane = renderToStaticMarkup(createElement(cloudSkin.Access, { model: { ...access, users } }));
+  assert.equal(pane.match(/data-action="access.delete"/g)?.length, 1);
+  window.location.hash = "#/access/users/people/m2";
+  try {
+    const person = renderToStaticMarkup(createElement(cloudSkin.Access, { model: { ...access, users } }));
+    assert.match(person, /<h1[^>]*>Alex/);
+    assert.match(person, /data-action="access.delete"/);
+  } finally {
+    window.location.hash = "";
+  }
+});
+
+test("cloud: a roles matrix header names what it opens and labels its member count", () => {
+  const roles = { ...access.roles, roles: { status: "ready", value: access.users.roles } } as AccessModel["roles"];
+  const markup = renderToStaticMarkup(createElement(cloudSkin.Access, { model: { ...access, tab: "roles", roles } }));
+  const head = markup.match(/<button[^>]*data-action="access.role.read"[^>]*>.*?<\/button>/)?.[0] ?? "";
+  assert.match(head, /aria-label="Player permissions"/);
+  assert.match(head, />Player</, "the visible text is the role alone; the Permission column already says what the cells are");
+  assert.match(markup, /aria-label="1 person"/);
+});
+
+test("cloud: the access list column is navigation only; its rows carry no Actions", () => {
+  const markup = renderToStaticMarkup(createElement(cloudSkin.Access, { model: access }));
+  const column = markup.slice(markup.indexOf('class="c-lcol"'), markup.indexOf('class="c-split-pane"'));
+  assert.doesNotMatch(column, /data-action=/);
+  assert.match(column, /href="#\/access\/users\/people\/m2"/);
 });

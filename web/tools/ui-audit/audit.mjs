@@ -1,32 +1,34 @@
-// Runtime UI audit: every route at every breakpoint, probed in the page.
-// node audit.mjs <baseUrl> <out.json> [light|dark]
-import { spawn } from "node:child_process";
-import { randomInt } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+// Runtime UI audit: every route, state and width, probed in the page.
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-// usage: audit.mjs [--gate [--accept]] [base-url] [detail-file|-] [light|dark]
-// The detail file is opt-in: pass a path to keep the raw findings, otherwise the
-// run prints its report and leaves nothing behind.
+import { launch, sleep } from "./cdp.mjs";
+import { STATES } from "./states.mjs";
+
+// usage: audit.mjs [--gate] [--advise] [--accept] [--self-test] [base-url]
 //
-// --gate is the breakpoint guard CI runs: every skin at both sides of every
-// step, failing on any layout finding accepted.txt does not list. --accept
-// rewrites accepted.txt with what this run found, for a reviewed exception.
+// --gate      the blocking check CI runs: fails on a finding accepted.txt does not list.
+// --advise    adds the advisory checks and writes the report with a screenshot per finding.
+// --accept    prints accepted.txt lines for what this run found; a reason is added by hand.
+// --self-test runs the probe on the fixtures in fixtures/ and fails on a miss it should catch.
+//
+// While fixing, narrow a run: SKIN=cloud AUDIT_ROUTES=world,worlds AUDIT_WIDTHS=360,600
+// AUDIT_STATES=stop AUDIT_STRIDE=0. AUDIT_OUT names the report folder (default out/ui-audit).
 const flags = new Set(process.argv.slice(2).filter((arg) => arg.startsWith("--")));
 const gate = flags.has("--gate");
+const advise = flags.has("--advise");
 const accept = flags.has("--accept");
-const [base = "http://localhost:5173", detail = "-", scheme = "light"] = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
-const out = detail === "-" ? null : detail;
-// SKIN=terminal audits another face; the console is worn when it is unset. The
-// gate wears every face unless SKIN names one.
-function skinsToWear() {
-  if (process.env.SKIN) return [process.env.SKIN];
-  return gate ? ["console", "terminal", "cloud"] : [""];
-}
-const skins = skinsToWear();
-const accepted = join(dirname(fileURLToPath(import.meta.url)), "accepted.txt");
+const selfTest = flags.has("--self-test");
+const [base = "http://127.0.0.1:5173"] = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
+const here = dirname(fileURLToPath(import.meta.url));
+const accepted = join(here, "accepted.txt");
+const reportDir = resolve(process.env.AUDIT_OUT ?? join(here, "../../out/ui-audit"));
+const PROBE_SOURCE = readFileSync(join(here, "probe.js"), "utf8");
+
+// The faces CI gates. The old console skin is not gated: S9 deletes it.
+const SKINS = process.env.SKIN ? process.env.SKIN.split(",") : ["cloud", "terminal"];
 
 const ROUTES = [
   ["landing", "/#/"],
@@ -43,585 +45,461 @@ const ROUTES = [
   ["world-factorio", "/?demo&latency=0#/worlds/factorio/factorio"],
   ["world-vanilla", "/?demo&latency=0#/worlds/minecraft/vanilla"],
   ["releases", "/?demo&latency=0#/releases/minecraft"],
-  ["console", "/?demo&latency=0#/console/minecraft"],
-  ["metrics", "/?demo&latency=0#/metrics/minecraft"],
   ["access-users", "/?demo&latency=0#/access/users"],
   ["access-roles", "/?demo&latency=0#/access/roles"],
   ["access-notifications", "/?demo&latency=0#/access/notifications"],
   ["profile", "/?demo&latency=0#/profile"],
 ];
 
-// Both sides of every breakpoint, because a rule that fires one pixel early is
-// invisible to a list of round numbers. The scale itself is in web/DESIGN.md.
-const VIEWPORTS = [
-  [360, 780, true],
-  [390, 844, true],
-  [599, 900, true],
-  [600, 900, true],
-  [768, 1024, true],
-  [839, 1024, true],
-  [840, 1024, true],
-  [959, 900, true],
-  [960, 900, false],
-  [1199, 900, false],
-  [1200, 900, false],
-  [1440, 900, false],
-  [1920, 1080, false],
-  // A 4K monitor at the usual 150–200% scaling is 1920–2560 CSS px; 3840 is
-  // what 100% scaling gives, kept as the smoke test for the open-ended pane.
-  [2560, 1440, false],
-  [3840, 2160, false],
-];
+// Both sides of every step in web/DESIGN.md (599/600, 839/840, 959/960,
+// 1199/1200), the smallest phone, a desktop and a 4K screen at 150%.
+const PAGE_WIDTHS = [360, 599, 600, 839, 840, 959, 960, 1199, 1200, 1440, 2560];
+// Dialogs dock to the bottom at the Compact step.
+const OVERLAY_WIDTHS = [360, 599, 600, 1440, 2560];
+const DARK_WIDTHS = [360, 1440];
+const STRESS_WIDTHS = [360, 840, 1440];
+// A table changes layout at its container's width, not the viewport's: a 40px
+// stride finds what falls between the steps. Light only, resized in place.
+const STRIDE = process.env.AUDIT_STRIDE === "0" ? [] : Array.from({ length: 34 }, (_, i) => 360 + i * 40);
+const heightOf = (width) => (width >= 2560 ? 1440 : width >= 1920 ? 1080 : width >= 960 ? 900 : width >= 600 ? 1024 : 844);
+const mobileAt = (width) => width < 960;
 
-// The gate: both sides of every step, and a phone and a desktop. A step is
-// where a rule changes, so that is where a layout breaks.
-const GATE_WIDTHS = new Set([360, 599, 600, 839, 840, 959, 960, 1440]);
-// While fixing, AUDIT_ROUTES=world,world-backups and AUDIT_WIDTHS=360,600 narrow a run.
 const onlyRoutes = process.env.AUDIT_ROUTES ? new Set(process.env.AUDIT_ROUTES.split(",")) : null;
 const onlyWidths = process.env.AUDIT_WIDTHS ? new Set(process.env.AUDIT_WIDTHS.split(",").map(Number)) : null;
+const onlyStates = process.env.AUDIT_STATES !== undefined ? new Set(process.env.AUDIT_STATES.split(",").filter(Boolean)) : null;
+const widthOk = (width) => !onlyWidths || onlyWidths.has(width);
 
-// Layout promises the panel makes, each owned by the primitive named. The
-// probe holds every page to them; a new primitive that makes one adds it here.
+// Selectors for faces that do not emit layout markers. The cloud skin's
+// primitives emit data-layout, data-col, data-status and data-layer, and the
+// probe reads those; these lists hold the terminal skin to the same promises.
 const LAYOUT = {
-  // PageHeader and the terminal page head: who this is and what can be done
-  // about it share one line from the phone step up.
-  oneLine: [[".page-title-row", 600], [".t-page-head", 600], [".c-page-header", 760], [".c-tracklist-row", 1024]],
-  // Details rows: a label beside its value shares the baseline of the value's first line.
-  pairs: [".details-row", ".t-detail", ".c-detail-item"],
-  // Cards and panels: what starts a line inside one starts on one edge — the
-  // title, a search field, a table's first column, the detail labels. A
-  // nested card keeps its own edge.
+  oneLine: [[".t-page-head", 600]],
+  pairs: [".t-detail"],
   rails: {
-    containers: ".card, .t-panel, .c-card",
-    // An empty table's one cell is its state, centred across the table, not a column.
-    starts: [".card-header h2", ".filter-bar .search", ".table th:first-child", ".table td:first-child:not(.table-empty)", ".details-row > dt",
-      ".t-filter-row .t-field", ".t-table th:first-child", ".t-table tr:not(.t-table-state) > td:first-child", ".t-detail > dt",
-      ".c-card-head h2", ".c-table th:first-child", ".c-table tr:not(.c-table-empty) > td:first-child", ".c-tracklist-head > :first-child",
-      ".c-tracklist-row > :first-child"],
+    containers: ".t-panel",
+    starts: [".t-filter-row .t-field", ".t-table th:first-child", ".t-table tr:not(.t-table-state) > td:first-child", ".t-detail > dt"],
   },
-  // EmptyState and the terminal Empty sit in the middle of their box.
-  centred: [".empty", ".t-empty", ".c-empty"],
-  // Menu and Overflow: where each item's label begins.
-  menuLabels: ".menu-item > span, .t-menu-copy, .c-menu-item > span:first-of-type",
+  centred: [".t-empty"],
 };
 
-
-const KINDS = [
-  ["sideways", "scrolls sideways"],
-  ["overflowing", "past the viewport"],
-  ["clipped", "cut with no ellipsis"],
-  ["smallTargets", "target below the floor"],
-  ["contrast", "contrast below 4.5"],
-  ["overlaps", "text under a control"],
-  ["textOverText", "text over text"],
-  ["wrapped", "row broke its line"],
-  ["offCentre", "empty state off centre"],
-  ["misaligned", "label off its value"],
-  ["offRail", "start off the card edge"],
-  ["menuClipped", "menu label cut"],
-  ["menuRagged", "menu labels ragged"],
-];
-
-// What the gate fails on: geometry that is either right or broken. Targets
-// and contrast stay in the report, where a disabled control is judged by eye.
-const GATED = new Set(["sideways", "overflowing", "overlaps", "textOverText", "wrapped", "offCentre", "misaligned", "offRail", "menuClipped", "menuRagged"]);
-
-// The measure beside a finding: a shift, a size or a contrast ratio.
-function detailOf(item) {
-  if (typeof item.by === "string") return item.by;
-  if (item.by !== undefined) return (item.by > 0 ? "+" : "") + item.by + "px";
-  if (item.w !== undefined) return item.w + "x" + item.h;
-  if (item.ratio !== undefined) return item.ratio.toFixed(2) + ":1";
-  return "";
-}
-
-function report(findings) {
-  const totals = new Map(KINDS.map(([key]) => [key, 0]));
-  const lines = [];
-  for (const probe of findings) {
-    for (const [key, label] of KINDS) {
-      for (const item of probe[key] ?? []) {
-        totals.set(key, totals.get(key) + 1);
-        const what = item.sel ?? item.selector ?? item.text ?? "";
-        const detail = detailOf(item);
-        lines.push(`  ${(probe.skin || "console").padEnd(8)} ${probe.route.padEnd(18)} ${String(probe.width).padStart(5)}px  ${label.padEnd(24)} ${detail.padEnd(10)} ${String(what).slice(-64)}`);
-      }
-    }
-  }
-  const counted = KINDS.map(([key, label]) => `${label}: ${totals.get(key)}`).join(", ");
-  console.log(`${findings.length} probes across ${new Set(findings.map((f) => f.width)).size} widths`);
-  console.log(counted);
-  if (lines.length > 0) {
-    console.log("");
-    // Contrast on disabled controls is exempt from WCAG and would drown the rest.
-    for (const line of lines.filter((line) => !line.includes("contrast below"))) console.log(line);
-  }
-}
-
-const PROBE = String.raw`(() => {
-  const toRgb = (value) => {
-    const m = String(value).match(/rgba?\(([^)]+)\)/);
-    if (!m) return null;
-    const parts = m[1].split(",").map((p) => parseFloat(p.trim()));
-    return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 };
-  };
-  const lum = (c) => {
-    const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
-    return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
-  };
-  const over = (fg, bg) => ({ r: fg.r * fg.a + bg.r * (1 - fg.a), g: fg.g * fg.a + bg.g * (1 - fg.a), b: fg.b * fg.a + bg.b * (1 - fg.a), a: 1 });
-  const ratio = (a, b) => { const l1 = lum(a), l2 = lum(b); const hi = Math.max(l1, l2), lo = Math.min(l1, l2); return (hi + 0.05) / (lo + 0.05); };
-  const path = (el) => {
-    const bits = [];
-    let node = el;
-    for (let i = 0; node && i < 4; i += 1) {
-      const cls = typeof node.className === "string" && node.className ? "." + node.className.trim().split(/\s+/).slice(0, 3).join(".") : "";
-      bits.unshift(node.tagName.toLowerCase() + cls);
-      node = node.parentElement;
-    }
-    return bits.join(" > ");
-  };
-  const visible = (el, rect) => {
-    const cs = getComputedStyle(el);
-    if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") return false;
-    if (rect.width < 1 || rect.height < 1) return false;
-    if (el.closest("[hidden]")) return false;
-    return true;
-  };
-  const scrollableAncestor = (el) => {
-    let node = el.parentElement;
-    while (node) {
-      const cs = getComputedStyle(node);
-      if (cs.overflowX === "auto" || cs.overflowX === "scroll") return true;
-      node = node.parentElement;
-    }
-    return false;
-  };
-  const effectiveBg = (el) => {
-    let node = el;
-    while (node) {
-      const c = toRgb(getComputedStyle(node).backgroundColor);
-      if (c && c.a > 0.95) return c;
-      node = node.parentElement;
-    }
-    return { r: 255, g: 255, b: 255, a: 1 };
-  };
-
-  const all = Array.from(document.querySelectorAll("body *"));
-  const result = {
-    docScrollWidth: document.documentElement.scrollWidth,
-    viewportWidth: window.innerWidth,
-    overflowing: [], clipped: [], sideways: [], smallTargets: [], fonts: {}, radii: {}, zIndex: {},
-    contrast: [], shadows: [], fontFamilies: {},
-  };
-
-  for (const el of all) {
-    const rect = el.getBoundingClientRect();
-    if (!visible(el, rect)) continue;
-    const cs = getComputedStyle(el);
-    // Text parked off-screen for a reader is meant to be clipped and meant to
-    // be outside the viewport. Counting it drowned the real findings: 185 of
-    // 185 clipped entries were this, and nobody reads a report that cries wolf.
-    // Detected by the technique rather than by a class name, because the same
-    // properties are applied inline by a media query in at least one place.
-    if (cs.clipPath === "inset(50%)" || el.closest(".visually-hidden") !== null) continue;
-
-    // 1. Horizontal overflow past the viewport, with no scroll container to excuse it.
-    // Chrome that lives off-canvas until it is opened — a closed navigation
-    // drawer, a sheet at rest — is parked, not overflowing. Only what sticks out
-    // past the right edge can force the page sideways.
-    if (rect.right > window.innerWidth + 1 && rect.left >= -1 && !scrollableAncestor(el)) {
-      result.overflowing.push({ sel: path(el), left: Math.round(rect.left), right: Math.round(rect.right), width: Math.round(rect.width) });
-    }
-
-    // 2. Content cut off with no ellipsis to announce it.
-    if (el.scrollWidth > el.clientWidth + 1 && cs.overflowX === "hidden" && cs.textOverflow !== "ellipsis" && el.children.length === 0 && el.textContent.trim()) {
-      result.clipped.push({ sel: path(el), scroll: el.scrollWidth, client: el.clientWidth, text: el.textContent.trim().slice(0, 40) });
-    }
-
-    // 3. A container that scrolls sideways. The overflow probe above excuses
-    // anything inside a scroll box, which is exactly where a table that no
-    // longer fits its card goes to hide: it does not stick out, it scrolls, and
-    // the reader finds half a row and no clue there is more.
-    if ((cs.overflowX === "auto" || cs.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 1
-        && el.dataset.scroll !== "expected") {
-      result.sideways.push({ sel: path(el), scroll: el.scrollWidth, client: el.clientWidth, by: el.scrollWidth - el.clientWidth });
-    }
-
-    // 4. Targets, measured against the pointer that is actually pointing. A
-    // finger wants the 32px this project's own touch rules aim at; a mouse is
-    // held to WCAG 2.5.8's 24px, and holding it to 32 flags controls that no
-    // standard objects to.
-    const floor = __COARSE__ ? 32 : 24;
-    const interactive = el.matches("button, a[href], input, select, textarea, [role=menuitem], [role=tab], summary");
-    if (interactive && (rect.width < floor || rect.height < floor) && cs.display !== "contents") {
-      result.smallTargets.push({ sel: path(el), w: Math.round(rect.width), h: Math.round(rect.height), label: (el.getAttribute("aria-label") || el.textContent || "").trim().slice(0, 30) });
-    }
-
-    // 4. Type ramp: only elements that own text directly.
-    const ownText = Array.from(el.childNodes).some((n) => n.nodeType === 3 && n.textContent.trim());
-    if (ownText) {
-      const key = cs.fontSize + "/" + cs.lineHeight + "/" + cs.fontWeight;
-      (result.fonts[key] ||= { count: 0, samples: [] });
-      result.fonts[key].count += 1;
-      if (result.fonts[key].samples.length < 3) result.fonts[key].samples.push(path(el));
-      const fam = cs.fontFamily.split(",")[0].replace(/["']/g, "");
-      (result.fontFamilies[fam] ||= { count: 0, samples: [] });
-      result.fontFamilies[fam].count += 1;
-      if (result.fontFamilies[fam].samples.length < 3) result.fontFamilies[fam].samples.push(path(el));
-
-      // 5. Contrast of real text against its effective background. An inactive
-      // control is out of scope for the contrast rule itself, and counting one
-      // buries the findings that are real: every disabled button in the panel
-      // was reported, sixty-six of them, and none was a fault.
-      const inactive = el.closest("[disabled], [aria-disabled=true]") !== null;
-      const fg = inactive ? null : toRgb(cs.color);
-      if (fg) {
-        const bg = effectiveBg(el);
-        const composite = fg.a < 1 ? over(fg, bg) : fg;
-        const r = ratio(composite, bg);
-        const size = parseFloat(cs.fontSize);
-        const large = size >= 24 || (size >= 18.66 && Number(cs.fontWeight) >= 700);
-        if (r < (large ? 3 : 4.5)) result.contrast.push({ sel: path(el), ratio: Math.round(r * 100) / 100, size: cs.fontSize, color: cs.color, bg: "rgb(" + Math.round(bg.r) + "," + Math.round(bg.g) + "," + Math.round(bg.b) + ")", text: (el.textContent || "").trim().slice(0, 30) });
-      }
-    }
-
-    // 6. Radius and z-index vocabularies.
-    if (cs.borderRadius !== "0px") {
-      (result.radii[cs.borderRadius] ||= { count: 0, samples: [] });
-      result.radii[cs.borderRadius].count += 1;
-      if (result.radii[cs.borderRadius].samples.length < 3) result.radii[cs.borderRadius].samples.push(path(el));
-    }
-    if (cs.zIndex !== "auto") {
-      (result.zIndex[cs.zIndex] ||= { count: 0, samples: [] });
-      result.zIndex[cs.zIndex].count += 1;
-      if (result.zIndex[cs.zIndex].samples.length < 3) result.zIndex[cs.zIndex].samples.push(path(el));
-    }
-
-    // 7. Shadow on a persistent surface.
-    if (cs.boxShadow !== "none" && !el.matches(".menu, .dialog, .sheet, .snackbar, .switch-track, .switch-track::after, .drawer, .btn-filled, .mark")) {
-      result.shadows.push({ sel: path(el), shadow: cs.boxShadow.slice(0, 60) });
-    }
-  }
-
-  const layout = __LAYOUT__;
-  // What of a box can be seen: inside the viewport's width and every box above
-  // it that clips. A tab scrolled out of its strip, a closed drawer parked off
-  // the edge and the hidden end of a truncated name are not on the page.
-  const clipBoxes = new Map();
-  const clipBox = (el) => {
-    if (clipBoxes.has(el)) return clipBoxes.get(el);
-    const parent = el.parentElement;
-    let box = parent && parent !== document.documentElement ? clipBox(parent) : { left: 0, right: window.innerWidth, top: -Infinity, bottom: Infinity };
-    if (parent) {
-      const pcs = getComputedStyle(parent);
-      if (pcs.overflowX !== "visible" || pcs.overflowY !== "visible") {
-        const r = parent.getBoundingClientRect();
-        box = { left: Math.max(box.left, r.left), right: Math.min(box.right, r.right), top: Math.max(box.top, r.top), bottom: Math.min(box.bottom, r.bottom) };
-      }
-    }
-    clipBoxes.set(el, box);
-    return box;
-  };
-  // within: also the element's own box when it clips, as a text run is clipped
-  // by the element that holds it (an ellipsis keeps its whole text inside).
-  const seen = (r, el, within = false) => {
-    let box = clipBox(el);
-    const ecs = within ? getComputedStyle(el) : null;
-    if (ecs && (ecs.overflowX !== "visible" || ecs.overflowY !== "visible")) {
-      const own = el.getBoundingClientRect();
-      box = { left: Math.max(box.left, own.left), right: Math.min(box.right, own.right), top: Math.max(box.top, own.top), bottom: Math.min(box.bottom, own.bottom) };
-    }
-    const s = { left: Math.max(r.left, box.left), right: Math.min(r.right, box.right), top: Math.max(r.top, box.top), bottom: Math.min(r.bottom, box.bottom) };
-    return s.right - s.left > 0 && s.bottom - s.top > 0 ? s : null;
-  };
-  const textRuns = (root) => {
-    const runs = [];
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const owner = node.parentElement;
-      // A glyph hidden from readers is decoration laid over its control on purpose, as a select's caret is.
-      if (!node.textContent.trim() || !owner || owner.closest(".visually-hidden, script, style, [aria-hidden=true]")) continue;
-      const ocs = getComputedStyle(owner);
-      if (ocs.visibility === "hidden" || ocs.display === "none" || ocs.clipPath === "inset(50%)") continue;
-      const range = document.createRange();
-      range.selectNodeContents(node);
-      for (const rect of range.getClientRects()) {
-        const r = rect.width >= 1 && rect.height >= 1 ? seen(rect, owner, true) : null;
-        if (r) runs.push({ node, r, raw: rect, text: node.textContent.trim().slice(0, 30) });
-      }
-    }
-    return runs;
-  };
-  const cross = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 2 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 2;
-  result.overlaps = []; result.textOverText = []; result.wrapped = []; result.offCentre = []; result.misaligned = []; result.offRail = [];
-
-  // 8. Text under a control, or one control over another: the corner key a
-  // short name ran under. A control's own text, and a control inside another
-  // (a button in a label), are not collisions.
-  const controls = all
-    .filter((el) => el.matches("button, a[href], input, select, textarea") && visible(el, el.getBoundingClientRect()) && el.closest(".visually-hidden") === null)
-    .map((el) => ({ el, r: seen(el.getBoundingClientRect(), el) }))
-    .filter((control) => control.r !== null);
-  const runs = textRuns(document.body);
-  for (const control of controls) {
-    const hit = runs.find((run) => !control.el.contains(run.node) && cross(control.r, run.r))
-      ?? controls.find((other) => other !== control && !other.el.contains(control.el) && !control.el.contains(other.el) && cross(control.r, other.r));
-    if (hit) result.overlaps.push({ sel: path(control.el), text: hit.text ?? path(hit.el) });
-  }
-
-  // 8b. Text over text: two text nodes that share pixels, as a badge laid over
-  // a title or a long value run into its neighbour. A run's box is the font's
-  // whole ascent and descent, taller than its glyphs, and two lines of tight
-  // leading share that margin by design; so each box is trimmed to the middle
-  // of its line before the pair is compared.
-  const cores = runs
-    .map((run) => { const inset = (run.r.bottom - run.r.top) * 0.2; return { ...run, c: { left: run.r.left, right: run.r.right, top: run.r.top + inset, bottom: run.r.bottom - inset } }; })
-    .sort((a, b) => a.c.top - b.c.top);
-  const reported = new Set();
-  for (let i = 0; i < cores.length; i++) {
-    for (let j = i + 1; j < cores.length && cores[j].c.top < cores[i].c.bottom; j++) {
-      const [a, b] = [cores[i], cores[j]];
-      if (a.node === b.node || !cross(a.c, b.c)) continue;
-      const sel = path(b.node.parentElement);
-      if (reported.has(sel)) continue;
-      reported.add(sel);
-      result.textOverText.push({ sel, by: "“" + b.text.slice(0, 12) + "” on “" + a.text.slice(0, 12) + "”" });
-    }
-  }
-
-  // 9. A row that promised one line and broke it.
-  for (const [selector, from] of layout.oneLine) {
-    if (window.innerWidth < from) continue;
-    for (const row of document.querySelectorAll(selector)) {
-      const kids = Array.from(row.children).filter((kid) => visible(kid, kid.getBoundingClientRect()));
-      if (kids.length < 2) continue;
-      const first = kids[0].getBoundingClientRect();
-      const broken = kids.slice(1).find((kid) => { const r = kid.getBoundingClientRect(); return r.top >= first.bottom - 1 || r.bottom <= first.top + 1; });
-      if (broken) result.wrapped.push({ sel: path(broken) });
-    }
-  }
-
-  // 10. An empty state that is not in the middle of its box.
-  for (const selector of layout.centred) {
-    for (const el of document.querySelectorAll(selector)) {
-      const r = el.getBoundingClientRect();
-      if (!visible(el, r) || !el.parentElement) continue;
-      const p = el.parentElement.getBoundingClientRect();
-      const pcs = getComputedStyle(el.parentElement);
-      const middle = (p.left + parseFloat(pcs.borderLeftWidth) + parseFloat(pcs.paddingLeft) + p.right - parseFloat(pcs.borderRightWidth) - parseFloat(pcs.paddingRight)) / 2;
-      const by = Math.round((r.left + r.right) / 2 - middle);
-      if (Math.abs(by) > 4) result.offCentre.push({ sel: path(el), by });
-    }
-  }
-
-  // 11. A label beside its value that does not share the baseline of the
-  // value's first line. Text of two sizes centred on one line still sits a pixel
-  // or two apart, and the eye reads the baselines. A label above its value, as
-  // a narrow record stacks them, has no line to share.
-  const metrics = document.createElement("canvas").getContext("2d");
-  const baseline = (el) => {
-    const run = textRuns(el)[0];
-    if (!run) return null;
-    const cs = getComputedStyle(run.node.parentElement);
-    metrics.font = cs.fontStyle + " " + cs.fontWeight + " " + cs.fontSize + " " + cs.fontFamily;
-    return run.raw.bottom - metrics.measureText(run.node.textContent).fontBoundingBoxDescent;
-  };
-  for (const selector of layout.pairs) {
-    for (const row of document.querySelectorAll(selector)) {
-      const [label, value] = row.children;
-      if (!label || !value || !visible(row, row.getBoundingClientRect())) continue;
-      if (value.getBoundingClientRect().left < label.getBoundingClientRect().right - 1) continue;
-      const l = baseline(label), v = baseline(value);
-      if (l === null || v === null) continue;
-      const by = Math.round((v - l) * 10) / 10;
-      if (Math.abs(by) > 1) result.misaligned.push({ sel: path(row), by, text: label.textContent.trim().slice(0, 24) });
-    }
-  }
-
-  // 12. What starts a line inside a card or panel and does not start on its
-  // edge: where its content begins, inside its own padding (a field, by its box).
-  const start = (el) => {
-    const r = el.getBoundingClientRect();
-    if (el.matches(".search, .t-field")) return r.left;
-    const cs = getComputedStyle(el);
-    return r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft);
-  };
-  for (const container of document.querySelectorAll(layout.rails.containers)) {
-    if (!visible(container, container.getBoundingClientRect())) continue;
-    const edges = [];
-    for (const selector of layout.rails.starts) {
-      const el = Array.from(container.querySelectorAll(selector)).find((candidate) => candidate.closest(layout.rails.containers) === container && visible(candidate, candidate.getBoundingClientRect()));
-      if (el) edges.push({ what: selector, x: Math.round(start(el)) });
-    }
-    if (edges.length < 2) continue;
-    const edge = edges[0].x;
-    const off = edges.filter((item) => Math.abs(item.x - edge) > 1);
-    if (off.length > 0) result.offRail.push({ sel: path(container), by: off.map((item) => item.what + " " + (item.x - edge > 0 ? "+" : "") + (item.x - edge) + "px").join(", "), edge: edges[0].what });
-  }
-  return JSON.stringify(result);
-})()`;
-
-// Menus are measured open: the first row menu of the page, where the clipped
-// Archive label was. Its labels must stay inside it and begin on one edge.
-const MENU_PROBE = `(async () => {
-  const layout = __LAYOUT__;
-  const trigger = Array.from(document.querySelectorAll("[aria-haspopup=menu][aria-controls]"))
-    .find((el) => el.closest("table") && el.getBoundingClientRect().width > 0);
-  if (!trigger) return JSON.stringify({});
-  trigger.click();
-  await new Promise((r) => setTimeout(r, 300));
-  const menu = document.getElementById(trigger.getAttribute("aria-controls"));
-  const result = { menuClipped: [], menuRagged: [] };
-  if (!menu) return JSON.stringify(result);
-  const m = menu.getBoundingClientRect();
-  const starts = [];
-  for (const label of menu.querySelectorAll(layout.menuLabels)) {
-    const range = document.createRange();
-    range.selectNodeContents(label);
-    const rects = Array.from(range.getClientRects()).filter((r) => r.width >= 1);
-    if (rects.length === 0) continue;
-    starts.push(Math.min(...rects.map((r) => r.left)));
-    if (rects.some((r) => r.right > m.right + 1 || r.left < m.left - 1)) result.menuClipped.push({ sel: trigger.getAttribute("aria-label"), text: label.textContent.trim().slice(0, 30) });
-  }
-  if (starts.length > 1 && Math.max(...starts) - Math.min(...starts) > 2) result.menuRagged.push({ sel: trigger.getAttribute("aria-label"), by: Math.round(Math.max(...starts) - Math.min(...starts)) });
-  if (typeof menu.hidePopover === "function" && menu.matches(":popover-open")) menu.hidePopover();
-  return JSON.stringify(result);
-})()`;
-
-// One line per gated finding, stable across runs: what accepted.txt lists.
-function findingKeys(findings) {
-  const keys = new Set();
-  for (const probe of findings) {
-    if (probe.error) keys.add(`${probe.skin || "console"} ${probe.route} ${probe.width} error ${probe.error.slice(0, 80)}`);
-    for (const kind of GATED) {
-      for (const item of probe[kind] ?? []) keys.add(`${probe.skin || "console"} ${probe.route} ${probe.width} ${kind} ${item.sel ?? ""}`);
-    }
-  }
-  return [...keys].sort((a, b) => a.localeCompare(b));
-}
-
-// Fails on a finding the reviewed list does not hold; a listed finding that is
-// gone is reported so the list shrinks as the panel is fixed.
-function judge(findings) {
-  const found = findingKeys(findings);
-  if (accept) {
-    writeFileSync(accepted, ["# Layout findings the breakpoint gate accepts, one per line: skin route width kind selector.",
-      "# Written by `npm run audit:ui:gate -- --accept`; every line here is a reviewed exception, not a backlog.", ...found, ""].join("\n"));
-    console.log(`\naccepted ${found.length} findings into ${accepted}`);
-    return 0;
-  }
-  const known = new Set(existsSync(accepted) ? readFileSync(accepted, "utf8").split("\n").filter((line) => line && !line.startsWith("#")) : []);
-  const fresh = found.filter((key) => !known.has(key));
-  const gone = [...known].filter((key) => !found.includes(key));
-  const listed = (keys) => keys.map((key) => "  " + key).join("\n");
-  if (gone.length > 0) console.log(`\n${gone.length} accepted findings no longer occur; remove them from accepted.txt:\n${listed(gone)}`);
-  if (fresh.length === 0) {
-    console.log(`\nbreakpoint gate: no new layout findings (${found.length} accepted)`);
-    return 0;
-  }
-  console.log(`\nbreakpoint gate: ${fresh.length} new layout findings\n${listed(fresh)}`);
-  return 1;
-}
-
-const chrome = process.env.CHROME_BIN ?? (process.platform === "darwin"
-  ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-  : "/usr/bin/chromium");
-const profile = mkdtempSync(join(process.env.SCRATCH ?? tmpdir(), "audit-"));
-const port = randomInt(9600, 9900);
-const proc = spawn(chrome, [
-  "--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
-  "--no-first-run", "--hide-scrollbars", "about:blank",
-], { stdio: ["ignore", "ignore", "pipe"] });
-
-// What chrome says about itself, kept for the failure message: a browser that
-// never answers and a browser that refused to launch used to be the same line.
-let complaints = "";
-proc.stderr.setEncoding("utf8");
-proc.stderr.on("data", (chunk) => { complaints = (complaints + chunk).slice(-2000); });
-let exit = null;
-proc.on("exit", (code, signal) => { exit = signal ?? code; });
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function target() {
-  // A minute, not the ten seconds this waited before: a cold CI runner can
-  // spend longer than that getting chrome to the point of opening its
-  // debugging port, and the gate failed on the wait rather than on the UI. The
-  // budget costs nothing when chrome dies instead of dawdling, because an exit
-  // ends the wait immediately.
-  for (let i = 0; i < 600 && exit === null; i += 1) {
-    try {
-      const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
-      const page = list.find((t) => t.type === "page");
-      if (page) return page;
-    } catch { /* starting */ }
-    await sleep(100);
-  }
-  const why = exit === null ? "did not open its debugging port within 60s" : `exited with ${exit}`;
-  throw new Error(`chrome ${why}${complaints ? `\n${complaints.trimEnd()}` : ""}`);
-}
-
-const page = await target();
-const ws = new WebSocket(page.webSocketDebuggerUrl);
-await new Promise((r) => { ws.onopen = r; });
-let nextId = 0;
-const pending = new Map();
-let onLoad = null;
-ws.onmessage = (event) => {
-  const message = JSON.parse(event.data);
-  if (message.id && pending.has(message.id)) { pending.get(message.id)(message); pending.delete(message.id); }
-  else if (message.method === "Page.loadEventFired" && onLoad) onLoad();
+// What fails the gate. The rest is the advisory report.
+const KINDS = {
+  wider: "page wider than the screen",
+  overflowing: "past the screen edge",
+  sideways: "scrolls sideways",
+  overlaps: "box over box",
+  textOverText: "text over text",
+  wrapped: "row broke its line",
+  offCentre: "empty state off centre",
+  misaligned: "label off its value",
+  offRail: "start off the card edge",
+  menuClipped: "menu label cut",
+  menuRagged: "menu labels ragged",
+  menuCut: "menu past the screen",
+  packed: "row packed at one side",
+  columns: "columns not shared",
+  repeatedLabel: "label in every row",
+  iconOffLine: "icon off the text centreline",
+  crumbRepeat: "title said twice",
+  gridEdge: "grid short of its edge",
+  cardHeights: "cards of one row differ in height",
+  stateTwice: "state said twice",
+  error: "probe or state failed",
 };
-const send = (method, params = {}) => new Promise((resolve) => {
-  const id = ++nextId;
-  pending.set(id, resolve);
-  ws.send(JSON.stringify({ id, method, params }));
-});
+const ADVISORY = {
+  loosePacked: "content packed at one side",
+  copy: "explanatory copy",
+  stretched: "stretched card",
+  smallTargets: "target below the floor",
+  contrast: "contrast below 4.5",
+  clipped: "cut with no ellipsis",
+};
 
-const findings = [];
+// ---- Jobs ------------------------------------------------------------------
+
+function plan() {
+  const jobs = [];
+  const routes = ROUTES.filter(([name]) => !onlyRoutes || onlyRoutes.has(name));
+  for (const skin of SKINS) {
+    for (const [name, route] of routes) {
+      for (const width of PAGE_WIDTHS.filter(widthOk)) {
+        jobs.push({ type: "page", skin, name, route, width, theme: "light", menus: OVERLAY_WIDTHS.includes(width) });
+        if (DARK_WIDTHS.includes(width)) jobs.push({ type: "page", skin, name, route, width, theme: "dark", menus: false });
+        if (STRESS_WIDTHS.includes(width) && name !== "landing") jobs.push({ type: "page", skin, name: `${name}+stress`, route: route.replace("?demo", "?demo&fixture=stress"), width, theme: "light", menus: false });
+      }
+      const stride = STRIDE.filter((width) => widthOk(width) && !PAGE_WIDTHS.includes(width));
+      for (const mobile of [true, false]) {
+        const widths = stride.filter((width) => mobileAt(width) === mobile);
+        if (widths.length > 0 && name !== "landing") jobs.push({ type: "stride", skin, name, route, widths, theme: "light" });
+      }
+    }
+    for (const state of STATES) {
+      if (state.skins && !state.skins.includes(skin)) continue;
+      if (onlyStates && !onlyStates.has(state.name)) continue;
+      if (onlyRoutes && !onlyStates) continue;
+      for (const width of OVERLAY_WIDTHS.filter(widthOk)) {
+        jobs.push({ type: "state", skin, name: `state:${state.name}`, state, route: state.route, width, theme: "light" });
+        if (DARK_WIDTHS.includes(width)) jobs.push({ type: "state", skin, name: `state:${state.name}`, state, route: state.route, width, theme: "dark" });
+      }
+    }
+  }
+  // Long jobs first, so the workers finish together.
+  return jobs.sort((a, b) => (b.type === "stride") - (a.type === "stride"));
+}
+
+// ---- In-page helpers ---------------------------------------------------------
+
+// Fonts loaded, then animations finished (a spinner's endless loop excepted),
+// then two frames. Bounded, so a page that never settles is still measured.
+const SETTLE = `(async () => {
+  await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1500))]);
+  const until = performance.now() + 1500;
+  const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
+  while (performance.now() < until) {
+    const running = document.getAnimations().filter((a) => a.playState === "running" && a.effect && a.effect.getTiming().iterations !== Infinity);
+    if (running.length === 0) break;
+    await Promise.race([Promise.all(running.map((a) => a.finished.catch(() => undefined))), new Promise((r) => setTimeout(r, 100))]);
+  }
+  await frame(); await frame();
+  return true;
+})()`;
+
+// The surfaces open now: their elements, tagged so the probe can find them.
+const SURFACES = `(() => {
+  const open = [];
+  const shown = (el) => { const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none" && !el.closest("[hidden]"); };
+  for (const el of document.querySelectorAll("dialog[open], [role=dialog], [role=alertdialog], [role=menu], [role=tooltip], #c-tip, .c-toast, .t-toast, .snackbar")) if (shown(el)) open.push(el);
+  return open;
+})()`;
+
+const STEP = `(async (step) => {
+  const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden"; };
+  const first = (selector) => Array.from(document.querySelectorAll(selector)).find(shown) ?? null;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  if (step.click) { const el = first(step.click); if (!el) return "absent"; el.scrollIntoView({ block: "center" }); el.click(); return "ok"; }
+  if (step.focus) { const el = first(step.focus); if (!el) return "absent"; el.scrollIntoView({ block: "center" }); el.focus(); el.dispatchEvent(new PointerEvent("pointerover", { bubbles: true })); return "ok"; }
+  if (step.key) { document.body.dispatchEvent(new KeyboardEvent("keydown", { key: step.key, bubbles: true })); window.dispatchEvent(new KeyboardEvent("keydown", { key: step.key, bubbles: true })); return "ok"; }
+  if (step.action) {
+    const all = Array.from(document.querySelectorAll("[data-action='" + step.action + "']"));
+    const direct = all.find((el) => shown(el) && !el.closest("[role=menu]"));
+    if (direct) { direct.scrollIntoView({ block: "center" }); direct.click(); return "ok"; }
+    for (const item of all) {
+      const menu = item.closest("[role=menu]");
+      const trigger = menu && menu.id ? Array.from(document.querySelectorAll("[aria-controls]")).find((el) => el.getAttribute("aria-controls") === menu.id && shown(el)) : null;
+      if (!trigger) continue;
+      trigger.scrollIntoView({ block: "center" });
+      trigger.click();
+      await wait(250);
+      item.click();
+      return "ok";
+    }
+    return "absent";
+  }
+  return "unknown step";
+})`;
+
+// ---- Running a job ---------------------------------------------------------
+
+async function settle(tab) {
+  await tab.evaluate(SETTLE, true).catch(() => undefined);
+}
+
+async function setWidth(tab, width) {
+  await tab.send("Emulation.setDeviceMetricsOverride", { width, height: heightOf(width), deviceScaleFactor: 1, mobile: mobileAt(width) });
+  await tab.send("Emulation.setTouchEmulationEnabled", { enabled: mobileAt(width), maxTouchPoints: mobileAt(width) ? 5 : 0 });
+}
+
 let pass = 0;
-try {
-  await send("Page.enable");
-  await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: scheme }] });
-  await send("Page.addScriptToEvaluateOnNewDocument", { source: `try { localStorage.setItem("spawnpoint.theme", ${JSON.stringify(scheme)}); } catch (e) {}` });
+async function open(tab, job, width) {
+  await tab.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: job.theme }] });
+  await setWidth(tab, width);
+  // A hash-only change reuses the document and fires no load event: a unique
+  // query parameter makes every visit a fresh load.
+  pass += 1;
+  const [path, hash = ""] = job.route.split("#");
+  const joiner = path.includes("?") ? "&" : "?";
+  await tab.goto(`${base}${path}${joiner}probe=${pass}&skin=${encodeURIComponent(job.skin)}${hash ? "#" + hash : ""}`);
+  await settle(tab);
+}
 
-  const layout = JSON.stringify(LAYOUT);
-  for (const skin of skins) {
-    const skinQuery = skin ? `&skin=${encodeURIComponent(skin)}` : "";
-    for (const [width, height, mobile] of VIEWPORTS.filter(([width]) => (!gate || GATE_WIDTHS.has(width)) && (!onlyWidths || onlyWidths.has(width)))) {
-      await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile });
-      await send("Emulation.setTouchEmulationEnabled", { enabled: mobile, maxTouchPoints: mobile ? 5 : 0 });
-      for (const [name, route] of ROUTES.filter(([name]) => !onlyRoutes || onlyRoutes.has(name))) {
-        // A hash-only change reuses the document and never fires a load event, so
-        // every probe gets a unique query parameter and a timeout to fall back on.
-        pass += 1;
-        const joiner = route.includes("?") ? "&" : "?";
-        const [path, hash = ""] = route.split("#");
-        const url = `${base}${path}${joiner}probe=${pass}${skinQuery}${hash ? "#" + hash : ""}`;
-        const loaded = new Promise((r) => { onLoad = r; });
-        await send("Page.navigate", { url });
-        await Promise.race([loaded, sleep(8000)]);
-        await sleep(gate ? 400 : 600); // NOSONAR: one tab probes one page at a time; each step needs the one before
-        // The runner knows which pointer it is emulating; the page does not have
-        // to be asked, and in headless it answers unreliably.
-        const probe = await send("Runtime.evaluate", { expression: PROBE.replace("__COARSE__", String(mobile)).replace("__LAYOUT__", layout), returnByValue: true, awaitPromise: false }); // NOSONAR: sequential by design, as above
-        const raw = probe.result?.result?.value;
-        if (!raw) { findings.push({ skin, route: name, width, error: JSON.stringify(probe.result).slice(0, 300) }); continue; }
-        const menus = await send("Runtime.evaluate", { expression: MENU_PROBE.replace("__LAYOUT__", layout), returnByValue: true, awaitPromise: true }); // NOSONAR: sequential by design, as above
-        findings.push({ skin, route: name, width, mobile, ...JSON.parse(raw), ...JSON.parse(menus.result?.result?.value ?? "{}") });
+async function probe(tab, width, root = null) {
+  const options = { width, coarse: mobileAt(width), layout: LAYOUT, advise, root };
+  return tab.evaluate(`(${PROBE_SOURCE})(${JSON.stringify(options)})`);
+}
+
+// Opens every menu on the page in turn and measures it on its own.
+async function walkMenus(tab, width) {
+  const results = [];
+  const count = await tab.evaluate(`(() => {
+    const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden" && !el.closest("[hidden], dialog:not([open])"); };
+    const triggers = Array.from(document.querySelectorAll("[aria-haspopup=menu][aria-controls]")).filter((el) => shown(el) && el.getAttribute("aria-disabled") !== "true" && !el.disabled);
+    triggers.forEach((el, i) => el.setAttribute("data-audit-trigger", String(i)));
+    return triggers.length;
+  })()`);
+  for (let i = 0; i < count; i += 1) {
+    const label = await tab.evaluate(`(() => {
+      const trigger = document.querySelector("[data-audit-trigger='${i}']");
+      if (!trigger) return null;
+      document.querySelectorAll("[data-audit-root]").forEach((el) => el.removeAttribute("data-audit-root"));
+      trigger.scrollIntoView({ block: "center" });
+      trigger.click();
+      const menu = document.getElementById(trigger.getAttribute("aria-controls"));
+      if (menu) menu.setAttribute("data-audit-root", "");
+      return trigger.getAttribute("aria-label") || trigger.textContent.trim();
+    })()`);
+    if (label === null) continue;
+    await settle(tab);
+    const found = await probe(tab, width, "[data-audit-root]");
+    results.push({ label, found });
+    await tab.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await tab.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await tab.evaluate(`(() => {
+      const trigger = document.querySelector("[data-audit-trigger='${i}']");
+      const menu = trigger && document.getElementById(trigger.getAttribute("aria-controls"));
+      if (menu && !menu.hidden && menu.getBoundingClientRect().width > 0) trigger.click();
+      window.scrollTo(0, 0);
+    })()`);
+    await settle(tab);
+  }
+  return results;
+}
+
+async function runState(tab, job) {
+  // A fixture is open already; a route is opened here.
+  if (job.route) await open(tab, job, job.width);
+  const before = await tab.evaluate(`${SURFACES}.length`);
+  for (const step of job.state.steps) {
+    const outcome = await tab.evaluate(`${STEP}(${JSON.stringify(step)})`, true);
+    // A control a width does not show cannot be pressed there: not a finding.
+    if (outcome === "absent") return null;
+    if (outcome !== "ok") return { error: `step ${JSON.stringify(step)}: ${outcome}` };
+    await settle(tab);
+  }
+  const opened = await tab.evaluate(`(() => {
+    const open = ${SURFACES};
+    document.querySelectorAll("[data-audit-root]").forEach((el) => el.removeAttribute("data-audit-root"));
+    const top = open.at(-1);
+    if (!top || open.length <= ${before}) return false;
+    top.setAttribute("data-audit-root", "");
+    return true;
+  })()`);
+  if (!opened) return { error: "the state opened no surface" };
+  return { found: await probe(tab, job.width, "[data-audit-root]") };
+}
+
+// One record per probe: what it measured and where.
+function record(job, width, found, extra = {}) {
+  return { skin: job.skin, name: job.name, width, theme: job.theme, ...extra, found };
+}
+
+async function runJob(tab, job, records) {
+  try {
+    if (job.type === "page") {
+      await open(tab, job, job.width);
+      records.push(record(job, job.width, await probe(tab, job.width)));
+      if (job.menus) {
+        for (const menu of await walkMenus(tab, job.width)) records.push(record({ ...job, name: `${job.name} menu` }, job.width, menu.found, { menu: menu.label }));
+      }
+    } else if (job.type === "stride") {
+      await open(tab, job, job.widths[0]);
+      for (const width of job.widths) {
+        await setWidth(tab, width);
+        await settle(tab);
+        records.push(record({ ...job, name: `${job.name}` }, width, await probe(tab, width), { stride: true }));
+      }
+    } else {
+      const result = await runState(tab, job);
+      if (result?.error) records.push(record(job, job.width, { error: [{ key: "state", sel: job.state.name, by: result.error }] }));
+      else if (result) records.push(record(job, job.width, result.found));
+    }
+  } catch (error) {
+    records.push(record(job, job.width ?? job.widths?.[0], { error: [{ key: "probe", sel: job.route, by: String(error.message ?? error).slice(0, 160) }] }));
+  }
+}
+
+// ---- Keys, acceptance and the report ---------------------------------------
+
+// One line per finding, stable across runs and class renames: skin, page or
+// state, width, theme, kind and the element's markers.
+const keyOf = (r, kind, item) => `${r.skin} ${r.name.replace(/ /g, "_")} ${r.width} ${r.theme} ${kind} ${item.key}`;
+
+function findings(records, kinds) {
+  const list = [];
+  for (const r of records) for (const kind of Object.keys(kinds)) for (const item of r.found?.[kind] ?? []) list.push({ key: keyOf(r, kind, item), kind, record: r, item });
+  const seenKeys = new Set();
+  return list.filter((f) => !seenKeys.has(f.key) && seenKeys.add(f.key));
+}
+
+// accepted.txt: `skin page width theme kind marker  # reason`. `*` matches any
+// skin, page, width or theme. A line without a reason is refused.
+function readAccepted() {
+  if (!existsSync(accepted)) return { rules: [], problems: [] };
+  const rules = [];
+  const problems = [];
+  for (const [index, raw] of readFileSync(accepted, "utf8").split("\n").entries()) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const [pattern, reason = ""] = line.split(/\s+#\s+/, 2);
+    if (!reason.trim()) { problems.push(`accepted.txt:${index + 1}: no reason after " # "`); continue; }
+    const [skin, page, width, theme, kind, ...marker] = pattern.trim().split(/\s+/);
+    rules.push({ line: pattern.trim(), skin, page, width, theme, kind, marker: marker.join(" "), used: false });
+  }
+  return { rules, problems };
+}
+
+const wild = (rule, value) => rule === "*" || rule === String(value);
+function acceptedBy(rules, f) {
+  const [skin, page, width, theme, kind, ...marker] = f.key.split(" ");
+  return rules.find((rule) => wild(rule.skin, skin) && wild(rule.page, page) && wild(rule.width, width) && wild(rule.theme, theme) && rule.kind === kind && rule.marker === marker.join(" "));
+}
+
+function line(f, kinds) {
+  const r = f.record;
+  const what = r.menu ? `menu “${r.menu}”: ${f.item.sel}` : f.item.sel;
+  return `  ${r.skin.padEnd(8)} ${r.name.padEnd(28)} ${String(r.width).padStart(4)} ${r.theme.padEnd(5)} ${kinds[f.kind].padEnd(30)} ${String(f.item.by ?? f.item.text ?? "").slice(0, 36).padEnd(36)} ${String(what).slice(-70)}`;
+}
+
+// Draws each finding's box on the page it came from and keeps the picture.
+async function shoot(tab, list, prefix) {
+  const shots = new Map();
+  const byPage = new Map();
+  for (const f of list) {
+    const r = f.record;
+    const id = `${r.skin}|${r.name}|${r.width}|${r.theme}`;
+    if (!byPage.has(id)) byPage.set(id, []);
+    byPage.get(id).push(f);
+  }
+  let count = 0;
+  for (const [id, group] of byPage) {
+    if (count >= 120) break;
+    count += 1;
+    const r = group[0].record;
+    const routeName = r.name.replace(/\+stress$/, "").replace(/ menu$/, "");
+    const route = ROUTES.find(([name]) => name === routeName)?.[1] ?? STATES.find((s) => `state:${s.name}` === routeName)?.route;
+    if (!route) continue;
+    const job = { skin: r.skin, theme: r.theme, route: r.name.includes("+stress") ? route.replace("?demo", "?demo&fixture=stress") : route };
+    try {
+      await open(tab, job, r.width);
+      const state = STATES.find((s) => `state:${s.name}` === routeName);
+      if (state) for (const step of state.steps) { await tab.evaluate(`${STEP}(${JSON.stringify(step)})`, true); await settle(tab); }
+      const boxes = group.map((f) => f.item.box).filter(Boolean);
+      await tab.evaluate(`(() => {
+        const layer = document.createElement("div");
+        layer.style.cssText = "position:absolute;left:0;top:0;pointer-events:none;z-index:2147483647";
+        for (const b of ${JSON.stringify(boxes)}) {
+          const mark = document.createElement("div");
+          mark.style.cssText = "position:absolute;outline:2px solid #e00;outline-offset:1px;background:rgba(255,0,0,.08)";
+          Object.assign(mark.style, { left: (b.x + scrollX) + "px", top: (b.y + scrollY) + "px", width: b.w + "px", height: b.h + "px" });
+          layer.appendChild(mark);
+        }
+        (document.querySelector("dialog[open]") ?? document.body).appendChild(layer);
+      })()`);
+      const png = await tab.screenshot();
+      if (!png) continue;
+      const file = `${prefix}-${id.replace(/[^a-z0-9+]+/gi, "-")}.png`;
+      writeFileSync(join(reportDir, file), png);
+      for (const f of group) shots.set(f.key, file);
+    } catch { /* a picture is a convenience; the finding stands without it */ }
+  }
+  return shots;
+}
+
+function writeReport(blocking, advisory, shots, summary) {
+  const rows = (list, kinds) => list.map((f) => `| ${f.record.skin} | ${f.record.name}${f.record.menu ? ` (${f.record.menu})` : ""} | ${f.record.width} | ${f.record.theme} | ${kinds[f.kind]} | ${String(f.item.by ?? f.item.text ?? "").replace(/\|/g, "/")} | \`${f.item.key}\` | ${shots.has(f.key) ? `[shot](${shots.get(f.key)})` : ""} |`).join("\n");
+  const head = "| Skin | Page or state | Width | Theme | Finding | Measure | Marker | Screenshot |\n|---|---|---|---|---|---|---|---|";
+  writeFileSync(join(reportDir, "report.md"), [
+    "# UI audit report", "", summary, "",
+    `## Blocking (${blocking.length})`, "", blocking.length ? `${head}\n${rows(blocking, KINDS)}` : "None.", "",
+    `## Advisory (${advisory.length})`, "", "A reviewer judges these; they do not fail the gate.", "", advisory.length ? `${head}\n${rows(advisory, ADVISORY)}` : "None.", "",
+  ].join("\n"));
+  writeFileSync(join(reportDir, "report.json"), JSON.stringify({ blocking: blocking.map(({ record, ...f }) => ({ ...f, skin: record.skin, name: record.name, width: record.width, theme: record.theme })), advisory: advisory.map(({ record, ...f }) => ({ ...f, skin: record.skin, name: record.name, width: record.width, theme: record.theme })) }, null, 1));
+}
+
+// ---- Self-test ---------------------------------------------------------------
+
+// Each fixture reproduces one miss of the old gate; the probe must name it.
+async function runSelfTest(browser) {
+  const { FIXTURES } = await import("./fixtures/fixtures.mjs");
+  const tab = await browser.open();
+  let failed = 0;
+  for (const fixture of FIXTURES) {
+    const job = { theme: "light" };
+    await tab.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: job.theme }] });
+    const records = [];
+    for (const width of fixture.widths) {
+      await setWidth(tab, width);
+      await tab.goto(pathToFileURL(join(here, "fixtures", fixture.file)).href);
+      await settle(tab);
+      if (fixture.state) {
+        const result = await runState(tab, { skin: "fixture", route: null, width, theme: "light", state: fixture.state, name: fixture.file }).catch((error) => ({ error: String(error) }));
+        records.push({ width, found: result?.found ?? { error: [{ key: "state", by: result?.error ?? "absent" }] } });
+      } else {
+        records.push({ width, found: await probe(tab, width) });
+        if (fixture.menus) for (const menu of await walkMenus(tab, width)) records.push({ width, found: menu.found });
       }
     }
+    const kinds = (records.flatMap((r) => Object.entries(r.found).filter(([, items]) => items.length > 0).map(([kind]) => kind)));
+    const missing = fixture.expect.filter((kind) => !kinds.includes(kind));
+    const unwanted = (fixture.clean ?? []).filter((kind) => kinds.includes(kind));
+    const ok = missing.length === 0 && unwanted.length === 0;
+    if (!ok) failed += 1;
+    console.log(`${ok ? "ok  " : "FAIL"} ${fixture.miss.padEnd(4)} ${fixture.file.padEnd(28)} expects ${fixture.expect.join(", ")}${missing.length ? `; missed ${missing.join(", ")}` : ""}${unwanted.length ? `; false ${unwanted.join(", ")}` : ""}`);
   }
-  report(findings);
-  if (gate) process.exitCode = judge(findings);
-  // The detail is written only when it is asked for, and never into the working
-  // tree by default: 169 probes of every font, radius and z-index on the page is
-  // 28k lines of JSON that nobody reads and git would have been asked to keep.
-  if (out !== null) {
-    writeFileSync(out, JSON.stringify(findings, null, 1));
-    console.log(`\ndetail: ${out}`);
+  console.log(failed === 0 ? `self-test: ${FIXTURES.length} fixtures, every miss caught` : `self-test: ${failed} of ${FIXTURES.length} fixtures failed`);
+  return failed === 0 ? 0 : 1;
+}
+
+// ---- Main --------------------------------------------------------------------
+
+const started = Date.now();
+const browser = await launch();
+try {
+  if (selfTest) {
+    process.exitCode = await runSelfTest(browser);
+  } else {
+    mkdirSync(reportDir, { recursive: true });
+    const jobs = plan();
+    const workers = Math.max(1, Number(process.env.AUDIT_WORKERS ?? Math.min(4, availableParallelism())));
+    const tabs = await Promise.all(Array.from({ length: workers }, () => browser.open()));
+    const records = [];
+    let next = 0;
+    await Promise.all(tabs.map(async (tab) => {
+      while (next < jobs.length) {
+        const job = jobs[next];
+        next += 1;
+        await runJob(tab, job, records);
+      }
+    }));
+    const probes = records.length;
+    if (process.env.AUDIT_JSON) writeFileSync(process.env.AUDIT_JSON, JSON.stringify(records, null, 1));
+    const blocking = findings(records, KINDS);
+    const advisory = advise ? findings(records, ADVISORY) : [];
+    const { rules, problems } = readAccepted();
+    const fresh = blocking.filter((f) => { const rule = acceptedBy(rules, f); if (rule) rule.used = true; return !rule; });
+    const summary = `${probes} probes (${jobs.length} jobs, ${workers} tabs) in ${Math.round((Date.now() - started) / 1000)}s: ${SKINS.join(" and ")}; ${blocking.length} blocking findings, ${blocking.length - fresh.length} accepted${advise ? `, ${advisory.length} advisory` : ""}.`;
+    console.log(summary);
+    if (advise) {
+      const shots = await shoot(tabs[0], [...fresh, ...advisory.filter((f) => f.item.box)].slice(0, 400), "shot");
+      writeReport(fresh, advisory, shots, summary);
+      console.log(`report: ${join(reportDir, "report.md")}`);
+      for (const f of advisory) console.log(line(f, ADVISORY));
+    }
+    for (const problem of problems) console.log(problem);
+    const unused = rules.filter((rule) => !rule.used);
+    // A narrowed run does not see every finding, so it cannot call a line stale.
+    const narrowed = onlyRoutes || onlyWidths || onlyStates || process.env.SKIN || process.env.AUDIT_STRIDE === "0";
+    if (unused.length > 0 && !narrowed) console.log(`\n${unused.length} accepted lines no longer match; remove them from accepted.txt:\n${unused.map((rule) => `  ${rule.line}`).join("\n")}`);
+    if (accept) {
+      console.log(`\nlines for accepted.txt (add a reason after " # " to each):\n${fresh.map((f) => `${f.key}  # `).join("\n")}`);
+    } else if (fresh.length > 0) {
+      console.log(`\nbreakpoint gate: ${fresh.length} new findings`);
+      for (const f of fresh) console.log(line(f, KINDS));
+      console.log(`\nkeys:\n${fresh.map((f) => `  ${f.key}`).join("\n")}`);
+    } else {
+      console.log("\nbreakpoint gate: no new findings");
+    }
+    if (gate) process.exitCode = fresh.length > 0 || problems.length > 0 ? 1 : 0;
   }
 } finally {
-  ws.close();
-  proc.kill();
+  browser.close();
 }

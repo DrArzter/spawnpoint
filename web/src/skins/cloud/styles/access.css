@@ -1,16 +1,4 @@
-/* Access (spec §6.5): the split page, the invitation form, permission lists and the roles matrix. */
-
-/* The split page sits flush with the rail: it takes back the main area's padding and gives it to the pane. */
-html[data-skin="cloud"] .c-access {
-  display: grid;
-  grid-template-columns: var(--c-lcol) minmax(0, 1fr);
-  margin: -20px calc(-1 * var(--c-pad)) -48px;
-}
-
-html[data-skin="cloud"] .c-access-pane {
-  min-width: 0;
-  padding: 20px var(--c-pad) 48px;
-}
+/* Access (spec §6.5): the invitation form, permission lists and the roles matrix. The split page is SplitPage's. */
 
 html[data-skin="cloud"] .c-access-invite {
   display: flex;
@@ -99,19 +87,4 @@ html[data-skin="cloud"] .c-access-owner-id {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-}
-
-@media (max-width: 1023px) {
-  html[data-skin="cloud"] .c-access {
-    display: block;
-    margin: 0;
-  }
-
-  html[data-skin="cloud"] .c-access .c-lcol {
-    display: none;
-  }
-
-  html[data-skin="cloud"] .c-access-pane {
-    padding: 0;
-  }
 }

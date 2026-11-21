@@ -142,7 +142,7 @@ test("cloud: a roles matrix header names what it opens and labels its member cou
 
 test("cloud: the access list column is navigation only; its rows carry no Actions", () => {
   const markup = renderToStaticMarkup(createElement(cloudSkin.Access, { model: access }));
-  const column = markup.slice(markup.indexOf('class="c-lcol"'), markup.indexOf('class="c-access-pane"'));
+  const column = markup.slice(markup.indexOf('class="c-lcol"'), markup.indexOf('class="c-split-pane"'));
   assert.doesNotMatch(column, /data-action=/);
   assert.match(column, /href="#\/access\/users\/people\/m2"/);
 });

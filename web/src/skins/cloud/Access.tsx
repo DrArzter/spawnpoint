@@ -18,12 +18,13 @@ import { Empty, LoadError } from "./ui/Empty";
 import { Field, Select, TextInput, Toggle } from "./ui/Fields";
 import { Grid } from "./ui/Grid";
 import { Indicator } from "./ui/Indicator";
-import { ListColumn, ListItemPerson, type ListGroup } from "./ui/ListColumn";
+import { ListColumn, ListItemIcon, ListItemPerson, type ListGroup } from "./ui/ListColumn";
 import { Notice } from "./ui/Notice";
 import { PageHeader, type Crumb } from "./ui/PageHeader";
 import { Person } from "./ui/Person";
 import { SidePanel } from "./ui/SidePanel";
 import { SkeletonRows } from "./ui/Skeleton";
+import { SplitPage } from "./ui/SplitPage";
 import { Status } from "./ui/Status";
 import { Table, type Column } from "./ui/Table";
 import { TrackList, TrackTitle } from "./ui/TrackList";
@@ -97,14 +98,12 @@ export function Access({ model }: Readonly<{ model: AccessModel }>) {
 
   const deletion = (users as WithDeletion).deletion ?? null;
   return (
-    <div className="c-access">
-      <AccessList model={model} selection={detail ? chosen : null} />
-      <div className="c-access-pane">
-        <div className="c-page">{pane}</div>
-      </div>
+    <>
+      {/* Every pane stands alone under 1024px: the Users pane is the page there, and a detail pane returns to it (spec §6.5). */}
+      <SplitPage list={<AccessList model={model} selection={detail ? chosen : null} />} selected>{pane}</SplitPage>
       {users.managed && <LinkedAccountsPanel close={users.closeManaged} member={users.managed} />}
       {deletion && <ConfirmationDialog model={deletion} />}
-    </div>
+    </>
   );
 }
 
@@ -120,7 +119,7 @@ function AccessList({ model, selection }: Readonly<{ model: AccessModel; selecti
   const invitations = (users.invitations?.list.status === "ready" ? users.invitations.list.value : []).filter((row) => match(row.invitation.deliveryEmail ?? "One-time link"));
   const on = Object.values(model.notifications.subscriptions).filter(Boolean).length;
   const groups: ListGroup[] = [
-    { id: "users", items: <ListItemPerson current={model.tab === "users" && selection === null} href={USERS} name="All users" tone="person" /> },
+    { id: "users", items: <ListItemIcon current={model.tab === "users" && selection === null} href={USERS} icon="group" name="All users" /> },
     ...(candidates.length > 0 ? [{
       id: "requests",
       label: "Requests",
@@ -143,8 +142,8 @@ function AccessList({ model, selection }: Readonly<{ model: AccessModel; selecti
       id: "settings",
       label: "Settings",
       items: <>
-        <ListItemPerson current={model.tab === "roles"} href="#/access/roles" meta={<span>{model.roleCount}</span>} name="Roles" />
-        <ListItemPerson current={model.tab === "notifications"} href="#/access/notifications" meta={<span>{on} on</span>} name="My notifications" />
+        <ListItemIcon current={model.tab === "roles"} href="#/access/roles" icon="admin_panel_settings" meta={<span>{model.roleCount}</span>} name="Roles" />
+        <ListItemIcon current={model.tab === "notifications"} href="#/access/notifications" icon="notifications" meta={<span>{on} on</span>} name="My notifications" />
       </>,
     },
   ];
@@ -200,11 +199,11 @@ function UsersPane({ model }: Readonly<{ model: UsersModel }>) {
           <Card body="flush" count={candidates.status === "ready" ? candidates.value.length : undefined} title="Requests">
             {candidates.status === "error"
               ? <LoadError error={candidates.error} kind={candidates.kind} retry={candidates.retry} size="sm" title="Requests could not be loaded" verb="read requests" />
-              : <Table columns={requestColumns} label="Requests" loading={candidates.status === "loading"} rowKey={candidateId} rows={candidates.status === "ready" ? candidates.value : []} />}
+              : <Table arrivals columns={requestColumns} label="Requests" loading={candidates.status === "loading"} rowKey={candidateId} rows={candidates.status === "ready" ? candidates.value : []} />}
           </Card>
         )}
         <Card body="flush" count={model.members.length} title="People">
-          <Table columns={peopleColumns} empty={<Empty icon="group" size="sm" title="No people" />} label="People" rowKey={(row) => row.member.id} rows={model.members} />
+          <Table arrivals columns={peopleColumns} empty={<Empty icon="group" size="sm" title="No people" />} label="People" rowKey={(row) => row.member.id} rows={model.members} />
         </Card>
         {model.invitations && <InviteCard model={model.invitations} />}
         {model.invitations && <InvitationsCard model={model.invitations} />}
@@ -253,7 +252,7 @@ function InvitationsCard({ model }: Readonly<{ model: InvitationsModel }>) {
     <Card body="flush" count={list.status === "ready" ? list.value.length : undefined} title="Invitations">
       {list.status === "error"
         ? <LoadError error={list.error} kind={list.kind} retry={list.retry} size="sm" title="Invitations could not be loaded" verb="read invitations" />
-        : <Table columns={columns} empty={<Empty icon="mail" size="sm" title="No invitations" />} label="Invitations" loading={list.status === "loading"} rowKey={(row) => row.invitation.id} rows={list.status === "ready" ? list.value : []} />}
+        : <Table arrivals columns={columns} empty={<Empty icon="mail" size="sm" title="No invitations" />} label="Invitations" loading={list.status === "loading"} rowKey={(row) => row.invitation.id} rows={list.status === "ready" ? list.value : []} />}
     </Card>
   );
 }

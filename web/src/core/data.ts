@@ -325,7 +325,7 @@ export function memberRemoval(member: Member, authority: DeletionAuthority, open
   return action("access.delete", "Delete user", () => open(member), { danger: true, icon: "delete_forever" });
 }
 
-export function deletionConfirmation(member: Member, opts: Readonly<{ typed: string; setTyped: (value: string) => void; busy: boolean; confirm: () => void; cancel: () => void }>): ConfirmationModel {
+export function deletionConfirmation(member: Member, opts: Readonly<{ typed: string; setTyped: (value: string) => void; busy: boolean; error: string | null; confirm: () => void; cancel: () => void }>): ConfirmationModel {
   const expected = member.name.trim();
   return {
     title: `Delete ${expected}?`,
@@ -335,21 +335,25 @@ export function deletionConfirmation(member: Member, opts: Readonly<{ typed: str
     cancel: action("access.delete.cancel", "Cancel", opts.cancel, { disabled: opts.busy }),
     releaseChoice: null,
     typedConfirmation: { label: "User name", expected, value: opts.typed, set: opts.setTyped },
+    error: opts.error,
   };
 }
 
-/** Deletes one person; on success the row goes and the panel showing them closes. A refusal leaves everything open. */
-export async function deleteMember(member: Member, deps: Readonly<{ remove: (identityId: string) => Promise<void>; members: readonly Member[]; onMembersChange: (members: Member[]) => void; managing: string | null; closeManaged: () => void; notify: Notify }>): Promise<boolean> {
+/**
+ * Deletes one person; on success the row goes and the panel showing them
+ * closes. A refusal changes nothing and is returned for the open dialog,
+ * which sits above any snackbar.
+ */
+export async function deleteMember(member: Member, deps: Readonly<{ remove: (identityId: string) => Promise<void>; members: readonly Member[]; onMembersChange: (members: Member[]) => void; managing: string | null; closeManaged: () => void; notify: Notify }>): Promise<string | null> {
   try {
     await deps.remove(member.id);
   } catch (cause) {
-    deps.notify({ tone: "error", message: cause instanceof Error ? cause.message : "This user could not be deleted." });
-    return false;
+    return cause instanceof Error ? cause.message : "This user could not be deleted.";
   }
   deps.onMembersChange(deps.members.filter((item) => item.id !== member.id));
   if (deps.managing === member.id) deps.closeManaged();
   deps.notify({ tone: "success", message: `${member.name.trim()} was deleted.` });
-  return true;
+  return null;
 }
 
 export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: boolean; authority: DeletionAuthority; members: Member[]; roles: Role[]; rolesLoading: boolean; onMembersChange: (members: Member[]) => void; notify: Notify }>): UsersModel {
@@ -358,6 +362,7 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
   const [deleting, setDeleting] = useState<string | null>(null);
   const [typed, setTyped] = useState("");
   const [removing, setRemoving] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
   const [candidateRoles, setCandidateRoles] = useState<Record<string, string>>({});
   const [working, setWorking] = useState<string | null>(null);
   const [state, retry, update] = useLoad<AccessCandidate[]>(() => Promise.all([loadAccessCandidates(), loadAccessIdentities()]).then(([candidates, identities]) => {
@@ -415,14 +420,17 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
 
   function openDeletion(member: Member) {
     setTyped("");
+    setRefusal(null);
     setDeleting(member.id);
   }
 
   async function confirmDeletion(member: Member) {
     setRemoving(true);
-    const deleted = await deleteMember(member, { remove: deleteIdentity, members, onMembersChange, managing, closeManaged: () => setManaging(null), notify });
+    setRefusal(null);
+    const refused = await deleteMember(member, { remove: deleteIdentity, members, onMembersChange, managing, closeManaged: () => setManaging(null), notify });
     setRemoving(false);
-    if (deleted) setDeleting(null);
+    if (refused === null) setDeleting(null);
+    else setRefusal(refused);
   }
 
   const rolesReady = !opts.rolesLoading && roles.length > 0;
@@ -459,7 +467,7 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
     invitations,
     managed: members.find((member) => member.id === managing) ?? null,
     closeManaged: action("sheet.close", "Close panel", () => setManaging(null)),
-    deletion: target === null ? null : deletionConfirmation(target, { typed, setTyped, busy: removing, confirm: () => void confirmDeletion(target), cancel: () => setDeleting(null) }),
+    deletion: target === null ? null : deletionConfirmation(target, { typed, setTyped, busy: removing, error: refusal, confirm: () => void confirmDeletion(target), cancel: () => setDeleting(null) }),
   };
 }
 

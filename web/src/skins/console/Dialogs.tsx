@@ -66,6 +66,7 @@ export function ConfirmationDialog({ model }: Readonly<{ model: ConfirmationMode
         <p className="confirm-note">Type <code>{model.typedConfirmation.expected}</code> to confirm.</p>
         <TextField autoComplete="off" data-autofocus label={model.typedConfirmation.label} mono onChange={(event) => model.typedConfirmation?.set(event.target.value)} placeholder={model.typedConfirmation.expected} value={model.typedConfirmation.value} />
       </>}
+      {model.error && <p className="boot-error" role="alert">{model.error}</p>}
     </Dialog>
   );
 }

@@ -140,13 +140,26 @@ if declare -F game_prepare_session >/dev/null; then
 fi
 
 # A world that keeps its whitelist on its record (ADR-0066) gets exactly that
-# list on whichever host it lands. A world that keeps none is left as it is.
+# list on whichever host it lands. A world that keeps none is left as it is —
+# which means the gate is off, not on and empty. An empty list on the record is
+# the same answer: a world whose list nobody has filled in is not a world
+# nobody may enter. The compose default stays TRUE for a session started
+# outside this script.
+whitelist_names=0
 if [[ -n "${WORLD_WHITELIST:-}" ]]; then
+  whitelist_names="$(jq 'length' <<<"${WORLD_WHITELIST}" 2>/dev/null || printf '0')"
+fi
+if (( whitelist_names > 0 )); then
+  export SPAWNPOINT_WHITELIST_ENABLED="TRUE"
   if declare -F game_render_whitelist >/dev/null; then
     game_render_whitelist "${WORLD_DATA_DIRECTORY}" "${WORLD_WHITELIST}"
   else
     printf 'warning: %s keeps no whitelist file; the list on the world record is not applied\n' "${GAME_ID}" >&2
   fi
+elif [[ -n "${WORLD_WHITELIST+defined}" ]]; then
+  # Defined and empty is the record answering "no names". Undefined is a
+  # session with no world record at all, and the compose default stands.
+  export SPAWNPOINT_WHITELIST_ENABLED="FALSE"
 fi
 
 # A placed session is scraped by the host's own tier, which must exist before

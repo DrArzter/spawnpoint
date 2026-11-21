@@ -57,6 +57,15 @@ jq -e '
   and .services.mc.environment.ENFORCE_WHITELIST == "TRUE"
 ' >/dev/null <<<"${rendered}"
 
+# The gate follows the world: start-session.sh answers FALSE for a world that
+# keeps no names, and a session rendered outside it keeps the gate. An empty
+# list with the gate on is a server nobody can join.
+ungated="$(SPAWNPOINT_WHITELIST_ENABLED=FALSE render_game minecraft 2>/dev/null)"
+jq -e '
+  .services.mc.environment.ENABLE_WHITELIST == "FALSE"
+  and .services.mc.environment.ENFORCE_WHITELIST == "FALSE"
+' >/dev/null <<<"${ungated}"
+
 # The server's level folder is the one the backup contract archives. It is
 # pinned, never the image's default and never a world's id.
 level_name="$(

@@ -25,6 +25,8 @@ cat >"${fixture}/server/scripts/start.sh" <<'STUB'
 #!/usr/bin/env bash
 printf 'container chatter on stdout\n'
 printf 'container chatter on stderr\n' >&2
+# What the session decided about the gate, for a test to read.
+printf '%s\n' "${SPAWNPOINT_WHITELIST_ENABLED-unset}" >"${SPAWNPOINT_WHITELIST_PROBE:-/dev/null}"
 STUB
 cat >"${fixture}/bin/zerotier-cli" <<'STUB'
 #!/usr/bin/env bash
@@ -62,6 +64,27 @@ generation="gen-$(printf '0%.0s' $(seq 1 32))"
 with_generation="$(WORLD_GENERATION_ID="${generation}" SESSION_FORMAT=json "${session}" 2>/dev/null)"
 [[ "$(jq -r .generation_id <<<"${with_generation}")" == "${generation}" ]]
 grep -Fxq 'container chatter on stdout' "${fixture}/json.err"
+
+# --- the gate follows the world's record, not the compose default ---
+# A world that keeps names is gated by them; one that keeps none, or keeps an
+# empty list, is not gated at all. The alternative is a server nobody can join
+# and an operator turning the whitelist off by hand after every start.
+probe="${fixture}/whitelist-decision"
+world_data="${fixture}/world-data"
+mkdir -p -- "${world_data}"
+gate() {
+  rm -f -- "${probe}"
+  SPAWNPOINT_WHITELIST_PROBE="${probe}" WORLD_WHITELIST="$1" WORLD_DATA_DIRECTORY="${world_data}" \
+    SESSION_FORMAT=json "${session}" >/dev/null 2>&1
+  cat -- "${probe}" 2>/dev/null || printf 'session-failed\n'
+}
+[[ "$(gate '["DrArzter"]')" == "TRUE" ]] || { printf 'a world with names was not gated\n' >&2; exit 1; }
+[[ "$(gate '[]')" == "FALSE" ]] || { printf 'an empty list gated the world\n' >&2; exit 1; }
+[[ "$(gate '')" == "FALSE" ]] || { printf 'a world keeping no list was gated\n' >&2; exit 1; }
+# A session with no world record at all keeps the compose default.
+rm -f -- "${probe}"
+SPAWNPOINT_WHITELIST_PROBE="${probe}" SESSION_FORMAT=json "${session}" >/dev/null 2>&1
+[[ "$(cat -- "${probe}")" == "unset" ]] || { printf 'a session with no record answered for the gate\n' >&2; exit 1; }
 grep -Fxq 'container chatter on stderr' "${fixture}/json.err"
 
 # --- a raw world's answer is the public address the instance holds ---

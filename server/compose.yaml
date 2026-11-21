@@ -43,9 +43,14 @@ services:
       ENABLE_RCON: "TRUE"
       RCON_PASSWORD: ${RCON_PASSWORD:?set RCON_PASSWORD in .env}
 
-      # PROJECT: generated from the link table from M4. Hand-maintained until then.
-      ENABLE_WHITELIST: "TRUE"
-      ENFORCE_WHITELIST: "TRUE"
+      # PROJECT: a world that keeps a list of names is gated by it; a world that
+      # keeps none is not gated at all (ADR-0066). These used to be TRUE for
+      # every session, which with an empty list is a server nobody can join —
+      # and the answer was to turn the whitelist off by hand after each start.
+      # start-session.sh answers for the world it is starting; the default
+      # keeps the gate for a session started outside it.
+      ENABLE_WHITELIST: ${SPAWNPOINT_WHITELIST_ENABLED:-TRUE}
+      ENFORCE_WHITELIST: ${SPAWNPOINT_WHITELIST_ENABLED:-TRUE}
 
       # PROJECT: the save folder in /data, which the backup contract archives
       # (MINECRAFT_LEVEL_NAME in games/minecraft/game.sh). Every world has a

@@ -131,3 +131,47 @@ test("capabilities only advertise owned, composed routes", () => {
   assert.deepEqual(capabilitiesForRoutes({ "POST /games/{gameId}/presets/{presetId}/builds": {} }), ["releaseBuilds"]);
   assert.deepEqual(capabilitiesForRoutes(Object.create({ "POST /games/{gameId}/presets/{presetId}/builds": {} })), []);
 });
+
+test("after deletion a cookie session is refused 401 and a bearer token 403", async (t) => {
+  process.env.ACCESS_TABLE_NAME ??= "access-api-test";
+  process.env.BOT_TOKEN_PARAMETER ??= "/spawnpoint/bot/token";
+  process.env.SESSION_SIGNING_SECRET_PARAMETER ??= "/spawnpoint/auth/session-signing-secret";
+  const { accessTable } = await import("./access-table.ts");
+  const { document, ssm } = await import("../src/handlers/api/clients.ts");
+  const { caller } = await import("../src/handlers/api/login-sessions.ts");
+  const { resolveIdentity } = await import("../src/handlers/api/identity-store.ts");
+  const { deleteIdentity } = await import("../src/handlers/api/identity-deletion.ts");
+  const { issueAccessToken, issueRefreshCredential } = await import("../src/access/login-session.ts");
+
+  const secret = "test-secret-that-is-long-enough";
+  t.mock.method(ssm, "send", async () => ({ Parameter: { Value: secret } }));
+  t.mock.method(console, "info", () => undefined);
+  const owner = "00000000-0000-4000-8000-0000000000a1";
+  const target = "00000000-0000-4000-8000-0000000000b1";
+  const member: Caller = { ...principal, subject: "555" };
+  const session = issueRefreshCredential();
+  accessTable(t, document, [
+    { pk: `IDENTITY#${owner}`, sk: "PROFILE", identity_id: owner, display_name: "Owner", role_id: "owner", direct_grants: [], status: "ACTIVE", gsi1pk: "IDENTITY#ACTIVE" },
+    { pk: `IDENTITY#${target}`, sk: "PROFILE", identity_id: target, display_name: "Test", role_id: "viewer", direct_grants: [], status: "ACTIVE", gsi1pk: "IDENTITY#ACTIVE" },
+    { pk: "TELEGRAM#555", sk: "ACCOUNT", platform: "telegram", platform_user_id: "555", identity_id: target, gsi1pk: `IDENTITY#${target}` },
+    {
+      pk: `LOGIN_SESSION#${session.loginSessionId}`, sk: "REFRESH", entity_type: "LOGIN_SESSION", status: "ACTIVE",
+      provider: "telegram", subject: "555", display_name: "Test", token_hash: session.tokenHash,
+      expires_at: Math.floor(Date.now() / 1000) + 3600, gsi1pk: "ACCOUNT#telegram#555",
+    },
+  ]);
+  const handler = createDispatcher(composeRoutes({ "GET /me": identityRoute((subject) => response(200, subject)) }), {
+    caller, resolveIdentity, panelOrigins: ["https://panel.example"],
+  });
+  const cookie = { routeKey: "GET /me", cookies: [`${browserSessionCookieName}=${session.token}`] };
+  const bearer = { routeKey: "GET /me", headers: { authorization: `Bearer ${issueAccessToken(member, session.loginSessionId, secret)}` } };
+  assert.equal((await handler(cookie)).statusCode, 200);
+  assert.equal((await handler(bearer)).statusCode, 200);
+
+  const deleted = await deleteIdentity({ id: owner, displayName: "Owner", roleId: "owner", directGrants: [] }, target, () => ({
+    list: async () => [], read: async () => null, replace: async () => undefined,
+  }));
+  assert.equal(deleted.statusCode, 204);
+  assert.deepEqual(await handler(cookie), response(401, { error: "invalid_or_expired_session" }));
+  assert.deepEqual(await handler(bearer), response(403, { error: "access_not_granted" }));
+});

@@ -119,9 +119,9 @@ test("authority is decided by the dispatcher, never inside a route's handler", a
     const count = [...source.matchAll(/requirePermission\(/g)].length;
     if (count > 0) checks[file] = count;
   }
-  // The sole definition, the dispatcher's gate, and exactly two payload-level
+  // The sole definition, the dispatcher's gate, and exactly three payload-level
   // owner-grant escalations. No feature route may grow a competing HTTP gate.
-  assert.deepEqual(checks, { "access.ts": 2, "dispatcher.ts": 1, "permissions.ts": 1 });
+  assert.deepEqual(checks, { "access.ts": 2, "dispatcher.ts": 1, "identity-deletion.ts": 1, "permissions.ts": 1 });
 });
 
 test("administrative routes all sit behind access.manage", () => {
@@ -134,6 +134,13 @@ test("administrative routes all sit behind access.manage", () => {
       `${key} manages who may use Spawnpoint and must require access.manage`,
     );
   }
+});
+
+test("deleting an identity is access management, deployed like every other route", async () => {
+  const key = "POST /access/identities/{identityId}/delete";
+  assert.deepEqual(routes[key]?.access, { kind: "permission", permission: "access.manage" });
+  assert.ok((await deployedRouteKeys()).has(key));
+  assert.equal((await routes[key]!.handle({ id: "caller" } as never, { pathParameters: { identityId: "not-an-id" } })).statusCode, 400);
 });
 
 test("permanent world deletion is owner-level world management", () => {

@@ -154,8 +154,9 @@ the live `server/data` path and any non-empty target. To test the mechanism with
 `SERVER_DATA_DIR` and `SERVER_BACKUP_DIR` to disposable fixture directories.
 
 Upload only a previously verified archive. The key includes its SHA-256, so an automation retry verifies the existing
-object instead of writing another copy. The host role deliberately has no `s3:DeleteObject`: exact `5/2/2` pruning is
-control-plane responsibility, not a permission given to the game server.
+object instead of writing another copy. The host role deliberately has no `s3:DeleteObject`: the daily
+`spawnpoint-backup-retention` Lambda in the control plane prunes to `5/2/2` per world generation. It is not a
+permission given to the game server.
 
 ```bash
 BACKUP_BUCKET=<bucket> AWS_REGION=eu-central-1 \

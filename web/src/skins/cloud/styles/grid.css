@@ -19,7 +19,6 @@ html[data-skin="cloud"] .c-grid-stat {
 
 html[data-skin="cloud"] .c-grid-name {
   --c-min: 200px;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--c-min)), 1fr));
 }
 
 html[data-skin="cloud"] .c-grid-perm {

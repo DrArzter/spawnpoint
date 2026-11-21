@@ -92,6 +92,14 @@ expect_failure "tampered payload" "${SCRIPTS}/reconcile-release.sh" "${manifest}
 after="$(find "${target}" -type f -exec sha256sum {} + | sort)"
 [[ "${before}" == "${after}" ]]
 no_stage_or_backup_litter
+
+# Same size, other bytes: only the hash of the staged copy can catch it.
+original_bytes="$(jq -r '.server.mods[] | select(.file == "beta.jar") | .bytes' "${manifest}")"
+head -c "${original_bytes}" /dev/zero >"${fixture}/release/mods/beta.jar"
+expect_failure "same-size tampered payload" "${SCRIPTS}/reconcile-release.sh" "${manifest}" "${target}"
+after="$(find "${target}" -type f -exec sha256sum {} + | sort)"
+[[ "${before}" == "${after}" ]]
+no_stage_or_backup_litter
 # restore the payload for the remaining cases
 printf 'jar two, different bytes\n' >"${fixture}/release/mods/beta.jar"
 

@@ -19,6 +19,17 @@ if [[ "${session_format}" == "json" ]]; then
   exec 1>&2
 fi
 
+# One line per step on stderr, so a cold start can be split by step. Seconds
+# count from the start of this script.
+session_started_at="$(date +%s)"
+mark_step() {
+  local now
+  now="$(date +%s)"
+  printf 'step=%s at=%s elapsed_seconds=%s\n' \
+    "$1" "$(date -u -d "@${now}" +%Y-%m-%dT%H:%M:%SZ)" "$((now - session_started_at))" >&2
+}
+mark_step session_start
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
@@ -36,6 +47,7 @@ if [[ -n "${WORLD_ID:-}" && -z "${SPAWNPOINT_WORLD_CATALOG:-}" ]]; then
   export SPAWNPOINT_WORLD_CATALOG
   SPAWNPOINT_WORLD_CATALOG="$(awk -F= '$1 == "catalog" { print substr($0, index($0, "=") + 1) }' <<<"${catalog_output}")"
   [[ -n "${SPAWNPOINT_WORLD_CATALOG}" ]] || { printf 'error: world catalog refresh returned no path\n' >&2; exit 1; }
+  mark_step world_catalog
 fi
 
 # Resolve the world and its game before any host plumbing is examined: a
@@ -56,6 +68,7 @@ if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
   # one is the world wherever it last ran (ADR-0048).
   export BACKUP_BUCKET="${BACKUP_BUCKET:-$(read_env_value BACKUP_BUCKET 2>/dev/null || true)}"
   "${SCRIPT_DIR}/prepare-world.sh" "${WORLD_ID}" >&2
+  mark_step world_prepared
 fi
 
 # Catalog worlds carry connectivity and a declared auth override; the env-only
@@ -85,6 +98,7 @@ command -v jq >/dev/null 2>&1 || {
 CONNECTIVITY_NETWORK_ID=""
 connectivity_prepare
 connection_host="${CONNECTIVITY_HOST}"
+mark_step connectivity_prepared
 
 export SERVER_PROJECT_DIRECTORY="${SERVER_DIR}"
 
@@ -105,8 +119,10 @@ if [[ -n "${release_bucket}" ]]; then
   }
   if pointer_output="$("${SCRIPT_DIR}/read-release-pointer.sh" "${world_name}" "${WORLD_GENERATION_ID}")"; then
     desired_release="$(awk -F= '$1 == "desired_release" { print $2 }' <<<"${pointer_output}")"
+    mark_step release_pointer_read
     payload_dir="${SERVER_DIR}/releases/${GAME_ID}/${WORLD_PROFILE_ID}/${desired_release}"
     "${SCRIPT_DIR}/download-release.sh" "${GAME_ID}" "${WORLD_PROFILE_ID}" "${desired_release}" "${payload_dir}" >&2
+    mark_step release_downloaded
     if [[ "${WORLD_STORAGE_LAYOUT}" == "generation" ]]; then
       "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" \
         "${SPAWNPOINT_WORLD_MODS_DIRECTORY}" >&2
@@ -125,6 +141,7 @@ if [[ -n "${release_bucket}" ]]; then
       game_prepare_runtime "${payload_dir}/manifest.json"
     fi
     reconcile_status="applied"
+    mark_step release_reconciled
   elif [[ $? -eq 3 ]]; then
     reconcile_status="skipped_no_pointer"
   else
@@ -169,12 +186,15 @@ if [[ -n "${SPAWNPOINT_SLOT:-}" ]]; then
   "${SCRIPT_DIR}/ensure-host-observability.sh" >&2
 fi
 
+mark_step game_starting
 "${SCRIPT_DIR}/start.sh"
+mark_step game_ready
 if ! connectivity_publish; then
   printf 'error: could not publish the session address; stopping the game\n' >&2
   "${SCRIPT_DIR}/stop.sh" || printf 'warning: could not stop game after publication failure\n' >&2
   exit 1
 fi
+mark_step address_published
 
 # The summary is what the machine carries back to whoever asked. The address in
 # it is composed, never configured: the strategy answers with the host part and

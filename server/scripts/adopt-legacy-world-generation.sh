@@ -39,8 +39,8 @@ mkdir -p -- "${WORLDS_DIRECTORY}"
   printf 'error: worlds storage root is unsafe\n' >&2
   exit 1
 }
-case "${legacy_data}/" in "${WORLDS_DIRECTORY}/"*) printf 'error: legacy data is inside the destination root\n' >&2; exit 1;; esac
-case "${legacy_mods}/" in "${WORLDS_DIRECTORY}/"*) printf 'error: legacy mods are inside the destination root\n' >&2; exit 1;; esac
+case "${legacy_data}/" in "${WORLDS_DIRECTORY}/"*) printf 'error: legacy data is inside the destination root\n' >&2; exit 1;; *) ;; esac
+case "${legacy_mods}/" in "${WORLDS_DIRECTORY}/"*) printf 'error: legacy mods are inside the destination root\n' >&2; exit 1;; *) ;; esac
 
 verify_copy() {
   local source="$1" destination="$2" difference

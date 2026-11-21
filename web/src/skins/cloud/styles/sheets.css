@@ -1,4 +1,4 @@
-/* Dialog and side panel content (S7): the typed-confirmation cue, switch rows, the footer's start action. */
+/* Dialog and side panel content (S7): the typed-confirmation cue, switch rows, the invitation count. */
 
 html[data-skin="cloud"] .c-sheet-expect {
   min-width: 0;
@@ -22,25 +22,4 @@ html[data-skin="cloud"] .c-sheet-count {
   align-items: center;
   gap: 8px;
   font-size: var(--c-fs-s);
-}
-
-/* Radio cards that never wrap 2 + 1 (R2): one row of equal cards, or one card per row in a narrow box. */
-html[data-skin="cloud"] .c-radios-even {
-  container-type: inline-size;
-}
-
-html[data-skin="cloud"] .c-radios-even .c-radios-row {
-  flex-wrap: nowrap;
-}
-
-@container (max-width: 500px) {
-  html[data-skin="cloud"] .c-radios-even .c-radios-row {
-    flex-direction: column;
-  }
-}
-
-/* Restore defaults leads the footer at its start edge; Cancel and Save keep the end. */
-html[data-skin="cloud"] .c-sheet-defaults {
-  order: -1;
-  margin-inline-end: auto;
 }

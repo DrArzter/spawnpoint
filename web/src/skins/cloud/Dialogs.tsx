@@ -50,7 +50,7 @@ function ConnectionFields({ model }: Readonly<{ model: ConnectionFieldsModel }>)
   const fleet = model.placement === "fleet";
   const hosting: readonly RadioCardOption<WorldPlacement>[] = [
     { value: "configured", label: "Persistent", icon: "dns" },
-    { value: "fleet", label: "Fleet", icon: "cloud", disabled: !model.fleetAvailable, hint: "Fleet hosting is off in this deployment" },
+    { value: "fleet", label: "Fleet", icon: "bolt", disabled: !model.fleetAvailable, hint: "Fleet hosting is off in this deployment" },
   ];
   // A persistent host joins ZeroTier only; a fleet host is public only.
   const connection: readonly RadioCardOption<World["connectivity"]>[] = [
@@ -59,9 +59,9 @@ function ConnectionFields({ model }: Readonly<{ model: ConnectionFieldsModel }>)
     ...(model.dnsAvailable ? [{ value: "route53" as const, label: "DNS", icon: "language" as const, disabled: !fleet, hint: "Persistent hosts connect through ZeroTier" }] : []),
   ];
   return <>
-    <RadioCards className="c-radios-even" legend="Hosting" name="hosting" onChange={model.setPlacement} options={hosting} value={model.placement} />
-    <RadioCards className="c-radios-even" legend="Connection" name="connection" onChange={model.setConnectivity} options={connection} value={model.connectivity} />
-    {model.connectivity !== "zerotier" && <Notice notice={{ id: "public-port", tone: "warning", title: "The game port is public." }} />}
+    <RadioCards legend="Hosting" name="hosting" onChange={model.setPlacement} options={hosting} value={model.placement} />
+    <RadioCards legend="Connection" name="connection" onChange={model.setConnectivity} options={connection} value={model.connectivity} />
+    {model.connectivity !== "zerotier" && <Notice detail="tooltip" notice={{ id: "public-port", tone: "warning", title: "The game port is public.", description: "Set the game's password or allowlist before you share its address." }} />}
   </>;
 }
 
@@ -111,20 +111,20 @@ function GameSettingInput({ field }: Readonly<{ field: GameSettingField }>) {
   switch (field.kind) {
     case "choice":
       return (
-        <Field label={field.label}>
-          <Select data-tip={field.hint} onChange={(event) => field.set(event.target.value)} options={field.options} value={field.value} />
+        <Field hint={field.hint} label={field.label}>
+          <Select onChange={(event) => field.set(event.target.value)} options={field.options} value={field.value} />
         </Field>
       );
     case "number":
       return (
-        <Field error={field.error} label={field.label}>
-          <NumberInput data-tip={field.hint} max={field.max} min={field.min} onChange={(event) => field.set(event.target.value)} value={field.value} />
+        <Field error={field.error} hint={field.hint} label={field.label}>
+          <NumberInput max={field.max} min={field.min} onChange={(event) => field.set(event.target.value)} value={field.value} />
         </Field>
       );
     case "text":
       return (
-        <Field error={field.error} label={field.label}>
-          <TextInput data-tip={field.hint} maxLength={field.maxLength} onChange={(event) => field.set(event.target.value)} value={field.value} />
+        <Field error={field.error} hint={field.hint} label={field.label}>
+          <TextInput maxLength={field.maxLength} onChange={(event) => field.set(event.target.value)} value={field.value} />
         </Field>
       );
     case "toggle":
@@ -140,11 +140,9 @@ function GameSettingInput({ field }: Readonly<{ field: GameSettingField }>) {
 export function GameSettingsSheet({ model }: Readonly<{ model: GameSettingsModel }>) {
   return (
     <SidePanel
-      actions={<>
-        <ActionButton action={model.restoreDefaults} className="c-sheet-defaults" variant="ghost" />
-        <ActionButton action={model.save} variant="primary" />
-      </>}
+      actions={<ActionButton action={model.save} variant="primary" />}
       cancel={model.cancel}
+      start={<ActionButton action={model.restoreDefaults} variant="ghost" />}
       title="Game settings"
     >
       {model.fields.map((field) => <GameSettingInput field={field} key={field.id} />)}

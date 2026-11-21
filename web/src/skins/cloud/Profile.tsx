@@ -34,7 +34,7 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
         actions={<>
           {model.openInBrowser && <ActionButton action={model.openInBrowser} />}
           <ActionButton action={model.signOut} />
-          {role && <Chip icon="admin_panel_settings">{role.name}</Chip>}
+          {role && <Chip icon="shield_person">{role.name}</Chip>}
         </>}
         after={(
           <span className="c-profile-id">
@@ -57,7 +57,7 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
 const THEMES: readonly { value: ThemePreference; label: string; icon: IconName }[] = [
   { value: "light", label: "Light", icon: "light_mode" },
   { value: "dark", label: "Dark", icon: "dark_mode" },
-  { value: "system", label: "System", icon: "brightness_auto" },
+  { value: "system", label: "System", icon: "contrast" },
 ];
 
 function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: LookModel }>) {
@@ -68,14 +68,15 @@ function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: Lo
   return (
     <Card title="Appearance">
       <div className="c-profile-settings">
-        <RadioCards className="c-radios-even" legend="Theme" name="theme" onChange={choose} options={THEMES} value={model.preference} />
+        <RadioCards legend="Theme" name="theme" onChange={choose} options={THEMES} value={model.preference} />
         {look.options.length > 0 && (
-          <fieldset className="c-profile-look">
-            <legend className="c-field-label">Look</legend>
-            <div className="c-profile-look-row">
-              {look.options.map((option) => <ActionButton action={option.choose} key={option.id} />)}
-            </div>
-          </fieldset>
+          <RadioCards
+            legend="Look"
+            name="look"
+            onChange={() => undefined}
+            options={look.options.map((option) => ({ value: option.id, label: option.name, action: option.choose }))}
+            value={look.current}
+          />
         )}
       </div>
     </Card>

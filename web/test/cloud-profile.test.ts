@@ -54,11 +54,13 @@ test("profile: the name is the title at the start, the role chip is last at the 
   assert.doesNotMatch(roleless, /c-chip/, "no role, no chip");
 });
 
-test("profile: Appearance holds the theme as three radio cards and the looks as Actions", () => {
+test("profile: Appearance holds the theme and the looks as radio cards, each look carrying its Action", () => {
   const markup = renderToStaticMarkup(createElement(Profile, { model: profile }));
   assert.equal(markup.match(/name="theme"/g)?.length, 3);
   assert.match(markup, /value="dark"[^>]*checked|checked=""[^>]*value="dark"/);
-  assert.match(markup, /data-action="look\.terminal"/);
+  assert.match(markup, /data-action="look\.terminal"[^>]*name="look"[^>]*type="radio"|name="look"[^>]*data-action="look\.terminal"|data-action="look\.terminal"[^>]*type="radio"/);
+  const onTerminal = renderToStaticMarkup(createElement(Profile, { model: { ...profile, look: { ...profile.look, current: "terminal" } } }));
+  assert.match(onTerminal, /checked=""[^>]*data-action="look\.terminal"|data-action="look\.terminal"[^>]*checked=""|checked=""[^>]*name="look"/, "the current look reads as chosen");
 });
 
 test("profile: sign-in methods share one track list with one action column", () => {
@@ -89,11 +91,11 @@ test("confirmation: the typed field is named by the model and cued with the expe
 test("connection fields: a fleet world is public and cannot pick ZeroTier; a persistent one is the reverse", () => {
   const settings = (connection: ConnectionFieldsModel): WorldSettingsModel => ({ game, world, stopped: true, connection, valid: true, save: spy("world.settings.save", "Save settings"), cancel: spy("sheet.close", "Cancel") });
   const onFleet = renderToStaticMarkup(createElement(WorldSettingsSheet, { model: settings(fleet) }));
-  assert.match(onFleet, /The game port is public\./);
-  assert.match(onFleet, /disabled=""[^>]*value="zerotier"|value="zerotier"[^>]*disabled=""/);
+  assert.match(onFleet, /The game port is public\.<\/strong><span aria-label="Set the game[^"]*" class="c-notice-more"/, "the details live in a tooltip, not on the line");
+  assert.match(onFleet, /aria-disabled="true"[^>]*value="zerotier"/);
   const onPersistent = renderToStaticMarkup(createElement(WorldSettingsSheet, { model: settings(persistent) }));
   assert.doesNotMatch(onPersistent, /The game port is public/);
-  assert.match(onPersistent, /disabled=""[^>]*value="raw"|value="raw"[^>]*disabled=""/);
+  assert.match(onPersistent, /aria-disabled="true"[^>]*value="raw"/);
 });
 
 test("create world: with no ready preset the preset row points to Releases", () => {
@@ -107,7 +109,7 @@ test("create world: with no ready preset the preset row points to Releases", () 
 test("game settings: Restore defaults leads the footer, the switch carries its Action", () => {
   const model: GameSettingsModel = { game, world, running: false, fields: [{ id: "pvp", label: "PvP", kind: "toggle", checked: false, toggle: spy("game-settings.pvp", "PvP") }], save: spy("game-settings.save", "Save settings"), restoreDefaults: spy("game-settings.defaults", "Restore defaults"), cancel: spy("sheet.close", "Cancel") };
   const markup = renderToStaticMarkup(createElement(GameSettingsSheet, { model }));
-  assert.match(markup, /class="c-btn c-btn-ghost c-sheet-defaults"[^>]*data-action="game-settings\.defaults"/);
+  assert.match(markup, /class="c-dialog-start"><button class="c-btn c-btn-ghost"[^>]*data-action="game-settings\.defaults"/);
   assert.match(markup, /data-action="game-settings\.pvp"[^>]*role="switch"/);
   assert.doesNotMatch(markup, /apply from its next start/, "the line shows only while the world runs");
 });

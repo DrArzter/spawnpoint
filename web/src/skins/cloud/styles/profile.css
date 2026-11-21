@@ -14,22 +14,6 @@ html[data-skin="cloud"] .c-profile-settings {
   gap: 20px;
 }
 
-html[data-skin="cloud"] .c-profile-look {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-html[data-skin="cloud"] .c-profile-look-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 html[data-skin="cloud"] .c-profile-method {
   display: inline-flex;
   align-items: center;

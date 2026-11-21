@@ -79,7 +79,7 @@ const WATCHDOG_TIMING = {
 // requestedBy attributes the operation to whoever asked ("every start has a
 // requester attached", ADR-0006/0016). It rides into the execution input, so
 // the history is the audit record today and the notifications leg reads it
-// tomorrow. A stable, PII-minimal identity — "telegram:<id>" — never a name.
+// tomorrow. A stable, PII-minimal identity — "identity:<uuid>" — never a name.
 // Omitted entirely when absent, so the committed input examples remain the
 // exact ownerless case.
 export function buildStartInput(args: Readonly<{

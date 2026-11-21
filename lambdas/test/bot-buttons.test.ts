@@ -30,6 +30,7 @@ function pressable(grants: ReadonlySet<Permission>) {
     observe: async () => undefined,
     request: async () => undefined,
     hasPermission: async (_id, permission) => grants.has(permission),
+    identityId: async () => "00000000-0000-4000-8000-000000000001",
   });
   bot.botInfo = {
     id: 123, is_bot: true, first_name: "Spawnpoint", username: "spawnpoint_bot",

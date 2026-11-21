@@ -99,6 +99,8 @@ resource "aws_lambda_function" "bot" {
     Name    = "spawnpoint-telegram-bot"
     Purpose = "chat-control-surface"
   }
+
+  depends_on = [aws_cloudwatch_log_group.bot]
 }
 
 resource "aws_lambda_function_url" "bot" {

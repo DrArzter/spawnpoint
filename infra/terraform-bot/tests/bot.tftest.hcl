@@ -47,6 +47,15 @@ mock_provider "aws" {
   }
 }
 
+# A mock provider cannot import; the overrides stand in for the adopted groups.
+override_resource {
+  target = aws_cloudwatch_log_group.bot
+}
+
+override_resource {
+  target = aws_cloudwatch_log_group.notifier
+}
+
 run "bot_is_an_isolated_webhook" {
   command = plan
 
@@ -108,6 +117,16 @@ run "bot_is_an_isolated_webhook" {
     condition     = length(aws_lambda_function.notifier) == 0 && length(aws_cloudwatch_event_rule.execution_notifications) == 0
     error_message = "An explicitly isolated bootstrap must deploy only the command bot."
   }
+
+  assert {
+    condition     = aws_cloudwatch_log_group.bot.name == "/aws/lambda/${aws_lambda_function.bot.function_name}" && aws_cloudwatch_log_group.bot.retention_in_days == 14
+    error_message = "The bot's log group holds Telegram ids and must expire after 14 days."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_group.notifier) == 0
+    error_message = "No notifier, no notifier log group."
+  }
 }
 
 run "resend_is_an_optional_least_privilege_notifier_adapter" {
@@ -153,7 +172,27 @@ run "resend_is_an_optional_least_privilege_notifier_adapter" {
   }
 
   assert {
+    condition     = aws_cloudwatch_log_group.notifier[0].name == "/aws/lambda/${aws_lambda_function.notifier[0].function_name}" && aws_cloudwatch_log_group.notifier[0].retention_in_days == 14
+    error_message = "The notifier's log group holds Telegram ids and must expire after 14 days."
+  }
+
+  assert {
     condition     = strcontains(data.aws_iam_policy_document.notifier[0].json, "parameter/spawnpoint/email/resend-api-key")
     error_message = "The notifier may read only the configured Resend key parameter, not a broad secret path."
+  }
+}
+
+run "a_fresh_account_adopts_no_log_group" {
+  command = plan
+
+  variables {
+    mini_app_url            = "https://spawnpoint.example.dev/"
+    enable_notifications    = false
+    adopt_lambda_log_groups = false
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_group.bot.retention_in_days == 14
+    error_message = "A fresh account creates the bot's log group with the same 14 days."
   }
 }

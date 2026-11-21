@@ -26,6 +26,11 @@ sending domain and may set `email_reply_to`; neither address is a secret. Only t
 The notifier sends game invitations to individually verified linked addresses and uses a stable idempotency key per
 invitation and recipient.
 
+The root also owns the log groups `/aws/lambda/spawnpoint-telegram-bot` and `/aws/lambda/spawnpoint-notifier`, with
+14-day retention, because both logs hold Telegram chat ids. Lambda created these groups without retention on the first
+invocation, so the root imports them (`adopt_lambda_log_groups = true`). In an account where neither function has
+run, set `adopt_lambda_log_groups = false`, or the plan fails on a group that does not exist.
+
 Set `mini_app_url` explicitly to the public HTTPS endpoint for this installation. The hosted pipeline reads it from the
 `SPAWNPOINT_MINI_APP_URL` repository variable; self-hosted deployments may use their custom domain, generated CloudFront
 URL or another public HTTPS endpoint.

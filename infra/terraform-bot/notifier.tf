@@ -95,6 +95,8 @@ resource "aws_lambda_function" "notifier" {
       EMAIL_REPLY_TO           = var.email_reply_to
     }
   }
+
+  depends_on = [aws_cloudwatch_log_group.notifier]
 }
 
 resource "aws_cloudwatch_event_rule" "execution_notifications" {

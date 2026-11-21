@@ -202,7 +202,11 @@ export const worldsApi = {
     const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/whitelist`);
     const body = await response.json().catch(() => ({})) as { error?: string } & Partial<WorldWhitelist>;
     if (!response.ok || body.names === undefined) {
-      throw await apiFailure(response, body.error === "forbidden" ? "Your role cannot manage whitelists." : "The whitelist could not be read.", body);
+      const messages: Record<string, string> = {
+        forbidden: "Your role cannot manage whitelists.",
+        whitelist_unreadable: "The running server did not answer with its whitelist. Try again.",
+      };
+      throw await apiFailure(response, messages[body.error ?? ""] ?? "The whitelist could not be read.", body);
     }
     return { managed: body.managed === true, names: body.names, updatedAt: body.updatedAt ?? null, updatedBy: body.updatedBy ?? null };
   },

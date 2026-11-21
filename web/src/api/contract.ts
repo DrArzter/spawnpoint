@@ -160,7 +160,8 @@ export type ReleasePackName = "server" | "full";
 export type ReleaseMods = Readonly<{ release: string; mods: readonly ReleaseMod[]; clientMods: readonly ReleaseMod[] | null }>;
 /**
  * A world's whitelist (ADR-0066). Unmanaged: the world's record keeps none, and
- * its server's own file is left alone. Managed: these names are the whole list.
+ * the names are the running server's own list (none while it is stopped); the
+ * first name added makes them the record's. Managed: these names are the whole list.
  */
 export type WorldWhitelist = Readonly<{ managed: boolean; names: readonly string[]; updatedAt: string | null; updatedBy: string | null }>;
 /** A saved whitelist, and whether a running server was asked to reload it now. */

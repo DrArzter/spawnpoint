@@ -23,6 +23,8 @@ export type DemoState = {
   console: Record<string, ConsoleEntry[]>;
   /** The whitelists worlds keep on their records (ADR-0066); absent when a world keeps none. */
   whitelists: Record<string, { names: string[]; updatedAt: string; updatedBy: string }>;
+  /** What a running server's own whitelist holds for a world whose record keeps none (ADR-0066 amendment). */
+  serverWhitelists: Record<string, string[]>;
   /** Effects that land when their time passes; read calls settle them. */
   scheduled: { operationId: string; at: number; apply: (state: DemoState) => void }[];
   counter: number;
@@ -203,6 +205,9 @@ export function initialState(): DemoState {
     },
     whitelists: {
       "minecraft/minecraft-rostik-12345678": { names: ["DrArzter", "Alex", "Mira", "Kira"], updatedAt: "2026-09-14T18:20:00.000Z", updatedBy: "DrArzter" },
+    },
+    serverWhitelists: {
+      "minecraft/minecraft-creative-5e1c9a07": ["DrArzter", "Mira"],
     },
     scheduled: [],
     counter: 0,

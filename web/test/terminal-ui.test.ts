@@ -1,6 +1,7 @@
 import "./support/browser.ts";
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -92,4 +93,23 @@ test("terminal table loading preserves row and column geometry", () => {
   assert.match(markup, /aria-label="Worlds\. Loading worlds"/);
   assert.equal((markup.match(/t-table-skeleton/g) ?? []).length, 2);
   assert.equal((markup.match(/t-skeleton-text/g) ?? []).length, 4);
+});
+
+test("a terminal table row's link is a real anchor whose hit area is the row, and keys stay above it", () => {
+  const markup = renderToStaticMarkup(createElement(Table<{ id: string }>, {
+    columns: [
+      { id: "name", label: "Name", render: (row) => createElement("a", { className: "t-row-link", href: `#/${row.id}` }, row.id) },
+      { id: "act", label: "Actions", render: () => createElement("button", { type: "button" }, "Open") },
+    ],
+    empty: "Empty",
+    label: "Worlds",
+    rowKey: (row) => row.id,
+    rows: [{ id: "one" }],
+  }));
+  assert.match(markup, /<td[^>]*><a class="t-row-link" href="#\/one">one<\/a><\/td>/);
+  assert.match(markup, /<td[^>]*><button type="button">Open<\/button><\/td>/);
+  const css = readFileSync(new URL("../src/skins/terminal/terminal.css", import.meta.url), "utf8");
+  assert.match(css, /\.t-table \.t-row-link::after \{\s*position: absolute;\s*inset: 0;/);
+  assert.match(css, /\.t-table tr \{\s*position: relative;/);
+  assert.match(css, /\.t-table :is\(button, select, label, input, \.t-indicator, a:not\(\.t-row-link\)\) \{\s*position: relative;\s*z-index: 1;/);
 });

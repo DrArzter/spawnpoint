@@ -43,8 +43,7 @@ export function WhitelistTab({ model }: Readonly<{ model: WhitelistModel }>) {
           {[0, 1, 2].map((cell) => <Skeleton height={44} key={cell} />)}
         </SkeletonGroup>
       )}
-      {ready && !ready.managed && <p className="c-line c-card-foot">Spawnpoint does not keep this world&apos;s whitelist yet; the first name replaces the server&apos;s list.</p>}
-      {ready && ready.managed && ready.rows.length === 0 && <Empty icon="verified_user" title="Nobody can join" />}
+      {ready && ready.rows.length === 0 && <Empty icon="verified_user" title={ready.managed ? "Nobody can join" : "No names"} />}
       {ready && ready.rows.length > 0 && (
         <Grid className="c-wl-names" kind="name" label="Players">
           {ready.rows.map((row) => (

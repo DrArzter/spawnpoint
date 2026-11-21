@@ -32,7 +32,7 @@ html[data-skin="console"] .c-tracklist-row {
   transition: background var(--c-d1);
 }
 
-html[data-skin="console"] .c-tracklist-row:hover {
+html[data-skin="console"] .c-tracklist-row:is(:hover, :has(a.c-track-title:focus-visible)) {
   background: var(--c-surface-2);
 }
 
@@ -87,6 +87,28 @@ html[data-skin="console"] .c-track-compact {
   display: none;
 }
 
+/* The title link stays a real anchor; its hit area and focus ring are the whole row. */
+html[data-skin="console"] .c-tracklist-row a.c-track-title::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+html[data-skin="console"] .c-tracklist-row a.c-track-title:focus-visible {
+  outline: 0;
+}
+
+html[data-skin="console"] .c-tracklist-row a.c-track-title:focus-visible::after {
+  outline: 2px solid var(--c-accent);
+  outline-offset: -2px;
+}
+
+/* Controls, copy, tooltips and other links in a row keep their own target above the row link. */
+html[data-skin="console"] .c-tracklist-row :is(button, select, label, input, [data-tip], .c-copy, a.c-btn, a:not(.c-track-title)) {
+  position: relative;
+  z-index: 1;
+}
+
 @media (max-width: 1023px) {
   html[data-skin="console"] .c-tracklist {
     grid-template-columns: var(--c-tracks-compact);
@@ -100,17 +122,6 @@ html[data-skin="console"] .c-track-compact {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-  }
-
-  html[data-skin="console"] .c-tracklist-row a.c-track-title::after {
-    position: absolute;
-    inset: 0;
-    content: "";
-  }
-
-  html[data-skin="console"] .c-tracklist-row :is(button, select, label, .c-copy, a.c-btn) {
-    position: relative;
-    z-index: 1;
   }
 }
 

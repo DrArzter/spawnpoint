@@ -119,3 +119,15 @@ test("archiving a running fleet world stops its session and removes its launched
   assert.equal(snapshot.games.find((item) => item.id === GAME)!.worlds.some((item) => item.id === skyline), false);
   assert.equal(snapshot.hosts.some((host) => host.id === `host-${skyline}`), false);
 });
+
+test("a world with no list of its own shows its running server's, none once stopped, and adding a name keeps those players (ADR-0066)", () => {
+  assert.equal(stateOf(store.snapshot(), CREATIVE), "running");
+  const read = store.whitelist(GAME, CREATIVE);
+  assert.deepEqual(read, { managed: false, names: ["DrArzter", "Mira"], updatedAt: null, updatedBy: null });
+  store.stopSession(GAME, CREATIVE);
+  mock.timers.tick(7000);
+  assert.deepEqual(store.whitelist(GAME, CREATIVE), { managed: false, names: [], updatedAt: null, updatedBy: null }, "a stopped world has no server to read");
+  const saved = store.updateWhitelist(GAME, CREATIVE, [...read.names, "Kira"]);
+  assert.deepEqual(saved.names, ["DrArzter", "Mira", "Kira"]);
+  assert.equal(store.whitelist(GAME, CREATIVE).managed, true);
+});

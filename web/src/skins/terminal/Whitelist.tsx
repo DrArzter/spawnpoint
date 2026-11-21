@@ -14,13 +14,6 @@ export function WhitelistPanel({ model }: Readonly<{ model: WhitelistModel }>) {
     ? <>Changed by {list.value.updatedBy ?? "someone"} <Timestamp value={list.value.updatedAt} /></>
     : undefined;
   return <>
-    {list.status === "ready" && !list.value.managed && (
-      <Notice
-        description="The first name you add makes this list the whole whitelist. Names added on the server by hand are dropped at its next start."
-        title="Spawnpoint does not keep this world's whitelist yet"
-        tone="warning"
-      />
-    )}
     <Panel name="Add a player">
       <form className="t-entry-form" onSubmit={(event) => { event.preventDefault(); model.add.run(); }}>
         <Field error={model.draftError} label="Player name">
@@ -46,7 +39,7 @@ export function WhitelistPanel({ model }: Readonly<{ model: WhitelistModel }>) {
           columns={columns}
           empty={list.status === "ready" && list.value.managed
             ? <Empty description="The whitelist is on and has no names." title="Nobody can join" />
-            : <Empty title="No names kept here yet" />}
+            : <Empty title="No names" />}
           label={`Whitelist of ${model.world.displayName}`}
           loading={list.status === "loading"}
           rowKey={(row) => row.name}

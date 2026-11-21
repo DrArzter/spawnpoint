@@ -508,7 +508,10 @@ export function whitelist(gameId: string, worldId: string): WorldWhitelist {
   settle();
   if (!world(gameId, worldId).worldLifecycleAvailable) throw new Error("This world has no record to keep a whitelist in.");
   const kept = state.whitelists[worldKey(gameId, worldId)];
-  return kept ? { managed: true, names: [...kept.names], updatedAt: kept.updatedAt, updatedBy: kept.updatedBy } : { managed: false, names: [], updatedAt: null, updatedBy: null };
+  if (kept) return { managed: true, names: [...kept.names], updatedAt: kept.updatedAt, updatedBy: kept.updatedBy };
+  // No list of its own: a running server's list is shown, a stopped world has none.
+  const running = heldSession(gameId, world(gameId, worldId))?.observedState === "ready";
+  return { managed: false, names: running ? [...(state.serverWhitelists[worldKey(gameId, worldId)] ?? [])] : [], updatedAt: null, updatedBy: null };
 }
 
 export function updateWhitelist(gameId: string, worldId: string, names: readonly string[]): SavedWhitelist {

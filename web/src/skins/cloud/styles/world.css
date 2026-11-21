@@ -1,0 +1,125 @@
+/* The world page: the hero and the parts its tabs own. SplitPage owns the list column beside it. */
+
+html[data-skin="cloud"] .c-hero {
+  position: relative;
+  overflow: hidden;
+}
+
+html[data-skin="cloud"] .c-hero-busy {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  height: 3px;
+  border-radius: 0;
+  background: none;
+}
+
+html[data-skin="cloud"] .c-hero-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2.4fr);
+  margin: 0;
+}
+
+html[data-skin="cloud"] .c-hero-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: var(--c-card-y) var(--c-card-x);
+  border-left: 1px solid var(--c-line);
+}
+
+html[data-skin="cloud"] .c-hero-fact:first-child {
+  border-left: 0;
+}
+
+html[data-skin="cloud"] .c-hero-fact dt {
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  font-weight: 600;
+}
+
+html[data-skin="cloud"] .c-hero-fact dd {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 34px;
+  margin: 0;
+  font-weight: 700;
+}
+
+html[data-skin="cloud"] .c-hero-big {
+  font-size: var(--c-fs-stat);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1;
+}
+
+html[data-skin="cloud"] .c-sum {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+html[data-skin="cloud"] .c-card-foot {
+  padding: 12px var(--c-card-x);
+  border-top: 1px solid var(--c-line);
+  font-size: var(--c-fs-s);
+}
+
+html[data-skin="cloud"] .c-wl-form {
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 520px;
+}
+
+html[data-skin="cloud"] .c-wl-form .c-input {
+  flex: 1 1 160px;
+  min-width: 0;
+  height: var(--c-ctl-sm);
+}
+
+html[data-skin="cloud"] .c-wl-names {
+  padding: var(--c-card-y) var(--c-card-x);
+}
+
+html[data-skin="cloud"] .c-wl-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 2px 2px 2px 14px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--c-r-ctl);
+  font-weight: 700;
+}
+
+html[data-skin="cloud"] .c-wl-name > .c-mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 759px) {
+  html[data-skin="cloud"] .c-hero-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  html[data-skin="cloud"] .c-hero-address {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--c-line);
+    border-left: 0;
+  }
+
+  html[data-skin="cloud"] .c-wl-form {
+    flex-basis: 100%;
+    max-width: none;
+  }
+}

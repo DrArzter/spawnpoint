@@ -1,0 +1,31 @@
+/* Dialog and side panel content (S7): the typed-confirmation cue, switch rows, the footer's start action. */
+
+html[data-skin="cloud"] .c-sheet-expect {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-skin="cloud"] .c-sheet-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: var(--c-field);
+}
+
+html[data-skin="cloud"] .c-sheet-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--c-fs-s);
+}
+
+/* Restore defaults leads the footer at its start edge; Cancel and Save keep the end. */
+html[data-skin="cloud"] .c-sheet-defaults {
+  order: -1;
+  margin-inline-end: auto;
+}

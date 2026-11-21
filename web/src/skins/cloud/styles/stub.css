@@ -11,8 +11,7 @@ html[data-skin="cloud"] .c-stub-names {
   padding-left: 18px;
 }
 
-html[data-skin="cloud"] .c-stub-form,
-html[data-skin="cloud"] .c-stub-field {
+html[data-skin="cloud"] .c-stub-form {
   display: flex;
   flex-direction: column;
   gap: 6px;

@@ -71,6 +71,19 @@
         "ownership.$": "$.Payload.ownership"
       },
       "ResultPath": "$.coordination.lease",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Begin Session"
     },
     "Begin Session": {
@@ -87,6 +100,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Route Placement Mode"
     },
     "Route Placement Mode": {
@@ -132,6 +158,19 @@
         "placement.$": "$.Payload.placement"
       },
       "ResultPath": "$.placement",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -151,6 +190,17 @@
         "instanceType.$": "$.Reservations[0].Instances[0].InstanceType"
       },
       "ResultPath": "$.host",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -171,6 +221,17 @@
         "vcpu.$": "$.InstanceTypes[0].VCpuInfo.DefaultVCpus"
       },
       "ResultPath": "$.host.shape",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -197,6 +258,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -222,6 +296,19 @@
         "placement.$": "$.Payload.placement"
       },
       "ResultPath": "$.placement",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -316,6 +403,17 @@
         "vcpu.$": "$.InstanceTypes[0].VCpuInfo.DefaultVCpus"
       },
       "ResultPath": "$.launched.shape",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -343,6 +441,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -369,6 +480,19 @@
         "placement.$": "$.Payload.placement"
       },
       "ResultPath": "$.placement",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -386,6 +510,17 @@
         "InstanceIds.$": "States.Array($.launched.instanceId)"
       },
       "ResultPath": "$.unreservedTermination",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -430,6 +565,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Mark Unplaced Session Stopped"
     },
     "Mark Unplaced Session Stopped": {
@@ -445,6 +593,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Release Unplaced Lease"
     },
     "Release Unplaced Lease": {
@@ -459,6 +620,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Start Refused Unplaced"
     },
     "Start Refused Unplaced": {
@@ -519,6 +693,17 @@
         "instanceType.$": "$.Reservations[0].Instances[0].InstanceType"
       },
       "ResultPath": "$.host",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -539,6 +724,17 @@
         "vcpu.$": "$.InstanceTypes[0].VCpuInfo.DefaultVCpus"
       },
       "ResultPath": "$.host.shape",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -565,6 +761,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -591,6 +800,19 @@
         "placement.$": "$.Payload.placement"
       },
       "ResultPath": "$.placement",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -614,6 +836,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Route Release Commit"
     },
     "Route Release Commit": {
@@ -646,6 +881,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -668,6 +916,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Start Session Watchdog"
     },
     "Start Session Watchdog": {
@@ -715,6 +976,19 @@
         "ownership.$": "$.Payload.ownership"
       },
       "ResultPath": "$.coordination.lease",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Begin Compensating Stop"
     },
     "Ready": {
@@ -743,6 +1017,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Stop Accepted V1"
     },
     "Stop Accepted V1": {
@@ -777,6 +1064,17 @@
         "InstanceIds.$": "States.Array($.request.placed.hostId)"
       },
       "ResultPath": "$.coordination.forcedStopRequest",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [{
         "ErrorEquals": ["States.ALL"],
         "ResultPath": "$.forcedStopFailure",
@@ -796,6 +1094,17 @@
         "InstanceIds.$": "States.Array($.request.placed.hostId)"
       },
       "ResultPath": "$.coordination.forcedStopInstance",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [{
         "ErrorEquals": ["States.ALL"],
         "ResultPath": "$.forcedStopFailure",
@@ -847,6 +1156,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Release Forced Placement"
     },
     "Release Forced Placement": {
@@ -862,6 +1184,19 @@
       },
       "ResultSelector": { "host.$": "$.Payload.host" },
       "ResultPath": "$.placementRelease",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.placementReleaseError", "Next": "Release Forced Compensation Lease" }],
       "Next": "Release Forced Compensation Lease"
     },
@@ -877,6 +1212,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Route Forced Fleet Drain"
     },
     "Route Forced Fleet Drain": {
@@ -927,6 +1275,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Release Compensated Placement"
     },
     "Release Compensated Placement": {
@@ -942,6 +1303,19 @@
       },
       "ResultSelector": { "host.$": "$.Payload.host" },
       "ResultPath": "$.placementRelease",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.placementReleaseError", "Next": "Release Compensating Lease" }],
       "Next": "Release Compensating Lease"
     },
@@ -957,6 +1331,19 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "Route Compensated Fleet Drain"
     },
     "Route Compensated Fleet Drain": {

@@ -167,9 +167,10 @@ export function TimeSeriesChart({ label, range, points, format, time, percent = 
               {shape.gaps.map((gap) => <rect fill={`url(#${id}-hatch)`} height={PLOT.height - PLOT.inset * 2} key={gap.x} width={gap.width} x={gap.x} y={PLOT.inset} />)}
               {shape.areas.map((area) => <path className="c-chart-fill" d={area} key={area} />)}
               {shape.lines.map((line) => <path className="c-chart-line" d={line} key={line} />)}
-              {shape.dots.map((dot) => <circle className="c-chart-point" cx={dot.x} cy={dot.y} key={dot.x} r="3" />)}
             </g>
           </svg>
+          {/* Lone readings are HTML marks: the stretched SVG would draw a circle as an ellipse. */}
+          {shape.dots.map((dot) => <span aria-hidden="true" className="c-chart-point" key={dot.x} style={{ left: `${(dot.x / PLOT.width) * 100}%`, top: `${(dot.y / PLOT.height) * 100}%` }} />)}
           {at && (
             <>
               <span aria-hidden="true" className="c-chart-cross" style={{ left: `${left}%` }} />

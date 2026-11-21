@@ -46,6 +46,12 @@ test("the y axis tops out at 100 for a percentage, else at the peak rounded up",
   assert.equal(chartSummary(series([null, null])), null);
 });
 
+test("a lone reading is an HTML mark, so the stretched plot cannot squash it", () => {
+  const markup = renderToStaticMarkup(createElement(TimeSeriesChart, { label: "CPU", range: "6 hours", points: series([null, 30, null]), format, time, percent: true }));
+  assert.doesNotMatch(markup, /<circle/);
+  assert.match(markup, /class="c-chart-point" style="left:50%;top:/);
+});
+
 test("the chart is one focusable group named by its series, range, latest and peak, with a data table on demand", () => {
   const markup = renderToStaticMarkup(createElement(TimeSeriesChart, { label: "CPU", range: "24 hours", points: series([10, null, 30, 20]), format, time, percent: true }));
   assert.match(markup, /role="group"[^>]*tabindex="0"|tabindex="0"[^>]*role="group"/);
@@ -92,8 +98,9 @@ test("the metrics tab draws the strip, a stat card and a chart per series, and t
   const model: MetricsModel = { range: "6h", ranges: [{ id: "6h", label: "6 hours" }, { id: "24h", label: "24 hours" }], setRange: noop, metrics: { status: "ready", value } };
   const markup = renderToStaticMarkup(createElement(MetricsTab, { model, worldId: "rostik" }));
   assert.match(markup, /Host running 75 % of the last 6 hours/);
-  assert.match(markup, /Peak 40 % at \d\d:02 · Avg 30 %/);
+  assert.match(markup, /<span>Peak 40 % at \d\d:02<\/span><span>Avg 30 %<\/span>/);
   assert.match(markup, /The host reported nothing in this window\./);
+  assert.doesNotMatch(markup, /Bytes/, "a series with no readings has no legend");
   assert.match(markup, /aria-label="CPU, 6 hours, latest 30 %, peak 40 %"/);
   assert.match(markup, /5-minute readings/);
   assert.match(markup, /role="radiogroup"[^>]*aria-label="Range"|aria-label="Range"[^>]*role="radiogroup"/);
@@ -105,7 +112,8 @@ test("the console reads newest last in a log region, and an offline world draws 
     { id: "b", at: at(2), who: "Mira", command: "say hi", status: { kind: "progress" as const, label: "Waiting for the game" }, output: null, pending: true },
   ];
   const log = renderToStaticMarkup(createElement(Terminal, { label: "Rostik console", lines }));
-  assert.match(log, /role="log"/);
+  assert.match(log, /aria-label="Rostik console"[^>]*role="log"/);
+  assert.match(log, /<table aria-label="Commands"/, "the table is not named twice");
   assert.match(log, /aria-live="polite"/);
   assert.ok(log.indexOf("list") < log.indexOf("say hi"), "newest last");
   const run = action("console.run", "Run", noop, { disabled: true, hint: "The world is not online" });

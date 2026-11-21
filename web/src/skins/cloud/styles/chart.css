@@ -73,7 +73,13 @@ html[data-skin="cloud"] .c-chart-line {
 }
 
 html[data-skin="cloud"] .c-chart-point {
-  fill: var(--c-accent);
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-accent);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 /* A5: the line is revealed from the start of the window. */
@@ -158,8 +164,6 @@ html[data-skin="cloud"] .c-legend-line {
 html[data-skin="cloud"] .c-legend-gap {
   background: repeating-linear-gradient(45deg, var(--c-surface-2) 0 3px, var(--c-line-2) 3px 5px);
 }
-
-@keyframes c-reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 
 @media (max-width: 759px) {
   html[data-skin="cloud"] .c-chart-area {

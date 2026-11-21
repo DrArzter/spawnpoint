@@ -28,7 +28,7 @@ export function Terminal({ label, lines }: Readonly<{ label: string; lines: read
           { id: "status", header: "Status", className: "c-term-status", render: (line) => <Status status={line.status} /> },
           { id: "output", header: "Output", className: "c-term-output", render: (line) => line.output === null ? <span className="c-faint">—</span> : <span className="c-mono" title={line.output}>{line.output}</span> },
         ]}
-        label={label}
+        label="Commands"
         rowKey={(line) => line.id}
         rows={lines}
         variant="fixed"

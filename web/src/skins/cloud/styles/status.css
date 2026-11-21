@@ -109,3 +109,11 @@ html[data-skin="cloud"] .c-chip-text {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+html[data-skin="cloud"] .c-indicator {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  vertical-align: middle;
+  border-radius: var(--c-r-pill);
+}

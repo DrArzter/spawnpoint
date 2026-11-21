@@ -1,0 +1,117 @@
+/* DetailList: labels above values in equal columns. */
+
+html[data-skin="cloud"] .c-detail {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px 24px;
+  margin: 0;
+  padding: 18px var(--c-card-x);
+}
+
+html[data-skin="cloud"] .c-detail-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+html[data-skin="cloud"] .c-detail-fit {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+html[data-skin="cloud"] .c-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+html[data-skin="cloud"] .c-detail > .c-span-w2 {
+  grid-column: span 2;
+}
+
+html[data-skin="cloud"] .c-detail dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  font-weight: 600;
+}
+
+html[data-skin="cloud"] .c-detail-explain {
+  display: inline-grid;
+  place-items: center;
+  color: var(--c-ink-3);
+  border-radius: var(--c-r-pill);
+}
+
+html[data-skin="cloud"] .c-detail dd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 30px;
+  margin: 0;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+html[data-skin="cloud"] .c-detail dd > * {
+  min-width: 0;
+}
+
+/* The value keeps its width; the hint after it gives way first. */
+html[data-skin="cloud"] .c-detail dd > .c-status {
+  flex: none;
+}
+
+html[data-skin="cloud"] .c-detail-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+html[data-skin="cloud"] .c-detail-time,
+html[data-skin="cloud"] .c-detail-release,
+html[data-skin="cloud"] .c-detail-preset {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+html[data-skin="cloud"] .c-detail-hint {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  color: var(--c-ink-3);
+  font-size: var(--c-fs-s);
+  font-weight: 500;
+}
+
+html[data-skin="cloud"] .c-detail-hint > :not(svg) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-skin="cloud"] .c-detail-hint.c-tone-warn {
+  color: var(--c-warn);
+}
+
+@media (max-width: 1199px) {
+  html[data-skin="cloud"] .c-detail-four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 479px) {
+  html[data-skin="cloud"] .c-detail-four,
+  html[data-skin="cloud"] .c-detail-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html[data-skin="cloud"] .c-detail > .c-span-w2 {
+    grid-column: auto;
+  }
+}

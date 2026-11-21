@@ -11,6 +11,16 @@
 @import "./notice.css";
 @import "./empty.css";
 @import "./skeleton.css";
+@import "./table.css";
+@import "./tracklist.css";
+@import "./list.css";
+@import "./detail.css";
+@import "./segmented.css";
+@import "./tabs.css";
+@import "./fields.css";
+@import "./filter.css";
+@import "./tiles.css";
+@import "./stat.css";
 @import "./identity.css";
 @import "./dialog.css";
 @import "./panel.css";

@@ -25,6 +25,19 @@ function sources(dir: string): string[] {
 
 const code = sources(join(root, "skins/cloud")).join("\n");
 
+// Commas inside :is() or :not() do not separate selectors.
+function selectorList(head: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (const ch of head) {
+    if (ch === "(") depth += 1;
+    if (ch === ")") depth -= 1;
+    if (ch === "," && depth === 0) { parts.push(current.trim()); current = ""; } else current += ch;
+  }
+  return [...parts, current.trim()];
+}
+
 type Rule = Readonly<{ sheet: string; context: string; selectors: readonly string[]; line: number; declarations: ReadonlyMap<string, string> }>;
 
 // Enough of a parser for hand-written sheets: comments out, at-rules as a
@@ -52,7 +65,7 @@ function rules(sheet: string, text: string): Rule[] {
       else {
         const declarations = new Map<string, string>();
         const context = stack.filter((entry) => entry.kind === "context").map((entry) => (entry as { head: string }).head).join(" | ");
-        found.push({ sheet, context, selectors: head.split(",").map((selector) => selector.trim()), line: start, declarations });
+        found.push({ sheet, context, selectors: selectorList(head), line: start, declarations });
         stack.push({ kind: "rule", declarations });
       }
       buffer = "";

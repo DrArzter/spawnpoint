@@ -268,7 +268,7 @@ const requestId = (candidate: AccessCandidate) => `${candidate.platform}:${candi
 
 /**
  * The people waiting for access (asked, or signed in and not approved), read on their own for a page that shows them
- * beside other things (the cloud skin's game home). Approve grants the default
+ * beside other things (the console skin's game home). Approve grants the default
  * role; the Access page is where another is chosen.
  */
 export function useAccessRequests(enabled: boolean, notify: Notify): Readonly<{

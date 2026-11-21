@@ -48,7 +48,7 @@ export type ShellWorld = Readonly<{ id: string; name: string; href: string; stat
 
 /*
  * The optional fields below serve a skin that draws more than the list of
- * worlds (the cloud skin). Actions there are asked for through functions, so
+ * worlds (the console skin). Actions there are asked for through functions, so
  * a skin that ignores them is never asked to draw them.
  */
 export type ShellModel = Readonly<{

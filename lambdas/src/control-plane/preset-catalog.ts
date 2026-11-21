@@ -31,7 +31,7 @@ function object(value: unknown): ObjectValue | null {
 // into worlds somebody can start.
 export function parsePresetCatalog(value: unknown, expectedGameId: string): readonly PresetObservation[] | null {
   const root = object(value);
-  if (root === null || root.schema_version !== 2 || root.game !== expectedGameId) return null;
+  if (root?.schema_version !== 2 || root.game !== expectedGameId) return null;
   const source = object(root.source);
   if (source === null || typeof source.repository !== "string" || !source.repository.startsWith("https://github.com/")) return null;
   if (typeof source.commit !== "string" || !COMMIT.test(source.commit)) return null;

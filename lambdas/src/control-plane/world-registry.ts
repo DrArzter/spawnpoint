@@ -326,7 +326,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
   const gameSettings = root?.game_settings === undefined ? undefined : parseGameSettings(root.game_settings);
   const whitelist = root?.whitelist === undefined ? undefined : parseWhitelist(root.whitelist);
   if (
-    root === null || root.schema_version !== 1 || root.storage_layout !== "generation" ||
+    root?.schema_version !== 1 || root.storage_layout !== "generation" ||
     typeof root.world_id !== "string" || !ID.test(root.world_id) ||
     typeof root.game !== "string" || !ID.test(root.game) ||
     typeof root.display_name !== "string" || root.display_name.length < 1 || root.display_name.length > 80 ||

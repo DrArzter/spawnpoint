@@ -206,7 +206,7 @@ async function writeInitialReleaseState(record: WorldRecord, input: Input): Prom
   } catch (error) {
     if (!(error instanceof Error) || (error.name !== "PreconditionFailed" && error.name !== "ConditionalRequestConflict")) throw error;
     const existing = await store.read({ worldId: state.worldId, generationId: state.generationId });
-    if (existing === null || existing.state.desiredRelease !== state.desiredRelease) throw new Error("release_state_conflict");
+    if (existing?.state.desiredRelease !== state.desiredRelease) throw new Error("release_state_conflict");
   }
 }
 

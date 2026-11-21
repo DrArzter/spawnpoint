@@ -32,7 +32,7 @@ export class S3WorldRepository {
       const body = await response.Body?.transformToString();
       if (!body || !response.ETag) throw new Error("invalid_world_record");
       const record = parseWorldRecord(JSON.parse(body) as unknown);
-      if (record === null || record.worldId !== worldId) throw new Error("invalid_world_record");
+      if (record?.worldId !== worldId) throw new Error("invalid_world_record");
       return { record, etag: response.ETag };
     } catch (error) {
       if (missing(error)) return null;

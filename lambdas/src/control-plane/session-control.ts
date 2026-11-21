@@ -105,7 +105,7 @@ export type PackChoice =
 // pack for a world nobody is playing yet. So: active first, desired only when
 // nothing is active.
 export function packRelease(pointer: ReleasePointerObservation | null): PackChoice {
-  if (pointer === null || pointer.state !== "available") return { kind: "none", reason: "no_release_pointer" };
+  if (pointer?.state !== "available") return { kind: "none", reason: "no_release_pointer" };
   const release = pointer.activeRelease ?? pointer.desiredRelease;
   return release === null ? { kind: "none", reason: "no_release_selected" } : { kind: "release", release };
 }

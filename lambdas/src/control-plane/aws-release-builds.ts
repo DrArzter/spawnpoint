@@ -43,13 +43,13 @@ export function legacyBuildCandidate(preset: PresetObservation, catalog: unknown
   const candidates = history.flatMap((entry) => {
     let value: Record<string, unknown>;
     try { value = JSON.parse(entry.input ?? "null") as typeof value; } catch { return []; }
-    if (!value || value.profileId !== preset.id || typeof value.release !== "string" || !/^\d+\.\d+$/.test(value.release) ||
+    if (value?.profileId !== preset.id || typeof value.release !== "string" || !/^\d+\.\d+$/.test(value.release) ||
       !entry.name || !entry.startDate) return [];
     const source = catalogBuildSource({ schema_version: 2, game: preset.gameId, presets: [], source: {
       repository: value.configRepositoryUrl, commit: value.configCommit,
       snapshot: { key: value.configSourceKey, sha256: value.configSourceSha256 },
     } }, preset.gameId);
-    if (!source || source.configRepositoryUrl.replace(/\.git$/, "") !== preset.repository.replace(/\.git$/, "") ||
+    if (source?.configRepositoryUrl.replace(/\.git$/, "") !== preset.repository.replace(/\.git$/, "") ||
       (source.configCommit !== current.configCommit && source.configCommit !== preset.commit)) return [];
     return [{ entry, source, release: value.release }];
   }).sort((a, b) => b.entry.startDate!.getTime() - a.entry.startDate!.getTime());
@@ -88,7 +88,7 @@ export function catalogBuildSource(value: unknown, gameId: string): BuildSource 
   const repository = `DrArzter/my-docker-${gameId === "minecraft" ? "minecraft" : gameId === "factorio" ? "factorio" : gameId === "zomboid" ? "zomboid" : "invalid"}-server-config`;
   if (source.repository.replace(/\.git$/, "") !== `https://github.com/${repository}`) return null;
   const snapshot = source.snapshot;
-  if (!snapshot || snapshot.key !== `config-sources/${repository}/${source.commit}.tar.gz` || typeof snapshot.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(snapshot.sha256)) return null;
+  if (snapshot?.key !== `config-sources/${repository}/${source.commit}.tar.gz` || typeof snapshot.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(snapshot.sha256)) return null;
   return { configCommit: source.commit, configRepositoryUrl: source.repository, configSourceKey: snapshot.key as string, configSourceSha256: snapshot.sha256 };
 }
 

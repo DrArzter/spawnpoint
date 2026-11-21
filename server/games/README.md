@@ -49,6 +49,13 @@ make the parser **self-checking** rather than optimistic: read the count one way
 and refuse unless they agree. A refusal is read as "not idle" by the probe and as a refusal by the stop, so the
 failure costs a few minutes of instance time. A wrong count in the other direction stops a server with people on it.
 
+## Share a probe transport, never a parser's trust
+
+A transport that more than one game speaks lives in [`_probes/`](_probes), with its own fake-server test: A2S in
+`a2s-client.py` and `a2s.sh` ([ADR-0075](../../docs/adr/0075-a2s-as-a-probe-transport.md)). Its parser makes two
+readings agree before it prints a count. A game with no RCON names its query port as `GAME_RCON_PORT`, so the port
+takes the slot's RCON place and stays on `127.0.0.1`.
+
 ## Read an egg, never run one
 
 A Pterodactyl or Pelican egg is research for the person who writes the module

@@ -5,7 +5,8 @@
 - Milestone: cross-cutting, first used by the Valheim module
 - Amends: [ADR-0034](0034-per-game-adapter.md) (its alternative "a binary/CLI adapter per game (Pterodactyl egg
   images)")
-- Relates: [ADR-0005](0005-containerised-game-server.md), [ADR-0033](0033-connectivity-as-a-strategy.md)
+- Relates: [ADR-0005](0005-containerised-game-server.md), [ADR-0033](0033-connectivity-as-a-strategy.md),
+  [ADR-0075](0075-a2s-as-a-probe-transport.md)
 - Numbering: ADR-0070 to ADR-0073 can be taken by work that is still open on other branches, so this ADR starts at
   0074. The highest number on this branch was 0069.
 

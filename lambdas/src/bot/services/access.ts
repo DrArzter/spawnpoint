@@ -15,6 +15,7 @@ export type AccessStore = Readonly<{
   observe: (contact: TelegramContact) => Promise<void>;
   request: (contact: TelegramContact) => Promise<void>;
   hasPermission: (telegramId: number, permission: Permission) => Promise<boolean>;
+  identityId: (telegramId: number) => Promise<string | null>;
 }>;
 
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({ region: env("AWS_REGION") }));
@@ -79,16 +80,22 @@ async function writeContact(contact: TelegramContact, requested: boolean): Promi
   }
 }
 
+async function linkedIdentityId(telegramId: number): Promise<string | null> {
+  const account = await document.send(new GetCommand({
+    TableName: env("ACCESS_TABLE_NAME"),
+    Key: { pk: `TELEGRAM#${telegramId}`, sk: "ACCOUNT" },
+  }));
+  const identityId = account.Item?.identity_id;
+  return typeof identityId === "string" ? identityId : null;
+}
+
 export const accessStore: AccessStore = {
   observe: (contact) => writeContact(contact, false),
   request: (contact) => writeContact(contact, true),
+  identityId: linkedIdentityId,
   hasPermission: async (telegramId, permission) => {
-    const account = await document.send(new GetCommand({
-      TableName: env("ACCESS_TABLE_NAME"),
-      Key: { pk: `TELEGRAM#${telegramId}`, sk: "ACCOUNT" },
-    }));
-    const identityId = account.Item?.identity_id;
-    if (typeof identityId !== "string") return false;
+    const identityId = await linkedIdentityId(telegramId);
+    if (identityId === null) return false;
     const profile = await document.send(new GetCommand({
       TableName: env("ACCESS_TABLE_NAME"),
       Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" },

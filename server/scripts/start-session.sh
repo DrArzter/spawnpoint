@@ -168,6 +168,11 @@ fi
 # the game with the port. A single configured string used to carry Minecraft's
 # port for every game — and a caller-supplied address could never be right for
 # a strategy whose address does not exist before the instance starts.
+#
+# The generation rides along for the same reason the release does: the host is
+# the only party that knows which wipe it just reconciled, and the release
+# pointer this start proves is kept per generation. A session on the legacy
+# layout reports none, and the machine then has nothing to commit.
 if [[ "${session_format}" == "json" ]]; then
   jq -cn \
     --arg connectivity "${session_connectivity}" \
@@ -176,6 +181,7 @@ if [[ "${session_format}" == "json" ]]; then
     --arg world "${world_name}" \
     --arg reconcile "${reconcile_status}" \
     --arg desired_release "${desired_release}" \
+    --arg generation_id "${WORLD_GENERATION_ID:-}" \
     --arg zerotier_network "${CONNECTIVITY_NETWORK_ID,,}" \
     '{
       connectivity: $connectivity,
@@ -183,7 +189,8 @@ if [[ "${session_format}" == "json" ]]; then
       connection_address: $connection_address,
       world: $world,
       reconcile: $reconcile,
-      desired_release: (if $desired_release == "null" then null else $desired_release end)
+      desired_release: (if $desired_release == "null" then null else $desired_release end),
+      generation_id: (if $generation_id == "" then null else $generation_id end)
     } + (if $zerotier_network == "" then {} else {zerotier_network: $zerotier_network} end)' >&3
 else
   {
@@ -196,5 +203,6 @@ else
     printf 'world=%s\n' "${world_name}"
     printf 'reconcile=%s\n' "${reconcile_status}"
     printf 'desired_release=%s\n' "${desired_release}"
+    printf 'generation_id=%s\n' "${WORLD_GENERATION_ID:-}"
   } >&3
 fi

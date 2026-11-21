@@ -45,6 +45,15 @@ data "aws_iam_policy_document" "lifecycle_v2_start" {
     resources = [local.lifecycle_v2_coordinator_arn]
   }
 
+  # A start that reached ready records the release it proved, which is what
+  # the active pointer means. Promotion does the same through the same
+  # function; this grant is the start's half of it.
+  statement {
+    sid       = "RecordProvenRelease"
+    actions   = ["lambda:InvokeFunction"]
+    resources = [local.release_state_function_arn]
+  }
+
   statement {
     sid       = "StartOnlyAcceptedHostOperations"
     actions   = ["states:StartExecution"]
@@ -163,6 +172,7 @@ resource "aws_sfn_state_machine" "lifecycle_v2_start" {
   type     = "STANDARD"
   definition = templatefile("${path.module}/../../workflows/start-server-v2.asl.json.tftpl", {
     coordinator_function_arn   = local.lifecycle_v2_coordinator_arn
+    release_state_function_arn = local.release_state_function_arn
     start_v1_state_machine_arn = local.start_state_machine_arn
     stop_v1_state_machine_arn  = local.stop_state_machine_arn
     watchdog_state_machine_arn = local.lifecycle_v2_watchdog_arn

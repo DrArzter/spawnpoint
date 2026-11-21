@@ -53,6 +53,14 @@ jq -e . >/dev/null <<<"${json_output}"
 [[ "$(jq -r .zerotier_network <<<"${json_output}")" == "b6079f73c6698651" ]]
 [[ "$(jq -r .world <<<"${json_output}")" == "world" ]]
 [[ "$(jq -r .desired_release <<<"${json_output}")" == "null" ]]
+# The wipe the host reconciled, so whoever records the proven release knows
+# which generation it belongs to. A session with no generation reports null
+# rather than an empty string, and the machine then records nothing.
+[[ "$(jq -r .generation_id <<<"${json_output}")" == "null" ]]
+grep -Fxq 'generation_id=' <<<"${text_output}"
+generation="gen-$(printf '0%.0s' $(seq 1 32))"
+with_generation="$(WORLD_GENERATION_ID="${generation}" SESSION_FORMAT=json "${session}" 2>/dev/null)"
+[[ "$(jq -r .generation_id <<<"${with_generation}")" == "${generation}" ]]
 grep -Fxq 'container chatter on stdout' "${fixture}/json.err"
 grep -Fxq 'container chatter on stderr' "${fixture}/json.err"
 

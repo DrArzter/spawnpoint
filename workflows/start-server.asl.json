@@ -350,6 +350,8 @@
         "connectivity.$": "$.session.summary.connectivity",
         "connectionHost.$": "$.session.summary.connection_host",
         "connectionAddress.$": "$.session.summary.connection_address",
+        "generationId.$": "$.session.summary.generation_id",
+        "desiredRelease.$": "$.session.summary.desired_release",
         "commandId.$": "$.observed.command.Command.CommandId",
         "commandOutput.$": "$.observed.invocation.StandardOutputContent"
       },

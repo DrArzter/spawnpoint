@@ -614,6 +614,46 @@
         }
       },
       "ResultPath": null,
+      "Next": "Route Release Commit"
+    },
+    "Route Release Commit": {
+      "Type": "Choice",
+      "Comment": "A start that reached ready is the evidence the active release is defined by. Only promotion used to record it, so a world created from a preset and simply started stayed 'ready for first start' for ever. A host on the legacy layout reports no generation, and there is then nothing to record against.",
+      "Choices": [
+        {
+          "And": [
+            { "Variable": "$.hostStart.Output.generationId", "IsPresent": true },
+            { "Variable": "$.hostStart.Output.generationId", "IsNull": false },
+            { "Variable": "$.hostStart.Output.desiredRelease", "IsPresent": true },
+            { "Variable": "$.hostStart.Output.desiredRelease", "IsNull": false }
+          ],
+          "Next": "Commit Active Release"
+        }
+      ],
+      "Default": "Release Start Lease"
+    },
+    "Commit Active Release": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${release_state_function_arn}",
+        "Payload": {
+          "action": "commit",
+          "worldId.$": "$.request.worldId",
+          "generationId.$": "$.hostStart.Output.generationId",
+          "release.$": "$.hostStart.Output.desiredRelease",
+          "operationId.$": "$.request.operationId"
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Comment": "The session is ready whatever the pointer says. Bookkeeping that fails leaves the previous active release standing and must not undo a start.",
+          "ResultPath": null,
+          "Next": "Release Start Lease"
+        }
+      ],
       "Next": "Release Start Lease"
     },
     "Release Start Lease": {

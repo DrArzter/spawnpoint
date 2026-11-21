@@ -74,7 +74,13 @@ test("V2 start owns lifecycle around the accepted V1 host operation", async () =
     "placed sessions must not reserve the unrelated configured host",
   );
   assert.equal(state(definition, "Reserve Slot Zero").Next, "Mark Session Ready");
-  assert.equal(state(definition, "Mark Session Ready").Next, "Release Start Lease");
+  // The release a start proved is recorded between the two, and a world with
+  // no generation to record against skips it. Neither path may leave the lease
+  // held, so both land on the same release.
+  assert.equal(state(definition, "Mark Session Ready").Next, "Route Release Commit");
+  assert.equal(state(definition, "Route Release Commit").Default, "Release Start Lease");
+  assert.equal(state(definition, "Commit Active Release").Next, "Release Start Lease");
+  assert.equal(state(definition, "Commit Active Release").Catch?.[0]?.Next, "Release Start Lease");
   assert.equal(state(definition, "Release Start Lease").Next, "Start Session Watchdog");
   assert.equal(state(definition, "Start Session Watchdog").Resource, "arn:aws:states:::aws-sdk:sfn:startExecution");
   assert.equal(state(definition, "Start Session Watchdog").Next, "Ready");

@@ -22,7 +22,8 @@ import { elapsed } from "../src/skins/cloud/ui/Flashbar.tsx";
 import { frameItems } from "../src/skins/cloud/ui/Frame.tsx";
 import { Grid } from "../src/skins/cloud/ui/Grid.tsx";
 import { Indicator } from "../src/skins/cloud/ui/Indicator.tsx";
-import { ListColumn, ListItemPerson, ListItemWorld } from "../src/skins/cloud/ui/ListColumn.tsx";
+import { MenuButton } from "../src/skins/cloud/ui/MenuButton.tsx";
+import { ListColumn, ListItemIcon, ListItemPerson, ListItemWorld } from "../src/skins/cloud/ui/ListColumn.tsx";
 import { Notice } from "../src/skins/cloud/ui/Notice.tsx";
 import { Overflow } from "../src/skins/cloud/ui/Overflow.tsx";
 import { PageHeader } from "../src/skins/cloud/ui/PageHeader.tsx";
@@ -32,10 +33,12 @@ import { TablePreferences } from "../src/skins/cloud/ui/Preferences.tsx";
 import { Segmented } from "../src/skins/cloud/ui/Segmented.tsx";
 import { SidePanel } from "../src/skins/cloud/ui/SidePanel.tsx";
 import { Skeleton, SkeletonGroup, SkeletonRows } from "../src/skins/cloud/ui/Skeleton.tsx";
+import { SplitPage } from "../src/skins/cloud/ui/SplitPage.tsx";
 import { StatCard } from "../src/skins/cloud/ui/StatCard.tsx";
 import { Status } from "../src/skins/cloud/ui/Status.tsx";
 import { nextSort, Table } from "../src/skins/cloud/ui/Table.tsx";
 import { TabPanel, Tabs } from "../src/skins/cloud/ui/Tabs.tsx";
+import { Tick } from "../src/skins/cloud/ui/Tick.tsx";
 import { Tile, Tiles } from "../src/skins/cloud/ui/Tile.tsx";
 import { TrackList, TrackTitle } from "../src/skins/cloud/ui/TrackList.tsx";
 
@@ -320,4 +323,63 @@ test("Tiles, Pager, preferences, skeleton rows and the stat card", () => {
   const stat = html(createElement(StatCard, { label: "CPU", value: null }));
   assert.match(stat, /<section aria-label="CPU" class="c-card c-stat">/);
   assert.match(stat, /—/);
+});
+
+// --- review pass 1 ---------------------------------------------------------------
+
+test("MenuButton and ActionButton: a trigger says it opens a menu in the static markup; a row button can carry its own name", () => {
+  const markup = html(createElement(MenuButton, { id: "worlds.bulk", label: "Actions", groups: [{ actions: [action("session.start", "Start", noop)] }] }));
+  assert.match(markup, /aria-controls="[^"]+" aria-expanded="false" aria-haspopup="menu"[^>]*data-action="worlds.bulk"/);
+  assert.match(markup, /data-action="session.start"/, "the menu's Actions are in the markup while it is closed");
+  assert.match(html(createElement(ActionButton, { action: action("whitelist.remove.Mira", "Remove", noop, { icon: "close" }), iconOnly: true, name: "Remove Mira" })), /aria-label="Remove Mira"/);
+  assert.match(html(createElement(LinkButton, { href: "#/worlds/mc", label: "Table view", icon: "table_rows", iconOnly: true })), /aria-label="Table view" class="c-btn c-btn-default c-btn-icon" data-tip="Table view"/);
+});
+
+test("RadioCards: a card can choose by a model Action, and the current one reads checked, not refused", () => {
+  const markup = html(createElement(RadioCards<"console" | "terminal">, {
+    legend: "Look", name: "look", value: "console", onChange: noop,
+    options: [
+      { value: "console", label: "Cloud console", action: action("look.console", "Cloud console", noop, { disabled: true, hint: "The face the console wears now" }) },
+      { value: "terminal", label: "Terminal", action: action("look.terminal", "Terminal", noop) },
+    ],
+  }));
+  assert.match(markup, /checked="" data-action="look.console"|data-action="look.console"[^>]*checked=""/);
+  assert.match(markup, /data-action="look.terminal"/);
+  assert.doesNotMatch(markup, /c-radio-disabled/, "the current look is not drawn as refused");
+  assert.match(markup, /--c-radio-count:2/, "cards share one row in equal columns");
+});
+
+test("SplitPage, list items with icons and the compact-only track line", () => {
+  const split = html(createElement(SplitPage, { list: "list", selected: true }, "pane"));
+  assert.match(split, /<div class="c-split" data-selected="true"><div class="c-split-list">list<\/div><div class="c-split-pane" data-pane="">pane<\/div><\/div>/);
+  const item = html(createElement(ListItemIcon, { href: "#/access/roles", current: false, icon: "admin_panel_settings", name: "Roles" }));
+  assert.match(item, /c-listitem-icon/);
+  assert.doesNotMatch(item, /c-avatar/, "a place is not a person: no initials");
+  assert.match(html(createElement(ListItemWorld, { href: "#", current: false, name: "R", players: null, hosting: "", status: { kind: "ok", label: "Online" }, line: "", standalone: true })), /c-listitem-slot c-listitem-standalone/);
+  const compact = html(createElement(TrackTitle, { title: "Password", compactLine: "a@example.com" }));
+  assert.match(compact, /<span class="c-track-line c-track-compact">a@example.com<\/span>/, "only the narrow layout draws a second line");
+});
+
+test("Notice detail as a tooltip, the dialog footer start, a card's meta, an icon indicator and a tick", () => {
+  const notice = html(createElement(Notice, { notice: { id: "port", tone: "warning", title: "The game port is public.", description: "Set a password." }, detail: "tooltip" }));
+  assert.match(notice, /aria-label="Set a password." class="c-notice-more" data-tip="Set a password."/);
+  assert.doesNotMatch(notice, /c-notice-detail/);
+  const panel = html(createElement(SidePanel, { title: "Game settings", cancel: action("sheet.close", "Cancel", noop), start: createElement(ActionButton, { action: action("game-settings.defaults", "Restore defaults", noop) }) }));
+  assert.ok(panel.indexOf("c-dialog-start") < panel.indexOf('data-action="sheet.close"'), "the start slot comes before Cancel");
+  assert.match(html(createElement(Card, { title: "Online now", count: 1, meta: "3 players" }, "x")), /<\/h2><span class="c-card-meta">3 players<\/span>/);
+  assert.match(html(createElement(Indicator, { icon: "bolt", label: "Fleet" })), /aria-label="Fleet" class="c-indicator c-indicator-quiet"/);
+  assert.match(html(createElement(Tick, { value: 3 })), /<span class="c-tick">3<\/span>/);
+  assert.match(html(createElement(Tick, { value: null })), /—/);
+});
+
+test("DetailList: a hint is its own faint line, and a detail without a key spans by label", () => {
+  const markup = html(createElement(DetailList, {
+    spans: { Operation: "full" },
+    details: [
+      { key: "host", label: "Compute host", value: { type: "status", status: { kind: "ok", label: "Running" } }, hint: "Shared game host · m7i-flex.large in eu-central-1a" },
+      { label: "Operation", value: { type: "text", text: "Starting session" } },
+    ],
+  }));
+  assert.match(markup, /<span class="c-detail-value">.*Running.*<\/span><span class="c-detail-hint" data-tip="Shared game host · m7i-flex.large in eu-central-1a" tabindex="0"><span class="c-detail-hint-text">/);
+  assert.match(markup, /c-detail-item c-span-full/);
 });

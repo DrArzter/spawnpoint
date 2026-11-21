@@ -42,10 +42,10 @@ export async function launch() {
     throw new Error(`chrome ${why}${complaints ? `\n${complaints.trimEnd()}` : ""}`);
   }
 
-  // Only the local debugging port may be dialled.
-  const target = new URL(endpoint);
-  if (target.protocol !== "ws:" || target.hostname !== "127.0.0.1" || target.port !== String(port)) throw new Error(`chrome offered an unexpected endpoint: ${target.origin}`);
-  const ws = new WebSocket(target.href);
+  // Dial the local port with the browser id alone; nothing else of the reply is used.
+  const browserId = /^ws:\/\/127\.0\.0\.1:\d+\/devtools\/browser\/([0-9a-f-]{36})$/.exec(endpoint)?.[1];
+  if (!browserId) throw new Error("chrome offered an unexpected debugging endpoint");
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/devtools/browser/${browserId}`);
   await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
   let nextId = 0;
   const pending = new Map();

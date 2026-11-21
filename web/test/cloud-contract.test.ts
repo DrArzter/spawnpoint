@@ -114,6 +114,7 @@ test("cloud: the worlds-by-state bar fills each state kind on its own, so online
   const markup = renderToStaticMarkup(createElement(cloudSkin.Worlds, { model: { ...worlds, rows: [online, ready] } }));
   assert.match(markup, /class="c-bystate-seg c-bystate-ok"/);
   assert.match(markup, /class="c-bystate-seg c-bystate-ready"/);
+  assert.match(markup, /class="c-bystate-seg c-bystate-key c-bystate-ready"/, "the legend key wears its segment's fill");
 });
 
 test("cloud: a state handed over by the game home belongs to that history entry only", () => {

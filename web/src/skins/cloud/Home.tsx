@@ -106,7 +106,13 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
                 rowKey={(row) => row.world.id}
                 rows={online}
                 tracks={[
-                  { id: "world", header: "World", width: "minmax(180px, 1fr)", compactWidth: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle compactLine={row.address ? <Address address={row.address} /> : undefined} href={row.href} line={<><HostingChip row={row} /><span className="c-mono">{row.releaseSummary}</span></>} title={row.world.displayName} /> },
+                  { id: "world", header: "World", width: "minmax(180px, 1fr)", compactWidth: "minmax(0, 1fr)", kind: "stack", render: (row) => (
+                    // Under 1024px the Address track drops; the address and its copy take a third line of their own (spec §6.1).
+                    <span className="c-home-world">
+                      <TrackTitle href={row.href} line={<><HostingChip row={row} /><span className="c-mono">{row.releaseSummary}</span></>} title={row.world.displayName} />
+                      {row.address && <span className="c-home-world-address"><Address address={row.address} copy /></span>}
+                    </span>
+                  ) },
                   { id: "uptime", header: "Uptime", width: "110px", kind: "optional", render: (row) => <Uptime since={row.launchedAt} /> },
                   { id: "address", header: "Address", width: "minmax(260px, 1.6fr)", kind: "optional", render: (row) => row.address ? <Address address={row.address} copy /> : <span className="c-faint">{row.addressAbsent}</span> },
                   { id: "players", header: "Players", width: "80px", compactWidth: "auto", kind: "num", render: (row) => <Players count={row.players} /> },
@@ -216,7 +222,9 @@ function ByState({ rows, list, onState }: Readonly<{ rows: readonly WorldRow[]; 
       <div className="c-bystate-legend">
         {states.map(({ status, count }) => (
           <a href={list} key={status.label} onClick={() => onState(status.label)}>
-            <Status status={status} />
+            {/* The key wears its segment's fill, so it reads like the bar. */}
+            <i aria-hidden="true" className={`c-bystate-seg c-bystate-key c-bystate-${status.kind}`} />
+            <span>{status.label}</span>
             <b>{count}</b>
           </a>
         ))}

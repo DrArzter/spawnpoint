@@ -437,7 +437,7 @@ function OwnerCard({ users }: Readonly<{ users: UsersModel }>) {
   const bootstrap = users.bootstrap;
   const claimed = bootstrap.state === "claimed";
   return (
-    <Card actions={<Status status={claimed ? { kind: "ok", label: "Claimed" } : { kind: "warning", label: "Unclaimed" }} variant="pill" />} body={claimed ? "kv" : "pad"} title="Initial owner">
+    <Card actions={claimed ? undefined : <Status status={{ kind: "warning", label: "Unclaimed" }} variant="pill" />} body={claimed ? "kv" : "pad"} title="Initial owner">
       {bootstrap.state === "claimed" ? (
         <DetailList columns="fit" details={[
           { label: "Owner", value: { type: "text", text: users.members.find((row) => row.member.id === bootstrap.ownerId)?.member.name ?? bootstrap.ownerId } },

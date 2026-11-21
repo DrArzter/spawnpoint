@@ -45,10 +45,11 @@ const profile: ProfileModel = {
 const fleet: ConnectionFieldsModel = { placement: "fleet", setPlacement: noop, fleetAvailable: true, connectivity: "raw", setConnectivity: noop, dnsAvailable: true };
 const persistent: ConnectionFieldsModel = { ...fleet, placement: "configured", connectivity: "zerotier" };
 
-test("profile: the name is the title at the start, the role chip is last at the end edge", () => {
+test("profile: the name is the title, the role chip follows it at the start, and the verbs keep the end edge", () => {
   const markup = renderToStaticMarkup(createElement(Profile, { model: profile }));
   assert.match(markup, /<h1[^>]*>Kai Ashby/);
-  assert.match(markup, /class="c-page-actions">.*data-action="profile\.signout".*<span class="c-chip"[^>]*>.*?Owner.*?<\/span><\/div><\/header>/);
+  assert.match(markup, /<\/nav><span class="c-chip"[^>]*>.*?Owner/, "the role sits after the title");
+  assert.doesNotMatch(markup.slice(markup.indexOf('class="c-page-actions"')), /c-chip/, "no chip among the verbs");
   assert.match(markup, /aria-label="Copy identity ID"/);
   const roleless = renderToStaticMarkup(createElement(Profile, { model: { ...profile, role: undefined } }));
   assert.doesNotMatch(roleless, /c-chip/, "no role, no chip");

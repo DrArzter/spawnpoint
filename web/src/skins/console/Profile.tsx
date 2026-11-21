@@ -27,7 +27,7 @@ import { SkeletonRows } from "./ui/Skeleton";
 import { useToast } from "./ui/Toast";
 import { TrackList, TrackTitle, type Track } from "./ui/TrackList";
 
-// Profile (spec §6.6): the name at the start, the role last at the end edge (on a phone too); the skin's only theme control.
+// Profile: the name, its role and its id at the start, the verbs at the end edge; the skin's only theme control.
 export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
   const { member, role, viewer } = model;
   return (
@@ -36,13 +36,15 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
         actions={<>
           {model.openInBrowser && <ActionButton action={model.openInBrowser} />}
           <ActionButton action={model.signOut} />
-          {role && <Chip icon="shield_person">{role.name}</Chip>}
         </>}
         after={(
+          <>
+          {role && <Chip icon="shield_person">{role.name}</Chip>}
           <span className="c-profile-id">
             <span className="c-mono c-faint" data-tip="Identity ID" tabIndex={0}>{member.id}</span>
             <Copy value={member.id} what="identity ID" />
           </span>
+          </>
         )}
         lead={<Avatar name={member.name} photoUrl={viewer.photoUrl} size="xl" />}
         title={member.name}

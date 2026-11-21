@@ -23,6 +23,11 @@ html[data-skin="console"] .c-detail-item {
   min-width: 0;
 }
 
+/* A lone item takes the whole row, so its value is not cut while the second column stays empty. */
+html[data-skin="console"] .c-detail > .c-detail-item:only-child {
+  grid-column: 1 / -1;
+}
+
 html[data-skin="console"] .c-detail > .c-span-w2 {
   grid-column: span 2;
 }
@@ -121,7 +126,12 @@ html[data-skin="console"] .c-detail-hint-text {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  html[data-skin="console"] .c-detail > .c-span-w2 {
+  /* A lone item takes the whole row, so its value is not cut while the second column stays empty. */
+html[data-skin="console"] .c-detail > .c-detail-item:only-child {
+  grid-column: 1 / -1;
+}
+
+html[data-skin="console"] .c-detail > .c-span-w2 {
     grid-column: auto;
   }
 }

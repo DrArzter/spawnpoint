@@ -85,9 +85,9 @@ const onlyWidths = process.env.AUDIT_WIDTHS ? new Set(process.env.AUDIT_WIDTHS.s
 const LAYOUT = {
   // PageHeader and the terminal page head: who this is and what can be done
   // about it share one line from the phone step up.
-  oneLine: [[".page-title-row", 600], [".t-page-head", 600], [".c-page-header", 760]],
+  oneLine: [[".page-title-row", 600], [".t-page-head", 600], [".c-page-header", 760], [".c-tracklist-row", 1024]],
   // Details rows: a label beside its value shares the baseline of the value's first line.
-  pairs: [".details-row", ".t-detail"],
+  pairs: [".details-row", ".t-detail", ".c-detail-item"],
   // Cards and panels: what starts a line inside one starts on one edge — the
   // title, a search field, a table's first column, the detail labels. A
   // nested card keeps its own edge.
@@ -96,7 +96,8 @@ const LAYOUT = {
     // An empty table's one cell is its state, centred across the table, not a column.
     starts: [".card-header h2", ".filter-bar .search", ".table th:first-child", ".table td:first-child:not(.table-empty)", ".details-row > dt",
       ".t-filter-row .t-field", ".t-table th:first-child", ".t-table tr:not(.t-table-state) > td:first-child", ".t-detail > dt",
-      ".c-card-head h2"],
+      ".c-card-head h2", ".c-table th:first-child", ".c-table tr:not(.c-table-empty) > td:first-child", ".c-tracklist-head > :first-child",
+      ".c-tracklist-row > :first-child"],
   },
   // EmptyState and the terminal Empty sit in the middle of their box.
   centred: [".empty", ".t-empty", ".c-empty"],

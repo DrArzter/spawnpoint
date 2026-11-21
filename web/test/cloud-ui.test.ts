@@ -9,19 +9,35 @@ import { action } from "../src/core/actions.ts";
 import type { ShellModel } from "../src/core/models.ts";
 import { flashItems, pageKey, transitionKind } from "../src/skins/cloud/Shell.tsx";
 import { ActionButton, LinkButton } from "../src/skins/cloud/ui/ActionButton.tsx";
+import { Address } from "../src/skins/cloud/ui/Address.tsx";
 import { relativeTime } from "../src/skins/cloud/ui/Ago.tsx";
 import { Card } from "../src/skins/cloud/ui/Card.tsx";
+import { Copy } from "../src/skins/cloud/ui/Copy.tsx";
+import { DetailList } from "../src/skins/cloud/ui/DetailList.tsx";
 import { Dialog } from "../src/skins/cloud/ui/Dialog.tsx";
 import { Empty, LoadError } from "../src/skins/cloud/ui/Empty.tsx";
+import { Checkbox, Field, RadioCards, Select, TextInput, Toggle } from "../src/skins/cloud/ui/Fields.tsx";
+import { applyFilter, FilterBar } from "../src/skins/cloud/ui/FilterBar.tsx";
 import { elapsed } from "../src/skins/cloud/ui/Flashbar.tsx";
 import { frameItems } from "../src/skins/cloud/ui/Frame.tsx";
 import { Grid } from "../src/skins/cloud/ui/Grid.tsx";
+import { Indicator } from "../src/skins/cloud/ui/Indicator.tsx";
+import { ListColumn, ListItemPerson, ListItemWorld } from "../src/skins/cloud/ui/ListColumn.tsx";
 import { Notice } from "../src/skins/cloud/ui/Notice.tsx";
 import { Overflow } from "../src/skins/cloud/ui/Overflow.tsx";
 import { PageHeader } from "../src/skins/cloud/ui/PageHeader.tsx";
+import { pageOf, Pager } from "../src/skins/cloud/ui/Pager.tsx";
+import { Person } from "../src/skins/cloud/ui/Person.tsx";
+import { TablePreferences } from "../src/skins/cloud/ui/Preferences.tsx";
+import { Segmented } from "../src/skins/cloud/ui/Segmented.tsx";
 import { SidePanel } from "../src/skins/cloud/ui/SidePanel.tsx";
-import { SkeletonGroup, Skeleton } from "../src/skins/cloud/ui/Skeleton.tsx";
+import { Skeleton, SkeletonGroup, SkeletonRows } from "../src/skins/cloud/ui/Skeleton.tsx";
+import { StatCard } from "../src/skins/cloud/ui/StatCard.tsx";
 import { Status } from "../src/skins/cloud/ui/Status.tsx";
+import { nextSort, Table } from "../src/skins/cloud/ui/Table.tsx";
+import { TabPanel, Tabs } from "../src/skins/cloud/ui/Tabs.tsx";
+import { Tile, Tiles } from "../src/skins/cloud/ui/Tile.tsx";
+import { TrackList, TrackTitle } from "../src/skins/cloud/ui/TrackList.tsx";
 
 // The cloud primitives' contracts: semantic markup, accessible names, stable
 // classes and every Action reachable with its data-action (AGENTS.md).
@@ -140,4 +156,168 @@ test("Shell helpers: a world's tab is not a page; operations and outcomes become
   assert.equal(flashItems(shell, { items: [], dismiss: noop }, "rostik")[0]!.since, undefined, "the world's own page shows its elapsed time once, in the hero");
   assert.equal(elapsed("2026-11-21T10:00:00Z", Date.parse("2026-11-21T10:01:05Z")), "1:05");
   assert.equal(relativeTime("2026-11-21T10:00:00Z", Date.parse("2026-11-21T10:08:00Z")), "8 min ago");
+});
+
+// --- S2 primitives ---------------------------------------------------------------
+
+type Row = Readonly<{ id: string; name: string; players: number; act: ReturnType<typeof action> }>;
+const tableRows: Row[] = [{ id: "a", name: "Rostik", players: 3, act: action("world.invite", "Invite", noop) }, { id: "b", name: "Cinder", players: 0, act: action("world.invite", "Invite", noop) }];
+
+test("Table: labels once in the header, one end-edge action column, records label their cells", () => {
+  const markup = html(createElement(Table<Row>, {
+    label: "Worlds",
+    rows: tableRows,
+    rowKey: (row) => row.id,
+    selected: (row) => row.id === "a",
+    columns: [
+      { id: "name", header: "Name", kind: "lead", render: (row) => createElement("a", { href: `#/${row.id}` }, row.name), sort: "ascending", onSort: noop },
+      { id: "players", header: "Players", kind: "num", render: (row) => row.players },
+      { id: "actions", header: "Actions", kind: "act", render: (row) => createElement(ActionButton, { action: row.act, size: "sm" }) },
+    ],
+  }));
+  assert.match(markup, /<table aria-label="Worlds" class="c-table">/);
+  assert.equal((markup.match(/<th /g) ?? []).length, 3, "labels once, in the header");
+  assert.match(markup, /aria-sort="ascending"/);
+  assert.match(markup, /<button class="c-sort"/);
+  assert.match(markup, /<span class="c-sr">Actions<\/span>/);
+  assert.match(markup, /class="c-col-num" data-label="Players"/);
+  assert.doesNotMatch(markup, /c-col-act" data-label/, "the action column carries no record label");
+  assert.match(markup, /<tr class="c-row-selected">/);
+  assert.equal((markup.match(/data-action="world.invite"/g) ?? []).length, 2);
+  const empty = html(createElement(Table<Row>, { label: "Worlds", rows: [], rowKey: (row) => row.id, columns: [{ id: "n", header: "Name", render: (row) => row.name }], empty: createElement(Empty, { icon: "public", title: "No worlds", size: "sm" }) }));
+  assert.match(empty, /<tr class="c-table-empty"><td colSpan="1">/i);
+  assert.match(html(createElement(Table<Row>, { label: "Worlds", rows: [], loading: true, rowKey: (row) => row.id, columns: [{ id: "n", header: "Name", render: (row) => row.name }] })), /<tbody aria-busy="true"/);
+  assert.equal(nextSort("ascending"), "descending");
+  assert.equal(nextSort(null), "ascending");
+});
+
+test("TrackList: one grid of shared tracks, the header once, rows as table rows", () => {
+  const markup = html(createElement(TrackList<Row>, {
+    label: "Operations",
+    rows: tableRows,
+    rowKey: (row) => row.id,
+    tracks: [
+      { id: "what", header: "Operation", width: "minmax(0, 1fr)", kind: "stack", render: (row) => createElement(TrackTitle, { title: row.name, href: "#/x", line: "op-1", compactLine: "3 min" }) },
+      { id: "for", header: "Running for", width: "120px", kind: "optional", render: () => "3 min" },
+      { id: "act", header: "Actions", width: "auto", kind: "end", quietHeader: true, render: (row) => createElement(ActionButton, { action: row.act, size: "sm" }) },
+    ],
+  }));
+  assert.match(markup, /role="table"/);
+  assert.match(markup, /--c-tracks:minmax\(0, 1fr\) 120px auto;--c-tracks-compact:minmax\(0, 1fr\) auto/);
+  assert.equal((markup.match(/role="columnheader"/g) ?? []).length, 3);
+  assert.equal((markup.match(/role="row"/g) ?? []).length, 3);
+  assert.match(markup, /c-track c-track-optional/);
+  assert.match(markup, /<a class="c-track-title" href="#\/x">Rostik<\/a>/);
+});
+
+test("ListColumn: a filter field, chips with counts, the current row marked", () => {
+  const markup = html(createElement(ListColumn, {
+    label: "Worlds of Minecraft",
+    filter: { value: "", set: noop, placeholder: "Filter worlds" },
+    chips: [{ id: "all", label: "All", count: 2, pressed: true, onPress: noop }],
+    groups: [{ id: "g", items: [
+      createElement(ListItemWorld, { key: "a", href: "#/a", current: true, name: "Rostik", players: 3, hosting: "Fleet", status: { kind: "ok", label: "Online" }, line: "1.2 · wipe #2" }),
+      createElement(ListItemPerson, { key: "p", href: "#/p", current: false, name: "Nikita", meta: "Viewer", account: "@nikita", accountIcon: "send" }),
+    ] }],
+  }));
+  assert.match(markup, /<nav aria-label="Worlds of Minecraft" class="c-lcol">/);
+  assert.match(markup, /aria-label="Filter worlds"/);
+  assert.match(markup, /aria-pressed="true" class="c-lcol-chip"/);
+  assert.match(markup, /aria-current="true" class="c-listitem c-listitem-world"/);
+  assert.match(markup, /c-listitem c-listitem-person/);
+});
+
+test("DetailList: every value kind, hints after the value, explanations as tooltips, keys left out", () => {
+  const markup = html(createElement(DetailList, {
+    omit: ["observed"],
+    spans: { address: "w2" },
+    details: [
+      { key: "session", label: "Session", value: { type: "status", status: { kind: "ok", label: "Online" } }, explain: "One at a time" },
+      { key: "observed", label: "Last observed", value: { type: "time", at: "2026-11-21T10:00:00Z" } },
+      { key: "world-id", label: "World ID", value: { type: "text", text: "rostik", mono: true }, copy: "rostik" },
+      { key: "release", label: "Release", value: { type: "release", active: "1.2", desired: "1.3" } },
+      { key: "address", label: "Address", value: { type: "address", address: { value: "1.2.3.4:25565", connectivity: "raw", network: "Public address." } } },
+      { key: "preset", label: "Preset", value: { type: "preset", name: "Industrial", source: { commit: "abcdef0", short: "abcdef0", href: "https://x" } } },
+      { key: "launched", label: "Launched", value: { type: "time", at: null } },
+      { key: "players", label: "Players online", value: { type: "number", value: 3 } },
+      { key: "wipe", label: "Current wipe", value: { type: "absent", text: "No wipes yet" }, hint: "Changed", hintAttention: true },
+    ],
+  }));
+  assert.match(markup, /<dl class="c-detail c-detail-four">/);
+  assert.doesNotMatch(markup, /Last observed/, "a fact shown elsewhere is left out by key");
+  assert.match(markup, /aria-label="One at a time"[^>]*data-tip="One at a time"/);
+  assert.match(markup, /aria-label="Copy World ID"/);
+  assert.match(markup, /data-tip="Desired 1.3"/);
+  assert.match(markup, /c-detail-item c-span-w2/);
+  assert.match(markup, /@abcdef0/);
+  assert.match(markup, /c-detail-hint c-tone-warn/);
+  assert.match(markup, /<span class="c-faint">—<\/span>/, "an unknown time is a dash");
+});
+
+test("Address, Copy, Person and Indicator: one line, names for every icon", () => {
+  const address = html(createElement(Address, { address: { value: "1.2.3.4:25565", connectivity: "zerotier", network: "ZeroTier network." }, copy: true }));
+  assert.match(address, /aria-label="ZeroTier network."[^>]*role="img"/);
+  assert.doesNotMatch(address, />ZeroTier network\.</, "the network is a tooltip, never a line");
+  assert.match(address, /aria-label="Copy address"/);
+  assert.match(html(createElement(Copy, { value: "x", what: "world ID" })), /data-tip="Copy"/);
+  const person = html(createElement(Person, { name: "Nikita Example", detail: "@nikita", detailIcon: "send" }));
+  assert.match(person, /<span aria-hidden="true" class="c-avatar c-avatar-sm">NE<\/span>/);
+  assert.match(person, /c-person-detail/);
+  assert.match(html(createElement(Indicator, { status: { kind: "ok", label: "Granted" } })), /aria-label="Granted" class="c-indicator c-tone-ok" data-tip="Granted" role="img"/);
+});
+
+test("Segmented and Tabs: one value chosen, tied to its panel", () => {
+  const seg = html(createElement(Segmented<"24h" | "7d">, { label: "Range", options: [{ value: "24h", label: "24 hours" }, { value: "7d", label: "7 days" }], value: "7d", onChange: noop }));
+  assert.match(seg, /role="radiogroup"/);
+  assert.match(seg, /aria-checked="true" class="c-segment" role="radio" tabindex="0" type="button"><span>7 days/);
+  const tabs = html(createElement(Tabs<"details" | "wipes">, { label: "World sections", prefix: "w", tabs: [{ id: "details", label: "Details" }, { id: "wipes", label: "Wipes", count: 2 }], value: "wipes", onChange: noop }));
+  assert.match(tabs, /role="tablist"/);
+  assert.match(tabs, /aria-controls="w-panel-wipes" aria-selected="true" class="c-tab" id="w-tab-wipes" role="tab" tabindex="0"/);
+  assert.match(tabs, /c-tab-count">2/);
+  assert.match(html(createElement(TabPanel, { prefix: "w", id: "wipes" }, "x")), /aria-labelledby="w-tab-wipes" class="c-tabpanel" id="w-panel-wipes" role="tabpanel"/);
+});
+
+test("Fields: a label tied to its control, an error tied with aria-describedby", () => {
+  const markup = html(createElement(Field, { label: "Player limit", error: "A whole number from 1 to 100." }, createElement(TextInput, { value: "500", onChange: noop })));
+  const id = markup.match(/<label class="c-field-label" for="([^"]+)"/)?.[1];
+  assert.ok(id);
+  assert.match(markup, new RegExp(`id="${id}" aria-invalid="true" aria-describedby="${id}-error"`));
+  assert.match(markup, new RegExp(`<span class="c-field-error" id="${id}-error">A whole number`));
+  assert.match(html(createElement(Field, { label: "Role" }, createElement(Select, { options: [{ value: "viewer", label: "Viewer" }], value: "viewer", onChange: noop }))), /c-select-chevron/);
+  const toggle = html(createElement(Toggle, { action: action("game-settings.pvp", "PvP", noop, { disabled: true, hint: "Saving" }), checked: true }));
+  assert.match(toggle, /aria-disabled="true" aria-label="PvP" data-action="game-settings.pvp" role="switch" type="checkbox" checked=""/);
+  assert.match(toggle, /data-tip="Saving"/);
+  assert.match(html(createElement(RadioCards<"fleet" | "configured">, { legend: "Hosting", name: "hosting", options: [{ value: "fleet", label: "Fleet" }, { value: "configured", label: "Persistent", disabled: true, hint: "Stop it first" }], value: "fleet", onChange: noop })), /<fieldset class="c-radios"><legend class="c-field-label">Hosting/);
+  assert.match(html(createElement(Checkbox, { checked: "mixed", onChange: noop, label: "Select all", labelHidden: true })), /aria-checked="mixed" aria-label="Select all"/);
+});
+
+test("FilterBar: tokens with remove buttons, a combobox, matches only while filtering, Clear from two tokens", () => {
+  const props = { label: "Filter worlds", properties: [{ id: "hosting", label: "Hosting", values: [{ value: "Fleet", count: 2 }] }], onChange: noop, matches: 1 };
+  const none = html(createElement(FilterBar, { ...props, tokens: [] }));
+  assert.match(none, /role="combobox"/);
+  assert.doesNotMatch(none, /matches?</);
+  const one = html(createElement(FilterBar, { ...props, tokens: [{ property: "hosting", value: "Fleet" }] }));
+  assert.match(one, /aria-label="Remove Hosting Fleet"/);
+  assert.match(one, />1 match</);
+  assert.doesNotMatch(one, /data-action="filter.clear"/);
+  assert.match(html(createElement(FilterBar, { ...props, tokens: [{ property: "hosting", value: "Fleet" }, { property: null, value: "pine" }] })), /data-action="filter.clear"/);
+  const rows = [{ name: "Hollow Pines", hosting: "Fleet" }, { name: "Rostik", hosting: "Persistent" }];
+  assert.deepEqual(applyFilter(rows, [{ property: "hosting", value: "Fleet" }, { property: null, value: "PINE" }], (row, id) => row[id as "hosting"], (row) => row.name).map((row) => row.name), ["Hollow Pines"]);
+});
+
+test("Tiles, Pager, preferences, skeleton rows and the stat card", () => {
+  const tiles = html(createElement(Tiles, { label: "Worlds by state" }, createElement(Tile, { status: { kind: "ok", label: "Online" }, count: 0, pressed: false, onPress: noop })));
+  assert.match(tiles, /aria-pressed="false" class="c-tile" disabled=""/, "a state no world holds cannot be pressed");
+  assert.equal(html(createElement(Pager, { page: 1, pages: 1, onPage: noop })), "", "one page draws no pager");
+  const pager = html(createElement(Pager, { page: 5, pages: 9, onPage: noop }));
+  assert.match(pager, /aria-current="page" aria-label="Page 5"/);
+  assert.match(pager, /…/);
+  assert.deepEqual(pageOf([1, 2, 3, 4, 5], 9, 2), { rows: [5], page: 3, pages: 3 });
+  const prefs = html(createElement(TablePreferences, { pageSize: { value: 25, set: noop } }));
+  assert.match(prefs, /aria-haspopup="menu"/);
+  assert.match(prefs, /role="menuitemradio"/);
+  assert.match(html(createElement(SkeletonRows, { columns: 3, rows: 2 })), /aria-busy="true"/);
+  const stat = html(createElement(StatCard, { label: "CPU", value: null }));
+  assert.match(stat, /<section aria-label="CPU" class="c-card c-stat">/);
+  assert.match(stat, /—/);
 });

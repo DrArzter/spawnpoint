@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>fixture</title><style>body{margin:0;font:16px/24px Arial,sans-serif;background:#fff;color:#111}main{padding:16px}button{font:inherit;padding:6px 12px;background:#1a73e8;color:#fff;border:0;border-radius:4px}</style></head><body><main><!-- M9: a fault inside a dialog the page opens; the page under the dialog is not a finding. -->
 <p>World list: Rostik, Vanilla, Megabase. Pressing Create world opens the form.</p>
 <button data-action="world.create" onclick="document.getElementById('d').showModal()">Create world</button>
-<dialog id="d" style="width:280px"><h2 style="margin:0 0 8px">Create world</h2><div style="position:relative"><label>Name</label><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" style="position:absolute;left:12px;top:2px"><rect width="24" height="24"/></svg></div></dialog>
+<dialog id="d" style="width:280px"><h2 style="margin:0 0 8px">Create world</h2><div style="position:relative"><label>Name</label><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" style="position:absolute;left:12px;top:2px"><rect width="24" height="24"/></svg></div></dialog> <!-- NOSONAR a label with no control is the fault this fixture shows -->
 </main></body></html>

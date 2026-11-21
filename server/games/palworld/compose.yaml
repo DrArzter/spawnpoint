@@ -1,0 +1,63 @@
+# Palworld session. The image is reused packaging (ADR-0005): it installs the
+# dedicated server with SteamCMD at start, renders PalWorldSettings.ini from its
+# environment, and on SIGTERM saves over the REST API, then shuts the server
+# down over it. That is what makes our stop contract safe here.
+# thijsvanloef/palworld-server-docker 2.8.1, built 2026-10-23; the amd64 entry
+# of this index is what a host runs.
+services:
+  palworld:
+    image: thijsvanloef/palworld-server-docker@sha256:86fc7470949f6fcc931cb6443f61facc79bacc09e3f40d46e628d9e1ef6e56cd
+    ports:
+      # The host port is the session's slot (ADR-0054); the container's is fixed.
+      - "${SPAWNPOINT_GAME_PORT:-8211}:8211/udp"
+      # The REST API stays host-local: the probe's transport (ADR-0076), never a
+      # player surface. Its maker says it must not face the Internet.
+      - "127.0.0.1:${SPAWNPOINT_RCON_PORT:-8212}:8212/tcp"
+    environment:
+      # Game settings (ADR-0064): no value, so one a world never set never
+      # reaches the container. See settings.json.
+      SERVER_NAME:
+      PLAYERS:
+      DEATH_PENALTY:
+      # The REST API's password, and in-game admin rights for whoever knows it.
+      # From the host's runtime .env, never a world setting (ADR-0076).
+      ADMIN_PASSWORD: ${PALWORLD_ADMIN_PASSWORD:?set PALWORLD_ADMIN_PASSWORD in .env}
+      # Optional, from the same .env. Empty means no password. A password is
+      # not identity: GAME_DEFAULT_AUTH stays none either way.
+      SERVER_PASSWORD: "${PALWORLD_SERVER_PASSWORD:-}"
+      REST_API_ENABLED: "true"
+      REST_API_PORT: "8212"
+      # Deprecated by the game's maker; the REST API does its work.
+      RCON_ENABLED: "false"
+      # Not on the community list, and Steam clients only: a player arrives at
+      # the address the connectivity strategy publishes, or not at all.
+      COMMUNITY: "false"
+      CROSSPLAY_PLATFORMS: "(Steam)"
+      PUBLIC_PORT: "${SPAWNPOINT_GAME_PORT:-8211}"
+      # A session is one run: no update or reboot inside it, no copies of the
+      # world beside the one our backup takes, and no pause that would make
+      # the API answer for a sleeping server.
+      AUTO_UPDATE_ENABLED: "false"
+      AUTO_REBOOT_ENABLED: "false"
+      AUTO_PAUSE_ENABLED: "false"
+      BACKUP_ENABLED: "false"
+      USE_BACKUP_SAVE_DATA: "False"
+      # No mod loader downloaded from a moving release, and no player names in
+      # the container log.
+      MOD_ENABLED: "false"
+      MOD_UPDATE_ON_BOOT: "false"
+      ENABLE_PLAYER_LOGGING: "false"
+      DISCORD_WEBHOOK_URL: ""
+    volumes:
+      # The server's Pal/Saved directory: SaveGames/ and the GameUserSettings.ini
+      # that names the world live in it. The install stays in its own volume.
+      - "palworld-server-files:/palworld"
+      - "${SPAWNPOINT_WORLD_DATA_DIRECTORY:-./games/palworld/data}:/palworld/Pal/Saved"
+    restart: "no" # same reasoning as every other game service: a restart policy
+    # would fight the idle stop and hide a crash loop.
+    # The image saves, asks for a shutdown, and waits up to 30 s before it
+    # kills the server; a large world needs that time and more to write.
+    stop_grace_period: 120s
+
+volumes:
+  palworld-server-files:

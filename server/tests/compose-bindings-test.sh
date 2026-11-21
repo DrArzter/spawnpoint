@@ -26,6 +26,7 @@ render_game() {
     RCON_PASSWORD=unused \
     ZOMBOID_RCON_PASSWORD=unused \
     ZOMBOID_ADMIN_PASSWORD=unused \
+    PALWORLD_ADMIN_PASSWORD="${PALWORLD_ADMIN_PASSWORD-unused}" \
     SPAWNPOINT_GAME_IMAGE=registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
     GRAFANA_ADMIN_PASSWORD=unused \
     PROMETHEUS_BIND_ADDRESS=127.0.0.1 \
@@ -201,5 +202,74 @@ jq -e '
   and ([.services.factorio.ports[] | select(.target == 27015)] | .[0].published == "30011" and .[0].host_ip == "127.0.0.1")
   and (((.services.factorio.mem_limit // .services.factorio.deploy.resources.limits.memory) | tostring | tonumber) == 2048 * 1024 * 1024)
 ' >/dev/null <<<"${factorio_slot}"
+
+# Valheim: the image pinned by digest, the query port host-local, the save's
+# name the one game.sh archives, unlisted and without crossplay, and every
+# game setting an entry with no value.
+valheim_world_name="$(
+  # shellcheck source=../games/valheim/game.sh
+  source "${server_directory}/games/valheim/game.sh"
+  printf '%s' "${VALHEIM_WORLD_NAME}"
+)"
+valheim_rendered="$(render_game valheim 2>/dev/null)"
+jq -e '
+  (.services.valheim.image | test("^[a-z0-9./-]+@sha256:[0-9a-f]{64}$"))
+  and ([.services.valheim.ports[] | select(.target == 2456)] | .[0].published == "2456" and .[0].protocol == "udp" and (.[0].host_ip // "") == "")
+  and ([.services.valheim.ports[] | select(.target == 2457)] | .[0].published == "2457" and .[0].protocol == "udp" and .[0].host_ip == "127.0.0.1")
+  and (.services.valheim.ports | length == 2)
+' >/dev/null <<<"${valheim_rendered}"
+jq -e --arg world "${valheim_world_name}" --slurpfile definitions "${server_directory}/games/valheim/settings.json" '
+  .services.valheim.environment as $environment
+  | $environment.WORLD_NAME == $world
+  and $environment.SERVER_PUBLIC == "false" and $environment.CROSSPLAY == "false" and $environment.SERVER_ARGS == ""
+  and $environment.UPDATE_CRON == "" and $environment.RESTART_CRON == "" and $environment.BACKUPS == "false"
+  and $environment.SERVER_PASS == ""
+  and all($definitions[0].settings[]; .env as $name | ($environment | has($name)) and $environment[$name] == null)
+' >/dev/null <<<"${valheim_rendered}"
+jq -e '.services.valheim.environment.SERVER_NAME == "Long ships" and .services.valheim.environment.SERVER_PASS == "unused-pass"' \
+  >/dev/null <<<"$(SERVER_NAME="Long ships" VALHEIM_SERVER_PASSWORD=unused-pass render_game valheim 2>/dev/null)"
+valheim_slot="$(WORLD_ID=longships WORLD_FOOTPRINT_MEMORY_MIB=4096 SPAWNPOINT_SLOT=1 render_game valheim 2>/dev/null)"
+jq -e '
+  ([.services.valheim.ports[] | select(.target == 2456)] | .[0].published == "30010" and .[0].protocol == "udp")
+  and ([.services.valheim.ports[] | select(.target == 2457)] | .[0].published == "30011" and .[0].host_ip == "127.0.0.1")
+  and (((.services.valheim.mem_limit // .services.valheim.deploy.resources.limits.memory) | tostring | tonumber) == 4096 * 1024 * 1024)
+' >/dev/null <<<"${valheim_slot}"
+
+# Palworld: the image pinned by digest, the REST API host-local (its maker
+# says it must not face the Internet), the admin password from the host .env,
+# RCON off, unlisted and Steam only, nothing that downloads or copies behind
+# our back, and every game setting an entry with no value.
+palworld_rendered="$(render_game palworld 2>/dev/null)"
+jq -e '
+  (.services.palworld.image | test("^[a-z0-9./-]+@sha256:[0-9a-f]{64}$"))
+  and ([.services.palworld.ports[] | select(.target == 8211)] | .[0].published == "8211" and .[0].protocol == "udp" and (.[0].host_ip // "") == "")
+  and ([.services.palworld.ports[] | select(.target == 8212)] | .[0].published == "8212" and .[0].protocol == "tcp" and .[0].host_ip == "127.0.0.1")
+  and (.services.palworld.ports | length == 2)
+  and ([.services.palworld.volumes[] | select(.target == "/palworld/Pal/Saved")] | length == 1)
+' >/dev/null <<<"${palworld_rendered}"
+jq -e --slurpfile definitions "${server_directory}/games/palworld/settings.json" '
+  .services.palworld.environment as $environment
+  | $environment.ADMIN_PASSWORD == "unused" and $environment.SERVER_PASSWORD == ""
+  and $environment.REST_API_ENABLED == "true" and $environment.REST_API_PORT == "8212"
+  and $environment.RCON_ENABLED == "false" and $environment.COMMUNITY == "false"
+  and $environment.CROSSPLAY_PLATFORMS == "(Steam)" and $environment.PUBLIC_PORT == "8211"
+  and $environment.AUTO_UPDATE_ENABLED == "false" and $environment.AUTO_REBOOT_ENABLED == "false"
+  and $environment.AUTO_PAUSE_ENABLED == "false" and $environment.BACKUP_ENABLED == "false"
+  and $environment.USE_BACKUP_SAVE_DATA == "False"
+  and $environment.MOD_ENABLED == "false" and $environment.MOD_UPDATE_ON_BOOT == "false"
+  and $environment.ENABLE_PLAYER_LOGGING == "false"
+  and all($definitions[0].settings[]; .env as $name | ($environment | has($name)) and $environment[$name] == null)
+' >/dev/null <<<"${palworld_rendered}"
+jq -e '.services.palworld.environment.SERVER_NAME == "Pal camp" and .services.palworld.environment.PLAYERS == "8" and .services.palworld.environment.SERVER_PASSWORD == "unused-pass"' \
+  >/dev/null <<<"$(SERVER_NAME="Pal camp" PLAYERS=8 PALWORLD_SERVER_PASSWORD=unused-pass render_game palworld 2>/dev/null)"
+# Without the admin password the session does not render at all.
+if PALWORLD_ADMIN_PASSWORD="" render_game palworld >/dev/null 2>&1; then exit 1; fi
+palworld_slot="$(WORLD_ID=palcamp WORLD_FOOTPRINT_MEMORY_MIB=16384 SPAWNPOINT_SLOT=1 render_game palworld 2>/dev/null)"
+jq -e '
+  ([.services.palworld.ports[] | select(.target == 8211)] | .[0].published == "30010" and .[0].protocol == "udp")
+  and ([.services.palworld.ports[] | select(.target == 8212)] | .[0].published == "30011" and .[0].host_ip == "127.0.0.1")
+  and .services.palworld.environment.PUBLIC_PORT == "30010"
+  and (((.services.palworld.mem_limit // .services.palworld.deploy.resources.limits.memory) | tostring | tonumber) == 16384 * 1024 * 1024)
+' >/dev/null <<<"${palworld_slot}"
 
 printf 'result=passed\n'

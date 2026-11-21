@@ -194,6 +194,10 @@ const QUICK_COMMANDS: Readonly<Record<string, readonly string[]>> = {
   minecraft: ["list", "save-all", "say Server stops in 5 minutes"],
   factorio: ["/players online", "/server-save", "/time"],
   zomboid: ["players", "save", "servermsg \"Server stops in 5 minutes\""],
+  // The server takes no command from outside the game.
+  valheim: [],
+  // The server's REST API, in its own words; see server/games/palworld/game.sh.
+  palworld: ["metrics", "save", "announce Server stops in 5 minutes"],
 };
 
 const consoleStatuses: Readonly<Record<ConsoleEntry["status"], StatusDescriptor>> = {

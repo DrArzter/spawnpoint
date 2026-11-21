@@ -11,6 +11,10 @@ test("subscription keys follow the deployed game catalog", () => {
     "factorio.stopped",
     "zomboid.started",
     "zomboid.stopped",
+    "valheim.started",
+    "valheim.stopped",
+    "palworld.started",
+    "palworld.stopped",
     "invitation.broadcast",
     "invitation.direct",
   ]);

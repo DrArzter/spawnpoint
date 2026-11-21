@@ -25,7 +25,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+# Looking the host up yields a fixed address, so no caller-supplied host
+# reaches the request (SSRF guard).
+LOOPBACK_HOSTS = {"127.0.0.1": "127.0.0.1", "::1": "[::1]", "localhost": "127.0.0.1"}
 MAX_BODY_BYTES = 1024 * 1024
 DEFAULT_TIMEOUT_SECONDS = 5
 
@@ -64,12 +66,14 @@ def read_settings():
         timeout = float(os.environ.get("HTTP_PROBE_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS))
     except ValueError:
         return usage()
+    url = f"http://{LOOPBACK_HOSTS[parsed.hostname]}:{parsed.port}{parsed.path}"
+    if parsed.query:
+        url += f"?{parsed.query}"
     return method, url, body, user, password, timeout
 
 
 def build_request(method: str, url: str, user: str, password: str):
-    # The URL was checked as loopback-only in read_settings.
-    request = urllib.request.Request(url, method=method)  # NOSONAR(pythonsecurity:S8703) loopback-only check above
+    request = urllib.request.Request(url, method=method)
     token = base64.b64encode(f"{user}:{password}".encode("utf-8")).decode("ascii")
     request.add_header("Authorization", f"Basic {token}")
     request.add_header("Accept", "application/json")

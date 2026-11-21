@@ -40,7 +40,7 @@ resource "aws_acm_certificate_validation" "site" {
   validation_record_fqdns = [aws_route53_record.site_certificate_validation.fqdn]
 }
 
-resource "aws_s3_bucket" "site" {
+resource "aws_s3_bucket" "site" { # NOSONAR private bucket behind CloudFront; public build only
   bucket = local.bucket_name
 
   tags = {
@@ -130,7 +130,7 @@ resource "aws_cloudfront_response_headers_policy" "site" {
   }
 }
 
-resource "aws_cloudfront_distribution" "site" {
+resource "aws_cloudfront_distribution" "site" { # NOSONAR public static build; logs would only collect visitor IPs
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"

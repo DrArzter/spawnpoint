@@ -68,7 +68,7 @@ while IFS= read -r line; do
   target="${payload_dir}/mods/${file_name}"
 
   if [[ -f "${target}" && ! -L "${target}" ]]; then
-    actual_sha1="$(sha1sum -- "${target}")"
+    actual_sha1="$(sha1sum -- "${target}")" # NOSONAR SHA-1 is the only hash CurseForge publishes
     actual_sha1="${actual_sha1%% *}"
     if [[ "${actual_sha1}" == "${sha1_expected}" && "$(stat --format '%s' -- "${target}")" == "${file_bytes}" ]]; then
       kept=$((kept + 1))
@@ -83,7 +83,7 @@ while IFS= read -r line; do
     rm -f -- "${fetch_tmp}"
     die "download failed for ${slug}:${file_id}"
   }
-  actual_sha1="$(sha1sum -- "${fetch_tmp}")"
+  actual_sha1="$(sha1sum -- "${fetch_tmp}")" # NOSONAR SHA-1 is the only hash CurseForge publishes
   actual_sha1="${actual_sha1%% *}"
   [[ "${actual_sha1}" == "${sha1_expected}" && "$(stat --format '%s' -- "${fetch_tmp}")" == "${file_bytes}" ]] || {
     rm -f -- "${fetch_tmp}"

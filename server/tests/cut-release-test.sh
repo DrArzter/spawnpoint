@@ -43,11 +43,12 @@ printf 'alpha jar bytes\n' >"${FAKE_CF_ROOT}/blobs/alpha-1.2.3.jar"
 printf 'beta jar bytes, longer\n' >"${FAKE_CF_ROOT}/blobs/beta-4.5.jar"
 
 fixture_file_json() {
-  local blob="$1" mod_id="$2" file_id="$3" name="$4" url="$5"
+  local blob="$1" mod_id="$2" file_id="$3" name="$4" url="$5" blob_sha1
+  blob_sha1="$(sha1sum -- "${blob}" | awk '{print $1}')" # NOSONAR test fixture
   jq -n \
     --arg name "${name}" \
     --arg url "${url}" \
-    --arg sha1 "$(sha1sum -- "${blob}" | awk '{print $1}')" \
+    --arg sha1 "${blob_sha1}" \
     --argjson bytes "$(stat --format '%s' -- "${blob}")" \
     '{data: {fileName: $name, fileLength: $bytes, downloadUrl: ($url | select(. != "") // null), hashes: [{value: $sha1, algo: 1}]}}' \
     >"${FAKE_CF_ROOT}/file-${mod_id}-${file_id}.json"

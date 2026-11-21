@@ -154,7 +154,7 @@ for entry in "${entries[@]}"; do
   resolved=$((resolved + 1))
   target="${output_dir}/mods/${file_name}"
   if [[ -f "${target}" && ! -L "${target}" ]]; then
-    actual="$(sha1sum -- "${target}")"
+    actual="$(sha1sum -- "${target}")" # NOSONAR SHA-1 is the only hash the Factorio portal publishes
     if [[ "${actual%% *}" == "${sha1_expected}" ]]; then
       kept=$((kept + 1))
       continue
@@ -170,7 +170,7 @@ for entry in "${entries[@]}"; do
     printf 'error: download failed for %s\n' "${entry}" >&2
     exit 1
   }
-  actual="$(sha1sum -- "${fetch_tmp}")"
+  actual="$(sha1sum -- "${fetch_tmp}")" # NOSONAR SHA-1 is the only hash the Factorio portal publishes
   [[ "${actual%% *}" == "${sha1_expected}" ]] || {
     rm -f -- "${fetch_tmp}"
     printf 'error: downloaded %s does not match the pinned SHA-1\n' "${file_name}" >&2

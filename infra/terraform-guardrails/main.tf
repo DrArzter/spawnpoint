@@ -3,7 +3,7 @@ data "aws_caller_identity" "current" {}
 # --- Alert topic: the one place budgets, anomaly detection and later CloudWatch
 #     alarms and chat adapters converge on ---
 
-resource "aws_sns_topic" "alerts" {
+resource "aws_sns_topic" "alerts" { # NOSONAR budget alerts cannot publish to an AWS-managed-key topic
   name = "spawnpoint-alert"
 
   tags = {

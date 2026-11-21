@@ -5,6 +5,8 @@ Standard library only, one round trip: authenticate, execute one command,
 print the response. Exit codes: 0 response printed, 2 usage, 3 connection
 failed, 4 authentication refused. The probe treats every non-zero as
 "unavailable", which the watchdog counts as not-empty — fail closed.
+
+The game server runs on this host, so only a loopback address is accepted.
 """
 
 import socket
@@ -15,6 +17,10 @@ SERVERDATA_AUTH = 3
 SERVERDATA_AUTH_RESPONSE = 2
 SERVERDATA_EXECCOMMAND = 2
 SERVERDATA_RESPONSE_VALUE = 0
+
+# Looking the host up yields a fixed address, so no caller-supplied host
+# reaches the socket (SSRF guard).
+LOOPBACK_ADDRESSES = {"127.0.0.1": "127.0.0.1", "localhost": "127.0.0.1"}
 
 
 def send_packet(sock: socket.socket, request_id: int, packet_type: int, body: str) -> None:
@@ -44,7 +50,11 @@ def main() -> int:
     if len(sys.argv) != 5:
         print("usage: rcon-client.py <host> <port> <password> <command>", file=sys.stderr)
         return 2
-    host, port, password, command = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
+    host = LOOPBACK_ADDRESSES.get(sys.argv[1])
+    if host is None:
+        print("error: only a loopback address is accepted", file=sys.stderr)
+        return 2
+    port, password, command = int(sys.argv[2]), sys.argv[3], sys.argv[4]
 
     try:
         with socket.create_connection((host, port), timeout=10) as sock:

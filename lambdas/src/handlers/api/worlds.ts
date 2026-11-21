@@ -31,7 +31,9 @@ export async function controlSession(identity: Identity, action: SessionAction, 
   if (plan.kind === "reject") return response(plan.reason === "unknown_world" ? 404 : 409, { error: plan.reason });
   const recoverySessionId = action === "stop" && !fleet ? stoppedHostRecoverySession(worldId, configuredHosts, located.record) : null;
   if (plan.kind === "noop" && recoverySessionId === null) return response(200, { result: plan.reason });
-  return executeSessionOperation({ identity, action, gameId, worldId, worldName: world?.displayName ?? worldId, fleet, plan, configuredHosts, located, recoverySessionId });
+  // A fleet world kept warm asks placement to keep its launched host after the stop (ADR-0048).
+  const warm = fleet && worldRecords.find((record) => record.worldId === worldId)?.warm === true;
+  return executeSessionOperation({ identity, action, gameId, worldId, worldName: world?.displayName ?? worldId, fleet, warm, plan, configuredHosts, located, recoverySessionId });
 }
 
 type SessionExecution = Readonly<{
@@ -41,6 +43,7 @@ type SessionExecution = Readonly<{
   worldId: string;
   worldName: string;
   fleet: boolean;
+  warm: boolean;
   plan: SessionPlan | FleetSessionPlan;
   configuredHosts: readonly Readonly<{ providerRef: string }>[];
   located: Awaited<ReturnType<typeof readWorldSession>>;
@@ -53,7 +56,7 @@ function plannedSessionHost(request: SessionExecution): string | undefined {
 }
 
 async function executeSessionOperation(request: SessionExecution): Promise<Response> {
-  const { identity, action, gameId, worldId, worldName, fleet, located, recoverySessionId } = request;
+  const { identity, action, gameId, worldId, worldName, fleet, warm, located, recoverySessionId } = request;
   const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
   const requestedBy = `identity:${identity.id}`;
   // The fleet workflow places the session itself. Its legacy instanceId input
@@ -69,6 +72,7 @@ async function executeSessionOperation(request: SessionExecution): Promise<Respo
       serverId: sessionLifecycleKey(gameId, worldId, fleet ? "fleet" : "configured"),
       worldName,
       placement: fleet ? "fleet" : "single",
+      ...(fleet ? { policy: warm ? "warm" as const : "cold" as const } : {}),
     });
   }
   else {

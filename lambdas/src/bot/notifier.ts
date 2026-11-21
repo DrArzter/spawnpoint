@@ -106,70 +106,72 @@ async function sendInvitationEmails(
   return { targetCount: results.length, successCount: results.length - failures.length };
 }
 
-export async function handler(event: SnsEvent | EventBridgeEvent): Promise<void> {
-  const records = (event as SnsEvent).Records;
-  if (Array.isArray(records)) {
-    for (const record of records) {
-      if (record.Sns?.Message === undefined) continue;
-      await sendToTargets(renderAlert({ subject: record.Sns.Subject ?? null, message: record.Sns.Message }), await configuredChatIds());
-    }
+async function notifyAlerts(records: NonNullable<SnsEvent["Records"]>): Promise<void> {
+  const alerts = records.flatMap((record) => record.Sns?.Message === undefined
+    ? []
+    : [renderAlert({ subject: record.Sns.Subject ?? null, message: record.Sns.Message })]);
+  if (alerts.length === 0) return;
+  const chatIds = await configuredChatIds();
+  // In order, so a burst of alerts reads in the order the topic sent it.
+  for (const alert of alerts) await sendToTargets(alert, chatIds);
+}
+
+async function notifyAccessApproved(event: EventBridgeEvent): Promise<void> {
+  const approval = parseAccessApprovedEvent(event.detail);
+  if (approval === null) {
+    console.error("unparseable access approval", eventShape(event));
     return;
   }
+  const miniAppUrl = env("MINI_APP_URL");
+  await sendToTargets(renderAccessApproved(approval), [approval.telegramChatId], { replyMarkup: {
+    inline_keyboard: [
+      [{ text: "Open panel", web_app: { url: miniAppUrl } }],
+      [{ text: "Open panel in browser", url: miniAppUrl }],
+    ],
+  } });
+}
 
-  const eventBridge = event as EventBridgeEvent;
-  if (eventBridge.source === "spawnpoint.access" && eventBridge["detail-type"] === "Access Approved") {
-    const approval = parseAccessApprovedEvent(eventBridge.detail);
-    if (approval === null) {
-      console.error("unparseable access approval", eventShape(eventBridge));
-      return;
-    }
-    const miniAppUrl = env("MINI_APP_URL");
-    await sendToTargets(renderAccessApproved(approval), [approval.telegramChatId], { replyMarkup: {
-      inline_keyboard: [
-        [{ text: "Open panel", web_app: { url: miniAppUrl } }],
-        [{ text: "Open panel in browser", url: miniAppUrl }],
-      ],
-    } });
+async function deliverInvitation(invitation: InvitationEvent): Promise<void> {
+  const key = invitation.audience === "broadcast" ? "invitation.broadcast" : "invitation.direct";
+  const subscribers = await subscribedNotificationTargets(key, invitation.audience === "direct"
+    ? { include: invitation.recipientIdentityIds, exclude: [invitation.senderIdentityId] }
+    : { exclude: [invitation.senderIdentityId] });
+  const groups = invitation.audience === "broadcast" ? (await configuredChatIds()).filter((chatId) => chatId < 0) : [];
+  const [telegram, email] = await Promise.all([
+    sendToTargets(renderInvitation(invitation), [...new Set([...groups, ...subscribers.telegramChatIds])], { throwOnTotalFailure: false }),
+    sendInvitationEmails(invitation, subscribers.emailAddresses),
+  ]);
+  const delivery = {
+    targetCount: telegram.targetCount + email.targetCount,
+    successCount: telegram.successCount + email.successCount,
+  };
+  await completeInvitationDelivery(
+    invitation.invitationId,
+    invitationDeliveryStatus(delivery.targetCount, delivery.successCount),
+    delivery.targetCount,
+    delivery.successCount,
+  );
+}
+
+async function notifyInvitation(event: EventBridgeEvent): Promise<void> {
+  const invitation = parseInvitationEvent(event.detail);
+  if (invitation === null) {
+    console.error("unparseable invitation", eventShape(event));
     return;
   }
-
-  if (eventBridge.source === "spawnpoint.access" && eventBridge["detail-type"] === "Game Invitation") {
-    const invitation = parseInvitationEvent(eventBridge.detail);
-    if (invitation === null) {
-      console.error("unparseable invitation", eventShape(eventBridge));
-      return;
-    }
-    if (!await claimInvitationDelivery(invitation.invitationId)) return;
-    try {
-      const key = invitation.audience === "broadcast" ? "invitation.broadcast" : "invitation.direct";
-      const subscribers = await subscribedNotificationTargets(key, invitation.audience === "direct"
-        ? { include: invitation.recipientIdentityIds, exclude: [invitation.senderIdentityId] }
-        : { exclude: [invitation.senderIdentityId] });
-      const groups = invitation.audience === "broadcast" ? (await configuredChatIds()).filter((chatId) => chatId < 0) : [];
-      const [telegram, email] = await Promise.all([
-        sendToTargets(renderInvitation(invitation), [...new Set([...groups, ...subscribers.telegramChatIds])], { throwOnTotalFailure: false }),
-        sendInvitationEmails(invitation, subscribers.emailAddresses),
-      ]);
-      const delivery = {
-        targetCount: telegram.targetCount + email.targetCount,
-        successCount: telegram.successCount + email.successCount,
-      };
-      await completeInvitationDelivery(
-        invitation.invitationId,
-        invitationDeliveryStatus(delivery.targetCount, delivery.successCount),
-        delivery.targetCount,
-        delivery.successCount,
-      );
-    } catch (error) {
-      console.error("invitation delivery failed before completion", error);
-      await completeInvitationDelivery(invitation.invitationId, "FAILED", 0, 0);
-    }
-    return;
+  if (!await claimInvitationDelivery(invitation.invitationId)) return;
+  try {
+    await deliverInvitation(invitation);
+  } catch (error) {
+    console.error("invitation delivery failed before completion", error);
+    await completeInvitationDelivery(invitation.invitationId, "FAILED", 0, 0);
   }
+}
 
-  const parsed = parseExecutionEvent(eventBridge.detail);
+async function notifyExecution(event: EventBridgeEvent): Promise<void> {
+  const parsed = parseExecutionEvent(event.detail);
   if (parsed === null) {
-    console.error("unparseable event", eventShape(eventBridge));
+    console.error("unparseable event", eventShape(event));
     return;
   }
   const text = renderNotification(parsed);
@@ -182,4 +184,21 @@ export async function handler(event: SnsEvent | EventBridgeEvent): Promise<void>
   const [configured, subscribers] = await Promise.all([configuredChatIds(), subscribedTelegramChatIds(subscriptionKey)]);
   const groups = configured.filter((chatId) => chatId < 0);
   await sendToTargets(text, [...new Set([...groups, ...subscribers])]);
+}
+
+// Access events by detail type; anything else is read as an execution event.
+const ACCESS_EVENTS: Readonly<Record<string, (event: EventBridgeEvent) => Promise<void>>> = {
+  "Access Approved": notifyAccessApproved,
+  "Game Invitation": notifyInvitation,
+};
+
+export async function handler(event: SnsEvent | EventBridgeEvent): Promise<void> {
+  const records = (event as SnsEvent).Records;
+  if (Array.isArray(records)) return notifyAlerts(records);
+  const eventBridge = event as EventBridgeEvent;
+  const detailType = eventBridge["detail-type"] ?? "";
+  const notifyAccess = eventBridge.source === "spawnpoint.access" && Object.hasOwn(ACCESS_EVENTS, detailType)
+    ? ACCESS_EVENTS[detailType]
+    : undefined;
+  return (notifyAccess ?? notifyExecution)(eventBridge);
 }

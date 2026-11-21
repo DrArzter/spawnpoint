@@ -28,7 +28,7 @@ function eventShape(event: EventBridgeEvent): string {
   return JSON.stringify({
     source: event.source ?? null,
     detailType: event["detail-type"] ?? null,
-    detailKeys: typeof detail === "object" && detail !== null ? Object.keys(detail).sort() : [],
+    detailKeys: typeof detail === "object" && detail !== null ? Object.keys(detail).sort((a, b) => a.localeCompare(b)) : [],
   });
 }
 

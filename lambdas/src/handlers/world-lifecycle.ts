@@ -129,7 +129,7 @@ async function openPurgeMarker(
     const parsed = purgeMarker(existing.value, input.worldId, targetGenerationId);
     return { stored: existing, generations: parsed.generations, completed: parsed.status === "completed" };
   }
-  if (record === null || record.worldId !== input.worldId) throw new Error("invalid_world_record");
+  if (record?.worldId !== input.worldId) throw new Error("invalid_world_record");
   const generations = purgeGenerationIds(record);
   const document = {
     schema_version: 1, world_id: input.worldId, target_generation_id: targetGenerationId,

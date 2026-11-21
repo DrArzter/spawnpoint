@@ -155,6 +155,16 @@ removed all 111 copied JARs and Forge could not decode the world's modded dimens
 setting `REMOVE_OLD_MODS=false` made the same world boot successfully. A world archive is necessary but not sufficient:
 restore must select an exact immutable release before starting Minecraft.
 
+#### Release download on a cold host — **not measured yet**
+
+| | |
+| --- | --- |
+| Status | **Not measured.** No cold-host timing exists for `download-release.sh`, before or after the change below |
+| Estimate only | 8–17 minutes for the Prominence II release with one `get-object` process per file. This is an estimate, not a measurement |
+| Change, 2026-11-21 | `download-release.sh` now fetches the missing `mods/` and `overrides/` files in one concurrent `aws s3 cp --recursive`. It never fetches `client.zip`, `server.zip` or `full.zip`. It still checks the SHA-256 and size of each file after the copy, and it links identical files from other cached releases of the game. `reconcile-release.sh` hashes each mod once, not twice |
+| How | Start a world on the Prominence II release on a fresh fleet host. Read the `step=` lines that `start-session.sh` writes to stderr (in the SSM output or the session command log group). The time from `connectivity_prepared` to `release_downloaded` is the download; from `release_downloaded` to `release_reconciled` is the reconcile. Record the date, the release, the instance type and the `downloaded=`, `kept=` and `reused=` counts |
+| Unblocks | Whether the mod step stays the slow part of a cold start, or the host bootstrap does (a baked image is the next step only if the bootstrap is slow) |
+
 ### 5a. Session observability — **locally exercised**
 
 The first Compose smoke test on 2026-08-12 started Prometheus 3.5.3, Grafana 13.1.0, `mc-monitor`, node_exporter

@@ -71,34 +71,3 @@ export function Dialog({ open, onClose, title, children, actions, className, dis
     </dialog>
   );
 }
-
-export function Sheet({ open, onClose, title, description, children, footer, className, closeActionId }: Readonly<{
-  open: boolean;
-  closeActionId?: string;
-  onClose: () => void;
-  title: ReactNode;
-  description?: ReactNode;
-  children?: ReactNode;
-  footer?: ReactNode;
-  className?: string;
-}>) {
-  const ref = useModal(open, onClose);
-  const titleId = useId();
-  return (
-    <dialog aria-labelledby={titleId} className={cx("sheet", className)} ref={ref}>
-      {open && (
-        <>
-          <header className="sheet-header">
-            <div>
-              <h2 id={titleId}>{title}</h2>
-              {description && <p>{description}</p>}
-            </div>
-            <IconButton data-action={closeActionId} icon="close" label="Close panel" onClick={onClose} />
-          </header>
-          <div className="sheet-body">{children}</div>
-          {footer && <footer className="sheet-footer">{footer}</footer>}
-        </>
-      )}
-    </dialog>
-  );
-}

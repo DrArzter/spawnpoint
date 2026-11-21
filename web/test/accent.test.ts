@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { contrast, deriveAccent, parseHex, readableOn, TEXT_CONTRAST, toHex } from "../src/styles/accent.ts";
+import { applyAccent, clearAccent, contrast, DEFAULT_ACCENT, deriveAccent, parseHex, readableOn, TEXT_CONTRAST, toHex } from "../src/styles/accent.ts";
 
 const rgb = (hex: string) => {
   const parsed = parseHex(hex);
@@ -94,4 +94,17 @@ test("nonsense is refused rather than guessed at", () => {
   assert.equal(deriveAccent("not a colour", "light"), null);
   assert.equal(parseHex("#12345"), null);
   assert.deepEqual(parseHex("#abc"), parseHex("#aabbcc"));
+});
+
+test("a picked accent marks the root, so the console's iris gives way; the default and a clear take the mark off", () => {
+  const props = new Map<string, string>();
+  const root = { dataset: {} as Record<string, string>, style: { setProperty: (name: string, value: string) => props.set(name, value), removeProperty: (name: string) => props.delete(name) } } as unknown as HTMLElement;
+  applyAccent(root, "#e8710a", "light");
+  assert.equal(root.dataset.accent, "chosen");
+  applyAccent(root, DEFAULT_ACCENT.toUpperCase(), "light");
+  assert.equal(root.dataset.accent, undefined);
+  applyAccent(root, "#e8710a", "dark");
+  clearAccent(root);
+  assert.equal(root.dataset.accent, undefined);
+  assert.equal(props.size, 0);
 });

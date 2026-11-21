@@ -62,32 +62,13 @@
   box-shadow: none;
 }
 
-.btn-danger {
-  background: var(--error);
-  color: var(--on-error);
-}
-
-.btn-danger:hover {
-  background: var(--error-hover);
-  box-shadow: var(--shadow-1);
-}
-
-.btn-danger-text {
-  color: var(--error-ink);
-}
-
-.btn-danger-text:hover {
-  background: var(--error-state);
-}
-
 .btn:disabled {
   color: var(--ink-disabled);
   background: transparent;
   box-shadow: none;
 }
 
-.btn-filled:disabled,
-.btn-danger:disabled {
+.btn-filled:disabled {
   background: var(--surface-variant);
 }
 
@@ -107,13 +88,8 @@
   color: var(--primary-ink);
 }
 
-.btn-filled[aria-busy="true"] .ring,
-.btn-danger[aria-busy="true"] .ring {
+.btn-filled[aria-busy="true"] .ring {
   color: var(--on-primary);
-}
-
-.btn-danger-text[aria-busy="true"] .ring {
-  color: var(--error-ink);
 }
 
 .btn-small {
@@ -212,25 +188,16 @@
    front (an icon's baseline is its bottom edge), so a label beside it shares
    the text's baseline. A zero-width strut comes first, aligned as the text is,
    and lends the line that baseline; its margin gives back the gap it adds. */
-.status::before,
-.copy-value::before {
-  content: "\200b" / "";
-}
-
 .status::before {
   margin-inline-end: -8px;
+  content: "\200b" / "";
 }
 
 .status-large::before {
   margin-inline-end: -12px;
 }
 
-.copy-value::before {
-  margin-inline-end: -2px;
-}
-
-.status .icon,
-.status .ring {
+.status .icon {
   flex: none;
 }
 
@@ -238,45 +205,8 @@
   color: var(--success-ink);
 }
 
-.status-progress .ring {
-  color: var(--primary);
-}
-
-.status-off .icon,
-.status-unknown .icon,
-.status-ready .icon,
-.status-archived .icon,
-.status-absent .icon,
-.status-pending .icon {
+.status-ready .icon {
   color: var(--ink-secondary);
-}
-
-.status-error .icon {
-  color: var(--error-ink);
-}
-
-.status-warning .icon {
-  color: var(--warning-ink);
-}
-
-.status-info .icon {
-  color: var(--info);
-}
-
-.status-absent,
-.status-archived {
-  color: var(--ink-secondary);
-}
-
-.details .status,
-.fact .status {
-  white-space: normal;
-  align-items: flex-start;
-}
-
-.details .status .icon,
-.fact .status .icon {
-  margin-top: 0;
 }
 
 .status-large {
@@ -312,30 +242,6 @@
   background: var(--surface-variant);
 }
 
-.chip-primary {
-  border-color: transparent;
-  background: var(--primary-container);
-  color: var(--on-primary-container);
-}
-
-.chip-success {
-  border-color: transparent;
-  background: var(--success-container);
-  color: var(--success-ink);
-}
-
-.chip-warning {
-  border-color: transparent;
-  background: var(--warning-container);
-  color: var(--warning-ink);
-}
-
-.chip-error {
-  border-color: transparent;
-  background: var(--error-container);
-  color: var(--error-ink);
-}
-
 button.chip {
   transition: background var(--dur-fast) var(--ease);
 }
@@ -350,705 +256,11 @@ button.chip[aria-pressed="true"] {
   color: var(--on-primary-container);
 }
 
-/* A fieldset used only to group controls: the browser's box is not wanted. */
-.fieldset-plain {
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
 /* Cards */
 .card {
   border: 1px solid var(--outline);
   border-radius: var(--radius-card);
   background: var(--surface);
-}
-
-.card-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px 16px;
-  padding: 16px var(--card-inset) 12px;
-}
-
-.card-header h2 {
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 500;
-}
-
-.card-header p {
-  max-width: 72ch;
-  margin-top: 2px;
-  color: var(--ink-secondary);
-  font-size: 13px;
-  line-height: 18px;
-}
-
-/* A card's own menu stands in its corner on the title's line, in line with
-   its rows' menus, instead of hanging 10px below the title it belongs to.
-   Only a menu: a status in the same place keeps the card's padding. */
-.card-header > .btn-row:has(> .icon-btn):not(:has(.btn, .tip-anchor)) {
-  align-self: center;
-  margin-block: -10px;
-  margin-right: -12px;
-}
-
-.card-body {
-  padding: 4px var(--card-inset) 20px;
-}
-
-.card-body-flush {
-  padding: 0;
-}
-
-/* A flush card still needs somewhere to put a control that is not a row. */
-.card-actions {
-  padding: 8px 12px;
-}
-
-.card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 20px;
-  border-top: 1px solid var(--outline);
-  color: var(--ink-secondary);
-  font-size: 13px;
-}
-
-/* Page header */
-.page-header {
-  display: grid;
-  gap: 8px;
-}
-
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: -4px;
-  color: var(--ink-secondary);
-  font-size: 14px;
-}
-
-.breadcrumb a,
-.breadcrumb button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 28px;
-  padding: 0 8px 0 4px;
-  border-radius: var(--radius-pill);
-  color: var(--ink-secondary);
-  font-weight: 500;
-}
-
-.breadcrumb a:hover,
-.breadcrumb button:hover {
-  background: var(--surface-hover);
-  color: var(--ink);
-  text-decoration: none;
-}
-
-/* A phone spends its title row on the name, the state and the one action, so
-   the way back keeps its tap target and loses its label. The name stays for
-   anybody reading the page rather than looking at it. */
-@media (max-width: 599px) {
-  .breadcrumb a {
-    width: 40px;
-    justify-content: center;
-    padding: 0;
-    border-radius: 50%;
-  }
-
-  .crumb-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-}
-
-/* The name takes the free space and everything else gathers at the right. With
-   space-between the row spread all four children evenly, which parked the
-   overflow menu a column away from the action it belongs beside. */
-.page-title-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
-
-.page-title {
-  display: flex;
-  align-items: center;
-  gap: 8px 16px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-/* The avatar before a person's name: it keeps its size while the name gives way. */
-.page-leading {
-  flex: none;
-  display: inline-flex;
-}
-
-/* Actions and the overflow travel together: either they fit beside the name or
-   they take a line, never one without the other. */
-.page-controls {
-  display: flex;
-  align-items: center;
-  flex: none;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.page-controls .icon-btn {
-  flex: none;
-}
-
-/* Below the compact step they always take a line, and a line they own is a line
-   they fill — the same rule every other action row follows. */
-@media (max-width: 599px) {
-  .page-controls {
-    width: 100%;
-    margin-left: 0;
-  }
-
-  .page-controls .btn-row {
-    flex: 1;
-  }
-}
-
-/* Cut with an ellipsis rather than broken mid-word: "Rostik" became "Ros / tik"
-   when the row ran short. */
-.page-title h1 {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* Name over handle, as one column, so the status beside them centres on the pair. */
-.page-name {
-  display: grid;
-  min-width: 0;
-}
-
-.page-subtitle {
-  color: var(--ink-secondary);
-  font-size: 14px;
-  line-height: 20px;
-}
-
-.page-title .status {
-  font-size: 14px;
-}
-
-.page-description {
-  color: var(--ink-secondary);
-  max-width: 72ch;
-}
-
-/* Tabs */
-.tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--outline);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.tab {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: var(--row-height);
-  padding: 0 16px;
-  color: var(--ink-secondary);
-  font-weight: 500;
-  white-space: nowrap;
-  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
-}
-
-.tab:hover {
-  color: var(--ink);
-  background: var(--surface-hover);
-}
-
-.tab[aria-selected="true"] {
-  color: var(--primary-ink);
-}
-
-.tab[aria-selected="true"]::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
-  height: 3px;
-  border-radius: var(--radius-tab-indicator) var(--radius-tab-indicator) 0 0;
-  background: var(--primary);
-}
-
-.tab .count {
-  display: inline-grid;
-  place-items: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-variant);
-  color: var(--ink);
-  font-size: 12px;
-  line-height: 16px;
-}
-
-.tab[aria-selected="true"] .count {
-  background: var(--primary-container);
-  color: var(--on-primary-container);
-}
-
-/* Data tables */
-.table-wrap {
-  container-type: inline-size;
-  overflow-x: auto;
-}
-
-.table {
-  width: 100%;
-  font-size: 13px;
-  line-height: 18px;
-}
-
-.table th,
-.table td {
-  padding: 0 16px;
-  text-align: left;
-  vertical-align: middle;
-  border-bottom: 1px solid var(--outline);
-}
-
-.table th {
-  height: var(--row-height);
-  color: var(--ink-secondary);
-  font-weight: 500;
-  white-space: nowrap;
-  background: var(--surface);
-}
-
-.table td {
-  height: var(--row-height);
-}
-
-/* The first and last cells keep the card's inset, so a table's first column
-   starts on the edge its card's title starts on. Only while the table is a
-   table; a stacked record takes the inset as its own padding. */
-@container (min-width: 600px) {
-  .table th:first-child,
-  .table td:first-child {
-    padding-left: var(--card-inset);
-  }
-
-  .table th:last-child,
-  .table td:last-child {
-    padding-right: var(--card-inset);
-  }
-}
-
-/* A long value that is copied rather than read gives up its width first: the
-   cell refuses to grow, and the value inside it ends in an ellipsis. Only while
-   the table is a table — the stacked layout below has a whole line for it. The
-   same container decides both: by the viewport, a card narrower than 600px
-   stacked its rows and still squeezed this cell to nothing. */
-@container (min-width: 600px) {
-  .table td.cell-truncate {
-    max-width: 0;
-  }
-
-  .table td.cell-truncate .copy-value {
-    max-width: 100%;
-  }
-
-  .table td.cell-truncate code {
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-
-  .table td.cell-truncate .ellipsis {
-    overflow: visible;
-  }
-}
-
-/* A column worth reading when there is room, and never worth the actions
-   column scrolling out of reach. */
-@media (max-width: 1199px) {
-  .table col.cell-secondary,
-  .table th.cell-secondary,
-  .table td.cell-secondary {
-    display: none;
-  }
-}
-
-.table tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.table tbody tr:hover td {
-  background: var(--surface-hover);
-}
-
-.table tbody tr[aria-selected="true"] td {
-  background: var(--primary-state);
-}
-
-.table .cell-end {
-  text-align: right;
-}
-
-.table .cell-num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.table .cell-actions {
-  width: 1%;
-  white-space: nowrap;
-  text-align: right;
-}
-
-.table .cell-actions > * {
-  vertical-align: middle;
-}
-
-/* The cell shrinks to its content, so a wrapping action row makes itself narrow
-   and tall instead of wide and short. In a table row, actions stay on one line
-   and the column takes the width they need. */
-.table .cell-actions .btn-row {
-  flex-wrap: nowrap;
-}
-
-.table strong {
-  font-weight: 500;
-  color: var(--ink);
-}
-
-.table .row-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  color: var(--primary-ink);
-  font-weight: 500;
-  text-decoration: none;
-}
-
-.table .row-link:hover {
-  text-decoration: underline;
-}
-
-.table small {
-  display: block;
-  color: var(--ink-secondary);
-  font-size: 12px;
-  line-height: 16px;
-}
-
-.table .mono {
-  font-size: 12px;
-}
-
-.table code {
-  white-space: nowrap;
-}
-
-.table-empty {
-  padding: 40px 24px;
-  color: var(--ink-secondary);
-  text-align: center;
-}
-
-.table-group th {
-  height: 40px;
-  color: var(--ink);
-  background: var(--surface-variant);
-  font-weight: 500;
-}
-
-.table-skeleton td {
-  height: var(--row-height);
-}
-
-/* The console waits with the shape of the rows; the words are for a reader
-   and for a face that waits with a line instead. */
-.table-loading {
-  display: none;
-}
-
-/* Medium: a row that carries a person, a control and a decision is still too
-   wide to fold into a record, and too narrow for the three to share a line
-   without the person's second line wrapping. The person keeps the first line;
-   the control and the decision share the second, packed against the end. The
-   header goes: a person, a select showing its value and a pair of buttons
-   already say what they are. */
-@container (min-width: 600px) and (max-width: 839px) {
-  .table-decision .table,
-  .table-decision .table tbody {
-    display: block;
-  }
-
-  .table-decision .table thead,
-  .table-decision .table colgroup {
-    display: none;
-  }
-
-  .table-decision .table tbody tr {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    align-items: center;
-    column-gap: 16px;
-    padding: 8px var(--card-inset) 12px;
-    border-bottom: 1px solid var(--outline);
-  }
-
-  .table-decision .table tbody tr:last-child {
-    border-bottom: 0;
-  }
-
-  .table-decision .table tbody tr:hover {
-    background: var(--surface-hover);
-  }
-
-  .table-decision .table tbody td {
-    display: block;
-    height: auto;
-    padding: 0;
-    border: 0;
-    background: transparent;
-  }
-
-  .table-decision .table tbody td:first-child {
-    grid-column: 1 / -1;
-    padding: 4px 0 8px;
-  }
-
-  .table-decision .table tbody td:nth-child(2) {
-    grid-column: 2;
-  }
-
-  .table-decision .table tbody td:nth-child(3) {
-    grid-column: 3;
-  }
-}
-
-@container (max-width: 599px) {
-  .table thead {
-    display: none;
-  }
-
-  .table,
-  .table tbody,
-  .table tr,
-  .table td {
-    display: block;
-  }
-
-  /* Each row is a card here, and its menu is placed against this corner. */
-  .table tr {
-    position: relative;
-    padding: 12px var(--card-inset);
-    border-bottom: 1px solid var(--outline);
-  }
-
-  .table tbody tr:last-child {
-    border-bottom: 0;
-  }
-
-  /* Label against the left rail, value against the right. Both packed into the
-     first third left the rest of the card empty, and a pair with a gap between
-     its halves reads as one line where two columns of ragged text do not.
-     The label shares the value's baseline, as a detail row's does. */
-  .table td {
-    display: grid;
-    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
-    gap: 12px;
-    height: auto;
-    min-height: 32px;
-    padding: 4px 0;
-    border: 0;
-    align-items: baseline;
-    justify-items: end;
-    text-align: right;
-  }
-
-  .table td::before {
-    content: attr(data-label);
-    justify-self: start;
-    color: var(--ink-secondary);
-    font-size: 12px;
-    font-weight: 500;
-    text-align: left;
-  }
-
-  /* A row's action in the stacked layout follows the same rule as any action
-     row: the width it has, divided evenly, rather than a corner of a line. */
-  .table td.cell-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    width: auto;
-    padding-top: 8px;
-  }
-
-  /* Only a button with a label divides the width. An icon button is square by
-     definition, and stretching one turns it into a grey lozenge across the
-     whole card. */
-  .table td.cell-actions > .btn,
-  .table td.cell-actions > .tip-anchor,
-  .table td.cell-actions > .btn-row > .btn,
-  .table td.cell-actions > .btn-row > .tip-anchor {
-    flex: 1;
-  }
-
-  .table td.cell-actions > .btn-row {
-    flex: 1;
-  }
-
-  .table td.cell-actions .icon-btn {
-    flex: none;
-  }
-
-  .table td.cell-actions .btn-text {
-    border: 1px solid var(--outline);
-  }
-
-  /* A menu with no label is not an action row. Left at the bottom it sat alone
-     against a band of empty width; in the card's corner it is where a card's
-     own menu is. Anything with a label keeps the last line and the full width. */
-  .table td.cell-actions:not(:has(.btn)) {
-    position: absolute;
-    top: 6px;
-    right: 8px;
-    padding: 0;
-  }
-
-  /* Only the first line gives way to the menu. A column of its own took the
-     width from every value in the card and left none of them at its edge.
-     Asked on the row, this test would nest one :has() inside another, which is
-     not a selector — so the table is asked instead. */
-  .table:has(td.cell-actions > .icon-btn) tbody td:first-child {
-    padding-right: 44px;
-  }
-
-  /* An empty table has no row to label, so its cell is not a label and a value.
-     Left in the pair, the state sat in the value column, off to one side. Block
-     layout honours justify-items too, so the pair's `end` is reset as well: it
-     shrank the empty state to its content against the right edge. */
-  .table td.table-empty {
-    display: block;
-    justify-items: normal;
-    padding: 0;
-    text-align: center;
-  }
-
-  .table td.table-empty::before {
-    content: none;
-  }
-
-  /* A cell that is a line of its own, such as a release and its packs: the
-     label above it and the value across the record, rather than a value
-     squeezed into the column beside its label. */
-  .table td.cell-block {
-    display: block;
-    justify-items: normal;
-    text-align: start;
-  }
-
-  .table td.cell-block::before {
-    display: block;
-    margin-bottom: 4px;
-  }
-
-  .table td.cell-actions::before {
-    display: none;
-  }
-
-  .table tbody tr:hover td {
-    background: transparent;
-  }
-
-  .table code {
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-}
-
-/* Details list (label / value rows) */
-.details {
-  display: grid;
-  grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
-  column-gap: 24px;
-  font-size: 14px;
-}
-
-/* A label and its value share a baseline: text of two sizes centred on one
-   line still sits a pixel apart, and the eye reads the baselines. */
-.details-row {
-  display: grid;
-  grid-template-columns: subgrid;
-  grid-column: 1 / -1;
-  align-items: baseline;
-  min-height: 44px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--outline);
-}
-
-.details-row:last-child {
-  border-bottom: 0;
-}
-
-.details-flush .details-row {
-  min-height: var(--row-height);
-  padding: 8px var(--card-inset);
-}
-
-.details dt {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--ink-secondary);
-}
-
-.explain-mark {
-  flex: none;
-  color: var(--outline-strong);
-}
-
-.explain-mark:hover,
-.explain-mark:focus-visible {
-  color: var(--ink-secondary);
 }
 
 /* Tooltip: the dark chip Material puts against a light surface. Placed against
@@ -1083,107 +295,6 @@ button.chip[aria-pressed="true"] {
 
 .tip-below {
   transform: translate(-50%, 8px);
-}
-
-.details dd {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.details dd small {
-  display: block;
-  margin-top: 2px;
-  color: var(--ink-secondary);
-  font-size: 12px;
-  line-height: 16px;
-}
-
-/* The row gap gives back the copy button's negative margin below, so a button
-   that wraps under its value no longer climbs into it. */
-.details .value-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px 8px;
-}
-
-/* A button that is only an icon has no text to share the line's baseline. */
-.details .value-row > .icon-btn {
-  align-self: center;
-}
-
-.details .value-row .mono {
-  font-size: 13px;
-}
-
-/* The copy button keeps its tap target but stops setting the height of the line
-   it sits on: a row with one was pushing its value below its own label. The
-   overflow falls inside the row's padding, so the negative margin is whatever
-   takes the button back to the 20px line — and the button grows on touch. */
-.details .value-row .icon-btn-small {
-  margin-block: -6px;
-}
-
-.details-columns {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
-  gap: 0 40px;
-}
-
-.details-group h3 {
-  padding: 16px 0 4px;
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 20px;
-  color: var(--ink);
-}
-
-.pair {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pair .icon {
-  color: var(--ink-secondary);
-}
-
-/* The same card grammar a stacked table row uses: the label against the left
-   rail, the value against the right. Stacked one above the other, these left
-   the right half of every row empty and read as a second kind of list on a
-   screen that already had one. */
-@media (max-width: 599px) {
-  .details {
-    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
-    column-gap: 12px;
-  }
-
-  .details-row {
-    padding: 8px 0;
-  }
-
-  /* A flush list sits in a card with no padding of its own, so its rows keep
-     the 16px a stacked table row has at this step; without it the labels
-     touched the card's edge while every row above them did not. */
-  .details-flush .details-row {
-    padding: 8px var(--card-inset);
-  }
-
-  .details dt {
-    font-size: 12px;
-    line-height: 16px;
-  }
-
-  .details dd {
-    justify-self: end;
-    text-align: right;
-  }
-
-  /* A value and its hint share one edge. The hint is often the longer of the
-     two, and it was the one setting where the value sat. */
-  .details .value-row {
-    justify-content: flex-end;
-  }
 }
 
 /* Fields */
@@ -1260,155 +371,6 @@ button.chip[aria-pressed="true"] {
   font-family: var(--font-mono);
 }
 
-.inline-select {
-  height: 32px;
-  min-height: 32px;
-  padding: 0 32px 0 10px;
-  border: 1px solid var(--outline);
-  border-radius: var(--radius-control);
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 13px;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%235f6368'%3E%3Cpath d='M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 6px center;
-  background-size: 18px;
-}
-
-[data-theme="dark"] .inline-select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239aa0a6'%3E%3Cpath d='M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z'/%3E%3C/svg%3E");
-}
-
-.inline-select:hover {
-  border-color: var(--outline-strong);
-}
-
-.inline-select:disabled {
-  color: var(--ink-disabled);
-}
-
-.search {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.search .icon {
-  position: absolute;
-  left: 12px;
-  color: var(--ink-secondary);
-  pointer-events: none;
-}
-
-.search input {
-  width: 100%;
-  height: 40px;
-  padding: 0 12px 0 44px;
-  border: 1px solid var(--outline-strong);
-  border-radius: var(--radius-control);
-  background: var(--surface);
-}
-
-.search input:focus-visible {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: inset 0 0 0 1px var(--primary);
-}
-
-.search input:disabled {
-  border-color: var(--outline);
-  color: var(--ink-disabled);
-}
-
-.search:has(input:disabled) .icon {
-  color: var(--ink-disabled);
-}
-
-/* Switch */
-.switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
-}
-
-.switch input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  margin: 0;
-}
-
-.switch-track {
-  position: relative;
-  display: inline-block;
-  flex: none;
-  width: 36px;
-  height: 20px;
-  border-radius: var(--radius-switch);
-  background: var(--outline-strong);
-  transition: background var(--dur-fast) var(--ease);
-}
-
-.switch-track::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--surface);
-  box-shadow: var(--shadow-1);
-  transition: transform var(--dur-fast) var(--ease);
-}
-
-.switch input:checked + .switch-track {
-  background: var(--primary);
-}
-
-.switch input:checked + .switch-track::after {
-  transform: translateX(16px);
-  background: var(--on-primary);
-}
-
-.switch input:focus-visible + .switch-track {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-.switch input:disabled + .switch-track {
-  opacity: 0.38;
-}
-
-.switch-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 56px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--outline);
-}
-
-.switch-row:last-child {
-  border-bottom: 0;
-}
-
-.switch-row strong {
-  display: block;
-  font-weight: 400;
-}
-
-.switch-row small {
-  display: block;
-  color: var(--ink-secondary);
-  font-size: 12px;
-  line-height: 16px;
-}
-
 /* Menus (top layer via popover) */
 .menu {
   position: fixed;
@@ -1480,14 +442,6 @@ button.chip[aria-pressed="true"] {
   color: var(--ink-disabled);
 }
 
-.menu-item-danger {
-  color: var(--error-ink);
-}
-
-.menu-item-danger .icon {
-  color: var(--error-ink);
-}
-
 .menu-item small {
   display: block;
   color: var(--ink-secondary);
@@ -1502,25 +456,20 @@ button.chip[aria-pressed="true"] {
 }
 
 /* Dialog and sheet */
-.dialog,
-.sheet {
+.dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
   padding: 0;
   border: 0;
+  border-radius: var(--radius-dialog);
   background: var(--surface);
   color: var(--ink);
   box-shadow: var(--shadow-3);
 }
 
-.dialog::backdrop,
-.sheet::backdrop {
+.dialog::backdrop {
   background: var(--scrim);
-}
-
-.dialog {
-  width: min(520px, calc(100vw - 32px));
-  max-width: none;
-  max-height: calc(100dvh - 32px);
-  border-radius: var(--radius-dialog);
 }
 
 .dialog-body {
@@ -1551,30 +500,9 @@ button.chip[aria-pressed="true"] {
   margin-top: 4px;
 }
 
-.sheet {
-  position: fixed;
-  inset: 0 0 0 auto;
-  width: min(480px, 100vw);
-  height: 100dvh;
-  /* A <dialog> is capped at `calc(100% - 34px)` by the browser, which left the
-     sheet 34px short of the edge it is docked to on a phone. */
-  max-width: none;
-  max-height: none;
-  margin: 0;
-  border-radius: 0;
-  display: none;
-  flex-direction: column;
-}
-
-.sheet[open] {
-  display: flex;
-  animation: sheet-in var(--dur) var(--ease) both;
-}
-
 /* The scrim arrives with the panel. Snapping on while the panel was still
    fading read as a blink behind it. */
-.dialog[open]::backdrop,
-.sheet[open]::backdrop {
+.dialog[open]::backdrop {
   animation: scrim-in var(--dur) var(--ease) both;
 }
 
@@ -1602,52 +530,6 @@ button.chip[aria-pressed="true"] {
   }
 }
 
-.sheet-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 16px 12px 24px;
-  border-bottom: 1px solid var(--outline);
-}
-
-.sheet-header h2 {
-  font-size: 20px;
-  line-height: 28px;
-  font-weight: 500;
-  padding-top: 6px;
-}
-
-.sheet-header p {
-  margin-top: 2px;
-  color: var(--ink-secondary);
-  font-size: 13px;
-}
-
-.sheet-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 20px 24px;
-  display: grid;
-  gap: 20px;
-  align-content: start;
-}
-
-.sheet-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 24px;
-  border-top: 1px solid var(--outline);
-}
-
-.sheet-footer p {
-  color: var(--ink-secondary);
-  font-size: 13px;
-}
-
 @media (max-width: 599px) {
   .dialog {
     width: calc(100vw - 32px);
@@ -1656,37 +538,6 @@ button.chip[aria-pressed="true"] {
   .dialog-body {
     padding: 20px;
   }
-
-  .sheet-header,
-  .sheet-body,
-  .sheet-footer {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-}
-
-/* "Part of this is not connected", said in a line. The boxed form of the same
-   notice claims the whole screen is missing, which is a different report. */
-.not-connected {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  max-width: 72ch;
-  padding: 2px 0 10px;
-  color: var(--ink-secondary);
-  font-size: 13px;
-  line-height: 18px;
-  text-wrap: pretty;
-}
-
-.not-connected .icon {
-  flex: none;
-  margin-top: 1px;
-}
-
-.not-connected strong {
-  color: var(--ink);
-  font-weight: 500;
 }
 
 /* Banner */
@@ -1729,24 +580,6 @@ button.chip[aria-pressed="true"] {
   margin: -6px -8px -6px 0;
 }
 
-.banner-info {
-  background: var(--info-container);
-  border-color: transparent;
-}
-
-.banner-info .icon {
-  color: var(--info);
-}
-
-.banner-warning {
-  background: var(--warning-container);
-  border-color: transparent;
-}
-
-.banner-warning .icon {
-  color: var(--warning-ink);
-}
-
 .banner-error {
   background: var(--error-container);
   border-color: transparent;
@@ -1754,15 +587,6 @@ button.chip[aria-pressed="true"] {
 
 .banner-error .icon {
   color: var(--error-ink);
-}
-
-.banner-success {
-  background: var(--success-container);
-  border-color: transparent;
-}
-
-.banner-success .icon {
-  color: var(--success-ink);
 }
 
 @media (max-width: 599px) {
@@ -1775,50 +599,6 @@ button.chip[aria-pressed="true"] {
     justify-content: flex-end;
     margin: 0;
   }
-}
-
-/* Empty state */
-.empty {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  padding: 40px 24px;
-  text-align: center;
-}
-
-.empty-icon {
-  display: grid;
-  place-items: center;
-  width: 56px;
-  height: 56px;
-  margin-bottom: 8px;
-  border-radius: 50%;
-  background: var(--surface-variant);
-  color: var(--ink-secondary);
-}
-
-.empty strong {
-  font-family: var(--font-title);
-  font-size: 18px;
-  font-weight: 400;
-  line-height: 24px;
-}
-
-.empty p {
-  max-width: 48ch;
-  color: var(--ink-secondary);
-}
-
-.empty .btn-row {
-  margin-top: 8px;
-  justify-content: center;
-}
-
-/* Skeleton */
-.skeleton-rows {
-  display: grid;
-  gap: 14px;
-  padding: 16px 20px;
 }
 
 .skeleton {
@@ -1958,117 +738,6 @@ button.chip[aria-pressed="true"] {
   line-height: 32px;
 }
 
-/* Copy affordance */
-.copy-value {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-}
-
-.copy-value code {
-  overflow-wrap: anywhere;
-}
-
-/* An address on a detail row is read as one thing: it never breaks inside
-   its port. When the row is too narrow the copy button steps down a line. */
-.details .copy-value {
-  flex-wrap: wrap;
-}
-
-.details .copy-value code {
-  overflow-wrap: normal;
-  white-space: nowrap;
-}
-
-/* The value gives up width; the button that copies it does not. In a truncating
-   cell the button was being squeezed to 18px, which is a target nobody can hit. */
-.copy-value .icon-btn {
-  flex: none;
-}
-
-/* Which network an address lives on: one icon in front of it, named on hover
-   and to a reader, instead of a caption under every address. */
-.address-network {
-  flex: none;
-  margin-right: 6px;
-  color: var(--ink-secondary);
-}
-
-/* Sparkline: one line at constant weight, no axes, no grid. The scale row under
-   it carries the two labels a reader needs — where the window starts and ends. */
-.spark {
-  width: 100%;
-  height: 40px;
-}
-
-.spark-floor {
-  stroke: var(--outline);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
-
-.spark-line {
-  fill: none;
-  stroke: var(--primary);
-  stroke-width: 1.5;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-}
-
-.spark-row {
-  display: grid;
-  gap: 4px;
-  max-width: 960px;
-  padding: 12px 0;
-}
-
-/* A line with no axes carries its shape in its slope. Stretched across a
-   2560px pane the slope goes, so the chart stops at a width it can be read
-   at, and the scale under it stops with it. */
-.scale {
-  max-width: 960px;
-}
-
-.spark-head,
-.scale {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--ink-secondary);
-  font-size: 12px;
-  line-height: 16px;
-}
-
-.spark-head strong {
-  color: var(--ink);
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 500;
-}
-
-/* A long identifier keeps its tail: the head is allowed to shrink and ellipsise,
-   the tail never does. Pure layout, so it re-cuts itself as the column resizes. */
-.ellipsis {
-  display: inline-flex;
-  align-items: baseline;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.ellipsis-head {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-.ellipsis-tail {
-  flex: none;
-  white-space: nowrap;
-}
-
 /* Timestamp: the day and the clock each stay whole, and a narrow column breaks
    between them rather than inside either. */
 .timestamp {
@@ -2081,63 +750,11 @@ button.chip[aria-pressed="true"] {
   white-space: nowrap;
 }
 
-/* Filter bar */
-.filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 8px var(--card-inset);
-  border-bottom: 1px solid var(--outline);
-  color: var(--ink-secondary);
-  font-size: 13px;
-}
-
-.filter-bar > .icon {
-  color: var(--ink-secondary);
-}
-
-.filter-bar .chip-row {
-  flex: 1;
-}
-
-/* A search box reads as one field, so the bar gives it room and keeps the
-   count beside it rather than under it. */
-.filter-search {
-  flex: 1 1 220px;
-  max-width: 420px;
-}
-
-.filter-summary {
-  white-space: nowrap;
-}
-
-/* Inside a sheet the content is spaced already: the field alone, no bar. */
-.filter-bar-plain {
-  padding: 0;
-  border-bottom: 0;
-}
-
-/* In a narrow sheet the field keeps its own line, so the count and Clear stay
-   together on the next one instead of the field squeezing them apart. */
-.filter-bar-plain .filter-search {
-  flex: 1 0 100%;
-  max-width: none;
-}
-
 /* Touch targets: phones and narrow webviews first, then any coarse pointer */
 @media (max-width: 959px) {
   .icon-btn-small {
     width: 40px;
     height: 40px;
-  }
-
-  .details .value-row .icon-btn-small {
-    margin-block: -10px;
-  }
-
-  .details .value-row {
-    row-gap: 10px;
   }
 
   .btn-small {
@@ -2152,31 +769,15 @@ button.chip[aria-pressed="true"] {
 
 @media (pointer: coarse) {
   .btn,
-  .icon-btn,
-  .tab,
-  .menu-item {
+.icon-btn,
+.menu-item {
     min-height: 44px;
-  }
-
-  /* A role select sits beside small buttons in every row it appears in, so
-     it grows to their 40px, not the 44px of a full-size control. Height, not
-     min-height: WebKit sizes a select from its font and ignores the latter. */
-  .inline-select {
-    height: 40px;
-    min-height: 40px;
   }
 
   /* A chip is a choice, not a verb: it takes the 32px floor, not the 44px a
      button gets, so a row of them still reads as one line. */
   .chip {
     height: 32px;
-  }
-
-  .table .row-link,
-  .preset-source a,
-  .breadcrumb a,
-  .breadcrumb button {
-    min-height: 44px;
   }
 
   .icon-btn {
@@ -2194,8 +795,7 @@ button.chip[aria-pressed="true"] {
   }
 
   .field input,
-  .field select,
-  .search input {
+.field select {
     font-size: 16px;
     min-height: 44px;
   }

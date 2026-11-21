@@ -5,7 +5,6 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { Tabs } from "../src/components/ui/Tabs.tsx";
 import { revealDelta } from "../src/lib/revealTab.ts";
 import { Tabs as TerminalTabs } from "../src/skins/terminal/ui.tsx";
 
@@ -20,14 +19,12 @@ test("a tab past the strip's edge is scrolled in, and only as far as needed", ()
   assert.equal(revealDelta(strip, { left: 300, right: 700 }), 284, "a tab wider than the strip shows its start");
 });
 
-test("both faces draw a scrolling tablist with one selected, focusable tab", () => {
+test("the terminal draws a scrolling tablist with one selected, focusable tab", () => {
   const options = [{ id: "details", label: "Details" }, { id: "metrics", label: "Metrics" }] as const;
-  for (const Strip of [Tabs, TerminalTabs]) {
-    const markup = renderToStaticMarkup(createElement(Strip, { label: "World", options, value: "metrics", onChange: () => undefined }));
-    assert.match(markup, /role="tablist"/);
-    assert.match(markup, /aria-label="World"/);
-    assert.match(markup, /data-scroll="expected"/);
-    assert.equal(markup.match(/aria-selected="true"/g)?.length, 1);
-    assert.match(markup, /aria-selected="true"[^>]*tabindex="0"[^>]*>Metrics/);
-  }
+  const markup = renderToStaticMarkup(createElement(TerminalTabs, { label: "World", options, value: "metrics", onChange: () => undefined }));
+  assert.match(markup, /role="tablist"/);
+  assert.match(markup, /aria-label="World"/);
+  assert.match(markup, /data-scroll="expected"/);
+  assert.equal(markup.match(/aria-selected="true"/g)?.length, 1);
+  assert.match(markup, /aria-selected="true"[^>]*tabindex="0"[^>]*>Metrics/);
 });

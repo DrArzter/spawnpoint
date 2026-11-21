@@ -58,12 +58,12 @@ export function ConfirmationDialog({ model }: Readonly<{ model: ConfirmationMode
           </SelectInput>
         </Field>
       )}
-      {model.typedConfirmation && <>
-        <p className="t-copy-line">Type <code>{model.typedConfirmation.expected}</code> to confirm.</p>
-        <Field label="World ID">
+      {model.typedConfirmation && (
+        <Field label={model.typedConfirmation.label}>
           <TextInput autoComplete="off" data-autofocus mono onChange={(event) => model.typedConfirmation?.set(event.target.value)} placeholder={model.typedConfirmation.expected} value={model.typedConfirmation.value} />
         </Field>
-      </>}
+      )}
+      {model.error && <p className="t-error" role="alert">{model.error}</p>}
     </Modal>
   );
 }

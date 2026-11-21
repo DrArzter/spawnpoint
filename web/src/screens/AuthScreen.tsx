@@ -14,7 +14,7 @@ function visitorAccount(auth: AuthState): string {
   return `Telegram ID ${candidate.telegramId}${username}`;
 }
 
-export function AuthScreen({ auth, onChange }: { auth: AuthState; onChange: (state: AuthState) => void }) {
+export function AuthScreen({ auth, onChange }: Readonly<{ auth: AuthState; onChange: (state: AuthState) => void }>) {
   const [requesting, setRequesting] = useState(false);
   const [requestError, setRequestError] = useState("");
   const visitor = auth.status === "authenticated" && auth.session.state === "visitor" ? auth.session : null;
@@ -64,12 +64,12 @@ export function AuthScreen({ auth, onChange }: { auth: AuthState; onChange: (sta
   );
 }
 
-export function BootScreen({ title, description }: { title: string; description: string }) {
+export function BootScreen({ title, description }: Readonly<{ title: string; description?: string }>) {
   return (
     <main aria-busy="true" aria-live="polite" className="boot" role="status">
       <section className="boot-card">
         <div className="boot-brand"><SpawnpointMark size={48} /><strong>Spawnpoint</strong></div>
-        <div className="boot-copy"><h1>{title}</h1><p>{description}</p></div>
+        <div className="boot-copy"><h1>{title}</h1>{description && <p>{description}</p>}</div>
         <div aria-hidden="true" className="boot-progress" />
       </section>
     </main>

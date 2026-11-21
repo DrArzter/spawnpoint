@@ -20,13 +20,18 @@ Consistency does **not** mean that two elements happen to look similar. It means
 ### Required workflow
 
 1. Search for the existing semantic primitive before writing markup or CSS.
-   - Shared console primitives live in `web/src/components/ui/`.
+   - Console primitives live in `web/src/skins/console/ui/` (one file each) and are styled in `web/src/skins/console/styles/` (one sheet each, `c-*` classes under `html[data-skin="console"]`).
    - Terminal primitives live in `web/src/skins/terminal/ui.tsx` and are styled in `web/src/skins/terminal/terminal.css`.
+   - The front door's parts (sign-in, landing, boot) live in `web/src/components/ui/` and `web/src/styles/`. A skin draws none of its views with them; it may use the shared behaviour there: the snackbar queue (both skins), and `Timestamp`, `Tooltip` and `useFilter` (terminal).
 2. If the intent already exists, use its component. Do not reproduce its DOM, brackets, icon, tooltip, padding, status colour, table layout, or breakpoint behavior locally.
 3. If the same intent appears at least three times and no primitive fits, add or extend a narrowly named shared component or variant. Do not create a generic abstraction for unrelated elements that only look alike.
 4. Migrate every equivalent occurrence in the touched flow. A fix is incomplete when one screen uses the contract and a neighboring screen still carries a lookalike implementation.
 5. Delete the superseded markup and CSS exception. Do not leave the old path available for the next screen to copy.
 6. Add a contract test when introducing or changing a primitive. Test semantic markup, accessibility labels, stable variant classes, and action reachability; do not snapshot an entire page.
+
+### Console vocabulary
+
+`web/DESIGN.md` lists the console primitives and the owner rules they keep. Use `ActionButton`, `Overflow` (always a menu, so a column has one control), `Table` and `TrackList` (rows on shared tracks, one action column), `Status` and `Indicator`, `DetailList`, `PageHeader` (the breadcrumb is the title), `Card` and `Grid`, `Empty`, `Skeleton`, `Dialog` and `SidePanel` instead of rebuilding them. A console primitive that promises a layout emits its `data-layout` marker.
 
 ### Terminal vocabulary
 
@@ -61,19 +66,21 @@ If a component lacks a needed capability, extend its typed API and implement the
 - Remove unused selectors when their component is removed. Do not retain speculative utility classes.
 - Use existing tokens and `t-*` scoping. Do not introduce raw colours, spacing values, or unscoped terminal rules when a semantic token already exists.
 
-`web/test/terminal-css.test.ts` enforces two of these rules on `terminal.css`: every styled `t-*` class has a consumer in `web/src` (a class built as `` `t-mark-${kind}` `` counts by its prefix), and no selector sets the same property twice in one cascade context. When it fails, consolidate the rules or delete the dead class; do not silence it.
+`web/test/terminal-css.test.ts` enforces two of these rules on `terminal.css`: every styled `t-*` class has a consumer in `web/src` (a class built as `` `t-mark-${kind}` `` counts by its prefix), and no selector sets the same property twice in one cascade context. `web/test/console-css.test.ts` enforces the same two rules on the console sheets for `c-*` classes, and also that every rule is scoped to `html[data-skin="console"]` and that colours, times and easings live only in `tokens.css`. When either fails, consolidate the rules or delete the dead class; do not silence it.
 
 ### Verification
 
 For changes under `web/`:
 
 1. Run `npm test` and `npm run build` from `web/`.
-2. Run `scripts/check.sh ui`, the breakpoint gate: both skins at both sides of every step, failing on text under a
-   control, text over text, a broken one-line row, an off-centre empty state, a label off its value, or a cut menu.
-   A primitive that promises a layout adds its selector to `LAYOUT` in `web/tools/ui-audit/audit.mjs`.
+2. Run `scripts/check.sh ui`, the UI gate: the console and terminal skins at both sides of every step and on a 40px
+   stride, every dialog, panel and menu opened, both themes and the stress fixture. It fails on a page wider than the
+   screen, overlapping text, icons or controls, a broken layout promise, or a broken owner rule
+   (`web/tools/ui-audit/README.md`). A console primitive that promises a layout emits its `data-layout` marker; a new
+   surface adds its state to `web/tools/ui-audit/states.mjs`. `UI_PORT` serves the gate on another port.
 3. Run `git diff --check`.
 4. Inspect the complete affected path once on desktop and mobile. Verify the shared component everywhere it appears, not only on the screenshot that exposed the problem.
 5. Check long values, empty/loading/error/disabled states, keyboard focus, tooltips, touch targets, and horizontal overflow as applicable.
-6. Before finishing CSS work, check for same-context duplicate selectors, overwritten properties, and dead `t-*` classes.
+6. Before finishing CSS work, check for same-context duplicate selectors, overwritten properties, and dead `t-*` and `c-*` classes.
 
 Do not call a UI change complete because one example looks correct. It is complete when every same-intent occurrence uses the same contract and the old competing implementation is gone.

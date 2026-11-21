@@ -1,0 +1,320 @@
+/* ListColumn and its rows: the list beside a split page. */
+
+html[data-skin="console"] .c-lcol {
+  position: sticky;
+  top: var(--c-bar);
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--c-bar));
+  overflow: auto;
+  border-right: 1px solid var(--c-line);
+  background: var(--c-surface);
+}
+
+html[data-skin="console"] .c-lcol-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--c-line);
+  background: var(--c-surface);
+}
+
+html[data-skin="console"] .c-lcol-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+}
+
+html[data-skin="console"] .c-lcol-search {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: var(--c-field);
+  padding: 0 12px;
+  border: 1px solid var(--c-line-2);
+  border-radius: var(--c-r-ctl);
+  background: var(--c-surface);
+  color: var(--c-ink-3);
+}
+
+html[data-skin="console"] .c-lcol-search:focus-within {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 1px var(--c-accent);
+}
+
+html[data-skin="console"] .c-lcol-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: none;
+  color: var(--c-ink);
+  outline: 0;
+}
+
+html[data-skin="console"] .c-lcol-chips {
+  display: flex;
+  gap: 6px;
+}
+
+html[data-skin="console"] .c-lcol-chip {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 6px;
+  border: 1px solid var(--c-line-2);
+  border-radius: var(--c-r-pill);
+  background: var(--c-surface);
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--c-d1), border-color var(--c-d1);
+}
+
+html[data-skin="console"] .c-lcol-chip:hover {
+  background: var(--c-surface-2);
+}
+
+html[data-skin="console"] .c-lcol-chip[aria-pressed="true"] {
+  border-color: var(--c-accent-line);
+  background: var(--c-accent-soft);
+  color: var(--c-accent-text);
+}
+
+html[data-skin="console"] .c-lcol-chip-count {
+  color: var(--c-ink-3);
+  font-weight: 600;
+}
+
+html[data-skin="console"] .c-lcol-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px 124px;
+}
+
+html[data-skin="console"] .c-lcol-group-label {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 6px;
+  color: var(--c-ink-3);
+  font-size: var(--c-fs-xs);
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+html[data-skin="console"] .c-listitem-slot {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+html[data-skin="console"] .c-listitem {
+  grid-column: 1 / -1;
+  padding: 12px 16px 12px 13px;
+  border-bottom: 1px solid var(--c-line);
+  border-left: 3px solid transparent;
+  color: var(--c-ink);
+  transition: background var(--c-d1);
+}
+
+html[data-skin="console"] .c-listitem:hover {
+  background: var(--c-surface-2);
+  text-decoration: none;
+}
+
+html[data-skin="console"] .c-listitem:focus-visible {
+  outline-offset: -2px;
+}
+
+html[data-skin="console"] .c-listitem[aria-current="true"] {
+  border-left-color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+html[data-skin="console"] .c-listitem-world {
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  row-gap: 5px;
+}
+
+html[data-skin="console"] .c-listitem-world > * {
+  min-width: 0;
+}
+
+html[data-skin="console"] .c-listitem-name {
+  overflow: hidden;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-listitem-players {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  font-weight: 600;
+}
+
+html[data-skin="console"] .c-listitem-hosting {
+  display: flex;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+html[data-skin="console"] .c-listitem-status {
+  display: flex;
+  align-items: center;
+  font-size: var(--c-fs-s);
+}
+
+html[data-skin="console"] .c-listitem-line {
+  grid-column: 2 / 4;
+  overflow: hidden;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  text-align: end;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-listitem-address {
+  display: flex;
+  grid-column: 1 / -1;
+  font-size: var(--c-fs-s);
+}
+
+html[data-skin="console"] .c-listitem-person {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 5px;
+}
+
+html[data-skin="console"] .c-listitem-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+html[data-skin="console"] .c-listitem-meta {
+  display: flex;
+  justify-content: flex-end;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  font-weight: 600;
+}
+
+html[data-skin="console"] .c-listitem-account {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding-left: 40px;
+  overflow: hidden;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-listitem-account > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 1023px) {
+  html[data-skin="console"] .c-lcol {
+    position: static;
+    height: auto;
+    min-height: calc(100vh - var(--c-bar));
+    border-right: 0;
+  }
+}
+
+@media (max-width: 759px) {
+  html[data-skin="console"] .c-lcol-group {
+    grid-template-columns: minmax(0, 1fr) 116px;
+  }
+
+  html[data-skin="console"] .c-listitem-world .c-listitem-name {
+    grid-row: 1;
+    grid-column: 1;
+    display: -webkit-box;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  html[data-skin="console"] .c-listitem-world .c-listitem-hosting {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  html[data-skin="console"] .c-listitem-world .c-listitem-status {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  html[data-skin="console"] .c-listitem-world .c-listitem-players {
+    grid-row: 2;
+    grid-column: 2;
+  }
+
+  html[data-skin="console"] .c-listitem-world .c-listitem-line {
+    grid-row: 3;
+    grid-column: 1 / -1;
+    text-align: start;
+  }
+
+  html[data-skin="console"] .c-listitem-world .c-listitem-address {
+    grid-row: 4;
+  }
+
+  html[data-skin="console"] .c-lcol-search {
+    height: var(--c-target);
+  }
+}
+
+html[data-skin="console"] .c-listitem-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--c-r-pill);
+  background: var(--c-surface-3);
+  color: var(--c-ink-2);
+}
+
+/* A world row outside the list column keeps the column's tracks on its own. */
+html[data-skin="console"] .c-listitem-standalone {
+  grid-template-columns: minmax(0, 1fr) 48px 124px;
+}
+
+@media (max-width: 759px) {
+  html[data-skin="console"] .c-listitem-standalone {
+    grid-template-columns: minmax(0, 1fr) 124px;
+  }
+}

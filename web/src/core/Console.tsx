@@ -1,22 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { ConsoleEntry } from "../api/contract";
 import type { ActiveSession } from "../auth";
 import { useSnackbar } from "../components/ui/Snackbar";
-import { buildStatus, sessionStatus, worldStatus } from "../components/ui/Status";
-import type { StatusDescriptor } from "../components/ui/Status";
-import type { Game, World, WorldTab } from "../model";
-import { routeHash } from "../routing";
+import type { Game, Preset, World, WorldTab } from "../model";
+import { routeHash, type WorldsView } from "../routing";
 import { operationsBlockingWorld, runningWorlds, worldSessionId, worldState } from "../session";
 import { pendingFor, pendingOf } from "../shell/actions";
 import type { Skin } from "../skins/skin";
 import { action, type Action } from "./actions";
 import { releaseBuildCopy } from "./release-builds";
+import { buildStatus, sessionStatus, worldStatus, type StatusDescriptor } from "./status";
 import { useConsole, type ConsoleController } from "./useConsole";
-import { useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
+import { useAccessRequests, useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
-import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, ReleasesModel, WorldModel, WorldsModel } from "./models";
-import { buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionDetails, withReleasePacks, worldDetails, worldMoreActions, worldNotices, worldSessionControl, worldTabs } from "./worlds";
+import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, OperationRow, ReleasesModel, ShellModel, WorldModel, WorldRow, WorldsModel } from "./models";
+import { addressFacts, buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionDetails, siblingRow, withReleasePacks, worldDetails, worldLaunchedAt, worldMoreActions, worldNotices, worldPlayers, worldSessionControl, worldTabs } from "./worlds";
 
 /*
  * The controllers: each takes the console's bones, builds one page's model
@@ -29,9 +28,9 @@ export type LookChoices = Readonly<{ current: string; options: readonly Readonly
 export function ConsoleRoot({ session, skin, looks, continuesBootCard }: Readonly<{ session: ActiveSession; skin: Skin; looks: LookChoices; continuesBootCard: boolean }>) {
   const notify = useSnackbar();
   const console = useConsole(session, continuesBootCard, notify);
-  if (!console.booted) return console.bootVisible ? <skin.Boot model={{ title: "Preparing the console", description: "Reading games, worlds and the current AWS state." }} /> : null;
+  if (!console.booted) return console.bootVisible ? <skin.Boot model={{ title: "Preparing the console" }} /> : null;
   return (
-    <skin.Shell model={console.shell}>
+    <skin.Shell model={shellModel(console)}>
       <CurrentPage console={console} looks={looks} skin={skin} />
       <skin.ScopeDialog model={console.shell.scope} />
       <ConfirmationController console={console} skin={skin} />
@@ -58,24 +57,83 @@ function refreshAction(console: ConsoleController): Action {
   return action("refresh", "Refresh", () => void console.refresh(), { icon: "refresh", busy: console.refreshing });
 }
 
+// The scoped game's worlds as rows, each with the verb its own page offers.
+function worldRows(console: ConsoleController): WorldRow[] {
+  const { game, snapshot, granted, pending, sharedSession, fleetOverview, worldCallbacks } = console;
+  if (!game) return [];
+  return game.worlds.map((world) => {
+    const row = buildWorldRow(game, world, { fleet: fleetOverview, sharedSession, granted, pending, callbacks: worldCallbacks, snapshot });
+    return { ...row, sessionAction: () => worldSessionVerb(console, game, world) };
+  });
+}
+
+function worldSessionVerb(console: ConsoleController, game: Game, world: World): Action {
+  const rowPending = pendingFor(console.pending, world.id);
+  return sessionVerb(console, game, world, rowPending !== null, rowPending?.kind === "session");
+}
+
+// The frame's model, with what it asks for about the scoped game's worlds.
+function shellModel(console: ConsoleController): ShellModel {
+  const { game, granted, worldCallbacks } = console;
+  const rows = worldRows(console);
+  return {
+    ...console.shell,
+    worlds: rows.map((row) => ({ id: row.world.id, name: row.world.displayName, href: row.href, status: row.status })),
+    refreshAction: () => refreshAction(console),
+    flash: { operations: gameOperationRows(game, console.snapshot).map((row) => ({ id: row.operation.id, label: row.label, worldName: row.worldName, worldId: row.operation.worldId ?? "", startedAt: row.operation.startedAt })) },
+    worldActions: (worldId) => {
+      const world = game?.worlds.find((item) => item.id === worldId);
+      if (!game || !world) return null;
+      return {
+        session: worldSessionVerb(console, game, world),
+        invite: granted.has("invitation.send") ? action("world.invite", "Invite players", () => worldCallbacks.onInvite(game, world), { icon: "send" }) : null,
+      };
+    },
+  };
+}
+
+function presetStatus(preset: Preset): StatusDescriptor {
+  return preset.build?.state === "starting" ? { kind: "pending", label: "Awaiting dispatch" } : buildStatus(preset.buildStatus);
+}
+
+// The game's running operations, each named by the world it holds.
+function gameOperationRows(game: Game | undefined, snapshot: ConsoleController["snapshot"]): OperationRow[] {
+  if (!game) return [];
+  return (snapshot?.operations ?? []).flatMap((operation) => {
+    const world = game.worlds.find((item) => item.id === operation.worldId);
+    return world ? [{ operation, label: operationLabel(operation.type), worldName: world.displayName, href: routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: world.id }) }] : [];
+  });
+}
+
 function WorldsPage({ console, skin }: Controlled) {
-  const { game, snapshot, listStatus, error, granted, pending, sharedSession, serverState, fleetOverview, worldCallbacks } = console;
+  const { game, snapshot, listStatus, error, granted, sharedSession, serverState, fleetOverview, route, notify, setRequestCount } = console;
   const loading = listStatus === "loading";
   const canManage = granted.has("world.manage");
   const readyPreset = game?.presets.some((preset) => preset.releases.length > 0) ?? false;
+  const view = route.worldsView;
+  const requests = useAccessRequests(view === "overview" && granted.has("access.manage"), notify);
+  const requestCount = requests.requests?.status === "ready" ? requests.requests.value.length : null;
+  useEffect(() => { if (requestCount !== null) setRequestCount(requestCount); }, [requestCount, setRequestCount]);
+  const viewHref = (worldsView: WorldsView) => routeHash({ page: "worlds", accessTab: "users", gameId: game?.id ?? null, worldId: null, worldsView });
   const model: WorldsModel = {
     status: listStatus,
     error,
     game,
-    unavailable: !loading && !game ? { failed: listStatus === "error", description: listStatus === "error" ? "Spawnpoint could not read games, worlds and the compute host." : "The control plane lists no games yet. Games and their presets are declared in Git." } : null,
+    unavailable: !loading && !game ? { failed: listStatus === "error", description: listStatus === "error" ? "Spawnpoint could not read games, worlds and the compute host." : "No games yet. Declare them in Git." } : null,
     notices: [
       ...(listStatus === "error" ? [{ id: "load", tone: "error" as const, title: "Current state could not be loaded", description: error, action: action("refresh", "Try again", () => void console.refresh()) }] : []),
     ],
     overview: buildSessionOverview(game, snapshot, serverState, sharedSession, fleetOverview),
-    rows: game ? game.worlds.map((world) => buildWorldRow(game, world, { fleet: fleetOverview, sharedSession, granted, pending, callbacks: worldCallbacks })) : [],
-    emptyDescription: canManage && readyPreset ? "Create the first world from a ready preset." : "Worlds appear here once a preset has a ready release and a world is created.",
+    rows: worldRows(console),
+    emptyDescription: canManage && readyPreset ? null : "Worlds appear here once a preset has a ready release.",
     refresh: refreshAction(console),
     createWorld: canManage && readyPreset && game ? action("world.create", "Create world", () => console.requestCreateWorld(game), { icon: "add" }) : null,
+    view,
+    views: { overview: viewHref("overview"), list: viewHref("list") },
+    operations: gameOperationRows(game, snapshot),
+    builds: (game?.presets ?? []).map((preset) => ({ preset, status: presetStatus(preset) })),
+    requests: requests.requests,
+    requestActions: requests.actions,
   };
   return <skin.Worlds model={model} />;
 }
@@ -158,11 +216,12 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     world,
     worldsHref: routeHash({ page: "worlds", accessTab: "users", gameId: game.id, worldId: null }),
     availability: worldStatus(world),
-    notices: worldNotices(world, rowPending),
+    sessionStatus: sessionStatus(state),
+    notices: worldNotices(world),
     tabs: shown.tabs,
     tab: route.worldTab,
     setTab: (tab) => navigate({ worldTab: tab }),
-    session: sessionVerb(console, game, world, busy, rowPending?.kind === "session"),
+    session: worldSessionVerb(console, game, world),
     refresh: refreshAction(console),
     invite: granted.has("invitation.send") ? action("world.invite", "Invite players", () => worldCallbacks.onInvite(game, world), { icon: "send" }) : null,
     more: worldMoreActions(game, world, granted, busy, worldCallbacks),
@@ -183,6 +242,14 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     whitelist: shown.whitelist,
     console: shown.console,
     metrics: shown.metrics,
+    siblings: worldRows(console).map(siblingRow),
+    glance: {
+      live: state === "running",
+      players: worldPlayers(game, world, sharedSession),
+      address: addressFacts(world),
+      launchedAt: worldLaunchedAt(game, world, sharedSession, snapshot),
+      busy: busy || operations.length > 0,
+    },
   };
   return <skin.World model={model} />;
 }
@@ -209,7 +276,9 @@ const consoleStatuses: Readonly<Record<ConsoleEntry["status"], StatusDescriptor>
 // A command an agent sent names the person and the agent, so the log shows
 // which commands nobody typed in the panel.
 export function consoleLine(entry: ConsoleEntry): ConsoleLine {
-  const who = entry.agent ? `${entry.displayName} via ${entry.agent}` : entry.displayName;
+  // A deleted person's commands keep their id and lose their name.
+  const name = entry.displayName ?? "Deleted user";
+  const who = entry.agent ? `${name} via ${entry.agent}` : name;
   return { id: entry.id, at: entry.at, who, command: entry.command, status: consoleStatuses[entry.status], output: entry.output, pending: entry.status === "pending" };
 }
 
@@ -261,7 +330,7 @@ function releasesModel(console: ConsoleController): ReleasesModel {
     loading: listStatus === "loading",
     presets: (game?.presets ?? []).map((preset) => ({
       preset,
-      status: preset.build?.state === "starting" ? { kind: "pending" as const, label: "Awaiting dispatch" } : buildStatus(preset.buildStatus),
+      status: presetStatus(preset),
       createWorld: game ? action("world.create", "Create world", () => console.requestCreateWorld(game, preset), {
         icon: "add",
         disabled: !canManage || preset.releases.length === 0 || pendingOf(pending, "create") !== null,
@@ -288,10 +357,15 @@ function createWorldHint(canManage: boolean, ready: boolean): string {
 }
 
 function AccessPage({ console, skin }: Controlled) {
-  const { games, members, setMembers, roles, setRoles, bootstrap, granted, route, navigate, notify } = console;
+  const { games, members, setMembers, roles, setRoles, bootstrap, granted, session, route, navigate, notify } = console;
   const rolesModel = useRoles(setRoles);
-  const users = useUsers({ bootstrap, canInvite: granted.has("access.invite"), members, roles, rolesLoading: rolesModel.loading, onMembersChange: setMembers, notify });
+  const authority = { selfId: session.identity.id, canDelete: granted.has("access.manage"), canDeleteOwner: granted.has("access.owner.grant") };
+  const users = useUsers({ bootstrap, canInvite: granted.has("access.invite"), authority, members, roles, rolesLoading: rolesModel.loading, onMembersChange: setMembers, notify });
   const notifications = useNotifications(games, notify);
+  const candidates = users.candidates;
+  const requestCount = candidates.status === "ready" ? candidates.value.length : null;
+  const { setRequestCount } = console;
+  useEffect(() => { if (requestCount !== null) setRequestCount(requestCount); }, [requestCount, setRequestCount]);
   const model: AccessModel = {
     tab: route.accessTab,
     setTab: (tab) => navigate({ page: "access", accessTab: tab }),

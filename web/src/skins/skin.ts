@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 
+import type { SnackbarQueue } from "../components/ui/Snackbar";
 import type { AccessModel, BootModel, ConfirmationModel, CreateWorldModel, GameSettingsModel, InvitationModel, ProfileModel, ReleasesModel, ScopeModel, ShellModel, WorldModel, WorldsModel, WorldSettingsModel } from "../core/models";
 
 /**
@@ -27,9 +28,16 @@ export type Skin = Readonly<{
   WorldSettingsSheet: ComponentType<{ model: WorldSettingsModel }>;
   GameSettingsSheet: ComponentType<{ model: GameSettingsModel }>;
   InvitationSheet: ComponentType<{ model: InvitationModel }>;
+  /** The shell draws the one Refresh (`ShellModel.refreshAction`); a page draws its own `refresh` only as a retry. */
+  shellRefresh?: boolean;
+  /** A skin that draws the notification queue itself; the default host is drawn when absent. */
+  renderSnackbar?: (queue: SnackbarQueue) => ReactNode;
 }>;
 
 export type SkinId = "console" | "terminal";
 
+/** Every face, in the order the contract test and the registry know them. */
 export const SKIN_IDS: readonly SkinId[] = ["console", "terminal"];
+/** The faces a person may choose on the profile page. */
+export const CHOOSABLE_SKIN_IDS: readonly SkinId[] = ["console", "terminal"];
 export const DEFAULT_SKIN: SkinId = "console";

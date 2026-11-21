@@ -1,15 +1,15 @@
 import { consoleSkin } from "./console";
-import { DEFAULT_SKIN, SKIN_IDS, type Skin, type SkinId } from "./skin";
+import { CHOOSABLE_SKIN_IDS, DEFAULT_SKIN, SKIN_IDS, type Skin, type SkinId } from "./skin";
 import { terminalSkin } from "./terminal";
 
 export type { Skin, SkinId } from "./skin";
 
 const skins: Readonly<Record<SkinId, Skin>> = { console: consoleSkin, terminal: terminalSkin };
 
-/** Every face, for the chooser on the profile page. */
-/** Every face the console can wear, in the order they are offered. */
+/** Every face the console can wear, each held to the skin contract. */
 export const SKINS: readonly Skin[] = SKIN_IDS.map((id) => skins[id]);
-export const SKIN_CHOICES: readonly Readonly<{ id: SkinId; name: string }>[] = SKIN_IDS.map((id) => ({ id, name: skins[id].name }));
+/** The faces offered on the profile page. */
+export const SKIN_CHOICES: readonly Readonly<{ id: SkinId; name: string }>[] = CHOOSABLE_SKIN_IDS.map((id) => ({ id, name: skins[id].name }));
 
 export function isSkinId(value: unknown): value is SkinId {
   return typeof value === "string" && (SKIN_IDS as readonly string[]).includes(value);
@@ -51,7 +51,7 @@ export function currentSkinId(): SkinId {
  */
 export function wearOnDocument(id: SkinId, worn: boolean): void {
   const root = document.documentElement;
-  if (worn && id !== DEFAULT_SKIN) root.dataset.skin = id;
+  if (worn) root.dataset.skin = id;
   else delete root.dataset.skin;
 }
 

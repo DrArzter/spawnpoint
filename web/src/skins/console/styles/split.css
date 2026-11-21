@@ -1,0 +1,41 @@
+/* SplitPage: a list column and a pane, edge to edge in the main area. */
+
+html[data-skin="console"] .c-main:has(.c-split) {
+  padding: 0;
+}
+
+html[data-skin="console"] .c-split {
+  display: grid;
+  grid-template-columns: var(--c-lcol) minmax(0, 1fr);
+  min-height: calc(100vh - var(--c-bar));
+}
+
+html[data-skin="console"] .c-split-list {
+  min-width: 0;
+}
+
+html[data-skin="console"] .c-split-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--c-gap);
+  min-width: 0;
+  padding: 20px var(--c-pad) 48px;
+  background: var(--c-bg);
+}
+
+@media (max-width: 1023px) {
+  html[data-skin="console"] .c-split {
+    display: block;
+  }
+
+  html[data-skin="console"] .c-split[data-selected] > .c-split-list,
+  html[data-skin="console"] .c-split:not([data-selected]) > .c-split-pane {
+    display: none;
+  }
+}
+
+@media (max-width: 759px) {
+  html[data-skin="console"] .c-split-pane {
+    padding-bottom: 96px;
+  }
+}

@@ -121,8 +121,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
+      # The whole history, so the gate can see whether a pull request changed web/.
       - name: Check out the commit under test
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Use Node 24
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -136,8 +139,22 @@ jobs:
         working-directory: web
 
       # The runner image carries Google Chrome; the gate drives it headless.
-      - name: Probe every page at both sides of every breakpoint
+      # A pull request that changes nothing under web/ skips it (UI_BASE);
+      # a push to main always runs it.
+      - name: Probe every page, state and menu at every step
         run: scripts/check.sh ui
+        env:
+          UI_BASE: ${{ github.event.pull_request.base.sha }}
+          UI_ADVISE: '1'
+
+      - name: Keep the advisory report and its screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ui-audit-report
+          path: web/out/ui-audit
+          if-no-files-found: ignore
+          retention-days: 14
 
   mcp:
     name: MCP checks

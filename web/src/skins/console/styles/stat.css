@@ -1,0 +1,46 @@
+/* StatCard shell: the label, its detail on the next line, then the value. Every card in a row reads the same way. */
+
+html[data-skin="console"] .c-stat {
+  gap: 8px;
+  padding: var(--c-card-y) var(--c-card-x);
+}
+
+html[data-skin="console"] .c-stat-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+html[data-skin="console"] .c-stat-label {
+  flex: none;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+  font-weight: 600;
+}
+
+/* The detail's parts wrap to a further line, each kept whole, rather than cut the average. */
+html[data-skin="console"] .c-stat-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 12px;
+  color: var(--c-ink-3);
+  font-size: var(--c-fs-s);
+}
+
+html[data-skin="console"] .c-stat-detail > span {
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-stat-value {
+  font-size: var(--c-fs-stat);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.1;
+}
+
+html[data-skin="console"] .c-stat-unit {
+  margin-left: 4px;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-body);
+  font-weight: 600;
+}

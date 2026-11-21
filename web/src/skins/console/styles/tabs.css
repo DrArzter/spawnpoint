@@ -1,0 +1,91 @@
+/* Tabs: a strip with a sliding ink (A3); the panel fades in as one block. */
+
+html[data-skin="console"] .c-tabrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--c-line);
+}
+
+html[data-skin="console"] .c-tabs {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+html[data-skin="console"] .c-tabs-more {
+  -webkit-mask-image: linear-gradient(90deg, black calc(100% - 48px), transparent);
+  mask-image: linear-gradient(90deg, black calc(100% - 48px), transparent);
+}
+
+html[data-skin="console"] .c-tab {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  height: 48px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px 8px 0 0;
+  background: none;
+  color: var(--c-ink-2);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--c-d1), background var(--c-d1);
+}
+
+html[data-skin="console"] .c-tab:hover {
+  background: var(--c-surface-2);
+  color: var(--c-ink);
+}
+
+html[data-skin="console"] .c-tab:focus-visible {
+  outline-offset: -2px;
+}
+
+html[data-skin="console"] .c-tab[aria-selected="true"] {
+  color: var(--c-accent-text);
+}
+
+html[data-skin="console"] .c-tab-count {
+  color: var(--c-ink-3);
+  font-weight: 600;
+}
+
+html[data-skin="console"] .c-tab-ink {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--c-accent);
+  pointer-events: none;
+  transition: left var(--c-d3) var(--c-ease-spring), width var(--c-d3) var(--c-ease-spring);
+}
+
+html[data-skin="console"] .c-tabrow-end {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+html[data-skin="console"] .c-tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--c-gap);
+  padding-top: 18px;
+  animation: c-tab-in var(--c-d2) var(--c-ease);
+}
+
+html[data-skin="console"] .c-tabpanel:focus-visible {
+  outline-offset: 4px;
+}
+
+@keyframes c-tab-in { from { opacity: .35; transform: translateY(8px); } }

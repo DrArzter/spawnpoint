@@ -1,71 +1,102 @@
-# UI audit
+# UI gate
 
-Drives the running console in headless Chrome and probes the live DOM, instead of asking a person to look at every
-screen at every width. It opens each route at fifteen viewports from 360px to 3840px, both sides of every step in `web/DESIGN.md`, in demo mode so the pages carry
-real records (`latency=0`, so the demo answers at once and the probe lands on the page, not the boot card), and reports what the design system can be checked against mechanically:
+The UI gate drives the demo build in headless Chrome and probes the live DOM. It replaces a person who looks at every
+page, state and width. It uses raw Chrome DevTools Protocol (`cdp.mjs`) and has no dependency of its own.
 
-| Check | What counts as a finding |
+| File | Content |
 |---|---|
-| Sideways scroll | `documentElement.scrollWidth` wider than the viewport |
-| Escaping elements | a visible box past the viewport edge with no scroll container above it |
-| Silent truncation | content wider than its box, `overflow: hidden`, no ellipsis |
-| Touch targets | an interactive element under 32px in either direction |
-| Contrast | text under 4.5:1 against its effective background (3:1 when large) |
-| Type ramp | a size/line-height/weight step that DESIGN.md does not record |
-| Shapes | a border radius outside the shape scale |
-| Elevation | a shadow on a surface that is not menu, dialog, sheet or snackbar |
-| Faces | every font family in use, to hold the Three-Face Rule |
-| Text under a control | a text run or another control under a button, link or field it does not belong to |
-| Text over text | two text runs that share pixels, compared on the middle of each line, so tight leading is not a finding |
-| Row broke its line | a row that promises one line (`LAYOUT.oneLine`, such as the page header) wrapped |
-| Empty state off centre | an empty state more than 4px from the middle of its box |
-| Label off its value | a label beside its value (`LAYOUT.pairs`) more than 1px off the baseline of the value's first line |
-| Start off the card edge | in one card or panel, a heading, search, table or detail row (`LAYOUT.rails`) whose content starts more than 1px from the others |
-| Menu label cut or ragged | in the first row menu, opened: a label past the menu's edge, or labels that do not begin on one edge |
+| `audit.mjs` | The runner: routes, widths, states, the menu walker, keys, `accepted.txt`, the report |
+| `probe.js` | The probe that runs in the page and returns the findings |
+| `states.mjs` | Every dialog, side panel, drawer, tooltip and toast the gate opens, and the skin files that draw them |
+| `fixtures/` | One page per miss of the old gate and per check that has no other proof, a clean page and a clean dialog, for `--self-test` |
+| `accepted.txt` | Findings accepted with a reason (optional) |
 
-Run it against a dev server or a preview deployment:
+## What it runs
+
+| Input | Values |
+|---|---|
+| Skins | `console` and `terminal` (set `SKIN` for one) |
+| Page widths | 360, 599/600, 759/760, 839/840, 959/960, 1023/1024, 1199/1200, 1440 and 2560: both sides of the steps where the frame, tables and dialogs change (`web/DESIGN.md`, console and terminal). The 40px stride (360–1680) crosses the smaller steps 900, 1280, 1500 and 1600; 2560 shows the grids past 1900 and 2000 |
+| Stride | every 40px from 360 to 1680 on each page, light theme, resized without a reload |
+| States | every entry in `states.mjs` at 360, 599, 600, 759, 760, 1440 and 2560 |
+| Menus | every menu on a page, opened one at a time, at the same seven widths |
+| Themes | light everywhere; dark at 360 and 1440 |
+| Data | the demo, and `?demo&fixture=stress` (80-character names, more rows) at 360, 840 and 1440 |
+
+The runner waits for fonts and finished animations before it probes. It runs 4 tabs in parallel.
+
+## What fails the gate
+
+| Kind | A finding is |
+|---|---|
+| `wider` | the page is wider than the width the runner set (a phone that grew) |
+| `overflowing` | a box past the left or right edge, with no scroll box above it |
+| `sideways` | a scroll box that scrolls sideways and is not marked `data-scroll="expected"` |
+| `overlaps`, `textOverText` | two atoms on one layer cross: text by its ink, icons, images, and controls and leaf boxes that paint |
+| `wrapped` | a row marked `data-layout="one-line"` broke its line (from `data-from` px) |
+| `offCentre` | a `data-layout="centred"` box more than 4px off the middle of its box |
+| `misaligned` | a `data-layout="pair"` label beside its value more than 1px off its baseline |
+| `offRail` | a `data-rail` start more than 1px off the other starts in its `data-layout="rail"` card |
+| `menuCut`, `menuClipped`, `menuRagged` | an open menu past the screen, a label cut, or labels that do not start on one edge |
+| `packed` | rule 2: a `data-layout="spread"` row whose end group stops short of the end edge |
+| `stateTwice` | rule 3: a `data-status` mark said twice in one card, surface, list item or layer |
+| `columns`, `repeatedLabel` | rule 4: in `data-layout="rows"`, a column that drifts, two `data-col="actions"` cells in a row, two button styles in the action column, or a label printed in every row |
+| `iconOffLine` | rule 5: an icon beside its text more than 1px off the text's centreline |
+| `crumbRepeat` | rule 6: more than one h1 beside a `data-layout="crumbs"` trail, or a heading or tab that repeats the title |
+| `gridEdge`, `cardHeights` | rule 8: from 1440px a grid row short of the grid's end edge; cards of one grid row of different heights |
+| `error` | a page that did not render or wore another skin, a state that opened no surface, a state whose control is absent at every width or at 1440, or a probe that failed |
+
+The rest goes to the advisory report: packed rows anywhere, explanatory copy (rule 1), stretched cards, touch targets,
+contrast and text cut with no ellipsis. A reviewer judges these; they do not fail the gate.
+
+**Layers.** An open modal dialog, an open popover, a fixed or sticky bar and a `data-layer` box each paint as one
+layer. The probe compares atoms only within one layer, and skips a pair that another layer covers. A modal makes the
+page under it inert, so a state measures only its surface. `data-layer="glyph"` marks decoration that is laid over its
+control on purpose (a select caret, the tab ink, a count badge); nothing else is exempt, `aria-hidden` marks included.
+
+**Markers.** The console primitives say what they promise with `data-layout`, `data-rail`, `data-col`, `data-status`,
+`data-scope` and `data-layer`, and `web/test/console-markers.test.ts` holds them to it. The terminal skin has no markers;
+`LAYOUT` at the top of `audit.mjs` lists its selectors. So the terminal gets the overlap, width, menu and layout checks
+(one line, pairs, rails, centred), but not the owner-rule checks, which read markers only. A new primitive that
+promises a layout emits the marker.
+
+**States.** A state is a route and steps: `{ action: id }` presses the control for that Action, or opens the menu that
+holds it. `web/test/ui-audit-states.test.ts` fails when a skin function draws a `Dialog`, `SidePanel`, `Modal` or
+`Drawer` that `SURFACES` in `states.mjs` does not name, or draws more surfaces than it names states. A control that a width does not show is skipped at that width; a state
+that opens no surface is a finding.
+
+## Run it
 
 ```bash
-npm run dev                      # in one terminal
-npm run audit:ui                 # light theme, writes audit-light.json
-npm run audit:ui -- http://localhost:5173 audit-dark.json dark
-SKIN=terminal npm run audit:ui       # another face; the console is worn when SKIN is unset
-node tools/ui-audit/summarise.mjs light
-node tools/ui-audit/summarise.mjs dark
+npm run build && npx vite preview --host 127.0.0.1 --port 4173   # in one terminal
+node tools/ui-audit/audit.mjs --self-test                       # the fixtures: every miss caught
+npm run audit:ui:gate -- http://127.0.0.1:4173                  # the blocking gate
+npm run audit:ui -- http://127.0.0.1:4173                       # the gate and the advisory report
+SKIN=console AUDIT_ROUTES=world AUDIT_WIDTHS=360,1440 AUDIT_STRIDE=0 AUDIT_STATES= npm run audit:ui:gate -- http://127.0.0.1:4173
 ```
 
-Read the output as evidence, not as a verdict. These results are expected and were judged, not overlooked:
+`AUDIT_ROUTES`, `AUDIT_WIDTHS` and `AUDIT_STATES` narrow a run while you fix; `AUDIT_STRIDE=0` drops the stride;
+`AUDIT_WORKERS` sets the tabs; `AUDIT_JSON=file` keeps every probe's raw findings. The report is in `web/out/ui-audit`:
+`report.md`, `report.json` and a screenshot per page or state with each finding outlined.
 
-- the mobile drawer sits off the left edge while it is closed, so it reads as an escaping element;
-- `.visually-hidden` labels are clipped on purpose, so they read as truncation;
-- disabled controls fail contrast by design, and WCAG exempts them;
-- a 24px row link passes the 24px minimum on a mouse and grows to 44px under a coarse pointer, below the tool's own
-  32px line;
-- a few line-height steps are inherited by elements whose text is incidental (avatar initials, the status glyph row,
-  the terminal status line), where the step is invisible.
+`scripts/check.sh ui` builds, runs the self-test, serves the build and runs the gate with `--gate`. CI sets
+`UI_BASE` to the pull request's base, so a pull request that changes nothing under `web/` skips it, and `UI_ADVISE=1`, so
+the report is kept as the `ui-audit-report` artifact. A push to `main` always runs it.
 
-Everything else is worth explaining or fixing.
+## Findings
 
-The routes are listed at the top of `audit.mjs`. Add one whenever a screen is added, otherwise it is never measured.
+Fix a finding rather than accept it. `--accept` prints the keys of what this run found. A line in `accepted.txt` is a
+key and a reason:
 
-## The breakpoint gate
-
-`scripts/check.sh ui` (CI job *Breakpoint gate*) builds the demo, serves it, and runs the audit with `--gate`: both
-skins at both sides of every step (360, 599, 600, 839, 840, 959, 960 and 1440px). It fails on any geometry finding —
-sideways scroll, past the viewport, text under a control, text over text, a broken line, off centre, off its value,
-off the card edge, a cut or ragged menu — that `accepted.txt` does not list. Touch targets and contrast stay in the report above, where a disabled
-control is judged by eye.
-
-```bash
-npm run audit:ui:gate                                   # against a running dev server
-npm run audit:ui:gate -- --accept                       # write what this run found into accepted.txt
+```text
+terminal world-wipes 680 light sideways div  # the wipes table scrolls at this one width; fixed by …
 ```
 
-Fix a finding rather than accept it. A line in `accepted.txt` is a reviewed exception, and a line the gate no longer
-finds is reported so the list only shrinks. A primitive that promises a layout (one line, a level pair, a centred
-state, a start on the card edge) adds its selector to `LAYOUT` at the top of `audit.mjs`, so every page that uses it is
-held to the promise. A new screen adds its route, or the gate never opens it.
+A key is `skin page width theme kind marker`. The marker is built from `data-*` markers and roles, never from a class
+path, so a class rename keeps the key. `*` matches any skin, page, width or theme. A line without a reason after ` # `
+fails the gate, and so does a line with page `*` and a one-part marker, which would hide every match of its kind. A line
+that no longer matches is reported so the list only shrinks. The gate also fails when the demo does not answer, or when
+the run measured fewer pages than it planned.
 
-What the probe cannot measure, where a control sits and whether the same control looks the same twice, is read by
-eye and written down per face under [`web/audits/`](../../audits/); the terminal skin's pass is
-[terminal-skin-2026-09-28.md](../../audits/terminal-skin-2026-09-28.md).
+What the probe cannot measure, where a control sits and whether the same control looks the same twice, is read by eye
+and written down per face under [`web/audits/`](../../audits/).

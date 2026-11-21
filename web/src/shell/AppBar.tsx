@@ -1,8 +1,5 @@
-import { Avatar } from "../components/Avatar";
-import { IconButton } from "../components/ui/Button";
 import { Tooltip } from "../components/ui/Tooltip";
 import { Icon } from "../icons";
-import type { Game } from "../model";
 
 export function SpawnpointMark({ size = 32 }: Readonly<{ size?: number }>) {
   // The mark: one block seen from above, the spawn point set on its top face.
@@ -29,39 +26,5 @@ export function DemoBadge() {
         <span>Demo data</span>
       </span>
     </Tooltip>
-  );
-}
-
-export function AppBar({ game, onMenu, onScope, scopeDisabled, viewerName, viewerPhoto, onProfile, demo }: Readonly<{
-  game: Game | undefined;
-  onMenu: () => void;
-  onScope: () => void;
-  scopeDisabled: boolean;
-  viewerName: string;
-  viewerPhoto?: string | null;
-  onProfile: () => void;
-  demo: boolean;
-}>) {
-  return (
-    <header className="appbar">
-      <IconButton icon="menu" label="Toggle navigation" onClick={onMenu} />
-      <a className="appbar-brand" href="#/worlds">
-        <SpawnpointMark />
-        <strong>Spawnpoint</strong>
-      </a>
-      <span aria-hidden="true" className="appbar-divider" />
-      <button aria-haspopup="dialog" className="appbar-scope" disabled={scopeDisabled} onClick={onScope} title="Select a game" type="button">
-        <Icon name="sports_esports" size={20} />
-        <span>{game?.displayName ?? "No game"}</span>
-        <Icon name="unfold_more" size={18} />
-      </button>
-      <span className="appbar-spacer" />
-      <div className="appbar-actions">
-        {demo && <DemoBadge />}
-        <button aria-label="Open my profile" className="appbar-avatar" onClick={onProfile} title={viewerName} type="button">
-          <Avatar name={viewerName} photoUrl={viewerPhoto} />
-        </button>
-      </div>
-    </header>
   );
 }

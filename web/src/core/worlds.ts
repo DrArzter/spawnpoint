@@ -1,14 +1,14 @@
 import type { ReleasePackName } from "../api/contract";
-import { hostStatus, sessionStatus, worldStatus, type StatusDescriptor } from "../components/ui/Status";
 import { commitUrl, formatDate, shortCommit } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Operation, ServerState, Wipe, World, WorldTab } from "../model";
 import { routeHash } from "../routing";
 import { configuredHosts, fleetPlayersOnline, fleetSessionOf, fleetWorldState, operationsBlockingWorld, playersOnline, sessionReason, sharedSessionOwnerLabel, worldOwnsSharedSession, worldState, type SessionReason, type SharedHostSession } from "../session";
-import type { Pending, PendingMap, SessionAction, WorldActionKind } from "../shell/actions";
+import type { PendingMap, SessionAction, WorldActionKind } from "../shell/actions";
 import { changedSettings, settingsAvailable } from "./settings";
 import { controlPending, pendingFor } from "../shell/actions";
 import { action, type Action } from "./actions";
-import type { AddressFacts, Detail, Notice, SessionOverview, WorldRow } from "./models";
+import { hostStatus, sessionStatus, worldStatus, type StatusDescriptor } from "./status";
+import type { AddressFacts, Detail, Notice, SessionOverview, SiblingRow, WorldRow } from "./models";
 
 /*
  * What the Worlds list and the world page know that no skin should have to
@@ -246,7 +246,19 @@ function rowStatus(world: World, active: boolean, state: ServerState | null): St
   return worldStatus(world);
 }
 
-export function buildWorldRow(game: Game, world: World, opts: Readonly<{ fleet: boolean; sharedSession: SharedHostSession; granted: ReadonlySet<string>; pending: PendingMap; callbacks: WorldCallbacks }>): WorldRow {
+/** Players on a world's own session: a fleet world's from its record, a configured one's only while it holds the shared host. */
+export function worldPlayers(game: Game, world: World, sharedSession: SharedHostSession): number | null {
+  if (world.placement === "fleet") return fleetPlayersOnline(game, world);
+  return worldOwnsSharedSession(sharedSession, game, world) ? playersOnline(game) : null;
+}
+
+// The snapshot names no fleet world's host, so only the shared host's launch is told.
+export function worldLaunchedAt(game: Game, world: World, sharedSession: SharedHostSession, snapshot: ControlPlaneSnapshot | null): string | null {
+  if (world.placement === "fleet" || !worldOwnsSharedSession(sharedSession, game, world) || sharedSession.state === "stopped") return null;
+  return configuredHosts(snapshot)[0]?.launchedAt ?? null;
+}
+
+export function buildWorldRow(game: Game, world: World, opts: Readonly<{ fleet: boolean; sharedSession: SharedHostSession; granted: ReadonlySet<string>; pending: PendingMap; callbacks: WorldCallbacks; snapshot?: ControlPlaneSnapshot | null }>): WorldRow {
   // A fleet world's row tells its own session's state, so two of one game read apart.
   const fleetWorld = world.placement === "fleet";
   const state = fleetWorld ? fleetWorldState(game, world) : null;
@@ -263,6 +275,23 @@ export function buildWorldRow(game: Game, world: World, opts: Readonly<{ fleet: 
     address: addressFacts(world),
     addressAbsent: missingAddressLabel(world, worldState(game, world, opts.sharedSession)),
     actions: rowActions(game, world, opts.granted, pendingFor(opts.pending, world.id) !== null, opts.callbacks),
+    players: worldPlayers(game, world, opts.sharedSession),
+    launchedAt: worldLaunchedAt(game, world, opts.sharedSession, opts.snapshot ?? null),
+  };
+}
+
+/** A row as data only, for a list beside another world's page. */
+export function siblingRow(row: WorldRow): SiblingRow {
+  return {
+    id: row.world.id,
+    name: row.world.displayName,
+    href: row.href,
+    status: row.status,
+    releaseSummary: row.releaseSummary,
+    wipe: row.wipe?.number ?? null,
+    players: row.players ?? null,
+    placement: row.world.placement === "fleet" ? "fleet" : "configured",
+    address: row.address,
   };
 }
 
@@ -286,10 +315,11 @@ function sessionHint(fleet: boolean, game: Game, world: World, reason: SessionRe
 }
 
 function hostDetail(host: Host | undefined): Detail {
-  if (!host) return { label: "Compute host", value: { type: "absent", text: "No host available" } };
+  if (!host) return { key: "host", label: "Compute host", value: { type: "absent", text: "No host available" } };
   // The state is the value; which host, and what kind, is the line under it.
   const zone = host.availabilityZone ? ` in ${host.availabilityZone}` : "";
   return {
+    key: "host",
     label: "Compute host",
     value: { type: "status", status: hostStatus(host.state) },
     hint: [host.name, host.instanceType ? `${host.instanceType}${zone}` : null].filter(Boolean).join(" · "),
@@ -297,14 +327,15 @@ function hostDetail(host: Host | undefined): Detail {
 }
 
 function launchedDetail(host: Host): Detail {
-  return { label: "Launched", value: host.launchedAt ? { type: "time", at: host.launchedAt } : { type: "absent", text: "Not running" } };
+  return { key: "launched", label: "Launched", value: host.launchedAt ? { type: "time", at: host.launchedAt } : { type: "absent", text: "Not running" } };
 }
 
 export function sessionDetails(game: Game, world: World, sharedSession: SharedHostSession, snapshot: ControlPlaneSnapshot | null, serverState: ServerState, fleet: boolean): Detail[] {
   const host = configuredHosts(snapshot)[0];
   const reason = sessionReason(sharedSession, game, world);
-  const players = fleet ? fleetPlayersOnline(game, world) : worldOwnsSharedSession(sharedSession, game, world) ? playersOnline(game) : null;
+  const players = worldPlayers(game, world, sharedSession);
   const details: Detail[] = [{
+    key: "session",
     label: "Session",
     value: { type: "status", status: sessionStatus(serverState) },
     explain: sessionHint(fleet, game, world, reason),
@@ -314,8 +345,8 @@ export function sessionDetails(game: Game, world: World, sharedSession: SharedHo
     details.push(hostDetail(host));
     if (host) details.push(launchedDetail(host));
   }
-  if (players !== null) details.push({ label: "Players online", value: { type: "number", value: players } });
-  details.push({ label: "Last observed", value: { type: "time", at: snapshot?.observedAt } });
+  if (players !== null) details.push({ key: "players", label: "Players online", value: { type: "number", value: players } });
+  details.push({ key: "observed", label: "Last observed", value: { type: "time", at: snapshot?.observedAt } });
   return details;
 }
 
@@ -326,9 +357,10 @@ export function worldDetails(game: Game, world: World, serverState: ServerState)
   const availability = worldStatus(world);
   const address = addressFacts(world);
   return [
-    { label: "World ID", value: { type: "text", text: world.id, mono: true } },
-    { label: "Availability", value: { type: "status", status: availability }, explain: world.worldLifecycleAvailable ? undefined : "Legacy world without wipe management" },
+    { key: "world-id", label: "World ID", value: { type: "text", text: world.id, mono: true } },
+    { key: "availability", label: "Availability", value: { type: "status", status: availability }, explain: world.worldLifecycleAvailable ? undefined : "Legacy world without wipe management" },
     {
+      key: "preset",
       label: "Preset",
       value: {
         type: "preset",
@@ -337,11 +369,11 @@ export function worldDetails(game: Game, world: World, serverState: ServerState)
       },
       explain: world.preset ? undefined : "Not built from a Git preset",
     },
-    { label: "Release", value: hasRelease ? { type: "release", active: world.release.activeRelease, desired: world.release.desiredRelease } : { type: "absent", text: releaseSummary(world) } },
-    { label: "Current wipe", value: currentWipe ? { type: "text", text: `#${currentWipe.number}` } : { type: "absent", text: world.worldLifecycleAvailable ? "No wipes yet" : "Not tracked" } },
-    { label: "Address", value: address ? { type: "address", address } : { type: "absent", text: missingAddressLabel(world, serverState) }, copy: world.connectionAddress ?? undefined },
-    { label: "Hosting", value: { type: "text", text: world.placement === "fleet" ? "On-demand fleet" : "Persistent host" } },
-    { label: "Connection", value: { type: "text", text: connectionLabels[world.connectivity] } },
+    { key: "release", label: "Release", value: hasRelease ? { type: "release", active: world.release.activeRelease, desired: world.release.desiredRelease } : { type: "absent", text: releaseSummary(world) } },
+    { key: "wipe", label: "Current wipe", value: currentWipe ? { type: "text", text: `#${currentWipe.number}` } : { type: "absent", text: world.worldLifecycleAvailable ? "No wipes yet" : "Not tracked" } },
+    { key: "address", label: "Address", value: address ? { type: "address", address } : { type: "absent", text: missingAddressLabel(world, serverState) }, copy: world.connectionAddress ?? undefined },
+    { key: "hosting", label: "Hosting", value: { type: "text", text: world.placement === "fleet" ? "On-demand fleet" : "Persistent host" } },
+    { key: "connection", label: "Connection", value: { type: "text", text: connectionLabels[world.connectivity] } },
     ...gameSettingsDetail(game, world),
   ];
 }
@@ -351,6 +383,7 @@ function gameSettingsDetail(game: Game, world: World): Detail[] {
   if (!settingsAvailable(game, world)) return [];
   const changed = changedSettings(game, world);
   return [{
+    key: "game-settings",
     label: "Game settings",
     value: changed.length > 0 ? { type: "text", text: changed.join(", ") } : { type: "absent", text: "Game defaults" },
     ...(world.gameSettings?.updatedAt ? { hint: "Changed", hintTime: world.gameSettings.updatedAt } : {}),
@@ -365,13 +398,10 @@ export function operationLabel(type: Operation["type"]): string {
   return operationLabels[type];
 }
 
-export function worldNotices(world: World, pending: Pending | null): Notice[] {
+export function worldNotices(world: World): Notice[] {
   const notices: Notice[] = [];
-  if (world.materialization === "archived") notices.push({ id: "archived", tone: "warning", title: "This world is archived", description: "Restore one of its backups to open a new wipe, or delete it permanently from the actions menu." });
-  if (pending?.kind === "lifecycle") {
-    const operation = pending.action === "wipe" ? "a new wipe" : pending.action;
-    notices.push({ id: "operation", tone: "info", title: "World operation in progress", description: `Spawnpoint is requesting ${operation}. The operation appears in the table below once accepted.` });
-  }
+  // A request in flight shows on its busy verb and in Operations, not as a notice.
+  if (world.materialization === "archived") notices.push({ id: "archived", tone: "warning", title: "This world is archived" });
   return notices;
 }
 

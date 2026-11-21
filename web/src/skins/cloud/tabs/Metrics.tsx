@@ -106,7 +106,7 @@ function Stat({ series, time }: Readonly<{ series: HostMetricSeries; time: (at: 
   const [value, ...unit] = format(summary.latest).split(" ");
   return (
     <StatCard
-      detail={`Peak ${format(summary.peak.value)} at ${time(summary.peak.at)} · Avg ${format(summary.average)}`}
+      detail={<><span>Peak {format(summary.peak.value)} at {time(summary.peak.at)}</span><span>Avg {format(summary.average)}</span></>}
       label={series.label}
       unit={unit.join(" ")}
       value={value ?? null}
@@ -124,7 +124,7 @@ function Chart({ series, range, reveal, time }: Readonly<{ series: HostMetricSer
     </span>
   );
   return (
-    <Card actions={legend} title={series.label}>
+    <Card actions={known ? legend : undefined} title={series.label}>
       {known
         ? <TimeSeriesChart format={metricFormat(series.unit)} label={series.label} percent={series.unit === "percent"} points={series.points} range={range} reveal={reveal} time={time} />
         : <Empty icon="bar_chart" size="sm" title="The host reported nothing in this window." />}

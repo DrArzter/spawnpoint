@@ -1,7 +1,8 @@
 /* Terminal: the console log as a fixed table that scrolls inside its own region, newest at the bottom. */
 
+/* The log fills the viewport under the top bar, less the card head and the command line (two controls with their insets). */
 html[data-skin="cloud"] .c-terminal {
-  max-height: max(360px, calc(100dvh - 360px));
+  max-height: max(360px, calc(100dvh - var(--c-bar) - 2 * (var(--c-field) + 2 * var(--c-card-y)) - var(--c-gap)));
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -16,7 +17,7 @@ html[data-skin="cloud"] .c-terminal .c-term-command {
 }
 
 html[data-skin="cloud"] .c-terminal .c-term-status {
-  width: 160px;
+  width: 110px;
 }
 
 html[data-skin="cloud"] .c-terminal .c-term-output .c-mono {

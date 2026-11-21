@@ -33,7 +33,9 @@ function storage(t: TestContext, credential: Record<string, unknown> | undefined
 
 async function links(): Promise<readonly Link[]> {
   const body = JSON.parse((await identities()).body as string) as { identities: readonly { links: readonly Link[] }[] };
-  return body.identities[0].links;
+  const first = body.identities[0];
+  assert.ok(first, "the listing must carry the one active identity");
+  return first.links;
 }
 
 const verifiedCredential = {

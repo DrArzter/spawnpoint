@@ -9,6 +9,7 @@ import { document, tableName, type Item } from "./access-store.ts";
 import { requirePermission } from "./permissions.ts";
 import { events } from "./clients.ts";
 import { accountKeyFor } from "./identity-store.ts";
+import { passwordCredentials } from "./credentials.ts";
 
 export function roles(identity: Identity): Response {
   const descriptions: Record<string, string> = {
@@ -32,7 +33,20 @@ export async function candidates(): Promise<Response> {
   })) });
 }
 
+// One lookup per address for the whole listing: several identities may share
+// none, but a single identity's accounts are read twice over otherwise, and
+// the answer cannot change while one response is being built.
+function verificationReader(): (email: string) => Promise<boolean> {
+  const seen = new Map<string, Promise<boolean>>();
+  return (email) => {
+    const pending = seen.get(email) ?? passwordCredentials.find(email).then((credential) => credential?.emailVerified === true);
+    seen.set(email, pending);
+    return pending;
+  };
+}
+
 export async function identities(): Promise<Response> {
+  const emailVerified = verificationReader();
   const profiles = await document.send(new QueryCommand({
     TableName: tableName,
     IndexName: "gsi1",
@@ -52,14 +66,18 @@ export async function identities(): Promise<Response> {
       displayName: profile.display_name,
       roleId: profile.role_id,
       directGrants: profile.direct_grants ?? [],
-      links: (accounts.Items ?? []).filter((account) => typeof account.platform === "string").map((account) => ({
+      links: await Promise.all((accounts.Items ?? []).filter((account) => typeof account.platform === "string").map(async (account) => ({
         platform: account.platform,
         value: account.platform_user_id,
         handle: accountHandle(account),
         // Telegram vouches for its accounts. An email address is a claim until
-        // a message to it has been answered, and nothing sends one yet.
-        verified: account.platform !== passwordProviderId,
-      })),
+        // a message to it has been answered, and the answer is kept on the
+        // credential — this used to read "nothing sends one yet", which stopped
+        // being true when email verification shipped and left every password
+        // account listed as unverified however often its owner confirmed it.
+        verified: account.platform !== passwordProviderId
+          || (typeof account.email === "string" && await emailVerified(account.email)),
+      }))),
     };
   }));
   return response(200, { identities: items });

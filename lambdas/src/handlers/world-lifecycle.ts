@@ -65,7 +65,7 @@ function parseInput(value: unknown): Input {
     (input.action !== "archive" && input.action !== "purge" && (typeof input.generationUuid !== "string" || !UUID.test(input.generationUuid))) ||
     (input.action === "purge" && (typeof input.targetGenerationId !== "string" || !GENERATION_ID.test(input.targetGenerationId))) ||
     (input.action === "restore" && typeof input.backupKey !== "string") ||
-    (input.action === "regenerate" && (typeof input.release !== "string" || !/^[0-9]+\.[0-9]+$/.test(input.release)))
+    (input.action === "regenerate" && (typeof input.release !== "string" || !/^\d+\.\d+$/.test(input.release)))
   ) throw new Error("invalid_input");
   return input as Input;
 }
@@ -206,7 +206,7 @@ async function writeInitialReleaseState(record: WorldRecord, input: Input): Prom
   } catch (error) {
     if (!(error instanceof Error) || (error.name !== "PreconditionFailed" && error.name !== "ConditionalRequestConflict")) throw error;
     const existing = await store.read({ worldId: state.worldId, generationId: state.generationId });
-    if (existing === null || existing.state.desiredRelease !== state.desiredRelease) throw new Error("release_state_conflict");
+    if (existing?.state.desiredRelease !== state.desiredRelease) throw new Error("release_state_conflict");
   }
 }
 

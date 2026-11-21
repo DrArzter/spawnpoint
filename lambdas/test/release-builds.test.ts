@@ -109,6 +109,14 @@ test("only a validated, repository-bound catalog snapshot can be built", () => {
   assert.equal(catalogBuildSource({ ...catalog, source: { ...catalog.source, repository: "https://github.com/other/repo" } }, "minecraft"), null);
 });
 
+test("a game without a config repository cannot be built, whatever repository it names", () => {
+  for (const game of ["terraria", "constructor"]) {
+    const repository = `DrArzter/my-docker-${game}-server-config`;
+    const catalog = { schema_version: 2, game, source: { repository: `https://github.com/${repository}`, commit: source.configCommit, snapshot: { key: `config-sources/${repository}/${source.configCommit}.tar.gz`, sha256: source.configSourceSha256 } }, presets: [] };
+    assert.equal(catalogBuildSource(catalog, game), null);
+  }
+});
+
 test("legacy GitHub failures retain their candidate identity and exact pins when adopted", () => {
   const preset = { id: "main", gameId: "minecraft", displayName: "Main", repository: source.configRepositoryUrl, commit: source.configCommit, profileDigest: input.profileDigest, releases: [], latestRelease: null, buildStatus: "unbuilt" as const };
   const catalog = { schema_version: 2, game: "minecraft", source: { repository: source.configRepositoryUrl, commit: source.configCommit, snapshot: { key: source.configSourceKey, sha256: source.configSourceSha256 } }, presets: [] };

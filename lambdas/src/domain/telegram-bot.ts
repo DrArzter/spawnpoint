@@ -16,7 +16,7 @@ export function parseAllowList(raw: string): readonly number[] {
     .map((entry) => entry.trim())
     .filter((entry) => entry !== "");
   return entries.map((entry) => {
-    if (!/^[0-9]+$/.test(entry)) {
+    if (!/^\d+$/.test(entry)) {
       throw new Error(`allow-list entry is not a numeric Telegram user id: ${entry}`);
     }
     return Number(entry);
@@ -48,7 +48,7 @@ export function parseChatIds(raw: string): readonly number[] {
     throw new Error("no notification chat ids configured");
   }
   return entries.map((entry) => {
-    if (!/^-?[0-9]+$/.test(entry)) {
+    if (!/^-?\d+$/.test(entry)) {
       throw new Error(`chat id is not a number: ${entry}`);
     }
     return Number(entry);

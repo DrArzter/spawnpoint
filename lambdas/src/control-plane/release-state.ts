@@ -13,7 +13,7 @@ export type ReleaseState = Readonly<{
 type ObjectValue = Record<string, unknown>;
 const WORLD_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const GENERATION_ID = /^gen-[0-9a-f]{32}$/;
-const RELEASE = /^[0-9]+\.[0-9]+$/;
+const RELEASE = /^\d+\.\d+$/;
 
 function object(value: unknown): ObjectValue | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as ObjectValue : null;
@@ -36,7 +36,7 @@ export function legacyReleaseStateKey(worldId: string): string {
 export function parseReleaseState(value: unknown, expected?: WorldRef): ReleaseState | null {
   const root = object(value);
   if (
-    root === null || root.schema_version !== 2 || typeof root.world_id !== "string" || !WORLD_ID.test(root.world_id) ||
+    root?.schema_version !== 2 || typeof root.world_id !== "string" || !WORLD_ID.test(root.world_id) ||
     typeof root.generation_id !== "string" || !GENERATION_ID.test(root.generation_id) ||
     typeof root.desired_release !== "string" || !RELEASE.test(root.desired_release) ||
     (root.active_release !== null && (typeof root.active_release !== "string" || !RELEASE.test(root.active_release))) ||
@@ -78,7 +78,7 @@ export function releaseStateDocument(state: ReleaseState): ObjectValue {
 export function parseLegacyReleaseState(value: unknown, ref: WorldRef, migratedAt: string): ReleaseState | null {
   const root = object(value);
   if (
-    root === null || root.schema_version !== 1 || root.world !== ref.worldId ||
+    root?.schema_version !== 1 || root.world !== ref.worldId ||
     typeof root.desired_release !== "string" || !RELEASE.test(root.desired_release) ||
     (root.active_release !== null && (typeof root.active_release !== "string" || !RELEASE.test(root.active_release))) ||
     Number.isNaN(Date.parse(migratedAt))

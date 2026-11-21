@@ -31,7 +31,7 @@ export type BackupInventory = Readonly<{
 }>;
 
 const CHECKSUM_ADDRESSED = /^(?<name>[A-Za-z0-9._-]+)-(?<checksum>[0-9a-f]{64})\.tar\.zst$/;
-const GENERATION_IN_ARCHIVE = /-(gen-[0-9a-f]{32})-[0-9]{8}T[0-9]{6}Z\.tar\.zst$/;
+const GENERATION_IN_ARCHIVE = /-(gen-[0-9a-f]{32})-\d{8}T\d{6}Z\.tar\.zst$/;
 
 export function backupInventory(objects: readonly BackupObject[], limit = 20): BackupInventory {
   const newestFirst = [...objects].sort((left, right) => right.storedAt.localeCompare(left.storedAt));

@@ -43,13 +43,13 @@ export function legacyBuildCandidate(preset: PresetObservation, catalog: unknown
   const candidates = history.flatMap((entry) => {
     let value: Record<string, unknown>;
     try { value = JSON.parse(entry.input ?? "null") as typeof value; } catch { return []; }
-    if (!value || value.profileId !== preset.id || typeof value.release !== "string" || !/^[0-9]+\.[0-9]+$/.test(value.release) ||
+    if (value?.profileId !== preset.id || typeof value.release !== "string" || !/^\d+\.\d+$/.test(value.release) ||
       !entry.name || !entry.startDate) return [];
     const source = catalogBuildSource({ schema_version: 2, game: preset.gameId, presets: [], source: {
       repository: value.configRepositoryUrl, commit: value.configCommit,
       snapshot: { key: value.configSourceKey, sha256: value.configSourceSha256 },
     } }, preset.gameId);
-    if (!source || source.configRepositoryUrl.replace(/\.git$/, "") !== preset.repository.replace(/\.git$/, "") ||
+    if (source?.configRepositoryUrl.replace(/\.git$/, "") !== preset.repository.replace(/\.git$/, "") ||
       (source.configCommit !== current.configCommit && source.configCommit !== preset.commit)) return [];
     return [{ entry, source, release: value.release }];
   }).sort((a, b) => b.entry.startDate!.getTime() - a.entry.startDate!.getTime());
@@ -82,13 +82,18 @@ export async function runningReleaseBuilds(): Promise<readonly RunningBuild[]> {
   return builds;
 }
 
+// A game without an entry here gets a repository name no catalog source matches.
+const CONFIG_REPOSITORY_GAMES: ReadonlyMap<string, string> = new Map([
+  ["minecraft", "minecraft"], ["factorio", "factorio"], ["zomboid", "zomboid"],
+]);
+
 export function catalogBuildSource(value: unknown, gameId: string): BuildSource | null {
   if (parsePresetCatalog(value, gameId) === null) return null;
   const source = (value as { source: { repository: string; commit: string; snapshot?: { key?: unknown; sha256?: unknown } } }).source;
-  const repository = `DrArzter/my-docker-${gameId === "minecraft" ? "minecraft" : gameId === "factorio" ? "factorio" : gameId === "zomboid" ? "zomboid" : "invalid"}-server-config`;
+  const repository = `DrArzter/my-docker-${CONFIG_REPOSITORY_GAMES.get(gameId) ?? "invalid"}-server-config`;
   if (source.repository.replace(/\.git$/, "") !== `https://github.com/${repository}`) return null;
   const snapshot = source.snapshot;
-  if (!snapshot || snapshot.key !== `config-sources/${repository}/${source.commit}.tar.gz` || typeof snapshot.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(snapshot.sha256)) return null;
+  if (snapshot?.key !== `config-sources/${repository}/${source.commit}.tar.gz` || typeof snapshot.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(snapshot.sha256)) return null;
   return { configCommit: source.commit, configRepositoryUrl: source.repository, configSourceKey: snapshot.key as string, configSourceSha256: snapshot.sha256 };
 }
 
@@ -110,31 +115,43 @@ function ports(gameId: string, profileId: string): ReleaseBuildPorts {
         // Private build records are written only by this adapter. Fail closed
         // on a wrong key or shape instead of dispatching arbitrary SFN input.
         if (request.gameId !== gameId || request.profileId !== profileId || !/^[0-9a-f]{64}$/.test(request.profileDigest) ||
-          !/^[0-9]+\.[0-9]+$/.test(request.release) || !/^[A-Za-z0-9_-]{1,80}$/.test(request.name) ||
+          !/^\d+\.\d+$/.test(request.release) || !/^[A-Za-z0-9_-]{1,80}$/.test(request.name) ||
           !Number.isSafeInteger(request.attempt) || request.attempt < 1 || !result.ETag ||
           typeof request.requestedBy !== "string" || request.requestedBy.length === 0 || source === null ||
           Number.isNaN(Date.parse(request.requestedAt))) throw new Error("invalid_build_record");
         return { request, etag: result.ETag };
-      } catch (error) { if (missing(error)) return null; throw error; }
+      } catch (error) {
+        if (missing(error)) return null;
+        throw error;
+      }
     },
     async claim(request, etag) {
       try {
         await s3.send(new PutObjectCommand({ Bucket, Key, Body: JSON.stringify(request), ContentType: "application/json", ServerSideEncryption: "AES256", ...(etag ? { IfMatch: etag } : { IfNoneMatch: "*" }) }));
         return true;
-      } catch (error) { if (conflict(error)) return false; throw error; }
+      } catch (error) {
+        if (conflict(error)) return false;
+        throw error;
+      }
     },
     async execution(name) {
       try {
         const result = await sfn.send(new DescribeExecutionCommand({ executionArn: executionArn(name) }));
         if (!result.status || result.status === "PENDING_REDRIVE") throw new Error("build_status_unavailable");
         return result.status;
-      } catch (error) { if (missing(error)) return null; throw error; }
+      } catch (error) {
+        if (missing(error)) return null;
+        throw error;
+      }
     },
     async published(request) {
       try {
         await s3.send(new HeadObjectCommand({ Bucket, Key: `releases/${gameId}/${profileId}/${request.release}/manifest.json` }));
         return true;
-      } catch (error) { if (missing(error)) return false; throw error; }
+      } catch (error) {
+        if (missing(error)) return false;
+        throw error;
+      }
     },
     async start(request) {
       const { profileId: profile, release, source } = request;

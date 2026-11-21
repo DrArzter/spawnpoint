@@ -73,11 +73,27 @@ set +e
 }
 set -e
 
-# 2. First download fetches everything; the payload is complete and verified.
-download_output="$("${SCRIPTS}/download-release.sh" minecraft main 1.0 "${host}/releases/minecraft/main/1.0")"
+# 2. First download fetches everything in one copy; the payload is complete
+# and verified, and the player packs beside it stay in the bucket.
+release_root="${FAKE_S3_ROOT}/${RELEASE_BUCKET}/releases/minecraft/main/1.0"
+for pack in client.zip server.zip full.zip; do
+  printf 'pack bytes\n' >"${release_root}/${pack}"
+done
+calls="${fixture}/aws-calls"
+download_output="$(FAKE_AWS_CALL_LOG="${calls}" \
+  "${SCRIPTS}/download-release.sh" minecraft main 1.0 "${host}/releases/minecraft/main/1.0")"
 grep -qx 'downloaded=2' <<<"${download_output}"
 grep -qx 'kept=0' <<<"${download_output}"
 cmp -- "${fixture}/source/pack/mods/alpha.jar" "${host}/releases/minecraft/main/1.0/mods/alpha.jar"
+[[ "$(grep -c '^s3 cp ' "${calls}")" == "1" ]]
+if grep -q 'get-object.*/mods/' "${calls}"; then
+  printf 'expected no per-object fetch of a mod\n' >&2
+  exit 1
+fi
+for pack in client.zip server.zip full.zip; do
+  [[ ! -e "${host}/releases/minecraft/main/1.0/${pack}" ]]
+done
+[[ -z "$(find "${host}/releases/minecraft/main/1.0" -name '.fetch.*')" ]]
 
 # 3. Reconcile materialises the live mod directory from the payload.
 SERVER_PROJECT_DIRECTORY="${host}" \
@@ -106,5 +122,36 @@ printf 'evil bytes\n' >"${corrupt}"
 rm -rf -- "${host}/releases/minecraft/main/1.0/mods/beta.jar"
 expect_failure "a bucket object that does not match the manifest" \
   "${SCRIPTS}/download-release.sh" minecraft main 1.0 "${host}/releases/minecraft/main/1.0"
+
+# --- reuse: a file another cached release holds is linked, not fetched ---
+next_root="${FAKE_S3_ROOT}/${RELEASE_BUCKET}/releases/minecraft/main/1.1"
+mkdir -p -- "${next_root}/mods"
+cp -- "${release_root}/mods/alpha.jar" "${next_root}/mods/alpha.jar"
+printf 'jar three\n' >"${next_root}/mods/gamma.jar"
+gamma_sha="$(sha256sum -- "${next_root}/mods/gamma.jar")"
+jq --arg sha "${gamma_sha%% *}" '
+  .release = "1.1" |
+  .server.mods = [(.server.mods[] | select(.file == "alpha.jar")),
+    {file: "gamma.jar", sha256: $sha, bytes: 10}]
+' "${release_root}/manifest.json" >"${next_root}/manifest.json"
+: >"${calls}"
+reuse_output="$(FAKE_AWS_CALL_LOG="${calls}" \
+  "${SCRIPTS}/download-release.sh" minecraft main 1.1 "${host}/releases/minecraft/main/1.1")"
+grep -qx 'downloaded=1' <<<"${reuse_output}"
+grep -qx 'reused=1' <<<"${reuse_output}"
+[[ "${host}/releases/minecraft/main/1.1/mods/alpha.jar" -ef "${host}/releases/minecraft/main/1.0/mods/alpha.jar" ]]
+grep -q -- '--include mods/gamma.jar' "${calls}"
+if grep -q -- 'alpha.jar' "${calls}"; then
+  printf 'expected the cached alpha.jar to be reused, not fetched\n' >&2
+  exit 1
+fi
+
+# A cached copy that no longer matches its hash is not reused.
+rm -rf -- "${host}/releases/minecraft/main/1.1"
+printf 'corrupted\n' >>"${host}/releases/minecraft/main/1.0/mods/alpha.jar"
+fallback_output="$("${SCRIPTS}/download-release.sh" minecraft main 1.1 "${host}/releases/minecraft/main/1.1")"
+grep -qx 'downloaded=2' <<<"${fallback_output}"
+grep -qx 'reused=0' <<<"${fallback_output}"
+cmp -- "${fixture}/source/pack/mods/alpha.jar" "${host}/releases/minecraft/main/1.1/mods/alpha.jar"
 
 printf 'boot-reconcile-test: ok\n'

@@ -38,8 +38,10 @@ fi
 release_prefix="releases/${game}/${preset_id}/${release}"
 manifest_key="${release_prefix}/manifest.json"
 manifest_tmp="$(mktemp "${payload_dir}/.manifest.XXXXXX")"
+fetch_dir=""
 cleanup() {
   rm -f -- "${manifest_tmp}"
+  [[ -z "${fetch_dir}" ]] || rm -rf -- "${fetch_dir}"
 }
 trap cleanup EXIT
 
@@ -79,71 +81,126 @@ jq -e '
 [[ "$(jq -r '.game' "${manifest_tmp}")" == "${game}" ]] || die "manifest names a different game"
 [[ "$(jq -r '.source_profile.id' "${manifest_tmp}")" == "${preset_id}" ]] || die "manifest names a different preset"
 
+# Other cached releases of this game often hold the same bytes. Their manifests
+# name each file by hash, so a match is linked in, never fetched again. Only the
+# standard cache layout <game>/<preset>/<release> is searched.
+declare -A reuse_by_sha=()
+game_root="$(dirname -- "$(dirname -- "${payload_dir}")")"
+if [[ "$(basename -- "${payload_dir}")" == "${release}" &&
+  "$(basename -- "$(dirname -- "${payload_dir}")")" == "${preset_id}" &&
+  "$(basename -- "${game_root}")" == "${game}" ]]; then
+  for sibling_manifest in "${game_root}"/*/*/manifest.json; do
+    [[ -f "${sibling_manifest}" && ! -L "${sibling_manifest}" ]] || continue
+    sibling_dir="$(realpath -e -- "$(dirname -- "${sibling_manifest}")")" || continue
+    [[ "${sibling_dir}" != "${payload_dir}" ]] || continue
+    while IFS=$'\t' read -r sha relative; do
+      [[ -n "${reuse_by_sha[${sha}]:-}" ]] || reuse_by_sha["${sha}"]="${sibling_dir}/${relative}"
+    done < <(jq -r '
+      (.server.mods // [])[] | select((.file | type == "string") and (.sha256 | type == "string")) |
+      [.sha256, "mods/" + .file] | @tsv
+      ' "${sibling_manifest}" 2>/dev/null || true)
+    while IFS=$'\t' read -r sha relative; do
+      [[ -n "${reuse_by_sha[${sha}]:-}" ]] || reuse_by_sha["${sha}"]="${sibling_dir}/${relative}"
+    done < <(jq -r '
+      (.server.overrides // [])[] | select((.path | type == "string") and (.sha256 | type == "string")) |
+      [.sha256, "overrides/" + .path] | @tsv
+      ' "${sibling_manifest}" 2>/dev/null || true)
+  done
+fi
+
+# Exact S3 filter for one key: the CLI reads --include as a glob.
+glob_literal() {
+  local text="$1" out="" char index
+  for ((index = 0; index < ${#text}; index++)); do
+    char="${text:index:1}"
+    case "${char}" in
+      '[' | '*' | '?') out+="[${char}]" ;;
+      *) out+="${char}" ;;
+    esac
+  done
+  printf '%s' "${out}"
+}
+
+file_matches() {
+  local file="$1" expected_sha="$2" expected_bytes="$3" actual_sha
+  [[ -f "${file}" && ! -L "${file}" ]] || return 1
+  [[ "$(stat --format '%s' -- "${file}")" == "${expected_bytes}" ]] || return 1
+  actual_sha="$(sha256sum -- "${file}")"
+  [[ "${actual_sha%% *}" == "${expected_sha}" ]]
+}
+
+# A candidate counts only when no symbolic link sits anywhere on its path.
+reuse_cached() {
+  local relative="$1" expected_sha="$2" expected_bytes="$3" target="$4" candidate resolved link_tmp
+  candidate="${reuse_by_sha[${expected_sha}]:-}"
+  [[ -n "${candidate}" ]] || return 1
+  resolved="$(realpath -e -- "${candidate}" 2>/dev/null)" || return 1
+  [[ "${resolved}" == "${candidate}" ]] || return 1
+  file_matches "${resolved}" "${expected_sha}" "${expected_bytes}" || return 1
+  link_tmp="$(mktemp -u "$(dirname -- "${target}")/.reuse.XXXXXX")"
+  ln -- "${resolved}" "${link_tmp}" 2>/dev/null ||
+    cp --reflink=auto -- "${resolved}" "${link_tmp}" || return 1
+  if ! file_matches "${link_tmp}" "${expected_sha}" "${expected_bytes}"; then
+    rm -f -- "${link_tmp}"
+    return 1
+  fi
+  mv -- "${link_tmp}" "${target}"
+  log "reused ${relative} from another cached release"
+}
+
 downloaded=0
 kept=0
-while IFS=$'\t' read -r filename expected_sha expected_bytes; do
-  target="${payload_dir}/mods/${filename}"
-
-  if [[ -f "${target}" && ! -L "${target}" ]]; then
-    actual_sha="$(sha256sum -- "${target}")"
-    actual_sha="${actual_sha%% *}"
-    if [[ "${actual_sha}" == "${expected_sha}" && "$(stat --format '%s' -- "${target}")" == "${expected_bytes}" ]]; then
-      kept=$((kept + 1))
-      continue
-    fi
-    log "cached ${filename} does not match the manifest; refetching"
-    rm -f -- "${target}"
-  fi
-
-  fetch_tmp="$(mktemp "${payload_dir}/mods/.${filename}.XXXXXX")"
-  s3_cli get-object \
-    --bucket "${RELEASE_BUCKET}" \
-    --key "${release_prefix}/mods/${filename}" \
-    "${fetch_tmp}" >/dev/null || {
-    rm -f -- "${fetch_tmp}"
-    die "could not download ${filename} for release ${release}"
-  }
-  actual_sha="$(sha256sum -- "${fetch_tmp}")"
-  actual_sha="${actual_sha%% *}"
-  [[ "${actual_sha}" == "${expected_sha}" ]] || {
-    rm -f -- "${fetch_tmp}"
-    die "downloaded ${filename} failed verification against the manifest"
-  }
-  mv -- "${fetch_tmp}" "${target}"
-  downloaded=$((downloaded + 1))
-done < <(jq -r '.server.mods[] | [.file, .sha256, (.bytes | tostring)] | @tsv' "${manifest_tmp}")
-
-while IFS=$'\t' read -r path expected_sha expected_bytes; do
-  target="${payload_dir}/overrides/${path}"
+reused=0
+missing=()
+while IFS=$'\t' read -r relative expected_sha expected_bytes; do
+  target="${payload_dir}/${relative}"
   mkdir -p -- "$(dirname -- "${target}")"
   if [[ -f "${target}" && ! -L "${target}" ]]; then
-    actual_sha="$(sha256sum -- "${target}")"
-    actual_sha="${actual_sha%% *}"
-    if [[ "${actual_sha}" == "${expected_sha}" && "$(stat --format '%s' -- "${target}")" == "${expected_bytes}" ]]; then
+    if file_matches "${target}" "${expected_sha}" "${expected_bytes}"; then
       kept=$((kept + 1))
       continue
     fi
-    log "cached override ${path} does not match the manifest; refetching"
+    log "cached ${relative} does not match the manifest; refetching"
     rm -f -- "${target}"
   fi
-  [[ ! -e "${target}" && ! -L "${target}" ]] || die "unsafe cached override path: ${target}"
-  fetch_tmp="$(mktemp "$(dirname -- "${target}")/.override.XXXXXX")"
-  s3_cli get-object \
-    --bucket "${RELEASE_BUCKET}" \
-    --key "${release_prefix}/overrides/${path}" \
-    "${fetch_tmp}" >/dev/null || {
-    rm -f -- "${fetch_tmp}"
-    die "could not download override ${path} for release ${release}"
-  }
-  actual_sha="$(sha256sum -- "${fetch_tmp}")"
-  actual_sha="${actual_sha%% *}"
-  [[ "${actual_sha}" == "${expected_sha}" && "$(stat --format '%s' -- "${fetch_tmp}")" == "${expected_bytes}" ]] || {
-    rm -f -- "${fetch_tmp}"
-    die "downloaded override ${path} failed verification against the manifest"
-  }
-  mv -- "${fetch_tmp}" "${target}"
-  downloaded=$((downloaded + 1))
-done < <(jq -r '(.server.overrides // [])[] | [.path, .sha256, (.bytes | tostring)] | @tsv' "${manifest_tmp}")
+  [[ ! -e "${target}" && ! -L "${target}" ]] || die "unsafe cached path: ${target}"
+  if reuse_cached "${relative}" "${expected_sha}" "${expected_bytes}" "${target}"; then
+    reused=$((reused + 1))
+    continue
+  fi
+  missing+=("${relative}"$'\t'"${expected_sha}"$'\t'"${expected_bytes}")
+done < <(jq -r '
+  (.server.mods[] | ["mods/" + .file, .sha256, (.bytes | tostring)]),
+  ((.server.overrides // [])[] | ["overrides/" + .path, .sha256, (.bytes | tostring)])
+  | @tsv
+  ' "${manifest_tmp}")
+
+# One concurrent copy of the missing mods/ and overrides/ keys. The client.zip,
+# server.zip and full.zip packs sit beside them and are never included.
+if ((${#missing[@]} > 0)); then
+  fetch_dir="$(mktemp -d "${payload_dir}/.fetch.XXXXXX")"
+  filters=(--exclude '*')
+  for entry in "${missing[@]}"; do
+    filters+=(--include "$(glob_literal "${entry%%$'\t'*}")")
+  done
+  aws "${S3_GLOBAL_ARGS[@]}" s3 cp \
+    "s3://${RELEASE_BUCKET}/${release_prefix}/" "${fetch_dir}/" \
+    --recursive --only-show-errors "${filters[@]}" >&2 ||
+    die "could not download the files of release ${release}"
+
+  # The copy does not compare hashes, so every file is held to the manifest.
+  for entry in "${missing[@]}"; do
+    IFS=$'\t' read -r relative expected_sha expected_bytes <<<"${entry}"
+    fetched="${fetch_dir}/${relative}"
+    [[ -f "${fetched}" && ! -L "${fetched}" ]] || die "could not download ${relative} for release ${release}"
+    file_matches "${fetched}" "${expected_sha}" "${expected_bytes}" ||
+      die "downloaded ${relative} failed verification against the manifest"
+    mv -- "${fetched}" "${payload_dir}/${relative}"
+    downloaded=$((downloaded + 1))
+  done
+  rm -rf -- "${fetch_dir}"
+  fetch_dir=""
+fi
 
 mv -- "${manifest_tmp}" "${payload_dir}/manifest.json"
 trap - EXIT
@@ -155,3 +212,4 @@ printf 'release=%s\n' "${release}"
 printf 'payload=%s\n' "${payload_dir}"
 printf 'downloaded=%s\n' "${downloaded}"
 printf 'kept=%s\n' "${kept}"
+printf 'reused=%s\n' "${reused}"

@@ -44,6 +44,12 @@ const lambdas: readonly LambdaDefinition[] = [
     terraform: "infra/terraform-access-api/control-plane-websocket.tf",
   },
   {
+    name: "backup retention",
+    entry: "lambdas/src/handlers/backup-retention.ts",
+    terraform: "infra/terraform-operations/backup-retention.tf",
+    required: ["BACKUP_BUCKET", "RELEASE_BUCKET"],
+  },
+  {
     name: "control-plane projector",
     entry: "lambdas/src/handlers/control-plane-projector.ts",
     terraform: "infra/terraform-operations/control-plane-projector.tf",

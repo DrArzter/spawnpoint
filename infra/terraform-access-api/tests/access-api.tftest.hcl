@@ -235,13 +235,13 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   assert {
     condition = contains(local.access_routes, "POST /access/identities/{identityId}/delete") && anytrue([
       for statement in data.aws_iam_policy_document.access_api.statement :
-      statement.sid == "ReadAndManageAccessDirectory" && contains(statement.actions, "dynamodb:DeleteItem")
+      statement.sid == "ReadAndManageAccessDirectory" && contains(statement.actions, "dynamodb:DeleteItem") && contains(statement.actions, "dynamodb:ConditionCheckItem")
       ]) && alltrue([
       for statement in data.aws_iam_policy_document.access_api.statement :
       statement.resources == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-access"])
       if contains(statement.actions, "dynamodb:Scan")
     ])
-    error_message = "Identity deletion is routed, may delete access items, and scans the access table only, never an index or another table."
+    error_message = "Identity deletion is routed, may delete and condition-check access items, and scans the access table only, never an index or another table."
   }
 
   assert {

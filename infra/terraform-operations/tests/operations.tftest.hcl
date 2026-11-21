@@ -423,6 +423,17 @@ run "launched_hosts_are_placed_drained_and_let_go_by_tag" {
 
   assert {
     condition = alltrue([
+      strcontains(aws_sfn_state_machine.lifecycle_v2_start.definition, "\"Commit Active Release\""),
+      strcontains(aws_sfn_state_machine.lifecycle_v2_start.definition, local.release_state_function_arn),
+      strcontains(aws_sfn_state_machine.lifecycle_v2_start.definition, "$.hostStart.Output.generationId"),
+      jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Commit Active Release"].Catch[0].Next == "Release Start Lease",
+      jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Route Release Commit"].Default == "Release Start Lease",
+    ])
+    error_message = "A start that reached ready must record the release it proved, and must finish the start whether or not that bookkeeping succeeds."
+  }
+
+  assert {
+    condition = alltrue([
       one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "LaunchFleetHosts"]) == toset(["ec2:CreateFleet", "ec2:RunInstances"]),
       one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "PassOnlyTheHostRole"]) == toset(["iam:PassRole"]),
       one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "TerminateOnlyLaunchedHosts"]) == toset(["ec2:TerminateInstances"]),

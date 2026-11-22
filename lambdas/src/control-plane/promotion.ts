@@ -52,7 +52,7 @@ function reject(status: 400 | 404 | 409, error: PromotionRefusal): PromotionPlan
 }
 
 function isWorldsPreset(preset: PresetObservation | undefined, record: WorldRecord): preset is PresetObservation {
-  return preset !== undefined && preset.gameId === record.gameId && preset.id === record.preset.id;
+  return preset?.gameId === record.gameId && preset.id === record.preset.id;
 }
 
 // An active release the catalog no longer lists cannot be ordered, so it is not older.

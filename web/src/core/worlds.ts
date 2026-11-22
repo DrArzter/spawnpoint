@@ -2,12 +2,12 @@ import type { ReleasePackName } from "../api/contract";
 import { commitUrl, shortCommit } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Operation, ServerState, Wipe, World, WorldTab } from "../model";
 import { routeHash } from "../routing";
-import { configuredHosts, fleetPlayersOnline, fleetSessionOf, fleetWorldState, operationsBlockingWorld, playersOnline, sessionReason, sharedSessionOwnerLabel, worldOwnsSharedSession, worldState, type SessionReason, type SharedHostSession } from "../session";
+import { configuredHosts, fleetPlayersOnline, fleetSessionOf, fleetWorldState, operationsBlockingWorld, playersOnline, sessionReason, sharedSessionOwnerLabel, worldOwnsSharedSession, worldSessionActive, worldState, type SessionReason, type SharedHostSession } from "../session";
 import type { PendingMap, SessionAction, WorldActionKind } from "../shell/actions";
 import { changedSettings, settingsAvailable } from "./settings";
 import { controlPending, pendingFor } from "../shell/actions";
 import { action, type Action } from "./actions";
-import { promotableReleases, startableLatest } from "./presets";
+import { promotableReleases, startableLatest, startableReleases } from "./presets";
 import { hostStatus, sessionStatus, worldStatus, type StatusDescriptor } from "./status";
 import type { AddressFacts, Detail, Notice, SessionOverview, SiblingRow, WorldRow } from "./models";
 
@@ -197,26 +197,42 @@ export function rowActions(game: Game, world: World, granted: ReadonlySet<string
   return items;
 }
 
+/** The wipe has a pointer and has run nothing: it holds no save, so its release may still change (ADR-0078). Archives are not loaded here; the API refuses a wipe that has one. */
+export function neverStarted(world: World): boolean {
+  const { release } = world;
+  return release.state === "available" && release.generationId !== null && release.activeRelease === null && (release.runCount ?? 0) === 0;
+}
+
 /** The releases a world's wipe may move to: its preset's others, newest first. */
 export function promotionTargets(game: Game, world: World): readonly string[] {
   const preset = presetOf(game, world);
   if (!preset) return [];
+  // A wipe that never started takes any release a new world may use; there is no save to protect.
+  if (neverStarted(world)) return [...startableReleases(preset)].reverse().filter((release) => release !== world.release.desiredRelease);
   // Only releases after the active one: going back is a restore (ADR-0052).
   const at = world.release.activeRelease === null ? -1 : preset.releases.indexOf(world.release.activeRelease);
   const usable = promotableReleases(preset);
   return preset.releases.slice(at + 1).filter((release) => usable.includes(release)).reverse();
 }
 
+function promotionReason(game: Game, world: World): string | undefined {
+  if (!world.release.activeRelease && !neverStarted(world)) return "Available once a release is active";
+  if (neverStarted(world)) {
+    if (worldSessionActive(game, world)) return "Refused while a session runs";
+    return promotionTargets(game, world).length === 0 ? "No other built release" : undefined;
+  }
+  if (promotionTargets(game, world).length === 0) return "No newer built release";
+  return (fleetPlayersOnline(game, world) ?? 0) > 0 ? "Refused while players are online" : undefined;
+}
+
 // Keeping the save across a release change is release.promote, the Owner's (ADR-0078).
 function promoteActions(game: Game, world: World, granted: ReadonlySet<string>, busy: boolean, callbacks: WorldCallbacks): Action[] {
   const promote = callbacks.onPromote;
   if (!promote || !granted.has("release.promote") || world.placement !== "fleet" || world.materialization !== "existing") return [];
-  const players = fleetPlayersOnline(game, world) ?? 0;
-  const reason = !world.release.activeRelease ? "Available once a release is active"
-    : promotionTargets(game, world).length === 0 ? "No newer built release"
-      : players > 0 ? "Refused while players are online" : undefined;
+  const reason = promotionReason(game, world);
   return [action("world.promote", "Update release", () => promote(game, world), {
-    icon: "deployed_code", disabled: busy || reason !== undefined, detail: reason ?? "Keeps the save; takes a backup first",
+    icon: "deployed_code", disabled: busy || reason !== undefined,
+    detail: reason ?? (neverStarted(world) ? "Switches the release before the first start" : "Keeps the save; takes a backup first"),
   })];
 }
 

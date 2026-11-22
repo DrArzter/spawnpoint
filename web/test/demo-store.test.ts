@@ -18,6 +18,7 @@ const GAME = "minecraft";
 const ROSTIK = "minecraft-rostik-12345678";
 const VANILLA = "vanilla";
 const CREATIVE = "minecraft-creative-5e1c9a07";
+const SANDBOX = "minecraft-sandbox-8d41f0b6";
 
 function stateOf(snapshot: ControlPlaneSnapshot, worldId: string) {
   const game = snapshot.games.find((item) => item.id === GAME)!;
@@ -31,10 +32,12 @@ test("the demo deploys fleet worlds by default and seeds one beside the configur
   assert.equal(snapshot.deployment?.placement, "fleet");
   assert.equal(snapshot.deployment?.launchEnabled, true);
   const worlds = snapshot.games.find((item) => item.id === GAME)!.worlds;
-  assert.deepEqual(worlds.filter((item) => item.placement === "fleet").map((item) => item.id), [CREATIVE]);
+  assert.deepEqual(worlds.filter((item) => item.placement === "fleet").map((item) => item.id), [CREATIVE, SANDBOX]);
   assert.deepEqual(worlds.filter((item) => item.placement === "configured").map((item) => item.id), [ROSTIK, VANILLA]);
   assert.equal(stateOf(snapshot, ROSTIK), "running");
   assert.equal(stateOf(snapshot, CREATIVE), "stopped");
+  const sandbox = worlds.find((item) => item.id === SANDBOX)!;
+  assert.deepEqual([sandbox.release.activeRelease, sandbox.release.runCount], [null, 0], "a never-started world shows Update release enabled");
 });
 
 test("two fleet worlds of a game start one after the other, each on a host of its own", () => {
@@ -164,4 +167,23 @@ test("the demo names where each mod of a release came from, except for a preset'
   const later = store.releaseMods(GAME, "industrial", "1.3");
   assert.deepEqual([...new Set(later.mods.map((mod) => mod.source))].sort(), ["curseforge", "github", "modrinth"]);
   assert.ok((store.releaseMods(GAME, "industrial", "1.2").clientMods ?? []).every((mod) => mod.source !== undefined));
+});
+
+test("a never-started world switches its release at once, with no operation, and a start commits the release it names (ADR-0078)", () => {
+  const created = store.createWorld(GAME, "industrial", "Sandbox", "1.2", "fleet", "raw").id;
+  const sandbox = () => store.snapshot().games.find((item) => item.id === GAME)!.worlds.find((item) => item.id === created)!;
+  assert.deepEqual([sandbox().release.activeRelease, sandbox().release.runCount, sandbox().release.desiredRelease], [null, 0, "1.2"]);
+  assert.throws(() => store.promoteWorld(GAME, created, "1.2"), /already selected/);
+  assert.throws(() => store.promoteWorld(GAME, created, "9.9"), /no longer available/);
+  const operations = store.snapshot().operations.length;
+  assert.deepEqual(store.promoteWorld(GAME, created, "1.1"), { result: "switched" });
+  assert.equal(store.snapshot().operations.length, operations, "no workflow runs");
+  assert.deepEqual([sandbox().release.activeRelease, sandbox().release.desiredRelease, sandbox().wipes[0]!.originRelease], [null, "1.1", "1.1"]);
+  assert.equal(store.backups(GAME, created).entries.length, 0);
+
+  store.startSession(GAME, created);
+  assert.throws(() => store.promoteWorld(GAME, created, "1.3"), /Another control-plane operation/);
+  mock.timers.tick(7000);
+  assert.deepEqual([sandbox().release.activeRelease, sandbox().release.runCount], ["1.1", 1]);
+  assert.equal(store.promoteWorld(GAME, created, "1.3").result, "requested", "once it ran, the promotion path applies");
 });

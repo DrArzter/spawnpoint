@@ -133,6 +133,23 @@ export function initialState(): DemoState {
               session: null,
               gameSettings: { values: { game_mode: "creative" }, updatedAt: "2026-10-02T12:00:00.000Z" },
             },
+            {
+              // Created and never started: no release has run, so its release may still change (ADR-0078).
+              id: "minecraft-sandbox-8d41f0b6",
+              displayName: "Sandbox",
+              profileId: "industrial",
+              sessionControlAvailable: true,
+              worldLifecycleAvailable: true,
+              connectivity: "raw",
+              placement: "fleet",
+              materialization: "existing",
+              preset: { id: "industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5", profileDigest: "41d9a8e0c73b5f26184ad0e9cb7f3520a6e81d4c95f27b03ea6d183c7b40f9e2", releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3" },
+              wipes: [{ id: "gen-8d41f0b6a2c75e39b1046fd8c3e97a52", number: 1, state: "current", createdAt: "2026-11-21T12:00:00.000Z", closedAt: null, originRelease: "1.2" }],
+              connectionAddress: null,
+              release: { state: "available", generationId: "gen-8d41f0b6a2c75e39b1046fd8c3e97a52", activeRelease: null, desiredRelease: "1.2", runCount: 0 },
+              session: null,
+              gameSettings: { values: {}, updatedAt: null },
+            },
           ],
         },
         {

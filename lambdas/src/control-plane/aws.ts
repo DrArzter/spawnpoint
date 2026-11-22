@@ -28,6 +28,7 @@ import { ReleaseHolders, resolveFromWorldRecords } from "./release-holders.ts";
 import { ReleaseRefs } from "./release-refs.ts";
 import { S3ReleaseStateStore } from "./s3-release-state-store.ts";
 import { S3WorldReader, S3WorldRepository } from "./s3-world-repository.ts";
+import { switchBeforeFirstStart, type SwitchOutcome, type SwitchRequest } from "./release-switch.ts";
 import { newWorldRecord, withGameSettings, withWhitelist, withWorldAccess, type WorldGameSettings, type WorldRecord, type WorldWhitelist } from "./world-registry.ts";
 import { parseDynamicProjection } from "./dynamic-projection.ts";
 import { createSessionHostReader } from "./aws-session-history.ts";
@@ -138,6 +139,7 @@ async function readReleasePointer(worldId: string, generationId: string | null):
       generationId: stored.state.generationId,
       desiredRelease: stored.state.desiredRelease,
       activeRelease: stored.state.activeRelease,
+      runCount: stored.state.releasesRun?.length ?? 0,
     };
   } catch (error) {
     if (error instanceof NoSuchKey || (error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound"))) {
@@ -410,10 +412,21 @@ async function listRunningOperations(): Promise<readonly OperationObservation[]>
   return operations.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
 
+/** One listing page of the wipe's own archives is enough to know whether any exists. */
+async function hasGenerationBackup(worldId: string, generationId: string): Promise<boolean> {
+  const listing = await s3.send(new ListObjectsV2Command({
+    Bucket: requiredEnv("BACKUP_BUCKET"),
+    Prefix: `worlds/${worldId}/archives/${worldId}-${generationId}-`,
+    MaxKeys: 1,
+  }));
+  return (listing.KeyCount ?? listing.Contents?.length ?? 0) > 0;
+}
+
 export const awsControlPlaneSources: ControlPlaneSources = {
   listHosts,
   readLifecycle,
   readReleasePointer,
+  hasGenerationBackup,
   listRunningOperations,
   listPresets,
   readReleaseManifest,
@@ -457,6 +470,18 @@ export function dashboardControlPlaneSources(): ControlPlaneSources {
 
 function preconditionFailed(error: unknown): boolean {
   return error instanceof Error && (error.name === "PreconditionFailed" || error.name === "ConditionalRequestConflict");
+}
+
+/** Moves a never-started wipe to another release (ADR-0078). Holders, pointer, record: see `switchBeforeFirstStart`. */
+export async function switchReleaseBeforeFirstStart(request: SwitchRequest): Promise<SwitchOutcome> {
+  const bucket = requiredEnv("RELEASE_BUCKET");
+  const holders = releaseHolders(bucket);
+  return switchBeforeFirstStart({
+    holders,
+    pointers: new S3ReleaseStateStore(s3, bucket, holders),
+    worlds: new S3WorldRepository(s3, bucket, holders),
+    now: () => new Date(),
+  }, request);
 }
 
 export async function materializePresetWorld(

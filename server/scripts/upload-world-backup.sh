@@ -41,6 +41,13 @@ fi
 if [[ -n "${WORLD_RELEASE:-}" ]]; then
   [[ "${WORLD_RELEASE}" =~ ^[0-9]+\.[0-9]+$ ]] || die "invalid WORLD_RELEASE"
   metadata="${metadata},release=${WORLD_RELEASE}"
+  # "active": the release that ran, read from the wipe's pointer. Absent: the
+  # wipe's origin release, as every archive before ADR-0052's amendment says.
+  if [[ -n "${WORLD_RELEASE_SOURCE:-}" ]]; then
+    [[ "${WORLD_RELEASE_SOURCE}" == "active" || "${WORLD_RELEASE_SOURCE}" == "generation" ]] ||
+      die "invalid WORLD_RELEASE_SOURCE"
+    metadata="${metadata},release-source=${WORLD_RELEASE_SOURCE}"
+  fi
 fi
 
 if head_output="$(head_backup_object "${object_key}" 2>/dev/null)"; then

@@ -208,7 +208,7 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     canRestore: granted.has("backup.restore"),
     busy,
     settled: `${world.wipes.length}:${operations.length}`,
-    onRestore: (entry) => worldCallbacks.onWorldAction(game, world, "restore", { key: entry.key, name: entry.archiveName }),
+    onRestore: (entry) => worldCallbacks.onWorldAction(game, world, "restore", { key: entry.key, name: entry.archiveName, release: entry.release }),
     onDownload: canDownload ? (entry) => console.downloadBackup(game, world, entry) : null,
   });
   const model: WorldModel = {

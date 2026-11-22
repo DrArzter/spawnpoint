@@ -229,16 +229,21 @@ export function regenerateWorldRecord(
   };
 }
 
+/**
+ * Opens a new wipe from a backup. `release` is the release the backup ran
+ * (backup-release.ts); without it the source wipe's origin release is used.
+ */
 export function restoreWorldRecord(
   record: WorldRecord,
-  backup: Readonly<{ key: string; checksum: string; generationId: string }>,
+  backup: Readonly<{ key: string; checksum: string; generationId: string; release?: string }>,
   generationUuid: string,
   createdAt: string,
 ): WorldRecord {
   if (
     !BACKUP_KEY.test(backup.key) || !backup.key.startsWith(`worlds/${record.worldId}/archives/`) ||
     !backup.key.endsWith(`-${backup.checksum}.tar.zst`) || !backup.key.includes(`-${backup.generationId}-`) ||
-    !SHA256.test(backup.checksum) || !GENERATION_ID.test(backup.generationId)
+    !SHA256.test(backup.checksum) || !GENERATION_ID.test(backup.generationId) ||
+    (backup.release !== undefined && !RELEASE.test(backup.release))
   ) {
     throw new Error("invalid_backup");
   }
@@ -249,7 +254,7 @@ export function restoreWorldRecord(
     ...record,
     status: "active",
     currentGeneration: {
-      id: generationId(generationUuid), release: source.release, createdAt,
+      id: generationId(generationUuid), release: backup.release ?? source.release, createdAt,
       source: { kind: "backup", key: backup.key, checksum: backup.checksum, generationId: backup.generationId },
     },
     previousGenerations: [...record.previousGenerations, closedCurrent(record, createdAt)],

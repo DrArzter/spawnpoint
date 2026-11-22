@@ -38,6 +38,19 @@ data "aws_iam_policy_document" "release_state" {
     actions   = ["s3:PutObject"]
     resources = ["${data.aws_s3_bucket.releases.arn}/worlds/*/generations/*/release.json"]
   }
+
+  # A promotion names the archive it keeps (ADR-0030). The key and checksum
+  # come from the listing, so the archive itself is never read.
+  statement {
+    sid       = "ListWipeArchivesForPrePromotionBackup"
+    actions   = ["s3:ListBucket"]
+    resources = [local.backup_bucket_arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["worlds/*/archives/*"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "release_state" {
@@ -62,7 +75,10 @@ resource "aws_lambda_function" "release_state" {
   memory_size      = 256
 
   environment {
-    variables = { RELEASE_BUCKET = data.aws_s3_bucket.releases.id }
+    variables = {
+      RELEASE_BUCKET = data.aws_s3_bucket.releases.id
+      BACKUP_BUCKET  = "spawnpoint-backups-${local.account_id}"
+    }
   }
 
   depends_on = [aws_cloudwatch_log_group.release_state]

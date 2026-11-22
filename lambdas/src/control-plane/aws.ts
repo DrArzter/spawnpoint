@@ -15,6 +15,8 @@ import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient, StartExecut
 import { randomUUID } from "node:crypto";
 
 import type { BackupObject } from "./backups.ts";
+import type { BackupReleaseSources } from "./backup-release.ts";
+import { s3BackupReleaseSources } from "./s3-backup-release.ts";
 import { clientPackKey, releaseModKey, releasePackKey, type ModStore, type ReleasePack } from "./release-artifacts.ts";
 import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts";
 import { presetBuildView, runningReleaseBuilds } from "./aws-release-builds.ts";
@@ -626,6 +628,11 @@ export async function listWorldBackups(worldId: string): Promise<readonly Backup
     storedAt: object.LastModified.toISOString(),
     checksumAlgorithms: object.ChecksumAlgorithm ?? [],
   }] : []);
+}
+
+/** Each archive's recorded release and its wipe's pointer: one HEAD per archive, never a download. */
+export function backupReleaseSources(): BackupReleaseSources {
+  return s3BackupReleaseSources(s3, requiredEnv("BACKUP_BUCKET"), requiredEnv("RELEASE_BUCKET"));
 }
 
 export async function readWorldRecord(worldId: string): Promise<WorldRecord | null> {

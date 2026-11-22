@@ -413,7 +413,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
       if (kind === "archive") setConfirmation({ kind: "archive", game: target, world: targetWorld });
       if (kind === "wipe") setConfirmation({ kind: "wipe", game: target, world: targetWorld, preset: target.presets.find((preset) => preset.id === (targetWorld.preset?.id ?? targetWorld.profileId)) ?? null });
       if (kind === "purge") setConfirmation({ kind: "purge", game: target, world: targetWorld });
-      if (kind === "restore" && backup) setConfirmation({ kind: "restore", game: target, world: targetWorld, backupKey: backup.key, backupName: backup.name });
+      if (kind === "restore" && backup) setConfirmation({ kind: "restore", game: target, world: targetWorld, backupKey: backup.key, backupName: backup.name, release: backup.release });
     },
     onInvite: (target, targetWorld) => setInvite({ game: target, world: targetWorld }),
     onDownloadPack: (target, targetWorld) => void downloadPack(target, targetWorld),

@@ -52,3 +52,24 @@ test("a key with no generation in it is refused", async () => {
 test("a deployment with no manifest source does not block restores", async () => {
   assert.equal(await restorableRelease(record, key(current), undefined), "ok");
 });
+
+test("after a promotion a backup is checked against the release it ran, not its wipe's origin", async () => {
+  const asked: string[] = [];
+  const verdict = await restorableRelease(record, key(previous), async (game, preset, version) => {
+    asked.push(`${game}/${preset}/${version}`);
+    return { release: version };
+  }, {
+    readArchiveMetadata: async () => ({ release: "1.5", releaseSource: "active", storedAt: "2026-09-10T00:00:00Z" }),
+    readReleaseState: async () => null,
+  });
+  assert.equal(verdict, "ok");
+  assert.deepEqual(asked, ["minecraft/industrial/1.5"]);
+});
+
+test("a backup whose archive is gone is refused", async () => {
+  const verdict = await restorableRelease(record, key(previous), async () => ({}), {
+    readArchiveMetadata: async () => null,
+    readReleaseState: async () => null,
+  });
+  assert.equal(verdict, "unknown_backup");
+});

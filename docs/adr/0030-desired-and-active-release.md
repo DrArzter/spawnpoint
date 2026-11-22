@@ -1,6 +1,6 @@
 # ADR-0030 — Separate the desired release from the active release
 
-- Status: Accepted
+- Status: Accepted, amended 2026-11-22: a stopped world is started and proved; a promotion keeps a protected backup
 - Date: 2026-08-11
 - Milestone: M3
 - Supersedes: the deployment-trigger semantics in [ADR-0009](0009-s3-as-mod-source-of-truth.md). Its S3 layout,
@@ -110,3 +110,35 @@ owned by ADR-0025 and remains an implementation question; this ADR does not add 
 - Exact health thresholds. M0 must measure normal and worst observed modded-server startup time before M3 chooses
   the timeout.
 - Whether a failed release is automatically quarantined from promotion until its manifest changes.
+
+## Amendment — a stopped world is proved, and a promotion keeps its backup (2026-11-22)
+
+**A stopped world does not end in `pending_start`.** The Decision above says a promotion of a stopped world only
+changes `desired_release`. The promotion workflow does more, and that is the safer rule: it starts the world on the
+target release, runs the full health check, commits `active_release`, and stops the world again
+(`workflows/promote-release.asl.json`, `workflows/README.md`). A release that does not start is found at once, and the
+automatic rollback applies. `pending_start` is not used.
+
+**A promotion keeps a protected pre-promotion backup.**
+
+1. Before the target release starts, the world is stopped on a verified archive: the fenced stop of a running world
+   verifies one ([ADR-0073](0073-a-stop-succeeds-only-when-the-worlds-archive-is-verified-on-its-host.md)), and a
+   stopped world was stopped by such a stop.
+2. The promotion names that archive: the newest verified archive of the wipe, which is the archive the next start
+   resumes from. It writes `pre_promotion_backup: {key, operation_id, release, recorded_at}` on the wipe's pointer.
+   `release` is the active release before the promotion. Only the promotion that prepared the pointer may write it.
+3. A wipe that ran a release and has no verified archive is not promoted. The previous desired release is restored and
+   the run fails `Spawnpoint.PrePromotionBackupMissing`. A wipe that never ran has nothing to keep.
+4. The result of the promotion (`promoted` or `rolled_back`) names the backup as `prePromotionBackup`.
+5. Backup retention keeps the archive that each wipe's pointer names as its pre-promotion backup. The next promotion of
+   the wipe names another archive, and the old one returns to the 5/2/2 rule
+   ([ADR-0010](0010-world-persistence-and-backups.md)).
+
+The archive is the one the world would resume from, so the promotion makes no extra archive. A rollback of a release
+that starts but damages the world is a restore of this backup onto the release it ran
+([ADR-0052](0052-keep-a-release-while-a-generation-names-it.md), amended). Promoting the previous release again is not a
+rollback: the save already holds data of the newer release.
+
+**Why on the pointer.** The workflow execution is the operation record (ADR-0025), but its history expires. The pointer
+is written by the same release-state adapter with a conditional write, is per wipe, and survives. Retention already
+reads world records; it now reads each wipe's pointer too.

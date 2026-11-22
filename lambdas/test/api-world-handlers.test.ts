@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { SFNClient } from "@aws-sdk/client-sfn";
 import { GetCommandInvocationCommand, SendCommandCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
@@ -123,10 +123,26 @@ test("archiving refuses a configured host's untracked session", async (t) => {
   assert.deepEqual(inputs, []);
 });
 
-test("restore verifies the saved generation's release before requesting a workflow", async (t) => {
+test("restore verifies the release the backup ran before requesting a workflow", async (t) => {
   const inputs = scenario(t);
+  process.env.BACKUP_BUCKET = "backups";
+  process.env.RELEASE_BUCKET = "releases";
+  t.after(() => { delete process.env.BACKUP_BUCKET; delete process.env.RELEASE_BUCKET; });
   const key = `worlds/${record.worldId}/archives/save-${record.currentGeneration.id}-test.tar.zst`;
+  t.mock.method(S3Client.prototype, "send", async (command: unknown) => {
+    if (command instanceof HeadObjectCommand) {
+      assert.deepEqual(command.input, { Bucket: "backups", Key: key });
+      return { Metadata: { release: "1.4", "release-source": "active" }, LastModified: new Date("2026-11-20T00:00:00Z") };
+    }
+    throw Object.assign(new Error("missing"), { name: "NoSuchKey" });
+  });
+  const asked: string[] = [];
+  t.mock.method(awsControlPlaneSources as Required<ControlPlaneSources>, "readReleaseManifest", async (_game: string, _preset: string, version: string) => {
+    asked.push(version);
+    return {};
+  });
   assert.equal((await controlWorldLifecycle(identity, "restore", record.gameId, record.worldId, JSON.stringify({ backupKey: key }))).statusCode, 202);
+  assert.deepEqual(asked, ["1.4"]);
   assert.equal(inputs[0]?.backupKey, key);
   assert.equal(inputs[0]?.stopRequired, false);
 });

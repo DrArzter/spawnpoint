@@ -67,7 +67,7 @@ test("desired is written before any host action, per ADR-0030", async () => {
   assert.equal(state(definition, "Prepare Release").Resource, "arn:aws:states:::lambda:invoke");
   assert.equal(state(definition, "Already Active").Default, "Read Lifecycle");
   assert.equal(state(definition, "Mark Origin Running").Next, "Stop Origin Session");
-  assert.equal(state(definition, "Mark Origin Stopped").Next, "Start With Target");
+  assert.equal(state(definition, "Mark Origin Stopped").Next, "Keep Pre-Promotion Backup");
 });
 
 test("active commits only after the target start succeeded", async () => {
@@ -154,12 +154,12 @@ test("the workflow delegates all release-state writes and knows no world storage
   const mutations = Object.values(definition.States).filter((candidate) =>
     candidate.Resource === "arn:aws:states:::lambda:invoke" &&
     candidate.Parameters?.FunctionName === "${release_state_function_arn}");
-  assert.equal(mutations.length, 5);
+  assert.equal(mutations.length, 7);
 
   const fails = Object.entries(definition.States).filter(([, state]) => state.Type === "Fail");
-  assert.equal(fails.length, 8);
+  assert.equal(fails.length, 9);
   const errors = new Set(fails.map(([, state]) => (state as { Error?: string }).Error));
-  assert.equal(errors.size, 8, "every failure mode must be distinguishable");
+  assert.equal(errors.size, 9, "every failure mode must be distinguishable");
 });
 
 test("release identity is preset-scoped and child machine ARNs are not caller-controlled", async () => {
@@ -200,4 +200,26 @@ test("promotion's nested starts name the world and carry no address", async () =
     assert.ok(!("connectionAddress.$" in nested), `${name} must not echo an address`);
   }
   assert.ok(!JSON.stringify(definition).includes("$.request.connectionAddress"));
+});
+
+test("a promotion keeps a named backup of the save before it starts the target, from either origin", async () => {
+  const definition = await loadDefinition();
+  assert.equal(state(definition, "Stop Origin Session").Next, "Keep Pre-Promotion Backup");
+  assert.equal(state(definition, "Mark Origin Stopped").Next, "Keep Pre-Promotion Backup");
+  const keep = state(definition, "Keep Pre-Promotion Backup");
+  assert.equal((keep.Parameters?.Payload as Record<string, unknown>).action, "protect");
+  assert.equal(keep.Next, "Start With Target");
+  // Without that backup the promotion does not change the release.
+  assert.equal(keep.Catch?.[0]?.Next, "Restore Desired After Missing Backup");
+  const restored = state(definition, "Restore Desired After Missing Backup");
+  assert.equal((restored.Parameters?.Payload as Record<string, unknown>).action, "restore");
+  assert.equal(restored.Next, "Pre-Promotion Backup Missing");
+  assert.equal(state(definition, "Pre-Promotion Backup Missing").Type, "Fail");
+});
+
+test("the operation's result names the pre-promotion backup", async () => {
+  const definition = await loadDefinition();
+  for (const name of ["Promoted Running", "Promoted Stopped", "Rolled Back"]) {
+    assert.equal(state(definition, name).Parameters?.["prePromotionBackup.$"], "$.observed.prePromotionBackup.key", name);
+  }
 });

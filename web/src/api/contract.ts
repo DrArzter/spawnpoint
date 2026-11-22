@@ -149,6 +149,10 @@ export type BackupEntry = {
   generationId: string | null;
   sizeBytes: number;
   storedAt: string;
+  /** The release a restore puts this backup on: the release it ran (ADR-0052). Null where it cannot be read. */
+  release: string | null;
+  /** recorded: written on the archive; ran: the wipe's record of what it ran; origin: the release the wipe began with. */
+  releaseSource: "recorded" | "ran" | "origin" | null;
 };
 
 export type BackupInventory = { entries: BackupEntry[]; unverified: number; truncated: boolean };

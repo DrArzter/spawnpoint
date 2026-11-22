@@ -1,6 +1,7 @@
 import { DeleteObjectCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 
-import { backupInventory, type BackupEntry } from "../control-plane/backups.ts";
+import { backupInventory, byCodeUnit, resumeArchiveKey, type BackupEntry } from "../control-plane/backups.ts";
+import { S3ReleaseStateStore } from "../control-plane/s3-release-state-store.ts";
 import { S3WorldRepository } from "../control-plane/s3-world-repository.ts";
 import type { WorldRecord } from "../control-plane/world-registry.ts";
 import { planBackupRetention } from "../domain/backup-retention.ts";
@@ -20,6 +21,8 @@ export type RetentionStore = Readonly<{
   listWorldIds(): Promise<readonly string[]>;
   listArchives(worldId: string): Promise<readonly ArchiveObject[]>;
   readWorld(worldId: string): Promise<WorldRecord | null>;
+  /** The pre-promotion backup each wipe of the world names on its release pointer. */
+  readPrePromotionBackups(record: WorldRecord): Promise<readonly string[]>;
   deleteArchive(key: string): Promise<void>;
 }>;
 
@@ -39,27 +42,24 @@ function requiredEnv(name: string): string {
   return value;
 }
 
-const RESUMABLE = /-\d{8}T\d{6}Z-[0-9a-f]{64}\.tar\.zst$/;
-
-// Keys sort by code unit, as jq's sort in prepare-world.sh picks the newest.
-function byCodeUnit(a: string, b: string): number {
-  if (a < b) return -1;
-  return a > b ? 1 : 0;
-}
-
 /** The archive the next start resumes from: the greatest key of the open generation, as server/scripts/prepare-world.sh picks it. */
 export function resumeKey(record: WorldRecord, keys: readonly string[]): string | undefined {
-  const prefix = `worlds/${record.worldId}/archives/${record.worldId}-${record.currentGeneration.id}-`;
-  return keys.filter((key) => key.startsWith(prefix) && RESUMABLE.test(key)).sort(byCodeUnit).at(-1);
+  return resumeArchiveKey(record.worldId, record.currentGeneration.id, keys);
 }
 
 /**
  * Keys no plan may remove: the newest verified archive of the open generation by
  * upload time and the one the next start resumes from by name (a retried upload
- * can make the two differ), and every archive a generation was restored from.
+ * can make the two differ), every archive a generation was restored from, and
+ * each wipe's pre-promotion backup until its next promotion names another (ADR-0030).
  */
-export function protectedKeys(record: WorldRecord, entries: readonly BackupEntry[], keys: readonly string[] = entries.map((entry) => entry.key)): ReadonlySet<string> {
-  const protect = new Set<string>();
+export function protectedKeys(
+  record: WorldRecord,
+  entries: readonly BackupEntry[],
+  keys: readonly string[] = entries.map((entry) => entry.key),
+  prePromotion: readonly string[] = [],
+): ReadonlySet<string> {
+  const protect = new Set<string>(prePromotion);
   const open = entries
     .filter((entry) => entry.generationId === record.currentGeneration.id)
     .sort((left, right) => right.storedAt.localeCompare(left.storedAt))[0];
@@ -72,9 +72,9 @@ export function protectedKeys(record: WorldRecord, entries: readonly BackupEntry
   return protect;
 }
 
-export function archivesToRemove(record: WorldRecord, objects: readonly ArchiveObject[]): readonly string[] {
+export function archivesToRemove(record: WorldRecord, objects: readonly ArchiveObject[], prePromotion: readonly string[] = []): readonly string[] {
   const entries = backupInventory(objects, Number.POSITIVE_INFINITY).entries;
-  const keep = protectedKeys(record, entries, objects.map((object) => object.key));
+  const keep = protectedKeys(record, entries, objects.map((object) => object.key), prePromotion);
   const byGeneration = new Map<string, BackupEntry[]>();
   for (const entry of entries) {
     const generation = entry.generationId ?? "none";
@@ -99,7 +99,8 @@ export async function applyBackupRetention(store: RetentionStore): Promise<reado
         results.push({ worldId, result: "no_world_record", removed: [] });
         continue;
       }
-      const removed = archivesToRemove(record, await store.listArchives(worldId)); // NOSONAR one world at a time: a failure is recorded per world
+      const prePromotion = await store.readPrePromotionBackups(record); // NOSONAR one world at a time: a failure is recorded per world
+      const removed = archivesToRemove(record, await store.listArchives(worldId), prePromotion); // NOSONAR one world at a time: a failure is recorded per world
       for (const key of removed) await store.deleteArchive(key); // NOSONAR ordered, fail-fast deletes
       results.push({ worldId, result: "applied", removed });
     } catch (error) {
@@ -110,7 +111,10 @@ export async function applyBackupRetention(store: RetentionStore): Promise<reado
   return results;
 }
 
-export function s3RetentionStore(s3: S3Send, backupBucket: string, worlds: Pick<S3WorldRepository, "read">): RetentionStore {
+export function s3RetentionStore(
+  s3: S3Send, backupBucket: string, worlds: Pick<S3WorldRepository, "read">, releaseBucket?: string,
+): RetentionStore {
+  const states = releaseBucket === undefined ? null : new S3ReleaseStateStore(s3 as S3Client, releaseBucket);
   return {
     async listWorldIds() {
       const ids: string[] = [];
@@ -148,6 +152,16 @@ export function s3RetentionStore(s3: S3Send, backupBucket: string, worlds: Pick<
     async readWorld(worldId) {
       return (await worlds.read(worldId))?.record ?? null;
     },
+    async readPrePromotionBackups(record) {
+      if (states === null) return [];
+      const keys: string[] = [];
+      // A pointer that cannot be read fails this world's run, so nothing of it is removed.
+      for (const generation of [record.currentGeneration, ...record.previousGenerations]) {
+        const stored = await states.read({ worldId: record.worldId, generationId: generation.id }); // NOSONAR few wipes per world
+        if (stored?.state.prePromotionBackup) keys.push(stored.state.prePromotionBackup.key);
+      }
+      return keys;
+    },
     async deleteArchive(key) {
       await s3.send(new DeleteObjectCommand({ Bucket: backupBucket, Key: key }));
     },
@@ -156,7 +170,8 @@ export function s3RetentionStore(s3: S3Send, backupBucket: string, worlds: Pick<
 
 export async function handler(): Promise<Readonly<{ worlds: number; removed: number }>> {
   const s3 = new S3Client({});
-  const store = s3RetentionStore(s3, requiredEnv("BACKUP_BUCKET"), new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET")));
+  const releaseBucket = requiredEnv("RELEASE_BUCKET");
+  const store = s3RetentionStore(s3, requiredEnv("BACKUP_BUCKET"), new S3WorldRepository(s3, releaseBucket), releaseBucket);
   const results = await applyBackupRetention(store);
   for (const result of results) {
     if (result.removed.length > 0) console.info("backup_retention_removed", { worldId: result.worldId, keys: result.removed });

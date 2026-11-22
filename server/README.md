@@ -35,7 +35,8 @@ Contents:
   - `archive-world.sh` — archive a stopped live world with Zstandard, write SHA-256 and verify the result,
   - `verify-archive.sh` — verify checksum, safe paths, archive readability and the presence of `level.dat`,
   - `upload-world-backup.sh` — idempotently upload a content-addressed archive and verify its S3 checksum, metadata
-    digest and size,
+    digest and size; `stop-session.sh` gives it the wipe's active release to record (`release-source=active`, ADR-0052),
+
   - `download-world-backup.sh` — download only into a new temporary file, verify both S3 and local SHA-256, then make
     the archive visible for restore,
   - `restore-world.sh` — restore only into a new or empty non-live data directory,

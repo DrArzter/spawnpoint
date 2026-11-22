@@ -23,7 +23,7 @@ export function objectKey(sha256: string): string {
 /** The digest an `objects/` key names, or null when the key is not an object key. */
 export function digestOfObjectKey(key: string): string | null {
   const match = /^objects\/sha256\/([0-9a-f]{2})\/([0-9a-f]{64})$/.exec(key);
-  return match !== null && match[2]!.startsWith(match[1]!) ? match[2]! : null;
+  return match?.[2]?.startsWith(match[1]!) ? match[2]! : null;
 }
 
 /** A manifest without `storage.layout = objects-v1` is legacy: its readers use per-release keys. */

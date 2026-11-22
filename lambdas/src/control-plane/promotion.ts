@@ -51,6 +51,16 @@ function reject(status: 400 | 404 | 409, error: PromotionRefusal): PromotionPlan
   return { kind: "reject", status, error };
 }
 
+function isWorldsPreset(preset: PresetObservation | undefined, record: WorldRecord): preset is PresetObservation {
+  return preset !== undefined && preset.gameId === record.gameId && preset.id === record.preset.id;
+}
+
+// An active release the catalog no longer lists cannot be ordered, so it is not older.
+function olderThanActive(preset: PresetObservation, active: string, release: string): boolean {
+  const at = preset.releases.indexOf(active);
+  return at !== -1 && preset.releases.indexOf(release) < at;
+}
+
 export function planPromotion(facts: PromotionFacts): PromotionPlan {
   const { record, preset, pointer, release } = facts;
   if (typeof release !== "string" || !RELEASE.test(release)) return reject(400, "invalid_release");
@@ -60,7 +70,7 @@ export function planPromotion(facts: PromotionFacts): PromotionPlan {
   if (record.placement !== "fleet") return reject(409, "promotion_needs_fleet_world");
   if (!facts.launchEnabled) return reject(409, "fleet_unavailable");
   // Only a release of the world's own preset: a world never changes preset.
-  if (preset === undefined || preset.gameId !== record.gameId || preset.id !== record.preset.id) return reject(409, "preset_removed");
+  if (!isWorldsPreset(preset, record)) return reject(409, "preset_removed");
   if (!usableByExistingWorld(preset, release)) return reject(409, "release_not_available");
   if (facts.releaseUsability !== "usable") return reject(409, facts.releaseUsability);
   if (pointer.state !== "available" || pointer.generationId !== record.currentGeneration.id) return reject(409, "release_state_unavailable");
@@ -70,8 +80,7 @@ export function planPromotion(facts: PromotionFacts): PromotionPlan {
   // Rollback is by restore (ADR-0052): a promotion only moves forward along the
   // preset's ordered releases (ADR-0042). An active release the catalog no
   // longer lists cannot be ordered, so it does not refuse.
-  const at = preset.releases.indexOf(pointer.activeRelease);
-  if (at !== -1 && preset.releases.indexOf(release) < at) return reject(409, "release_older_than_active");
+  if (olderThanActive(preset, pointer.activeRelease, release)) return reject(409, "release_older_than_active");
   // The workflow's stop refuses with players online too; this answers before it is asked.
   if ((facts.session?.idle?.playersOnline ?? 0) > 0) return reject(409, "players_online");
   if (facts.blockingOperations > 0) return reject(409, "operation_in_progress");

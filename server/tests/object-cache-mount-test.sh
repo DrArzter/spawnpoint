@@ -69,7 +69,8 @@ else
   )
 fi
 helper() { # a root container on the work directory
-  docker run --rm --pull=missing "${work_mount[@]}" "${image}" sh -c "$1"
+  local script="$1"
+  docker run --rm --pull=missing "${work_mount[@]}" "${image}" sh -c "${script}"
 }
 cleanup() {
   if [[ -n "${volume}" ]]; then

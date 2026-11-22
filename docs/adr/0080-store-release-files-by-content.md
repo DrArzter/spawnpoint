@@ -1,13 +1,14 @@
 # ADR-0080 — Store release files by content, and free them only when no release names them
 
-- Status: Proposed — the readers, the infrastructure and the report-only reconciler are built; the writer is built later
-  and stays off until the readers are deployed. The owner decisions in the table below are defaults that the owner may
+- Status: Proposed — the readers, the infrastructure, the reconciler, the writer (off), retirement and the sweep (dry run)
+  are built. The writer stays off until the readers are deployed. The owner decisions in the table below are defaults that the owner may
   change.
 - Date: 2026-11-22
 - Milestone: M6
 - Amends: [ADR-0008](0008-versioned-mod-releases.md) (where the bytes of a release live),
   [ADR-0052](0052-keep-a-release-while-a-generation-names-it.md) (holders, retirement and the first release cleanup),
   [ADR-0065](0065-hand-out-world-files-as-short-lived-links.md) (a link goes to an object named by its digest)
+- Runbook: [release-storage-runbook.md](../release-storage-runbook.md)
 - Relates: [ADR-0042](0042-preset-scoped-release-identity.md) (release identity does not change),
   [ADR-0028](0028-update-proposals.md) (candidate releases create the growth),
   [ADR-0030](0030-desired-and-active-release.md), [ADR-0068](0068-normalize-upstream-modpacks-into-releases.md),

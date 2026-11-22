@@ -4,7 +4,7 @@ import test from "node:test";
 import type { PresetObservation } from "../src/control-plane/preset-catalog.ts";
 import { objectKey } from "../src/control-plane/release-objects.ts";
 import {
-  compare, mark, tableView, EXAMPLE_LIMIT, type ArchiveSource, type MarkInput, type ManifestSource, type TableItem,
+  compare, mark, tableView, EXAMPLE_LIMIT, LEGACY_GENERATION, type ArchiveSource, type MarkInput, type ManifestSource, type TableItem,
 } from "../src/control-plane/release-reconciler.ts";
 import type { ReleaseState } from "../src/control-plane/release-state.ts";
 import type { WorldRecord } from "../src/control-plane/world-registry.ts";
@@ -148,19 +148,20 @@ function consistentMarks() {
 }
 
 function run(items: TableItem[] = consistentTable(), keys: string[] = consistentListing(), marks = consistentMarks()) {
-  return compare(marks, tableView(items), { keys }, NOW);
+  return compare(marks, tableView(items), { keys }, NOW, NOW);
 }
 
 function counts(report: ReturnType<typeof run>): Record<string, number> {
   return Object.fromEntries(Object.entries(report.classes).filter(([, value]) => value.count > 0).map(([name, value]) => [name, value.count]));
 }
 
-test("a consistent table, listing and marks report nothing, complete, and never sweepable", () => {
+test("a consistent table, listing and marks report nothing, complete, and sweepable", () => {
   const report = run();
   assert.deepEqual(counts(report), {});
   assert.equal(report.dangerous, 0);
   assert.equal(report.complete, true);
-  assert.equal(report.sweepable, false);
+  assert.equal(report.sweepable, true);
+  assert.equal(report.startedAt, NOW);
   assert.equal(report.table_empty, false);
   assert.equal(report.generatedAt, NOW);
   assert.deepEqual(report.skipped, []);
@@ -263,30 +264,55 @@ test("a failed source marks the run incomplete and the rest is still compared", 
     manifests: [manifest(R11, objectsManifest())], manifestsListed: true,
     failures: [{ source: "world", subject: "worlds/x/world.json", reason: "AccessDenied" }],
   }));
-  const report = compare(failing, tableView(consistentTable()), { keys: consistentListing().slice(1) }, NOW);
+  const report = compare(failing, tableView(consistentTable()), { keys: consistentListing().slice(1) }, NOW, NOW);
   assert.equal(report.complete, false);
   assert.equal(report.sweepable, false);
   assert.equal(report.classes.missing_object.count, 1);
   assert.deepEqual(report.failures.map((failure) => failure.source), ["world"]);
 });
 
+test("a build holder and a building release are never reported as extra or missing", () => {
+  const building = [
+    { pk: `release#${R12}`, sk: "meta", state: "building", layout: "objects", holders: 1 },
+    { pk: `release#${R12}`, sk: "hold#build#b1", roles: new Set(["build"]) },
+    { pk: `file#${digest(9)}`, sk: "meta", refs: 1, state: "live" },
+    { pk: `file#${digest(9)}`, sk: `release#${R12}`, path: "mods/x.jar" },
+  ];
+  const report = run([...consistentTable(), ...building], [...consistentListing(), objectKey(digest(9))]);
+  assert.deepEqual(counts(report), {}, "no manifest, no source holder: still nothing to report");
+  assert.equal(report.dangerous, 0);
+  // The holder is not derivable from any source, so no marks entry asks for it.
+  assert.ok(consistentMarks().holders.every((holder) => !holder.sk.startsWith("hold#build#")));
+});
+
+test("a legacy pointer holds its releases under hold#gen#<world>/legacy", () => {
+  const legacy: ReleaseState = { worldId: "world", generationId: LEGACY_GENERATION, desiredRelease: "1.2", activeRelease: "1.1", updatedAt: NOW, updatedBy: "x", source: "migration" };
+  const marks = mark(input({ worlds: [world()], pointers: [{ worldId: "world", state: legacy }] }));
+  const holders = marks.holders.map((holder) => `${holder.release} ${holder.sk}`);
+  assert.ok(holders.includes(`${R12} hold#gen#world/${LEGACY_GENERATION}`));
+  assert.ok(holders.includes(`${R11} hold#gen#world/${LEGACY_GENERATION}`));
+  assert.ok(marks.namedReleases.has(R12));
+  const noActive = mark(input({ worlds: [world()], pointers: [{ worldId: "world", state: { ...legacy, activeRelease: null } }] }));
+  assert.ok(!noActive.holders.some((holder) => holder.release === R11));
+});
+
 test("a manifest that cannot be listed or parsed skips extra_reference and orphan_object", () => {
   const partial = mark(input({ manifestsListed: false, manifests: [manifest(R11, objectsManifest())] }));
   const items = [...consistentTable(), { pk: `file#${digest(9)}`, sk: `release#${R11}`, path: "x" }];
-  const report = compare(partial, tableView(items), { keys: [...consistentListing(), objectKey(digest(7))] }, NOW);
+  const report = compare(partial, tableView(items), { keys: [...consistentListing(), objectKey(digest(7))] }, NOW, NOW);
   assert.equal(report.classes.extra_reference.count, 0);
   assert.equal(report.classes.orphan_object.count, 0);
   assert.deepEqual(report.skipped.map((entry) => `${entry.class} ${entry.reason}`).sort(), ["extra_reference manifests_incomplete", "orphan_object manifests_incomplete"]);
 });
 
 test("an unreadable table or listing skips what needs it and the run is incomplete", () => {
-  const noTable = compare(consistentMarks(), null, { keys: consistentListing().slice(1) }, NOW);
+  const noTable = compare(consistentMarks(), null, { keys: consistentListing().slice(1) }, NOW, NOW);
   assert.equal(noTable.complete, false);
   assert.equal(noTable.table_empty, false);
   assert.equal(noTable.classes.missing_object.count, 1);
   assert.equal(noTable.classes.unregistered_release.count, 0, "without the table nothing is unregistered");
 
-  const noListing = compare(consistentMarks(), tableView(consistentTable()), null, NOW);
+  const noListing = compare(consistentMarks(), tableView(consistentTable()), null, NOW, NOW);
   assert.equal(noListing.complete, false);
   assert.equal(noListing.dangerous, 0);
   assert.deepEqual(noListing.skipped.map((entry) => entry.class).sort(), ["missing_object", "orphan_object"]);

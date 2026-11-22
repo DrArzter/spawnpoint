@@ -5,7 +5,9 @@ import { manifestClientAddons, manifestClientMods, manifestModSource, RELEASE_PA
 import { manifestUsesObjects } from "../../control-plane/release-objects.ts";
 import { type PlanMod, type ReleasePlan, releasePlan, storedReleasePlan } from "../../control-plane/release-plan.ts";
 import { packRelease } from "../../control-plane/session-control.ts";
-import { type Response, response } from "./http.ts";
+import { releaseRetirement } from "../../control-plane/aws-release-retirement.ts";
+import { retirementConfirmation } from "../../control-plane/release-retirement.ts";
+import { parseObjectBody, type Response, response } from "./http.ts";
 
 const RELEASE_ID = /^[a-z0-9][a-z0-9-]*$/;
 const RELEASE_VERSION = /^\d+\.\d+$/;
@@ -39,6 +41,31 @@ export async function buildRelease(identity: Identity, gameId: string, presetId:
     console.error("release_build_request_failed", { gameId, presetId, errorName: error instanceof Error ? error.name : "UnknownError" });
     return response(503, { error: "build_request_failed" });
   }
+}
+
+// Retire a release (ADR-0080). The dispatcher has checked release.retire, which
+// only the Owner role holds. This answers only that the request was queued: the
+// retirement Lambda checks the confirmation again, judges every live use and
+// logs the outcome with the identity that asked.
+export async function requestReleaseRetirement(identity: Identity, gameId: string, presetId: string, version: string, body: string | undefined): Promise<Response> {
+  if (!RELEASE_ID.test(gameId) || !RELEASE_ID.test(presetId) || !RELEASE_VERSION.test(version)) {
+    return response(400, { error: "invalid_release_reference" });
+  }
+  const parsed = parseObjectBody(body);
+  if (parsed === null) return response(400, { error: "invalid_json" });
+  const confirmation = { gameId, presetId, release: version };
+  if (Object.keys(parsed).some((key) => key !== "confirmation") || parsed.confirmation !== retirementConfirmation(confirmation)) {
+    return response(400, { error: "invalid_retire_confirmation" });
+  }
+  if (await awsControlPlaneSources.readReleaseManifest?.(gameId, presetId, version) === null) return response(404, { error: "unknown_release" });
+  try {
+    await releaseRetirement.request({ ...confirmation, confirmation: parsed.confirmation, requestedBy: `identity:${identity.id}` });
+  } catch (error) {
+    console.error("release_retirement_request_failed", { gameId, presetId, errorName: error instanceof Error ? error.name : "UnknownError" });
+    return response(503, { error: "retirement_request_failed" });
+  }
+  console.info(JSON.stringify({ event: "release_retirement_requested", gameId, presetId, release: version, requestedBy: `identity:${identity.id}` }));
+  return response(202, { status: "requested", release: version });
 }
 
 // Manifest text is data, not an arbitrary object's string representation.

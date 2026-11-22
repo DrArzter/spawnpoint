@@ -233,6 +233,11 @@ aws dynamodb query --table-name spawnpoint-access --key-condition-expression 'pk
   --expression-attribute-values '{":pk":{"S":"DOWNLOAD#<worldId>"}}' --no-scan-index-forward --max-items 30
 ```
 
+## Content-addressed release storage (ADR-0080)
+
+Deploy order, registering legacy releases, reading the reconciler, retiring a release, the sweep and the measurements are
+in [release-storage-runbook.md](release-storage-runbook.md).
+
 ## Telegram bot
 
 The exact first deployment, webhook and acceptance commands are recorded in

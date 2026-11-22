@@ -6,17 +6,21 @@ import { ScanCommand, type DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb"
 import type { ArchiveMetadata } from "./backup-release.ts";
 import { parsePresetCatalog } from "./preset-catalog.ts";
 import {
-  tableView, type ArchiveSource, type CatalogSource, type Listing, type ManifestSource, type MarkInput,
+  LEGACY_GENERATION, tableView, type ArchiveSource, type CatalogSource, type Listing, type ManifestSource, type MarkInput,
   type PointerSource, type SourceFailure, type TableItem, type TableView,
 } from "./release-reconciler.ts";
-import { releaseStateKey, parseReleaseState } from "./release-state.ts";
+import { legacyReleaseStateKey, parseLegacyReleaseState, parseReleaseState, releaseStateKey } from "./release-state.ts";
 import { parseWorldRecord, type WorldRecord } from "./world-registry.ts";
 
 // The reconciler's read adapters. Each port has list, get, head or scan methods
 // and no other: the report-only run cannot change a bucket or the table.
 
+export type ListedObject = Readonly<{ key: string; size: number }>;
+
 export type ReleaseBucketReader = Readonly<{
   listKeys(prefix: string): Promise<readonly string[]>;
+  /** Like listKeys, with each object's size: the sweep records it for an orphan. */
+  listObjects(prefix: string): Promise<readonly ListedObject[]>;
   /** Null when the key does not exist. */
   getText(key: string): Promise<string | null>;
 }>;
@@ -39,18 +43,22 @@ function missing(error: unknown): boolean {
 }
 
 export function s3ReleaseBucketReader(s3: S3Send, bucket: string): ReleaseBucketReader {
+  const listObjects = async (prefix: string): Promise<ListedObject[]> => {
+    const objects: ListedObject[] = [];
+    let token: string | undefined;
+    do {
+      const page = await s3.send(new ListObjectsV2Command({ // NOSONAR paginated: the next token comes from the previous page
+        Bucket: bucket, Prefix: prefix, ...(token ? { ContinuationToken: token } : {}),
+      }));
+      for (const object of page.Contents ?? []) if (object.Key) objects.push({ key: object.Key, size: object.Size ?? 0 });
+      token = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (token);
+    return objects;
+  };
   return {
+    listObjects,
     async listKeys(prefix) {
-      const keys: string[] = [];
-      let token: string | undefined;
-      do {
-        const page = await s3.send(new ListObjectsV2Command({ // NOSONAR paginated: the next token comes from the previous page
-          Bucket: bucket, Prefix: prefix, ...(token ? { ContinuationToken: token } : {}),
-        }));
-        for (const object of page.Contents ?? []) if (object.Key) keys.push(object.Key);
-        token = page.IsTruncated ? page.NextContinuationToken : undefined;
-      } while (token);
-      return keys;
+      return (await listObjects(prefix)).map((object) => object.key);
     },
     async getText(key) {
       try {
@@ -140,8 +148,11 @@ async function inChunks<T, R>(items: readonly T[], work: (item: T) => Promise<R>
   return results;
 }
 
-/** Reads every source. A failed read is recorded and the run goes on with what it could read. */
-export async function collectSources(ports: SourcePorts): Promise<CollectedSources> {
+/**
+ * Reads every source. A failed read is recorded and the run goes on with what it could read.
+ * `startedAt` is the run's start, taken by the caller before this call (the legacy pointer needs a date).
+ */
+export async function collectSources(ports: SourcePorts, startedAt: string): Promise<CollectedSources> {
   const failures: SourceFailure[] = [];
   const fail = (source: string, subject: string, error: unknown) => { failures.push({ source, subject, reason: typeof error === "string" ? error : reasonOf(error) }); };
 
@@ -153,7 +164,8 @@ export async function collectSources(ports: SourcePorts): Promise<CollectedSourc
   }
   let listing: Listing = null;
   try {
-    listing = { keys: await ports.release.listKeys("objects/sha256/") };
+    const objects = await ports.release.listObjects("objects/sha256/");
+    listing = { keys: objects.map((object) => object.key), sizes: new Map(objects.map((object) => [object.key, object.size])) };
   } catch (error) {
     fail("objects", "objects/sha256/", error);
   }
@@ -200,6 +212,18 @@ export async function collectSources(ports: SourcePorts): Promise<CollectedSourc
       }
       const world: WorldRecord = record;
       worlds.push(world);
+      // The pointer of a world from before generations. One that exists and cannot be parsed fails the run.
+      const legacyKey = legacyReleaseStateKey(worldId);
+      try {
+        const value = await json(legacyKey);
+        if (value !== null) {
+          const state = parseLegacyReleaseState(value, { worldId, generationId: LEGACY_GENERATION }, startedAt);
+          if (state === null) throw new Error("invalid_release_state");
+          pointers.push({ worldId, state });
+        }
+      } catch (error) {
+        fail("pointer", legacyKey, error);
+      }
       for (const generation of [world.currentGeneration, ...world.previousGenerations]) {
         const ref = { worldId, generationId: generation.id };
         try {

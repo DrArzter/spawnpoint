@@ -162,13 +162,14 @@ test("a holder that exists gets a new role without another count, and an existin
   assert.equal(meta(table)!.holders, 2);
 });
 
-test("a holder for a release the table does not know registers it as legacy first, and an existing holder stays allowed while it is retiring", async () => {
+test("a holder for a release the table does not know registers it as legacy first, and even an existing holder is refused while it is retiring", async () => {
   const { table, refs } = setup();
   const key = holderKey.generation("w", "gen-1");
   await refs.hold(ref, key, ["origin"]);
   assert.deepEqual({ layout: meta(table)!.layout, state: meta(table)!.state, holders: meta(table)!.holders }, { layout: "legacy", state: "live", holders: 1 });
   table.put({ ...meta(table)!, state: "retiring" });
-  await refs.hold(ref, key, ["origin"]);
+  // A pointer that turns back to a retiring release must not slip in after the retirement's live check.
+  await assert.rejects(refs.hold(ref, key, ["origin"]), /release_retired/);
   await assert.rejects(refs.hold(ref, holderKey.generation("w", "gen-2"), ["origin"]), /release_retired/);
 });
 

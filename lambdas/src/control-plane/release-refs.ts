@@ -139,12 +139,16 @@ export class ReleaseRefs {
     await this.hold(ref, holderKey.build(buildId), ["build"]);
   }
 
-  /** Adds a holder, or a role to the holder that exists. Refuses a release that is retiring, retired or, for most holders, not live. */
+  /** Adds a holder, or a role to the holder that exists. Refuses a release that is retiring, retired or, for most holders, not live, also for a holder that exists. */
   async hold(ref: ReleaseRef, key: string, roles: readonly (HolderRole | "build")[]): Promise<void> {
     const isBuild = key.startsWith("build#");
     // DynamoDB refuses an empty set, so a holder always names a role.
     if (roles.length === 0) throw new ReleaseRefsError("holder_needs_a_role");
     let release = await this.releaseForHolder(ref, isBuild);
+    // An existing holder gets no pass: a pointer that turns back to a retiring
+    // release could otherwise slip in after the retirement's live check.
+    const allowed = HOLDER_STATES[isBuild ? "build" : "other"];
+    if (!allowed.includes(release.state)) throw unusable(release.state);
     const sk = `hold#${key}`;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const { Item } = await this.client.send(new GetCommand({ TableName: this.table, Key: this.key(ref, sk), ConsistentRead: true })); // NOSONAR retry: each attempt reads what the last one changed
@@ -152,8 +156,6 @@ export class ReleaseRefs {
         await this.addRoles(ref, sk, Item.roles, roles);
         return;
       }
-      const allowed = HOLDER_STATES[isBuild ? "build" : "other"];
-      if (!allowed.includes(release.state)) throw unusable(release.state);
       if (await this.addHolder(ref, sk, roles, allowed)) return; // NOSONAR retry: the next attempt depends on this write
       // The item appeared (another writer: loop and add the role) or the state moved.
       release = await this.readRelease(ref) ?? release; // NOSONAR retry: the state decides whether the next attempt may write
@@ -286,22 +288,25 @@ export class ReleaseRefs {
     if (!isSha256(file.sha256)) throw new ReleaseRefsError("invalid_digest");
     const waitForDelete = this.deleteWait(options);
     for (;;) {
-      const prior = await this.readFile(file.sha256); // NOSONAR retry: each attempt reads what the last one changed
-      if (prior?.state === "deleting") {
-        await waitForDelete(); // NOSONAR the sweeper must finish before this build writes
-        continue;
-      }
-      if (prior?.state === "deleted") {
-        if (await this.revive(ref, file, options)) return "recreated"; // NOSONAR retry: a lost revival reads the file again
-        continue;
-      }
-      const outcome = await this.countReference(ref, file); // NOSONAR retry: a lost count reads the file again
-      if (outcome === "lost") continue;
-      // `counted` for the first time or already counted by an earlier attempt: either way the reference is in place.
-      const created = prior === null && outcome === "done";
-      await options.ensureObject(file, created ? "create" : "verify");
-      return created ? "created" : "reused";
+      const claimed = await this.claimOnce(ref, file, options, waitForDelete); // NOSONAR retry: each attempt reads what the last one changed
+      if (claimed !== null) return claimed;
     }
+  }
+
+  /** One attempt of claimFile; null when the file's state moved and it must be read again. */
+  private async claimOnce(ref: ReleaseRef, file: FileClaim, options: ClaimOptions, waitForDelete: () => Promise<void>): Promise<"created" | "reused" | "recreated" | null> {
+    const prior = await this.readFile(file.sha256);
+    if (prior?.state === "deleting") {
+      await waitForDelete(); // the sweeper must finish before this build writes
+      return null;
+    }
+    if (prior?.state === "deleted") return await this.revive(ref, file, options) ? "recreated" : null;
+    const outcome = await this.countReference(ref, file);
+    if (outcome === "lost") return null;
+    // `counted` for the first time or already counted by an earlier attempt: either way the reference is in place.
+    const created = prior === null && outcome === "done";
+    await options.ensureObject(file, created ? "create" : "verify");
+    return created ? "created" : "reused";
   }
 
   /** Backs off while a file is `deleting`: doubling delays up to 30 s, and an error after the wait limit. */

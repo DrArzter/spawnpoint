@@ -154,6 +154,9 @@ class DeploymentSecurityTest(unittest.TestCase):
         for variable in common_variables:
             self.assertIn(variable, plan)
             self.assertIn(variable, deploy)
+        sweep = "TF_VAR_release_sweep_dry_run: ${{ vars.SPAWNPOINT_RELEASE_SWEEP_DRY_RUN || 'true' }}"
+        self.assertIn(sweep, plan)
+        self.assertIn(sweep, deploy)
         self.assertIn("TF_VAR_app_commit: ${{ github.event.pull_request.head.sha }}", plan)
         self.assertIn("TF_VAR_app_commit: ${{ inputs.ref }}", deploy)
         self.assertIn("if: env.TF_VAR_launch == 'enabled'", deploy)

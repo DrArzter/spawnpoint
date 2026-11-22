@@ -80,3 +80,9 @@ variable "drain_max_keep_polls" {
   type        = number
   default     = 288
 }
+
+variable "release_sweep_dry_run" {
+  description = "When true, the release reconciler plans and logs its sweep and writes nothing (ADR-0080). Set false only after at least four weekly dry runs were read. CI sets it from the repository variable SPAWNPOINT_RELEASE_SWEEP_DRY_RUN; an unset variable means true."
+  type        = bool
+  default     = true
+}

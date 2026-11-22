@@ -710,3 +710,33 @@ run "world_lifecycle_alarms_on_failed_and_timed_out_executions" {
     error_message = "One failed or timed-out world lifecycle execution alarms the guardrails topic."
   }
 }
+
+run "api_may_invoke_only_the_release_retirement_function" {
+  command = plan
+
+  variables {
+    bootstrap_owner_telegram_id      = "123456789"
+    panel_url                        = "https://panel.example.dev/"
+    session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
+  }
+
+  assert {
+    condition = alltrue([
+      contains(local.access_routes, "POST /games/{gameId}/presets/{presetId}/releases/{version}/retire"),
+      aws_lambda_function.access_api.environment[0].variables["RELEASE_RETIREMENT_FUNCTION_NAME"] == "spawnpoint-release-retirement",
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.actions if statement.sid == "RequestReleaseRetirement"]) == toset(["lambda:InvokeFunction"]),
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.resources if statement.sid == "RequestReleaseRetirement"]) == toset(["arn:aws:lambda:eu-central-1:123456789012:function:spawnpoint-release-retirement"]),
+    ])
+    error_message = "The API routes the retire request and may invoke exactly the retirement function: no wildcard, no other function."
+  }
+
+  # Only that statement may invoke a Lambda.
+  assert {
+    condition = alltrue([
+      for statement in data.aws_iam_policy_document.access_api.statement :
+      statement.sid == "RequestReleaseRetirement"
+      if length([for action in statement.actions : action if startswith(action, "lambda:")]) > 0
+    ])
+    error_message = "The access API role has no Lambda action outside the retirement request."
+  }
+}

@@ -1,27 +1,37 @@
-import { GetCommand, PutCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { DeleteCommand, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 
 // An in-memory stand-in for the reference table. It understands only the
 // expressions release-refs.ts writes: attribute_(not_)exists, `#s = :v`,
-// `#s IN (...)` joined by OR, and SET / ADD / REMOVE updates.
+// `#s IN (...)`, `attr <= :v`, clauses joined by AND or OR, and SET / ADD / REMOVE updates.
 
 type Item = Record<string, unknown>;
 type Names = Record<string, string> | undefined;
 type Values = Record<string, unknown> | undefined;
 
+type Comparison = (actual: unknown, expected: unknown) => boolean;
+
+const COMPARISONS: readonly (readonly [RegExp, Comparison])[] = [
+  [/^#?\w+ = :\w+$/, (actual, expected) => actual === expected],
+  [/^#?\w+ <= :\w+$/, (actual, expected) => actual !== undefined && (actual as string | number) <= (expected as string | number)],
+  [/^#?\w+ > :\w+$/, (actual, expected) => Number(actual) > Number(expected)],
+];
+
+function clauseHolds(item: Item | undefined, text: string, names: Names, values: Values): boolean {
+  const attribute = (token: string) => item?.[names?.[token] ?? token];
+  if (/^attribute_not_exists\((\w+)\)$/.test(text)) return item === undefined;
+  if (/^attribute_exists\((\w+)\)$/.test(text)) return item !== undefined;
+  const [left, , right] = text.split(" ");
+  for (const [pattern, compare] of COMPARISONS) {
+    if (pattern.test(text)) return item !== undefined && compare(attribute(left!), values![right!]);
+  }
+  const list = /^(#\w+) IN \(([^)]*)\)$/.exec(text);
+  if (list) return item !== undefined && list[2]!.split(",").map((name) => values![name.trim()]).includes(attribute(list[1]!));
+  throw new Error(`fake table: unsupported condition ${text}`);
+}
+
 function conditionHolds(item: Item | undefined, expression: string | undefined, names: Names, values: Values): boolean {
   if (expression === undefined) return true;
-  return expression.split(" OR ").some((clause) => {
-    const text = clause.trim();
-    let match = /^attribute_not_exists\((\w+)\)$/.exec(text);
-    if (match) return item === undefined;
-    match = /^attribute_exists\((\w+)\)$/.exec(text);
-    if (match) return item !== undefined;
-    match = /^(#\w+) = (:\w+)$/.exec(text);
-    if (match) return item !== undefined && item[names![match[1]!]!] === values![match[2]!];
-    match = /^(#\w+) IN \(([^)]*)\)$/.exec(text);
-    if (match) return item !== undefined && match[2]!.split(",").map((name) => values![name.trim()]).includes(item[names![match[1]!]!]);
-    throw new Error(`fake table: unsupported condition ${text}`);
-  });
+  return expression.split(" OR ").some((alternative) => alternative.split(" AND ").every((clause) => clauseHolds(item, clause.trim(), names, values)));
 }
 
 function apply(item: Item, expression: string, names: Names, values: Values): Item {
@@ -96,34 +106,55 @@ export class FakeRefsTable {
   private handle(command: unknown): Record<string, unknown> {
     this.beforeSend?.(command);
     this.commands.push((command as object).constructor.name);
-    if (command instanceof GetCommand) {
-      const found = this.items.get(this.id(command.input.Key!));
-      return found === undefined ? {} : { Item: structuredClone(found) };
-    }
-    if (command instanceof PutCommand) {
-      const input = command.input;
-      const current = this.items.get(this.id(input.Item!));
-      if (!conditionHolds(current, input.ConditionExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues)) {
-        throw Object.assign(new Error("condition failed"), { name: "ConditionalCheckFailedException" });
-      }
-      this.items.set(this.id(input.Item!), input.Item!);
+    if (command instanceof GetCommand) return this.onGet(command);
+    if (command instanceof QueryCommand) return this.onQuery(command);
+    if (command instanceof PutCommand) return this.onPut(command);
+    if (command instanceof DeleteCommand) {
+      this.items.delete(this.id(command.input.Key!));
       return {};
     }
-    if (command instanceof UpdateCommand) {
-      const input = command.input;
-      const current = this.items.get(this.id(input.Key!));
-      if (!conditionHolds(current, input.ConditionExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues)) {
-        throw Object.assign(new Error("condition failed"), { name: "ConditionalCheckFailedException" });
-      }
-      this.items.set(this.id(input.Key!), apply(current ?? { ...input.Key }, input.UpdateExpression!, input.ExpressionAttributeNames, input.ExpressionAttributeValues));
-      return {};
-    }
-    if (command instanceof TransactWriteCommand) {
-      const evaluated = command.input.TransactItems!.map((entry) => this.transactItem(entry as never));
-      if (evaluated.some((entry) => !entry.ok)) throw cancelled(evaluated.map((entry) => ({ Code: entry.ok ? "None" : "ConditionalCheckFailed" })));
-      for (const entry of evaluated) entry.commit();
-      return {};
-    }
+    if (command instanceof UpdateCommand) return this.onUpdate(command);
+    if (command instanceof TransactWriteCommand) return this.onTransact(command);
     throw new Error("fake table: unsupported command");
+  }
+
+  private onGet(command: GetCommand): Record<string, unknown> {
+    const found = this.items.get(this.id(command.input.Key!));
+    return found === undefined ? {} : { Item: structuredClone(found) };
+  }
+
+  private onQuery(command: QueryCommand): Record<string, unknown> {
+    const values = command.input.ExpressionAttributeValues!;
+    const items = [...this.items.values()]
+      .filter((item) => item.pk === values[":pk"] && String(item.sk).startsWith(String(values[":hold"] ?? values[":prefix"])))
+      .map((item) => structuredClone(item));
+    return { Items: items };
+  }
+
+  private onPut(command: PutCommand): Record<string, unknown> {
+    const input = command.input;
+    const current = this.items.get(this.id(input.Item!));
+    if (!conditionHolds(current, input.ConditionExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues)) {
+      throw Object.assign(new Error("condition failed"), { name: "ConditionalCheckFailedException" });
+    }
+    this.items.set(this.id(input.Item!), input.Item!);
+    return {};
+  }
+
+  private onUpdate(command: UpdateCommand): Record<string, unknown> {
+    const input = command.input;
+    const current = this.items.get(this.id(input.Key!));
+    if (!conditionHolds(current, input.ConditionExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues)) {
+      throw Object.assign(new Error("condition failed"), { name: "ConditionalCheckFailedException" });
+    }
+    this.items.set(this.id(input.Key!), apply(current ?? { ...input.Key }, input.UpdateExpression!, input.ExpressionAttributeNames, input.ExpressionAttributeValues));
+    return {};
+  }
+
+  private onTransact(command: TransactWriteCommand): Record<string, unknown> {
+    const evaluated = command.input.TransactItems!.map((entry) => this.transactItem(entry as never));
+    if (evaluated.some((entry) => !entry.ok)) throw cancelled(evaluated.map((entry) => ({ Code: entry.ok ? "None" : "ConditionalCheckFailed" })));
+    for (const entry of evaluated) entry.commit();
+    return {};
   }
 }

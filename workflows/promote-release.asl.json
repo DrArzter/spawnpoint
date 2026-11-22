@@ -17,7 +17,8 @@
           "placement": "single",
           "launch": "disabled",
           "appCommit": "main",
-          "policy": "cold"
+          "policy": "cold",
+          "startAfter": true
         }
       },
       "Next": "Apply Request Defaults"
@@ -235,7 +236,11 @@
     },
     "Route Completion": {
       "Type": "Choice",
-      "Choices": [{ "Variable": "$.origin", "StringEquals": "stopped", "Next": "Stop Target After Commit" }],
+      "Comment": "The world runs on the new release after the check; the idle watchdog stops it. Only startAfter: false stops a stopped origin again.",
+      "Choices": [
+        { "And": [{ "Variable": "$.request.startAfter", "IsPresent": true }, { "Variable": "$.request.startAfter", "BooleanEquals": true }], "Next": "Promoted Running" },
+        { "Variable": "$.origin", "StringEquals": "stopped", "Next": "Stop Target After Commit" }
+      ],
       "Default": "Promoted Running"
     },
     "Stop Target After Commit": {
@@ -310,7 +315,11 @@
     },
     "Route Rollback Completion": {
       "Type": "Choice",
-      "Choices": [{ "Variable": "$.origin", "StringEquals": "stopped", "Next": "Stop Rollback Session" }],
+      "Comment": "After a rollback the same rule: the world runs on the previous release unless startAfter is false.",
+      "Choices": [
+        { "And": [{ "Variable": "$.request.startAfter", "IsPresent": true }, { "Variable": "$.request.startAfter", "BooleanEquals": true }], "Next": "Rolled Back" },
+        { "Variable": "$.origin", "StringEquals": "stopped", "Next": "Stop Rollback Session" }
+      ],
       "Default": "Rolled Back"
     },
     "Stop Rollback Session": {

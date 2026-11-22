@@ -133,7 +133,7 @@ test("the API starts the promote machine with the fleet world's own record, plac
   const { inputs, machines, lifecycleKeys } = scenario(t);
   const result = await promoteWorld(owner, "minecraft", record.worldId, JSON.stringify({ release: "200.1" }));
   assert.equal(result.statusCode, 202);
-  assert.deepEqual({ ...JSON.parse(result.body), operationId: undefined }, { result: "requested", release: "200.1", previousRelease: "100.1", operationId: undefined });
+  assert.deepEqual({ ...JSON.parse(result.body), operationId: undefined }, { result: "requested", release: "200.1", previousRelease: "100.1", startAfter: true, operationId: undefined });
   assert.deepEqual(machines, ["arn:aws:states:eu-central-1:123456789012:stateMachine:promote"]);
   assert.deepEqual(lifecycleKeys, [`world#${record.worldId}`]);
   const input = inputs[0]!;
@@ -261,4 +261,19 @@ test("a switch that loses a race answers 409 world_changed", async (t) => {
   unstartedScenario(t);
   const result = await promoteWorld(owner, "minecraft", record.worldId, JSON.stringify({ release: "200.1" }), async () => "conflict");
   assert.deepEqual([result.statusCode, JSON.parse(result.body)], [409, { error: "world_changed" }]);
+});
+
+test("the update keeps the world running by default, stops it again only on startAfter: false, and refuses a non-boolean", async (t) => {
+  const { inputs } = scenario(t);
+  const plain = await promoteWorld(owner, "minecraft", record.worldId, JSON.stringify({ release: "200.1" }));
+  assert.equal(plain.statusCode, 202);
+  assert.equal(JSON.parse(plain.body).startAfter, true);
+  assert.equal(inputs[0]?.startAfter, true, "left out, the world keeps running and the idle watchdog stops it");
+  const stopped = await promoteWorld(owner, "minecraft", record.worldId, JSON.stringify({ release: "200.1", startAfter: false }));
+  assert.equal(stopped.statusCode, 202);
+  assert.equal(inputs[1]?.startAfter, false, "false keeps the old closing stop of a stopped origin");
+  const wrong = await promoteWorld(owner, "minecraft", record.worldId, JSON.stringify({ release: "200.1", startAfter: "yes" }));
+  assert.equal(wrong.statusCode, 400);
+  assert.deepEqual(JSON.parse(wrong.body), { error: "invalid_start_after" });
+  assert.equal(inputs.length, 2, "a refused request starts no workflow");
 });

@@ -215,7 +215,7 @@ export function confirmationCopy(confirmation: Confirmation): { title: string; d
       }
       return {
         title: `Update ${world.displayName} to another release?`,
-        description: `Keeps the save. Stops the world, keeps its backup, then starts it on the chosen release. If that start fails, ${world.release.activeRelease ?? "the active release"} stays. Refused while players are online.`,
+        description: `Keeps the save. Stops the world, keeps its backup, then starts it on the chosen release and leaves it running. If that start fails, ${world.release.activeRelease ?? "the active release"} stays. Refused while players are online.`,
         label: "Update release",
         destructive: true,
       };

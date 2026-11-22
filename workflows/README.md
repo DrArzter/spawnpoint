@@ -148,8 +148,9 @@ pass them on, so the session is placed as a panel start places it. A caller that
    second fresh session — the host reconciles *back* by the same boot-time mechanism — ending `rolled_back`, or
    `RollbackFailed` if that start fails too. A wipe whose active is null has nowhere to roll back to and fails as
    `PromotionFailedNoRollback`.
-7. A host that was stopped is stopped again after the commit or the rollback, so promotion never leaves a paid surprise
-   behind; a host that was running stays running with its new session.
+7. After the commit the world keeps running on the new release, or on its previous release after a rollback, and the
+   idle watchdog stops it when nobody plays, as after any start. A request with `startAfter: false` stops a world that
+   was stopped before its update again, as earlier versions always did.
 
 Every bad ending is a distinct `Spawnpoint.*` error, because "failed" without "where" is midnight archaeology. Nested
 execution inputs are passed as objects to `states:startExecution.sync:2`, which serialises them. The interleaving gap

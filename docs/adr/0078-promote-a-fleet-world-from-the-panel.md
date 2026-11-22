@@ -68,6 +68,12 @@ and no route used it.
      archives, so the API is the authority and its refusal is shown.
    - Permission, route and capability do not change: `release.promote`, the Owner role, `releasePromotion`. The old
      `no_active_release` refusal is gone: a wipe with no active release is switched or refused with one of the above.
+7. **The world keeps running after its update (amendment).** The update's check is a full start on the new release.
+   Stopping the world again right after it meant a second full start when the Owner wanted to play. Now the world keeps
+   running on the new release, or on the previous release after a rollback, and the idle watchdog stops it when nobody
+   plays, as after any start. The cost is at most one idle window of a running host. The request body may carry
+   `startAfter: false` to stop a world that was stopped before its update again; any value that is not a boolean answers
+   `400 invalid_start_after`. The panel sends nothing and gets the default.
 
 ## Consequences
 

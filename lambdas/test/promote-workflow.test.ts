@@ -240,3 +240,15 @@ test("a fleet world's promotion places both nested starts as a panel start would
     }
   }
 });
+
+test("a world keeps running after its update, also after a rollback, unless the request says startAfter: false", async () => {
+  const definition = await loadDefinition();
+  const defaults = (state(definition, "Initialize") as unknown as { Parameters: { defaults: Record<string, unknown> } }).Parameters.defaults;
+  assert.equal(defaults.startAfter, true, "a caller that says nothing leaves the world running for the idle watchdog");
+  for (const [choice, kept, stop] of [["Route Completion", "Promoted Running", "Stop Target After Commit"], ["Route Rollback Completion", "Rolled Back", "Stop Rollback Session"]] as const) {
+    const choices = (state(definition, choice) as unknown as { Choices: Array<Record<string, unknown>> }).Choices;
+    assert.equal(choices[0]?.Next, kept, `${choice} checks startAfter before the origin`);
+    assert.match(JSON.stringify(choices[0]), /\$\.request\.startAfter.*BooleanEquals":true/);
+    assert.equal(choices[1]?.Next, stop, `${choice} still stops a stopped origin otherwise`);
+  }
+});

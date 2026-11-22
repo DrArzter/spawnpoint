@@ -292,9 +292,16 @@ export function promoteWorld(gameId: string, worldId: string, release: string): 
   if ((target.session?.idle?.playersOnline ?? 0) > 0) throw new Error("Players are online. Ask them to log off first.");
   archive(gameId, target);
   target.release = { ...target.release, desiredRelease: release };
+  // The world runs on the new release after its update; the idle watchdog stops it (ADR-0078).
+  const wasRunning = Boolean(target.session?.activeSessionId);
   const operationId = schedule("promote", worldId, LIFECYCLE_MS, (current) => {
     const next = current.snapshot.games.find((item) => item.id === gameId)?.worlds.find((item) => item.id === worldId);
-    if (next) next.release = { ...next.release, activeRelease: release, desiredRelease: release };
+    if (!next) return;
+    next.release = { ...next.release, activeRelease: release, desiredRelease: release };
+    if (!wasRunning) {
+      const now = Math.floor(Date.now() / 1000);
+      next.session = { serverId: gameId, desiredState: "running", observedState: "ready", activeSessionId: `session-promote-${worldId}`, activeWorldId: worldId, readyAtEpochSeconds: now, updatedAtEpochSeconds: now, idle: null };
+    }
   });
   return { result: "requested", operationId };
 }

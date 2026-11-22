@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { FakeRefsTable } from "./fake-refs-table.ts";
 import { candidateReleases, planLegacyRegistration, type RegistrationInput } from "../src/control-plane/legacy-registration.ts";
+import { ReleaseRefs } from "../src/control-plane/release-refs.ts";
 import type { WorldRecord } from "../src/control-plane/world-registry.ts";
 
 const GEN1 = `gen-${"1".repeat(32)}`;
@@ -22,7 +24,7 @@ function input(extra: Partial<RegistrationInput> = {}): RegistrationInput {
   return {
     manifests: [listing("1.0"), listing("1.1"), listing("1.2"), listing("1.3")], known: new Map(),
     catalogs: [{ gameId: "minecraft", presets: [{ id: "industrial", releases: ["1.1", "1.2", "1.3"] }] }],
-    worlds: [world], pointers: [], legacyPointers: [], unreadable: [], ...extra,
+    worlds: [world], pointers: [], legacyPointers: [], archives: [], unreadable: [], ...extra,
   };
 }
 
@@ -107,4 +109,48 @@ test("the plan writes no file reference: it has only release registrations and h
 test("candidate releases cover the listing and everything that names a release", () => {
   const releases = candidateReleases({ ...input({ legacyPointers: [{ worldId: "alpha", generationId: "legacy", desired: "9.9", active: null, runs: [], prePromotion: null }] }) }).map((entry) => entry.release).sort();
   assert.deepEqual(releases, ["1.0", "1.1", "1.2", "1.3", "9.9"]);
+});
+
+const metadata = (release: string | null) => ({ release, releaseSource: release === null ? null : "active", storedAt: "2026-11-01T00:00:00Z" });
+const archive = (key: string, versionId: string, release: string | null, worldId = "alpha") => ({ worldId, key, versionId, metadata: metadata(release) });
+const GEN_KEY = `worlds/alpha/archives/alpha-${GEN2}-20261101T000000Z-${"c".repeat(64)}.tar.zst`;
+const OLD_KEY = `worlds/alpha/archives/alpha-20260826T170524Z-${"d".repeat(64)}.tar.zst`;
+
+test("each archive version whose release resolves is held under its backup key; one without a release is reported, with no holder", () => {
+  const plan = planLegacyRegistration(input({ archives: [archive(GEN_KEY, "v1", "1.2"), archive(GEN_KEY, "v0", "1.2"), archive(OLD_KEY, "v3", null)] }));
+  assert.deepEqual(holder(plan, "1.2", `backup#${GEN_KEY}#v1`)?.roles, ["backup"]);
+  assert.ok(holder(plan, "1.2", `backup#${GEN_KEY}#v0`));
+  assert.equal(plan.holders.some((entry) => entry.key.includes(OLD_KEY)), false);
+  assert.deepEqual(plan.report.map((line) => line.kind), ["archive_without_release"]);
+});
+
+test("an archive that names a release and cannot be resolved is reported as unreadable, with no holder", () => {
+  const plan = planLegacyRegistration(input({ archives: [archive(GEN_KEY, "v1", "1.2", "ghost")] }));
+  assert.equal(plan.holders.some((entry) => entry.key.startsWith("backup#")), false);
+  assert.deepEqual(plan.report.map((line) => line.kind), ["unreadable"]);
+});
+
+test("an archive's release is a candidate, so the table is asked about it", () => {
+  const releases = candidateReleases(input({ archives: [archive(GEN_KEY, "v1", "1.9")], manifests: [] })).map((entry) => entry.release);
+  assert.ok(releases.includes("1.2"), "the generation's own release, as the reconciler resolves it");
+});
+
+test("applying the plan writes the backup holders, and a second run writes nothing", async () => {
+  const table = new FakeRefsTable();
+  const refs = new ReleaseRefs(table, "refs", () => new Date("2026-11-22T00:00:00Z"));
+  const plan = planLegacyRegistration(input({ archives: [archive(GEN_KEY, "v1", "1.2"), archive(OLD_KEY, "v3", null)] }));
+  // The same steps as the tool's --apply: a holder is written only when it is not there.
+  const applyPlan = async (): Promise<number> => {
+    let written = 0;
+    for (const entry of plan.register) await refs.registerLegacy(entry);
+    for (const entry of plan.holders) {
+      if (await refs.holds(entry.ref, entry.key, entry.roles)) continue;
+      await refs.hold(entry.ref, entry.key, entry.roles);
+      written += 1;
+    }
+    return written;
+  };
+  assert.ok(await applyPlan() > 0);
+  assert.ok(table.get("release#minecraft/industrial/1.2", `hold#backup#${GEN_KEY}#v1`), "the backup holder exists");
+  assert.equal(await applyPlan(), 0);
 });

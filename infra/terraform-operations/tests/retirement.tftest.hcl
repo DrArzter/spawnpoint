@@ -133,6 +133,13 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.game_host_backup_holders
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.lifecycle_v2_start_assume
     values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }

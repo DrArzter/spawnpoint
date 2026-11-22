@@ -38,6 +38,8 @@ resource "aws_iam_role_policy_attachment" "release_reconciler_logs" {
 }
 
 data "aws_iam_policy_document" "release_reconciler" {
+  # The reader lists worlds/ and reads a pointer only when it is listed, so a world
+  # with no legacy pointer causes no read and no 403. worlds/* covers listing below a world.
   statement {
     sid       = "ListReleaseBucket"
     actions   = ["s3:ListBucket"]
@@ -45,7 +47,7 @@ data "aws_iam_policy_document" "release_reconciler" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["releases/", "objects/sha256/", "worlds/", "presets/"]
+      values   = ["releases/", "objects/sha256/", "worlds/", "worlds/*", "presets/"]
     }
   }
 

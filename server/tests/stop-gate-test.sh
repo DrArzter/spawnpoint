@@ -37,6 +37,10 @@ exec "${repository_root}/server/tests/fake-aws" "\$@"
 STUB
 chmod 0755 "${fixture}/bin/aws"
 
+# The reference table: release 1.2 is live, 4.9 is retiring and 5.0 is unknown. A backup holds the release it ran (ADR-0080).
+export FAKE_DDB_FILE="${fixture}/refs.json"
+printf '%s' '{"release#minecraft/industrial/1.2|meta":{"state":{"S":"live"},"holders":{"N":"0"}},"release#minecraft/industrial/4.9|meta":{"state":{"S":"retiring"},"holders":{"N":"0"}}}' >"${FAKE_DDB_FILE}"
+
 # A fake container is a file named for its service, holding its state. The host
 # has no other game, so the host-activity sensor reports idle.
 cat >"${fixture}/bin/docker" <<'STUB'
@@ -171,7 +175,7 @@ jq -n --arg world "${world_id}" --arg generation "${generation}" '{
   updated_at: "2026-11-22T00:00:00Z", updated_by: "promote-test", source: "promote-commit"
 }' >"${pointer_dir}/release.json"
 play "${a_world}" "session three"
-output="$(RELEASE_BUCKET=releases stop_on a)"
+output="$(RELEASE_BUCKET=releases stop_on a 2>"${fixture}/third.err")"
 third="$(awk -F= '$1 == "object_key" { print substr($0, index($0, "=") + 1) }' <<<"${output}")"
 [[ "$(metadata_of "${third}")" == *",release=4.9,release-source=active" ]]
 
@@ -184,6 +188,33 @@ fourth="$(awk -F= '$1 == "object_key" { print substr($0, index($0, "=") + 1) }' 
 [[ "$(metadata_of "${fourth}")" == *",release=1.2,release-source=generation" ]]
 [[ "$(object_count)" == "4" ]]
 
+# --- each backup holds its release right after the upload, with its version id ---
+holder_slots() {
+  jq -r 'keys[] | select(contains("|hold#backup#"))' "${FAKE_DDB_FILE}"
+}
+for key in "${uploaded}" "${second}" "${fourth}"; do
+  holder_slot="$(holder_slots | grep -F "release#minecraft/industrial/1.2|hold#backup#${key}#fake-version-" || true)"
+  [[ -n "${holder_slot}" ]]
+  [[ "$(jq -r --arg slot "${holder_slot}" '.[$slot].roles.SS[0]' "${FAKE_DDB_FILE}")" == "backup" ]]
+done
+[[ "$(jq -r '."release#minecraft/industrial/1.2|meta".holders.N' "${FAKE_DDB_FILE}")" == "3" ]]
+# A release that is not live gets no holder, and the stop still succeeds with the backup in place.
+if holder_slots | grep -qF "${third}"; then exit 1; fi
+grep -q 'backup_holder_missing' "${fixture}/third.err"
+grep -q 'is retiring' "${fixture}/third.err"
+
+# --- a holder write that fails keeps the backup and the stop, and says so ---
+play "${a_world}" "session five"
+code=0
+output="$(FAKE_DDB_FAIL=true stop_on a 2>"${fixture}/fifth.err")" || code=$?
+[[ "${code}" == "0" ]]
+[[ "$(result_of "${output}")" == "session_stopped_and_backed_up" ]]
+[[ "$(object_count)" == "5" ]]
+fifth="$(awk -F= '$1 == "object_key" { print substr($0, index($0, "=") + 1) }' <<<"${output}")"
+[[ "$(recorded_key "${a_world}")" == "${fifth}" ]]
+grep -q "backup_holder_missing key=${fifth}" "${fixture}/fifth.err"
+if holder_slots | grep -qF "${fifth}"; then exit 1; fi
+
 # --- a host that never held the world refuses; it cannot vouch for the archive ---
 code=0
 output="$(stop_on b 2>"${fixture}/elsewhere.err")" || code=$?
@@ -194,6 +225,6 @@ rm -f -- "${FAKE_STATES_DIR}/mc"
 code=0
 output="$(stop_on b 2>/dev/null)" || code=$?
 [[ "${code}" == "6" ]]
-[[ "$(object_count)" == "4" ]]
+[[ "$(object_count)" == "5" ]]
 
 printf 'stop-gate-test: ok\n'

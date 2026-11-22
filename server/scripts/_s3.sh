@@ -39,6 +39,19 @@ head_backup_object() {
     --output text
 }
 
+head_backup_version() {
+  local key="$1"
+  s3_cli head-object --bucket "${BACKUP_BUCKET}" --key "${key}" --query VersionId --output text
+}
+
+# A version id as printed, or nothing when the bucket gave none (an unversioned bucket answers "None" or "null").
+backup_version_id() {
+  case "${1:-}" in
+    "" | None | null) ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
 verify_remote_backup() {
   local key="$1"
   local expected_hex="$2"

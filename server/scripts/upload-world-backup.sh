@@ -56,6 +56,7 @@ if head_output="$(head_backup_object "${object_key}" 2>/dev/null)"; then
     printf 'result=already_present\n'
     printf 'bucket=%s\n' "${BACKUP_BUCKET}"
     printf 'object_key=%s\n' "${object_key}"
+    printf 'version_id=%s\n' "$(backup_version_id "$(head_backup_version "${object_key}" 2>/dev/null || true)")"
     printf 'checksum=%s\n' "${digest}"
     printf 'archive_bytes=%s\n' "${archive_bytes}"
     exit 0
@@ -63,19 +64,21 @@ if head_output="$(head_backup_object "${object_key}" 2>/dev/null)"; then
   die "immutable backup key already exists with different content: s3://${BACKUP_BUCKET}/${object_key}"
 fi
 
-s3_cli put-object \
+# The version id names this upload in the backup holder (ADR-0080).
+put_version="$(s3_cli put-object \
   --bucket "${BACKUP_BUCKET}" \
   --key "${object_key}" \
   --body "${archive}" \
   --checksum-algorithm SHA256 \
   --checksum-sha256 "${digest_base64}" \
   --metadata "${metadata}" \
-  >/dev/null
+  --query VersionId --output text)"
 
 verify_remote_backup "${object_key}" "${digest}" "${digest_base64}" "${archive_bytes}"
 
 printf 'result=uploaded\n'
 printf 'bucket=%s\n' "${BACKUP_BUCKET}"
 printf 'object_key=%s\n' "${object_key}"
+printf 'version_id=%s\n' "$(backup_version_id "${put_version}")"
 printf 'checksum=%s\n' "${digest}"
 printf 'archive_bytes=%s\n' "${archive_bytes}"

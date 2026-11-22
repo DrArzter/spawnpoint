@@ -9,7 +9,9 @@ import {
   LEGACY_GENERATION, tableView, type ArchiveSource, type CatalogSource, type Listing, type ManifestSource, type MarkInput,
   type PointerSource, type SourceFailure, type TableItem, type TableView,
 } from "./release-reconciler.ts";
-import { legacyReleaseStateKey, parseLegacyReleaseState, parseReleaseState, releaseStateKey } from "./release-state.ts";
+import {
+  legacyReleaseStateKey, parseLegacyReleaseState, parseReleaseState, releaseStateKey, type ReleaseState,
+} from "./release-state.ts";
 import { parseWorldRecord, type WorldRecord } from "./world-registry.ts";
 
 // The reconciler's read adapters. Each port has list, get, head or scan methods
@@ -132,7 +134,7 @@ const ID = "[a-z0-9][a-z0-9-]{0,31}";
 const MANIFEST_KEY = new RegExp(String.raw`^releases/(${ID})/(${ID})/(\d+\.\d+)/manifest\.json$`);
 const WORLD_KEY = new RegExp(String.raw`^worlds/(${ID})/world\.json$`);
 const CATALOG_KEY = new RegExp(String.raw`^presets/(${ID})/catalog\.json$`);
-const ARCHIVE_KEY = new RegExp(String.raw`^worlds/(${ID})/archives/[A-Za-z0-9._-]+\.tar\.zst$`);
+export const ARCHIVE_KEY = new RegExp(String.raw`^worlds/(${ID})/archives/[A-Za-z0-9._-]+\.tar\.zst$`);
 const CHUNK = 8;
 
 // Only the error's name is kept: a failure line must not carry a body or a message.
@@ -198,8 +200,22 @@ export async function collectSources(ports: SourcePorts, startedAt: string): Pro
   const worlds: WorldRecord[] = [];
   const pointers: PointerSource[] = [];
   try {
-    const keys = (await ports.release.listKeys("worlds/")).filter((key) => WORLD_KEY.test(key));
-    await inChunks(keys, async (key) => {
+    const listed = await ports.release.listKeys("worlds/");
+    const present = new Set(listed);
+    // A pointer is read only when the listing holds it: the role cannot tell S3 to answer 404 for a key it may not list, and a 403 is a real failure.
+    const readPointer = async (key: string, parse: (value: unknown) => ReleaseState | null, worldId: string) => {
+      if (!present.has(key)) return;
+      try {
+        const value = await json(key);
+        if (value === null) return;
+        const state = parse(value);
+        if (state === null) throw new Error("invalid_release_state");
+        pointers.push({ worldId, state });
+      } catch (error) {
+        fail("pointer", key, error);
+      }
+    };
+    await inChunks(listed.filter((key) => WORLD_KEY.test(key)), async (key) => {
       const worldId = WORLD_KEY.exec(key)![1]!;
       let record: WorldRecord | null = null;
       try {
@@ -213,28 +229,10 @@ export async function collectSources(ports: SourcePorts, startedAt: string): Pro
       const world: WorldRecord = record;
       worlds.push(world);
       // The pointer of a world from before generations. One that exists and cannot be parsed fails the run.
-      const legacyKey = legacyReleaseStateKey(worldId);
-      try {
-        const value = await json(legacyKey);
-        if (value !== null) {
-          const state = parseLegacyReleaseState(value, { worldId, generationId: LEGACY_GENERATION }, startedAt);
-          if (state === null) throw new Error("invalid_release_state");
-          pointers.push({ worldId, state });
-        }
-      } catch (error) {
-        fail("pointer", legacyKey, error);
-      }
+      await readPointer(legacyReleaseStateKey(worldId), (value) => parseLegacyReleaseState(value, { worldId, generationId: LEGACY_GENERATION }, startedAt), worldId);
       for (const generation of [world.currentGeneration, ...world.previousGenerations]) {
         const ref = { worldId, generationId: generation.id };
-        try {
-          const value = await json(releaseStateKey(ref)); // NOSONAR a few generations per world
-          if (value === null) continue;
-          const state = parseReleaseState(value, ref);
-          if (state === null) throw new Error("invalid_release_state");
-          pointers.push({ worldId, state });
-        } catch (error) {
-          fail("pointer", releaseStateKey(ref), error);
-        }
+        await readPointer(releaseStateKey(ref), (value) => parseReleaseState(value, ref), worldId); // NOSONAR a few generations per world
       }
     });
   } catch (error) {

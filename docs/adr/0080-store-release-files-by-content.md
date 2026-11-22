@@ -58,6 +58,13 @@ each item.
    release items and release holders. Holders name who needs a release: a generation (`hold#gen`), the catalog
    (`hold#catalog`), a build (`hold#build`) and a backup (`hold#backup`). Every writer of a generation's release writes
    its holder **before** it writes the record that names the release.
+   One exception: the backup holder `hold#backup#<archive key>#<versionId>`. The key needs the version id, which S3
+   returns only after the upload, so the host writes it **right after** the upload
+   (`server/scripts/hold-backup-release.sh`, role `backup`, only for a live release). This is safe because the
+   generation's holder already holds the release while the backup is made: the release cannot be retired in the gap.
+   If the write fails, the archive stays and the stop still succeeds. The host logs `backup_holder_missing`, the
+   reconciler reports a `missing_holder`, and `register-legacy-releases.ts --apply` writes it. The host role may get,
+   put and update items whose leading key is `release#*` in the table, and nothing else.
 7. **One rule for "may this release be used".** A release with state `retiring` or `retired` is not used for a new
    world, a wipe, a restore or a promotion, even though its manifest still exists. One helper does this check for all
    four paths. A release that the table does not know (legacy, or not yet registered) is usable.
@@ -73,7 +80,10 @@ each item.
 11. **The reconciler.** A scheduled Lambda in `infra/terraform-operations` marks from the sources of truth, compares with
     the table and with a listing of `objects/`, and reports each difference by class. It ships in **report-only mode**.
     It has no write port and its role has no write or delete right. The sweep is a later step behind a dry-run flag that
-    is on by default; real deletes need a repository variable.
+    is on by default; real deletes need a repository variable. A backup archive with no release metadata and no
+    generation id in its key predates release recording. It holds no release: the report lists it as
+    `archive_without_release` (informational, never a failure) and it gets no holder. An archive that has either and
+    cannot be resolved still fails the run. A legacy pointer is read only when the listing of `worlds/` holds it.
 12. **Bucket policy.** `DenyReleaseDeletion` on `releases/*` does not change. `DeleteObject` on `objects/*` is denied to
     every principal except the role `spawnpoint-release-reconciler`. `DeleteObjectVersion` on `objects/*` is denied to
     every principal. A lifecycle rule expires noncurrent object versions after 30 days and removes delete markers. No rule
@@ -144,7 +154,7 @@ The table gives the defaults that this work takes. The owner may change each of 
 | Delete old releases by age | Destroys the only way to open an archive (ADR-0052) |
 | A new manifest `schema_version: 2` | Changes the three `schema_version == 1` checks. A top-level field leaves them as they are |
 | Packs under the release key | `DenyReleaseDeletion` would make them impossible to free, and they are most of the new bytes |
-| One table entry for each file of each backup | About 1,657 transactional writes for each backup, and hosts would need write access to the table |
+| One table entry for each file of each backup | About 1,657 transactional writes for each backup, and hosts would need write access to the table (one holder item per backup does need it, limited to `release#*` items) |
 | Cache bytes in `objects/` | No release names them, so the reconciler would mark them as orphans |
 
 ## Deploy order

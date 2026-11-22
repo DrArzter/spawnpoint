@@ -57,6 +57,8 @@ export type Marks = Readonly<{
   holders: readonly ExpectedHolder[];
   /** Every release a manifest or a holder names. */
   namedReleases: ReadonlySet<string>;
+  /** Archives that hold no release: no release metadata and no generation id in the key. Informational. */
+  archivesWithoutRelease: readonly string[];
   manifestsKnown: boolean;
   failures: readonly SourceFailure[];
 }>;
@@ -90,6 +92,7 @@ type MarkState = Readonly<{
   failures: SourceFailure[];
   holders: Map<string, ExpectedHolder>;
   named: Set<string>;
+  withoutRelease: string[];
   hold: (release: string, sk: string) => void;
 }>;
 
@@ -156,9 +159,8 @@ function markCatalogs(input: MarkInput, state: MarkState): void {
 
 /** The release an archive belongs to, or null when it cannot be told. */
 function archiveRelease(
-  archive: ArchiveSource, record: WorldRecord | undefined, pointers: ReadonlyMap<string, ReleaseState>,
+  archive: ArchiveSource, record: WorldRecord, pointers: ReadonlyMap<string, ReleaseState>,
 ): string | null {
-  if (record === undefined) return null;
   const generationId = backupGenerationId(archive.key);
   const generation = [record.currentGeneration, ...record.previousGenerations].find((candidate) => candidate.id === generationId);
   if (generation !== undefined) {
@@ -167,18 +169,40 @@ function archiveRelease(
   return archive.metadata.release !== null && /^\d+\.\d+$/.test(archive.metadata.release) ? archive.metadata.release : null;
 }
 
+export type ArchiveResolution =
+  | Readonly<{ kind: "release"; release: string }>
+  | Readonly<{ kind: "none" }>
+  | Readonly<{ kind: "unresolved" }>;
+
+/** The pointers of generations by world and generation id, as `resolveArchive` reads them. */
+export function pointerIndex(pointers: readonly PointerSource[]): ReadonlyMap<string, ReleaseState> {
+  return new Map(pointers.map((pointer) => [pointerKey(pointer.worldId, pointer.state.generationId), pointer.state]));
+}
+
+/**
+ * The one rule for an archive's release, shared by the reconciler and the registration tool.
+ * An archive with no release metadata and no generation id in its key predates ADR-0052:
+ * it holds no release. Any other archive that cannot be resolved is unresolved (fail closed).
+ */
+export function resolveArchive(
+  archive: ArchiveSource, record: WorldRecord | undefined, pointers: ReadonlyMap<string, ReleaseState>,
+): ArchiveResolution {
+  if (archive.metadata.release === null && backupGenerationId(archive.key) === null) return { kind: "none" };
+  const release = record === undefined ? null : archiveRelease(archive, record, pointers);
+  return release === null ? { kind: "unresolved" } : { kind: "release", release };
+}
+
 function markArchives(
   input: MarkInput, state: MarkState, worlds: ReadonlyMap<string, WorldRecord>,
   pointers: ReadonlyMap<string, ReleaseState>, ofWorld: WorldOfRelease,
 ): void {
   for (const archive of input.archives) {
     const record = worlds.get(archive.worldId);
-    const release = archiveRelease(archive, record, pointers);
-    if (record === undefined || release === null) {
-      state.failures.push({ source: "archive", subject: `${archive.key}#${archive.versionId}`, reason: "release_unresolved" });
-      continue;
-    }
-    state.hold(ofWorld(record, release), `hold#backup#${archive.key}#${archive.versionId}`);
+    const subject = `${archive.key}#${archive.versionId}`;
+    const resolved = resolveArchive(archive, record, pointers);
+    if (resolved.kind === "none") state.withoutRelease.push(subject);
+    else if (resolved.kind === "unresolved" || record === undefined) state.failures.push({ source: "archive", subject, reason: "release_unresolved" });
+    else state.hold(ofWorld(record, resolved.release), `hold#backup#${subject}`);
   }
 }
 
@@ -192,12 +216,13 @@ export function mark(input: MarkInput): Marks {
     holders.set(`${release}|${sk}`, { release, sk });
     named.add(release);
   };
-  const state: MarkState = { failures, holders, named, hold };
+  const withoutRelease: string[] = [];
+  const state: MarkState = { failures, holders, named, withoutRelease, hold };
 
   markManifests(input, state, liveReleases, digests);
 
   const worlds = new Map(input.worlds.map((record) => [record.worldId, record]));
-  const pointers = new Map(input.pointers.map((pointer) => [pointerKey(pointer.worldId, pointer.state.generationId), pointer.state]));
+  const pointers = pointerIndex(input.pointers);
   const ofWorld: WorldOfRelease = (record, release) => releaseId({ gameId: record.gameId, presetId: record.preset.id, release });
 
   markWorlds(input, state, pointers, ofWorld);
@@ -205,7 +230,7 @@ export function mark(input: MarkInput): Marks {
   markArchives(input, state, worlds, pointers, ofWorld);
 
   return {
-    liveReleases, digests, holders: [...holders.values()], namedReleases: named,
+    liveReleases, digests, holders: [...holders.values()], namedReleases: named, archivesWithoutRelease: withoutRelease,
     manifestsKnown: input.manifestsListed && !failures.some((failure) => failure.source === "manifest" || failure.source === "manifests"),
     failures,
   };
@@ -271,6 +296,7 @@ export function tableView(items: readonly TableItem[]): TableView {
 export const DIFF_CLASSES = [
   "missing_holder", "missing_reference", "missing_object",
   "extra_reference", "counter_drift", "orphan_object", "stuck_deleting", "unregistered_release", "unknown_object_key",
+  "archive_without_release",
 ] as const;
 export type DiffClass = (typeof DIFF_CLASSES)[number];
 
@@ -425,6 +451,7 @@ export function compare(marks: Marks, table: TableView | null, listing: Listing,
 
   const objects = digestsListed(listing, found);
   const named = digestsNamed(marks);
+  found.archive_without_release.push(...marks.archivesWithoutRelease);
 
   if (listing === null) skip(["missing_object", "orphan_object"], "objects_listing_failed");
   else findMissingObjects(marks, objects, found);

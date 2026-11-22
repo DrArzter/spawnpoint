@@ -51,7 +51,7 @@ const writers: Readonly<Record<string, Coverage>> = {
   },
   "server/scripts/upload-world-backup.sh": {
     kind: "host-archive",
-    why: "an archive's release is held through its wipe's active or run holder (design 4.8, point 1): the pointer names the release before the host runs it. The host role has no table access, by design",
+    why: "the upload prints the version id; stop-session.sh then calls hold-backup-release.sh, which writes hold#backup#<key>#<version> right after the upload (ADR-0080, the one exception to holder first). Until then the generation's holder holds the release",
   },
   "scripts/migrate-release-layout.sh": {
     kind: "not-a-holder-write", why: "writes a release manifest with release metadata: no world record, pointer or archive",
@@ -112,6 +112,20 @@ test("the holder helper names a missing node and the tool offers no way to skip 
   assert.match(helper, /command -v node[^\n]*\n[^\n]*node is required/);
   const tool = readFileSync(join(root, "lambdas/tools/hold-release.ts"), "utf8");
   assert.doesNotMatch(tool, /--skip|--force|--no-hold|SKIP|process\.env\.[A-Z_]*(HOLD|BYPASS)/);
+});
+
+test("the host writes the backup holder after the upload, and a failed holder never fails the stop", () => {
+  const stop = readFileSync(join(root, "server/scripts/stop-session.sh"), "utf8");
+  const upload = stop.search(/upload-world-backup\.sh" "\$\{archive\}"/);
+  const hold = stop.search(/hold-backup-release\.sh/);
+  assert.ok(upload !== -1 && hold > upload, "the holder is written after the upload returns");
+  assert.match(stop, /if \[\[ -z "\$\{backup_version\}" \]\] \|\|\n\s*! AWS_REGION=[^\n]*hold-backup-release\.sh/, "the holder call is inside an if: its failure does not stop the script");
+  assert.match(stop, /backup_holder_missing/);
+  const script = readFileSync(join(root, "server/scripts/hold-backup-release.sh"), "utf8");
+  assert.match(script, /roles: \{SS: \["backup"\]\}/);
+  assert.match(script, /ConditionExpression: "#s = :live"/, "a release that is not live is refused");
+  assert.match(script, /hold#backup#\$\{archive_key\}#\$\{version_id\}/, "the key format of the reconciler and the registration tool");
+  assert.match(readFileSync(join(root, "server/scripts/upload-world-backup.sh"), "utf8"), /version_id=/);
 });
 
 function arguments_(source: string, from: number): string[] {

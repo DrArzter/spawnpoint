@@ -175,6 +175,19 @@ else
   printf 'warning: upload reported no key; the next start or stop here will not trust the local copy\n' >&2
 fi
 
+# The backup holds its release (ADR-0080). The holder needs the upload's version
+# id, so it is written right after the upload. A failure never loses or fails the
+# backup: the archive stays and the reconciler reports the missing holder.
+backup_version="$(awk -F= '$1 == "version_id" { print substr($0, index($0, "=") + 1) }' <<<"${upload_output}")"
+if [[ -n "${WORLD_GENERATION_ID:-}" && -n "${WORLD_RELEASE:-}" && -n "${GAME_ID:-}" && -n "${WORLD_PROFILE_ID:-}" && -n "${uploaded_key}" ]]; then
+  if [[ -z "${backup_version}" ]] ||
+    ! AWS_REGION="${aws_region}" "${SCRIPT_DIR}/hold-backup-release.sh" \
+      "${GAME_ID}" "${WORLD_PROFILE_ID}" "${WORLD_RELEASE}" "${uploaded_key}" "${backup_version}" >&2; then
+    printf 'warning: backup_holder_missing key=%s version=%s: the backup is safe; the reconciler reports the holder and register-legacy-releases.ts --apply writes it\n' \
+      "${uploaded_key}" "${backup_version:-unknown}" >&2
+  fi
+fi
+
 printf '%s\n' "${archive_output}"
 printf '%s\n' "${upload_output}"
 if ! connectivity_retract; then

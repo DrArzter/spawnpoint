@@ -143,7 +143,7 @@ test("a run reads, compares, logs one line per class and puts the metrics", asyn
   });
 
   const parsed = lines.map((line) => JSON.parse(line) as { event: string; class?: string; count?: number });
-  assert.equal(parsed.filter((line) => line.event === "release_reconciler_class").length, 9);
+  assert.equal(parsed.filter((line) => line.event === "release_reconciler_class").length, 10);
   assert.equal(parsed.find((line) => line.class === "missing_object")?.count, 1);
   assert.equal(parsed.filter((line) => line.event === "release_reconciler_summary").length, 1);
 });
@@ -282,6 +282,37 @@ test("collect reads a world's legacy pointer as one more source; one that cannot
   const { result: report } = await quiet(() => reconcile({}, deps(state)));
   assert.equal(report.complete, false, "an unreadable legacy pointer makes the run incomplete");
   assert.equal(report.sweep.reason, "incomplete_run");
+});
+
+test("a world with no legacy pointer causes no read of it; a listed pointer that is denied is still a failure", async () => {
+  const state = fakes();
+  const reads: string[] = [];
+  const base = deps(state).ports;
+  const spy = (denied: string[]) => ({
+    ...base,
+    release: { ...base.release, async getText(key: string) {
+      reads.push(key);
+      if (denied.includes(key)) throw Object.assign(new Error("denied"), { name: "AccessDenied" });
+      return base.release.getText(key);
+    } },
+  });
+  const absent = await collectSources(spy([legacyReleaseStateKey("world")]), NOW.toISOString());
+  assert.deepEqual(absent.input.failures, [], "an unlisted pointer is absent");
+  assert.equal(reads.includes(legacyReleaseStateKey("world")), false);
+
+  state.docs.set(legacyReleaseStateKey("world"), JSON.stringify({ schema_version: 1, world: "world", desired_release: "1.1", active_release: null }));
+  const denied = await collectSources({ ...spy([legacyReleaseStateKey("world")]), release: { ...spy([legacyReleaseStateKey("world")]).release, listKeys: async (prefix) => [...state.docs.keys()].filter((key) => key.startsWith(prefix)) } }, NOW.toISOString());
+  assert.deepEqual(denied.input.failures.map((failure) => `${failure.source} ${failure.reason}`), ["pointer AccessDenied"]);
+});
+
+test("an old archive with no release is reported by class and does not make the run incomplete", async () => {
+  const state = fakes();
+  const old = "worlds/world/archives/world-20260826T170524Z-" + "e".repeat(64) + ".tar.zst";
+  state.versions.push({ key: old, versionId: "v7" });
+  state.heads.set(`${old}#v7`, { release: null, releaseSource: null, storedAt: "2026-08-26T17:05:24.000Z" });
+  const { result: report } = await quiet(() => reconcile({}, deps(state)));
+  assert.equal(report.classes.archive_without_release.count, 1);
+  assert.deepEqual(report.failures, []);
 });
 
 test("the reconciler modules contain no write call to S3, DynamoDB or any other service but the metric put", async () => {

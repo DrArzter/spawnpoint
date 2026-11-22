@@ -1,5 +1,5 @@
 import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../../model";
-import { apiFailure, type FileLink, type ReleaseDiff, type ReleaseMod, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type SessionOperation, type SpawnpointApi, type WorldLifecycleAction, type WorldWhitelist } from "../contract";
+import { apiFailure, type FileLink, type ReleaseDiff, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type SessionOperation, type SpawnpointApi, type WorldLifecycleAction, type WorldWhitelist } from "../contract";
 import { authorizedFetch } from "./transport";
 
 function controlPlaneSubscription(onInvalidated: () => void): () => void {
@@ -268,14 +268,29 @@ export const worldsApi = {
     throw new Error(messages[body.error ?? ""] ?? "The whitelist could not be saved.");
   },
 
-  async loadReleaseMods(gameId: string, presetId: string, release: string): Promise<ReleaseMods> {
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}`);
-    const body = await response.json().catch(() => ({})) as { error?: string; release?: string; mods?: ReleaseMod[]; clientMods?: ReleaseMod[] | null };
+  async loadReleaseMods(gameId: string, presetId: string, release: string, query: ReleaseModQuery): Promise<ReleaseModPage> {
+    // Page and size are always sent: any parameter asks for one page.
+    const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize), sort: query.sort, order: query.order });
+    if (query.search !== "") params.set("query", query.search);
+    if (query.source !== null) params.set("source", query.source);
+    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}?${params}`);
+    const body = await response.json().catch(() => ({})) as { error?: string } & Partial<ReleaseModPage>;
     if (!response.ok || body.mods === undefined) {
       const messages: Record<string, string> = { forbidden: "Your role cannot read releases.", unknown_release: `Release ${release} is not in the store.` };
       throw await apiFailure(response, messages[body.error ?? ""] ?? "The release's mods could not be read.", body);
     }
-    return { release: body.release ?? release, mods: body.mods, clientMods: body.clientMods ?? null };
+    const total = body.total ?? body.mods.length;
+    return {
+      release: body.release ?? release,
+      split: body.split ?? false,
+      all: body.all ?? total,
+      total,
+      page: body.page ?? query.page,
+      pages: body.pages ?? 1,
+      pageSize: body.pageSize ?? query.pageSize,
+      sources: body.sources ?? [],
+      mods: body.mods,
+    };
   },
 
   async loadReleaseDiff(gameId: string, presetId: string, release: string, from: string | null): Promise<ReleaseDiff | null> {

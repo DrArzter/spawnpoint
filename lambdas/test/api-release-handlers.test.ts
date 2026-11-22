@@ -90,6 +90,135 @@ test("a missing manifest stays a 404 and invalid references never reach storage"
   assert.equal(missing.statusCode, 404);
 });
 
+// --- The mod list, one page at a time ---------------------------------------------------
+
+const listed = (file: string, bytes: number, source?: string) => ({ file, sha256: file.padEnd(64, "0").slice(0, 64), bytes, ...(source ? { source } : {}) });
+const bigManifest = {
+  release: "1.4",
+  server: { mods: [listed("b-Create.jar", 30, "modrinth"), listed("a-jei.jar", 10), listed("d-curios.jar", 20, "curseforge"), listed("c-create-extra.jar", 20, "modrinth"), listed("e-spark.jar", 5, "github")] },
+  client: { kind: "mod-set", mods: [listed("b-Create.jar", 30, "modrinth"), listed("f-minimap.jar", 7, "modrinth")] },
+};
+
+async function page(query: Record<string, string>) {
+  const result = await releaseManifest("minecraft", "prominence", "1.4", query);
+  return { status: result.statusCode, data: JSON.parse(result.body) };
+}
+
+const files = (data: { mods: Array<{ file: string }> }) => data.mods.map((mod) => mod.file);
+
+test("a mod list request answers one page with totals, source counts and the players' set flag", async (t) => {
+  t.mock.method(sources, "readReleaseManifest", async () => bigManifest);
+  const { status, data } = await page({ page: "1", pageSize: "2" });
+  assert.equal(status, 200);
+  assert.deepEqual(files(data), ["a-jei.jar", "b-Create.jar"]);
+  assert.deepEqual([data.all, data.total, data.page, data.pageSize, data.pages, data.split], [6, 6, 1, 2, 3, true]);
+  assert.deepEqual(data.sources, [{ source: "curseforge", count: 1 }, { source: "modrinth", count: 3 }, { source: "github", count: 1 }, { source: "unknown", count: 1 }]);
+  assert.equal("clientMods" in data, false);
+  assert.deepEqual(files((await page({ page: "3", pageSize: "2" })).data), ["e-spark.jar", "f-minimap.jar"]);
+});
+
+test("paging defaults to 50 rows and clamps a page past the end to the last", async (t) => {
+  t.mock.method(sources, "readReleaseManifest", async () => bigManifest);
+  const first = await page({ page: "1" });
+  assert.equal(first.data.pageSize, 50);
+  const past = await page({ page: "99", pageSize: "4" });
+  assert.deepEqual([past.status, past.data.page, past.data.pages, files(past.data)], [200, 2, 2, ["e-spark.jar", "f-minimap.jar"]]);
+});
+
+test("a large release is cut to the page size and never answered whole", async (t) => {
+  const many = Array.from({ length: 367 }, (_, index) => listed(`mod-${String(index).padStart(3, "0")}.jar`, index, "curseforge"));
+  t.mock.method(sources, "readReleaseManifest", async () => ({ release: "1.4", server: { mods: many } }));
+  const { data } = await page({ pageSize: "200" });
+  assert.deepEqual([data.mods.length, data.total, data.pages], [200, 367, 2]);
+  assert.equal((await page({ pageSize: "200", page: "2" })).data.mods.length, 167);
+});
+
+test("search matches the file name without regard to case, and the filter and total follow it", async (t) => {
+  t.mock.method(sources, "readReleaseManifest", async () => bigManifest);
+  const found = await page({ query: "  CREATE " });
+  assert.deepEqual(files(found.data), ["b-Create.jar", "c-create-extra.jar"]);
+  assert.equal(found.data.total, 2);
+  assert.equal(found.data.all, 6, "the unfiltered count stays, so a list can tell no match from no mods");
+  assert.equal(found.data.sources.length, 4, "source counts cover the release, not the search");
+  const none = await page({ query: "nothing-here" });
+  assert.deepEqual([none.status, none.data.total, none.data.mods, none.data.page, none.data.pages], [200, 0, [], 1, 1]);
+});
+
+test("the source filter takes a known source or unknown", async (t) => {
+  t.mock.method(sources, "readReleaseManifest", async () => bigManifest);
+  assert.deepEqual(files((await page({ source: "modrinth" })).data), ["b-Create.jar", "c-create-extra.jar", "f-minimap.jar"]);
+  assert.deepEqual(files((await page({ source: "unknown" })).data), ["a-jei.jar"]);
+  assert.deepEqual(files((await page({ source: "github", query: "spark" })).data), ["e-spark.jar"]);
+  assert.deepEqual(files((await page({ source: "github", query: "jei" })).data), []);
+});
+
+test("mods sort by name, source or size in either order, and equal rows keep name order", async (t) => {
+  t.mock.method(sources, "readReleaseManifest", async () => bigManifest);
+  const order = async (sort: string, direction: string) => files((await page({ sort, order: direction })).data);
+  assert.deepEqual(await order("name", "asc"), ["a-jei.jar", "b-Create.jar", "c-create-extra.jar", "d-curios.jar", "e-spark.jar", "f-minimap.jar"]);
+  assert.deepEqual(await order("name", "desc"), ["f-minimap.jar", "e-spark.jar", "d-curios.jar", "c-create-extra.jar", "b-Create.jar", "a-jei.jar"]);
+  assert.deepEqual(await order("source", "asc"), ["d-curios.jar", "b-Create.jar", "c-create-extra.jar", "f-minimap.jar", "e-spark.jar", "a-jei.jar"]);
+  assert.deepEqual(await order("source", "desc"), ["a-jei.jar", "e-spark.jar", "b-Create.jar", "c-create-extra.jar", "f-minimap.jar", "d-curios.jar"]);
+  assert.deepEqual(await order("size", "asc"), ["e-spark.jar", "f-minimap.jar", "a-jei.jar", "c-create-extra.jar", "d-curios.jar", "b-Create.jar"]);
+  assert.deepEqual(await order("size", "desc"), ["b-Create.jar", "c-create-extra.jar", "d-curios.jar", "a-jei.jar", "f-minimap.jar", "e-spark.jar"]);
+});
+
+test("a release that recorded no sources offers no source counts, and its rows carry none", async (t) => {
+  t.mock.method(sources, "readReleaseManifest", async () => ({ release: "1.0", server: { mods: [listed("a.jar", 1), listed("b.jar", 2)] } }));
+  const { data } = await page({ page: "1" });
+  assert.deepEqual([data.sources, data.split, data.total], [[], false, 2]);
+  assert.equal(data.mods.some((mod: object) => "source" in mod), false);
+  assert.deepEqual(files((await page({ source: "unknown" })).data), ["a.jar", "b.jar"]);
+});
+
+test("invalid mod list parameters are a 400 and never reach storage", async (t) => {
+  const read = t.mock.method(sources, "readReleaseManifest", async () => bigManifest);
+  const invalid: Array<Record<string, string>> = [
+    { page: "0" }, { page: "-1" }, { page: "1.5" }, { page: "abc" }, { page: "" }, { page: "9999999" },
+    { pageSize: "0" }, { pageSize: "201" }, { pageSize: "x" },
+    { sort: "date" }, { sort: "" }, { order: "up" }, { order: "ASC" },
+    { source: "gitlab" }, { source: "" }, { query: "x".repeat(101) },
+    { colour: "red" }, { page: "1", unknown: "1" },
+  ];
+  for (const query of invalid) {
+    const result = await releaseManifest("minecraft", "prominence", "1.4", query);
+    assert.deepEqual([result.statusCode, JSON.parse(result.body)], [400, { error: "invalid_mod_query" }], JSON.stringify(query));
+  }
+  assert.equal(read.mock.callCount(), 0);
+  assert.equal((await page({ pageSize: "200" })).status, 200);
+  assert.equal((await page({ query: "x".repeat(100) })).status, 200);
+});
+
+test("a request without parameters still answers the whole manifest for the MCP tool", async (t) => {
+  t.mock.method(sources, "readReleaseManifest", async () => bigManifest);
+  const data = JSON.parse((await releaseManifest("minecraft", "prominence", "1.4")).body);
+  assert.equal(data.mods.length, 5);
+  assert.equal(data.clientMods.length, 2);
+  assert.equal("total" in data, false);
+});
+
+test("a mod list request for an unknown release is a 404", async (t) => {
+  t.mock.method(sources, "readReleaseManifest", async () => null);
+  assert.deepEqual([(await page({ page: "1" })).status, (await page({ page: "1" })).data], [404, { error: "unknown_release" }]);
+});
+
+test("the route hands its query to the handler under release.read", async (t) => {
+  t.mock.method(sources, "readReleaseManifest", async () => bigManifest);
+  const principal = { provider: "telegram", subject: "1", displayName: "T", username: null, email: null, photoUrl: null } as const;
+  const dispatch = createDispatcher(composeRoutes(releasesRoutes), {
+    caller: async () => principal,
+    resolveIdentity: async () => ({ id: "operator", displayName: "T", roleId: "operator", directGrants: [] }),
+    panelOrigins: ["https://panel.example"],
+  });
+  const result = await dispatch({
+    routeKey: "GET /games/{gameId}/presets/{presetId}/releases/{version}",
+    pathParameters: { gameId: "minecraft", presetId: "prominence", version: "1.4" },
+    queryStringParameters: { pageSize: "2", query: "create" },
+  });
+  assert.equal(result.statusCode, 200);
+  assert.deepEqual(files(JSON.parse(result.body)), ["b-Create.jar", "c-create-extra.jar"]);
+});
+
 test("build input rejects malformed JSON separately from an invalid pinned-build request", async () => {
   const malformed = await buildRelease(identity, "minecraft", "industrial", "{");
   assert.deepEqual(JSON.parse(malformed.body), { error: "invalid_json" });

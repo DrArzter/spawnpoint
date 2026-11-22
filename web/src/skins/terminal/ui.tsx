@@ -317,17 +317,30 @@ export function NoMatches({ filter, noun, clearLabel = "Clear search" }: Readonl
  * The search above a list already in hand: one field, and once something is
  * typed, how much of the list survived. `plain` drops the row's own padding and
  * rule for content that is already spaced, such as a drawer. `children` are
- * choices that narrow the same list, beside the field.
+ * choices that narrow the same list, beside the field. A search the server
+ * answers passes `matches`, its own count of what survived.
  */
-export function FilterRow<Row>({ filter, label, placeholder, disabled = false, plain = false, children }: Readonly<{ filter: Filter<Row>; label: string; placeholder: string; disabled?: boolean; plain?: boolean; children?: ReactNode }>) {
+export function FilterRow<Row>({ filter, label, placeholder, disabled = false, plain = false, matches, children }: Readonly<{ filter: Filter<Row>; label: string; placeholder: string; disabled?: boolean; plain?: boolean; matches?: number; children?: ReactNode }>) {
   return (
     <div className={cx("t-filter-row", plain && "t-filter-row-plain")}>
       <Field hideLabel label={label}>
         <TextInput autoComplete="off" disabled={disabled} onChange={(event) => filter.setQuery(event.target.value)} placeholder={placeholder} ref={filter.field} type="search" value={filter.query} />
       </Field>
       {children}
-      {filter.active && <span aria-live="polite" className="t-filter-count" role="status">{filter.rows.length} of {filter.total}</span>}
+      {filter.active && <span aria-live="polite" className="t-filter-count" role="status">{matches ?? filter.rows.length} of {filter.total}</span>}
     </div>
+  );
+}
+
+/** The place in a list of pages between a key for the previous and one for the next; drawn only when there is more than one page. */
+export function Pager({ page, pages, onPage, label = "Pages" }: Readonly<{ page: number; pages: number; onPage: (page: number) => void; label?: string }>) {
+  if (pages <= 1) return null;
+  return (
+    <nav aria-label={label} className="t-pager">
+      <IconKey disabled={page <= 1} icon="chevron_left" label="Previous page" onClick={() => onPage(page - 1)} size="small" />
+      <span aria-current="page" className="t-pager-place">Page {page} of {pages}</span>
+      <IconKey disabled={page >= pages} icon="chevron_right" label="Next page" onClick={() => onPage(page + 1)} size="small" />
+    </nav>
   );
 }
 

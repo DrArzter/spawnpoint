@@ -6,7 +6,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { action, actionsOf, type Action } from "../src/core/actions.ts";
-import type { AccessModel, ConfirmationModel, ConsoleModel, CreateWorldModel, GameSettingsModel, InvitationModel, MetricsModel, ProfileModel, ReleasesModel, ShellModel, WhitelistModel, WorldModel, WorldsModel, WorldSettingsModel } from "../src/core/models.ts";
+import type { AccessModel, ConfirmationModel, ConsoleModel, CreateWorldModel, GameSettingsModel, InvitationModel, MetricsModel, ModsModel, ProfileModel, ReleasesModel, ShellModel, WhitelistModel, WorldModel, WorldsModel, WorldSettingsModel } from "../src/core/models.ts";
 import type { Game, World } from "../src/model.ts";
 import { SKINS } from "../src/skins/index.ts";
 
@@ -81,6 +81,22 @@ const worlds: WorldsModel = {
   createWorld: spy("world.create", "Create world"),
 };
 
+const modRows = [
+  { file: "create-1.20.1-0.5.1.j.jar", bytes: 14_221_830, sha256: "c".repeat(64), source: "curseforge" as const, download: spy("mod.download.ccc", "Download") },
+  { file: "jei-1.20.1-forge-15.20.0.106.jar", bytes: 1_402_115, sha256: "d".repeat(64), source: null, download: spy("mod.download.ddd", "Download") },
+];
+const modSources = [{ source: "curseforge" as const, label: "CurseForge", count: 1 }, { source: "unknown" as const, label: "Unknown", count: 1 }];
+
+// One page of a release's mods; each change names the call a person's choice would make.
+function modsModel(over: Partial<ModsModel> = {}): ModsModel {
+  return {
+    release: "1.2", split: true, search: "", setSearch: noop, source: null, setSource: noop, sources: modSources,
+    sort: { key: "name", direction: "ascending" }, setSort: noop, page: 1, pages: 1, setPage: noop, narrowed: false, clear: noop,
+    files: { status: "ready", value: { rows: modRows, total: 2, all: 2 } },
+    ...over,
+  };
+}
+
 const worldPage: WorldModel = {
   game,
   world,
@@ -113,10 +129,7 @@ const worldPage: WorldModel = {
   releases: {
     rows: [{ name: "1.2", status: "Active", downloadable: true, sourceHref: "https://github.com/example/preset", downloads: [spy("world.pack", "Client"), spy("release.pack.server", "Server"), spy("release.pack.full", "Full")] }],
     state: "ready",
-    mods: { release: "1.2", split: true, files: { status: "ready", value: [
-      { file: "create-1.20.1-0.5.1.j.jar", bytes: 14_221_830, sha256: "c".repeat(64), source: "curseforge", download: spy("mod.download.ccc", "Download") },
-      { file: "jei-1.20.1-forge-15.20.0.106.jar", bytes: 1_402_115, sha256: "d".repeat(64), source: null, download: spy("mod.download.ddd", "Download") },
-    ] } },
+    mods: modsModel(),
     changes: { release: "1.2", changes: { status: "ready", value: { from: "1.1", unchanged: 40, rows: [
       { id: "removed:Server mod:oldmod-1.jar", change: "removed", part: "Server mod", name: "oldmod-1.jar", detail: "oldmod" },
       { id: "changed:Server mod:create-0.6.jar", change: "changed", part: "Server mod", name: "create-0.6.jar", detail: "was create-0.5.jar" },
@@ -263,29 +276,64 @@ for (const skin of SKINS) {
     checkSurface("World", details + wipes + backups + releasesTab, { ...worldPage, backups: { ...worldPage.backups, restore: worldPage.backups.restore(entry), download: worldPage.backups.download!(entry) } }, skin.shellRefresh ? ["refresh"] : []);
   });
 
+  const tabWith = (model: Partial<WorldModel["releases"]> | { mods: ModsModel | null }) => renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "releases", releases: { ...worldPage.releases, ...model } } }));
+  // The source filter: the console offers Source in its property menu, the terminal a radio per source.
+  const sourceFilter = skin.name === "Terminal" ? /Filter mods by source/ : /c-filter-option[^>]*>\s*<span>Source<\/span>/;
+  const pager = skin.name === "Terminal" ? /class="t-pager"/ : /class="c-pager"/;
+
   test(`${skin.name}: a world's files are its release's mods and its backup archives (ADR-0065)`, () => {
-    const releasesTab = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "releases" } }));
+    const releasesTab = tabWith({});
     assert.match(releasesTab, /create-1\.20\.1-0\.5\.1\.j\.jar/, "the mods of the release the world starts with");
-    const withoutMods = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "releases", releases: { ...worldPage.releases, mods: null } } }));
-    assert.doesNotMatch(withoutMods, /Server mods/);
-    const failed = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "releases", releases: { ...worldPage.releases, mods: { release: "1.2", split: false, files: { status: "error", error: "boom", kind: "failed", retry: spy("mods.retry", "Try again") } } } } }));
-    assert.match(failed, /data-action="mods\.retry"/);
+    assert.doesNotMatch(tabWith({ mods: null }), /Server mods/);
+    assert.match(tabWith({ mods: modsModel({ files: { status: "error", error: "boom", kind: "failed", retry: spy("mods.retry", "Try again") } }) }), /data-action="mods\.retry"/);
     // The source of each mod is a mark with its name; a mod of an older release reads as unknown.
     assert.match(releasesTab, /CurseForge/);
     assert.match(releasesTab, /Unknown source/);
     assert.match(releasesTab, /Search mods/);
-    // The source filter: the console offers Source in its property menu, the terminal a radio per source.
-    const sourceFilter = skin.name === "Terminal" ? /Filter mods by source/ : /c-filter-option[^>]*>\s*<span>Source<\/span>/;
     assert.match(releasesTab, sourceFilter);
     // A release that recorded no source keeps the search and offers no source filter.
-    const old = { ...worldPage.releases.mods!, files: { status: "ready" as const, value: [{ file: "old.jar", bytes: 1, sha256: "e".repeat(64), source: null, download: spy("mod.download.eee", "Download") }] } };
-    const oldTab = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "releases", releases: { ...worldPage.releases, mods: old } } }));
+    const oldTab = tabWith({ mods: modsModel({ sources: [], files: { status: "ready", value: { rows: [{ ...modRows[1]!, file: "old.jar" }], total: 1, all: 1 } } }) });
     assert.match(oldTab, /Search mods/);
     assert.match(oldTab, /Unknown source/);
     assert.doesNotMatch(oldTab, sourceFilter);
     // Without backup.download, the archive is listed and never offered.
     const noDownload = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "backups", backups: { ...worldPage.backups, download: null } } }));
     assert.doesNotMatch(noDownload, /data-action="backup\.download"/);
+  });
+
+  test(`${skin.name}: the mod list shows one page, its pager only when there are more pages, and every state of the list`, () => {
+    assert.doesNotMatch(tabWith({}), pager, "one page draws no pager");
+    const paged = tabWith({ mods: modsModel({ page: 2, pages: 8 }) });
+    assert.match(paged, pager);
+    assert.match(paged, /Previous page/);
+    assert.match(paged, /Next page/);
+    assert.match(paged, skin.name === "Terminal" ? /Page 2 of 8/ : /aria-current="page" aria-label="Page 2"/);
+    const loading = tabWith({ mods: modsModel({ files: { status: "loading" } }) });
+    assert.match(loading, /aria-busy="true"/);
+    assert.match(loading, /Search mods/, "the search stays while a page loads");
+    assert.match(tabWith({ mods: modsModel({ sources: [], files: { status: "ready", value: { rows: [], total: 0, all: 0 } } }) }), /No mods|has no mods/);
+    const none = tabWith({ mods: modsModel({ search: "zzz", narrowed: true, files: { status: "ready", value: { rows: [], total: 0, all: 2 } } }) });
+    assert.match(none, /No matches|No matching mods/, "a search that matched nothing is not an empty release");
+    assert.match(none, /Clear filters/);
+  });
+
+  test(`${skin.name}: the mod list shows the sort and the search the server was asked for`, () => {
+    const sorted = tabWith({ mods: modsModel({ search: "create", sort: { key: "size", direction: "descending" } }) });
+    if (skin.name === "Terminal") {
+      assert.match(sorted, /<option[^>]*value="size:descending"[^>]*selected|selected=""[^>]*value="size:descending"/);
+      assert.match(sorted, /value="create"/);
+    } else {
+      assert.match(sorted, /aria-sort="descending"/);
+      assert.equal(sorted.match(/aria-sort="/g)?.length, 1, "one sorted column");
+      assert.match(sorted, /c-filter-token-key">Text: <\/span>create/);
+    }
+  });
+
+  test(`${skin.name}: the downloads list the newest release first`, () => {
+    const row = (name: string) => ({ name, status: "Active", downloadable: true, sourceHref: null, downloads: [spy("world.pack", "Download")] });
+    const markup = tabWith({ rows: [row("7.2"), row("7.10"), row("7.9")] });
+    const at = (name: string) => markup.indexOf(`>${name}<`);
+    assert.ok(at("7.10") > 0 && at("7.10") < at("7.9") && at("7.9") < at("7.2"), "7.10, then 7.9, then 7.2");
   });
 
   test(`${skin.name}: a release's changes name each item with its change as a word, and every other state (P3)`, () => {

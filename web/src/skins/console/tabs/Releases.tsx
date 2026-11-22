@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
-
 import type { ChangeRow, Detail, ModRow, ModsModel, ReleaseChangesModel, WorldModel } from "../../../core/models";
-import { modSourceCounts, modSourceLabel, sortMods, UNKNOWN_SOURCE, type ModSortKey } from "../../../core/release-mods";
+import type { ModSortKey } from "../../../api/contract";
+import { modSourceLabel, UNKNOWN_SOURCE } from "../../../core/release-mods";
+import { newestFirst } from "../../../core/release-order";
 import type { StatusDescriptor } from "../../../core/status";
 import { formatBytes } from "../../../lib/format";
 import { action } from "../../../core/actions";
@@ -11,11 +11,12 @@ import { Chip } from "../ui/Chip";
 import { Copy } from "../ui/Copy";
 import { DetailList } from "../ui/DetailList";
 import { Empty, LoadError } from "../ui/Empty";
-import { applyFilter, FilterBar, type FilterProperty, type FilterToken } from "../ui/FilterBar";
+import { FilterBar, type FilterProperty, type FilterToken } from "../ui/FilterBar";
 import { Grid } from "../ui/Grid";
 import { Indicator } from "../ui/Indicator";
+import { Pager } from "../ui/Pager";
 import { Status } from "../ui/Status";
-import { nextSort, Table, type Column, type SortDirection } from "../ui/Table";
+import { nextSort, Table, type Column } from "../ui/Table";
 import { TrackList, TrackTitle } from "../ui/TrackList";
 
 const pointerStates = { unconfigured: "Unconfigured", unavailable: "Unavailable" } as const;
@@ -31,7 +32,7 @@ function releaseFacts(model: WorldModel): Detail[] {
 
 /** The Release card says which release is active or desired; a download row names its release only (a state shown once). */
 export function ReleasesTab({ model }: Readonly<{ model: WorldModel }>) {
-  const rows = model.releases.rows;
+  const rows = newestFirst(model.releases.rows);
   return (
     <Grid kind="stack">
       <Card body="kv" title="Release"><DetailList columns="fit" details={releaseFacts(model)} /></Card>
@@ -98,21 +99,30 @@ function SourceMark({ row }: Readonly<{ row: ModRow }>) {
   return <Indicator icon={row.source === null ? "help" : sourceIcons[row.source]} label={row.source === null ? `${UNKNOWN_SOURCE} source` : modSourceLabel(row.source)} />;
 }
 
-const textOf = (row: ModRow) => row.file;
-const propertyOf = (row: ModRow, property: string) => property === "source" ? modSourceLabel(row.source) : "";
+const SOURCE_PROPERTY = "source";
+
+// The model keeps one search and one source; the bar shows them as tokens, and a later token of a kind replaces the earlier one.
+export function tokensOf(mods: ModsModel): readonly FilterToken[] {
+  const text = mods.search.trim();
+  const source = mods.sources.find((entry) => entry.source === mods.source);
+  return [...(text === "" ? [] : [{ property: null, value: text }]), ...(source ? [{ property: SOURCE_PROPERTY, value: source.label }] : [])];
+}
+
+export function narrow(mods: ModsModel, tokens: readonly FilterToken[]) {
+  const text = tokens.filter((token) => token.property === null).at(-1);
+  const source = tokens.filter((token) => token.property === SOURCE_PROPERTY).at(-1);
+  mods.setSearch(text?.value ?? "");
+  mods.setSource(mods.sources.find((entry) => entry.label === source?.value)?.source ?? null);
+}
 
 function Mods({ mods }: Readonly<{ mods: ModsModel }>) {
   const files = mods.files;
-  const [tokens, setTokens] = useState<readonly FilterToken[]>([]);
-  const [sort, setSort] = useState<Readonly<{ key: ModSortKey; direction: SortDirection }>>({ key: "name", direction: "ascending" });
-  const rows = useMemo(() => files.status === "ready" ? files.value : [], [files]);
-  const shown = useMemo(() => sortMods(applyFilter(rows, tokens, propertyOf, textOf), sort.key, sort.direction), [rows, tokens, sort]);
+  const ready = files.status === "ready" ? files.value : null;
   // The source filter exists only when the release recorded sources; an old one keeps the search alone.
-  const sources = modSourceCounts(rows);
-  const properties: readonly FilterProperty[] = sources.length === 0 ? [] : [{ id: "source", label: "Source", values: sources.map(({ label, count }) => ({ value: label, count })) }];
+  const properties: readonly FilterProperty[] = mods.sources.length === 0 ? [] : [{ id: SOURCE_PROPERTY, label: "Source", values: mods.sources.map(({ label, count }) => ({ value: label, count })) }];
   const sortable = (key: ModSortKey) => ({
-    sort: sort.key === key ? sort.direction : null,
-    onSort: () => setSort({ key, direction: sort.key === key ? nextSort(sort.direction) : "ascending" }),
+    sort: mods.sort.key === key ? mods.sort.direction : null,
+    onSort: () => mods.setSort(key, mods.sort.key === key ? nextSort(mods.sort.direction) : "ascending"),
   });
   // Whether players install their own set is a fact about the release, so it lives in the chip's tooltip.
   const head = <Chip icon="dns" tip={mods.split ? `Release ${mods.release} · Players install their own set` : `Release ${mods.release}`}>Server</Chip>;
@@ -124,19 +134,28 @@ function Mods({ mods }: Readonly<{ mods: ModsModel }>) {
     { id: "actions", header: "Actions", kind: "act", render: (row) => <ActionButton action={row.download} size="sm" /> },
   ];
   return (
-    <Card actions={head} body="flush" count={files.status === "ready" ? files.value.length : undefined} title="Mods">
+    <Card actions={head} body="flush" count={ready?.all} title="Mods">
       {files.status === "error"
         ? <LoadError error={files.error} kind={files.kind} retry={files.retry} size="sm" title="Mods could not be loaded" verb="read mods" />
         : (
           <>
-            <FilterBar disabled={files.status !== "ready"} label="Search mods" matches={shown.length} onChange={setTokens} placeholder="Search by file name" properties={properties} tokens={tokens} />
+            <FilterBar
+              disabled={files.status === "loading" && mods.sources.length === 0 && !mods.narrowed}
+              end={<Pager label="Mod pages" onPage={mods.setPage} page={mods.page} pages={mods.pages} />}
+              label="Search mods"
+              matches={ready?.total}
+              onChange={(tokens) => narrow(mods, tokens)}
+              placeholder="Search by file name"
+              properties={properties}
+              tokens={tokensOf(mods)}
+            />
             <Table
               columns={columns}
-              empty={tokens.length > 0 ? <Empty action={action("mods.filter.clear", "Clear filters", () => setTokens([]), { icon: "filter_alt_off" })} icon="filter_alt_off" size="sm" title="No matches" /> : <Empty icon="inventory" size="sm" title="No mods" />}
+              empty={mods.narrowed ? <Empty action={action("mods.filter.clear", "Clear filters", mods.clear, { icon: "filter_alt_off" })} icon="filter_alt_off" size="sm" title="No matches" /> : <Empty icon="inventory" size="sm" title="No mods" />}
               label="Mods"
               loading={files.status === "loading"}
               rowKey={(row) => row.sha256}
-              rows={shown}
+              rows={ready?.rows ?? []}
             />
           </>
         )}

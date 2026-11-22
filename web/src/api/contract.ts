@@ -164,8 +164,35 @@ export type ModSource = "curseforge" | "modrinth" | "github";
 /** One server mod of a release, as its manifest records it (ADR-0065). */
 export type ReleaseMod = Readonly<{ file: string; sha256: string; bytes: number; source?: ModSource }>;
 export type ReleasePackName = "server" | "full";
-/** A release's server mods, and the players' own set when it differs (ADR-0069); null when players install the server's. */
-export type ReleaseMods = Readonly<{ release: string; mods: readonly ReleaseMod[]; clientMods: readonly ReleaseMod[] | null }>;
+/** A mod's source as a list filters on it; `unknown` is a mod whose release recorded none. */
+export type ModSourceFilter = ModSource | "unknown";
+export type ModSortKey = "name" | "source" | "size";
+/** What one page of a release's mods is asked for. The server searches, filters, sorts and pages; the panel holds one page. */
+export type ReleaseModQuery = Readonly<{
+  search: string;
+  source: ModSourceFilter | null;
+  sort: ModSortKey;
+  order: "asc" | "desc";
+  page: number;
+  pageSize: number;
+}>;
+/**
+ * One page of a release's mods, server and players' own set as one list
+ * (ADR-0069). `total` counts what the search and filter match, `all` the whole
+ * release; `sources` counts the whole release and is empty when it recorded none.
+ * `split`: players install a set of their own.
+ */
+export type ReleaseModPage = Readonly<{
+  release: string;
+  split: boolean;
+  all: number;
+  total: number;
+  page: number;
+  pages: number;
+  pageSize: number;
+  sources: readonly Readonly<{ source: ModSourceFilter; count: number }>[];
+  mods: readonly ReleaseMod[];
+}>;
 /** One file in a release diff (P3): its mod ids where the release records them, its side when it is an addon (ADR-0077). */
 export type DiffMod = Readonly<{ file: string; sha256: string; bytes: number; side: string | null; modIds: readonly string[] | null }>;
 export type DiffOverride = Readonly<{ path: string; sha256: string; bytes: number }>;
@@ -336,7 +363,7 @@ export type SpawnpointApi = Readonly<{
   /** The whole list; a running world is asked to reload it, any start writes it. */
   updateWhitelist(gameId: string, worldId: string, names: readonly string[]): Promise<SavedWhitelist>;
   /** A release's server mods, from its manifest. */
-  loadReleaseMods(gameId: string, presetId: string, release: string): Promise<ReleaseMods>;
+  loadReleaseMods(gameId: string, presetId: string, release: string, query: ReleaseModQuery): Promise<ReleaseModPage>;
   /** What a release changes: against `from`, or, with null, against what its build compared it with; null when that build kept no plan. */
   loadReleaseDiff(gameId: string, presetId: string, release: string, from: string | null): Promise<ReleaseDiff | null>;
   /** A short-lived link to one server mod of a release, named by its digest. */

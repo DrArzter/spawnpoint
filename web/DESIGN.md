@@ -306,7 +306,7 @@ confirms or removes the stamp for the surface it shows (`wearOnDocument`): the f
 
 `skins/terminal` draws the console as one monospace screen: a top row, a menu row, then the grid, every row the full
 width on a phone as on a 4K monitor. Every view is the face's own, built from its own vocabulary in `ui.tsx` (panel,
-verb, mark and state, table, tabs, field, toggle, details, overflow, modal, drawer) and styled only by `terminal.css`
+verb, mark and state, table, pager, tabs, field, toggle, details, overflow, modal, drawer) and styled only by `terminal.css`
 in its own `t-*` classes; the console face's primitives and sheets play no part in it. The rules apply while the
 document carries `html[data-skin="terminal"]`, which `index.html` stamps before the first paint and `App` keeps true.
 

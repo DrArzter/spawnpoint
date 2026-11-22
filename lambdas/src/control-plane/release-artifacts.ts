@@ -50,6 +50,11 @@ function manifestMods(value: unknown): readonly ManifestMod[] {
     : [];
 }
 
+/** The server's mods as the manifest records them; entries without a file, digest and size are left out. */
+export function manifestServerMods(manifest: unknown): readonly ManifestMod[] {
+  return manifestMods((manifest as { server?: { mods?: unknown } } | null)?.server?.mods);
+}
+
 /** The players' mod set when a release records one apart from the server's; null when they install the server's. */
 export function manifestClientMods(manifest: unknown): readonly ManifestMod[] | null {
   const client = (manifest as { client?: { kind?: unknown; mods?: unknown } } | null)?.client;

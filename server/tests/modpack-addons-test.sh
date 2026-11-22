@@ -128,7 +128,6 @@ case "${url}" in
     # GitHub release assets, with no token: <owner>/<repo>/releases/download/<tag>/<asset>.
     rest="${url#https://github.com/}"
     IFS=/ read -r owner repo _releases _download tag file <<<"${rest}"
-    [[ "${owner}/${repo}" == DrArzter/SophisticatedBackpacks ]]
     source="${FAKE_ROOT}/github/${tag//%2B/+}/${file//%2B/+}"
     ;;
   https://downloads.invalid/*) source="${FAKE_ROOT}/downloads/${url##*/}" ;;
@@ -457,7 +456,7 @@ jq '.server.world_data = ["config/prominence.json"]' "${manifest}" >"${fixture}/
 refuses "invalid release manifest" "a forged manifest with world_data over a shipped file" \
   env RELEASE_SOURCE_DIR="${payload}" "${scripts}/upload-release.sh" "${fixture}/world-data-forged.json"
 
-# --- github_release (ADR-0079): an asset of a release of an allow-listed repository ---
+# --- github_release (ADR-0079): an asset of a GitHub release, from any repository ---
 gh_repository=DrArzter/SophisticatedBackpacks
 gh_commit=0123456789abcdef0123456789abcdef01234567
 gh_workflow=.github/workflows/release.yml
@@ -504,7 +503,6 @@ profile gh-c8 "$(addons "[$(ghrelease v-c8 hud-fork.jar client), $(ghrelease v-c
 profile gh-size "$(addons "[$(jq -c '.github_release.bytes += 1' <<<"${gh_backpacks}"),${core}]")"
 profile gh-sha "$(addons "[$(jq -c '.github_release.sha512 = ("0" * 128)' <<<"${gh_backpacks}"),${core}]")"
 profile gh-repository "$(addons "[$(ghrelease "${gh_tag}" "${gh_file}" both Fork someone/SophisticatedBackpacks),${core}]")"
-profile gh-case "$(addons "[$(ghrelease "${gh_tag}" "${gh_file}" both Fork drarzter/sophisticatedbackpacks),${core}]")"
 # Shape: a URL in the pin, two sources in one entry, a missing field, a repeated asset.
 profile gh-url "$(addons "[$(jq -c '.github_release.url = "https://evil.invalid/x.jar"' <<<"${gh_backpacks}"),${core}]")"
 profile gh-two-sources "$(addons "[$(jq -c '.modrinth = {project_id:"ouNrBQtq",version_id:"Jk6o7s4h",file:"a.jar",sha512:("0" * 128),bytes:1}' <<<"${gh_backpacks}"),${core}]")"
@@ -553,12 +551,11 @@ grep -qx 'client_mods=1' <<<"${output}"
 : >"${fixture}/curl.log"
 refusal gh-size "does not match the pinned size" "a GitHub asset of another size than the pin"
 refusal gh-sha "does not match the pinned SHA-512" "a GitHub asset with the right size and another SHA-512"
-refusal gh-repository "not on the owner allow-list: someone/SophisticatedBackpacks" "a repository off the allow-list"
-refusal gh-case "not on the owner allow-list: drarzter/sophisticatedbackpacks" "a repository that differs only in case"
-if grep -Fq someone/ "${fixture}/curl.log"; then
-  printf 'a download was attempted from a repository off the allow-list\n' >&2
-  exit 1
-fi
+# No repository list (ADR-0079, amended): a pin to another repository resolves, and
+# the bytes are still the pinned ones.
+output="$("${scripts}/resolve-profile-mods.sh" "${config}/profiles/gh-repository" "${fixture}/gh-repository/mods" 2>/dev/null)"
+grep -qx 'addons=2' <<<"${output}"
+grep -Fq "https://github.com/someone/SophisticatedBackpacks/releases/download/" "${fixture}/curl.log"
 refusal gh-url "invalid addons file" "a pin that carries its own URL"
 refusal gh-two-sources "invalid addons file" "an entry with two sources"
 refusal gh-no-commit "invalid addons file" "a GitHub pin without its commit"

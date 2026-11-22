@@ -4,8 +4,7 @@
 # Every entry names one exact file: a CurseForge project and file id, checked
 # against the API's SHA-1 and size, or a Modrinth version, downloaded from the
 # Modrinth CDN only and checked against its pinned SHA-512 and size, or an asset
-# of a GitHub release of an allow-listed repository (ADR-0079), checked the same
-# way. The output is inert data: no downloaded code is run, and the pack is not
+# of a GitHub release (ADR-0079), checked the same way. The output is inert data: no downloaded code is run, and the pack is not
 # read here.
 
 set -Eeuo pipefail
@@ -102,22 +101,6 @@ jq -e '
 
 api_base="${CF_API_BASE:-https://api.curseforge.com}"
 readonly MODRINTH_CDN="https://cdn.modrinth.com/data"
-# Repositories whose release assets may be pinned (ADR-0079). The list is part of
-# the reviewed builder bundle: only a Spawnpoint merge and apply change it, never
-# the config repository. Match is exact and case-sensitive.
-readonly GITHUB_RELEASE_REPOSITORIES=(
-  "DrArzter/SophisticatedBackpacks"
-)
-
-# Refuse before any download when a pin names a repository that is not listed.
-while IFS= read -r repository; do
-  allowed=false
-  for listed in "${GITHUB_RELEASE_REPOSITORIES[@]}"; do
-    [[ "${repository}" != "${listed}" ]] || allowed=true
-  done
-  [[ "${allowed}" == true ]] || die "github_release repository is not on the owner allow-list: ${repository}"
-done < <(jq -r '.mods[] | .github_release.repository // empty' "${addons_file}")
-
 workspace="$(mktemp -d "$(dirname -- "${output_dir}")/.addons.XXXXXXXX")"
 cleanup() {
   rm -rf -- "${workspace}"

@@ -37,11 +37,12 @@ export function State({ kind, label, size = "medium", className }: Readonly<{ ki
 }
 
 /** A compact state for dense rows: the mark stays visible and the label moves
-    into the tooltip without becoming inaccessible to readers. */
-export function Indicator({ kind, label, className }: Readonly<{ kind: StatusKind; label: string; className?: string }>) {
+    into the tooltip without becoming inaccessible to readers. A plain fact that
+    is no state (a mod's source) names its own `glyph` and stays quiet. */
+export function Indicator({ label, className, ...mark }: Readonly<({ kind: StatusKind } | { glyph: string }) & { label: string; className?: string }>) {
   return (
     <Tooltip className={cx("t-indicator", className)} text={label}>
-      <Mark kind={kind} />
+      {"kind" in mark ? <Mark kind={mark.kind} /> : <span aria-hidden="true" className="t-mark">[{mark.glyph}]</span>}
       <span className="visually-hidden">{label}</span>
     </Tooltip>
   );
@@ -307,21 +308,23 @@ export function Empty({ title, description, verbs, className }: Readonly<{ title
 }
 
 /** A list a search emptied, not the directory: what was asked, and the way back to everything. */
-export function NoMatches({ filter, noun }: Readonly<{ filter: Pick<Filter<unknown>, "query" | "clear">; noun: string }>) {
-  return <Empty description={`Nothing matches "${filter.query}".`} title={`No matching ${noun}`} verbs={<Key label="Clear search" onClick={filter.clear} size="small" />} />;
+export function NoMatches({ filter, noun, clearLabel = "Clear search" }: Readonly<{ filter: Pick<Filter<unknown>, "query" | "clear">; noun: string; clearLabel?: string }>) {
+  return <Empty description={filter.query === "" ? undefined : `Nothing matches "${filter.query}".`} title={`No matching ${noun}`} verbs={<Key label={clearLabel} onClick={filter.clear} size="small" />} />;
 }
 
 /**
  * The search above a list already in hand: one field, and once something is
  * typed, how much of the list survived. `plain` drops the row's own padding and
- * rule for content that is already spaced, such as a drawer.
+ * rule for content that is already spaced, such as a drawer. `children` are
+ * choices that narrow the same list, beside the field.
  */
-export function FilterRow<Row>({ filter, label, placeholder, disabled = false, plain = false }: Readonly<{ filter: Filter<Row>; label: string; placeholder: string; disabled?: boolean; plain?: boolean }>) {
+export function FilterRow<Row>({ filter, label, placeholder, disabled = false, plain = false, children }: Readonly<{ filter: Filter<Row>; label: string; placeholder: string; disabled?: boolean; plain?: boolean; children?: ReactNode }>) {
   return (
     <div className={cx("t-filter-row", plain && "t-filter-row-plain")}>
       <Field hideLabel label={label}>
         <TextInput autoComplete="off" disabled={disabled} onChange={(event) => filter.setQuery(event.target.value)} placeholder={placeholder} ref={filter.field} type="search" value={filter.query} />
       </Field>
+      {children}
       {filter.active && <span aria-live="polite" className="t-filter-count" role="status">{filter.rows.length} of {filter.total}</span>}
     </div>
   );

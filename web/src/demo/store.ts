@@ -1,5 +1,5 @@
 import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
-import { identityDeletionRefusal, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type ReleaseDiff, type ReleaseMod, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
+import { identityDeletionRefusal, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
 import { startableReleases } from "../core/presets";
 import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
@@ -505,6 +505,22 @@ const DEMO_PLAYERS_ONLY_MODS: readonly (readonly [string, number])[] = [
   ["oculus-mc1.20.1-1.8.0.jar", 1_527_018],
 ];
 
+// Where a release's build fetched each mod. A preset's first release stands for
+// one built before sources were recorded: it names none.
+const DEMO_MOD_SOURCES: Readonly<Record<string, ModSource>> = {
+  "create-1.20.1-0.5.1.j.jar": "curseforge",
+  "jei-1.20.1-forge-15.20.0.106.jar": "modrinth",
+  "Mekanism-1.20.1-10.4.15.75.jar": "curseforge",
+  "appliedenergistics2-forge-15.3.3.jar": "curseforge",
+  "ftb-quests-forge-2001.4.9.jar": "curseforge",
+  "sophisticatedbackpacks-1.20.1-3.21.2.1199.jar": "github",
+  "Jade-1.20.1-Forge-11.12.3.jar": "modrinth",
+  "thermal_expansion-1.20.1-11.0.1.29.jar": "curseforge",
+  "spark-1.10.53-forge.jar": "modrinth",
+  "Xaeros_Minimap_24.6.1_Forge_1.20.jar": "modrinth",
+  "oculus-mc1.20.1-1.8.0.jar": "modrinth",
+};
+
 // A stable stand-in for a SHA-256: 64 hex digits derived from the name.
 function demoDigest(text: string): string {
   let hash = 2166136261;
@@ -523,7 +539,8 @@ export function releaseMods(gameId: string, presetId: string, release: string): 
   const preset = state.snapshot.games.find((game) => game.id === gameId)?.presets.find((candidate) => candidate.id === presetId);
   if (!preset?.releases.includes(release)) throw new Error(`Release ${release} is not in the store.`);
   const files = DEMO_MODS.slice(0, 5 + preset.releases.indexOf(release));
-  const mod = ([file, bytes]: readonly [string, number]) => ({ file, bytes, sha256: demoDigest(file) });
+  const recorded = preset.releases.indexOf(release) > 0;
+  const mod = ([file, bytes]: readonly [string, number]): ReleaseMod => ({ file, bytes, sha256: demoDigest(file), ...(recorded && DEMO_MOD_SOURCES[file] ? { source: DEMO_MOD_SOURCES[file] } : {}) });
   // From 1.2 the industrial preset keeps side lists (ADR-0069): a profiler only
   // the server runs, and a minimap and shaders only players install.
   if (presetId !== "industrial" || release === "1.1") return { release, mods: files.map(mod), clientMods: null };
@@ -546,7 +563,7 @@ export function releaseDiff(gameId: string, presetId: string, release: string, f
   }
   const next = releaseMods(gameId, presetId, release);
   const old = releaseMods(gameId, presetId, previous);
-  const diffMod = (mod: ReleaseMod): DiffMod => ({ ...mod, side: null, modIds: null });
+  const diffMod = (mod: ReleaseMod): DiffMod => ({ file: mod.file, sha256: mod.sha256, bytes: mod.bytes, side: null, modIds: null });
   const classes = (before: readonly ReleaseMod[], after: readonly ReleaseMod[]): DiffClasses<DiffMod> => {
     const named = (list: readonly ReleaseMod[], file: string) => list.find((mod) => mod.file === file);
     return {

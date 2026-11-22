@@ -6,13 +6,36 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { Address, Indicator, Person, Skeleton, SkeletonGroup, Table } from "../src/skins/terminal/ui.tsx";
+import { Address, FilterRow, Indicator, NoMatches, Person, Skeleton, SkeletonGroup, Table } from "../src/skins/terminal/ui.tsx";
 
 test("terminal dense status keeps one visible mark and an accessible label", () => {
   const markup = renderToStaticMarkup(createElement(Indicator, { kind: "ok", label: "Verified" }));
   assert.match(markup, /t-indicator/);
   assert.match(markup, /t-mark-ok/);
   assert.match(markup, /visually-hidden[^>]*>Verified/);
+});
+
+test("a terminal indicator for a plain fact names its own glyph, with no status tone and the word in its label", () => {
+  const markup = renderToStaticMarkup(createElement(Indicator, { glyph: "M", label: "Modrinth" }));
+  assert.match(markup, /t-indicator/);
+  assert.match(markup, /<span aria-hidden="true" class="t-mark">\[M\]<\/span>/);
+  assert.doesNotMatch(markup, /t-mark-/);
+  assert.match(markup, /visually-hidden[^>]*>Modrinth/);
+});
+
+test("a terminal filter row holds the choices that narrow its list beside the search field", () => {
+  const filter = { query: "", setQuery: () => undefined, clear: () => undefined, active: false, rows: [], total: 0, field: { current: null } };
+  const markup = renderToStaticMarkup(createElement(FilterRow, { filter, label: "Search mods", placeholder: "Search by file name" }, createElement("fieldset", { className: "t-choices" })));
+  assert.match(markup, /<\/label><fieldset class="t-choices">/);
+});
+
+test("a terminal list that a filter emptied says what it was asked only when something was typed, and names its way back", () => {
+  const typed = renderToStaticMarkup(createElement(NoMatches, { filter: { query: "pine", clear: () => undefined }, noun: "mods" }));
+  assert.match(typed, /Nothing matches &quot;pine&quot;/);
+  assert.match(typed, />Clear search</);
+  const chosen = renderToStaticMarkup(createElement(NoMatches, { filter: { query: "", clear: () => undefined }, noun: "mods", clearLabel: "Clear filters" }));
+  assert.doesNotMatch(chosen, /Nothing matches/);
+  assert.match(chosen, />Clear filters</);
 });
 
 test("terminal person is the shared avatar, name and optional detail row", () => {

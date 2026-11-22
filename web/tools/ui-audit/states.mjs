@@ -31,6 +31,9 @@ export const STATES = [
   { name: "password", route: "/?demo&latency=0#/profile", steps: [{ action: "accounts.password.change" }], skins: ["console"] },
   { name: "shortcuts", route: "/?demo&latency=0#/worlds/minecraft", steps: [{ key: "?" }], skins: ["console"] },
   { name: "tooltip", route: WORLD, steps: [{ focus: "[data-tip]" }], skins: ["console"] },
+  // A mod's source is a mark with its name in the tooltip. The mods sit below the fold: the second focus lands after the scroll that closed the first tip.
+  { name: "mod-source", route: `${WORLD}/releases`, steps: [{ focus: "table[aria-label=Mods] [data-tip]" }, { focus: "table[aria-label=Mods] [data-tip]" }], skins: ["console"] },
+  { name: "mod-source-terminal", route: `${WORLD}/releases`, steps: [{ focus: "table[aria-label^='Mods of'] .t-indicator" }], skins: ["terminal"] },
   { name: "toast", route: "/?demo&latency=0#/releases/minecraft", steps: [{ click: "[aria-disabled=true][data-action]" }], skins: ["console"] },
 ];
 

@@ -81,6 +81,90 @@ function pointerKey(worldId: string, generationId: string): string {
   return `${worldId}/${generationId}`;
 }
 
+type MarkState = Readonly<{
+  failures: SourceFailure[];
+  holders: Map<string, ExpectedHolder>;
+  named: Set<string>;
+  hold: (release: string, sk: string) => void;
+}>;
+
+type WorldOfRelease = (record: WorldRecord, release: string) => string;
+
+function markManifests(input: MarkInput, state: MarkState, liveReleases: Set<string>, digests: Map<string, Map<string, string>>): void {
+  for (const { ref, manifest } of input.manifests) {
+    const id = releaseId(ref);
+    if (input.retired.has(id)) continue;
+    liveReleases.add(id);
+    state.named.add(id);
+    if (!manifestUsesObjects(manifest)) continue;
+    const own = new Map<string, string>();
+    for (const item of namedDigests(manifest)) {
+      if (isSha256(item.sha256)) {
+        if (!own.has(item.sha256)) own.set(item.sha256, item.path);
+      } else {
+        state.failures.push({ source: "manifest", subject: id, reason: `invalid_digest:${item.path}` });
+      }
+    }
+    digests.set(id, own);
+  }
+}
+
+function markWorlds(
+  input: MarkInput, state: MarkState, pointers: ReadonlyMap<string, ReleaseState>, ofWorld: WorldOfRelease,
+): void {
+  for (const record of input.worlds) {
+    for (const generation of [record.currentGeneration, ...record.previousGenerations]) {
+      const sk = `hold#gen#${record.worldId}/${generation.id}`;
+      state.hold(ofWorld(record, generation.release), sk);
+      const pointer = pointers.get(pointerKey(record.worldId, generation.id));
+      if (pointer !== undefined) markPointer(record, pointer, sk, state, ofWorld);
+    }
+  }
+}
+
+function markPointer(record: WorldRecord, pointer: ReleaseState, sk: string, state: MarkState, ofWorld: WorldOfRelease): void {
+  state.hold(ofWorld(record, pointer.desiredRelease), sk);
+  if (pointer.activeRelease !== null) state.hold(ofWorld(record, pointer.activeRelease), sk);
+  for (const run of pointer.releasesRun ?? []) state.hold(ofWorld(record, run.release), sk);
+  if (pointer.prePromotionBackup?.release) state.hold(ofWorld(record, pointer.prePromotionBackup.release), sk);
+}
+
+function markCatalogs(input: MarkInput, state: MarkState): void {
+  for (const catalog of input.catalogs) {
+    for (const preset of catalog.presets) {
+      for (const release of preset.releases) state.hold(releaseId({ gameId: catalog.gameId, presetId: preset.id, release }), `hold#catalog#${catalog.gameId}`);
+    }
+  }
+}
+
+/** The release an archive belongs to, or null when it cannot be told. */
+function archiveRelease(
+  archive: ArchiveSource, record: WorldRecord | undefined, pointers: ReadonlyMap<string, ReleaseState>,
+): string | null {
+  if (record === undefined) return null;
+  const generationId = backupGenerationId(archive.key);
+  const generation = [record.currentGeneration, ...record.previousGenerations].find((candidate) => candidate.id === generationId);
+  if (generation !== undefined) {
+    return backupRelease(generation, archive.metadata, pointers.get(pointerKey(record.worldId, generation.id)) ?? null).release;
+  }
+  return archive.metadata.release !== null && /^\d+\.\d+$/.test(archive.metadata.release) ? archive.metadata.release : null;
+}
+
+function markArchives(
+  input: MarkInput, state: MarkState, worlds: ReadonlyMap<string, WorldRecord>,
+  pointers: ReadonlyMap<string, ReleaseState>, ofWorld: WorldOfRelease,
+): void {
+  for (const archive of input.archives) {
+    const record = worlds.get(archive.worldId);
+    const release = archiveRelease(archive, record, pointers);
+    if (record === undefined || release === null) {
+      state.failures.push({ source: "archive", subject: `${archive.key}#${archive.versionId}`, reason: "release_unresolved" });
+      continue;
+    }
+    state.hold(ofWorld(record, release), `hold#backup#${archive.key}#${archive.versionId}`);
+  }
+}
+
 export function mark(input: MarkInput): Marks {
   const failures: SourceFailure[] = [...input.failures];
   const liveReleases = new Set<string>();
@@ -91,63 +175,17 @@ export function mark(input: MarkInput): Marks {
     holders.set(`${release}|${sk}`, { release, sk });
     named.add(release);
   };
+  const state: MarkState = { failures, holders, named, hold };
 
-  for (const { ref, manifest } of input.manifests) {
-    const id = releaseId(ref);
-    if (input.retired.has(id)) continue;
-    liveReleases.add(id);
-    named.add(id);
-    if (!manifestUsesObjects(manifest)) continue;
-    const own = new Map<string, string>();
-    for (const item of namedDigests(manifest)) {
-      if (isSha256(item.sha256)) {
-        if (!own.has(item.sha256)) own.set(item.sha256, item.path);
-      } else {
-        failures.push({ source: "manifest", subject: id, reason: `invalid_digest:${item.path}` });
-      }
-    }
-    digests.set(id, own);
-  }
+  markManifests(input, state, liveReleases, digests);
 
   const worlds = new Map(input.worlds.map((record) => [record.worldId, record]));
   const pointers = new Map(input.pointers.map((pointer) => [pointerKey(pointer.worldId, pointer.state.generationId), pointer.state]));
-  const ofWorld = (record: WorldRecord, release: string) => releaseId({ gameId: record.gameId, presetId: record.preset.id, release });
+  const ofWorld: WorldOfRelease = (record, release) => releaseId({ gameId: record.gameId, presetId: record.preset.id, release });
 
-  for (const record of input.worlds) {
-    for (const generation of [record.currentGeneration, ...record.previousGenerations]) {
-      const sk = `hold#gen#${record.worldId}/${generation.id}`;
-      hold(ofWorld(record, generation.release), sk);
-      const state = pointers.get(pointerKey(record.worldId, generation.id));
-      if (state === undefined) continue;
-      hold(ofWorld(record, state.desiredRelease), sk);
-      if (state.activeRelease !== null) hold(ofWorld(record, state.activeRelease), sk);
-      for (const run of state.releasesRun ?? []) hold(ofWorld(record, run.release), sk);
-      if (state.prePromotionBackup?.release) hold(ofWorld(record, state.prePromotionBackup.release), sk);
-    }
-  }
-
-  for (const catalog of input.catalogs) {
-    for (const preset of catalog.presets) {
-      for (const release of preset.releases) hold(releaseId({ gameId: catalog.gameId, presetId: preset.id, release }), `hold#catalog#${catalog.gameId}`);
-    }
-  }
-
-  for (const archive of input.archives) {
-    const record = worlds.get(archive.worldId);
-    const generationId = backupGenerationId(archive.key);
-    const generation = record === undefined ? undefined : [record.currentGeneration, ...record.previousGenerations].find((candidate) => candidate.id === generationId);
-    let release: string | null = null;
-    if (record !== undefined && generation !== undefined) {
-      release = backupRelease(generation, archive.metadata, pointers.get(pointerKey(record.worldId, generation.id)) ?? null).release;
-    } else if (record !== undefined && archive.metadata.release !== null && /^\d+\.\d+$/.test(archive.metadata.release)) {
-      release = archive.metadata.release;
-    }
-    if (record === undefined || release === null) {
-      failures.push({ source: "archive", subject: `${archive.key}#${archive.versionId}`, reason: "release_unresolved" });
-      continue;
-    }
-    hold(ofWorld(record, release), `hold#backup#${archive.key}#${archive.versionId}`);
-  }
+  markWorlds(input, state, pointers, ofWorld);
+  markCatalogs(input, state);
+  markArchives(input, state, worlds, pointers, ofWorld);
 
   return {
     liveReleases, digests, holders: [...holders.values()], namedReleases: named,
@@ -220,6 +258,116 @@ export type Listing = Readonly<{ keys: readonly string[] }> | null;
 
 type Findings = Record<DiffClass, string[]>;
 
+type Skip = (names: readonly DiffClass[], reason: string) => void;
+
+const TABLE_CLASSES = ["missing_holder", "missing_reference", "extra_reference", "counter_drift", "stuck_deleting"] as const;
+
+/** The digests the listing holds; keys that are not object keys are findings. */
+function digestsListed(listing: Listing, found: Findings): Set<string> {
+  const objects = new Set<string>();
+  if (listing === null) return objects;
+  for (const key of listing.keys) {
+    const digest = digestOfObjectKey(key);
+    if (digest === null) found.unknown_object_key.push(key);
+    else objects.add(digest);
+  }
+  return objects;
+}
+
+function digestsNamed(marks: Marks): Set<string> {
+  const named = new Set<string>();
+  for (const own of marks.digests.values()) for (const digest of own.keys()) named.add(digest);
+  return named;
+}
+
+function findMissingObjects(marks: Marks, objects: ReadonlySet<string>, found: Findings): void {
+  for (const [release, own] of marks.digests) {
+    for (const digest of own.keys()) if (!objects.has(digest)) found.missing_object.push(`release#${release} -> file#${digest}`);
+  }
+}
+
+function findMissingHolders(marks: Marks, table: TableView, found: Findings): void {
+  for (const { release, sk } of marks.holders) {
+    if (table.releases.has(release) && !table.holders.get(release)?.has(sk)) found.missing_holder.push(`release#${release} / ${sk}`);
+  }
+}
+
+function findMissingReferences(marks: Marks, table: TableView, found: Findings): void {
+  for (const [release, own] of marks.digests) {
+    if (!table.releases.has(release)) continue;
+    for (const digest of own.keys()) {
+      if (!table.backReferences.get(digest)?.has(release)) found.missing_reference.push(`release#${release} -> file#${digest}`);
+    }
+  }
+}
+
+function findExtraReferences(marks: Marks, table: TableView, found: Findings): void {
+  // A building release holds references before its manifest exists.
+  for (const [digest, releases] of table.backReferences) {
+    for (const release of releases) {
+      if (table.releases.get(release)?.state !== "building" && marks.digests.get(release)?.has(digest) !== true) found.extra_reference.push(`file#${digest} <- release#${release}`);
+    }
+  }
+}
+
+function findCounterDrift(table: TableView, found: Findings): void {
+  for (const digest of new Set([...table.files.keys(), ...table.backReferences.keys()])) {
+    const actual = table.backReferences.get(digest)?.size ?? 0;
+    const item = table.files.get(digest);
+    if (item === undefined) found.counter_drift.push(`file#${digest} has no meta, ${actual} back-references`);
+    else if (item.refs !== actual) found.counter_drift.push(`file#${digest} refs=${item.refs} back-references=${actual}`);
+    if (item?.state === "deleting") found.stuck_deleting.push(`file#${digest}`);
+  }
+}
+
+function compareTable(marks: Marks, table: TableView | null, found: Findings, skip: Skip): void {
+  if (table === null) {
+    skip([...TABLE_CLASSES, "unregistered_release"], "table_unreadable");
+    return;
+  }
+  for (const release of marks.namedReleases) if (!table.releases.has(release)) found.unregistered_release.push(`release#${release}`);
+  if (table.empty) {
+    skip(TABLE_CLASSES, "table_empty");
+    return;
+  }
+  findMissingHolders(marks, table, found);
+  findMissingReferences(marks, table, found);
+  if (marks.manifestsKnown) findExtraReferences(marks, table, found);
+  else skip(["extra_reference"], "manifests_incomplete");
+  findCounterDrift(table, found);
+}
+
+/** Digests whose back-reference comes from a building release. */
+function buildingDigests(table: TableView | null): Set<string> {
+  const building = new Set<string>();
+  if (table === null) return building;
+  for (const [digest, releases] of table.backReferences) {
+    if ([...releases].some((release) => table.releases.get(release)?.state === "building")) building.add(digest);
+  }
+  return building;
+}
+
+function findOrphans(
+  marks: Marks, listing: Listing, objects: ReadonlySet<string>, named: ReadonlySet<string>, table: TableView | null,
+  found: Findings, skip: Skip,
+): void {
+  if (listing === null) return;
+  if (!marks.manifestsKnown) {
+    skip(["orphan_object"], "manifests_incomplete");
+    return;
+  }
+  // The builder uploads objects before the manifest, so a building release's digests are not orphans.
+  const building = buildingDigests(table);
+  for (const digest of objects) if (!named.has(digest) && !building.has(digest)) found.orphan_object.push(`file#${digest}`);
+}
+
+function summarise(found: Findings): Record<DiffClass, ClassReport> {
+  return Object.fromEntries(DIFF_CLASSES.map((name) => {
+    const list = [...new Set(found[name])].sort((a, b) => a.localeCompare(b));
+    return [name, { count: list.length, examples: list.slice(0, EXAMPLE_LIMIT) }];
+  })) as unknown as Record<DiffClass, ClassReport>;
+}
+
 /**
  * `table` is null when it could not be read; `listing` is null when `objects/`
  * could not be listed. A class that needs a missing source is skipped, not guessed.
@@ -227,80 +375,18 @@ type Findings = Record<DiffClass, string[]>;
 export function compare(marks: Marks, table: TableView | null, listing: Listing, generatedAt: string): ConsistencyReport {
   const found = Object.fromEntries(DIFF_CLASSES.map((name) => [name, [] as string[]])) as Findings;
   const skipped: { class: DiffClass; reason: string }[] = [];
-  const skip = (names: readonly DiffClass[], reason: string) => { for (const name of names) skipped.push({ class: name, reason }); };
+  const skip: Skip = (names, reason) => { for (const name of names) skipped.push({ class: name, reason }); };
 
-  const objects = new Set<string>();
-  if (listing !== null) {
-    for (const key of listing.keys) {
-      const digest = digestOfObjectKey(key);
-      if (digest === null) found.unknown_object_key.push(key);
-      else objects.add(digest);
-    }
-  }
-  const named = new Set<string>();
-  for (const own of marks.digests.values()) for (const digest of own.keys()) named.add(digest);
+  const objects = digestsListed(listing, found);
+  const named = digestsNamed(marks);
 
-  if (listing === null) {
-    skip(["missing_object", "orphan_object"], "objects_listing_failed");
-  } else {
-    for (const [release, own] of marks.digests) {
-      for (const digest of own.keys()) if (!objects.has(digest)) found.missing_object.push(`release#${release} -> file#${digest}`);
-    }
-  }
+  if (listing === null) skip(["missing_object", "orphan_object"], "objects_listing_failed");
+  else findMissingObjects(marks, objects, found);
 
-  const tableClasses = ["missing_holder", "missing_reference", "extra_reference", "counter_drift", "stuck_deleting"] as const;
-  if (table === null) {
-    skip([...tableClasses, "unregistered_release"], "table_unreadable");
-  } else {
-    for (const release of marks.namedReleases) if (!table.releases.has(release)) found.unregistered_release.push(`release#${release}`);
-    if (table.empty) {
-      skip(tableClasses, "table_empty");
-    } else {
-      for (const { release, sk } of marks.holders) {
-        if (table.releases.has(release) && !table.holders.get(release)?.has(sk)) found.missing_holder.push(`release#${release} / ${sk}`);
-      }
-      for (const [release, own] of marks.digests) {
-        if (!table.releases.has(release)) continue;
-        for (const digest of own.keys()) {
-          if (!table.backReferences.get(digest)?.has(release)) found.missing_reference.push(`release#${release} -> file#${digest}`);
-        }
-      }
-      if (marks.manifestsKnown) {
-        // A building release holds references before its manifest exists.
-        for (const [digest, releases] of table.backReferences) {
-          for (const release of releases) {
-            if (table.releases.get(release)?.state !== "building" && marks.digests.get(release)?.has(digest) !== true) found.extra_reference.push(`file#${digest} <- release#${release}`);
-          }
-        }
-      } else {
-        skip(["extra_reference"], "manifests_incomplete");
-      }
-      for (const digest of new Set([...table.files.keys(), ...table.backReferences.keys()])) {
-        const actual = table.backReferences.get(digest)?.size ?? 0;
-        const item = table.files.get(digest);
-        if (item === undefined) found.counter_drift.push(`file#${digest} has no meta, ${actual} back-references`);
-        else if (item.refs !== actual) found.counter_drift.push(`file#${digest} refs=${item.refs} back-references=${actual}`);
-        if (item?.state === "deleting") found.stuck_deleting.push(`file#${digest}`);
-      }
-    }
-  }
+  compareTable(marks, table, found, skip);
+  findOrphans(marks, listing, objects, named, table, found, skip);
 
-  // The builder uploads objects before the manifest, so a building release's digests are not orphans.
-  const building = new Set<string>();
-  if (table !== null) {
-    for (const [digest, releases] of table.backReferences) {
-      if ([...releases].some((release) => table.releases.get(release)?.state === "building")) building.add(digest);
-    }
-  }
-  if (listing !== null && !marks.manifestsKnown) skip(["orphan_object"], "manifests_incomplete");
-  else if (listing !== null) {
-    for (const digest of objects) if (!named.has(digest) && !building.has(digest)) found.orphan_object.push(`file#${digest}`);
-  }
-
-  const classes = Object.fromEntries(DIFF_CLASSES.map((name) => {
-    const list = [...new Set(found[name])].sort();
-    return [name, { count: list.length, examples: list.slice(0, EXAMPLE_LIMIT) }];
-  })) as unknown as Record<DiffClass, ClassReport>;
+  const classes = summarise(found);
   const complete = marks.failures.length === 0 && table !== null && listing !== null;
   return {
     generatedAt, mode: "report", complete, sweepable: false, table_empty: table?.empty ?? false,

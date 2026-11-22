@@ -121,10 +121,10 @@ export type SourcePorts = Readonly<{ release: ReleaseBucketReader; backup: Backu
 export type CollectedSources = Readonly<{ input: MarkInput; table: TableView | null; listing: Listing }>;
 
 const ID = "[a-z0-9][a-z0-9-]{0,31}";
-const MANIFEST_KEY = new RegExp(`^releases/(${ID})/(${ID})/(\\d+\\.\\d+)/manifest\\.json$`);
-const WORLD_KEY = new RegExp(`^worlds/(${ID})/world\\.json$`);
-const CATALOG_KEY = new RegExp(`^presets/(${ID})/catalog\\.json$`);
-const ARCHIVE_KEY = new RegExp(`^worlds/(${ID})/archives/[A-Za-z0-9._-]+\\.tar\\.zst$`);
+const MANIFEST_KEY = new RegExp(String.raw`^releases/(${ID})/(${ID})/(\d+\.\d+)/manifest\.json$`);
+const WORLD_KEY = new RegExp(String.raw`^worlds/(${ID})/world\.json$`);
+const CATALOG_KEY = new RegExp(String.raw`^presets/(${ID})/catalog\.json$`);
+const ARCHIVE_KEY = new RegExp(String.raw`^worlds/(${ID})/archives/[A-Za-z0-9._-]+\.tar\.zst$`);
 const CHUNK = 8;
 
 // Only the error's name is kept: a failure line must not carry a body or a message.
@@ -158,7 +158,7 @@ export async function collectSources(ports: SourcePorts): Promise<CollectedSourc
     fail("objects", "objects/sha256/", error);
   }
 
-  const json = async (key: string): Promise<unknown | null> => {
+  const json = async (key: string): Promise<unknown> => {
     const text = await ports.release.getText(key);
     return text === null ? null : JSON.parse(text) as unknown;
   };

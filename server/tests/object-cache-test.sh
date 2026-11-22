@@ -35,11 +35,17 @@ fails_with() {
     fail "error does not contain '${needle}'"
   }
 }
-inode() { stat --format '%i' -- "$1"; }
-links() { stat --format '%h' -- "$1"; }
+inode() {
+  local path="$1"
+  stat --format '%i' -- "${path}"
+}
+links() {
+  local path="$1"
+  stat --format '%h' -- "${path}"
+}
 sha() {
-  local out
-  out="$(sha256sum -- "$1")"
+  local file="$1" out
+  out="$(sha256sum -- "${file}")"
   printf '%s' "${out%% *}"
 }
 
@@ -64,10 +70,10 @@ printf 'b = 22\n' >"${fixture}/src/overrides/config/b.toml"
 
 object_path() { printf '%s/sha256/%s/%s' "${cache}" "${1:0:2}" "$1"; }
 put_object() {
-  local digest
-  digest="$(sha "$1")"
+  local file="$1" digest
+  digest="$(sha "${file}")"
   mkdir -p -- "${bucket_root}/objects/sha256/${digest:0:2}"
-  cp -- "$1" "${bucket_root}/objects/sha256/${digest:0:2}/${digest}"
+  cp -- "${file}" "${bucket_root}/objects/sha256/${digest:0:2}/${digest}"
   printf '%s' "${digest}"
 }
 
@@ -78,7 +84,8 @@ cfg_b_sha="$(put_object "${fixture}/src/overrides/config/b.toml")"
 
 # publish <release> <extra jq filter>: write an objects-v1 manifest.
 publish() {
-  local release="$1" filter="${2:-.}" dir="${bucket_root}/releases/minecraft/main/$1"
+  local release="$1" filter="${2:-.}" dir
+  dir="${bucket_root}/releases/minecraft/main/${release}"
   mkdir -p -- "${dir}"
   jq -n \
     --arg release "${release}" --arg alpha "${alpha_sha}" --arg beta "${beta_sha}" \
@@ -100,7 +107,8 @@ publish() {
 }
 payload_of() { printf '%s/releases/minecraft/main/%s' "${host}" "$1"; }
 download() {
-  "${SCRIPTS}/download-release.sh" minecraft main "$1" "$(payload_of "$1")"
+  local release="$1"
+  "${SCRIPTS}/download-release.sh" minecraft main "${release}" "$(payload_of "${release}")"
 }
 publish 1.0
 
@@ -244,7 +252,10 @@ cmp -- "${fixture}/src/overrides/config/a.toml" "$(payload_of 1.0)/overrides/con
 reconcile() {
   SERVER_PROJECT_DIRECTORY="${host}" "${SCRIPTS}/reconcile-release.sh" "$(payload_of 1.0)/manifest.json" "${target}"
 }
-reconcile_with() { env OBJECT_CACHE_START_CHECK="$1" SERVER_PROJECT_DIRECTORY="${host}" "${SCRIPTS}/reconcile-release.sh" "$(payload_of 1.0)/manifest.json" "${target}"; }
+reconcile_with() {
+  local check="$1"
+  env OBJECT_CACHE_START_CHECK="${check}" SERVER_PROJECT_DIRECTORY="${host}" "${SCRIPTS}/reconcile-release.sh" "$(payload_of 1.0)/manifest.json" "${target}"
+}
 reconcile_with size >/dev/null
 reconcile_with hash >/dev/null
 fails_with "OBJECT_CACHE_START_CHECK" reconcile_with sloppy
@@ -308,19 +319,23 @@ reconcile >/dev/null
 
 # --- (f) eviction ---
 evict() { "${SCRIPTS}/evict-object-cache.sh" "$@"; }
-exists() { [[ -f "$(object_path "$1")" ]]; }
+exists() {
+  local digest="$1"
+  [[ -f "$(object_path "${digest}")" ]]
+}
 
 # A cache of its own, so the fixtures above stay.
 export OBJECT_CACHE_DIR="${fixture}/evict-cache"
 mkdir -p -- "${OBJECT_CACHE_DIR}"
 make_object() { # name age-in-days -> digest
-  local file="${fixture}/evict-src-$1" digest
-  printf 'object %s padding padding\n' "$1" >"${file}"
+  local name="$1" age="$2" digest file
+  file="${fixture}/evict-src-${name}"
+  printf 'object %s padding padding\n' "${name}" >"${file}"
   digest="$(sha "${file}")"
   mkdir -p -- "${OBJECT_CACHE_DIR}/sha256/${digest:0:2}"
   cp -- "${file}" "${OBJECT_CACHE_DIR}/sha256/${digest:0:2}/${digest}"
   chmod 0444 -- "${OBJECT_CACHE_DIR}/sha256/${digest:0:2}/${digest}"
-  touch -d "$2 days ago" -- "${OBJECT_CACHE_DIR}/sha256/${digest:0:2}/${digest}"
+  touch -d "${age} days ago" -- "${OBJECT_CACHE_DIR}/sha256/${digest:0:2}/${digest}"
   printf '%s' "${digest}"
 }
 cache="${OBJECT_CACHE_DIR}"

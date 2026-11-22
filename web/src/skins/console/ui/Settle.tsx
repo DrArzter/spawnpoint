@@ -32,7 +32,7 @@ export function Settle({ children }: Readonly<{ children: ReactNode }>) {
       // Start where the old content ended, commit that, then move to the new height.
       delete outer.dataset.settling;
       outer.style.height = `${from}px`;
-      void outer.offsetHeight;
+      outer.getBoundingClientRect(); // forces layout, so the start height is committed
       outer.dataset.settling = "";
       outer.style.height = `${next}px`;
       window.clearTimeout(timer);

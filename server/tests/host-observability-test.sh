@@ -31,7 +31,8 @@ export FAKE_DOCKER_CALLS="${fixture}/docker-calls"
 export FAKE_NETWORK_EXISTS="${fixture}/network-exists"
 export SERVER_PROJECT_DIRECTORY="${server}"
 export SERVER_ENV_FILE="${fixture}/host.env"
-printf 'GRAFANA_ADMIN_PASSWORD=unused\n' >"${SERVER_ENV_FILE}"
+# shellcheck disable=SC2016 # a literal dollar sign, as in a bcrypt-shaped key
+printf 'GRAFANA_ADMIN_PASSWORD=unused\nCF_API_KEY=$2a$10$example\n' >"${SERVER_ENV_FILE}"
 
 # --- first session on the host: create the network, bring the tier up ---
 output="$("${server}/scripts/ensure-host-observability.sh" 2>"${fixture}/stderr")"
@@ -39,7 +40,10 @@ output="$("${server}/scripts/ensure-host-observability.sh" 2>"${fixture}/stderr"
 mapfile -t calls <"${FAKE_DOCKER_CALLS}"
 [[ "${calls[0]}" == "network inspect spawnpoint-observability" ]]
 [[ "${calls[1]}" == "network create spawnpoint-observability" ]]
-[[ "${calls[2]}" == "compose --project-name spawnpoint-observability --project-directory ${server} -f ${server}/observability/compose.yaml -f ${server}/observability/compose.host.yaml --env-file ${SERVER_ENV_FILE} up -d --quiet-pull" ]]
+[[ "${calls[2]}" == "compose --project-name spawnpoint-observability --project-directory ${server} -f ${server}/observability/compose.yaml -f ${server}/observability/compose.host.yaml --env-file ${SERVER_ENV_FILE}.compose up -d --quiet-pull" ]]
+# Compose reads the escaped copy, so a dollar sign is a dollar sign, not a variable.
+# shellcheck disable=SC2016 # the escaped form Compose reads
+grep -Fxq 'CF_API_KEY=$$2a$$10$$example' "${SERVER_ENV_FILE}.compose"
 [[ "${#calls[@]}" -eq 3 ]]
 
 # --- every later session: the network exists, `up -d` is a no-op ---

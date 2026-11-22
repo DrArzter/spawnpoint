@@ -18,8 +18,9 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-SERVER_DIR="${SERVER_PROJECT_DIRECTORY:-$(cd -- "${SCRIPT_DIR}/.." && pwd)}"
-ENV_FILE="${SERVER_ENV_FILE:-${SERVER_DIR}/.env}"
+# SERVER_DIR, ENV_FILE and compose_env_file, as every other Compose call uses them.
+# shellcheck source=_common.sh
+source "${SCRIPT_DIR}/_common.sh"
 
 readonly HOST_OBSERVABILITY_PROJECT="spawnpoint-observability"
 readonly HOST_OBSERVABILITY_NETWORK="spawnpoint-observability"
@@ -34,8 +35,11 @@ args=(
   -f "${SERVER_DIR}/observability/compose.yaml"
   -f "${SERVER_DIR}/observability/compose.host.yaml"
 )
+# The escaped copy: a value with a dollar sign (the CurseForge key is
+# bcrypt-shaped) reaches the containers whole, and no warning prints a piece of
+# it into the session log.
 if [[ -f "${ENV_FILE}" ]]; then
-  args+=(--env-file "${ENV_FILE}")
+  args+=(--env-file "$(compose_env_file)")
 fi
 
 if docker compose "${args[@]}" up -d --quiet-pull >&2; then

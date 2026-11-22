@@ -204,6 +204,18 @@ data "aws_iam_policy_document" "release_builder" {
     resources = ["${data.aws_s3_bucket.releases.arn}/upstream/*"]
   }
 
+  # Content-addressed objects (ADR-0080). A copy from upstream/ into objects/
+  # needs the read above and this write. No delete: only the reconciler deletes
+  # an object, and the bucket policy denies everyone else.
+  statement {
+    sid = "WriteContentAddressedObjects"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+    ]
+    resources = ["${data.aws_s3_bucket.releases.arn}/objects/*"]
+  }
+
   statement {
     sid       = "ReadReviewedBuilderSource"
     actions   = ["s3:GetObject"]

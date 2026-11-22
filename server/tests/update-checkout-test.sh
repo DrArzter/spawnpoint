@@ -65,6 +65,16 @@ expect() {
     exit 1
   }
 }
+# The log (stderr) names the reason and says what an older checkout cannot do.
+expect_log() {
+  local reason="$1" log
+  shift
+  log="$(update "$@" 2>&1 >/dev/null)"
+  grep -Fq -- "(${reason})" <<<"${log}" && grep -Fq -- 'objects-v1' <<<"${log}" || {
+    printf 'expected a log line for %s naming objects-v1, got:\n%s\n' "${reason}" "${log}" >&2
+    exit 1
+  }
+}
 head_is() {
   local expected="$1" actual
   actual="$(git -C "${host}" rev-parse HEAD)"
@@ -88,6 +98,8 @@ expect 'result=current' FAKE_DEPLOYED="${commit_two}"
 expect 'reason=sessions_running' FAKE_DEPLOYED="${commit_three}" FAKE_ACTIVITY=busy
 expect 'reason=activity_unavailable' FAKE_DEPLOYED="${commit_three}" FAKE_ACTIVITY=unavailable
 head_is "${commit_two}"
+expect_log sessions_running FAKE_DEPLOYED="${commit_three}" FAKE_ACTIVITY=busy
+expect_log activity_unavailable FAKE_DEPLOYED="${commit_three}" FAKE_ACTIVITY=unavailable
 
 # --- an edit to a tracked file is not thrown away ---
 printf 'edited by hand\n' >"${host}/server/release.txt"
@@ -98,6 +110,7 @@ git -C "${host}" checkout -q -- server/release.txt
 # --- Parameter Store unreadable, or a value git could read as an option ---
 expect 'reason=parameter_unreadable' FAKE_DEPLOYED="${commit_three}" FAKE_SSM_FAIL=1
 expect 'reason=parameter_invalid' FAKE_DEPLOYED='--upload-pack=touch /tmp/owned'
+expect_log parameter_unreadable FAKE_DEPLOYED="${commit_three}" FAKE_SSM_FAIL=1
 head_is "${commit_two}"
 
 # --- a commit origin does not have leaves the host where it was ---
@@ -116,5 +129,12 @@ cp -- "${host}/server/scripts/"*.sh "${plain}/server/scripts/"
 output="$(env PATH="${fixture}/bin:${PATH}" AWS_REGION=eu-central-1 FAKE_DEPLOYED="${commit_one}" \
   GIT_CEILING_DIRECTORIES="${fixture}" "${plain}/server/scripts/update-checkout.sh")"
 grep -Fxq 'reason=not_a_checkout' <<<"${output}"
+
+# --- a current host says nothing about layouts ---
+log="$(update FAKE_DEPLOYED="${commit_three}" 2>&1 >/dev/null)"
+[[ -z "${log}" ]] || {
+  printf 'expected no log for a current host, got: %s\n' "${log}" >&2
+  exit 1
+}
 
 printf 'update checkout test passed\n'

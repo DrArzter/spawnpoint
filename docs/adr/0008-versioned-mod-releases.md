@@ -5,6 +5,8 @@
 - Milestone: M3
 - Amended by: [ADR-0030](0030-desired-and-active-release.md), which replaces the single live pointer with desired
   and active release state
+- Amended by: [ADR-0080](0080-store-release-files-by-content.md) — the bytes of a release may live in `objects/`,
+  named by digest. The manifest keeps its key and stays the immutable record
 - Amended by: [ADR-0028](0028-update-proposals.md) — **the pins live in the git mod list**, as `slug:fileId`, not only
   in the release manifest. The manifest still holds the hashes and stays what the server reconciles against; git became
   the input to it because the pull request needs a diff to show

@@ -10,6 +10,17 @@ variable "aws_profile" {
   default     = "spawnpoint"
 }
 
+variable "release_refs_table_name" {
+  description = "DynamoDB table holding the state of content-addressed releases (ADR-0080); owned by ../terraform-storage."
+  type        = string
+  default     = "spawnpoint-release-refs"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_.-]{3,255}$", var.release_refs_table_name))
+    error_message = "release_refs_table_name must be a valid DynamoDB table name."
+  }
+}
+
 variable "control_plane_view_table_name" {
   description = "DynamoDB table containing the rebuildable dashboard projection."
   type        = string

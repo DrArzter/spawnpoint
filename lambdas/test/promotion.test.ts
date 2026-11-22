@@ -30,6 +30,7 @@ function facts(values: Partial<PromotionFacts> = {}): PromotionFacts {
   return {
     gameId: "minecraft", release: "200.1", record, preset,
     pointer: { state: "available", generationId: GENERATION, desiredRelease: "100.1", activeRelease: "100.1" },
+    releaseUsability: "usable",
     session: null, blockingOperations: 0, launchEnabled: true, configuredHostId: "i-0123456789abcdef0",
     ...values,
   };
@@ -66,6 +67,20 @@ test("the release belongs to the world's own preset, and that preset is built", 
   assert.equal(refused({ preset: { ...preset, buildStatus: "building" } }), "409 release_not_available");
 });
 
+test("a release being retired, retired or not yet built is not promoted to", () => {
+  assert.equal(refused({ releaseUsability: "release_retired" }), "409 release_retired");
+  assert.equal(refused({ releaseUsability: "release_not_ready" }), "409 release_not_ready");
+});
+
+test("the API asks the reference table about the release before it plans", async (t) => {
+  const { inputs } = scenario(t);
+  t.mock.method(awsControlPlaneSources as Required<ControlPlaneSources>, "readReleaseState", async () => "retiring");
+  const result = await promoteWorld(owner, "minecraft", record.worldId, JSON.stringify({ release: "200.1" }));
+  assert.equal(result.statusCode, 409);
+  assert.deepEqual(JSON.parse(result.body), { error: "release_retired" });
+  assert.deepEqual(inputs, []);
+});
+
 test("the wipe's pointer must be readable, have run a release, and not run this one already", () => {
   assert.equal(refused({ pointer: { state: "unavailable", generationId: GENERATION, desiredRelease: null, activeRelease: null } }), "409 release_state_unavailable");
   assert.equal(refused({ pointer: { state: "available", generationId: `gen-${"d".repeat(32)}`, desiredRelease: "100.1", activeRelease: "100.1" } }), "409 release_state_unavailable");
@@ -94,6 +109,7 @@ function scenario(t: TestContext, options: Readonly<{ operations?: OperationObse
   const sources = awsControlPlaneSources as Required<ControlPlaneSources>;
   t.mock.method(sources, "listHosts", async () => [{ id: "configured", providerRef: "i-0123456789abcdef0", state: "stopped", provenance: "configured" }]);
   t.mock.method(sources, "listPresets", async () => [preset]);
+  t.mock.method(sources, "readReleaseState", async () => null);
   t.mock.method(sources, "listRunningOperations", async () => options.operations ?? []);
   t.mock.method(sources, "listWorldRecords", async () => [options.world ?? { ...record, warm: true }]);
   t.mock.method(sources, "readReleasePointer", async () => ({ state: "available", generationId: GENERATION, desiredRelease: "100.1", activeRelease: "100.1" }));

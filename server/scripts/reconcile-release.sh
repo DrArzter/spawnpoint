@@ -5,6 +5,8 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_common.sh
 source "${SCRIPT_DIR}/_common.sh"
+# shellcheck source=_object-cache.sh
+source "${SCRIPT_DIR}/_object-cache.sh"
 
 usage() {
   cat >&2 <<'EOF'
@@ -72,6 +74,24 @@ if ! jq -e '
   die "invalid release manifest: ${manifest}"
 fi
 
+layout="legacy"
+if [[ "$(jq -r '(.storage // {}) | has("layout")' "${manifest}")" == "true" ]]; then
+  layout="$(jq -r '.storage.layout | if type == "string" then . else "(not a string)" end' "${manifest}")"
+  [[ "${layout}" == "objects-v1" ]] || die "manifest uses the storage layout '${layout}', which this host does not know"
+fi
+
+# objects-v1 only: how the staged mods are checked when the game starts.
+#   hash (default)  SHA-256 of every staged file, as for a legacy release.
+#   size            size, root owner and mode 0444 only.
+# The default stays hash. It is flipped only after
+# server/tests/object-cache-mount-test.sh passes on a real host with the pinned
+# game image, and only with OBJECT_CACHE_STAGE_MODE=link. By default a staged mod
+# is a copy (see _object-cache.sh), so the size mode has no effect and every
+# staged file is hashed.
+start_check="${OBJECT_CACHE_START_CHECK:-hash}"
+[[ "${start_check}" == "hash" || "${start_check}" == "size" ]] ||
+  die "OBJECT_CACHE_START_CHECK must be hash or size, not '${start_check}'"
+
 release="$(jq -r '.release' "${manifest}")"
 expected_count="$(jq -r '.server.mods | length' "${manifest}")"
 lock_file="${target_parent}/.spawnpoint-${target_name}.reconcile.lock"
@@ -135,6 +155,24 @@ cleanup() {
 trap cleanup EXIT
 
 while IFS=$'\t' read -r filename expected_sha expected_bytes; do
+  if [[ "${layout}" == "objects-v1" ]]; then
+    # The cache object is the source. The link shares its inode, so its owner
+    # and mode are the cache file's (root, 0444) and are never changed here.
+    source_file="$(object_cache_path "${expected_sha}")"
+    [[ -f "${source_file}" && ! -L "${source_file}" ]] || die "object ${expected_sha} for ${filename} is missing from the object cache"
+    actual_bytes="$(stat --format '%s' -- "${source_file}")"
+    [[ "${actual_bytes}" == "${expected_bytes}" ]] || die "size mismatch for ${filename}: expected ${expected_bytes}, got ${actual_bytes}"
+    object_cache_link_or_copy "${source_file}" "${stage_dir}/${filename}" "${expected_sha}" "${expected_bytes}"
+    if [[ "${start_check}" == "size" && "${OBJECT_LINKED}" == true ]]; then
+      object_cache_trusted "${stage_dir}/${filename}" "${expected_bytes}" ||
+        die "object ${expected_sha} for ${filename} is not a root-owned 0444 file of ${expected_bytes} bytes"
+    else
+      copied_sha="$(sha256sum -- "${stage_dir}/${filename}")"
+      copied_sha="${copied_sha%% *}"
+      [[ "${copied_sha}" == "${expected_sha}" ]] || die "SHA-256 mismatch for ${filename}"
+    fi
+    continue
+  fi
   source_file="${source_dir}/mods/${filename}"
   [[ -f "${source_file}" && ! -L "${source_file}" ]] || die "release file is missing or is a symlink: ${source_file}"
 

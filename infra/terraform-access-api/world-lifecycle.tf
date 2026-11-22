@@ -27,6 +27,12 @@ data "aws_iam_policy_document" "world_lifecycle" {
   }
 
   statement {
+    sid       = "ReadReleaseState"
+    actions   = ["dynamodb:GetItem"]
+    resources = [local.release_refs_table_arn]
+  }
+
+  statement {
     sid       = "VerifyReleaseBeforeRestore"
     actions   = ["s3:GetObject"]
     resources = ["${data.aws_s3_bucket.releases.arn}/releases/*/manifest.json"]
@@ -122,8 +128,9 @@ resource "aws_lambda_function" "world_lifecycle" {
 
   environment {
     variables = {
-      RELEASE_BUCKET = data.aws_s3_bucket.releases.id
-      BACKUP_BUCKET  = data.aws_s3_bucket.backups.id
+      RELEASE_BUCKET     = data.aws_s3_bucket.releases.id
+      BACKUP_BUCKET      = data.aws_s3_bucket.backups.id
+      RELEASE_REFS_TABLE = var.release_refs_table_name
     }
   }
 

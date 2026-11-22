@@ -56,3 +56,19 @@ test("restore opens the new wipe on the release the backup ran and checks that r
   await assert.rejects(restoreWithPublishedRelease(world, { ...backup, release: "1.3" }, restoreUuid, "2026-09-03T00:00:00Z", async () => false), /release_missing/);
   await assert.rejects(restoreWithPublishedRelease(world, { ...backup, release: "latest" }, restoreUuid, "2026-09-03T00:00:00Z", async () => true), /invalid_backup/);
 });
+
+test("a release that is being retired, or is retired, refuses a restore even though its manifest exists", async () => {
+  for (const [state, error] of [["retiring", /release_retired/], ["retired", /release_retired/], ["building", /release_not_ready/]] as const) {
+    await assert.rejects(
+      restoreWithPublishedRelease(world, backup, restoreUuid, "2026-09-03T00:00:00Z", async () => true, async () => state),
+      error,
+    );
+  }
+});
+
+test("a live release, and one the reference table does not know, are restored", async () => {
+  for (const state of ["live", null] as const) {
+    const restored = await restoreWithPublishedRelease(world, backup, restoreUuid, "2026-09-03T00:00:00Z", async () => true, async () => state);
+    assert.equal(restored.currentGeneration.release, "1.2");
+  }
+});

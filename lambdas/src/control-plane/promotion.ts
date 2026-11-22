@@ -4,6 +4,7 @@
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { usableByExistingWorld, type PresetObservation } from "./preset-catalog.ts";
 import type { ReleasePointerObservation } from "./read-model.ts";
+import type { ReleaseUsability } from "./release-usable.ts";
 import type { WorldRecord } from "./world-registry.ts";
 
 const RELEASE = /^\d+\.\d+$/;
@@ -16,6 +17,8 @@ export type PromotionRefusal =
   | "fleet_unavailable"
   | "preset_removed"
   | "release_not_available"
+  | "release_retired"
+  | "release_not_ready"
   | "release_state_unavailable"
   | "no_active_release"
   | "release_already_active"
@@ -34,6 +37,8 @@ export type PromotionFacts = Readonly<{
   record: WorldRecord | undefined;
   preset: PresetObservation | undefined;
   pointer: ReleasePointerObservation;
+  /** What the reference table says of the target release (ADR-0080); "usable" for a release it does not know. */
+  releaseUsability: ReleaseUsability;
   /** The world's own lifecycle record (ADR-0062). */
   session: LifecycleRecord | null;
   blockingOperations: number;
@@ -57,6 +62,7 @@ export function planPromotion(facts: PromotionFacts): PromotionPlan {
   // Only a release of the world's own preset: a world never changes preset.
   if (preset === undefined || preset.gameId !== record.gameId || preset.id !== record.preset.id) return reject(409, "preset_removed");
   if (!usableByExistingWorld(preset, release)) return reject(409, "release_not_available");
+  if (facts.releaseUsability !== "usable") return reject(409, facts.releaseUsability);
   if (pointer.state !== "available" || pointer.generationId !== record.currentGeneration.id) return reject(409, "release_state_unavailable");
   // A wipe that never passed a start has nothing to roll back to; a new wipe gives it a release.
   if (pointer.activeRelease === null) return reject(409, "no_active_release");

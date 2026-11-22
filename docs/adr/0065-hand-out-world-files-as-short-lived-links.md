@@ -3,6 +3,8 @@
 - Status: Accepted
 - Date: 2026-10-09
 - Milestone: M6
+- Amended by: [ADR-0080](0080-store-release-files-by-content.md) — a link for a mod or a pack of an `objects-v1`
+  release goes to the object of its digest, with an attachment name
 - Relates: [ADR-0013](0013-modpack-distribution.md), [ADR-0040](0040-reusable-presets-and-world-wipes.md),
   [ADR-0052](0052-keep-a-release-while-a-generation-names-it.md)
 

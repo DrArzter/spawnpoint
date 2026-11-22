@@ -4,6 +4,7 @@ import { type Identity } from "../../access/domain.ts";
 import { awsControlPlaneSources, promotionExecution } from "../../control-plane/aws.ts";
 import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
 import { planPromotion } from "../../control-plane/promotion.ts";
+import { checkReleaseUsable, noReleaseState } from "../../control-plane/release-usable.ts";
 import { blockingOperations, sessionLifecycleKey } from "../../control-plane/world-session.ts";
 import { parseObjectBody, response, type Response } from "./http.ts";
 import { worldPlacements } from "./world-state.ts";
@@ -28,8 +29,12 @@ export async function promoteWorld(identity: Identity, gameId: string, worldId: 
     record?.placement === "fleet" ? awsControlPlaneSources.readLifecycle(serverId) : Promise.resolve(null),
   ]);
   const operations = blockingOperations(allOperations, worldId, worldPlacements(catalogWithPresets(presets, gameCatalog, worldRecords)));
+  // The check runs for a well-formed release of a known world; the plan refuses the rest first.
+  const releaseUsability = record !== undefined && typeof parsed.release === "string" && /^\d+\.\d+$/.test(parsed.release)
+    ? await checkReleaseUsable(awsControlPlaneSources.readReleaseState ?? noReleaseState, gameId, record.preset.id, parsed.release)
+    : "usable";
   const plan = planPromotion({
-    gameId, release: parsed.release, record,
+    gameId, release: parsed.release, record, releaseUsability,
     preset: presets.find((candidate) => candidate.gameId === gameId && candidate.id === record?.preset.id),
     pointer, session,
     blockingOperations: operations.length,

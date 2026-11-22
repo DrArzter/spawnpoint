@@ -2,6 +2,7 @@ import { type Identity } from "../../access/domain.ts";
 import { startPresetBuild } from "../../control-plane/aws-release-builds.ts";
 import { awsControlPlaneSources, releaseModUrl, releasePackUrl, packDownloadUrl } from "../../control-plane/aws.ts";
 import { manifestClientAddons, manifestClientMods, RELEASE_PACKS, releaseModLocation, type ReleasePack } from "../../control-plane/release-artifacts.ts";
+import { manifestUsesObjects } from "../../control-plane/release-objects.ts";
 import { type PlanMod, type ReleasePlan, releasePlan, storedReleasePlan } from "../../control-plane/release-plan.ts";
 import { packRelease } from "../../control-plane/session-control.ts";
 import { type Response, response } from "./http.ts";
@@ -48,7 +49,9 @@ function manifestText(value: unknown): string {
 // One mod of a release (ADR-0065), by the digest its manifest records: the
 // digest names the file without putting a mod's name, whatever characters it
 // holds, into a path. A players' own mod (ADR-0069) is as public as the client
-// pack it ships in; whoever may read the release may have its files.
+// pack it ships in; whoever may read the release may have its files. The
+// manifest still proves that this release names the digest; an objects-v1
+// release then serves the object of that digest (ADR-0080).
 export async function releaseModDownload(gameId: string, presetId: string, version: string, sha256: string): Promise<Response> {
   if (!RELEASE_ID.test(gameId) || !RELEASE_ID.test(presetId) || !RELEASE_VERSION.test(version) || !SHA256_DIGEST.test(sha256)) {
     return response(400, { error: "invalid_release_reference" });
@@ -56,7 +59,8 @@ export async function releaseModDownload(gameId: string, presetId: string, versi
   const manifest = await awsControlPlaneSources.readReleaseManifest?.(gameId, presetId, version) ?? null;
   const location = releaseModLocation(manifest, sha256);
   if (location === null || !/^[^/\\]+\.(jar|zip)$/.test(location.file)) return response(404, { error: "unknown_mod" });
-  return response(200, { file: location.file, url: await releaseModUrl(gameId, presetId, version, location, MOD_LINK_SECONDS), expiresIn: MOD_LINK_SECONDS });
+  const objectDigest = manifestUsesObjects(manifest) ? sha256 : undefined;
+  return response(200, { file: location.file, url: await releaseModUrl(gameId, presetId, version, location, MOD_LINK_SECONDS, objectDigest), expiresIn: MOD_LINK_SECONDS });
 }
 
 // One pack of a release by name (ADR-0069): the players' set, the server's set,

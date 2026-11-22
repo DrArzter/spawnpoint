@@ -1,4 +1,5 @@
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
+import type { ReleaseStateReader } from "./release-usable.ts";
 import type { SessionHost } from "../domain/session-history.ts";
 import { catalogWithPresets, gameCatalog, type CatalogGame, worldAddress } from "./catalog.ts";
 import { locateWorldSession, sessionLifecycleKey } from "./world-session.ts";
@@ -72,6 +73,8 @@ export type ControlPlaneSources = Readonly<{
   listRunningOperations: () => Promise<readonly OperationObservation[]>;
   listPresets?: () => Promise<readonly PresetObservation[]>;
   readReleaseManifest?: (gameId: string, presetId: string, version: string) => Promise<unknown>;
+  /** The release's state in the reference table (ADR-0080); null when the table has no item for it. */
+  readReleaseState?: ReleaseStateReader;
   /** The build's plan.json beside the manifest; null when the release has none. */
   readReleasePlan?: (gameId: string, presetId: string, version: string) => Promise<unknown>;
   readHostMetrics?: (instanceId: string, hours: number) => Promise<HostMetrics>;

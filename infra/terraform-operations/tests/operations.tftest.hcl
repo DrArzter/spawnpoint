@@ -58,6 +58,16 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.release_reconciler_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.release_reconciler
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.fleet_sweeper_assume
     values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
@@ -188,6 +198,14 @@ mock_provider "archive" {
     target = data.archive_file.backup_retention
     values = {
       output_path         = "backup-retention.zip"
+      output_base64sha256 = "test"
+    }
+  }
+
+  override_data {
+    target = data.archive_file.release_reconciler
+    values = {
+      output_path         = "release-reconciler.zip"
       output_base64sha256 = "test"
     }
   }
@@ -573,5 +591,111 @@ run "backup_retention_runs_daily_and_may_delete_only_current_archives" {
       contains(aws_cloudwatch_metric_alarm.backup_retention_failed.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"),
     ])
     error_message = "A failed retention run must alarm the guardrails topic."
+  }
+}
+
+run "release_reconciler_only_reads_and_runs_weekly" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      aws_iam_role.release_reconciler.name == "spawnpoint-release-reconciler",
+      aws_lambda_function.release_reconciler.function_name == "spawnpoint-release-reconciler",
+      aws_lambda_function.release_reconciler.runtime == "nodejs22.x",
+      aws_lambda_function.release_reconciler.timeout == 900,
+      aws_lambda_function.release_reconciler.memory_size == 512,
+      aws_lambda_function.release_reconciler.environment[0].variables["RELEASE_BUCKET"] == "spawnpoint-releases-123456789012",
+      aws_lambda_function.release_reconciler.environment[0].variables["BACKUP_BUCKET"] == "spawnpoint-backups-123456789012",
+      aws_lambda_function.release_reconciler.environment[0].variables["RELEASE_REFS_TABLE"] == "spawnpoint-release-refs",
+      aws_cloudwatch_log_group.release_reconciler.retention_in_days == 30,
+    ])
+    error_message = "The reconciler is the named role and Lambda, with the two buckets and the reference table."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_cloudwatch_event_rule.release_reconciler_weekly.name == "spawnpoint-release-reconciler-weekly",
+      aws_cloudwatch_event_rule.release_reconciler_weekly.schedule_expression == "cron(0 5 ? * SUN *)",
+      aws_cloudwatch_event_target.release_reconciler_weekly.rule == aws_cloudwatch_event_rule.release_reconciler_weekly.name,
+      aws_lambda_permission.release_reconciler_weekly.principal == "events.amazonaws.com",
+    ])
+    error_message = "The reconciler runs once a week, on Sunday morning."
+  }
+
+  # Every action in the policy must be on this list. A write needs a change here, in review.
+  assert {
+    condition = alltrue([
+      for action in flatten([for statement in data.aws_iam_policy_document.release_reconciler.statement : tolist(statement.actions)]) :
+      contains([
+        "s3:ListBucket", "s3:ListBucketVersions", "s3:GetObject", "s3:GetObjectVersion",
+        "dynamodb:GetItem", "dynamodb:Query", "dynamodb:Scan", "cloudwatch:PutMetricData",
+      ], action)
+    ])
+    error_message = "The reconciler may list, get, read the table and put metrics, and nothing else."
+  }
+
+  assert {
+    condition = alltrue([
+      for action in flatten([for statement in data.aws_iam_policy_document.release_reconciler.statement : tolist(statement.actions)]) :
+      !startswith(action, "s3:Delete") && !startswith(action, "s3:Put") && !startswith(action, "s3:Restore") &&
+      !startswith(action, "dynamodb:Put") && !startswith(action, "dynamodb:Update") && !startswith(action, "dynamodb:Delete") &&
+      !startswith(action, "dynamodb:Batch") && !startswith(action, "dynamodb:Transact")
+    ])
+    error_message = "A report-only reconciler has no s3:Delete*, s3:Put* or table write action."
+  }
+
+  assert {
+    condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.resources if statement.sid == "ReadReferenceTable"]) == toset([
+        "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-release-refs",
+        "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-release-refs/index/*",
+      ]),
+      one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.resources if statement.sid == "ReadReleaseSources"]) == toset([
+        "arn:aws:s3:::spawnpoint-releases-123456789012/releases/*",
+        "arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*",
+        "arn:aws:s3:::spawnpoint-releases-123456789012/presets/*",
+      ]),
+      one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.resources if statement.sid == "ReadArchiveMetadata"]) == toset(["arn:aws:s3:::spawnpoint-backups-123456789012/worlds/*/archives/*"]),
+      toset(one(one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.condition if statement.sid == "ListReleaseBucket"])).values) == toset(["releases/", "objects/sha256/", "worlds/", "presets/"]),
+    ])
+    error_message = "The reconciler reads the reference table, three release prefixes and archive metadata, and lists four prefixes. It never reads objects/."
+  }
+
+  assert {
+    condition = alltrue([
+      one(one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.condition if statement.sid == "PutReconcilerMetrics"])).test == "StringEquals",
+      one(one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.condition if statement.sid == "PutReconcilerMetrics"])).variable == "cloudwatch:namespace",
+      toset(one(one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.condition if statement.sid == "PutReconcilerMetrics"])).values) == toset(["Spawnpoint/ReleaseReconciler"]),
+    ])
+    error_message = "PutMetricData is allowed in the reconciler's own namespace only."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_cloudwatch_metric_alarm.release_reconciler_dangerous_diff.alarm_name == "spawnpoint-release-reconciler-dangerous-diff",
+      aws_cloudwatch_metric_alarm.release_reconciler_dangerous_diff.metric_name == "DangerousDiff",
+      aws_cloudwatch_metric_alarm.release_reconciler_missing_object.alarm_name == "spawnpoint-release-reconciler-missing-object",
+      aws_cloudwatch_metric_alarm.release_reconciler_missing_object.metric_name == "MissingObject",
+      aws_cloudwatch_metric_alarm.release_reconciler_run_failed.alarm_name == "spawnpoint-release-reconciler-run-failed",
+      aws_cloudwatch_metric_alarm.release_reconciler_run_failed.metric_name == "RunFailed",
+      alltrue([for alarm in [
+        aws_cloudwatch_metric_alarm.release_reconciler_dangerous_diff,
+        aws_cloudwatch_metric_alarm.release_reconciler_missing_object,
+        aws_cloudwatch_metric_alarm.release_reconciler_run_failed,
+        ] : alarm.namespace == "Spawnpoint/ReleaseReconciler" && alarm.statistic == "Maximum" && alarm.period == 86400 &&
+        alarm.threshold == 0 && alarm.comparison_operator == "GreaterThanThreshold" && alarm.treat_missing_data == "notBreaching" &&
+        contains(alarm.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert") &&
+      contains(alarm.ok_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert")]),
+    ])
+    error_message = "Dangerous diff, missing object and a failed run each alarm the guardrails topic, on a one-day window that survives a weekly metric."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_cloudwatch_metric_alarm.release_reconciler_errors.metric_name == "Errors",
+      aws_cloudwatch_metric_alarm.release_reconciler_errors.dimensions.FunctionName == "spawnpoint-release-reconciler",
+      contains(aws_cloudwatch_metric_alarm.release_reconciler_errors.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"),
+    ])
+    error_message = "A Lambda error in the reconciler must alarm the guardrails topic."
   }
 }

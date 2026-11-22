@@ -2,10 +2,14 @@ import {
   DeleteObjectsCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, ListObjectVersionsCommand,
   NoSuchKey, PutObjectCommand, S3Client,
 } from "@aws-sdk/client-s3";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
 import { resolveBackupRelease } from "../control-plane/backup-release.ts";
 import { backupInventory } from "../control-plane/backups.ts";
+import { dynamoReleaseStateReader } from "../control-plane/dynamo-release-state.ts";
 import { parsePresetCatalog, usableByNewWipe } from "../control-plane/preset-catalog.ts";
+import { requireReleaseUsable } from "../control-plane/release-usable.ts";
 import { type ReleaseState } from "../control-plane/release-state.ts";
 import { releaseManifestKey } from "../control-plane/release-artifacts.ts";
 import { restoreWithPublishedRelease } from "../control-plane/restore-guard.ts";
@@ -31,6 +35,7 @@ const WORLD_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const GENERATION_ID = /^gen-[0-9a-f]{32}$/;
 const s3 = new S3Client({});
+const readReleaseState = dynamoReleaseStateReader(DynamoDBDocumentClient.from(new DynamoDBClient({})));
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -245,6 +250,7 @@ async function nextRecord(input: Input, record: WorldRecord, backups: Backups): 
     const preset = await latestPreset(record);
     if (!preset.releases.includes(release)) throw new Error("release_not_available");
     if (!usableByNewWipe(preset, release)) throw new Error("release_outdated");
+    await requireReleaseUsable(readReleaseState, record.gameId, record.preset.id, release);
     return regenerateWorldRecord(record, preset, release, input.generationUuid!, input.requestedAt);
   }
   const backup = backups.find((candidate) => candidate.key === input.backupKey);
@@ -255,7 +261,7 @@ async function nextRecord(input: Input, record: WorldRecord, backups: Backups): 
   if (typeof ran === "string") throw new Error(ran === "unknown_backup" ? "backup_not_verified" : "backup_generation_unknown");
   return restoreWithPublishedRelease(record, {
     key: backup.key, checksum: backup.checksum, generationId: backup.generationId, release: ran.release,
-  }, input.generationUuid!, input.requestedAt, publishedReleaseExists);
+  }, input.generationUuid!, input.requestedAt, publishedReleaseExists, readReleaseState);
 }
 
 // A generation that ran a release must have a verified backup before it is replaced.

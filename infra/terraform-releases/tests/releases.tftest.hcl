@@ -130,6 +130,18 @@ run "build_release_workflow_can_only_run_the_reviewed_builder" {
   }
 }
 
+run "release_builder_writes_objects_without_deleting" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.release_builder.statement : statement.actions if statement.sid == "WriteContentAddressedObjects"]) == toset(["s3:GetObject", "s3:PutObject"]),
+      one([for statement in data.aws_iam_policy_document.release_builder.statement : statement.resources if statement.sid == "WriteContentAddressedObjects"]) == toset(["arn:aws:s3:::spawnpoint-releases-123456789012/objects/*"]),
+    ])
+    error_message = "The release builder reads and writes content-addressed objects under objects/ only, and never deletes them."
+  }
+}
+
 run "release_builder_caches_upstream_files_only_under_upstream" {
   command = plan
 

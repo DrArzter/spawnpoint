@@ -3,6 +3,7 @@ import { type SessionAction, planFleetSessionOperation, planSessionOperation, st
 import { awsControlPlaneSources, backupReleaseSources, readConsoleInvocation, sendConsoleCommand, startSessionExecution, stopSessionExecution, materializePresetWorld, replaceWorldAccess, replaceWorldGameSettings, readWorldRecord, replaceWorldWhitelist, sendWhitelistReload, worldLifecycleExecution } from "../../control-plane/aws.ts";
 import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
 import { usableByNewWipe } from "../../control-plane/preset-catalog.ts";
+import { checkReleaseUsable, noReleaseState, type ReleaseStateReader, type ReleaseUsability } from "../../control-plane/release-usable.ts";
 import { blockingOperations, sessionLifecycleKey, holdsWorld, type WorldHost, type WorldPlacement } from "../../control-plane/world-session.ts";
 import { randomUUID } from "node:crypto";
 import { type WorldRecord, worldIdForName } from "../../control-plane/world-registry.ts";
@@ -136,6 +137,8 @@ export async function createWorld(identity: Identity, gameId: string, presetId: 
   if (preset.releases.length === 0) return response(409, { error: "preset_release_not_ready" });
   if (!preset.releases.includes(release)) return response(409, { error: "release_not_available" });
   if (!usableByNewWipe(preset, release)) return response(409, { error: "release_outdated" });
+  const usability = await checkReleaseUsable(awsControlPlaneSources.readReleaseState ?? noReleaseState, gameId, presetId, release);
+  if (usability !== "usable") return response(409, { error: usability });
   const worldUuid = randomUUID();
   const worldId = worldIdForName(gameId, displayName, worldUuid);
   const createdAt = new Date().toISOString();
@@ -322,15 +325,19 @@ export async function restorableRelease(
   backupKey: string,
   readManifest: ControlPlaneSources["readReleaseManifest"],
   sources?: BackupReleaseSources,
-): Promise<"ok" | "unknown_generation" | "unknown_backup" | "release_missing"> {
+  readState: ReleaseStateReader = noReleaseState,
+): Promise<"ok" | "unknown_generation" | "unknown_backup" | "release_missing" | Exclude<ReleaseUsability, "usable">> {
   const generationId = backupGenerationId(backupKey);
   const generation = [record.currentGeneration, ...record.previousGenerations].find((candidate) => candidate.id === generationId);
   if (generation === undefined) return "unknown_generation";
   const ran = sources === undefined ? generation.release : await resolveBackupRelease(record, backupKey, sources);
   if (ran === "unknown_generation" || ran === "unknown_backup") return ran;
   if (readManifest === undefined) return "ok";
-  const manifest = await readManifest(record.gameId, record.preset.id, typeof ran === "string" ? ran : ran.release);
-  return manifest === null ? "release_missing" : "ok";
+  const release = typeof ran === "string" ? ran : ran.release;
+  const manifest = await readManifest(record.gameId, record.preset.id, release);
+  if (manifest === null) return "release_missing";
+  const usability = await checkReleaseUsable(readState, record.gameId, record.preset.id, release);
+  return usability === "usable" ? "ok" : usability;
 }
 
 type WorldLifecycleAction = "archive" | "regenerate" | "restore" | "purge";
@@ -394,7 +401,7 @@ export async function controlWorldLifecycle(
   const operations = blockingOperations(allOperations, worldId, worldPlacements(catalogWithPresets(presets, gameCatalog, worldRecords)));
   if (action === "purge" && record.status !== "archived") return response(409, { error: "world_not_archived" });
   if (action === "restore" && backupKey !== undefined) {
-    const restorable = await restorableRelease(record, backupKey, awsControlPlaneSources.readReleaseManifest, backupReleaseSources());
+    const restorable = await restorableRelease(record, backupKey, awsControlPlaneSources.readReleaseManifest, backupReleaseSources(), awsControlPlaneSources.readReleaseState);
     if (restorable !== "ok") return response(409, { error: restorable });
   }
   if (operations.length > 0) return response(409, { error: "operation_in_progress" });

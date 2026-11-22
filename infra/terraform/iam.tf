@@ -6,6 +6,7 @@ locals {
 
   game_host_release_resources = [
     "${data.aws_s3_bucket.releases.arn}/releases/*",
+    "${data.aws_s3_bucket.releases.arn}/objects/*",
     "${data.aws_s3_bucket.releases.arn}/worlds/*",
   ]
 }

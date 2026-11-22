@@ -15,6 +15,13 @@ In the release bucket, no rule expires a current object under `releases/`. The o
 release builder's cache of verified upstream files: it expires 60 days after a write, bytes and index together, because
 no release names these objects and CurseForge or a pinned mirror can supply them again.
 
+Content-addressed releases ([ADR-0080](../../docs/adr/0080-store-release-files-by-content.md)) keep payload files and
+packs under `objects/sha256/`, named by digest. The bucket policy lets only the role `spawnpoint-release-reconciler`
+(`../terraform-operations`) delete an object there, and lets nobody delete an object version. A lifecycle rule expires
+noncurrent object versions after 30 days and never expires a current object. `spawnpoint-release-refs` is the owner's
+reference table: back-references of each object and holders of each release. It is on-demand, encrypted,
+deletion-protected and has point-in-time recovery. Apply this root before the roots that read it.
+
 The control-plane table is encrypted, deletion-protected and on-demand. Event records expire through TTL; projection
 records do not.
 

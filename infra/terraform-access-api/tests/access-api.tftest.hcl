@@ -270,6 +270,36 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
 
   assert {
     condition = alltrue([
+      one([
+        for statement in data.aws_iam_policy_document.world_lifecycle.statement : statement.actions
+        if statement.sid == "ReadReleaseState"
+      ]) == toset(["dynamodb:GetItem"]),
+      one([
+        for statement in data.aws_iam_policy_document.world_lifecycle.statement : statement.resources
+        if statement.sid == "ReadReleaseState"
+      ]) == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-release-refs"]),
+      one([
+        for statement in data.aws_iam_policy_document.access_api.statement : statement.actions
+        if statement.sid == "ReadReleaseState"
+      ]) == toset(["dynamodb:GetItem"]),
+      one([
+        for statement in data.aws_iam_policy_document.access_api.statement : statement.resources
+        if statement.sid == "ReadReleaseState"
+      ]) == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-release-refs"]),
+    ])
+    error_message = "The API and the world lifecycle read one item of the release reference table to learn a release's state, and may not write it in this stage."
+  }
+
+  assert {
+    condition = contains(one([
+      for statement in data.aws_iam_policy_document.access_api.statement : statement.resources
+      if statement.sid == "ReadWorldReleasePointersAndPacks"
+    ]), "arn:aws:s3:::spawnpoint-releases-123456789012/objects/*")
+    error_message = "The API presigns the objects of a content-addressed release, so it reads objects/."
+  }
+
+  assert {
+    condition = alltrue([
       contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/promote"),
       one([
         for statement in data.aws_iam_policy_document.access_api.statement : statement.resources

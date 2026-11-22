@@ -94,9 +94,10 @@ run "release_versions_expire_but_no_release_can_be_deleted" {
 
   assert {
     condition = alltrue([
-      for rule in aws_s3_bucket_lifecycle_configuration.releases.rule : length(rule.expiration) == 0
+      for rule in aws_s3_bucket_lifecycle_configuration.releases.rule :
+      length(rule.expiration) == 0 || one(rule.filter).prefix == "upstream/"
     ])
-    error_message = "No rule may expire a current object in the release store: a generation may name it (ADR-0052)."
+    error_message = "Only the upstream cache may expire a current object in the release store: a generation may name a release object (ADR-0052)."
   }
 
   assert {
@@ -106,5 +107,32 @@ run "release_versions_expire_but_no_release_can_be_deleted" {
       one([for statement in data.aws_iam_policy_document.releases_bucket.statement : statement.resources if statement.sid == "DenyReleaseDeletion"]) == toset(["arn:aws:s3:::spawnpoint-releases-123456789012/releases/*"]),
     ])
     error_message = "No principal may delete a release object, so expiring noncurrent versions can never remove the last copy of a release."
+  }
+}
+
+run "upstream_cache_expires_after_60_days" {
+  command = plan
+
+  assert {
+    condition = anytrue([
+      for rule in aws_s3_bucket_lifecycle_configuration.releases.rule :
+      rule.status == "Enabled" &&
+      one(rule.filter).prefix == "upstream/" &&
+      one(rule.expiration).days == 60 &&
+      one(rule.noncurrent_version_expiration).noncurrent_days == 1
+      if rule.id == "expire-upstream-cache"
+    ])
+    error_message = "The whole upstream/ cache prefix, bytes and index together, expires 60 days after a write."
+  }
+
+  assert {
+    condition = anytrue([
+      for rule in aws_s3_bucket_lifecycle_configuration.releases.rule :
+      rule.status == "Enabled" &&
+      one(rule.filter).prefix == "upstream/" &&
+      one(rule.expiration).expired_object_delete_marker == true
+      if rule.id == "remove-upstream-cache-delete-markers"
+    ])
+    error_message = "Delete markers that cache expiry leaves are removed."
   }
 }

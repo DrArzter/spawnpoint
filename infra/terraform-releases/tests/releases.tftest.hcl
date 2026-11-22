@@ -129,3 +129,24 @@ run "build_release_workflow_can_only_run_the_reviewed_builder" {
     error_message = "Only a synchronously successful build may produce READY."
   }
 }
+
+run "release_builder_caches_upstream_files_only_under_upstream" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.release_builder.statement : statement.actions if statement.sid == "CacheUpstreamFiles"]) == toset(["s3:GetObject", "s3:PutObject"]),
+      one([for statement in data.aws_iam_policy_document.release_builder.statement : statement.resources if statement.sid == "CacheUpstreamFiles"]) == toset(["arn:aws:s3:::spawnpoint-releases-123456789012/upstream/*"]),
+    ])
+    error_message = "The release builder reads and writes the upstream cache under upstream/ only."
+  }
+
+  assert {
+    condition = alltrue(flatten([
+      for statement in data.aws_iam_policy_document.release_builder.statement : [
+        for action in statement.actions : !can(regex("^s3:(Delete|List)", action))
+      ]
+    ]))
+    error_message = "The release builder may neither delete nor list objects; a cache miss is a 403 or a 404."
+  }
+}

@@ -434,7 +434,7 @@ test("the write command prints result lines, rewrites the manifest and leaves it
   await rm(dir, { recursive: true });
 });
 
-test("the write command refuses a path with a parent segment before it reads anything", async () => {
+test("the write command refuses a path with a parent segment, or outside its roots, before it reads anything", async () => {
   const { refs, port } = setup();
   const make = () => ({ port, refs });
   const env = { RELEASE_BUCKET: "bucket" };
@@ -444,6 +444,9 @@ test("the write command refuses a path with a parent segment before it reads any
     ["--manifest", "/work/manifest.json", "--source-dir", "/payload/../etc"],
     ["--manifest", "/work/manifest.json", "--source-dir", "/payload", "--pack", "server=/work/../pack.zip"],
     ["--manifest", "/work/manifest.json", "--source-dir", "/payload", "--upstream-map", "/work/../map.json"],
+    // Outside the temp directory, /tmp, the working directory and RELEASE_WRITER_ROOT.
+    ["--manifest", "/etc/manifest.json", "--source-dir", "/tmp/payload"],
+    ["--manifest", "/tmp/manifest.json", "--source-dir", "/var/payload-elsewhere"],
   ];
   for (const flags of cases) {
     const err: string[] = [];

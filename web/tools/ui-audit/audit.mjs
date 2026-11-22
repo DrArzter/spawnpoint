@@ -44,6 +44,9 @@ const ROUTES = [
   ["world-metrics", "/?demo&latency=0#/worlds/minecraft/minecraft-rostik-12345678/metrics"],
   ["world-factorio", "/?demo&latency=0#/worlds/factorio/factorio"],
   ["world-vanilla", "/?demo&latency=0#/worlds/minecraft/vanilla"],
+  // A promotion held at one step, and one that failed with a long cause; a failure shows once the operation has left the snapshot, so the gate waits for its mark.
+  ["world-progress", "/?demo&latency=0&operation=running#/worlds/minecraft/minecraft-creative-5e1c9a07"],
+  ["world-failed", "/?demo&latency=0&operation=failed#/worlds/minecraft/minecraft-creative-5e1c9a07", { console: "[data-status=error]", terminal: ".t-state-error" }],
   ["releases", "/?demo&latency=0#/releases/minecraft"],
   ["access-users", "/?demo&latency=0#/access/users"],
   ["access-roles", "/?demo&latency=0#/access/roles"],
@@ -254,6 +257,8 @@ async function open(tab, job, width) {
   await tab.goto(`${base}${path}${joiner}probe=${pass}&skin=${encodeURIComponent(job.skin)}${hash ? "#" + hash : ""}`);
   // The front door mounts after its own boot: wait for the app before the page settles.
   await tab.evaluate(`(async () => { const until = performance.now() + 5000; while (performance.now() < until && !document.getElementById("root")?.children.length) await new Promise((r) => setTimeout(r, 50)); })()`, true).catch(() => undefined);
+  const ready = ROUTES.find(([, route]) => route === job.route.replace("?demo&fixture=stress", "?demo"))?.[2]?.[job.skin];
+  if (ready) await tab.evaluate(`(async () => { const until = performance.now() + 8000; while (performance.now() < until && !document.querySelector(${JSON.stringify(ready)})) await new Promise((r) => setTimeout(r, 50)); })()`, true).catch(() => undefined);
   await settle(tab);
   // A blank page or another skin has nothing wrong to find: say so, or the gate passes on nothing.
   const worn = await tab.evaluate(`JSON.stringify({ mounted: (document.getElementById("root")?.children.length ?? 0) > 0, skin: document.documentElement.dataset.skin ?? null })`).then(JSON.parse);

@@ -32,6 +32,7 @@ import { switchBeforeFirstStart, type SwitchOutcome, type SwitchRequest } from "
 import { newWorldRecord, withGameSettings, withWhitelist, withWorldAccess, type WorldGameSettings, type WorldRecord, type WorldWhitelist } from "./world-registry.ts";
 import { parseDynamicProjection } from "./dynamic-projection.ts";
 import { createSessionHostReader } from "./aws-session-history.ts";
+import { createOperationProgressReader } from "./aws-operation-progress.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildLifecycleStartInput, buildLifecycleStopInput, buildPromotionInput, buildStopInput } from "../domain/telegram-bot.ts";
@@ -383,6 +384,11 @@ async function recentRuns(stateMachineArn: string, now: number): Promise<Machine
   return history;
 }
 
+// A running operation's usual duration, from the finished runs the list reads.
+async function expectedDuration(stateMachineArn: string, worldId: string) {
+  return expectationFromRuns((await recentRuns(stateMachineArn, Date.now())).runs, worldId);
+}
+
 async function listRunningOperations(): Promise<readonly OperationObservation[]> {
   const machines = operationMachines().filter((machine) => isSessionOperation(machine.type));
   const now = Date.now();
@@ -434,6 +440,7 @@ export const awsControlPlaneSources: ControlPlaneSources = {
   readReleasePlan,
   readHostMetrics,
   readHostsMetrics,
+  readOperationProgress: createOperationProgressReader({ sfn, machines: operationMachines, expectation: expectedDuration }),
   readWorldSessionHosts: createSessionHostReader({ sfn, document, tableName: () => process.env.LIFECYCLE_TABLE_NAME, machines: operationMachines }),
   listWorldRecords,
 };

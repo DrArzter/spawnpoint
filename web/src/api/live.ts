@@ -3,6 +3,7 @@ import { accessApi } from "./live/access";
 import { authApi } from "./live/auth";
 import { backupsApi } from "./live/backups";
 import { metricsApi } from "./live/metrics";
+import { operationsApi } from "./live/operations";
 import { consoleApi } from "./live/console";
 import { playerInvitationsApi } from "./live/player-invitations";
 import { preferencesApi } from "./live/preferences";
@@ -18,6 +19,7 @@ export const liveApi: SpawnpointApi = {
   ...worldsApi,
   ...backupsApi,
   ...metricsApi,
+  ...operationsApi,
   ...consoleApi,
   ...playerInvitationsApi,
   ...preferencesApi,

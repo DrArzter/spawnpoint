@@ -1,5 +1,6 @@
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import type { ReleaseStateReader } from "./release-usable.ts";
+import type { OperationProgress } from "./operation-progress.ts";
 import type { SessionHost } from "../domain/session-history.ts";
 import { catalogWithPresets, gameCatalog, type CatalogGame, worldAddress } from "./catalog.ts";
 import { locateWorldSession, sessionLifecycleKey } from "./world-session.ts";
@@ -75,6 +76,8 @@ export type ControlPlaneSources = Readonly<{
   /** Whether any backup archive of this wipe exists. Absent on a control plane that cannot list them. */
   hasGenerationBackup?: (worldId: string, generationId: string) => Promise<boolean>;
   listRunningOperations: () => Promise<readonly OperationObservation[]>;
+  /** What one operation of a world is doing now; null when it is not that world's or not there. */
+  readOperationProgress?: (request: Readonly<{ worldId: string; operationId: string }>) => Promise<OperationProgress | null>;
   listPresets?: () => Promise<readonly PresetObservation[]>;
   readReleaseManifest?: (gameId: string, presetId: string, version: string) => Promise<unknown>;
   /** The release's state in the reference table (ADR-0080); null when the table has no item for it. */

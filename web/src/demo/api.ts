@@ -244,6 +244,11 @@ export const demoApi: SpawnpointApi = {
     return store.worldMetrics(gameId, worldId, range);
   },
 
+  async loadOperationProgress(gameId: string, worldId: string, operationId: string) {
+    await demoLatency();
+    return store.operationProgress(gameId, worldId, operationId);
+  },
+
   async loadConsole(gameId: string, worldId: string) {
     await demoLatency();
     return store.consoleHistory(gameId, worldId);

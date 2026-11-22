@@ -21,6 +21,18 @@ export function demoFixture(): string | null {
   return new URLSearchParams(window.location.search).get("fixture");
 }
 
+export type DemoOperation = "promotion" | "running" | "failed";
+
+/**
+ * `?operation=` seeds a promotion on the Creative world: `promotion` runs the
+ * steps and ends, `running` holds at one step for a screenshot or the UI
+ * gate, `failed` ends at once with a long cause (web/tools/ui-audit).
+ */
+export function demoOperation(): DemoOperation | null {
+  const asked = new URLSearchParams(window.location.search).get("operation");
+  return asked === "promotion" || asked === "running" || asked === "failed" ? asked : null;
+}
+
 export function demoUrl(): string {
   return `${window.location.pathname}?demo#/worlds`;
 }

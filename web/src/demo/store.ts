@@ -1,11 +1,11 @@
 import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
-import { identityDeletionRefusal, type PromotionResult, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
+import { identityDeletionRefusal, type PromotionResult, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type OperationProgress, type OperationStep, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
 import { startableReleases } from "../core/presets";
 import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
 import type { ControlPlaneSnapshot, Preset, SettingValue, World, WorldGameSettings, WorldSession } from "../model";
-import { DemoState, initialState, Mutable } from "./data";
-import { demoFixture } from "./flag";
+import { DemoState, initialState, Mutable, type OperationPlan } from "./data";
+import { demoFixture, demoOperation } from "./flag";
 import { stressState } from "./stress";
 
 // One in-memory control plane for the whole demo. Transitions are scheduled in
@@ -20,7 +20,7 @@ const ARCHIVE_MS = 4000;
 const DELIVERY_MS = 3000;
 // What earlier runs of each operation took, as the control plane would average them.
 // A stop usually ends before the demo's does, so its ETA shows the over-time reading.
-const USUAL = { start: { seconds: 10, samples: 10 }, stop: { seconds: 4, samples: 6 }, world: { seconds: 8, samples: 5 }, promote: { seconds: 12, samples: 4 } } as const;
+const USUAL = { start: { seconds: 10, samples: 10 }, stop: { seconds: 4, samples: 6 }, world: { seconds: 8, samples: 5 }, promote: { seconds: 30, samples: 4 } } as const;
 
 const iso = () => new Date().toISOString();
 const worldKey = (gameId: string, worldId: string) => `${gameId}/${worldId}`;
@@ -49,13 +49,88 @@ function settle(): void {
   state.snapshot.observedAt = iso();
 }
 
-function schedule(type: "start" | "stop" | "world" | "promote", worldId: string, afterMs: number, apply: (state: DemoState) => void): string {
+function schedule(type: OperationPlan["type"], worldId: string, afterMs: number, apply: (state: DemoState) => void, plan: Partial<OperationPlan> = {}): string {
   state.counter += 1;
   const id = `op-${type}-${state.counter.toString().padStart(4, "0")}`;
   state.snapshot.operations.push({ id, type, status: "running", startedAt: iso(), worldId, expectedSeconds: USUAL[type].seconds, expectedSamples: USUAL[type].samples });
   state.scheduled.push({ operationId: id, at: Date.now() + afterMs, apply });
+  state.progress[id] = { type, worldId, startedAt: Date.now(), durationMs: afterMs, ...plan };
   state.snapshot.observedAt = iso();
   return id;
+}
+
+const step = (key: string, label: string): OperationStep => ({ key, label });
+type Phase = Readonly<{ weight: number; step: OperationStep; children?: readonly Readonly<{ weight: number; step: OperationStep }>[] }>;
+
+// The steps of each operation and their share of its run, as the workflows name them.
+const START_STEPS = [
+  { weight: 5, step: step("start.launching_host", "Launching the host") },
+  { weight: 5, step: step("start.waiting_host", "Waiting for the host") },
+  { weight: 4, step: step("start.starting_server", "Starting the server") },
+] as const;
+const PHASES: Readonly<Record<OperationPlan["type"], readonly Phase[]>> = {
+  promote: [
+    { weight: 2, step: step("promote.checking_release", "Checking the release") },
+    { weight: 4, step: step("promote.stopping_server", "Stopping the server") },
+    { weight: 5, step: step("promote.keeping_backup", "Keeping the backup") },
+    { weight: 14, step: step("promote.starting_release", "Starting on the new release"), children: START_STEPS },
+    { weight: 2, step: step("promote.recording_release", "Recording the release") },
+  ],
+  start: START_STEPS,
+  stop: [
+    { weight: 1, step: step("stop.checking", "Checking the session") },
+    { weight: 3, step: step("stop.saving", "Saving and stopping the server") },
+    { weight: 1, step: step("stop.releasing_host", "Releasing the host") },
+  ],
+  world: [
+    { weight: 1, step: step("world.checking", "Checking the server") },
+    { weight: 3, step: step("world.stopping_backing_up", "Stopping and backing up") },
+    { weight: 2, step: step("world.applying", "Applying the change") },
+  ],
+};
+
+/** The step an operation is in after `fraction` of its run, and the child step inside it. */
+function phaseAt(type: OperationPlan["type"], fraction: number): Pick<OperationProgress, "step" | "child"> {
+  const phases = PHASES[type];
+  const total = phases.reduce((sum, phase) => sum + phase.weight, 0);
+  let at = Math.min(Math.max(fraction, 0), 0.9999) * total;
+  for (const phase of phases) {
+    if (at >= phase.weight) { at -= phase.weight; continue; }
+    let inner = at;
+    const child = phase.children?.find((candidate) => { if (inner >= candidate.weight) { inner -= candidate.weight; return false; } return true; });
+    return { step: phase.step, child: child ? { type: "start", step: child.step } : null };
+  }
+  return { step: phases.at(-1)!.step, child: null };
+}
+
+/** One operation of a world; null when the control plane does not know it (the API's 404). */
+export function operationProgress(gameId: string, worldId: string, operationId: string): OperationProgress | null {
+  settle();
+  const plan = state.progress[operationId];
+  const owner = state.snapshot.games.find((item) => item.id === gameId);
+  if (!plan || plan.worldId !== worldId || !owner?.worlds.some((item) => item.id === worldId)) return null;
+  const running = state.snapshot.operations.some((operation) => operation.id === operationId);
+  const usual = USUAL[plan.type];
+  const base = { id: operationId, type: plan.type, startedAt: new Date(plan.startedAt).toISOString(), expectedSeconds: usual.seconds, expectedSamples: usual.samples };
+  if (running) {
+    const ran = Math.min(Date.now() - plan.startedAt, plan.pinAtMs ?? Number.POSITIVE_INFINITY);
+    return { ...base, status: "running", stoppedAt: null, elapsedSeconds: Math.floor((Date.now() - plan.startedAt) / 1000), ...phaseAt(plan.type, ran / plan.durationMs), result: null, failure: null, caught: caughtOf(plan) };
+  }
+  return {
+    ...base,
+    status: plan.failure ? "failed" : "succeeded",
+    stoppedAt: new Date(plan.startedAt + plan.durationMs).toISOString(),
+    elapsedSeconds: Math.floor(plan.durationMs / 1000),
+    step: null,
+    child: null,
+    result: plan.failure || plan.type !== "promote" ? null : "promoted",
+    failure: plan.failure ?? null,
+    caught: caughtOf(plan),
+  };
+}
+
+function caughtOf(plan: OperationPlan): OperationProgress["caught"] {
+  return plan.caught ? { error: plan.caught.error, cause: plan.caught.cause, step: step(plan.caught.stepKey, "Starting on the new release") } : null;
 }
 
 export function buildRelease(gameId: string, presetId: string, profileDigest: string, retryRelease?: string): { release: string; attempt: number } {
@@ -837,3 +912,28 @@ export function runConsoleCommand(gameId: string, worldId: string, command: stri
   }, CONSOLE_REPLY_MS);
   return entry;
 }
+
+// `?operation=` (flag.ts) puts one promotion on the Creative world: running
+// through its steps, held at one step, or ended at once with a long cause.
+const PROMOTION_DEMO_MS = 27_000;
+const HOLD_MS = 86_400_000;
+const LONG_CAUSE = "We currently do not have sufficient m7i-flex.large capacity in the Availability Zone you requested (eu-central-1a). Our system will be working on provisioning additional capacity. You can currently get m7i-flex.large capacity by not specifying an Availability Zone in your request or choosing eu-central-1b, eu-central-1c.";
+
+function seedOperation(): void {
+  const kind = demoOperation();
+  if (kind === null) return;
+  const worldId = "minecraft-creative-5e1c9a07";
+  const nothing = () => undefined;
+  if (kind === "failed") {
+    schedule("promote", worldId, 1200, nothing, {
+      failure: { error: "Ec2.InsufficientInstanceCapacity", cause: LONG_CAUSE },
+      caught: { error: "SessionStartFailed", cause: "The host did not report ready before the start timed out.", stepKey: "promote.starting_release" },
+    });
+  } else if (kind === "running") {
+    schedule("promote", worldId, HOLD_MS, nothing, { durationMs: PROMOTION_DEMO_MS, pinAtMs: 20_000 });
+  } else {
+    schedule("promote", worldId, PROMOTION_DEMO_MS, nothing);
+  }
+}
+
+seedOperation();

@@ -14,6 +14,7 @@ import { startableReleases } from "./presets";
 import { presetBuildStates, sessionStatus, worldStatus, type StatusDescriptor } from "./status";
 import { useConsole, type ConsoleController } from "./useConsole";
 import { useAccessRequests, useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseChanges, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
+import { newestRunning, progressModel, useOperationProgress } from "./operation-progress";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, OperationRow, ReleasesModel, ShellModel, WorldModel, WorldRow, WorldsModel } from "./models";
 import { addressFacts, buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionDetails, siblingRow, withReleasePacks, worldDetails, worldLaunchedAt, worldMoreActions, worldNotices, worldPlayers, worldSessionControl, worldTabs } from "./worlds";
@@ -210,6 +211,9 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
   const state = worldState(game, world, sharedSession);
   const operations = operationsBlockingWorld(snapshot, world);
   const shown = useWorldTabs(console, game, world, notify);
+  const offersProgress = capabilities.has("operationProgress");
+  const running = newestRunning(snapshot?.operations ?? [], world.id);
+  const progress = progressModel(offersProgress ? running : null, useOperationProgress(offersProgress ? { gameId: game.id, worldId: world.id } : null, running));
   const canDownload = granted.has("backup.download") && capabilities.has("backupDownloads");
   const backups = useBackups(game.id, world, {
     canRead: granted.has("backup.read"),
@@ -235,7 +239,8 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     more: worldMoreActions(game, world, granted, busy, worldCallbacks),
     sessionDetails: sessionDetails(game, world, sharedSession, snapshot, state, fleet),
     worldDetails: worldDetails(game, world, state),
-    operations: operations.map((operation) => ({ operation, label: operationLabel(operation.type) })),
+    operations: operations.filter((operation) => operation.id !== progress?.id).map((operation) => ({ operation, label: operationLabel(operation.type) })),
+    progress,
     wipes: [...world.wipes].reverse().map((wipe) => ({ wipe, showBackups: action("wipe.backups", "Backups", () => { backups.setFilter(wipe.id); navigate({ worldTab: "backups" }); }, { icon: "backup" }) })),
     backups,
     releases: {

@@ -4,14 +4,15 @@ import type { BackupEntry } from "../../api/contract";
 import { Timestamp } from "../../components/ui/Timestamp";
 import { action } from "../../core/actions";
 import { useFilter } from "../../components/ui/Filter";
-import type { BackupsModel, ChangeRow, Detail, DetailValue, ModRow, ModsModel, ReleaseChangesModel, ReleaseRow, WorldModel } from "../../core/models";
+import type { BackupsModel, ChangeRow, Detail, DetailValue, ModRow, ModsModel, OperationProgressModel, ReleaseChangesModel, ReleaseRow, WorldModel } from "../../core/models";
+import { progressDetails, useSecondClock } from "../../core/operation-progress";
 import { modSourceCounts, modSourceLabel } from "../../core/release-mods";
 import type { StatusKind } from "../../core/status";
 import { wipeStatus } from "../../core/worlds";
 import { Icon } from "../../icons";
 import { formatBytes, formatTime, shortDigest } from "../../lib/format";
 import { useMediaQuery } from "../../shell/hooks";
-import { Address, Choice, Choices, Col, DetailRow, DetailsGroup, Empty, FilterRow, Ghost, Indicator, NoMatches, Notice, Overflow, Page, Panel, State, Table, Tabs, Verb, Verbs } from "./ui";
+import { Address, Choice, Choices, Col, DetailRow, Details, DetailsGroup, Empty, FilterRow, Ghost, Indicator, NoMatches, Notice, Overflow, Page, Panel, State, Table, Tabs, Verb, Verbs } from "./ui";
 import { MetricsPanel } from "./Metrics";
 import { ConsolePanel } from "./Rcon";
 import { WhitelistPanel } from "./Whitelist";
@@ -40,6 +41,7 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
         </Verbs>
       </header>
       <Notices notices={model.notices} />
+      {model.progress && <ProgressPanel model={model.progress} />}
 
       <Tabs label="World sections" onChange={model.setTab} options={model.tabs} value={model.tab} />
       {model.tab === "details" && <>
@@ -61,6 +63,16 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
       {model.tab === "metrics" && model.metrics && <MetricsPanel model={model.metrics} />}
       <span className="visually-hidden">{game.displayName}</span>
     </Page>
+  );
+}
+
+// The running operation, or the one that just failed: its step and times, then the cause.
+function ProgressPanel({ model }: Readonly<{ model: OperationProgressModel }>) {
+  const now = useSecondClock(model.running);
+  return (
+    <Panel head={<State kind={model.status.kind} label={model.status.label} />} name={model.title}>
+      <Details items={progressDetails(model, now).map(detailRow)} label={`${model.title}: ${model.status.label}`} />
+    </Panel>
   );
 }
 

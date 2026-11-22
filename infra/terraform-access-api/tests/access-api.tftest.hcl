@@ -340,6 +340,31 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition = alltrue([
+      contains(local.access_routes, "GET /games/{gameId}/worlds/{worldId}/operations/{operationId}"),
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.actions if statement.sid == "ReadOperationHistory"]) == toset(["states:GetExecutionHistory"]),
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.resources if statement.sid == "ReadOperationHistory"]) == toset([
+        for name in ["start-server-v2", "stop-server-v2", "promote-release", "world-lifecycle", "start-server", "stop-server"] :
+        "arn:aws:states:eu-central-1:123456789012:execution:spawnpoint-${name}:*"
+      ]),
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.actions if statement.sid == "DescribeNestedHostExecutions"]) == toset(["states:DescribeExecution"]),
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.resources if statement.sid == "DescribeNestedHostExecutions"]) == toset([
+        "arn:aws:states:eu-central-1:123456789012:execution:spawnpoint-start-server:*",
+        "arn:aws:states:eu-central-1:123456789012:execution:spawnpoint-stop-server:*",
+      ]),
+    ])
+    error_message = "Operation progress reads the execution history of the operation machines and the two host machines, and describes the host machines' executions: read-only, on those executions, and no wildcard machine."
+  }
+
+  assert {
+    condition = alltrue([
+      for statement in data.aws_iam_policy_document.access_api.statement :
+      !contains(statement.actions, "states:GetExecutionHistory") || (statement.sid == "ReadOperationHistory" && alltrue([for arn in statement.resources : strcontains(arn, ":execution:spawnpoint-") && endswith(arn, ":*")]))
+    ])
+    error_message = "Only the operation progress statement may read an execution history."
+  }
+
+  assert {
     condition     = contains(local.access_routes, "POST /auth/refresh") && contains(local.access_routes, "POST /auth/logout")
     error_message = "Persistent browser login requires explicit refresh and logout endpoints."
   }

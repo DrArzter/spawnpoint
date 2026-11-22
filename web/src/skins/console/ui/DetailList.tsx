@@ -19,7 +19,7 @@ export function shortDateTime(at: Instant): string | null {
 /** One value of a detail, drawn by its kind. */
 export function DetailValueView({ value }: Readonly<{ value: DetailValue }>) {
   switch (value.type) {
-    case "text": return <span className={cx("c-detail-text", value.mono && "c-mono")} title={value.text}>{value.text}</span>;
+    case "text": return <span className={cx(value.wrap ? "c-detail-wrap" : "c-detail-text", value.mono && "c-mono")} title={value.text}>{value.text}</span>;
     case "absent": return <span className="c-faint c-detail-text">{value.text}</span>;
     case "status": return <Status status={value.status} />;
     case "number": return <span>{value.value}</span>;

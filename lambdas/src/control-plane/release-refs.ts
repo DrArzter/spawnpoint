@@ -158,7 +158,7 @@ export class ReleaseRefs {
       }
       if (await this.addHolder(ref, sk, roles, allowed)) return; // NOSONAR retry: the next attempt depends on this write
       // The item appeared (another writer: loop and add the role) or the state moved.
-      release = await this.readRelease(ref) ?? release;
+      release = await this.readRelease(ref) ?? release; // NOSONAR retry: the state decides whether the next attempt may write
       if (!allowed.includes(release.state)) throw unusable(release.state);
     }
     throw new ReleaseRefsError("holder_conflict");
@@ -286,28 +286,36 @@ export class ReleaseRefs {
    */
   async claimFile(ref: ReleaseRef, file: FileClaim, options: ClaimOptions): Promise<"created" | "reused" | "recreated"> {
     if (!isSha256(file.sha256)) throw new ReleaseRefsError("invalid_digest");
-    const sleep = options.sleep ?? ((milliseconds: number) => new Promise<void>((resolve) => { setTimeout(resolve, milliseconds); }));
-    const deadline = this.now().getTime() + (options.waitMilliseconds ?? 15 * 60_000);
-    let delay = 500;
+    const waitForDelete = this.deleteWait(options);
     for (;;) {
-      const prior = await this.readFile(file.sha256);
+      const prior = await this.readFile(file.sha256); // NOSONAR retry: each attempt reads what the last one changed
       if (prior?.state === "deleting") {
-        if (this.now().getTime() > deadline) throw new ReleaseRefsError("file_deleting_timeout");
-        await sleep(delay);
-        delay = Math.min(delay * 2, 30_000);
+        await waitForDelete(); // NOSONAR the sweeper must finish before this build writes
         continue;
       }
       if (prior?.state === "deleted") {
-        if (await this.revive(ref, file, options)) return "recreated";
+        if (await this.revive(ref, file, options)) return "recreated"; // NOSONAR retry: a lost revival reads the file again
         continue;
       }
-      const outcome = await this.countReference(ref, file);
+      const outcome = await this.countReference(ref, file); // NOSONAR retry: a lost count reads the file again
       if (outcome === "lost") continue;
       // `counted` for the first time or already counted by an earlier attempt: either way the reference is in place.
       const created = prior === null && outcome === "done";
       await options.ensureObject(file, created ? "create" : "verify");
       return created ? "created" : "reused";
     }
+  }
+
+  /** Backs off while a file is `deleting`: doubling delays up to 30 s, and an error after the wait limit. */
+  private deleteWait(options: ClaimOptions): () => Promise<void> {
+    const sleep = options.sleep ?? ((milliseconds: number) => new Promise<void>((resolve) => { setTimeout(resolve, milliseconds); }));
+    const deadline = this.now().getTime() + (options.waitMilliseconds ?? 15 * 60_000);
+    let delay = 500;
+    return async () => {
+      if (this.now().getTime() > deadline) throw new ReleaseRefsError("file_deleting_timeout");
+      await sleep(delay);
+      delay = Math.min(delay * 2, 30_000);
+    };
   }
 
   /** A deleted file: the object again, then the item back to live. False when its state moved (read again). */

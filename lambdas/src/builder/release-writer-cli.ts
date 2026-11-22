@@ -1,5 +1,6 @@
 import { readFile, rename, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 
 import { ReleaseRefsError, type ReleaseRef, type ReleaseRefs } from "../control-plane/release-refs.ts";
@@ -28,9 +29,18 @@ function usage(detail: string): never {
 }
 
 /** A path from the command line: absolute, and never with a `..` segment, so it cannot climb out of the directory it names. */
-function safePath(value: string, what: string): string {
+// The builder hands the writer paths from mktemp and its workspace; RELEASE_WRITER_ROOT adds one more root.
+function allowedRoots(env: NodeJS.ProcessEnv): string[] {
+  const roots = [tmpdir(), "/tmp", process.cwd()];
+  if (env.RELEASE_WRITER_ROOT) roots.push(env.RELEASE_WRITER_ROOT);
+  return [...new Set(roots.map((root) => resolve(root)))];
+}
+
+function safePath(value: string, what: string, env: NodeJS.ProcessEnv): string {
   if (value === "" || value.includes("\0") || value.split(/[\\/]/).includes("..")) usage(what);
-  return resolve(value);
+  const resolved = resolve(value);
+  if (!allowedRoots(env).some((root) => resolved === root || resolved.startsWith(root + sep))) usage(what);
+  return resolved;
 }
 
 function releaseRef(values: Record<string, unknown>): ReleaseRef {
@@ -53,13 +63,13 @@ function concurrency(env: NodeJS.ProcessEnv): number {
   return Number(raw);
 }
 
-function packFiles(values: readonly string[]): Partial<Record<ManifestPack, string>> {
+function packFiles(values: readonly string[], env: NodeJS.ProcessEnv): Partial<Record<ManifestPack, string>> {
   const packs: Partial<Record<ManifestPack, string>> = {};
   for (const value of values) {
     const [name, ...rest] = value.split("=");
     const path = rest.join("=");
     if ((name !== "client" && name !== "server" && name !== "full") || path === "" || packs[name] !== undefined) usage("pack");
-    packs[name] = safePath(path, "pack");
+    packs[name] = safePath(path, "pack", env);
   }
   return packs;
 }
@@ -86,10 +96,10 @@ async function write(argv: readonly string[], env: NodeJS.ProcessEnv, deps: CliD
     },
   });
   if (values.manifest === undefined || values["source-dir"] === undefined) usage("manifest and source-dir");
-  const manifestPath = safePath(values.manifest, "manifest");
-  const sourceDir = safePath(values["source-dir"], "source-dir");
-  const packs = packFiles(values.pack ?? []);
-  const upstreamPath = values["upstream-map"] === undefined ? undefined : safePath(values["upstream-map"], "upstream-map");
+  const manifestPath = safePath(values.manifest, "manifest", env);
+  const sourceDir = safePath(values["source-dir"], "source-dir", env);
+  const packs = packFiles(values.pack ?? [], env);
+  const upstreamPath = values["upstream-map"] === undefined ? undefined : safePath(values["upstream-map"], "upstream-map", env);
   const ref = releaseRef(values);
   const id = buildId(values);
   const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Manifest;

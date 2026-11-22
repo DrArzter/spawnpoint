@@ -3,6 +3,7 @@ import { useId, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { action } from "../../../core/actions";
 import { cx } from "../../../lib/cx";
 import { ActionButton } from "./ActionButton";
+import { Skeleton } from "./Skeleton";
 import { Table } from "./Table";
 
 export type ChartPoint = Readonly<{ at: string; value: number | null }>;
@@ -204,6 +205,21 @@ export function TimeSeriesChart({ label, range, points, format, time, percent = 
           rows={points}
         />
       )}
+    </div>
+  );
+}
+
+/** A chart that is still loading: the axis column, the plot box and the data key, at their final size. */
+export function ChartSkeleton() {
+  return (
+    <div className="c-chart">
+      <div className="c-chart-plot">
+        <div aria-hidden="true" className="c-chart-axis">
+          {[0, 1, 2].map((tick) => <Skeleton height={12} key={tick} width={26} />)}
+        </div>
+        <div className="c-chart-area"><Skeleton height="100%" /></div>
+      </div>
+      <div className="c-chart-foot"><Skeleton height="var(--c-ctl-sm)" width={96} /></div>
     </div>
   );
 }

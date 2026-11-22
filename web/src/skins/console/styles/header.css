@@ -1,6 +1,10 @@
 /* PageHeader: the breadcrumb is the title. */
 
-/* One line from the tablet step: the title gives way (the h1 truncates), the actions never wrap. */
+/*
+ * One line from the tablet step: the title gives way (the h1 truncates), the
+ * actions never wrap. The height is fixed, so the header is as tall on every
+ * page and a page switch never moves what is below it.
+ */
 html[data-skin="console"] .c-page-header {
   display: flex;
   container: c-head / inline-size;
@@ -8,7 +12,7 @@ html[data-skin="console"] .c-page-header {
   align-items: center;
   justify-content: space-between;
   gap: 12px 16px;
-  min-height: 44px;
+  height: var(--c-target);
 }
 
 html[data-skin="console"] .c-page-title {
@@ -124,16 +128,19 @@ html[data-skin="console"] .c-page-actions {
 @media (max-width: 759px) {
   html[data-skin="console"] .c-page-header {
     flex-wrap: wrap;
+    height: auto;
   }
 
   html[data-skin="console"] .c-page-title {
     flex-basis: 100%;
     gap: 8px;
+    height: var(--c-target);
   }
 
   html[data-skin="console"] .c-page-actions {
     flex-wrap: wrap;
     width: 100%;
+    min-height: var(--c-target);
   }
 
   html[data-skin="console"] .c-page-actions > .c-btn:not(.c-btn-icon) {

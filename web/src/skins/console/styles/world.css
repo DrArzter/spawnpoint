@@ -163,6 +163,11 @@ html[data-skin="console"] .c-strip-label {
   font-weight: 600;
 }
 
+/* An empty placeholder has no baseline to hang the label on; it centres on the line instead. */
+html[data-skin="console"] .c-strip-label:has(.c-skeleton) {
+  align-items: center;
+}
+
 html[data-skin="console"] .c-strip-label strong {
   color: var(--c-ink);
   font-size: var(--c-fs-m);

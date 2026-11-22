@@ -24,7 +24,6 @@ import { Overflow } from "./ui/Overflow";
 import { PageHeader, type Crumb } from "./ui/PageHeader";
 import { Person } from "./ui/Person";
 import { SidePanel } from "./ui/SidePanel";
-import { SkeletonRows } from "./ui/Skeleton";
 import { SplitPage } from "./ui/SplitPage";
 import { Status } from "./ui/Status";
 import { Table, type Column } from "./ui/Table";
@@ -461,17 +460,16 @@ function NotificationsPane({ model }: Readonly<{ model: NotificationsModel }>) {
       <PageHeader title="My notifications" trail={[ACCESS]} />
       {model.state === "error" && <Notice notice={{ id: "notifications", tone: "error", title: "Subscriptions could not be loaded", description: model.error, action: model.retry ?? undefined }} />}
       <Card body="flush" label="My notifications">
-        {model.state === "loading" ? <SkeletonRows columns={2} rows={rows.length} /> : (
-          <TrackList
-            label="Notifications"
-            rowKey={(row) => row.id}
-            rows={rows}
-            tracks={[
-              { id: "notification", header: "Notification", width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle title={row.label} /> },
-              { id: "subscribed", header: "Subscribed", width: "auto", kind: "end", render: (row) => <Toggle action={model.toggle(row.id, row.label)} checked={Boolean(model.subscriptions[row.id])} /> },
-            ]}
-          />
-        )}
+        <TrackList
+          label="Notifications"
+          loading={model.state === "loading"}
+          rowKey={(row) => row.id}
+          rows={rows}
+          tracks={[
+            { id: "notification", header: "Notification", width: "minmax(0, 1fr)", kind: "stack", lines: 1, render: (row) => <TrackTitle title={row.label} /> },
+            { id: "subscribed", header: "Subscribed", width: "auto", kind: "end", render: (row) => <Toggle action={model.toggle(row.id, row.label)} checked={Boolean(model.subscriptions[row.id])} /> },
+          ]}
+        />
         <output aria-live="polite" className="c-sr">{model.saveStatus}</output>
       </Card>
     </>

@@ -10,29 +10,12 @@ export function SkeletonGroup({ label = "Loading", className, children }: Readon
   return <output aria-busy="true" aria-label={label} className={cx("c-skeleton-group", className)}>{children}</output>;
 }
 
-/** One placeholder block. Width and height are its final size. */
-export function Skeleton({ width = "100%", height = 16, className }: Readonly<{ width?: number | string; height?: number | string; className?: string }>) {
-  const style: CSSProperties = { width, height };
-  return <span aria-hidden="true" className={cx("c-skeleton", className)} style={style} />;
-}
-
 /**
- * Placeholder rows for a table or a track list, at its row height. Inside a
- * Table it is the body; elsewhere it is its own announced region.
+ * One placeholder block. A `text` block is one line of its container's text:
+ * it is exactly as tall as the line it stands for, so a card, a row or a stat
+ * keeps the height of the real thing. Any other block gives its final size.
  */
-export function SkeletonRows({ rows = 8, columns, inTable = false }: Readonly<{ rows?: number; columns: number; inTable?: boolean }>) {
-  const lines = Array.from({ length: rows }, (_, row) => row);
-  const cells = Array.from({ length: columns }, (_, cell) => cell);
-  if (inTable) {
-    return (
-      <tbody aria-busy="true" aria-label="Loading" className="c-skeleton-rows">
-        {lines.map((row) => <tr key={row}>{cells.map((cell) => <td key={cell}><Skeleton height={14} width={cell === 0 ? "70%" : "50%"} /></td>)}</tr>)}
-      </tbody>
-    );
-  }
-  return (
-    <SkeletonGroup className="c-skeleton-rows">
-      {lines.map((row) => <span className="c-skeleton-row" key={row}>{cells.map((cell) => <Skeleton height={14} key={cell} width={cell === 0 ? "70%" : "50%"} />)}</span>)}
-    </SkeletonGroup>
-  );
+export function Skeleton({ width = "100%", height = 16, text = false, className }: Readonly<{ width?: number | string; height?: number | string; text?: boolean; className?: string }>) {
+  const style: CSSProperties = text ? { width } : { width, height };
+  return <span aria-hidden="true" className={cx("c-skeleton", text && "c-skeleton-text", className)} style={style} />;
 }

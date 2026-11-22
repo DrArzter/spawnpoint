@@ -1,6 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
 
 import { cx } from "../../../lib/cx";
+import { Skeleton } from "./Skeleton";
+import { useSkeletonRows } from "./rows";
 import { ARRIVED, useArrivals } from "./Tick";
 
 /**
@@ -22,6 +24,8 @@ export type Track<Row> = Readonly<{
   render: (row: Row) => ReactNode;
   /** Hides the header label visually (an end action track). */
   quietHeader?: boolean;
+  /** How many lines a stack cell holds, so its placeholder keeps the row's height; two by default. */
+  lines?: 1 | 2;
 }>;
 
 /**
@@ -29,7 +33,7 @@ export type Track<Row> = Readonly<{
  * subgrid, labels once in the header. Under 1024px the row's title link
  * covers the row (link it with `TrackTitle`); controls in a row stay above it.
  */
-export function TrackList<Row>({ label, tracks, rows, rowKey, empty, header = true, arrivals = false, className }: Readonly<{
+export function TrackList<Row>({ label, tracks, rows, rowKey, empty, header = true, loading = false, arrivals = false, className }: Readonly<{
   label: string;
   tracks: readonly Track<Row>[];
   rows: readonly Row[];
@@ -37,6 +41,8 @@ export function TrackList<Row>({ label, tracks, rows, rowKey, empty, header = tr
   empty?: ReactNode;
   /** Draw the header row; a list of one obvious shape may leave it out. */
   header?: boolean;
+  /** Placeholder rows on the same tracks, as many as the list showed last time. */
+  loading?: boolean;
   /**
    * Rows that arrived while the view is open (A9). `true` works them out from
    * the rows shown, for a list that shows every row; a paged or filtered list
@@ -52,9 +58,10 @@ export function TrackList<Row>({ label, tracks, rows, rowKey, empty, header = tr
     "--c-tracks": tracks.map((track) => track.width).join(" "),
     "--c-tracks-compact": tracks.filter((track) => track.kind !== "optional").map((track) => track.compactWidth ?? track.width).join(" "),
   } as CSSProperties;
-  if (rows.length === 0 && empty !== undefined) return <>{empty}</>;
+  const placeholders = useSkeletonRows(label, rows.length, loading);
+  if (!loading && rows.length === 0 && empty !== undefined) return <>{empty}</>;
   return (
-    <div aria-label={label} className={cx("c-tracklist", className)} data-layout="rows" role="table" style={style}>
+    <div aria-busy={loading || undefined} aria-label={label} className={cx("c-tracklist", className)} data-layout="rows" role="table" style={style}>
       {header && (
         <div className="c-tracklist-head" role="row">
           {tracks.map((track, index) => (
@@ -64,7 +71,14 @@ export function TrackList<Row>({ label, tracks, rows, rowKey, empty, header = tr
           ))}
         </div>
       )}
-      {rows.map((row) => (
+      {loading && Array.from({ length: placeholders }, (_, row) => (
+        <div className="c-tracklist-row" data-from="1024" data-layout="one-line" key={row} role="row">
+          {tracks.map((track, index) => (
+            <span className={cx("c-track", track.kind && `c-track-${track.kind}`)} data-rail={index === 0 ? "" : undefined} key={track.id} role="cell">{placeholder(track)}</span>
+          ))}
+        </div>
+      ))}
+      {!loading && rows.map((row) => (
         <div className={cx("c-tracklist-row", fresh.has(rowKey(row)) && ARRIVED)} data-from="1024" data-layout="one-line" key={rowKey(row)} role="row">
           {tracks.map((track, index) => (
             <span className={cx("c-track", track.kind && `c-track-${track.kind}`)} data-rail={index === 0 ? "" : undefined} key={track.id} role="cell">{track.render(row)}</span>
@@ -73,6 +87,13 @@ export function TrackList<Row>({ label, tracks, rows, rowKey, empty, header = tr
       ))}
     </div>
   );
+}
+
+/** A cell's placeholder: a title and its line for a stack, a small block at the end edge, else one line. */
+function placeholder<Row>(track: Track<Row>) {
+  if (track.kind === "stack") return <span className="c-track-stack-body"><Skeleton text width="55%" />{track.lines !== 1 && <Skeleton text width="35%" />}</span>;
+  if (track.kind === "end") return <Skeleton height={28} width={track.quietHeader ? 72 : 48} />;
+  return <Skeleton text width={track.kind === "num" ? "3em" : "60%"} />;
 }
 
 /** A stack cell: the title (a link that covers the row on narrow widths) and its secondary line. */

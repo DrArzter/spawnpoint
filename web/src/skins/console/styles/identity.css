@@ -29,12 +29,6 @@ html[data-skin="console"] .c-avatar-lg {
   font-size: var(--c-fs-body);
 }
 
-html[data-skin="console"] .c-avatar-xl {
-  width: 56px;
-  height: 56px;
-  font-size: 20px;
-}
-
 html[data-skin="console"] .c-avatar-request {
   background: var(--c-off);
 }

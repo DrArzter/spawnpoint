@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import { Icon, type IconName } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { ARRIVED, useArrivals } from "./Tick";
-import { SkeletonRows } from "./Skeleton";
+import { Skeleton } from "./Skeleton";
+import { useSkeletonRows } from "./rows";
 
 /**
  * A column's role decides its layout:
@@ -66,6 +67,7 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
 }>) {
   const tracked = useArrivals(arrivals === true ? rows.map(rowKey) : []);
   const fresh = typeof arrivals === "object" ? arrivals : tracked;
+  const placeholders = useSkeletonRows(label, rows.length, loading);
   return (
     <div className={cx("c-table-wrap", split && "c-table-split", className)}>
       <table aria-label={label} className={cx("c-table", variant !== "default" && `c-table-${variant}`)} data-layout="rows">
@@ -78,7 +80,7 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
             ))}
           </tr>
         </thead>
-        {loading ? <SkeletonRows columns={columns.length} inTable /> : (
+        {loading ? <LoadingBody columns={columns} count={placeholders} /> : (
           <tbody>
             {rows.length === 0 && empty !== undefined && <tr className="c-table-empty"><td colSpan={columns.length}>{empty}</td></tr>}
             {rows.map((row) => (
@@ -94,6 +96,31 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
         )}
       </table>
     </div>
+  );
+}
+
+/** A cell's placeholder: the size of what the column holds, so the row keeps its height. */
+function placeholder(kind: ColumnKind | undefined) {
+  if (kind === "act") return <Skeleton height="var(--c-ctl-sm)" width={72} />;
+  if (kind === "check") return <Skeleton height={18} width={18} />;
+  const width = { lead: "60%", num: "3em" } as Readonly<Partial<Record<ColumnKind, string>>>;
+  return <Skeleton text width={(kind && width[kind]) ?? "50%"} />;
+}
+
+/** The rows of a table that is loading: the same cells, classes and labels as a loaded row. */
+function LoadingBody<Row>({ columns, count }: Readonly<{ columns: readonly Column<Row>[]; count: number }>) {
+  return (
+    <tbody aria-busy="true" aria-label="Loading">
+      {Array.from({ length: count }, (_, row) => (
+        <tr key={row}>
+          {columns.map((column, index) => (
+            <td className={cx(column.kind && `c-col-${column.kind}`, column.clip && "c-col-clip", column.className)} data-col={column.kind === "act" ? "actions" : undefined} data-label={column.kind === "act" || column.kind === "lead" || column.kind === "check" ? undefined : column.header} data-rail={index === 0 ? "" : undefined} key={column.id}>
+              {placeholder(column.kind)}
+            </td>
+          ))}
+        </tr>
+      ))}
+    </tbody>
   );
 }
 

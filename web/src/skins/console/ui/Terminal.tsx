@@ -11,7 +11,7 @@ import { Table } from "./Table";
  * announced politely and highlighted as they arrive (A9). Commands and output
  * are mono, one line each, with the whole text as the tooltip.
  */
-export function Terminal({ label, lines }: Readonly<{ label: string; lines: readonly ConsoleLine[] }>) {
+export function Terminal({ label, lines, loading = false }: Readonly<{ label: string; lines: readonly ConsoleLine[]; /** The log is on its way: placeholder rows on the same columns. */ loading?: boolean }>) {
   const region = useRef<HTMLDivElement>(null);
   const newest = lines.at(-1)?.id;
   useLayoutEffect(() => {
@@ -30,6 +30,7 @@ export function Terminal({ label, lines }: Readonly<{ label: string; lines: read
         ]}
         arrivals
         label="Commands"
+        loading={loading}
         rowKey={(line) => line.id}
         rows={lines}
         variant="fixed"

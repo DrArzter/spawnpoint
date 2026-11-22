@@ -15,6 +15,14 @@ html[data-skin="console"] .c-skeleton {
   animation: c-shimmer var(--c-loop-shimmer) linear infinite;
 }
 
+/* A line of text: as tall as the line, drawn as a bar inside it. */
+html[data-skin="console"] .c-skeleton-text {
+  box-sizing: border-box;
+  height: 1lh;
+  border-block: .2lh solid transparent;
+  background-clip: padding-box;
+}
+
 html[data-skin="console"] .c-progress {
   position: relative;
   display: block;

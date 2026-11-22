@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import type { HostMetrics, HostMetricSeries, MetricRange } from "../../../api/contract";
 import type { MetricsModel } from "../../../core/models";
@@ -9,8 +9,8 @@ import { Empty, LoadError } from "../ui/Empty";
 import { Grid } from "../ui/Grid";
 import { Segmented } from "../ui/Segmented";
 import { Skeleton, SkeletonGroup } from "../ui/Skeleton";
-import { StatCard } from "../ui/StatCard";
-import { chartSummary, TimeSeriesChart } from "../ui/TimeSeriesChart";
+import { StatCard, StatSkeleton } from "../ui/StatCard";
+import { ChartSkeleton, chartSummary, TimeSeriesChart } from "../ui/TimeSeriesChart";
 
 // A5: the charts draw in on the first view of a world's metrics in this session.
 const seen = new Set<string>();
@@ -51,6 +51,9 @@ export function stripRuns(mask: readonly boolean[]): StripRun[] {
   return runs;
 }
 
+// A host reports four series (CPU, memory and the two networks); the skeleton draws that many.
+const SERIES = [0, 1, 2, 3];
+
 export function MetricsTab({ model, worldId }: Readonly<{ model: MetricsModel; worldId: string }>) {
   const [reveal, setReveal] = useState(() => !seen.has(worldId));
   useEffect(() => { seen.add(worldId); }, [worldId]);
@@ -66,6 +69,7 @@ export function MetricsTab({ model, worldId }: Readonly<{ model: MetricsModel; w
           options={model.ranges.map((range) => ({ value: range.id, label: range.label }))}
           value={model.range}
         />
+        {metrics.status === "loading" && <span className="c-metrics-window"><Skeleton text width="15em" /></span>}
         {value && (
           <span className="c-metrics-window" data-tip={`${Math.round(value.periodSeconds / 60)}-minute readings`} tabIndex={0 /* NOSONAR focusable tooltip trigger */}>
             {shortDateTime(value.startedAt)} – {shortDateTime(value.endedAt)}
@@ -74,8 +78,9 @@ export function MetricsTab({ model, worldId }: Readonly<{ model: MetricsModel; w
       </div>
       {metrics.status === "loading" && (
         <SkeletonGroup className="c-metrics-loading">
-          <Grid kind="stat">{[0, 1, 2, 3].map((cell) => <Skeleton height={96} key={cell} />)}</Grid>
-          <Grid kind="metrics">{[0, 1, 2, 3].map((cell) => <Skeleton height={300} key={cell} />)}</Grid>
+          <StripCard axis={<><Skeleton text width="6em" /><Skeleton text width="2.5em" /></>} share={<Skeleton text width="3ch" />} track={<div className="c-strip-track"><Skeleton height="100%" /></div>} />
+          <Grid kind="stat">{SERIES.map((cell) => <StatSkeleton key={cell} />)}</Grid>
+          <Grid kind="metrics">{SERIES.map((cell) => <Card key={cell} loading><ChartSkeleton /></Card>)}</Grid>
         </SkeletonGroup>
       )}
       {metrics.status === "error" && <Card label="Metrics"><LoadError error={metrics.error} kind={metrics.kind} retry={metrics.retry} title="Metrics could not be loaded" verb="read metrics" /></Card>}
@@ -133,6 +138,19 @@ function Chart({ series, range, reveal, time }: Readonly<{ series: HostMetricSer
   );
 }
 
+/** The Host running card's shell, shared by the strip and its skeleton: the label with its share, the track, the time axis. */
+function StripCard({ share, track, axis }: Readonly<{ share: ReactNode; track: ReactNode; axis: ReactNode }>) {
+  return (
+    <Card label="Host running">
+      <div className="c-strip">
+        <span className="c-strip-label">Host running<strong>{share}</strong></span>
+        {track}
+        <div aria-hidden="true" className="c-strip-axis">{axis}</div>
+      </div>
+    </Card>
+  );
+}
+
 /** Host running: when a host reported anything in the window, as one quiet track of runs (§10). */
 function Strip({ metrics, range, reveal }: Readonly<{ metrics: HostMetrics; range: string; reveal: boolean }>) {
   const mask = hostRunning(metrics);
@@ -142,9 +160,10 @@ function Strip({ metrics, range, reveal }: Readonly<{ metrics: HostMetrics; rang
   const time = metricTime(metrics.range);
   const end = (run: StripRun) => run.from + run.length >= mask.length ? "now" : time(points[run.from + run.length]?.at ?? metrics.endedAt);
   return (
-    <Card label="Host running">
-      <div className="c-strip">
-        <span className="c-strip-label">Host running<strong>{share} %</strong></span>
+    <StripCard
+      axis={<><span>{shortDateTime(metrics.startedAt)}</span><span>Now</span></>}
+      share={`${share} %`}
+      track={(
         <div aria-label={`Host running ${share} % of the last ${range}`} className={reveal ? "c-strip-track c-strip-reveal" : "c-strip-track"} role="img">
           {stripRuns(mask).map((run) => (
             <span
@@ -155,11 +174,7 @@ function Strip({ metrics, range, reveal }: Readonly<{ metrics: HostMetrics; rang
             />
           ))}
         </div>
-        <div aria-hidden="true" className="c-strip-axis">
-          <span>{shortDateTime(metrics.startedAt)}</span>
-          <span>Now</span>
-        </div>
-      </div>
-    </Card>
+      )}
+    />
   );
 }

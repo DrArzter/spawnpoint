@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cx } from "../../../lib/cx";
+import { Skeleton } from "./Skeleton";
 import { Tick } from "./Tick";
 
 export type CardBody = "pad" | "flush" | "kv";
@@ -10,7 +11,7 @@ export type CardBody = "pad" | "flush" | "kv";
  * end. The body keeps its content at the top, so cards of one grid row share
  * one height without centring anything (R11).
  */
-export function Card({ title, meta, count, titleTip, actions, body = "pad", className, label, children }: Readonly<{
+export function Card({ title, meta, count, titleTip, actions, body = "pad", loading = false, className, label, children }: Readonly<{
   title?: string;
   /** A fact after the title on the same line: "· 3 players". */
   meta?: ReactNode;
@@ -19,6 +20,8 @@ export function Card({ title, meta, count, titleTip, actions, body = "pad", clas
   titleTip?: string;
   actions?: ReactNode;
   body?: CardBody;
+  /** Its content is loading: the head keeps its height, with a placeholder where the title is not yet known. */
+  loading?: boolean;
   className?: string;
   /** Names a card that has no visible title. */
   label?: string;
@@ -26,10 +29,10 @@ export function Card({ title, meta, count, titleTip, actions, body = "pad", clas
 }>) {
   return (
     <section aria-label={title ? undefined : label} className={cx("c-card", className)} data-layout="rail" data-scope="">
-      {title && (
+      {(title || loading) && (
         <header className="c-card-head" data-layout={actions ? "spread" : undefined}>
           <h2 data-rail="" data-tip={titleTip} tabIndex={titleTip ? 0 : undefined /* NOSONAR focusable tooltip trigger */}>
-            {title}
+            {title || <Skeleton text width="7em" />}
             {count !== undefined && <span className="c-count"><Tick value={count} /></span>}
           </h2>
           {meta && <span className="c-card-meta">{meta}</span>}

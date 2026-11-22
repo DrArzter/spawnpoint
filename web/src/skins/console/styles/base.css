@@ -68,8 +68,11 @@ html[data-skin="console"] .c-spin {
 @keyframes c-reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @keyframes c-shimmer { to { background-position: -200% 0; } }
 @keyframes c-shake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
-@keyframes c-page-out { to { opacity: 0; transform: translateX(-32px) scale(.985); } }
-@keyframes c-page-in { from { transform: translateX(56px); } }
+@keyframes c-fade-out { to { opacity: 0; } }
+@keyframes c-leave-left { to { opacity: 0; transform: translateX(calc(-1 * var(--c-travel))); } }
+@keyframes c-leave-right { to { opacity: 0; transform: translateX(var(--c-travel)); } }
+@keyframes c-enter-from-right { from { opacity: 0; transform: translateX(var(--c-travel)); } }
+@keyframes c-enter-from-left { from { opacity: 0; transform: translateX(calc(-1 * var(--c-travel))); } }
 @keyframes c-bump { 40% { color: var(--c-accent-text); transform: translateY(-2px); } }
 @keyframes c-row-in { from { opacity: 0; transform: translateY(-8px); background-color: var(--c-accent-soft); } }
 @keyframes c-pane-out { to { opacity: 0; transform: translateY(-16px); } }
@@ -90,20 +93,66 @@ html[data-skin="console"] .c-arrived > td {
   animation: c-row-in var(--c-d3) var(--c-ease);
 }
 
-/* A1: the page area slides as a solid sheet; the bars are outside it, and the
-   notifications float above it with no snapshot of their own underneath. */
+/*
+ * A1: the page area traverses with the hierarchy. Going deeper (forward) the
+ * new page comes in from the end edge and the old one leaves to the start
+ * edge; going up or to an earlier section (back) it is the other way round. A
+ * switch with no direction (another game) only cross-fades. Old and new share
+ * one duration and easing, so their opacities always sum to one: the area
+ * never dims or brightens. The group clips what travels, so a sheet never
+ * crosses the rail or the bars; those are outside it, and the notifications
+ * float above it with no snapshot of their own underneath.
+ */
 html[data-skin="console"]::view-transition-group(c-page) {
+  overflow: clip;
   animation-duration: var(--c-d3);
   animation-timing-function: var(--c-ease);
 }
 
-html[data-skin="console"]::view-transition-old(c-page) {
-  animation: var(--c-d3) var(--c-ease) both c-page-out;
+html[data-skin="console"][data-direction="none"]::view-transition-old(c-page) {
+  animation: var(--c-d3) var(--c-ease) both c-fade-out;
 }
 
-html[data-skin="console"]::view-transition-new(c-page) {
-  animation: var(--c-d3) var(--c-ease) both c-page-in;
-  box-shadow: -24px 0 48px -24px var(--c-page-edge);
+html[data-skin="console"][data-direction="none"]::view-transition-new(c-page) {
+  animation: var(--c-d3) var(--c-ease) both c-fade;
+}
+
+html[data-skin="console"][data-direction="forward"]::view-transition-old(c-page) {
+  animation: var(--c-d3) var(--c-ease) both c-leave-left;
+}
+
+html[data-skin="console"][data-direction="forward"]::view-transition-new(c-page) {
+  animation: var(--c-d3) var(--c-ease) both c-enter-from-right;
+}
+
+html[data-skin="console"][data-direction="back"]::view-transition-old(c-page) {
+  animation: var(--c-d3) var(--c-ease) both c-leave-right;
+}
+
+html[data-skin="console"][data-direction="back"]::view-transition-new(c-page) {
+  animation: var(--c-d3) var(--c-ease) both c-enter-from-left;
+}
+
+/*
+ * A1h: the page header is its own group in a page or pane switch, so it does
+ * not travel with the sheet. It keeps its place and cross-fades; text both
+ * pages share stays put, and only the words that change dissolve.
+ */
+html[data-skin="console"][data-transition] .c-page-header {
+  view-transition-name: c-head;
+}
+
+html[data-skin="console"]::view-transition-group(c-head) {
+  animation-duration: var(--c-d2);
+  animation-timing-function: var(--c-ease);
+}
+
+html[data-skin="console"]::view-transition-old(c-head),
+html[data-skin="console"]::view-transition-new(c-head) {
+  height: auto;
+  width: 100%;
+  object-fit: none;
+  object-position: 0 0;
 }
 
 /* A2: during a pane switch only the pane moves; the page area keeps still. */

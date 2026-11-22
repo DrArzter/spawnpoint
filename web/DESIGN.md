@@ -67,6 +67,7 @@ motion:
   d4: "900ms"
   ease: "cubic-bezier(.22, 1, .36, 1)"
   ease-spring: "cubic-bezier(.34, 1.45, .64, 1)"
+  travel: "64px"
 ---
 
 # Design System: Spawnpoint Console
@@ -211,7 +212,7 @@ and bottom sheet 18px; button, pill, chip and segmented control 999px.
 ## Motion
 
 Tokens: `--c-d1` 140ms (hover, press, colour), `--c-d2` 240ms (small surfaces), `--c-d3` 420ms (panels, page moves),
-`--c-d4` 900ms (drawing), `--c-ease`, `--c-ease-spring`, and the named loops and dwells (`--c-d-tick`,
+`--c-d4` 900ms (drawing), `--c-ease`, `--c-ease-spring`, `--c-travel` 64px (how far a page sheet travels), and the named loops and dwells (`--c-d-tick`,
 `--c-loop-bar`, `--c-loop-spin`, `--c-loop-shimmer`, `--c-shake`, `--c-dwell-copy`, `--c-dwell-toast`). Timers in
 TypeScript read `ui/motion.ts`, which the `console-css` test holds equal to the tokens.
 
@@ -220,9 +221,11 @@ came from. Under `prefers-reduced-motion: reduce` every transition is instant an
 
 | # | Element | Trigger | Motion |
 |---|---|---|---|
-| A1 | Page switch | Navigation to another page | View Transition on the page area only: the new page slides in from 56px as an opaque sheet, the old one slides back and fades |
-| A2 | Pane switch | Navigation inside a split page | As A1 on the pane only, vertical |
+| A1 | Page switch | Navigation to another page | View Transition on the page area only, in the direction of the hierarchy (`data-direction`): going deeper (a list to one of its items, Home to a world) the new page comes in from the end edge by `--c-travel` and the old one leaves to the start edge; going up or earlier on the rail (a world to Home or Releases, Profile to Home) it is mirrored; the same place in another game only cross-fades. Both sheets move together, with no scale, no shadow and one easing, so their opacities always sum to one. The area is clipped to itself: nothing crosses the rail or the bars. Order between two pages of one depth follows the rail: Home, Worlds, Releases, Access, Profile. Back and Forward in the browser do not animate |
+| A1h | Page header | A page or pane switch | The header is its own transition group: it does not travel with the sheet, holds still and cross-fades in `--c-d2`; words both pages share stay steady, only the words that change dissolve. It is 44px on every page from 760px; under it the title row is 44px and the actions, when a page has any, are one 44px row |
+| A2 | Pane switch | Navigation inside a split page | As A1 on the pane only, vertical; the list column does not move |
 | A3 | Tab switch | Tab activation | The panel fades up 8px; the tab ink slides |
+| A3h | Panel height | A tab's content changes size: data arrives, another tab or world replaces it | The panel box eases from the old height to the new one in `--c-d3` (`Settle`); it clips only while it moves |
 | A4 | Card entrance | First view of a page in the session | All cards rise 12px together; no stagger |
 | A5 | Chart draw-in | First view of Metrics; a range change | Reveal from the left |
 | A6 | Strip and worlds-by-state bar | First view; a count change | Reveal; segments move |
@@ -263,6 +266,7 @@ stays focusable and shows the hint) and `aria-busy` while busy. Contract tests: 
 | `Table`, `TrackList`, `DetailList` | Rows on shared tracks; key-value sections in equal columns |
 | `Status`, `Indicator`, `Chip`, `Tile`, `Tick` | State: icon and label; icon with the label in the tooltip; facts; status count tiles; ticking counts |
 | `Notice`, `Empty`, `Skeleton`, `ProgressBar` | One-line notices; empty and error states; loading at the final geometry; indeterminate work |
+| `Settle` | Wraps the tab panel so its height glides when the content changes size (A3h) |
 | `Dialog`, `SidePanel`, `Palette`, `Flashbar`, `Toast`, `Tooltip` | Layers |
 | `Field`, `TextInput`, `NumberInput`, `ColourInput`, `Select`, `Toggle`, `RadioCards`, `Checkbox`, `Segmented`, `FilterBar`, `Pager`, `Preferences` | Input |
 | `Address`, `Copy`, `Person`, `Avatar`, `GameGlyph`, `Ago` | Facts with a fixed form |
@@ -274,7 +278,12 @@ A primitive that promises a layout emits its marker (`data-layout`, `data-rail`,
 ## States
 
 - **Boot**: a centred card with the mark, one title and an indeterminate bar.
-- **Loading**: the region's skeleton at its final geometry; the header, tabs and card heads draw at once.
+- **Loading**: the region's skeleton at its final geometry; the header, tabs and card heads draw at once. A skeleton is
+  built from the shell of the thing it stands for, never from a fixed height: `Table` and `TrackList` take `loading`
+  and draw placeholder rows with the loaded row's cells, classes, labels and tracks; `Card loading`, `StatSkeleton`,
+  `ChartSkeleton` and `ListItemWorldSkeleton` keep a card, a stat, a chart and a world row at their size; a `Skeleton
+  text` is exactly one line of its container. A list draws as many placeholder rows as it knows, else as many as it
+  showed last time in the session, else three, so another world's backups are as tall loading as loaded.
 - **Empty**: one icon, one title, at most one Action.
 - **Error**: the empty state's error variant with the reason as one line and Retry. A refused role shows a lock and
   no Retry.

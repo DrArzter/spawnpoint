@@ -77,6 +77,36 @@ function segment(value: string | undefined): string | null {
   }
 }
 
+// The rail's order. Between two pages of one depth, the one further down the
+// rail is "after" the other, so a page switch can tell which way it travels.
+const SECTION_ORDER = ["home", "worlds", "releases", "access", "profile"] as const;
+
+/**
+ * Where an address sits in the console's hierarchy: its depth (a world is one
+ * level below its game's pages) and its section's place on the rail. An
+ * address of no known section sits with the worlds.
+ */
+export function placeOf(hash: string): Readonly<{ depth: number; section: number }> {
+  const [path = "", , world = ""] = hash.replace(/^#\/?/, "").split("?")[0]!.split("/");
+  const section = SECTION_ORDER.indexOf(path === "home" ? "home" : (pageByPath[path] ?? "worlds"));
+  return { depth: path === "worlds" && world !== "" ? 1 : 0, section };
+}
+
+export type Traverse = "forward" | "back" | "none";
+
+/**
+ * Which way a page switch travels. Going deeper (a list to one of its items) is
+ * forward; going up, or to an earlier section of the same depth, is back; two
+ * pages of one depth and section (another game's worlds) have no direction.
+ */
+export function traverse(from: string, to: string): Traverse {
+  const before = placeOf(from);
+  const after = placeOf(to);
+  const order = after.depth - before.depth || after.section - before.section;
+  if (order === 0) return "none";
+  return order > 0 ? "forward" : "back";
+}
+
 export function readRoute(): AppRoute {
   const [pagePath = "worlds", second, third, fourth] = window.location.hash.replace(/^#\/?/, "").split("/");
   const page = pageByPath[pagePath] ?? "worlds";

@@ -110,10 +110,6 @@ html[data-skin="console"] .c-bystate-legend b {
   font-weight: 800;
 }
 
-html[data-skin="console"] .c-worlds-loading .c-tiles {
-  margin: 0;
-}
-
 html[data-skin="console"] .c-worlds-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -194,6 +190,10 @@ html[data-skin="console"] .c-worlds-row {
 
 html[data-skin="console"] .c-worlds-row:last-child {
   border-bottom: 0;
+}
+
+html[data-skin="console"] .c-worlds-row > .c-skeleton {
+  justify-self: center;
 }
 
 html[data-skin="console"] .c-worlds-row-selected {

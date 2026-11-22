@@ -106,45 +106,55 @@ export class FakeRefsTable {
   private handle(command: unknown): Record<string, unknown> {
     this.beforeSend?.(command);
     this.commands.push((command as object).constructor.name);
-    if (command instanceof GetCommand) {
-      const found = this.items.get(this.id(command.input.Key!));
-      return found === undefined ? {} : { Item: structuredClone(found) };
-    }
-    if (command instanceof QueryCommand) {
-      const values = command.input.ExpressionAttributeValues!;
-      const items = [...this.items.values()]
-        .filter((item) => item.pk === values[":pk"] && String(item.sk).startsWith(String(values[":hold"] ?? values[":prefix"])))
-        .map((item) => structuredClone(item));
-      return { Items: items };
-    }
-    if (command instanceof PutCommand) {
-      const input = command.input;
-      const current = this.items.get(this.id(input.Item!));
-      if (!conditionHolds(current, input.ConditionExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues)) {
-        throw Object.assign(new Error("condition failed"), { name: "ConditionalCheckFailedException" });
-      }
-      this.items.set(this.id(input.Item!), input.Item!);
-      return {};
-    }
+    if (command instanceof GetCommand) return this.onGet(command);
+    if (command instanceof QueryCommand) return this.onQuery(command);
+    if (command instanceof PutCommand) return this.onPut(command);
     if (command instanceof DeleteCommand) {
       this.items.delete(this.id(command.input.Key!));
       return {};
     }
-    if (command instanceof UpdateCommand) {
-      const input = command.input;
-      const current = this.items.get(this.id(input.Key!));
-      if (!conditionHolds(current, input.ConditionExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues)) {
-        throw Object.assign(new Error("condition failed"), { name: "ConditionalCheckFailedException" });
-      }
-      this.items.set(this.id(input.Key!), apply(current ?? { ...input.Key }, input.UpdateExpression!, input.ExpressionAttributeNames, input.ExpressionAttributeValues));
-      return {};
-    }
-    if (command instanceof TransactWriteCommand) {
-      const evaluated = command.input.TransactItems!.map((entry) => this.transactItem(entry as never));
-      if (evaluated.some((entry) => !entry.ok)) throw cancelled(evaluated.map((entry) => ({ Code: entry.ok ? "None" : "ConditionalCheckFailed" })));
-      for (const entry of evaluated) entry.commit();
-      return {};
-    }
+    if (command instanceof UpdateCommand) return this.onUpdate(command);
+    if (command instanceof TransactWriteCommand) return this.onTransact(command);
     throw new Error("fake table: unsupported command");
+  }
+
+  private onGet(command: GetCommand): Record<string, unknown> {
+    const found = this.items.get(this.id(command.input.Key!));
+    return found === undefined ? {} : { Item: structuredClone(found) };
+  }
+
+  private onQuery(command: QueryCommand): Record<string, unknown> {
+    const values = command.input.ExpressionAttributeValues!;
+    const items = [...this.items.values()]
+      .filter((item) => item.pk === values[":pk"] && String(item.sk).startsWith(String(values[":hold"] ?? values[":prefix"])))
+      .map((item) => structuredClone(item));
+    return { Items: items };
+  }
+
+  private onPut(command: PutCommand): Record<string, unknown> {
+    const input = command.input;
+    const current = this.items.get(this.id(input.Item!));
+    if (!conditionHolds(current, input.ConditionExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues)) {
+      throw Object.assign(new Error("condition failed"), { name: "ConditionalCheckFailedException" });
+    }
+    this.items.set(this.id(input.Item!), input.Item!);
+    return {};
+  }
+
+  private onUpdate(command: UpdateCommand): Record<string, unknown> {
+    const input = command.input;
+    const current = this.items.get(this.id(input.Key!));
+    if (!conditionHolds(current, input.ConditionExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues)) {
+      throw Object.assign(new Error("condition failed"), { name: "ConditionalCheckFailedException" });
+    }
+    this.items.set(this.id(input.Key!), apply(current ?? { ...input.Key }, input.UpdateExpression!, input.ExpressionAttributeNames, input.ExpressionAttributeValues));
+    return {};
+  }
+
+  private onTransact(command: TransactWriteCommand): Record<string, unknown> {
+    const evaluated = command.input.TransactItems!.map((entry) => this.transactItem(entry as never));
+    if (evaluated.some((entry) => !entry.ok)) throw cancelled(evaluated.map((entry) => ({ Code: entry.ok ? "None" : "ConditionalCheckFailed" })));
+    for (const entry of evaluated) entry.commit();
+    return {};
   }
 }

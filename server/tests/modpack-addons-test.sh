@@ -124,6 +124,13 @@ case "${url}" in
     IFS=/ read -r _project _versions version file <<<"${rest}"
     source="${FAKE_ROOT}/modrinth/${version}/${file//%2B/+}"
     ;;
+  https://github.com/*/releases/download/*)
+    # GitHub release assets, with no token: <owner>/<repo>/releases/download/<tag>/<asset>.
+    rest="${url#https://github.com/}"
+    IFS=/ read -r owner repo _releases _download tag file <<<"${rest}"
+    [[ "${owner}/${repo}" == DrArzter/SophisticatedBackpacks ]]
+    source="${FAKE_ROOT}/github/${tag//%2B/+}/${file//%2B/+}"
+    ;;
   https://downloads.invalid/*) source="${FAKE_ROOT}/downloads/${url##*/}" ;;
   *) exit 22 ;;
 esac
@@ -443,6 +450,128 @@ refusal world-data-nested "invalid addons file" "one world_data path inside anot
 jq '.server.world_data = ["config/prominence.json"]' "${manifest}" >"${fixture}/world-data-forged.json"
 refuses "invalid release manifest" "a forged manifest with world_data over a shipped file" \
   env RELEASE_SOURCE_DIR="${payload}" "${scripts}/upload-release.sh" "${fixture}/world-data-forged.json"
+
+# --- github_release (ADR-0079): an asset of a release of an allow-listed repository ---
+gh_repository=DrArzter/SophisticatedBackpacks
+gh_commit=0123456789abcdef0123456789abcdef01234567
+gh_workflow=.github/workflows/release.yml
+gh_tag='v1.20.1-3.23.4.5.110+sp.1'
+gh_file='sophisticatedbackpacks-1.20.1-3.23.4.5.110+sp.1.jar'
+mkdir -p -- "${fixture}/github"
+# gh_jar <tag> <file> <metadata>: a release asset the fake GitHub serves.
+gh_jar() {
+  mkdir -p -- "${fixture}/github/$1"
+  fabric "${fixture}/github/$1/$2" "$3"
+}
+# ghrelease <tag> <file> [side] [name] [repository]: the pin of a served asset.
+ghrelease() {
+  local tag="$1" file="$2" side="${3:-both}" name="${4:-$2}" repository="${5:-${gh_repository}}" path="${fixture}/github/$1/$2"
+  jq -cn --arg name "${name}" --arg side "${side}" --arg repository "${repository}" --arg tag "${tag}" --arg file "${file}" \
+    --arg commit "${gh_commit}" --arg workflow "${gh_workflow}" \
+    --arg sha512 "$(sha512sum "${path}" | awk '{print $1}')" --argjson bytes "$(stat --format '%s' "${path}")" \
+    '{name: $name, side: $side, github_release: {repository: $repository, tag: $tag, asset: $file, commit: $commit,
+      sha512: $sha512, bytes: $bytes, workflow: $workflow}}'
+}
+gh_jar "${gh_tag}" "${gh_file}" '{"schemaVersion":1,"id":"sophisticatedbackpacks","version":"1.20.1-3.23.4.5.110+sp.1",
+  "depends":{"fabricloader":">=0.16.9","fabric-api":">=0.92.2+1.20.1","minecraft":"1.20.1",
+    "sophisticatedcore":">=1.20.1-1.2.7.7 <1.20.4","forgeconfigapiport":">=8.0.0","team_reborn_energy":">=3.0.0",
+    "porting_lib_loot":">=2.3.2","porting_lib_model_loader":">=2.3.2","porting_lib_tool_actions":">=2.3.2",
+    "porting_lib_networking":">=2.3.2","porting_lib_transfer":">=2.3.2"}}'
+gh_backpacks="$(ghrelease "${gh_tag}" "${gh_file}" both "Sophisticated Backpacks (Fabric port, Spawnpoint fix)")"
+profile gh-release "$(addons "[${gh_backpacks},${core}]")"
+# One refusal profile per rule. The same C1-C8 checks run on a GitHub asset.
+mkdir -p -- "${fixture}/github/v-forge"
+jar "${fixture}/github/v-forge/sophisticatedbackpacks-forge.jar" META-INF/mods.toml \
+  $'modLoader="javafml"\n[[mods]]\nmodId="sophisticatedbackpacks"'
+profile gh-c1 "$(addons "[$(ghrelease v-forge sophisticatedbackpacks-forge.jar)]")"
+gh_jar v-c2 trinkets-3.7.2.jar '{"schemaVersion":1,"id":"trinkets-fork","version":"3.7.2"}'
+profile gh-c2 "$(addons "[$(ghrelease v-c2 trinkets-3.7.2.jar)]")"
+gh_jar v-c4 travelersbackpack-fork.jar '{"schemaVersion":1,"id":"travelersbackpack","version":"9.2.0"}'
+profile gh-c4 "$(addons "[$(ghrelease v-c4 travelersbackpack-fork.jar)]")"
+profile gh-c6 "$(addons "[${gh_backpacks}]")"
+gh_jar v-c7 breaker-fork.jar '{"schemaVersion":1,"id":"breakerfork","version":"1.0","breaks":{"trinkets":"<4"}}'
+profile gh-c7 "$(addons "[$(ghrelease v-c7 breaker-fork.jar)]")"
+gh_jar v-c8 hud-fork.jar '{"schemaVersion":1,"id":"hudfork","version":"1.0","depends":{"serverlibfork":"*"}}'
+gh_jar v-c8 serverlib-fork.jar '{"schemaVersion":1,"id":"serverlibfork","version":"1.0"}'
+profile gh-c8 "$(addons "[$(ghrelease v-c8 hud-fork.jar client), $(ghrelease v-c8 serverlib-fork.jar server)]")"
+# Pin errors: wrong size, wrong SHA-512 with the right size, a repository off the list.
+profile gh-size "$(addons "[$(jq -c '.github_release.bytes += 1' <<<"${gh_backpacks}"),${core}]")"
+profile gh-sha "$(addons "[$(jq -c '.github_release.sha512 = ("0" * 128)' <<<"${gh_backpacks}"),${core}]")"
+profile gh-repository "$(addons "[$(ghrelease "${gh_tag}" "${gh_file}" both Fork someone/SophisticatedBackpacks),${core}]")"
+profile gh-case "$(addons "[$(ghrelease "${gh_tag}" "${gh_file}" both Fork drarzter/sophisticatedbackpacks),${core}]")"
+# Shape: a URL in the pin, two sources in one entry, a missing field, a repeated asset.
+profile gh-url "$(addons "[$(jq -c '.github_release.url = "https://evil.invalid/x.jar"' <<<"${gh_backpacks}"),${core}]")"
+profile gh-two-sources "$(addons "[$(jq -c '.modrinth = {project_id:"ouNrBQtq",version_id:"Jk6o7s4h",file:"a.jar",sha512:("0" * 128),bytes:1}' <<<"${gh_backpacks}"),${core}]")"
+profile gh-no-commit "$(addons "[$(jq -c 'del(.github_release.commit)' <<<"${gh_backpacks}"),${core}]")"
+profile gh-bad-tag "$(addons "[$(jq -c '.github_release.tag = "v1/../x"' <<<"${gh_backpacks}"),${core}]")"
+profile gh-twice "$(addons "[${gh_backpacks},$(jq -c '.name = "Again"' <<<"${gh_backpacks}"),${core}]")"
+git -C "${config}" add -A
+git -C "${config}" -c user.name=Test -c user.email=test@example.invalid commit --quiet -m github-release
+
+: >"${fixture}/curl.log"
+payload_gh="${fixture}/gh-release"
+output="$("${scripts}/resolve-profile-mods.sh" "${config}/profiles/gh-release" "${payload_gh}/mods" 2>/dev/null)"
+grep -qx 'addons=2' <<<"${output}"
+# The URL is built from the pin, with + as %2B, on github.com only, and no API call.
+grep -Fxq "https://github.com/${gh_repository}/releases/download/v1.20.1-3.23.4.5.110%2Bsp.1/sophisticatedbackpacks-1.20.1-3.23.4.5.110%2Bsp.1.jar" \
+  "${fixture}/curl.log"
+if grep -Fv -e https://github.com/DrArzter/SophisticatedBackpacks/ -e https://cdn.modrinth.com/ -e https://downloads.invalid/ \
+  -e https://api.curseforge.com/ "${fixture}/curl.log" | grep -q .; then
+  printf 'a download used a host other than GitHub release downloads, Modrinth and CurseForge\n' >&2
+  exit 1
+fi
+[[ "$(files "${payload_gh}/mods")" == "ForgeConfigAPIPort-v8.0.3-1.20.1-Fabric.jar fabric-api-0.92.12+1.20.1.jar ${gh_file} ${core_file} travelersbackpack-fabric-1.20.1-9.1.55.jar trinkets-3.7.2.jar" ]]
+cmp -- "${fixture}/github/${gh_tag}/${gh_file}" "${payload_gh}/mods/${gh_file}"
+"${scripts}/build-profile-release.sh" "${config}/profiles/gh-release" 1.0 "${payload_gh}/mods" "${payload_gh}/manifest.json" >/dev/null
+jq -e --arg file "${gh_file}" '[.client.addons[] | select(.file == $file) | .side] == ["both"]' "${payload_gh}/manifest.json" >/dev/null
+unzip -q "${payload_gh}/client.zip" -d "${payload_gh}/client-tree"
+cmp -- "${fixture}/github/${gh_tag}/${gh_file}" "${payload_gh}/client-tree/overrides/mods/${gh_file}"
+jq -e --arg tag "${gh_tag}" --arg commit "${gh_commit}" --arg repository "${gh_repository}" '
+  ([.addons[] | select(.source.github_release)] | length) == 1 and
+  (.addons[] | select(.source.github_release) | .source) == {github_release: {repository: $repository, tag: $tag, commit: $commit}}
+' "${payload_gh}/client-tree/spawnpoint-client-lock.json" >/dev/null
+RELEASE_SOURCE_DIR="${payload_gh}" "${scripts}/upload-release.sh" "${payload_gh}/manifest.json" >/dev/null
+cmp -- "${fixture}/github/${gh_tag}/${gh_file}" \
+  "${FAKE_S3_ROOT}/${RELEASE_BUCKET}/releases/minecraft/gh-release/1.0/mods/${gh_file}"
+
+# A GitHub asset side: a client addon goes to the players only.
+gh_jar v-zoom zoomify-fork-2.12.jar '{"schemaVersion":1,"id":"zoomifyfork","version":"2.12","depends":{"minecraft":"1.20.x","fabric-api":"*"}}'
+profile gh-client "$(addons "[$(ghrelease v-zoom zoomify-fork-2.12.jar client Zoomify)]")"
+git -C "${config}" add -A
+git -C "${config}" -c user.name=Test -c user.email=test@example.invalid commit --quiet -m github-client
+output="$("${scripts}/resolve-profile-mods.sh" "${config}/profiles/gh-client" "${fixture}/gh-client/mods" 2>/dev/null)"
+grep -qx 'client_mods=1' <<<"${output}"
+[[ "$(files "${fixture}/gh-client/client-mods")" == "zoomify-fork-2.12.jar" && ! -e "${fixture}/gh-client/mods/zoomify-fork-2.12.jar" ]]
+
+: >"${fixture}/curl.log"
+refusal gh-size "does not match the pinned size" "a GitHub asset of another size than the pin"
+refusal gh-sha "does not match the pinned SHA-512" "a GitHub asset with the right size and another SHA-512"
+refusal gh-repository "not on the owner allow-list: someone/SophisticatedBackpacks" "a repository off the allow-list"
+refusal gh-case "not on the owner allow-list: drarzter/sophisticatedbackpacks" "a repository that differs only in case"
+if grep -Fq someone/ "${fixture}/curl.log"; then
+  printf 'a download was attempted from a repository off the allow-list\n' >&2
+  exit 1
+fi
+refusal gh-url "invalid addons file" "a pin that carries its own URL"
+refusal gh-two-sources "invalid addons file" "an entry with two sources"
+refusal gh-no-commit "invalid addons file" "a GitHub pin without its commit"
+refusal gh-bad-tag "invalid addons file" "a tag that is not a plain tag name"
+refusal gh-twice "invalid addons file" "one asset pinned twice"
+refusal gh-c1 "C1 addon" "a Forge JAR from a GitHub release"
+grep -Fq "has no readable fabric mod metadata" "${fixture}/stderr"
+refusal gh-c2 "C2 addon" "a GitHub asset with a file name the pack has"
+grep -Fq "the pack has other bytes under trinkets-3.7.2.jar" "${fixture}/stderr"
+refusal gh-c4 "C4 addon" "a GitHub asset with a mod id the pack has"
+grep -Fq "the pack already has mod travelersbackpack" "${fixture}/stderr"
+refusal gh-c6 "C6 addon" "a GitHub asset with an unmet required dependency"
+grep -Fq "needs sophisticatedcore" "${fixture}/stderr"
+refusal gh-c7 "C7 addon" "a GitHub asset with a declared breaks that matches"
+refusal gh-c8 "C8 addon \"hud-fork.jar\" needs serverlibfork on the client side" "a client GitHub asset needing a server-only addon"
+
+# The sample is valid: its shape passes, and only its placeholder pin stops the build.
+refuses "does not match the pinned size" "the GitHub release sample against this test's own bytes" \
+  env ADDONS_MINECRAFT_VERSION=1.20.1 ADDONS_LOADER_TYPE=fabric \
+    "${scripts}/resolve-addons.sh" "${repository_root}/docs/examples/prominence-addons/addons-github-release.json" "${fixture}" "${fixture}/gh-sample"
 
 # The distribution rule allows the same bytes from a reviewed mirror.
 mirror_entry="$(jq -cn --arg sha512 "$(sha512sum "${fixture}/downloads/locked-1.0.jar" | awk '{print $1}')" \

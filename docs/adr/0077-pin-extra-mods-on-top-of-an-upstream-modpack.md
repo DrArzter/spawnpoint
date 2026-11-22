@@ -6,6 +6,8 @@
 - Amends: [ADR-0068](0068-normalize-upstream-modpacks-into-releases.md),
   [ADR-0069](0069-give-players-a-mod-set-of-their-own.md) (Scope),
   [ADR-0040](0040-reusable-presets-and-world-wipes.md) (preset composition)
+- Amended by [ADR-0079](0079-pin-an-addon-to-a-github-release-asset.md): a third source, `github_release`, which
+  downloads from GitHub
 - Amended on 2026-11-22: an addon may declare `world_data` paths inside the managed config roots. See
   [World data](#amendment-2026-11-22-world-data)
 
@@ -38,7 +40,7 @@ modpack world: the worked example is Sophisticated Backpacks on Prominence II 4.
 - CurseForge: `{project_id, file_id}`. The build reads the file's SHA-1, size, game versions and the project's
   distribution setting from the API, and checks the download against them.
 - Modrinth: `{project_id, version_id, file, sha512, bytes}`. The build makes the URL on the Modrinth CDN from these
-  fields and checks SHA-512 and size. No other host is used.
+  fields and checks SHA-512 and size. No other host is used for this source.
 - A CurseForge file whose author switched off third-party distribution is refused. The author may give the same bytes
   as a Modrinth entry, or as `mirror: {url, sha512, bytes}` that must also match the CurseForge SHA-1 and size
   (the ADR-0068 rule).

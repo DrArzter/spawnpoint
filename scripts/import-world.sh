@@ -138,6 +138,7 @@ manifest_key="$(awk -F= '$1 == "manifest_key" { print $2 }' <"${staging}/release
 # 3 + 4. Archive the world and upload it, both through the existing verified paths.
 SPAWNPOINT_GAME="${game}" \
 SERVER_DATA_DIR="${data_dir}" \
+SERVER_MODS_DIR="${mods_dir}" \
 SERVER_BACKUP_DIR="${staging}/backups" \
 WORLD_NAME="${world_name}" \
   "${SERVER_SCRIPTS}/archive-world.sh" >"${staging}/archive.out"

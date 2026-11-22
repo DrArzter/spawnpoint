@@ -42,6 +42,11 @@
 #   game_save_sentinel         succeed only if the data dir holds a real save
 #                              (both take the data dir and the world's name; the name
 #                              names backups, and the game's own config names its save)
+#   game_save_excludes         optional: print NUL-separated tar patterns, anchored and
+#                              with * stopping at a slash, to leave out of those paths
+#   game_mod_data_paths        optional: given the world's mods dir, print NUL-separated
+#                              subfolders that hold world data; they are archived
+#                              under mods-data/ and restored into the mods dir
 #   game_prepare_runtime       optional: derive runtime inputs from a verified release manifest
 #   game_prepare_installed_runtime optional: restore those inputs for later lifecycle commands
 #   game_prepare_session       optional: last-mile files before the container starts

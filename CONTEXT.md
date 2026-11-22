@@ -52,6 +52,8 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Backup**: A recoverable point-in-time snapshot of one world generation, associated with the release that produced it. Restoring a backup creates a new generation from that saved state; it does not turn the backup into a world or release.
 
+**World-owned data**: Data that a server mod or plugin writes for one world beside its save, such as the LuckPerms database in `mods/luckperms/` or a `world_data` path inside a managed config root. A backup holds it and a release change keeps it; jars and caches are not world-owned data. _Avoid_: Mod config when the files the release ships are meant.
+
 **Desired release**: The release an open world generation is currently meant to run. It may differ from the active release while a deployment operation is in progress or has failed.
 
 **Active release**: The last release that started for an open world generation and passed the server health check. It is evidence of a successful deployment, not merely a requested value.

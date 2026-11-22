@@ -96,10 +96,42 @@ game_parse_player_count() {
   printf '%s\n' "${count}"
 }
 
-# The level and its dimension siblings (world_nether, ...).
+# The level and its dimension siblings (world_nether, ...), then what the world
+# owns beside them (ADR-0010): plugin folders, the Paper and Bukkit server
+# files, and the world_data paths the installed release keeps out of its
+# managed config roots (ADR-0077), with the marker that names them so a new
+# host keeps them too.
 game_save_paths() {
-  local data_dir="$1" _world_name="$2"
-  find "${data_dir}" -mindepth 1 -maxdepth 1 -type d -name "${MINECRAFT_LEVEL_NAME}*" -printf '%f\0' | sort -z
+  local data_dir="$1" _world_name="$2" path
+  local marker="${data_dir}/.spawnpoint-overrides.json"
+  local -a paths=()
+  mapfile -d '' paths < <(find "${data_dir}" -mindepth 1 -maxdepth 1 -type d -name "${MINECRAFT_LEVEL_NAME}*" -printf '%f\0' | sort -z)
+  [[ ! -d "${data_dir}/plugins" || -L "${data_dir}/plugins" ]] || paths+=("plugins")
+  for path in bukkit.yml spigot.yml config/paper-global.yml config/paper-world-defaults.yml; do
+    [[ ! -f "${data_dir}/${path}" || -L "${data_dir}/${path}" ]] || paths+=("${path}")
+  done
+  if [[ -f "${marker}" && ! -L "${marker}" ]] && jq -e '(.world_data // []) | length > 0' "${marker}" >/dev/null 2>&1; then
+    paths+=(".spawnpoint-overrides.json")
+    while IFS= read -r path; do
+      if [[ -e "${data_dir}/${path}" || -L "${data_dir}/${path}" ]]; then paths+=("${path}"); fi
+    done < <(jq -r '.world_data[] | select(type == "string" and test("^(config|defaultconfigs|kubejs|scripts|global_packs|openloader)(/[^/\\\\]+)+$") and (split("/") | all(. != "." and . != "..")))' "${marker}")
+  fi
+  (( ${#paths[@]} == 0 )) || printf '%s\0' "${paths[@]}"
+}
+
+# Caches and release-owned files inside the save paths, as anchored tar
+# patterns in which * stops at a slash. Each name was read in Paper,
+# Paperclip and the itzg image (docs/adr/0034-per-game-adapter.md).
+game_save_excludes() {
+  printf '%s\0' 'plugins/*.jar' 'plugins/.paper-remapped' 'plugins/*/libs' 'libraries' 'cache' 'versions'
+}
+
+# The non-jar subfolders of the world's mods directory: Fabric server mods
+# such as LuckPerms keep their data there (ADR-0010, mods-data/).
+game_mod_data_paths() {
+  local mods_dir="$1"
+  [[ -d "${mods_dir}" && ! -L "${mods_dir}" ]] || return 0
+  find "${mods_dir}" -mindepth 1 -maxdepth 1 -type d -printf '%f\0' | sort -z
 }
 
 game_save_sentinel() {

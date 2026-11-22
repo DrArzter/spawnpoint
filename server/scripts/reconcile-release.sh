@@ -86,14 +86,49 @@ chmod 0755 -- "${stage_dir}"
 backup_dir="${target_parent}/.${target_name}.${release}.previous.$$"
 target_moved=false
 committed=false
+# The world's own subfolders of the mods directory (ADR-0010), moved into the
+# stage before the swap so that a release change keeps them.
+kept_folders=()
+# Put every kept folder back into the old mods directory. A folder that cannot
+# go back stays in the stage, which is then kept.
+return_kept_folders() {
+  local folder failed=false
+  for folder in "${kept_folders[@]}"; do
+    [[ -e "${stage_dir}/${folder}" || -L "${stage_dir}/${folder}" ]] || continue
+    if [[ -e "${target_dir}/${folder}" || -L "${target_dir}/${folder}" ]] || ! mv -T -- "${stage_dir}/${folder}" "${target_dir}/${folder}"; then
+      printf 'error: could not put %s back into %s; it is kept in %s\n' "${folder}" "${target_dir}" "${stage_dir}" >&2
+      failed=true
+    fi
+  done
+  [[ "${failed}" == false ]]
+}
+holds_folder() {
+  [[ -d "$1" && -n "$(find "$1" -mindepth 1 -maxdepth 1 -type d -print -quit)" ]]
+}
 cleanup() {
   status=$?
-  if [[ "${committed}" != true && "${target_moved}" == true && ! -e "${target_dir}" && -d "${backup_dir}" ]]; then
-    mv -- "${backup_dir}" "${target_dir}"
+  if [[ "${committed}" != true ]]; then
+    if [[ "${target_moved}" == true && ! -e "${target_dir}" && -d "${backup_dir}" ]]; then
+      mv -- "${backup_dir}" "${target_dir}"
+    fi
+    if [[ -d "${target_dir}" && ! -L "${target_dir}" ]]; then
+      return_kept_folders || status=1
+    fi
   fi
-  rm -rf -- "${stage_dir}"
+  # Never delete a folder of world data: a stage or a previous directory that
+  # still holds one is kept for the operator.
+  if holds_folder "${stage_dir}"; then
+    printf 'error: the stage still holds world data; kept at %s\n' "${stage_dir}" >&2
+    (( status != 0 )) || status=1
+  else
+    rm -rf -- "${stage_dir}"
+  fi
   if [[ "${committed}" == true ]]; then
-    rm -rf -- "${backup_dir}"
+    if holds_folder "${backup_dir}"; then
+      printf 'warning: the previous mods directory still holds a folder; kept at %s\n' "${backup_dir}" >&2
+    else
+      rm -rf -- "${backup_dir}"
+    fi
   fi
   exit "${status}"
 }
@@ -120,6 +155,20 @@ actual_count="$(find "${stage_dir}" -maxdepth 1 -type f \( -name '*.jar' -o -nam
 cp -- "${manifest}" "${stage_dir}/.spawnpoint-release.json"
 chmod 0644 -- "${stage_dir}/.spawnpoint-release.json"
 
+if [[ -d "${target_dir}" ]]; then
+  mapfile -d '' world_folders < <(find "${target_dir}" -mindepth 1 -maxdepth 1 -type d -printf '%f\0' | sort -z)
+  # Every name is checked before the first folder moves.
+  for folder in "${world_folders[@]}"; do
+    [[ ! -e "${stage_dir}/${folder}" && ! -L "${stage_dir}/${folder}" ]] ||
+      die "the release ships ${folder}, which is a folder of world data in ${target_dir}"
+  done
+  for folder in "${world_folders[@]}"; do
+    kept_folders+=("${folder}")
+    mv -T -- "${target_dir}/${folder}" "${stage_dir}/${folder}" ||
+      die "could not move ${folder} out of ${target_dir}; every folder is put back"
+  done
+fi
+
 if [[ -e "${target_dir}" ]]; then
   mv -- "${target_dir}" "${backup_dir}"
   target_moved=true
@@ -130,4 +179,5 @@ committed=true
 printf 'result=reconciled\n'
 printf 'release=%s\n' "${release}"
 printf 'mods=%s\n' "${expected_count}"
+printf 'kept_folders=%s\n' "${#kept_folders[@]}"
 printf 'target=%s\n' "${target_dir}"

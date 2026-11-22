@@ -41,6 +41,40 @@ archive="$(realpath -m -- "${archive}")"
 
 mapfile -d '' world_paths < <(game_save_paths "${data_dir}" "${world_name}")
 (( ${#world_paths[@]} > 0 )) || die "no save paths reported for ${world_name}"
+for path in "${world_paths[@]}"; do
+  # mods-data/ is the second root; ./ marks its members for the transform below.
+  [[ -n "${path}" && "${path}" != -* && "${path}" != ./* && "${path}" != mods-data && "${path}" != mods-data/* ]] ||
+    die "unsafe save path reported for ${world_name}: ${path}"
+done
+
+# Anchored, and * stops at a slash: plugins/*.jar must not reach
+# plugins/Geyser/ext/a.jar, and libraries must not reach world/libraries.
+exclude_options=()
+if declare -F game_save_excludes >/dev/null; then
+  mapfile -d '' save_excludes < <(game_save_excludes)
+  exclude_options=(--anchored --no-wildcards-match-slash)
+  for pattern in "${save_excludes[@]}"; do
+    exclude_options+=("--exclude=${pattern}")
+  done
+fi
+
+# Subfolders of the world's mods directory go in under mods-data/. The
+# excludes cannot reach them: their names start with ./, which no anchored
+# pattern matches.
+mods_dir="$(realpath -m -- "${SERVER_MODS_DIR:-$(dirname -- "${data_dir}")/mods}")"
+mod_data_paths=()
+if declare -F game_mod_data_paths >/dev/null; then
+  mapfile -d '' mod_data_paths < <(game_mod_data_paths "${mods_dir}")
+fi
+mod_data_options=()
+if (( ${#mod_data_paths[@]} > 0 )); then
+  mod_data_options=(--directory "${mods_dir}" --transform 's,^\./,mods-data/,S')
+  for path in "${mod_data_paths[@]}"; do
+    [[ -n "${path}" && "${path}" != */* && "${path}" != . && "${path}" != .. ]] ||
+      die "unsafe mod data folder in ${mods_dir}: ${path}"
+    mod_data_options+=("./${path}")
+  done
+fi
 
 temporary_archive="$(mktemp --tmpdir="$(dirname -- "${archive}")" '.world-archive.XXXXXX.tar.zst')"
 cleanup() {
@@ -48,7 +82,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-tar --create --zstd --file "${temporary_archive}" --directory "${data_dir}" -- "${world_paths[@]}"
+# No -- before the names: the mods-data part needs its own --directory. The
+# check above refuses a save path that starts with -. Both directories are
+# absolute, because tar resolves a relative one from the one before.
+tar --create --zstd --file "${temporary_archive}" "${exclude_options[@]}" --directory "$(realpath -e -- "${data_dir}")" \
+  "${world_paths[@]}" "${mod_data_options[@]}"
 
 mv -- "${temporary_archive}" "${archive}"
 digest="$(sha256sum -- "${archive}" | awk '{print $1}')"
@@ -61,3 +99,4 @@ printf 'archive=%s\n' "${archive}"
 printf 'checksum=%s\n' "${digest}"
 printf 'archive_bytes=%s\n' "$(stat --format '%s' -- "${archive}")"
 printf 'world_directories=%s\n' "${#world_paths[@]}"
+printf 'mod_data_directories=%s\n' "${#mod_data_paths[@]}"

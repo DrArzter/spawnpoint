@@ -1,7 +1,10 @@
+import { GetLogEventsCommand, ResourceNotFoundException, type CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
+import { ListCommandsCommand, type SSMClient } from "@aws-sdk/client-ssm";
 import { DescribeExecutionCommand, ExecutionDoesNotExist, GetExecutionHistoryCommand, type HistoryEvent as SfnEvent, type SFNClient } from "@aws-sdk/client-sfn";
 
+import { filterHostLog, type HostLogLine, type RawLogEvent } from "./host-log.ts";
 import type { OperationExpectation } from "./operation-eta.ts";
-import { HISTORY_PAGE_SIZE, readOperationProgress, type ExecutionPort, type ExecutionStatus, type HistoryEvent, type OperationProgress } from "./operation-progress.ts";
+import { HISTORY_PAGE_SIZE, readOperationProgress, type HostRun, type ExecutionPort, type ExecutionStatus, type HistoryEvent, type OperationProgress } from "./operation-progress.ts";
 import { workflowOfMachine } from "./operation-steps.ts";
 
 type Machine = Readonly<{ type: OperationProgress["type"]; arn: string }>;
@@ -60,11 +63,66 @@ export function sfnExecutionPort(sfn: Pick<SFNClient, "send">): ExecutionPort {
   };
 }
 
+/** The log group the host's start commands write their output to (infra/terraform/iam.tf). */
+export const SESSION_COMMAND_LOG_GROUP = "/spawnpoint/session-commands";
+/** Events read from the end of each stream; the filter keeps the few worth showing. */
+export const LOG_EVENTS_PER_STREAM = 200;
+// A command is sent shortly after its workflow starts; its clock may differ a little.
+const COMMAND_SLACK_MS = 60_000;
+const COMMAND_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+export type HostLogReader = (host: HostRun) => Promise<readonly HostLogLine[]>;
+
+/**
+ * The tail of the host's newest shell command inside the start's window, as
+ * filtered lines. The command and its streams are looked up once and kept;
+ * a stream that does not exist yet reads as empty.
+ */
+export function createHostLogReader(deps: Readonly<{ ssm: Pick<SSMClient, "send">; logs: Pick<CloudWatchLogsClient, "send"> }>): HostLogReader {
+  const commands = new Map<string, string>();
+  return async (host) => {
+    const key = `${host.instanceId}|${host.startedAt.toISOString()}`;
+    let commandId = commands.get(key);
+    if (commandId === undefined) {
+      const found = await deps.ssm.send(new ListCommandsCommand({
+        InstanceId: host.instanceId,
+        MaxResults: 10,
+        Filters: [{ key: "InvokedAfter", value: new Date(host.startedAt.getTime() - COMMAND_SLACK_MS).toISOString() }],
+      }));
+      const end = host.endedAt === null ? Infinity : host.endedAt.getTime() + COMMAND_SLACK_MS;
+      const newest = (found.Commands ?? [])
+        .filter((command) => command.DocumentName === "AWS-RunShellScript" && command.CommandId !== undefined && COMMAND_ID.test(command.CommandId) && (command.RequestedDateTime?.getTime() ?? 0) <= end)
+        .sort((a, b) => (b.RequestedDateTime?.getTime() ?? 0) - (a.RequestedDateTime?.getTime() ?? 0))[0];
+      if (newest?.CommandId === undefined) return [];
+      commandId = newest.CommandId;
+      if (commands.size >= 200) commands.clear();
+      commands.set(key, commandId);
+    }
+    const id = commandId;
+    const tails = await Promise.all(["stdout", "stderr"].map(async (stream) => {
+      try {
+        const page = await deps.logs.send(new GetLogEventsCommand({
+          logGroupName: SESSION_COMMAND_LOG_GROUP,
+          logStreamName: `${id}/${host.instanceId}/aws-runShellScript/${stream}`,
+          startFromHead: false,
+          limit: LOG_EVENTS_PER_STREAM,
+        }));
+        return (page.events ?? []).flatMap((event): RawLogEvent[] => event.timestamp === undefined || event.message === undefined ? [] : [{ timestamp: event.timestamp, message: event.message }]);
+      } catch (error) {
+        if (error instanceof ResourceNotFoundException) return [];
+        throw error;
+      }
+    }));
+    return filterHostLog(tails.flat());
+  };
+}
+
 export type OperationProgressReader = (request: Readonly<{ worldId: string; operationId: string }>) => Promise<OperationProgress | null>;
 
 /** Null for an id that names no workflow here, an execution that is not there, or one of another world. */
 export function createOperationProgressReader(deps: Readonly<{
   sfn: Pick<SFNClient, "send">;
+  hostLog?: HostLogReader;
   machines: () => readonly Machine[];
   expectation: (machineArn: string, worldId: string) => Promise<OperationExpectation | null>;
   now?: () => Date;
@@ -83,6 +141,7 @@ export function createOperationProgressReader(deps: Readonly<{
       worldId,
       now: (deps.now ?? (() => new Date()))(),
       expectation: () => deps.expectation(machine.arn, worldId),
+      ...(deps.hostLog === undefined ? {} : { hostLog: deps.hostLog }),
     });
   };
 }

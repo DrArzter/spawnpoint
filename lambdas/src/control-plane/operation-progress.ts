@@ -3,6 +3,7 @@
 // newest first and in a bounded number of pages.
 
 import { ENDED, NESTED_STATES, stepOfState, workflowOfMachine, type OperationStep, type WorkflowName } from "./operation-steps.ts";
+import type { HostLogLine } from "./host-log.ts";
 import { operationWorldId } from "./world-session.ts";
 
 export type ExecutionStatus = "RUNNING" | "SUCCEEDED" | "FAILED" | "TIMED_OUT" | "ABORTED" | "PENDING_REDRIVE";
@@ -53,7 +54,12 @@ export type OperationProgress = Readonly<{
   result: string | null;
   failure: Readonly<{ error: string; cause: string }> | null;
   caught: CaughtError | null;
+  /** The host's own lines of a start, oldest first; present only when the API could look for them. */
+  hostLog?: readonly HostLogLine[];
 }>;
+
+/** The host a start runs on, and when its start ran. */
+export type HostRun = Readonly<{ instanceId: string; startedAt: Date; endedAt: Date | null }>;
 
 /** A history page holds up to this many events, and no more than this many pages are read. */
 export const HISTORY_PAGE_SIZE = 100;
@@ -170,6 +176,52 @@ async function deepestChild(
   }
 }
 
+// The newest nested execution of one of these workflows, from the parent's history.
+async function newestChild(port: ExecutionPort, parentArn: string, accept: readonly WorkflowName[]): Promise<Readonly<{ arn: string; workflow: WorkflowName }> | null> {
+  let nextToken: string | undefined;
+  for (let page = 0; page < HISTORY_MAX_PAGES; page += 1) {
+    const read = await port.historyPage(parentArn, nextToken);
+    for (const event of read.events) {
+      const child = event.scheduledParameters === undefined ? null : childExecutionArn(event.scheduledParameters, parentArn);
+      if (child !== null && accept.includes(child.workflow)) return child;
+    }
+    nextToken = read.nextToken;
+    if (nextToken === undefined) break;
+  }
+  return null;
+}
+
+/**
+ * The host start of a start or a promotion, running or ended: the instance it
+ * ran on, from the host workflow's own input. Null for other operations, or
+ * when no host start was reached.
+ */
+export async function findHostRun(port: ExecutionPort, root: Readonly<{ arn: string; workflow: WorkflowName }>): Promise<HostRun | null> {
+  let hostArn: string | null = null;
+  if (root.workflow === "start") hostArn = (await newestChild(port, root.arn, ["start-host"]))?.arn ?? null;
+  else if (root.workflow === "promote") {
+    const start = await newestChild(port, root.arn, ["start"]);
+    hostArn = start === null ? null : (await newestChild(port, start.arn, ["start-host"]))?.arn ?? null;
+  }
+  if (hostArn === null) return null;
+  const summary = await port.describe(hostArn);
+  if (summary === null) return null;
+  const instanceId = instanceOfInput(summary.input);
+  return instanceId === null ? null : { instanceId, startedAt: summary.startDate, endedAt: summary.stopDate };
+}
+
+function instanceOfInput(input: string | undefined): string | null {
+  if (input === undefined) return null;
+  try {
+    const parsed: unknown = JSON.parse(input);
+    const request = parsed !== null && typeof parsed === "object" ? (parsed as { request?: unknown }).request : undefined;
+    const id = request !== null && typeof request === "object" ? (request as { instanceId?: unknown }).instanceId : undefined;
+    return typeof id === "string" && /^i-[0-9a-f]{8,17}$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
 function statusOf(status: ExecutionStatus): OperationProgress["status"] {
   switch (status) {
     case "RUNNING": return "running";
@@ -207,6 +259,8 @@ export async function readOperationProgress(
     worldId: string;
     now: Date;
     expectation?: () => Promise<Readonly<{ expectedSeconds: number; expectedSamples: number }> | null>;
+    /** The host's lines of a start; read for a running or failed start or promotion only. */
+    hostLog?: (host: HostRun) => Promise<readonly HostLogLine[]>;
   }>,
 ): Promise<OperationProgress | null> {
   const summary = await port.describe(request.executionArn);
@@ -221,6 +275,7 @@ export async function readOperationProgress(
     ? await deepestChild(port, { arn: request.executionArn, workflow: request.workflow, state: reading.state, nested: reading.nested }, 1)
     : null;
   const failed = status === "failed" || status === "timed_out" || status === "aborted";
+  const hostLog = (running || failed) && request.hostLog !== undefined ? await readHostLog(port, request, request.hostLog) : null;
   return {
     id: request.id,
     type: request.type,
@@ -233,10 +288,27 @@ export async function readOperationProgress(
     child,
     result: status === "succeeded" ? resultOf(summary.output) : null,
     failure: failed ? { error: scrub(summary.error ?? summary.status, MAX_ERROR), cause: scrub(summary.cause ?? "", MAX_CAUSE) } : null,
+    ...(hostLog === null ? {} : { hostLog }),
     caught: reading.caught === null ? null : {
       error: scrub(reading.caught.error, MAX_ERROR),
       cause: scrub(reading.caught.cause, MAX_CAUSE),
       step: stepOfState(request.workflow, reading.caught.state),
     },
   };
+}
+
+// The log is a courtesy: when it cannot be read the operation is still told.
+async function readHostLog(
+  port: ExecutionPort,
+  request: Readonly<{ executionArn: string; workflow: WorkflowName }>,
+  read: (host: HostRun) => Promise<readonly HostLogLine[]>,
+): Promise<readonly HostLogLine[] | null> {
+  if (request.workflow !== "start" && request.workflow !== "promote") return null;
+  try {
+    const host = await findHostRun(port, { arn: request.executionArn, workflow: request.workflow });
+    return host === null ? [] : await read(host);
+  } catch (error) {
+    console.warn("could not read the host log of an operation", request.executionArn, error);
+    return null;
+  }
 }

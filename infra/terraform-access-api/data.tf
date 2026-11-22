@@ -37,6 +37,9 @@ locals {
     { type = "promote", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-promote-release" },
     { type = "world", arn = local.world_lifecycle_arn },
   ]
+  # The log group the host's start commands write to; the same name as in infra/terraform/iam.tf and the workflows.
+  session_command_log_group     = "/spawnpoint/session-commands"
+  session_command_log_group_arn = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.session_command_log_group}"
   # The machines whose executions show an operation's steps, nested ones included.
   operation_progress_machines = concat(
     [for machine in local.operation_state_machines : machine.arn if contains(["start", "stop", "promote", "world"], machine.type)],

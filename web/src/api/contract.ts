@@ -220,6 +220,13 @@ export type SessionOperation = "start" | "stop";
 /** One step of a running workflow: the key is stable, the label is the server's plain words. */
 export type OperationStep = Readonly<{ key: string; label: string }>;
 
+/** One line of the host's own output while a start ran, already filtered and redacted by the API. */
+export type HostLogLine = Readonly<{
+  at: string;
+  kind: "step" | "result" | "container" | "error" | "warning" | "game";
+  text: string;
+}>;
+
 /** How far one world operation has come, and why it ended badly (`GET .../operations/{id}`). */
 export type OperationProgress = Readonly<{
   id: string;
@@ -241,6 +248,8 @@ export type OperationProgress = Readonly<{
   failure: Readonly<{ error: string; cause: string }> | null;
   /** A task error the workflow caught, such as before a rollback. */
   caught: Readonly<{ error: string; cause: string; step: OperationStep | null }> | null;
+  /** The host's lines of a start or promotion, oldest first; absent when the API could not read them. */
+  hostLog?: readonly HostLogLine[];
 }>;
 export type LoginOptions = Readonly<{
   providers: readonly LoginProviderId[];

@@ -1,5 +1,5 @@
 import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
-import { identityDeletionRefusal, type PromotionResult, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type OperationProgress, type OperationStep, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
+import { identityDeletionRefusal, type HostLogLine, type PromotionResult, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type OperationProgress, type OperationStep, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
 import { startableReleases } from "../core/presets";
 import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
@@ -103,6 +103,35 @@ function phaseAt(type: OperationPlan["type"], fraction: number): Pick<OperationP
   return { step: phases.at(-1)!.step, child: null };
 }
 
+// The host's own lines of a start, by the share of the start they appear at.
+const HOST_LINES: readonly Readonly<{ at: number; kind: HostLogLine["kind"]; text: string }>[] = [
+  { at: 0, kind: "step", text: "Session started (0 s)" },
+  { at: 0.12, kind: "step", text: "World prepared (14 s)" },
+  { at: 0.24, kind: "step", text: "Release pointer read (15 s)" },
+  { at: 0.4, kind: "result", text: "Downloaded: 1659" },
+  { at: 0.46, kind: "step", text: "Release downloaded (1209 s)" },
+  { at: 0.58, kind: "step", text: "Release reconciled (1214 s)" },
+  { at: 0.7, kind: "step", text: "Game starting (1215 s)" },
+  { at: 0.78, kind: "container", text: "Container spawnpoint-demo-mc-1 Started" },
+  { at: 0.9, kind: "step", text: "Game ready (1252 s)" },
+];
+const HOST_FAULTS: readonly Readonly<{ at: number; kind: HostLogLine["kind"]; text: string }>[] = [
+  { at: 0.8, kind: "game", text: "[22:41:10] [Server thread/ERROR]: java.lang.IllegalStateException: Mod loading has failed: examplemod-neoforge-1.21.1-12.3.4-build.5678-with-a-very-long-file-name.jar" },
+  { at: 0.84, kind: "error", text: "the game did not report ready" },
+];
+
+// A start, or the start inside a promotion, prints these lines over its run.
+function hostLogOf(plan: OperationPlan, ranMs: number): readonly HostLogLine[] {
+  if (plan.type !== "start" && plan.type !== "promote") return [];
+  const from = plan.type === "promote" ? 0.4 : 0;
+  const span = plan.type === "promote" ? 0.5 : 0.95;
+  const script = plan.failure ? [...HOST_LINES.filter((line) => line.at < 0.78), ...HOST_FAULTS] : HOST_LINES;
+  return script
+    .map((line) => ({ line, time: (from + line.at * span) * plan.durationMs }))
+    .filter(({ time }) => time <= ranMs)
+    .map(({ line, time }) => ({ at: new Date(plan.startedAt + time).toISOString(), kind: line.kind, text: line.text }));
+}
+
 /** One operation of a world; null when the control plane does not know it (the API's 404). */
 export function operationProgress(gameId: string, worldId: string, operationId: string): OperationProgress | null {
   settle();
@@ -114,7 +143,7 @@ export function operationProgress(gameId: string, worldId: string, operationId: 
   const base = { id: operationId, type: plan.type, startedAt: new Date(plan.startedAt).toISOString(), expectedSeconds: usual.seconds, expectedSamples: usual.samples };
   if (running) {
     const ran = Math.min(Date.now() - plan.startedAt, plan.pinAtMs ?? Number.POSITIVE_INFINITY);
-    return { ...base, status: "running", stoppedAt: null, elapsedSeconds: Math.floor((Date.now() - plan.startedAt) / 1000), ...phaseAt(plan.type, ran / plan.durationMs), result: null, failure: null, caught: caughtOf(plan) };
+    return { ...base, status: "running", stoppedAt: null, elapsedSeconds: Math.floor((Date.now() - plan.startedAt) / 1000), ...phaseAt(plan.type, ran / plan.durationMs), result: null, failure: null, caught: caughtOf(plan), hostLog: hostLogOf(plan, ran) };
   }
   return {
     ...base,
@@ -126,6 +155,7 @@ export function operationProgress(gameId: string, worldId: string, operationId: 
     result: plan.failure || plan.type !== "promote" ? null : "promoted",
     failure: plan.failure ?? null,
     caught: caughtOf(plan),
+    ...(plan.failure ? { hostLog: hostLogOf(plan, plan.durationMs) } : {}),
   };
 }
 

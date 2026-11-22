@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { OperationProgress } from "../api/contract";
+import type { HostLogLine, OperationProgress } from "../api/contract";
 import { loadOperationProgress } from "../auth";
 import { clock, elapsedSeconds, eta } from "../lib/operation-time";
 import type { Operation } from "../model";
-import type { Detail, OperationProgressModel } from "./models";
+import type { Detail, HostLogRow, OperationProgressModel } from "./models";
 import type { StatusDescriptor } from "./status";
 import { operationLabel } from "./worlds";
 
@@ -83,7 +83,32 @@ function build(id: string, type: Operation["type"], startedAt: string, expected:
     child: progress?.child?.step.label ?? null,
     failure: progress?.failure ?? null,
     caught: progress?.caught ? { error: progress.caught.error, cause: progress.caught.cause, step: progress.caught.step?.label ?? null } : null,
+    log: hostLogRows(progress?.hostLog ?? []),
   };
+}
+
+function toneOf(line: HostLogLine): HostLogRow["tone"] {
+  if (line.kind === "error") return "error";
+  if (line.kind === "warning") return "warning";
+  if (line.kind !== "game") return "plain";
+  return /\b(?:ERROR|FATAL)\b|Exception|Error\b/.test(line.text) ? "error" : "warning";
+}
+
+/** The host's lines as rows; a line that repeats keeps a distinct id. */
+export function hostLogRows(lines: readonly HostLogLine[]): HostLogRow[] {
+  const seen = new Map<string, number>();
+  return lines.map((line) => {
+    const base = `${line.at}|${line.text}`;
+    const nth = seen.get(base) ?? 0;
+    seen.set(base, nth + 1);
+    return { id: `${base}|${nth}`, at: line.at, text: line.text, tone: toneOf(line) };
+  });
+}
+
+/** The time a log line is printed at: the clock of the person reading it. */
+export function logTime(at: string): string {
+  const date = new Date(at);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString("en-GB", { hour12: false });
 }
 
 /** The rows of the progress element at `now`, the same words in every skin. */

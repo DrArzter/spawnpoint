@@ -358,6 +358,25 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
 
   assert {
     condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.actions if statement.sid == "FindHostStartCommand"]) == toset(["ssm:ListCommands"]),
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.actions if statement.sid == "ReadHostStartOutput"]) == toset(["logs:GetLogEvents"]),
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.resources if statement.sid == "ReadHostStartOutput"]) == toset(["arn:aws:logs:eu-central-1:123456789012:log-group:/spawnpoint/session-commands:log-stream:*"]),
+      local.session_command_log_group == "/spawnpoint/session-commands",
+    ])
+    error_message = "The host's start output is read from the session command log group only, with GetLogEvents, and the command is found with ListCommands: read-only."
+  }
+
+  assert {
+    condition = alltrue([
+      for statement in data.aws_iam_policy_document.access_api.statement :
+      (!contains(statement.actions, "logs:GetLogEvents") || statement.sid == "ReadHostStartOutput") &&
+      (!contains(statement.actions, "ssm:ListCommands") || statement.sid == "FindHostStartCommand")
+    ])
+    error_message = "Only the host start statements may read log events or list commands."
+  }
+
+  assert {
+    condition = alltrue([
       for statement in data.aws_iam_policy_document.access_api.statement :
       !contains(statement.actions, "states:GetExecutionHistory") || (statement.sid == "ReadOperationHistory" && alltrue([for arn in statement.resources : strcontains(arn, ":execution:spawnpoint-") && endswith(arn, ":*")]))
     ])

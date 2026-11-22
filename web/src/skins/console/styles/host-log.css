@@ -1,0 +1,37 @@
+/* HostLog: the host's lines of a start, mono and wrapped, newest last in a short scrolling region. */
+
+html[data-skin="console"] .c-host-log {
+  max-height: 224px;
+  margin: 0;
+  padding: 8px var(--c-card-x);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--c-line);
+  font-family: var(--c-font-mono);
+  font-size: var(--c-fs-xs);
+  line-height: 18px;
+}
+
+html[data-skin="console"] .c-host-line {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+html[data-skin="console"] .c-host-time {
+  flex: none;
+  color: var(--c-ink-2);
+}
+
+html[data-skin="console"] .c-host-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+html[data-skin="console"] .c-host-line[data-tone="warning"] .c-host-text {
+  color: var(--c-warn);
+}
+
+html[data-skin="console"] .c-host-line[data-tone="error"] .c-host-text {
+  color: var(--c-err);
+}

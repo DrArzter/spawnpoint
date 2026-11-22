@@ -294,7 +294,12 @@ export type OperationProgressModel = Readonly<{
   child: string | null;
   failure: Readonly<{ error: string; cause: string }> | null;
   caught: Readonly<{ error: string; cause: string; step: string | null }> | null;
+  /** The host's own lines of a start, oldest first. */
+  log: readonly HostLogRow[];
 }>;
+
+/** One line of the host log: `tone` marks a fault; `at` is a time the skin prints. */
+export type HostLogRow = Readonly<{ id: string; at: string; text: string; tone: "plain" | "warning" | "error" }>;
 
 /** This world's session in a few facts; `busy` while an operation holds it. */
 export type WorldGlance = Readonly<{ live: boolean; players: number | null; address: AddressFacts | null; launchedAt: string | null; busy: boolean }>;

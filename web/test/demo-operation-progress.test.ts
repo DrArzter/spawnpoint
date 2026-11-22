@@ -50,3 +50,14 @@ test("when the operation leaves the snapshot it reads as succeeded with no step,
   assert.equal(store.operationProgress(GAME, "vanilla", operation.id), null);
   assert.equal(store.operationProgress(GAME, CREATIVE, "op-missing"), null);
 });
+
+test("a demo start prints the host's lines over its run, oldest first", () => {
+  const { operationId } = store.startSession("minecraft", "minecraft-sandbox-8d41f0b6");
+  const lines = () => store.operationProgress("minecraft", "minecraft-sandbox-8d41f0b6", operationId)!.hostLog!;
+  assert.equal(lines().length, 1);
+  mock.timers.tick(5000);
+  const mid = lines();
+  assert.ok(mid.length > 1 && mid.length < 9);
+  assert.deepEqual(mid.map((line) => line.at), [...mid.map((line) => line.at)].sort());
+  assert.ok(mid.every((line) => line.text.length > 0 && line.text.length <= 200));
+});

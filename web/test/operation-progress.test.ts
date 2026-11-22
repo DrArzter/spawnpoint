@@ -189,5 +189,5 @@ test("a last read is owed when the operation left the snapshot, unless a poll sa
 
 test("the model carries nothing a skin has to compute", () => {
   const model: OperationProgressModel = progressModel(null, failed)!;
-  assert.deepEqual(Object.keys(model).sort(), ["caught", "child", "expectation", "failure", "id", "ranSeconds", "running", "startedAt", "status", "step", "title"]);
+  assert.deepEqual(Object.keys(model).sort(), ["caught", "child", "expectation", "failure", "id", "log", "ranSeconds", "running", "startedAt", "status", "step", "title"]);
 });

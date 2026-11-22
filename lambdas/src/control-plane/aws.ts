@@ -11,6 +11,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { GetCommand, DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { GetCommandInvocationCommand, SendCommandCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 import { randomUUID } from "node:crypto";
 
@@ -32,7 +33,7 @@ import { switchBeforeFirstStart, type SwitchOutcome, type SwitchRequest } from "
 import { newWorldRecord, withGameSettings, withWhitelist, withWorldAccess, type WorldGameSettings, type WorldRecord, type WorldWhitelist } from "./world-registry.ts";
 import { parseDynamicProjection } from "./dynamic-projection.ts";
 import { createSessionHostReader } from "./aws-session-history.ts";
-import { createOperationProgressReader } from "./aws-operation-progress.ts";
+import { createOperationProgressReader, createHostLogReader } from "./aws-operation-progress.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildLifecycleStartInput, buildLifecycleStopInput, buildPromotionInput, buildStopInput } from "../domain/telegram-bot.ts";
@@ -87,6 +88,7 @@ function worldRepository(): S3WorldRepository {
   return new S3WorldRepository(s3, bucket, releaseHolders(bucket));
 }
 const ssm = new SSMClient({});
+const logs = new CloudWatchLogsClient({});
 
 function tag(instance: Instance, key: string): string | undefined {
   return instance.Tags?.find((candidate) => candidate.Key === key)?.Value;
@@ -440,7 +442,7 @@ export const awsControlPlaneSources: ControlPlaneSources = {
   readReleasePlan,
   readHostMetrics,
   readHostsMetrics,
-  readOperationProgress: createOperationProgressReader({ sfn, machines: operationMachines, expectation: expectedDuration }),
+  readOperationProgress: createOperationProgressReader({ sfn, hostLog: createHostLogReader({ ssm, logs }), machines: operationMachines, expectation: expectedDuration }),
   readWorldSessionHosts: createSessionHostReader({ sfn, document, tableName: () => process.env.LIFECYCLE_TABLE_NAME, machines: operationMachines }),
   listWorldRecords,
 };

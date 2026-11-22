@@ -194,6 +194,22 @@ data "aws_iam_policy_document" "access_api" {
     ]
   }
 
+  # The host's own lines of a start. ListCommands takes no resource, so the grant
+  # is the action alone: it finds the shell command a start sent to its host.
+  # The output is read from one log group only, never written, and the API
+  # filters it to an allow-list before it leaves (host-log.ts).
+  statement {
+    sid       = "FindHostStartCommand"
+    actions   = ["ssm:ListCommands"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "ReadHostStartOutput"
+    actions   = ["logs:GetLogEvents"]
+    resources = ["${local.session_command_log_group_arn}:log-stream:*"]
+  }
+
   statement {
     sid       = "ControlSupportedSession"
     actions   = ["states:StartExecution"]

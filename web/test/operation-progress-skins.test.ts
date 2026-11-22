@@ -100,3 +100,54 @@ test("terminal: a failure shows one error state, the error, the whole cause and 
 test("terminal: no progress, no panel", () => {
   assert.doesNotMatch(terminalPage(null), /Promoting release/);
 });
+
+// --- the host's log ------------------------------------------------------------
+
+const withLog: OperationProgress = {
+  ...running,
+  hostLog: [
+    { at: "2026-11-21T12:00:10.000Z", kind: "step", text: "World prepared (14 s)" },
+    { at: "2026-11-21T12:00:12.000Z", kind: "container", text: "Container spawnpoint-w1-mc-1 Started" },
+    { at: "2026-11-21T12:00:20.000Z", kind: "warning", text: "backup older than a day" },
+    { at: "2026-11-21T12:00:30.000Z", kind: "game", text: "[22:41:10] [Server thread/ERROR]: Could not load mod <b>x</b>" },
+    { at: "2026-11-21T12:00:31.000Z", kind: "game", text: "[22:41:11] [Server thread/WARN]: Can't keep up!" },
+  ],
+};
+const logModel = () => progressModel(live, withLog)!;
+
+test("the log rows keep their order, tone faults and give a repeated line its own id", () => {
+  const rows = logModel().log;
+  assert.deepEqual(rows.map((row) => row.tone), ["plain", "plain", "warning", "error", "warning"]);
+  const twice = progressModel(live, { ...running, hostLog: [withLog.hostLog![0]!, withLog.hostLog![0]!] })!.log;
+  assert.equal(new Set(twice.map((row) => row.id)).size, 2);
+  assert.deepEqual(progressModel(live, running)!.log, []);
+});
+
+test("console: the log is one labelled live region inside the progress card, one entry per line, faults named in text", () => {
+  const markup = render(createElement(ConsoleProgress, { model: logModel() }), 42);
+  assert.equal(count(markup, /role="log"/), 1);
+  assert.match(markup, /aria-label="Promoting release: host log"[^>]*aria-live="polite"|aria-live="polite"[^>]*aria-label="Promoting release: host log"/);
+  assert.equal(count(markup, /class="c-host-line"/), 5);
+  assert.equal(count(markup, /data-tone="error"/), 1);
+  assert.equal(count(markup, /data-tone="warning"/), 2);
+  assert.ok(markup.includes("Error: ") && markup.includes("Warning: "));
+  assert.match(markup, /<time[^>]*dateTime="2026-11-21T12:00:10.000Z"[^>]*>\d\d:\d\d:\d\d<\/time>/);
+  assert.ok(markup.includes("World prepared (14 s)"));
+  assert.ok(!markup.includes("<b>x</b>"), "a line is text, never markup");
+});
+
+test("console: no lines, no log region", () => {
+  assert.doesNotMatch(render(createElement(ConsoleProgress, { model: runningModel() }), 42), /role="log"/);
+});
+
+test("terminal: the log sits in the progress panel with the same lines and faults named in text", () => {
+  const markup = terminalPage(logModel());
+  assert.equal(count(markup, /role="log"/), 1);
+  assert.match(markup, /aria-label="Promoting release: host log"/);
+  assert.equal(count(markup, /class="t-log-line/), 5);
+  assert.equal(count(markup, /t-log-error/), 1);
+  assert.equal(count(markup, /t-log-warning/), 2);
+  assert.ok(markup.includes("Error: ") && markup.includes("Warning: "));
+  assert.ok(markup.includes("Container spawnpoint-w1-mc-1 Started"));
+  assert.doesNotMatch(terminalPage(runningModel()), /role="log"/);
+});

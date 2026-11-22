@@ -12,7 +12,7 @@ import { wipeStatus } from "../../core/worlds";
 import { Icon } from "../../icons";
 import { formatBytes, formatTime, shortDigest } from "../../lib/format";
 import { useMediaQuery } from "../../shell/hooks";
-import { Address, Choice, Choices, Col, DetailRow, Details, DetailsGroup, Empty, FilterRow, Ghost, Indicator, NoMatches, Notice, Overflow, Page, Panel, State, Table, Tabs, Verb, Verbs } from "./ui";
+import { Address, Choice, Choices, Col, DetailRow, Details, DetailsGroup, Empty, FilterRow, Ghost, Indicator, Log, NoMatches, Notice, Overflow, Page, Panel, State, Table, Tabs, Verb, Verbs } from "./ui";
 import { MetricsPanel } from "./Metrics";
 import { ConsolePanel } from "./Rcon";
 import { WhitelistPanel } from "./Whitelist";
@@ -72,6 +72,7 @@ function ProgressPanel({ model }: Readonly<{ model: OperationProgressModel }>) {
   return (
     <Panel head={<State kind={model.status.kind} label={model.status.label} />} name={model.title}>
       <Details items={progressDetails(model, now).map(detailRow)} label={`${model.title}: ${model.status.label}`} />
+      {model.log.length > 0 && <Log label={`${model.title}: host log`} rows={model.log} />}
     </Panel>
   );
 }

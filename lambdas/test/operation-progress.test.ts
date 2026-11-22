@@ -258,3 +258,74 @@ test("the reader describes only the execution of the machine the id names", asyn
   assert.deepEqual(seen, [`DescribeExecutionCommand ${execution("stop-server-v2", id)}`, `GetExecutionHistoryCommand ${execution("stop-server-v2", id)}`]);
   assert.equal(await read({ worldId: "prominence", operationId: "panel-build-1" }), null);
 });
+
+// --- the host's lines --------------------------------------------------------
+
+const INSTANCE = "i-0123456789abcdef0";
+const hostLine = { at: "2026-11-22T10:00:30Z", kind: "step" as const, text: "World prepared (14 s)" };
+
+function startWithHost(id: string, patch: Partial<ExecutionSummary> = {}) {
+  const hostId = `${id}-host`;
+  return {
+    hostId,
+    executions: {
+      [execution("start-server-v2", id)]: { summary: summary(patch), events: [entered("Initialize"), entered("Start Accepted V1"), scheduled("start-server", hostId, "start-server")] },
+      [execution("start-server", hostId)]: { summary: summary({ input: JSON.stringify({ request: { instanceId: INSTANCE, worldId: "prominence" } }) }), events: [entered("Start Session Command")] },
+    },
+  };
+}
+
+test("a running start reads the host's lines from the instance its host workflow names", async () => {
+  const id = "panel-start-20261122T100000-cccc3333";
+  const { executions } = startWithHost(id);
+  const { port } = fake(executions);
+  const hosts: unknown[] = [];
+  const progress = await readOperationProgress(port, {
+    ...request(id, { type: "start", workflow: "start", executionArn: execution("start-server-v2", id) }),
+    hostLog: async (host) => { hosts.push(host); return [hostLine]; },
+  });
+  assert.deepEqual(progress?.hostLog, [hostLine]);
+  assert.deepEqual(hosts, [{ instanceId: INSTANCE, startedAt: START, endedAt: null }]);
+});
+
+test("a failed start keeps the host's lines, and a succeeded one does not read them", async () => {
+  const id = "panel-start-20261122T100000-dddd4444";
+  const { executions } = startWithHost(id, { status: "FAILED", stopDate: NOW, error: "Boom", cause: "x" });
+  const hostLog = async () => [hostLine];
+  const failedRun = await readOperationProgress(fake(executions).port, { ...request(id, { type: "start", workflow: "start", executionArn: execution("start-server-v2", id) }), hostLog });
+  assert.deepEqual(failedRun?.hostLog, [hostLine]);
+  const done = startWithHost(id, { status: "SUCCEEDED", stopDate: NOW, output: JSON.stringify({ status: "ready" }) });
+  const doneRun = await readOperationProgress(fake(done.executions).port, { ...request(id, { type: "start", workflow: "start", executionArn: execution("start-server-v2", id) }), hostLog });
+  assert.equal(doneRun?.hostLog, undefined);
+});
+
+test("a start that has not reached its host has an empty log, and a log that cannot be read leaves the progress whole", async () => {
+  const id = "panel-start-20261122T100000-eeee5555";
+  const early = { [execution("start-server-v2", id)]: { summary: summary(), events: [entered("Initialize"), entered("Place Session")] } };
+  const asked = request(id, { type: "start", workflow: "start", executionArn: execution("start-server-v2", id) });
+  const empty = await readOperationProgress(fake(early).port, { ...asked, hostLog: async () => { throw new Error("must not be asked"); } });
+  assert.deepEqual(empty?.hostLog, []);
+  const { executions } = startWithHost(id);
+  const broken = await readOperationProgress(fake(executions).port, { ...asked, hostLog: async () => { throw new Error("denied"); } });
+  assert.equal(broken?.status, "running");
+  assert.equal(broken?.hostLog, undefined);
+});
+
+test("a promotion finds its host start two executions down, and a stop has no host log", async () => {
+  const id = "panel-promote-20261122T100000-ffff6666";
+  const v2 = `${id}-target-start`;
+  const host = `${v2}-host`;
+  const executions = {
+    [execution("promote-release", id)]: { summary: summary(), events: [entered("Start With Target"), scheduled("start-server-v2", v2, "start-server-v2")] },
+    [execution("start-server-v2", v2)]: { summary: summary(), events: [entered("Start Accepted V1"), scheduled("start-server", host, "start-server")] },
+    [execution("start-server", host)]: { summary: summary({ input: JSON.stringify({ request: { instanceId: INSTANCE } }) }), events: [entered("Start Session Command")] },
+  };
+  const progress = await readOperationProgress(fake(executions).port, { ...request(id), hostLog: async () => [hostLine] });
+  assert.deepEqual(progress?.hostLog, [hostLine]);
+  const stop = "panel-stop-20261122T100000-aaaa7777";
+  const stopped = await readOperationProgress(fake({ [execution("stop-server-v2", stop)]: { summary: summary(), events: [entered("Lock Session")] } }).port, {
+    ...request(stop, { type: "stop", workflow: "stop", executionArn: execution("stop-server-v2", stop) }),
+    hostLog: async () => { throw new Error("must not be asked"); },
+  });
+  assert.equal(stopped?.hostLog, undefined);
+});

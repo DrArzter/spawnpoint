@@ -448,12 +448,13 @@ they were stored and the head of the SHA-256 the key is addressed by. `backup.re
 
 **What "verified" means here is exactly what a listing can prove**: the key carries a well-formed digest, which
 `upload-world-backup.sh` puts there, and S3 holds a SHA-256 checksum for the object. That is checked without ever
-downloading an archive — the API's role has `ListBucket` on the backup bucket and **no** `GetObject`, so the panel can
-enumerate a world's backups and cannot read one. Anything in the prefix that fails those two checks is **counted and
-named as unverified rather than dropped**, since a silently shortened list is how corruption stays invisible.
+downloading an archive. Anything in the prefix that fails those two checks is **counted and named as unverified rather
+than dropped**, since a silently shortened list is how corruption stays invisible.
 
-Restoring is still `scripts/restore-world.sh` from an owner workstation, and the procedure remains unrehearsed. The
-inventory exists so that when it is rehearsed, the choice of archive is made from what is actually there.
+Each listed backup also names the release a restore puts it on: the release it ran
+([ADR-0052](adr/0052-keep-a-release-while-a-generation-names-it.md), amended). The API reads it with one `HEAD` per
+listed archive and never reads an archive body. The restore dialog shows that release. See
+[Roll back a release](#roll-back-a-release) for how the release is found.
 
 ## Publishing a world without the overlay
 
@@ -628,8 +629,10 @@ The intended production sequence is:
 2. CodeBuild resolves the clean profile checkout, builds the exact manifest, uploads JARs first and the manifest last.
    The resulting candidate is inert: no pointer changes and no server starts.
 3. Promote it: `scripts/promote-release.sh <world> <version>` — writes desired and composes Lifecycle V2 against the
-   exact active session. Boot-time reconciliation applies the release; health and watchdog registration gate the
-   commit. A stopped server is started for verification and stopped again afterwards.
+   exact active session. Before the target starts, the promotion names the wipe's newest verified archive as its
+   pre-promotion backup ([ADR-0030](adr/0030-desired-and-active-release.md), amended). Boot-time reconciliation applies
+   the release; health and watchdog registration gate the commit. A stopped server is started for verification and
+   stopped again afterwards.
 4. A failed start rolls back by itself in a distinct fenced session: the pointer flips to the previous active and the
    server starts again on it.
    `status=rolled_back` in the output is the pipeline working, not failing.
@@ -741,6 +744,41 @@ The builder hashes the server JARs into the release manifest and carries only de
 configuration roots into `server.overrides`. Starts download the resulting S3 release and never call CurseForge.
 Archive launch scripts, worlds, logs, `server.properties`, operator lists and other mutable server state are ignored.
 
+### Update a modpack preset
+
+Use this procedure to move a modpack preset, for example Prominence II, to a newer upstream version. Do the steps in
+this order.
+
+1. Read every upstream changelog between the two versions, not only the newest. Write down each removed mod, each
+   removed dimension and each "make a backup" note. A removed mod deletes its blocks, items and dimension from the
+   save at the first load.
+2. Edit the preset **in place** in the configuration repository, in one commit. A new preset directory cannot serve the
+   existing world: a world never changes preset. Change these values:
+
+   | File | Field | Value |
+   | --- | --- | --- |
+   | `profiles/<id>/extras/curseforge-modpack.json` | `file_id` | the new main file ID |
+   | same | `server_pack_file_id` | the server pack of that file |
+   | same | `client_mirror` | the new `.mrpack` URL, SHA-512 and size, if the preset has a mirror |
+   | `profiles/<id>/profile.json` | `loader.version` | the loader in the new client `manifest.json`, if it changed |
+   | same | `display_name` | the new upstream version, so the panel shows it |
+
+3. Push to `main`. The publish workflow catalogs the new revision and builds it. Until the build ends, the preset is not
+   built and a new wipe is refused. The previous release leaves the preset's list, but it stays in S3 and the world
+   continues to run it. If the build fails, read its log, fix the commit and push again.
+4. In the panel, open **Releases** and compare the mod list of the new release with the active one. Look for the mods
+   from step 1.
+5. Decide: keep the save (promote) or start a new wipe. Start a new wipe when the Minecraft version or the loader type
+   changed, or when a removed mod holds things the players must keep.
+6. Announce the update. Players must log off: a promotion refuses while players are online (`PromotionRefused`).
+7. Promote. A configured world: `scripts/promote-release.sh <world> <release>`. A fleet world can only start a new wipe
+   until fleet promotion exists.
+8. The promotion keeps a pre-promotion backup and names it in its result (`prePromotionBackup`). Retention keeps it
+   until the next promotion of that wipe.
+9. Tell players to replace their whole instance with the new client pack (**Download client pack**, or `/pack` in
+   Telegram). A client on the old pack cannot join, and the error does not say why.
+10. To undo the update, follow [Roll back a release](#roll-back-a-release). Do not promote the old release again.
+
 Do not promote during an active session unless it is urgent — the stop refuses while players are online
 (`PromotionRefused`, pointer restored, nothing changed). Announce first.
 
@@ -749,13 +787,47 @@ should be running, the execution history says where it stopped, and the running-
 
 ## Roll back a release
 
-Automatic on a failed start. To roll back manually:
+There are two cases.
 
-```bash
-# TODO: promote the previous version — the pointer move is the rollback
-```
+**The new release does not start.** The promotion rolls back by itself
+([ADR-0030](adr/0030-desired-and-active-release.md)): the pointer goes back to the previous active release and the
+world starts again on it in a separate session. The result is `status=rolled_back`. Nothing else is necessary.
 
-Rollback is the same mechanism as a deploy, which is why it can be trusted. See
+**The new release starts, but the world is damaged** (items or a dimension are lost). Roll back by restore. Do **not**
+promote the previous release again: the save now holds data of the new release, and loading it with the old mod set can
+delete more.
+
+1. Find the pre-promotion backup. The promotion result names it, and the wipe's pointer keeps it:
+
+   ```bash
+   aws s3 cp s3://spawnpoint-releases-${ACCOUNT_ID}/worlds/<world>/generations/<gen>/release.json - \
+     --profile spawnpoint --region eu-central-1 | jq '.pre_promotion_backup, .releases_run'
+   ```
+
+   `pre_promotion_backup.release` is the release that ran before the promotion. `releases_run` lists each release the
+   wipe ran, from the first start that committed it.
+2. In the panel, open the world, then **Backups**. Find the archive and select **Restore** (`backup.restore`).
+3. Read the release in the dialog. It must be the release in `pre_promotion_backup.release`. If the dialog names
+   another release, or no release, cancel and continue with the note below.
+4. Confirm. The restore backs up the current wipe, then opens a new wipe from the archive on the release that archive
+   ran.
+5. Start the world and check it in game.
+6. Tell players to replace their instance with the client pack of the restored release.
+
+How a restore finds the release of an archive, in this order:
+
+| Source | When |
+| --- | --- |
+| The archive's metadata (`release`, with `release-source=active`) | Archives that a host uploaded after this change. The host reads the wipe's active release at each stop |
+| The wipe's `releases_run` at the time the archive was stored | Older archives of a wipe that started at least once after this change |
+| The wipe's `active_release` | Older wipes with no `releases_run` |
+| The wipe's origin release (`current_generation.release`) | A wipe that never passed a start |
+
+Note: an archive taken before this change, on a wipe that was promoted before this change, can show the wrong release.
+The panel cannot choose another release. Do not restore it from the panel; restore it by hand onto the correct release
+with [Restore the world](#restore-the-world).
+
+Rollback by restore uses the same immutable releases as a deploy, which is why it can be trusted. See
 [ADR-0008](adr/0008-versioned-mod-releases.md).
 
 ## A world's copy on a host (ADR-0048, amended)

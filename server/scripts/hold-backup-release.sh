@@ -38,7 +38,8 @@ ddb() {
 }
 
 item_key() {
-  jq -nc --arg pk "$1" --arg sk "$2" '{pk: {S: $pk}, sk: {S: $sk}}'
+  local partition="$1" sort="$2"
+  jq -nc --arg pk "${partition}" --arg sk "${sort}" '{pk: {S: $pk}, sk: {S: $sk}}'
 }
 
 existing="$(ddb get-item --table-name "${table}" --key "$(item_key "${pk}" "${sk}")" --consistent-read --output json)" ||

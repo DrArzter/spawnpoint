@@ -80,6 +80,15 @@ if [[ "${game}" == "minecraft" ]]; then
   }
 fi
 
+# How long a builder step took, for the build log. stderr keeps the result
+# lines on stdout parseable; the first call counts from the script's start.
+step_timing() {
+  local now="${SECONDS}"
+  printf 'timing step=%s seconds=%s\n' "$1" "$(( now - ${STEP_TIMING_MARK:-0} ))" >&2
+  STEP_TIMING_MARK="${now}"
+}
+step_timing config_snapshot
+
 payload="${workspace}/payload"
 # Verified upstream files are kept under upstream/ in the release bucket, so a
 # rebuild of the same pins reads them from S3 instead of CurseForge. A hit is
@@ -87,6 +96,7 @@ payload="${workspace}/payload"
 export UPSTREAM_CACHE_HITS_FILE="${workspace}/upstream-hits.tsv"
 UPSTREAM_CACHE_BUCKET="${RELEASE_BUCKET}" \
   "${server_scripts}/resolve-profile-mods.sh" "${profile_directory}" "${payload}/mods"
+step_timing resolve_mods
 
 RELEASE_CREATED_BY="${RELEASE_CREATED_BY:-github-actions}" \
 RELEASE_CHANGELOG="${RELEASE_CHANGELOG:-Profile ${PROFILE_ID} at ${config_revision}}" \
@@ -94,6 +104,7 @@ PROFILE_SOURCE_REPOSITORY="${config_origin}" \
 PROFILE_SOURCE_COMMIT="${config_revision}" \
   "${server_scripts}/build-profile-release.sh" \
     "${profile_directory}" "${RELEASE}" "${payload}/mods" "${payload}/manifest.json"
+step_timing build_release
 
 # The plan: what this release changes compared with the preset's latest
 # release, or PREVIOUS_RELEASE (`none` for a first release). It is descriptive,
@@ -134,6 +145,8 @@ if [[ -n "${previous_manifest}" ]]; then
   fi
 fi
 
+step_timing plan
+
 # The digest names the profile that built the release; the reference table
 # keeps it on the release item (objects-v1 only).
 profile_digest="$({
@@ -160,6 +173,7 @@ RELEASE_REFS_TABLE="${RELEASE_REFS_TABLE:-spawnpoint-release-refs}" \
 RELEASE_PROFILE_DIGEST="${profile_digest}" \
 RELEASE_UPSTREAM_MAP="${upstream_map}" \
   "${server_scripts}/upload-release.sh" "${payload}/manifest.json"
+step_timing upload
 
 # A release and preset discovery are separate records, joined by the digest of
 # the profile directory (computed before the upload) rather than by the
@@ -208,6 +222,7 @@ else
   printf 'preset_catalog=missing\n'
 fi
 
+step_timing catalog
 printf 'result=release_ready\n'
 printf 'profile_id=%s\n' "${PROFILE_ID}"
 printf 'game=%s\n' "${game}"

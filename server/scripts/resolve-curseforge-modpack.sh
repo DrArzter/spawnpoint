@@ -131,12 +131,14 @@ file_metadata "${server_pack_file_id}" "${server_metadata}"
 server_parent="$(jq -r '.data.parentProjectFileId // empty' "${server_metadata}")"
 [[ -z "${server_parent}" || "${server_parent}" == "${file_id}" ]] ||
   die "CurseForge server pack ${server_pack_file_id} belongs to another main file"
+step_timing modpack_metadata
 
 client_archive="${workspace}/client.zip"
 server_archive="${workspace}/server.zip"
 fetch_pack_file "${main_metadata}" "${file_id}" "${client_archive}" "client pack ${project_id}:${file_id}"
 fetch_pack_file "${server_metadata}" "${server_pack_file_id}" "${server_archive}" \
   "server pack ${project_id}:${server_pack_file_id}"
+step_timing modpack_archives
 
 # A profile's runtime contract must describe the archive it pins. Reading the
 # launcher manifest is data validation only: no pack-provided code is run.
@@ -322,6 +324,7 @@ resolve_client_file() {
     --arg path "${directory}/${filename}" --arg sha256 "${digest%% *}" \
     '{project_id:$project,file_id:$file,path:$path,sha256:$sha256}' >>"${client_entries}"
 }
+step_timing modpack_trees
 mkdir -- "${workspace}/claims"
 client_jobs=()
 while IFS=$'\t' read -r dependency_project dependency_file; do
@@ -337,6 +340,7 @@ done < <(jq -r '.files[] | [.projectID,.fileID] | @tsv' "${client_manifest}")
 batch_failed=false
 for client_job in "${client_jobs[@]}"; do wait "${client_job}" || batch_failed=true; done
 [[ "${batch_failed}" == false ]] || die "client dependency resolution failed"
+step_timing client_dependencies
 
 # An importable CurseForge pack with every dependency already embedded in its
 # overrides. The launcher only installs the pinned Minecraft and loader.
@@ -393,6 +397,7 @@ mod_count="$(find "${workspace}/result/mods" -maxdepth 1 -type f -iname '*.jar' 
 override_count="$(find "${workspace}/result/overrides" -type f | wc -l)"
 cp -- "${workspace}/complete-client.zip" "${workspace}/result/client.zip"
 mv -T -- "${workspace}/result" "${output_dir}"
+step_timing modpack_output
 
 printf 'result=resolved\n'
 printf 'project_id=%s\n' "${project_id}"

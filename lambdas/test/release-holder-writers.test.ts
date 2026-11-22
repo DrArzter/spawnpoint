@@ -119,7 +119,7 @@ test("the host writes the backup holder after the upload, and a failed holder ne
   const upload = stop.search(/upload-world-backup\.sh" "\$\{archive\}"/);
   const hold = stop.search(/hold-backup-release\.sh/);
   assert.ok(upload !== -1 && hold > upload, "the holder is written after the upload returns");
-  assert.match(stop, /if \[\[ -z "\$\{backup_version\}" \]\] \|\|\n\s*! AWS_REGION=[^\n]*hold-backup-release\.sh/, "the holder call is inside an if: its failure does not stop the script");
+  assert.match(stop, /if \[\[[^\n]*\]\] &&\n\s*\{ \[\[ -z "\$\{backup_version\}" \]\] \|\|\n\s*! AWS_REGION=[^\n]*hold-backup-release\.sh/, "the holder call is inside an if: its failure does not stop the script");
   assert.match(stop, /backup_holder_missing/);
   const script = readFileSync(join(root, "server/scripts/hold-backup-release.sh"), "utf8");
   assert.match(script, /roles: \{SS: \["backup"\]\}/);

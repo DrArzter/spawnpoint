@@ -9,8 +9,8 @@ Each `*-routes.ts` owns one functional area's HTTP paths and declares authority
 with `publicRoute`, `sessionRoute`, `identityRoute`, or `permissionRoute`.
 Its neighboring feature module implements the requests. Authentication,
 access administration, access invitations, profile, control plane, worlds,
-metrics, console, releases, backups, player invitations, OAuth, and MCP have
-separate route groups.
+metrics, console, releases, backups, release promotion, player invitations,
+OAuth, and MCP have separate route groups.
 
 `route-table.ts` composes those groups and rejects duplicate route keys.
 `capabilities.ts` derives advertised capabilities from the composed routes;

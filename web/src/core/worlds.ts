@@ -175,6 +175,8 @@ export type WorldCallbacks = Readonly<{
   onEditSettings?: (game: Game, world: World) => void;
   /** Present when the deployment can keep game settings (ADR-0064). */
   onEditGameSettings?: (game: Game, world: World) => void;
+  /** Present when the deployment promotes fleet worlds (ADR-0078). */
+  onPromote?: (game: Game, world: World) => void;
 }>;
 
 export function presetOf(game: Game, world: World) {
@@ -188,9 +190,32 @@ export function rowActions(game: Game, world: World, granted: ReadonlySet<string
   ];
   if (granted.has("invitation.send")) items.push(action("world.invite", "Invite players", () => callbacks.onInvite(game, world), { icon: "send" }));
   if (granted.has("connection.read")) items.push(packAction(game, world, busy, callbacks));
+  items.push(...promoteActions(game, world, granted, busy, callbacks));
   if (!granted.has("world.manage") || !world.worldLifecycleAvailable) return items;
   items.push(...lifecycleActions(game, world, busy, callbacks));
   return items;
+}
+
+/** The releases a world's wipe may move to: its preset's others, newest first. */
+export function promotionTargets(game: Game, world: World): readonly string[] {
+  const preset = presetOf(game, world);
+  if (!preset || preset.buildStatus !== "ready") return [];
+  // Only releases after the active one: going back is a restore (ADR-0052).
+  const at = world.release.activeRelease === null ? -1 : preset.releases.indexOf(world.release.activeRelease);
+  return preset.releases.slice(at + 1).reverse();
+}
+
+// Keeping the save across a release change is release.promote, the Owner's (ADR-0078).
+function promoteActions(game: Game, world: World, granted: ReadonlySet<string>, busy: boolean, callbacks: WorldCallbacks): Action[] {
+  const promote = callbacks.onPromote;
+  if (!promote || !granted.has("release.promote") || world.placement !== "fleet" || world.materialization !== "existing") return [];
+  const players = fleetPlayersOnline(game, world) ?? 0;
+  const reason = !world.release.activeRelease ? "Available once a release is active"
+    : promotionTargets(game, world).length === 0 ? "No newer built release"
+      : players > 0 ? "Refused while players are online" : undefined;
+  return [action("world.promote", "Update release", () => promote(game, world), {
+    icon: "deployed_code", disabled: busy || reason !== undefined, detail: reason ?? "Keeps the save; takes a backup first",
+  })];
 }
 
 function packAction(game: Game, world: World, busy: boolean, callbacks: WorldCallbacks): Action {
@@ -219,6 +244,7 @@ function lifecycleActions(game: Game, world: World, busy: boolean, callbacks: Wo
 export function worldMoreActions(game: Game, world: World, granted: ReadonlySet<string>, busy: boolean, callbacks: WorldCallbacks): Action[] {
   const items: Action[] = [];
   if (granted.has("connection.read")) items.push(packAction(game, world, busy, callbacks));
+  items.push(...promoteActions(game, world, granted, busy, callbacks));
   if (!granted.has("world.manage") || !world.worldLifecycleAvailable) return items;
   if (world.materialization !== "archived" && callbacks.onEditSettings) {
     const edit = callbacks.onEditSettings;

@@ -128,6 +128,11 @@ whose transitions — prepare, protect, commit, restore, rollback — are pure T
 `lambdas/src/control-plane/release-state-transitions.ts`, written with optimistic concurrency on the S3 object's ETag.
 The machine never builds a pointer document itself.
 
+A fleet world is promoted from the panel ([ADR-0078](../docs/adr/0078-promote-a-fleet-world-from-the-panel.md)). Its
+input names `placement: fleet`, the world's own lifecycle key as `serverId` and its warm choice, and both nested starts
+pass them on, so the session is placed as a panel start places it. A caller that names no placement, such as
+`scripts/promote-release.sh`, means the configured host.
+
 1. Verify the target release is published for this game and preset (its manifest exists).
 2. **Prepare**: write desired for the world's current wipe; an already-active release ends idempotently. From here
    every path must leave the pointer telling the truth.

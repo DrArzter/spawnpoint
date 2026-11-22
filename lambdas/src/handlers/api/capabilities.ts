@@ -16,6 +16,7 @@ const capabilityRoutes: Readonly<Record<string, string>> = {
   backupDownloads: "POST /games/{gameId}/worlds/{worldId}/backups/download",
   whitelist: "PUT /games/{gameId}/worlds/{worldId}/whitelist",
   releaseBuilds: "POST /games/{gameId}/presets/{presetId}/builds",
+  releasePromotion: "POST /games/{gameId}/worlds/{worldId}/promote",
 };
 
 export function capabilitiesForRoutes(routes: Readonly<Record<string, unknown>>): readonly string[] {

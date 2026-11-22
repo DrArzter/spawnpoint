@@ -771,8 +771,10 @@ this order.
 5. Decide: keep the save (promote) or start a new wipe. Start a new wipe when the Minecraft version or the loader type
    changed, or when a removed mod holds things the players must keep.
 6. Announce the update. Players must log off: a promotion refuses while players are online (`PromotionRefused`).
-7. Promote. A configured world: `scripts/promote-release.sh <world> <release>`. A fleet world can only start a new wipe
-   until fleet promotion exists.
+7. Promote. A configured world: `scripts/promote-release.sh <world> <release>`. A fleet world: in the panel, open the
+   world's menu, select **Update release**, choose the release and type the world ID (Owner only,
+   [ADR-0078](adr/0078-promote-a-fleet-world-from-the-panel.md)). The API is
+   `POST /games/{gameId}/worlds/{worldId}/promote` with `{"release": "<release>"}`.
 8. The promotion keeps a pre-promotion backup and names it in its result (`prePromotionBackup`). Retention keeps it
    until the next promotion of that wipe.
 9. Tell players to replace their whole instance with the new client pack (**Download client pack**, or `/pack` in

@@ -19,7 +19,7 @@ const ARCHIVE_MS = 4000;
 const DELIVERY_MS = 3000;
 // What earlier runs of each operation took, as the control plane would average them.
 // A stop usually ends before the demo's does, so its ETA shows the over-time reading.
-const USUAL = { start: { seconds: 10, samples: 10 }, stop: { seconds: 4, samples: 6 }, world: { seconds: 8, samples: 5 } } as const;
+const USUAL = { start: { seconds: 10, samples: 10 }, stop: { seconds: 4, samples: 6 }, world: { seconds: 8, samples: 5 }, promote: { seconds: 12, samples: 4 } } as const;
 
 const iso = () => new Date().toISOString();
 const worldKey = (gameId: string, worldId: string) => `${gameId}/${worldId}`;
@@ -48,7 +48,7 @@ function settle(): void {
   state.snapshot.observedAt = iso();
 }
 
-function schedule(type: "start" | "stop" | "world", worldId: string, afterMs: number, apply: (state: DemoState) => void): string {
+function schedule(type: "start" | "stop" | "world" | "promote", worldId: string, afterMs: number, apply: (state: DemoState) => void): string {
   state.counter += 1;
   const id = `op-${type}-${state.counter.toString().padStart(4, "0")}`;
   state.snapshot.operations.push({ id, type, status: "running", startedAt: iso(), worldId, expectedSeconds: USUAL[type].seconds, expectedSamples: USUAL[type].samples });
@@ -260,6 +260,25 @@ export function stopSession(gameId: string, worldId: string): { result: "request
 function gamePort(gameId: string): string {
   const address = game(gameId).worlds.map((item) => item.connectionAddress).find((value) => value !== null);
   return address?.split(":").at(-1) ?? "25565";
+}
+
+/** A fleet world's promotion (ADR-0078): desired first, active once the target start passes. */
+export function promoteWorld(gameId: string, worldId: string, release: string): { result: "requested"; operationId: string } {
+  settle();
+  requireIdle(worldId);
+  const target = world(gameId, worldId);
+  if (target.placement !== "fleet") throw new Error("Only a fleet world is promoted from the panel.");
+  if (!(target.preset?.releases.includes(release) ?? false)) throw new Error("The selected release is no longer available. Refresh and try again.");
+  if (target.release.activeRelease === null) throw new Error("This wipe has never started. Start a new wipe instead.");
+  if (target.release.activeRelease === release) throw new Error("This release is already active.");
+  if ((target.session?.idle?.playersOnline ?? 0) > 0) throw new Error("Players are online. Ask them to log off first.");
+  archive(gameId, target);
+  target.release = { ...target.release, desiredRelease: release };
+  const operationId = schedule("promote", worldId, LIFECYCLE_MS, (current) => {
+    const next = current.snapshot.games.find((item) => item.id === gameId)?.worlds.find((item) => item.id === worldId);
+    if (next) next.release = { ...next.release, activeRelease: release, desiredRelease: release };
+  });
+  return { result: "requested", operationId };
 }
 
 export function worldLifecycle(gameId: string, worldId: string, action: "archive" | "regenerate" | "restore" | "purge", backupKey?: string, release?: string): { result: "requested"; operationId: string } {

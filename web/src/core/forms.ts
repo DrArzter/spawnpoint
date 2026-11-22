@@ -5,6 +5,7 @@ import { worldSessionActive } from "../session";
 import type { Confirmation } from "../shell/actions";
 import { action } from "./actions";
 import { releaseBuildCopy } from "./release-builds";
+import { promotionTargets } from "./worlds";
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, WorldPlacement, WorldSettingsModel } from "./models";
 import { effectiveValue, settingDefinitions, settingValueValid } from "./settings";
 
@@ -202,6 +203,13 @@ export function confirmationCopy(confirmation: Confirmation): { title: string; d
       return { title: `Start a new wipe of ${world.displayName}?`, description: "Backs up and closes the current wipe, then opens an empty one from the chosen release.", label: "Start new wipe", destructive: true };
     case "purge":
       return { title: `Permanently delete ${world.displayName}?`, description: "Deletes the world, its release pointer and every backup. This cannot be undone.", label: "Delete forever", destructive: true };
+    case "promote":
+      return {
+        title: `Update ${world.displayName} to another release?`,
+        description: `Keeps the save. Stops the world, keeps its backup, then starts it on the chosen release. If that start fails, ${world.release.activeRelease ?? "the active release"} stays. Refused while players are online.`,
+        label: "Update release",
+        destructive: true,
+      };
     default:
       return {
         title: `Restore ${confirmation.backupName}?`,
@@ -219,19 +227,41 @@ export function useConfirmationForm(confirmation: Confirmation | null, opts: Rea
   const [release, setRelease] = useState("");
   useEffect(() => {
     setTyped("");
-    setRelease(confirmation?.kind === "wipe" ? confirmation.preset?.latestRelease ?? "" : "");
+    setRelease(initialRelease(confirmation));
   }, [confirmation]);
   if (confirmation === null) return null;
   const copy = confirmationCopy(confirmation);
-  const preset = confirmation.kind === "wipe" ? confirmation.preset : null;
-  const blocked = (confirmation.kind === "purge" && typed !== confirmation.world.id) || (confirmation.kind === "wipe" && !(preset?.releases.includes(release) ?? false));
+  const options = releaseOptions(confirmation);
+  const typedTarget = confirmation.kind === "purge" || confirmation.kind === "promote" ? confirmation.world.id : null;
+  const needsRelease = confirmation.kind === "wipe" || confirmation.kind === "promote";
+  const blocked = (typedTarget !== null && typed !== typedTarget) || (needsRelease && !(options?.some((option) => option.version === release) ?? false));
+  const chosen = needsRelease ? release : undefined;
   return {
     title: copy.title,
     description: copy.description,
     destructive: copy.destructive,
-    confirm: action("confirm", copy.label, () => opts.onConfirm(confirmation, confirmation.kind === "wipe" ? release : undefined), { disabled: blocked, danger: copy.destructive }),
+    confirm: action("confirm", copy.label, () => opts.onConfirm(confirmation, chosen), { disabled: blocked, danger: copy.destructive }),
     cancel: action("cancel", "Cancel", opts.onClose),
-    releaseChoice: preset ? { value: release, options: [...preset.releases].reverse().map((version) => ({ version, latest: version === preset.latestRelease })), set: setRelease } : null,
-    typedConfirmation: confirmation.kind === "purge" ? { label: "World ID", expected: confirmation.world.id, value: typed, set: setTyped } : null,
+    releaseChoice: options === null ? null : {
+      label: confirmation.kind === "promote" ? "Release to update to" : "Release for the new wipe", value: release, options, set: setRelease,
+    },
+    typedConfirmation: typedTarget === null ? null : { label: "World ID", expected: typedTarget, value: typed, set: setTyped },
   };
+}
+
+// A wipe may open on any built release; a promotion moves to one the wipe does not run.
+function releaseOptions(confirmation: Confirmation): readonly Readonly<{ version: string; latest: boolean }>[] | null {
+  if (confirmation.kind !== "wipe" && confirmation.kind !== "promote") return null;
+  const preset = confirmation.preset;
+  if (!preset) return null;
+  const releases = confirmation.kind === "promote"
+    ? promotionTargets(confirmation.game, confirmation.world)
+    : [...preset.releases].reverse();
+  return releases.map((version) => ({ version, latest: version === preset.latestRelease }));
+}
+
+function initialRelease(confirmation: Confirmation | null): string {
+  if (confirmation === null) return "";
+  const latest = confirmation.kind === "wipe" || confirmation.kind === "promote" ? confirmation.preset?.latestRelease ?? "" : "";
+  return releaseOptions(confirmation)?.some((option) => option.version === latest) ? latest : "";
 }

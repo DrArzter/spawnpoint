@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ReleaseMod, ReleasePackName } from "../api/contract";
 import { requestReleaseBuild } from "../auth";
-import { ActiveSession, endSession, loadAppearance, loadControlPlane, requestBackupDownload, requestCreateWorld, requestModDownload, requestPackDownload, requestReleasePack, requestSessionOperation, requestUpdateWorldSettings, requestWorldLifecycle, subscribeControlPlane, updateAppearance, updateGameSettings, type BackupEntry } from "../auth";
+import { ActiveSession, endSession, loadAppearance, loadControlPlane, requestBackupDownload, requestCreateWorld, requestModDownload, requestPackDownload, requestReleasePack, requestSessionOperation, requestPromotion, requestUpdateWorldSettings, requestWorldLifecycle, subscribeControlPlane, updateAppearance, updateGameSettings, type BackupEntry } from "../auth";
 import { sessionStatus } from "./status";
 import { formatDateTime } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, SettingValue, World } from "../model";
@@ -17,7 +17,7 @@ import type { Notify } from "./data";
 import { openDownload } from "./download";
 import type { AppearanceModel, NavigationItem, ShellModel, WorldPlacement } from "./models";
 import { visibleNavigation } from "./navigation";
-import type { WorldCallbacks } from "./worlds";
+import { presetOf, type WorldCallbacks } from "./worlds";
 
 /*
  * The console's bones: what is loaded, what is pending, what is open, and
@@ -327,6 +327,20 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     }
   }
 
+  async function runPromotion(target: Game, targetWorld: World, release: string) {
+    const mine: Pending = { kind: "promote", worldId: targetWorld.id };
+    holdPending(mine);
+    try {
+      await requestPromotion(target.id, targetWorld.id, release);
+      notify({ tone: "success", message: `Update of ${targetWorld.displayName} to release ${release} accepted. It appears in Operations while it runs.` });
+      await refresh(true);
+    } catch (error) {
+      notify({ tone: "error", message: error instanceof Error ? error.message : "The release update request failed." });
+    } finally {
+      releasePending(mine);
+    }
+  }
+
   async function downloadPack(target: Game, targetWorld: World) {
     const mine: Pending = { kind: "pack", worldId: targetWorld.id };
     holdPending(mine);
@@ -419,6 +433,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     onDownloadPack: (target, targetWorld) => void downloadPack(target, targetWorld),
     onEditSettings: (target, targetWorld) => setEditing({ game: target, world: targetWorld }),
     ...(capabilities.has("gameSettings") ? { onEditGameSettings: (target: Game, targetWorld: World) => setEditingGameSettings({ game: target, world: targetWorld }) } : {}),
+    ...(capabilities.has("releasePromotion") ? { onPromote: (target: Game, targetWorld: World) => setConfirmation({ kind: "promote", game: target, world: targetWorld, preset: presetOf(target, targetWorld) ?? null }) } : {}),
   };
 
   const appearanceModel: AppearanceModel = {
@@ -497,6 +512,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
       if (item.kind === "wipe") void runLifecycle(item.game, item.world, "wipe", undefined, release);
       if (item.kind === "restore") void runLifecycle(item.game, item.world, "restore", item.backupKey);
       if (item.kind === "purge") void runLifecycle(item.game, item.world, "purge");
+      if (item.kind === "promote" && release) void runPromotion(item.game, item.world, release);
     },
     invite,
     closeInvite: () => setInvite(null),

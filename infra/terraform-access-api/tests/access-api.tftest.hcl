@@ -269,6 +269,17 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition = alltrue([
+      contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/promote"),
+      one([
+        for statement in data.aws_iam_policy_document.access_api.statement : statement.resources
+        if statement.sid == "PromoteFleetWorld"
+      ]) == toset(["arn:aws:states:eu-central-1:123456789012:stateMachine:spawnpoint-promote-release"]),
+    ])
+    error_message = "The API may start the promote-release machine and no other machine through the promotion grant."
+  }
+
+  assert {
     condition     = contains(local.access_routes, "POST /auth/refresh") && contains(local.access_routes, "POST /auth/logout")
     error_message = "Persistent browser login requires explicit refresh and logout endpoints."
   }

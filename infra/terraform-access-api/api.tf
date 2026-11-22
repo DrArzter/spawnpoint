@@ -155,6 +155,14 @@ data "aws_iam_policy_document" "access_api" {
     resources = [for machine in local.operation_state_machines : machine.arn if contains(["start", "stop", "world"], machine.type)]
   }
 
+  # A fleet world's promotion (ADR-0078), under release.promote. The machine
+  # itself composes only the fixed Lifecycle V2 start and stop.
+  statement {
+    sid       = "PromoteFleetWorld"
+    actions   = ["states:StartExecution"]
+    resources = [for machine in local.operation_state_machines : machine.arn if machine.type == "promote"]
+  }
+
   statement {
     sid       = "RequestReleaseBuild"
     actions   = ["states:StartExecution"]
@@ -352,6 +360,7 @@ locals {
     "POST /games/{gameId}/worlds/{worldId}/wipe",
     "POST /games/{gameId}/worlds/{worldId}/restore",
     "POST /games/{gameId}/worlds/{worldId}/purge",
+    "POST /games/{gameId}/worlds/{worldId}/promote",
     "POST /access/request",
     "GET /access/candidates",
     "GET /access/identities",

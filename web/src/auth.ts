@@ -55,6 +55,7 @@ export const deleteIdentity = (identityId: string) => api.deleteIdentity(identit
 export const loadControlPlane = () => api.loadControlPlane();
 export const subscribeControlPlane = (onInvalidated: () => void) => api.subscribeControlPlane(onInvalidated);
 export const requestSessionOperation = (gameId: string, worldId: string, action: "start" | "stop") => api.requestSessionOperation(gameId, worldId, action);
+export const requestPromotion = (gameId: string, worldId: string, release: string) => api.requestPromotion(gameId, worldId, release);
 export const requestWorldLifecycle = (gameId: string, worldId: string, action: "archive" | "regenerate" | "restore" | "purge", backupKey?: string, release?: string) => api.requestWorldLifecycle(gameId, worldId, action, backupKey, release);
 export const requestCreateWorld = (gameId: string, presetId: string, displayName: string, release: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external") => api.requestCreateWorld(gameId, presetId, displayName, release, placement, connectivity, auth);
 export const requestReleaseBuild = (gameId: string, presetId: string, profileDigest: string, retryRelease?: string) => api.requestReleaseBuild(gameId, presetId, profileDigest, retryRelease);

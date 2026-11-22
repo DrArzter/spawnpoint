@@ -131,3 +131,18 @@ test("a world with no list of its own shows its running server's, none once stop
   assert.deepEqual(saved.names, ["DrArzter", "Mira", "Kira"]);
   assert.equal(store.whitelist(GAME, CREATIVE).managed, true);
 });
+
+test("a fleet world's promotion keeps its wipe, names the target as desired, and commits it once the operation ends (ADR-0078)", () => {
+  assert.equal(stateOf(store.snapshot(), CREATIVE), "stopped");
+  const creative = () => store.snapshot().games.find((item) => item.id === GAME)!.worlds.find((item) => item.id === CREATIVE)!;
+  const wipe = creative().release.generationId;
+  const from = creative().release.activeRelease!;
+  const to = creative().preset!.releases.find((release) => release !== from)!;
+  assert.throws(() => store.promoteWorld(GAME, CREATIVE, from), /already active/);
+  assert.throws(() => store.promoteWorld(GAME, ROSTIK, to), /fleet world/);
+  store.promoteWorld(GAME, CREATIVE, to);
+  assert.deepEqual([creative().release.desiredRelease, creative().release.activeRelease], [to, from]);
+  assert.ok(store.snapshot().operations.some((operation) => operation.type === "promote" && operation.worldId === CREATIVE));
+  mock.timers.tick(7000);
+  assert.deepEqual([creative().release.desiredRelease, creative().release.activeRelease, creative().release.generationId], [to, to, wipe]);
+});

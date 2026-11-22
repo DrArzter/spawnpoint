@@ -89,10 +89,10 @@ world_identity="$(jq -cer --arg world "${world}" '
   printf 'error: world registry has no valid current wipe, game or preset: %s\n' "${world}" >&2
   exit 1
 }
-# A fleet world takes its desired release at its next start on a host launched
-# for it (ADR-0054); promotion stops and starts the configured host's session.
+# This tool promotes on the configured host. A fleet world is promoted from the
+# panel or the API, which place its sessions (ADR-0078).
 if [[ "$(jq -r '.placement // "configured"' <<<"${world_record}")" == "fleet" ]]; then
-  printf 'error: %s is a fleet world; promotion stops and starts the configured host only.\n' "${world}" >&2
+  printf 'error: %s is a fleet world; promote it from the panel (Update release) or POST .../promote.\n' "${world}" >&2
   exit 1
 fi
 generation_id="$(jq -r .generationId <<<"${world_identity}")"

@@ -1850,19 +1850,12 @@ html[data-skin="terminal"] .t-radio + .t-radio {
    the cell it is mounted in: a row's menu read right-aligned and could not wrap
    its detail, which cut the label off at the menu's edge. */
 html[data-skin="terminal"] .t-menu {
-  position: fixed;
-  inset: auto;
-  margin: 0;
   padding: 4px 0;
   border: 1px solid var(--rule);
   background: var(--surface);
   color: var(--ink);
   text-align: start;
   white-space: normal;
-}
-
-html[data-skin="terminal"] .t-menu:not(:popover-open) {
-  display: none;
 }
 
 html[data-skin="terminal"] .t-menu hr {

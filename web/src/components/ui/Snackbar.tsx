@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Icon } from "../../icons";
 import { cx } from "../../lib/cx";
 import { Button, IconButton } from "./Button";
+import { useLayer } from "./layer";
 
 export type SnackTone = "info" | "success" | "error";
 export type SnackInput = { message: string; tone?: SnackTone; action?: { label: string; onClick: () => void }; persistent?: boolean };
@@ -40,6 +41,9 @@ export function useSnackbar(): (snack: SnackInput) => void {
 export function SnackbarProvider({ children, render }: Readonly<{ children: ReactNode; render?: (queue: SnackbarQueue) => ReactNode }>) {
   const [queue, setQueue] = useState<Snack[]>([]);
   const counter = useRef(0);
+  const host = useRef<HTMLElement>(null);
+  // Open from the start, so the live region is never hidden when an item joins it.
+  useLayer(host, true, true);
   const dismiss = useCallback((id: number) => setQueue((current) => dropSnack(current, id)), []);
   const notify = useCallback((input: SnackInput) => {
     counter.current += 1;
@@ -53,7 +57,7 @@ export function SnackbarProvider({ children, render }: Readonly<{ children: Reac
       <QueueContext.Provider value={shared}>
         {children}
         {render ? render(shared) : (
-          <section aria-label="Notifications" aria-live="polite" className="snackbar-host">
+          <section aria-label="Notifications" aria-live="polite" className="snackbar-host" data-layer="toast" popover="manual" ref={host}>
             {queue.map((snack) => <SnackbarItem key={snack.id} onDismiss={() => dismiss(snack.id)} snack={snack} />)}
           </section>
         )}

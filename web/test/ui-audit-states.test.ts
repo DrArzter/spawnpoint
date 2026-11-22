@@ -60,6 +60,7 @@ test("ui-audit states: names are unique and every step is one the walker knows",
   assert.equal(new Set(STATES.map((state) => state.name)).size, STATES.length);
   for (const state of STATES) {
     assert.ok(state.steps.length > 0, state.name);
+    for (const kind of state.onTop ?? []) assert.ok(["tip", "toast"].includes(kind), `${state.name}: onTop ${kind}`);
     for (const step of state.steps) assert.equal(Object.keys(step).filter((key) => ["action", "click", "focus", "key"].includes(key)).length, 1, `${state.name}: ${JSON.stringify(step)}`);
   }
 });

@@ -1,8 +1,9 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useRef, useState, type KeyboardEvent } from "react";
 
 import { Icon, IconName } from "../../icons";
 import { Avatar } from "../Avatar";
 import { IconButton } from "./Button";
+import { hideLayer, showLayer, useLightDismiss } from "./layer";
 
 export type MenuItem = {
   id: string;
@@ -16,8 +17,9 @@ export type MenuItem = {
   onSelect: () => void;
 };
 
-// Overflow menu in the top layer (popover API), so table scroll containers
-// never clip it; positioned from the trigger's rectangle on open.
+// Overflow menu in the top layer (a manual popover), so table scroll
+// containers never clip it; positioned from the trigger's rectangle on open.
+// A press outside closes it (the popover has no light dismiss of its own).
 export function Menu({ label, icon = "more_vert", items, align = "end", size = "medium", avatar }: Readonly<{
   label: string;
   icon?: IconName;
@@ -43,27 +45,17 @@ export function Menu({ label, icon = "more_vert", items, align = "end", size = "
     menu.style.left = `${left}px`;
     menu.style.top = below + estimatedHeight > window.innerHeight ? `${Math.max(8, rect.top - estimatedHeight - 4)}px` : `${below}px`;
     menu.style.width = `${width}px`;
-    if (typeof menu.showPopover === "function") menu.showPopover();
+    showLayer(menu);
     setOpen(true);
     window.requestAnimationFrame(() => menu.querySelector<HTMLButtonElement>("[role=menuitem]:not(:disabled)")?.focus());
   }
 
   function hide() {
-    const menu = panel.current;
-    if (menu && typeof menu.hidePopover === "function" && menu.matches(":popover-open")) menu.hidePopover();
+    hideLayer(panel.current);
     setOpen(false);
   }
 
-  useEffect(() => {
-    const menu = panel.current;
-    if (!menu) return;
-    const onToggle = (event: Event) => {
-      const state = (event as ToggleEvent).newState;
-      if (state === "closed") setOpen(false);
-    };
-    menu.addEventListener("toggle", onToggle);
-    return () => menu.removeEventListener("toggle", onToggle);
-  }, []);
+  useLightDismiss(open, [panel, trigger], hide);
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("[role=menuitem]:not(:disabled)"));
@@ -83,7 +75,7 @@ export function Menu({ label, icon = "more_vert", items, align = "end", size = "
     <>
       {avatar && <button aria-controls={id} aria-expanded={open} aria-haspopup="menu" aria-label={label} className="appbar-avatar" onClick={() => (open ? hide() : show())} ref={trigger} title={label} type="button"><Avatar name={avatar.name} photoUrl={avatar.photoUrl} /></button>}
       {!avatar && <IconButton aria-controls={id} aria-expanded={open} aria-haspopup="menu" icon={icon} label={label} onClick={() => (open ? hide() : show())} ref={trigger} size={size} />}
-      <div className="menu" data-open={open || undefined} id={id} onKeyDown={onKeyDown} popover="auto" ref={panel} role="menu" /* NOSONAR focus moves to the items, which carry the tab stop */>
+      <div className="menu" data-layer="menu" data-open={open || undefined} id={id} onKeyDown={onKeyDown} popover="manual" ref={panel} role="menu" /* NOSONAR focus moves to the items, which carry the tab stop */>
         {items.map((item, index) => item === "separator" ? <hr key={`separator-${index}`} /> : ( // NOSONAR separators have no id; the list is rebuilt whole
           <button
             className="menu-item"

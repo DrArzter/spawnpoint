@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, type KeyboardEvent, type RefObject } from "react";
+import { useLayoutEffect, useRef, type KeyboardEvent, type RefObject } from "react";
 
+import { hideLayer, showLayer, useLightDismiss } from "../../../components/ui/layer";
 import type { Action } from "../../../core/actions";
 import { Icon } from "../../../icons";
 import { cx } from "../../../lib/cx";
@@ -24,12 +25,11 @@ export function Menu({ id, label, groups, open, anchor, onClose }: Readonly<{ id
     const element = menu.current;
     const target = anchor.current;
     if (!element) return;
-    const shown = typeof element.showPopover === "function" && element.matches(":popover-open");
     if (!open || !target) {
-      if (shown) element.hidePopover();
+      hideLayer(element);
       return;
     }
-    if (!shown && typeof element.showPopover === "function") element.showPopover();
+    showLayer(element);
     const rect = target.getBoundingClientRect();
     const height = element.offsetHeight;
     const width = element.offsetWidth;
@@ -39,14 +39,7 @@ export function Menu({ id, label, groups, open, anchor, onClose }: Readonly<{ id
     (items().find((item) => item.getAttribute("aria-disabled") !== "true") ?? items()[0])?.focus();
   }, [open, anchor]);
 
-  useEffect(() => {
-    if (!open) return;
-    const away = (event: PointerEvent) => {
-      if (event.target instanceof Node && !menu.current?.contains(event.target) && !anchor.current?.contains(event.target)) onClose();
-    };
-    document.addEventListener("pointerdown", away);
-    return () => document.removeEventListener("pointerdown", away);
-  }, [open, anchor, onClose]);
+  useLightDismiss(open, [menu, anchor], onClose);
 
   const close = () => { onClose(); anchor.current?.focus(); };
   const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -74,7 +67,7 @@ export function Menu({ id, label, groups, open, anchor, onClose }: Readonly<{ id
   const visible = groups.filter((group) => group.actions.length > 0);
 
   return (
-    <div aria-label={label} className="c-menu" data-layer="menu" hidden={!open} id={id} popover="manual" onKeyDown={onKey} ref={menu} role="menu" /* NOSONAR focus moves to the items, which carry the tab stop */>
+    <div aria-label={label} className="c-menu" data-layer="menu" id={id} popover="manual" onKeyDown={onKey} ref={menu} role="menu" /* NOSONAR focus moves to the items, which carry the tab stop */>
       {visible.map((group, index) => (
         <div className={cx("c-menu-group", index > 0 && "c-menu-group-split")} key={group.label ?? index} role="group" aria-label={group.label} /* NOSONAR a labelled group of menu items; <fieldset> is not valid inside a menu */>
           {group.label && <div aria-hidden="true" className="c-menu-label">{group.label}</div>}

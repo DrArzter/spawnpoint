@@ -1,11 +1,6 @@
 /* Menu: the Overflow's list of Actions. */
 
 html[data-skin="console"] .c-menu {
-  position: fixed;
-  inset: auto;
-  z-index: 80;
-  margin: 0;
-  overflow: visible;
   color: var(--c-ink);
   min-width: 240px;
   max-width: min(360px, calc(100vw - 16px));

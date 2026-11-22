@@ -357,7 +357,7 @@ export function deletionConfirmation(member: Member, opts: Readonly<{ typed: str
 /**
  * Deletes one person; on success the row goes and the panel showing them
  * closes. A refusal changes nothing and is returned for the open dialog,
- * which sits above any snackbar.
+ * which keeps it in view until the next attempt.
  */
 export async function deleteMember(member: Member, deps: Readonly<{ remove: (identityId: string) => Promise<void>; members: readonly Member[]; onMembersChange: (members: Member[]) => void; managing: string | null; closeManaged: () => void; notify: Notify }>): Promise<string | null> {
   try {

@@ -111,6 +111,7 @@ const KINDS = {
   gridEdge: "grid short of its edge",
   cardHeights: "cards of one row differ in height",
   stateTwice: "state said twice",
+  covered: "floating layer under a dialog",
   error: "probe or state failed",
 };
 const ADVISORY = {
@@ -231,6 +232,64 @@ const STEP = `(async (step) => {
   return "unknown step";
 })`;
 
+// A state with `onTop: ["tip", "toast"]` names layers that must show above the
+// dialog it opened. document.elementFromPoint cannot tell: a modal makes the
+// page outside it inert, and a hit test skips inert boxes, so a layer that
+// really is above still answers with the dialog. The paint order of a DOM
+// snapshot is the order the browser draws in, top layer included.
+const MARK_LAYERS = `((kinds) => {
+  const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).display !== "none"; };
+  document.querySelectorAll("[data-layer=tip], [data-layer=menu], [data-layer=toast]").forEach((el) => el.setAttribute("data-audit-layer", el.dataset.layer));
+  document.querySelectorAll("dialog:modal").forEach((el) => el.setAttribute("data-audit-modal", ""));
+  const missing = [];
+  for (const kind of kinds) {
+    const layer = Array.from(document.querySelectorAll('[data-layer="' + kind + '"]')).find((el) => shown(el) && el.textContent.trim() !== "");
+    const box = layer && ((kind === "toast" ? layer.firstElementChild : null) ?? layer);
+    if (box) box.setAttribute("data-audit-box", kind); else missing.push(kind);
+  }
+  return missing;
+})`;
+const UNMARK_LAYERS = `document.querySelectorAll("[data-audit-layer], [data-audit-box], [data-audit-modal]").forEach((el) => { el.removeAttribute("data-audit-layer"); el.removeAttribute("data-audit-box"); el.removeAttribute("data-audit-modal"); })`;
+
+// A layer is covered when an open modal paints after it, wherever it sits (the
+// backdrop dims the whole page), or when any box that is no layer paints after
+// it over its centre.
+function coveredBy(snapshot) {
+  const { documents, strings } = snapshot;
+  const doc = documents[0];
+  const attribute = (node, name) => {
+    const list = doc.nodes.attributes[node];
+    for (let i = 0; i < list.length; i += 2) if (strings[list[i]] === name) return strings[list[i + 1]];
+    return null;
+  };
+  const parent = doc.nodes.parentIndex;
+  const painted = new Map(doc.layout.nodeIndex.map((node, k) => [node, { order: doc.layout.paintOrders[k], box: doc.layout.bounds[k] }]));
+  const inLayer = (node) => {
+    for (let n = node; n >= 0; n = parent[n]) {
+      if (attribute(n, "data-audit-layer") !== null) return true;
+    }
+    return false;
+  };
+  const found = [];
+  for (const [node, { order, box }] of painted) {
+    const kind = attribute(node, "data-audit-box");
+    if (kind === null) continue;
+    const x = box[0] + box[2] / 2;
+    const y = box[1] + box[3] / 2;
+    for (const [other, over] of painted) {
+      if (over.order <= order || inLayer(other)) continue;
+      const [left, top, width, height] = over.box;
+      const modal = attribute(other, "data-audit-modal") !== null;
+      if (!modal && (x < left || x > left + width || y < top || y > top + height)) continue;
+      const name = strings[doc.nodes.nodeName[other]].toLowerCase();
+      const css = (attribute(other, "class") ?? "").split(" ")[0];
+      found.push({ key: "layer=" + kind, sel: kind + " layer", by: "under " + name + (css ? "." + css : "") });
+      break;
+    }
+  }
+  return found;
+}
+
 // ---- Running a job ---------------------------------------------------------
 
 async function settle(tab, quiet = 120) {
@@ -329,13 +388,22 @@ async function runState(tab, job) {
   const opened = await tab.evaluate(`(() => {
     const open = ${SURFACES};
     document.querySelectorAll("[data-audit-root]").forEach((el) => el.removeAttribute("data-audit-root"));
-    const top = open.at(-1);
+    const top = ${job.state.onTop ? 'open.filter((el) => el.matches("dialog[open]")).at(-1)' : "open.at(-1)"};
     if (!top || open.length <= ${before}) return false;
     top.setAttribute("data-audit-root", "");
     return true;
   })()`);
   if (!opened) return { error: "the state opened no surface" };
-  return { found: await probe(tab, job.width, "[data-audit-root]") };
+  const found = await probe(tab, job.width, "[data-audit-root]");
+  if (job.state.onTop) {
+    const missing = await tab.evaluate(`${MARK_LAYERS}(${JSON.stringify(job.state.onTop)})`);
+    const snapshot = await tab.send("DOMSnapshot.captureSnapshot", { computedStyles: [], includePaintOrder: true });
+    await tab.evaluate(UNMARK_LAYERS);
+    if (missing.length > 0) return { error: `no ${missing.join(" or ")} is showing` };
+    if (!snapshot.result) return { error: "the paint order could not be read" };
+    found.covered = coveredBy(snapshot.result);
+  }
+  return { found };
 }
 
 // One record per probe: what it measured and where.

@@ -45,7 +45,10 @@ export type StripState = "on" | "off" | "pending";
 export function hostSlots(metrics: HostMetrics): StripState[] {
   const running = hostRunning(metrics);
   const first = metrics.pendingFrom === undefined ? -1 : (metrics.series[0]?.points ?? []).findIndex((point) => point.at >= metrics.pendingFrom!);
-  return running.map((on, index) => on ? "on" : first >= 0 && index >= first ? "pending" : "off");
+  return running.map((on, index): StripState => {
+    if (on) return "on";
+    return first >= 0 && index >= first ? "pending" : "off";
+  });
 }
 
 export type StripRun = Readonly<{ state: StripState; from: number; length: number }>;

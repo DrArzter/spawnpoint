@@ -53,6 +53,7 @@ test("a world that could not be read is not cached", async (t) => {
 });
 
 test("host metrics add memory from the watchdog's namespace beside the free EC2 series", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.UTC(2026, 10, 21, 14) });
   let queries: NonNullable<GetMetricDataCommand["input"]["MetricDataQueries"]> = [];
   t.mock.method(CloudWatchClient.prototype, "send", async (command: unknown) => {
     assert.ok(command instanceof GetMetricDataCommand);
@@ -69,6 +70,26 @@ test("host metrics add memory from the watchdog's namespace beside the free EC2 
   assert.equal(memory?.Stat, "Average");
   assert.equal(queries.find((query) => query.Id === "cpu")?.MetricStat?.Metric?.Namespace, "AWS/EC2");
   assert.deepEqual(metrics.series.map((series) => series.id), ["cpu", "memory", "networkIn", "networkOut"]);
-  assert.deepEqual(metrics.series.find((series) => series.id === "memory")?.points, [{ at: "2026-11-21T12:00:00.000Z", value: 41.5 }]);
-  assert.deepEqual(metrics.series.find((series) => series.id === "cpu")?.points, []);
+  const memoryPoints = metrics.series.find((series) => series.id === "memory")?.points ?? [];
+  assert.deepEqual(memoryPoints.filter((point) => point.value !== null), [{ at: "2026-11-21T12:00:00.000Z", value: 41.5 }]);
+  assert.ok(metrics.series.find((series) => series.id === "cpu")?.points.every((point) => point.value === null));
+});
+
+test("a host that was off keeps its gap: every series spans the window, null where CloudWatch has nothing", async (t) => {
+  const now = Date.UTC(2026, 10, 22, 12, 0);
+  t.mock.timers.enable({ apis: ["Date"], now });
+  const at = (hoursAgo: number) => new Date(now - hoursAgo * 3_600_000);
+  t.mock.method(CloudWatchClient.prototype, "send", async () => ({
+    // Running for the last two hours only, at the 6-hour range's 5-minute grain.
+    MetricDataResults: [{ Id: "cpu", Timestamps: [at(2), at(1), at(0.5)], Values: [40, 50, 60] }],
+  }));
+
+  const metrics = await awsControlPlaneSources.readHostMetrics!("i-0abc", 6);
+
+  const lengths = new Set(metrics.series.map((series) => series.points.length));
+  assert.deepEqual([...lengths], [72], "6 hours of 5-minute periods, the same for every series");
+  const cpu = metrics.series.find((series) => series.id === "cpu")!.points;
+  assert.equal(cpu.filter((point) => point.value !== null).length, 3);
+  assert.equal(cpu[0]!.value, null, "the start of the window, when the host was off");
+  assert.deepEqual(cpu.find((point) => point.at === at(1).toISOString()), { at: at(1).toISOString(), value: 50 });
 });

@@ -145,7 +145,13 @@ output="$(stop_on a)"
 [[ "$(result_of "${output}")" == "session_stopped_and_backed_up" ]]
 grep -qx 'host=idle' <<<"${output}"
 [[ "$(object_count)" == "1" ]]
-uploaded="$(awk -F= '$1 == "object_key" { print substr($0, index($0, "=") + 1) }' <<<"${output}")"
+# The archive key an upload printed.
+object_key_of() {
+  local printed="$1"
+  awk -F= '$1 == "object_key" { print substr($0, index($0, "=") + 1) }' <<<"${printed}"
+}
+
+uploaded="$(object_key_of "${output}")"
 [[ -n "${uploaded}" && "$(recorded_key "${a_world}")" == "${uploaded}" ]]
 
 # --- nothing changed since that upload: done, with no second archive ---
@@ -163,7 +169,7 @@ output="$(stop_on a)"
 metadata_of() {
   head -n 1 "${FAKE_S3_ROOT}/backups/$1.fake-metadata"
 }
-second="$(awk -F= '$1 == "object_key" { print substr($0, index($0, "=") + 1) }' <<<"${output}")"
+second="$(object_key_of "${output}")"
 [[ "$(metadata_of "${second}")" == *",release=1.2,release-source=generation" ]]
 
 # --- after a promotion, the active release on the wipe's pointer (ADR-0052) ---
@@ -176,7 +182,7 @@ jq -n --arg world "${world_id}" --arg generation "${generation}" '{
 }' >"${pointer_dir}/release.json"
 play "${a_world}" "session three"
 output="$(RELEASE_BUCKET=releases stop_on a 2>"${fixture}/third.err")"
-third="$(awk -F= '$1 == "object_key" { print substr($0, index($0, "=") + 1) }' <<<"${output}")"
+third="$(object_key_of "${output}")"
 [[ "$(metadata_of "${third}")" == *",release=4.9,release-source=active" ]]
 
 # --- a pointer that names no active release yet leaves the origin, marked as such ---
@@ -184,7 +190,7 @@ jq '.active_release = null' "${pointer_dir}/release.json" >"${pointer_dir}/relea
 mv -- "${pointer_dir}/release.next" "${pointer_dir}/release.json"
 play "${a_world}" "session four"
 output="$(RELEASE_BUCKET=releases stop_on a)"
-fourth="$(awk -F= '$1 == "object_key" { print substr($0, index($0, "=") + 1) }' <<<"${output}")"
+fourth="$(object_key_of "${output}")"
 [[ "$(metadata_of "${fourth}")" == *",release=1.2,release-source=generation" ]]
 [[ "$(object_count)" == "4" ]]
 
@@ -210,7 +216,7 @@ output="$(FAKE_DDB_FAIL=true stop_on a 2>"${fixture}/fifth.err")" || code=$?
 [[ "${code}" == "0" ]]
 [[ "$(result_of "${output}")" == "session_stopped_and_backed_up" ]]
 [[ "$(object_count)" == "5" ]]
-fifth="$(awk -F= '$1 == "object_key" { print substr($0, index($0, "=") + 1) }' <<<"${output}")"
+fifth="$(object_key_of "${output}")"
 [[ "$(recorded_key "${a_world}")" == "${fifth}" ]]
 grep -q "backup_holder_missing key=${fifth}" "${fixture}/fifth.err"
 if holder_slots | grep -qF "${fifth}"; then exit 1; fi

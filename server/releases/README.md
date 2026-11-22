@@ -26,6 +26,11 @@ CurseForge/Modrinth file IDs, but reconciliation must ignore those descriptive f
 correct. Metadata extraction is necessarily best-effort: one JAR can expose multiple components, placeholders or a
 non-SemVer version. See [ADR-0008](../../docs/adr/0008-versioned-mod-releases.md).
 
+A modpack release with addons ([ADR-0077](../../docs/adr/0077-pin-extra-mods-on-top-of-an-upstream-modpack.md))
+records them in `client.addons` as `{file, sha256, bytes, side}`; that is deployment content and part of the identity.
+It also carries a top-level `mod_index` (SHA-256 to mod ids, read from each JAR's metadata). `mod_index` is
+descriptive: the immutability gate in `upload-release.sh` does not compare it.
+
 Create a manifest from a known-good directory:
 
 ```bash

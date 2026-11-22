@@ -20,6 +20,11 @@ Environment:
   RELEASE_CLIENT_MODS_DIR
                       Optional players' mod set, when it differs from the server's (ADR-0069);
                       not together with RELEASE_CLIENT_PACK
+  RELEASE_CLIENT_ADDONS
+                      Optional addons lock (ADR-0077), with RELEASE_CLIENT_PACK only: recorded as client.addons
+  RELEASE_CLIENT_ADDONS_DIR
+                      The client-only addon files of that lock
+  RELEASE_MOD_INDEX   Optional descriptive map of SHA-256 to mod ids, recorded as the top-level mod_index
 EOF
 }
 
@@ -71,6 +76,9 @@ runtime_image="${RELEASE_RUNTIME_IMAGE:-}"
 overrides_dir="${RELEASE_SERVER_OVERRIDES_DIR:-}"
 client_pack="${RELEASE_CLIENT_PACK:-}"
 client_mods_dir="${RELEASE_CLIENT_MODS_DIR:-}"
+client_addons="${RELEASE_CLIENT_ADDONS:-}"
+client_addons_dir="${RELEASE_CLIENT_ADDONS_DIR:-}"
+mod_index="${RELEASE_MOD_INDEX:-}"
 
 command -v jq >/dev/null 2>&1 || {
   printf 'error: required command not found: jq\n' >&2
@@ -139,6 +147,23 @@ if [[ -n "${client_mods_dir}" ]]; then
     exit 1
   }
 fi
+if [[ -n "${client_addons}" ]]; then
+  [[ -n "${client_pack}" ]] || {
+    printf 'error: addons extend a client pack; RELEASE_CLIENT_PACK is required\n' >&2
+    exit 1
+  }
+  client_addons="$(realpath -e -- "${client_addons}")"
+  [[ -z "${client_addons_dir}" ]] || client_addons_dir="$(realpath -e -- "${client_addons_dir}")"
+fi
+if [[ -n "${mod_index}" ]]; then
+  mod_index="$(realpath -e -- "${mod_index}")"
+  jq -e 'type == "object" and all(to_entries[];
+    (.key | test("^[0-9a-f]{64}$")) and (.value | type == "array" and all(.[]; type == "string")))' \
+    "${mod_index}" >/dev/null || {
+    printf 'error: mod index must map SHA-256 digests to mod ids\n' >&2
+    exit 1
+  }
+fi
 [[ ! -e "${output_manifest}" && ! -L "${output_manifest}" ]] || {
   printf 'error: immutable release manifest already exists: %s\n' "${output_manifest}" >&2
   exit 1
@@ -147,10 +172,11 @@ fi
 mkdir -p -- "$(dirname -- "${output_manifest}")"
 entries_file="$(mktemp)"
 client_entries_file="$(mktemp)"
+addon_entries_file="$(mktemp)"
 overrides_file="$(mktemp)"
 output_tmp="$(mktemp "$(dirname -- "${output_manifest}")/.manifest.XXXXXX")"
 cleanup() {
-  rm -f -- "${entries_file}" "${client_entries_file}" "${overrides_file}" "${output_tmp}"
+  rm -f -- "${entries_file}" "${client_entries_file}" "${addon_entries_file}" "${overrides_file}" "${output_tmp}"
 }
 trap cleanup EXIT
 
@@ -193,6 +219,37 @@ if [[ -n "${client_mods_dir}" ]]; then
     all(.[]; ($by_file[.file] // .sha256) == .sha256)
   ' "${client_entries_file}" >/dev/null || {
     printf 'error: a players mod shares a name with a server mod but not its bytes\n' >&2
+    exit 1
+  }
+fi
+
+# Each addon as the release holds it: both and server addons are server mods,
+# client addons are files of their own. The digest is checked against the lock.
+addon_count=0
+if [[ -n "${client_addons}" ]]; then
+  while IFS=$'\t' read -r filename side locked_sha256; do
+    addon_file="${mods_dir}/${filename}"
+    if [[ "${side}" == client ]]; then
+      addon_file=""
+      [[ -z "${client_addons_dir}" ]] || addon_file="${client_addons_dir}/${filename}"
+    fi
+    [[ -n "${addon_file}" && -f "${addon_file}" && ! -L "${addon_file}" ]] || {
+      printf 'error: addon %s (%s) is missing from the release payload\n' "${filename}" "${side}" >&2
+      exit 1
+    }
+    sha256="$(sha256sum -- "${addon_file}")"
+    sha256="${sha256%% *}"
+    [[ "${sha256}" == "${locked_sha256}" ]] || {
+      printf 'error: addon %s does not match its lock\n' "${filename}" >&2
+      exit 1
+    }
+    jq -cn --arg file "${filename}" --arg sha256 "${sha256}" --arg side "${side}" \
+      --argjson bytes "$(stat --format '%s' -- "${addon_file}")" \
+      '{file: $file, sha256: $sha256, bytes: $bytes, side: $side}' >>"${addon_entries_file}"
+    addon_count=$((addon_count + 1))
+  done < <(jq -r '.mods[] | [.file, .side, .sha256] | @tsv' "${client_addons}")
+  (( addon_count > 0 )) || {
+    printf 'error: an addons lock must hold at least one addon\n' >&2
     exit 1
   }
 fi
@@ -246,6 +303,8 @@ fi
 jq -s \
   --slurpfile overrides "${overrides_file}" \
   --slurpfile client_mods "${client_entries_file}" \
+  --slurpfile client_addons "${addon_entries_file}" \
+  --slurpfile mod_index "${mod_index:-/dev/null}" \
   --arg release "${release}" \
   --arg minecraft_version "${minecraft_version}" \
   --arg loader_version "${loader_version}" \
@@ -273,7 +332,8 @@ jq -s \
   } + if $runtime_image == "" then {} else {
     runtime: {image: $runtime_image}
   } end + if $client_sha256 == "" then {} else {
-    client: {file: "client.zip", sha256: $client_sha256, bytes: $client_bytes, kind: "curseforge-modpack"}
+    client: ({file: "client.zip", sha256: $client_sha256, bytes: $client_bytes, kind: "curseforge-modpack"} +
+      if ($client_addons | length) == 0 then {} else {addons: ($client_addons | sort_by(.file))} end)
   } end + if ($client_mods | length) == 0 then {} else {
     client: {kind: "mod-set", mods: $client_mods}
   } end + if $profile_id == "" then {} else {
@@ -282,6 +342,8 @@ jq -s \
       repository: $profile_repository,
       commit: $profile_commit
     }
+  } end + if ($mod_index | length) == 0 then {} else {
+    mod_index: $mod_index[0]
   } end)' "${entries_file}" >"${output_tmp}"
 
 chmod 0644 "${output_tmp}"
@@ -292,3 +354,4 @@ printf 'manifest=%s\n' "${output_manifest}"
 printf 'mods=%d\n' "${count}"
 printf 'client_mods=%d\n' "${client_count}"
 printf 'overrides=%d\n' "${override_count}"
+printf 'addons=%d\n' "${addon_count}"

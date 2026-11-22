@@ -319,6 +319,9 @@ while IFS= read -r -d '' mod; do
   [[ ! -e "${workspace}/result/mods/${filename}" ]] || die "duplicate mod filename in server pack: ${filename}"
   cp -- "${mod}" "${workspace}/result/mods/${filename}"
 done < <(find "${mod_directories[0]}" -maxdepth 1 -type f -iname '*.jar' -print0 | sort -z)
+# Names only, for the addon checks (ADR-0077); disabled JARs never enter a release.
+find "${mod_directories[0]}" -maxdepth 1 -type f -iname '*.jar.disabled' -printf '%f\n' | LC_ALL=C sort \
+  >"${workspace}/result/disabled-mods.txt"
 
 # Only deterministic server configuration enters a release. Launchers,
 # installers, worlds, logs, operator lists and server.properties stay out.

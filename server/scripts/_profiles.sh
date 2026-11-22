@@ -91,7 +91,11 @@ validate_profile_metadata() {
     # brings its own client pack, and Factorio clients take the server mods.
     (if (.mods.server_only // .mods.client_only // null) == null then true
       else ($loader_type == "minecraft" and .mods.source != null and (.mods.resolver // "curseforge-files") == "curseforge-files")
-    end)
+    end) and
+    # Addons (ADR-0077) pin extra mods on top of a modpack, with a side each.
+    (.mods.addons == null or (
+      (.mods.addons | type == "string" and length > 0) and
+      $loader_type == "minecraft" and .loader.type != "vanilla" and .mods.resolver == "curseforge-modpack"))
   ' "${profile}" >/dev/null || {
     printf 'error: unsupported or invalid profile metadata: %s\n' "${profile}" >&2
     exit 1

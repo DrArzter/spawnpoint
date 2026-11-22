@@ -822,9 +822,8 @@ existing world; edit the file through the world's file links, or start a new wip
 ADR-0079. Use it for the group's own public fork of a mod. `docs/examples/prominence-addons/addons-github-release.json`
 shows the entry. Its commit and digest are placeholders; replace them with the real values.
 
-1. The fork's repository must be public and on the allow-list `GITHUB_RELEASE_REPOSITORIES` in
-   `server/scripts/resolve-addons.sh`. To add one, change that list in a Spawnpoint pull request. A merge and a
-   Terraform apply of the release builder ship the change. The config repository cannot change it.
+1. The fork's repository must be public. No Spawnpoint change is needed: the config pull request, its review and its
+   verify workflow (immutable release, digests, attestation) decide.
 2. In the fork, turn on immutable releases. A tag workflow builds the JAR, attests it with `actions/attest` and
    publishes the release with the JAR and a `-sources.jar`. Keep the tag and the release while any Spawnpoint release
    carries the JAR.

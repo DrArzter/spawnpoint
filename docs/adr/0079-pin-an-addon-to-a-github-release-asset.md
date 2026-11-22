@@ -58,16 +58,23 @@ Facts:
 
 One entry per `repository` and `asset`, and one file name across all addons, as before.
 
-**The allow-list is `GITHUB_RELEASE_REPOSITORIES` in `server/scripts/resolve-addons.sh`.** It is part of the reviewed
-builder bundle, which Terraform embeds at apply time. It changes only through a Spawnpoint merge and an apply, never
-through the config repository, so a person who can push a config profile cannot approve their own fork. The match is
-exact and case-sensitive. The list is by repository, not by owner, so a new repository of the same owner needs its own
-review. The first entry is `DrArzter/SophisticatedBackpacks`. A pin to another repository refuses the build before any
-download.
+**No repository list (amended 2026-11-22).** The first version kept an allow-list of repositories,
+`GITHUB_RELEASE_REPOSITORIES`, in the builder, so that each new fork needed a Spawnpoint merge and an apply. It is
+removed. A GitHub release pin is trusted the same way as a Modrinth or CurseForge pin, which never had a project list:
+
+- The config repository is reviewed: a person merges the pin as a diff.
+- The pin locks the exact file with its SHA-512 and size. The builder refuses any other bytes, so a replaced asset
+  fails the build even without immutable releases.
+- Before the merge, the config repository's CI checks that the release is published and immutable, that the asset
+  matches the pin and the release digest, and that its build attestation names the pinned workflow, tag and commit on
+  a GitHub-hosted runner.
+
+A person who can change config `main` could already pin any Modrinth or CurseForge file, so the list in the builder
+did not stop that person. It only made each new fork a Spawnpoint change.
 
 **The builder (`resolve_github_release`) does five things.**
 
-1. Check the shape and the allow-list.
+1. Check the shape.
 2. Build the URL from the pin, with `+` as `%2B`. Never read a URL from the pin. Download only `asset`, so a
    `-sources.jar` never enters a release. No token and no GitHub API call.
 3. Check the size, then the SHA-512, against the pin, before the file is moved or read for anything else. A mismatch
@@ -116,7 +123,7 @@ as GPL-3.0.
 
 - A new host, `github.com`, and its redirect host serve JARs into the builder. Only the pinned SHA-512 limits this.
 - The attestation is checked outside Spawnpoint. A direct push to config `main` skips that check.
-- The allow-list needs a Spawnpoint merge and an apply for each new repository. This is intended.
+- Any public repository can serve a pin. The config review and the attestation check decide, as for the other sources.
 - The group maintains the fork and keeps its release for as long as a release uses it.
 
 **Mitigations**
@@ -132,5 +139,6 @@ as GPL-3.0.
 | Upload a JAR in the panel | No provenance; bytes enter outside Git (ADR-0040, ADR-0077) |
 | `vendored`: the JAR in the config repository | Fallback, not built. A binary diff shows nothing and every version stays in Git history |
 | Modrinth unlisted or private project | Not a source: review and CDN access are not documented |
-| An allow-list by owner | A new repository of an approved owner would pass without a Spawnpoint review |
+| An allow-list of repositories in the builder | Chosen first, removed on 2026-11-22: every new fork needed a Spawnpoint change, and it gave no protection that the config review and the SHA-512 pin do not |
+| An allow-list by owner | Still a list to maintain; the config review already decides each pin |
 | The builder verifies the attestation | Rate limit of unauthenticated API calls; the pin already carries the decision |

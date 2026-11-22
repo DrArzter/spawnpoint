@@ -137,7 +137,7 @@ export function operationProgress(gameId: string, worldId: string, operationId: 
   settle();
   const plan = state.progress[operationId];
   const owner = state.snapshot.games.find((item) => item.id === gameId);
-  if (!plan || plan.worldId !== worldId || !owner?.worlds.some((item) => item.id === worldId)) return null;
+  if (plan?.worldId !== worldId || !owner?.worlds.some((item) => item.id === worldId)) return null;
   const running = state.snapshot.operations.some((operation) => operation.id === operationId);
   const usual = USUAL[plan.type];
   const base = { id: operationId, type: plan.type, startedAt: new Date(plan.startedAt).toISOString(), expectedSeconds: usual.seconds, expectedSamples: usual.samples };

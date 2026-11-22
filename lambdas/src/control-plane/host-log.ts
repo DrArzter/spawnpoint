@@ -44,7 +44,10 @@ const RESULT_LABELS: Readonly<Record<string, string>> = {
 
 const STEP = /^step=([a-z][a-z0-9_]{0,39}) at=(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) elapsed_seconds=(\d{1,7})$/;
 const RESULT = /^([a-z_]{1,20})=([A-Za-z0-9._:+/-]{1,60})$/;
-const CONTAINER = /^(?:✔\s+)?Container\s+([A-Za-z0-9][A-Za-z0-9_.-]{0,100})\s+(Creating|Created|Starting|Started|Stopping|Stopped)(?:\s+\d+(?:\.\d+)?s)?$/;
+// Compose prefixes a tick and suffixes a duration; both are trimmed before the match.
+const CONTAINER = /^Container\s+([\w.-]{1,101})\s+(Creating|Created|Starting|Started|Stopping|Stopped)$/;
+const CONTAINER_TICK = /^✔\s+/;
+const CONTAINER_DURATION = /\s+\d+(?:\.\d+)?s$/;
 const NOTICE = /^(error|warning):\s*(.{1,400})$/i;
 const GAME = /^mc-1\s+\|\s?(.*)$/;
 const GAME_FAULT = /\b(?:ERROR|WARN|WARNING|FATAL)\b|Exception|OutOfMemoryError/;
@@ -56,11 +59,30 @@ const ESCAPES = /\u001b\[[0-9;?]*[A-Za-z]/g;
 // eslint-disable-next-line no-control-regex
 const CONTROLS = /[\u0000-\u001f\u007f]/g;
 
+// A name, an optional closing quote and a separator. The value after a secret
+// name is hidden; other values are scanned again for names of their own.
+const ASSIGNMENT = /(["']?[\w.-]{1,100})(["']?\s*[:=]\s*)/g;
+const VALUE = /"[^"]*"|'[^']*'|\S+/y;
+const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD/i;
+
+function hideSecretValues(text: string): string {
+  let out = "";
+  let from = 0;
+  for (const match of text.matchAll(ASSIGNMENT)) {
+    const at = match.index + match[0].length;
+    if (match.index < from || !SECRET_NAME.test(match[1]!)) continue;
+    VALUE.lastIndex = at;
+    const value = VALUE.exec(text);
+    if (value === null) continue;
+    out += `${text.slice(from, at)}[redacted]`;
+    from = at + value[0].length;
+  }
+  return out + text.slice(from);
+}
+
 /** Hides anything shaped like a secret, an address or an identifier. */
 export function redact(text: string): string {
-  return text
-    .replace(/\$2[abxy]?\$\S*/g, "[redacted]")
-    .replace(/(["']?[A-Za-z0-9_.-]*(?:KEY|TOKEN|SECRET|PASSWORD)[A-Za-z0-9_.-]*["']?\s*[:=]\s*)("[^"]*"|'[^']*'|\S+)/gi, "$1[redacted]")
+  return hideSecretValues(text.replace(/\$2[abxy]?\$\S*/g, "[redacted]"))
     .replace(/[A-Za-z0-9+/_=]{32,}/g, "[redacted]")
     .replace(/\b[0-9a-fA-F]{20,}\b/g, "[redacted]")
     .replace(/\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g, "[id]")
@@ -85,7 +107,7 @@ function shape(line: string): Shape | null {
   if (step) return { kind: "step", text: stepText(step[1]!, step[3]!), at: step[2]! };
   const result = RESULT.exec(line);
   if (result && RESULT_LABELS[result[1]!] !== undefined) return { kind: "result", text: `${RESULT_LABELS[result[1]!]}: ${result[2]}` };
-  const container = CONTAINER.exec(line);
+  const container = CONTAINER.exec(line.replace(CONTAINER_TICK, "").replace(CONTAINER_DURATION, ""));
   if (container) return { kind: "container", text: `Container ${container[1]} ${container[2]}` };
   const notice = NOTICE.exec(line);
   if (notice) return { kind: notice[1]!.toLowerCase() === "error" ? "error" : "warning", text: notice[2]! };

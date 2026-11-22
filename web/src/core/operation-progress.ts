@@ -122,12 +122,16 @@ export function progressDetails(model: OperationProgressModel, now: number): Det
   const reading = model.running ? eta(model.startedAt, model.expectation, now) : null;
   if (reading !== null) rows.push({ label: PROGRESS_LABELS.expected, value: text(reading.text, { mono: true }), explain: reading.tip });
   if (model.failure !== null) {
-    rows.push({ label: PROGRESS_LABELS.error, value: text(model.failure.error, { mono: true, wrap: true }) });
-    rows.push({ label: PROGRESS_LABELS.cause, value: text(model.failure.cause, { wrap: true }) });
+    rows.push(
+      { label: PROGRESS_LABELS.error, value: text(model.failure.error, { mono: true, wrap: true }) },
+      { label: PROGRESS_LABELS.cause, value: text(model.failure.cause, { wrap: true }) },
+    );
   }
   if (model.caught !== null) {
-    rows.push({ label: PROGRESS_LABELS.caught, value: text(model.caught.error, { mono: true, wrap: true }) });
-    rows.push({ label: PROGRESS_LABELS.caughtCause, value: text(model.caught.cause, { wrap: true }) });
+    rows.push(
+      { label: PROGRESS_LABELS.caught, value: text(model.caught.error, { mono: true, wrap: true }) },
+      { label: PROGRESS_LABELS.caughtCause, value: text(model.caught.cause, { wrap: true }) },
+    );
     if (model.caught.step !== null) rows.push({ label: PROGRESS_LABELS.caughtAt, value: text(model.caught.step) });
   }
   return rows;

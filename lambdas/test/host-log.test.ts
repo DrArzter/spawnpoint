@@ -96,6 +96,20 @@ test("secrets inside a passing line are redacted", () => {
   assert.match(out, /CURSEFORGE_API_KEY=\[redacted\] rejected/);
 });
 
+test("a secret name inside another value is still found, and a non-secret value is left as it is", () => {
+  assert.equal(redact("url=https://example.test/a?api_key=abc123 next"), "url=https://example.test/a?api_key=[redacted] next");
+  assert.equal(redact('{"Token": "abc", "mode": "fast"}'), '{"Token": [redacted], "mode": "fast"}');
+  assert.equal(redact("level=info password: hunter2"), "level=info password: [redacted]");
+});
+
+test("Compose container lines pass with or without the tick and the duration", () => {
+  assert.deepEqual(texts(["✔ Container game-mc-1  Started  0.4s", "Container game-mc-1 Stopping", " ✔ Container game.mc_1 Created 12s"]), [
+    "Container game-mc-1 Started",
+    "Container game-mc-1 Stopping",
+    "Container game.mc_1 Created",
+  ]);
+});
+
 test("a container name with many hyphens is not mistaken for a secret", () => {
   assert.deepEqual(texts([" Container spawnpoint-minecraft-rostik-12345678-mc-1 Starting"]), ["Container spawnpoint-minecraft-rostik-12345678-mc-1 Starting"]);
   assert.equal(redact("worlds/minecraft-rostik-12345678"), "worlds/minecraft-rostik-12345678");

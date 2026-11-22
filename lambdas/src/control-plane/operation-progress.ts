@@ -74,34 +74,38 @@ type Reading = Readonly<{ state: string | null; nested: string | null; caught: R
 // The state names, the failure the workflow caught and the nested execution of
 // the current state, from events newest first. A task failure counts as caught
 // only when a later state was entered: the workflow carried on.
+type Scan = { state: string | null; nested: string | null; caught: Reading["caught"]; pending: Readonly<{ error: string; cause: string }> | null; entered: boolean };
+
+function scanEvent(scan: Scan, event: HistoryEvent, wantCaught: boolean): void {
+  if (event.entered !== undefined) {
+    if (scan.pending !== null) {
+      scan.caught = { ...scan.pending, state: event.entered };
+      scan.pending = null;
+    }
+    scan.state ??= event.entered;
+    scan.entered = true;
+    return;
+  }
+  if (event.scheduledParameters !== undefined) {
+    if (scan.state === null && scan.nested === null) scan.nested = event.scheduledParameters;
+    return;
+  }
+  const waiting = wantCaught && scan.entered && scan.caught === null && scan.pending === null;
+  if (event.failure !== undefined && waiting) scan.pending = unwrap(event.failure);
+}
+
 async function readHistory(port: ExecutionPort, executionArn: string, wantCaught: boolean): Promise<Reading> {
-  let state: string | null = null;
-  let nested: string | null = null;
-  let caught: Reading["caught"] = null;
-  let pending: Readonly<{ error: string; cause: string }> | null = null;
-  let entered = false;
+  const scan: Scan = { state: null, nested: null, caught: null, pending: null, entered: false };
   let nextToken: string | undefined;
   for (let page = 0; page < HISTORY_MAX_PAGES; page += 1) {
     const read = await port.historyPage(executionArn, nextToken);
-    for (const event of read.events) {
-      if (event.entered !== undefined) {
-        if (pending !== null) {
-          caught = { ...pending, state: event.entered };
-          pending = null;
-        }
-        if (state === null) state = event.entered;
-        entered = true;
-      } else if (event.scheduledParameters !== undefined && state === null && nested === null) {
-        nested = event.scheduledParameters;
-      } else if (event.failure !== undefined && wantCaught && entered && caught === null && pending === null) {
-        pending = unwrap(event.failure);
-      }
-    }
+    for (const event of read.events) scanEvent(scan, event, wantCaught);
     nextToken = read.nextToken;
     // The current state is found on the first page; only the caught error looks further.
-    if (nextToken === undefined || (state !== null && (caught !== null || !wantCaught))) break;
+    const done = scan.state !== null && (scan.caught !== null || !wantCaught);
+    if (nextToken === undefined || done) break;
   }
-  return { state, nested, caught };
+  return { state: scan.state, nested: scan.nested, caught: scan.caught };
 }
 
 // A nested execution's failure reaches its parent as the child's description.

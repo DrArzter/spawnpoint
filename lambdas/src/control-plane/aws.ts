@@ -324,7 +324,7 @@ async function listRunningOperations(): Promise<readonly OperationObservation[]>
         startedAt: execution.startDate.toISOString(),
         providerRef: execution.executionArn,
         worldId,
-        ...(expected ?? {}),
+        ...expected,
       };
     }));
   }));

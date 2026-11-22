@@ -1,5 +1,5 @@
 import type { Action } from "../../core/actions";
-import type { OperationRow, RequestSummary, WorldRow, WorldsModel } from "../../core/models";
+import type { RequestSummary, WorldRow, WorldsModel } from "../../core/models";
 import { routeHash } from "../../routing";
 import { HostingChip, Players, Uptime, statesOf } from "./WorldFacts";
 import { ActionButton, LinkButton } from "./ui/ActionButton";

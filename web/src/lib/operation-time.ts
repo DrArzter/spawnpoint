@@ -27,7 +27,8 @@ export function eta(since: string | undefined, expectation: Expectation, now: nu
   const elapsed = elapsedSeconds(since, now);
   if (expected === undefined || elapsed === null) return null;
   const samples = expectation.expectedSamples;
-  const tip = `Usually ${clock(expected)}${samples ? `, from the last ${samples} runs` : ""}`;
+  const from = samples ? `, from the last ${samples} runs` : "";
+  const tip = `Usually ${clock(expected)}${from}`;
   return elapsed < expected
     ? { kind: "left", text: `ETA ~${clock(expected - elapsed)}`, tip }
     : { kind: "over", text: "Taking longer", tip };

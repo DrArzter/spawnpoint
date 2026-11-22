@@ -95,9 +95,9 @@ run "release_versions_expire_but_no_release_can_be_deleted" {
   assert {
     condition = alltrue([
       for rule in aws_s3_bucket_lifecycle_configuration.releases.rule :
-      length(rule.expiration) == 0 || one(rule.filter).prefix == "upstream/"
+      length(rule.expiration) == 0 || one(rule.filter).prefix == "upstream/" || rule.id == "remove-object-delete-markers"
     ])
-    error_message = "Only the upstream cache may expire a current object in the release store: a generation may name a release object (ADR-0052)."
+    error_message = "Only the upstream cache may expire a current object in the release store (a generation may name a release object, ADR-0052); elsewhere an expiration rule may only remove a delete marker."
   }
 
   assert {
@@ -134,5 +134,69 @@ run "upstream_cache_expires_after_60_days" {
       if rule.id == "remove-upstream-cache-delete-markers"
     ])
     error_message = "Delete markers that cache expiry leaves are removed."
+  }
+}
+
+run "content_addressed_objects_are_deleted_only_by_the_reconciler" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.releases_bucket.statement : statement.effect if statement.sid == "DenyObjectDeletionExceptReconciler"]) == "Deny",
+      one([for statement in data.aws_iam_policy_document.releases_bucket.statement : statement.actions if statement.sid == "DenyObjectDeletionExceptReconciler"]) == toset(["s3:DeleteObject"]),
+      one([for statement in data.aws_iam_policy_document.releases_bucket.statement : statement.resources if statement.sid == "DenyObjectDeletionExceptReconciler"]) == toset(["arn:aws:s3:::spawnpoint-releases-123456789012/objects/*"]),
+      one(flatten([for statement in data.aws_iam_policy_document.releases_bucket.statement : [for condition in statement.condition : condition.values if statement.sid == "DenyObjectDeletionExceptReconciler"]])) == "arn:aws:iam::123456789012:role/spawnpoint-release-reconciler",
+    ])
+    error_message = "Only the reconciler role may delete an object under objects/."
+  }
+
+  assert {
+    condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.releases_bucket.statement : statement.effect if statement.sid == "DenyObjectVersionDeletion"]) == "Deny",
+      one([for statement in data.aws_iam_policy_document.releases_bucket.statement : statement.actions if statement.sid == "DenyObjectVersionDeletion"]) == toset(["s3:DeleteObjectVersion"]),
+      one([for statement in data.aws_iam_policy_document.releases_bucket.statement : statement.resources if statement.sid == "DenyObjectVersionDeletion"]) == toset(["arn:aws:s3:::spawnpoint-releases-123456789012/objects/*"]),
+    ])
+    error_message = "No principal may delete a version under objects/."
+  }
+
+  assert {
+    condition = anytrue([
+      for rule in aws_s3_bucket_lifecycle_configuration.releases.rule :
+      rule.status == "Enabled" &&
+      one(rule.filter).prefix == "objects/" &&
+      one(rule.noncurrent_version_expiration).noncurrent_days == 30 &&
+      length(rule.expiration) == 0
+      if rule.id == "expire-noncurrent-object-versions"
+    ])
+    error_message = "Noncurrent object versions expire after 30 days, and no current object expires."
+  }
+
+  assert {
+    condition = anytrue([
+      for rule in aws_s3_bucket_lifecycle_configuration.releases.rule :
+      rule.status == "Enabled" &&
+      one(rule.filter).prefix == "objects/" &&
+      one(rule.expiration).expired_object_delete_marker == true
+      if rule.id == "remove-object-delete-markers"
+    ])
+    error_message = "Delete markers under objects/ are removed once nothing is under them."
+  }
+}
+
+run "release_refs_table_is_durable_and_recoverable" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      aws_dynamodb_table.release_refs.name == "spawnpoint-release-refs",
+      aws_dynamodb_table.release_refs.billing_mode == "PAY_PER_REQUEST",
+      aws_dynamodb_table.release_refs.hash_key == "pk",
+      aws_dynamodb_table.release_refs.range_key == "sk",
+      aws_dynamodb_table.release_refs.deletion_protection_enabled,
+      aws_dynamodb_table.release_refs.point_in_time_recovery[0].enabled,
+      aws_dynamodb_table.release_refs.server_side_encryption[0].enabled,
+      length(aws_dynamodb_table.release_refs.ttl) == 0,
+    ])
+    error_message = "The reference table must be on-demand, encrypted, deletion-protected and recoverable, and must never expire an item."
   }
 }

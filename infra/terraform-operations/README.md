@@ -37,6 +37,13 @@ The first deployment contained six additions: two IAM roles, two inline policies
 machines. Lifecycle V2 Phase 5 is a later additive plan containing exactly nine more: three roles, three inline
 policies and three state machines.
 
+## Release reconciler
+
+`spawnpoint-release-reconciler` (ADR-0080) runs weekly on Sunday at 05:00 UTC, in report-only mode. Its role can list and read
+the release sources, scan `spawnpoint-release-refs`, and put metrics in `Spawnpoint/ReleaseReconciler`. It has no write or delete
+action. For an on-demand run, invoke the Lambda by hand with `{}` or `{"mode":"report"}`; any other mode is refused. The result and
+one log line per class are in `/aws/lambda/spawnpoint-release-reconciler`. The table is created in `../terraform-storage`.
+
 ## Local verification
 
 ```bash

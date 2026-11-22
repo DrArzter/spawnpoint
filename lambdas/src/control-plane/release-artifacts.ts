@@ -86,3 +86,13 @@ export function releaseModLocation(manifest: unknown, sha256: string): Readonly<
 export function releaseManifestKey(gameId: string, presetId: string, release: string): string {
   return `${releaseArtifactPrefix(gameId, presetId, release)}/manifest.json`;
 }
+
+/** The name a player's browser saves a downloaded file under, whatever characters it holds. */
+export function attachmentDisposition(filename: string): string {
+  return `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
+/** What a pack is called when a player saves it. Objects are named by digest, so the name must come from here. */
+export function packAttachmentName(presetId: string, release: string, pack: ReleasePack): string {
+  return `${presetId}-${release}-${pack}.zip`;
+}

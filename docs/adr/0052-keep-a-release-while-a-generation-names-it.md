@@ -3,6 +3,8 @@
 - Status: Accepted — restore preflight enforced at request and workflow boundaries, 2026-09-23; retention rule applies to any future release cleanup; amended 2026-11-22: a backup is paired with the release that ran
 - Date: 2026-09-16
 - Milestone: M4
+- Amended by: [ADR-0080](0080-store-release-files-by-content.md) — holders in a reference table, retirement with
+  `holders = 0`, and a release in state `retiring` or `retired` is not used again
 - Relates: [ADR-0042](0042-preset-scoped-release-identity.md) (the namespace a release is stored under),
   [ADR-0040](0040-reusable-presets-and-world-wipes.md) (the generation that names it),
   [ADR-0010](0010-world-persistence-and-backups.md) (the archive that is useless without it),

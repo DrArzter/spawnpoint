@@ -45,6 +45,8 @@ data "aws_iam_policy_document" "bot" {
     resources = [
       "${data.aws_s3_bucket.releases.arn}/worlds/*",
       "${data.aws_s3_bucket.releases.arn}/releases/*",
+      # A pack of a content-addressed release is an object named by its digest.
+      "${data.aws_s3_bucket.releases.arn}/objects/*",
     ]
   }
 

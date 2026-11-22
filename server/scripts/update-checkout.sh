@@ -21,7 +21,10 @@ git_app() {
   git -c safe.directory="${APP_DIR}" -C "${APP_DIR}" "$@"
 }
 
+# A kept checkout can be older than the storage layout of a newer release; an
+# objects-v1 release then fails at the download. The log line names the reason.
 kept() {
+  printf 'warning: keeping the host checkout (%s); a release in a newer storage layout (objects-v1) cannot be downloaded by an older checkout\n' "$1" >&2
   printf 'result=kept\nreason=%s\n' "$1"
   [[ -z "${2:-}" ]] || printf 'commit=%s\n' "$2"
   exit 0

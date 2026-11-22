@@ -49,6 +49,14 @@ data "aws_iam_policy_document" "access_api" {
     resources = ["arn:aws:events:${var.aws_region}:${data.aws_caller_identity.current.account_id}:event-bus/default"]
   }
 
+  # The state of a release (live, retiring, retired) decides whether a wipe,
+  # restore, promotion or new world may use it (ADR-0080).
+  statement {
+    sid       = "ReadReleaseState"
+    actions   = ["dynamodb:GetItem"]
+    resources = [local.release_refs_table_arn]
+  }
+
   statement {
     sid       = "ReadLifecycleState"
     actions   = ["dynamodb:GetItem"]
@@ -99,6 +107,8 @@ data "aws_iam_policy_document" "access_api" {
       # Presigning a pack link signs this same permission, so the panel can hand
       # a player the files without ever holding a credential.
       "${data.aws_s3_bucket.releases.arn}/releases/*",
+      # A pack or a mod of a content-addressed release is an object named by its digest.
+      "${data.aws_s3_bucket.releases.arn}/objects/*",
     ]
   }
 
@@ -253,6 +263,7 @@ resource "aws_lambda_function" "access_api" {
       CONTROL_PLANE_WEBSOCKET_URL      = "wss://${aws_apigatewayv2_api.control_plane.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.control_plane.name}"
       OPERATION_STATE_MACHINES         = jsonencode(local.operation_state_machines)
       RELEASE_BUCKET                   = data.aws_s3_bucket.releases.id
+      RELEASE_REFS_TABLE               = var.release_refs_table_name
       BUILD_RELEASE_STATE_MACHINE_ARN  = local.build_release_arn
       BACKUP_BUCKET                    = data.aws_s3_bucket.backups.id
       CONNECTION_HOST                  = var.connection_host

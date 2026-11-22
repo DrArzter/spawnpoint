@@ -43,7 +43,10 @@ Contents:
   - `read-release-pointer.sh` — read a world's desired/active release pointer (ADR-0030); exit 3 means "not imported
     yet", which callers treat as a state, not an error,
   - `download-release.sh` — ensure a complete verified local copy of a release; a cache on the data volume, so an
-    unchanged boot downloads nothing and a tampered entry is refetched,
+    unchanged boot downloads nothing and a tampered entry is refetched. A manifest with `storage.layout`
+    `objects-v1` is built from the shared host object cache (`_object-cache.sh`) instead,
+  - `evict-object-cache.sh` — free object-cache space (oldest first) when the disk is low; never removes a file of a
+    `--keep` release or a file that a payload or mods directory still links,
   - `resolve-mod-list.sh` — fetch a pinned mod list (`slug:fileId`, ADR-0028) from CurseForge into a payload
     directory; SHA-1 and size verified against the API's own record, cache heals itself, an author-disabled
     download fails with instructions. `server/tests/fake-curl` stands in for the API under test,

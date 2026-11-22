@@ -146,9 +146,10 @@ run "free_plan_host_preserves_m0_invariants" {
   assert {
     condition = local.game_host_release_resources == [
       "arn:aws:s3:::spawnpoint-releases-123456789012/releases/*",
+      "arn:aws:s3:::spawnpoint-releases-123456789012/objects/*",
       "arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*",
     ]
-    error_message = "The host must be able to read both immutable releases and dynamically materialized world records."
+    error_message = "The host must be able to read immutable releases, their content-addressed objects and dynamically materialized world records."
   }
 
   assert {

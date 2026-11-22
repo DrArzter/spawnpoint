@@ -40,6 +40,7 @@ function scenario(t: TestContext, options: Readonly<{
   t.mock.method(sources, "listWorldRecords", async () => [options.world ?? record]);
   t.mock.method(sources, "readLifecycle", async (key: string) => key.startsWith("world#") ? options.own ?? null : options.game ?? null);
   t.mock.method(sources, "readReleaseManifest", async () => ({}));
+  t.mock.method(sources, "readReleaseState", async () => null);
   t.mock.method(SFNClient.prototype, "send", async (command: unknown) => {
     const input = (command as { input: { input: string } }).input;
     inputs.push(JSON.parse(input.input) as Record<string, unknown>);
@@ -145,6 +146,40 @@ test("restore verifies the release the backup ran before requesting a workflow",
   assert.deepEqual(asked, ["1.4"]);
   assert.equal(inputs[0]?.backupKey, key);
   assert.equal(inputs[0]?.stopRequired, false);
+});
+
+test("a restore onto a release that is being retired or is retired is refused before any workflow", async (t) => {
+  const inputs = scenario(t);
+  process.env.BACKUP_BUCKET = "backups";
+  process.env.RELEASE_BUCKET = "releases";
+  t.after(() => { delete process.env.BACKUP_BUCKET; delete process.env.RELEASE_BUCKET; });
+  const key = `worlds/${record.worldId}/archives/save-${record.currentGeneration.id}-test.tar.zst`;
+  t.mock.method(S3Client.prototype, "send", async (command: unknown) => {
+    if (command instanceof HeadObjectCommand) return { Metadata: { release: "1.4", "release-source": "active" }, LastModified: new Date("2026-11-20T00:00:00Z") };
+    throw Object.assign(new Error("missing"), { name: "NoSuchKey" });
+  });
+  for (const [state, error] of [["retiring", "release_retired"], ["retired", "release_retired"], ["building", "release_not_ready"]] as const) {
+    t.mock.method(awsControlPlaneSources as Required<ControlPlaneSources>, "readReleaseState", async () => state);
+    const result = await controlWorldLifecycle(identity, "restore", record.gameId, record.worldId, JSON.stringify({ backupKey: key }));
+    assert.equal(result.statusCode, 409);
+    assert.deepEqual(JSON.parse(result.body), { error });
+  }
+  assert.deepEqual(inputs, []);
+});
+
+test("a new world is not opened on a release that is being retired, retired or not built (ADR-0080)", async (t) => {
+  scenario(t);
+  const sources = awsControlPlaneSources as Required<ControlPlaneSources>;
+  t.mock.method(sources, "listPresets", async () => [{
+    id: "industrial", displayName: "Industrial", gameId: "minecraft", repository: record.preset.repository, commit: record.preset.commit,
+    profileDigest: record.preset.profileDigest, releases: ["1.2"], latestRelease: "1.2", buildStatus: "ready" as const,
+  }]);
+  for (const [state, error] of [["retiring", "release_retired"], ["retired", "release_retired"], ["building", "release_not_ready"]] as const) {
+    t.mock.method(sources, "readReleaseState", async () => state);
+    const result = await createWorld(identity, "minecraft", "industrial", JSON.stringify({ displayName: "Test", release: "1.2" }));
+    assert.equal(result.statusCode, 409);
+    assert.deepEqual(JSON.parse(result.body), { error });
+  }
 });
 
 test("purge still requires an archived world even with the exact confirmation", async (t) => {

@@ -9,7 +9,8 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "node:crypto";
 
 import { buildLifecycleStartInput } from "../../domain/telegram-bot.ts";
-import { clientPackKey } from "../../control-plane/release-artifacts.ts";
+import { attachmentDisposition, packAttachmentName, releaseManifestKey } from "../../control-plane/release-artifacts.ts";
+import { releasePackStorageKey } from "../../control-plane/release-objects.ts";
 import { S3ReleaseStateStore } from "../../control-plane/s3-release-state-store.ts";
 import { S3WorldRepository } from "../../control-plane/s3-world-repository.ts";
 
@@ -112,14 +113,31 @@ export async function startSession(requestedBy: string): Promise<string> {
   return operationId;
 }
 
+// An objects-v1 release keeps its pack as an object named by digest, so the
+// manifest decides the key and the attachment name tells the player what it is.
 export async function packUrl(game: string, preset: string, release: string): Promise<string | null> {
-  const key = clientPackKey(game, preset, release);
+  const bucket = env("RELEASE_BUCKET");
+  const key = releasePackStorageKey(await readManifest(bucket, game, preset, release), game, preset, release, "client");
+  if (key === null) return null;
   try {
-    await s3.send(new HeadObjectCommand({ Bucket: env("RELEASE_BUCKET"), Key: key }));
+    await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
   } catch {
     return null;
   }
-  return getSignedUrl(s3, new GetObjectCommand({ Bucket: env("RELEASE_BUCKET"), Key: key }), {
-    expiresIn: 3600,
-  });
+  return getSignedUrl(s3, new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    ResponseContentDisposition: attachmentDisposition(packAttachmentName(preset, release, "client")),
+  }), { expiresIn: 3600 });
+}
+
+async function readManifest(bucket: string, game: string, preset: string, release: string): Promise<unknown> {
+  try {
+    const response = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: releaseManifestKey(game, preset, release) }));
+    const body = await response.Body?.transformToString();
+    return body ? JSON.parse(body) as unknown : null;
+  } catch (error) {
+    if (error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound")) return null;
+    throw error;
+  }
 }

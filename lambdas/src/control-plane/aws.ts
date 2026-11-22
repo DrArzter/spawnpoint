@@ -17,7 +17,9 @@ import { randomUUID } from "node:crypto";
 import type { BackupObject } from "./backups.ts";
 import type { BackupReleaseSources } from "./backup-release.ts";
 import { s3BackupReleaseSources } from "./s3-backup-release.ts";
-import { clientPackKey, releaseModKey, releasePackKey, type ModStore, type ReleasePack } from "./release-artifacts.ts";
+import { attachmentDisposition, packAttachmentName, releaseModKey, type ModStore, type ReleasePack } from "./release-artifacts.ts";
+import { objectKey, releasePackStorageKey } from "./release-objects.ts";
+import { dynamoReleaseStateReader } from "./dynamo-release-state.ts";
 import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts";
 import { presetBuildView, runningReleaseBuilds } from "./aws-release-builds.ts";
 import { gameCatalog } from "./catalog.ts";
@@ -68,6 +70,8 @@ const s3 = new S3Client({});
 const cloudwatch = new CloudWatchClient({});
 const sfn = new SFNClient({});
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
+const readReleaseState = dynamoReleaseStateReader(document);
 const ssm = new SSMClient({});
 
 function tag(instance: Instance, key: string): string | undefined {
@@ -400,6 +404,7 @@ export const awsControlPlaneSources: ControlPlaneSources = {
   listRunningOperations,
   listPresets,
   readReleaseManifest,
+  readReleaseState,
   readReleasePlan,
   readHostMetrics,
   readHostsMetrics,
@@ -603,20 +608,18 @@ export async function worldLifecycleExecution(args: Readonly<{
 // hour. A missing object is a normal answer — releases published before packs
 // were part of publication have none — so it is reported, not thrown.
 export async function packDownloadUrl(gameId: string, presetId: string, release: string): Promise<string | null> {
-  const bucket = requiredEnv("RELEASE_BUCKET");
-  const key = clientPackKey(gameId, presetId, release);
-  try {
-    await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
-  } catch {
-    return null;
-  }
-  return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: 3600 });
+  return releasePackUrl(gameId, presetId, release, "client", 3600);
 }
 
-/** One pack of a release, by name, when it was published; named for the preset and release it holds. */
+/**
+ * One pack of a release, by name, when it was published; named for the preset
+ * and release it holds. An objects-v1 release keeps its packs as objects named
+ * by digest, so the attachment name is what tells a player which pack it is.
+ */
 export async function releasePackUrl(gameId: string, presetId: string, release: string, pack: ReleasePack, expiresIn: number): Promise<string | null> {
   const bucket = requiredEnv("RELEASE_BUCKET");
-  const key = releasePackKey(gameId, presetId, release, pack);
+  const key = releasePackStorageKey(await readReleaseManifest(gameId, presetId, release), gameId, presetId, release, pack);
+  if (key === null) return null;
   try {
     await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
   } catch {
@@ -625,21 +628,30 @@ export async function releasePackUrl(gameId: string, presetId: string, release: 
   return getSignedUrl(s3, new GetObjectCommand({
     Bucket: bucket,
     Key: key,
-    ResponseContentDisposition: attachment(`${presetId}-${release}-${pack}.zip`),
+    ResponseContentDisposition: attachment(packAttachmentName(presetId, release, pack)),
   }), { expiresIn });
 }
 
 // A file the panel hands to someone, named as it is stored, so the browser
 // saves it under that name whatever characters it holds.
-function attachment(filename: string): string {
-  return `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`;
-}
+const attachment = attachmentDisposition;
 
-/** One mod of a release, from either set, presigned for this role's read of releases. */
-export function releaseModUrl(gameId: string, presetId: string, release: string, location: Readonly<{ file: string; store: ModStore }>, expiresIn: number): Promise<string> {
+/**
+ * One mod of a release, from either set, presigned for this role's read of
+ * releases. A digest names the object of an objects-v1 release; without one the
+ * mod is under its release's own keys.
+ */
+export function releaseModUrl(
+  gameId: string,
+  presetId: string,
+  release: string,
+  location: Readonly<{ file: string; store: ModStore }>,
+  expiresIn: number,
+  objectDigest?: string,
+): Promise<string> {
   return getSignedUrl(s3, new GetObjectCommand({
     Bucket: requiredEnv("RELEASE_BUCKET"),
-    Key: releaseModKey(gameId, presetId, release, location.file, location.store),
+    Key: objectDigest === undefined ? releaseModKey(gameId, presetId, release, location.file, location.store) : objectKey(objectDigest),
     ResponseContentDisposition: attachment(location.file),
   }), { expiresIn });
 }

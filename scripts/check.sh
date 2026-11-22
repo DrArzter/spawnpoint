@@ -157,6 +157,8 @@ check_server_suite() {
       [ "$name" = "profile-resolver-test.sh" ] && continue
       # compose-bindings needs the real docker compose; it runs on the host below.
       [ "$name" = "compose-bindings-test.sh" ] && continue
+      # object-cache-mount runs containers of its own; it runs on the host below.
+      [ "$name" = "object-cache-mount-test.sh" ] && continue
       slot=$((position % SHARD_COUNT)); position=$((position + 1))
       [ "$slot" -eq "$SHARD_INDEX" ] || continue
       selected=$((selected + 1))
@@ -181,6 +183,10 @@ validate_shard() {
 
 check_compose_bindings() {
   bash server/tests/compose-bindings-test.sh
+}
+
+check_object_cache_mount() {
+  bash server/tests/object-cache-mount-test.sh
 }
 
 # Roots are discovered, not listed: the list had to be extended by hand the day
@@ -229,6 +235,7 @@ run_app() {
 run_server() {
   step "server test suite (container)" check_server_suite
   step "compose bindings (host docker)" check_compose_bindings
+  step "object cache mount (host docker)" check_object_cache_mount
 }
 
 run_terraform() {

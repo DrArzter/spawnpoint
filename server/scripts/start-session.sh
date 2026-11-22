@@ -123,6 +123,16 @@ if [[ -n "${release_bucket}" ]]; then
     payload_dir="${SERVER_DIR}/releases/${GAME_ID}/${WORLD_PROFILE_ID}/${desired_release}"
     "${SCRIPT_DIR}/download-release.sh" "${GAME_ID}" "${WORLD_PROFILE_ID}" "${desired_release}" "${payload_dir}" >&2
     mark_step release_downloaded
+    # Free object-cache space once the desired manifest is on the host. The
+    # desired and the active release keep their files; if one manifest is not
+    # on the host, nothing is evicted. A failure here never stops the start.
+    active_release="$(awk -F= '$1 == "active_release" { print $2 }' <<<"${pointer_output}")"
+    keep_args=(--keep "${GAME_ID}/${WORLD_PROFILE_ID}/${desired_release}")
+    if [[ "${active_release}" =~ ^[0-9]+\.[0-9]+$ && "${active_release}" != "${desired_release}" ]]; then
+      keep_args+=(--keep "${GAME_ID}/${WORLD_PROFILE_ID}/${active_release}")
+    fi
+    "${SCRIPT_DIR}/evict-object-cache.sh" "${keep_args[@]}" >&2 ||
+      printf 'warning: object cache eviction did not run; the start goes on\n' >&2
     if [[ "${WORLD_STORAGE_LAYOUT}" == "generation" ]]; then
       "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" \
         "${SPAWNPOINT_WORLD_MODS_DIRECTORY}" >&2

@@ -13,6 +13,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/_common.sh"
 # shellcheck source=_s3.sh
 source "${SCRIPT_DIR}/_s3.sh"
+# shellcheck source=_object-cache.sh
+source "${SCRIPT_DIR}/_object-cache.sh"
 
 game="${1:-}"
 preset_id="${2:-}"
@@ -71,6 +73,7 @@ jq -e '
     else ((has("runtime") | not) or
       (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$")))
   end) and
+  ((has("storage") | not) or (.storage | type == "object")) and
   (.server.mods | type == "array") and
   all(.server.mods[];
     (.file | type == "string" and test("^[^/\\\\]+\\.(jar|zip)$")) and
@@ -99,6 +102,160 @@ jq -e '
 [[ "$(jq -r '.game' "${manifest_tmp}")" == "${game}" ]] || die "manifest names a different game"
 [[ "$(jq -r '.source_profile.id' "${manifest_tmp}")" == "${preset_id}" ]] || die "manifest names a different preset"
 
+layout="legacy"
+if [[ "$(jq -r '(.storage // {}) | has("layout")' "${manifest_tmp}")" == "true" ]]; then
+  layout="$(jq -r '.storage.layout | if type == "string" then . else "(not a string)" end' "${manifest_tmp}")"
+  [[ "${layout}" == "objects-v1" ]] ||
+    die "release ${release} uses the storage layout '${layout}', which this host does not know; update the host checkout"
+fi
+
+# Exact S3 filter for one key: the CLI reads --include as a glob.
+glob_literal() {
+  local text="$1" out="" char index
+  for ((index = 0; index < ${#text}; index++)); do
+    char="${text:index:1}"
+    case "${char}" in
+      '[' | '*' | '?') out+="[${char}]" ;;
+      *) out+="${char}" ;;
+    esac
+  done
+  printf '%s' "${out}"
+}
+
+file_matches() {
+  local file="$1" expected_sha="$2" expected_bytes="$3" actual_sha
+  [[ -f "${file}" && ! -L "${file}" ]] || return 1
+  [[ "$(stat --format '%s' -- "${file}")" == "${expected_bytes}" ]] || return 1
+  actual_sha="$(sha256sum -- "${file}")"
+  [[ "${actual_sha%% *}" == "${expected_sha}" ]]
+}
+
+# objects-v1: every file is an object named by its digest. Missing digests are
+# fetched once into the shared cache, then the payload is built from the cache.
+# Mods are hard links, so a mod costs no second copy. Overrides are copies,
+# because a mod rewrites its configs at run time.
+download_objects_v1() {
+  local sha bytes relative object target tmp fetched_file cache_root
+  local -A bytes_of=()
+  local -a missing=() filters=()
+  downloaded=0
+  kept=0
+  fetched=0
+
+  cache_root="$(object_cache_root)"
+  object_cache_init
+  # The cache lock covers the checks and the links, so eviction never removes
+  # an object between the two.
+  exec 8>"${cache_root}/.cache.lock"
+  flock -w "${DOWNLOAD_LOCK_WAIT_SECONDS:-900}" 8 || die "another process is changing the object cache"
+  rm -rf -- "${cache_root}"/.fetch.*
+
+  while IFS=$'\t' read -r sha bytes; do
+    [[ -z "${bytes_of[${sha}]:-}" || "${bytes_of[${sha}]}" == "${bytes}" ]] ||
+      die "manifest of release ${release} names digest ${sha} with two sizes"
+    bytes_of["${sha}"]="${bytes}"
+  done < <(jq -r '(.server.mods[], (.server.overrides // [])[]) | [.sha256, (.bytes | tostring)] | @tsv' "${manifest_tmp}")
+
+  while read -r sha; do
+    bytes="${bytes_of[${sha}]}"
+    object="$(object_cache_path "${sha}")"
+    object_cache_dir "${sha}"
+    if object_cache_trusted "${object}" "${bytes}"; then
+      touch -c -- "${object}" 2>/dev/null || true # mtime orders eviction: oldest first
+      continue
+    fi
+    if [[ -f "${object}" && ! -L "${object}" ]]; then
+      # Not root-owned 0444: trust it only after the hash agrees.
+      if file_matches "${object}" "${sha}" "${bytes}"; then
+        chmod 0444 -- "${object}"
+        chown 0:0 -- "${object}" 2>/dev/null || true
+        continue
+      fi
+      log "cached object ${sha} does not match its digest; refetching"
+      rm -f -- "${object}"
+    fi
+    [[ ! -e "${object}" && ! -L "${object}" ]] || die "unsafe object cache path: ${object}"
+    missing+=("${sha}")
+  done < <(printf '%s\n' "${!bytes_of[@]}" | sort)
+
+  if ((${#missing[@]} > 0)); then
+    fetch_dir="$(mktemp -d "${cache_root}/.fetch.XXXXXX")"
+    filters=(--exclude '*')
+    for sha in "${missing[@]}"; do
+      filters+=(--include "$(glob_literal "${sha:0:2}/${sha}")")
+    done
+    aws "${S3_GLOBAL_ARGS[@]}" s3 cp \
+      "s3://${RELEASE_BUCKET}/objects/sha256/" "${fetch_dir}/" \
+      --recursive --only-show-errors "${filters[@]}" >&2 ||
+      die "could not download the objects of release ${release}"
+
+    # The copy does not compare hashes: each object is held to size and digest
+    # before it enters the cache, and the host never loads a wrong file.
+    for sha in "${missing[@]}"; do
+      bytes="${bytes_of[${sha}]}"
+      fetched_file="${fetch_dir}/${sha:0:2}/${sha}"
+      [[ -f "${fetched_file}" && ! -L "${fetched_file}" ]] ||
+        die "object ${sha} is missing from the object store; release ${release} cannot be loaded"
+      file_matches "${fetched_file}" "${sha}" "${bytes}" ||
+        die "object ${sha} failed verification against the manifest of release ${release}"
+      chmod 0444 -- "${fetched_file}"
+      object_cache_dir "${sha}"
+      mv -f -- "${fetched_file}" "$(object_cache_path "${sha}")"
+      fetched=$((fetched + 1))
+    done
+    rm -rf -- "${fetch_dir}"
+    fetch_dir=""
+  fi
+
+  while IFS=$'\t' read -r relative sha bytes; do
+    target="${payload_dir}/${relative}"
+    object="$(object_cache_path "${sha}")"
+    mkdir -p -- "$(dirname -- "${target}")"
+    [[ ! -L "${target}" ]] || die "unsafe cached path: ${target}"
+    if [[ "${relative}" == mods/* ]]; then
+      if [[ -f "${target}" && "${target}" -ef "${object}" ]]; then
+        kept=$((kept + 1))
+        continue
+      fi
+      tmp="$(mktemp -u "$(dirname -- "${target}")/.reuse.XXXXXX")"
+      # The payload directory is never mounted into the container, so it may share the inode.
+      object_cache_link_or_copy "${object}" "${tmp}" "${sha}" "${bytes}" link
+    else
+      if [[ -f "${target}" ]] && file_matches "${target}" "${sha}" "${bytes}"; then
+        kept=$((kept + 1))
+        continue
+      fi
+      tmp="$(mktemp -u "$(dirname -- "${target}")/.reuse.XXXXXX")"
+      cp -- "${object}" "${tmp}"
+      chmod 0644 -- "${tmp}"
+      file_matches "${tmp}" "${sha}" "${bytes}" || die "copy of override ${relative} failed verification"
+    fi
+    mv -f -- "${tmp}" "${target}"
+    downloaded=$((downloaded + 1))
+  done < <(jq -r '
+    (.server.mods[] | ["mods/" + .file, .sha256, (.bytes | tostring)]),
+    ((.server.overrides // [])[] | ["overrides/" + .path, .sha256, (.bytes | tostring)])
+    | @tsv
+    ' "${manifest_tmp}")
+}
+
+if [[ "${layout}" == "objects-v1" ]]; then
+  download_objects_v1
+  mv -- "${manifest_tmp}" "${payload_dir}/manifest.json"
+  trap - EXIT
+  printf 'result=release_ready\n'
+  printf 'game=%s\n' "${game}"
+  printf 'preset=%s\n' "${preset_id}"
+  printf 'release=%s\n' "${release}"
+  printf 'payload=%s\n' "${payload_dir}"
+  printf 'downloaded=%s\n' "${downloaded}"
+  printf 'kept=%s\n' "${kept}"
+  printf 'reused=0\n'
+  printf 'layout=objects-v1\n'
+  printf 'fetched=%s\n' "${fetched}"
+  exit 0
+fi
+
 # Other cached releases of this game often hold the same bytes. Their manifests
 # name each file by hash, so a match is linked in, never fetched again. Only the
 # standard cache layout <game>/<preset>/<release> is searched.
@@ -125,27 +282,6 @@ if [[ "$(basename -- "${payload_dir}")" == "${release}" &&
       ' "${sibling_manifest}" 2>/dev/null || true)
   done
 fi
-
-# Exact S3 filter for one key: the CLI reads --include as a glob.
-glob_literal() {
-  local text="$1" out="" char index
-  for ((index = 0; index < ${#text}; index++)); do
-    char="${text:index:1}"
-    case "${char}" in
-      '[' | '*' | '?') out+="[${char}]" ;;
-      *) out+="${char}" ;;
-    esac
-  done
-  printf '%s' "${out}"
-}
-
-file_matches() {
-  local file="$1" expected_sha="$2" expected_bytes="$3" actual_sha
-  [[ -f "${file}" && ! -L "${file}" ]] || return 1
-  [[ "$(stat --format '%s' -- "${file}")" == "${expected_bytes}" ]] || return 1
-  actual_sha="$(sha256sum -- "${file}")"
-  [[ "${actual_sha%% *}" == "${expected_sha}" ]]
-}
 
 # A candidate counts only when no symbolic link sits anywhere on its path.
 reuse_cached() {
@@ -234,3 +370,4 @@ printf 'payload=%s\n' "${payload_dir}"
 printf 'downloaded=%s\n' "${downloaded}"
 printf 'kept=%s\n' "${kept}"
 printf 'reused=%s\n' "${reused}"
+printf 'layout=legacy\n'

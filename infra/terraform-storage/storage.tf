@@ -44,6 +44,46 @@ resource "aws_dynamodb_table" "control_plane_view" {
   }
 }
 
+# The owner's reference table for content-addressed releases (ADR-0080): the
+# back-references of each object, the holders of each release, and the state of
+# both. It is a record that the reconciler checks against the sources of truth,
+# so point-in-time recovery and deletion protection are on.
+resource "aws_dynamodb_table" "release_refs" {
+  name         = var.release_refs_table_name
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  deletion_protection_enabled = true
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = {
+    Name    = var.release_refs_table_name
+    Purpose = "content-addressed-release-references"
+  }
+}
+
 resource "aws_s3_bucket" "backups" {
   bucket = local.backup_bucket_name
 
@@ -206,6 +246,38 @@ resource "aws_s3_bucket_lifecycle_configuration" "releases" {
     }
   }
 
+  # Content-addressed objects (ADR-0080). A current object never expires: only
+  # the reconciler deletes one, and only when no release names it. A delete
+  # leaves a noncurrent version, which this rule keeps for 30 days; with the
+  # 14 days of grace in the reference table that is the owner's undo window.
+  rule {
+    id     = "expire-noncurrent-object-versions"
+    status = "Enabled"
+
+    filter {
+      prefix = "objects/"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+
+  # A delete marker with no version under it is removed. This never expires a
+  # current object.
+  rule {
+    id     = "remove-object-delete-markers"
+    status = "Enabled"
+
+    filter {
+      prefix = "objects/"
+    }
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+  }
+
   # The release builder's cache of verified upstream files (incremental builds,
   # stage 3). No release names these objects: CurseForge or a pinned mirror can
   # supply them again, so they expire by age, bytes and index together. A
@@ -279,6 +351,41 @@ data "aws_iam_policy_document" "releases_bucket" {
     actions = ["s3:DeleteObject", "s3:DeleteObjectVersion"]
 
     resources = ["arn:aws:s3:::${aws_s3_bucket.releases.bucket}/releases/*"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+  }
+
+  # Content-addressed objects (ADR-0080). Only the reconciler may delete an
+  # object, and it deletes only what the reference table and a complete mark
+  # both release. No principal may delete a version: the 30-day lifecycle of
+  # noncurrent versions is the undo window. DenyReleaseDeletion above is
+  # unchanged, so legacy releases and manifests stay undeletable.
+  statement {
+    sid       = "DenyObjectDeletionExceptReconciler"
+    effect    = "Deny"
+    actions   = ["s3:DeleteObject"]
+    resources = ["arn:aws:s3:::${aws_s3_bucket.releases.bucket}/objects/*"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    condition {
+      test     = "ArnNotEquals"
+      variable = "aws:PrincipalArn"
+      values   = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.release_reconciler_role_name}"]
+    }
+  }
+
+  statement {
+    sid       = "DenyObjectVersionDeletion"
+    effect    = "Deny"
+    actions   = ["s3:DeleteObjectVersion"]
+    resources = ["arn:aws:s3:::${aws_s3_bucket.releases.bucket}/objects/*"]
 
     principals {
       type        = "*"

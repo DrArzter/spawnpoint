@@ -76,15 +76,15 @@ function packFiles(values: readonly string[], env: NodeJS.ProcessEnv): Partial<R
 
 async function upstreamMap(path: string | undefined): Promise<Map<string, string>> {
   if (path === undefined) return new Map();
-  const parsed = JSON.parse(await readFile(path, "utf8")) as unknown;
+  const parsed = JSON.parse(await readFile(path, "utf8")) as unknown; // NOSONAR path checked by safePath: no parent segment, inside an allowed root
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) usage("upstream-map");
   return new Map(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
 }
 
 async function replaceFile(path: string, content: string): Promise<void> {
   const staged = `${path}.writer`;
-  await writeFile(staged, content);
-  await rename(staged, path);
+  await writeFile(staged, content); // NOSONAR path checked by safePath: no parent segment, inside an allowed root
+  await rename(staged, path); // NOSONAR path checked by safePath: no parent segment, inside an allowed root
 }
 
 async function write(argv: readonly string[], env: NodeJS.ProcessEnv, deps: CliDeps, io: CliIo): Promise<void> {
@@ -102,7 +102,7 @@ async function write(argv: readonly string[], env: NodeJS.ProcessEnv, deps: CliD
   const upstreamPath = values["upstream-map"] === undefined ? undefined : safePath(values["upstream-map"], "upstream-map", env);
   const ref = releaseRef(values);
   const id = buildId(values);
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Manifest;
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Manifest; // NOSONAR path checked by safePath: no parent segment, inside an allowed root
   const heal = values.heal === true;
   const started = Date.now();
   const result = await writeObjects(deps, {

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
-import { MOTION, reducedMotion } from "./motion";
+import { canTransition, runTransition } from "./transition";
 
 import { Icon, type IconName } from "../../../icons";
 import { cx } from "../../../lib/cx";
@@ -109,39 +109,23 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
   );
 }
 
-type TabTransitionDocument = Document & { startViewTransition?: (update: () => Promise<void>) => { finished?: Promise<void> } };
-
-/**
- * A2t: a tab switch runs as a view transition of the panel alone, moving
- * sideways by the tab bar's order. The update resolves once the new tab has
- * rendered, or after the motion time, so the old panel is never followed by a
- * blank frame.
- */
+/** A tab switch (A3) runs as the panel's transition, sideways by the tab bar's order. */
 function useTabTransition<Id extends string>(tabs: readonly TabItem<Id>[], value: Id, onChange: (id: Id) => void): (id: Id) => void {
-  const arrived = useRef<{ id: Id; resolve: () => void } | null>(null);
+  const arrived = useRef<{ id: Id; done: () => void } | null>(null);
   useLayoutEffect(() => {
-    if (arrived.current?.id === value) arrived.current.resolve();
+    if (arrived.current?.id === value) arrived.current.done();
   }, [value]);
   return (id: Id) => {
-    const start = (document as TabTransitionDocument).startViewTransition;
-    if (id === value || !start || reducedMotion()) {
+    if (id === value || !canTransition()) {
       onChange(id);
       return;
     }
-    const root = document.documentElement;
     const from = tabs.findIndex((tab) => tab.id === value);
     const to = tabs.findIndex((tab) => tab.id === id);
-    root.dataset.transition = "tab";
-    root.dataset.direction = to > from ? "forward" : "back";
-    const clear = () => { delete root.dataset.transition; delete root.dataset.direction; };
-    const transition = start.call(document, () => new Promise<void>((resolve) => {
-      const done = () => { arrived.current = null; resolve(); };
-      arrived.current = { id, resolve: done };
-      window.setTimeout(done, MOTION["--c-d3"]);
+    runTransition("tab", to > from ? "forward" : "back", (done) => {
+      arrived.current = { id, done: () => { arrived.current = null; done(); } };
       onChange(id);
-    }));
-    if (transition?.finished) transition.finished.then(clear, clear);
-    else clear();
+    });
   };
 }
 

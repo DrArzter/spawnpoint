@@ -69,10 +69,8 @@ html[data-skin="console"] .c-spin {
 @keyframes c-shimmer { to { background-position: -200% 0; } }
 @keyframes c-shake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 @keyframes c-fade-out { to { opacity: 0; } }
-@keyframes c-leave-left { to { opacity: 0; transform: translateX(calc(-1 * var(--c-travel))); } }
-@keyframes c-leave-right { to { opacity: 0; transform: translateX(var(--c-travel)); } }
-@keyframes c-enter-from-right { from { opacity: 0; transform: translateX(var(--c-travel)); } }
-@keyframes c-enter-from-left { from { opacity: 0; transform: translateX(calc(-1 * var(--c-travel))); } }
+@keyframes c-move-out { to { opacity: 0; transform: translateX(calc(var(--c-dir) * var(--c-travel) / -4)); } }
+@keyframes c-move-in { from { opacity: 0; transform: translateX(calc(var(--c-dir) * var(--c-travel))); } 40% { opacity: 1; } }
 @keyframes c-bump { 40% { color: var(--c-accent-text); transform: translateY(-2px); } }
 @keyframes c-row-in { from { opacity: 0; transform: translateY(-8px); background-color: var(--c-accent-soft); } }
 
@@ -92,43 +90,57 @@ html[data-skin="console"] .c-arrived > td {
 }
 
 /*
- * A1: the page area traverses with the hierarchy. Going deeper (forward) the
- * new page comes in from the end edge and the old one leaves to the start
- * edge; going up or to an earlier section (back) it is the other way round. A
- * switch with no direction (another game) only cross-fades. Old and new share
- * one duration and easing, so their opacities always sum to one: the area
- * never dims or brightens. The group clips what travels, so a sheet never
- * crosses the rail or the bars; those are outside it, and the notifications
- * float above it with no snapshot of their own underneath.
+ * A1–A3: one way to move between views. The page area (c-page), a split
+ * page's pane and a tab panel (c-pane) share one choreography, a fade-through:
+ * the old view leaves fast with a small shift, and the new one comes in a
+ * little later from the side the move points to (forward from the end edge,
+ * back from the start edge, none only fades). The two barely overlap, so text
+ * never shows twice. Only the distance differs: a page travels further than a
+ * pane or a tab. Each group clips what travels, keeps both snapshots at their
+ * own size from the top, and eases its height from one to the other.
  */
-html[data-skin="console"]::view-transition-group(c-page) {
+html[data-skin="console"] {
+  --c-dir: 0;
+}
+
+html[data-skin="console"][data-direction="forward"] {
+  --c-dir: 1;
+}
+
+html[data-skin="console"][data-direction="back"] {
+  --c-dir: -1;
+}
+
+html[data-skin="console"] .c-main,
+html[data-skin="console"] [data-pane],
+html[data-skin="console"] .c-tabpanel {
+  view-transition-class: move;
+}
+
+html[data-skin="console"]::view-transition-group(*.move) {
   overflow: clip;
   animation-duration: var(--c-d3);
   animation-timing-function: var(--c-ease);
 }
 
-html[data-skin="console"][data-direction="none"]::view-transition-old(c-page) {
-  animation: var(--c-d3) var(--c-ease) both c-fade-out;
+html[data-skin="console"]::view-transition-group(c-pane) {
+  --c-travel: var(--c-travel-pane);
 }
 
-html[data-skin="console"][data-direction="none"]::view-transition-new(c-page) {
-  animation: var(--c-d3) var(--c-ease) both c-fade;
+html[data-skin="console"]::view-transition-old(*.move),
+html[data-skin="console"]::view-transition-new(*.move) {
+  height: auto;
+  width: 100%;
+  object-fit: none;
+  object-position: 0 0;
 }
 
-html[data-skin="console"][data-direction="forward"]::view-transition-old(c-page) {
-  animation: var(--c-d3) var(--c-ease) both c-leave-left;
+html[data-skin="console"]::view-transition-old(*.move) {
+  animation: var(--c-out) linear both c-move-out;
 }
 
-html[data-skin="console"][data-direction="forward"]::view-transition-new(c-page) {
-  animation: var(--c-d3) var(--c-ease) both c-enter-from-right;
-}
-
-html[data-skin="console"][data-direction="back"]::view-transition-old(c-page) {
-  animation: var(--c-d3) var(--c-ease) both c-leave-right;
-}
-
-html[data-skin="console"][data-direction="back"]::view-transition-new(c-page) {
-  animation: var(--c-d3) var(--c-ease) both c-enter-from-left;
+html[data-skin="console"]::view-transition-new(*.move) {
+  animation: calc(var(--c-d3) - var(--c-handover)) var(--c-ease) var(--c-handover) both c-move-in;
 }
 
 /*
@@ -167,59 +179,6 @@ html[data-skin="console"][data-transition="pane"] [data-pane] {
    strip and the tab bar are the same on both sides and keep still. */
 html[data-skin="console"][data-transition="tab"] .c-main {
   view-transition-name: none;
-}
-
-/*
- * A2d: a tab switch moves sideways by the tab bar's order, a short way, and
- * never up or down; another world on the same tab only cross-fades. Both
- * snapshots keep their size and sit at the top, so a pane of another height
- * is revealed or clipped by the group rather than stretched.
- */
-html[data-skin="console"]::view-transition-group(c-pane) {
-  overflow: clip;
-  animation-duration: var(--c-d3);
-  animation-timing-function: var(--c-ease);
-}
-
-html[data-skin="console"]::view-transition-old(c-pane),
-html[data-skin="console"]::view-transition-new(c-pane) {
-  --c-travel: var(--c-travel-pane);
-  height: auto;
-  width: 100%;
-  object-fit: none;
-  object-position: 0 0;
-}
-
-html[data-skin="console"][data-direction="none"]::view-transition-old(c-pane) {
-  animation: var(--c-d3) var(--c-ease) both c-fade-out;
-}
-
-html[data-skin="console"][data-direction="none"]::view-transition-new(c-pane) {
-  animation: var(--c-d3) var(--c-ease) both c-fade;
-}
-
-html[data-skin="console"][data-direction="forward"]::view-transition-old(c-pane) {
-  animation: var(--c-d3) var(--c-ease) both c-leave-left;
-}
-
-html[data-skin="console"][data-direction="forward"]::view-transition-new(c-pane) {
-  animation: var(--c-d3) var(--c-ease) both c-enter-from-right;
-}
-
-html[data-skin="console"][data-direction="back"]::view-transition-old(c-pane) {
-  animation: var(--c-d3) var(--c-ease) both c-leave-right;
-}
-
-html[data-skin="console"][data-direction="back"]::view-transition-new(c-pane) {
-  animation: var(--c-d3) var(--c-ease) both c-enter-from-left;
-}
-
-html[data-skin="console"]::view-transition-old(c-page),
-html[data-skin="console"]::view-transition-new(c-page) {
-  height: auto;
-  width: 100%;
-  object-fit: none;
-  object-position: 0 0;
 }
 
 html[data-skin="console"]::view-transition-old(root),

@@ -8,7 +8,8 @@ import { ScopeSwitcher } from "./Scope";
 import { Dialog } from "./ui/Dialog";
 import { Flashbar, type FlashItem } from "./ui/Flashbar";
 import { BottomBar, Rail, TopBar } from "./ui/Frame";
-import { MOTION, reducedMotion } from "./ui/motion";
+import { MOTION } from "./ui/motion";
+import { canTransition, runTransition } from "./ui/transition";
 import { Palette } from "./ui/Palette";
 import { ToastProvider } from "./ui/Toast";
 import { TooltipLayer } from "./ui/Tooltip";
@@ -68,15 +69,11 @@ export function flashItems(model: ShellModel, queue: SnackbarQueue, worldId: str
   return [...operations, ...outcomes];
 }
 
-type ViewTransitionDocument = Document & { startViewTransition?: (update: () => Promise<void>) => unknown };
-
 type Arrival = { target: string; resolve: () => void };
 
-/** Moves to `href` and holds the transition until that view renders, or the motion time passes. */
-function navigateUntilArrived(arrived: RefObject<Arrival | null>, href: string, resolve: () => void): void {
-  const done = () => { arrived.current = null; resolve(); };
-  arrived.current = { target: viewKey(href), resolve: done };
-  window.setTimeout(done, MOTION["--c-d3"]);
+/** Moves to `href`; `arrived` runs when that view renders. */
+function navigateUntilArrived(arrived: RefObject<Arrival | null>, href: string, done: () => void): void {
+  arrived.current = { target: viewKey(href), resolve: () => { arrived.current = null; done(); } };
   window.location.hash = href.slice(1);
 }
 
@@ -97,19 +94,13 @@ function usePageTransition(key: string) {
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
       const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href^='#/']") : null;
-      const start = (document as ViewTransitionDocument).startViewTransition;
-      if (!link || !start || link.target || link.hasAttribute("download") || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || reducedMotion()) return;
+      if (!link || !canTransition() || link.target || link.hasAttribute("download") || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const href = link.getAttribute("href")!;
       const kind = transitionKind(window.location.hash, href);
       if (kind === null || (kind === "pane" && !document.querySelector("[data-pane]"))) return;
       event.preventDefault();
-      const root = document.documentElement;
-      root.dataset.transition = kind;
-      root.dataset.direction = kind === "page" ? traverse(window.location.hash, href) : tabTraverse(window.location.hash, href);
-      const finished = start.call(document, () => new Promise<void>((resolve) => navigateUntilArrived(arrived, href, resolve))) as { finished?: Promise<void> } | undefined;
-      const clear = () => { delete root.dataset.transition; delete root.dataset.direction; };
-      if (finished?.finished) finished.finished.then(clear, clear);
-      else clear();
+      const direction = kind === "page" ? traverse(window.location.hash, href) : tabTraverse(window.location.hash, href);
+      runTransition(kind, direction, (done) => navigateUntilArrived(arrived, href, done));
     };
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);

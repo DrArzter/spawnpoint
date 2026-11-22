@@ -28,9 +28,9 @@ export function Settle({ children }: Readonly<{ children: ReactNode }>) {
       if (next === settled) return;
       const from = outer.dataset.settling === undefined ? settled : outer.getBoundingClientRect().height;
       settled = next;
-      // During a tab transition its group already eases the size; a second
+      // During a view transition its group already eases the size; a second
       // height animation would finish after it and show as a jump.
-      if (reducedMotion() || document.documentElement.dataset.transition === "tab") {
+      if (reducedMotion() || document.documentElement.dataset.transition !== undefined) {
         done();
         return;
       }

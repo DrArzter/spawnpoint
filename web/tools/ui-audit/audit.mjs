@@ -259,7 +259,9 @@ function coveredBy(snapshot) {
   const doc = documents[0];
   const attribute = (node, name) => {
     const list = doc.nodes.attributes[node];
-    for (let i = 0; i < list.length; i += 2) if (strings[list[i]] === name) return strings[list[i + 1]];
+    for (let i = 0; i < list.length; i += 2) {
+      if (strings[list[i]] === name) return strings[list[i + 1]];
+    }
     return null;
   };
   const parent = doc.nodes.parentIndex;

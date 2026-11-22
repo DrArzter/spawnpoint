@@ -1,6 +1,6 @@
 import type { SettingValue } from "./game-settings.ts";
 import { checkWhitelist } from "./whitelist.ts";
-import type { PresetObservation } from "./preset-catalog.ts";
+import { usableByNewWipe, type PresetObservation } from "./preset-catalog.ts";
 
 export type GenerationSource =
   | Readonly<{ kind: "preset" }>
@@ -135,6 +135,8 @@ export function newWorldRecord(
     !ID.test(identity.worldId) || identity.displayName.length < 1 || identity.displayName.length > 80 ||
     !RELEASE.test(identity.release) || Number.isNaN(Date.parse(createdAt))
   ) throw new Error("invalid_world_creation");
+  // A new world opens on the current revision only (ADR-0042).
+  if (!usableByNewWipe(preset, identity.release)) throw new Error("release_outdated");
   const generationId = `gen-${generationUuid.replaceAll("-", "")}`;
   if (!GENERATION_ID.test(generationId)) throw new Error("invalid_generation_id");
   if (
@@ -219,6 +221,8 @@ export function regenerateWorldRecord(
   if (preset.buildStatus !== "ready" || !preset.releases.includes(release) || !RELEASE.test(release) || Number.isNaN(Date.parse(createdAt))) {
     throw new Error("preset_release_not_ready");
   }
+  // A wipe opens on the current revision only (ADR-0042).
+  if (!usableByNewWipe(preset, release)) throw new Error("release_outdated");
   return {
     ...record,
     preset: {

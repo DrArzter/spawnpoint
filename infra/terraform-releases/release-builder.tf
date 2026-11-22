@@ -178,9 +178,23 @@ data "aws_iam_policy_document" "release_builder" {
     ]
   }
 
+  # The preset catalog lists the published releases of its game, to find a
+  # release that a catalog without history had forgotten (ADR-0042). Listing is
+  # limited to the release prefix; a missing key then answers 404, which the
+  # upstream cache reads as a miss like the 403 it saw before.
+  statement {
+    sid       = "ListPublishedReleases"
+    actions   = ["s3:ListBucket"]
+    resources = [data.aws_s3_bucket.releases.arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["releases/*"]
+    }
+  }
+
   # Verified upstream bytes and their index (incremental builds, stage 3). No
-  # s3:ListBucket: a missing key then answers 403, which the builder reads as a
-  # miss like a 404. No delete: the storage root's lifecycle expires the prefix.
+  # delete: the storage root's lifecycle expires the prefix.
   statement {
     sid = "CacheUpstreamFiles"
     actions = [

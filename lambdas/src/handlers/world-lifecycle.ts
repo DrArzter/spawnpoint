@@ -5,7 +5,7 @@ import {
 
 import { resolveBackupRelease } from "../control-plane/backup-release.ts";
 import { backupInventory } from "../control-plane/backups.ts";
-import { parsePresetCatalog } from "../control-plane/preset-catalog.ts";
+import { parsePresetCatalog, usableByNewWipe } from "../control-plane/preset-catalog.ts";
 import { type ReleaseState } from "../control-plane/release-state.ts";
 import { releaseManifestKey } from "../control-plane/release-artifacts.ts";
 import { restoreWithPublishedRelease } from "../control-plane/restore-guard.ts";
@@ -244,6 +244,7 @@ async function nextRecord(input: Input, record: WorldRecord, backups: Backups): 
     const release = input.release!;
     const preset = await latestPreset(record);
     if (!preset.releases.includes(release)) throw new Error("release_not_available");
+    if (!usableByNewWipe(preset, release)) throw new Error("release_outdated");
     return regenerateWorldRecord(record, preset, release, input.generationUuid!, input.requestedAt);
   }
   const backup = backups.find((candidate) => candidate.key === input.backupKey);

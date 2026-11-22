@@ -102,6 +102,7 @@ export type ControlPlaneSnapshot = Readonly<{
       releases: readonly string[];
       buildStatus: "unbuilt" | "building" | "ready" | "failed";
       latestRelease: string | null;
+      olderReleases?: readonly string[];
       buildAvailable?: PresetObservation["buildAvailable"];
       build?: PresetObservation["build"];
     }>>;
@@ -243,6 +244,7 @@ export async function readControlPlaneSnapshot(
         releases: preset.releases,
         buildStatus: preset.buildStatus,
         latestRelease: preset.latestRelease,
+        ...(preset.olderReleases?.length ? { olderReleases: preset.olderReleases } : {}),
         ...(preset.buildAvailable === undefined ? {} : { buildAvailable: preset.buildAvailable }),
         ...(preset.build === undefined ? {} : { build: preset.build }),
       })),

@@ -1,5 +1,6 @@
 import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
 import { identityDeletionRefusal, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type ReleaseDiff, type ReleaseMod, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
+import { startableReleases } from "../core/presets";
 import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
 import type { ControlPlaneSnapshot, Preset, SettingValue, World, WorldGameSettings, WorldSession } from "../model";
@@ -287,6 +288,7 @@ export function worldLifecycle(gameId: string, worldId: string, action: "archive
   const target = world(gameId, worldId);
   if (action === "purge" && target.materialization !== "archived") throw new Error("Archive this world before permanently deleting it.");
   if (action === "regenerate" && !(target.preset?.releases.includes(release ?? "") ?? false)) throw new Error("The selected release is no longer available. Refresh and try again.");
+  if (action === "regenerate" && !startableReleases(target.preset!).includes(release ?? "")) throw new Error("That release was built from an older revision. Build the preset again.");
   if (action === "restore" && !(state.backups[worldKey(gameId, worldId)] ?? []).some((entry) => entry.key === backupKey)) throw new Error("This backup does not belong to the selected world.");
 
   const duration = action === "archive" || action === "purge" ? ARCHIVE_MS : LIFECYCLE_MS;
@@ -344,6 +346,7 @@ export function createWorld(gameId: string, presetId: string, displayName: strin
   if (!preset) throw new Error("This preset is no longer available.");
   if (preset.releases.length === 0) throw new Error("This preset has no ready release yet.");
   if (!preset.releases.includes(release)) throw new Error("The selected release is no longer available. Refresh and try again.");
+  if (!startableReleases(preset).includes(release)) throw new Error("That release was built from an older revision. Build the preset again.");
   if (displayName.trim().length === 0 || displayName.trim().length > 80) throw new Error("Enter a name between 1 and 80 characters.");
 
   state.counter += 1;
@@ -361,7 +364,7 @@ export function createWorld(gameId: string, presetId: string, displayName: strin
     ...(placement === "fleet" ? { session: null } : {}),
     auth: auth ?? null,
     materialization: "existing",
-    preset: { id: preset.id, repository: preset.repository, commit: preset.commit, profileDigest: preset.profileDigest, releases: [...preset.releases], buildStatus: preset.buildStatus, latestRelease: preset.latestRelease },
+    preset: { id: preset.id, repository: preset.repository, commit: preset.commit, profileDigest: preset.profileDigest, releases: [...preset.releases], buildStatus: preset.buildStatus, latestRelease: preset.latestRelease, ...(preset.olderReleases ? { olderReleases: [...preset.olderReleases] } : {}) },
     wipes: [{ id: generationId, number: 1, state: "current", createdAt: iso(), closedAt: null, originRelease: release }],
     connectionAddress: connectivity === "zerotier" ? owner.worlds[0]?.connectionAddress ?? null : null,
     release: { state: "available", generationId, activeRelease: release, desiredRelease: release },

@@ -1,4 +1,5 @@
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, WorldPlacement, WorldSettingsModel } from "../../core/models";
+import { startableLatest, startableReleases } from "../../core/presets";
 import type { World } from "../../model";
 import { routeHash } from "../../routing";
 import { ActionButton } from "./ui/ActionButton";
@@ -66,11 +67,11 @@ function ConnectionFields({ model }: Readonly<{ model: ConnectionFieldsModel }>)
 }
 
 export function CreateWorldSheet({ model }: Readonly<{ model: CreateWorldModel }>) {
-  const ready = model.presets.some((preset) => preset.releases.length > 0);
-  const presets: readonly SelectOption[] = model.presets.map((preset) => ({ value: preset.id, label: preset.releases.length > 0 ? preset.displayName : `${preset.displayName} · ${preset.buildStatus}`, disabled: preset.releases.length === 0 }));
+  const ready = model.presets.some((preset) => startableReleases(preset).length > 0);
+  const presets: readonly SelectOption[] = model.presets.map((preset) => ({ value: preset.id, label: startableReleases(preset).length > 0 ? preset.displayName : `${preset.displayName} · ${preset.buildStatus}`, disabled: startableReleases(preset).length === 0 }));
   const releases: readonly SelectOption[] = [
     ...(model.release === "" ? [{ value: "", label: "Choose a release", disabled: true }] : []),
-    ...[...(model.preset?.releases ?? [])].reverse().map((version) => ({ value: version, label: version === model.preset?.latestRelease ? `${version} · latest` : version })),
+    ...[...(model.preset ? startableReleases(model.preset) : [])].reverse().map((version) => ({ value: version, label: version === (model.preset && startableLatest(model.preset)) ? `${version} · latest` : version })),
   ];
   const releasesHref = routeHash({ page: "releases", accessTab: "users", gameId: model.game.id, worldId: null });
   return (

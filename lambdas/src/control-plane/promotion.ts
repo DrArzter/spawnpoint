@@ -2,7 +2,7 @@
 // (ADR-0078). The workflow does the work; this decides whether to ask for it.
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
-import type { PresetObservation } from "./preset-catalog.ts";
+import { usableByExistingWorld, type PresetObservation } from "./preset-catalog.ts";
 import type { ReleasePointerObservation } from "./read-model.ts";
 import type { WorldRecord } from "./world-registry.ts";
 
@@ -56,7 +56,7 @@ export function planPromotion(facts: PromotionFacts): PromotionPlan {
   if (!facts.launchEnabled) return reject(409, "fleet_unavailable");
   // Only a release of the world's own preset: a world never changes preset.
   if (preset === undefined || preset.gameId !== record.gameId || preset.id !== record.preset.id) return reject(409, "preset_removed");
-  if (preset.buildStatus !== "ready" || !preset.releases.includes(release)) return reject(409, "release_not_available");
+  if (!usableByExistingWorld(preset, release)) return reject(409, "release_not_available");
   if (pointer.state !== "available" || pointer.generationId !== record.currentGeneration.id) return reject(409, "release_state_unavailable");
   // A wipe that never passed a start has nothing to roll back to; a new wipe gives it a release.
   if (pointer.activeRelease === null) return reject(409, "no_active_release");

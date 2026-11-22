@@ -196,7 +196,7 @@ factorio_config="${fixture}/factorio-config"
 mkdir -p -- "${factorio_config}/profiles/factorio-vanilla/extras"
 git -C "${factorio_config}" init --quiet
 cat >"${factorio_config}/profiles/factorio-vanilla/profile.json" <<'EOF'
-{"schema_version":1,"game":"factorio","id":"factorio-vanilla","factorio_version":"2.0.77","runtime":{"image":"registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"loader":{"type":"factorio","version":null},"mods":{"source":"extras/mod-pins.txt"}}
+{"schema_version":1,"game":"factorio","id":"factorio-vanilla","display_name":"Factorio vanilla","factorio_version":"2.0.77","runtime":{"image":"registry.example.invalid/factorio:9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"loader":{"type":"factorio","version":null},"mods":{"source":"extras/mod-pins.txt"}}
 EOF
 printf 'graftorio2:0.4.20\n' >"${factorio_config}/profiles/factorio-vanilla/extras/mod-pins.txt"
 git -C "${factorio_config}" add profiles
@@ -244,6 +244,44 @@ jq -e '
   and (.server.mods | length) == 1
 ' "${factorio_manifest}" >/dev/null
 [[ -f "${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/factorio/factorio-vanilla/5.0/mods/graftorio2_0.4.20.zip" ]]
+
+# --- the catalog keeps its history: a success appends, it never replaces ---
+# The preset catalog is published first. Release 5.0 was built before it, so
+# the catalog finds it from its manifest, built from an unknown revision.
+env \
+  PATH="${fixture}/bin:${PATH}" \
+  CONFIG_REPOSITORY_URL="${factorio_url}" \
+  CONFIG_COMMIT="${factorio_commit}" \
+  CONFIG_SOURCE_KEY="${factorio_source_key}" \
+  CONFIG_SOURCE_SHA256="${factorio_source_sha256}" \
+  RELEASE_BUCKET=spawnpoint-test-releases \
+  "${repository_root}/scripts/aws-preset-catalog-builder.sh" >/dev/null
+factorio_catalog="${FAKE_S3_ROOT}/spawnpoint-test-releases/presets/factorio/catalog.json"
+jq -e '.presets[] | select(.id == "factorio-vanilla") | .build_status == "unbuilt" and .releases == ["5.0"] and .latest_release == "5.0"' \
+  "${factorio_catalog}" >/dev/null
+factorio_digest="$(jq -r '.presets[] | select(.id == "factorio-vanilla") | .profile_digest' "${factorio_catalog}")"
+factorio_second="$(
+  env \
+    PATH="${fixture}/bin:${PATH}" \
+    CONFIG_REPOSITORY_URL="${factorio_url}" \
+    CONFIG_COMMIT="${factorio_commit}" \
+    CONFIG_SOURCE_KEY="${factorio_source_key}" \
+    CONFIG_SOURCE_SHA256="${factorio_source_sha256}" \
+    PROFILE_ID=factorio-vanilla \
+    RELEASE=5.1 \
+    RELEASE_BUCKET=spawnpoint-test-releases \
+    FAKE_FACTORIO_ROOT="${FAKE_FACTORIO_ROOT}" \
+    FACTORIO_USERNAME=arzter \
+    FACTORIO_TOKEN=portal-token \
+    "${builder}"
+)"
+grep -qx 'preset_catalog=updated' <<<"${factorio_second}"
+jq -e --arg digest "${factorio_digest}" --arg commit "${factorio_commit}" '
+  .presets[] | select(.id == "factorio-vanilla")
+  | .build_status == "ready" and .releases == ["5.0", "5.1"] and .latest_release == "5.1"
+    and .built_from["5.0"].profile_digest == null
+    and .built_from["5.1"] == {profile_digest: $digest, source_commit: $commit}
+' "${factorio_catalog}" >/dev/null
 
 # the CurseForge key is a minecraft requirement, enforced once the profile is
 # known rather than for every game

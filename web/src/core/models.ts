@@ -145,7 +145,7 @@ export type WorldsModel = Readonly<{
   view?: WorldsView;
   views?: Readonly<{ overview: string; list: string }>;
   operations?: readonly OperationRow[];
-  builds?: readonly Readonly<{ preset: Preset; status: StatusDescriptor }>[];
+  builds?: readonly Readonly<{ preset: Preset; status: StatusDescriptor; revision: StatusDescriptor | null }>[];
   /** People waiting for access, as the Access page lists them; null without the role to manage access. */
   requests?: Loading<readonly RequestSummary[]> | null;
   requestActions?: (id: string) => Readonly<{ approve: Action; dismiss: Action }> | null;
@@ -317,7 +317,7 @@ export type ConsoleModel = Readonly<{
   unavailable: string | null;
 }>;
 
-export type PresetRow = Readonly<{ preset: Preset; status: StatusDescriptor; createWorld: Action | null; build?: Action | null }>;
+export type PresetRow = Readonly<{ preset: Preset; status: StatusDescriptor; revision: StatusDescriptor | null; createWorld: Action | null; build?: Action | null }>;
 export type PointerRow = Readonly<{ world: World; href: string; presetName: string; summary: string }>;
 
 export type ReleasesModel = Readonly<{

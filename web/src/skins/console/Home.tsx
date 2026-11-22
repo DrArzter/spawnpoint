@@ -1,6 +1,7 @@
 import type { Action } from "../../core/actions";
 import type { RequestSummary, WorldRow, WorldsModel } from "../../core/models";
 import { routeHash } from "../../routing";
+import { BuildState } from "./BuildState";
 import { HostingChip, Players, Uptime, statesOf } from "./WorldFacts";
 import { ActionButton, LinkButton } from "./ui/ActionButton";
 import { Address } from "./ui/Address";
@@ -154,7 +155,7 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
                 tracks={[
                   { id: "preset", header: "Preset", width: "minmax(0, 1.2fr)", compactWidth: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle compactLine={row.preset.latestRelease ?? undefined} title={row.preset.displayName} /> },
                   { id: "latest", header: "Latest release", width: "minmax(0, 1fr)", kind: "optional", render: (row) => row.preset.latestRelease ? <span className="c-mono">{row.preset.latestRelease}</span> : <span className="c-faint">—</span> },
-                  { id: "build", header: "Build", width: "auto", kind: "end", render: (row) => <Status status={row.status} /> },
+                  { id: "build", header: "Build", width: "auto", kind: "end", render: (row) => <BuildState row={row} /> },
                 ]}
               />
             </Card>

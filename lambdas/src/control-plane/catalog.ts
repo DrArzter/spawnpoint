@@ -60,6 +60,7 @@ export type CatalogWorld = Readonly<{
     releases: readonly string[];
     buildStatus: "unbuilt" | "building" | "ready" | "failed";
     latestRelease: string | null;
+    olderReleases?: readonly string[];
   }>;
 }>;
 
@@ -155,6 +156,7 @@ export function catalogWithPresets(
           releases: preset.releases,
           buildStatus: preset.buildStatus,
           latestRelease: preset.latestRelease,
+          ...(preset.olderReleases?.length ? { olderReleases: preset.olderReleases } : {}),
         },
       };
     });
@@ -188,6 +190,7 @@ export function catalogWithPresets(
             releases: current.releases,
             buildStatus: current.buildStatus,
             latestRelease: current.latestRelease,
+            ...(current.olderReleases?.length ? { olderReleases: current.olderReleases } : {}),
           },
         };
       });

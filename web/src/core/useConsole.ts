@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReleaseMod, ReleasePackName } from "../api/contract";
 import { requestReleaseBuild } from "../auth";
 import { ActiveSession, endSession, loadAppearance, loadControlPlane, requestBackupDownload, requestCreateWorld, requestModDownload, requestPackDownload, requestReleasePack, requestSessionOperation, requestPromotion, requestUpdateWorldSettings, requestWorldLifecycle, subscribeControlPlane, updateAppearance, updateGameSettings, type BackupEntry } from "../auth";
+import { startableReleases } from "./presets";
 import { sessionStatus } from "./status";
 import { formatDateTime } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, SettingValue, World } from "../model";
@@ -492,7 +493,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     setRequestCount,
     worldCallbacks,
     requestSession: (target, targetWorld, sessionAction) => setConfirmation({ kind: "session", action: sessionAction, game: target, world: targetWorld }),
-    requestCreateWorld: (target, preset) => setCreating({ game: target, preset: preset ?? target.presets.find((item) => item.releases.length > 0) ?? null }),
+    requestCreateWorld: (target, preset) => setCreating({ game: target, preset: preset ?? target.presets.find((item) => startableReleases(item).length > 0) ?? null }),
     requestBuild: (target, preset) => setConfirmation({ kind: "build", game: target, preset }),
     members,
     setMembers,

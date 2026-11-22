@@ -90,25 +90,81 @@ jq -s \
   '{schema_version: 2, game: $game, source: {kind: $kind, origin: $origin, revision: $revision, repository: $origin, commit: $revision, snapshot: {key: $snapshot_key, sha256: $snapshot_sha256}}, presets: .}' \
   "${entries}" >"${catalog}"
 
-# Preserve a successful build for an unchanged profile. A repository commit
-# changes when any preset changes; the profile digest is the narrower identity
-# that prevents unrelated edits from making every other preset look unbuilt.
+# Carry a preset's release history over from the published catalog (ADR-0042).
+# A repository commit changes when any preset changes; the profile digest is the
+# narrower identity that prevents unrelated edits from making every other preset
+# look unbuilt. The digest decides only the state of the current revision:
+#  - the same digest keeps build_status as it was;
+#  - a changed digest starts unbuilt, and every earlier release stays listed
+#    with the digest and commit it was built from, so a reader can tell that it
+#    was built from an older revision.
 existing="${workspace}/existing.json"
 catalog_key="presets/${game}/catalog.json"
 if aws s3api get-object --bucket "${RELEASE_BUCKET}" --key "${catalog_key}" "${existing}" >/dev/null 2>&1; then
   jq --slurpfile old "${existing}" --argjson has_revisions "$(if [[ -f "${checkout}/profiles/.source-revisions.json" ]]; then printf true; else printf false; fi)" '
     .presets |= map(. as $new |
-      ([$old[0].presets[]? | select(.id == $new.id and .profile_digest == $new.profile_digest)] | first // null) as $previous |
-      if $previous then
-        .source_commit = (if $has_revisions then .source_commit else ($previous.source_commit // $old[0].source.commit) end) |
-        .build_status = $previous.build_status |
-        .releases = ($previous.releases // (if $previous.latest_release == null then [] else [$previous.latest_release] end)) |
-        .latest_release = $previous.latest_release
-      else . end
+      ([$old[0].presets[]? | select(.id == $new.id)] | first // null) as $previous |
+      if $previous == null then .
+      else
+        ($previous.releases // (if $previous.latest_release == null then [] else [$previous.latest_release] end)) as $releases |
+        ($previous.source_commit // $old[0].source.commit) as $previous_commit |
+        ($previous.built_from // {}) as $recorded |
+        (reduce $releases[] as $release ({};
+          .[$release] = ($recorded[$release] // {profile_digest: $previous.profile_digest, source_commit: $previous_commit}))) as $built_from |
+        .releases = $releases |
+        .latest_release = $previous.latest_release |
+        (if ($built_from | length) > 0 then .built_from = $built_from else . end) |
+        if $previous.profile_digest == $new.profile_digest then
+          .source_commit = (if $has_revisions then .source_commit else $previous_commit end) |
+          .build_status = $previous.build_status
+        else . end
+      end
     )
   ' "${catalog}" >"${catalog}.merged"
   mv -- "${catalog}.merged" "${catalog}"
 fi
+
+# A release whose manifest exists in S3 is published, whatever the catalog
+# says: a catalog written before this history was kept has forgotten releases
+# that a world still runs. A folder without a manifest is a failed build and is
+# never listed. The listing is best effort: without it the catalog still
+# publishes.
+discover_published_releases() {
+  local listing key id release manifest known="${workspace}/known-releases.txt" found="${workspace}/discovered.jsonl"
+  : >"${found}"
+  jq -r '.presets[] | .id as $id | (.releases[]?) | "\($id)/\(.)"' "${catalog}" >"${known}"
+  listing="$(aws s3api list-objects-v2 --bucket "${RELEASE_BUCKET}" --prefix "releases/${game}/" --output json 2>/dev/null | jq -r '(.Contents // [])[].Key')" || {
+    printf 'warning: could not list published releases\n' >&2
+    return 0
+  }
+  while IFS= read -r key; do
+    [[ "${key}" =~ ^releases/${game}/([a-z0-9][a-z0-9-]{0,31})/([0-9]+\.[0-9]+)/manifest\.json$ ]] || continue
+    id="${BASH_REMATCH[1]}"
+    release="${BASH_REMATCH[2]}"
+    grep -qxF -- "${id}/${release}" "${known}" && continue
+    jq -e --arg id "${id}" '.presets | any(.id == $id)' "${catalog}" >/dev/null || continue
+    manifest="${workspace}/discovered-manifest.json"
+    aws s3api get-object --bucket "${RELEASE_BUCKET}" --key "${key}" "${manifest}" >/dev/null 2>&1 || continue
+    jq -ce --arg game "${game}" --arg id "${id}" --arg release "${release}" '
+      select((.game // "minecraft") == $game and .release == $release and .source_profile.id == $id
+        and (.source_profile.commit | type == "string" and test("^[0-9a-f]{40}$")) and (.created_at | type == "string"))
+      | {id: $id, release: $release, created_at: .created_at, source_commit: .source_profile.commit}
+    ' "${manifest}" >>"${found}" || true
+  done <<<"${listing}"
+  jq --slurpfile found "${found}" '
+    .presets |= map(. as $preset |
+      ([$found[] | select(.id == $preset.id)] | sort_by(.created_at)) as $recovered |
+      if ($recovered | length) == 0 then .
+      else
+        .releases = ((.releases // []) + ($recovered | map(.release))) |
+        .built_from = ((.built_from // {}) + ($recovered | map({key: .release, value: {profile_digest: null, source_commit: .source_commit}}) | from_entries)) |
+        .latest_release = (.latest_release // ($recovered | last | .release))
+      end
+    )
+  ' "${catalog}" >"${catalog}.discovered"
+  mv -- "${catalog}.discovered" "${catalog}"
+}
+discover_published_releases
 
 aws s3api put-object \
   --bucket "${RELEASE_BUCKET}" \

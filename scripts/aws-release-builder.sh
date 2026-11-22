@@ -152,13 +152,17 @@ if aws s3api get-object --bucket "${RELEASE_BUCKET}" --key "${catalog_key}" "${c
     --arg digest "${profile_digest}" \
     '(.schema_version == 1 or .schema_version == 2) and any(.presets[]?; .id == $id and .profile_digest == $digest)' \
     "${catalog}" >/dev/null; then
+    # The history is kept: earlier releases stay, and the new one records the
+    # revision it was built from (ADR-0042). Only a published release is listed.
     jq \
       --arg id "${PROFILE_ID}" \
       --arg digest "${profile_digest}" \
+      --arg commit "${config_revision}" \
       --arg release "${RELEASE}" '
       .presets |= map(
         if .id == $id and .profile_digest == $digest
         then .build_status = "ready" |
+          .built_from = ((.built_from // {}) + {($release): {profile_digest: $digest, source_commit: (.source_commit // $commit)}}) |
           .releases = (reduce (((.releases // []) + [$release])[]) as $version ([]; if index($version) == null then . + [$version] else . end)) |
           .latest_release = $release
         else . end

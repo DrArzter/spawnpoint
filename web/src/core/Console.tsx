@@ -10,7 +10,8 @@ import { pendingFor, pendingOf } from "../shell/actions";
 import type { Skin } from "../skins/skin";
 import { action, type Action } from "./actions";
 import { releaseBuildCopy } from "./release-builds";
-import { buildStatus, sessionStatus, worldStatus, type StatusDescriptor } from "./status";
+import { startableReleases } from "./presets";
+import { presetBuildStates, sessionStatus, worldStatus, type StatusDescriptor } from "./status";
 import { useConsole, type ConsoleController } from "./useConsole";
 import { useAccessRequests, useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseChanges, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
@@ -92,10 +93,6 @@ function shellModel(console: ConsoleController): ShellModel {
   };
 }
 
-function presetStatus(preset: Preset): StatusDescriptor {
-  return preset.build?.state === "starting" ? { kind: "pending", label: "Awaiting dispatch" } : buildStatus(preset.buildStatus);
-}
-
 // The game's running operations, each named by the world it holds.
 function gameOperationRows(game: Game | undefined, snapshot: ConsoleController["snapshot"]): OperationRow[] {
   if (!game) return [];
@@ -109,7 +106,7 @@ function WorldsPage({ console, skin }: Controlled) {
   const { game, snapshot, listStatus, error, granted, sharedSession, serverState, fleetOverview, route, notify, setRequestCount } = console;
   const loading = listStatus === "loading";
   const canManage = granted.has("world.manage");
-  const readyPreset = game?.presets.some((preset) => preset.releases.length > 0) ?? false;
+  const readyPreset = game?.presets.some((preset) => startableReleases(preset).length > 0) ?? false;
   const view = route.worldsView;
   const requests = useAccessRequests(view === "overview" && granted.has("access.manage"), notify);
   const requestCount = requests.requests?.status === "ready" ? requests.requests.value.length : null;
@@ -131,7 +128,7 @@ function WorldsPage({ console, skin }: Controlled) {
     view,
     views: { overview: viewHref("overview"), list: viewHref("list") },
     operations: gameOperationRows(game, snapshot),
-    builds: (game?.presets ?? []).map((preset) => ({ preset, status: presetStatus(preset) })),
+    builds: (game?.presets ?? []).map((preset) => ({ preset, ...presetBuildStates(preset) })),
     requests: requests.requests,
     requestActions: requests.actions,
   };
@@ -342,11 +339,11 @@ function releasesModel(console: ConsoleController): ReleasesModel {
     loading: listStatus === "loading",
     presets: (game?.presets ?? []).map((preset) => ({
       preset,
-      status: presetStatus(preset),
+      ...presetBuildStates(preset),
       createWorld: game ? action("world.create", "Create world", () => console.requestCreateWorld(game, preset), {
         icon: "add",
-        disabled: !canManage || preset.releases.length === 0 || pendingOf(pending, "create") !== null,
-        hint: createWorldHint(canManage, preset.releases.length > 0),
+        disabled: !canManage || startableReleases(preset).length === 0 || pendingOf(pending, "create") !== null,
+        hint: createWorldHint(canManage, startableReleases(preset).length > 0),
       }) : null,
       build: game && console.capabilities.has("releaseBuilds") && granted.has("release.build") ? action("release.build", releaseBuildCopy(preset).label, () => console.requestBuild(game, preset), {
         icon: "refresh", disabled: preset.buildAvailable !== true || buildRunning(preset) || pendingOf(pending, "build") !== null,

@@ -147,7 +147,7 @@ export function GameSettingsSheet({ model }: Readonly<{ model: GameSettingsModel
       cancel={model.cancel}
       closeActionId={model.cancel.id}
       description={`${model.game.displayName} · ${model.world.displayName}`}
-      footer={<><Verb action={model.restoreDefaults} /><Verb action={model.save} tone="primary" /></>}
+      footer={<><Verb action={model.restoreDefaults} /><Verb action={model.save} tone="primary" tooltipWhenDisabled /></>}
       onClose={model.cancel.run}
       open
       title="Game settings"

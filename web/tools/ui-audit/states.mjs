@@ -5,12 +5,18 @@
 //   { click: selector }   press the first visible match
 //   { focus: selector }   focus the first visible match (a tooltip shows)
 //   { key: "?" }          press a key on the page
+// `onTop: ["tip", "toast"]` names the floating layers that must show above the
+// dialog the state opened: the gate hit-tests each layer's centre and fails
+// when anything else is topmost (a layer in the page, under a modal).
 // `phoneOnly` names the skins whose control shows only under 960px, so the
 // gate does not expect it at 1440.
 // Row and page menus need no entry: the gate opens every menu on every page.
 // test/ui-audit-states.test.ts holds every surface in the skins to an entry here.
 
 const WORLD = "/?demo&latency=0#/worlds/minecraft/minecraft-rostik-12345678";
+
+// Saving a changed game setting queues a snackbar and closes the drawer.
+const SNACK = [{ action: "world.game-settings" }, { click: "dialog[open] [data-action='game-settings.pvp']" }, { click: "dialog[open] [data-action='game-settings.save']" }];
 
 export const STATES = [
   // The console top bar names every game at desktop widths; its scope dialog is the phone's.
@@ -36,6 +42,15 @@ export const STATES = [
   { name: "mod-source", route: `${WORLD}/releases`, steps: [{ focus: "table[aria-label=Mods] [data-tip]" }, { focus: "table[aria-label=Mods] [data-tip]" }], skins: ["console"] },
   { name: "mod-source-terminal", route: `${WORLD}/releases`, steps: [{ focus: "table[aria-label^='Mods of'] .t-indicator" }], skins: ["terminal"] },
   { name: "toast", route: "/?demo&latency=0#/releases/minecraft", steps: [{ click: "[aria-disabled=true][data-action]" }], skins: ["console"] },
+  // Layers over a modal. The console raises its toast from the dialog's own
+// disabled button, or from the page behind it. The terminal's snackbar comes
+// from a saved setting, so the dialog opens after it: the host must come
+// forward again. View distance sits below the fold on a phone: the second
+// focus lands after the scroll that closed the first tip. The terminal draws no tip inside a modal, only in a drawer.
+  { name: "layers-drawer", route: WORLD, steps: [{ action: "world.game-settings" }, { click: "dialog[open] [aria-disabled=true][data-action]" }, { focus: "dialog[open] .c-field-hint[data-tip^='In chunks']" }, { focus: "dialog[open] .c-field-hint[data-tip^='In chunks']" }], skins: ["console"], onTop: ["toast", "tip"] },
+  { name: "layers-dialog", route: "/?demo&latency=0#/worlds/minecraft", steps: [{ action: "world.archive" }, { click: "[data-action='worlds.bulk'][aria-disabled=true]" }, { focus: "dialog[open] [data-tip]" }], skins: ["console"], onTop: ["toast", "tip"] },
+  { name: "layers-drawer-terminal", route: WORLD, steps: [...SNACK, { action: "world.game-settings" }, { focus: "dialog[open] .tip-anchor" }], skins: ["terminal"], onTop: ["toast", "tip"] },
+  { name: "layers-dialog-terminal", route: WORLD, steps: [...SNACK, { action: "session.stop" }], skins: ["terminal"], onTop: ["toast"] },
 ];
 
 // Every surface the skins draw, by file and by the function that draws it,

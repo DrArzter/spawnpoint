@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentPropsWithRef, type KeyboardEvent, type ReactNode, type SelectHTMLAttributes } from "react";
 
 import type { Filter } from "../../components/ui/Filter";
+import { hideLayer, showLayer, useLightDismiss } from "../../components/ui/layer";
 import type { StatusKind } from "../../core/status";
 import { Tooltip } from "../../components/ui/Tooltip";
 import type { Action } from "../../core/actions";
@@ -526,7 +527,7 @@ export function Overflow({ label, groups, size = "medium", className, menu = fal
     menu.style.left = `${left}px`;
     menu.style.top = `${below}px`;
     menu.style.width = `${width}px`;
-    if (typeof menu.showPopover === "function") menu.showPopover();
+    showLayer(menu);
     // Measured once open: a coarse pointer's taller items outgrow any estimate (UI gate menuCut).
     const height = menu.offsetHeight;
     if (below + height > window.innerHeight) menu.style.top = `${Math.max(8, rect.top - height - 4)}px`;
@@ -535,18 +536,11 @@ export function Overflow({ label, groups, size = "medium", className, menu = fal
   }
 
   function hide() {
-    const menu = panel.current;
-    if (menu && typeof menu.hidePopover === "function" && menu.matches(":popover-open")) menu.hidePopover();
+    hideLayer(panel.current);
     setOpen(false);
   }
 
-  useEffect(() => {
-    const menu = panel.current;
-    if (!menu) return;
-    const onToggle = (event: Event) => { if ((event as ToggleEvent).newState === "closed") setOpen(false); };
-    menu.addEventListener("toggle", onToggle);
-    return () => menu.removeEventListener("toggle", onToggle);
-  }, []);
+  useLightDismiss(open, [panel, trigger], hide);
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("[role=menuitem]:not(:disabled)"));
@@ -582,7 +576,7 @@ export function Overflow({ label, groups, size = "medium", className, menu = fal
   return (
     <>
       <IconKey aria-controls={id} aria-expanded={open} aria-haspopup="menu" className={className} icon="more_vert" label={label} onClick={() => (open ? hide() : show())} ref={trigger} size={size} />
-      <div className="t-menu" id={id} onKeyDown={onKeyDown} popover="auto" ref={panel} role="menu" tabIndex={-1}>
+      <div className="t-menu" data-layer="menu" id={id} onKeyDown={onKeyDown} popover="manual" ref={panel} role="menu" tabIndex={-1}>
         {present.map((group, groupIndex) => (
           <div className="t-menu-group" key={group[0]?.id ?? groupIndex}>
             {groupIndex > 0 && <hr />}

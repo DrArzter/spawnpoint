@@ -263,6 +263,23 @@ button.chip[aria-pressed="true"] {
   background: var(--surface);
 }
 
+/* Floating layers: tip, menu and toast are manual popovers in the top layer
+   (components/ui/layer.ts), so a modal cannot cover them. This is the one
+   place that strips the user agent's popover box; each layer draws its own
+   look. Both skins and the front door read it. A browser without the Popover
+   API keeps the fixed box, ordered by the z-index below. */
+:where([data-layer="tip"], [data-layer="menu"], [data-layer="toast"]) {
+  position: fixed;
+  z-index: 100;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
+}
+
 /* Tooltip: the dark chip Material puts against a light surface. Placed against
    the viewport, so it is never clipped by a table's own scroll box. */
 .tip-anchor {
@@ -278,8 +295,6 @@ button.chip[aria-pressed="true"] {
 }
 
 .tip {
-  position: fixed;
-  z-index: 60;
   max-width: 264px;
   padding: 6px 8px;
   transform: translate(-50%, calc(-100% - 8px));
@@ -373,13 +388,9 @@ button.chip[aria-pressed="true"] {
 
 /* Menus (top layer via popover) */
 .menu {
-  position: fixed;
-  inset: auto;
   min-width: 200px;
   max-width: 320px;
-  margin: 0;
   padding: 8px 0;
-  border: 0;
   border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--ink);
@@ -625,10 +636,8 @@ button.chip[aria-pressed="true"] {
 
 /* Snackbar */
 .snackbar-host {
-  position: fixed;
   left: 24px;
   bottom: 24px;
-  z-index: 60;
   display: grid;
   gap: 8px;
   width: min(560px, calc(100vw - 48px));

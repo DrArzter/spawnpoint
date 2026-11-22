@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { cx } from "../../lib/cx";
+import { useLayer } from "./layer";
 
 const OPEN_DELAY_MS = 120;
 const HALF_WIDTH = 132;
@@ -14,6 +15,7 @@ type Placement = { left: number; top: number; below: boolean };
 export function Tooltip({ text, children, className }: Readonly<{ text: string; children: ReactNode; className?: string }>) {
   const [placement, setPlacement] = useState<Placement | null>(null);
   const anchor = useRef<HTMLSpanElement>(null);
+  const tip = useRef<HTMLSpanElement>(null);
   const timer = useRef(0);
   const id = useId();
 
@@ -40,6 +42,9 @@ export function Tooltip({ text, children, className }: Readonly<{ text: string; 
   }
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  // A popover in the top layer: a dialog or drawer the anchor sits in cannot cover it.
+  useLayer(tip, placement !== null);
 
   useEffect(() => {
     if (placement === null) return;
@@ -71,7 +76,7 @@ export function Tooltip({ text, children, className }: Readonly<{ text: string; 
     >
       {children}
       {placement && createPortal(
-        <span className={cx("tip", placement.below && "tip-below")} id={id} role="tooltip" style={{ left: placement.left, top: placement.top }}>
+        <span className={cx("tip", placement.below && "tip-below")} data-layer="tip" id={id} popover="manual" ref={tip} role="tooltip" style={{ left: placement.left, top: placement.top }}>
           {text}
         </span>,
         document.body,

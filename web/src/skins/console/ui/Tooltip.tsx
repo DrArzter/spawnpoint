@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+
+import { useLayer } from "../../../components/ui/layer";
 
 /*
  * One tooltip for the whole skin. A control names its tip with `data-tip`;
  * this layer shows it on hover and keyboard focus, above the anchor or below
  * it when the top bar is in the way, and ties it to the anchor with
- * aria-describedby while it shows.
+ * aria-describedby while it shows. It is a popover, so a dialog cannot cover it.
  */
 
 const TIP_ID = "c-tip";
@@ -57,8 +59,10 @@ export function TooltipLayer() {
     };
   }, []);
 
+  useLayer(tip, placed !== null);
+
   // Clamped to the viewport; flipped below when it would cover the top bar.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = tip.current;
     const target = anchor.current;
     if (!element || !target || !placed) return;
@@ -73,5 +77,5 @@ export function TooltipLayer() {
     element.style.top = `${top}px`;
   }, [placed]);
 
-  return <div className="c-tip" data-layer="tip" hidden={placed === null} id={TIP_ID} ref={tip} role="tooltip">{placed?.text}</div>;
+  return <div className="c-tip" data-layer="tip" id={TIP_ID} popover="manual" ref={tip} role="tooltip">{placed?.text}</div>;
 }

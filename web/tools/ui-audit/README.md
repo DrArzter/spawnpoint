@@ -44,6 +44,7 @@ The runner waits for fonts and finished animations before it probes. It runs 4 t
 | `iconOffLine` | rule 5: an icon beside its text more than 1px off the text's centreline |
 | `crumbRepeat` | rule 6: more than one h1 beside a `data-layout="crumbs"` trail, or a heading or tab that repeats the title |
 | `gridEdge`, `cardHeights` | rule 8: from 1440px a grid row short of the grid's end edge; cards of one grid row of different heights |
+| `covered` | a state with `onTop`: a tip or toast that an open modal paints over (the paint order of a DOM snapshot, since a modal makes the rest of the page inert and `elementFromPoint` skips inert boxes) |
 | `error` | a page that did not render or wore another skin, a state that opened no surface, a state whose control is absent at every width or at 1440, or a probe that failed |
 
 The rest goes to the advisory report: packed rows anywhere, explanatory copy (rule 1), stretched cards, touch targets,
@@ -53,6 +54,11 @@ contrast and text cut with no ellipsis. A reviewer judges these; they do not fai
 layer. The probe compares atoms only within one layer, and skips a pair that another layer covers. A modal makes the
 page under it inert, so a state measures only its surface. `data-layer="glyph"` marks decoration that is laid over its
 control on purpose (a select caret, the tab ink, a count badge); nothing else is exempt, `aria-hidden` marks included.
+
+**Floating layers.** A state with `onTop: ["tip", "toast"]` opens a surface, shows a tip and raises a toast or snackbar
+while it is open (or before it, where the host must come forward again), then fails when an open modal paints after
+either layer. `layers-drawer` and `layers-dialog` do this in both skins; the terminal draws no tip in a modal. Every
+layer is a `data-layer` box (`tip`, `menu`, `toast`), a manual popover from `components/ui/layer.ts`.
 
 **Markers.** The console primitives say what they promise with `data-layout`, `data-rail`, `data-col`, `data-status`,
 `data-scope` and `data-layer`, and `web/test/console-markers.test.ts` holds them to it. The terminal skin has no markers;

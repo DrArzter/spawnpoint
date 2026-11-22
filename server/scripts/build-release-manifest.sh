@@ -25,6 +25,8 @@ Environment:
   RELEASE_CLIENT_ADDONS_DIR
                       The client-only addon files of that lock
   RELEASE_MOD_INDEX   Optional descriptive map of SHA-256 to mod ids, recorded as the top-level mod_index
+  RELEASE_MOD_SOURCE  Optional curseforge, modrinth or github: where the resolver fetched the release's mods.
+                      An addon records the source its lock pins. Descriptive only, outside the identity gate.
 EOF
 }
 
@@ -79,6 +81,7 @@ client_mods_dir="${RELEASE_CLIENT_MODS_DIR:-}"
 client_addons="${RELEASE_CLIENT_ADDONS:-}"
 client_addons_dir="${RELEASE_CLIENT_ADDONS_DIR:-}"
 mod_index="${RELEASE_MOD_INDEX:-}"
+mod_source="${RELEASE_MOD_SOURCE:-}"
 
 command -v jq >/dev/null 2>&1 || {
   printf 'error: required command not found: jq\n' >&2
@@ -155,6 +158,13 @@ if [[ -n "${client_addons}" ]]; then
   client_addons="$(realpath -e -- "${client_addons}")"
   [[ -z "${client_addons_dir}" ]] || client_addons_dir="$(realpath -e -- "${client_addons_dir}")"
 fi
+case "${mod_source}" in
+  "" | curseforge | modrinth | github) ;;
+  *)
+    printf 'error: unsupported mod source: %s\n' "${mod_source}" >&2
+    exit 1
+    ;;
+esac
 if [[ -n "${mod_index}" ]]; then
   mod_index="$(realpath -e -- "${mod_index}")"
   jq -e 'type == "object" and all(to_entries[];
@@ -227,7 +237,7 @@ fi
 # client addons are files of their own. The digest is checked against the lock.
 addon_count=0
 if [[ -n "${client_addons}" ]]; then
-  while IFS=$'\t' read -r filename side locked_sha256; do
+  while IFS=$'\t' read -r filename side locked_sha256 addon_source; do
     addon_file="${mods_dir}/${filename}"
     if [[ "${side}" == client ]]; then
       addon_file=""
@@ -243,11 +253,13 @@ if [[ -n "${client_addons}" ]]; then
       printf 'error: addon %s does not match its lock\n' "${filename}" >&2
       exit 1
     }
-    jq -cn --arg file "${filename}" --arg sha256 "${sha256}" --arg side "${side}" \
+    jq -cn --arg file "${filename}" --arg sha256 "${sha256}" --arg side "${side}" --arg source "${addon_source}" \
       --argjson bytes "$(stat --format '%s' -- "${addon_file}")" \
-      '{file: $file, sha256: $sha256, bytes: $bytes, side: $side}' >>"${addon_entries_file}"
+      '{file: $file, sha256: $sha256, bytes: $bytes, side: $side} + if $source == "none" then {} else {source: $source} end' \
+      >>"${addon_entries_file}"
     addon_count=$((addon_count + 1))
-  done < <(jq -r '.mods[] | [.file, .side, .sha256] | @tsv' "${client_addons}")
+  # "none" stands for a lock written before sources: a tab-separated empty field would collapse.
+  done < <(jq -r '.mods[] | [.file, .side, .sha256, (.source | keys[0] // "none" | if . == "github_release" then "github" else . end)] | @tsv' "${client_addons}")
   (( addon_count > 0 )) || {
     printf 'error: an addons lock must hold at least one addon\n' >&2
     exit 1
@@ -345,9 +357,14 @@ jq -s \
   --arg profile_commit "${profile_commit}" \
   --arg runtime_image "${runtime_image}" \
   --arg client_sha256 "${client_sha256}" \
+  --arg mod_source "${mod_source}" \
   --argjson client_bytes "${client_bytes}" \
   --argjson world_data "${world_data}" \
-  '({
+  '# A pinned addon keeps the source its lock names; every other mod has the resolver source.
+  ($client_addons | map(select(.source != null) | {key: .sha256, value: .source}) | from_entries) as $addon_sources |
+  def sourced: . + ((($addon_sources[.sha256] // (if $mod_source == "" then null else $mod_source end)) as $source |
+    if $source == null then {} else {source: $source} end));
+  ({
     schema_version: 1,
     game: $game,
     release: $release,
@@ -356,7 +373,7 @@ jq -s \
     created_at: $created_at,
     created_by: $created_by,
     changelog: $changelog,
-    server: ({mods: .} + if ($overrides | length) == 0 then {} else {overrides: $overrides} end
+    server: ({mods: map(sourced)} + if ($overrides | length) == 0 then {} else {overrides: $overrides} end
       + if ($world_data | length) == 0 then {} else {world_data: $world_data} end)
   } + if $runtime_image == "" then {} else {
     runtime: {image: $runtime_image}
@@ -364,7 +381,7 @@ jq -s \
     client: ({file: "client.zip", sha256: $client_sha256, bytes: $client_bytes, kind: "curseforge-modpack"} +
       if ($client_addons | length) == 0 then {} else {addons: ($client_addons | sort_by(.file))} end)
   } end + if ($client_mods | length) == 0 then {} else {
-    client: {kind: "mod-set", mods: $client_mods}
+    client: {kind: "mod-set", mods: ($client_mods | map(sourced))}
   } end + if $profile_id == "" then {} else {
     source_profile: {
       id: $profile_id,

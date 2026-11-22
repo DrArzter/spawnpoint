@@ -22,6 +22,19 @@ test("release manifests retain the client-facing metadata and exact source revis
   assert.equal(data.clientMods, null);
 });
 
+test("a mod's source is answered when the manifest names a known one, and left out otherwise", async (t) => {
+  const mod = (file: string, source?: unknown) => ({ file, sha256: file.padEnd(64, "0"), bytes: 1, ...(source === undefined ? {} : { source }) });
+  t.mock.method(sources, "readReleaseManifest", async () => ({
+    release: "1.5",
+    server: { mods: [mod("a.jar", "curseforge"), mod("b.jar", "modrinth"), mod("c.jar", "github"), mod("d.jar", "elsewhere"), mod("e.jar")] },
+    client: { kind: "mod-set", mods: [mod("a.jar", "curseforge"), mod("f.jar", "modrinth")] },
+  }));
+  const data = JSON.parse((await releaseManifest("minecraft", "industrial", "1.5")).body);
+  assert.deepEqual(data.mods.map((item: { source?: string }) => item.source ?? null), ["curseforge", "modrinth", "github", null, null]);
+  assert.equal("source" in data.mods[4], false);
+  assert.deepEqual(data.clientMods.map((item: { source?: string }) => item.source ?? null), ["curseforge", "modrinth"]);
+});
+
 test("a release with side lists answers the players' set beside the server's (ADR-0069)", async (t) => {
   const shared = { file: "shared.jar", sha256: "a".repeat(64), bytes: 1 };
   t.mock.method(sources, "readReleaseManifest", async () => ({

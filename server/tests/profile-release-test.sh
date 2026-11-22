@@ -53,6 +53,7 @@ jq -e \
       commit: $commit
     }
     and (.server.mods | length) == 1
+    and .server.mods[0].source == "curseforge"
   ' "${main_manifest}" >/dev/null
 
 vanilla_manifest="${fixture}/vanilla-manifest.json"

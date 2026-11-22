@@ -108,11 +108,13 @@ function Readings({ metrics, range, reveal }: Readonly<{ metrics: HostMetrics; r
 function Stat({ series, time }: Readonly<{ series: HostMetricSeries; time: (at: string) => string }>) {
   const format = metricFormat(series.unit);
   const summary = chartSummary(series.points);
-  if (!summary || summary.count < 2) return <StatCard label={series.label} value={null} />;
+  if (!summary) return <StatCard label={series.label} value={null} />;
   const [value, ...unit] = format(summary.latest).split(" ");
+  // One reading is a value; a peak and an average need at least two. Memory
+  // arrives once per watchdog check, so its first reading stands alone.
   return (
     <StatCard
-      detail={<><span>Peak {format(summary.peak.value)} at {time(summary.peak.at)}</span><span>Avg {format(summary.average)}</span></>}
+      detail={summary.count < 2 ? undefined : <><span>Peak {format(summary.peak.value)} at {time(summary.peak.at)}</span><span>Avg {format(summary.average)}</span></>}
       label={series.label}
       unit={unit.join(" ")}
       value={value ?? null}

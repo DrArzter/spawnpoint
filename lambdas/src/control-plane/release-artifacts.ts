@@ -29,15 +29,23 @@ export function releaseModKey(gameId: string, presetId: string, release: string,
   return `${releaseArtifactPrefix(gameId, presetId, release)}/${store}/${file}`;
 }
 
-export type ManifestMod = Readonly<{ file: string; sha256: string; bytes: number }>;
+/** Where the build fetched a mod (descriptive; releases built before it record none). */
+export const MOD_SOURCES = ["curseforge", "modrinth", "github"] as const;
+export type ModSource = (typeof MOD_SOURCES)[number];
+
+export function manifestModSource(value: unknown): ModSource | undefined {
+  return MOD_SOURCES.find((source) => source === value);
+}
+
+export type ManifestMod = Readonly<{ file: string; sha256: string; bytes: number; source?: ModSource }>;
 
 function manifestMods(value: unknown): readonly ManifestMod[] {
   return Array.isArray(value)
     ? value.flatMap((entry) => {
       const mod = entry as Record<string, unknown> | null;
-      return typeof mod?.file === "string" && typeof mod.sha256 === "string" && typeof mod.bytes === "number"
-        ? [{ file: mod.file, sha256: mod.sha256, bytes: mod.bytes }]
-        : [];
+      if (typeof mod?.file !== "string" || typeof mod.sha256 !== "string" || typeof mod.bytes !== "number") return [];
+      const source = manifestModSource(mod.source);
+      return [{ file: mod.file, sha256: mod.sha256, bytes: mod.bytes, ...(source ? { source } : {}) }];
     })
     : [];
 }

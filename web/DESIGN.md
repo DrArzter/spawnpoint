@@ -321,7 +321,7 @@ document carries `html[data-skin="terminal"]`, which `index.html` stamps before 
   `[-]` off, `[.]` pending, `[?]` unknown, `[!]` error and warning, `[i]` info, `[x]` archived, `[+]` absent. Progress
   is the one mark that moves: `[~]` spinning through `|`, `/`, `-` and `\`, held on the tilde under reduced motion.
   Notices carry the same marks in front of their titles. Dense rows use `Indicator`: the same visible mark with the
-  word in its tooltip and accessible label. `State` is reserved for places with room for both mark and word.
+  word in its tooltip and accessible label. A plain fact that is no state, such as a mod's source, is an `Indicator` with its own `glyph` (`[C]`, `[M]`, `[G]`) and no tone. `State` is reserved for places with room for both mark and word.
 - **Bracketed controls.** A button is its label between `[` and `]`, and nothing is filled: the primary verb keeps
   the accent in its word and its brackets where a secondary verb's brackets are dim, the danger verb says so in red,
   and hover is an underline. A verb carries no icon, whatever the model suggests; the only keys that hold a glyph are

@@ -71,6 +71,22 @@ html[data-skin="console"] .c-flash-time {
   opacity: .85;
 }
 
+html[data-skin="console"] .c-running {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+html[data-skin="console"] .c-eta {
+  color: var(--c-ink-3);
+  font-weight: 500;
+}
+
+html[data-skin="console"] .c-flash .c-eta {
+  color: inherit;
+}
+
 html[data-skin="console"] .c-toasts {
   position: fixed;
   bottom: 24px;

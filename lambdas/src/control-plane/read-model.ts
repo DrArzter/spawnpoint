@@ -35,6 +35,9 @@ export type OperationObservation = Readonly<{
   providerRef: string;
   /** The world the workflow's input names; null when it names none (ADR-0062). */
   worldId: string | null;
+  /** The usual duration of this type for this world; absent with too little history. */
+  expectedSeconds?: number;
+  expectedSamples?: number;
 }>;
 
 export type HostMetricPoint = Readonly<{ at: string; value: number | null }>;
@@ -119,6 +122,8 @@ export type ControlPlaneSnapshot = Readonly<{
     startedAt: string;
     worldId: string | null;
     providerRef?: string;
+    expectedSeconds?: number;
+    expectedSamples?: number;
   }>>;
 }>;
 
@@ -279,6 +284,7 @@ export async function readControlPlaneSnapshot(
       status: operation.status,
       startedAt: operation.startedAt,
       worldId: operation.worldId,
+      ...(operation.expectedSeconds === undefined ? {} : { expectedSeconds: operation.expectedSeconds, expectedSamples: operation.expectedSamples }),
       ...(options.includeInfrastructure ? { providerRef: operation.providerRef } : {}),
     })),
   };

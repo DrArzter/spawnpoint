@@ -1,6 +1,6 @@
 import type { WorldGlance } from "../../../core/models";
 import { Address } from "../ui/Address";
-import { elapsed, useNow } from "../ui/Flashbar";
+import { useNow } from "../ui/Flashbar";
 import { ProgressBar } from "../ui/ProgressBar";
 import { Tick } from "../ui/Tick";
 
@@ -13,12 +13,6 @@ export function uptime(since: string | null | undefined, now: number): string | 
   if (hours >= 24) return `${Math.floor(hours / 24)} d ${hours % 24} h`;
   const minutes = Math.floor((seconds % 3600) / 60);
   return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-}
-
-/** An operation's running time, ticking once a clock tick. */
-export function Elapsed({ since }: Readonly<{ since: string }>) {
-  const now = useNow();
-  return <span className="c-mono">{elapsed(since, now) ?? "—"}</span>;
 }
 
 /**

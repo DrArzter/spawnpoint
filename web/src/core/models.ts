@@ -73,7 +73,7 @@ export type ShellModel = Readonly<{
   flash?: Readonly<{ operations: readonly FlashOperation[] }>;
 }>;
 
-export type FlashOperation = Readonly<{ id: string; label: string; worldName: string; worldId: string; startedAt: string }>;
+export type FlashOperation = Readonly<{ id: string; label: string; worldName: string; worldId: string; startedAt: string; expectedSeconds?: number; expectedSamples?: number }>;
 
 // --- worlds -----------------------------------------------------------------
 

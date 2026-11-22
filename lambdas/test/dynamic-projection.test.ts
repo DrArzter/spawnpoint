@@ -76,3 +76,20 @@ test("stopped-host recovery requires the exact session to be reserved on that ho
   assert.equal(hostOwnsSession(null, "i-123", "session-1"), false);
   assert.equal(hostOwnsSession({ hostId: "i-123", reservations: null }, "i-123", "session-1"), false);
 });
+
+test("a stored operation keeps its expected time and drops a malformed one", () => {
+  const stored = (extra: Record<string, unknown>) => ({
+    schema_version: 1,
+    observed_at_epoch_ms: 1_000,
+    hosts: [],
+    operations: [{ id: "start-1", type: "start", status: "running", startedAt: "2026-09-15T00:00:00.000Z", providerRef: "arn:execution", worldId: "w1", ...extra }],
+  });
+
+  const kept = parseDynamicProjection(stored({ expectedSeconds: 100, expectedSamples: 7 }), 1_500)?.operations[0];
+  assert.equal(kept?.expectedSeconds, 100);
+  assert.equal(kept?.expectedSamples, 7);
+
+  const dropped = parseDynamicProjection(stored({ expectedSeconds: "soon", expectedSamples: 7 }), 1_500)?.operations[0];
+  assert.equal(dropped?.id, "start-1");
+  assert.equal(dropped?.expectedSeconds, undefined);
+});

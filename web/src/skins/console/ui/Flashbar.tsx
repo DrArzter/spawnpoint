@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { Icon, ProgressRing } from "../../../icons";
 import { cx } from "../../../lib/cx";
+import { clock, elapsedSeconds, eta, type Expectation } from "../../../lib/operation-time";
 import { IconButton } from "./IconButton";
 import { MOTION } from "./motion";
 
@@ -13,15 +14,15 @@ export type FlashItem = Readonly<{
   message: string;
   /** A running operation's start; its elapsed time ticks beside the message. */
   since?: string;
+  /** What that operation usually takes, for its ETA. */
+  expectation?: Expectation;
   onDismiss?: () => void;
 }>;
 
 /** Seconds since `since` as m:ss, or null when not known. */
 export function elapsed(since: string | undefined, now: number): string | null {
-  const start = since ? Date.parse(since) : Number.NaN;
-  if (Number.isNaN(start)) return null;
-  const seconds = Math.max(0, Math.floor((now - start) / 1000));
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  const seconds = elapsedSeconds(since, now);
+  return seconds === null ? null : clock(seconds);
 }
 
 /** The time now, read again once a clock tick while `live`. */
@@ -35,6 +36,24 @@ export function useNow(live = true): number {
   return now;
 }
 
+/**
+ * A running operation's time: how long it has run and, when the control plane
+ * knows what it usually takes, the ETA or that it is taking longer. Everywhere
+ * the console shows "running for" it shows this.
+ */
+export function RunningTime({ since, expectation, className }: Readonly<{ since: string; expectation?: Expectation; className?: string }>) {
+  const now = useNow();
+  const time = elapsed(since, now);
+  const reading = expectation ? eta(since, expectation, now) : null;
+  if (time === null) return <span className="c-mono">—</span>;
+  return (
+    <span className={cx("c-running", className)}>
+      <span className="c-mono">{time}</span>
+      {reading && <span className="c-mono c-eta" data-eta={reading.kind} data-tip={reading.tip}>{reading.text}</span>}
+    </span>
+  );
+}
+
 const icons = { ok: "check_circle", err: "error" } as const;
 
 /**
@@ -43,22 +62,18 @@ const icons = { ok: "check_circle", err: "error" } as const;
  * page switch (A1 rule).
  */
 export function Flashbar({ items }: Readonly<{ items: readonly FlashItem[] }>) {
-  const now = useNow(items.some((item) => item.since));
   return (
     <div aria-label="Notifications" aria-live="polite" className="c-flashbar" role="status">
-      {items.slice(-4).map((item) => {
-        const time = elapsed(item.since, now);
-        return (
-          <div className={cx("c-flash", `c-flash-${item.kind}`)} key={item.id}>
-            {item.kind === "busy" ? <ProgressRing className="c-spin" size={20} /> : <Icon name={icons[item.kind]} size={20} />}
-            <span className="c-flash-message">
-              <span>{item.message}</span>
-              {time && <span className="c-mono c-flash-time">{time}</span>}
-            </span>
-            {item.onDismiss && <IconButton icon="close" label="Dismiss" onClick={item.onDismiss} tone="flash" />}
-          </div>
-        );
-      })}
+      {items.slice(-4).map((item) => (
+        <div className={cx("c-flash", `c-flash-${item.kind}`)} key={item.id}>
+          {item.kind === "busy" ? <ProgressRing className="c-spin" size={20} /> : <Icon name={icons[item.kind]} size={20} />}
+          <span className="c-flash-message">
+            <span>{item.message}</span>
+            {item.since && <RunningTime className="c-flash-time" expectation={item.expectation} since={item.since} />}
+          </span>
+          {item.onDismiss && <IconButton icon="close" label="Dismiss" onClick={item.onDismiss} tone="flash" />}
+        </div>
+      ))}
     </div>
   );
 }

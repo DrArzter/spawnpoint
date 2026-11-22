@@ -63,6 +63,9 @@ function operation(value: unknown): OperationObservation | null {
   // A projection written before operations named their world names none.
   const worldId = item.worldId === undefined ? null : nullableString(item.worldId);
   if (worldId === undefined) return null;
+  // An ETA is a hint: a malformed one is dropped, not a reason to drop the projection.
+  const expected = typeof item.expectedSeconds === "number" && Number.isFinite(item.expectedSeconds) && item.expectedSeconds >= 0 &&
+    typeof item.expectedSamples === "number" && Number.isSafeInteger(item.expectedSamples);
   return {
     id: item.id,
     type: item.type as OperationObservation["type"],
@@ -70,6 +73,7 @@ function operation(value: unknown): OperationObservation | null {
     startedAt: item.startedAt,
     providerRef: item.providerRef,
     worldId,
+    ...(expected ? { expectedSeconds: item.expectedSeconds as number, expectedSamples: item.expectedSamples as number } : {}),
   };
 }
 

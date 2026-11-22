@@ -1,15 +1,4 @@
-import type { ModSource, ReleaseMod, ReleaseMods } from "../api/contract";
-import type { ModRow } from "./models";
-
-/**
- * Every mod of a release once, in name order: the server's and, when players
- * install a set of their own (ADR-0069), theirs. A file both carry is one row.
- */
-export function releaseModUnion(value: Pick<ReleaseMods, "mods" | "clientMods">): readonly ReleaseMod[] {
-  const server = new Set(value.mods.map((mod) => mod.sha256));
-  return [...value.mods, ...(value.clientMods ?? []).filter((mod) => !server.has(mod.sha256))]
-    .sort((left, right) => left.file.localeCompare(right.file));
-}
+import type { ModSortKey, ModSource, ModSourceFilter, ReleaseModPage, ReleaseModQuery } from "../api/contract";
 
 /** The sources a mod can come from, in the order a list offers them. */
 export const MOD_SOURCES: readonly Readonly<{ id: ModSource; label: string }>[] = [
@@ -25,28 +14,40 @@ export function modSourceLabel(source: ModSource | null): string {
   return MOD_SOURCES.find((item) => item.id === source)?.label ?? UNKNOWN_SOURCE;
 }
 
-/** The sources the rows hold and how many rows hold each, unknown last. Empty when no row names a source. */
-export function modSourceCounts(rows: readonly Pick<ModRow, "source">[]): readonly Readonly<{ source: ModSource | null; label: string; count: number }>[] {
-  if (rows.every((row) => row.source === null)) return [];
-  return [...MOD_SOURCES.map((item) => item.id), null]
-    .map((source) => ({ source, label: modSourceLabel(source), count: rows.filter((row) => row.source === source).length }))
-    .filter((entry) => entry.count > 0);
+/** The mods a page asks for at once, and how long a search waits for the next key before it asks. */
+export const MOD_PAGE_SIZE = 50;
+export const MOD_SEARCH_DELAY_MS = 300;
+
+export type ModSortDirection = "ascending" | "descending";
+
+/** What a person has chosen on the list; the server turns it into one page. */
+export type ModsView = Readonly<{
+  /** The text in the search field. */
+  search: string;
+  /** The search the page was last asked with; it follows `search` after a pause. */
+  applied: string;
+  source: ModSourceFilter | null;
+  sort: Readonly<{ key: ModSortKey; direction: ModSortDirection }>;
+  page: number;
+}>;
+
+export const FRESH_MODS_VIEW: ModsView = { search: "", applied: "", source: null, sort: { key: "name", direction: "ascending" }, page: 1 };
+
+export function modListQuery(view: ModsView): ReleaseModQuery {
+  return {
+    search: view.applied.trim(),
+    source: view.source,
+    sort: view.sort.key,
+    order: view.sort.direction === "ascending" ? "asc" : "desc",
+    page: view.page,
+    pageSize: MOD_PAGE_SIZE,
+  };
 }
 
-export type ModSortKey = "name" | "source" | "size";
-
-const sourceRank = (source: ModSource | null): number => source === null ? MOD_SOURCES.length : MOD_SOURCES.findIndex((item) => item.id === source);
-
-const byName = (left: ModRow, right: ModRow): number => left.file.localeCompare(right.file);
-
-const modOrders: Readonly<Record<ModSortKey, (left: ModRow, right: ModRow) => number>> = {
-  name: byName,
-  source: (left, right) => sourceRank(left.source) - sourceRank(right.source),
-  size: (left, right) => left.bytes - right.bytes,
-};
-
-/** The rows in the order a column asks for; equal rows keep name order, also when the sort is descending. */
-export function sortMods(rows: readonly ModRow[], key: ModSortKey, direction: "ascending" | "descending"): ModRow[] {
-  const sign = direction === "ascending" ? 1 : -1;
-  return [...rows].sort((left, right) => sign * modOrders[key](left, right) || byName(left, right));
+/** The sources a release holds with the words a filter shows, in the order a list offers them, unknown last. */
+export function modSourceEntries(sources: ReleaseModPage["sources"]): readonly Readonly<{ source: ModSourceFilter; label: string; count: number }>[] {
+  const rank = (source: ModSourceFilter) => source === "unknown" ? MOD_SOURCES.length : MOD_SOURCES.findIndex((item) => item.id === source);
+  return [...sources]
+    .sort((left, right) => rank(left.source) - rank(right.source))
+    .map(({ source, count }) => ({ source, count, label: source === "unknown" ? UNKNOWN_SOURCE : modSourceLabel(source) }));
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseDiff, ReleaseMod, ReleaseMods, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
+import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseDiff, ReleaseMod, ReleaseModPage, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
 import { failureKind } from "../api/contract";
 import {
   approveAccessCandidate, changePassword, createAccessInvitation, deleteIdentity, dismissAccessCandidate, googleOidcClientId, linkGoogle, linkPassword, linkTelegram, loadAccessCandidates, loadAccessIdentities, loadAccessInvitations,
@@ -13,9 +13,9 @@ import { formatDateTime } from "../lib/format";
 import { GOOGLE_CLIENT_ID } from "../lib/signin";
 import type { Game, LinkKind, Member, OwnerBootstrap, Role, World } from "../model";
 import { action, type Action } from "./actions";
-import type { BackupsModel, CandidateRow, ConfirmationModel, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, NotificationsModel, ReleaseChangesModel, RequestSummary, RolesModel, UsersModel, WhitelistModel } from "./models";
+import type { BackupsModel, CandidateRow, ConfirmationModel, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, ModsPage, NotificationsModel, ReleaseChangesModel, RequestSummary, RolesModel, UsersModel, WhitelistModel } from "./models";
 import { releaseChangeRows } from "./release-diff";
-import { releaseModUnion } from "./release-mods";
+import { FRESH_MODS_VIEW, MOD_SEARCH_DELAY_MS, modListQuery, modSourceEntries, type ModsView } from "./release-mods";
 import { whitelistNameError } from "./whitelist";
 
 /*
@@ -134,19 +134,69 @@ export function useWhitelist(gameId: string, world: World, open: boolean, notify
 
 // --- release files (ADR-0065) -------------------------------------------------
 
-/** A release's mods of both sides, read only while the tab that shows them is open (ADR-0065, ADR-0069). */
+function modsPending(state: Exclude<LoadState<ReleaseModPage>, { status: "ready" }>, retry: () => void): Loading<ModsPage> {
+  return state.status === "error" ? { status: "error", error: state.error, kind: state.kind, retry: action("mods.retry", "Try again", retry) } : state;
+}
+
+type ModsState = Readonly<{ key: string; view: ModsView }>;
+
+/**
+ * A release's mods of both sides, read only while the tab that shows them is
+ * open (ADR-0065, ADR-0069), one page at a time. The server searches, filters,
+ * sorts and pages; the search waits for a pause in typing, and any other choice
+ * returns to page 1. What a person chose stays while pages load and while the
+ * tab is closed, and starts again for another release.
+ */
 export function useReleaseMods(gameId: string, release: Readonly<{ presetId: string; version: string }> | null, onDownload: (presetId: string, version: string, mod: ReleaseMod) => void): ModsModel | null {
-  const [state, retry] = useLoad<ReleaseMods>(release === null ? null : () => loadReleaseMods(gameId, release.presetId, release.version), [gameId, release?.presetId, release?.version]);
+  const key = release === null ? "" : `${gameId}/${release.presetId}/${release.version}`;
+  const [kept, setKept] = useState<ModsState>({ key, view: FRESH_MODS_VIEW });
+  const view = kept.key === key ? kept.view : FRESH_MODS_VIEW;
+  const change = useCallback((patch: Partial<ModsView>) => setKept((current) => ({ key, view: { ...(current.key === key ? current.view : FRESH_MODS_VIEW), ...patch } })), [key]);
+  useEffect(() => {
+    if (view.search === view.applied) return;
+    const timer = window.setTimeout(() => change({ applied: view.search, page: 1 }), MOD_SEARCH_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [view.search, view.applied, change]);
+
+  const query = modListQuery(view);
+  const [state, retry] = useLoad<ReleaseModPage>(release === null ? null : () => loadReleaseMods(gameId, release.presetId, release.version, query), [key, query.search, query.source, query.sort, query.order, query.page]);
+  const [held, setHeld] = useState<Readonly<{ key: string; split: boolean; pages: number; sources: ReleaseModPage["sources"] }> | null>(null);
+  useEffect(() => {
+    if (state.status === "ready") setHeld({ key, split: state.value.split, pages: state.value.pages, sources: state.value.sources });
+  }, [state, key]);
   if (release === null) return null;
-  if (state.status !== "ready") return { release: release.version, split: false, files: asLoading(state, retry, "mods.retry") };
+
+  const ready = state.status === "ready" ? state.value : null;
+  const facts = held?.key === key ? held : null;
+  const narrowed = view.applied.trim() !== "" || view.source !== null;
+  const files: Loading<ModsPage> = state.status !== "ready" ? modsPending(state, retry) : {
+    status: "ready",
+    value: {
+      total: state.value.total,
+      all: state.value.all,
+      rows: state.value.mods.map((mod) => ({
+        ...mod,
+        source: mod.source ?? null,
+        download: action(`mod.download.${mod.sha256}`, "Download", () => onDownload(release.presetId, release.version, mod), { icon: "download" }),
+      })),
+    },
+  };
   return {
     release: release.version,
-    split: state.value.clientMods !== null,
-    files: { status: "ready", value: releaseModUnion(state.value).map((mod) => ({
-      ...mod,
-      source: mod.source ?? null,
-      download: action(`mod.download.${mod.sha256}`, "Download", () => onDownload(release.presetId, release.version, mod), { icon: "download" }),
-    })) },
+    split: ready?.split ?? facts?.split ?? false,
+    search: view.search,
+    setSearch: (value) => change({ search: value }),
+    source: view.source,
+    setSource: (source) => change({ source, page: 1 }),
+    sources: modSourceEntries(ready?.sources ?? facts?.sources ?? []),
+    sort: view.sort,
+    setSort: (sortKey, direction) => change({ sort: { key: sortKey, direction }, page: 1 }),
+    page: ready?.page ?? view.page,
+    pages: ready?.pages ?? facts?.pages ?? 1,
+    setPage: (page) => change({ page }),
+    narrowed,
+    clear: () => change({ search: "", applied: "", source: null, page: 1 }),
+    files,
   };
 }
 

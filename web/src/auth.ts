@@ -1,5 +1,5 @@
 import { demoApi, demoEnabled } from "./demo";
-import type { AppearancePreference, MetricRange, ReleasePackName, SpawnpointApi, SubscriptionState } from "./api/contract";
+import type { AppearancePreference, MetricRange, ReleaseModQuery, ReleasePackName, SpawnpointApi, SubscriptionState } from "./api/contract";
 import { liveApi, liveAuthConfigured } from "./api/live";
 
 export type {
@@ -66,7 +66,7 @@ export const requestBackupDownload = (gameId: string, worldId: string, key: stri
 export const updateGameSettings = (gameId: string, worldId: string, values: Readonly<Record<string, SettingValue>>) => api.updateGameSettings(gameId, worldId, values);
 export const loadWhitelist = (gameId: string, worldId: string) => api.loadWhitelist(gameId, worldId);
 export const updateWhitelist = (gameId: string, worldId: string, names: readonly string[]) => api.updateWhitelist(gameId, worldId, names);
-export const loadReleaseMods = (gameId: string, presetId: string, release: string) => api.loadReleaseMods(gameId, presetId, release);
+export const loadReleaseMods = (gameId: string, presetId: string, release: string, query: ReleaseModQuery) => api.loadReleaseMods(gameId, presetId, release, query);
 export const loadReleaseDiff = (gameId: string, presetId: string, release: string, from: string | null) => api.loadReleaseDiff(gameId, presetId, release, from);
 export const requestModDownload = (gameId: string, presetId: string, release: string, sha256: string) => api.requestModDownload(gameId, presetId, release, sha256);
 export const requestReleasePack = (gameId: string, presetId: string, release: string, pack: ReleasePackName) => api.requestReleasePack(gameId, presetId, release, pack);

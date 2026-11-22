@@ -169,6 +169,22 @@ test("the demo names where each mod of a release came from, except for a preset'
   assert.ok((store.releaseMods(GAME, "industrial", "1.2").clientMods ?? []).every((mod) => mod.source !== undefined));
 });
 
+test("the demo pages, searches, filters and sorts a release's mods as the API does", () => {
+  const ask = (over: Partial<Parameters<typeof store.releaseModPage>[3]> = {}) => store.releaseModPage(GAME, "industrial", "1.3", { search: "", source: null, sort: "name", order: "asc", page: 1, pageSize: 50, ...over });
+  const files = (page: ReturnType<typeof ask>) => page.mods.map((mod) => mod.file);
+  const everything = ask();
+  assert.deepEqual([everything.all, everything.total, everything.pages, everything.split], [10, 10, 1, true]);
+  assert.deepEqual(files(ask({ page: 2, pageSize: 4 })).length, 4);
+  assert.deepEqual([ask({ page: 9, pageSize: 4 }).page, ask({ page: 9, pageSize: 4 }).pages], [3, 3], "a page past the end falls back to the last");
+  assert.deepEqual(files(ask({ search: "MEKANISM" })), ["Mekanism-1.20.1-10.4.15.75.jar"]);
+  assert.ok(ask({ source: "modrinth" }).mods.every((mod) => mod.source === "modrinth"));
+  assert.deepEqual(everything.sources.map((entry) => entry.source), ["curseforge", "modrinth", "github"]);
+  const bySize = files(ask({ sort: "size", order: "desc" }));
+  assert.deepEqual([bySize[0], bySize.at(-1)], ["create-1.20.1-0.5.1.j.jar", "Jade-1.20.1-Forge-11.12.3.jar"]);
+  const old = store.releaseModPage(GAME, "industrial", "1.1", { search: "", source: null, sort: "name", order: "asc", page: 1, pageSize: 50 });
+  assert.deepEqual([old.sources, old.split], [[], false], "an older release records no source and offers no filter");
+});
+
 test("a never-started world switches its release at once, with no operation, and a start commits the release it names (ADR-0078)", () => {
   const created = store.createWorld(GAME, "industrial", "Sandbox", "1.2", "fleet", "raw").id;
   const sandbox = () => store.snapshot().games.find((item) => item.id === GAME)!.worlds.find((item) => item.id === created)!;

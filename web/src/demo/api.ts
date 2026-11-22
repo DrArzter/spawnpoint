@@ -1,4 +1,4 @@
-import type { AccessInvitation, AuthState, MetricRange, ReleasePackName, SpawnpointApi } from "../api/contract";
+import type { AccessInvitation, AuthState, MetricRange, ReleaseModQuery, ReleasePackName, SpawnpointApi } from "../api/contract";
 import { demoSession } from "./data";
 import { clearDemoFlag, demoLatency } from "./flag";
 import * as store from "./store";
@@ -219,9 +219,9 @@ export const demoApi: SpawnpointApi = {
     return store.updateWhitelist(gameId, worldId, names);
   },
 
-  async loadReleaseMods(gameId: string, presetId: string, release: string) {
+  async loadReleaseMods(gameId: string, presetId: string, release: string, query: ReleaseModQuery) {
     await demoLatency();
-    return store.releaseMods(gameId, presetId, release);
+    return store.releaseModPage(gameId, presetId, release, query);
   },
 
   async loadReleaseDiff(gameId: string, presetId: string, release: string, from: string | null) {

@@ -3,6 +3,7 @@ import { startPresetBuild } from "../../control-plane/aws-release-builds.ts";
 import { awsControlPlaneSources, releaseModUrl, releasePackUrl, packDownloadUrl } from "../../control-plane/aws.ts";
 import { manifestClientAddons, manifestClientMods, manifestModSource, RELEASE_PACKS, releaseModLocation, type ReleasePack } from "../../control-plane/release-artifacts.ts";
 import { manifestUsesObjects } from "../../control-plane/release-objects.ts";
+import { parseModListQuery, releaseModPage } from "../../control-plane/release-mod-list.ts";
 import { type PlanMod, type ReleasePlan, releasePlan, storedReleasePlan } from "../../control-plane/release-plan.ts";
 import { packRelease } from "../../control-plane/session-control.ts";
 import { releaseRetirement } from "../../control-plane/aws-release-retirement.ts";
@@ -103,13 +104,22 @@ export async function releasePackDownload(gameId: string, presetId: string, vers
 // What a release contains, which until now lived only in S3 and in the mods
 // directory of whichever host last installed it. Shaped rather than echoed: the
 // manifest is a build artifact, and this is an API.
-export async function releaseManifest(gameId: string, presetId: string, version: string): Promise<Response> {
+//
+// Without query parameters this is the whole manifest, which the MCP tool
+// reads. With any of them it answers one page of the mod list instead: the
+// panel never holds a release's whole list.
+export async function releaseManifest(gameId: string, presetId: string, version: string, query?: Readonly<Record<string, string | undefined>>): Promise<Response> {
   if (!RELEASE_ID.test(gameId) || !RELEASE_ID.test(presetId) || !RELEASE_VERSION.test(version)) {
     return response(400, { error: "invalid_release_reference" });
   }
+  const list = parseModListQuery(query);
+  if (list.kind === "invalid") return response(400, { error: "invalid_mod_query" });
   const manifest = await awsControlPlaneSources.readReleaseManifest?.(gameId, presetId, version) ?? null;
   if (manifest === null || typeof manifest !== "object") return response(404, { error: "unknown_release" });
   const value = manifest as Record<string, unknown>;
+  if (list.kind === "query") {
+    return response(200, { gameId, presetId, release: typeof value.release === "string" ? value.release : version, ...releaseModPage(manifest, list.query) });
+  }
   const server = value.server as { mods?: unknown } | undefined;
   const loader = value.loader as { type?: unknown; version?: unknown } | undefined;
   const runtime = value.runtime as { image?: unknown } | undefined;

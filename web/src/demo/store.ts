@@ -1,5 +1,5 @@
 import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
-import { identityDeletionRefusal, type PromotionResult, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
+import { identityDeletionRefusal, type PromotionResult, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
 import { startableReleases } from "../core/presets";
 import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
@@ -552,7 +552,10 @@ function demoDigest(text: string): string {
   return hex.slice(0, 64);
 }
 
-export function releaseMods(gameId: string, presetId: string, release: string): ReleaseMods {
+/** A demo release's mods of both sides; the panel reads them a page at a time through `releaseModPage`. */
+type DemoReleaseMods = Readonly<{ release: string; mods: readonly ReleaseMod[]; clientMods: readonly ReleaseMod[] | null }>;
+
+export function releaseMods(gameId: string, presetId: string, release: string): DemoReleaseMods {
   settle();
   const preset = state.snapshot.games.find((game) => game.id === gameId)?.presets.find((candidate) => candidate.id === presetId);
   if (!preset?.releases.includes(release)) throw new Error(`Release ${release} is not in the store.`);
@@ -566,6 +569,42 @@ export function releaseMods(gameId: string, presetId: string, release: string): 
     release,
     mods: [...files, DEMO_SERVER_ONLY_MOD].map(mod),
     clientMods: [...files, ...DEMO_PLAYERS_ONLY_MODS].map(mod),
+  };
+}
+
+const demoSourceRank = (source: ModSource | undefined): number => source === undefined ? 3 : ["curseforge", "modrinth", "github"].indexOf(source);
+
+/** One page of a release's mods, searched, filtered, sorted and paged here as the API does it. */
+export function releaseModPage(gameId: string, presetId: string, release: string, query: ReleaseModQuery): ReleaseModPage {
+  const { mods: server, clientMods } = releaseMods(gameId, presetId, release);
+  const held = new Set(server.map((mod) => mod.sha256));
+  const all = [...server, ...(clientMods ?? []).filter((mod) => !held.has(mod.sha256))];
+  const sources = (["curseforge", "modrinth", "github", "unknown"] as const)
+    .map((source) => ({ source, count: all.filter((mod) => (mod.source ?? "unknown") === source).length }))
+    .filter((entry) => entry.count > 0);
+  const needle = query.search.toLowerCase();
+  const sign = query.order === "asc" ? 1 : -1;
+  const byName = (left: ReleaseMod, right: ReleaseMod) => left.file.localeCompare(right.file, "en") || left.sha256.localeCompare(right.sha256);
+  const orders = {
+    name: byName,
+    source: (left: ReleaseMod, right: ReleaseMod) => demoSourceRank(left.source) - demoSourceRank(right.source),
+    size: (left: ReleaseMod, right: ReleaseMod) => left.bytes - right.bytes,
+  };
+  const matching = all
+    .filter((mod) => (needle === "" || mod.file.toLowerCase().includes(needle)) && (query.source === null || (mod.source ?? "unknown") === query.source))
+    .sort((left, right) => sign * orders[query.sort](left, right) || byName(left, right));
+  const pages = Math.max(1, Math.ceil(matching.length / query.pageSize));
+  const page = Math.min(Math.max(1, query.page), pages);
+  return {
+    release,
+    split: clientMods !== null,
+    all: all.length,
+    total: matching.length,
+    page,
+    pages,
+    pageSize: query.pageSize,
+    sources: sources.length === 1 && sources[0]?.source === "unknown" ? [] : sources,
+    mods: matching.slice((page - 1) * query.pageSize, page * query.pageSize),
   };
 }
 
@@ -591,7 +630,7 @@ export function releaseDiff(gameId: string, presetId: string, release: string, f
       unchanged: after.filter((mod) => named(before, mod.file)?.sha256 === mod.sha256).length,
     };
   };
-  const clientOnly = (mods: ReleaseMods) => (mods.clientMods ?? []).filter((mod) => !mods.mods.some((server) => server.file === mod.file));
+  const clientOnly = (mods: DemoReleaseMods) => (mods.clientMods ?? []).filter((mod) => !mods.mods.some((server) => server.file === mod.file));
   const config = (text: string) => ({ path: "config/create-server.toml", sha256: demoDigest(text), bytes: 4_812 });
   const same = <T,>(value: T): DiffValue<T> => ({ from: value, to: value, changed: false });
   return {

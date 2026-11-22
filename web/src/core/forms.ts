@@ -258,12 +258,17 @@ function releaseOptions(confirmation: Confirmation): readonly Readonly<{ version
   const releases = confirmation.kind === "promote"
     ? promotionTargets(confirmation.game, confirmation.world)
     : [...startableReleases(preset)].reverse();
-  return releases.map((version) => ({ version, latest: version === (confirmation.kind === "wipe" ? startableLatest(preset) : preset.latestRelease) }));
+  const newest = newestRelease(confirmation.kind, preset);
+  return releases.map((version) => ({ version, latest: version === newest }));
+}
+
+// A wipe opens on the current revision; a promotion may go to the newest of all.
+function newestRelease(kind: "wipe" | "promote", preset: Preset): string | null {
+  return kind === "wipe" ? startableLatest(preset) : preset.latestRelease;
 }
 
 function initialRelease(confirmation: Confirmation | null): string {
-  if (confirmation === null) return "";
-  const preset = confirmation.kind === "wipe" || confirmation.kind === "promote" ? confirmation.preset : undefined;
-  const latest = preset ? (confirmation.kind === "wipe" ? startableLatest(preset) : preset.latestRelease) ?? "" : "";
+  if (confirmation === null || (confirmation.kind !== "wipe" && confirmation.kind !== "promote") || !confirmation.preset) return "";
+  const latest = newestRelease(confirmation.kind, confirmation.preset) ?? "";
   return releaseOptions(confirmation)?.some((option) => option.version === latest) ? latest : "";
 }

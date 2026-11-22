@@ -122,8 +122,9 @@ fi
 
 # --- Release history across digests (ADR-0042) ---
 publish_snapshot() {
+  local message="$1"
   git -C "${config}" add profiles
-  git -C "${config}" -c user.name=Test -c user.email=test@example.invalid commit --quiet --allow-empty -m "$1"
+  git -C "${config}" -c user.name=Test -c user.email=test@example.invalid commit --quiet --allow-empty -m "${message}"
   commit="$(git -C "${config}" rev-parse HEAD)"
   source_key="config-sources/DrArzter/my-docker-factorio-server-config/${commit}.tar.gz"
   git -C "${config}" archive --format=tar.gz --output="${source_archive}" "${commit}" profiles
@@ -131,14 +132,16 @@ publish_snapshot() {
   cp -- "${source_archive}" "${FAKE_S3_ROOT}/spawnpoint-test-releases/${source_key}"
 }
 preset_field() {
-  jq -r --arg id "$1" ".presets[] | select(.id == \$id) | $2" "${catalog}"
+  local id="$1" path="$2"
+  jq -r --arg id "${id}" ".presets[] | select(.id == \$id) | ${path}" "${catalog}"
 }
 releases_root="${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/factorio/factorio-vanilla"
 put_manifest() {
-  mkdir -p -- "${releases_root}/$1"
-  jq -n --arg release "$1" --arg commit "${commit}" \
+  local release="$1"
+  mkdir -p -- "${releases_root}/${release}"
+  jq -n --arg release "${release}" --arg commit "${commit}" \
     '{game: "factorio", release: $release, created_at: "2026-11-01T00:00:00Z", source_profile: {id: "factorio-vanilla", repository: "https://github.com/DrArzter/my-docker-factorio-server-config", commit: $commit}}' \
-    >"${releases_root}/$1/manifest.json"
+    >"${releases_root}/${release}/manifest.json"
 }
 
 # The ready release "1.0" was built from this digest and commit.

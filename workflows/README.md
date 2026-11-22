@@ -124,7 +124,7 @@ failure ends loudly. A stale watchdog fails its coordinator mutation before it c
 V2 instead of duplicating it. The insight that makes it small: **boot-time reconciliation turned the wipe's release
 pointer into the single control surface**, so promotion is pointer writes around a fenced, verified stop and start, and
 rollback is the same mechanism in reverse. Since 2026-09-11 the pointer writes are one Lambda, `spawnpoint-release-state`,
-whose transitions — prepare, commit, restore, rollback — are pure TypeScript in
+whose transitions — prepare, protect, commit, restore, rollback — are pure TypeScript in
 `lambdas/src/control-plane/release-state-transitions.ts`, written with optimistic concurrency on the S3 object's ETag.
 The machine never builds a pointer document itself.
 
@@ -133,14 +133,17 @@ The machine never builds a pointer document itself.
    every path must leave the pointer telling the truth.
 3. Read the authoritative lifecycle record. Ready with an active session → the fenced V2 stop of *that* session (a
    refusal — players online — restores the pointer and fails as `PromotionRefused`; nothing changed). Fully stopped →
-   straight to start. Anything else → restore the pointer and fail as `LifecycleUnavailable`.
-4. The V2 start runs synchronously with a fresh session identity: the host reconciles to desired, the health gate
+   straight to the next step. Anything else → restore the pointer and fail as `LifecycleUnavailable`.
+4. **Protect**: name the wipe's newest verified archive as its pre-promotion backup on the pointer
+   ([ADR-0030](../docs/adr/0030-desired-and-active-release.md), amended). Retention keeps it until the next promotion.
+   A wipe that ran and has no verified archive restores the pointer and fails as `PrePromotionBackupMissing`.
+5. The V2 start runs synchronously with a fresh session identity: the host reconciles to desired, the health gate
    proves it, and V2 registers the watchdog — promotion has no watchdog bypass and no watchdogless success.
-5. Success → **commit active**. Failure → **rollback**: flip the pointer to the previous active and start again in a
+6. Success → **commit active**, which also records the release in the wipe's `releases_run`. Failure → **rollback**: flip the pointer to the previous active and start again in a
    second fresh session — the host reconciles *back* by the same boot-time mechanism — ending `rolled_back`, or
    `RollbackFailed` if that start fails too. A wipe whose active is null has nowhere to roll back to and fails as
    `PromotionFailedNoRollback`.
-6. A host that was stopped is stopped again after the commit or the rollback, so promotion never leaves a paid surprise
+7. A host that was stopped is stopped again after the commit or the rollback, so promotion never leaves a paid surprise
    behind; a host that was running stays running with its new session.
 
 Every bad ending is a distinct `Spawnpoint.*` error, because "failed" without "where" is midnight archaeology. Nested

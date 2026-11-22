@@ -63,6 +63,14 @@ data "aws_iam_policy_document" "world_lifecycle" {
     }
   }
 
+  # A HEAD reads the release the host recorded on an archive (ADR-0052). S3
+  # authorises HEAD as GetObject; the handler never reads an archive body.
+  statement {
+    sid       = "ReadBackupReleaseMetadata"
+    actions   = ["s3:GetObject"]
+    resources = ["${data.aws_s3_bucket.backups.arn}/worlds/*/archives/*.tar.zst"]
+  }
+
   statement {
     sid       = "PurgeWorldBackups"
     actions   = ["s3:DeleteObject", "s3:DeleteObjectVersion"]

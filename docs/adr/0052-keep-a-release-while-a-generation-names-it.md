@@ -1,6 +1,6 @@
 # ADR-0052 — Keep a release while a generation names it, and check before restoring
 
-- Status: Accepted — restore preflight enforced at request and workflow boundaries, 2026-09-23; retention rule applies to any future release cleanup
+- Status: Accepted — restore preflight enforced at request and workflow boundaries, 2026-09-23; retention rule applies to any future release cleanup; amended 2026-11-22: a backup is paired with the release that ran
 - Date: 2026-09-16
 - Milestone: M4
 - Relates: [ADR-0042](0042-preset-scoped-release-identity.md) (the namespace a release is stored under),
@@ -85,3 +85,50 @@ they are still looking at the button, and the world is untouched.
   considered, or is exactly the garbage a cleanup should collect.
 - Whether the check should verify the manifest's digests as well as the release's presence, or whether presence is the
   honest limit of what can be proven cheaply at the moment somebody presses a button.
+
+## Amendment — a backup is paired with the release that ran (2026-11-22)
+
+The Context above says "the restored generation takes its release from the generation the archive came from". That
+was true only while a wipe ran one release. A promotion changes the release pointer of a wipe
+([ADR-0030](0030-desired-and-active-release.md)) and does not change the generation's `release` in the world record,
+which stays the release the wipe began with (its origin). The host also wrote the origin release on each archive. So a
+backup taken on 4.1.9, after a promotion from 4.1.4, restored onto 4.1.4 and loaded without the mods it was saved with.
+That is the failure this ADR exists to prevent.
+
+**Decision.**
+
+1. **Each wipe records the releases it ran.** Every commit of an active release, at a start or at a promotion, appends
+   the release to `releases_run: [{release, since}]` on the wipe's pointer
+   (`worlds/<id>/generations/<gen>/release.json`) when it differs from the last entry. `since` is the commit time. The
+   field is absent on pointers written before this amendment.
+2. **The host writes the release that ran on each archive.** At each stop the host reads the wipe's pointer and writes
+   its `active_release` as the archive's `release` metadata, with `release-source=active`. When the pointer cannot be
+   read or has no active release, the host writes the origin release, as before, with `release-source=generation`.
+3. **A restore uses the release of the backup.** It takes, in this order: the archive's `release` when
+   `release-source=active`; else the entry of the source wipe's `releases_run` that began last at or before the time the
+   archive was stored (the oldest entry when the archive is older than all of them); else the source wipe's
+   `active_release`; else its origin release. The existence check of this ADR applies to that release, before the new
+   generation is written. The restored generation names that release.
+4. **The panel shows it.** Each listed backup carries the release a restore would use and where it came from
+   (`recorded`, `ran` or `origin`). The restore dialog names the release.
+5. **The named set grows.** A release is named when any generation names it **or** any wipe's `releases_run` lists it.
+   A future release cleanup reads both.
+
+**Consequences.**
+
+- Good: a restore after a promotion loads the save with the mods it was saved with. A rollback after a damaging update
+  is a restore of the pre-promotion backup (ADR-0030, amended).
+- Bad: an archive taken before this amendment, on a wipe promoted before this amendment, has no reliable record of the
+  release that ran. The fallback can pick the wrong release. The runbook tells the operator to check the dialog and to
+  restore such an archive by hand.
+- Bad: listing backups costs one `HEAD` per listed archive (at most 20) and one pointer read per wipe. The world
+  lifecycle role may now `GetObject` world archives, because S3 authorises `HEAD` that way; the handler reads metadata
+  only.
+
+**Alternatives considered.**
+
+| Option | Why not chosen |
+| --- | --- |
+| Change the generation's `release` in the world record at each promotion | Loses the origin, and the world record is written by other paths; the pointer is the record of what ran |
+| Infer the release only from `releases_run` and the archive time | Works without metadata, but the archive time and the commit time can disagree by a session; the host knows the active release at the stop |
+| Put the release in the archive's key | Changes the key format that restore, retention and prepare-world.sh parse |

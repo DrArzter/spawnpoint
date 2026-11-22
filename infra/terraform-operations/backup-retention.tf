@@ -54,6 +54,13 @@ data "aws_iam_policy_document" "backup_retention" {
     actions   = ["s3:GetObject"]
     resources = ["${data.aws_s3_bucket.releases.arn}/worlds/*/world.json"]
   }
+
+  # Each wipe's pointer names the pre-promotion backup no plan may remove.
+  statement {
+    sid       = "ReadPrePromotionBackups"
+    actions   = ["s3:GetObject"]
+    resources = ["${data.aws_s3_bucket.releases.arn}/worlds/*/generations/*/release.json"]
+  }
 }
 
 resource "aws_iam_role_policy" "backup_retention" {

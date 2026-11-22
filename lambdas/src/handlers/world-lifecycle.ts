@@ -3,11 +3,13 @@ import {
   NoSuchKey, PutObjectCommand, S3Client,
 } from "@aws-sdk/client-s3";
 
+import { resolveBackupRelease } from "../control-plane/backup-release.ts";
 import { backupInventory } from "../control-plane/backups.ts";
 import { parsePresetCatalog } from "../control-plane/preset-catalog.ts";
 import { type ReleaseState } from "../control-plane/release-state.ts";
 import { releaseManifestKey } from "../control-plane/release-artifacts.ts";
 import { restoreWithPublishedRelease } from "../control-plane/restore-guard.ts";
+import { s3BackupReleaseSources } from "../control-plane/s3-backup-release.ts";
 import { S3ReleaseStateStore } from "../control-plane/s3-release-state-store.ts";
 import { S3WorldRepository } from "../control-plane/s3-world-repository.ts";
 import {
@@ -246,8 +248,12 @@ async function nextRecord(input: Input, record: WorldRecord, backups: Backups): 
   }
   const backup = backups.find((candidate) => candidate.key === input.backupKey);
   if (backup === undefined || backup.generationId === null) throw new Error("backup_not_verified");
+  // The backup is restored onto the release it ran (ADR-0052), not its wipe's origin.
+  const ran = await resolveBackupRelease(record, backup.key,
+    s3BackupReleaseSources(s3, requiredEnv("BACKUP_BUCKET"), requiredEnv("RELEASE_BUCKET")));
+  if (typeof ran === "string") throw new Error(ran === "unknown_backup" ? "backup_not_verified" : "backup_generation_unknown");
   return restoreWithPublishedRelease(record, {
-    key: backup.key, checksum: backup.checksum, generationId: backup.generationId,
+    key: backup.key, checksum: backup.checksum, generationId: backup.generationId, release: ran.release,
   }, input.generationUuid!, input.requestedAt, publishedReleaseExists);
 }
 

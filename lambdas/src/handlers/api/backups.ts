@@ -1,5 +1,6 @@
 import { backupInventory } from "../../control-plane/backups.ts";
-import { listWorldBackups, backupArchiveUrl } from "../../control-plane/aws.ts";
+import { withBackupReleases } from "../../control-plane/backup-release.ts";
+import { listWorldBackups, backupArchiveUrl, backupReleaseSources, readWorldRecord } from "../../control-plane/aws.ts";
 import { type Identity } from "../../access/domain.ts";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
@@ -8,10 +9,12 @@ import { knownWorld } from "./world-state.ts";
 import { document, tableName } from "./access-store.ts";
 
 // What a restore would have to choose between. The inventory is a listing,
-// read without touching an archive; reading one is a download.
+// read without touching an archive; reading one is a download. Each entry
+// names the release a restore would use: one HEAD per listed archive.
 export async function backups(gameId: string, worldId: string): Promise<Response> {
   if (!await knownWorld(gameId, worldId)) return response(404, { error: "unknown_world" });
-  return response(200, backupInventory(await listWorldBackups(worldId)));
+  const [inventory, record] = await Promise.all([listWorldBackups(worldId).then((objects) => backupInventory(objects)), readWorldRecord(worldId)]);
+  return response(200, { ...inventory, entries: await withBackupReleases(record, inventory.entries, backupReleaseSources()) });
 }
 
 const BACKUP_LINK_SECONDS = 300;

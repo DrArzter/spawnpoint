@@ -190,11 +190,11 @@ export function initialState(): DemoState {
     },
     backups: {
       "minecraft/minecraft-rostik-12345678": [
-        { key: "worlds/minecraft-rostik-12345678/archives/20260914T173200Z", archiveName: "minecraft-rostik-12345678-20260914T173200Z.tar.zst", checksum: "8b4e3a7d24c09ea61de95cdb613cfb9bea802cff4cb67f2ed0a910832d96f231", generationId: "gen-c73b18ae5f0492d6817be30a4c95f2d1", sizeBytes: 184549376, storedAt: "2026-09-14T17:32:00.000Z" },
-        { key: "worlds/minecraft-rostik-12345678/archives/20260912T221500Z", archiveName: "minecraft-rostik-12345678-20260912T221500Z.tar.zst", checksum: "294c47d3cbd1d52ed7117338b0e44a28d5ae53b9b0ad9f563172c8b4fbfd19cc", generationId: "gen-4a1f7c02e89b5d3641ca0e7852bd93f0", sizeBytes: 178257920, storedAt: "2026-09-12T22:15:00.000Z" },
+        { key: "worlds/minecraft-rostik-12345678/archives/20260914T173200Z", archiveName: "minecraft-rostik-12345678-20260914T173200Z.tar.zst", checksum: "8b4e3a7d24c09ea61de95cdb613cfb9bea802cff4cb67f2ed0a910832d96f231", generationId: "gen-c73b18ae5f0492d6817be30a4c95f2d1", sizeBytes: 184549376, storedAt: "2026-09-14T17:32:00.000Z", release: "1.2", releaseSource: "recorded" },
+        { key: "worlds/minecraft-rostik-12345678/archives/20260912T221500Z", archiveName: "minecraft-rostik-12345678-20260912T221500Z.tar.zst", checksum: "294c47d3cbd1d52ed7117338b0e44a28d5ae53b9b0ad9f563172c8b4fbfd19cc", generationId: "gen-4a1f7c02e89b5d3641ca0e7852bd93f0", sizeBytes: 178257920, storedAt: "2026-09-12T22:15:00.000Z", release: "1.1", releaseSource: "ran" },
       ],
       "factorio/factorio": [
-        { key: "worlds/factorio/archives/20260908T201100Z", archiveName: "factorio-20260908T201100Z.tar.zst", checksum: "5f2d0c7b9a1e4438ac6f05d2e7b3418c9d6a2f7e0b5c84913ad2e6f70b9c3d55", generationId: null, sizeBytes: 42991616, storedAt: "2026-09-08T20:11:00.000Z" },
+        { key: "worlds/factorio/archives/20260908T201100Z", archiveName: "factorio-20260908T201100Z.tar.zst", checksum: "5f2d0c7b9a1e4438ac6f05d2e7b3418c9d6a2f7e0b5c84913ad2e6f70b9c3d55", generationId: null, sizeBytes: 42991616, storedAt: "2026-09-08T20:11:00.000Z", release: null, releaseSource: null },
       ],
     },
     console: {

@@ -83,7 +83,7 @@
       "Default": "Restore Desired After Unavailable Lifecycle"
     },
     "Mark Origin Running": { "Type": "Pass", "Result": "running", "ResultPath": "$.origin", "Next": "Stop Origin Session" },
-    "Mark Origin Stopped": { "Type": "Pass", "Result": "stopped", "ResultPath": "$.origin", "Next": "Start With Target" },
+    "Mark Origin Stopped": { "Type": "Pass", "Result": "stopped", "ResultPath": "$.origin", "Next": "Keep Pre-Promotion Backup" },
     "Stop Origin Session": {
       "Type": "Task",
       "Resource": "arn:aws:states:::states:startExecution.sync:2",
@@ -102,7 +102,41 @@
       },
       "ResultPath": "$.observed.stop",
       "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.stopError", "Next": "Restore Desired After Refusal" }],
+      "Next": "Keep Pre-Promotion Backup"
+    },
+    "Keep Pre-Promotion Backup": {
+      "Type": "Task",
+      "Comment": "The world is stopped on a verified archive here: just now by the fenced stop, or earlier by the stop that left it stopped. Its key goes on the wipe's pointer, and retention keeps it until the next promotion (ADR-0030).",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${release_state_function_arn}",
+        "Payload": {
+          "action": "protect",
+          "worldId.$": "$.request.worldId",
+          "generationId.$": "$.request.generationId",
+          "operationId.$": "$.request.operationId"
+        }
+      },
+      "ResultSelector": { "status.$": "$.Payload.status", "key.$": "$.Payload.key" },
+      "ResultPath": "$.observed.prePromotionBackup",
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.prePromotionBackupError", "Next": "Restore Desired After Missing Backup" }],
       "Next": "Start With Target"
+    },
+    "Restore Desired After Missing Backup": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${release_state_function_arn}",
+        "Payload": {
+          "action": "restore",
+          "worldId.$": "$.request.worldId",
+          "generationId.$": "$.request.generationId",
+          "operationId.$": "$.request.operationId",
+          "previous.$": "$.mutation.previous"
+        }
+      },
+      "ResultPath": "$.observed.restore",
+      "Next": "Pre-Promotion Backup Missing"
     },
     "Restore Desired After Refusal": {
       "Type": "Task",
@@ -271,12 +305,13 @@
       "Next": "Rolled Back"
     },
     "Nothing To Do": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "status": "already_active", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release" }, "End": true },
-    "Promoted Running": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "status": "promoted", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release", "server": "running", "sessionId.$": "$.sessions.target" }, "End": true },
-    "Promoted Stopped": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "status": "promoted", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release", "server": "stopped" }, "End": true },
-    "Rolled Back": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "status": "rolled_back", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "failedRelease.$": "$.request.release", "activeRelease.$": "$.mutation.previous.activeRelease", "server.$": "$.origin" }, "End": true },
+    "Promoted Running": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "prePromotionBackup.$": "$.observed.prePromotionBackup.key", "status": "promoted", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release", "server": "running", "sessionId.$": "$.sessions.target" }, "End": true },
+    "Promoted Stopped": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "prePromotionBackup.$": "$.observed.prePromotionBackup.key", "status": "promoted", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release", "server": "stopped" }, "End": true },
+    "Rolled Back": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "prePromotionBackup.$": "$.observed.prePromotionBackup.key", "status": "rolled_back", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "failedRelease.$": "$.request.release", "activeRelease.$": "$.mutation.previous.activeRelease", "server.$": "$.origin" }, "End": true },
     "World Not Imported": { "Type": "Fail", "Error": "Spawnpoint.WorldNotImported", "Cause": "No release state exists for this world's current wipe." },
     "Release Not Published": { "Type": "Fail", "Error": "Spawnpoint.ReleaseNotPublished", "Cause": "The target release has no manifest for this game and preset." },
     "Lifecycle Unavailable": { "Type": "Fail", "Error": "Spawnpoint.LifecycleUnavailable", "Cause": "The server lifecycle is absent or transitional. The previous desired release was restored." },
+    "Pre-Promotion Backup Missing": { "Type": "Fail", "Error": "Spawnpoint.PrePromotionBackupMissing", "Cause": "This wipe ran a release but has no verified archive to keep before the promotion. The previous desired release was restored." },
     "Promotion Refused": { "Type": "Fail", "Error": "Spawnpoint.PromotionRefused", "Cause": "The fenced, verified stop failed. The previous desired release was restored." },
     "Promotion Failed No Rollback": { "Type": "Fail", "Error": "Spawnpoint.PromotionFailedNoRollback", "Cause": "The target start failed and this wipe has no active release to roll back to." },
     "Rollback Failed": { "Type": "Fail", "Error": "Spawnpoint.RollbackFailed", "Cause": "The rollback start failed too; lifecycle state identifies the exact recovery point." },

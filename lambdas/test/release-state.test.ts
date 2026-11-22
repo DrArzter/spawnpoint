@@ -45,3 +45,25 @@ test("legacy pointers can only be imported with an explicit generation identity"
   assert.equal(parseLegacyReleaseState({ schema_version: 1, world: "another" }, ref, state.updatedAt), null);
 });
 
+
+test("the releases a wipe ran and its pre-promotion backup round-trip on the pointer", () => {
+  const archive = `worlds/${ref.worldId}/archives/${ref.worldId}-${ref.generationId}-20260910T120000Z-${"c".repeat(64)}.tar.zst`;
+  const recorded: ReleaseState = {
+    ...state,
+    releasesRun: [{ release: "2.0", since: "2026-09-01T00:00:00.000Z" }],
+    prePromotionBackup: { key: archive, operationId: "op-1", release: "2.0", recordedAt: "2026-09-10T12:00:00.000Z" },
+  };
+  const document = releaseStateDocument(recorded);
+  assert.deepEqual(document.releases_run, [{ release: "2.0", since: "2026-09-01T00:00:00.000Z" }]);
+  assert.deepEqual(parseReleaseState(document, ref), recorded);
+  // A pointer written before runs were recorded reads as before and writes nothing new.
+  assert.equal("releases_run" in releaseStateDocument(state), false);
+});
+
+test("a pre-promotion backup of another wipe or a malformed run makes the pointer invalid", () => {
+  const document = releaseStateDocument(state);
+  const otherWipe = `worlds/${ref.worldId}/archives/${ref.worldId}-gen-${"b".repeat(32)}-20260910T120000Z-${"c".repeat(64)}.tar.zst`;
+  assert.equal(parseReleaseState({ ...document, pre_promotion_backup: { key: otherWipe, operation_id: "op", release: null, recorded_at: "2026-09-10T12:00:00Z" } }, ref), null);
+  assert.equal(parseReleaseState({ ...document, releases_run: [{ release: "latest", since: "2026-09-10T12:00:00Z" }] }, ref), null);
+  assert.throws(() => releaseStateDocument({ ...state, prePromotionBackup: { key: otherWipe, operationId: "op", release: null, recordedAt: "2026-09-10T12:00:00Z" } }), /invalid_release_state/);
+});

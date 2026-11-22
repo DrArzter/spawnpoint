@@ -276,7 +276,7 @@ run "promotion_delegates_release_state_and_composes_existing_machines" {
 
   assert {
     condition = alltrue([
-      for state in ["Prepare Release", "Restore Desired After Refusal", "Commit Active", "Write Rollback Desired"] :
+      for state in ["Prepare Release", "Restore Desired After Refusal", "Keep Pre-Promotion Backup", "Restore Desired After Missing Backup", "Commit Active", "Write Rollback Desired"] :
       jsondecode(aws_sfn_state_machine.promote_release.definition).States[state].Parameters.FunctionName == local.release_state_function_arn
     ])
     error_message = "Every release-state transition must use the same adapter Lambda."
@@ -553,7 +553,12 @@ run "backup_retention_runs_daily_and_may_delete_only_current_archives" {
 
   assert {
     condition     = one([for statement in data.aws_iam_policy_document.backup_retention.statement : statement.resources if statement.sid == "ReadWorldRecords"]) == toset(["arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*/world.json"])
-    error_message = "Retention reads world records and nothing else of the release bucket."
+    error_message = "Retention reads world records through this statement and nothing else."
+  }
+
+  assert {
+    condition     = one([for statement in data.aws_iam_policy_document.backup_retention.statement : statement.resources if statement.sid == "ReadPrePromotionBackups"]) == toset(["arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*/generations/*/release.json"])
+    error_message = "Retention reads each wipe's pointer for its pre-promotion backup, and nothing else in the release bucket."
   }
 
   assert {

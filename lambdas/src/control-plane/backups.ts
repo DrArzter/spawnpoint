@@ -64,3 +64,17 @@ export function backupInventory(objects: readonly BackupObject[], limit = 20): B
 
   return { entries, unverified, truncated: newestFirst.length - unverified > entries.length };
 }
+
+const RESUMABLE = /-\d{8}T\d{6}Z-[0-9a-f]{64}\.tar\.zst$/;
+
+// Keys sort by code unit, as jq's sort in prepare-world.sh picks the newest.
+export function byCodeUnit(a: string, b: string): number {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
+
+/** The archive a wipe's next start resumes from: its greatest timestamped key, as server/scripts/prepare-world.sh picks it. */
+export function resumeArchiveKey(worldId: string, generationId: string, keys: readonly string[]): string | undefined {
+  const prefix = `worlds/${worldId}/archives/${worldId}-${generationId}-`;
+  return keys.filter((key) => key.startsWith(prefix) && RESUMABLE.test(key)).sort(byCodeUnit).at(-1);
+}

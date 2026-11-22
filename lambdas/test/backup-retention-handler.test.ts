@@ -116,6 +116,7 @@ test("a world with no record is left alone, and one failed world does not stop t
       return worldId === "world" ? world() : null;
     },
     listArchives: async (worldId) => worldId === "world" ? [...open.kept, ...open.removed] : [archive(null, "2026-01-01T00:00:00.000Z")],
+    readPrePromotionBackups: async () => [],
     deleteArchive: async (key) => { deleted.push(key); },
   };
   const errors: unknown[] = [];
@@ -158,4 +159,54 @@ test("the S3 store reads every page and deletes by key on the backup bucket only
   assert.ok(sent.every((command) => command.input.Bucket === "backups"));
   assert.deepEqual(sent.at(-1), { name: "DeleteObjectCommand", input: { Bucket: "backups", Key: "worlds/first/archives/a.tar.zst" } });
   assert.equal(sent.filter((command) => command.name === "ListObjectsV2Command").length, 4);
+});
+
+test("a pre-promotion backup is kept although a later stop the same day replaced it as the day's newest", () => {
+  const open = openGeneration();
+  const prePromotion = open.removed[0]!;
+  const removed = archivesToRemove(world(), [...open.kept, ...open.removed], [prePromotion.key]);
+  assert.equal(removed.includes(prePromotion.key), false);
+  assert.deepEqual(removed, [open.removed[1]!.key]);
+});
+
+test("each wipe's pre-promotion backup is read from its own pointer, and a world whose pointer fails is not pruned", async () => {
+  const open = openGeneration();
+  const prePromotion = open.removed[0]!.key;
+  const pointer = (generationId: string, key?: string) => JSON.stringify({
+    schema_version: 2, world_id: "world", generation_id: generationId, desired_release: "1.1", active_release: "1.1",
+    updated_at: "2026-11-12T08:00:00.000Z", updated_by: "op-1", source: "promote-commit",
+    ...(key === undefined ? {} : { pre_promotion_backup: { key, operation_id: "op-1", release: "1.0", recorded_at: "2026-11-12T08:00:00.000Z" } }),
+  });
+  const asked: string[] = [];
+  const s3 = {
+    send: async (command: { constructor: { name: string }; input: Record<string, unknown> }) => {
+      asked.push(`${String(command.input.Bucket)}/${String(command.input.Key)}`);
+      const key = String(command.input.Key);
+      if (key.includes(OPEN)) return { Body: { transformToString: async () => pointer(OPEN, prePromotion) }, ETag: "\"1\"" };
+      return { Body: { transformToString: async () => pointer(CLOSED) }, ETag: "\"2\"" };
+    },
+  };
+  const store = s3RetentionStore(s3 as never, "backups", { read: async () => null }, "releases");
+  assert.deepEqual(await store.readPrePromotionBackups(world()), [prePromotion]);
+  assert.deepEqual(asked, [
+    `releases/worlds/world/generations/${OPEN}/release.json`,
+    `releases/worlds/world/generations/${CLOSED}/release.json`,
+  ]);
+
+  const deleted: string[] = [];
+  const failing: RetentionStore = {
+    listWorldIds: async () => ["world"],
+    readWorld: async () => world(),
+    listArchives: async () => [...open.kept, ...open.removed],
+    readPrePromotionBackups: async () => { throw new Error("pointer_unreadable"); },
+    deleteArchive: async (key) => { deleted.push(key); },
+  };
+  const original = console.error;
+  console.error = () => {};
+  try {
+    assert.deepEqual((await applyBackupRetention(failing)).map((result) => result.result), ["failed"]);
+  } finally {
+    console.error = original;
+  }
+  assert.deepEqual(deleted, []);
 });

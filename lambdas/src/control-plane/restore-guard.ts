@@ -1,9 +1,12 @@
 import { restoreWorldRecord, type WorldRecord } from "./world-registry.ts";
 
-/** Keep the existence check adjacent to the registry mutation, not only at the HTTP entry point. */
+/**
+ * Keep the existence check adjacent to the registry mutation, not only at the
+ * HTTP entry point. `backup.release` is the release the backup ran.
+ */
 export async function restoreWithPublishedRelease(
   record: WorldRecord,
-  backup: Readonly<{ key: string; checksum: string; generationId: string }>,
+  backup: Readonly<{ key: string; checksum: string; generationId: string; release?: string }>,
   generationUuid: string,
   createdAt: string,
   releaseExists: (gameId: string, presetId: string, release: string) => Promise<boolean>,

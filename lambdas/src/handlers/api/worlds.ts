@@ -1,6 +1,6 @@
 import { type Identity } from "../../access/domain.ts";
 import { type SessionAction, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, type SessionPlan, type FleetSessionPlan } from "../../control-plane/session-control.ts";
-import { awsControlPlaneSources, readConsoleInvocation, sendConsoleCommand, startSessionExecution, stopSessionExecution, materializePresetWorld, replaceWorldAccess, replaceWorldGameSettings, readWorldRecord, replaceWorldWhitelist, sendWhitelistReload, worldLifecycleExecution } from "../../control-plane/aws.ts";
+import { awsControlPlaneSources, backupReleaseSources, readConsoleInvocation, sendConsoleCommand, startSessionExecution, stopSessionExecution, materializePresetWorld, replaceWorldAccess, replaceWorldGameSettings, readWorldRecord, replaceWorldWhitelist, sendWhitelistReload, worldLifecycleExecution } from "../../control-plane/aws.ts";
 import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
 import { blockingOperations, sessionLifecycleKey, holdsWorld, type WorldHost, type WorldPlacement } from "../../control-plane/world-session.ts";
 import { randomUUID } from "node:crypto";
@@ -9,6 +9,7 @@ import { checkGameSettings } from "../../control-plane/game-settings.ts";
 import { checkWhitelist, parseServerWhitelist, SERVER_WHITELIST_COMMANDS } from "../../control-plane/whitelist.ts";
 import { consoleResult, encodeConsoleCommand } from "../../control-plane/console.ts";
 import { type ControlPlaneSources } from "../../control-plane/read-model.ts";
+import { backupGenerationId, resolveBackupRelease, type BackupReleaseSources } from "../../control-plane/backup-release.ts";
 import { type Response, response, parseObjectBody } from "./http.ts";
 import { readWorldSession, worldPlacements, locateWorldHost } from "./world-state.ts";
 
@@ -308,23 +309,25 @@ async function reloadRunningWhitelist(gameId: string, worldId: string): Promise<
   }
 }
 
-// A backup carries the generation it was taken from, and that generation names
-// the release it ran. Restoring reinstates the pair, so a release that is no
-// longer in the store makes the restored generation unstartable — and today the
-// refusal would arrive at the next start, from reconciliation, with the world
-// already repointed. It is checked here, where somebody is still looking at the
-// button they pressed. See ADR-0052.
+// A backup is restored onto the release it ran (ADR-0052): the release the
+// host recorded on the archive, else the release its wipe ran at that time,
+// else the wipe's origin. A release that is no longer in the store makes the
+// restored generation unstartable, and the refusal would otherwise arrive at
+// the next start, with the world already repointed. It is checked here, where
+// somebody is still looking at the button they pressed.
 export async function restorableRelease(
   record: WorldRecord,
   backupKey: string,
   readManifest: ControlPlaneSources["readReleaseManifest"],
-): Promise<"ok" | "unknown_generation" | "release_missing"> {
-  const generationId = /-(gen-[0-9a-f]{32})-/.exec(backupKey)?.[1];
-  if (generationId === undefined) return "unknown_generation";
+  sources?: BackupReleaseSources,
+): Promise<"ok" | "unknown_generation" | "unknown_backup" | "release_missing"> {
+  const generationId = backupGenerationId(backupKey);
   const generation = [record.currentGeneration, ...record.previousGenerations].find((candidate) => candidate.id === generationId);
   if (generation === undefined) return "unknown_generation";
+  const ran = sources === undefined ? generation.release : await resolveBackupRelease(record, backupKey, sources);
+  if (ran === "unknown_generation" || ran === "unknown_backup") return ran;
   if (readManifest === undefined) return "ok";
-  const manifest = await readManifest(record.gameId, record.preset.id, generation.release);
+  const manifest = await readManifest(record.gameId, record.preset.id, typeof ran === "string" ? ran : ran.release);
   return manifest === null ? "release_missing" : "ok";
 }
 
@@ -389,7 +392,7 @@ export async function controlWorldLifecycle(
   const operations = blockingOperations(allOperations, worldId, worldPlacements(catalogWithPresets(presets, gameCatalog, worldRecords)));
   if (action === "purge" && record.status !== "archived") return response(409, { error: "world_not_archived" });
   if (action === "restore" && backupKey !== undefined) {
-    const restorable = await restorableRelease(record, backupKey, awsControlPlaneSources.readReleaseManifest);
+    const restorable = await restorableRelease(record, backupKey, awsControlPlaneSources.readReleaseManifest, backupReleaseSources());
     if (restorable !== "ok") return response(409, { error: restorable });
   }
   if (operations.length > 0) return response(409, { error: "operation_in_progress" });

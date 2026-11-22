@@ -140,6 +140,8 @@ function archive(gameId: string, target: Mutable<World>): void {
     generationId: target.release.generationId,
     sizeBytes: 150_000_000 + state.counter * 1_048_576,
     storedAt: iso(),
+    release: target.release.activeRelease,
+    releaseSource: target.release.activeRelease === null ? null : "recorded",
   };
   const key = worldKey(gameId, target.id);
   state.backups[key] = [entry, ...(state.backups[key] ?? [])];
@@ -303,7 +305,7 @@ export function worldLifecycle(gameId: string, worldId: string, action: "archive
     if (action === "restore") {
       const backup = (current.backups[worldKey(gameId, worldId)] ?? []).find((entry) => entry.key === backupKey);
       const sourceWipe = backup?.generationId ? next.wipes.find((wipe) => wipe.id === backup.generationId) : undefined;
-      origin = sourceWipe?.originRelease ?? next.release.activeRelease ?? "1.0";
+      origin = backup?.release ?? sourceWipe?.originRelease ?? next.release.activeRelease ?? "1.0";
     }
     const open = next.wipes.find((wipe) => wipe.state === "current");
     if (open) {

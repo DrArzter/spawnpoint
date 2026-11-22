@@ -169,7 +169,7 @@ export function buildSessionOverview(game: Game | undefined, snapshot: ControlPl
 }
 
 export type WorldCallbacks = Readonly<{
-  onWorldAction: (game: Game, world: World, action: WorldActionKind, backup?: { key: string; name: string }) => void;
+  onWorldAction: (game: Game, world: World, action: WorldActionKind, backup?: { key: string; name: string; release: string | null }) => void;
   onInvite: (game: Game, world: World) => void;
   onDownloadPack: (game: Game, world: World) => void;
   onEditSettings?: (game: Game, world: World) => void;

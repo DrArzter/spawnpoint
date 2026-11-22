@@ -48,10 +48,23 @@ load_connectivity "${WORLD_CONNECTIVITY:-zerotier}"
 if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
   export SERVER_DATA_DIR="${WORLD_DATA_DIRECTORY}"
   export WORLD_NAME="${WORLD_ID}"
+  # The backup is paired with the release that ran (ADR-0052): the wipe's
+  # active release, which a promotion changes, not the release the wipe began
+  # with. Without a readable pointer the archive says it carries the origin.
+  WORLD_RELEASE_SOURCE="generation"
+  pointer_bucket="${RELEASE_BUCKET:-$(read_env_value RELEASE_BUCKET 2>/dev/null || true)}"
+  if [[ -n "${pointer_bucket}" ]] &&
+    pointer_output="$(RELEASE_BUCKET="${pointer_bucket}" "${SCRIPT_DIR}/read-release-pointer.sh" "${WORLD_ID}" "${WORLD_GENERATION_ID}" 2>/dev/null)"; then
+    active_release="$(awk -F= '$1 == "active_release" { print $2 }' <<<"${pointer_output}")"
+    if [[ "${active_release}" =~ ^[0-9]+\.[0-9]+$ ]]; then
+      WORLD_RELEASE="${active_release}"
+      WORLD_RELEASE_SOURCE="active"
+    fi
+  fi
   # Child archive/upload processes must bind the immutable backup to the exact
   # generation it came from. The id is also encoded in the object name, so the
   # control plane can select restores without downloading world data.
-  export WORLD_GENERATION_ID WORLD_RELEASE
+  export WORLD_GENERATION_ID WORLD_RELEASE WORLD_RELEASE_SOURCE
 fi
 
 export SERVER_PROJECT_DIRECTORY="${SERVER_DIR}"

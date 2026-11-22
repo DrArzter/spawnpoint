@@ -44,3 +44,15 @@ test("an unrelated backup is rejected before any release lookup", async () => {
     "2026-09-03T00:00:00Z", async () => { checked = true; return true; }), /backup_generation_unknown/);
   assert.equal(checked, false);
 });
+
+test("restore opens the new wipe on the release the backup ran and checks that release", async () => {
+  const asked: string[] = [];
+  const restored = await restoreWithPublishedRelease(world, { ...backup, release: "1.3" }, restoreUuid, "2026-09-03T00:00:00Z", async (game, selectedPreset, release) => {
+    asked.push(releaseManifestKey(game, selectedPreset, release));
+    return true;
+  });
+  assert.equal(restored.currentGeneration.release, "1.3");
+  assert.deepEqual(asked, ["releases/minecraft/industrial/1.3/manifest.json"]);
+  await assert.rejects(restoreWithPublishedRelease(world, { ...backup, release: "1.3" }, restoreUuid, "2026-09-03T00:00:00Z", async () => false), /release_missing/);
+  await assert.rejects(restoreWithPublishedRelease(world, { ...backup, release: "latest" }, restoreUuid, "2026-09-03T00:00:00Z", async () => true), /invalid_backup/);
+});

@@ -155,6 +155,35 @@ output="$(stop_on a)"
 [[ "$(result_of "${output}")" == "session_stopped_and_backed_up" ]]
 [[ "$(object_count)" == "2" ]]
 
+# --- the archive names the release it ran: the wipe's origin without a pointer ---
+metadata_of() {
+  head -n 1 "${FAKE_S3_ROOT}/backups/$1.fake-metadata"
+}
+second="$(awk -F= '$1 == "object_key" { print substr($0, index($0, "=") + 1) }' <<<"${output}")"
+[[ "$(metadata_of "${second}")" == *",release=1.2,release-source=generation" ]]
+
+# --- after a promotion, the active release on the wipe's pointer (ADR-0052) ---
+pointer_dir="${FAKE_S3_ROOT}/releases/worlds/${world_id}/generations/${generation}"
+mkdir -p -- "${pointer_dir}"
+jq -n --arg world "${world_id}" --arg generation "${generation}" '{
+  schema_version: 2, world_id: $world, generation_id: $generation,
+  desired_release: "4.9", active_release: "4.9",
+  updated_at: "2026-11-22T00:00:00Z", updated_by: "promote-test", source: "promote-commit"
+}' >"${pointer_dir}/release.json"
+play "${a_world}" "session three"
+output="$(RELEASE_BUCKET=releases stop_on a)"
+third="$(awk -F= '$1 == "object_key" { print substr($0, index($0, "=") + 1) }' <<<"${output}")"
+[[ "$(metadata_of "${third}")" == *",release=4.9,release-source=active" ]]
+
+# --- a pointer that names no active release yet leaves the origin, marked as such ---
+jq '.active_release = null' "${pointer_dir}/release.json" >"${pointer_dir}/release.next"
+mv -- "${pointer_dir}/release.next" "${pointer_dir}/release.json"
+play "${a_world}" "session four"
+output="$(RELEASE_BUCKET=releases stop_on a)"
+fourth="$(awk -F= '$1 == "object_key" { print substr($0, index($0, "=") + 1) }' <<<"${output}")"
+[[ "$(metadata_of "${fourth}")" == *",release=1.2,release-source=generation" ]]
+[[ "$(object_count)" == "4" ]]
+
 # --- a host that never held the world refuses; it cannot vouch for the archive ---
 code=0
 output="$(stop_on b 2>"${fixture}/elsewhere.err")" || code=$?
@@ -165,6 +194,6 @@ rm -f -- "${FAKE_STATES_DIR}/mc"
 code=0
 output="$(stop_on b 2>/dev/null)" || code=$?
 [[ "${code}" == "6" ]]
-[[ "$(object_count)" == "2" ]]
+[[ "$(object_count)" == "4" ]]
 
 printf 'stop-gate-test: ok\n'

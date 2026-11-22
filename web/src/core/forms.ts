@@ -181,7 +181,7 @@ function startDescription(world: World): string {
   return world.materialization === "not_created" ? "Creates wipe #1 and starts a billed host." : "Starts a billed host. It may take a few minutes.";
 }
 
-function confirmationCopy(confirmation: Confirmation): { title: string; description: string; label: string; destructive: boolean } {
+export function confirmationCopy(confirmation: Confirmation): { title: string; description: string; label: string; destructive: boolean } {
   if (confirmation.kind === "build") {
     return { ...releaseBuildCopy(confirmation.preset), destructive: false };
   }
@@ -203,7 +203,14 @@ function confirmationCopy(confirmation: Confirmation): { title: string; descript
     case "purge":
       return { title: `Permanently delete ${world.displayName}?`, description: "Deletes the world, its release pointer and every backup. This cannot be undone.", label: "Delete forever", destructive: true };
     default:
-      return { title: `Restore ${confirmation.backupName}?`, description: "Backs up the current wipe, then restores this backup as a new wipe.", label: "Restore backup", destructive: true };
+      return {
+        title: `Restore ${confirmation.backupName}?`,
+        description: confirmation.release === null
+          ? "Backs up the current wipe, then restores this backup as a new wipe."
+          : `Backs up the current wipe, then restores this backup as a new wipe on release ${confirmation.release}, the release it ran.`,
+        label: "Restore backup",
+        destructive: true,
+      };
   }
 }
 

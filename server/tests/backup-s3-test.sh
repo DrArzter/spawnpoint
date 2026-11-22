@@ -46,6 +46,27 @@ cmp -- "${archive}" "${download}"
 metadata_file="${fixture}/fake-s3/${BACKUP_BUCKET}/${object_key}.fake-metadata"
 grep -q "generation=${WORLD_GENERATION_ID}" "${metadata_file}"
 grep -q "release=${WORLD_RELEASE}" "${metadata_file}"
+# An archive that names a release source carries it, and an unknown source is refused.
+printf 'region fixture two\n' >"${fixture}/data/world/region/r.0.0.mca"
+sleep 1
+second_output="$(
+  SERVER_DATA_DIR="${fixture}/data" \
+  SERVER_BACKUP_DIR="${fixture}/backups" \
+    "${REPOSITORY_ROOT}/server/scripts/archive-world.sh"
+)"
+second="$(awk -F= '$1 == "archive" { print $2 }' <<<"${second_output}")"
+if WORLD_RELEASE_SOURCE=guessed "${REPOSITORY_ROOT}/server/scripts/upload-world-backup.sh" "${second}" >/dev/null 2>&1; then
+  printf 'expected an unknown release source to be refused\n' >&2
+  exit 1
+fi
+second_key="$(WORLD_RELEASE_SOURCE=active "${REPOSITORY_ROOT}/server/scripts/upload-world-backup.sh" "${second}" |
+  awk -F= '$1 == "object_key" { print $2 }')"
+grep -q "release=${WORLD_RELEASE},release-source=active" "${fixture}/fake-s3/${BACKUP_BUCKET}/${second_key}.fake-metadata"
+if grep -q "release-source" "${metadata_file}"; then
+  printf 'expected no release source where none was given\n' >&2
+  exit 1
+fi
+
 sed -i -E '1s/^sha256=[0-9a-f]{64}/sha256=0000000000000000000000000000000000000000000000000000000000000000/' "${metadata_file}"
 if "${REPOSITORY_ROOT}/server/scripts/download-world-backup.sh" "${object_key}" "${fixture}/corrupt.tar.zst" >/dev/null 2>&1; then
   printf 'expected corrupt metadata download to fail\n' >&2

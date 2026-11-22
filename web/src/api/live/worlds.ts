@@ -1,5 +1,5 @@
 import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../../model";
-import { apiFailure, type FileLink, type ReleaseMod, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type SessionOperation, type SpawnpointApi, type WorldLifecycleAction, type WorldWhitelist } from "../contract";
+import { apiFailure, type FileLink, type ReleaseDiff, type ReleaseMod, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type SessionOperation, type SpawnpointApi, type WorldLifecycleAction, type WorldWhitelist } from "../contract";
 import { authorizedFetch } from "./transport";
 
 function controlPlaneSubscription(onInvalidated: () => void): () => void {
@@ -270,6 +270,18 @@ export const worldsApi = {
       throw await apiFailure(response, messages[body.error ?? ""] ?? "The release's mods could not be read.", body);
     }
     return { release: body.release ?? release, mods: body.mods, clientMods: body.clientMods ?? null };
+  },
+
+  async loadReleaseDiff(gameId: string, presetId: string, release: string, from: string | null): Promise<ReleaseDiff | null> {
+    const query = from === null ? "" : `?from=${encodeURIComponent(from)}`;
+    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}/diff${query}`);
+    const body = await response.json().catch(() => ({})) as Partial<ReleaseDiff> & { error?: string };
+    if (response.status === 404 && body.error === "no_plan") return null;
+    if (!response.ok || body.serverMods === undefined) {
+      const messages: Record<string, string> = { forbidden: "Your role cannot read releases.", unknown_release: `Release ${from ?? release} is not in the store.` };
+      throw await apiFailure(response, messages[body.error ?? ""] ?? "The release's changes could not be read.", body);
+    }
+    return body as ReleaseDiff;
   },
 
   async requestModDownload(gameId: string, presetId: string, release: string, sha256: string): Promise<FileLink> {

@@ -319,6 +319,25 @@ publish_set_packs() {
     '([.server.mods[], .client.mods[]] | unique_by(.file))[] | [.file, .sha256] | @tsv')"
 }
 
+# The release plan (plan-release.sh), when the caller made one. It is
+# descriptive and outside the gate: written after the payload and just before
+# the manifest, and a failure here never stops the publication.
+plan_key="${release_prefix}/plan.json"
+plan_result=not_provided
+publish_plan() {
+  local plan="${RELEASE_PLAN:-}"
+  [[ -n "${plan}" ]] || return 0
+  if [[ -f "${plan}" && ! -L "${plan}" ]] &&
+    jq -e --arg release "${release}" --arg preset "${preset_id}" \
+      '.schema_version == 1 and .release == $release and .preset == $preset' "${plan}" >/dev/null 2>&1 &&
+    (upload_release_object "${plan_key}" "${plan}" "$(file_sha256 "${plan}")" "plan.json"); then
+    plan_result=uploaded
+  else
+    plan_result=failed
+    log "warning: the release plan was not published; the release is unaffected"
+  fi
+}
+
 # An existing manifest is the immutability gate. Identity is the deployment
 # content — release, versions and the mods entries — not the whole document:
 # created_at and the changelog are descriptive, and two imports of the same
@@ -350,6 +369,9 @@ printf 'client_mods=%s\n' "${client_mods_count}"
   printf 'pack_key=%s\n' "${pack_key}"
 printf 'server_pack=%s\n' "${server_pack_result}"
 printf 'full_pack=%s\n' "${full_pack_result}"
+  # A published release keeps the plan of the build that published it.
+  [[ -z "${RELEASE_PLAN:-}" ]] || plan_result=skipped_existing_release
+  printf 'plan=%s\n' "${plan_result}"
   exit 0
 fi
 
@@ -440,6 +462,7 @@ await_uploads
 log "payload upload finished: ${uploads_done} objects in $((SECONDS - upload_started))s"
 pack_result="$(publish_pack)"
 publish_set_packs
+publish_plan
 upload_release_object "${manifest_key}" "${manifest}" "${manifest_digest}" "manifest.json" head
 log "release published in ${SECONDS}s"
 
@@ -454,3 +477,5 @@ printf 'pack=%s\n' "${pack_result}"
 printf 'pack_key=%s\n' "${pack_key}"
 printf 'server_pack=%s\n' "${server_pack_result}"
 printf 'full_pack=%s\n' "${full_pack_result}"
+printf 'plan=%s\n' "${plan_result}"
+[[ "${plan_result}" != uploaded ]] || printf 'plan_key=%s\n' "${plan_key}"

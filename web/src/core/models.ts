@@ -212,6 +212,18 @@ export type ModRow = Readonly<{ file: string; bytes: number; sha256: string; dow
 /** `split`: players install a set of their own, so the release offers its server and full packs too. */
 export type ModsModel = Readonly<{ release: string; split: boolean; files: Loading<readonly ModRow[]> }>;
 
+/** One line of a release diff (P3): what changed, in which part of the release, and the item. */
+export type ChangeRow = Readonly<{ id: string; change: "added" | "removed" | "changed"; part: string; name: string; detail: string | null }>;
+/**
+ * What the release a world starts with changes compared with the release it
+ * replaces, or with what its build compared it with. A ready value of null is
+ * a release whose build kept no plan.
+ */
+export type ReleaseChangesModel = Readonly<{
+  release: string;
+  changes: Loading<Readonly<{ from: string | null; rows: readonly ChangeRow[]; unchanged: number }> | null>;
+}>;
+
 export type WorldModel = Readonly<{
   game: Game;
   world: World;
@@ -239,6 +251,8 @@ export type WorldModel = Readonly<{
     state: World["release"]["state"];
     /** The server mods of the release the world starts with; null when none can be read. */
     mods: ModsModel | null;
+    /** What that release changes; null when the role or the deployment offers no diff. */
+    changes: ReleaseChangesModel | null;
   }>;
   /** The players who may join; null when the role, the game or the world keeps no whitelist here. */
   whitelist: WhitelistModel | null;

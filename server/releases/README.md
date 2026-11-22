@@ -74,6 +74,25 @@ zips embed mtimes and are not byte-reproducible, and release immutability is alr
 above. To fill the gap for a release published before this was true, run
 `scripts/publish-pack.sh <game> <preset> <release>`.
 
+## The release plan
+
+`server/scripts/plan-release.sh <new-manifest> <previous-manifest | none>` writes what a release changes compared
+with an earlier one: the Minecraft version, the loader, the runtime image, `server.mods`, `server.overrides` by root,
+the client-only mods and addons, and `client.zip`. Each entry is `added`, `removed`, `changed` (the same name or the
+same mod id, another digest) or `unchanged`. It matches by mod id when both manifests have `mod_index`, and by file
+name when they do not. It prints `plan_*=` summary lines and up to 50 `plan_entry=` lines.
+
+The CodeBuild builder compares with the preset's `latest_release` in `presets/<game>/catalog.json`. `PREVIOUS_RELEASE`
+overrides it, and `none` makes a first release. `upload-release.sh` writes the plan to
+`releases/<game>/<preset>/<release>/plan.json` after the payload and just before the manifest, when the caller sets
+`RELEASE_PLAN`. The plan is descriptive and outside the immutability gate. A plan that fails or does not upload never
+stops a release. A release that is published already keeps its plan. The plan has no storage delta yet: that needs
+content-addressed storage, which does not exist yet.
+
+The API diffs releases with the same model (`GET /games/{game}/presets/{preset}/releases/{release}/diff?from=`). It
+reads `plan.json` for the pair the build compared, and diffs the two manifests for any other pair. Both are held to
+the fixtures in `server/tests/fixtures/release-plan`.
+
 ## A profile names its game
 
 Authoring lives in one repository per game, because the contracts differ: a Minecraft profile pins a loader and

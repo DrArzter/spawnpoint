@@ -60,7 +60,7 @@ const model: WorldModel = {
     inventory: { status: "ready", value: { entries: [], unverified: 0, truncated: false } },
     wipeNumber: () => 1, restore: () => spy("backup.restore", "Restore"), download: null,
   },
-  releases: { rows: [], state: "available", mods: null },
+  releases: { rows: [], state: "available", mods: null, changes: null },
   whitelist: null,
   console: null,
   metrics: null,

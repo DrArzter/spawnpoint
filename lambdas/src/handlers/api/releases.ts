@@ -2,6 +2,7 @@ import { type Identity } from "../../access/domain.ts";
 import { startPresetBuild } from "../../control-plane/aws-release-builds.ts";
 import { awsControlPlaneSources, releaseModUrl, releasePackUrl, packDownloadUrl } from "../../control-plane/aws.ts";
 import { manifestClientAddons, manifestClientMods, RELEASE_PACKS, releaseModLocation, type ReleasePack } from "../../control-plane/release-artifacts.ts";
+import { type PlanMod, type ReleasePlan, releasePlan, storedReleasePlan } from "../../control-plane/release-plan.ts";
 import { packRelease } from "../../control-plane/session-control.ts";
 import { type Response, response } from "./http.ts";
 
@@ -101,6 +102,60 @@ export async function releaseManifest(gameId: string, presetId: string, version:
     clientMods: manifestClientMods(manifest),
     // Extra mods on top of a modpack, with their side (ADR-0077).
     addons: manifestClientAddons(manifest),
+  });
+}
+
+function diffMod(mod: PlanMod) {
+  return { file: mod.file, sha256: mod.sha256, bytes: mod.bytes, side: mod.side ?? null, modIds: mod.mod_ids ?? null };
+}
+
+function diffClasses(section: ReleasePlan["server_mods"]) {
+  return {
+    added: section.added.map(diffMod),
+    removed: section.removed.map(diffMod),
+    changed: section.changed.map((change) => ({ from: diffMod(change.from), to: diffMod(change.to) })),
+    unchanged: section.unchanged,
+  };
+}
+
+// What a release changes compared with another one of its preset (P3). The
+// pair the build compared comes from its plan.json; any other pair, or a
+// release built before plans existed, is diffed from the two manifests.
+export async function releaseDiff(gameId: string, presetId: string, version: string, from: string | undefined): Promise<Response> {
+  if (!RELEASE_ID.test(gameId) || !RELEASE_ID.test(presetId) || !RELEASE_VERSION.test(version) ||
+    (from !== undefined && (!RELEASE_VERSION.test(from) || from === version))) {
+    return response(400, { error: "invalid_release_reference" });
+  }
+  const sources = awsControlPlaneSources;
+  const stored = storedReleasePlan(await sources.readReleasePlan?.(gameId, presetId, version) ?? null, version);
+  let plan: ReleasePlan | null = stored !== null && (from === undefined || stored.previous_release === from) ? stored : null;
+  const source = plan === null ? "manifests" : "plan";
+  if (plan === null) {
+    if (from === undefined) return response(404, { error: "no_plan" });
+    const [next, previous] = await Promise.all([
+      sources.readReleaseManifest?.(gameId, presetId, version) ?? null,
+      sources.readReleaseManifest?.(gameId, presetId, from) ?? null,
+    ]);
+    if (next === null || previous === null) return response(404, { error: "unknown_release" });
+    plan = releasePlan(next, previous);
+    if (plan === null) return response(502, { error: "invalid_manifest" });
+  }
+  return response(200, {
+    gameId,
+    presetId,
+    release: plan.release,
+    from: plan.previous_release,
+    source,
+    matchedBy: plan.matched_by,
+    gameVersion: plan.minecraft,
+    loader: plan.loader,
+    runtimeImage: plan.runtime,
+    serverMods: diffClasses(plan.server_mods),
+    overrides: plan.server_overrides.roots.map((root) => ({
+      root: root.root, added: root.added, removed: root.removed, changed: root.changed, unchanged: root.unchanged,
+    })),
+    clientMods: diffClasses(plan.client_mods),
+    clientPack: plan.client_pack,
   });
 }
 

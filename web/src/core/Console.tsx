@@ -12,7 +12,7 @@ import { action, type Action } from "./actions";
 import { releaseBuildCopy } from "./release-builds";
 import { buildStatus, sessionStatus, worldStatus, type StatusDescriptor } from "./status";
 import { useConsole, type ConsoleController } from "./useConsole";
-import { useAccessRequests, useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
+import { useAccessRequests, useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseChanges, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, OperationRow, ReleasesModel, ShellModel, WorldModel, WorldRow, WorldsModel } from "./models";
 import { addressFacts, buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionDetails, siblingRow, withReleasePacks, worldDetails, worldLaunchedAt, worldMoreActions, worldNotices, worldPlayers, worldSessionControl, worldTabs } from "./worlds";
@@ -160,6 +160,15 @@ function modsSource(world: World, open: boolean): Readonly<{ presetId: string; v
   return open && world.preset !== null && version !== null ? { presetId: world.preset.id, version } : null;
 }
 
+// The same release's changes (P3): against the active release while a
+// promotion waits, otherwise against what its build compared it with.
+function changesSource(world: World, open: boolean): Readonly<{ presetId: string; version: string; from: string | null }> | null {
+  const source = modsSource(world, open);
+  if (source === null) return null;
+  const { activeRelease } = world.release;
+  return { ...source, from: activeRelease !== null && activeRelease !== source.version ? activeRelease : null };
+}
+
 // A whitelist kept on the world's record (ADR-0066): a game that keeps one, a
 // live world with a record, a role and a deployment that manage it.
 function whitelistOffered(console: ConsoleController, game: Game, world: World): boolean {
@@ -184,9 +193,11 @@ function useWorldTabs(console: ConsoleController, game: Game, world: World, noti
   const metrics = useWorldMetrics(open("metrics") ? game.id : undefined, world.id, worldSessionId(game, world));
   const whitelist = useWhitelist(game.id, world, open("whitelist"), notify);
   const mods = useReleaseMods(game.id, modsSource(world, open("releases") && capabilities.has("releaseFiles")), (presetId, version, mod) => console.downloadMod(game, presetId, version, mod));
+  const changes = useReleaseChanges(game.id, changesSource(world, open("releases") && capabilities.has("releaseDiff")));
   return {
     tabs,
     mods,
+    changes,
     whitelist: offered("whitelist") ? whitelist : null,
     console: offered("console") ? consoleModel : null,
     metrics: offered("metrics") ? metrics : null,
@@ -238,6 +249,7 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
       ),
       state: world.release.state,
       mods: shown.mods,
+      changes: shown.changes,
     },
     whitelist: shown.whitelist,
     console: shown.console,

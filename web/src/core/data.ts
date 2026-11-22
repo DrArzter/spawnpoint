@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseMod, ReleaseMods, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
+import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseDiff, ReleaseMod, ReleaseMods, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
 import { failureKind } from "../api/contract";
 import {
   approveAccessCandidate, changePassword, createAccessInvitation, deleteIdentity, dismissAccessCandidate, googleOidcClientId, linkGoogle, linkPassword, linkTelegram, loadAccessCandidates, loadAccessIdentities, loadAccessInvitations,
-  loadAccessRoles, loadBackups, loadConsole, loadInvitationHistory, loadWorldMetrics, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadReleaseMods, loadWhitelist, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
+  loadAccessRoles, loadBackups, loadConsole, loadInvitationHistory, loadWorldMetrics, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadReleaseDiff, loadReleaseMods, loadWhitelist, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
   runConsoleCommand, sendInvitation, telegramOidcClientId, updateIdentityRole, updateSubscriptions, updateWhitelist,
 } from "../auth";
 import type { SnackInput } from "../components/ui/Snackbar";
@@ -13,7 +13,8 @@ import { formatDateTime } from "../lib/format";
 import { GOOGLE_CLIENT_ID } from "../lib/signin";
 import type { Game, LinkKind, Member, OwnerBootstrap, Role, World } from "../model";
 import { action, type Action } from "./actions";
-import type { BackupsModel, CandidateRow, ConfirmationModel, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, NotificationsModel, RequestSummary, RolesModel, UsersModel, WhitelistModel } from "./models";
+import type { BackupsModel, CandidateRow, ConfirmationModel, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, NotificationsModel, ReleaseChangesModel, RequestSummary, RolesModel, UsersModel, WhitelistModel } from "./models";
+import { releaseChangeRows } from "./release-diff";
 import { releaseModUnion } from "./release-mods";
 import { whitelistNameError } from "./whitelist";
 
@@ -146,6 +147,18 @@ export function useReleaseMods(gameId: string, release: Readonly<{ presetId: str
       download: action(`mod.download.${mod.sha256}`, "Download", () => onDownload(release.presetId, release.version, mod), { icon: "download" }),
     })) },
   };
+}
+
+/**
+ * What a release changes (P3), read only while the Releases tab is open:
+ * against `from` while a promotion waits, otherwise against what its build compared.
+ */
+export function useReleaseChanges(gameId: string, release: Readonly<{ presetId: string; version: string; from: string | null }> | null): ReleaseChangesModel | null {
+  const [state, retry] = useLoad<ReleaseDiff | null>(release === null ? null : () => loadReleaseDiff(gameId, release.presetId, release.version, release.from), [gameId, release?.presetId, release?.version, release?.from]);
+  if (release === null) return null;
+  if (state.status !== "ready") return { release: release.version, changes: asLoading(state, retry, "changes.retry") };
+  const diff = state.value;
+  return { release: release.version, changes: { status: "ready", value: diff === null ? null : { from: diff.from, ...releaseChangeRows(diff) } } };
 }
 
 function restoreHint(world: World, entry: BackupEntry, canRestore: boolean): string {

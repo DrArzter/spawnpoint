@@ -88,6 +88,46 @@ PROFILE_SOURCE_COMMIT="${config_revision}" \
   "${server_scripts}/build-profile-release.sh" \
     "${profile_directory}" "${RELEASE}" "${payload}/mods" "${payload}/manifest.json"
 
+# The plan: what this release changes compared with the preset's latest
+# release, or PREVIOUS_RELEASE (`none` for a first release). It is descriptive,
+# so any failure here only leaves the release without a plan.
+plan_file=""
+previous_release="${PREVIOUS_RELEASE:-}"
+if [[ -z "${previous_release}" ]]; then
+  previous_release=none
+  if aws s3api get-object --bucket "${RELEASE_BUCKET}" --key "presets/${game}/catalog.json" \
+    "${workspace}/plan-catalog.json" >/dev/null 2>&1; then
+    previous_release="$(jq -r --arg id "${PROFILE_ID}" \
+      'first(.presets[]? | select(.id == $id) | .latest_release // empty) // "none"' \
+      "${workspace}/plan-catalog.json" 2>/dev/null)" || previous_release=none
+  else
+    printf 'plan_catalog=unreadable\n'
+  fi
+fi
+previous_manifest=""
+if [[ "${previous_release}" == none ]]; then
+  previous_manifest=none
+elif [[ ! "${previous_release}" =~ ^[0-9]+\.[0-9]+$ ]]; then
+  printf 'plan=skipped\nplan_reason=invalid_previous_release\n'
+elif [[ "${previous_release}" == "${RELEASE}" ]]; then
+  printf 'plan=skipped\nplan_reason=same_release\n'
+elif aws s3api get-object --bucket "${RELEASE_BUCKET}" \
+  --key "releases/${game}/${PROFILE_ID}/${previous_release}/manifest.json" \
+  "${workspace}/previous-manifest.json" >/dev/null 2>&1; then
+  previous_manifest="${workspace}/previous-manifest.json"
+else
+  printf 'plan=skipped\nplan_reason=previous_manifest_unreadable\nplan_previous_release=%s\n' "${previous_release}"
+fi
+if [[ -n "${previous_manifest}" ]]; then
+  if RELEASE_PLAN_OUTPUT="${workspace}/plan.json" \
+    "${server_scripts}/plan-release.sh" "${payload}/manifest.json" "${previous_manifest}"; then
+    plan_file="${workspace}/plan.json"
+  else
+    printf 'plan=failed\n'
+  fi
+fi
+
+RELEASE_PLAN="${plan_file}" \
 RELEASE_SOURCE_DIR="${payload}" \
   "${server_scripts}/upload-release.sh" "${payload}/manifest.json"
 

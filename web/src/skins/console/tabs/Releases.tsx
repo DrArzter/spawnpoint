@@ -1,4 +1,5 @@
-import type { Detail, ModsModel, WorldModel } from "../../../core/models";
+import type { ChangeRow, Detail, ModsModel, ReleaseChangesModel, WorldModel } from "../../../core/models";
+import type { StatusDescriptor } from "../../../core/status";
 import { formatBytes } from "../../../lib/format";
 import { ActionButton } from "../ui/ActionButton";
 import { Card } from "../ui/Card";
@@ -7,6 +8,7 @@ import { Copy } from "../ui/Copy";
 import { DetailList } from "../ui/DetailList";
 import { Empty, LoadError } from "../ui/Empty";
 import { Grid } from "../ui/Grid";
+import { Status } from "../ui/Status";
 import { Table } from "../ui/Table";
 import { TrackList, TrackTitle } from "../ui/TrackList";
 
@@ -41,8 +43,45 @@ export function ReleasesTab({ model }: Readonly<{ model: WorldModel }>) {
           />
         </Card>
       )}
+      {model.releases.changes && <Changes changes={model.releases.changes} />}
       {model.releases.mods && <Mods mods={model.releases.mods} />}
     </Grid>
+  );
+}
+
+const changeStatus: Readonly<Record<ChangeRow["change"], StatusDescriptor>> = {
+  removed: { kind: "warning", label: "Removed" },
+  changed: { kind: "info", label: "Changed" },
+  added: { kind: "ok", label: "Added" },
+};
+
+/** What the release changes (P3); the pair it compares is the chip, the unchanged count its tooltip. */
+function Changes({ changes }: Readonly<{ changes: ReleaseChangesModel }>) {
+  const state = changes.changes;
+  const value = state.status === "ready" ? state.value : null;
+  const head = value && <Chip icon="history" tip={`${value.unchanged} files unchanged`}>{value.from === null ? `First release ${changes.release}` : `${value.from} → ${changes.release}`}</Chip>;
+  return (
+    <Card actions={head ?? undefined} body="flush" count={value?.rows.length} title="Changes">
+      {state.status === "error"
+        ? <LoadError error={state.error} kind={state.kind} retry={state.retry} size="sm" title="Changes could not be loaded" verb="read changes" />
+        : state.status === "ready" && state.value === null
+          ? <Empty icon="history" size="sm" title={`Release ${changes.release} has no build plan`} />
+          : (
+            <Table
+              columns={[
+                { id: "item", header: "Item", kind: "lead", clip: true, render: (row) => <strong className="c-mono" title={row.name}>{row.name}</strong> },
+                { id: "change", header: "Change", render: (row) => <Status status={changeStatus[row.change]} /> },
+                { id: "part", header: "Part", render: (row) => row.part },
+                { id: "detail", header: "Detail", kind: "wide", render: (row) => row.detail ?? <span className="c-faint">—</span> },
+              ]}
+              empty={<Empty icon="history" size="sm" title="No changes" />}
+              label="Changes"
+              loading={state.status === "loading"}
+              rowKey={(row) => row.id}
+              rows={value?.rows ?? []}
+            />
+          )}
+    </Card>
   );
 }
 

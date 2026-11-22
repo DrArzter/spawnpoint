@@ -6,7 +6,7 @@ import { DetailList } from "../ui/DetailList";
 import { Empty } from "../ui/Empty";
 import { Grid } from "../ui/Grid";
 import { TrackList, TrackTitle } from "../ui/TrackList";
-import { Elapsed } from "./Hero";
+import { RunningTime } from "../ui/Flashbar";
 
 /** The overflow items the World card draws instead of the header menu. */
 export const CARD_ACTIONS: readonly string[] = ["world.settings", "world.game-settings"];
@@ -49,7 +49,7 @@ export function DetailsTab({ model }: Readonly<{ model: WorldModel }>) {
             rows={model.operations}
             tracks={[
               { id: "operation", header: "Operation", width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle line={<span className="c-mono">{row.operation.id}</span>} title={row.label} /> },
-              { id: "running", header: "Running for", width: "120px", kind: "num", render: (row) => <Elapsed since={row.operation.startedAt} /> },
+              { id: "running", header: "Running for", width: "auto", kind: "num", render: (row) => <RunningTime expectation={row.operation} since={row.operation.startedAt} /> },
             ]}
           />
         </Card>

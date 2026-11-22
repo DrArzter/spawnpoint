@@ -7,7 +7,7 @@ import { Address } from "./ui/Address";
 import { Ago } from "./ui/Ago";
 import { Card } from "./ui/Card";
 import { Empty, LoadError } from "./ui/Empty";
-import { elapsed, useNow } from "./ui/Flashbar";
+import { RunningTime } from "./ui/Flashbar";
 import { GameGlyph } from "./ui/GameGlyph";
 import { Grid, GridCell } from "./ui/Grid";
 import { Notices } from "./ui/Notice";
@@ -140,7 +140,7 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
             rows={operations}
             tracks={[
               { id: "operation", header: "Operation", width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle href={row.href} line={<span className="c-mono">{row.operation.id}</span>} title={`${row.label} · ${row.worldName}`} /> },
-              { id: "running", header: "Running for", width: "auto", kind: "num", render: (row) => <RunningFor row={row} /> },
+              { id: "running", header: "Running for", width: "auto", kind: "num", render: (row) => <RunningTime expectation={row.operation} since={row.operation.startedAt} /> },
             ]}
           />
         </Card>
@@ -169,11 +169,6 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
       </Grid>
     </div>
   );
-}
-
-function RunningFor({ row }: Readonly<{ row: OperationRow }>) {
-  const now = useNow();
-  return <span className="c-mono">{elapsed(row.operation.startedAt, now) ?? "—"}</span>;
 }
 
 function Requests({ model, requests }: Readonly<{ model: WorldsModel; requests: NonNullable<WorldsModel["requests"]> }>) {

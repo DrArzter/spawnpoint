@@ -29,6 +29,7 @@ import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildLifecycleStartInput, buildLifecycleStopInput, buildStopInput } from "../domain/telegram-bot.ts";
 import type { ControlPlaneSources, HostMetrics, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 import { operationWorldId } from "./world-session.ts";
+import { expectationFromRuns, type FinishedRun } from "./operation-eta.ts";
 import type { ConsoleInvocation } from "./console.ts";
 import type { HostRecord, SessionPolicy } from "../domain/placement.ts";
 
@@ -275,23 +276,63 @@ async function runningExecutions(stateMachineArn: string) {
   return running;
 }
 
+// How many finished runs to read per workflow, and how long they are kept. A
+// panel polls, and an average over ten runs moves slowly.
+const HISTORY_PAGE = 50;
+const HISTORY_TTL_MS = 5 * 60 * 1000;
+
+type MachineHistory = Readonly<{ readAt: number; runs: readonly FinishedRun[] }>;
+const historyByMachine = new Map<string, MachineHistory>();
+
+// The newest finished runs of one workflow, each with its world. Described
+// worlds stay in `worldByExecution`, so a refresh describes only new runs.
+// A failed read is kept as empty for the same time, so a throttled call is not
+// repeated at every poll.
+async function recentRuns(stateMachineArn: string, now: number): Promise<MachineHistory> {
+  const cached = historyByMachine.get(stateMachineArn);
+  if (cached && now - cached.readAt < HISTORY_TTL_MS) return cached;
+  let runs: readonly FinishedRun[] = [];
+  try {
+    const page = await sfn.send(new ListExecutionsCommand({ stateMachineArn, statusFilter: "SUCCEEDED", maxResults: HISTORY_PAGE }));
+    runs = await Promise.all((page.executions ?? [])
+      .flatMap((execution) => execution.executionArn && execution.startDate && execution.stopDate
+        ? [{ executionArn: execution.executionArn, startDate: execution.startDate, stopDate: execution.stopDate }]
+        : [])
+      .map(async ({ executionArn, startDate, stopDate }) => ({ executionArn, worldId: await executionWorldId(executionArn), startDate, stopDate })));
+  } catch (error) {
+    console.warn("could not read the finished runs of an operation workflow", stateMachineArn, error);
+  }
+  const history = { readAt: now, runs };
+  historyByMachine.set(stateMachineArn, history);
+  return history;
+}
+
 async function listRunningOperations(): Promise<readonly OperationObservation[]> {
   const machines = operationMachines().filter((machine) => isSessionOperation(machine.type));
+  const now = Date.now();
   const groups = await Promise.all(machines.map(async (machine) => {
     const running = await runningExecutions(machine.arn);
-    return Promise.all(running.map(async (execution) => ({
-      id: execution.name,
-      type: machine.type as OperationObservation["type"],
-      status: "running" as const,
-      startedAt: execution.startDate.toISOString(),
-      providerRef: execution.executionArn,
-      worldId: await executionWorldId(execution.executionArn),
-    })));
+    // Nothing running: the history is not read at all.
+    const history = running.length > 0 ? await recentRuns(machine.arn, now) : null;
+    return Promise.all(running.map(async (execution) => {
+      const worldId = await executionWorldId(execution.executionArn);
+      const expected = history && worldId !== null ? expectationFromRuns(history.runs, worldId) : null;
+      return {
+        id: execution.name,
+        type: machine.type as OperationObservation["type"],
+        status: "running" as const,
+        startedAt: execution.startDate.toISOString(),
+        providerRef: execution.executionArn,
+        worldId,
+        ...(expected ?? {}),
+      };
+    }));
   }));
   const operations = groups.flat();
-  // Keep the cache to executions still running.
-  const listed = new Set(operations.map((operation) => operation.providerRef));
-  for (const executionArn of worldByExecution.keys()) if (!listed.has(executionArn)) worldByExecution.delete(executionArn);
+  // Keep the cache to executions still running and the runs the histories hold.
+  const keep = new Set(operations.map((operation) => operation.providerRef));
+  for (const history of historyByMachine.values()) for (const run of history.runs) keep.add(run.executionArn);
+  for (const executionArn of worldByExecution.keys()) if (!keep.has(executionArn)) worldByExecution.delete(executionArn);
   return operations.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
 

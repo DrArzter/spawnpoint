@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { action, type Action } from "../../core/actions";
 import type { Detail, WorldRow, WorldsModel } from "../../core/models";
 import { cx } from "../../lib/cx";
+import { eta } from "../../lib/operation-time";
 import { Home, withIcon } from "./Home";
 import { HostingChip, HostingMark, Players, hostingLabel, releaseLine, statesOf, statusRank, uptimeText } from "./WorldFacts";
 import { ActionButton, LinkButton } from "./ui/ActionButton";
@@ -391,7 +392,7 @@ function QuickLook({ model, row, onClose }: Readonly<{ model: WorldsModel; row: 
     { key: "hosting", label: "Hosting", value: { type: "text", text: hostingLabel(row) } },
     { key: "release", label: "Release", value: { type: "release", active: row.world.release.activeRelease, desired: row.world.release.desiredRelease } },
     { key: "wipe", label: "Current wipe", value: row.wipe ? { type: "text", text: `#${row.wipe.number}` } : { type: "absent", text: row.wipeAbsent } },
-    ...(operation ? [{ label: "Operation", value: { type: "text", text: `${operation.operation.id} · ${elapsed(operation.operation.startedAt, now) ?? ""}`, mono: true } } satisfies Detail] : []),
+    ...(operation ? [{ label: "Operation", value: { type: "text", text: [operation.operation.id, elapsed(operation.operation.startedAt, now) ?? "", eta(operation.operation.startedAt, operation.operation, now)?.text].filter(Boolean).join(" · "), mono: true } } satisfies Detail] : []),
     { key: "address", label: "Address", value: row.address ? { type: "address", address: row.address } : { type: "absent", text: row.addressAbsent } },
   ];
   return (

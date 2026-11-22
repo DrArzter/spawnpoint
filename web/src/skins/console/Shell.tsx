@@ -57,7 +57,7 @@ export function flashItems(model: ShellModel, queue: SnackbarQueue, worldId: str
     kind: "busy",
     message: `${operation.label} · ${operation.worldName}`,
     // On the world's own page its hero shows the elapsed time (R3).
-    ...(operation.worldId === worldId ? {} : { since: operation.startedAt }),
+    ...(operation.worldId === worldId ? {} : { since: operation.startedAt, expectation: { expectedSeconds: operation.expectedSeconds, expectedSamples: operation.expectedSamples } }),
   }));
   const outcomes: FlashItem[] = queue.items.map((snack) => ({
     id: `snack:${snack.id}`,

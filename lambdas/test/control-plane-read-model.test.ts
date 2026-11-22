@@ -268,3 +268,17 @@ test("each game carries its settings, and each world with a record what it sets 
   assert.deepEqual(worlds.get("minecraft-rostik-1a2b3c4d")?.gameSettings, { values: { max_players: 8 }, updatedAt: "2026-10-09T11:00:00.000Z" });
   assert.equal(worlds.get("vanilla")?.gameSettings, null, "a legacy world has no record to keep settings in");
 });
+
+test("an operation's expected time reaches the snapshot, also for a coarse viewer", async () => {
+  const withEta: ControlPlaneSources = {
+    ...sources,
+    listRunningOperations: async () => [
+      { id: "start-1", type: "start", status: "running", startedAt: "2026-08-29T00:00:00.000Z", providerRef: "arn:execution", worldId: "w1", expectedSeconds: 100, expectedSamples: 6 },
+      { id: "stop-1", type: "stop", status: "running", startedAt: "2026-08-29T00:00:00.000Z", providerRef: "arn:execution-2", worldId: "w1" },
+    ],
+  };
+  const coarse = await readControlPlaneSnapshot(withEta, { includeInfrastructure: false, includeDesiredRelease: false });
+  assert.equal(coarse.operations[0]?.expectedSeconds, 100);
+  assert.equal(coarse.operations[0]?.expectedSamples, 6);
+  assert.equal("expectedSeconds" in coarse.operations[1]!, false);
+});

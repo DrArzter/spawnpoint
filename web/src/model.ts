@@ -107,8 +107,11 @@ export type Host = {
   launchedAt?: string | null;
   publicIp?: string | null;
 };
-/** `worldId` is the world the workflow's input names; null or absent blocks every world (ADR-0062). */
-export type Operation = { id: string; type: "start" | "stop" | "promote" | "world"; status: "running"; startedAt: string; worldId?: string | null; providerRef?: string };
+/**
+ * `worldId` is the world the workflow's input names; null or absent blocks every world (ADR-0062).
+ * `expectedSeconds` is the average of this world's latest runs of the type; absent with fewer than three.
+ */
+export type Operation = { id: string; type: "start" | "stop" | "promote" | "world"; status: "running"; startedAt: string; worldId?: string | null; providerRef?: string; expectedSeconds?: number; expectedSamples?: number };
 export type ControlPlaneSnapshot = {
   observedAt: string;
   games: readonly Game[];

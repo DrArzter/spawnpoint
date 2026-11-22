@@ -48,15 +48,30 @@ export function manifestClientMods(manifest: unknown): readonly ManifestMod[] | 
   return client?.kind === "mod-set" ? manifestMods(client.mods) : null;
 }
 
+export type AddonSide = "both" | "server" | "client";
+export type ManifestAddon = Readonly<ManifestMod & { side: AddonSide }>;
+
+/** The extra mods a modpack release pins on top of its pack (ADR-0077); empty when it has none. */
+export function manifestClientAddons(manifest: unknown): readonly ManifestAddon[] {
+  const client = (manifest as { client?: { kind?: unknown; addons?: unknown } } | null)?.client;
+  if (client?.kind !== "curseforge-modpack" || !Array.isArray(client.addons)) return [];
+  return client.addons.flatMap((entry) => {
+    const side = (entry as { side?: unknown } | null)?.side;
+    if (side !== "both" && side !== "server" && side !== "client") return [];
+    return manifestMods([entry]).map((mod) => ({ ...mod, side }));
+  });
+}
+
 /**
  * Where a release keeps the mod with this digest. A file both sets carry is
- * stored once, with the server's mods; only a players' own mod is in
- * client-mods/. Publication refuses a shared name with two digests.
+ * stored once, with the server's mods; only a players' own mod, or a client
+ * addon, is in client-mods/. Publication refuses a shared name with two digests.
  */
 export function releaseModLocation(manifest: unknown, sha256: string): Readonly<{ file: string; store: ModStore }> | null {
   const onServer = manifestMods((manifest as { server?: { mods?: unknown } } | null)?.server?.mods).find((mod) => mod.sha256 === sha256);
   if (onServer) return { file: onServer.file, store: "mods" };
-  const forPlayers = (manifestClientMods(manifest) ?? []).find((mod) => mod.sha256 === sha256);
+  const forPlayers = [...manifestClientMods(manifest) ?? [], ...manifestClientAddons(manifest).filter((addon) => addon.side === "client")]
+    .find((mod) => mod.sha256 === sha256);
   return forPlayers ? { file: forPlayers.file, store: "client-mods" } : null;
 }
 

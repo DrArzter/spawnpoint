@@ -137,10 +137,10 @@ preset_field() {
 }
 releases_root="${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/factorio/factorio-vanilla"
 put_manifest() {
-  local release="$1"
+  local release="$1" created_at="${2:-2026-11-01T00:00:00Z}"
   mkdir -p -- "${releases_root}/${release}"
-  jq -n --arg release "${release}" --arg commit "${commit}" \
-    '{game: "factorio", release: $release, created_at: "2026-11-01T00:00:00Z", source_profile: {id: "factorio-vanilla", repository: "https://github.com/DrArzter/my-docker-factorio-server-config", commit: $commit}}' \
+  jq -n --arg release "${release}" --arg commit "${commit}" --arg created_at "${created_at}" \
+    '{game: "factorio", release: $release, created_at: $created_at, source_profile: {id: "factorio-vanilla", repository: "https://github.com/DrArzter/my-docker-factorio-server-config", commit: $commit}}' \
     >"${releases_root}/${release}/manifest.json"
 }
 
@@ -188,8 +188,25 @@ jq -e '
     and .built_from["1.5"].profile_digest == null
 ' "${catalog}" >/dev/null
 
+# releases stays oldest first, because promotion offers only the releases
+# after a world's active one. A recovered release is older than the kept ones.
+put_manifest 1.7 2026-11-02T00:00:00Z
+jq '(.presets[] | select(.id == "factorio-vanilla")) |= (.releases = ["1.7"] | .latest_release = "1.7")' \
+  "${catalog}" >"${catalog}.newer"
+mv -- "${catalog}.newer" "${catalog}"
+run_builder >/dev/null
+[[ "$(preset_field factorio-vanilla '.releases | join(",")')" == "1.5,1.7" ]]
+[[ "$(preset_field factorio-vanilla .latest_release)" == "1.7" ]]
+
+# A list written newest first by an earlier recovery is put back in order.
+jq '(.presets[] | select(.id == "factorio-vanilla")) |= (.releases = ["1.7", "1.5"])' \
+  "${catalog}" >"${catalog}.reversed"
+mv -- "${catalog}.reversed" "${catalog}"
+run_builder >/dev/null
+[[ "$(preset_field factorio-vanilla '.releases | join(",")')" == "1.5,1.7" ]]
+
 # Without a listing the catalog still publishes and keeps what it has.
 FAKE_S3_LIST_FAIL=true run_builder >/dev/null 2>&1
-[[ "$(preset_field factorio-vanilla '.releases | join(",")')" == "1.5" ]]
+[[ "$(preset_field factorio-vanilla '.releases | join(",")')" == "1.5,1.7" ]]
 
 printf 'result=passed\n'

@@ -212,16 +212,29 @@ html[data-skin="console"] .c-bottom-item:hover {
 }
 
 html[data-skin="console"] .c-nav-icon {
+  position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 56px;
   height: 32px;
+}
+
+html[data-skin="console"] .c-nav-pill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   border-radius: var(--c-r-pill);
   transition: background var(--c-d1);
 }
 
-html[data-skin="console"] .c-rail-item:hover .c-nav-icon {
+html[data-skin="console"] .c-nav-glyph {
+  display: flex;
+  view-transition-class: nav-glyph;
+}
+
+html[data-skin="console"] .c-rail-item:hover .c-nav-pill {
   background: var(--c-surface-2);
 }
 
@@ -235,9 +248,19 @@ html[data-skin="console"] .c-bottom-item[aria-current="page"] {
   color: var(--c-accent-text);
 }
 
-html[data-skin="console"] .c-rail-item[aria-current="page"] .c-nav-icon,
-html[data-skin="console"] .c-bottom-item[aria-current="page"] .c-nav-icon {
+html[data-skin="console"] .c-rail-item[aria-current="page"] .c-nav-pill,
+html[data-skin="console"] .c-bottom-item[aria-current="page"] .c-nav-pill {
   background: var(--c-accent-soft);
+}
+
+/* A1n: on a page change the current item's pill slides from the old item to the
+   new one; only one item of each bar is current, so each name is unique. */
+html[data-skin="console"] .c-rail-item[aria-current="page"] .c-nav-pill {
+  view-transition-name: c-rail-pill;
+}
+
+html[data-skin="console"] .c-bottom-item[aria-current="page"] .c-nav-pill {
+  view-transition-name: c-bottom-pill;
 }
 
 html[data-skin="console"] .c-badge {
@@ -358,7 +381,9 @@ html[data-skin="console"] .c-keys-row dd {
     padding-bottom: 96px;
   }
 
+  /* Its own transition layer, above the page area's: the page sheet never covers the bar (A1n). */
   html[data-skin="console"] .c-bottom {
+    view-transition-name: c-bottom;
     position: fixed;
     right: 0;
     bottom: 0;

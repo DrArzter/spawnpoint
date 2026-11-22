@@ -50,7 +50,11 @@ export function Mark() {
 function NavLink({ item, place }: Readonly<{ item: FrameItem; place: "rail" | "bottom" }>) {
   return (
     <a aria-current={item.current ? "page" : undefined} className={place === "rail" ? "c-rail-item" : "c-bottom-item"} href={item.href}>
-      <span className="c-nav-icon"><Icon name={icons[item.key] ?? "chevron_right"} size={22} /></span>
+      <span className="c-nav-icon">
+        <span aria-hidden="true" className="c-nav-pill" />
+        {/* Its own transition layer, so the moving pill passes under it (A1n). */}
+        <span className="c-nav-glyph" style={{ viewTransitionName: `c-${place}-${item.key}` }}><Icon name={icons[item.key] ?? "chevron_right"} size={22} /></span>
+      </span>
       <span className="c-nav-label">{item.label}</span>
       {item.badge !== undefined && <span aria-label={`${item.badge} requests`} className="c-badge" data-layer="glyph">{item.badge}</span>}
     </a>

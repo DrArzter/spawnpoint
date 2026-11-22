@@ -3,8 +3,10 @@
 # Materialise the addons a modpack profile pins on top of its pack (ADR-0077).
 # Every entry names one exact file: a CurseForge project and file id, checked
 # against the API's SHA-1 and size, or a Modrinth version, downloaded from the
-# Modrinth CDN only and checked against its pinned SHA-512 and size. The output
-# is inert data: no downloaded code is run, and the pack is not read here.
+# Modrinth CDN only and checked against its pinned SHA-512 and size, or an asset
+# of a GitHub release of an allow-listed repository (ADR-0079), checked the same
+# way. The output is inert data: no downloaded code is run, and the pack is not
+# read here.
 
 set -Eeuo pipefail
 
@@ -51,14 +53,14 @@ jq -e '
   (keys - ["schema_version", "mods", "config"] | length == 0) and
   (.mods | type == "array" and length > 0) and
   all(.mods[];
-    (keys - ["name", "side", "required_by", "curseforge", "modrinth", "world_data"] | length == 0) and
+    (keys - ["name", "side", "required_by", "curseforge", "modrinth", "github_release", "world_data"] | length == 0) and
     (.name | type == "string" and length > 0) and
     (.side | IN("both", "server", "client")) and
     ((has("world_data") | not) or (
       .side != "client" and
       (.world_data | type == "array" and length > 0 and all(.[]; world_data_path)))) and
     ((.required_by // []) | type == "array" and all(.[]; type == "string" and length > 0)) and
-    ([has("curseforge"), has("modrinth")] | map(select(.)) | length == 1) and
+    ([has("curseforge"), has("modrinth"), has("github_release")] | map(select(.)) | length == 1) and
     (if has("curseforge") then
       (.curseforge | keys - ["project_id", "file_id", "mirror"] | length == 0) and
       (.curseforge.project_id | positive) and (.curseforge.file_id | positive) and
@@ -66,6 +68,15 @@ jq -e '
         (.curseforge.mirror | keys - ["url", "sha512", "bytes"] | length == 0) and
         (.curseforge.mirror.url | type == "string" and startswith("https://")) and
         (.curseforge.mirror.sha512 | sha512) and (.curseforge.mirror.bytes | positive)))
+    elif has("github_release") then
+      (.github_release | keys - ["repository", "tag", "asset", "commit", "sha512", "bytes", "workflow"] | length == 0) and
+      (.github_release.repository | type == "string" and test("^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$") and
+        (split("/")[1] | . != "." and . != "..")) and
+      (.github_release.tag | type == "string" and test("^[A-Za-z0-9][A-Za-z0-9._+-]*$")) and
+      (.github_release.asset | safe_jar) and
+      (.github_release.commit | type == "string" and test("^[0-9a-f]{40}$")) and
+      (.github_release | .sha512 | sha512) and (.github_release | .bytes | positive) and
+      (.github_release.workflow | type == "string" and test("^\\.github/workflows/[A-Za-z0-9._-]+\\.ya?ml$"))
     else
       (.modrinth | keys - ["project_id", "version_id", "file", "sha512", "bytes"] | length == 0) and
       (.modrinth.project_id | type == "string" and test("^[A-Za-z0-9]{8}$")) and
@@ -75,7 +86,8 @@ jq -e '
   ([.mods[].name] | length == (unique | length)) and
   ([.mods[] | .curseforge.project_id // empty] | length == (unique | length)) and
   ([.mods[] | .modrinth.project_id // empty] | length == (unique | length)) and
-  ([.mods[] | .modrinth.file // empty] | length == (unique | length)) and
+  ([.mods[] | .modrinth.file // .github_release.asset // empty] | length == (unique | length)) and
+  ([.mods[] | .github_release // empty | .repository + "/" + .asset] | length == (unique | length)) and
   ([.mods[].world_data // [] | .[]] as $paths |
     all(range($paths | length) as $i | range($i + 1; $paths | length) as $j | [$i, $j];
       overlaps($paths[.[0]]; $paths[.[1]]) | not)) and
@@ -87,6 +99,21 @@ jq -e '
 
 api_base="${CF_API_BASE:-https://api.curseforge.com}"
 readonly MODRINTH_CDN="https://cdn.modrinth.com/data"
+# Repositories whose release assets may be pinned (ADR-0079). The list is part of
+# the reviewed builder bundle: only a Spawnpoint merge and apply change it, never
+# the config repository. Match is exact and case-sensitive.
+readonly GITHUB_RELEASE_REPOSITORIES=(
+  "DrArzter/SophisticatedBackpacks"
+)
+
+# Refuse before any download when a pin names a repository that is not listed.
+while IFS= read -r repository; do
+  allowed=false
+  for listed in "${GITHUB_RELEASE_REPOSITORIES[@]}"; do
+    [[ "${repository}" != "${listed}" ]] || allowed=true
+  done
+  [[ "${allowed}" == true ]] || die "github_release repository is not on the owner allow-list: ${repository}"
+done < <(jq -r '.mods[] | .github_release.repository // empty' "${addons_file}")
 
 workspace="$(mktemp -d "$(dirname -- "${output_dir}")/.addons.XXXXXXXX")"
 cleanup() {
@@ -194,6 +221,28 @@ resolve_modrinth() {
   jq -cn --argjson pin "${pin}" '{modrinth: ($pin | {project_id, version_id}), file: $pin.file}'
 }
 
+resolve_github_release() {
+  local index="$1" label="$2" destination_dir="$3"
+  local pin repository tag filename url download
+  pin="$(jq -c --argjson i "${index}" '.mods[$i].github_release' "${addons_file}")"
+  repository="$(jq -r '.repository' <<<"${pin}")"
+  tag="$(jq -r '.tag' <<<"${pin}")"
+  filename="$(jq -r '.asset' <<<"${pin}")"
+  # The URL is built here, never read from the pin. No token and no API call:
+  # GitHub answers with a redirect to its signed asset host.
+  url="https://github.com/${repository}/releases/download/${tag//+/%2B}/${filename//+/%2B}"
+  download="${workspace}/download-${index}"
+  fetch "${url}" "${download}" || die "GitHub release download failed for ${label}"
+  # Size first, then SHA-512, before the file is kept or read for anything else.
+  [[ "$(stat --format '%s' -- "${download}")" == "$(jq -r '.bytes' <<<"${pin}")" ]] ||
+    die "${label}: download does not match the pinned size"
+  [[ "$(sha512sum -- "${download}" | cut -d ' ' -f 1)" == "$(jq -r '.sha512' <<<"${pin}")" ]] ||
+    die "${label}: download does not match the pinned SHA-512"
+  [[ ! -e "${destination_dir}/${filename}" ]] || die "${label}: two addons resolve to ${filename}"
+  mv -- "${download}" "${destination_dir}/${filename}"
+  jq -cn --argjson pin "${pin}" '{github_release: ($pin | {repository, tag, commit}), file: $pin.asset}'
+}
+
 count="$(jq '.mods | length' "${addons_file}")"
 for (( index = 0; index < count; index++ )); do
   name="$(jq -r --argjson i "${index}" '.mods[$i].name' "${addons_file}")"
@@ -201,6 +250,8 @@ for (( index = 0; index < count; index++ )); do
   label="addon \"${name}\""
   if jq -e --argjson i "${index}" '.mods[$i] | has("curseforge")' "${addons_file}" >/dev/null; then
     pinned="$(resolve_curseforge "${index}" "${label}" "${result}/${side}")"
+  elif jq -e --argjson i "${index}" '.mods[$i] | has("github_release")' "${addons_file}" >/dev/null; then
+    pinned="$(resolve_github_release "${index}" "${label}" "${result}/${side}")"
   else
     pinned="$(resolve_modrinth "${index}" "${label}" "${result}/${side}")"
   fi

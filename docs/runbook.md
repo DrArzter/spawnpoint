@@ -792,6 +792,8 @@ Sophisticated Core.
    project id and file id.
 2. Set `side` by hand: `both`, `server` or `client`. Add every required dependency that the pack does not have. The
    build checks dependencies; it never adds them.
+   A mod of the group's own fork has a third form, `github_release` (ADR-0079). See
+   [A mod from a GitHub release](#a-mod-from-a-github-release).
 3. Optional config: put files under `config.tree` in the six managed roots, and under `client/` for the client pack
    only. Name every pack file the tree overwrites in `config.replaces`.
 4. Commit and push. The build refuses on any C1–C8 or config rule and names the rule and the addon. Fix the entry and
@@ -805,6 +807,30 @@ release diff first.
 
 A server config that the mod keeps in the world's `serverconfig/` is world-owned. A changed default does not reach an
 existing world; edit the file through the world's file links, or start a new wipe.
+
+### A mod from a GitHub release
+
+ADR-0079. Use it for the group's own public fork of a mod. `docs/examples/prominence-addons/addons-github-release.json`
+shows the entry. Its commit and digest are placeholders; replace them with the real values.
+
+1. The fork's repository must be public and on the allow-list `GITHUB_RELEASE_REPOSITORIES` in
+   `server/scripts/resolve-addons.sh`. To add one, change that list in a Spawnpoint pull request. A merge and a
+   Terraform apply of the release builder ship the change. The config repository cannot change it.
+2. In the fork, turn on immutable releases. A tag workflow builds the JAR, attests it with `actions/attest` and
+   publishes the release with the JAR and a `-sources.jar`. Keep the tag and the release while any Spawnpoint release
+   carries the JAR.
+3. Take the values from the release: `tag`, `asset`, the full `commit` that the tag points to, and the `workflow` path.
+   Compute `sha512` and `bytes` from the downloaded asset, for example `sha512sum <asset>` and `stat -c %s <asset>`.
+4. Add the entry to `extras/addons.json`. Use one source per entry. Do not name a URL: the builder makes it from the
+   fields. A `+` in the tag or asset name is allowed.
+5. Push. The builder downloads the asset without a token. It checks the size, then the SHA-512, and refuses on a
+   mismatch. Then it runs C1 to C8. The release records `repository`, `tag` and `commit` as the source.
+6. The builder does not check immutability or the attestation. The config repository's required CI check does
+   (follow-up in that repository, see ADR-0079). Until that check is required, check them by hand:
+   `gh release verify-asset <tag> <asset> -R <repository>` and
+   `gh attestation verify <asset> --repo <repository> --signer-workflow <repository>/<workflow> --source-ref refs/tags/<tag> --source-digest <commit> --deny-self-hosted-runners`.
+7. Do not pin the fork and the Modrinth port together. C4 refuses two addons with one mod id. To swap, replace the
+   Modrinth entry with the `github_release` entry in one commit.
 
 Do not promote during an active session unless it is urgent — the stop refuses while players are online
 (`PromotionRefused`, pointer restored, nothing changed). Announce first.

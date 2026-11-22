@@ -46,9 +46,10 @@ head_backup_version() {
 
 # A version id as printed, or nothing when the bucket gave none (an unversioned bucket answers "None" or "null").
 backup_version_id() {
-  case "${1:-}" in
+  local version="${1:-}"
+  case "${version}" in
     "" | None | null) ;;
-    *) printf '%s' "$1" ;;
+    *) printf '%s' "${version}" ;;
   esac
 }
 

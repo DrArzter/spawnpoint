@@ -27,6 +27,10 @@ A Minecraft profile of CurseForge files may add mods.server_only and mods.client
 format, resolved the same way. The server gets source plus server_only in the output directory; players get source plus
 client_only, written beside it as client-mods/.
 
+A CurseForge modpack profile may add mods.addons (ADR-0077): a JSON file of pinned extra mods with a side each. They
+are checked against the pack (C1-C8) and join the server set; the client side is written beside the output as
+addons/ (and client-mods/ for client-only addons) for build-profile-release.sh to add to the client pack.
+
 The output path must not exist. Downloads happen in a sibling staging directory and become visible only after every
 download succeeds. An empty-mod profile creates an empty output without contacting any mod source.
 EOF
@@ -87,6 +91,8 @@ mods_resolver="$(jq -r '.mods.resolver // empty' "${profile}")"
 [[ -n "${mods_resolver}" ]] || mods_resolver="${PROFILE_RESOLVER}"
 server_only_list="$(jq -r '.mods.server_only // empty' "${profile}")"
 client_only_list="$(jq -r '.mods.client_only // empty' "${profile}")"
+addons_list="$(jq -r '.mods.addons // empty' "${profile}")"
+addon_count=0
 
 stage="$(mktemp -d "${output_parent}/.$(basename -- "${output_directory}").stage.XXXXXXXX")"
 download_stage="${stage}/download"
@@ -97,7 +103,7 @@ cleanup() {
     rm -rf -- "${stage}"
   fi
   if [[ "${sidecars_moved:-false}" == true ]]; then
-    rm -rf -- "${output_parent}/overrides" "${output_parent}/client.zip" "${output_parent}/client-mods"
+    rm -rf -- "${output_parent}/overrides" "${output_parent}/client.zip" "${output_parent}/client-mods" "${output_parent}/addons"
   fi
 }
 trap cleanup EXIT
@@ -165,11 +171,53 @@ merge_side_list() {
   }
 }
 
+# Addons on top of the modpack in <stage>/download (ADR-0077): resolved, checked
+# against the pack, then merged. The server set gets both and server addons and
+# the top-level config; the client side waits in <stage>/addons for the release
+# version, which only build-profile-release.sh knows.
+add_addons() {
+  local resolved="${stage}/addons-resolved" sidecar="${stage}/addons" jar
+  for script in resolve-addons.sh check-mod-set.sh; do
+    [[ -f "${SCRIPT_DIR}/${script}" ]] || {
+      printf 'error: addons need %s, which this bundle does not carry\n' "${SCRIPT_DIR}/${script}" >&2
+      exit 1
+    }
+  done
+  ADDONS_MINECRAFT_VERSION="${game_version}" ADDONS_LOADER_TYPE="${loader_type}" \
+    bash "${SCRIPT_DIR}/resolve-addons.sh" "${profile_directory}/${addons_list}" "${profile_directory}" "${resolved}" >&2
+  CHECK_MINECRAFT_VERSION="${game_version}" CHECK_LOADER_TYPE="${loader_type}" \
+    bash "${SCRIPT_DIR}/check-mod-set.sh" "${download_stage}" "${resolved}" >&2
+  mkdir -p -- "${sidecar}/client/mods" "${sidecar}/client/overrides"
+  while IFS= read -r -d '' jar; do
+    cp -- "${jar}" "${download_stage}/mods/"
+  done < <(find "${resolved}/both" "${resolved}/server" -maxdepth 1 -type f -name '*.jar' -print0)
+  while IFS= read -r -d '' jar; do
+    cp -- "${jar}" "${sidecar}/client/mods/"
+  done < <(find "${resolved}/both" "${resolved}/client" -maxdepth 1 -type f -name '*.jar' -print0)
+  if [[ -n "$(find "${resolved}/client" -maxdepth 1 -type f -name '*.jar' -print -quit)" ]]; then
+    mkdir -p -- "${stage}/client-mods"
+    cp -- "${resolved}/client/"*.jar "${stage}/client-mods/"
+  fi
+  if [[ -d "${resolved}/config" ]]; then
+    for root in config defaultconfigs kubejs scripts global_packs openloader; do
+      [[ -d "${resolved}/config/${root}" ]] || continue
+      mkdir -p -- "${download_stage}/overrides/${root}" "${sidecar}/client/overrides/${root}"
+      cp -R -- "${resolved}/config/${root}/." "${download_stage}/overrides/${root}/"
+      cp -R -- "${resolved}/config/${root}/." "${sidecar}/client/overrides/${root}/"
+    done
+    [[ ! -d "${resolved}/config/client" ]] || cp -R -- "${resolved}/config/client/." "${sidecar}/client/overrides/"
+  fi
+  mv -- "${download_stage}/client.zip" "${sidecar}/upstream-client.zip"
+  cp -- "${resolved}/addons-lock.json" "${resolved}/mod-index.json" "${sidecar}/"
+  addon_count="$(jq '.mods | length' "${resolved}/addons-lock.json")"
+}
+
 if [[ -n "${mods_source}" ]]; then
   mods_source="$(checked_list "${mods_source}")"
   source_file="${profile_directory}/${mods_source}"
   [[ -z "${server_only_list}" ]] || server_only_list="$(checked_list "${server_only_list}")"
   [[ -z "${client_only_list}" ]] || client_only_list="$(checked_list "${client_only_list}")"
+  [[ -z "${addons_list}" ]] || addons_list="$(checked_list "${addons_list}")"
 
   case "${mods_resolver}" in
   curseforge-files | curseforge-modpack)
@@ -214,6 +262,7 @@ if [[ -n "${mods_source}" ]]; then
       CURSEFORGE_EXPECTED_LOADER_TYPE="${loader_type}" \
       CURSEFORGE_EXPECTED_LOADER_VERSION="${loader_version}" \
         bash "${modpack_resolver}" "${source_file}" "${download_stage}" >&2
+      [[ -z "${addons_list}" ]] || add_addons
     fi
     ;;
   factorio-portal)
@@ -260,6 +309,15 @@ if [[ -n "${mods_source}" ]]; then
   # own; the server gets its own on top. Validation admitted them for
   # CurseForge files only.
   client_mod_count=0
+  if [[ -d "${stage}/client-mods" && -n "${addons_list}" ]]; then
+    client_mod_count="$(find "${stage}/client-mods" -maxdepth 1 -type f -name '*.jar' | wc -l)"
+    [[ ! -e "${output_parent}/client-mods" && ! -L "${output_parent}/client-mods" ]] || {
+      printf 'error: immutable resolver client mods already exist: %s\n' "${output_parent}/client-mods" >&2
+      exit 1
+    }
+    mv -- "${stage}/client-mods" "${output_parent}/client-mods"
+    sidecars_moved=true
+  fi
   if [[ -n "${server_only_list}${client_only_list}" ]]; then
     client_stage="${stage}/client-mods"
     mkdir -p -- "${client_stage}"
@@ -289,7 +347,7 @@ if [[ -n "${mods_source}" ]]; then
       printf 'error: CurseForge modpack resolver produced no overrides directory\n' >&2
       exit 1
     }
-    [[ -f "${client_source}" && ! -L "${client_source}" ]] || {
+    [[ -n "${addons_list}" || (-f "${client_source}" && ! -L "${client_source}") ]] || {
       printf 'error: CurseForge modpack resolver produced no client pack\n' >&2
       exit 1
     }
@@ -302,7 +360,16 @@ if [[ -n "${mods_source}" ]]; then
       exit 1
     }
     mv -- "${overrides_source}" "${output_parent}/overrides"
-    mv -- "${client_source}" "${output_parent}/client.zip"
+    if [[ -n "${addons_list}" ]]; then
+      # The client pack is built with the release version (build-profile-release.sh).
+      [[ ! -e "${output_parent}/addons" && ! -L "${output_parent}/addons" ]] || {
+        printf 'error: immutable resolver addons already exist: %s\n' "${output_parent}/addons" >&2
+        exit 1
+      }
+      mv -- "${stage}/addons" "${output_parent}/addons"
+    else
+      mv -- "${client_source}" "${output_parent}/client.zip"
+    fi
     sidecars_moved=true
   fi
 else
@@ -327,5 +394,6 @@ printf 'profile_id=%s\n' "${profile_id}"
 printf 'game=%s\n' "${game}"
 printf 'mods=%s\n' "${mod_count}"
 printf 'client_mods=%s\n' "${client_mod_count}"
+printf 'addons=%s\n' "${addon_count}"
 printf 'bytes=%s\n' "${total_bytes}"
 printf 'output=%s\n' "${output_directory}"

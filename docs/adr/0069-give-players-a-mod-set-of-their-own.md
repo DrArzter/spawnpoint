@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-26
 - Milestone: M6
+- Amended by: [ADR-0077](0077-pin-extra-mods-on-top-of-an-upstream-modpack.md) (Scope)
 - Relates: [ADR-0013](0013-modpack-distribution.md) (answers its open question on server-side mods),
   [ADR-0040](0040-reusable-presets-and-world-wipes.md), [ADR-0065](0065-hand-out-world-files-as-short-lived-links.md),
   [ADR-0068](0068-normalize-upstream-modpacks-into-releases.md)
@@ -44,8 +45,9 @@ row, and lists every mod of both sides once; the release API answers the players
 either set can be downloaded by its digest. A release without side lists keeps its one client pack and one Download.
 
 **Scope.** Side lists are accepted only for Minecraft presets of individual CurseForge files. A CurseForge modpack
-already brings the author's client pack (ADR-0068); adding our own mods to it is a separate decision. Factorio clients
-take their mods from the server.
+already brings the author's client pack (ADR-0068). Our own mods on a modpack are pinned in `mods.addons`, with a side
+per entry (ADR-0077); side lists stay refused beside a modpack, so one profile never mixes the two vocabularies.
+Factorio clients take their mods from the server.
 
 ## Consequences
 

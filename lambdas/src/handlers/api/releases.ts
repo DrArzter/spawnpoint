@@ -1,7 +1,7 @@
 import { type Identity } from "../../access/domain.ts";
 import { startPresetBuild } from "../../control-plane/aws-release-builds.ts";
 import { awsControlPlaneSources, releaseModUrl, releasePackUrl, packDownloadUrl } from "../../control-plane/aws.ts";
-import { manifestClientMods, RELEASE_PACKS, releaseModLocation, type ReleasePack } from "../../control-plane/release-artifacts.ts";
+import { manifestClientAddons, manifestClientMods, RELEASE_PACKS, releaseModLocation, type ReleasePack } from "../../control-plane/release-artifacts.ts";
 import { packRelease } from "../../control-plane/session-control.ts";
 import { type Response, response } from "./http.ts";
 
@@ -99,6 +99,8 @@ export async function releaseManifest(gameId: string, presetId: string, version:
     }),
     // What players install when it is not the server's set (ADR-0069).
     clientMods: manifestClientMods(manifest),
+    // Extra mods on top of a modpack, with their side (ADR-0077).
+    addons: manifestClientAddons(manifest),
   });
 }
 

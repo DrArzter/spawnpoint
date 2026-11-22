@@ -61,10 +61,25 @@ jq -e '
     (.bytes | type == "number" and floor == . and . >= 0)
   ) and
   (([(.server.overrides // [])[].path] | unique | length) == ((.server.overrides // []) | length)) and
+  # mod_index (ADR-0077) is descriptive: SHA-256 to mod ids, outside the identity gate.
+  ((has("mod_index") | not) or (.mod_index | type == "object" and all(to_entries[];
+    (.key | test("^[0-9a-f]{64}$")) and (.value | type == "array" and all(.[]; type == "string"))))) and
   ((has("client") | not) or (
     .client.file == "client.zip" and .client.kind == "curseforge-modpack" and
     (.client.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
-    (.client.bytes | type == "number" and floor == . and . > 0)
+    (.client.bytes | type == "number" and floor == . and . > 0) and
+    # Addons (ADR-0077): both and server addons are server mods with the same
+    # digest; a client addon is a file of its own, never a server name.
+    ((.client | has("addons") | not) or (
+      (.client.addons | type == "array" and length > 0) and
+      all(.client.addons[];
+        (.file | type == "string" and test("^[^/\\\\]+\\.jar$")) and
+        (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+        (.bytes | type == "number" and floor == . and . > 0) and
+        (.side | IN("both", "server", "client"))) and
+      (([.client.addons[].file] | unique | length) == (.client.addons | length)) and
+      ((.server.mods | map({key: .file, value: .sha256}) | from_entries) as $server |
+        all(.client.addons[]; if .side == "client" then $server[.file] == null else $server[.file] == .sha256 end))))
   ) or (
     # The players mod set (ADR-0069): a name the server also carries is the
     # same file, stored once with the server mods.
@@ -85,7 +100,7 @@ release="$(jq -r '.release' "${manifest}")"
 mods_count="$(jq -r '.server.mods | length' "${manifest}")"
 overrides_count="$(jq -r '(.server.overrides // []) | length' "${manifest}")"
 client_kind="$(jq -r '.client.kind // empty' "${manifest}")"
-client_mods_count="$(jq -r 'if .client.kind == "mod-set" then .client.mods | length else 0 end' "${manifest}")"
+client_mods_count="$(jq -r 'if .client.kind == "mod-set" then .client.mods | length else [(.client.addons // [])[] | select(.side == "client")] | length end' "${manifest}")"
 game="$(jq -r '.game // "minecraft"' "${manifest}")"
 preset_id="$(jq -r '.source_profile.id' "${manifest}")"
 release_prefix="releases/${game}/${preset_id}/${release}"
@@ -386,7 +401,7 @@ while IFS=$'\t' read -r filename expected_sha expected_bytes; do
   queue_upload "${release_prefix}/client-mods/${filename}" "${source_file}" "${expected_sha}" "${filename}"
 done < <(jq -r '
   [.server.mods[].file] as $server |
-  (if .client.kind == "mod-set" then .client.mods else [] end)[] |
+  (if .client.kind == "mod-set" then .client.mods else [(.client.addons // [])[] | select(.side == "client")] end)[] |
   select(.file as $file | $server | index($file) | not) |
   [.file, .sha256, (.bytes | tostring)] | @tsv' "${manifest}")
 

@@ -14,6 +14,8 @@ The profile must belong to a clean Git checkout, or PROFILE_SOURCE_REPOSITORY an
 its verified Git snapshot. Its origin URL, full commit and profile ID are embedded in the release manifest. A profile
 with mods.source=null requires an empty resolved mod directory. The profile's game
 (ADR-0034) selects the version field, the loader contract and the mod extension; absence means minecraft.
+A profile with mods.addons (ADR-0077) needs the resolver's addons/ beside the mods: this step adds them to the client
+pack, whose version becomes <upstream>+<release>, and records them in client.addons and mod_index.
 EOF
 }
 
@@ -107,6 +109,44 @@ client_mods_directory=""
 [[ ! -d "${payload_root}/overrides" ]] || overrides_directory="${payload_root}/overrides"
 [[ ! -f "${payload_root}/client.zip" ]] || client_pack="${payload_root}/client.zip"
 [[ ! -d "${payload_root}/client-mods" ]] || client_mods_directory="${payload_root}/client-mods"
+client_addons=""
+client_addons_directory=""
+mod_index=""
+addons_directory="${payload_root}/addons"
+if [[ -n "$(jq -r '.mods.addons // empty' "${profile}")" ]]; then
+  [[ -d "${addons_directory}" && ! -L "${addons_directory}" && -f "${addons_directory}/addons-lock.json" ]] || {
+    printf 'error: profile %s declares addons but the resolver produced no addons directory\n' "${profile_id}" >&2
+    exit 1
+  }
+  [[ -z "${client_pack}" ]] || {
+    printf 'error: immutable client pack already exists: %s\n' "${client_pack}" >&2
+    exit 1
+  }
+  client_pack="${payload_root}/client.zip"
+  "${SCRIPT_DIR}/extend-client-pack.sh" "${addons_directory}/upstream-client.zip" "${addons_directory}/client" \
+    "${addons_directory}/addons-lock.json" "${release}" "${client_pack}" >&2
+  client_addons="${addons_directory}/addons-lock.json"
+  mod_index="${addons_directory}/mod-index.json"
+  # Client-only addons are the only players' files apart from the pack.
+  if jq -e 'any(.mods[]; .side == "client")' "${client_addons}" >/dev/null; then
+    [[ -n "${client_mods_directory}" ]] || {
+      printf 'error: profile %s has client addons but the resolver produced no client-mods\n' "${profile_id}" >&2
+      exit 1
+    }
+    client_addons_directory="${client_mods_directory}"
+  else
+    [[ -z "${client_mods_directory}" ]] || {
+      printf 'error: profile %s has no client addons but client-mods exists\n' "${profile_id}" >&2
+      exit 1
+    }
+  fi
+  client_mods_directory=""
+else
+  [[ ! -e "${addons_directory}" ]] || {
+    printf 'error: profile %s declares no addons but addons exists\n' "${profile_id}" >&2
+    exit 1
+  }
+fi
 # Players' own mod set exists exactly when the profile declares a side list
 # (ADR-0069); either without the other is a resolver output from another profile.
 side_lists="$(jq -r '[.mods.server_only, .mods.client_only] | map(select(. != null)) | length' "${profile}")"
@@ -141,6 +181,9 @@ RELEASE_LOADER_TYPE="${loader_type}" \
 RELEASE_SERVER_OVERRIDES_DIR="${overrides_directory}" \
 RELEASE_CLIENT_PACK="${client_pack}" \
 RELEASE_CLIENT_MODS_DIR="${client_mods_directory}" \
+RELEASE_CLIENT_ADDONS="${client_addons}" \
+RELEASE_CLIENT_ADDONS_DIR="${client_addons_directory}" \
+RELEASE_MOD_INDEX="${mod_index}" \
   "${SCRIPT_DIR}/build-release-manifest.sh" \
     "${release}" \
     "${game_version}" \

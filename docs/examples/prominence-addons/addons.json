@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "mods": [
+    {
+      "name": "Sophisticated Backpacks (unofficial Fabric port)",
+      "side": "both",
+      "modrinth": {
+        "project_id": "ouNrBQtq",
+        "version_id": "Jk6o7s4h",
+        "file": "sophisticatedbackpacks-1.20.1-3.23.4.5.110.jar",
+        "sha512": "651a6121533e5693c26bde85141339cb89b5cfee5a750d67cbdad12a97a51ec8a0a3b3b59845afe9013b477fce9570f80ae0047e1c7054f458bc9c1b93ef748c",
+        "bytes": 986101
+      }
+    },
+    {
+      "name": "Sophisticated Core (unofficial Fabric port)",
+      "side": "both",
+      "required_by": ["Sophisticated Backpacks (unofficial Fabric port)"],
+      "modrinth": {
+        "project_id": "9jxwkYQL",
+        "version_id": "BP3CQI2v",
+        "file": "sophisticatedcore-1.20.1-1.2.7.15.166.jar",
+        "sha512": "892dda2bfa2a49ed66e869877fc6309cfc3af11fe61859c3b1be341baf689a693fda30902dec5c9ec6f737fd8fe451615ceb3d1c31c51e40c38e68b59dfcf134",
+        "bytes": 2858683
+      }
+    }
+  ]
+}

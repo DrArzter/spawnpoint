@@ -59,6 +59,23 @@ data "archive_file" "release_builder_source" {
     filename = "server/scripts/resolve-curseforge-modpack.sh"
   }
 
+  # Addons on top of a modpack (ADR-0077): pinned downloads, the C1-C8 checks
+  # and the extended client pack.
+  source {
+    content  = file("${path.module}/../../server/scripts/resolve-addons.sh")
+    filename = "server/scripts/resolve-addons.sh"
+  }
+
+  source {
+    content  = file("${path.module}/../../server/scripts/check-mod-set.sh")
+    filename = "server/scripts/check-mod-set.sh"
+  }
+
+  source {
+    content  = file("${path.module}/../../server/scripts/extend-client-pack.sh")
+    filename = "server/scripts/extend-client-pack.sh"
+  }
+
   # The factorio resolver is a game module rather than a container, so the
   # bundle carries it the way it carries the shared scripts.
   source {

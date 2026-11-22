@@ -33,6 +33,7 @@ printf 'client override\n' >"${fixture}/client/README.txt"
 (cd "${fixture}/client" && zip -qr "${fixture}/downloads/client.zip" .)
 printf 'fabric mod one\n' >"${fixture}/server/Prominence/mods/one.jar"
 printf 'fabric mod two\n' >"${fixture}/server/Prominence/mods/two.jar"
+printf 'switched off\n' >"${fixture}/server/Prominence/mods/three.jar.disabled"
 printf 'pack config\n' >"${fixture}/server/Prominence/config/prominence/server.json"
 printf 'defaults\n' >"${fixture}/server/Prominence/defaultconfigs/game.toml"
 printf 'must not execute\n' >"${fixture}/server/Prominence/start.sh"
@@ -156,6 +157,9 @@ cmp "${fixture}/client/overrides/resourcepacks/embedded.zip" "${fixture}/complet
 cmp "${fixture}/client/overrides/custom-folder/data.txt" "${fixture}/complete-client/overrides/custom-folder/data.txt"
 cmp "${fixture}/client/overrides/config/client.json" "${fixture}/complete-client/overrides/config/client.json"
 cmp -- "${fixture}/server/Prominence/mods/one.jar" "${fixture}/resolved/mods/one.jar"
+# A disabled JAR is named for the addon checks (ADR-0077), never shipped.
+[[ "$(cat "${fixture}/resolved/disabled-mods.txt")" == "three.jar.disabled" ]]
+[[ ! -e "${fixture}/resolved/mods/three.jar.disabled" ]]
 cmp -- "${fixture}/server/Prominence/config/prominence/server.json" \
   "${fixture}/resolved/overrides/config/prominence/server.json"
 [[ ! -e "${fixture}/resolved/overrides/start.sh" ]]

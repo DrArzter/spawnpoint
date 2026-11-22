@@ -33,6 +33,24 @@ test("a release with side lists answers the players' set beside the server's (AD
   assert.deepEqual(data.clientMods.map((mod: { file: string }) => mod.file), ["shared.jar", "minimap.jar"]);
 });
 
+test("a modpack release with addons answers each addon and its side; mod_index stays out (ADR-0077)", async (t) => {
+  const backpacks = { file: "sophisticatedbackpacks-1.20.1-3.23.4.5.110.jar", sha256: "a".repeat(64), bytes: 986101 };
+  t.mock.method(sources, "readReleaseManifest", async () => ({
+    release: "1.4", server: { mods: [{ file: "fabric-api.jar", sha256: "b".repeat(64), bytes: 2 }, backpacks] },
+    client: { kind: "curseforge-modpack", file: "client.zip", sha256: "c".repeat(64), bytes: 3, addons: [{ ...backpacks, side: "both" }] },
+    mod_index: { ["a".repeat(64)]: ["sophisticatedbackpacks"] },
+  }));
+  const data = JSON.parse((await releaseManifest("minecraft", "prominence", "1.4")).body);
+  assert.deepEqual(data.addons, [{ ...backpacks, side: "both" }]);
+  assert.equal(data.clientMods, null);
+  assert.equal("mod_index" in data, false);
+});
+
+test("a release without addons answers an empty list", async (t) => {
+  t.mock.method(sources, "readReleaseManifest", async () => ({ release: "1.0", server: { mods: [] } }));
+  assert.deepEqual(JSON.parse((await releaseManifest("minecraft", "prominence", "1.0")).body).addons, []);
+});
+
 test("manifest text fields cannot stringify objects or arrays into misleading metadata", async (t) => {
   t.mock.method(sources, "readReleaseManifest", async () => ({
     loader: { type: {}, version: [] }, source_profile: { id: {}, repository: [], commit: null },

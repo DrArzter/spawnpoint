@@ -136,6 +136,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0074](0074-eggs-are-a-reference-not-a-runtime.md) | Eggs are a reference, not a runtime | Accepted | — |
 | [0075](0075-a2s-as-a-probe-transport.md) | A2S as a probe transport | Proposed — implemented for Valheim; two host tests open | — |
 | [0076](0076-http-and-telnet-probe-transports.md) | HTTP and telnet probe transports | Proposed — HTTP implemented for Palworld; telnet not built | — |
+| [0077](0077-pin-extra-mods-on-top-of-an-upstream-modpack.md) | Pin extra mods on top of an upstream modpack | Accepted — minimum version implemented | M6 |
 | [0078](0078-promote-a-fleet-world-from-the-panel.md) | Promote a fleet world from the panel and keep its save | Accepted — implemented for fleet worlds | M4 |
 
 ## Decisions still to record

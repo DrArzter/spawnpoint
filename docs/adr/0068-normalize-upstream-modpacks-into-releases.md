@@ -3,6 +3,8 @@
 - Status: Accepted
 - Date: 2026-10-18
 - Amends: [ADR-0008](0008-versioned-mod-releases.md), [ADR-0047](0047-normalize-preset-sources-before-building.md)
+- Amended by: [ADR-0077](0077-pin-extra-mods-on-top-of-an-upstream-modpack.md), which lets a modpack preset pin
+  extra mods; the client pack is then the upstream pack plus those addons
 
 A preset may depend on a CurseForge modpack, but the game host must still consume only a Spawnpoint release. The preset therefore pins the main CurseForge file and its matching server-pack file; the release builder verifies their API relationship, size and hash, materializes the complete client pack, and normalizes the server archive into JARs plus an allow-listed configuration overlay. It never selects `latest`, executes archive-provided scripts, or contacts CurseForge while a world starts.
 

@@ -4,7 +4,8 @@
 - Date: 2026-09-10
 - Supersedes: [ADR-0039](0039-git-presets-instantiate-world-generations.md)
 - Amends: [ADR-0023](0023-multiple-worlds.md) and [ADR-0030](0030-desired-and-active-release.md)
-- Amended by: [ADR-0064](0064-let-a-world-carry-game-settings.md), for server settings only; mods stay in Git
+- Amended by: [ADR-0064](0064-let-a-world-carry-game-settings.md), for server settings only; mods stay in Git;
+  [ADR-0077](0077-pin-extra-mods-on-top-of-an-upstream-modpack.md), which adds pinned mods to a modpack preset
 
 ## Context
 
@@ -24,7 +25,7 @@ The dashboard creates a world explicitly from a selected release. Starting a ses
 
 Navigation follows identities rather than collection labels. A world route reads `Game / Preset / World name`; a generation route may append `Wipe #N`. `Worlds` is not a breadcrumb segment. Release details remain a linked view under the preset instead of becoming a permanent ancestor of the world.
 
-Different release age alone does not require different presets. If two worlds intentionally need different mod composition, they use distinct presets. Per-world ad-hoc mod overrides are not allowed: Git remains the only authoring surface and every effective configuration must build into an immutable release. Single-parent preset composition (`extends`, add, remove and adapter-validated overrides) remains a candidate for a later decision; it is not implied by this ADR.
+Different release age alone does not require different presets. If two worlds intentionally need different mod composition, they use distinct presets. Per-world ad-hoc mod overrides are not allowed: Git remains the only authoring surface and every effective configuration must build into an immutable release. Single-parent preset composition (`extends`, add, remove and adapter-validated overrides) remains a candidate for a later decision; it is not implied by this ADR. ADR-0077 allows one part of it: a modpack preset may add pinned mods in Git through `mods.addons`. `extends` and removal stay deferred.
 
 ## Consequences
 

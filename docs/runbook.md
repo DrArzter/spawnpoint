@@ -781,6 +781,31 @@ this order.
    Telegram). A client on the old pack cannot join, and the error does not say why.
 10. To undo the update, follow [Roll back a release](#roll-back-a-release). Do not promote the old release again.
 
+### Extra mods on a modpack preset
+
+ADR-0077. Add `"addons": "extras/addons.json"` to the profile's `mods` block, and pin each extra mod in that file.
+`docs/examples/prominence-addons/addons.json` pins the unofficial Fabric port of Sophisticated Backpacks and
+Sophisticated Core.
+
+1. For each mod, choose one exact file for the pack's Minecraft version and loader. On Modrinth, copy the version id,
+   file name, SHA-512 and size from `https://api.modrinth.com/v2/version/<version_id>`. On CurseForge, copy the
+   project id and file id.
+2. Set `side` by hand: `both`, `server` or `client`. Add every required dependency that the pack does not have. The
+   build checks dependencies; it never adds them.
+3. Optional config: put files under `config.tree` in the six managed roots, and under `client/` for the client pack
+   only. Name every pack file the tree overwrites in `config.replaces`.
+4. Commit and push. The build refuses on any C1–C8 or config rule and names the rule and the addon. Fix the entry and
+   push again.
+5. The new release is the same preset with a new version. Building it changes no world. Put it into a world by a
+   promotion (with the pre-promotion backup) or by a new wipe. Test it on a disposable world first.
+
+At a pack update, keep the addon pins. If the build refuses because the pack now ships the same mod, remove the addon
+entry. If a dependency is unmet, change the addon pin. Removing an addon from a world deletes its items, so read the
+release diff first.
+
+A server config that the mod keeps in the world's `serverconfig/` is world-owned. A changed default does not reach an
+existing world; edit the file through the world's file links, or start a new wipe.
+
 Do not promote during an active session unless it is urgent — the stop refuses while players are online
 (`PromotionRefused`, pointer restored, nothing changed). Announce first.
 

@@ -51,7 +51,7 @@ function NavLink({ item, place }: Readonly<{ item: FrameItem; place: "rail" | "b
   return (
     <a aria-current={item.current ? "page" : undefined} className={place === "rail" ? "c-rail-item" : "c-bottom-item"} href={item.href}>
       <span className="c-nav-icon">
-        <span aria-hidden="true" className="c-nav-pill" />
+        <span aria-hidden="true" className="c-nav-pill" data-layer="glyph" />
         {/* Its own transition layer, so the moving pill passes under it (A1n). */}
         <span className="c-nav-glyph" style={{ viewTransitionName: `c-${place}-${item.key}` }}><Icon name={icons[item.key] ?? "chevron_right"} size={22} /></span>
       </span>

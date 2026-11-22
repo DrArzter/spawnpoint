@@ -103,8 +103,12 @@ html[data-skin="console"] {
   --c-d4: 900ms;
   --c-ease: cubic-bezier(.22, 1, .36, 1);
   --c-ease-spring: cubic-bezier(.34, 1.45, .64, 1);
-  --c-travel: 64px;
-  --c-travel-pane: 24px;
+  /* A view change (A1–A3): the old view leaves in --c-out, the new one starts
+     after --c-handover and travels --c-travel (a page) or --c-travel-pane. */
+  --c-out: 130ms;
+  --c-handover: 70ms;
+  --c-travel: 32px;
+  --c-travel-pane: 12px;
   --c-d-tick: 660ms;
   --c-loop-bar: 1.6s;
   --c-loop-spin: 1s;

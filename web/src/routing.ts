@@ -66,7 +66,9 @@ const pathByPage: Record<Page, string> = {
 };
 
 const accessTabs = new Set<AccessTab>(["users", "roles", "notifications"]);
-const worldTabs = new Set<WorldTab>(["details", "wipes", "backups", "releases", "whitelist", "console", "metrics"]);
+/** The world page tabs, in the order the tab bar shows them. */
+const WORLD_TAB_ORDER: readonly WorldTab[] = ["details", "wipes", "backups", "releases", "whitelist", "console", "metrics"];
+const worldTabs = new Set<WorldTab>(WORLD_TAB_ORDER);
 
 function segment(value: string | undefined): string | null {
   if (!value) return null;
@@ -105,6 +107,21 @@ export function traverse(from: string, to: string): Traverse {
   const order = after.depth - before.depth || after.section - before.section;
   if (order === 0) return "none";
   return order > 0 ? "forward" : "back";
+}
+
+/**
+ * A pane switch inside one world follows the tab bar: a tab to the right comes
+ * in from the right. Another world, or the same tab, has no direction.
+ */
+export function tabTraverse(from: string, to: string): Traverse {
+  const tab = (hash: string) => {
+    const [, , world, name] = hash.replace(/^#\/?/, "").split("?")[0]!.split("/");
+    return { world, index: WORLD_TAB_ORDER.indexOf(worldTabs.has(name as WorldTab) ? (name as WorldTab) : "details") };
+  };
+  const before = tab(from);
+  const after = tab(to);
+  if (before.world !== after.world || before.index === after.index) return "none";
+  return after.index > before.index ? "forward" : "back";
 }
 
 export function readRoute(): AppRoute {

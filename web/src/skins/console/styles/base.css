@@ -181,6 +181,37 @@ html[data-skin="console"][data-transition="tab"] .c-main {
   view-transition-name: none;
 }
 
+/*
+ * A1n: the navigation holds still through a page change. The bottom bar and
+ * every nav glyph are layers that do not move or fade; only the current item's
+ * pill travels from the old item to the new one, under the glyphs.
+ */
+html[data-skin="console"]::view-transition-group(c-rail-pill),
+html[data-skin="console"]::view-transition-group(c-bottom-pill) {
+  z-index: 2;
+  animation-duration: var(--c-d3);
+  animation-timing-function: var(--c-ease);
+}
+
+/* Layer order is set here, not left to paint order: the bar above the page,
+   the pill above the bar, the glyphs above the pill. */
+html[data-skin="console"]::view-transition-group(c-bottom) {
+  z-index: 1;
+}
+
+html[data-skin="console"]::view-transition-group(*.nav-glyph) {
+  z-index: 3;
+}
+
+html[data-skin="console"]::view-transition-old(c-bottom),
+html[data-skin="console"]::view-transition-old(*.nav-glyph) {
+  display: none;
+}
+
+html[data-skin="console"]::view-transition-group(c-bottom),
+html[data-skin="console"]::view-transition-new(c-bottom),
+html[data-skin="console"]::view-transition-group(*.nav-glyph),
+html[data-skin="console"]::view-transition-new(*.nav-glyph),
 html[data-skin="console"]::view-transition-old(root),
 html[data-skin="console"]::view-transition-new(root),
 html[data-skin="console"]::view-transition-group(c-flash),

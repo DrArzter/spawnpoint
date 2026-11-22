@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
+import { reducedMotion } from "./motion";
 import { canTransition, runTransition } from "./transition";
 
 import { Icon, type IconName } from "../../../icons";
@@ -46,7 +47,7 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
   const strip = useRef<HTMLDivElement>(null);
   const ink = useRef<HTMLSpanElement>(null);
   const [more, setMore] = useState(false);
-  const select = useTabTransition(tabs, value, onChange);
+  const select = useTabTransition(tabs, value, onChange, prefix);
 
   useLayoutEffect(() => {
     const row = strip.current;
@@ -54,7 +55,10 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
     if (!row || !active || !ink.current) return;
     ink.current.style.left = `${active.offsetLeft}px`;
     ink.current.style.width = `${active.offsetWidth}px`;
-    if (active.offsetLeft < row.scrollLeft || active.offsetLeft + active.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = active.offsetLeft - 16;
+    // The strip glides to a tab out of view rather than jumping to it.
+    if (active.offsetLeft < row.scrollLeft || active.offsetLeft + active.offsetWidth > row.scrollLeft + row.clientWidth) {
+      row.scrollTo({ left: active.offsetLeft - 16, behavior: reducedMotion() ? "auto" : "smooth" });
+    }
     const place = () => {
       if (!ink.current) return;
       ink.current.style.left = `${active.offsetLeft}px`;
@@ -110,12 +114,13 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
 }
 
 /** A tab switch (A3) runs as the panel's transition, sideways by the tab bar's order. */
-function useTabTransition<Id extends string>(tabs: readonly TabItem<Id>[], value: Id, onChange: (id: Id) => void): (id: Id) => void {
+function useTabTransition<Id extends string>(tabs: readonly TabItem<Id>[], value: Id, onChange: (id: Id) => void, prefix: string): (id: Id) => void {
   const arrived = useRef<{ id: Id; done: () => void } | null>(null);
   useLayoutEffect(() => {
     if (arrived.current?.id === value) arrived.current.done();
   }, [value]);
   return (id: Id) => {
+    holdPageLength(document.getElementById(tabPanelId(prefix, value))?.parentElement ?? null);
     if (id === value || !canTransition()) {
       onChange(id);
       return;
@@ -127,6 +132,20 @@ function useTabTransition<Id extends string>(tabs: readonly TabItem<Id>[], value
       onChange(id);
     });
   };
+}
+
+/**
+ * A shorter tab must not pull the page up under the reader. Before a switch,
+ * the panel box keeps at least the height that lets the page stay where it is
+ * scrolled; it is set, never cleared, so no step of the switch can shorten the
+ * page and make the browser jump. The next switch sets it again from there.
+ */
+function holdPageLength(box: HTMLElement | null): void {
+  if (!box) return;
+  const top = box.getBoundingClientRect().top + window.scrollY;
+  const below = document.documentElement.scrollHeight - (top + box.offsetHeight);
+  const need = Math.ceil(window.scrollY + window.innerHeight - top - below);
+  box.style.minHeight = need > 0 ? `${need}px` : "";
 }
 
 /** The panel of the active tab. Its content fades in as one block when the tab changes (A3). */

@@ -206,6 +206,42 @@ resource "aws_s3_bucket_lifecycle_configuration" "releases" {
     }
   }
 
+  # The release builder's cache of verified upstream files (incremental builds,
+  # stage 3). No release names these objects: CurseForge or a pinned mirror can
+  # supply them again, so they expire by age, bytes and index together. A
+  # rebuild writes them again; the older copy it leaves expires a day later.
+  rule {
+    id     = "expire-upstream-cache"
+    status = "Enabled"
+
+    filter {
+      prefix = "upstream/"
+    }
+
+    expiration {
+      days = 60
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
+
+  # An expired cache object leaves a delete marker; remove it once nothing
+  # remains under it.
+  rule {
+    id     = "remove-upstream-cache-delete-markers"
+    status = "Enabled"
+
+    filter {
+      prefix = "upstream/"
+    }
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+  }
+
   depends_on = [aws_s3_bucket_versioning.releases]
 }
 

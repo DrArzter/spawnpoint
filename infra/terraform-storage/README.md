@@ -11,6 +11,10 @@ the exact `5 daily / 2 weekly / 2 monthly` domain policy and have no age-based e
 `prevent_destroy`; destroying disposable compute cannot include them, and destroying this root requires a deliberate
 code change.
 
+In the release bucket, no rule expires a current object under `releases/`. The one exception is `upstream/`, the
+release builder's cache of verified upstream files: it expires 60 days after a write, bytes and index together, because
+no release names these objects and CurseForge or a pinned mirror can supply them again.
+
 The control-plane table is encrypted, deletion-protected and on-demand. Event records expire through TTL; projection
 records do not.
 

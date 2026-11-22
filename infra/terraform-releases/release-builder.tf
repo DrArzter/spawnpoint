@@ -44,6 +44,12 @@ data "archive_file" "release_builder_source" {
     filename = "server/scripts/_s3.sh"
   }
 
+  # The upstream cache the resolvers share (incremental builds, stage 3).
+  source {
+    content  = file("${path.module}/../../server/scripts/_upstream-cache.sh")
+    filename = "server/scripts/_upstream-cache.sh"
+  }
+
   source {
     content  = file("${path.module}/../../server/scripts/_profiles.sh")
     filename = "server/scripts/_profiles.sh"
@@ -165,6 +171,18 @@ data "aws_iam_policy_document" "release_builder" {
       "${data.aws_s3_bucket.releases.arn}/releases/*",
       "${data.aws_s3_bucket.releases.arn}/presets/*",
     ]
+  }
+
+  # Verified upstream bytes and their index (incremental builds, stage 3). No
+  # s3:ListBucket: a missing key then answers 403, which the builder reads as a
+  # miss like a 404. No delete: the storage root's lifecycle expires the prefix.
+  statement {
+    sid = "CacheUpstreamFiles"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+    ]
+    resources = ["${data.aws_s3_bucket.releases.arn}/upstream/*"]
   }
 
   statement {

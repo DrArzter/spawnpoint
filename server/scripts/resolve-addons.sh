@@ -13,6 +13,8 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_common.sh
 source "${SCRIPT_DIR}/_common.sh"
+# shellcheck source=_upstream-cache.sh
+source "${SCRIPT_DIR}/_upstream-cache.sh"
 
 addons_file="${1:-}"
 profile_directory="${2:-}"
@@ -27,6 +29,7 @@ minecraft_version="${ADDONS_MINECRAFT_VERSION:-}"
 loader_type="${ADDONS_LOADER_TYPE:-}"
 [[ -n "${minecraft_version}" && -n "${loader_type}" ]] ||
   die "ADDONS_MINECRAFT_VERSION and ADDONS_LOADER_TYPE are required"
+upstream_cache_require
 case "${loader_type}" in
   forge | neoforge | fabric | quilt) ;;
   *) die "addons need a mod loader, not ${loader_type}" ;;
@@ -120,6 +123,7 @@ cleanup() {
   rm -rf -- "${workspace}"
 }
 trap cleanup EXIT
+upstream_cache_start "${workspace}"
 result="${workspace}/result"
 mkdir -p -- "${result}/both" "${result}/server" "${result}/client"
 entries="${workspace}/entries.jsonl"
@@ -146,7 +150,7 @@ esac
 
 resolve_curseforge() {
   local index="$1" label="$2" destination_dir="$3"
-  local project_id file_id project metadata filename expected_sha expected_bytes url download actual_sha mirror distributable
+  local project_id file_id project metadata filename expected_sha expected_bytes url download actual_sha mirror distributable cached
   project_id="$(jq -r --argjson i "${index}" '.mods[$i].curseforge.project_id' "${addons_file}")"
   file_id="$(jq -r --argjson i "${index}" '.mods[$i].curseforge.file_id' "${addons_file}")"
   project="${workspace}/project-${project_id}.json"
@@ -178,13 +182,16 @@ resolve_curseforge() {
   [[ -n "${url}" ]] || distributable=false
   mirror="$(jq -c --argjson i "${index}" '.mods[$i].curseforge.mirror // empty' "${addons_file}")"
   download="${workspace}/download-${index}"
-  if [[ "${distributable}" == true ]]; then
+  # The author switched third-party distribution off. Respect it unless the
+  # same bytes come from a reviewed mirror (the ADR-0068 rule), also on a cache hit.
+  [[ "${distributable}" == true || -n "${mirror}" ]] ||
+    die "${label}: CurseForge project ${project_id} disables third-party distribution; pin the same file from Modrinth or a mirror"
+  cached=false
+  if upstream_cache_curseforge_fetch "${project_id}" "${file_id}" "${download}" "${expected_sha}" "${expected_bytes}"; then
+    cached=true
+  elif [[ "${distributable}" == true ]]; then
     fetch "${url}" "${download}" || die "CurseForge download failed for ${label}"
   else
-    # The author switched third-party distribution off. Respect it unless the
-    # same bytes come from a reviewed mirror (the ADR-0068 rule).
-    [[ -n "${mirror}" ]] ||
-      die "${label}: CurseForge project ${project_id} disables third-party distribution; pin the same file from Modrinth or a mirror"
     fetch "$(jq -r '.url' <<<"${mirror}")" "${download}" || die "mirror download failed for ${label}"
     actual_sha="$(sha512sum -- "${download}")"
     [[ "${actual_sha%% *}" == "$(jq -r '.sha512' <<<"${mirror}")" &&
@@ -195,6 +202,9 @@ resolve_curseforge() {
   actual_sha="$(sha1sum -- "${download}")" # NOSONAR
   [[ "${actual_sha%% *}" == "${expected_sha}" && "$(stat --format '%s' -- "${download}")" == "${expected_bytes}" ]] ||
     die "${label}: download does not match CurseForge SHA-1 and size"
+  [[ "${cached}" == true ]] ||
+    upstream_cache_curseforge_store "${project_id}" "${file_id}" "${download}" "${filename}" \
+      "${expected_sha}" "${expected_bytes}" 6
   [[ ! -e "${destination_dir}/${filename}" ]] || die "${label}: two addons resolve to ${filename}"
   mv -- "${download}" "${destination_dir}/${filename}"
   jq -cn --argjson project "${project_id}" --argjson file "${file_id}" --arg filename "${filename}" \
@@ -203,7 +213,7 @@ resolve_curseforge() {
 
 resolve_modrinth() {
   local index="$1" label="$2" destination_dir="$3"
-  local pin project_id version_id filename url download actual_sha
+  local pin project_id version_id filename url download actual_sha cache_key
   pin="$(jq -c --argjson i "${index}" '.mods[$i].modrinth' "${addons_file}")"
   project_id="$(jq -r '.project_id' <<<"${pin}")"
   version_id="$(jq -r '.version_id' <<<"${pin}")"
@@ -211,11 +221,17 @@ resolve_modrinth() {
   # The URL is built here, never read from the pin: the CDN is the only source.
   url="${MODRINTH_CDN}/${project_id}/versions/${version_id}/${filename//+/%2B}"
   download="${workspace}/download-${index}"
-  fetch "${url}" "${download}" || die "Modrinth download failed for ${label}"
-  actual_sha="$(sha512sum -- "${download}")"
-  [[ "${actual_sha%% *}" == "$(jq -r '.sha512' <<<"${pin}")" &&
-    "$(stat --format '%s' -- "${download}")" == "$(jq -r '.bytes' <<<"${pin}")" ]] ||
-    die "${label}: download does not match the pinned SHA-512 and size"
+  cache_key="$(upstream_cache_modrinth_key "${version_id}" "$(jq -r '.sha512' <<<"${pin}")")"
+  if ! upstream_cache_sha512_fetch "${cache_key}" "${download}" \
+    "$(jq -r '.sha512' <<<"${pin}")" "$(jq -r '.bytes' <<<"${pin}")"; then
+    fetch "${url}" "${download}" || die "Modrinth download failed for ${label}"
+    actual_sha="$(sha512sum -- "${download}")"
+    [[ "${actual_sha%% *}" == "$(jq -r '.sha512' <<<"${pin}")" &&
+      "$(stat --format '%s' -- "${download}")" == "$(jq -r '.bytes' <<<"${pin}")" ]] ||
+      die "${label}: download does not match the pinned SHA-512 and size"
+    upstream_cache_sha512_store "${cache_key}" "${download}" \
+      "$(jq -r '.sha512' <<<"${pin}")" "$(jq -r '.bytes' <<<"${pin}")"
+  fi
   [[ ! -e "${destination_dir}/${filename}" ]] || die "${label}: two addons resolve to ${filename}"
   mv -- "${download}" "${destination_dir}/${filename}"
   jq -cn --argjson pin "${pin}" '{modrinth: ($pin | {project_id, version_id}), file: $pin.file}'
@@ -302,3 +318,4 @@ mv -T -- "${result}" "${output_dir}"
 printf 'result=resolved\n'
 printf 'addons=%s\n' "${count}"
 printf 'output=%s\n' "${output_dir}"
+upstream_cache_summary

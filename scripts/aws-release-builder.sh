@@ -79,7 +79,10 @@ if [[ "${game}" == "minecraft" ]]; then
 fi
 
 payload="${workspace}/payload"
-"${server_scripts}/resolve-profile-mods.sh" "${profile_directory}" "${payload}/mods"
+# Verified upstream files are kept under upstream/ in the release bucket, so a
+# rebuild of the same pins reads them from S3 instead of CurseForge.
+UPSTREAM_CACHE_BUCKET="${RELEASE_BUCKET}" \
+  "${server_scripts}/resolve-profile-mods.sh" "${profile_directory}" "${payload}/mods"
 
 RELEASE_CREATED_BY="${RELEASE_CREATED_BY:-github-actions}" \
 RELEASE_CHANGELOG="${RELEASE_CHANGELOG:-Profile ${PROFILE_ID} at ${config_revision}}" \

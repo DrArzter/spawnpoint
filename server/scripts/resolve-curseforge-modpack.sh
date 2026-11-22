@@ -10,6 +10,8 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_common.sh
 source "${SCRIPT_DIR}/_common.sh"
+# shellcheck source=_upstream-cache.sh
+source "${SCRIPT_DIR}/_upstream-cache.sh"
 
 source_file="${1:-}"
 output_dir="${2:-}"
@@ -20,6 +22,7 @@ for command in curl find jq realpath sha1sum sha256sum sha512sum stat unzip zip;
   require_command "${command}"
 done
 [[ -n "${CF_API_KEY:-}" ]] || die "CF_API_KEY is required"
+upstream_cache_require
 
 source_file="$(realpath -e -- "${source_file}")"
 output_dir="$(realpath -m -- "${output_dir}")"
@@ -47,6 +50,7 @@ cleanup() {
   rm -rf -- "${workspace}"
 }
 trap cleanup EXIT
+upstream_cache_start "${workspace}"
 
 cf_get() {
   local url="$1"
@@ -104,6 +108,19 @@ download_verified() {
     die "downloaded ${label} does not match CurseForge SHA-1 and size"
 }
 
+# The pack pair: fresh metadata keeps the relationship checks, and the bytes
+# come from the upstream cache when it holds this file id.
+fetch_pack_file() {
+  local metadata="$1" requested_id="$2" destination="$3" label="$4" expected_sha expected_bytes
+  expected_sha="$(jq -r '[.data.hashes[] | select(.algo == 1)][0].value' "${metadata}")"
+  expected_bytes="$(jq -r '.data.fileLength' "${metadata}")"
+  upstream_cache_curseforge_fetch "${project_id}" "${requested_id}" "${destination}" \
+    "${expected_sha}" "${expected_bytes}" && return 0
+  download_verified "${metadata}" "${requested_id}" "${destination}" "${label}"
+  upstream_cache_curseforge_store "${project_id}" "${requested_id}" "${destination}" \
+    "$(jq -r '.data.fileName' "${metadata}")" "${expected_sha}" "${expected_bytes}"
+}
+
 main_metadata="${workspace}/main.json"
 server_metadata="${workspace}/server.json"
 file_metadata "${file_id}" "${main_metadata}"
@@ -117,8 +134,8 @@ server_parent="$(jq -r '.data.parentProjectFileId // empty' "${server_metadata}"
 
 client_archive="${workspace}/client.zip"
 server_archive="${workspace}/server.zip"
-download_verified "${main_metadata}" "${file_id}" "${client_archive}" "client pack ${project_id}:${file_id}"
-download_verified "${server_metadata}" "${server_pack_file_id}" "${server_archive}" \
+fetch_pack_file "${main_metadata}" "${file_id}" "${client_archive}" "client pack ${project_id}:${file_id}"
+fetch_pack_file "${server_metadata}" "${server_pack_file_id}" "${server_archive}" \
   "server pack ${project_id}:${server_pack_file_id}"
 
 # A profile's runtime contract must describe the archive it pins. Reading the
@@ -187,12 +204,18 @@ mirror_index=""
 if jq -e 'has("client_mirror")' "${source_file}" >/dev/null; then
   mirror_archive="${workspace}/client-mirror.zip"
   mirror_tree="${workspace}/client-mirror"
-  curl -fsSL --retry 3 --connect-timeout 20 --max-time 600 \
-    -o "${mirror_archive}" "$(jq -r '.client_mirror.url' "${source_file}")" || die "client mirror download failed"
-  mirror_sha="$(sha512sum -- "${mirror_archive}")"
-  [[ "${mirror_sha%% *}" == "$(jq -r '.client_mirror | .sha512' "${source_file}")" &&
-    "$(stat --format '%s' -- "${mirror_archive}")" == "$(jq -r '.client_mirror.bytes' "${source_file}")" ]] ||
-    die "client mirror does not match its pinned SHA-512 and size"
+  mirror_pin_sha="$(jq -r '.client_mirror | .sha512' "${source_file}")"
+  mirror_pin_bytes="$(jq -r '.client_mirror.bytes' "${source_file}")"
+  mirror_key="$(upstream_cache_mirror_key "${project_id}" "${file_id}" "${mirror_pin_sha}")"
+  if ! upstream_cache_sha512_fetch "${mirror_key}" "${mirror_archive}" "${mirror_pin_sha}" "${mirror_pin_bytes}"; then
+    curl -fsSL --retry 3 --connect-timeout 20 --max-time 600 \
+      -o "${mirror_archive}" "$(jq -r '.client_mirror.url' "${source_file}")" || die "client mirror download failed"
+    mirror_sha="$(sha512sum -- "${mirror_archive}")"
+    [[ "${mirror_sha%% *}" == "${mirror_pin_sha}" &&
+      "$(stat --format '%s' -- "${mirror_archive}")" == "${mirror_pin_bytes}" ]] ||
+      die "client mirror does not match its pinned SHA-512 and size"
+    upstream_cache_sha512_store "${mirror_key}" "${mirror_archive}" "${mirror_pin_sha}" "${mirror_pin_bytes}"
+  fi
   validate_archive_paths "${mirror_archive}"
   mkdir -- "${mirror_tree}"
   unzip -q "${mirror_archive}" -d "${mirror_tree}"
@@ -213,54 +236,84 @@ mkdir -p -- "${client_overrides}"
 client_entries="${workspace}/client-entries.jsonl"
 touch "${client_entries}"
 
-resolve_client_file() {
-  # Dynamic scope keeps every metadata/URL request bound to this dependency's
-  # project rather than the modpack project.
-  local project_id="$1" dependency_file_id="$2" metadata project category directory filename destination digest downloaded candidate expected_sha expected_bytes candidate_sha mirror_url
-  metadata="${workspace}/dependency-${project_id}-${dependency_file_id}.json"
-  file_metadata "${dependency_file_id}" "${metadata}" 'jar|zip'
-  project="$(cf_get "${api_base}/v1/mods/${project_id}")" || die "CurseForge project lookup failed: ${project_id}"
-  jq -e --argjson id "${project_id}" '.data.id == $id and .data.gameId == 432' <<<"${project}" >/dev/null ||
-    die "client dependency is not a Minecraft project: ${project_id}"
-  category="$(jq -r '.data.classId' <<<"${project}")"
-  case "${category}" in
-    6) directory=mods ;;
-    12) directory=resourcepacks ;;
-    6552) directory=shaderpacks ;;
-    6945) directory=datapacks ;;
-    *) die "unsupported CurseForge client dependency class ${category}: ${project_id}" ;;
-  esac
-  filename="$(jq -r '.data.fileName' "${metadata}")"
-  destination="${client_overrides}/${directory}/${filename}"
-  mkdir -p -- "$(dirname -- "${destination}")"
-  # mkdir is an atomic claim, including when two projects use the same filename.
-  mkdir -- "${workspace}/claims/${directory}-${filename}" 2>/dev/null ||
-    die "client dependencies collide: ${directory}/${filename}"
-  downloaded="${workspace}/download-${project_id}-${dependency_file_id}"
-  # The author may bundle a dependency in either archive while disabling its
-  # standalone API download. Reuse only byte-identical, provider-verified files
-  # from those already verified author archives.
-  expected_sha="$(jq -r '[.data.hashes[] | select(.algo == 1)][0].value' "${metadata}")"
-  expected_bytes="$(jq -r '.data.fileLength' "${metadata}")"
+# Reuses a byte-identical, provider-verified copy the author bundled in an
+# already verified archive, where the standalone API download may be disabled.
+find_bundled_copy() {
+  local filename="$1" expected_sha="$2" expected_bytes="$3" destination="$4" candidate candidate_sha
   while IFS= read -r -d '' candidate; do
     [[ "$(stat --format '%s' -- "${candidate}")" == "${expected_bytes}" ]] || continue
     # Same provider integrity field as download_verified, not a signature.
     candidate_sha="$(sha1sum -- "${candidate}")" # NOSONAR
     [[ "${candidate_sha%% *}" == "${expected_sha}" ]] || continue
-    cp -- "${candidate}" "${downloaded}"
-    break
+    cp -- "${candidate}" "${destination}"
+    return 0
   done < <(find "${author_trees[@]}" -type f -name "${filename}" -print0)
-  if [[ ! -f "${downloaded}" ]]; then
-    mirror_url=""
-    if [[ -n "${mirror_index}" ]]; then
-      mirror_url="$(jq -r --arg sha "${expected_sha}" --argjson bytes "${expected_bytes}" '
-        [.files[]? | select(.hashes.sha1 == $sha and .fileSize == $bytes) |
-          .downloads[]? | select(type == "string" and startswith("https://"))][0] // empty
-      ' "${mirror_index}")"
+  return 1
+}
+
+client_class_directory() {
+  case "$1" in
+    6) printf 'mods\n' ;;
+    12) printf 'resourcepacks\n' ;;
+    6552) printf 'shaderpacks\n' ;;
+    6945) printf 'datapacks\n' ;;
+    *) return 1 ;;
+  esac
+}
+
+resolve_client_file() {
+  # Dynamic scope keeps every metadata/URL request bound to this dependency's
+  # project rather than the modpack project.
+  local project_id="$1" dependency_file_id="$2" metadata project category directory filename destination digest downloaded expected_sha expected_bytes mirror_url index resolved=false
+  downloaded="${workspace}/download-${project_id}-${dependency_file_id}"
+  # A cache index hit skips both metadata calls: it was written only after
+  # those checks and the SHA-1 and size check passed for this immutable file id.
+  index="${workspace}/index-${project_id}-${dependency_file_id}.json"
+  if upstream_cache_curseforge_index "${project_id}" "${dependency_file_id}" "${index}" &&
+    client_class_directory "$(jq -r '.classId' "${index}")" >/dev/null; then
+    category="$(jq -r '.classId' "${index}")"
+    directory="$(client_class_directory "${category}")"
+    filename="$(jq -r '.fileName' "${index}")"
+    expected_sha="$(jq -r '.sha1' "${index}")"
+    expected_bytes="$(jq -r '.fileLength' "${index}")"
+    if find_bundled_copy "${filename}" "${expected_sha}" "${expected_bytes}" "${downloaded}" ||
+      upstream_cache_curseforge_bytes "${project_id}" "${dependency_file_id}" "${index}" "${downloaded}"; then
+      resolved=true
     fi
-    download_verified "${metadata}" "${dependency_file_id}" "${downloaded}" \
-      "client dependency ${project_id}:${dependency_file_id} (${filename})" "${mirror_url}"
   fi
+  if [[ "${resolved}" == false ]]; then
+    rm -f -- "${downloaded}"
+    metadata="${workspace}/dependency-${project_id}-${dependency_file_id}.json"
+    file_metadata "${dependency_file_id}" "${metadata}" 'jar|zip'
+    project="$(cf_get "${api_base}/v1/mods/${project_id}")" || die "CurseForge project lookup failed: ${project_id}"
+    jq -e --argjson id "${project_id}" '.data.id == $id and .data.gameId == 432' <<<"${project}" >/dev/null ||
+      die "client dependency is not a Minecraft project: ${project_id}"
+    category="$(jq -r '.data.classId' <<<"${project}")"
+    directory="$(client_class_directory "${category}")" ||
+      die "unsupported CurseForge client dependency class ${category}: ${project_id}"
+    filename="$(jq -r '.data.fileName' "${metadata}")"
+    expected_sha="$(jq -r '[.data.hashes[] | select(.algo == 1)][0].value' "${metadata}")"
+    expected_bytes="$(jq -r '.data.fileLength' "${metadata}")"
+    if ! find_bundled_copy "${filename}" "${expected_sha}" "${expected_bytes}" "${downloaded}"; then
+      mirror_url=""
+      if [[ -n "${mirror_index}" ]]; then
+        mirror_url="$(jq -r --arg sha "${expected_sha}" --argjson bytes "${expected_bytes}" '
+          [.files[]? | select(.hashes.sha1 == $sha and .fileSize == $bytes) |
+            .downloads[]? | select(type == "string" and startswith("https://"))][0] // empty
+        ' "${mirror_index}")"
+      fi
+      download_verified "${metadata}" "${dependency_file_id}" "${downloaded}" \
+        "client dependency ${project_id}:${dependency_file_id} (${filename})" "${mirror_url}"
+    fi
+  fi
+  [[ "${resolved}" == true ]] ||
+    upstream_cache_curseforge_store "${project_id}" "${dependency_file_id}" "${downloaded}" \
+      "${filename}" "${expected_sha}" "${expected_bytes}" "${category}"
+  destination="${client_overrides}/${directory}/${filename}"
+  mkdir -p -- "$(dirname -- "${destination}")"
+  # mkdir is an atomic claim, including when two projects use the same filename.
+  mkdir -- "${workspace}/claims/${directory}-${filename}" 2>/dev/null ||
+    die "client dependencies collide: ${directory}/${filename}"
   # CurseForge applies author overrides after indexed files. Preserve that
   # precedence when the author intentionally replaces a dependency's bytes.
   [[ -e "${destination}" ]] || cp -- "${downloaded}" "${destination}"
@@ -348,3 +401,4 @@ printf 'server_pack_file_id=%s\n' "${server_pack_file_id}"
 printf 'mods=%s\n' "${mod_count}"
 printf 'overrides=%s\n' "${override_count}"
 printf 'output=%s\n' "${output_dir}"
+upstream_cache_summary

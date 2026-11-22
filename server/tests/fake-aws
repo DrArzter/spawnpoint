@@ -80,6 +80,7 @@ key=""
 body=""
 metadata=""
 checksum=""
+query=""
 if_none_match=""
 destination=""
 prefix=""
@@ -114,7 +115,11 @@ while (( $# > 0 )); do
       prefix="$2"
       shift 2
       ;;
-    --checksum-mode | --checksum-algorithm | --query | --output | --server-side-encryption | --content-type)
+    --query)
+      query="$2"
+      shift 2
+      ;;
+    --checksum-mode | --checksum-algorithm | --output | --server-side-encryption | --content-type)
       shift 2
       ;;
     --*)
@@ -134,6 +139,14 @@ case "${operation}" in
   put-object)
     [[ -z "${FAKE_S3_PUT_FAIL_KEY:-}" || "${key}" != "${FAKE_S3_PUT_FAIL_KEY}" ]] || exit 255
     [[ "${if_none_match}" != "*" || ! -f "${object}" ]] || exit 255
+    # FAKE_S3_INFLIGHT_DIR makes puts overlap long enough to log how many ran
+    # at once: one line per put in FAKE_S3_INFLIGHT_LOG.
+    if [[ -n "${FAKE_S3_INFLIGHT_DIR:-}" ]]; then
+      : >"${FAKE_S3_INFLIGHT_DIR}/$$"
+      printf '%s\n' "$(find "${FAKE_S3_INFLIGHT_DIR}" -type f | wc -l)" >>"${FAKE_S3_INFLIGHT_LOG}"
+      sleep "${FAKE_S3_PUT_SLEEP:-0.2}"
+      rm -f -- "${FAKE_S3_INFLIGHT_DIR}/$$"
+    fi
     mkdir -p -- "$(dirname -- "${object}")"
     cp -- "${body}" "${object}"
     if jq -e 'type == "object"' <<<"${metadata}" >/dev/null 2>&1; then
@@ -145,6 +158,15 @@ case "${operation}" in
       printf '%s\n' "${metadata}" >"${metadata_file}"
     fi
     printf '%s\n' "${checksum}" >>"${metadata_file}"
+    # The real response carries ChecksumSHA256 once S3 validated the bytes.
+    # FAKE_S3_PUT_BAD_RESPONSE_KEY stands for S3 answering with another digest.
+    if [[ "${query}" == ChecksumSHA256 ]]; then
+      if [[ -n "${FAKE_S3_PUT_BAD_RESPONSE_KEY:-}" && "${key}" == "${FAKE_S3_PUT_BAD_RESPONSE_KEY}" ]]; then
+        printf '%s\n' "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+      else
+        printf '%s\n' "${checksum}"
+      fi
+    fi
     ;;
   head-object)
     [[ -f "${object}" && -f "${metadata_file}" ]] || exit 254

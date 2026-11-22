@@ -128,11 +128,14 @@ head_release_object() {
     --output text
 }
 
+# Stores one object and confirms it from the put-object response. S3 returns
+# ChecksumSHA256 only after it validated the bytes against the checksum we sent,
+# so the response proves the stored bytes. A third argument "head" adds the
+# head-object read-back (metadata, checksum and size) for single large objects.
 upload_release_object() {
-  local key="$1" body="$2" digest="$3" filename="$4"
-  local digest_base64 bytes metadata head_output remote_hex remote_base64 remote_bytes
+  local key="$1" body="$2" digest="$3" filename="$4" confirm="${5:-response}"
+  local digest_base64 bytes metadata put_checksum head_output remote_hex remote_base64 remote_bytes
   digest_base64="$(archive_checksum_base64 "${body}")"
-  bytes="$(stat --format '%s' -- "${body}")"
   metadata="$(jq -cn \
     --arg sha256 "${digest}" \
     --arg release "${release}" \
@@ -141,15 +144,20 @@ upload_release_object() {
     --arg file "${filename}" \
     '{sha256: $sha256, game: $game, preset: $preset, release: $release, file: $file}')"
 
-  s3_cli put-object \
+  put_checksum="$(s3_cli put-object \
     --bucket "${RELEASE_BUCKET}" \
     --key "${key}" \
     --body "${body}" \
     --checksum-algorithm SHA256 \
     --checksum-sha256 "${digest_base64}" \
     --metadata "${metadata}" \
-    >/dev/null
+    --query ChecksumSHA256 \
+    --output text)" || die "upload failed: s3://${RELEASE_BUCKET}/${key}"
+  [[ "${put_checksum}" == "${digest_base64}" ]] ||
+    die "upload not confirmed by S3: s3://${RELEASE_BUCKET}/${key}"
+  [[ "${confirm}" == head ]] || return 0
 
+  bytes="$(stat --format '%s' -- "${body}")"
   head_output="$(head_release_object "${key}")" || die "could not inspect uploaded object: s3://${RELEASE_BUCKET}/${key}"
   IFS=$'\t' read -r remote_hex remote_base64 remote_bytes <<<"${head_output}"
   [[ "${remote_hex}" == "${digest}" && "${remote_base64}" == "${digest_base64}" && "${remote_bytes}" == "${bytes}" ]] ||
@@ -227,7 +235,7 @@ publish_pack() {
     expected_bytes="$(jq -r '.client.bytes' "${manifest}")"
     [[ "${pack_digest}" == "$(jq -r '.client.sha256' "${manifest}")" && "$(stat --format '%s' -- "${pack_zip}")" == "${expected_bytes}" ]] ||
       die "release client pack does not match the manifest"
-    upload_release_object "${pack_key}" "${pack_zip}" "${pack_digest}" "client.zip"
+    upload_release_object "${pack_key}" "${pack_zip}" "${pack_digest}" "client.zip" head
     printf 'uploaded'
     return 0
   fi
@@ -256,7 +264,7 @@ publish_pack() {
 
   (cd "${pack_dir}/pack" && zip -qr "${pack_zip}" .)
   pack_digest="$(file_sha256 "${pack_zip}")"
-  upload_release_object "${pack_key}" "${pack_zip}" "${pack_digest}" "pack.zip"
+  upload_release_object "${pack_key}" "${pack_zip}" "${pack_digest}" "pack.zip" head
   rm -rf -- "${pack_dir}"
   printf 'uploaded'
 }
@@ -286,7 +294,7 @@ publish_set_pack() {
   printf '%s\n' "${title}" >"${pack_dir}/pack/README.txt"
   (cd "${pack_dir}/pack" && zip -qr "${pack_zip}" .)
   pack_digest="$(file_sha256 "${pack_zip}")"
-  upload_release_object "${key}" "${pack_zip}" "${pack_digest}" "${name}.zip"
+  upload_release_object "${key}" "${pack_zip}" "${pack_digest}" "${name}.zip" head
   rm -rf -- "${pack_dir}"
   printf 'uploaded'
 }
@@ -337,26 +345,41 @@ printf 'full_pack=%s\n' "${full_pack_result}"
   exit 0
 fi
 
-# A modpack can contain thousands of small configs. Keep the per-object
-# checksum/HEAD contract, but avoid serial round trips dominating the build.
-upload_jobs=()
-await_uploads() {
-  local job failed=false
-  for job in "${upload_jobs[@]}"; do
-    wait "${job}" || failed=true
-  done
-  upload_jobs=()
-  [[ "${failed}" == false ]] || die "release payload publication failed"
-}
-queue_upload() {
-  upload_release_object "$@" &
-  upload_jobs+=("$!")
-  if (( ${#upload_jobs[@]} == 8 )); then
-    await_uploads
+# A modpack can contain thousands of small configs, and every aws CLI process
+# costs about a second of CPU on a small builder. So each object takes one
+# process (no head-object), run in a sliding window: a slot is refilled the
+# moment any upload ends, never after the slowest of a batch.
+upload_concurrency="${RELEASE_UPLOAD_CONCURRENCY:-16}"
+upload_progress_every="${RELEASE_UPLOAD_PROGRESS_EVERY:-100}"
+[[ "${upload_concurrency}" =~ ^[1-9][0-9]?$ ]] || die "RELEASE_UPLOAD_CONCURRENCY must be 1 to 99: ${upload_concurrency}"
+[[ "${upload_progress_every}" =~ ^[1-9][0-9]*$ ]] || die "RELEASE_UPLOAD_PROGRESS_EVERY must be a positive integer: ${upload_progress_every}"
+uploads_running=0
+uploads_done=0
+upload_started=${SECONDS}
+# One finished upload frees its slot. A failed one stops the publication at
+# once; the job already named its key, and finish_uploads awaits the rest.
+reap_upload() {
+  wait -n || die "release payload publication failed after ${uploads_done} objects"
+  uploads_running=$((uploads_running - 1))
+  uploads_done=$((uploads_done + 1))
+  if (( uploads_done % upload_progress_every == 0 )); then
+    log "uploaded ${uploads_done} objects in $((SECONDS - upload_started))s"
   fi
 }
-# If validation fails with a batch in flight, let its readers finish before
-# the caller removes the staged payload. No manifest is committed on failure.
+await_uploads() {
+  while (( uploads_running > 0 )); do
+    reap_upload
+  done
+}
+queue_upload() {
+  while (( uploads_running >= upload_concurrency )); do
+    reap_upload
+  done
+  upload_release_object "$@" &
+  uploads_running=$((uploads_running + 1))
+}
+# If validation fails with uploads in flight, let them finish before the
+# caller removes the staged payload. No manifest is committed on failure.
 finish_uploads() {
   local exit_status=$?
   wait || true
@@ -406,9 +429,11 @@ done < <(jq -r '
   [.file, .sha256, (.bytes | tostring)] | @tsv' "${manifest}")
 
 await_uploads
+log "payload upload finished: ${uploads_done} objects in $((SECONDS - upload_started))s"
 pack_result="$(publish_pack)"
 publish_set_packs
-upload_release_object "${manifest_key}" "${manifest}" "${manifest_digest}" "manifest.json"
+upload_release_object "${manifest_key}" "${manifest}" "${manifest_digest}" "manifest.json" head
+log "release published in ${SECONDS}s"
 
 printf 'result=uploaded\n'
 printf 'bucket=%s\n' "${RELEASE_BUCKET}"

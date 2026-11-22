@@ -336,12 +336,23 @@ done < <(jq -r '
 
 # One concurrent copy of the missing mods/ and overrides/ keys. The client.zip,
 # server.zip and full.zip packs sit beside them and are never included.
+# The CLI tests every listed key against every filter in one Python thread, so
+# one filter per file costs files x filters: a fresh host with 1,659 missing
+# files spent 19 minutes there with the network idle. Above a small number of
+# missing files the copy takes the two folders whole; the check below still
+# keeps only the files the manifest names, each held to its SHA-256.
+filter_limit="${RELEASE_DOWNLOAD_FILTER_LIMIT:-64}"
+[[ "${filter_limit}" =~ ^[0-9]+$ ]] || die "RELEASE_DOWNLOAD_FILTER_LIMIT must be a whole number"
 if ((${#missing[@]} > 0)); then
   fetch_dir="$(mktemp -d "${payload_dir}/.fetch.XXXXXX")"
   filters=(--exclude '*')
-  for entry in "${missing[@]}"; do
-    filters+=(--include "$(glob_literal "${entry%%$'\t'*}")")
-  done
+  if ((${#missing[@]} > filter_limit)); then
+    filters+=(--include 'mods/*' --include 'overrides/*')
+  else
+    for entry in "${missing[@]}"; do
+      filters+=(--include "$(glob_literal "${entry%%$'\t'*}")")
+    done
+  fi
   aws "${S3_GLOBAL_ARGS[@]}" s3 cp \
     "s3://${RELEASE_BUCKET}/${release_prefix}/" "${fetch_dir}/" \
     --recursive --only-show-errors "${filters[@]}" >&2 ||

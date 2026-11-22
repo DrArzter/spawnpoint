@@ -9,13 +9,15 @@ import { resolveBackupRelease } from "../control-plane/backup-release.ts";
 import { backupInventory } from "../control-plane/backups.ts";
 import { dynamoReleaseStateReader } from "../control-plane/dynamo-release-state.ts";
 import { parsePresetCatalog, usableByNewWipe } from "../control-plane/preset-catalog.ts";
+import { ReleaseHolders, resolveFromWorldRecords } from "../control-plane/release-holders.ts";
+import { ReleaseRefs } from "../control-plane/release-refs.ts";
 import { requireReleaseUsable } from "../control-plane/release-usable.ts";
 import { type ReleaseState } from "../control-plane/release-state.ts";
 import { releaseManifestKey } from "../control-plane/release-artifacts.ts";
 import { restoreWithPublishedRelease } from "../control-plane/restore-guard.ts";
 import { s3BackupReleaseSources } from "../control-plane/s3-backup-release.ts";
 import { S3ReleaseStateStore } from "../control-plane/s3-release-state-store.ts";
-import { S3WorldRepository } from "../control-plane/s3-world-repository.ts";
+import { S3WorldReader, S3WorldRepository } from "../control-plane/s3-world-repository.ts";
 import {
   archiveWorldRecord, parseWorldRecord, purgeGenerationIds, regenerateWorldRecord, type WorldRecord,
 } from "../control-plane/world-registry.ts";
@@ -35,12 +37,18 @@ const WORLD_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const GENERATION_ID = /^gen-[0-9a-f]{32}$/;
 const s3 = new S3Client({});
-const readReleaseState = dynamoReleaseStateReader(DynamoDBDocumentClient.from(new DynamoDBClient({})));
+const table = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const readReleaseState = dynamoReleaseStateReader(table);
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`missing environment variable: ${name}`);
   return value;
+}
+
+// Holder first (ADR-0080): both stores add the generation's holder before they write.
+function releaseHolders(bucket: string): ReleaseHolders {
+  return new ReleaseHolders(new ReleaseRefs(table), resolveFromWorldRecords(new S3WorldReader(s3, bucket)));
 }
 
 async function jsonObject(bucket: string, key: string): Promise<{ value: Record<string, unknown>; etag: string }> {
@@ -212,7 +220,8 @@ async function publishedReleaseExists(gameId: string, presetId: string, release:
 }
 
 async function writeInitialReleaseState(record: WorldRecord, input: Input): Promise<void> {
-  const store = new S3ReleaseStateStore(s3, requiredEnv("RELEASE_BUCKET"));
+  const bucket = requiredEnv("RELEASE_BUCKET");
+  const store = new S3ReleaseStateStore(s3, bucket, releaseHolders(bucket));
   const state: ReleaseState = {
     worldId: record.worldId,
     generationId: record.currentGeneration.id,
@@ -223,7 +232,7 @@ async function writeInitialReleaseState(record: WorldRecord, input: Input): Prom
     source: input.action === "restore" ? "restore-backup" : "start-wipe",
   };
   try {
-    await store.create(state);
+    await store.create(state, { gameId: record.gameId, presetId: record.preset.id });
   } catch (error) {
     if (!(error instanceof Error) || (error.name !== "PreconditionFailed" && error.name !== "ConditionalRequestConflict")) throw error;
     const existing = await store.read({ worldId: state.worldId, generationId: state.generationId });
@@ -277,7 +286,8 @@ export async function handler(event: unknown) {
   const input = parseInput(event);
   const releaseBucket = requiredEnv("RELEASE_BUCKET");
   if (input.action === "purge") return purgeWorld(input, releaseBucket);
-  const worlds = new S3WorldRepository(s3, releaseBucket);
+  const holders = releaseHolders(releaseBucket);
+  const worlds = new S3WorldRepository(s3, releaseBucket, holders);
   const stored = await worlds.read(input.worldId);
   if (stored === null) throw new Error("invalid_world_record");
   const record = stored.record;
@@ -287,7 +297,7 @@ export async function handler(event: unknown) {
   const changed = !appliedEarlier(input, record, expectedGenerationId);
   if (changed) {
     const backups = await verifiedBackups(record.worldId);
-    await requireCurrentGenerationBackup(record, backups, new S3ReleaseStateStore(s3, releaseBucket));
+    await requireCurrentGenerationBackup(record, backups, new S3ReleaseStateStore(s3, releaseBucket, holders));
     next = await nextRecord(input, record, backups);
     await worlds.replace(next, stored.etag);
   }

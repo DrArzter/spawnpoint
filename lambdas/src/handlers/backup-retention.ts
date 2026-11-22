@@ -1,8 +1,8 @@
 import { DeleteObjectCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 
 import { backupInventory, byCodeUnit, resumeArchiveKey, type BackupEntry } from "../control-plane/backups.ts";
-import { S3ReleaseStateStore } from "../control-plane/s3-release-state-store.ts";
-import { S3WorldRepository } from "../control-plane/s3-world-repository.ts";
+import { S3ReleaseStateReader } from "../control-plane/s3-release-state-store.ts";
+import { S3WorldReader } from "../control-plane/s3-world-repository.ts";
 import type { WorldRecord } from "../control-plane/world-registry.ts";
 import { planBackupRetention } from "../domain/backup-retention.ts";
 
@@ -112,9 +112,9 @@ export async function applyBackupRetention(store: RetentionStore): Promise<reado
 }
 
 export function s3RetentionStore(
-  s3: S3Send, backupBucket: string, worlds: Pick<S3WorldRepository, "read">, releaseBucket?: string,
+  s3: S3Send, backupBucket: string, worlds: Pick<S3WorldReader, "read">, releaseBucket?: string,
 ): RetentionStore {
-  const states = releaseBucket === undefined ? null : new S3ReleaseStateStore(s3 as S3Client, releaseBucket);
+  const states = releaseBucket === undefined ? null : new S3ReleaseStateReader(s3 as S3Client, releaseBucket);
   return {
     async listWorldIds() {
       const ids: string[] = [];
@@ -171,7 +171,7 @@ export function s3RetentionStore(
 export async function handler(): Promise<Readonly<{ worlds: number; removed: number }>> {
   const s3 = new S3Client({});
   const releaseBucket = requiredEnv("RELEASE_BUCKET");
-  const store = s3RetentionStore(s3, requiredEnv("BACKUP_BUCKET"), new S3WorldRepository(s3, releaseBucket), releaseBucket);
+  const store = s3RetentionStore(s3, requiredEnv("BACKUP_BUCKET"), new S3WorldReader(s3, releaseBucket), releaseBucket);
   const results = await applyBackupRetention(store);
   for (const result of results) {
     if (result.removed.length > 0) console.info("backup_retention_removed", { worldId: result.worldId, keys: result.removed });

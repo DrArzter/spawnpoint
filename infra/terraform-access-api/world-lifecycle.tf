@@ -26,10 +26,17 @@ data "aws_iam_policy_document" "world_lifecycle" {
     ]
   }
 
+  # A regenerate or restore adds the new generation's holder before it writes
+  # the record and the pointer (ADR-0080). Release items and holders only.
   statement {
-    sid       = "ReadReleaseState"
-    actions   = ["dynamodb:GetItem"]
+    sid       = "HoldReleaseState"
+    actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]
     resources = [local.release_refs_table_arn]
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["release#*"]
+    }
   }
 
   statement {

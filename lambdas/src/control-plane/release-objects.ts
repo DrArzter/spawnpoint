@@ -33,10 +33,15 @@ export function manifestUsesObjects(manifest: unknown): boolean {
 
 export type ManifestPack = "client" | "server" | "full";
 
-/** The digest and size of one pack of an objects-v1 manifest; null when the release has none. */
+/**
+ * The digest and size of one pack of an objects-v1 manifest; null when the
+ * release has none. A modpack release names its client pack in `client`
+ * (inside the immutability gate); every other pack is in `packs`, outside it.
+ */
 export function manifestPackObject(manifest: unknown, pack: ManifestPack): Readonly<{ sha256: string; bytes: number }> | null {
-  const root = manifest as { client?: { sha256?: unknown; bytes?: unknown }; packs?: Record<string, { sha256?: unknown; bytes?: unknown } | undefined> } | null;
-  const entry = pack === "client" ? root?.client : root?.packs?.[pack];
+  type Entry = { sha256?: unknown; bytes?: unknown } | undefined;
+  const root = manifest as { client?: Entry; packs?: Record<string, Entry> } | null;
+  const entry = pack === "client" && isSha256(root?.client?.sha256) ? root?.client : root?.packs?.[pack];
   if (!isSha256(entry?.sha256)) return null;
   return { sha256: entry.sha256, bytes: typeof entry.bytes === "number" ? entry.bytes : 0 };
 }

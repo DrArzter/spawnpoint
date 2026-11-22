@@ -5,7 +5,9 @@ import {
   DeleteCommand, GetCommand, QueryCommand, ScanCommand, TransactWriteCommand, UpdateCommand,
   type QueryCommandInput, type ScanCommandInput, type TransactWriteCommandInput,
 } from "@aws-sdk/lib-dynamodb";
-import { S3WorldRepository } from "../../control-plane/s3-world-repository.ts";
+import { ReleaseHolders, resolveFromWorldRecords } from "../../control-plane/release-holders.ts";
+import { ReleaseRefs } from "../../control-plane/release-refs.ts";
+import { S3WorldReader, S3WorldRepository } from "../../control-plane/s3-world-repository.ts";
 import { type WorldRecord } from "../../control-plane/world-registry.ts";
 import { type Response, response } from "./http.ts";
 import { document, tableName, type Item } from "./access-store.ts";
@@ -26,7 +28,9 @@ let releaseWorlds: WorldStore | undefined;
 function worldsInReleaseBucket(): WorldStore {
   const bucket = process.env.RELEASE_BUCKET;
   if (!bucket) throw new Error("missing environment variable: RELEASE_BUCKET");
-  releaseWorlds ??= new S3WorldRepository(new S3Client({}), bucket);
+  // Anonymising an owner rewrites the record: the holder of its release is already there, so this costs one read.
+  const s3 = new S3Client({});
+  releaseWorlds ??= new S3WorldRepository(s3, bucket, new ReleaseHolders(new ReleaseRefs(document), resolveFromWorldRecords(new S3WorldReader(s3, bucket))));
   return releaseWorlds;
 }
 

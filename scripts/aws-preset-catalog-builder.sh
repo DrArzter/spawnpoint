@@ -8,6 +8,8 @@ set -Eeuo pipefail
 repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/_config-source.sh
 source "${repository_root}/scripts/_config-source.sh"
+# shellcheck source=scripts/_release-holders.sh
+source "${repository_root}/scripts/_release-holders.sh"
 
 [[ -n "${RELEASE_BUCKET:-}" && "${RELEASE_BUCKET}" != "REQUIRED_BY_CALLER" ]] || {
   printf 'error: RELEASE_BUCKET is required\n' >&2
@@ -165,6 +167,10 @@ discover_published_releases() {
   mv -- "${catalog}.discovered" "${catalog}"
 }
 discover_published_releases
+
+# Holder first (ADR-0080): every release the catalog lists is held before the
+# catalog is written. A failure stops here, and the old catalog stays.
+hold_catalog_releases "${catalog}" "${game}"
 
 aws s3api put-object \
   --bucket "${RELEASE_BUCKET}" \

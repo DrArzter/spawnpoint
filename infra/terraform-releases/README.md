@@ -45,6 +45,18 @@ fetches are not cached.
 The role may get and put objects under `upstream/` only. It has no `s3:ListBucket`, so S3 answers a missing key with
 403; the builder treats that as a miss. It has no delete right: the storage root's lifecycle rule expires the prefix.
 
+## Content-addressed layout
+
+`release_storage_layout` selects what the builder writes: `legacy` (the default; per-release keys, as before) or
+`objects-v1` (ADR-0080: objects named by SHA-256 under `objects/`, with a manifest that refers to them by digest). The
+CodeBuild project gets it as `RELEASE_STORAGE_LAYOUT`. Keep `legacy` until the readers are deployed and the reconciler
+report is clean. The project also gets `RELEASE_REFS_TABLE` (`release_refs_table_name`, created by `../terraform-storage`).
+
+The layout is written by one bundled Node program, `lambdas/dist/release-writer/index.cjs`, which the source bundle
+carries as `tools/release-writer.cjs`. Run `npm --prefix ../../lambdas run build` before `terraform plan`: the file must
+exist then. The role may get, put, update and delete items on the reference table, and nothing else in DynamoDB; it
+still has no `s3:Delete*`. The catalog builders hold each release a catalog lists before they write the catalog.
+
 ## Plan and apply
 
 Copy `backend.hcl.example` to ignored `backend.hcl`, replace the account ID, then:

@@ -44,6 +44,13 @@ upstream_cache_event() {
   [[ -z "${UPSTREAM_CACHE_EVENTS}" ]] || printf '%s %s\n' "$1" "$2" >>"${UPSTREAM_CACHE_EVENTS}"
 }
 
+# A file read from the cache is a copy source for the objects-v1 writer: it
+# can copy it inside S3 instead of uploading it. When UPSTREAM_CACHE_HITS_FILE
+# is set, a hit adds one `sha256<TAB>key` line. It never changes a result.
+upstream_cache_record_hit() {
+  [[ -z "${UPSTREAM_CACHE_HITS_FILE:-}" ]] || printf '%s\t%s\n' "$1" "$2" >>"${UPSTREAM_CACHE_HITS_FILE}" || true
+}
+
 # Prints hits, misses and rejected entries as key=value lines.
 upstream_cache_summary() {
   upstream_cache_enabled || return 0
@@ -121,6 +128,7 @@ upstream_cache_curseforge_bytes() {
     return 1
   fi
   upstream_cache_event hit "curseforge:${project}:${file}"
+  upstream_cache_record_hit "$(jq -r '.sha256' "${index}")" "${prefix}/file"
 }
 
 # A hit for a caller that already holds fresh CurseForge metadata: the index

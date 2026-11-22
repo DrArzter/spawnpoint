@@ -11,8 +11,8 @@ import { randomUUID } from "node:crypto";
 import { buildLifecycleStartInput } from "../../domain/telegram-bot.ts";
 import { attachmentDisposition, packAttachmentName, releaseManifestKey } from "../../control-plane/release-artifacts.ts";
 import { releasePackStorageKey } from "../../control-plane/release-objects.ts";
-import { S3ReleaseStateStore } from "../../control-plane/s3-release-state-store.ts";
-import { S3WorldRepository } from "../../control-plane/s3-world-repository.ts";
+import { S3ReleaseStateReader } from "../../control-plane/s3-release-state-store.ts";
+import { S3WorldReader } from "../../control-plane/s3-world-repository.ts";
 
 export const env = (name: string): string => {
   const value = process.env[name];
@@ -46,9 +46,9 @@ export type Pointer = Readonly<{ game: string; preset: string; desired_release: 
 export async function readPointer(): Promise<Pointer | null> {
   try {
     const bucket = env("RELEASE_BUCKET");
-    const world = await new S3WorldRepository(s3, bucket).read(env("WORLD_ID"));
+    const world = await new S3WorldReader(s3, bucket).read(env("WORLD_ID"));
     if (world === null) return null;
-    const release = await new S3ReleaseStateStore(s3, bucket).read({
+    const release = await new S3ReleaseStateReader(s3, bucket).read({
       worldId: world.record.worldId,
       generationId: world.record.currentGeneration.id,
     });

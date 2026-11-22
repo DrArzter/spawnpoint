@@ -9,6 +9,8 @@ trap cleanup EXIT
 
 mkdir -p -- "${fixture}/bin" "${fixture}/s3/releases/worlds/legacy" "${fixture}/s3/releases/presets/minecraft"
 ln -s -- "${REPOSITORY_ROOT}/server/tests/fake-aws" "${fixture}/bin/aws"
+ln -s -- "${REPOSITORY_ROOT}/server/tests/fake-node" "${fixture}/bin/node"
+export FAKE_NODE_LOG="${fixture}/node.log"
 export PATH="${fixture}/bin:${PATH}"
 export FAKE_S3_ROOT="${fixture}/s3"
 export RELEASE_BUCKET="releases"
@@ -32,7 +34,15 @@ state="${FAKE_S3_ROOT}/${RELEASE_BUCKET}/worlds/legacy/generations/${generation_
 record="${FAKE_S3_ROOT}/${RELEASE_BUCKET}/worlds/legacy/world.json"
 [[ ! -e "${state}" && ! -e "${record}" ]]
 
+# Holder first (ADR-0080): a refused holder stops the migration before any write.
+if FAKE_NODE_FAIL=true ${tool} legacy --apply >/dev/null 2>&1; then
+  printf 'expected a refused holder to stop the migration\n' >&2
+  exit 1
+fi
+[[ ! -e "${state}" && ! -e "${record}" ]]
+
 applied="$(${tool} legacy --apply)"
+[[ -s "${FAKE_NODE_LOG}" ]]
 grep -qx 'result=migrated' <<<"${applied}"
 jq -e --arg generation "${generation_id}" '
   .schema_version == 2 and .world_id == "legacy" and .generation_id == $generation and

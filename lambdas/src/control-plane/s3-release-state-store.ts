@@ -2,6 +2,7 @@ import {
   GetObjectCommand, NoSuchKey, PutObjectCommand, S3Client,
 } from "@aws-sdk/client-s3";
 
+import type { ReleaseHolders, WorldIdentity } from "./release-holders.ts";
 import {
   legacyReleaseStateKey, parseLegacyReleaseState, parseReleaseState, releaseStateDocument,
   releaseStateKey, type ReleaseState, type WorldRef,
@@ -13,22 +14,17 @@ function missing(error: unknown): boolean {
   return error instanceof NoSuchKey || (error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound"));
 }
 
-export class S3ReleaseStateStore {
-  private readonly s3: S3Client;
-  private readonly bucket: string;
-  private readonly now: () => Date;
+/** Reads pointers and has no write method: the type a read-only call site holds (ADR-0080). */
+export class S3ReleaseStateReader {
+  protected readonly s3: S3Client;
+  protected readonly bucket: string;
 
-  constructor(
-    s3: S3Client,
-    bucket: string,
-    now: () => Date = () => new Date(),
-  ) {
+  constructor(s3: S3Client, bucket: string) {
     this.s3 = s3;
     this.bucket = bucket;
-    this.now = now;
   }
 
-  private async readObject(key: string): Promise<{ value: unknown; etag: string } | null> {
+  protected async readObject(key: string): Promise<{ value: unknown; etag: string } | null> {
     try {
       const response = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
       const body = await response.Body?.transformToString();
@@ -46,6 +42,18 @@ export class S3ReleaseStateStore {
     const state = parseReleaseState(stored.value, ref);
     if (state === null) throw new Error("invalid_release_state");
     return { state, etag: stored.etag };
+  }
+}
+
+/** Every write adds the holders first, so a call site cannot forget them: the holders argument is required. */
+export class S3ReleaseStateStore extends S3ReleaseStateReader {
+  private readonly holders: ReleaseHolders;
+  private readonly now: () => Date;
+
+  constructor(s3: S3Client, bucket: string, holders: ReleaseHolders, now: () => Date = () => new Date()) {
+    super(s3, bucket);
+    this.holders = holders;
+    this.now = now;
   }
 
   async readOrMigrateLegacy(ref: WorldRef): Promise<StoredReleaseState | null> {
@@ -65,7 +73,9 @@ export class S3ReleaseStateStore {
     return stored;
   }
 
-  async create(state: ReleaseState): Promise<void> {
+  /** `world` is the game and preset when the world record is not stored yet; otherwise they are read from it. */
+  async create(state: ReleaseState, world?: WorldIdentity): Promise<void> {
+    await this.holders.holdPointer(state, world);
     await this.s3.send(new PutObjectCommand({
       Bucket: this.bucket,
       Key: releaseStateKey(state),
@@ -76,8 +86,9 @@ export class S3ReleaseStateStore {
     }));
   }
 
-  async replace(state: ReleaseState, etag: string): Promise<void> {
+  async replace(state: ReleaseState, etag: string, world?: WorldIdentity): Promise<void> {
     if (!etag) throw new Error("missing_release_state_etag");
+    await this.holders.holdPointer(state, world);
     await this.s3.send(new PutObjectCommand({
       Bucket: this.bucket,
       Key: releaseStateKey(state),

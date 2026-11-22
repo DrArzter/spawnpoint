@@ -215,8 +215,11 @@ output="$(run_addons addons-first)"
 jq -e '.classId == 6' "${cache}/curseforge/555/501/index.json" >/dev/null || fail "the addon index has no class"
 cmp -s "${fixture}/modrinth/AbCdEf12/modrinth-addon.jar" "${cache}/modrinth/AbCdEf12/${modrinth_sha}" ||
   fail "the Modrinth addon was not cached by version and SHA-512"
-output="$(run_addons addons-second FAKE_OFFLINE=1)"
+output="$(run_addons addons-second FAKE_OFFLINE=1 UPSTREAM_CACHE_HITS_FILE="${fixture}/hits.tsv")"
 [[ "$(value upstream_cache_hits "${output}")" == 2 ]] || fail "warm addon resolution did not hit twice"
+# A CurseForge hit is recorded as a copy source for the objects-v1 writer; a SHA-512 hit has no SHA-256 to record.
+[[ "$(cat "${fixture}/hits.tsv")" == "$(printf '%s\tupstream/curseforge/555/501/file' "$(sha256sum "${cache}/curseforge/555/501/file" | awk '{print $1}')")" ]] ||
+  fail "the CurseForge hit was not recorded for the writer"
 cmp -s "${fixture}/addons-first/addons-lock.json" "${fixture}/addons-second/addons-lock.json" ||
   fail "an addon cache hit changed the lock"
 printf 'tampered\n' >>"${cache}/modrinth/AbCdEf12/${modrinth_sha}"

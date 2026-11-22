@@ -7,6 +7,8 @@
 set -Eeuo pipefail
 
 REPOSITORY_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=_hold-release.sh
+source "${REPOSITORY_ROOT}/scripts/_hold-release.sh"
 catalog="${SPAWNPOINT_WORLD_CATALOG:-${REPOSITORY_ROOT}/server/worlds/catalog.json}"
 profile="${AWS_PROFILE:-spawnpoint}"
 region="${AWS_REGION:-eu-central-1}"
@@ -148,6 +150,16 @@ put_if_missing() {
     --bucket "${RELEASE_BUCKET}" --key "${key}" --body "${expected}" \
     --if-none-match '*' --server-side-encryption AES256 --content-type application/json >/dev/null
 }
+
+# Holder first: the pointer names the release as desired (and active), the
+# record as the origin. A refused holder stops the migration before any write.
+active_release="$(jq -r '.active_release // empty' "${legacy}")"
+AWS_PROFILE="${profile}" AWS_REGION="${region}" \
+  hold_release "${game}" "${preset_id}" "${release}" "${world_id}" "${generation_id}" desired,origin || exit 1
+if [[ -n "${active_release}" ]]; then
+  AWS_PROFILE="${profile}" AWS_REGION="${region}" \
+    hold_release "${game}" "${preset_id}" "${active_release}" "${world_id}" "${generation_id}" active || exit 1
+fi
 
 # The world descriptor is the discoverability commit. A retry can safely
 # resume after a release-state-only partial write.

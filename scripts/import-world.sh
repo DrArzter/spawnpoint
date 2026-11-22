@@ -12,6 +12,8 @@ set -Eeuo pipefail
 
 REPOSITORY_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_SCRIPTS="${REPOSITORY_ROOT}/server/scripts"
+# shellcheck source=_hold-release.sh
+source "${REPOSITORY_ROOT}/scripts/_hold-release.sh"
 
 usage() {
   cat >&2 <<'EOF'
@@ -58,7 +60,8 @@ export AWS_PROFILE="${AWS_PROFILE:-spawnpoint}"
 export AWS_REGION="${AWS_REGION:-eu-central-1}"
 actor="${IMPORT_ACTOR:-import}"
 
-for command in aws jq sha256sum; do
+# node writes the release holder before the pointer; check it before any upload.
+for command in aws jq node sha256sum; do
   command -v "${command}" >/dev/null 2>&1 || {
     printf 'error: required command not found: %s\n' "${command}" >&2
     exit 1
@@ -165,6 +168,10 @@ jq -n \
     updated_by: $updated_by,
     source: "import-world"
   }' >"${staging}/release-pointer.json"
+
+# Holder first. This pointer has no generation yet, so its holder is `legacy`;
+# migrating the world later writes the real generation's holder.
+hold_release "${game}" "${RELEASE_PROFILE_ID}" "${release}" "${world_name}" legacy desired || exit 1
 
 pointer_digest="$(sha256sum -- "${staging}/release-pointer.json")"
 pointer_digest="${pointer_digest%% *}"

@@ -1,7 +1,7 @@
 import { HeadObjectCommand, NoSuchKey, type S3Client } from "@aws-sdk/client-s3";
 
 import type { BackupReleaseSources } from "./backup-release.ts";
-import { S3ReleaseStateStore } from "./s3-release-state-store.ts";
+import { S3ReleaseStateReader } from "./s3-release-state-store.ts";
 
 function missing(error: unknown): boolean {
   return error instanceof NoSuchKey || (error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound"));
@@ -9,7 +9,7 @@ function missing(error: unknown): boolean {
 
 /** Reads an archive's metadata with one HEAD, never its body, and the source wipe's pointer without migrating it. */
 export function s3BackupReleaseSources(s3: Pick<S3Client, "send">, backupBucket: string, releaseBucket: string): BackupReleaseSources {
-  const states = new S3ReleaseStateStore(s3 as S3Client, releaseBucket);
+  const states = new S3ReleaseStateReader(s3 as S3Client, releaseBucket);
   return {
     async readArchiveMetadata(key) {
       try {

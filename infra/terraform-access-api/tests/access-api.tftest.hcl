@@ -270,24 +270,37 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
 
   assert {
     condition = alltrue([
-      one([
-        for statement in data.aws_iam_policy_document.world_lifecycle.statement : statement.actions
-        if statement.sid == "ReadReleaseState"
-      ]) == toset(["dynamodb:GetItem"]),
-      one([
-        for statement in data.aws_iam_policy_document.world_lifecycle.statement : statement.resources
-        if statement.sid == "ReadReleaseState"
-      ]) == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-release-refs"]),
-      one([
-        for statement in data.aws_iam_policy_document.access_api.statement : statement.actions
-        if statement.sid == "ReadReleaseState"
-      ]) == toset(["dynamodb:GetItem"]),
-      one([
-        for statement in data.aws_iam_policy_document.access_api.statement : statement.resources
-        if statement.sid == "ReadReleaseState"
-      ]) == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-release-refs"]),
+      one([for statement in data.aws_iam_policy_document.world_lifecycle.statement : statement.actions if statement.sid == "HoldReleaseState"]) == toset(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]),
+      one([for statement in data.aws_iam_policy_document.world_lifecycle.statement : statement.resources if statement.sid == "HoldReleaseState"]) == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-release-refs"]),
+      one(one([for statement in data.aws_iam_policy_document.world_lifecycle.statement : statement.condition if statement.sid == "HoldReleaseState"])).test == "ForAllValues:StringLike",
+      one(one([for statement in data.aws_iam_policy_document.world_lifecycle.statement : statement.condition if statement.sid == "HoldReleaseState"])).variable == "dynamodb:LeadingKeys",
+      toset(one(one([for statement in data.aws_iam_policy_document.world_lifecycle.statement : statement.condition if statement.sid == "HoldReleaseState"])).values) == toset(["release#*"]),
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.actions if statement.sid == "HoldReleaseState"]) == toset(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]),
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.resources if statement.sid == "HoldReleaseState"]) == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-release-refs"]),
+      one(one([for statement in data.aws_iam_policy_document.access_api.statement : statement.condition if statement.sid == "HoldReleaseState"])).test == "ForAllValues:StringLike",
+      one(one([for statement in data.aws_iam_policy_document.access_api.statement : statement.condition if statement.sid == "HoldReleaseState"])).variable == "dynamodb:LeadingKeys",
+      toset(one(one([for statement in data.aws_iam_policy_document.access_api.statement : statement.condition if statement.sid == "HoldReleaseState"])).values) == toset(["release#*"]),
     ])
-    error_message = "The API and the world lifecycle read one item of the release reference table to learn a release's state, and may not write it in this stage."
+    error_message = "The API and the world lifecycle get, put and update release items and holders (leading key release#*) so a writer holds a release before it names it, and nothing else in the table."
+  }
+
+  # No statement may delete, batch, scan or query the table, and every write on
+  # it carries the leading-key condition: a file# item cannot be written.
+  assert {
+    condition = alltrue([
+      for action in flatten([for statement in concat(tolist(data.aws_iam_policy_document.world_lifecycle.statement), tolist(data.aws_iam_policy_document.access_api.statement)) : tolist(statement.actions) if contains(statement.resources, "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-release-refs")]) :
+      !startswith(action, "dynamodb:Delete") && !startswith(action, "dynamodb:Batch") && !startswith(action, "dynamodb:Scan") && !startswith(action, "dynamodb:Query")
+    ])
+    error_message = "No role of this root may delete from the reference table or read it by scan or query."
+  }
+
+  assert {
+    condition = alltrue([
+      for statement in concat(tolist(data.aws_iam_policy_document.world_lifecycle.statement), tolist(data.aws_iam_policy_document.access_api.statement)) :
+      length(statement.condition) == 1 && one(statement.condition).variable == "dynamodb:LeadingKeys" && toset(one(statement.condition).values) == toset(["release#*"])
+      if contains(statement.resources, "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-release-refs")
+    ])
+    error_message = "Every statement on the reference table is limited to release# leading keys, so no role here writes a file# item."
   }
 
   assert {

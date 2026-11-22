@@ -14,3 +14,25 @@ variable "aws_profile" {
   type        = string
   default     = "spawnpoint"
 }
+
+variable "release_storage_layout" {
+  description = "Storage layout the release builder writes: legacy (per-release keys) or objects-v1 (content-addressed, ADR-0080). Keep legacy until the readers are deployed."
+  type        = string
+  default     = "legacy"
+
+  validation {
+    condition     = contains(["legacy", "objects-v1"], var.release_storage_layout)
+    error_message = "release_storage_layout must be legacy or objects-v1."
+  }
+}
+
+variable "release_refs_table_name" {
+  description = "Name of the release reference table that terraform-storage creates."
+  type        = string
+  default     = "spawnpoint-release-refs"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_.-]{3,255}$", var.release_refs_table_name))
+    error_message = "release_refs_table_name must be a valid DynamoDB table name."
+  }
+}

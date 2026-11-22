@@ -192,6 +192,23 @@ resource "aws_cloudwatch_metric_alarm" "release_reconciler_run_failed" {
   ok_actions          = [data.aws_sns_topic.fleet_alerts.arn]
 }
 
+# A run that could not read a source skips classes and can report no dangerous
+# difference. That is not a pass, so it alarms too.
+resource "aws_cloudwatch_metric_alarm" "release_reconciler_incomplete" {
+  alarm_name          = "spawnpoint-release-reconciler-incomplete"
+  alarm_description   = "The reconciler could not read every source, so its report is incomplete and nothing is sweepable. Check /aws/lambda/spawnpoint-release-reconciler."
+  namespace           = local.reconciler_namespace
+  metric_name         = "Incomplete"
+  statistic           = "Maximum"
+  period              = 86400
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [data.aws_sns_topic.fleet_alerts.arn]
+  ok_actions          = [data.aws_sns_topic.fleet_alerts.arn]
+}
+
 resource "aws_cloudwatch_metric_alarm" "release_reconciler_errors" {
   alarm_name          = "spawnpoint-release-reconciler-errors"
   alarm_description   = "The reconciler Lambda raised an error, for example a timeout before it could put RunFailed. Check /aws/lambda/spawnpoint-release-reconciler."

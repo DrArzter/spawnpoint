@@ -24,8 +24,10 @@ import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts"
 import { presetBuildView, runningReleaseBuilds } from "./aws-release-builds.ts";
 import { gameCatalog } from "./catalog.ts";
 import { type ReleaseState } from "./release-state.ts";
+import { ReleaseHolders, resolveFromWorldRecords } from "./release-holders.ts";
+import { ReleaseRefs } from "./release-refs.ts";
 import { S3ReleaseStateStore } from "./s3-release-state-store.ts";
-import { S3WorldRepository } from "./s3-world-repository.ts";
+import { S3WorldReader, S3WorldRepository } from "./s3-world-repository.ts";
 import { newWorldRecord, withGameSettings, withWhitelist, withWorldAccess, type WorldGameSettings, type WorldRecord, type WorldWhitelist } from "./world-registry.ts";
 import { parseDynamicProjection } from "./dynamic-projection.ts";
 import { createSessionHostReader } from "./aws-session-history.ts";
@@ -72,6 +74,16 @@ const sfn = new SFNClient({});
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const readReleaseState = dynamoReleaseStateReader(document);
+
+// Holder first (ADR-0080): the stores below add a generation's holder before each write.
+function releaseHolders(bucket: string): ReleaseHolders {
+  return new ReleaseHolders(new ReleaseRefs(document), resolveFromWorldRecords(new S3WorldReader(s3, bucket)));
+}
+
+function worldRepository(): S3WorldRepository {
+  const bucket = requiredEnv("RELEASE_BUCKET");
+  return new S3WorldRepository(s3, bucket, releaseHolders(bucket));
+}
 const ssm = new SSMClient({});
 
 function tag(instance: Instance, key: string): string | undefined {
@@ -118,7 +130,8 @@ async function readLifecycle(serverId: string): Promise<LifecycleRecord | null> 
 async function readReleasePointer(worldId: string, generationId: string | null): Promise<ReleasePointerObservation> {
   try {
     if (generationId === null) return { state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null };
-    const stored = await new S3ReleaseStateStore(s3, requiredEnv("RELEASE_BUCKET")).readOrMigrateLegacy({ worldId, generationId });
+    const bucket = requiredEnv("RELEASE_BUCKET");
+    const stored = await new S3ReleaseStateStore(s3, bucket, releaseHolders(bucket)).readOrMigrateLegacy({ worldId, generationId });
     if (stored === null) return { state: "unconfigured", generationId, desiredRelease: null, activeRelease: null };
     return {
       state: "available",
@@ -294,7 +307,7 @@ function onSlots(slots: readonly number[], periodSeconds: number, timestamps: re
 }
 
 async function listWorldRecords(): Promise<readonly WorldRecord[]> {
-  return new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET")).list();
+  return new S3WorldReader(s3, requiredEnv("RELEASE_BUCKET")).list();
 }
 
 function isSessionOperation(type: MachineType): type is OperationObservation["type"] {
@@ -464,10 +477,12 @@ export async function materializePresetWorld(
     source: "create-world",
   };
   const bucket = requiredEnv("RELEASE_BUCKET");
-  const releaseStates = new S3ReleaseStateStore(s3, bucket);
-  const worlds = new S3WorldRepository(s3, bucket);
+  const holders = releaseHolders(bucket);
+  const releaseStates = new S3ReleaseStateStore(s3, bucket, holders);
+  const worlds = new S3WorldRepository(s3, bucket, holders);
   try {
-    await releaseStates.create(releaseState);
+    // The world record is not stored yet, so the pointer's holder takes the game and preset from the proposal.
+    await releaseStates.create(releaseState, { gameId: proposed.gameId, presetId: proposed.preset.id });
   } catch (error) {
     if (!preconditionFailed(error)) throw error;
     const existing = await releaseStates.read({ worldId: proposed.worldId, generationId: proposed.currentGeneration.id });
@@ -701,7 +716,7 @@ export function backupReleaseSources(): BackupReleaseSources {
 }
 
 export async function readWorldRecord(worldId: string): Promise<WorldRecord | null> {
-  return (await new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET")).read(worldId))?.record ?? null;
+  return (await new S3WorldReader(s3, requiredEnv("RELEASE_BUCKET")).read(worldId))?.record ?? null;
 }
 
 /** A world's game settings (ADR-0064); a running world takes them at its next start. */
@@ -710,7 +725,7 @@ export async function replaceWorldGameSettings(
   worldId: string,
   gameSettings: WorldGameSettings,
 ): Promise<"updated" | "missing" | "archived" | "conflict"> {
-  const worlds = new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET"));
+  const worlds = worldRepository();
   const stored = await worlds.read(worldId);
   if (stored?.record.gameId !== gameId) return "missing";
   if (stored.record.status !== "active") return "archived";
@@ -729,7 +744,7 @@ export async function replaceWorldWhitelist(
   worldId: string,
   whitelist: WorldWhitelist,
 ): Promise<"updated" | "missing" | "archived" | "conflict"> {
-  const worlds = new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET"));
+  const worlds = worldRepository();
   const stored = await worlds.read(worldId);
   if (stored?.record.gameId !== gameId) return "missing";
   if (stored.record.status !== "active") return "archived";
@@ -747,7 +762,7 @@ export async function replaceWorldAccess(
   worldId: string,
   access: Readonly<{ placement: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"]; warm?: boolean }>,
 ): Promise<"updated" | "missing" | "conflict"> {
-  const worlds = new S3WorldRepository(s3, requiredEnv("RELEASE_BUCKET"));
+  const worlds = worldRepository();
   const stored = await worlds.read(worldId);
   if (stored?.record.gameId !== gameId) return "missing";
   if (stored.record.status !== "active") return "conflict";

@@ -62,7 +62,7 @@ One entry per `repository` and `asset`, and one file name across all addons, as 
 builder bundle, which Terraform embeds at apply time. It changes only through a Spawnpoint merge and an apply, never
 through the config repository, so a person who can push a config profile cannot approve their own fork. The match is
 exact and case-sensitive. The list is by repository, not by owner, so a new repository of the same owner needs its own
-review. The first entry is `DrArzter/SophisticatedBackpacks`. A pin to another repository refuses the build before any
+review. The first entry is `DrArzter/SophisticatedBackpacks`; `DrArzter/SophisticatedCore` (the fork of the Core library it needs) followed. A pin to another repository refuses the build before any
 download.
 
 **The builder (`resolve_github_release`) does five things.**

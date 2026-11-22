@@ -107,6 +107,7 @@ readonly MODRINTH_CDN="https://cdn.modrinth.com/data"
 # the config repository. Match is exact and case-sensitive.
 readonly GITHUB_RELEASE_REPOSITORIES=(
   "DrArzter/SophisticatedBackpacks"
+  "DrArzter/SophisticatedCore"
 )
 
 # Refuse before any download when a pin names a repository that is not listed.

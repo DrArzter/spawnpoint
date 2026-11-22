@@ -128,7 +128,7 @@ case "${url}" in
     # GitHub release assets, with no token: <owner>/<repo>/releases/download/<tag>/<asset>.
     rest="${url#https://github.com/}"
     IFS=/ read -r owner repo _releases _download tag file <<<"${rest}"
-    [[ "${owner}/${repo}" == DrArzter/SophisticatedBackpacks ]]
+    [[ "${owner}/${repo}" == DrArzter/SophisticatedBackpacks || "${owner}/${repo}" == DrArzter/SophisticatedCore ]]
     source="${FAKE_ROOT}/github/${tag//%2B/+}/${file//%2B/+}"
     ;;
   https://downloads.invalid/*) source="${FAKE_ROOT}/downloads/${url##*/}" ;;
@@ -485,6 +485,15 @@ gh_jar "${gh_tag}" "${gh_file}" '{"schemaVersion":1,"id":"sophisticatedbackpacks
     "porting_lib_networking":">=2.3.2","porting_lib_transfer":">=2.3.2"}}'
 gh_backpacks="$(ghrelease "${gh_tag}" "${gh_file}" both "Sophisticated Backpacks (Fabric port, Spawnpoint fix)")"
 profile gh-release "$(addons "[${gh_backpacks},${core}]")"
+# The Core fork is allow-listed too, so both mods can come from GitHub releases.
+gh_core_tag='v1.20.1-1.2.7.15.166+sp.1'
+gh_core_file='sophisticatedcore-1.20.1-1.2.7.15.166+sp.1.jar'
+# The fork's jar bundles the same libraries as the Modrinth build, so the fixture is a copy of it.
+mkdir -p -- "${fixture}/github/${gh_core_tag}"
+cp -- "${fixture}/modrinth/BP3CQI2v/${core_file}" "${fixture}/github/${gh_core_tag}/${gh_core_file}"
+gh_core="$(ghrelease "${gh_core_tag}" "${gh_core_file}" both "Sophisticated Core (sp fork)" DrArzter/SophisticatedCore |
+  jq -c '.required_by = ["Sophisticated Backpacks (Fabric port, Spawnpoint fix)"]')"
+profile gh-core-fork "$(addons "[${gh_backpacks},${gh_core}]")"
 # One refusal profile per rule. The same C1-C8 checks run on a GitHub asset.
 mkdir -p -- "${fixture}/github/v-forge"
 jar "${fixture}/github/v-forge/sophisticatedbackpacks-forge.jar" META-INF/mods.toml \
@@ -528,6 +537,9 @@ if grep -Fv -e https://github.com/DrArzter/SophisticatedBackpacks/ -e https://cd
 fi
 [[ "$(files "${payload_gh}/mods")" == "ForgeConfigAPIPort-v8.0.3-1.20.1-Fabric.jar fabric-api-0.92.12+1.20.1.jar ${gh_file} ${core_file} travelersbackpack-fabric-1.20.1-9.1.55.jar trinkets-3.7.2.jar" ]]
 cmp -- "${fixture}/github/${gh_tag}/${gh_file}" "${payload_gh}/mods/${gh_file}"
+output="$("${scripts}/resolve-profile-mods.sh" "${config}/profiles/gh-core-fork" "${fixture}/gh-core-fork/mods" 2>/dev/null)"
+grep -qx 'addons=2' <<<"${output}"
+cmp -- "${fixture}/github/${gh_core_tag}/${gh_core_file}" "${fixture}/gh-core-fork/mods/${gh_core_file}"
 "${scripts}/build-profile-release.sh" "${config}/profiles/gh-release" 1.0 "${payload_gh}/mods" "${payload_gh}/manifest.json" >/dev/null
 jq -e --arg file "${gh_file}" '[.client.addons[] | select(.file == $file) | .side] == ["both"]' "${payload_gh}/manifest.json" >/dev/null
 jq -e --arg file "${gh_file}" '(.server.mods[] | select(.file == $file) | .source) == "github"' "${payload_gh}/manifest.json" >/dev/null

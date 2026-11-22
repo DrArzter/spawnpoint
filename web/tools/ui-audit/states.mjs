@@ -24,6 +24,7 @@ export const STATES = [
   { name: "wipe", route: `${WORLD}/wipes`, steps: [{ action: "world.wipe" }] },
   { name: "restore", route: `${WORLD}/backups`, steps: [{ action: "backup.restore" }] },
   { name: "promote", route: "/?demo&latency=0#/worlds/minecraft/minecraft-creative-5e1c9a07", steps: [{ action: "world.promote" }] },
+  { name: "promote-unstarted", route: "/?demo&latency=0#/worlds/minecraft/minecraft-sandbox-8d41f0b6", steps: [{ action: "world.promote" }] },
   { name: "linked-accounts", route: "/?demo&latency=0#/access/users", steps: [{ action: "access.linked" }] },
   { name: "delete-user", route: "/?demo&latency=0#/access/users", steps: [{ action: "access.delete" }] },
   { name: "role", route: "/?demo&latency=0#/access/roles", steps: [{ action: "access.role.read" }] },
@@ -48,7 +49,7 @@ export const SURFACES = {
     "Scope.tsx": { ScopeDialog: ["scope"] },
     "Profile.tsx": { PasswordPanel: ["password"] },
     "Dialogs.tsx": {
-      ConfirmationDialog: ["stop", "archive", "wipe", "restore", "promote", "delete-user"],
+      ConfirmationDialog: ["stop", "archive", "wipe", "restore", "promote", "promote-unstarted", "delete-user"],
       CreateWorldSheet: ["create-world"],
       WorldSettingsSheet: ["world-settings"],
       GameSettingsSheet: ["game-settings"],
@@ -59,7 +60,7 @@ export const SURFACES = {
     "Access.tsx": { Users: ["linked-accounts"], Roles: ["role"] },
     "Dialogs.tsx": {
       ScopeDialog: ["scope"],
-      ConfirmationDialog: ["stop", "archive", "wipe", "restore", "promote", "delete-user"],
+      ConfirmationDialog: ["stop", "archive", "wipe", "restore", "promote", "promote-unstarted", "delete-user"],
       CreateWorldSheet: ["create-world"],
       WorldSettingsSheet: ["world-settings"],
       GameSettingsSheet: ["game-settings"],

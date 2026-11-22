@@ -332,8 +332,10 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     const mine: Pending = { kind: "promote", worldId: targetWorld.id };
     holdPending(mine);
     try {
-      await requestPromotion(target.id, targetWorld.id, release);
-      notify({ tone: "success", message: `Update of ${targetWorld.displayName} to release ${release} accepted. It appears in Operations while it runs.` });
+      const { result } = await requestPromotion(target.id, targetWorld.id, release);
+      notify({ tone: "success", message: result === "switched"
+        ? `${targetWorld.displayName} will start on release ${release}.`
+        : `Update of ${targetWorld.displayName} to release ${release} accepted. It appears in Operations while it runs.` });
       await refresh(true);
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : "The release update request failed." });

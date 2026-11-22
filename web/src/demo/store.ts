@@ -1,5 +1,5 @@
 import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
-import { identityDeletionRefusal, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
+import { identityDeletionRefusal, type PromotionResult, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
 import { startableReleases } from "../core/presets";
 import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
@@ -204,6 +204,7 @@ export function startSession(gameId: string, worldId: string): { result: "reques
   }
 
   const operationId = schedule("start", worldId, START_MS, (current) => {
+    if (target.release.activeRelease === null) target.release = { ...target.release, activeRelease: target.release.desiredRelease, runCount: 1 };
     session.observedState = "ready";
     session.readyAtEpochSeconds = Math.floor(Date.now() / 1000);
     session.updatedAtEpochSeconds = Math.floor(Date.now() / 1000);
@@ -263,14 +264,30 @@ function gamePort(gameId: string): string {
   return address?.split(":").at(-1) ?? "25565";
 }
 
+/** A wipe that never started takes the release at once: no backup, no operation (ADR-0078). */
+function switchRelease(gameId: string, target: Mutable<World>, release: string): PromotionResult {
+  const generationId = target.release.generationId;
+  if (!startableReleases(target.preset!).includes(release)) throw new Error("That release was built from an older revision. Build the preset again.");
+  const archived = (state.backups[worldKey(gameId, target.id)] ?? []).some((entry) => entry.generationId === generationId);
+  if ((target.release.runCount ?? 0) > 0 || archived) throw new Error("This wipe has already started. Refresh to update it with a backup.");
+  const sessionState = heldSession(gameId, target)?.observedState ?? "stopped";
+  if (sessionState !== "stopped") throw new Error("A session is starting or running. Stop it first.");
+  const current = target.wipes.find((wipe) => wipe.id === generationId);
+  if (target.release.desiredRelease === release && current?.originRelease === release) throw new Error("This release is already selected.");
+  target.release = { ...target.release, desiredRelease: release };
+  if (current) target.wipes = target.wipes.map((wipe) => wipe === current ? { ...wipe, originRelease: release } : wipe);
+  state.snapshot.observedAt = iso();
+  return { result: "switched" };
+}
+
 /** A fleet world's promotion (ADR-0078): desired first, active once the target start passes. */
-export function promoteWorld(gameId: string, worldId: string, release: string): { result: "requested"; operationId: string } {
+export function promoteWorld(gameId: string, worldId: string, release: string): PromotionResult {
   settle();
   requireIdle(worldId);
   const target = world(gameId, worldId);
   if (target.placement !== "fleet") throw new Error("Only a fleet world is promoted from the panel.");
   if (!(target.preset?.releases.includes(release) ?? false)) throw new Error("The selected release is no longer available. Refresh and try again.");
-  if (target.release.activeRelease === null) throw new Error("This wipe has never started. Start a new wipe instead.");
+  if (target.release.activeRelease === null) return switchRelease(gameId, target, release);
   if (target.release.activeRelease === release) throw new Error("This release is already active.");
   if ((target.session?.idle?.playersOnline ?? 0) > 0) throw new Error("Players are online. Ask them to log off first.");
   archive(gameId, target);
@@ -367,7 +384,8 @@ export function createWorld(gameId: string, presetId: string, displayName: strin
     preset: { id: preset.id, repository: preset.repository, commit: preset.commit, profileDigest: preset.profileDigest, releases: [...preset.releases], buildStatus: preset.buildStatus, latestRelease: preset.latestRelease, ...(preset.olderReleases ? { olderReleases: [...preset.olderReleases] } : {}) },
     wipes: [{ id: generationId, number: 1, state: "current", createdAt: iso(), closedAt: null, originRelease: release }],
     connectionAddress: connectivity === "zerotier" ? owner.worlds[0]?.connectionAddress ?? null : null,
-    release: { state: "available", generationId, activeRelease: release, desiredRelease: release },
+    // Nothing has run yet: the first start commits the release as active.
+    release: { state: "available", generationId, activeRelease: null, desiredRelease: release, runCount: 0 },
   });
   state.snapshot.observedAt = iso();
   return { id, displayName: displayName.trim() };

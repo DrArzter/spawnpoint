@@ -1,6 +1,8 @@
 import type { LoginProviderId } from "../lib/signin";
 import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../model";
 
+export type PromotionResult = { result: "requested"; operationId: string } | { result: "switched" };
+
 export type { LoginProviderId } from "../lib/signin";
 
 /**
@@ -319,8 +321,8 @@ export type SpawnpointApi = Readonly<{
   subscribeControlPlane(onInvalidated: () => void): () => void;
   requestSessionOperation(gameId: string, worldId: string, action: SessionOperation): Promise<{ result: "requested" | "already_stopped"; operationId?: string }>;
   requestWorldLifecycle(gameId: string, worldId: string, action: WorldLifecycleAction, backupKey?: string, release?: string): Promise<{ result: "requested"; operationId: string }>;
-  /** Moves a fleet world's open wipe to another release of its preset, keeping its save (ADR-0078). */
-  requestPromotion(gameId: string, worldId: string, release: string): Promise<{ result: "requested"; operationId: string }>;
+  /** Moves a fleet world's open wipe to another release of its preset, keeping its save (ADR-0078). A wipe that never started is switched at once, with no operation. */
+  requestPromotion(gameId: string, worldId: string, release: string): Promise<PromotionResult>;
   requestCreateWorld(gameId: string, presetId: string, displayName: string, release: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external"): Promise<{ id: string; displayName: string }>;
   requestReleaseBuild(gameId: string, presetId: string, profileDigest: string, retryRelease?: string): Promise<{ release: string; attempt: number }>;
   requestUpdateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external"): Promise<void>;

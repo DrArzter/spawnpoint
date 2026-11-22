@@ -7,6 +7,8 @@ export type ReleasePointer = {
   generationId: string | null;
   desiredRelease: string | null;
   activeRelease: string | null;
+  /** How many releases this wipe has run. Absent from older responses. */
+  runCount?: number;
 };
 export type Preset = {
   id: string;

@@ -87,7 +87,7 @@ function promotion(values: Partial<PromotionFacts>) {
       built_from: { "100.1": revision(OLD_DIGEST), "200.1": revision(OLD_DIGEST) },
     }), "minecraft")![0]!,
     pointer: { state: "available", generationId: GENERATION, desiredRelease: "100.1", activeRelease: "100.1" },
-    releaseUsability: "usable",
+    releaseUsability: "usable", hasBackup: false,
     session: null, blockingOperations: 0, launchEnabled: true, configuredHostId: "i-0123456789abcdef0",
     ...values,
   });

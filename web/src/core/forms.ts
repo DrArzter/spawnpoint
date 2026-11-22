@@ -6,7 +6,7 @@ import type { Confirmation } from "../shell/actions";
 import { action } from "./actions";
 import { startableLatest, startableReleases } from "./presets";
 import { releaseBuildCopy } from "./release-builds";
-import { promotionTargets } from "./worlds";
+import { neverStarted, promotionTargets } from "./worlds";
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, WorldPlacement, WorldSettingsModel } from "./models";
 import { effectiveValue, settingDefinitions, settingValueValid } from "./settings";
 
@@ -205,6 +205,14 @@ export function confirmationCopy(confirmation: Confirmation): { title: string; d
     case "purge":
       return { title: `Permanently delete ${world.displayName}?`, description: "Deletes the world, its release pointer and every backup. This cannot be undone.", label: "Delete forever", destructive: true };
     case "promote":
+      if (neverStarted(world)) {
+        return {
+          title: `Update ${world.displayName} to another release?`,
+          description: "Switches the release before the first start. Nothing is started or backed up.",
+          label: "Update release",
+          destructive: false,
+        };
+      }
       return {
         title: `Update ${world.displayName} to another release?`,
         description: `Keeps the save. Stops the world, keeps its backup, then starts it on the chosen release. If that start fails, ${world.release.activeRelease ?? "the active release"} stays. Refused while players are online.`,
@@ -233,7 +241,8 @@ export function useConfirmationForm(confirmation: Confirmation | null, opts: Rea
   if (confirmation === null) return null;
   const copy = confirmationCopy(confirmation);
   const options = releaseOptions(confirmation);
-  const typedTarget = confirmation.kind === "purge" || confirmation.kind === "promote" ? confirmation.world.id : null;
+  // A wipe that never started holds no save, so its release change needs no typed ID.
+  const typedTarget = confirmation.kind === "purge" || (confirmation.kind === "promote" && !neverStarted(confirmation.world)) ? confirmation.world.id : null;
   const needsRelease = confirmation.kind === "wipe" || confirmation.kind === "promote";
   const blocked = (typedTarget !== null && typed !== typedTarget) || (needsRelease && !(options?.some((option) => option.version === release) ?? false));
   const chosen = needsRelease ? release : undefined;
@@ -258,17 +267,17 @@ function releaseOptions(confirmation: Confirmation): readonly Readonly<{ version
   const releases = confirmation.kind === "promote"
     ? promotionTargets(confirmation.game, confirmation.world)
     : [...startableReleases(preset)].reverse();
-  const newest = newestRelease(confirmation.kind, preset);
+  const newest = newestRelease(confirmation, preset);
   return releases.map((version) => ({ version, latest: version === newest }));
 }
 
-// A wipe opens on the current revision; a promotion may go to the newest of all.
-function newestRelease(kind: "wipe" | "promote", preset: Preset): string | null {
-  return kind === "wipe" ? startableLatest(preset) : preset.latestRelease;
+// A wipe opens on the current revision, and so does a wipe that never started; a promotion may go to the newest of all.
+function newestRelease(confirmation: Extract<Confirmation, { kind: "wipe" | "promote" }>, preset: Preset): string | null {
+  return confirmation.kind === "promote" && !neverStarted(confirmation.world) ? preset.latestRelease : startableLatest(preset);
 }
 
 function initialRelease(confirmation: Confirmation | null): string {
   if (confirmation === null || (confirmation.kind !== "wipe" && confirmation.kind !== "promote") || !confirmation.preset) return "";
-  const latest = newestRelease(confirmation.kind, confirmation.preset) ?? "";
+  const latest = newestRelease(confirmation, confirmation.preset) ?? "";
   return releaseOptions(confirmation)?.some((option) => option.version === latest) ? latest : "";
 }

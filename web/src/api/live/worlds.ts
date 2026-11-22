@@ -68,7 +68,11 @@ export const PROMOTION_REFUSALS: Readonly<Record<string, string>> = {
   preset_removed: "This world's preset is no longer in the catalog.",
   release_not_available: "The selected release is no longer available. Refresh and try again.",
   release_state_unavailable: "The world's release pointer cannot be read now. Try again.",
-  no_active_release: "This wipe has never started. Start a new wipe instead.",
+  release_outdated: "That release was built from an older revision. Build the preset again.",
+  world_already_started: "This wipe has already started. Refresh to update it with a backup.",
+  session_active: "A session is starting or running. Stop it first.",
+  release_already_selected: "This release is already selected.",
+  world_changed: "The world changed while this was sent. Refresh and try again.",
   release_already_active: "This release is already active.",
   release_older_than_active: "This release is older than the active one. Restore a backup to go back.",
   players_online: "Players are online. Ask them to log off first.",
@@ -129,7 +133,8 @@ export const worldsApi = {
       `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/promote`,
       { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ release }) },
     );
-    const body = await response.json() as { error?: string; result?: "requested"; operationId?: string };
+    const body = await response.json() as { error?: string; result?: "requested" | "switched"; operationId?: string };
+    if (response.ok && body.result === "switched") return { result: "switched" as const };
     if (!response.ok || body.result !== "requested" || body.operationId === undefined) {
       throw new Error(PROMOTION_REFUSALS[body.error ?? ""] ?? "The release update could not be accepted.");
     }

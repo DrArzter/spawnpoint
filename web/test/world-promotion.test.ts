@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { confirmationCopy } from "../src/core/forms.ts";
-import { promotionTargets, rowActions, worldMoreActions, type WorldCallbacks } from "../src/core/worlds.ts";
+import { neverStarted, promotionTargets, rowActions, worldMoreActions, type WorldCallbacks } from "../src/core/worlds.ts";
 import type { Game, Preset, World, WorldSession } from "../src/model.ts";
 import type { Confirmation } from "../src/shell/actions.ts";
 
@@ -73,7 +73,9 @@ test("it is refused while players are online, with no newer release, before a fi
   assert.equal(promote(world({ session: session(0) })).fromPage?.disabled, false);
   const only = world({ preset: { ...preset, releases: ["100.1"], latestRelease: "100.1" } });
   assert.equal(promote(only).fromPage?.detail, "No newer built release");
-  assert.equal(promote(world({ release: { state: "available", generationId: null, desiredRelease: "100.1", activeRelease: null } })).fromPage?.disabled, true);
+  const legacy = promote(world({ release: { state: "available", generationId: null, desiredRelease: "100.1", activeRelease: null } })).fromPage;
+  assert.equal(legacy?.disabled, true);
+  assert.equal(legacy?.detail, "Available once a release is active");
   assert.equal(promote(world(), OWNER, true).fromPage?.disabled, true);
 });
 
@@ -98,4 +100,55 @@ test("only releases after the active one are offered; going back is a restore", 
   const game = { presets: [{ id: "p", releases, buildStatus: "ready" }] } as unknown as Parameters<typeof promotionTargets>[0];
   const world = { preset: { id: "p" }, release: { activeRelease: "2.1" } } as unknown as Parameters<typeof promotionTargets>[1];
   assert.deepEqual(promotionTargets(game, world), ["3.1"]);
+});
+
+// ADR-0078, amended: a wipe that never started holds no save, so its release may change.
+const unstarted = (values: Partial<World> = {}) => world({
+  release: { state: "available", generationId: `gen-${"c".repeat(32)}`, desiredRelease: "200.1", activeRelease: null, runCount: 0 },
+  ...values,
+});
+
+test("a never-started world finds Update release enabled, in the page menu and on the row", () => {
+  const { fromPage, fromRow, promoted } = promote(unstarted());
+  for (const item of [fromPage, fromRow]) {
+    assert.equal(item?.label, "Update release");
+    assert.equal(item?.disabled, false);
+    assert.equal(item?.detail, "Switches the release before the first start");
+  }
+  fromRow?.run();
+  assert.deepEqual(promoted, ["prom"]);
+  assert.equal(neverStarted(unstarted()), true);
+});
+
+test("its targets are every release a new world may use, newest first, except the one it names", () => {
+  assert.deepEqual(promotionTargets(gameOf(unstarted()), unstarted()), ["300.1", "100.1"]);
+  const older = unstarted({ preset: { ...preset, olderReleases: ["100.1"] } });
+  assert.deepEqual(promotionTargets(gameOf(older), older), ["300.1"]);
+  const building = { ...gameOf(unstarted()), presets: [{ ...preset, buildStatus: "building" as const }] };
+  assert.deepEqual(promotionTargets(building, unstarted()), ["300.1", "100.1"], "a new world needs a release, not a finished build");
+});
+
+test("a world that ran, or has an active release, keeps the promotion rules", () => {
+  const ran = world({ release: { state: "available", generationId: `gen-${"c".repeat(32)}`, desiredRelease: "100.1", activeRelease: null, runCount: 1 } });
+  assert.equal(neverStarted(ran), false);
+  assert.equal(promote(ran).fromPage?.detail, "Available once a release is active");
+  assert.equal(neverStarted(world()), false);
+  assert.deepEqual(promotionTargets(gameOf(world()), world()), ["300.1", "200.1"]);
+});
+
+test("a never-started world stays refused while busy, while a session runs, or with no other release", () => {
+  assert.equal(promote(unstarted(), OWNER, true).fromPage?.disabled, true);
+  const running = unstarted({ session: session(0) });
+  assert.equal(promote(running).fromPage?.disabled, true);
+  assert.equal(promote(running).fromPage?.detail, "Refused while a session runs");
+  const only = unstarted({ preset: { ...preset, releases: ["200.1"], latestRelease: "200.1" } });
+  assert.equal(promote(only).fromPage?.detail, "No other built release");
+});
+
+test("its dialog is not destructive, needs no typed ID and says nothing is backed up", () => {
+  const confirmation: Confirmation = { kind: "promote", game: gameOf(unstarted()), world: unstarted(), preset };
+  const copy = confirmationCopy(confirmation);
+  assert.equal(copy.destructive, false);
+  assert.match(copy.description, /before the first start/);
+  assert.doesNotMatch(copy.description, /Keeps the save/);
 });

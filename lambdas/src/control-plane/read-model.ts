@@ -27,6 +27,8 @@ export type ReleasePointerObservation = Readonly<{
   generationId: string | null;
   desiredRelease: string | null;
   activeRelease: string | null;
+  /** How many releases this wipe has run; a wipe that never started has none (ADR-0078). Absent when the pointer is not read. */
+  runCount?: number;
 }>;
 
 export type OperationObservation = Readonly<{
@@ -70,6 +72,8 @@ export type ControlPlaneSources = Readonly<{
   listHosts: () => Promise<readonly HostObservation[]>;
   readLifecycle: (serverId: string) => Promise<LifecycleRecord | null>;
   readReleasePointer: (worldId: string, generationId: string | null) => Promise<ReleasePointerObservation>;
+  /** Whether any backup archive of this wipe exists. Absent on a control plane that cannot list them. */
+  hasGenerationBackup?: (worldId: string, generationId: string) => Promise<boolean>;
   listRunningOperations: () => Promise<readonly OperationObservation[]>;
   listPresets?: () => Promise<readonly PresetObservation[]>;
   readReleaseManifest?: (gameId: string, presetId: string, version: string) => Promise<unknown>;

@@ -784,7 +784,11 @@ this order.
    world's menu, select **Update release**, choose the release and type the world ID (Owner only,
    [ADR-0078](adr/0078-promote-a-fleet-world-from-the-panel.md)). The API is
    `POST /games/{gameId}/worlds/{worldId}/promote` with `{"release": "<release>"}`.
-8. The promotion keeps a pre-promotion backup and names it in its result (`prePromotionBackup`). Retention keeps it
+   A fleet world that never started has no save. **Update release** then switches its release at once, to any release of
+   its preset that a new world may use, newer or older. It takes no backup and starts nothing. The API answers `200`
+   with `{"result": "switched"}`. A world that ran, holds a backup, or has a session starting or running is refused
+   (`world_already_started`, `session_active`); use the steps above.
+8. A promotion keeps a pre-promotion backup and names it in its result (`prePromotionBackup`). Retention keeps it
    until the next promotion of that wipe.
 9. Tell players to replace their whole instance with the new client pack (**Download client pack**, or `/pack` in
    Telegram). A client on the old pack cannot join, and the error does not say why.

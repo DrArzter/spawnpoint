@@ -33,6 +33,14 @@ die() {
   exit 1
 }
 
+# How long a builder step took, for the build log. stderr keeps the result
+# lines on stdout parseable; the first call counts from the script's start.
+step_timing() {
+  local now="${SECONDS}"
+  printf 'timing step=%s seconds=%s\n' "$1" "$(( now - ${STEP_TIMING_MARK:-0} ))" >&2
+  STEP_TIMING_MARK="${now}"
+}
+
 require_command() {
   command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
 }

@@ -6,6 +6,14 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_profiles.sh
 source "${SCRIPT_DIR}/_profiles.sh"
 
+# How long a builder step took, for the build log. stderr keeps the result
+# lines on stdout parseable; the first call counts from the script's start.
+step_timing() {
+  local now="${SECONDS}"
+  printf 'timing step=%s seconds=%s\n' "$1" "$(( now - ${STEP_TIMING_MARK:-0} ))" >&2
+  STEP_TIMING_MARK="${now}"
+}
+
 readonly DEFAULT_RESOLVER_IMAGE="itzg/minecraft-server@sha256:7423a4cf59ec510a58294f853fc7b07cdf0a50c5bc4618ee172327d7913941eb"
 
 usage() {
@@ -185,8 +193,10 @@ add_addons() {
   done
   ADDONS_MINECRAFT_VERSION="${game_version}" ADDONS_LOADER_TYPE="${loader_type}" \
     bash "${SCRIPT_DIR}/resolve-addons.sh" "${profile_directory}/${addons_list}" "${profile_directory}" "${resolved}" >&2
+  step_timing addons
   CHECK_MINECRAFT_VERSION="${game_version}" CHECK_LOADER_TYPE="${loader_type}" \
     bash "${SCRIPT_DIR}/check-mod-set.sh" "${download_stage}" "${resolved}" >&2
+  step_timing mod_set_check
   mkdir -p -- "${sidecar}/client/mods" "${sidecar}/client/overrides"
   while IFS= read -r -d '' jar; do
     cp -- "${jar}" "${download_stage}/mods/"
@@ -262,6 +272,7 @@ if [[ -n "${mods_source}" ]]; then
       CURSEFORGE_EXPECTED_LOADER_TYPE="${loader_type}" \
       CURSEFORGE_EXPECTED_LOADER_VERSION="${loader_version}" \
         bash "${modpack_resolver}" "${source_file}" "${download_stage}" >&2
+      step_timing modpack
       [[ -z "${addons_list}" ]] || add_addons
     fi
     ;;

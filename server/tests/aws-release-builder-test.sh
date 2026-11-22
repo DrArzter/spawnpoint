@@ -101,10 +101,18 @@ builder_output="$(
     RELEASE=4.0 \
     RELEASE_BUCKET=spawnpoint-test-releases \
     CF_API_KEY=test-only \
-    "${builder}"
+    "${builder}" 2>"${fixture}/builder.err"
 )"
 grep -qx 'result=release_ready' <<<"${builder_output}"
 grep -qx 'source_kind=github-snapshot' <<<"${builder_output}"
+# Each step's duration reaches the build log, on stderr, without touching the result lines.
+for step in config_snapshot resolve_mods build_release plan upload catalog; do
+  grep -Eq "^timing step=${step} seconds=[0-9]+$" "${fixture}/builder.err"
+done
+if grep -q '^timing ' <<<"${builder_output}"; then
+  printf 'timing lines must stay on stderr\n' >&2
+  exit 1
+fi
 grep -qx "source_revision=${config_commit}" <<<"${builder_output}"
 manifest="${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/minecraft/main/4.0/manifest.json"
 jq -e \

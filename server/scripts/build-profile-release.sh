@@ -172,6 +172,14 @@ else
   loader_version="${game_version}"
 fi
 
+# Where the resolver fetched the mods, for the manifest's descriptive source field.
+mod_source=""
+mods_resolver="$(jq -r '.mods.resolver // empty' "${profile}")"
+case "${mods_resolver:-${PROFILE_RESOLVER}}" in
+  curseforge-files | curseforge-modpack) mod_source="curseforge" ;;
+esac
+[[ -n "${mods_source}" ]] || mod_source=""
+
 RELEASE_GAME="${game}" \
 RELEASE_PROFILE_ID="${profile_id}" \
 RELEASE_PROFILE_REPOSITORY="${profile_repository}" \
@@ -184,6 +192,7 @@ RELEASE_CLIENT_MODS_DIR="${client_mods_directory}" \
 RELEASE_CLIENT_ADDONS="${client_addons}" \
 RELEASE_CLIENT_ADDONS_DIR="${client_addons_directory}" \
 RELEASE_MOD_INDEX="${mod_index}" \
+RELEASE_MOD_SOURCE="${mod_source}" \
   "${SCRIPT_DIR}/build-release-manifest.sh" \
     "${release}" \
     "${game_version}" \

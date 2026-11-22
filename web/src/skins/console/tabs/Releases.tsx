@@ -1,15 +1,21 @@
-import type { ChangeRow, Detail, ModsModel, ReleaseChangesModel, WorldModel } from "../../../core/models";
+import { useMemo, useState } from "react";
+
+import type { ChangeRow, Detail, ModRow, ModsModel, ReleaseChangesModel, WorldModel } from "../../../core/models";
+import { modSourceCounts, modSourceLabel, sortMods, UNKNOWN_SOURCE, type ModSortKey } from "../../../core/release-mods";
 import type { StatusDescriptor } from "../../../core/status";
 import { formatBytes } from "../../../lib/format";
+import { action } from "../../../core/actions";
 import { ActionButton } from "../ui/ActionButton";
 import { Card } from "../ui/Card";
 import { Chip } from "../ui/Chip";
 import { Copy } from "../ui/Copy";
 import { DetailList } from "../ui/DetailList";
 import { Empty, LoadError } from "../ui/Empty";
+import { applyFilter, FilterBar, type FilterProperty, type FilterToken } from "../ui/FilterBar";
 import { Grid } from "../ui/Grid";
+import { Indicator } from "../ui/Indicator";
 import { Status } from "../ui/Status";
-import { Table } from "../ui/Table";
+import { nextSort, Table, type Column, type SortDirection } from "../ui/Table";
 import { TrackList, TrackTitle } from "../ui/TrackList";
 
 const pointerStates = { unconfigured: "Unconfigured", unavailable: "Unavailable" } as const;
@@ -44,7 +50,7 @@ export function ReleasesTab({ model }: Readonly<{ model: WorldModel }>) {
         </Card>
       )}
       {model.releases.changes && <Changes changes={model.releases.changes} />}
-      {model.releases.mods && <Mods mods={model.releases.mods} />}
+      {model.releases.mods && <Mods key={`${model.world.id}:${model.releases.mods.release}`} mods={model.releases.mods} />}
     </Grid>
   );
 }
@@ -85,28 +91,54 @@ function Changes({ changes }: Readonly<{ changes: ReleaseChangesModel }>) {
   );
 }
 
+const sourceIcons = { curseforge: "deployed_code", modrinth: "layers", github: "hub" } as const;
+
+/** One mark per source, its name in the tooltip; a release built before sources were recorded reads as unknown. */
+function SourceMark({ row }: Readonly<{ row: ModRow }>) {
+  return <Indicator icon={row.source === null ? "help" : sourceIcons[row.source]} label={row.source === null ? `${UNKNOWN_SOURCE} source` : modSourceLabel(row.source)} />;
+}
+
+const textOf = (row: ModRow) => row.file;
+const propertyOf = (row: ModRow, property: string) => property === "source" ? modSourceLabel(row.source) : "";
+
 function Mods({ mods }: Readonly<{ mods: ModsModel }>) {
   const files = mods.files;
+  const [tokens, setTokens] = useState<readonly FilterToken[]>([]);
+  const [sort, setSort] = useState<Readonly<{ key: ModSortKey; direction: SortDirection }>>({ key: "name", direction: "ascending" });
+  const rows = useMemo(() => files.status === "ready" ? files.value : [], [files]);
+  const shown = useMemo(() => sortMods(applyFilter(rows, tokens, propertyOf, textOf), sort.key, sort.direction), [rows, tokens, sort]);
+  // The source filter exists only when the release recorded sources; an old one keeps the search alone.
+  const sources = modSourceCounts(rows);
+  const properties: readonly FilterProperty[] = sources.length === 0 ? [] : [{ id: "source", label: "Source", values: sources.map(({ label, count }) => ({ value: label, count })) }];
+  const sortable = (key: ModSortKey) => ({
+    sort: sort.key === key ? sort.direction : null,
+    onSort: () => setSort({ key, direction: sort.key === key ? nextSort(sort.direction) : "ascending" }),
+  });
   // Whether players install their own set is a fact about the release, so it lives in the chip's tooltip.
   const head = <Chip icon="dns" tip={mods.split ? `Release ${mods.release} · Players install their own set` : `Release ${mods.release}`}>Server</Chip>;
+  const columns: Column<ModRow>[] = [
+    { id: "mod", header: "Mod", kind: "lead", ...sortable("name"), render: (row) => <strong title={row.file}>{row.file}</strong> },
+    { id: "source", header: "Source", ...sortable("source"), render: (row) => <SourceMark row={row} /> },
+    { id: "size", header: "Size", kind: "num", ...sortable("size"), render: (row) => formatBytes(row.bytes) },
+    { id: "sha", header: "SHA-256", kind: "wide", render: (row) => <span className="c-sum"><span className="c-mono" title={row.sha256}>{row.sha256.slice(0, 12)}</span><Copy value={row.sha256} what="SHA-256" /></span> },
+    { id: "actions", header: "Actions", kind: "act", render: (row) => <ActionButton action={row.download} size="sm" /> },
+  ];
   return (
     <Card actions={head} body="flush" count={files.status === "ready" ? files.value.length : undefined} title="Mods">
       {files.status === "error"
         ? <LoadError error={files.error} kind={files.kind} retry={files.retry} size="sm" title="Mods could not be loaded" verb="read mods" />
         : (
-          <Table
-            columns={[
-              { id: "mod", header: "Mod", kind: "lead", render: (row) => <strong title={row.file}>{row.file}</strong> },
-              { id: "size", header: "Size", kind: "num", render: (row) => formatBytes(row.bytes) },
-              { id: "sha", header: "SHA-256", kind: "wide", render: (row) => <span className="c-sum"><span className="c-mono" title={row.sha256}>{row.sha256.slice(0, 12)}</span><Copy value={row.sha256} what="SHA-256" /></span> },
-              { id: "actions", header: "Actions", kind: "act", render: (row) => <ActionButton action={row.download} size="sm" /> },
-            ]}
-            empty={<Empty icon="inventory" size="sm" title="No mods" />}
-            label="Mods"
-            loading={files.status === "loading"}
-            rowKey={(row) => row.sha256}
-            rows={files.status === "ready" ? files.value : []}
-          />
+          <>
+            <FilterBar disabled={files.status !== "ready"} label="Search mods" matches={shown.length} onChange={setTokens} placeholder="Search by file name" properties={properties} tokens={tokens} />
+            <Table
+              columns={columns}
+              empty={tokens.length > 0 ? <Empty action={action("mods.filter.clear", "Clear filters", () => setTokens([]), { icon: "filter_alt_off" })} icon="filter_alt_off" size="sm" title="No matches" /> : <Empty icon="inventory" size="sm" title="No mods" />}
+              label="Mods"
+              loading={files.status === "loading"}
+              rowKey={(row) => row.sha256}
+              rows={shown}
+            />
+          </>
         )}
     </Card>
   );

@@ -366,6 +366,8 @@ test("FilterBar: tokens with remove buttons, a combobox, matches only while filt
   assert.match(one, />1 match</);
   assert.doesNotMatch(one, /data-action="filter.clear"/);
   assert.match(html(createElement(FilterBar, { ...props, tokens: [{ property: "hosting", value: "Fleet" }, { property: null, value: "pine" }] })), /data-action="filter.clear"/);
+  assert.doesNotMatch(none, /<input[^>]* disabled/);
+  assert.match(html(createElement(FilterBar, { ...props, tokens: [], disabled: true })), /<input[^>]* disabled/, "a bar over rows still loading is not typed into");
   const rows = [{ name: "Hollow Pines", hosting: "Fleet" }, { name: "Rostik", hosting: "Persistent" }];
   assert.deepEqual(applyFilter(rows, [{ property: "hosting", value: "Fleet" }, { property: null, value: "PINE" }], (row, id) => row[id as "hosting"], (row) => row.name).map((row) => row.name), ["Hollow Pines"]);
 });

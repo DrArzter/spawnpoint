@@ -1,7 +1,7 @@
 import { type Identity } from "../../access/domain.ts";
 import { startPresetBuild } from "../../control-plane/aws-release-builds.ts";
 import { awsControlPlaneSources, releaseModUrl, releasePackUrl, packDownloadUrl } from "../../control-plane/aws.ts";
-import { manifestClientAddons, manifestClientMods, RELEASE_PACKS, releaseModLocation, type ReleasePack } from "../../control-plane/release-artifacts.ts";
+import { manifestClientAddons, manifestClientMods, manifestModSource, RELEASE_PACKS, releaseModLocation, type ReleasePack } from "../../control-plane/release-artifacts.ts";
 import { manifestUsesObjects } from "../../control-plane/release-objects.ts";
 import { type PlanMod, type ReleasePlan, releasePlan, storedReleasePlan } from "../../control-plane/release-plan.ts";
 import { packRelease } from "../../control-plane/session-control.ts";
@@ -127,7 +127,8 @@ export async function releaseManifest(gameId: string, presetId: string, version:
     source: profile ? { presetId: manifestText(profile.id), repository: manifestText(profile.repository), commit: manifestText(profile.commit) } : null,
     mods: mods.map((entry) => {
       const mod = entry as Record<string, unknown>;
-      return { file: manifestText(mod.file), sha256: manifestText(mod.sha256), bytes: Number(mod.bytes ?? 0) };
+      const source = manifestModSource(mod.source);
+      return { file: manifestText(mod.file), sha256: manifestText(mod.sha256), bytes: Number(mod.bytes ?? 0), ...(source ? { source } : {}) };
     }),
     // What players install when it is not the server's set (ADR-0069).
     clientMods: manifestClientMods(manifest),

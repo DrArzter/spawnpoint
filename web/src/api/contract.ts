@@ -157,8 +157,10 @@ export type BackupEntry = {
 
 export type BackupInventory = { entries: BackupEntry[]; unverified: number; truncated: boolean };
 
+/** Where a release's build fetched a mod. Releases built before it was recorded carry none. */
+export type ModSource = "curseforge" | "modrinth" | "github";
 /** One server mod of a release, as its manifest records it (ADR-0065). */
-export type ReleaseMod = Readonly<{ file: string; sha256: string; bytes: number }>;
+export type ReleaseMod = Readonly<{ file: string; sha256: string; bytes: number; source?: ModSource }>;
 export type ReleasePackName = "server" | "full";
 /** A release's server mods, and the players' own set when it differs (ADR-0069); null when players install the server's. */
 export type ReleaseMods = Readonly<{ release: string; mods: readonly ReleaseMod[]; clientMods: readonly ReleaseMod[] | null }>;

@@ -19,7 +19,7 @@ Follow this order. Do not skip a step.
 
 1. Apply `infra/terraform-storage`. It creates the table, the bucket policy and the lifecycle rules.
 2. Apply the other roots that read or write the table: `terraform-releases`, `terraform-access-api`,
-   `terraform-operations`, `terraform-bot` and `terraform` (the host role).
+   `terraform-operations` (it also lets the game host write backup holders), `terraform-bot` and `terraform` (the host role).
    - If the table does not exist, creating a world, a wipe, a restore and a promotion all fail. This is intended.
    - The builder's catalog step writes holders even while the layout is `legacy`. A build stops at the catalog step if
      the table or the builder's access is missing.
@@ -35,12 +35,16 @@ Follow this order. Do not skip a step.
 Legacy releases are never deleted. Registering them in the table makes sure that nothing treats them as unknown.
 
 ```
-RELEASE_BUCKET=<bucket> node lambdas/tools/register-legacy-releases.ts            # dry run: prints the plan
-RELEASE_BUCKET=<bucket> node lambdas/tools/register-legacy-releases.ts --apply    # writes
+RELEASE_BUCKET=<bucket> BACKUP_BUCKET=<bucket> node lambdas/tools/register-legacy-releases.ts            # dry run: prints the plan
+RELEASE_BUCKET=<bucket> BACKUP_BUCKET=<bucket> node lambdas/tools/register-legacy-releases.ts --apply    # writes
 ```
 
 - The tool writes no file reference. It skips releases with an `objects-v1` manifest and reports them.
-- It reports each record that it cannot read. Fix those first.
+- It writes the backup holders (`hold#backup#<key>#<versionId>`, role `backup`) for every archive version whose release
+  it can resolve. It uses the same rule as the reconciler. A second run writes nothing new.
+- An archive with no release metadata and no generation id in its key gets no holder. The tool prints
+  `report archive_without_release` for it.
+- It reports each record that it cannot read, and each archive that names a release but cannot be resolved. Fix those first.
 
 ## 4. Read the reconciler report
 
@@ -54,6 +58,16 @@ Run the Lambda by hand: invoke `spawnpoint-release-reconciler` with `{}`. The we
 | `orphan_object` | An object that no manifest names | The sweep condemns it in a real run |
 | `stuck_deleting` | A delete did not finish | The next complete run finishes or reverts it |
 | `unregistered_release` | A release has no table item | Run section 3 |
+| `archive_without_release` | A backup archive (any version) with no release metadata and no generation id in its key. It predates release recording, so it holds no release | Informational. Not dangerous, not a failure. No action. Legacy releases are never swept |
+
+A new backup gets its holder from the host, right after the upload (`hold-backup-release.sh`). If that write fails,
+the archive stays and the stop succeeds. The host log has `backup_holder_missing key=... version=...`. The reconciler
+then reports a `missing_holder` for it. Run section 3 with `--apply` to write it. Do not retire or sweep until it is
+fixed. A common cause is a release that is not registered yet (run section 3) or not live.
+
+An archive that has release metadata or a generation id but whose release cannot be resolved is a failure
+(`release_unresolved`). The run is then incomplete. A world with no legacy pointer is not a failure: the reconciler
+reads the pointer only when the listing of `worlds/` holds it. A listed pointer that S3 refuses to read is a failure.
 
 An `Incomplete` alarm means that one source could not be read. The report is then not a pass, and nothing is
 swept in that run. Check `/aws/lambda/spawnpoint-release-reconciler`.

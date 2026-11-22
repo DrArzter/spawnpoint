@@ -1,5 +1,6 @@
 import { manifestUsesObjects, releaseItemPk, type ReleaseItemState, type ReleaseLayout } from "./release-objects.ts";
 import { holderKey, type HolderRole, type ReleaseRef } from "./release-refs.ts";
+import { pointerIndex, resolveArchive, type ArchiveSource } from "./release-reconciler.ts";
 import type { ReleaseState } from "./release-state.ts";
 import type { WorldRecord } from "./world-registry.ts";
 
@@ -23,13 +24,15 @@ export type RegistrationInput = Readonly<{
   worlds: readonly WorldRecord[];
   pointers: readonly Readonly<{ worldId: string; state: ReleaseState }>[];
   legacyPointers: readonly PointerSource[];
+  /** Every version of every backup archive, with its metadata. */
+  archives: readonly ArchiveSource[];
   /** Sources the tool could not read or parse; each one is reported, never skipped. */
   unreadable: readonly Readonly<{ source: string; subject: string; reason: string }>[];
 }>;
 
 export type HolderPlan = Readonly<{ ref: ReleaseRef; key: string; roles: readonly HolderRole[] }>;
 
-export type ReportKind = "objects_layout" | "not_live" | "no_manifest" | "unreadable";
+export type ReportKind = "objects_layout" | "not_live" | "no_manifest" | "unreadable" | "archive_without_release";
 export type ReportLine = Readonly<{ kind: ReportKind; subject: string; reason: string }>;
 
 export type RegistrationPlan = Readonly<{
@@ -48,7 +51,7 @@ export function pointerSources(pointers: RegistrationInput["pointers"]): readonl
 }
 
 type Wanted = Map<string, { ref: ReleaseRef; key: string; roles: Set<HolderRole> }>;
-type Sources = Pick<RegistrationInput, "catalogs" | "worlds" | "pointers" | "legacyPointers">;
+type Sources = Pick<RegistrationInput, "catalogs" | "worlds" | "pointers" | "legacyPointers" | "archives">;
 
 type Want = (ref: ReleaseRef, key: string, role: HolderRole) => void;
 type WorldIds = ReadonlyMap<string, Readonly<{ gameId: string; presetId: string }>>;
@@ -77,10 +80,27 @@ function wantPointer(pointer: PointerSource, world: Readonly<{ gameId: string; p
   if (pointer.prePromotion !== null) want({ ...world, release: pointer.prePromotion }, key, "pre-promotion");
 }
 
-// What names a release today: the catalog, each generation of a record, each pointer.
-function collect(input: Sources): Readonly<{ wanted: Wanted; orphans: readonly string[] }> {
+/** Backup holders use the reconciler's resolution; an archive without a release gets none. */
+function wantArchives(input: Sources, want: Want, lines: Lines): void {
+  const records = new Map(input.worlds.map((record) => [record.worldId, record]));
+  const pointers = pointerIndex(input.pointers);
+  for (const archive of input.archives) {
+    const record = records.get(archive.worldId);
+    const subject = `${archive.key}#${archive.versionId}`;
+    const resolved = resolveArchive(archive, record, pointers);
+    if (resolved.kind === "none") lines.withoutRelease.push(subject);
+    else if (resolved.kind === "unresolved" || record === undefined) lines.unresolved.push(subject);
+    else want({ gameId: record.gameId, presetId: record.preset.id, release: resolved.release }, holderKey.backup(archive.key, archive.versionId), "backup");
+  }
+}
+
+type Lines = { withoutRelease: string[]; unresolved: string[] };
+
+// What names a release today: the catalog, each generation of a record, each pointer, each archive.
+function collect(input: Sources): Readonly<{ wanted: Wanted; orphans: readonly string[]; archiveLines: Lines }> {
   const wanted: Wanted = new Map();
   const orphans: string[] = [];
+  const archiveLines: Lines = { withoutRelease: [], unresolved: [] };
   const want: Want = (ref, key, role) => {
     const slot = `${id(ref)}|${key}`;
     const entry = wanted.get(slot) ?? { ref, key, roles: new Set<HolderRole>() };
@@ -95,7 +115,8 @@ function collect(input: Sources): Readonly<{ wanted: Wanted; orphans: readonly s
     if (world === undefined) orphans.push(`${pointer.worldId}/${pointer.generationId}`);
     else wantPointer(pointer, world, want);
   }
-  return { wanted, orphans };
+  wantArchives(input, want, archiveLines);
+  return { wanted, orphans, archiveLines };
 }
 
 /** Every release the table may need an answer for: the listed manifests and whatever names a release. */
@@ -118,8 +139,10 @@ export function planLegacyRegistration(input: RegistrationInput): RegistrationPl
   const report: ReportLine[] = input.unreadable.map((line) => ({ kind: "unreadable", subject: `${line.source} ${line.subject}`, reason: line.reason }));
   const manifests = new Map(input.manifests.map((listing) => [id(listing.ref), listing]));
   const reported = new Set<string>();
-  const { wanted, orphans } = collect(input);
+  const { wanted, orphans, archiveLines } = collect(input);
   for (const orphan of orphans) report.push({ kind: "unreadable", subject: `pointer ${orphan}`, reason: "no world record names this world" });
+  for (const subject of archiveLines.unresolved) report.push({ kind: "unreadable", subject: `archive ${subject}`, reason: "release_unresolved" });
+  for (const subject of archiveLines.withoutRelease) report.push({ kind: "archive_without_release", subject: `archive ${subject}`, reason: "it predates release recording; no holder is added" });
 
   const note = (kind: ReportKind, subject: string, reason: string) => {
     const line = `${kind}|${subject}`;

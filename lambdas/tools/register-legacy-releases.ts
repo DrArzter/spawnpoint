@@ -3,16 +3,20 @@
 // DRY RUN by default: it prints the plan and writes nothing. It never writes a
 // file reference, and nothing for a release whose manifest is objects-v1.
 //
-//   RELEASE_BUCKET=<bucket> node lambdas/tools/register-legacy-releases.ts           print the plan
-//   RELEASE_BUCKET=<bucket> node lambdas/tools/register-legacy-releases.ts --apply   write it
+//   RELEASE_BUCKET=<bucket> BACKUP_BUCKET=<bucket> node lambdas/tools/register-legacy-releases.ts           print the plan
+//   RELEASE_BUCKET=<bucket> BACKUP_BUCKET=<bucket> node lambdas/tools/register-legacy-releases.ts --apply   write it
 //
-// Needs AWS credentials and AWS_REGION; AWS_PROFILE and RELEASE_REFS_TABLE are optional.
+// Backup holders use the reconciler's own resolution (resolveArchive); an archive
+// without a release gets none. Needs AWS credentials and AWS_REGION;
+// AWS_PROFILE and RELEASE_REFS_TABLE are optional.
 
 import { GetObjectCommand, ListObjectsV2Command, NoSuchKey, S3Client } from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
 import { candidateReleases, planLegacyRegistration, type KnownRelease, type ManifestListing, type PointerSource, type RegistrationInput } from "../src/control-plane/legacy-registration.ts";
+import { ARCHIVE_KEY, s3BackupBucketReader } from "../src/control-plane/s3-release-marks.ts";
+import type { ArchiveSource } from "../src/control-plane/release-reconciler.ts";
 import { parsePresetCatalog } from "../src/control-plane/preset-catalog.ts";
 import { releaseItemPk } from "../src/control-plane/release-objects.ts";
 import { ReleaseRefs } from "../src/control-plane/release-refs.ts";
@@ -21,8 +25,9 @@ import { parseWorldRecord, type WorldRecord } from "../src/control-plane/world-r
 
 const apply = process.argv.includes("--apply");
 const bucket = process.env.RELEASE_BUCKET;
-if (!bucket) {
-  console.error("error: RELEASE_BUCKET is required");
+const backupBucket = process.env.BACKUP_BUCKET;
+if (!bucket || !backupBucket) {
+  console.error("error: RELEASE_BUCKET and BACKUP_BUCKET are required");
   process.exit(2);
 }
 if (process.argv.slice(2).some((argument) => argument !== "--apply")) {
@@ -104,13 +109,25 @@ for (const match of await keys("worlds/", /^worlds\/([a-z0-9][a-z0-9-]{0,31})\/w
   else legacyPointers.push({ worldId: record.worldId, generationId: "legacy", desired: state.desiredRelease, active: state.activeRelease, runs: [], prePromotion: null });
 }
 
+// Every version of every archive. A version that cannot be read is reported, never skipped.
+const archives: ArchiveSource[] = [];
+const backups = s3BackupBucketReader(s3, backupBucket);
+for (const version of (await backups.listVersions("worlds/")).filter((entry) => ARCHIVE_KEY.test(entry.key))) {
+  try {
+    const metadata = await backups.head(version.key, version.versionId); // NOSONAR one at a time: the listing is small
+    if (metadata !== null) archives.push({ worldId: ARCHIVE_KEY.exec(version.key)![1]!, key: version.key, versionId: version.versionId, metadata });
+  } catch (error) {
+    unreadable.push({ source: "archive", subject: `${version.key}#${version.versionId}`, reason: error instanceof Error ? error.name : "unknown error" });
+  }
+}
+
 const known = new Map<string, KnownRelease>();
-for (const ref of candidateReleases({ manifests, catalogs, worlds, pointers, legacyPointers })) {
+for (const ref of candidateReleases({ manifests, catalogs, worlds, pointers, legacyPointers, archives })) {
   const item = await refs.readRelease(ref); // NOSONAR one consistent read at a time
   if (item !== null) known.set(releaseItemPk(ref.gameId, ref.presetId, ref.release), { layout: item.layout, state: item.state });
 }
 
-const plan = planLegacyRegistration({ manifests, known, catalogs, worlds, pointers, legacyPointers, unreadable });
+const plan = planLegacyRegistration({ manifests, known, catalogs, worlds, pointers, legacyPointers, archives, unreadable });
 const name = (ref: { gameId: string; presetId: string; release: string }) => `${ref.gameId}/${ref.presetId}/${ref.release}`;
 
 console.log(apply ? "mode=apply" : "mode=dry-run (nothing is written; pass --apply to write)");

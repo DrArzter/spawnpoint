@@ -113,7 +113,7 @@ test("a digest that is not a SHA-256, or an archive no release can be found for,
   bad.server.mods[0]!.sha256 = "not-a-digest";
   const marks = mark(input({
     manifests: [manifest(R11, bad)],
-    archives: [{ worldId: "gone", key: "worlds/gone/archives/x.tar.zst", versionId: "v9", metadata: { release: null, releaseSource: null, storedAt: NOW } }],
+    archives: [{ worldId: "gone", key: "worlds/gone/archives/x.tar.zst", versionId: "v9", metadata: { release: "1.1", releaseSource: "active", storedAt: NOW } }],
   }));
   assert.deepEqual(marks.failures.map((failure) => `${failure.source} ${failure.reason}`), ["manifest invalid_digest:mods/a.jar", "archive release_unresolved"]);
   assert.equal(marks.manifestsKnown, false);
@@ -125,6 +125,40 @@ test("an archive whose metadata names no release resolves through its wipe's poi
     archives: [{ worldId: "world", key: ARCHIVE, versionId: "v1", metadata: { release: null, releaseSource: null, storedAt: "2026-11-01T00:00:00.000Z" } }],
   }));
   assert.ok(marks.holders.some((holder) => holder.release === R11 && holder.sk === `hold#backup#${ARCHIVE}#v1`), "the run at that time was 1.1");
+});
+
+const OLD_KEY = "worlds/world/archives/world-20260826T170524Z-7346253eec7e2de6a4d3087cfdda13d6c24c64ef5c7ad1760b77411fbf92d22c.tar.zst";
+const NO_METADATA = { release: null, releaseSource: null, storedAt: "2026-08-26T17:05:24.000Z" };
+
+test("an archive with no release metadata and no generation id holds no release: informational, not a failure", () => {
+  const marks = mark(input({
+    worlds: [world()],
+    archives: [
+      { worldId: "world", key: OLD_KEY, versionId: "v1", metadata: NO_METADATA },
+      { worldId: "world", key: OLD_KEY, versionId: "v0", metadata: NO_METADATA },
+      { worldId: "gone", key: "worlds/gone/archives/ported-world-x.tar.zst", versionId: "v2", metadata: NO_METADATA },
+    ],
+  }));
+  assert.deepEqual(marks.failures, []);
+  assert.deepEqual([...marks.archivesWithoutRelease].sort(), ["worlds/gone/archives/ported-world-x.tar.zst#v2", `${OLD_KEY}#v0`, `${OLD_KEY}#v1`]);
+  assert.equal(marks.holders.some((holder) => holder.sk.startsWith("hold#backup#")), false, "no holder for it");
+  const report = compare(marks, tableView(consistentTable()), { keys: consistentListing() }, NOW, NOW);
+  assert.equal(report.classes.archive_without_release.count, 3);
+  assert.equal(report.dangerous, 0);
+  assert.equal(report.complete, true);
+});
+
+test("an archive that carries release metadata or a generation id and cannot be resolved stays a failure", () => {
+  const marks = mark(input({
+    worlds: [world()],
+    archives: [
+      { worldId: "world", key: OLD_KEY, versionId: "v1", metadata: { release: "not-a-release", releaseSource: "active", storedAt: NOW } },
+      { worldId: "world", key: `worlds/world/archives/world-gen-${"d".repeat(32)}-20261101T000000Z-${"c".repeat(64)}.tar.zst`, versionId: "v2", metadata: NO_METADATA },
+    ],
+  }));
+  assert.deepEqual(marks.failures.map((failure) => failure.reason), ["release_unresolved", "release_unresolved"]);
+  assert.deepEqual(marks.archivesWithoutRelease, []);
+  assert.equal(compare(marks, tableView(consistentTable()), { keys: consistentListing() }, NOW, NOW).complete, false);
 });
 
 // A consistent world: R11 is objects-v1, held by the catalog, referenced and present.

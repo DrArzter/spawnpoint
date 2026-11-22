@@ -15,7 +15,7 @@ export type ReleaseRef = Readonly<{ gameId: string; presetId: string; release: s
 export type ReleaseItem = Readonly<{ layout: ReleaseLayout; state: ReleaseItemState; holders: number }>;
 export type FileItem = Readonly<{ state: FileItemState; refs: number; bytes: number }>;
 
-export type HolderRole = "origin" | "desired" | "active" | "run" | "pre-promotion" | "catalog";
+export type HolderRole = "origin" | "desired" | "active" | "run" | "pre-promotion" | "catalog" | "backup";
 
 /** The holder's sort key is `hold#` plus one of these. */
 export const holderKey = {

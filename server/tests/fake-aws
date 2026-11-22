@@ -21,6 +21,47 @@ done
 # FAKE_AWS_CALL_LOG records each call, so a test can count the requests.
 [[ -z "${FAKE_AWS_CALL_LOG:-}" ]] || printf '%s\n' "$*" >>"${FAKE_AWS_CALL_LOG}"
 
+# A DynamoDB table of one JSON object per item in FAKE_DDB_FILE, keyed `pk|sk`.
+# FAKE_DDB_FAIL=true stands for a table the host may not write.
+if [[ "${1:-}" == "dynamodb" ]]; then
+  [[ "${FAKE_DDB_FAIL:-false}" != "true" ]] || exit 255
+  : "${FAKE_DDB_FILE:?FAKE_DDB_FILE is required}"
+  [[ -f "${FAKE_DDB_FILE}" ]] || printf '{}' >"${FAKE_DDB_FILE}"
+  operation="${2:-}"
+  shift 2
+  key_json=""
+  items_json=""
+  while (( $# > 0 )); do
+    case "$1" in
+      --key) key_json="$2"; shift 2 ;;
+      --transact-items) items_json="$2"; shift 2 ;;
+      --table-name | --output) shift 2 ;;
+      --consistent-read) shift ;;
+      *) exit 64 ;;
+    esac
+  done
+  case "${operation}" in
+    get-item)
+      slot="$(jq -r '.pk.S + "|" + .sk.S' <<<"${key_json}")"
+      jq --arg slot "${slot}" 'if has($slot) then {Item: .[$slot]} else {} end' "${FAKE_DDB_FILE}"
+      ;;
+    transact-write-items)
+      # A Put needs a free slot; an Update on the release item needs state live.
+      state="$(jq -r '.[1].Update.Key.pk.S as $pk | .[1].Update.Key.sk.S as $sk | $pk + "|" + $sk' <<<"${items_json}")"
+      jq -e --argjson items "${items_json}" --arg meta "${state}" '
+        ($items[0].Put.Item.pk.S + "|" + $items[0].Put.Item.sk.S) as $slot
+        | (has($slot) | not) and (.[$meta].state.S == "live")' "${FAKE_DDB_FILE}" >/dev/null || exit 254
+      updated="$(jq --argjson items "${items_json}" --arg meta "${state}" '
+        ($items[0].Put.Item.pk.S + "|" + $items[0].Put.Item.sk.S) as $slot
+        | .[$slot] = $items[0].Put.Item
+        | .[$meta].holders.N = ((.[$meta].holders.N | tonumber) + 1 | tostring)' "${FAKE_DDB_FILE}")"
+      printf '%s' "${updated}" >"${FAKE_DDB_FILE}"
+      ;;
+    *) exit 64 ;;
+  esac
+  exit 0
+fi
+
 # `s3 cp --recursive s3://bucket/prefix/ dir/` with ordered --exclude and
 # --include globs, the last match deciding, as the real CLI does.
 if [[ "${1:-}" == "s3" ]]; then
@@ -158,6 +199,9 @@ case "${operation}" in
       printf '%s\n' "${metadata}" >"${metadata_file}"
     fi
     printf '%s\n' "${checksum}" >>"${metadata_file}"
+    if [[ "${query}" == VersionId ]]; then
+      printf 'fake-version-%s\n' "$(cksum <<<"${key}" | cut -d' ' -f1)"
+    fi
     # The real response carries ChecksumSHA256 once S3 validated the bytes.
     # FAKE_S3_PUT_BAD_RESPONSE_KEY stands for S3 answering with another digest.
     if [[ "${query}" == ChecksumSHA256 ]]; then
@@ -170,6 +214,10 @@ case "${operation}" in
     ;;
   head-object)
     [[ -f "${object}" && -f "${metadata_file}" ]] || exit 254
+    if [[ "${query}" == VersionId ]]; then
+      printf 'fake-version-%s\n' "$(cksum <<<"${key}" | cut -d' ' -f1)"
+      exit 0
+    fi
     IFS=',' read -r sha_field _ <"${metadata_file}"
     stored_checksum="$(sed -n '2p' "${metadata_file}")"
     printf '%s\t%s\t%s\n' "${sha_field#sha256=}" "${stored_checksum}" "$(stat --format '%s' -- "${object}")"

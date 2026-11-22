@@ -133,6 +133,13 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.game_host_backup_holders
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.lifecycle_v2_start_assume
     values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
@@ -253,6 +260,25 @@ run "host_can_read_but_never_write_world_pointers" {
   assert {
     condition     = data.aws_iam_policy_document.game_host_world_pointers.statement[0].resources == toset(["arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*"])
     error_message = "Host pointer access must not widen to the whole release bucket."
+  }
+}
+
+run "game_host_holds_a_release_for_a_new_backup_and_nothing_else_in_the_table" {
+  command = plan
+
+  assert {
+    condition     = aws_iam_role_policy.game_host_backup_holders.role == "spawnpoint-game-host"
+    error_message = "The backup holder permission must attach only to the established game-host role."
+  }
+
+  assert {
+    condition = (
+      toset(one(data.aws_iam_policy_document.game_host_backup_holders.statement).actions) == toset(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]) &&
+      toset(one(data.aws_iam_policy_document.game_host_backup_holders.statement).resources) == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-release-refs"]) &&
+      one(one(data.aws_iam_policy_document.game_host_backup_holders.statement).condition).variable == "dynamodb:LeadingKeys" &&
+      toset(one(one(data.aws_iam_policy_document.game_host_backup_holders.statement).condition).values) == toset(["release#*"])
+    )
+    error_message = "The host may only get, put and update release items: no delete, scan, query or file items."
   }
 }
 
@@ -673,7 +699,7 @@ run "release_reconciler_reads_and_runs_weekly" {
         "arn:aws:s3:::spawnpoint-releases-123456789012/presets/*",
       ]),
       one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.resources if statement.sid == "ReadArchiveMetadata"]) == toset(["arn:aws:s3:::spawnpoint-backups-123456789012/worlds/*/archives/*"]),
-      toset(one(one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.condition if statement.sid == "ListReleaseBucket"])).values) == toset(["releases/", "objects/sha256/", "worlds/", "presets/"]),
+      toset(one(one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.condition if statement.sid == "ListReleaseBucket"])).values) == toset(["releases/", "objects/sha256/", "worlds/", "worlds/*", "presets/"]),
     ])
     error_message = "The reconciler reads the reference table, three release prefixes and archive metadata, and lists four prefixes. It never reads objects/."
   }

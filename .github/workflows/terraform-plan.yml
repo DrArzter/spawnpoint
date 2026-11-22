@@ -47,6 +47,7 @@ jobs:
       TF_VAR_launch: ${{ vars.SPAWNPOINT_LAUNCH || 'disabled' }}
       TF_VAR_headroom_mib: ${{ vars.SPAWNPOINT_FLEET_HEADROOM_MIB || '0' }}
       TF_VAR_release_sweep_dry_run: ${{ vars.SPAWNPOINT_RELEASE_SWEEP_DRY_RUN || 'true' }}
+      TF_VAR_release_storage_layout: ${{ vars.SPAWNPOINT_RELEASE_STORAGE_LAYOUT || 'legacy' }}
       TF_VAR_game_dns_zone_name: ${{ vars.SPAWNPOINT_GAME_DNS_ZONE || '' }}
       TF_VAR_game_dns_suffix: ${{ vars.SPAWNPOINT_GAME_DNS_SUFFIX || '' }}
       TF_VAR_app_commit: ${{ github.event.pull_request.head.sha }}

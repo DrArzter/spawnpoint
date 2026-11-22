@@ -157,6 +157,9 @@ class DeploymentSecurityTest(unittest.TestCase):
         sweep = "TF_VAR_release_sweep_dry_run: ${{ vars.SPAWNPOINT_RELEASE_SWEEP_DRY_RUN || 'true' }}"
         self.assertIn(sweep, plan)
         self.assertIn(sweep, deploy)
+        layout = "TF_VAR_release_storage_layout: ${{ vars.SPAWNPOINT_RELEASE_STORAGE_LAYOUT || 'legacy' }}"
+        self.assertIn(layout, plan)
+        self.assertIn(layout, deploy)
         self.assertIn("TF_VAR_app_commit: ${{ github.event.pull_request.head.sha }}", plan)
         self.assertIn("TF_VAR_app_commit: ${{ inputs.ref }}", deploy)
         self.assertIn("if: env.TF_VAR_launch == 'enabled'", deploy)

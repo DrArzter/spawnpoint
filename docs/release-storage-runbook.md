@@ -75,11 +75,11 @@ swept in that run. Check `/aws/lambda/spawnpoint-release-reconciler`.
 ## 5. Turn on the writer
 
 1. Confirm section 2 is done and the reconciler report has no dangerous class.
-2. Set `release_storage_layout = "objects-v1"` in `infra/terraform-releases` and apply through the normal review.
+2. Set the repository variable `SPAWNPOINT_RELEASE_STORAGE_LAYOUT` to `objects-v1` and run the production deploy. It reaches `release_storage_layout` in `infra/terraform-releases`; unset means `legacy`.
 3. Build one release of a small preset. Read the build log lines: `layout=objects-v1`, `objects_total`,
    `objects_created`, `objects_reused`, `bytes_uploaded` and `writer_seconds`.
 4. Start a world on it from a host that runs the new commit. Read `downloaded=`, `fetched=` and `seconds=`.
-5. To go back, set the variable to `legacy`. Releases that exist stay readable.
+5. To go back, set the repository variable to `legacy` (or delete it) and deploy again. Releases that exist stay readable.
 
 An old host that meets an `objects-v1` release stops at the download and loads no mods. The start log names the cause.
 

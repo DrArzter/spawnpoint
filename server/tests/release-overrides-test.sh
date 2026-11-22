@@ -78,6 +78,21 @@ grep -Fxq 'keep me' "${fixture}/world/data/operator/notes.txt"
 jq -e '.release == "4.1" and .roots == ["config", "kubejs"]' \
   "${fixture}/world/data/.spawnpoint-overrides.json" >/dev/null
 
+# The game rewrites some config files at boot as its own user, so a root run
+# hands every reconciled root to that user (1000:1000 by default, as the image).
+if ((EUID == 0)); then
+  [[ "$(stat --format '%u:%g' -- "${fixture}/world/data/config/pack/server.json")" == "1000:1000" ]]
+  [[ "$(stat --format '%u:%g' -- "${fixture}/world/data/config/pack")" == "1000:1000" ]]
+  [[ "$(stat --format '%u:%g' -- "${fixture}/world/data/kubejs/server_scripts/recipe.js")" == "1000:1000" ]]
+  [[ "$(stat --format '%u:%g' -- "${fixture}/world/data/operator/notes.txt")" == "0:0" ]] # operator files are not touched
+  GAME_DATA_OWNER=1234:1234 "${scripts}/reconcile-server-overrides.sh" "${fixture}/cache/manifest.json" "${fixture}/world/data" >/dev/null
+  [[ "$(stat --format '%u:%g' -- "${fixture}/world/data/config/pack/server.json")" == "1234:1234" ]]
+  if GAME_DATA_OWNER=game "${scripts}/reconcile-server-overrides.sh" "${fixture}/cache/manifest.json" "${fixture}/world/data" >/dev/null 2>&1; then
+    printf 'expected an owner that is not uid:gid to be refused\n' >&2
+    exit 1
+  fi
+fi
+
 printf 'tampered\n' >>"${fixture}/cache/overrides/config/pack/server.json"
 if "${scripts}/reconcile-server-overrides.sh" "${fixture}/cache/manifest.json" "${fixture}/world/data" >/dev/null 2>&1; then
   printf 'expected tampered override to be rejected\n' >&2

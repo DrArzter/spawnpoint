@@ -175,9 +175,11 @@ export type SavedWhitelist = WorldWhitelist & Readonly<{ applied: "reloading" | 
 export type FileLink = Readonly<{ url: string; expiresIn: number }>;
 
 export type MetricRange = "6h" | "24h" | "7d";
-export type HostMetricPoint = Readonly<{ at: string; value: number | null }>;
-export type HostMetricSeries = Readonly<{ id: string; label: string; unit: string; points: readonly HostMetricPoint[] }>;
-export type HostMetrics = Readonly<{ range: MetricRange; startedAt: string; endedAt: string; periodSeconds: number; series: readonly HostMetricSeries[] }>;
+/** `interpolated`: a reading drawn between two real ones, memory only; it is a line, never a stat. */
+export type HostMetricPoint = Readonly<{ at: string; value: number | null; interpolated?: true }>;
+/** `pendingFrom`: while the session runs, the first slot the newest readings have not reached; an empty slot from there on is not reported yet, not off. */
+export type HostMetricSeries = Readonly<{ id: string; label: string; unit: string; points: readonly HostMetricPoint[]; pendingFrom?: string }>;
+export type HostMetrics = Readonly<{ range: MetricRange; startedAt: string; endedAt: string; periodSeconds: number; series: readonly HostMetricSeries[]; pendingFrom?: string }>;
 
 export type AuthState =
   | { status: "loading" }

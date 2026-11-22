@@ -197,6 +197,12 @@ html[data-skin="console"] .c-strip-on {
   background: var(--c-run);
 }
 
+/* Slots the readings have not reached yet while the session runs: neutral, between running and off. */
+html[data-skin="console"] .c-strip-pending {
+  background: var(--c-surface-2);
+  box-shadow: inset 0 0 0 1px var(--c-line-2);
+}
+
 html[data-skin="console"] .c-strip-on:hover {
   filter: brightness(1.15);
 }

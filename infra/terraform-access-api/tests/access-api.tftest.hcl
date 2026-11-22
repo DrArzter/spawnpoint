@@ -280,6 +280,23 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition = alltrue([
+      for statement in data.aws_iam_policy_document.access_api.statement :
+      statement.actions == toset(["dynamodb:GetItem"]) && statement.resources == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-lifecycle-v2"])
+      if statement.sid == "ReadLifecycleState"
+    ])
+    error_message = "The API reads a world's session history (sessions# items) from the lifecycle table with GetItem only; the coordinator writes it."
+  }
+
+  assert {
+    condition = alltrue([
+      for sid in ["ReadRunningOperations", "ReadRunningOperationWorlds"] :
+      length([for statement in data.aws_iam_policy_document.access_api.statement : statement if statement.sid == sid && strcontains(join(",", statement.resources), "spawnpoint-start-server-v2")]) == 1
+    ])
+    error_message = "Earlier sessions of a world are read from the finished start and stop executions: both may be listed and described, read-only (ADR-0015)."
+  }
+
+  assert {
     condition     = contains(local.access_routes, "POST /auth/refresh") && contains(local.access_routes, "POST /auth/logout")
     error_message = "Persistent browser login requires explicit refresh and logout endpoints."
   }

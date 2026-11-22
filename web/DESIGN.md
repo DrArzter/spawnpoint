@@ -364,6 +364,14 @@ document carries `html[data-skin="terminal"]`, which `index.html` stamps before 
 - **Metrics as the status page draws them.** One series is one 120px well with its line in the accent and the area
   under it filled at a tenth of it, no axes and no grid; a caption under the well names the series and its peak, and
   the window is stated once under all of them. A gap in the readings is a gap in the line, never a line to zero.
+  A world's metrics span every host its sessions ran on, so an earlier session shows beside the current one and a
+  stopped world shows its history. The console skin draws the same data in `TimeSeriesChart` and the Host running
+  strip: a missing reading is a hatched "No host" gap, never joined, for CPU and network. Two marks are not gaps. The
+  newest slots of a running session that the readings have not reached (EC2 reports minutes late) are a neutral "Not
+  reported yet" band, from the server's `pendingFrom`; they stay out of the strip's share. Memory, which a probe
+  reads every 15 minutes, is the one series the server joins: readings no more than a probe (plus a margin) apart,
+  from one host, with CPU in every slot between, get flagged `interpolated` points. They draw as line, read "(joined)"
+  in the tooltip and table, and never count as the latest, the peak or the average.
 - **Placeholders.** A loading region is announced once, while shared skeleton primitives preserve the final
   geometry and any labels already known. Terminal plots use quiet, discrete traces rather than fake readings or a
   web shimmer; text uses a small fixed vocabulary of widths. The metrics wells stay at their final 120px height so

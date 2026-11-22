@@ -1,4 +1,5 @@
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
+import type { SessionHost } from "../domain/session-history.ts";
 import { catalogWithPresets, gameCatalog, type CatalogGame, worldAddress } from "./catalog.ts";
 import { locateWorldSession, sessionLifecycleKey } from "./world-session.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
@@ -40,9 +41,28 @@ export type OperationObservation = Readonly<{
   expectedSamples?: number;
 }>;
 
-export type HostMetricPoint = Readonly<{ at: string; value: number | null }>;
-export type HostMetricSeries = Readonly<{ id: string; label: string; unit: string; points: readonly HostMetricPoint[] }>;
-export type HostMetrics = Readonly<{ startedAt: string; endedAt: string; periodSeconds: number; series: readonly HostMetricSeries[] }>;
+/** `interpolated` marks a reading drawn between two real ones (memory only, see `joinSampledSeries`). */
+export type HostMetricPoint = Readonly<{ at: string; value: number | null; interpolated?: true }>;
+export type HostMetricSeries = Readonly<{
+  id: string;
+  label: string;
+  unit: string;
+  points: readonly HostMetricPoint[];
+  /**
+   * While the world's session runs: the first slot that cannot hold a reading
+   * yet, because the newest readings arrive late. An empty slot from here on
+   * is "not reported yet", not "no host". Absent when nothing is pending.
+   */
+  pendingFrom?: string;
+}>;
+export type HostMetrics = Readonly<{
+  startedAt: string;
+  endedAt: string;
+  periodSeconds: number;
+  series: readonly HostMetricSeries[];
+  /** The host series' `pendingFrom`, for the strip. */
+  pendingFrom?: string;
+}>;
 
 export type ControlPlaneSources = Readonly<{
   readObservedAt?: () => Promise<Date | null>;
@@ -53,6 +73,10 @@ export type ControlPlaneSources = Readonly<{
   listPresets?: () => Promise<readonly PresetObservation[]>;
   readReleaseManifest?: (gameId: string, presetId: string, version: string) => Promise<unknown>;
   readHostMetrics?: (instanceId: string, hours: number) => Promise<HostMetrics>;
+  /** The same window for several hosts at once, by host id. */
+  readHostsMetrics?: (hostIds: readonly string[], hours: number) => Promise<Readonly<Record<string, HostMetrics>>>;
+  /** The hosts a world's sessions ran on since a time, from the stored history and, before it, the workflows. */
+  readWorldSessionHosts?: (worldId: string, sinceMs: number) => Promise<readonly SessionHost[]>;
   listWorldRecords?: () => Promise<readonly WorldRecord[]>;
 }>;
 

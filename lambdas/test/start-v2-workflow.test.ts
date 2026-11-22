@@ -77,7 +77,9 @@ test("V2 start owns lifecycle around the accepted V1 host operation", async () =
   // The release a start proved is recorded between the two, and a world with
   // no generation to record against skips it. Neither path may leave the lease
   // held, so both land on the same release.
-  assert.equal(state(definition, "Mark Session Ready").Next, "Route Release Commit");
+  // The session's host is recorded for the metrics history first (best effort).
+  assert.equal(state(definition, "Mark Session Ready").Next, "Record Session Host");
+  assert.equal(state(definition, "Record Session Host").Next, "Route Release Commit");
   assert.equal(state(definition, "Route Release Commit").Default, "Release Start Lease");
   assert.equal(state(definition, "Commit Active Release").Next, "Release Start Lease");
   assert.equal(state(definition, "Commit Active Release").Catch?.[0]?.Next, "Release Start Lease");
@@ -99,7 +101,8 @@ test("a failed V1 start is durably stopped before lifecycle is cleared", async (
     "$.request.worldId",
   );
   assert.equal(state(definition, "Stop Accepted V1").Next, "Mark Compensated Session Stopped");
-  assert.equal(state(definition, "Mark Compensated Session Stopped").Next, "Release Compensated Placement", "a failed start must not free its host before the game is stopped");
+  assert.equal(state(definition, "Mark Compensated Session Stopped").Next, "Close Compensated Session History");
+  assert.equal(state(definition, "Close Compensated Session History").Next, "Release Compensated Placement", "a failed start must not free its host before the game is stopped");
   assert.equal(state(definition, "Release Compensated Placement").Next, "Release Compensating Lease");
   assert.equal(state(definition, "Release Compensating Lease").Next, "Route Compensated Fleet Drain");
   assert.equal(state(definition, "Route Compensated Fleet Drain").Choices?.[1]?.Next, "Start Compensated Host Drain");
@@ -119,7 +122,8 @@ test("a failed verified compensation force-stops the billed host with a bounded 
   assert.equal(state(definition, "Forced Stop Host Stopped").Default, "Increment Forced Stop Poll");
   assert.equal(state(definition, "Increment Forced Stop Poll").Next, "Forced Stop Poll Limit Reached");
   assert.equal(state(definition, "Forced Stop Poll Limit Reached").Default, "Wait Before Forced Stop Poll");
-  assert.equal(state(definition, "Mark Forced Session Stopped").Next, "Release Forced Placement");
+  assert.equal(state(definition, "Mark Forced Session Stopped").Next, "Close Forced Session History");
+  assert.equal(state(definition, "Close Forced Session History").Next, "Release Forced Placement");
   assert.equal(state(definition, "Release Forced Placement").Next, "Release Forced Compensation Lease");
   assert.equal(state(definition, "Release Forced Compensation Lease").Next, "Route Forced Fleet Drain");
   assert.equal(state(definition, "Route Forced Fleet Drain").Choices?.[1]?.Next, "Start Forced Host Drain");
@@ -229,7 +233,8 @@ test("the stop releases the session's reservation after the verified stop, and t
   const url = new URL("../../workflows/stop-server-v2.asl.json.tftpl", import.meta.url);
   const template = await readFile(url, "utf8");
   const definition = JSON.parse(template.replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource")) as Definition;
-  assert.equal(state(definition, "Mark Session Stopped").Next, "Release Placement");
+  assert.equal(state(definition, "Mark Session Stopped").Next, "Close Session History");
+  assert.equal(state(definition, "Close Session History").Next, "Release Placement");
   const release = state(definition, "Release Placement");
   assert.equal(release.Next, "Route Emptied Host");
   assert.equal(release.Catch?.[0]?.Next, "Release Stop Lease");

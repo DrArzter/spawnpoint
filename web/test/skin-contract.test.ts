@@ -305,7 +305,7 @@ for (const skin of SKINS) {
     checkSurface("World console", worldTab({ tab: "console", console: rconUnreadable }), rconUnreadable);
     checkSurface("World metrics", worldTab({ tab: "metrics", metrics }), metrics);
     const noHost = worldTab({ tab: "metrics", metrics: metricsWithoutHost });
-    assert.match(noHost, /No host right now/, "a stopped fleet world shows no other world's host");
+    assert.match(noHost, /No session in this window/, "a world that did not run shows no other world's host");
     const console = worldTab({ tab: "console", console: rcon });
     assert.match(console, new RegExp(world.displayName), "the console names the world it speaks to");
   });

@@ -854,6 +854,42 @@
           "BackoffRate": 2
         }
       ],
+      "Next": "Record Session Host"
+    },
+    "Record Session Host": {
+      "Type": "Task",
+      "Comment": "Which host this session ran on, for the metrics history (ADR-0015). Best effort: a session that cannot be recorded still runs.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "openSessionHistory",
+          "worldId.$": "$.request.worldId",
+          "sessionId.$": "$.request.sessionId",
+          "hostId.$": "$.request.placed.hostId"
+        }
+      },
+      "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.sessionHistoryFailure",
+          "Next": "Route Release Commit"
+        }
+      ],
       "Next": "Route Release Commit"
     },
     "Route Release Commit": {
@@ -1174,6 +1210,41 @@
           "BackoffRate": 2
         }
       ],
+      "Next": "Close Forced Session History"
+    },
+    "Close Forced Session History": {
+      "Type": "Task",
+      "Comment": "Ends the session in the metrics history (ADR-0015). Best effort: a missed close is ended by the next session or by the stop time.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "closeSessionHistory",
+          "worldId.$": "$.request.worldId",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.sessionHistoryFailure",
+          "Next": "Release Forced Placement"
+        }
+      ],
       "Next": "Release Forced Placement"
     },
     "Release Forced Placement": {
@@ -1291,6 +1362,41 @@
           "IntervalSeconds": 2,
           "MaxAttempts": 3,
           "BackoffRate": 2
+        }
+      ],
+      "Next": "Close Compensated Session History"
+    },
+    "Close Compensated Session History": {
+      "Type": "Task",
+      "Comment": "Ends the session in the metrics history (ADR-0015). Best effort: a missed close is ended by the next session or by the stop time.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "closeSessionHistory",
+          "worldId.$": "$.request.worldId",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.sessionHistoryFailure",
+          "Next": "Release Compensated Placement"
         }
       ],
       "Next": "Release Compensated Placement"

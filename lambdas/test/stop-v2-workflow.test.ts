@@ -85,7 +85,8 @@ test("V2 stop holds one fenced lease across the accepted verified stop", async (
   assert.equal("hostId.$" in release, false, "the reservation is found by session, wherever it is");
   assert.equal(state(definition, "Stop Accepted V1").Resource, "arn:aws:states:::states:startExecution.sync:2");
   assert.equal(state(definition, "Stop Accepted V1").Next, "Mark Session Stopped");
-  assert.equal(state(definition, "Mark Session Stopped").Next, "Release Placement");
+  assert.equal(state(definition, "Mark Session Stopped").Next, "Close Session History");
+  assert.equal(state(definition, "Close Session History").Next, "Release Placement");
   assert.equal(state(definition, "Release Placement").Next, "Route Emptied Host");
   assert.equal(state(definition, "Release Placement").Catch?.[0]?.Next, "Release Stop Lease");
   assert.equal(state(definition, "Release Stop Lease").Next, "Stopped");

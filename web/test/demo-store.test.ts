@@ -61,6 +61,11 @@ test("two fleet worlds of a game start one after the other, each on a host of it
   assert.ok(snapshot.hosts.filter((host) => host.provenance === "launched").every((host) => host.state === "running" && host.publicIp));
   assert.notEqual(store.worldMetrics(GAME, skyline, "6h"), null);
   assert.ok(store.worldMetrics(GAME, skyline, "6h")?.series.some((series) => series.id === "memory"), "the demo draws memory beside CPU");
+  const running = store.worldMetrics(GAME, skyline, "6h")!;
+  assert.ok(running.pendingFrom !== undefined, "a running session's newest slots are not reported yet");
+  const memory = running.series.find((series) => series.id === "memory")!.points;
+  assert.ok(memory.some((point) => point.interpolated === true), "memory is joined between its 15-minute probes");
+  assert.ok(memory.filter((point) => point.interpolated !== true && point.value !== null).length > 1);
   const fleetWorld = snapshot.games.find((item) => item.id === GAME)!.worlds.find((item) => item.id === skyline)!;
   assert.equal(fleetWorld.session?.readyAtEpochSeconds, Date.parse("2026-11-21T12:00:07.000Z") / 1000, "a session says when it became ready");
   assert.throws(() => store.startSession(GAME, CREATIVE), /already running/);
@@ -77,7 +82,13 @@ test("a fleet world waits only for its own operation", () => {
   const snapshot = store.snapshot();
   assert.equal(stateOf(snapshot, CREATIVE), "stopped");
   assert.deepEqual(snapshot.hosts.map((host) => host.id), ["host-game", `host-${skyline}`]);
-  assert.equal(store.worldMetrics(GAME, CREATIVE, "6h"), null);
+  // A stopped fleet world keeps its history: an earlier session on one host, a later one on another.
+  const history = store.worldMetrics(GAME, CREATIVE, "24h");
+  const cpu = history?.series.find((series) => series.id === "cpu")?.points ?? [];
+  const runs = cpu.reduce((count, point, index) => count + (point.value !== null && (index === 0 || cpu[index - 1]?.value === null) ? 1 : 0), 0);
+  assert.equal(runs, 2, "two sessions with a gap between them");
+  assert.equal(history?.pendingFrom, undefined, "nothing runs, so nothing is pending");
+  assert.equal(store.worldMetrics(GAME, ROSTIK, "6h") === null, false, "the configured world still holds its session");
 });
 
 test("a configured sibling is refused while another configured world of the game runs", () => {

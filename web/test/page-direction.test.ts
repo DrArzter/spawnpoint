@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { placeOf, traverse } from "../src/routing.ts";
+import { placeOf, tabTraverse, traverse } from "../src/routing.ts";
 
 // A page switch travels the way the hierarchy goes: deeper is forward, up or
 // earlier on the rail is back, and the same place has no direction.
@@ -49,4 +49,17 @@ test("old aliases sit with the worlds, and a query does not change the place", (
   assert.equal(placeOf("#/worlds/mc/rostik?x=1").depth, 1);
   assert.equal(placeOf("#/worlds").depth, 0);
   assert.equal(placeOf("#/home").section, 0);
+});
+
+test("a tab switch follows the tab bar, and another world has no direction", () => {
+  for (const line of [
+    "#/worlds/mc/rostik > #/worlds/mc/rostik/backups = forward",
+    "#/worlds/mc/rostik/metrics > #/worlds/mc/rostik/console = back",
+    "#/worlds/mc/rostik/releases > #/worlds/mc/creative/releases = none",
+    "#/worlds/mc/rostik/whitelist > #/worlds/mc/rostik/whitelist = none",
+  ]) {
+    const [route, expected] = line.split(" = ");
+    const [from, to] = route.split(" > ");
+    assert.equal(tabTraverse(from, to), expected, line);
+  }
 });

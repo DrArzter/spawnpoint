@@ -1,5 +1,7 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
+import { MOTION, reducedMotion } from "./motion";
+
 import { Icon, type IconName } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { Settle } from "./Settle";
@@ -44,6 +46,7 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
   const strip = useRef<HTMLDivElement>(null);
   const ink = useRef<HTMLSpanElement>(null);
   const [more, setMore] = useState(false);
+  const select = useTabTransition(tabs, value, onChange);
 
   useLayoutEffect(() => {
     const row = strip.current;
@@ -72,7 +75,7 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
     const target = tabForKey(tabs, at, event.key);
     if (!target) return;
     event.preventDefault();
-    onChange(target.id);
+    select(target.id);
     strip.current?.querySelector<HTMLElement>(`#${CSS.escape(tabId(prefix, target.id))}`)?.focus();
   };
 
@@ -88,7 +91,7 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
               className="c-tab"
               id={tabId(prefix, tab.id)}
               key={tab.id}
-              onClick={() => onChange(tab.id)}
+              onClick={() => select(tab.id)}
               role="tab"
               tabIndex={selected ? 0 : -1}
               type="button"
@@ -104,6 +107,42 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
       {end && <div className="c-tabrow-end">{end}</div>}
     </div>
   );
+}
+
+type TabTransitionDocument = Document & { startViewTransition?: (update: () => Promise<void>) => { finished?: Promise<void> } };
+
+/**
+ * A2t: a tab switch runs as a view transition of the panel alone, moving
+ * sideways by the tab bar's order. The update resolves once the new tab has
+ * rendered, or after the motion time, so the old panel is never followed by a
+ * blank frame.
+ */
+function useTabTransition<Id extends string>(tabs: readonly TabItem<Id>[], value: Id, onChange: (id: Id) => void): (id: Id) => void {
+  const arrived = useRef<{ id: Id; resolve: () => void } | null>(null);
+  useLayoutEffect(() => {
+    if (arrived.current?.id === value) arrived.current.resolve();
+  }, [value]);
+  return (id: Id) => {
+    const start = (document as TabTransitionDocument).startViewTransition;
+    if (id === value || !start || reducedMotion()) {
+      onChange(id);
+      return;
+    }
+    const root = document.documentElement;
+    const from = tabs.findIndex((tab) => tab.id === value);
+    const to = tabs.findIndex((tab) => tab.id === id);
+    root.dataset.transition = "tab";
+    root.dataset.direction = to > from ? "forward" : "back";
+    const clear = () => { delete root.dataset.transition; delete root.dataset.direction; };
+    const transition = start.call(document, () => new Promise<void>((resolve) => {
+      const done = () => { arrived.current = null; resolve(); };
+      arrived.current = { id, resolve: done };
+      window.setTimeout(done, MOTION["--c-d3"]);
+      onChange(id);
+    }));
+    if (transition?.finished) transition.finished.then(clear, clear);
+    else clear();
+  };
 }
 
 /** The panel of the active tab. Its content fades in as one block when the tab changes (A3). */

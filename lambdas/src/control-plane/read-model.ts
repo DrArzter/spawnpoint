@@ -1,7 +1,7 @@
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import type { ReleaseStateReader } from "./release-usable.ts";
 import type { SessionHost } from "../domain/session-history.ts";
-import { catalogWithPresets, gameCatalog, type CatalogGame, worldAddress } from "./catalog.ts";
+import { catalogWithPresets, displayAddress, gameCatalog, type CatalogGame, worldAddress } from "./catalog.ts";
 import { locateWorldSession, sessionLifecycleKey } from "./world-session.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
 import type { WorldRecord } from "./world-registry.ts";
@@ -188,6 +188,12 @@ function sessionView(serverId: string, record: LifecycleRecord | null): WorldSes
   };
 }
 
+// A route53 world's record is always <world id>.<suffix> (server/connectivity/route53.sh), so its name is known while
+// it is stopped; a session on another port than the game's own reports its full address while it runs.
+function dnsAddress(world: Readonly<{ id: string; connectivity: string }>, suffix: string | null): string | null {
+  return world.connectivity === "route53" && suffix !== null && suffix !== "" ? `${world.id}.${suffix}` : null;
+}
+
 function observedAddress(lifecycle: LifecycleRecord | null, worldId: string): string | null {
   if (lifecycle?.activeWorldId !== worldId || lifecycle?.observedState !== "ready") return null;
   return lifecycle.activeSessionAddress ?? null;
@@ -201,6 +207,8 @@ export async function readControlPlaneSnapshot(
     // The connectivity strategy's answer for this deployment. Null when the
     // caller may not see an address at all, which is the visitor's case.
     connectionHost?: string | null;
+    // The DNS suffix of route53 worlds; their name is fixed, so it is shown while they are stopped too.
+    dnsSuffix?: string | null;
   }>,
   catalog: readonly CatalogGame[] = gameCatalog,
   now: () => Date = () => new Date(),
@@ -270,8 +278,10 @@ export async function readControlPlaneSnapshot(
         // altogether from a caller who may not read one.
         let connectionAddress: string | null = null;
         if (connectionHost !== null) {
-          connectionAddress = observedAddress(session.record, world.id)
+          const address = observedAddress(session.record, world.id)
+            ?? dnsAddress(world, options.dnsSuffix ?? null)
             ?? (world.placement === "fleet" ? null : worldAddress(world.id, { connectionHost, publicIp: hostPublicIp }, effectiveCatalog));
+          connectionAddress = address === null ? null : displayAddress(address, world.id, effectiveCatalog);
         }
         return {
           id: world.id,

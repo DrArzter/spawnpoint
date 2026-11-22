@@ -21,6 +21,7 @@ export async function controlPlane(identity: Identity): Promise<Response> {
     // The host part of every address; the game's port completes it. Withheld
     // from a caller who may not read the connection, like any other reference.
     connectionHost: can("connection.read") ? process.env.CONNECTION_HOST ?? null : null,
+    dnsSuffix: can("connection.read") ? process.env.GAME_DNS_SUFFIX ?? null : null,
   });
   return response(200, {
     ...snapshot,

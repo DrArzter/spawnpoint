@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, 
 
 import { action } from "../../core/actions";
 import type { ShellModel } from "../../core/models";
-import { traverse } from "../../routing";
+import { tabTraverse, traverse } from "../../routing";
 import { useSnackbarQueue, type SnackbarQueue } from "../../components/ui/Snackbar";
 import { ScopeSwitcher } from "./Scope";
 import { Dialog } from "./ui/Dialog";
@@ -105,7 +105,7 @@ function usePageTransition(key: string) {
       event.preventDefault();
       const root = document.documentElement;
       root.dataset.transition = kind;
-      if (kind === "page") root.dataset.direction = traverse(window.location.hash, href);
+      root.dataset.direction = kind === "page" ? traverse(window.location.hash, href) : tabTraverse(window.location.hash, href);
       const finished = start.call(document, () => new Promise<void>((resolve) => navigateUntilArrived(arrived, href, resolve))) as { finished?: Promise<void> } | undefined;
       const clear = () => { delete root.dataset.transition; delete root.dataset.direction; };
       if (finished?.finished) finished.finished.then(clear, clear);

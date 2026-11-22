@@ -86,9 +86,11 @@ cp -- "${J}/pack-minimap.jar" "${fixture}/downloads/pack-minimap.jar"
 cf_file() {
   local project="$1" id="$2" file="$3" extra="${4:-}"
   [[ -n "${extra}" ]] || extra='{}'
+  local sha
+  sha="$(sha1sum "${fixture}/downloads/${file}" | awk '{print $1}')" # NOSONAR test fixture: the fake CurseForge API answers SHA-1, as the real one does
   jq -n --argjson project "${project}" --argjson id "${id}" --arg file "${file}" \
     --argjson bytes "$(stat --format '%s' "${fixture}/downloads/${file}")" \
-    --arg sha "$(sha1sum "${fixture}/downloads/${file}" | awk '{print $1}')" --argjson extra "${extra}" '
+    --arg sha "${sha}" --argjson extra "${extra}" '
     {data: ({id: $id, modId: $project, fileName: $file, fileLength: $bytes,
       downloadUrl: ("https://downloads.invalid/" + $file), hashes: [{algo: 1, value: $sha}],
       gameVersions: ["1.20.1", "Fabric", "Server", "Client"]} + $extra)}' >"${fixture}/api/file-${id}.json"

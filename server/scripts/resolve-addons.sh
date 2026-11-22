@@ -104,6 +104,7 @@ case "${loader_type}" in
   neoforge) cf_loader="NeoForge" ;;
   fabric) cf_loader="Fabric" ;;
   quilt) cf_loader="Quilt" ;;
+  *) die "addons do not support loader ${loader_type}" ;;
 esac
 
 resolve_curseforge() {

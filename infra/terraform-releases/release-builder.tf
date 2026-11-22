@@ -29,6 +29,12 @@ data "archive_file" "release_builder_source" {
     filename = "scripts/_config-source.sh"
   }
 
+  # Holders for the catalog (ADR-0080).
+  source {
+    content  = file("${path.module}/../../scripts/_release-holders.sh")
+    filename = "scripts/_release-holders.sh"
+  }
+
   source {
     content  = file("${path.module}/../../scripts/config-sources/github-snapshot.sh")
     filename = "scripts/config-sources/github-snapshot.sh"
@@ -107,6 +113,13 @@ data "archive_file" "release_builder_source" {
   source {
     content  = file("${path.module}/../../server/scripts/upload-release.sh")
     filename = "server/scripts/upload-release.sh"
+  }
+
+  # The objects-v1 writer (ADR-0080): one bundled Node program, built by
+  # lambdas/scripts/build.sh. The file must exist when Terraform plans.
+  source {
+    content  = file("${path.module}/../../lambdas/dist/release-writer/index.cjs")
+    filename = "tools/release-writer.cjs"
   }
 }
 
@@ -216,6 +229,19 @@ data "aws_iam_policy_document" "release_builder" {
     resources = ["${data.aws_s3_bucket.releases.arn}/objects/*"]
   }
 
+  # The reference table (ADR-0080): the actions that ReleaseRefs sends, on this
+  # one table. A transaction needs no action of its own; no scan, no query.
+  statement {
+    sid = "UpdateReleaseReferences"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+      "dynamodb:DeleteItem",
+    ]
+    resources = ["arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.release_refs_table_name}"]
+  }
+
   statement {
     sid       = "ReadReviewedBuilderSource"
     actions   = ["s3:GetObject"]
@@ -278,6 +304,19 @@ resource "aws_codebuild_project" "release_builder" {
     environment_variable {
       name  = "RELEASE_BUCKET"
       value = data.aws_s3_bucket.releases.id
+    }
+
+    # `legacy` keeps today's per-release keys; `objects-v1` writes
+    # content-addressed objects (ADR-0080) and stays off until the readers are
+    # deployed.
+    environment_variable {
+      name  = "RELEASE_STORAGE_LAYOUT"
+      value = var.release_storage_layout
+    }
+
+    environment_variable {
+      name  = "RELEASE_REFS_TABLE"
+      value = var.release_refs_table_name
     }
 
     # The current installation enables one adapter. Future sources add another

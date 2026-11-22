@@ -678,7 +678,10 @@ run "release_reconciler_only_reads_and_runs_weekly" {
       aws_cloudwatch_metric_alarm.release_reconciler_missing_object.metric_name == "MissingObject",
       aws_cloudwatch_metric_alarm.release_reconciler_run_failed.alarm_name == "spawnpoint-release-reconciler-run-failed",
       aws_cloudwatch_metric_alarm.release_reconciler_run_failed.metric_name == "RunFailed",
+      aws_cloudwatch_metric_alarm.release_reconciler_incomplete.alarm_name == "spawnpoint-release-reconciler-incomplete",
+      aws_cloudwatch_metric_alarm.release_reconciler_incomplete.metric_name == "Incomplete",
       alltrue([for alarm in [
+        aws_cloudwatch_metric_alarm.release_reconciler_incomplete,
         aws_cloudwatch_metric_alarm.release_reconciler_dangerous_diff,
         aws_cloudwatch_metric_alarm.release_reconciler_missing_object,
         aws_cloudwatch_metric_alarm.release_reconciler_run_failed,
@@ -687,7 +690,7 @@ run "release_reconciler_only_reads_and_runs_weekly" {
         contains(alarm.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert") &&
       contains(alarm.ok_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert")]),
     ])
-    error_message = "Dangerous diff, missing object and a failed run each alarm the guardrails topic, on a one-day window that survives a weekly metric."
+    error_message = "Dangerous diff, missing object, an incomplete run and a failed run each alarm the guardrails topic, on a one-day window that survives a weekly metric."
   }
 
   assert {
@@ -697,5 +700,44 @@ run "release_reconciler_only_reads_and_runs_weekly" {
       contains(aws_cloudwatch_metric_alarm.release_reconciler_errors.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"),
     ])
     error_message = "A Lambda error in the reconciler must alarm the guardrails topic."
+  }
+}
+
+run "release_state_holds_release_items_and_never_file_items" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      aws_lambda_function.release_state.environment[0].variables["RELEASE_REFS_TABLE"] == "spawnpoint-release-refs",
+      aws_lambda_function.release_state.environment[0].variables["RELEASE_BUCKET"] == "spawnpoint-releases-123456789012",
+    ])
+    error_message = "The release-state Lambda names the reference table and the release bucket."
+  }
+
+  assert {
+    condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.release_state.statement : statement.actions if statement.sid == "HoldReleaseState"]) == toset(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]),
+      one([for statement in data.aws_iam_policy_document.release_state.statement : statement.resources if statement.sid == "HoldReleaseState"]) == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-release-refs"]),
+      one(one([for statement in data.aws_iam_policy_document.release_state.statement : statement.condition if statement.sid == "HoldReleaseState"])).test == "ForAllValues:StringLike",
+      one(one([for statement in data.aws_iam_policy_document.release_state.statement : statement.condition if statement.sid == "HoldReleaseState"])).variable == "dynamodb:LeadingKeys",
+      toset(one(one([for statement in data.aws_iam_policy_document.release_state.statement : statement.condition if statement.sid == "HoldReleaseState"])).values) == toset(["release#*"]),
+    ])
+    error_message = "A transition may get, put and update release items and holders (leading key release#*), and nothing else in the table."
+  }
+
+  assert {
+    condition = alltrue([
+      for action in flatten([for statement in data.aws_iam_policy_document.release_state.statement : tolist(statement.actions)]) :
+      !startswith(action, "dynamodb:Delete") && !startswith(action, "dynamodb:Batch") && !startswith(action, "dynamodb:Scan") && !startswith(action, "dynamodb:Query")
+    ])
+    error_message = "The release-state Lambda cannot delete, batch, scan or query the table, so it cannot write a file# item or remove a holder."
+  }
+
+  assert {
+    condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.release_state.statement : statement.actions if statement.sid == "ReadWorldRecordForHolder"]) == toset(["s3:GetObject"]),
+      one([for statement in data.aws_iam_policy_document.release_state.statement : statement.resources if statement.sid == "ReadWorldRecordForHolder"]) == toset(["arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*/world.json"]),
+    ])
+    error_message = "The release-state Lambda reads world records, and only them, to find the game and preset of a pointer."
   }
 }

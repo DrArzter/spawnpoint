@@ -16,6 +16,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# The awk program that keeps a digest and drops the file name.
+# shellcheck disable=SC2016 # awk program, not a shell expansion
+first_field='{print $1}'
+
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
   exit 1
@@ -44,7 +48,7 @@ file_json() {
   local project="$1" id="$2" file="$3" extra="${4:-null}"
   # Fixture mirrors CurseForge's documented SHA-1 integrity field.
   local sha
-  sha="$(sha1sum "${fixture}/downloads/${file}" | awk '{print $1}')" # NOSONAR test fixture: the fake CurseForge API answers SHA-1, as the real one does
+  sha="$(sha1sum "${fixture}/downloads/${file}" | awk "${first_field}")" # NOSONAR test fixture: the fake CurseForge API answers SHA-1, as the real one does
   jq -n --argjson project "${project}" --argjson id "${id}" --arg file "${file}" \
     --argjson bytes "$(stat --format '%s' "${fixture}/downloads/${file}")" \
     --arg sha "${sha}" \
@@ -96,7 +100,7 @@ if [[ -n "${output}" ]]; then cp -- "${source}" "${output}"; else cat -- "${sour
 EOF
 chmod 0755 "${fixture}/bin/curl"
 
-jq -n --arg sha "$(sha512sum "${fixture}/downloads/mirror.zip" | awk '{print $1}')" \
+jq -n --arg sha "$(sha512sum "${fixture}/downloads/mirror.zip" | awk "${first_field}")" \
   --argjson bytes "$(stat --format '%s' "${fixture}/downloads/mirror.zip")" '
   {schema_version:1,project_id:466901,file_id:9184727,server_pack_file_id:9184730,
     client_mirror:{url:"https://downloads.invalid/mirror.zip",sha512:$sha,bytes:$bytes}}
@@ -136,9 +140,9 @@ for key in 466901/9184727 466901/9184730 111/101 222/102 333/103; do
     fail "the cache did not store ${key}"
 done
 cmp -s "${fixture}/downloads/server.zip" "${cache}/curseforge/466901/9184730/file" || fail "cached server pack bytes differ"
-textures_sha1="$(sha1sum "${fixture}/downloads/textures.zip" | awk '{print $1}')" # NOSONAR test fixture: SHA-1 is what CurseForge publishes
+textures_sha1="$(sha1sum "${fixture}/downloads/textures.zip" | awk "${first_field}")" # NOSONAR test fixture: SHA-1 is what CurseForge publishes
 jq -e --arg sha1 "${textures_sha1}" \
-  --arg sha256 "$(sha256sum "${fixture}/downloads/textures.zip" | awk '{print $1}')" '
+  --arg sha256 "$(sha256sum "${fixture}/downloads/textures.zip" | awk "${first_field}")" '
   .project_id == 222 and .file_id == 102 and .fileName == "textures.zip" and .classId == 12 and
   .sha1 == $sha1 and .sha256 == $sha256 and .fileLength > 0
 ' "${cache}/curseforge/222/102/index.json" >/dev/null || fail "the dependency index is incomplete"
@@ -194,7 +198,7 @@ printf 'curseforge addon\n' >"${fixture}/downloads/addon.jar"
 file_json 555 501 addon.jar >"${fixture}/api/501.json"
 printf '{"data":{"id":555,"gameId":432,"classId":6}}\n' >"${fixture}/api/project-555.json"
 printf 'modrinth addon\n' >"${fixture}/modrinth/AbCdEf12/modrinth-addon.jar"
-modrinth_sha="$(sha512sum "${fixture}/modrinth/AbCdEf12/modrinth-addon.jar" | awk '{print $1}')"
+modrinth_sha="$(sha512sum "${fixture}/modrinth/AbCdEf12/modrinth-addon.jar" | awk "${first_field}")"
 mkdir -p "${fixture}/profile"
 jq -n --arg sha "${modrinth_sha}" --argjson bytes "$(stat --format '%s' "${fixture}/modrinth/AbCdEf12/modrinth-addon.jar")" '
   {schema_version:1,mods:[
@@ -215,8 +219,11 @@ output="$(run_addons addons-first)"
 jq -e '.classId == 6' "${cache}/curseforge/555/501/index.json" >/dev/null || fail "the addon index has no class"
 cmp -s "${fixture}/modrinth/AbCdEf12/modrinth-addon.jar" "${cache}/modrinth/AbCdEf12/${modrinth_sha}" ||
   fail "the Modrinth addon was not cached by version and SHA-512"
-output="$(run_addons addons-second FAKE_OFFLINE=1)"
+output="$(run_addons addons-second FAKE_OFFLINE=1 UPSTREAM_CACHE_HITS_FILE="${fixture}/hits.tsv")"
 [[ "$(value upstream_cache_hits "${output}")" == 2 ]] || fail "warm addon resolution did not hit twice"
+# A CurseForge hit is recorded as a copy source for the objects-v1 writer; a SHA-512 hit has no SHA-256 to record.
+[[ "$(cat "${fixture}/hits.tsv")" == "$(printf '%s\tupstream/curseforge/555/501/file' "$(sha256sum "${cache}/curseforge/555/501/file" | awk "${first_field}")")" ]] ||
+  fail "the CurseForge hit was not recorded for the writer"
 cmp -s "${fixture}/addons-first/addons-lock.json" "${fixture}/addons-second/addons-lock.json" ||
   fail "an addon cache hit changed the lock"
 printf 'tampered\n' >>"${cache}/modrinth/AbCdEf12/${modrinth_sha}"

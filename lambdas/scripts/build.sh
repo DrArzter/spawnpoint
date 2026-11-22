@@ -6,7 +6,7 @@ lambda_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 output_dir="${lambda_dir}/dist/lifecycle-coordinator"
 archive="${lambda_dir}/dist/lifecycle-coordinator.zip"
 
-mkdir -p "${output_dir}" "${lambda_dir}/dist/bot" "${lambda_dir}/dist/notifier" "${lambda_dir}/dist/world-lifecycle" "${lambda_dir}/dist/release-state" "${lambda_dir}/dist/control-plane-projector" "${lambda_dir}/dist/control-plane-subscriptions" "${lambda_dir}/dist/fleet-sweeper" "${lambda_dir}/dist/backup-retention" "${lambda_dir}/dist/release-reconciler"
+mkdir -p "${output_dir}" "${lambda_dir}/dist/bot" "${lambda_dir}/dist/notifier" "${lambda_dir}/dist/world-lifecycle" "${lambda_dir}/dist/release-state" "${lambda_dir}/dist/control-plane-projector" "${lambda_dir}/dist/control-plane-subscriptions" "${lambda_dir}/dist/fleet-sweeper" "${lambda_dir}/dist/backup-retention" "${lambda_dir}/dist/release-reconciler" "${lambda_dir}/dist/release-writer"
 "${lambda_dir}/node_modules/.bin/esbuild" \
   "${lambda_dir}/src/handlers/lifecycle-coordinator.ts" \
   --bundle \
@@ -82,6 +82,15 @@ mkdir -p "${lambda_dir}/dist/access-api"
   --external:@aws-sdk/* \
   --outfile="${lambda_dir}/dist/release-reconciler/index.cjs"
 
+# The builder's writer runs in CodeBuild, where no node_modules exist: everything is bundled.
+"${lambda_dir}/node_modules/.bin/esbuild" \
+  "${lambda_dir}/src/builder/release-writer-main.ts" \
+  --bundle \
+  --platform=node \
+  --target=node22 \
+  --format=cjs \
+  --outfile="${lambda_dir}/dist/release-writer/index.cjs"
+
 "${lambda_dir}/node_modules/.bin/esbuild" \
   "${lambda_dir}/src/handlers/control-plane-subscriptions.ts" \
   --bundle \
@@ -110,7 +119,7 @@ rm -f "${lambda_dir}/dist/bot/index.mjs"
   --external:@aws-sdk/* \
   --outfile="${lambda_dir}/dist/notifier/index.mjs"
 
-printf 'result=built\narchive=%s\naccess_api=%s\nworld_lifecycle=%s\nrelease_state=%s\ncontrol_plane_projector=%s\nfleet_sweeper=%s\nbackup_retention=%s\nrelease_reconciler=%s\ncontrol_plane_subscriptions=%s\nbot=%s\nnotifier=%s\n' \
+printf 'result=built\narchive=%s\naccess_api=%s\nworld_lifecycle=%s\nrelease_state=%s\ncontrol_plane_projector=%s\nfleet_sweeper=%s\nbackup_retention=%s\nrelease_reconciler=%s\nrelease_writer=%s\ncontrol_plane_subscriptions=%s\nbot=%s\nnotifier=%s\n' \
   "${archive}" \
   "${lambda_dir}/dist/access-api/index.cjs" \
   "${lambda_dir}/dist/world-lifecycle/index.cjs" \
@@ -119,6 +128,7 @@ printf 'result=built\narchive=%s\naccess_api=%s\nworld_lifecycle=%s\nrelease_sta
   "${lambda_dir}/dist/fleet-sweeper/index.cjs" \
   "${lambda_dir}/dist/backup-retention/index.cjs" \
   "${lambda_dir}/dist/release-reconciler/index.cjs" \
+  "${lambda_dir}/dist/release-writer/index.cjs" \
   "${lambda_dir}/dist/control-plane-subscriptions/index.cjs" \
   "${lambda_dir}/dist/bot/index.cjs" \
   "${lambda_dir}/dist/notifier/index.mjs"

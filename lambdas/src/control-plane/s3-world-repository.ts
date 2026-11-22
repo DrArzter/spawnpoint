@@ -2,6 +2,7 @@ import {
   GetObjectCommand, ListObjectsV2Command, NoSuchKey, PutObjectCommand, S3Client,
 } from "@aws-sdk/client-s3";
 
+import type { ReleaseHolders } from "./release-holders.ts";
 import { parseWorldRecord, worldRecordDocument, type WorldRecord } from "./world-registry.ts";
 
 export type StoredWorld = Readonly<{ record: WorldRecord; etag: string }>;
@@ -17,9 +18,10 @@ function missing(error: unknown): boolean {
   return error instanceof NoSuchKey || (error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound"));
 }
 
-export class S3WorldRepository {
-  private readonly s3: S3Client;
-  private readonly bucket: string;
+/** Reads world records and has no write method: the type a read-only call site holds (ADR-0080). */
+export class S3WorldReader {
+  protected readonly s3: S3Client;
+  protected readonly bucket: string;
 
   constructor(s3: S3Client, bucket: string) {
     this.s3 = s3;
@@ -56,8 +58,19 @@ export class S3WorldRepository {
     }));
     return records.filter((record): record is WorldRecord => record !== null);
   }
+}
+
+/** Every write holds the current generation's release first, so a call site cannot forget it: the holders argument is required. */
+export class S3WorldRepository extends S3WorldReader {
+  private readonly holders: ReleaseHolders;
+
+  constructor(s3: S3Client, bucket: string, holders: ReleaseHolders) {
+    super(s3, bucket);
+    this.holders = holders;
+  }
 
   async create(record: WorldRecord): Promise<void> {
+    await this.holders.holdRecord(record);
     await this.s3.send(new PutObjectCommand({
       Bucket: this.bucket, Key: key(record.worldId), Body: JSON.stringify(worldRecordDocument(record)),
       ContentType: "application/json", ServerSideEncryption: "AES256", IfNoneMatch: "*",
@@ -66,6 +79,7 @@ export class S3WorldRepository {
 
   async replace(record: WorldRecord, etag: string): Promise<void> {
     if (!etag) throw new Error("missing_world_record_etag");
+    await this.holders.holdRecord(record);
     await this.s3.send(new PutObjectCommand({
       Bucket: this.bucket, Key: key(record.worldId), Body: JSON.stringify(worldRecordDocument(record)),
       ContentType: "application/json", ServerSideEncryption: "AES256", IfMatch: etag,

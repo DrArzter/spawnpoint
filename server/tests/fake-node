@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+# Stands in for `node` in the shell tests: the operator scripts call it only to
+# write a release holder (lambdas/tools/hold-release.ts). It records its
+# arguments and, with FAKE_NODE_FAIL=true, refuses, so a test can show that a
+# script stops before it writes anything.
+
+printf '%s\n' "$*" >>"${FAKE_NODE_LOG:-/dev/null}"
+[[ "${FAKE_NODE_FAIL:-false}" != true ]] || {
+  printf 'fake node: the holder was refused\n' >&2
+  exit 1
+}

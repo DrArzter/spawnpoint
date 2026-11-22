@@ -50,11 +50,18 @@ data "aws_iam_policy_document" "access_api" {
   }
 
   # The state of a release (live, retiring, retired) decides whether a wipe,
-  # restore, promotion or new world may use it (ADR-0080).
+  # restore, promotion or new world may use it, and a writer of a world record
+  # or pointer adds its holder first (ADR-0080). Release items and holders only:
+  # the leading key keeps file items out of reach, and nothing here deletes.
   statement {
-    sid       = "ReadReleaseState"
-    actions   = ["dynamodb:GetItem"]
+    sid       = "HoldReleaseState"
+    actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]
     resources = [local.release_refs_table_arn]
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["release#*"]
+    }
   }
 
   statement {

@@ -8,6 +8,7 @@ import { initialLifecycleRecord, type LifecycleRecord } from "../src/domain/life
 import { awsControlPlaneSources } from "../src/control-plane/aws.ts";
 import { type ControlPlaneSources, type HostObservation } from "../src/control-plane/read-model.ts";
 import { type WorldRecord, worldRecordDocument } from "../src/control-plane/world-registry.ts";
+import { FakeRefsTable } from "./fake-refs-table.ts";
 import { controlSession, controlWorldLifecycle, createWorld, updateWorldSettings, whitelistOf } from "../src/handlers/api/worlds.ts";
 
 process.env.OPERATION_STATE_MACHINES = JSON.stringify(["start", "stop", "world"].map((type) => ({ type, arn: `arn:aws:states:eu-central-1:123456789012:stateMachine:${type}` })));
@@ -202,6 +203,12 @@ test("world connectivity validation keeps its creation defaults and explicit-upd
 function storedWorld(t: TestContext, stored: WorldRecord) {
   process.env.RELEASE_BUCKET = "releases";
   const written: Record<string, unknown>[] = [];
+  // The record's release already has its holder, as any stored world's does: a write costs one read.
+  const refs = new FakeRefsTable();
+  const ref = `release#${stored.gameId}/${stored.preset.id}/${stored.currentGeneration.release}`;
+  refs.put({ pk: ref, sk: "meta", layout: "legacy", state: "live", holders: 1 });
+  refs.put({ pk: ref, sk: `hold#gen#${stored.worldId}/${stored.currentGeneration.id}`, roles: new Set(["origin"]) });
+  t.mock.method(DynamoDBDocumentClient.prototype, "send", (command: unknown) => refs.send(command));
   t.mock.method(S3Client.prototype, "send", async (command: unknown) => {
     if (command instanceof GetObjectCommand) {
       return { ETag: "\"v1\"", Body: { transformToString: async () => JSON.stringify(worldRecordDocument(stored)) } };

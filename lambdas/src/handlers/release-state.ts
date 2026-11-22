@@ -1,14 +1,19 @@
 import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
 import { backupInventory, resumeArchiveKey, type BackupObject } from "../control-plane/backups.ts";
 import { releaseStateDocument, type ReleaseState, type WorldRef } from "../control-plane/release-state.ts";
 import {
   commitPromotion, preparePromotion, recordPrePromotionBackup, restorePromotion, rollbackPromotion,
 } from "../control-plane/release-state-transitions.ts";
+import { ReleaseHolders, resolveFromWorldRecords } from "../control-plane/release-holders.ts";
+import { ReleaseRefs } from "../control-plane/release-refs.ts";
 import { S3ReleaseStateStore } from "../control-plane/s3-release-state-store.ts";
+import { S3WorldReader } from "../control-plane/s3-world-repository.ts";
 
 type Action = "read" | "prepare" | "commit" | "restore" | "rollback" | "protect";
-type Input = Readonly<{
+export type Input = Readonly<{
   action: Action;
   worldId: string;
   generationId: string;
@@ -81,8 +86,12 @@ export function prePromotionArchive(ref: WorldRef, objects: readonly BackupObjec
   return resumeArchiveKey(ref.worldId, ref.generationId, verified);
 }
 
-async function protect(request: Input, stored: Readonly<{ state: ReleaseState; etag: string }>, ref: WorldRef, store: S3ReleaseStateStore) {
-  const key = prePromotionArchive(ref, await listWipeArchives(ref));
+export type ArchiveLister = (ref: WorldRef) => Promise<BackupObject[]>;
+
+async function protect(
+  request: Input, stored: Readonly<{ state: ReleaseState; etag: string }>, ref: WorldRef, store: S3ReleaseStateStore, listArchives: ArchiveLister,
+) {
+  const key = prePromotionArchive(ref, await listArchives(ref));
   if (key === undefined) {
     // A wipe that never ran has no save to lose; one that ran must keep one.
     if (stored.state.activeRelease !== null) throw new Error("pre_promotion_backup_missing");
@@ -102,14 +111,13 @@ function transition(request: Input, current: ReleaseState, ref: WorldRef, at: st
   }
 }
 
-export async function handler(event: unknown) {
-  const request = input(event);
+/** The handler's logic, with its store and archive listing injected. Every `store.replace` adds the holders first. */
+export async function run(request: Input, store: S3ReleaseStateStore, listArchives: ArchiveLister) {
   const ref = { worldId: request.worldId, generationId: request.generationId };
-  const store = new S3ReleaseStateStore(s3, requiredEnv("RELEASE_BUCKET"));
   const stored = await store.readOrMigrateLegacy(ref);
   if (stored === null) throw new Error("world_release_state_missing");
   if (request.action === "read") return { status: "read", state: stored.state };
-  if (request.action === "protect") return protect(request, stored, ref, store);
+  if (request.action === "protect") return protect(request, stored, ref, store, listArchives);
   if (request.action === "prepare" && stored.state.activeRelease === request.release) {
     return { status: "already_active", state: stored.state, previous: stored.state };
   }
@@ -122,4 +130,14 @@ export async function handler(event: unknown) {
     state: next,
     ...(request.action === "prepare" ? { previous: stored.state } : {}),
   };
+}
+
+export async function handler(event: unknown) {
+  const bucket = requiredEnv("RELEASE_BUCKET");
+  // A pointer names no game or preset: the world's record gives them, and a world without one is refused.
+  const holders = new ReleaseHolders(
+    new ReleaseRefs(DynamoDBDocumentClient.from(new DynamoDBClient({}))),
+    resolveFromWorldRecords(new S3WorldReader(s3, bucket)),
+  );
+  return run(input(event), new S3ReleaseStateStore(s3, bucket, holders), listWipeArchives);
 }

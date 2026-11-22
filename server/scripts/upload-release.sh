@@ -20,6 +20,15 @@ source "${SCRIPT_DIR}/_s3.sh"
 manifest="${1:-}"
 [[ -n "${manifest}" ]] || die "usage: upload-release.sh <manifest.json> (payload defaults to the manifest's directory; override with RELEASE_SOURCE_DIR)"
 
+# The storage layout (ADR-0080). `legacy` is today's per-release keys and the
+# default; `objects-v1` writes content-addressed objects through the writer and
+# stays off until the readers are deployed.
+storage_layout="${RELEASE_STORAGE_LAYOUT:-legacy}"
+case "${storage_layout}" in
+  legacy | objects-v1) ;;
+  *) die "RELEASE_STORAGE_LAYOUT must be legacy or objects-v1: ${storage_layout}" ;;
+esac
+
 require_command aws
 require_command jq
 require_command base64
@@ -229,6 +238,30 @@ EOF
   esac
 }
 
+# The files of the client pack, with the install notes, in <directory>. Both
+# layouts stage the same files; only the zip and the place of the bytes differ.
+stage_client_pack() {
+  local directory="$1" filename expected_sha candidate
+  mkdir -p -- "${directory}"
+  if [[ "${client_kind}" == "mod-set" ]]; then
+    # The players set, every file held to the manifest's digest: the pack is
+    # what players install. A shared mod may be found with the server's.
+    while IFS=$'\t' read -r filename expected_sha; do
+      candidate="${source_dir}/client-mods/${filename}"
+      [[ -f "${candidate}" ]] || candidate="${source_dir}/mods/${filename}"
+      [[ -f "${candidate}" && ! -L "${candidate}" ]] || die "players mod is missing or is a symlink: ${filename}"
+      [[ "$(file_sha256 "${candidate}")" == "${expected_sha}" ]] ||
+        die "SHA-256 mismatch for players mod ${filename}"
+      cp -- "${candidate}" "${directory}/${filename}"
+    done < <(jq -r '.client.mods[] | [.file, .sha256] | @tsv' "${manifest}")
+  else
+    while IFS= read -r filename; do
+      cp -- "${source_dir}/mods/${filename}" "${directory}/${filename}"
+    done < <(jq -r '.server.mods[].file' "${manifest}")
+  fi
+  write_install_notes "${directory}/INSTALL.txt"
+}
+
 publish_pack() {
   if head_release_object "${pack_key}" >/dev/null 2>&1; then
     printf 'already_present'
@@ -250,25 +283,7 @@ publish_pack() {
 
   pack_dir="$(mktemp -d)"
   pack_zip="${pack_dir}/pack.zip"
-  mkdir -p -- "${pack_dir}/pack"
-  if [[ "${client_kind}" == "mod-set" ]]; then
-    # The players set, every file held to the manifest's digest: the pack is
-    # what players install. A shared mod may be found with the server's.
-    local filename expected_sha candidate
-    while IFS=$'\t' read -r filename expected_sha; do
-      candidate="${source_dir}/client-mods/${filename}"
-      [[ -f "${candidate}" ]] || candidate="${source_dir}/mods/${filename}"
-      [[ -f "${candidate}" && ! -L "${candidate}" ]] || die "players mod is missing or is a symlink: ${filename}"
-      [[ "$(file_sha256 "${candidate}")" == "${expected_sha}" ]] ||
-        die "SHA-256 mismatch for players mod ${filename}"
-      cp -- "${candidate}" "${pack_dir}/pack/${filename}"
-    done < <(jq -r '.client.mods[] | [.file, .sha256] | @tsv' "${manifest}")
-  else
-    while IFS= read -r filename; do
-      cp -- "${source_dir}/mods/${filename}" "${pack_dir}/pack/${filename}"
-    done < <(jq -r '.server.mods[].file' "${manifest}")
-  fi
-  write_install_notes "${pack_dir}/pack/INSTALL.txt"
+  stage_client_pack "${pack_dir}/pack"
 
   (cd "${pack_dir}/pack" && zip -qr "${pack_zip}" .)
   pack_digest="$(file_sha256 "${pack_zip}")"
@@ -277,12 +292,32 @@ publish_pack() {
   printf 'uploaded'
 }
 
+# The files of a server or full pack, with its README, in <directory>.
+stage_set_pack() {
+  local directory="$1" name="$2" title="$3" filter="$4" filename expected_sha candidate
+  mkdir -p -- "${directory}"
+  while IFS=$'\t' read -r filename expected_sha; do
+    candidate="${source_dir}/mods/${filename}"
+    [[ -f "${candidate}" ]] || candidate="${source_dir}/client-mods/${filename}"
+    [[ -f "${candidate}" && ! -L "${candidate}" ]] || die "${name} pack file is missing or is a symlink: ${filename}"
+    [[ "$(file_sha256 "${candidate}")" == "${expected_sha}" ]] ||
+      die "SHA-256 mismatch for ${name} pack file ${filename}"
+    cp -- "${candidate}" "${directory}/${filename}"
+  done < <(jq -r "${filter}" "${manifest}")
+  printf '%s\n' "${title}" >"${directory}/README.txt"
+}
+
+set_pack_title_server="Spawnpoint ${preset_id} release ${release}: every mod the server runs. Players install the client pack."
+set_pack_title_full="Spawnpoint ${preset_id} release ${release}: every mod, server and players together. Players install the client pack."
+set_pack_filter_server='.server.mods[] | [.file, .sha256] | @tsv'
+set_pack_filter_full='([.server.mods[], .client.mods[]] | unique_by(.file))[] | [.file, .sha256] | @tsv'
+
 # A release with its own players set (ADR-0069) also offers the server's set
 # and every mod together. They are built here because no request can zip
 # hundreds of megabytes; each is published once and its files are held to the
 # manifest's digests. A shared file is stored with the server's mods.
 publish_set_pack() {
-  local name="$1" title="$2" filter="$3" key pack_dir pack_zip pack_digest filename expected_sha candidate
+  local name="$1" title="$2" filter="$3" key pack_dir pack_zip pack_digest
   key="${release_prefix}/${name}.zip"
   if head_release_object "${key}" >/dev/null 2>&1; then
     printf 'already_present'
@@ -290,16 +325,7 @@ publish_set_pack() {
   fi
   pack_dir="$(mktemp -d)"
   pack_zip="${pack_dir}/${name}.zip"
-  mkdir -p -- "${pack_dir}/pack"
-  while IFS=$'\t' read -r filename expected_sha; do
-    candidate="${source_dir}/mods/${filename}"
-    [[ -f "${candidate}" ]] || candidate="${source_dir}/client-mods/${filename}"
-    [[ -f "${candidate}" && ! -L "${candidate}" ]] || die "${name} pack file is missing or is a symlink: ${filename}"
-    [[ "$(file_sha256 "${candidate}")" == "${expected_sha}" ]] ||
-      die "SHA-256 mismatch for ${name} pack file ${filename}"
-    cp -- "${candidate}" "${pack_dir}/pack/${filename}"
-  done < <(jq -r "${filter}" "${manifest}")
-  printf '%s\n' "${title}" >"${pack_dir}/pack/README.txt"
+  stage_set_pack "${pack_dir}/pack" "${name}" "${title}" "${filter}"
   (cd "${pack_dir}/pack" && zip -qr "${pack_zip}" .)
   pack_digest="$(file_sha256 "${pack_zip}")"
   upload_release_object "${key}" "${pack_zip}" "${pack_digest}" "${name}.zip" head
@@ -311,12 +337,8 @@ publish_set_packs() {
   server_pack_result=not_applicable
   full_pack_result=not_applicable
   [[ "${client_kind}" == "mod-set" ]] || return 0
-  server_pack_result="$(publish_set_pack server \
-    "Spawnpoint ${preset_id} release ${release}: every mod the server runs. Players install the client pack." \
-    '.server.mods[] | [.file, .sha256] | @tsv')"
-  full_pack_result="$(publish_set_pack full \
-    "Spawnpoint ${preset_id} release ${release}: every mod, server and players together. Players install the client pack." \
-    '([.server.mods[], .client.mods[]] | unique_by(.file))[] | [.file, .sha256] | @tsv')"
+  server_pack_result="$(publish_set_pack server "${set_pack_title_server}" "${set_pack_filter_server}")"
+  full_pack_result="$(publish_set_pack full "${set_pack_title_full}" "${set_pack_filter_full}")"
 }
 
 # The release plan (plan-release.sh), when the caller made one. It is
@@ -338,6 +360,108 @@ publish_plan() {
   fi
 }
 
+# --- objects-v1 (ADR-0080) ------------------------------------------------
+# The payload goes through the writer: one long-lived Node process with a
+# bounded worker pool. One aws CLI process for each object reached only 1.9
+# objects/s on BUILD_GENERAL1_SMALL (2 vCPU, measured), and a modpack has about
+# 1,700 objects. The writer keeps the S3 checksum confirmation of this script.
+# The manifest still goes last, with one put: its existence is the commit marker.
+writer_command=()
+object_pack_args=()
+objects_work=""
+prepare_object_writer() {
+  if [[ -n "${RELEASE_WRITER_BIN:-}" ]]; then
+    # Tests point the script at a stub; the value is a command line.
+    read -r -a writer_command <<<"${RELEASE_WRITER_BIN}"
+  else
+    require_command node
+    [[ -f "${SCRIPT_DIR}/../../tools/release-writer.cjs" ]] || die "RELEASE_STORAGE_LAYOUT=objects-v1 needs the release writer bundle (tools/release-writer.cjs)"
+    writer_command=(node "${SCRIPT_DIR}/../../tools/release-writer.cjs")
+  fi
+  build_id="${RELEASE_BUILD_ID:-}"
+  [[ -n "${build_id}" ]] || build_id="local-$(cat /proc/sys/kernel/random/uuid 2>/dev/null || date +%s)-$$"
+  objects_work="$(mktemp -d)"
+}
+
+# Prints the writer's result lines; a failure ends this script.
+run_writer() {
+  local command="$1" output
+  output="$(RELEASE_BUCKET="${RELEASE_BUCKET}" "${writer_command[@]}" "$@")" || die "release writer failed: ${command}"
+  [[ -z "${output}" ]] || printf '%s\n' "${output}"
+}
+
+# The same files give the same zip, so a rebuild stores no new pack object: a
+# fixed mtime, a fixed mode and a sorted entry list.
+zip_reproducible() {
+  local directory="$1" archive="$2"
+  find "${directory}" -type f -exec chmod 0644 {} +
+  find "${directory}" -exec touch -h -t 198001010000 {} +
+  (cd "${directory}" && find . -type f -printf '%P\n' | LC_ALL=C sort | zip -X -q "${archive}" -@)
+}
+
+# Fills object_pack_args. A modpack's client pack is the payload's client.zip,
+# which the writer checks against client.sha256; every other pack is built here.
+build_object_packs() {
+  local work="$1"
+  object_pack_args=()
+  if [[ "${client_kind}" == "curseforge-modpack" ]]; then
+    [[ -f "${source_dir}/client.zip" && ! -L "${source_dir}/client.zip" ]] || die "release client pack is missing or is a symlink"
+    object_pack_args+=(--pack "client=${source_dir}/client.zip")
+  else
+    stage_client_pack "${work}/client"
+    zip_reproducible "${work}/client" "${work}/client.zip"
+    object_pack_args+=(--pack "client=${work}/client.zip")
+  fi
+  if [[ "${client_kind}" == "mod-set" ]]; then
+    local name
+    for name in server full; do
+      local title="set_pack_title_${name}" filter="set_pack_filter_${name}"
+      stage_set_pack "${work}/${name}" "${name}" "${!title}" "${!filter}"
+      zip_reproducible "${work}/${name}" "${work}/${name}.zip"
+      object_pack_args+=(--pack "${name}=${work}/${name}.zip")
+    done
+  fi
+}
+
+# Runs `write` for <manifest-file>; more arguments (--heal) follow it.
+write_objects() {
+  local manifest_file="$1"
+  shift
+  local extra=()
+  [[ ! "${RELEASE_PROFILE_DIGEST:-}" =~ ^[0-9a-f]{64}$ ]] || extra+=(--profile-digest "${RELEASE_PROFILE_DIGEST}")
+  [[ -z "${RELEASE_UPSTREAM_MAP:-}" || ! -s "${RELEASE_UPSTREAM_MAP}" ]] || extra+=(--upstream-map "${RELEASE_UPSTREAM_MAP}")
+  run_writer write --manifest "${manifest_file}" --source-dir "${source_dir}" \
+    --game "${game}" --preset "${preset_id}" --release "${release}" --build-id "${build_id}" \
+    "${object_pack_args[@]}" "${extra[@]}" "$@"
+}
+
+publish_objects_release() {
+  run_writer publish --game "${game}" --preset "${preset_id}" --release "${release}" --build-id "${build_id}" >/dev/null
+}
+
+# The result lines of an objects-v1 release: the legacy names, then the writer's.
+print_objects_result() {
+  local result="$1" final_manifest="$2" writer_lines="$3" client_digest
+  client_digest="$(jq -r '.client.sha256 // .packs.client.sha256 // empty' "${final_manifest}")"
+  printf 'result=%s\n' "${result}"
+  printf 'bucket=%s\n' "${RELEASE_BUCKET}"
+  printf 'release=%s\n' "${release}"
+  printf 'manifest_key=%s\n' "${manifest_key}"
+  printf 'mods=%s\n' "${mods_count}"
+  printf 'overrides=%s\n' "${overrides_count}"
+  printf 'client_mods=%s\n' "${client_mods_count}"
+  printf 'pack=objects\n'
+  [[ -z "${client_digest}" ]] || printf 'pack_key=objects/sha256/%s/%s\n' "${client_digest:0:2}" "${client_digest}"
+  if [[ "${client_kind}" == "mod-set" ]]; then
+    printf 'server_pack=objects\nfull_pack=objects\n'
+  else
+    printf 'server_pack=not_applicable\nfull_pack=not_applicable\n'
+  fi
+  printf 'plan=%s\n' "${plan_result}"
+  [[ "${plan_result}" != uploaded ]] || printf 'plan_key=%s\n' "${plan_key}"
+  [[ -z "${writer_lines}" ]] || printf '%s\n' "${writer_lines}"
+}
+
 # An existing manifest is the immutability gate. Identity is the deployment
 # content — release, versions and the mods entries — not the whole document:
 # created_at and the changelog are descriptive, and two imports of the same
@@ -356,6 +480,22 @@ if head_release_object "${manifest_key}" >/dev/null 2>&1; then
     "${remote_manifest}" >/dev/null || die "could not fetch the existing manifest: s3://${RELEASE_BUCKET}/${manifest_key}"
   [[ "$(canonical_manifest "${manifest}")" == "$(canonical_manifest "${remote_manifest}")" ]] ||
     die "release ${release} already exists with different content: s3://${RELEASE_BUCKET}/${manifest_key}"
+  if jq -e '.storage.layout == "objects-v1"' "${remote_manifest}" >/dev/null 2>&1; then
+    # An objects-v1 release keeps no pack under its own key: never write one.
+    # With the flag on, heal: verify every object, recreate a missing one only
+    # from a local file whose digest matches. The stored manifest is kept.
+    writer_lines=""
+    if [[ "${storage_layout}" == objects-v1 ]]; then
+      prepare_object_writer
+      trap 'rm -f -- "${remote_manifest}"; rm -rf -- "${objects_work}"' EXIT
+      build_object_packs "${objects_work}"
+      writer_lines="$(write_objects "${remote_manifest}" --heal)"
+      publish_objects_release
+    fi
+    [[ -z "${RELEASE_PLAN:-}" ]] || plan_result=skipped_existing_release
+    print_objects_result already_present "${remote_manifest}" "${writer_lines}"
+    exit 0
+  fi
   pack_result="$(publish_pack)"
   publish_set_packs
   printf 'result=already_present\n'
@@ -372,6 +512,23 @@ printf 'full_pack=%s\n' "${full_pack_result}"
   # A published release keeps the plan of the build that published it.
   [[ -z "${RELEASE_PLAN:-}" ]] || plan_result=skipped_existing_release
   printf 'plan=%s\n' "${plan_result}"
+  exit 0
+fi
+
+if [[ "${storage_layout}" == objects-v1 ]]; then
+  # The manifest was validated above. Objects first (the writer adds `storage`
+  # and `packs` to the manifest once every object is in place), then the plan,
+  # then the manifest, then the release goes live.
+  prepare_object_writer
+  trap 'rm -rf -- "${objects_work}"' EXIT
+  build_object_packs "${objects_work}"
+  writer_lines="$(write_objects "${manifest}")"
+  manifest_digest="$(file_sha256 "${manifest}")"
+  publish_plan
+  upload_release_object "${manifest_key}" "${manifest}" "${manifest_digest}" "manifest.json" head
+  publish_objects_release
+  log "release published in ${SECONDS}s"
+  print_objects_result uploaded "${manifest}" "${writer_lines}"
   exit 0
 fi
 

@@ -179,3 +179,84 @@ run "release_builder_caches_upstream_files_only_under_upstream" {
     error_message = "The listing is limited to the release prefix."
   }
 }
+
+run "storage_layout_defaults_to_legacy" {
+  command = plan
+
+  assert {
+    condition     = var.release_storage_layout == "legacy"
+    error_message = "The builder writes the legacy layout until the readers are deployed."
+  }
+
+  assert {
+    condition = one([
+      for variable in aws_codebuild_project.release_builder.environment[0].environment_variable :
+      variable.value if variable.name == "RELEASE_STORAGE_LAYOUT"
+    ]) == "legacy"
+    error_message = "The CodeBuild project passes the layout flag, off by default."
+  }
+
+  assert {
+    condition = one([
+      for variable in aws_codebuild_project.release_builder.environment[0].environment_variable :
+      variable.value if variable.name == "RELEASE_REFS_TABLE"
+    ]) == "spawnpoint-release-refs"
+    error_message = "The builder names the reference table that the storage root creates."
+  }
+}
+
+run "objects_v1_layout_is_accepted" {
+  command = plan
+
+  variables {
+    release_storage_layout = "objects-v1"
+  }
+
+  assert {
+    condition = one([
+      for variable in aws_codebuild_project.release_builder.environment[0].environment_variable :
+      variable.value if variable.name == "RELEASE_STORAGE_LAYOUT"
+    ]) == "objects-v1"
+    error_message = "The flag reaches the build."
+  }
+}
+
+run "an_unknown_storage_layout_is_refused" {
+  command = plan
+
+  variables {
+    release_storage_layout = "objects-v2"
+  }
+
+  expect_failures = [var.release_storage_layout]
+}
+
+run "release_builder_updates_only_the_reference_table" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.release_builder.statement : statement.actions if statement.sid == "UpdateReleaseReferences"]) == toset(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem"]),
+      one([for statement in data.aws_iam_policy_document.release_builder.statement : statement.resources if statement.sid == "UpdateReleaseReferences"]) == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-release-refs"]),
+    ])
+    error_message = "The builder gets exactly GetItem, PutItem, UpdateItem and DeleteItem on the reference table."
+  }
+
+  assert {
+    condition = alltrue(flatten([
+      for statement in data.aws_iam_policy_document.release_builder.statement : [
+        for action in statement.actions : statement.sid == "UpdateReleaseReferences" || !can(regex("^dynamodb:", action))
+      ]
+    ]))
+    error_message = "No other statement may reach DynamoDB: no scan, no query, no other table."
+  }
+
+  assert {
+    condition = alltrue(flatten([
+      for statement in data.aws_iam_policy_document.release_builder.statement : [
+        for action in statement.actions : !can(regex("^s3:Delete", action))
+      ]
+    ]))
+    error_message = "The release builder may not delete objects."
+  }
+}

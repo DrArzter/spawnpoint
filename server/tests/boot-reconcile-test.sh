@@ -26,6 +26,8 @@ expect_failure() {
 
 mkdir -p -- "${fixture}/bin"
 ln -s -- "${REPOSITORY_ROOT}/server/tests/fake-aws" "${fixture}/bin/aws"
+ln -s -- "${REPOSITORY_ROOT}/server/tests/fake-node" "${fixture}/bin/node"
+export FAKE_NODE_LOG="${fixture}/node.log"
 export PATH="${fixture}/bin:${PATH}"
 export FAKE_S3_ROOT="${fixture}/fake-s3"
 export BACKUP_BUCKET="spawnpoint-test-backups"

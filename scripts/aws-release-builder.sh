@@ -11,6 +11,8 @@ repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 server_scripts="${repository_root}/server/scripts"
 # shellcheck source=scripts/_config-source.sh
 source "${repository_root}/scripts/_config-source.sh"
+# shellcheck source=scripts/_release-holders.sh
+source "${repository_root}/scripts/_release-holders.sh"
 
 if [[ "${BUILDER_MODE:-release}" == "preset-catalog" ]]; then
   exec "${repository_root}/scripts/aws-preset-catalog-builder.sh"
@@ -80,7 +82,9 @@ fi
 
 payload="${workspace}/payload"
 # Verified upstream files are kept under upstream/ in the release bucket, so a
-# rebuild of the same pins reads them from S3 instead of CurseForge.
+# rebuild of the same pins reads them from S3 instead of CurseForge. A hit is
+# also noted, so the objects-v1 writer can copy those bytes inside S3.
+export UPSTREAM_CACHE_HITS_FILE="${workspace}/upstream-hits.tsv"
 UPSTREAM_CACHE_BUCKET="${RELEASE_BUCKET}" \
   "${server_scripts}/resolve-profile-mods.sh" "${profile_directory}" "${payload}/mods"
 
@@ -130,20 +134,38 @@ if [[ -n "${previous_manifest}" ]]; then
   fi
 fi
 
-RELEASE_PLAN="${plan_file}" \
-RELEASE_SOURCE_DIR="${payload}" \
-  "${server_scripts}/upload-release.sh" "${payload}/manifest.json"
-
-# A release and preset discovery are separate records, joined by the digest of
-# the profile directory rather than by the repository-wide commit. This keeps
-# an older build from marking a newer preset ready, while an unrelated edit in
-# the same repository does not invalidate the profile that was actually built.
+# The digest names the profile that built the release; the reference table
+# keeps it on the release item (objects-v1 only).
 profile_digest="$({
   while IFS= read -r -d '' file; do
     relative="${file#"${profile_directory}/"}"
     printf '%s  %s\n' "$(sha256sum -- "${file}" | awk '{print $1}')" "${relative}"
   done < <(find "${profile_directory}" -type f -print0 | sort -z)
 } | sha256sum | awk '{print $1}')"
+
+# One build id for the table's build holder; a local run gets a fresh one.
+build_id="${CODEBUILD_BUILD_ID:-}"
+[[ -n "${build_id}" ]] || build_id="local-$(cat /proc/sys/kernel/random/uuid 2>/dev/null || date +%s)-$$"
+upstream_map=""
+if [[ -s "${UPSTREAM_CACHE_HITS_FILE}" ]]; then
+  upstream_map="${workspace}/upstream-map.json"
+  jq -Rn '[inputs | split("\t") | select(length == 2) | {key: .[0], value: .[1]}] | from_entries' \
+    "${UPSTREAM_CACHE_HITS_FILE}" >"${upstream_map}"
+fi
+
+RELEASE_PLAN="${plan_file}" \
+RELEASE_SOURCE_DIR="${payload}" \
+RELEASE_BUILD_ID="${build_id}" \
+RELEASE_REFS_TABLE="${RELEASE_REFS_TABLE:-spawnpoint-release-refs}" \
+RELEASE_PROFILE_DIGEST="${profile_digest}" \
+RELEASE_UPSTREAM_MAP="${upstream_map}" \
+  "${server_scripts}/upload-release.sh" "${payload}/manifest.json"
+
+# A release and preset discovery are separate records, joined by the digest of
+# the profile directory (computed before the upload) rather than by the
+# repository-wide commit. This keeps an older build from marking a newer preset
+# ready, while an unrelated edit in the same repository does not invalidate the
+# profile that was actually built.
 catalog_key="presets/${game}/catalog.json"
 catalog="${workspace}/preset-catalog.json"
 if aws s3api get-object --bucket "${RELEASE_BUCKET}" --key "${catalog_key}" "${catalog}" >/dev/null 2>&1; then
@@ -168,6 +190,9 @@ if aws s3api get-object --bucket "${RELEASE_BUCKET}" --key "${catalog_key}" "${c
         else . end
       ) | .schema_version = 2
     ' "${catalog}" >"${catalog}.updated"
+    # Holder first (ADR-0080): the catalog may list a release only after the
+    # table says that the catalog holds it. A failure stops before the write.
+    hold_catalog_releases "${catalog}.updated" "${game}"
     aws s3api put-object \
       --bucket "${RELEASE_BUCKET}" \
       --key "${catalog_key}" \

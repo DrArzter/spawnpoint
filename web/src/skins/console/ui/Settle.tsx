@@ -28,7 +28,12 @@ export function Settle({ children }: Readonly<{ children: ReactNode }>) {
       if (next === settled) return;
       const from = outer.dataset.settling === undefined ? settled : outer.getBoundingClientRect().height;
       settled = next;
-      if (reducedMotion()) return;
+      // During a tab transition its group already eases the size; a second
+      // height animation would finish after it and show as a jump.
+      if (reducedMotion() || document.documentElement.dataset.transition === "tab") {
+        done();
+        return;
+      }
       // Start where the old content ended, commit that, then move to the new height.
       delete outer.dataset.settling;
       outer.style.height = `${from}px`;

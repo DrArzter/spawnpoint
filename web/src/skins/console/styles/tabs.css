@@ -87,14 +87,21 @@ html[data-skin="console"] .c-tabpanel {
   flex-direction: column;
   gap: var(--c-gap);
   padding-top: 18px;
-  animation: c-tab-in var(--c-d2) var(--c-ease);
 }
 
-/* During a tab transition the snapshots carry the motion; the panel does not fade in again. */
+/* A tab switch is a view transition of the panel (A3); its snapshots carry all
+   the motion. The panel never animates itself where view transitions exist:
+   an animation switched off for the transition restarts when it ends, and the
+   panel blinks. */
 html[data-skin="console"][data-transition="tab"] .c-tabpanel {
-  animation: none;
   background: var(--c-bg);
   view-transition-name: c-pane;
+}
+
+@supports not (view-transition-name: none) {
+  html[data-skin="console"] .c-tabpanel {
+    animation: c-tab-in var(--c-d2) var(--c-ease);
+  }
 }
 
 html[data-skin="console"] .c-tabpanel:focus-visible {

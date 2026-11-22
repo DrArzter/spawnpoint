@@ -98,16 +98,19 @@ game_parse_player_count() {
 
 # The level and its dimension siblings (world_nether, ...), then what the world
 # owns beside them (ADR-0010): plugin folders, the Paper and Bukkit server
-# files, and the world_data paths the installed release keeps out of its
+# files, the player lists the server keeps (operators, bans, an unmanaged
+# whitelist and the name cache, so a fresh host does not forget who is an
+# operator), and the world_data paths the installed release keeps out of its
 # managed config roots (ADR-0077), with the marker that names them so a new
-# host keeps them too.
+# host keeps them too. A managed whitelist (ADR-0066) is rewritten at start.
 game_save_paths() {
   local data_dir="$1" _world_name="$2" path
   local marker="${data_dir}/.spawnpoint-overrides.json"
   local -a paths=()
   mapfile -d '' paths < <(find "${data_dir}" -mindepth 1 -maxdepth 1 -type d -name "${MINECRAFT_LEVEL_NAME}*" -printf '%f\0' | sort -z)
   [[ ! -d "${data_dir}/plugins" || -L "${data_dir}/plugins" ]] || paths+=("plugins")
-  for path in bukkit.yml spigot.yml config/paper-global.yml config/paper-world-defaults.yml; do
+  for path in bukkit.yml spigot.yml config/paper-global.yml config/paper-world-defaults.yml \
+    ops.json banned-players.json banned-ips.json whitelist.json usercache.json; do
     [[ ! -f "${data_dir}/${path}" || -L "${data_dir}/${path}" ]] || paths+=("${path}")
   done
   if [[ -f "${marker}" && ! -L "${marker}" ]] && jq -e '(.world_data // []) | length > 0' "${marker}" >/dev/null 2>&1; then

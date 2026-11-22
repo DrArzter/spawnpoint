@@ -43,9 +43,11 @@ cp -- "${fixture}/downloads/shaders.zip" "${fixture}/mirror/overrides/mods/shade
 file_json() {
   local project="$1" id="$2" file="$3" extra="${4:-null}"
   # Fixture mirrors CurseForge's documented SHA-1 integrity field.
+  local sha
+  sha="$(sha1sum "${fixture}/downloads/${file}" | awk '{print $1}')" # NOSONAR test fixture: the fake CurseForge API answers SHA-1, as the real one does
   jq -n --argjson project "${project}" --argjson id "${id}" --arg file "${file}" \
     --argjson bytes "$(stat --format '%s' "${fixture}/downloads/${file}")" \
-    --arg sha "$(sha1sum "${fixture}/downloads/${file}" | awk '{print $1}')" \
+    --arg sha "${sha}" \
     --argjson extra "${extra}" '
       {data: ({id: $id, modId: $project, fileName: $file, fileLength: $bytes,
         downloadUrl: ("https://downloads.invalid/" + $file), hashes: [{algo: 1, value: $sha}],
@@ -134,7 +136,8 @@ for key in 466901/9184727 466901/9184730 111/101 222/102 333/103; do
     fail "the cache did not store ${key}"
 done
 cmp -s "${fixture}/downloads/server.zip" "${cache}/curseforge/466901/9184730/file" || fail "cached server pack bytes differ"
-jq -e --arg sha1 "$(sha1sum "${fixture}/downloads/textures.zip" | awk '{print $1}')" \
+textures_sha1="$(sha1sum "${fixture}/downloads/textures.zip" | awk '{print $1}')" # NOSONAR test fixture: SHA-1 is what CurseForge publishes
+jq -e --arg sha1 "${textures_sha1}" \
   --arg sha256 "$(sha256sum "${fixture}/downloads/textures.zip" | awk '{print $1}')" '
   .project_id == 222 and .file_id == 102 and .fileName == "textures.zip" and .classId == 12 and
   .sha1 == $sha1 and .sha256 == $sha256 and .fileLength > 0

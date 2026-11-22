@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, HostMetrics, LinkedLoginAccount, MetricRange, SubscriptionState } from "../api/contract";
+import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, HostMetrics, LinkedLoginAccount, MetricRange, ModSource, SubscriptionState } from "../api/contract";
 import type { StatusDescriptor } from "./status";
 import type { AccessTab, ControlPlaneSnapshot, Game, Member, Operation, OwnerBootstrap, Page, Preset, Role, ServerState, Wipe, World, WorldTab } from "../model";
 import type { WorldsView } from "../routing";
@@ -207,8 +207,8 @@ export type WhitelistModel = Readonly<{
   add: Action;
 }>;
 
-/** One mod of the release a world starts with, of either side, and its download (ADR-0065, ADR-0069). */
-export type ModRow = Readonly<{ file: string; bytes: number; sha256: string; download: Action }>;
+/** One mod of the release a world starts with, of either side, and its download (ADR-0065, ADR-0069). `source` is null for a release built before sources were recorded. */
+export type ModRow = Readonly<{ file: string; bytes: number; sha256: string; source: ModSource | null; download: Action }>;
 /** `split`: players install a set of their own, so the release offers its server and full packs too. */
 export type ModsModel = Readonly<{ release: string; split: boolean; files: Loading<readonly ModRow[]> }>;
 

@@ -366,6 +366,15 @@ data "aws_iam_policy_document" "lifecycle_v2_watchdog" {
     resources = [local.lifecycle_v2_stop_arn]
   }
 
+  # At its check cap with players still online the stop is refused, and the
+  # session needs watching by somebody. This watchdog has spent its budget, so
+  # it starts its successor and ends.
+  statement {
+    sid       = "HandOverToAFreshWatchdog"
+    actions   = ["states:StartExecution"]
+    resources = [local.lifecycle_v2_watchdog_arn]
+  }
+
   statement {
     sid     = "WatchOnlyFencedStop"
     actions = ["states:DescribeExecution", "states:StopExecution"]
@@ -392,8 +401,9 @@ resource "aws_sfn_state_machine" "lifecycle_v2_watchdog" {
   role_arn = aws_iam_role.lifecycle_v2_watchdog.arn
   type     = "STANDARD"
   definition = templatefile("${path.module}/../../workflows/idle-watchdog-v2.asl.json.tftpl", {
-    coordinator_function_arn  = local.lifecycle_v2_coordinator_arn
-    stop_v2_state_machine_arn = local.lifecycle_v2_stop_arn
+    coordinator_function_arn   = local.lifecycle_v2_coordinator_arn
+    stop_v2_state_machine_arn  = local.lifecycle_v2_stop_arn
+    watchdog_state_machine_arn = local.lifecycle_v2_watchdog_arn
   })
 
   tags = {

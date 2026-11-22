@@ -137,6 +137,29 @@ test("a stale watchdog exits successfully after a newer session owns lifecycle",
   assert.equal(state(definition, "Session Superseded").End, true);
 });
 
+test("a cap reached with players online hands the session to a fresh watchdog", async () => {
+  const definition = await loadDefinition();
+  const refused = state(definition, "Route Capped Stop Failure").Choices
+    ?.find((choice) => JSON.stringify(choice).includes("V2StopRefusedPlayersOnline"));
+  assert.equal(refused?.Next, "Route Hand Over", "a refused capped stop must not be treated as a failure");
+
+  // The relay is the watchdog itself, named apart from the execution that
+  // started it, and it carries the slot only when there is one to carry.
+  const placed = state(definition, "Hand Over Placed Session");
+  const unplaced = state(definition, "Hand Over Session");
+  assert.equal(state(definition, "Route Hand Over").Default, "Hand Over Session");
+  for (const relay of [placed, unplaced]) {
+    assert.equal(relay.Resource, "arn:aws:states:::aws-sdk:sfn:startExecution");
+    assert.match(JSON.stringify(relay.Parameters), /-relay-/);
+    assert.match(JSON.stringify(relay.Parameters), /"sessionId\.\$":"\$\.request\.sessionId"/);
+    assert.equal(relay.Next, "Handed Over");
+    assert.equal(relay.Catch?.[0]?.Next, "Watchdog Stop Failing");
+  }
+  assert.match(JSON.stringify(placed.Parameters), /"slot\.\$"/);
+  assert.ok(!JSON.stringify(unplaced.Parameters).includes('"slot.$"'), "an unplaced relay must not name a slot");
+  assert.equal(state(definition, "Handed Over").End, true);
+});
+
 test("a placed session is probed on its slot; a request with no slot is probed as before", async () => {
   const definition = await loadDefinition();
   assert.equal(state(definition, "Host Still Running").Choices?.[0]?.Next, "Route Probe Command");

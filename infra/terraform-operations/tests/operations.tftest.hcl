@@ -332,8 +332,9 @@ run "lifecycle_v2_workflows_are_additive_standard_and_session_scoped" {
 
   assert {
     condition = strcontains(templatefile("${path.module}/../../workflows/idle-watchdog-v2.asl.json.tftpl", {
-      coordinator_function_arn  = local.lifecycle_v2_coordinator_arn
-      stop_v2_state_machine_arn = local.lifecycle_v2_stop_arn
+      coordinator_function_arn   = local.lifecycle_v2_coordinator_arn
+      stop_v2_state_machine_arn  = local.lifecycle_v2_stop_arn
+      watchdog_state_machine_arn = local.lifecycle_v2_watchdog_arn
     }), "recordPlayerObservation")
     error_message = "V2 watchdog must persist observations through the coordinator."
   }

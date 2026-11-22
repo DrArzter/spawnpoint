@@ -667,14 +667,85 @@
     },
     "Route Capped Stop Failure": {
       "Type": "Choice",
+      "Comment": "A cap reached while people are playing is not a failure of anything: the stop is refused on purpose, and the session still needs watching. This watchdog has spent its own budget, so it hands the session to a fresh one and ends. Without the hand-over the session ran on unwatched until somebody pressed Stop.",
       "Choices": [
         {
           "Variable": "$.observed.stopError.Cause",
           "StringMatches": "*Spawnpoint.V2StaleSession*",
           "Next": "Session Superseded"
+        },
+        {
+          "Variable": "$.observed.stopError.Cause",
+          "StringMatches": "*Spawnpoint.V2StopRefusedPlayersOnline*",
+          "Next": "Route Hand Over"
         }
       ],
       "Default": "Watchdog Stop Failing"
+    },
+    "Route Hand Over": {
+      "Type": "Choice",
+      "Comment": "A placed session is probed on its own slot, so the relay carries it; an unplaced one has none to carry.",
+      "Choices": [
+        {
+          "Variable": "$.request.slot",
+          "IsPresent": true,
+          "Next": "Hand Over Placed Session"
+        }
+      ],
+      "Default": "Hand Over Session"
+    },
+    "Hand Over Placed Session": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:sfn:startExecution",
+      "Parameters": {
+        "StateMachineArn": "${watchdog_state_machine_arn}",
+        "Name.$": "States.Format('{}-relay-{}', $.request.operationId, $.counters.total)",
+        "Input": {
+          "serverId.$": "$.request.serverId",
+          "operationId.$": "States.Format('{}-relay-{}', $.request.operationId, $.counters.total)",
+          "sessionId.$": "$.request.sessionId",
+          "registrationLeaseTtlSeconds.$": "$.request.registrationLeaseTtlSeconds",
+          "stopLeaseTtlSeconds.$": "$.request.stopLeaseTtlSeconds",
+          "instanceId.$": "$.request.instanceId",
+          "slot.$": "$.request.slot",
+          "worldId.$": "$.request.worldId",
+          "timing.$": "$.request.timing",
+          "stopTiming.$": "$.request.stopTiming"
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": null, "Next": "Watchdog Stop Failing" }
+      ],
+      "Next": "Handed Over"
+    },
+    "Hand Over Session": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:sfn:startExecution",
+      "Parameters": {
+        "StateMachineArn": "${watchdog_state_machine_arn}",
+        "Name.$": "States.Format('{}-relay-{}', $.request.operationId, $.counters.total)",
+        "Input": {
+          "serverId.$": "$.request.serverId",
+          "operationId.$": "States.Format('{}-relay-{}', $.request.operationId, $.counters.total)",
+          "sessionId.$": "$.request.sessionId",
+          "registrationLeaseTtlSeconds.$": "$.request.registrationLeaseTtlSeconds",
+          "stopLeaseTtlSeconds.$": "$.request.stopLeaseTtlSeconds",
+          "instanceId.$": "$.request.instanceId",
+          "worldId.$": "$.request.worldId",
+          "timing.$": "$.request.timing",
+          "stopTiming.$": "$.request.stopTiming"
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": null, "Next": "Watchdog Stop Failing" }
+      ],
+      "Next": "Handed Over"
+    },
+    "Handed Over": {
+      "Type": "Pass",
+      "End": true
     },
     "Reconcile Externally Stopped Host": {
       "Type": "Task",

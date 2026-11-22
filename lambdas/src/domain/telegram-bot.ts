@@ -69,9 +69,9 @@ const POLL_TIMING = {
 } as const;
 
 const WATCHDOG_TIMING = {
-  checkIntervalSeconds: 300,
+  checkIntervalSeconds: 900,
   emptyChecksRequired: 3,
-  maxTotalChecks: 96,
+  maxTotalChecks: 32,
   maxConsecutiveProbeFailures: 6,
   maxStopRefusals: 3,
   probePollSeconds: 10,

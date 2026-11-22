@@ -94,6 +94,12 @@ module takes part by:
   sentinel passes tests and loses worlds. They receive the world's name, which names its backups; where the save
   sits comes from the game's own settings, not from that name. Minecraft's folder is the `level-name` that
   `compose.yaml` pins as `LEVEL`, and a world created from a preset has an id such as `minecraft-rostik-1a2b3c4d`.
+- `game_save_paths` names everything the world owns, not only the level. Minecraft adds `plugins`, `bukkit.yml`,
+  `spigot.yml`, `config/paper-global.yml`, `config/paper-world-defaults.yml` and the release's `world_data` paths
+  when they exist. The optional `game_save_excludes` leaves caches and release-owned files out of those paths. Its
+  patterns are anchored and `*` stops at a slash, so `libraries` does not match `world/libraries`. The optional
+  `game_mod_data_paths` names the folders of the mods directory that hold world data. They are archived under
+  `mods-data/` ([ADR-0034](../../docs/adr/0034-per-game-adapter.md)).
 - `settings.json`, when a game offers game settings ([ADR-0064](../../docs/adr/0064-let-a-world-carry-game-settings.md)), lists
   each one: id, label, kind (`choice`, `integer`, `boolean` or `text`), the values it may take, its default and `env`, the
   container variable it becomes. Give every `env` an entry with no value in the game's compose file, so a setting

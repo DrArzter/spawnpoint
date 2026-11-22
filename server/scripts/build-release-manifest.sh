@@ -292,6 +292,33 @@ if [[ -n "${overrides_dir}" ]]; then
   done < <(find "${overrides_dir}" -type f -print0 | sort -z)
 fi
 
+# Paths the addons keep as world data inside the managed roots (ADR-0077): the
+# overrides swap leaves them in place, and backups carry them. A path that
+# overlaps a file this release ships would have two owners.
+world_data='[]'
+if [[ -n "${client_addons}" ]]; then
+  world_data="$(jq -c '[.mods[].world_data // [] | .[]] | sort' "${client_addons}")"
+fi
+jq -e -n --argjson paths "${world_data}" --slurpfile overrides "${overrides_file}" '
+  def overlaps($a; $b): $a == $b or ($a | startswith($b + "/")) or ($b | startswith($a + "/"));
+  all($paths[]; type == "string" and (test("[\\t\\n\\\\]") | not) and
+    test("^(config|defaultconfigs|kubejs|scripts|global_packs|openloader)(/[^/]+)+$") and
+    (split("/") | all(. != "." and . != ".."))) and
+  all(range($paths | length) as $i | range($i + 1; $paths | length) as $j | [$i, $j];
+    overlaps($paths[.[0]]; $paths[.[1]]) | not)
+' >/dev/null || {
+  printf 'error: invalid or overlapping world_data paths in the addons lock\n' >&2
+  exit 1
+}
+world_data_conflict="$(jq -r -n --argjson paths "${world_data}" --slurpfile overrides "${overrides_file}" '
+  def overlaps($a; $b): $a == $b or ($a | startswith($b + "/")) or ($b | startswith($a + "/"));
+  first($paths[] as $path | $overrides[] | select(overlaps(.path; $path)) | "\($path) and \(.path)") // empty
+')"
+[[ -z "${world_data_conflict}" ]] || {
+  printf 'error: a world_data path overlaps a file the release ships: %s\n' "${world_data_conflict}" >&2
+  exit 1
+}
+
 client_sha256=""
 client_bytes=0
 if [[ -n "${client_pack}" ]]; then
@@ -319,6 +346,7 @@ jq -s \
   --arg runtime_image "${runtime_image}" \
   --arg client_sha256 "${client_sha256}" \
   --argjson client_bytes "${client_bytes}" \
+  --argjson world_data "${world_data}" \
   '({
     schema_version: 1,
     game: $game,
@@ -328,7 +356,8 @@ jq -s \
     created_at: $created_at,
     created_by: $created_by,
     changelog: $changelog,
-    server: ({mods: .} + if ($overrides | length) == 0 then {} else {overrides: $overrides} end)
+    server: ({mods: .} + if ($overrides | length) == 0 then {} else {overrides: $overrides} end
+      + if ($world_data | length) == 0 then {} else {world_data: $world_data} end)
   } + if $runtime_image == "" then {} else {
     runtime: {image: $runtime_image}
   } end + if $client_sha256 == "" then {} else {
@@ -355,3 +384,4 @@ printf 'mods=%d\n' "${count}"
 printf 'client_mods=%d\n' "${client_count}"
 printf 'overrides=%d\n' "${override_count}"
 printf 'addons=%d\n' "${addon_count}"
+printf 'world_data=%d\n' "$(jq -r 'length' <<<"${world_data}")"

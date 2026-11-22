@@ -147,12 +147,17 @@ After stopping, exercise the complete local backup and restore path:
 ```bash
 server/scripts/archive-world.sh
 server/scripts/verify-archive.sh server/backups/world-<timestamp>.tar.zst
-server/scripts/restore-world.sh server/backups/world-<timestamp>.tar.zst /tmp/spawnpoint-restore-test
+server/scripts/restore-world.sh server/backups/world-<timestamp>.tar.zst /tmp/spawnpoint-restore-test/data \
+  /tmp/spawnpoint-restore-test/mods
 ```
 
 The checksum sits beside the archive as `.sha256` and is mandatory during verification. `restore-world.sh` refuses
-the live `server/data` path and any non-empty target. To test the mechanism without the real world, set
-`SERVER_DATA_DIR` and `SERVER_BACKUP_DIR` to disposable fixture directories.
+the live `server/data` path and any non-empty target. An archive also holds the folders of the world's `mods/`
+directory under `mods-data/` ([ADR-0010](../docs/adr/0010-world-persistence-and-backups.md)); the third argument names
+the mods directory they go back into. A restore of such an archive without it stops, and so does a restore into the
+live `server/mods` or into a mods directory that already holds a folder of the same name. An archive made before
+`mods-data/` restores with two arguments, as before. To test the mechanism without the real world, set
+`SERVER_DATA_DIR`, `SERVER_MODS_DIR` and `SERVER_BACKUP_DIR` to disposable fixture directories.
 
 Upload only a previously verified archive. The key includes its SHA-256, so an automation retry verifies the existing
 object instead of writing another copy. The host role deliberately has no `s3:DeleteObject`: the daily
@@ -182,6 +187,9 @@ loader, a mis-named target and a concurrent run — leaving the live mod directo
 litter behind. `world-restore-test.sh` covers the backup contract: a byte-identical restore, refusal of the live data
 directory and of a non-empty destination, and verify-archive rejecting a missing or wrong checksum, a truncated
 archive with a fresh checksum, an archive without `level.dat`, and a path-traversal entry.
+`world-owned-data-test.sh` covers the data a world owns beside its save: plugin folders and server files in the archive
+without jars and caches, `mods-data/` out and back, an archive without `mods-data/`, the release swap and the overrides
+swap keeping world data, and a failed move in either swap that deletes nothing.
 `installed-release-test.sh` proves adoption cannot accept a changed, missing, extra or symlinked JAR, including a real
 bracketed Forge filename shape.
 

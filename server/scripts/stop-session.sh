@@ -47,6 +47,7 @@ load_connectivity "${WORLD_CONNECTIVITY:-zerotier}"
 
 if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
   export SERVER_DATA_DIR="${WORLD_DATA_DIRECTORY}"
+  export SERVER_MODS_DIR="${WORLD_MODS_DIRECTORY}"
   export WORLD_NAME="${WORLD_ID}"
   # The backup is paired with the release that ran (ADR-0052): the wipe's
   # active release, which a promotion changes, not the release the wipe began
@@ -88,12 +89,20 @@ archive_record="${archive_record_dir}/.spawnpoint-archive.json"
 world_changed_since_upload() {
   [[ -f "${archive_record}" ]] || return 0
   [[ "$(jq -r '.key // empty' "${archive_record}")" != "" ]] || return 0
-  local paths=() path changed
+  local paths=() path changed mods_dir="${SERVER_MODS_DIR:-$(dirname -- "${data_dir}")/mods}"
   mapfile -d '' paths < <(game_save_paths "${data_dir}" "${world_name}")
   for path in "${paths[@]}"; do
     changed="$(find "${data_dir}/${path}" -newer "${archive_record}" -print -quit)"
     [[ -z "${changed}" ]] || return 0
   done
+  # Mod data under mods/ is archived too (mods-data/).
+  if declare -F game_mod_data_paths >/dev/null; then
+    mapfile -d '' paths < <(game_mod_data_paths "${mods_dir}")
+    for path in "${paths[@]}"; do
+      changed="$(find "${mods_dir}/${path}" -newer "${archive_record}" -print -quit)"
+      [[ -z "${changed}" ]] || return 0
+    done
+  fi
   return 1
 }
 

@@ -36,6 +36,11 @@ for entry in "${entries[@]}"; do
   if [[ "${entry}" == /* ]] || [[ "/${entry}/" == *"/../"* ]]; then
     die "unsafe path in archive: ${entry}"
   fi
+  # mods-data/ holds folders only (ADR-0010): a file directly under it would
+  # land in the mods directory as a mod nobody verified.
+  if [[ "${entry}" == "mods-data" ]] || [[ "${entry}" =~ ^mods-data/[^/]+$ ]]; then
+    die "mods-data/ may hold only folders: ${entry}"
+  fi
   if [[ "${entry}" =~ ${sentinel_regex} ]]; then
     has_sentinel=true
   fi

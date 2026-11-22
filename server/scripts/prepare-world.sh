@@ -161,7 +161,7 @@ if ${fresh}; then
       exit 1
     }
     SPAWNPOINT_GAME="${WORLD_GAME}" WORLD_NAME="${WORLD_ID}" \
-      "${SCRIPT_DIR}/restore-world.sh" "${restore_archive}" "${stage}/data" >/dev/null
+      "${SCRIPT_DIR}/restore-world.sh" "${restore_archive}" "${stage}/data" "${stage}/mods" >/dev/null
     rm -f -- "${restore_archive}" "${restore_archive}.sha256"
   else
     mkdir -p -- "${stage}/data"

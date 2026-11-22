@@ -61,6 +61,14 @@ jq -e '
     (.bytes | type == "number" and floor == . and . >= 0)
   ) and
   (([(.server.overrides // [])[].path] | unique | length) == ((.server.overrides // []) | length)) and
+  # world_data (ADR-0077): below a managed root, and clear of every shipped file.
+  ((.server | has("world_data") | not) or (
+    (.server.world_data | type == "array" and length > 0 and length == (unique | length)) and
+    all(.server.world_data[]; type == "string" and (test("[\\t\\n\\\\]") | not) and
+      test("^(config|defaultconfigs|kubejs|scripts|global_packs|openloader)(/[^/]+)+$") and
+      (split("/") | all(. != "." and . != ".."))) and
+    ([.server.world_data[] as $path | (.server.overrides // [])[] |
+      select(.path == $path or (.path | startswith($path + "/")) or ($path | startswith(.path + "/")))] | length == 0))) and
   # mod_index (ADR-0077) is descriptive: SHA-256 to mod ids, outside the identity gate.
   ((has("mod_index") | not) or (.mod_index | type == "object" and all(to_entries[];
     (.key | test("^[0-9a-f]{64}$")) and (.value | type == "array" and all(.[]; type == "string"))))) and

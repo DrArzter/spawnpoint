@@ -8,6 +8,8 @@
 - Amended on 2026-11-21: retention applies **per world generation**. A daily Lambda keeps 5/2/2 of each generation's
   verified archives. It never deletes the newest verified archive of the open generation, the archive the next start
   resumes from, or an archive a generation was restored from. A deleted archive stays as a noncurrent version for 30 days
+- Amended on 2026-11-22: an archive holds **all the data the world owns**, not only the level. See
+  [World-owned data](#amendment-2026-11-22-world-owned-data)
 
 > **A challenge was raised and did not survive.** [ADR-0026](0026-tiered-backups.md) argued that a full archive after
 > every session would dominate the bill and add billed upload time. That holds for a world of tens of gigabytes; the
@@ -52,6 +54,36 @@ survives even after the counts were cut.
 
 A restore is a documented procedure in the runbook, and it is tested at least once, deliberately, before
 it is ever needed.
+
+### Amendment 2026-11-22: world-owned data
+
+A server mod or plugin keeps its own data beside the level. LuckPerms on Fabric keeps its database in `mods/luckperms/`.
+Before this amendment, that data was in no archive, and the release swap deleted it at every release change. The
+archive now holds this data:
+
+| Content | In the archive as | Restored into |
+| --- | --- | --- |
+| The level and its dimensions (`world*`) | `world/…` | the data directory |
+| `plugins/`, `bukkit.yml`, `spigot.yml`, `config/paper-global.yml`, `config/paper-world-defaults.yml`, when they exist | the same path | the data directory |
+| The `world_data` paths of the installed release ([ADR-0077](0077-pin-extra-mods-on-top-of-an-upstream-modpack.md)) and the marker `.spawnpoint-overrides.json` that names them | the same path | the data directory |
+| Each folder of the world's `mods/` directory | `mods-data/<folder>/…` | the world's `mods/` directory |
+
+- Jars and caches stay out: `plugins/*.jar`, `plugins/.paper-remapped`, `plugins/*/libs`, `libraries`, `cache` and
+  `versions` ([ADR-0034](0034-per-game-adapter.md), `game_save_excludes`). A jar inside a folder of `mods/` stays in,
+  because a mod may keep its own files there.
+- `verify-archive.sh` accepts `mods-data/`. It refuses a file directly below `mods-data/`, so a restore cannot put a
+  jar that nobody verified into `mods/`.
+- `restore-world.sh` takes the mods directory as a third argument. It stops before it writes anything when that
+  directory already holds a folder of the same name: it never merges two folders. It refuses the live `mods/`.
+- The release swap (`reconcile-release.sh`) moves each folder of the old `mods/` into the new one. A move that fails
+  puts every folder back. A folder that cannot go back stays in the stage directory, which is then kept. A release
+  that ships a file with the name of such a folder stops the start. This applies to every game. A Factorio mod
+  unpacked into a folder would stay beside a newer zip of the same mod; Factorio releases ship zips only, so this is
+  not expected (to check if an unpacked Factorio mod ever appears).
+- The sentinel stays `world/level.dat`.
+- **An archive made before this amendment stays valid.** It has no `mods-data/`, verifies as before, and restores as
+  before, with or without the third argument.
+- After a restore, the start reconciles the release over the restored files, so release-owned files still win.
 
 ## Consequences
 

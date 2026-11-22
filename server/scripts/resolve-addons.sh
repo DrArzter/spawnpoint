@@ -43,13 +43,20 @@ jq -e '
     (split("/") | all(. != "" and . != "." and . != ".."));
   def sha512: type == "string" and test("^[0-9a-f]{128}$");
   def positive: type == "number" and floor == . and . > 0;
+  # A world_data path is a folder or file below one managed root, never a root.
+  def world_data_path: safe_relative and (test("[\\t\\n]") | not) and
+    test("^(config|defaultconfigs|kubejs|scripts|global_packs|openloader)/");
+  def overlaps($a; $b): $a == $b or ($a | startswith($b + "/")) or ($b | startswith($a + "/"));
   .schema_version == 1 and
   (keys - ["schema_version", "mods", "config"] | length == 0) and
   (.mods | type == "array" and length > 0) and
   all(.mods[];
-    (keys - ["name", "side", "required_by", "curseforge", "modrinth"] | length == 0) and
+    (keys - ["name", "side", "required_by", "curseforge", "modrinth", "world_data"] | length == 0) and
     (.name | type == "string" and length > 0) and
     (.side | IN("both", "server", "client")) and
+    ((has("world_data") | not) or (
+      .side != "client" and
+      (.world_data | type == "array" and length > 0 and all(.[]; world_data_path)))) and
     ((.required_by // []) | type == "array" and all(.[]; type == "string" and length > 0)) and
     ([has("curseforge"), has("modrinth")] | map(select(.)) | length == 1) and
     (if has("curseforge") then
@@ -69,6 +76,9 @@ jq -e '
   ([.mods[] | .curseforge.project_id // empty] | length == (unique | length)) and
   ([.mods[] | .modrinth.project_id // empty] | length == (unique | length)) and
   ([.mods[] | .modrinth.file // empty] | length == (unique | length)) and
+  ([.mods[].world_data // [] | .[]] as $paths |
+    all(range($paths | length) as $i | range($i + 1; $paths | length) as $j | [$i, $j];
+      overlaps($paths[.[0]]; $paths[.[1]]) | not)) and
   ((has("config") | not) or (
     (.config | keys - ["tree", "replaces"] | length == 0) and
     (.config.tree | safe_relative) and
@@ -199,9 +209,11 @@ for (( index = 0; index < count; index++ )); do
   [[ "$(find "${result}" -mindepth 2 -maxdepth 2 -type f -name "${filename}" | wc -l)" == 1 ]] ||
     die "${label}: another addon already resolves to ${filename}"
   digest="$(sha256sum -- "${result}/${side}/${filename}")"
+  world_data="$(jq -c --argjson i "${index}" '.mods[$i].world_data // null' "${addons_file}")"
   jq -cn --argjson pinned "${pinned}" --arg name "${name}" --arg side "${side}" --arg sha256 "${digest%% *}" \
-    --argjson bytes "$(stat --format '%s' -- "${result}/${side}/${filename}")" \
-    '{name: $name, side: $side, source: ($pinned | del(.file)), file: $pinned.file, sha256: $sha256, bytes: $bytes}' \
+    --argjson bytes "$(stat --format '%s' -- "${result}/${side}/${filename}")" --argjson world_data "${world_data}" \
+    '{name: $name, side: $side, source: ($pinned | del(.file)), file: $pinned.file, sha256: $sha256, bytes: $bytes}
+      + if $world_data == null then {} else {world_data: ($world_data | sort)} end' \
     >>"${entries}"
 done
 

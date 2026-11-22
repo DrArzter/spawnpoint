@@ -6,6 +6,8 @@
 - Amends: [ADR-0068](0068-normalize-upstream-modpacks-into-releases.md),
   [ADR-0069](0069-give-players-a-mod-set-of-their-own.md) (Scope),
   [ADR-0040](0040-reusable-presets-and-world-wipes.md) (preset composition)
+- Amended on 2026-11-22: an addon may declare `world_data` paths inside the managed config roots. See
+  [World data](#amendment-2026-11-22-world-data)
 
 ## Context
 
@@ -92,6 +94,29 @@ ships the same config file refuses the build, and the owner changes the addon en
   so one profile never mixes the two vocabularies.
 - ADR-0040: adding mods to one preset through `mods.addons` is allowed. `extends` and removal stay deferred. A pure
   pack and an extended pack that must both exist are still two presets.
+
+### Amendment 2026-11-22: world data
+
+A server mod can keep its data inside a root that the release manages, for example `config/<mod>/data`. The
+overrides swap replaces each managed root as one unit, so it deleted that data at every start.
+
+- An addon entry with `side` `both` or `server` may list `world_data`: paths below one of the six roots, for example
+  `"world_data": ["config/examplemod/data"]`. A whole root is refused. Two paths where one is inside the other are
+  refused. A `client` addon may not declare `world_data`.
+- The lock keeps each entry's `world_data`. The manifest carries the sorted union as `server.world_data`, inside the
+  release identity. A release without `world_data` has no such key, so its identity does not change.
+- The build refuses a `world_data` path that is, contains or is inside a file the release ships (pack config or addon
+  config). `upload-release.sh` and `download-release.sh` check the same rules.
+- `reconcile-server-overrides.sh` moves each `world_data` path from the old root into the new root, then swaps the
+  roots. If the swap fails at any step, including a root that cannot move into the previous directory, every moved
+  root and its data go back. If one cannot go back, the stage and the previous directories are kept, and nothing is
+  deleted.
+- **A path stays world data once a release declared it.** The marker `.spawnpoint-overrides.json` records the paths.
+  A later release that does not declare a path still keeps it. A later release that ships a file at, inside or above
+  such a path stops the start, and nothing is changed or deleted. The operator then decides (owner decision,
+  2026-11-22).
+- The archive holds the `world_data` paths and the marker, so a host move or a restore keeps them
+  ([ADR-0010](0010-world-persistence-and-backups.md#amendment-2026-11-22-world-owned-data)).
 
 ## Consequences
 

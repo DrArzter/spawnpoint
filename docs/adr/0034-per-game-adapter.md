@@ -11,6 +11,9 @@
   [ADR-0005](0005-containerised-game-server.md) (reused packaging per game)
 - Amended by: [ADR-0074](0074-eggs-are-a-reference-not-a-runtime.md) — a Pterodactyl egg is a reference for writing a
   module by hand, never a runtime; the egg row under "Alternatives considered" is answered there
+- Amended on 2026-11-22: two optional members, `game_save_excludes` and `game_mod_data_paths`, and a wider
+  `game_save_paths` for minecraft. See the contract table and
+  [ADR-0010](0010-world-persistence-and-backups.md#amendment-2026-11-22-world-owned-data)
 
 ## Context
 
@@ -38,6 +41,28 @@ file.** The module contract:
 | `game_parse_player_count` | The parser: raw on stdin, an integer on stdout, non-zero on anything else |
 | `game_save_paths`, `game_save_sentinel` | What to archive under the data directory, and what proves a save exists |
 | `game_archive_sentinel_regex` | What a verified archive must contain to count as this game's save |
+| `game_save_excludes` (optional) | Tar patterns to leave out of the save paths: caches and release-owned files. The archive applies them anchored, and `*` does not match `/` |
+| `game_mod_data_paths` (optional) | Given the world's mods directory, the folders in it that hold world data. They go into the archive under `mods-data/` |
+
+Amended on 2026-11-22. Minecraft's `game_save_paths` also names `plugins`, `bukkit.yml`, `spigot.yml`,
+`config/paper-global.yml`, `config/paper-world-defaults.yml` and the release's `world_data` paths with their marker,
+when they exist. Its `game_save_excludes` are `plugins/*.jar`, `plugins/.paper-remapped`, `plugins/*/libs`,
+`libraries`, `cache` and `versions`. Each name was read in the source:
+
+| Pattern | Evidence (read 2026-11-22) |
+| --- | --- |
+| `plugins/.paper-remapped` | Paper 1.21.4, `PluginRemapper.java` (branch `ver/1.21.4`). Later Paper versions may not use it |
+| `libraries` | Paperclip `Paperclip.java`, relative to `/data`; the Paper plugin library loader, `LibraryLoader.java` |
+| `cache`, `versions` | Paperclip `DownloadContext.java` and `Paperclip.java` |
+| `plugins/*/libs` | LuckPerms `DependencyManagerImpl.java` (`plugins/LuckPerms/libs`). Not checked for other plugins |
+| `plugins/*.jar` | Release-owned: a later release delivers plugin jars itself |
+
+Anchoring matters: without it, `libraries` would also leave out `world/libraries`, and `plugins/*.jar` would leave
+out `plugins/Geyser/ext/a.jar`. `plugins/<name>/libs-data` stays in. Today no save path is a top-level `libraries`,
+`cache` or `versions`, so those three patterns match nothing; they stop a later, wider save path from taking in
+Paperclip's downloads. Minecraft's `game_mod_data_paths` names every
+folder of `mods/`; Factorio declares neither member, so its archives do not change. The sentinel stays
+`world/level.dat`.
 
 Consumers dispatch through `server/games/_dispatch.sh`: a world names its game in the catalog (`game` field), an
 explicit `SPAWNPOINT_GAME` overrides for fixtures, **and absence means minecraft** — the minecraft module is the

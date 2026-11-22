@@ -412,6 +412,38 @@ refusal unpinned "invalid addons file" "an entry without an exact file pin"
 refusal side-lists "invalid profile metadata" "ADR-0069 side lists beside addons"
 refusal files-preset "invalid profile metadata" "addons on a preset of CurseForge files"
 
+# --- world_data (ADR-0077): paths the world owns inside the managed roots ---
+spark_entry='{"name":"spark","side":"server","curseforge":{"project_id":555,"file_id":5001}}'
+profile world-data "$(addons "[$(jq -c '.world_data = ["config/spark/data"]' <<<"${spark_entry}")]")"
+profile world-data-overlap "$(addons "[$(jq -c '.world_data = ["config/spark"]' <<<"${spark_entry}")]" \
+  '{"tree":"addons-config","replaces":[]}')"
+mkdir -p -- "${config}/profiles/world-data-overlap/addons-config/config/spark"
+printf 'shipped\n' >"${config}/profiles/world-data-overlap/addons-config/config/spark/settings.toml"
+profile world-data-root "$(addons "[$(jq -c '.world_data = ["config"]' <<<"${spark_entry}")]")"
+profile world-data-client "$(addons "[$(jq -c '.side = "client" | .world_data = ["config/spark/data"]' <<<"${spark_entry}")]")"
+profile world-data-nested "$(addons "[$(jq -c '.world_data = ["config/spark", "config/spark/data"]' <<<"${spark_entry}")]")"
+git -C "${config}" add -A
+git -C "${config}" -c user.name=Test -c user.email=test@example.invalid commit --quiet -m world-data
+
+"${scripts}/resolve-profile-mods.sh" "${config}/profiles/world-data" "${fixture}/world-data/mods" >/dev/null 2>&1
+output="$("${scripts}/build-profile-release.sh" "${config}/profiles/world-data" 1.0 "${fixture}/world-data/mods" "${fixture}/world-data/manifest.json")"
+grep -qx 'world_data=1' <<<"${output}"
+jq -e '.server.world_data == ["config/spark/data"]' "${fixture}/world-data/manifest.json" >/dev/null
+# A release without world_data carries no key, so its identity is unchanged.
+jq -e '.server | has("world_data") | not' "${fixture}/pure/manifest.json" >/dev/null
+"${scripts}/resolve-profile-mods.sh" "${config}/profiles/world-data-overlap" "${fixture}/world-data-overlap/mods" >/dev/null 2>&1
+refuses "a world_data path overlaps a file the release ships: config/spark and config/spark/settings.toml" \
+  "a world_data path over a shipped config file" \
+  "${scripts}/build-profile-release.sh" "${config}/profiles/world-data-overlap" 1.0 \
+    "${fixture}/world-data-overlap/mods" "${fixture}/world-data-overlap/manifest.json"
+refusal world-data-root "invalid addons file" "a whole managed root as world_data"
+refusal world-data-client "invalid addons file" "world_data on a client addon"
+refusal world-data-nested "invalid addons file" "one world_data path inside another"
+# The host refuses the same overlap in a manifest that did not come from the build.
+jq '.server.world_data = ["config/prominence.json"]' "${manifest}" >"${fixture}/world-data-forged.json"
+refuses "invalid release manifest" "a forged manifest with world_data over a shipped file" \
+  env RELEASE_SOURCE_DIR="${payload}" "${scripts}/upload-release.sh" "${fixture}/world-data-forged.json"
+
 # The distribution rule allows the same bytes from a reviewed mirror.
 mirror_entry="$(jq -cn --arg sha512 "$(sha512sum "${fixture}/downloads/locked-1.0.jar" | awk '{print $1}')" \
   --argjson bytes "$(stat --format '%s' "${fixture}/downloads/locked-1.0.jar")" \

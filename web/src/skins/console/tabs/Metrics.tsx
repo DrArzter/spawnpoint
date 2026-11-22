@@ -10,7 +10,7 @@ import { Grid } from "../ui/Grid";
 import { Segmented } from "../ui/Segmented";
 import { Skeleton, SkeletonGroup } from "../ui/Skeleton";
 import { StatCard, StatSkeleton } from "../ui/StatCard";
-import { ChartSkeleton, chartSummary, TimeSeriesChart } from "../ui/TimeSeriesChart";
+import { ChartSkeleton, chartNotes, chartSummary, TimeSeriesChart } from "../ui/TimeSeriesChart";
 
 // A5: the charts draw in on the first view of a world's metrics in this session.
 const seen = new Set<string>();
@@ -38,18 +38,31 @@ export function hostRunning(metrics: HostMetrics): boolean[] {
   return Array.from({ length }, (_, index) => series.some((item) => item.points[index]?.value != null));
 }
 
-export type StripRun = Readonly<{ on: boolean; from: number; length: number }>;
+/** A slot of the Host running strip: the host reported, it did not, or its readings are not due yet. */
+export type StripState = "on" | "off" | "pending";
+
+/** Each reading's state. An empty slot from `pendingFrom` on is pending, not off. */
+export function hostSlots(metrics: HostMetrics): StripState[] {
+  const running = hostRunning(metrics);
+  const first = metrics.pendingFrom === undefined ? -1 : (metrics.series[0]?.points ?? []).findIndex((point) => point.at >= metrics.pendingFrom!);
+  return running.map((on, index) => on ? "on" : first >= 0 && index >= first ? "pending" : "off");
+}
+
+export type StripRun = Readonly<{ state: StripState; from: number; length: number }>;
 
 /** Joins neighbouring readings of one state into runs. */
-export function stripRuns(mask: readonly boolean[]): StripRun[] {
-  const runs: { on: boolean; from: number; length: number }[] = [];
-  mask.forEach((on, index) => {
+export function stripRuns(states: readonly StripState[]): StripRun[] {
+  const runs: { state: StripState; from: number; length: number }[] = [];
+  states.forEach((state, index) => {
     const last = runs.at(-1);
-    if (last?.on === on) last.length += 1;
-    else runs.push({ on, from: index, length: 1 });
+    if (last?.state === state) last.length += 1;
+    else runs.push({ state, from: index, length: 1 });
   });
   return runs;
 }
+
+const STRIP_LABEL: Readonly<Record<StripState, string>> = { on: "Host running", off: "No host", pending: "Not reported yet" };
+const STRIP_CLASS: Readonly<Record<StripState, string>> = { on: "c-strip-run c-strip-on", off: "c-strip-run", pending: "c-strip-run c-strip-pending" };
 
 // A host reports four series (CPU, memory and the two networks); the skeleton draws that many.
 const SERIES = [0, 1, 2, 3];
@@ -84,7 +97,7 @@ export function MetricsTab({ model, worldId }: Readonly<{ model: MetricsModel; w
         </SkeletonGroup>
       )}
       {metrics.status === "error" && <Card label="Metrics"><LoadError error={metrics.error} kind={metrics.kind} retry={metrics.retry} title="Metrics could not be loaded" verb="read metrics" /></Card>}
-      {metrics.status === "ready" && value === null && <Card label="Metrics"><Empty icon="monitoring" title="No host right now" /></Card>}
+      {metrics.status === "ready" && value === null && <Card label="Metrics"><Empty icon="monitoring" title="No session in this window" /></Card>}
       {value && <Readings metrics={value} range={rangeLabel} reveal={reveal} />}
     </>
   );
@@ -124,17 +137,18 @@ function Stat({ series, time }: Readonly<{ series: HostMetricSeries; time: (at: 
 
 function Chart({ series, range, reveal, time }: Readonly<{ series: HostMetricSeries; range: string; reveal: boolean; time: (at: string) => string }>) {
   const known = series.points.some((point) => point.value !== null);
-  const gaps = series.points.some((point) => point.value === null);
+  const notes = chartNotes(series.points, series.pendingFrom);
   const legend = (
     <span className="c-legend">
       <span className="c-legend-item"><span aria-hidden="true" className="c-legend-line" />{series.unit === "percent" ? "%" : "Bytes"}</span>
-      {gaps && known && <span className="c-legend-item"><span aria-hidden="true" className="c-legend-gap" />No host</span>}
+      {notes.gaps && known && <span className="c-legend-item"><span aria-hidden="true" className="c-legend-gap" />No host</span>}
+      {notes.pending && <span className="c-legend-item"><span aria-hidden="true" className="c-legend-pending" />Not reported yet</span>}
     </span>
   );
   return (
     <Card actions={known ? legend : undefined} title={series.label}>
       {known
-        ? <TimeSeriesChart format={metricFormat(series.unit)} label={series.label} percent={series.unit === "percent"} points={series.points} range={range} reveal={reveal} time={time} />
+        ? <TimeSeriesChart format={metricFormat(series.unit)} label={series.label} pendingFrom={series.pendingFrom} percent={series.unit === "percent"} points={series.points} range={range} reveal={reveal} time={time} />
         : <Empty icon="monitoring" size="sm" title="The host reported nothing in this window." />}
     </Card>
   );
@@ -155,22 +169,24 @@ function StripCard({ share, track, axis }: Readonly<{ share: ReactNode; track: R
 
 /** Host running: when a host reported anything in the window, as one quiet track of runs (§10). */
 function Strip({ metrics, range, reveal }: Readonly<{ metrics: HostMetrics; range: string; reveal: boolean }>) {
-  const mask = hostRunning(metrics);
-  if (mask.length === 0) return null;
-  const share = Math.round((mask.filter(Boolean).length / mask.length) * 100);
+  const slots = hostSlots(metrics);
+  if (slots.length === 0) return null;
+  // Slots not due yet say nothing about the host, so they stay out of the share.
+  const due = slots.filter((state) => state !== "pending");
+  const share = due.length === 0 ? 0 : Math.round((due.filter((state) => state === "on").length / due.length) * 100);
   const points = metrics.series[0]?.points ?? [];
   const time = metricTime(metrics.range);
-  const end = (run: StripRun) => run.from + run.length >= mask.length ? "now" : time(points[run.from + run.length]?.at ?? metrics.endedAt);
+  const end = (run: StripRun) => run.from + run.length >= slots.length ? "now" : time(points[run.from + run.length]?.at ?? metrics.endedAt);
   return (
     <StripCard
       axis={<><span>{shortDateTime(metrics.startedAt)}</span><span>Now</span></>}
       share={`${share} %`}
       track={(
         <div aria-label={`Host running ${share} % of the last ${range}`} className={reveal ? "c-strip-track c-strip-reveal" : "c-strip-track"} role="img">
-          {stripRuns(mask).map((run) => (
+          {stripRuns(slots).map((run) => (
             <span
-              className={run.on ? "c-strip-run c-strip-on" : "c-strip-run"}
-              data-tip={`${run.on ? "Host running" : "No host"} · ${time(points[run.from]?.at ?? metrics.startedAt)}–${end(run)}`}
+              className={STRIP_CLASS[run.state]}
+              data-tip={`${STRIP_LABEL[run.state]} · ${time(points[run.from]?.at ?? metrics.startedAt)}–${end(run)}`}
               key={run.from}
               style={{ flexGrow: run.length }}
             />

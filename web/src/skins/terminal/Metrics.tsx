@@ -18,21 +18,23 @@ const PAD_BOTTOM = 12;
 
 const formatMetric = (unit: string) => (value: number) => (unit === "percent" ? `${value.toFixed(1)}%` : formatBytes(value));
 
-// One world's host, measured (ADR-0062): never the first host in a list.
+// One world's hosts, measured (ADR-0062): never the first host in a list. The
+// server joins the hosts of its sessions, and joins memory readings between
+// probes (flagged), so a line is a line here; the rest of the window is blank.
 export function MetricsPanel({ model }: Readonly<{ model: MetricsModel }>) {
   const metrics = model.metrics;
   if (metrics.status === "error" && metrics.kind === "unavailable") {
     return <Panel><Empty title="CloudWatch is not connected yet" /></Panel>;
   }
   if (metrics.status === "ready" && metrics.value === null) {
-    return <Panel><Empty description="Metrics show the host this world's session runs on. Start the world to see them." title="No host right now" /></Panel>;
+    return <Panel><Empty description="Metrics show the hosts this world's sessions ran on. Start the world to see them." title="No session in this window" /></Panel>;
   }
   return (
     <Panel
       head={<Choices label="Window">
         {model.ranges.map((option) => <Choice key={option.id} onClick={() => model.setRange(option.id)} pressed={model.range === option.id}>{option.label}</Choice>)}
       </Choices>}
-      name="Host this world runs on"
+      name="Hosts this world ran on"
     >
       {metrics.status === "error" && <Notice description={metrics.error} title="Metrics could not be loaded" tone="error" verbs={<Verb action={metrics.retry} size="small" />} />}
       {metrics.status === "loading" && waiting}

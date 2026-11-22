@@ -398,51 +398,75 @@ const RANGE: Readonly<Record<MetricRange, { hours: number; period: number }>> = 
   "7d": { hours: 168, period: 3600 },
 };
 
-// A plausible evening: quiet, a session that starts, load while people play,
-// then nothing — the gap is the point, because a stopped host reports nothing.
-function hostMetrics(instanceId: string, range: MetricRange): HostMetrics {
-  settle();
-  const hours = RANGE[range].hours;
-  const period = RANGE[range].period;
+// A session's stretch of the window, as fractions of it, from the one it began to the one it ended.
+type DemoSession = Readonly<{ from: number; to: number }>;
+
+// A plausible two days: a session on one host, a gap while nothing ran, then a
+// session on another. The server merges both hosts onto one grid, so the demo
+// draws the merged result. Memory is probed every 15 minutes, so on the 5-minute
+// grain its readings stand three slots apart and the server joins them with a
+// line; the newest slots of a running session are not reported yet.
+function worldMetricsOf(range: MetricRange, sessions: readonly DemoSession[], live: boolean): HostMetrics {
+  const { hours, period } = RANGE[range];
   const end = Date.now();
   const count = Math.floor((hours * 3600) / period);
-  const series = [
-    { id: "cpu", label: "CPU", unit: "percent", peak: 62 },
-    { id: "memory", label: "Memory", unit: "percent", peak: 71 },
-    { id: "networkIn", label: "Network in", unit: "bytes", peak: 4_800_000 },
-    { id: "networkOut", label: "Network out", unit: "bytes", peak: 9_200_000 },
-  ];
+  const stride = Math.max(1, Math.round(900 / period));
+  const pendingCount = live ? Math.max(1, Math.ceil(600 / period)) : 0;
+  const slotAt = (index: number) => new Date(end - (count - index) * period * 1000).toISOString();
+  const through = (index: number) => index / Math.max(count - 1, 1);
+  const owner = (index: number) => sessions.findIndex((session) => through(index) >= session.from && through(index) < session.to);
+  const firstOf = (session: number) => Array.from({ length: count }, (_, index) => index).find((index) => owner(index) === session) ?? 0;
+  const reported = (index: number) => owner(index) >= 0 && index < count - pendingCount;
+  const wave = (index: number) => 0.55 + 0.45 * Math.sin(index / 3.7) * Math.cos(index / 11.3);
+  const ramp = (index: number) => Math.min(1, ((index - firstOf(owner(index))) / Math.max(count - 1, 1)) / 0.12 + 0.15);
+  const measured = (peak: number) => Array.from({ length: count }, (_, index) => reported(index) ? Math.round(peak * ramp(index) * wave(index) * 100) / 100 : null);
+
+  const cpu = measured(62);
+  // One reading per probe from the session's first slot; a joined slot lies between two readings of one host while CPU reported.
+  const probes = Array.from({ length: count }, (_, index) => reported(index) && (index - firstOf(owner(index))) % stride === 0 ? Math.round(71 * ramp(index) * wave(index) * 100) / 100 : null);
+  const memory = probes.map((value, index): HostMetrics["series"][number]["points"][number] => ({ at: slotAt(index), value }));
+  let last = -1;
+  probes.forEach((value, index) => {
+    if (value === null) return;
+    if (last >= 0 && index - last > 1 && index - last <= stride && owner(index) === owner(last) && cpu.slice(last + 1, index).every((item) => item !== null)) {
+      for (let slot = last + 1; slot < index; slot += 1) {
+        memory[slot] = { at: slotAt(slot), value: Math.round((probes[last]! + (value - probes[last]!) * ((slot - last) / (index - last))) * 100) / 100, interpolated: true };
+      }
+    }
+    last = index;
+  });
+  const pendingFrom = live ? slotAt(count - pendingCount) : undefined;
+  const memoryPending = live && last + 1 < count ? slotAt(last + 1) : undefined;
+  const plain = (id: string, label: string, unit: string, values: readonly (number | null)[], pending: string | undefined) => ({
+    id, label, unit, points: values.map((value, index) => ({ at: slotAt(index), value })), ...(pending ? { pendingFrom: pending } : {}),
+  });
   return {
     range,
     startedAt: new Date(end - hours * 3_600_000).toISOString(),
     endedAt: new Date(end).toISOString(),
     periodSeconds: period,
-    series: series.map((entry) => ({
-      id: entry.id,
-      label: entry.label,
-      unit: entry.unit,
-      points: Array.from({ length: count }, (_, index) => {
-        const at = new Date(end - (count - index) * period * 1000).toISOString();
-        const through = index / Math.max(count - 1, 1);
-        // Stopped for the first third of the window: no host, no datapoints.
-        if (through < 0.34) return { at, value: null };
-        const ramp = Math.min(1, (through - 0.34) / 0.12);
-        const wave = 0.55 + 0.45 * Math.sin(index / 3.7) * Math.cos(index / 11.3);
-        return { at, value: Math.round(entry.peak * ramp * wave * 100) / 100 };
-      }),
-    })),
+    series: [
+      plain("cpu", "CPU", "percent", cpu, pendingFrom),
+      { id: "memory", label: "Memory", unit: "percent", points: memory, ...(memoryPending ? { pendingFrom: memoryPending } : {}) },
+      plain("networkIn", "Network in", "bytes", measured(4_800_000), pendingFrom),
+      plain("networkOut", "Network out", "bytes", measured(9_200_000), pendingFrom),
+    ],
+    ...(pendingFrom ? { pendingFrom } : {}),
   };
 }
 
-// Like the API, the demo shows a host only for the world whose session runs on
-// it: a fleet world its launched host, a configured world the shared host while
-// it holds the session. Another world's load is not this one's.
+// Like the API, the demo shows the hosts a world's sessions ran on: a fleet
+// world its earlier session on another host, a gap, and its running session on
+// its launched host; a stopped fleet world keeps that history. A configured
+// world has only the session it holds on the shared host, and none when stopped.
 export function worldMetrics(gameId: string, worldId: string, range: MetricRange): HostMetrics | null {
   settle();
   const target = world(gameId, worldId);
+  if (target.materialization === "archived") return null;
   const session = heldSession(gameId, target);
-  if (!session || session.observedState === "stopped") return null;
-  return hostMetrics(target.placement === "fleet" ? launchedHostId(worldId) : configuredHost().id, range);
+  const live = !!session && session.observedState !== "stopped";
+  if (target.placement === "fleet") return worldMetricsOf(range, [{ from: 0.1, to: 0.38 }, { from: 0.55, to: live ? 2 : 0.8 }], live);
+  return live ? worldMetricsOf(range, [{ from: 0.34, to: 2 }], true) : null;
 }
 
 // The real console signs a short-lived S3 link; the demo runs in memory, so a

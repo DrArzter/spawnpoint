@@ -59,6 +59,12 @@ html[data-skin="console"] .c-chart-hatch-line {
   stroke-width: 2;
 }
 
+/* The newest slots of a running session: not reported yet, which is neither a reading nor a gap. */
+html[data-skin="console"] .c-chart-pending {
+  fill: var(--c-surface-2);
+  opacity: .7;
+}
+
 html[data-skin="console"] .c-chart-fill {
   fill: var(--c-accent);
   opacity: .12;
@@ -150,7 +156,8 @@ html[data-skin="console"] .c-legend-item {
 }
 
 html[data-skin="console"] .c-legend-line,
-html[data-skin="console"] .c-legend-gap {
+html[data-skin="console"] .c-legend-gap,
+html[data-skin="console"] .c-legend-pending {
   display: inline-block;
   width: 14px;
   height: 10px;
@@ -163,6 +170,12 @@ html[data-skin="console"] .c-legend-line {
 
 html[data-skin="console"] .c-legend-gap {
   background: repeating-linear-gradient(45deg, var(--c-surface-2) 0 3px, var(--c-line-2) 3px 5px);
+}
+
+html[data-skin="console"] .c-legend-pending {
+  background: var(--c-surface-2);
+  outline: 1px dashed var(--c-line-2);
+  outline-offset: -1px;
 }
 
 @media (max-width: 759px) {

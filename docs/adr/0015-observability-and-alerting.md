@@ -12,6 +12,13 @@
   `InstanceId`) to the `Spawnpoint/Host` namespace from the memory figures its probe reads on the host, and the panel's
   Metrics tab charts it; its IAM grant is limited by the `cloudwatch:namespace` condition, and a host that predates the
   probe shows no memory until its next start.
+- Amended on 2026-11-22: a world's Metrics tab spans every host its sessions ran on, not only the current one. The
+  lifecycle coordinator keeps one bounded item per world (`sessions#<world>` in the lifecycle table, no TTL: entries
+  older than eight days are pruned on write) with each session's host, start and end; V2 start writes it when the
+  session is ready and V2 stop closes it, both best effort. Before its first entry, the finished V2 start and stop
+  executions fill the window read-only (input names the world, output the session and host). Each slot takes the host
+  that ran the world then and hosts are never added. The newest slots of a running session are marked pending, not
+  "No host". Memory readings one probe apart are joined as flagged points; CPU and network never are.
 
 ## Context
 

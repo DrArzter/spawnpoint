@@ -245,6 +245,41 @@
           "BackoffRate": 2
         }
       ],
+      "Next": "Close Session History"
+    },
+    "Close Session History": {
+      "Type": "Task",
+      "Comment": "Ends the session in the metrics history (ADR-0015). Best effort: a missed close is ended by the next session or by the stop time.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "closeSessionHistory",
+          "worldId.$": "$.request.worldId",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.sessionHistoryFailure",
+          "Next": "Release Placement"
+        }
+      ],
       "Next": "Release Placement"
     },
     "Release Placement": {

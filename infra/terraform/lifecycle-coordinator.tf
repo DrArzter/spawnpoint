@@ -4,7 +4,8 @@ locals {
     "dynamodb:GetItem",
     "dynamodb:PutItem",
     # Host records (ADR-0054) share the table under a prefixed key; the fleet
-    # is read with a filtered scan until its size earns an index.
+    # is read with a filtered scan until its size earns an index. Session
+    # history (`sessions#<world>`, ADR-0015) needs only Get and Put.
     "dynamodb:Scan",
   ]
 }

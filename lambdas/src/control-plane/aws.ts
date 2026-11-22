@@ -1,5 +1,5 @@
 import { DescribeInstancesCommand, EC2Client, type Instance } from "@aws-sdk/client-ec2";
-import { CloudWatchClient, GetMetricDataCommand } from "@aws-sdk/client-cloudwatch";
+import { CloudWatchClient, GetMetricDataCommand, type MetricDataResult } from "@aws-sdk/client-cloudwatch";
 import {
   GetObjectCommand,
   HeadObjectCommand,
@@ -26,6 +26,7 @@ import { S3ReleaseStateStore } from "./s3-release-state-store.ts";
 import { S3WorldRepository } from "./s3-world-repository.ts";
 import { newWorldRecord, withGameSettings, withWhitelist, withWorldAccess, type WorldGameSettings, type WorldRecord, type WorldWhitelist } from "./world-registry.ts";
 import { parseDynamicProjection } from "./dynamic-projection.ts";
+import { createSessionHostReader } from "./aws-session-history.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildLifecycleStartInput, buildLifecycleStopInput, buildPromotionInput, buildStopInput } from "../domain/telegram-bot.ts";
@@ -198,39 +199,62 @@ function metricPeriodSeconds(hours: number): number {
   return hours <= 48 ? 900 : 3600;
 }
 
-async function readHostMetrics(instanceId: string, hours: number): Promise<HostMetrics> {
-  const end = new Date();
-  const start = new Date(end.getTime() - hours * 3_600_000);
-  const period = metricPeriodSeconds(hours);
-  const response = await cloudwatch.send(new GetMetricDataCommand({
-    StartTime: start,
-    EndTime: end,
-    ScanBy: "TimestampAscending",
-    MetricDataQueries: HOST_SERIES.map((series) => ({
-      Id: series.id,
-      MetricStat: {
-        Metric: { Namespace: series.namespace, MetricName: series.metric, Dimensions: [{ Name: "InstanceId", Value: instanceId }] },
-        Period: period,
-        Stat: series.statistic,
-      },
-    })),
+function hostQueries(instanceId: string, period: number, suffix: string) {
+  return HOST_SERIES.map((series) => ({
+    Id: `${series.id}${suffix}`,
+    MetricStat: {
+      Metric: { Namespace: series.namespace, MetricName: series.metric, Dimensions: [{ Name: "InstanceId", Value: instanceId }] },
+      Period: period,
+      Stat: series.statistic,
+    },
   }));
-  const byId = new Map((response.MetricDataResults ?? []).map((result) => [result.Id, result]));
-  const slots = metricSlots(start, end, period);
+}
+
+function hostMetricsFrom(
+  results: ReadonlyMap<string | undefined, MetricDataResult>,
+  suffix: string,
+  window: Readonly<{ start: Date; end: Date; period: number }>,
+): HostMetrics {
+  const slots = metricSlots(window.start, window.end, window.period);
   return {
-    startedAt: start.toISOString(),
-    endedAt: end.toISOString(),
-    periodSeconds: period,
+    startedAt: window.start.toISOString(),
+    endedAt: window.end.toISOString(),
+    periodSeconds: window.period,
     series: HOST_SERIES.map((series) => {
-      const result = byId.get(series.id);
+      const result = results.get(`${series.id}${suffix}`);
       return {
         id: series.id,
         label: series.label,
         unit: series.unit,
-        points: onSlots(slots, period, result?.Timestamps ?? [], result?.Values ?? []),
+        points: onSlots(slots, window.period, result?.Timestamps ?? [], result?.Values ?? []),
       };
     }),
   };
+}
+
+async function readHostMetrics(instanceId: string, hours: number): Promise<HostMetrics> {
+  return (await readHostsMetrics([instanceId], hours))[instanceId]!;
+}
+
+// A call takes up to 500 queries, so four series for each of up to 100 hosts
+// fit; a world has far fewer sessions than that inside a week.
+const MAX_METRIC_HOSTS = 100;
+
+async function readHostsMetrics(instanceIds: readonly string[], hours: number): Promise<Readonly<Record<string, HostMetrics>>> {
+  const hostIds = [...new Set(instanceIds)].slice(-MAX_METRIC_HOSTS);
+  const end = new Date();
+  const start = new Date(end.getTime() - hours * 3_600_000);
+  const period = metricPeriodSeconds(hours);
+  // One host keeps the plain series ids; several are told apart by position.
+  const suffix = (index: number) => hostIds.length === 1 ? "" : `_${index}`;
+  const response = await cloudwatch.send(new GetMetricDataCommand({
+    StartTime: start,
+    EndTime: end,
+    ScanBy: "TimestampAscending",
+    MetricDataQueries: hostIds.flatMap((hostId, index) => hostQueries(hostId, period, suffix(index))),
+  }));
+  const results = new Map((response.MetricDataResults ?? []).map((result) => [result.Id, result]));
+  return Object.fromEntries(hostIds.map((hostId, index) => [hostId, hostMetricsFrom(results, suffix(index), { start, end, period })]));
 }
 
 // CloudWatch returns only the periods that have data, so a host that was off
@@ -367,6 +391,8 @@ export const awsControlPlaneSources: ControlPlaneSources = {
   listPresets,
   readReleaseManifest,
   readHostMetrics,
+  readHostsMetrics,
+  readWorldSessionHosts: createSessionHostReader({ sfn, document, tableName: () => process.env.LIFECYCLE_TABLE_NAME, machines: operationMachines }),
   listWorldRecords,
 };
 

@@ -19,8 +19,15 @@ import {
   type PlacementStore,
   type VersionedHost,
 } from "../lifecycle/placement-coordinator.ts";
+import {
+  createSessionHistoryCoordinator,
+  isSessionHistoryInput,
+  type SessionHistoryInput,
+  type SessionHistoryStore,
+} from "../lifecycle/session-history.ts";
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import type { HostRecord } from "../domain/placement.ts";
+import type { SessionHost } from "../domain/session-history.ts";
 
 const tableName = process.env.LIFECYCLE_TABLE_NAME;
 if (!tableName) throw new Error("LIFECYCLE_TABLE_NAME is required");
@@ -161,11 +168,62 @@ const placementStore: PlacementStore = {
   },
 };
 
+// Which host each session of a world ran on (ADR-0015): one bounded item per
+// world under its own prefix, so the same table and permissions serve it. The
+// access API reads it with GetItem.
+const SESSION_HISTORY_KEY_PREFIX = "sessions#";
+
+const sessionHistoryStore: SessionHistoryStore = {
+  async read(worldId: string) {
+    const response = await documentClient.send(
+      new GetCommand({ TableName: tableName, Key: { server_id: `${SESSION_HISTORY_KEY_PREFIX}${worldId}` }, ConsistentRead: true }),
+    );
+    if (!response.Item) return null;
+    return { revision: response.Item.revision as number, entries: response.Item.entries as SessionHost[] };
+  },
+
+  async create(worldId: string, entries: readonly SessionHost[]): Promise<boolean> {
+    try {
+      await documentClient.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: { server_id: `${SESSION_HISTORY_KEY_PREFIX}${worldId}`, revision: 1, entries },
+          ConditionExpression: "attribute_not_exists(server_id)",
+        }),
+      );
+      return true;
+    } catch (error) {
+      if (isConditionalFailure(error)) return false;
+      throw error;
+    }
+  },
+
+  async compareAndSet(worldId: string, expectedRevision: number, entries: readonly SessionHost[]): Promise<boolean> {
+    try {
+      await documentClient.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: { server_id: `${SESSION_HISTORY_KEY_PREFIX}${worldId}`, revision: expectedRevision + 1, entries },
+          ConditionExpression: "revision = :expected_revision",
+          ExpressionAttributeValues: { ":expected_revision": expectedRevision },
+        }),
+      );
+      return true;
+    } catch (error) {
+      if (isConditionalFailure(error)) return false;
+      throw error;
+    }
+  },
+};
+
 const lifecycle = createLifecycleCoordinator(store);
 const placement = createPlacementCoordinator(placementStore);
+const sessionHistory = createSessionHistoryCoordinator(sessionHistoryStore);
 
-export const handler = async (input: CoordinatorInput | PlacementInput) =>
-  isPlacementInput(input) ? placement(input) : lifecycle(input as CoordinatorInput);
+export const handler = async (input: CoordinatorInput | PlacementInput | SessionHistoryInput) => {
+  if (isSessionHistoryInput(input)) return sessionHistory(input);
+  return isPlacementInput(input) ? placement(input) : lifecycle(input);
+};
 
-export type { CoordinatorInput, PlacementInput };
+export type { CoordinatorInput, PlacementInput, SessionHistoryInput };
 

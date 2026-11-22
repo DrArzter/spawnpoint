@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { DeleteCommand, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 
 // An in-memory stand-in for the reference table. It understands only the
@@ -9,6 +10,29 @@ type Names = Record<string, string> | undefined;
 type Values = Record<string, unknown> | undefined;
 
 type Comparison = (actual: unknown, expected: unknown) => boolean;
+
+// DynamoDB refuses an expression that names a reserved word directly (the list
+// is the official one); a bare `roles` once reached production this way.
+const RESERVED_WORDS = new Set(readFileSync(new URL("./dynamodb-reserved-words.txt", import.meta.url), "utf8").split("\n").filter(Boolean));
+const EXPRESSION_SYNTAX = new Set(["SET", "ADD", "REMOVE", "DELETE", "AND", "OR", "NOT", "IN", "BETWEEN"]);
+const EXPRESSION_FUNCTIONS = /\b(?:attribute_exists|attribute_not_exists|attribute_type|begins_with|contains|size|if_not_exists|list_append)\s*\(/g;
+
+export function rejectReservedWords(expression: unknown): void {
+  if (typeof expression !== "string") return;
+  const bare = expression.replace(EXPRESSION_FUNCTIONS, "(").replace(/[#:]\w+/g, " ");
+  for (const word of bare.match(/[A-Za-z_]\w*/g) ?? []) {
+    const upper = word.toUpperCase();
+    if (!EXPRESSION_SYNTAX.has(upper) && RESERVED_WORDS.has(upper)) {
+      throw Object.assign(new Error(`Invalid expression: Attribute name is a reserved keyword; reserved keyword: ${word}`), { name: "ValidationException" });
+    }
+  }
+}
+
+function rejectReservedWordsIn(input: Record<string, unknown>): void {
+  for (const field of ["UpdateExpression", "ConditionExpression", "KeyConditionExpression", "FilterExpression", "ProjectionExpression"]) {
+    rejectReservedWords(input[field]);
+  }
+}
 
 const COMPARISONS: readonly (readonly [RegExp, Comparison])[] = [
   [/^#?\w+ = :\w+$/, (actual, expected) => actual === expected],
@@ -106,6 +130,11 @@ export class FakeRefsTable {
   private handle(command: unknown): Record<string, unknown> {
     this.beforeSend?.(command);
     this.commands.push((command as object).constructor.name);
+    const input = (command as { input?: Record<string, unknown> }).input ?? {};
+    rejectReservedWordsIn(input);
+    for (const entry of (input.TransactItems as Record<string, Record<string, unknown>>[] | undefined) ?? []) {
+      for (const body of Object.values(entry)) rejectReservedWordsIn(body);
+    }
     if (command instanceof GetCommand) return this.onGet(command);
     if (command instanceof QueryCommand) return this.onQuery(command);
     if (command instanceof PutCommand) return this.onPut(command);

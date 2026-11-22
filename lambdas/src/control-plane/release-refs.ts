@@ -181,7 +181,9 @@ export class ReleaseRefs {
     if (roles.every((role) => have.has(role))) return;
     await this.client.send(new UpdateCommand({
       TableName: this.table, Key: this.key(ref, sk),
-      UpdateExpression: "ADD roles :roles", ConditionExpression: "attribute_exists(pk)",
+      // "roles" is a DynamoDB reserved word, so the expression names it through #roles.
+      UpdateExpression: "ADD #roles :roles", ConditionExpression: "attribute_exists(pk)",
+      ExpressionAttributeNames: { "#roles": "roles" },
       ExpressionAttributeValues: { ":roles": new Set(roles) },
     }));
   }

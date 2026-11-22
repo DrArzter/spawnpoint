@@ -264,7 +264,12 @@ function coveredBy(snapshot) {
   };
   const parent = doc.nodes.parentIndex;
   const painted = new Map(doc.layout.nodeIndex.map((node, k) => [node, { order: doc.layout.paintOrders[k], box: doc.layout.bounds[k] }]));
-  const inLayer = (node) => { for (let n = node; n >= 0; n = parent[n]) if (attribute(n, "data-audit-layer") !== null) return true; return false; };
+  const inLayer = (node) => {
+    for (let n = node; n >= 0; n = parent[n]) {
+      if (attribute(n, "data-audit-layer") !== null) return true;
+    }
+    return false;
+  };
   const found = [];
   for (const [node, { order, box }] of painted) {
     const kind = attribute(node, "data-audit-box");

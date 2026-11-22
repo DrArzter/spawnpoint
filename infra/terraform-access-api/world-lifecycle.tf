@@ -40,12 +40,6 @@ data "aws_iam_policy_document" "world_lifecycle" {
   }
 
   statement {
-    sid       = "ReadReleaseState"
-    actions   = ["dynamodb:GetItem"]
-    resources = [local.release_refs_table_arn]
-  }
-
-  statement {
     sid       = "VerifyReleaseBeforeRestore"
     actions   = ["s3:GetObject"]
     resources = ["${data.aws_s3_bucket.releases.arn}/releases/*/manifest.json"]

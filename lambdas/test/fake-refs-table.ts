@@ -8,20 +8,24 @@ type Item = Record<string, unknown>;
 type Names = Record<string, string> | undefined;
 type Values = Record<string, unknown> | undefined;
 
+type Comparison = (actual: unknown, expected: unknown) => boolean;
+
+const COMPARISONS: readonly (readonly [RegExp, Comparison])[] = [
+  [/^#?\w+ = :\w+$/, (actual, expected) => actual === expected],
+  [/^#?\w+ <= :\w+$/, (actual, expected) => actual !== undefined && (actual as string | number) <= (expected as string | number)],
+  [/^#?\w+ > :\w+$/, (actual, expected) => Number(actual) > Number(expected)],
+];
+
 function clauseHolds(item: Item | undefined, text: string, names: Names, values: Values): boolean {
   const attribute = (token: string) => item?.[names?.[token] ?? token];
-  let match = /^attribute_not_exists\((\w+)\)$/.exec(text);
-  if (match) return item === undefined;
-  match = /^attribute_exists\((\w+)\)$/.exec(text);
-  if (match) return item !== undefined;
-  match = /^(#?\w+) = (:\w+)$/.exec(text);
-  if (match) return item !== undefined && attribute(match[1]!) === values![match[2]!];
-  match = /^(#?\w+) <= (:\w+)$/.exec(text);
-  if (match) return item !== undefined && attribute(match[1]!) !== undefined && (attribute(match[1]!) as string | number) <= (values![match[2]!] as string | number);
-  match = /^(#?\w+) > (:\w+)$/.exec(text);
-  if (match) return item !== undefined && Number(attribute(match[1]!)) > Number(values![match[2]!]);
-  match = /^(#\w+) IN \(([^)]*)\)$/.exec(text);
-  if (match) return item !== undefined && match[2]!.split(",").map((name) => values![name.trim()]).includes(attribute(match[1]!));
+  if (/^attribute_not_exists\((\w+)\)$/.test(text)) return item === undefined;
+  if (/^attribute_exists\((\w+)\)$/.test(text)) return item !== undefined;
+  const [left, , right] = text.split(" ");
+  for (const [pattern, compare] of COMPARISONS) {
+    if (pattern.test(text)) return item !== undefined && compare(attribute(left!), values![right!]);
+  }
+  const list = /^(#\w+) IN \(([^)]*)\)$/.exec(text);
+  if (list) return item !== undefined && list[2]!.split(",").map((name) => values![name.trim()]).includes(attribute(list[1]!));
   throw new Error(`fake table: unsupported condition ${text}`);
 }
 
@@ -88,7 +92,18 @@ export class FakeRefsTable {
     };
   }
 
-  async send(command: unknown): Promise<Record<string, unknown>> {
+  // A rejection, as the SDK client gives it, not a synchronous throw.
+  send(command: unknown): Promise<Record<string, unknown>> {
+    return new Promise((resolve, reject) => {
+      try {
+        resolve(this.handle(command));
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  private handle(command: unknown): Record<string, unknown> {
     this.beforeSend?.(command);
     this.commands.push((command as object).constructor.name);
     if (command instanceof GetCommand) {

@@ -144,57 +144,72 @@ export class ReleaseRefs {
     const isBuild = key.startsWith("build#");
     // DynamoDB refuses an empty set, so a holder always names a role.
     if (roles.length === 0) throw new ReleaseRefsError("holder_needs_a_role");
-    let release = await this.readRelease(ref);
-    if (release === null) {
-      if (isBuild) throw new ReleaseRefsError("release_not_begun");
-      await this.registerLegacy(ref);
-      release = await this.readRelease(ref);
-      if (release === null) throw new ReleaseRefsError("release_state_unreadable");
-    }
+    let release = await this.releaseForHolder(ref, isBuild);
     // An existing holder gets no pass: a pointer that turns back to a retiring
     // release could otherwise slip in after the retirement's live check.
     const allowed = HOLDER_STATES[isBuild ? "build" : "other"];
     if (!allowed.includes(release.state)) throw unusable(release.state);
     const sk = `hold#${key}`;
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const { Item } = await this.client.send(new GetCommand({ TableName: this.table, Key: this.key(ref, sk), ConsistentRead: true }));
+      const { Item } = await this.client.send(new GetCommand({ TableName: this.table, Key: this.key(ref, sk), ConsistentRead: true })); // NOSONAR retry: each attempt reads what the last one changed
       if (Item !== undefined) {
-        const have = new Set<string>(Item.roles instanceof Set ? [...Item.roles as Set<string>] : []);
-        if (roles.every((role) => have.has(role))) return;
-        await this.client.send(new UpdateCommand({
-          TableName: this.table, Key: this.key(ref, sk),
-          UpdateExpression: "ADD roles :roles", ConditionExpression: "attribute_exists(pk)",
-          ExpressionAttributeValues: { ":roles": new Set(roles) },
-        }));
+        await this.addRoles(ref, sk, Item.roles, roles);
         return;
       }
-      try {
-        await this.client.send(new TransactWriteCommand({
-          TransactItems: [
-            { Put: {
-              TableName: this.table,
-              Item: { ...this.key(ref, sk), roles: new Set(roles), added_at: this.now().toISOString() },
-              ConditionExpression: "attribute_not_exists(pk)",
-            } },
-            { Update: {
-              TableName: this.table, Key: this.key(ref, ITEM_META_SK),
-              UpdateExpression: "ADD holders :one",
-              ConditionExpression: allowed.length === 1 ? "#s = :a" : "#s IN (:a, :b)",
-              ExpressionAttributeNames: { "#s": "state" },
-              ExpressionAttributeValues: { ":one": 1, ":a": allowed[0], ...(allowed.length === 1 ? {} : { ":b": allowed[1] }) },
-            } },
-          ],
-        }));
-        return;
-      } catch (error) {
-        const reasons = cancellationReasons(error);
-        if (reasons === null) throw error;
-        // The item appeared (another writer: loop and add the role) or the state moved.
-        release = await this.readRelease(ref) ?? release;
-        if (!allowed.includes(release.state)) throw unusable(release.state);
-      }
+      if (await this.addHolder(ref, sk, roles, allowed)) return; // NOSONAR retry: the next attempt depends on this write
+      // The item appeared (another writer: loop and add the role) or the state moved.
+      release = await this.readRelease(ref) ?? release;
+      if (!allowed.includes(release.state)) throw unusable(release.state);
     }
     throw new ReleaseRefsError("holder_conflict");
+  }
+
+  /** The release item a holder needs; an unknown release is registered as legacy, except for a build. */
+  private async releaseForHolder(ref: ReleaseRef, isBuild: boolean): Promise<ReleaseItem> {
+    const release = await this.readRelease(ref);
+    if (release !== null) return release;
+    if (isBuild) throw new ReleaseRefsError("release_not_begun");
+    await this.registerLegacy(ref);
+    const registered = await this.readRelease(ref);
+    if (registered === null) throw new ReleaseRefsError("release_state_unreadable");
+    return registered;
+  }
+
+  /** A holder that exists: add the roles it lacks. */
+  private async addRoles(ref: ReleaseRef, sk: string, stored: unknown, roles: readonly string[]): Promise<void> {
+    const have = new Set<string>(stored instanceof Set ? [...stored as Set<string>] : []);
+    if (roles.every((role) => have.has(role))) return;
+    await this.client.send(new UpdateCommand({
+      TableName: this.table, Key: this.key(ref, sk),
+      UpdateExpression: "ADD roles :roles", ConditionExpression: "attribute_exists(pk)",
+      ExpressionAttributeValues: { ":roles": new Set(roles) },
+    }));
+  }
+
+  /** The holder item and the count, in one transaction that needs the release in an allowed state. False when it was cancelled. */
+  private async addHolder(ref: ReleaseRef, sk: string, roles: readonly string[], allowed: readonly ReleaseItemState[]): Promise<boolean> {
+    try {
+      await this.client.send(new TransactWriteCommand({
+        TransactItems: [
+          { Put: {
+            TableName: this.table,
+            Item: { ...this.key(ref, sk), roles: new Set(roles), added_at: this.now().toISOString() },
+            ConditionExpression: "attribute_not_exists(pk)",
+          } },
+          { Update: {
+            TableName: this.table, Key: this.key(ref, ITEM_META_SK),
+            UpdateExpression: "ADD holders :one",
+            ConditionExpression: allowed.length === 1 ? "#s = :a" : "#s IN (:a, :b)",
+            ExpressionAttributeNames: { "#s": "state" },
+            ExpressionAttributeValues: { ":one": 1, ":a": allowed[0], ...(allowed.length === 1 ? {} : { ":b": allowed[1] }) },
+          } },
+        ],
+      }));
+      return true;
+    } catch (error) {
+      if (cancellationReasons(error) === null) throw error;
+      return false;
+    }
   }
 
   /** Removes one holder, as a build does when it has published. */
@@ -283,35 +298,46 @@ export class ReleaseRefs {
         continue;
       }
       if (prior?.state === "deleted") {
-        await options.ensureObject(file, "recreate");
-        if (await this.transact([
-          { Update: {
-            TableName: this.table, Key: { pk: fileItemPk(file.sha256), sk: ITEM_META_SK },
-            UpdateExpression: "SET #s = :live, bytes = :bytes, refs = :one REMOVE condemned_at",
-            ConditionExpression: "#s = :deleted",
-            ExpressionAttributeNames: { "#s": "state" },
-            ExpressionAttributeValues: { ":live": "live", ":bytes": file.bytes, ":one": 1, ":deleted": "deleted" },
-          } },
-          this.backReference(ref, file),
-        ]) !== "lost") return "recreated";
+        if (await this.revive(ref, file, options)) return "recreated";
         continue;
       }
-      const outcome = await this.transact([
-        { Update: {
-          TableName: this.table, Key: { pk: fileItemPk(file.sha256), sk: ITEM_META_SK },
-          UpdateExpression: "SET #s = :live, bytes = :bytes ADD refs :one REMOVE condemned_at",
-          ConditionExpression: "attribute_not_exists(pk) OR #s IN (:live, :condemned)",
-          ExpressionAttributeNames: { "#s": "state" },
-          ExpressionAttributeValues: { ":live": "live", ":condemned": "condemned", ":bytes": file.bytes, ":one": 1 },
-        } },
-        this.backReference(ref, file),
-      ]);
+      const outcome = await this.countReference(ref, file);
       if (outcome === "lost") continue;
       // `counted` for the first time or already counted by an earlier attempt: either way the reference is in place.
       const created = prior === null && outcome === "done";
       await options.ensureObject(file, created ? "create" : "verify");
       return created ? "created" : "reused";
     }
+  }
+
+  /** A deleted file: the object again, then the item back to live. False when its state moved (read again). */
+  private async revive(ref: ReleaseRef, file: FileClaim, options: ClaimOptions): Promise<boolean> {
+    await options.ensureObject(file, "recreate");
+    const outcome = await this.transact([
+      { Update: {
+        TableName: this.table, Key: { pk: fileItemPk(file.sha256), sk: ITEM_META_SK },
+        UpdateExpression: "SET #s = :live, bytes = :bytes, refs = :one REMOVE condemned_at",
+        ConditionExpression: "#s = :deleted",
+        ExpressionAttributeNames: { "#s": "state" },
+        ExpressionAttributeValues: { ":live": "live", ":bytes": file.bytes, ":one": 1, ":deleted": "deleted" },
+      } },
+      this.backReference(ref, file),
+    ]);
+    return outcome !== "lost";
+  }
+
+  /** A new or live file: count this release's reference. */
+  private countReference(ref: ReleaseRef, file: FileClaim): Promise<"done" | "counted" | "lost"> {
+    return this.transact([
+      { Update: {
+        TableName: this.table, Key: { pk: fileItemPk(file.sha256), sk: ITEM_META_SK },
+        UpdateExpression: "SET #s = :live, bytes = :bytes ADD refs :one REMOVE condemned_at",
+        ConditionExpression: "attribute_not_exists(pk) OR #s IN (:live, :condemned)",
+        ExpressionAttributeNames: { "#s": "state" },
+        ExpressionAttributeValues: { ":live": "live", ":condemned": "condemned", ":bytes": file.bytes, ":one": 1 },
+      } },
+      this.backReference(ref, file),
+    ]);
   }
 
   /** `done`; `counted` (this release's reference was already there); `lost` (the file item's state moved: read again). */

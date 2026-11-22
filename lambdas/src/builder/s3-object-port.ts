@@ -37,10 +37,10 @@ export function s3ObjectPort(client: Client, bucket: string, options: PortOption
   const retrying = async <T>(call: () => Promise<T>): Promise<T> => {
     for (let attempt = 1; ; attempt += 1) {
       try {
-        return await call();
+        return await call(); // NOSONAR retry: each attempt depends on the last one failing
       } catch (error) {
         if (attempt >= attempts || !transient(error)) throw error;
-        await sleep(250 * 2 ** (attempt - 1));
+        await sleep(250 * 2 ** (attempt - 1)); // NOSONAR backoff between attempts
       }
     }
   };

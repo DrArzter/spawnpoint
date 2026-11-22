@@ -61,7 +61,8 @@ export type CatalogStore = Readonly<{
 
 export type RetirementDeps = Readonly<{
   table: RetirementTable;
-  readManifest(ref: ReleaseRef): Promise<unknown | null>;
+  /** Null when the release has no manifest. */
+  readManifest(ref: ReleaseRef): Promise<unknown>;
   /** Every source the live check judges: world records, pointers (the pre-generation one too), archives, catalogs. */
   readSources(): Promise<MarkInput>;
   catalogs: CatalogStore;
@@ -132,7 +133,7 @@ export function manifestDigests(manifest: unknown): readonly string[] {
 }
 
 /** The catalog without this release, or null when it does not list it. */
-export function catalogWithoutRelease(document: unknown, presetId: string, release: string): unknown | null {
+export function catalogWithoutRelease(document: unknown, presetId: string, release: string): unknown {
   const root = structuredClone(document) as { presets?: Array<Record<string, unknown>> };
   const preset = root.presets?.find((candidate) => candidate.id === presetId);
   const releases = preset?.releases;
@@ -191,7 +192,7 @@ async function liveCheck(deps: RetirementDeps, ref: ReleaseRef): Promise<void> {
   const named = marks.holders
     .filter((holder) => holder.release === id && !holder.sk.startsWith("hold#catalog#"))
     .map((holder) => holder.sk);
-  if (named.length > 0) throw new Stop("aborted", "release_in_use", [...new Set(named)].sort().slice(0, EXAMPLE_LIMIT));
+  if (named.length > 0) throw new Stop("aborted", "release_in_use", [...new Set(named)].sort((a, b) => a.localeCompare(b)).slice(0, EXAMPLE_LIMIT));
 }
 
 /** Step d, first half: a holder that may belong to a write in flight stops the retirement. */
@@ -241,13 +242,46 @@ async function toLive(deps: RetirementDeps, ref: ReleaseRef): Promise<void> {
   await deps.table.transition(ref, "retiring", "live", {});
 }
 
-export async function retireRelease(input: unknown, deps: RetirementDeps): Promise<RetirementResult> {
-  const request = parseRetirementRequest(input);
+/** The coordinates of a request, also when it is invalid, so the refusal can name them. */
+function refOf(input: unknown, request: RetirementRequest | null): ReleaseRef {
+  if (request !== null) return request;
   const raw = (input ?? {}) as Record<string, unknown>;
-  const ref: ReleaseRef = request ?? {
+  return {
     gameId: typeof raw.gameId === "string" ? raw.gameId : "", presetId: typeof raw.presetId === "string" ? raw.presetId : "",
     release: typeof raw.release === "string" ? raw.release : "",
   };
+}
+
+/** Step b. A lost condition means another run moved the state: read it again and follow it. True when the release is retired already. */
+async function beginRetiring(deps: RetirementDeps, ref: ReleaseRef, item: ReleaseRow, by: string): Promise<boolean> {
+  if (item.state !== "live" || await deps.table.transition(ref, "live", "retiring", { by })) return false;
+  const now = await deps.table.readRelease(ref);
+  if (now?.state === "retired") return true;
+  if (now?.state !== "retiring") throw new Stop("refused", "release_not_live");
+  return false;
+}
+
+/** Step f: each drop is its own transaction. */
+async function dropHolders(deps: RetirementDeps, ref: ReleaseRef, holders: readonly HolderRow[], progress: Progress): Promise<void> {
+  for (const holder of holders) {
+    if (await deps.table.dropHolder(ref, holder.sk) === "dropped") progress.holdersRemoved += 1; // NOSONAR each drop is its own transaction
+  }
+}
+
+/** Steps c to h: from `retiring` to `retired`. */
+async function retireNow(deps: RetirementDeps, ref: ReleaseRef, by: string, progress: Progress): Promise<void> {
+  await liveCheck(deps, ref);
+  const holders = await checkHolders(deps, ref);
+  progress.catalogChanged = await dropFromCatalog(deps, ref);
+  await dropHolders(deps, ref, holders, progress);
+  if (await deps.table.transition(ref, "retiring", "retired", { by, noHolders: true })) return;
+  const now = await deps.table.readRelease(ref);
+  if (now?.state !== "retired") throw new Stop("aborted", "holder_appeared");
+}
+
+export async function retireRelease(input: unknown, deps: RetirementDeps): Promise<RetirementResult> {
+  const request = parseRetirementRequest(input);
+  const ref = refOf(input, request);
   if (request === null) return empty(ref, { status: "refused", error: "invalid_request" });
   // The caller checks this too; the Lambda never trusts the caller.
   if (request.confirmation !== retirementConfirmation(ref)) return empty(ref, { status: "refused", error: "invalid_retire_confirmation" });
@@ -257,27 +291,11 @@ export async function retireRelease(input: unknown, deps: RetirementDeps): Promi
   try {
     const { item, digests } = await checkRetirable(deps, ref);
     let alreadyRetired = item.state === "retired";
+    if (!alreadyRetired) alreadyRetired = await beginRetiring(deps, ref, item, request.requestedBy);
     if (!alreadyRetired) {
-      // Step b. A lost condition means another run moved the state: read it again and follow it.
-      if (item.state === "live" && !await deps.table.transition(ref, "live", "retiring", { by: request.requestedBy })) {
-        const now = await deps.table.readRelease(ref);
-        if (now?.state === "retired") alreadyRetired = true;
-        else if (now?.state !== "retiring") throw new Stop("refused", "release_not_live");
-      }
-      if (!alreadyRetired) {
-        retiring = true;
-        await liveCheck(deps, ref);
-        const holders = await checkHolders(deps, ref);
-        progress.catalogChanged = await dropFromCatalog(deps, ref);
-        for (const holder of holders) {
-          if (await deps.table.dropHolder(ref, holder.sk) === "dropped") progress.holdersRemoved += 1; // NOSONAR each drop is its own transaction
-        }
-        if (!await deps.table.transition(ref, "retiring", "retired", { by: request.requestedBy, noHolders: true })) {
-          const now = await deps.table.readRelease(ref);
-          if (now?.state !== "retired") throw new Stop("aborted", "holder_appeared");
-        }
-        retiring = false;
-      }
+      retiring = true;
+      await retireNow(deps, ref, request.requestedBy, progress);
+      retiring = false;
     }
     const cleaned = await cleanReferences(deps, ref, digests);
     return empty(ref, { status: "retired", ...progress, ...cleaned, alreadyRetired });

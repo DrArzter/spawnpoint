@@ -51,7 +51,7 @@ export function s3CatalogStore(s3: S3Send, bucket: string): CatalogStore {
   };
 }
 
-export async function readReleaseManifest(reader: Pick<ReleaseBucketReader, "getText">, ref: Readonly<{ gameId: string; presetId: string; release: string }>): Promise<unknown | null> {
+export async function readReleaseManifest(reader: Pick<ReleaseBucketReader, "getText">, ref: Readonly<{ gameId: string; presetId: string; release: string }>): Promise<unknown> {
   const text = await reader.getText(releaseManifestKey(ref.gameId, ref.presetId, ref.release));
   return text === null ? null : JSON.parse(text) as unknown;
 }
@@ -65,11 +65,11 @@ export function liveSourceReader(
   ports: Readonly<{ release: ReleaseBucketReader; backup: BackupBucketReader }>,
   now: () => Date,
 ): () => Promise<MarkInput> {
-  const none = async () => [] as never[];
+  const none = () => Promise.resolve([] as never[]);
   const release: ReleaseBucketReader = {
     ...ports.release,
     listKeys: (prefix) => (prefix.startsWith("worlds/") || prefix.startsWith("presets/") ? ports.release.listKeys(prefix) : none()),
-    listObjects: async (prefix) => (prefix.startsWith("worlds/") || prefix.startsWith("presets/") ? ports.release.listObjects(prefix) : none()),
+    listObjects: (prefix) => (prefix.startsWith("worlds/") || prefix.startsWith("presets/") ? ports.release.listObjects(prefix) : none()),
   };
   return async () => (await collectSources({ release, backup: ports.backup, table: { scan: none } }, now().toISOString())).input;
 }

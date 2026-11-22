@@ -1,5 +1,5 @@
 import { digestOfObjectKey, objectKey } from "./release-objects.ts";
-import { buildingDigests, type ConsistencyReport, type Listing, type Marks, type TableView } from "./release-reconciler.ts";
+import { buildingDigests, digestsNamed, type ConsistencyReport, type FileView, type Listing, type Marks, type TableView } from "./release-reconciler.ts";
 
 // The sweep of ADR-0080 (design 4.8). `planSweep` is pure. `executeSweep` acts
 // through a SweepWriter and never through a client, so the dry-run path can
@@ -60,33 +60,25 @@ function time(value: string | null): number {
   return value === null ? Number.NaN : Date.parse(value);
 }
 
-export function planSweep(input: PlanInput): SweepPlan {
-  const { report, marks, table, listing } = input;
-  const cutoff = sweepCutoff(report.startedAt, input.graceDays);
-  if (!report.complete || !report.sweepable || table === null || listing === null) return { reason: "incomplete_run", cutoff, actions: [] };
+/** What the plan needs to judge one file: the run's times and the digests that are still named or referenced. */
+type Judgement = Readonly<{ startedAt: number; cutoffTime: number; unproven: (digest: string) => boolean }>;
 
-  const startedAt = Date.parse(report.startedAt);
-  const cutoffTime = Date.parse(cutoff);
-  const named = new Set<string>();
-  for (const own of marks.digests.values()) for (const digest of own.keys()) named.add(digest);
-  const unproven = (digest: string) => named.has(digest) || (table.backReferences.get(digest)?.size ?? 0) > 0;
+function judgeCondemned(digest: string, item: FileView, judge: Judgement): SweepAction | null {
+  const condemnedAt = time(item.condemnedAt);
+  // `condemnedAt <= cutoff` also implies it is before the run's start; both are checked on purpose.
+  if (item.refs === 0 && condemnedAt <= judge.cutoffTime && condemnedAt < judge.startedAt && !judge.unproven(digest)) return { kind: "delete", digest };
+  return null;
+}
 
-  const finishing: SweepAction[] = [];
-  const deleting: SweepAction[] = [];
-  for (const [digest, item] of table.files) {
-    if (item.state === "condemned") {
-      const condemnedAt = time(item.condemnedAt);
-      // `condemnedAt <= cutoff` also implies it is before the run's start; both are checked on purpose.
-      if (item.refs === 0 && condemnedAt <= cutoffTime && condemnedAt < startedAt && !unproven(digest)) deleting.push({ kind: "delete", digest });
-    } else if (item.state === "deleting") {
-      const since = time(item.deletingAt);
-      if (!Number.isNaN(since) && startedAt - since <= STUCK_AFTER_MS) continue; // another run may still work on it
-      if (item.refs === 0 && !unproven(digest)) finishing.push({ kind: "finish", digest });
-      else finishing.push({ kind: "revert", digest, to: item.refs > 0 ? "live" : "condemned" });
-    }
-  }
+function judgeDeleting(digest: string, item: FileView, judge: Judgement): SweepAction | null {
+  const since = time(item.deletingAt);
+  if (!Number.isNaN(since) && judge.startedAt - since <= STUCK_AFTER_MS) return null; // another run may still work on it
+  if (item.refs === 0 && !judge.unproven(digest)) return { kind: "finish", digest };
+  return { kind: "revert", digest, to: item.refs > 0 ? "live" : "condemned" };
+}
 
-  // An object no manifest names, with no table item at all, and not a building release's upload.
+/** An object no manifest names, with no table item at all, and not a building release's upload. */
+function orphanActions(listing: NonNullable<Listing>, table: TableView, named: ReadonlySet<string>): SweepAction[] {
   const building = buildingDigests(table);
   const orphans: SweepAction[] = [];
   for (const key of listing.keys) {
@@ -95,9 +87,36 @@ export function planSweep(input: PlanInput): SweepPlan {
     if (table.files.has(digest) || table.backReferences.has(digest)) continue;
     orphans.push({ kind: "condemn", digest, bytes: listing.sizes?.get(key) ?? 0 });
   }
+  return orphans;
+}
 
-  const byDigest = (a: SweepAction, b: SweepAction) => a.digest.localeCompare(b.digest);
-  return { reason: null, cutoff, actions: [...finishing.sort(byDigest), ...deleting.sort(byDigest), ...orphans.sort(byDigest)] };
+const byDigest = (a: SweepAction, b: SweepAction) => a.digest.localeCompare(b.digest);
+
+export function planSweep(input: PlanInput): SweepPlan {
+  const { report, marks, table, listing } = input;
+  const cutoff = sweepCutoff(report.startedAt, input.graceDays);
+  if (!report.complete || !report.sweepable || table === null || listing === null) return { reason: "incomplete_run", cutoff, actions: [] };
+
+  const named = digestsNamed(marks);
+  const judge: Judgement = {
+    startedAt: Date.parse(report.startedAt), cutoffTime: Date.parse(cutoff),
+    unproven: (digest) => named.has(digest) || (table.backReferences.get(digest)?.size ?? 0) > 0,
+  };
+
+  const finishing: SweepAction[] = [];
+  const deleting: SweepAction[] = [];
+  for (const [digest, item] of table.files) {
+    if (item.state === "condemned") {
+      const action = judgeCondemned(digest, item, judge);
+      if (action !== null) deleting.push(action);
+    } else if (item.state === "deleting") {
+      const action = judgeDeleting(digest, item, judge);
+      if (action !== null) finishing.push(action);
+    }
+  }
+
+  const orphans = orphanActions(listing, table, named);
+  return { reason: null, cutoff, actions: [...finishing.toSorted(byDigest), ...deleting.toSorted(byDigest), ...orphans.toSorted(byDigest)] };
 }
 
 /** Each method is one conditional write or one delete; it returns false when its condition no longer held. */
@@ -141,65 +160,99 @@ export function describeSweep(plan: SweepPlan): readonly Readonly<Record<string,
   return plan.actions.map((action) => ({ event: "release_sweep_action", dryRun: true, ...action }));
 }
 
-export async function executeSweep(plan: SweepPlan, writer: SweepWriter, now: () => Date, log: SweepLog): Promise<SweepOutcome> {
-  let swept = 0;
-  let condemned = 0;
-  let reverted = 0;
-  let skipped = 0;
-  const failures: SweepFailure[] = [];
-  const fail = (digest: string, step: string, error: unknown) => {
+type Counters = { swept: number; condemned: number; reverted: number; skipped: number };
+
+/** One run's writes. Each action is awaited before the next, and inside a delete the order deleting, DeleteObject, deleted is fixed. */
+class SweepRun {
+  readonly counts: Counters = { swept: 0, condemned: 0, reverted: 0, skipped: 0 };
+  readonly failures: SweepFailure[] = [];
+  private readonly plan: SweepPlan;
+  private readonly writer: SweepWriter;
+  private readonly now: () => Date;
+  private readonly log: SweepLog;
+
+  constructor(plan: SweepPlan, writer: SweepWriter, now: () => Date, log: SweepLog) {
+    this.plan = plan;
+    this.writer = writer;
+    this.now = now;
+    this.log = log;
+  }
+
+  async run(): Promise<SweepOutcome> {
+    for (const action of this.plan.actions) {
+      try {
+        await this.act(action); // NOSONAR strictly sequential: deleting, then DeleteObject, then deleted
+      } catch (error) {
+        this.fail(action.digest, action.kind, error);
+      }
+    }
+    return { ...this.counts, failures: this.failures };
+  }
+
+  private act(action: SweepAction): Promise<void> {
+    switch (action.kind) {
+      case "delete": return this.delete(action);
+      case "finish": return this.removeAndMark(action.digest, "finish");
+      case "revert": return this.revert(action);
+      default: return this.condemn(action);
+    }
+  }
+
+  private fail(digest: string, step: string, error: unknown): void {
     const failure = { digest, step, reason: typeof error === "string" ? error : reasonOf(error) };
-    failures.push(failure);
-    log({ event: "release_sweep_action", dryRun: false, result: "failed", ...failure });
-  };
-  const skip = (action: SweepAction, why: string) => {
-    skipped += 1;
-    log({ event: "release_sweep_action", dryRun: false, ...action, result: "skipped", why });
-  };
+    this.failures.push(failure);
+    this.log({ event: "release_sweep_action", dryRun: false, result: "failed", ...failure });
+  }
+
+  private skip(action: SweepAction, why: string): void {
+    this.counts.skipped += 1;
+    this.log({ event: "release_sweep_action", dryRun: false, ...action, result: "skipped", why });
+  }
+
+  private async delete(action: Extract<SweepAction, { kind: "delete" }>): Promise<void> {
+    if (await this.writer.markDeleting(action.digest, this.plan.cutoff, this.now().toISOString())) await this.removeAndMark(action.digest, "delete");
+    else this.skip(action, "condition_lost");
+  }
+
+  private async revert(action: Extract<SweepAction, { kind: "revert" }>): Promise<void> {
+    if (await this.writer.revertDeleting(action.digest, action.to)) {
+      this.counts.reverted += 1;
+      this.log({ event: "release_sweep_action", dryRun: false, ...action, result: "reverted" });
+    } else {
+      this.skip(action, "condition_lost");
+    }
+  }
+
+  private async condemn(action: Extract<SweepAction, { kind: "condemn" }>): Promise<void> {
+    if (await this.writer.condemnOrphan(action.digest, action.bytes, this.now().toISOString())) {
+      this.counts.condemned += 1;
+      this.log({ event: "release_sweep_action", dryRun: false, ...action, result: "condemned" });
+    } else {
+      this.skip(action, "item_exists");
+    }
+  }
 
   // Steps 2 and 3. Step 3 runs only when DeleteObject returned without an error.
-  const removeAndMark = async (digest: string, kind: string) => {
+  private async removeAndMark(digest: string, kind: string): Promise<void> {
     try {
-      await writer.deleteObject(objectKey(digest));
+      await this.writer.deleteObject(objectKey(digest));
     } catch (error) {
-      fail(digest, "delete_object", error); // the item stays `deleting`
+      this.fail(digest, "delete_object", error); // the item stays `deleting`
       return;
     }
     try {
-      if (await writer.markDeleted(digest)) {
-        swept += 1;
-        log({ event: "release_sweep_action", dryRun: false, kind, digest, result: "deleted" });
+      if (await this.writer.markDeleted(digest)) {
+        this.counts.swept += 1;
+        this.log({ event: "release_sweep_action", dryRun: false, kind, digest, result: "deleted" });
       } else {
-        fail(digest, "mark_deleted", "state_changed");
+        this.fail(digest, "mark_deleted", "state_changed");
       }
     } catch (error) {
-      fail(digest, "mark_deleted", error);
-    }
-  };
-
-  for (const action of plan.actions) {
-    try {
-      if (action.kind === "delete") {
-        if (await writer.markDeleting(action.digest, plan.cutoff, now().toISOString())) await removeAndMark(action.digest, "delete");
-        else skip(action, "condition_lost");
-      } else if (action.kind === "finish") {
-        await removeAndMark(action.digest, "finish");
-      } else if (action.kind === "revert") {
-        if (await writer.revertDeleting(action.digest, action.to)) {
-          reverted += 1;
-          log({ event: "release_sweep_action", dryRun: false, ...action, result: "reverted" });
-        } else {
-          skip(action, "condition_lost");
-        }
-      } else if (await writer.condemnOrphan(action.digest, action.bytes, now().toISOString())) {
-        condemned += 1;
-        log({ event: "release_sweep_action", dryRun: false, ...action, result: "condemned" });
-      } else {
-        skip(action, "item_exists");
-      }
-    } catch (error) {
-      fail(action.digest, action.kind, error);
+      this.fail(digest, "mark_deleted", error);
     }
   }
-  return { swept, condemned, reverted, skipped, failures };
+}
+
+export function executeSweep(plan: SweepPlan, writer: SweepWriter, now: () => Date, log: SweepLog): Promise<SweepOutcome> {
+  return new SweepRun(plan, writer, now, log).run();
 }

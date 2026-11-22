@@ -12,8 +12,8 @@ export type ManifestListing = Readonly<{ ref: ReleaseRef; manifest: unknown }>;
 
 export type KnownRelease = Readonly<{ layout: ReleaseLayout; state: ReleaseItemState }>;
 
-/** A release pointer of a generation, or the pre-generation pointer of a world (`worlds/<id>/release.json`). */
-export type PointerSource = Readonly<{ worldId: string; generationId: string | "legacy"; desired: string; active: string | null; runs: readonly string[]; prePromotion: string | null }>;
+/** A release pointer of a generation, or the pre-generation pointer of a world (`worlds/<id>/release.json`, generation id `legacy`). */
+export type PointerSource = Readonly<{ worldId: string; generationId: string; desired: string; active: string | null; runs: readonly string[]; prePromotion: string | null }>;
 
 export type RegistrationInput = Readonly<{
   manifests: readonly ManifestListing[];
@@ -50,38 +50,50 @@ export function pointerSources(pointers: RegistrationInput["pointers"]): readonl
 type Wanted = Map<string, { ref: ReleaseRef; key: string; roles: Set<HolderRole> }>;
 type Sources = Pick<RegistrationInput, "catalogs" | "worlds" | "pointers" | "legacyPointers">;
 
-// What names a release today: the catalog, each generation of a record, each pointer.
-function collect(input: Sources): Readonly<{ wanted: Wanted; orphans: readonly string[] }> {
-  const wanted: Wanted = new Map();
-  const orphans: string[] = [];
-  const want = (ref: ReleaseRef, key: string, role: HolderRole) => {
-    const slot = `${id(ref)}|${key}`;
-    const entry = wanted.get(slot) ?? { ref, key, roles: new Set<HolderRole>() };
-    entry.roles.add(role);
-    wanted.set(slot, entry);
-  };
+type Want = (ref: ReleaseRef, key: string, role: HolderRole) => void;
+type WorldIds = ReadonlyMap<string, Readonly<{ gameId: string; presetId: string }>>;
+
+function wantCatalogs(input: Sources, want: Want): void {
   for (const catalog of input.catalogs) {
     for (const preset of catalog.presets) {
       for (const release of preset.releases) want({ gameId: catalog.gameId, presetId: preset.id, release }, holderKey.catalog(catalog.gameId), "catalog");
     }
   }
-  const worlds = new Map(input.worlds.map((record) => [record.worldId, { gameId: record.gameId, presetId: record.preset.id }]));
+}
+
+function wantGenerations(input: Sources, worlds: WorldIds, want: Want): void {
   for (const record of input.worlds) {
     for (const generation of [record.currentGeneration, ...record.previousGenerations]) {
       want({ ...worlds.get(record.worldId)!, release: generation.release }, holderKey.generation(record.worldId, generation.id), "origin");
     }
   }
+}
+
+function wantPointer(pointer: PointerSource, world: Readonly<{ gameId: string; presetId: string }>, want: Want): void {
+  const key = holderKey.generation(pointer.worldId, pointer.generationId);
+  want({ ...world, release: pointer.desired }, key, "desired");
+  if (pointer.active !== null) want({ ...world, release: pointer.active }, key, "active");
+  for (const release of pointer.runs) want({ ...world, release }, key, "run");
+  if (pointer.prePromotion !== null) want({ ...world, release: pointer.prePromotion }, key, "pre-promotion");
+}
+
+// What names a release today: the catalog, each generation of a record, each pointer.
+function collect(input: Sources): Readonly<{ wanted: Wanted; orphans: readonly string[] }> {
+  const wanted: Wanted = new Map();
+  const orphans: string[] = [];
+  const want: Want = (ref, key, role) => {
+    const slot = `${id(ref)}|${key}`;
+    const entry = wanted.get(slot) ?? { ref, key, roles: new Set<HolderRole>() };
+    entry.roles.add(role);
+    wanted.set(slot, entry);
+  };
+  wantCatalogs(input, want);
+  const worlds: WorldIds = new Map(input.worlds.map((record) => [record.worldId, { gameId: record.gameId, presetId: record.preset.id }]));
+  wantGenerations(input, worlds, want);
   for (const pointer of [...pointerSources(input.pointers), ...input.legacyPointers]) {
     const world = worlds.get(pointer.worldId);
-    if (world === undefined) {
-      orphans.push(`${pointer.worldId}/${pointer.generationId}`);
-      continue;
-    }
-    const key = holderKey.generation(pointer.worldId, pointer.generationId);
-    want({ ...world, release: pointer.desired }, key, "desired");
-    if (pointer.active !== null) want({ ...world, release: pointer.active }, key, "active");
-    for (const release of pointer.runs) want({ ...world, release }, key, "run");
-    if (pointer.prePromotion !== null) want({ ...world, release: pointer.prePromotion }, key, "pre-promotion");
+    if (world === undefined) orphans.push(`${pointer.worldId}/${pointer.generationId}`);
+    else wantPointer(pointer, world, want);
   }
   return { wanted, orphans };
 }
@@ -91,6 +103,15 @@ export function candidateReleases(input: Sources & Pick<RegistrationInput, "mani
   const refs = new Map(input.manifests.map((listing) => [id(listing.ref), listing.ref]));
   for (const { ref } of collect(input).wanted.values()) refs.set(id(ref), ref);
   return [...refs.values()];
+}
+
+function unusableReason(known: KnownRelease | undefined, listing: ManifestListing | undefined): Readonly<{ kind: ReportKind; reason: string }> | null {
+  if (known?.layout === "objects" || (listing !== undefined && manifestUsesObjects(listing.manifest))) {
+    return { kind: "objects_layout", reason: "an objects-v1 release is registered by the builder; nothing is written for it here" };
+  }
+  if (known !== undefined && known.state !== "live") return { kind: "not_live", reason: `the release is ${known.state}; no holder is added` };
+  if (known === undefined && listing === undefined) return { kind: "no_manifest", reason: "a catalog, record or pointer names it, but no manifest exists" };
+  return null;
 }
 
 export function planLegacyRegistration(input: RegistrationInput): RegistrationPlan {
@@ -116,17 +137,9 @@ export function planLegacyRegistration(input: RegistrationInput): RegistrationPl
     const subject = slot.slice("release#".length);
     const known = input.known.get(slot);
     const listing = manifests.get(slot);
-    let ok = true;
-    if (known?.layout === "objects" || (listing !== undefined && manifestUsesObjects(listing.manifest))) {
-      note("objects_layout", subject, "an objects-v1 release is registered by the builder; nothing is written for it here");
-      ok = false;
-    } else if (known !== undefined && known.state !== "live") {
-      note("not_live", subject, `the release is ${known.state}; no holder is added`);
-      ok = false;
-    } else if (known === undefined && listing === undefined) {
-      note("no_manifest", subject, "a catalog, record or pointer names it, but no manifest exists");
-      ok = false;
-    }
+    const problem = unusableReason(known, listing);
+    if (problem !== null) note(problem.kind, subject, problem.reason);
+    const ok = problem === null;
     usable.set(slot, ok);
     return ok;
   };

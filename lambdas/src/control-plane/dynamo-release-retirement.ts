@@ -39,8 +39,8 @@ export function dynamoRetirementTable(client: Client, table: string = process.en
       try {
         await client.send(new UpdateCommand({
           TableName: table, Key: releaseKey(ref, ITEM_META_SK),
-          UpdateExpression: `SET ${sets.join(", ")}${remove.length > 0 ? ` REMOVE ${remove.join(", ")}` : ""}`,
-          ConditionExpression: `#s = :from${options.noHolders === true ? " AND holders = :zero" : ""}`,
+          UpdateExpression: remove.length > 0 ? `SET ${sets.join(", ")} REMOVE ${remove.join(", ")}` : `SET ${sets.join(", ")}`,
+          ConditionExpression: options.noHolders === true ? "#s = :from AND holders = :zero" : "#s = :from",
           ExpressionAttributeNames: { "#s": "state" },
           ExpressionAttributeValues: values,
         }));

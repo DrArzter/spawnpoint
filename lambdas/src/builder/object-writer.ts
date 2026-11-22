@@ -97,7 +97,7 @@ export async function runPool<T>(items: readonly T[], limit: number, worker: (it
       next += 1;
       if (index >= items.length) return;
       try {
-        await worker(items[index]!);
+        await worker(items[index]!); // NOSONAR one item at a time per lane: the pool bounds the concurrency
       } catch (error) {
         failure ??= { error };
       }
@@ -154,7 +154,12 @@ export function withObjectLayout(manifest: Manifest, packs: WriteResult["packs"]
 function sorted(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sorted);
   if (value === null || typeof value !== "object") return value;
-  return Object.fromEntries(Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([key, entry]) => [key, sorted(entry)]));
+  return Object.fromEntries(Object.entries(value).sort(([a], [b]) => byCodeUnit(a, b)).map(([key, entry]) => [key, sorted(entry)]));
+}
+
+function byCodeUnit(a: string, b: string): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
 }
 
 /** What the immutability gate compares (`canonical_manifest` in upload-release.sh). */
@@ -174,30 +179,32 @@ async function regularFile(path: string): Promise<boolean> {
 
 const PACKS = ["client", "server", "full"] as const;
 
+/** One pack zip: an entry hashed from the local file, or the stored one when only its object can be verified. Null means skip. */
+async function packEntry(options: WriteOptions, name: (typeof PACKS)[number]): Promise<Entry | null> {
+  const heal = options.heal === true;
+  const path = options.packs[name];
+  const stored = manifestPackObject(options.manifest, name);
+  const modpack = name === "client" && clientPackInManifest(options.manifest);
+  const label = modpack ? "client.zip" : `packs/${name}`;
+  if (path === undefined) return heal && stored !== null ? { ...stored, path: label, sources: [], checked: true, pack: name } : null;
+  if (!(await regularFile(path))) throw new WriterError("pack_missing", name);
+  const actual = await hashFile(path);
+  const expected = heal || modpack ? stored : null;
+  if (expected !== null && (expected.sha256 !== actual.sha256 || expected.bytes !== actual.bytes)) {
+    if (!heal) throw new WriterError("pack_mismatch", name);
+    // A rebuilt zip may differ from the stored one: its object can be verified, not created.
+    options.log?.(`pack ${name} differs from the manifest; its object is verified only`);
+    return { ...expected, path: label, sources: [], checked: true, pack: name };
+  }
+  return { ...actual, path: label, sources: [path], checked: true, pack: name };
+}
+
 /** One entry for each local pack zip, hashed once; in heal mode also each pack the manifest names. */
 async function packEntries(options: WriteOptions): Promise<Entry[]> {
-  const heal = options.heal === true;
   const entries: Entry[] = [];
   for (const name of PACKS) {
-    const path = options.packs[name];
-    const stored = manifestPackObject(options.manifest, name);
-    const modpack = name === "client" && clientPackInManifest(options.manifest);
-    const label = modpack ? "client.zip" : `packs/${name}`;
-    if (path === undefined) {
-      if (heal && stored !== null) entries.push({ ...stored, path: label, sources: [], checked: true, pack: name });
-      continue;
-    }
-    if (!(await regularFile(path))) throw new WriterError("pack_missing", name);
-    const actual = await hashFile(path);
-    const expected = heal || modpack ? stored : null;
-    if (expected !== null && (expected.sha256 !== actual.sha256 || expected.bytes !== actual.bytes)) {
-      if (!heal) throw new WriterError("pack_mismatch", name);
-      // A rebuilt zip may differ from the stored one: its object can be verified, not created.
-      options.log?.(`pack ${name} differs from the manifest; its object is verified only`);
-      entries.push({ ...expected, path: label, sources: [], checked: true, pack: name });
-      continue;
-    }
-    entries.push({ ...actual, path: label, sources: [path], checked: true, pack: name });
+    const entry = await packEntry(options, name); // NOSONAR sequential: the first bad pack decides the error
+    if (entry !== null) entries.push(entry);
   }
   return entries;
 }
@@ -236,21 +243,23 @@ export async function writeObjects(deps: WriterDeps, options: WriteOptions): Pro
 
   const counts = { created: 0, reused: 0, recreated: 0, repaired: 0, copied: 0, bytesUploaded: 0 };
 
+  const intact = (found: ObjectInfo | null, file: FileClaim): boolean => found !== null && found.bytes === file.bytes && found.checksumSha256 === base64(file.sha256);
+
   const confirm = (key: string, file: FileClaim, found: ObjectInfo | null): void => {
     if (found === null) throw new WriterError("object_missing", key);
-    if (found.bytes !== file.bytes || found.checksumSha256 !== base64(file.sha256)) throw new WriterError("object_mismatch", key);
+    if (!intact(found, file)) throw new WriterError("object_mismatch", key);
   };
 
   const tryCopy = async (file: FileClaim, key: string): Promise<boolean> => {
     const from = upstream.get(file.sha256);
-    if (from === undefined || !from.startsWith("upstream/")) return false;
+    if (!from?.startsWith("upstream/")) return false;
     try {
       // The source is checked first: a copy of wrong bytes would sit under an immutable key.
       const source = await port.head(from);
-      if (source === null || source.bytes !== file.bytes || source.checksumSha256 !== base64(file.sha256)) return false;
+      if (!intact(source, file)) return false;
       const status = await port.copy(from, key);
       const copy = await port.head(key);
-      if (copy === null || copy.bytes !== file.bytes || copy.checksumSha256 !== base64(file.sha256)) return false;
+      if (!intact(copy, file)) return false;
       if (status === "created") counts.copied += 1;
       return true;
     } catch {
@@ -292,31 +301,40 @@ export async function writeObjects(deps: WriterDeps, options: WriteOptions): Pro
   let done = 0;
   const work = [...all.values()];
   await runPool(work, options.concurrency, async (entry) => {
-    let source: string | null = null;
-    for (const candidate of entry.sources) {
-      if (await regularFile(candidate)) {
-        source = candidate;
-        break;
-      }
-    }
-    if (source === null && !heal) throw new WriterError("local_file_missing", entry.path);
-    if (source !== null && !entry.checked) {
-      const actual = await hashFile(source);
-      if (actual.bytes !== entry.bytes) throw new WriterError("local_size_mismatch", entry.path);
-      if (actual.sha256 !== entry.sha256) throw new WriterError("local_digest_mismatch", entry.path);
-    }
+    const source = await localSource(entry, heal);
     const claim: ClaimOptions = {
       ensureObject: (file, mode) => ensure(file, mode, source),
       ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
       ...(options.waitMilliseconds === undefined ? {} : { waitMilliseconds: options.waitMilliseconds }),
     };
     const outcome = await refs.claimFile(options.ref, { sha256: entry.sha256, bytes: entry.bytes, path: entry.path }, claim);
-    counts[outcome === "created" ? "created" : outcome === "reused" ? "reused" : "recreated"] += 1;
+    counts[outcome] += 1;
     done += 1;
     if (options.progressEvery !== undefined && done % options.progressEvery === 0) options.log?.(`claimed ${done} objects in ${Math.round((Date.now() - started) / 1000)}s`);
   });
 
   return { total: work.length, ...counts, packs };
+}
+
+/** The first regular local file of an entry, checked against its digest. Null only in heal mode. */
+async function localSource(entry: Entry, heal: boolean): Promise<string | null> {
+  let source: string | null = null;
+  for (const candidate of entry.sources) {
+    if (await regularFile(candidate)) { // NOSONAR in order: the first regular file wins
+      source = candidate;
+      break;
+    }
+  }
+  if (source === null) {
+    if (!heal) throw new WriterError("local_file_missing", entry.path);
+    return null;
+  }
+  if (!entry.checked) {
+    const actual = await hashFile(source);
+    if (actual.bytes !== entry.bytes) throw new WriterError("local_size_mismatch", entry.path);
+    if (actual.sha256 !== entry.sha256) throw new WriterError("local_digest_mismatch", entry.path);
+  }
+  return source;
 }
 
 /** The manifest is written: live first (a holder needs a live release), then the catalog holder, then the build holder goes. Safe to repeat. */
@@ -328,5 +346,5 @@ export async function publishRelease(refs: Pick<ReleaseRefs, "publish" | "hold" 
 
 /** The catalog is about to list these releases: hold them first, so no retirement can take one from under it. */
 export async function holdCatalog(refs: Pick<ReleaseRefs, "hold">, gameId: string, presetId: string, releases: readonly string[]): Promise<void> {
-  for (const release of releases) await refs.hold({ gameId, presetId, release }, holderKey.catalog(gameId), ["catalog"]);
+  for (const release of releases) await refs.hold({ gameId, presetId, release }, holderKey.catalog(gameId), ["catalog"]); // NOSONAR sequential: a refusal must stop the next hold
 }

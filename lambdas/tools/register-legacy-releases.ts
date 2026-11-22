@@ -97,7 +97,7 @@ for (const match of await keys("worlds/", /^worlds\/([a-z0-9][a-z0-9-]{0,31})\/w
     else pointers.push({ worldId: record.worldId, state });
   }
   const legacyKey = `worlds/${record.worldId}/release.json`;
-  const legacy = await json(legacyKey);
+  const legacy = await json(legacyKey); // NOSONAR in order with the world record read above
   if (legacy === null) continue;
   const state = parseLegacyReleaseState(legacy, { worldId: record.worldId, generationId: record.currentGeneration.id }, new Date().toISOString());
   if (state === null) unreadable.push({ source: "release pointer", subject: legacyKey, reason: "not a valid legacy release pointer" });

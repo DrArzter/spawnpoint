@@ -27,7 +27,7 @@ import { parseDynamicProjection } from "./dynamic-projection.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildLifecycleStartInput, buildLifecycleStopInput, buildStopInput } from "../domain/telegram-bot.ts";
-import type { ControlPlaneSources, HostMetrics, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
+import type { ControlPlaneSources, HostMetricPoint, HostMetrics, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 import { operationWorldId } from "./world-session.ts";
 import type { ConsoleInvocation } from "./console.ts";
 import type { HostRecord, SessionPolicy } from "../domain/placement.ts";
@@ -213,22 +213,43 @@ async function readHostMetrics(instanceId: string, hours: number): Promise<HostM
     })),
   }));
   const byId = new Map((response.MetricDataResults ?? []).map((result) => [result.Id, result]));
+  const slots = metricSlots(start, end, period);
   return {
     startedAt: start.toISOString(),
     endedAt: end.toISOString(),
     periodSeconds: period,
     series: HOST_SERIES.map((series) => {
       const result = byId.get(series.id);
-      const timestamps = result?.Timestamps ?? [];
-      const values = result?.Values ?? [];
       return {
         id: series.id,
         label: series.label,
         unit: series.unit,
-        points: timestamps.map((at, index) => ({ at: at.toISOString(), value: values[index] ?? null })),
+        points: onSlots(slots, period, result?.Timestamps ?? [], result?.Values ?? []),
       };
     }),
   };
+}
+
+// CloudWatch returns only the periods that have data, so a host that was off
+// leaves no datapoint at all. Every series is laid on the same grid of periods
+// across the whole window, with null where nothing was reported.
+function metricSlots(start: Date, end: Date, periodSeconds: number): number[] {
+  const step = periodSeconds * 1000;
+  const first = Math.floor(start.getTime() / step) * step;
+  const slots: number[] = [];
+  for (let at = first; at < end.getTime(); at += step) slots.push(at);
+  return slots;
+}
+
+function onSlots(slots: readonly number[], periodSeconds: number, timestamps: readonly Date[], values: readonly number[]): HostMetricPoint[] {
+  const step = periodSeconds * 1000;
+  const first = slots[0] ?? 0;
+  const byIndex = new Map<number, number>();
+  timestamps.forEach((at, index) => {
+    const value = values[index];
+    if (value !== undefined) byIndex.set(Math.floor((at.getTime() - first) / step), value);
+  });
+  return slots.map((at, index) => ({ at: new Date(at).toISOString(), value: byIndex.get(index) ?? null }));
 }
 
 async function listWorldRecords(): Promise<readonly WorldRecord[]> {

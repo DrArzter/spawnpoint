@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { initialLifecycleRecord } from "../src/domain/lifecycle.ts";
 import { readControlPlaneSnapshot, type ControlPlaneSources } from "../src/control-plane/read-model.ts";
-import { gameCatalog } from "../src/control-plane/catalog.ts";
+import { displayAddress, gameCatalog, type CatalogGame } from "../src/control-plane/catalog.ts";
 
 const sources: ControlPlaneSources = {
   listHosts: async () => [
@@ -107,7 +107,7 @@ test("each world's address carries its own game's port, and only for callers all
   const addresses = new Map(
     visible.games.flatMap((game) => game.worlds.map((world) => [world.id, world.connectionAddress])),
   );
-  assert.equal(addresses.get("world"), "172.29.23.24:25565");
+  assert.equal(addresses.get("world"), "172.29.23.24", "Minecraft's own port is implied, so the address leaves it out");
   assert.equal(addresses.has("factorio-vanilla"), false, "a reusable preset is not a world until one is created");
   assert.equal(addresses.has("zomboid-vanilla"), false, "a reusable preset is not a world until one is created");
   assert.equal(visible.games.find((game) => game.id === "factorio")?.presets[0]?.id, "factorio-vanilla");
@@ -240,7 +240,7 @@ test("a ready session's address is the one the host reported, port and all; a st
   );
   const addresses = new Map(snapshot.games[0]!.worlds.map((world) => [world.id, world.connectionAddress]));
   assert.equal(addresses.get("vanilla"), "172.29.23.24:30010", "the session on slot one publishes its slot's port");
-  assert.equal(addresses.get("world"), "172.29.23.24:25565", "a world with no session shows where it would be");
+  assert.equal(addresses.get("world"), "172.29.23.24", "a world with no session shows where it would be, without the implied port");
   const withheld = await readControlPlaneSnapshot(
     { ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? ready : null },
     { includeInfrastructure: false, includeDesiredRelease: false },
@@ -281,4 +281,23 @@ test("an operation's expected time reaches the snapshot, also for a coarse viewe
   assert.equal(coarse.operations[0]?.expectedSeconds, 100);
   assert.equal(coarse.operations[0]?.expectedSamples, 6);
   assert.equal("expectedSeconds" in coarse.operations[1]!, false);
+});
+
+test("a DNS world shows its fixed name while stopped, and an address keeps a port other than the game's own", async () => {
+  const sources: ControlPlaneSources = {
+    listHosts: async () => [],
+    listRunningOperations: async () => [],
+    readLifecycle: async () => null,
+    readReleasePointer: async () => ({ state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null }),
+  };
+  const catalog: CatalogGame[] = [{
+    id: "minecraft", code: "MC", displayName: "Minecraft", connectPort: 25565, portImplied: true,
+    worlds: [{ id: "minecraft-dns-1a2b3c4d", displayName: "Dns", profileId: "main", sessionControl: "v2", connectivity: "route53", placement: "fleet", hostBinding: "launched" } as never],
+  }];
+  const stopped = await readControlPlaneSnapshot(sources, { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "unused", dnsSuffix: "games.example" }, catalog);
+  assert.equal(stopped.games[0]!.worlds[0]!.connectionAddress, "minecraft-dns-1a2b3c4d.games.example", "the record's name is known while the world is stopped");
+  const withheld = await readControlPlaneSnapshot(sources, { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: null, dnsSuffix: "games.example" }, catalog);
+  assert.equal(withheld.games[0]!.worlds[0]!.connectionAddress, null, "a caller who may not read an address reads none");
+  assert.equal(displayAddress("minecraft-dns-1a2b3c4d.games.example:25565", "minecraft-dns-1a2b3c4d", catalog), "minecraft-dns-1a2b3c4d.games.example");
+  assert.equal(displayAddress("minecraft-dns-1a2b3c4d.games.example:30010", "minecraft-dns-1a2b3c4d", catalog), "minecraft-dns-1a2b3c4d.games.example:30010", "a slot's own port stays");
 });

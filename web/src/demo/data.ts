@@ -78,6 +78,8 @@ export function initialState(): DemoState {
           presets: [
             { id: "industrial", displayName: "Industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5", profileDigest: "41d9a8e0c73b5f26184ad0e9cb7f3520a6e81d4c95f27b03ea6d183c7b40f9e2", releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3", buildAvailable: true },
             { id: "skyblock", displayName: "Skyblock", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "2b8e04f7a1c63d95e0847bf21a5d3906c7e4128b", profileDigest: "9c1e57a30b8d426fa9e271c04b5f83da6017e94b2c85fd30a7b16e2f48c0d95a", releases: [], buildStatus: "failed", latestRelease: null, buildAvailable: true, build: { release: "1.0", attempt: 1, state: "failed", requestedAt: "2026-09-14T18:00:00Z" } },
+            // The config was edited, the build of the new revision failed, and the release a world runs is still published (ADR-0042).
+            { id: "prominence", displayName: "Prominence II", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "185db5e3c94a07d2f6b81e4c5a90d37f2e61b8c4", profileDigest: "34cc6e0b92d7a15f38c40e9b7d2a61f85c03e9d47b1a6f28c5e03d97a4b8162f", releases: ["39127124115.1"], olderReleases: ["39127124115.1"], buildStatus: "failed", latestRelease: "39127124115.1", buildAvailable: true, build: { release: "45023300711.1", attempt: 1, state: "failed", requestedAt: "2026-11-22T09:00:00Z" } },
           ],
           worlds: [
             {

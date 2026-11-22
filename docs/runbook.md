@@ -646,6 +646,10 @@ history include `profiles/.source-revisions.json` in the hash-verified snapshot;
 the catalog stores each entry as `source_commit`. This metadata lives outside
 profile directories and does not invalidate their digests or ready releases.
 Legacy publishers preserve the previous revision for unchanged profile digests.
+A changed digest starts the entry `unbuilt` but keeps its earlier releases, each marked in `built_from` with the
+digest it was built from (ADR-0042, amended). The panel shows such a release as ready and the build of the new
+revision beside it. A new world or wipe needs a release of the current revision; a world that exists keeps using
+its own release. The catalog publish also adds a release that has a manifest but is not listed.
 The catalog's top-level source revision and immutable release manifests retain
 the exact repository snapshot used for publishing/building; they are not rewritten
 to the narrower path revision.

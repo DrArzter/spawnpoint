@@ -172,6 +172,7 @@ export const worldsApi = {
         invalid_world_name: "Enter a name between 1 and 80 characters.",
         preset_release_not_ready: "This preset has no ready release yet.",
         release_not_available: "The selected release is no longer available. Refresh and try again.",
+        release_outdated: "That release was built from an older revision. Build the preset again.",
         invalid_world_connectivity: "This network is not available for the current host mode. Refresh and choose another connection.",
       };
       throw new Error(messages[body.error ?? ""] ?? "The world could not be created.");

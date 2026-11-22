@@ -15,8 +15,12 @@ export type Preset = {
   commit: string;
   profileDigest: string;
   releases: readonly string[];
+  /** The state of the build of the current revision, not of the releases. */
   buildStatus: "unbuilt" | "building" | "ready" | "failed";
+  /** The newest published release, whatever revision it was built from. */
   latestRelease: string | null;
+  /** The releases built from an older revision than the current one (ADR-0042). */
+  olderReleases?: readonly string[];
   buildAvailable?: boolean;
   build?: { release: string; attempt: number; state: "starting" | "building" | "ready" | "failed"; requestedAt: string; profileDigest?: string };
 };
@@ -47,6 +51,7 @@ export type World = {
     releases: readonly string[];
     buildStatus: "unbuilt" | "building" | "ready" | "failed";
     latestRelease: string | null;
+    olderReleases?: readonly string[];
   };
   connectionAddress: string | null;
   release: ReleasePointer;

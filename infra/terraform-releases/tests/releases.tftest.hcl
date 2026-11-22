@@ -144,9 +144,26 @@ run "release_builder_caches_upstream_files_only_under_upstream" {
   assert {
     condition = alltrue(flatten([
       for statement in data.aws_iam_policy_document.release_builder.statement : [
-        for action in statement.actions : !can(regex("^s3:(Delete|List)", action))
+        for action in statement.actions : !can(regex("^s3:Delete", action))
       ]
     ]))
-    error_message = "The release builder may neither delete nor list objects; a cache miss is a 403 or a 404."
+    error_message = "The release builder may not delete objects."
+  }
+
+  assert {
+    condition = alltrue(flatten([
+      for statement in data.aws_iam_policy_document.release_builder.statement : [
+        for action in statement.actions : statement.sid == "ListPublishedReleases" || !can(regex("^s3:List", action))
+      ]
+    ]))
+    error_message = "The release builder may list objects only to find the published releases."
+  }
+
+  assert {
+    condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.release_builder.statement : statement.actions if statement.sid == "ListPublishedReleases"]) == toset(["s3:ListBucket"]),
+      one(flatten([for statement in data.aws_iam_policy_document.release_builder.statement : [for condition in statement.condition : condition.values if statement.sid == "ListPublishedReleases"]])) == "releases/*",
+    ])
+    error_message = "The listing is limited to the release prefix."
   }
 }

@@ -1,12 +1,12 @@
 import type { PointerRow, PresetRow, ReleasesModel } from "../../core/models";
 import { routeHash } from "../../routing";
+import { BuildState } from "./BuildState";
 import { ActionButton } from "./ui/ActionButton";
 import { Card } from "./ui/Card";
 import { Chip } from "./ui/Chip";
 import { Empty } from "./ui/Empty";
 import { Grid } from "./ui/Grid";
 import { PageHeader } from "./ui/PageHeader";
-import { Status } from "./ui/Status";
 import { Table, type Column } from "./ui/Table";
 
 /**
@@ -26,9 +26,9 @@ export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
   }
   const presets: Column<PresetRow>[] = [
     { id: "preset", header: "Preset", kind: "lead", render: (row) => row.preset.displayName },
-    { id: "build", header: "Build", render: (row) => <Status status={row.status} /> },
+    { id: "build", header: "Build", render: (row) => <BuildState row={row} /> },
     { id: "latest", header: "Latest release", render: (row) => row.preset.latestRelease ? <span className="c-mono">{row.preset.latestRelease}</span> : <span className="c-faint">—</span> },
-    { id: "releases", header: "Releases", kind: "num", render: (row) => row.preset.releases.length },
+    { id: "releases", header: "Releases", kind: "wide", className: "c-col-num", render: (row) => row.preset.releases.length },
     { id: "source", header: "Source", kind: "wide", clip: true, render: (row) => <SourceRef row={row} /> },
     { id: "actions", header: "Actions", kind: "act", render: (row) => <>{row.build && <ActionButton action={row.build} size="sm" />}{row.createWorld && <ActionButton action={row.createWorld} size="sm" />}</> },
   ];

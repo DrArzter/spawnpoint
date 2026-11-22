@@ -33,6 +33,7 @@ test("parses a versioned per-game preset catalog", () => {
     releases: ["1.0"],
     buildStatus: "ready",
     latestRelease: "1.0",
+    olderReleases: [],
   }]);
 });
 

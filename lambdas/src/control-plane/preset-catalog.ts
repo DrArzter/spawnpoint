@@ -8,8 +8,12 @@ export type PresetObservation = Readonly<{
   commit: string;
   profileDigest: string;
   releases: readonly string[];
+  /** The newest published release, whatever revision it was built from. */
   latestRelease: string | null;
+  /** The state of the build of the current revision (the profile digest), not of the releases. */
   buildStatus: "unbuilt" | "building" | "ready" | "failed";
+  /** Releases built from an older revision than the current profile digest (ADR-0042). */
+  olderReleases?: readonly string[];
   buildAvailable?: boolean;
   build?: BuildView;
 }>;
@@ -40,6 +44,25 @@ function parseReleases(value: unknown): string[] | null {
   return new Set(releases).size === releases.length ? releases : null;
 }
 
+// `built_from` records the profile digest and source commit each release was
+// built from. A release whose digest is not the entry's own is older. A null
+// digest is a release recovered without its revision: older by definition.
+// Absent for a legacy entry, whose releases all belong to the current digest.
+function parseOlderReleases(value: unknown, releases: readonly string[], digest: string): string[] | null {
+  if (value === undefined) return [];
+  const builtFrom = object(value);
+  if (builtFrom === null) return null;
+  const older: string[] = [];
+  for (const [release, revision] of Object.entries(builtFrom)) {
+    const record = object(revision);
+    if (!releases.includes(release) || record === null) return null;
+    if (record.profile_digest !== null && (typeof record.profile_digest !== "string" || !SHA256.test(record.profile_digest))) return null;
+    if (typeof record.source_commit !== "string" || !COMMIT.test(record.source_commit)) return null;
+    if (record.profile_digest !== digest) older.push(release);
+  }
+  return releases.filter((release) => older.includes(release));
+}
+
 function parsePreset(candidate: unknown, source: CatalogSource, gameId: string, ids: ReadonlySet<string>): PresetObservation | null {
   const preset = object(candidate);
   if (preset === null || typeof preset.id !== "string" || !ID.test(preset.id) || ids.has(preset.id)) return null;
@@ -55,6 +78,8 @@ function parsePreset(candidate: unknown, source: CatalogSource, gameId: string, 
   if (releases === null) return null;
   if (status === "ready" && (latestRelease === null || !releases.includes(latestRelease))) return null;
   if (status !== "ready" && latestRelease !== null && !releases.includes(latestRelease)) return null;
+  const olderReleases = parseOlderReleases(preset.built_from, releases, preset.profile_digest);
+  if (olderReleases === null) return null;
   return {
     id: preset.id,
     displayName: preset.display_name,
@@ -65,7 +90,27 @@ function parsePreset(candidate: unknown, source: CatalogSource, gameId: string, 
     releases,
     latestRelease,
     buildStatus: status,
+    olderReleases,
   };
+}
+
+/** A release of this preset built from an older revision than the current profile digest. */
+export function isOlderRevision(preset: Pick<PresetObservation, "olderReleases">, release: string): boolean {
+  return preset.olderReleases?.includes(release) ?? false;
+}
+
+/**
+ * Whether a world that exists may use a published release: start, restore and
+ * promote (ADR-0042). A release of an older revision stays usable while the
+ * current revision is not built, exactly as it was before the digest changed.
+ */
+export function usableByExistingWorld(preset: Pick<PresetObservation, "releases" | "buildStatus" | "olderReleases">, release: string): boolean {
+  return preset.releases.includes(release) && (preset.buildStatus === "ready" || isOlderRevision(preset, release));
+}
+
+/** Whether a new world or a new wipe may open on a release: only one built from the current revision. */
+export function usableByNewWipe(preset: Pick<PresetObservation, "releases" | "olderReleases">, release: string): boolean {
+  return preset.releases.includes(release) && !isOlderRevision(preset, release);
 }
 
 // Catalog documents are produced by the reviewed AWS builder, but they are

@@ -8,7 +8,7 @@ const SHOWN_RELEASES = 3;
 export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
   const presetColumns: readonly Col<PresetRow>[] = [
     { id: "preset", label: "Preset", width: "26%", render: (row) => <strong>{row.preset.displayName}</strong> },
-    { id: "build", label: "Build", width: "80px", render: (row) => <Indicator kind={row.status.kind} label={row.preset.build ? `${row.status.label}: ${row.preset.build.release}, attempt ${row.preset.build.attempt}` : row.status.label} /> },
+    { id: "build", label: "Build", width: "96px", render: (row) => <span className="t-inline"><Indicator kind={row.status.kind} label={row.preset.build && !row.revision ? `${row.status.label}: ${row.preset.build.release}, attempt ${row.preset.build.attempt}` : row.status.label} />{row.revision && <Indicator kind={row.revision.kind} label={row.preset.build ? `${row.revision.label}: ${row.preset.build.release}, attempt ${row.preset.build.attempt}` : row.revision.label} />}</span> },
     { id: "latest", label: "Latest build", width: "14%", render: (row) => (row.preset.latestRelease ? <code title="Immutable build ID, not the game version">{row.preset.latestRelease}</code> : <Ghost>None yet</Ghost>) },
     // The newest few, then a count: a preset accumulates releases forever.
     {

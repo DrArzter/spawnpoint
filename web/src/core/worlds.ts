@@ -7,6 +7,7 @@ import type { PendingMap, SessionAction, WorldActionKind } from "../shell/action
 import { changedSettings, settingsAvailable } from "./settings";
 import { controlPending, pendingFor } from "../shell/actions";
 import { action, type Action } from "./actions";
+import { promotableReleases, startableLatest } from "./presets";
 import { hostStatus, sessionStatus, worldStatus, type StatusDescriptor } from "./status";
 import type { AddressFacts, Detail, Notice, SessionOverview, SiblingRow, WorldRow } from "./models";
 
@@ -199,10 +200,11 @@ export function rowActions(game: Game, world: World, granted: ReadonlySet<string
 /** The releases a world's wipe may move to: its preset's others, newest first. */
 export function promotionTargets(game: Game, world: World): readonly string[] {
   const preset = presetOf(game, world);
-  if (!preset || preset.buildStatus !== "ready") return [];
+  if (!preset) return [];
   // Only releases after the active one: going back is a restore (ADR-0052).
   const at = world.release.activeRelease === null ? -1 : preset.releases.indexOf(world.release.activeRelease);
-  return preset.releases.slice(at + 1).reverse();
+  const usable = promotableReleases(preset);
+  return preset.releases.slice(at + 1).filter((release) => usable.includes(release)).reverse();
 }
 
 // Keeping the save across a release change is release.promote, the Owner's (ADR-0078).
@@ -230,7 +232,7 @@ function lifecycleActions(game: Game, world: World, busy: boolean, callbacks: Wo
   const preset = presetOf(game, world);
   if (world.materialization === "existing") {
     return [
-      action("world.wipe", "Start a new wipe", () => callbacks.onWorldAction(game, world, "wipe"), { icon: "history", disabled: busy || !preset?.latestRelease, detail: preset?.latestRelease ? `From ${preset.displayName} ${preset.latestRelease}` : "Needs a built release" }),
+      action("world.wipe", "Start a new wipe", () => callbacks.onWorldAction(game, world, "wipe"), { icon: "history", disabled: busy || !preset || startableLatest(preset) === null, detail: preset && startableLatest(preset) ? `From ${preset.displayName} ${startableLatest(preset)}` : "Needs a built release" }),
       action("world.archive", "Archive", () => callbacks.onWorldAction(game, world, "archive"), { icon: "archive", disabled: busy, detail: "Stops, backs up, hides from session control" }),
     ];
   }

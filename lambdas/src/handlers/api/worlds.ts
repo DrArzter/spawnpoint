@@ -2,6 +2,7 @@ import { type Identity } from "../../access/domain.ts";
 import { type SessionAction, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, type SessionPlan, type FleetSessionPlan } from "../../control-plane/session-control.ts";
 import { awsControlPlaneSources, backupReleaseSources, readConsoleInvocation, sendConsoleCommand, startSessionExecution, stopSessionExecution, materializePresetWorld, replaceWorldAccess, replaceWorldGameSettings, readWorldRecord, replaceWorldWhitelist, sendWhitelistReload, worldLifecycleExecution } from "../../control-plane/aws.ts";
 import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
+import { usableByNewWipe } from "../../control-plane/preset-catalog.ts";
 import { blockingOperations, sessionLifecycleKey, holdsWorld, type WorldHost, type WorldPlacement } from "../../control-plane/world-session.ts";
 import { randomUUID } from "node:crypto";
 import { type WorldRecord, worldIdForName } from "../../control-plane/world-registry.ts";
@@ -134,6 +135,7 @@ export async function createWorld(identity: Identity, gameId: string, presetId: 
   if (preset === undefined) return response(404, { error: "unknown_preset" });
   if (preset.releases.length === 0) return response(409, { error: "preset_release_not_ready" });
   if (!preset.releases.includes(release)) return response(409, { error: "release_not_available" });
+  if (!usableByNewWipe(preset, release)) return response(409, { error: "release_outdated" });
   const worldUuid = randomUUID();
   const worldId = worldIdForName(gameId, displayName, worldUuid);
   const createdAt = new Date().toISOString();

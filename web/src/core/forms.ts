@@ -4,6 +4,7 @@ import type { ControlPlaneSnapshot, Game, Preset, SettingDefinition, SettingValu
 import { worldSessionActive } from "../session";
 import type { Confirmation } from "../shell/actions";
 import { action } from "./actions";
+import { startableLatest, startableReleases } from "./presets";
 import { releaseBuildCopy } from "./release-builds";
 import { promotionTargets } from "./worlds";
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, WorldPlacement, WorldSettingsModel } from "./models";
@@ -46,16 +47,16 @@ function useConnectionFields(deployment: Deployment, initial: { placement: World
 }
 
 export function useCreateWorldForm(game: Game, initialPreset: Preset | null, deployment: Deployment, opts: Readonly<{ busy: boolean; onCreate: (preset: Preset, name: string, release: string, placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game") => void; onClose: () => void }>): CreateWorldModel {
-  const firstReady = game.presets.find((preset) => preset.releases.length > 0);
+  const firstReady = game.presets.find((preset) => startableReleases(preset).length > 0);
   const [presetId, setPresetId] = useState(initialPreset?.id ?? firstReady?.id ?? "");
   const preset = game.presets.find((item) => item.id === presetId) ?? null;
   const [name, setName] = useState("");
-  const [release, setRelease] = useState(preset?.latestRelease ?? "");
+  const [release, setRelease] = useState(preset ? startableLatest(preset) ?? "" : "");
   const connection = useConnectionFields(deployment, deployment?.placement === "fleet" && deployment.launchEnabled
     ? { placement: "fleet", connectivity: deployment.dnsAvailable ? "route53" : "raw" }
     : { placement: "configured", connectivity: "zerotier" });
-  useEffect(() => setRelease(preset?.latestRelease ?? ""), [preset?.id, preset?.latestRelease]);
-  const valid = preset !== null && preset.releases.includes(release) && name.trim().length > 0 && name.trim().length <= 80 && connection.valid;
+  useEffect(() => setRelease(preset ? startableLatest(preset) ?? "" : ""), [preset?.id, preset?.latestRelease, preset?.olderReleases]);
+  const valid = preset !== null && startableReleases(preset).includes(release) && name.trim().length > 0 && name.trim().length <= 80 && connection.valid;
   return {
     game,
     presets: game.presets,
@@ -249,19 +250,20 @@ export function useConfirmationForm(confirmation: Confirmation | null, opts: Rea
   };
 }
 
-// A wipe may open on any built release; a promotion moves to one the wipe does not run.
+// A wipe may open on any release of the current revision; a promotion moves to one the wipe does not run.
 function releaseOptions(confirmation: Confirmation): readonly Readonly<{ version: string; latest: boolean }>[] | null {
   if (confirmation.kind !== "wipe" && confirmation.kind !== "promote") return null;
   const preset = confirmation.preset;
   if (!preset) return null;
   const releases = confirmation.kind === "promote"
     ? promotionTargets(confirmation.game, confirmation.world)
-    : [...preset.releases].reverse();
-  return releases.map((version) => ({ version, latest: version === preset.latestRelease }));
+    : [...startableReleases(preset)].reverse();
+  return releases.map((version) => ({ version, latest: version === (confirmation.kind === "wipe" ? startableLatest(preset) : preset.latestRelease) }));
 }
 
 function initialRelease(confirmation: Confirmation | null): string {
   if (confirmation === null) return "";
-  const latest = confirmation.kind === "wipe" || confirmation.kind === "promote" ? confirmation.preset?.latestRelease ?? "" : "";
+  const preset = confirmation.kind === "wipe" || confirmation.kind === "promote" ? confirmation.preset : undefined;
+  const latest = preset ? (confirmation.kind === "wipe" ? startableLatest(preset) : preset.latestRelease) ?? "" : "";
   return releaseOptions(confirmation)?.some((option) => option.version === latest) ? latest : "";
 }

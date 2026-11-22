@@ -13,8 +13,8 @@
 #   upstream/curseforge/<project>/<file>/mirror/<sha512>   the pack's pinned client mirror
 #   upstream/modrinth/<version_id>/<sha512>                a Modrinth addon
 #
-# The builder has no s3:ListBucket, so S3 answers a missing key with 403, not
-# 404. Both are a miss here.
+# Without s3:ListBucket S3 answers a missing key with 403, not 404. Both are a
+# miss here.
 # shellcheck shell=bash
 
 # shellcheck source=_s3.sh

@@ -1,6 +1,6 @@
 # ADR-0042 — Release identity and storage are scoped by preset
 
-- Status: Accepted
+- Status: Accepted — amended 2026-11-22: a preset keeps its release history across revisions
 - Date: 2026-09-10
 - Amends: [ADR-0040](0040-reusable-presets-and-world-wipes.md)
 
@@ -30,3 +30,56 @@ The existing production release is copied and verified into its canonical namesp
 | Keep globally unique bare versions | Forces unrelated presets to coordinate numbering and contradicts ADR-0040's preset-owned release model |
 | Add only a catalog history while artifacts remain global | Makes the UI appear correct but preserves the physical collision and blocks multi-game adoption |
 | Use a random release UUID | Avoids collisions but discards the useful human version and still needs a preset relationship |
+
+## Amendment — a preset keeps its release history across revisions (2026-11-22)
+
+### Context
+
+The catalog carried `build_status`, `releases` and `latest_release` over only while the profile digest was unchanged.
+An edit to a preset's configuration changed the digest, the entry started empty, and every earlier release was
+forgotten. In production the owner added two addons to Prominence II; the build of the new revision failed; the
+panel said "Not built" while release `39127124115.1` still existed in S3 and the world ran on it.
+
+### Decision
+
+**The catalog lists every published release of a preset, whatever revision built it.** A revision is the profile
+digest and its source commit.
+
+- `releases` and `latest_release` are the newest published releases of all revisions. A release is published when its
+  manifest exists; a folder without a manifest (a failed build) is never listed.
+- `build_status` is the state of the current revision only: `unbuilt`, `building`, `failed` or `ready`.
+- A new optional map, `built_from`, records `{profile_digest, source_commit}` for each release. A release whose digest
+  differs from the entry's own is **older**. A release recovered without its revision has `profile_digest: null` and
+  is older. A legacy entry without the map keeps its meaning: all its releases are current.
+- `schema_version` stays 2. The change only adds a field and relaxes the carry-over. A reader that ignores
+  `built_from` sees an entry with releases, a `latest_release` that is among them, and a status that is not `ready`:
+  all of this was already valid. Such a reader refuses promotion while the status is not `ready`, which is the safe side.
+
+The catalog builder carries `releases`, `latest_release` and `built_from` over for every entry whose id it knew,
+and marks each earlier release with the old entry's digest and commit. A digest change starts `unbuilt`. The
+builder also lists `releases/<game>/` and adds every release that has a manifest and that the catalog forgot, so the
+history of a catalog written before this amendment heals at its next publish. The listing is best effort. The release
+builder appends the new release with the current digest and commit, as before.
+
+Readers decide by release, not by the entry's status alone:
+
+| Use | Older-revision release | Why |
+| --- | --- | --- |
+| Start, restore and download for a world that exists | Allowed | The world runs on it. Nothing changed for the world. |
+| Promotion of a fleet world (ADR-0078) | Allowed while the current revision is not ready | Exactly as before the digest change. A current-revision release still needs `ready`. |
+| New world | Refused (`release_outdated`) | A new world should not start on a pack that the configuration has left. |
+| New wipe | Refused (`release_outdated`) | The same. |
+
+Refusing is the safer default and keeps today's behaviour for new worlds. It costs a build of the new revision
+before the next wipe. The owner can reverse this rule later in one place (`usableByNewWipe`).
+
+The panel shows the release as ready and the new revision's build as a second compact indicator
+("New revision: build failed"), in both skins.
+
+### Consequences
+
+- A failed or pending build of a new revision no longer hides a release that a world runs on.
+- The release list keeps growing. The panel already shows only the newest few.
+- A release recovered from S3 has no known digest. It is marked older, even if it was built from the current one.
+- The release-builder role needs `s3:ListBucket` on the bucket, limited to the `releases/` prefix.
+- A catalog is healed at the next catalog publish (a push to the configuration repository), not at the next build.

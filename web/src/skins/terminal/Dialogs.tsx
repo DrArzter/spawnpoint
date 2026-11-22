@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, ScopeModel, WorldSettingsModel } from "../../core/models";
+import { startableLatest, startableReleases } from "../../core/presets";
 import { plural } from "../../lib/format";
 import { Drawer, Empty, Field, Modal, NoMatches, Notice, Person, SelectInput, SkeletonRows, State, TextInput, Toggle, Verb } from "./ui";
 
@@ -87,13 +88,13 @@ function ConnectionFields({ model, first = false }: Readonly<{ model: Connection
 }
 
 export function CreateWorldSheet({ model }: Readonly<{ model: CreateWorldModel }>) {
-  const readyPresets = model.presets.filter((preset) => preset.releases.length > 0);
+  const readyPresets = model.presets.filter((preset) => startableReleases(preset).length > 0);
   return (
     <Drawer
       cancel={model.cancel}
       closeActionId={model.cancel.id}
       footer={<>
-        <p>{model.preset ? `${model.preset.displayName} · ${plural(model.preset.releases.length, "release")}` : "Choose a preset"}</p>
+        <p>{model.preset ? `${model.preset.displayName} · ${plural(startableReleases(model.preset).length, "release")}` : "Choose a preset"}</p>
         <Verb action={model.submit} tone="primary" />
       </>}
       onClose={model.cancel.run}
@@ -103,7 +104,7 @@ export function CreateWorldSheet({ model }: Readonly<{ model: CreateWorldModel }
       <form className="t-form" onSubmit={(event) => { event.preventDefault(); model.submit.run(); }}>
         <Field hint={readyPresets.length === 0 ? "No preset of this game has a ready release." : undefined} label="Preset">
           <SelectInput onChange={(event) => model.setPresetId(event.target.value)} value={model.presetId}>
-            {model.presets.map((item) => <option disabled={item.releases.length === 0} key={item.id} value={item.id}>{item.displayName}{item.releases.length === 0 ? ` (${item.buildStatus})` : ""}</option>)}
+            {model.presets.map((item) => <option disabled={startableReleases(item).length === 0} key={item.id} value={item.id}>{item.displayName}{startableReleases(item).length === 0 ? ` (${item.buildStatus})` : ""}</option>)}
           </SelectInput>
         </Field>
         <Field hint="1 to 80 characters. Shown in the worlds list and in Telegram." label="Name">
@@ -112,7 +113,7 @@ export function CreateWorldSheet({ model }: Readonly<{ model: CreateWorldModel }
         <Field label="Release">
           <SelectInput disabled={!model.preset} onChange={(event) => model.setRelease(event.target.value)} value={model.release}>
             <option disabled value="">Choose a release</option>
-            {model.preset && [...model.preset.releases].reverse().map((version) => <option key={version} value={version}>{version}{version === model.preset?.latestRelease ? " (latest)" : ""}</option>)}
+            {model.preset && [...startableReleases(model.preset)].reverse().map((version) => <option key={version} value={version}>{version}{version === startableLatest(model.preset!) ? " (latest)" : ""}</option>)}
           </SelectInput>
         </Field>
         <ConnectionFields model={model.connection} />

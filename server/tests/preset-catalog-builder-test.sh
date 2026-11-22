@@ -120,4 +120,73 @@ if run_builder >/dev/null 2>&1; then
   exit 1
 fi
 
+# --- Release history across digests (ADR-0042) ---
+publish_snapshot() {
+  git -C "${config}" add profiles
+  git -C "${config}" -c user.name=Test -c user.email=test@example.invalid commit --quiet --allow-empty -m "$1"
+  commit="$(git -C "${config}" rev-parse HEAD)"
+  source_key="config-sources/DrArzter/my-docker-factorio-server-config/${commit}.tar.gz"
+  git -C "${config}" archive --format=tar.gz --output="${source_archive}" "${commit}" profiles
+  source_sha256="$(sha256sum -- "${source_archive}" | awk '{print $1}')"
+  cp -- "${source_archive}" "${FAKE_S3_ROOT}/spawnpoint-test-releases/${source_key}"
+}
+preset_field() {
+  jq -r --arg id "$1" ".presets[] | select(.id == \$id) | $2" "${catalog}"
+}
+releases_root="${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/factorio/factorio-vanilla"
+put_manifest() {
+  mkdir -p -- "${releases_root}/$1"
+  jq -n --arg release "$1" --arg commit "${commit}" \
+    '{game: "factorio", release: $release, created_at: "2026-11-01T00:00:00Z", source_profile: {id: "factorio-vanilla", repository: "https://github.com/DrArzter/my-docker-factorio-server-config", commit: $commit}}' \
+    >"${releases_root}/$1/manifest.json"
+}
+
+# The ready release "1.0" was built from this digest and commit.
+publish_snapshot "revision before the edit"
+run_builder >/dev/null
+old_digest="$(preset_field factorio-vanilla .profile_digest)"
+old_commit="$(preset_field factorio-vanilla .source_commit)"
+[[ "$(preset_field factorio-vanilla .build_status)" == ready ]]
+
+# A digest change starts unbuilt but keeps every release, marked with the
+# revision it was built from. latest_release stays the newest published one.
+printf 'edited\n' >"${config}/profiles/factorio-vanilla/extra.txt"
+publish_snapshot "edit the profile"
+run_builder >/dev/null
+jq -e --arg old_digest "${old_digest}" --arg old_commit "${old_commit}" '
+  (.presets[] | select(.id == "factorio-vanilla")
+    | .profile_digest != $old_digest and .build_status == "unbuilt"
+      and .releases == ["1.0"] and .latest_release == "1.0"
+      and .built_from == {"1.0": {profile_digest: $old_digest, source_commit: $old_commit}})
+  and (.presets[] | select(.id == "space-age") | .build_status == "unbuilt" and .releases == [] and (has("built_from") | not))
+' "${catalog}" >/dev/null
+
+# A folder without a manifest is a failed build and is never listed. A
+# published release that the catalog does not list is added, from an unknown
+# revision, and does not take latest_release from a known one.
+mkdir -p -- "${releases_root}/2.0/mods"
+printf 'partial\n' >"${releases_root}/2.0/mods/example.zip"
+put_manifest 1.5
+run_builder >/dev/null
+[[ "$(preset_field factorio-vanilla '.releases | join(",")')" == "1.0,1.5" ]]
+[[ "$(preset_field factorio-vanilla .latest_release)" == "1.0" ]]
+[[ "$(preset_field factorio-vanilla '.built_from["1.5"].profile_digest')" == null ]]
+[[ "$(preset_field factorio-vanilla '.built_from["1.0"].profile_digest')" == "${old_digest}" ]]
+
+# A catalog that forgot its history (the entry was reset on a digest change)
+# gets it back from the manifests, so a world's release stays usable.
+jq '(.presets[] | select(.id == "factorio-vanilla")) |= (.releases = [] | .latest_release = null | del(.built_from))' \
+  "${catalog}" >"${catalog}.forgotten"
+mv -- "${catalog}.forgotten" "${catalog}"
+run_builder >/dev/null
+jq -e '
+  .presets[] | select(.id == "factorio-vanilla")
+  | .build_status == "unbuilt" and .releases == ["1.5"] and .latest_release == "1.5"
+    and .built_from["1.5"].profile_digest == null
+' "${catalog}" >/dev/null
+
+# Without a listing the catalog still publishes and keeps what it has.
+FAKE_S3_LIST_FAIL=true run_builder >/dev/null 2>&1
+[[ "$(preset_field factorio-vanilla '.releases | join(",")')" == "1.5" ]]
+
 printf 'result=passed\n'

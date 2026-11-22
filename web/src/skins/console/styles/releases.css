@@ -12,7 +12,8 @@ html[data-skin="console"] .c-releases-world {
   width: 40%;
 }
 
-html[data-skin="console"] .c-releases-release {
+html[data-skin="console"] .c-releases-release,
+html[data-skin="console"] .c-releases-build {
   display: inline-flex;
   align-items: center;
   gap: 6px;

@@ -139,12 +139,13 @@ jobs:
         working-directory: web
 
       # The runner image carries Google Chrome; the gate drives it headless.
-      # A pull request that changes nothing under web/ skips it (UI_BASE);
-      # a push to main always runs it.
+      # It skips when nothing under web/ (or its own wiring) changed since
+      # UI_BASE: a pull request's base, or the commit a push replaced. A push
+      # without a previous commit (a new branch) runs it in full.
       - name: Probe every page, state and menu at every step
         run: scripts/check.sh ui
         env:
-          UI_BASE: ${{ github.event.pull_request.base.sha }}
+          UI_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before != '0000000000000000000000000000000000000000' && github.event.before || '' }}
           UI_ADVISE: '1'
 
       - name: Keep the advisory report and its screenshots

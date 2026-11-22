@@ -6,7 +6,7 @@ import { parameter } from "./http.ts";
 
 export const releasesRoutes: Readonly<Record<string, Route>> = {
   "GET /games/{gameId}/presets/{presetId}/releases/{version}": permissionRoute("release.read", (_identity, event) =>
-    releaseManifest(parameter(event, "gameId"), parameter(event, "presetId"), parameter(event, "version"))),
+    releaseManifest(parameter(event, "gameId"), parameter(event, "presetId"), parameter(event, "version"), event.queryStringParameters)),
   "GET /games/{gameId}/presets/{presetId}/releases/{version}/diff": permissionRoute("release.read", (_identity, event) =>
     releaseDiff(parameter(event, "gameId"), parameter(event, "presetId"), parameter(event, "version"), event.queryStringParameters?.from)),
   "POST /games/{gameId}/presets/{presetId}/builds": permissionRoute("release.build", (identity, event) =>

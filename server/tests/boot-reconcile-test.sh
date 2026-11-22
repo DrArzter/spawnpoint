@@ -97,6 +97,25 @@ for pack in client.zip server.zip full.zip; do
 done
 [[ -z "$(find "${host}/releases/minecraft/main/1.0" -name '.fetch.*')" ]]
 
+# 2b. Many missing files take the two folders whole instead of one filter per
+# file (the CLI matches every key against every filter), with the same checks.
+rm -rf -- "${host}/releases/minecraft/main/1.0"
+: >"${calls}"
+folder_output="$(FAKE_AWS_CALL_LOG="${calls}" RELEASE_DOWNLOAD_FILTER_LIMIT=1 \
+  "${SCRIPTS}/download-release.sh" minecraft main 1.0 "${host}/releases/minecraft/main/1.0")"
+grep -qx 'downloaded=2' <<<"${folder_output}"
+grep -qF -- '--include mods/*' "${calls}"
+grep -qF -- '--include overrides/*' "${calls}"
+if grep -qF -- '--include mods/alpha.jar' "${calls}"; then
+  printf 'expected folder filters above the limit, not one per file\n' >&2
+  exit 1
+fi
+cmp -- "${fixture}/source/pack/mods/alpha.jar" "${host}/releases/minecraft/main/1.0/mods/alpha.jar"
+for pack in client.zip server.zip full.zip; do
+  [[ ! -e "${host}/releases/minecraft/main/1.0/${pack}" ]]
+done
+[[ -z "$(find "${host}/releases/minecraft/main/1.0" -name '.fetch.*')" ]]
+
 # 3. Reconcile materialises the live mod directory from the payload.
 SERVER_PROJECT_DIRECTORY="${host}" \
   "${SCRIPTS}/reconcile-release.sh" "${host}/releases/minecraft/main/1.0/manifest.json" >/dev/null

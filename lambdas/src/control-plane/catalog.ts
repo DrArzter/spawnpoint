@@ -72,6 +72,9 @@ export type CatalogGame = Readonly<{
   // connectivity strategy (ADR-0033); the port belongs to the game, and one
   // configured address string used to carry Minecraft's port for all of them.
   connectPort: number;
+  // The client fills in connectPort by itself, so an address on that port is
+  // shown without it (Minecraft's 25565). Any other port stays in the address.
+  portImplied?: true;
   // Replaces the entry in gameFootprints for this catalog; absent means that entry.
   footprint?: Footprint;
   // False for a game whose server tells its clients which port to continue on:
@@ -93,6 +96,7 @@ export const gameCatalog: readonly CatalogGame[] = [
     code: "MC",
     displayName: "Minecraft",
     connectPort: 25565,
+    portImplied: true,
     whitelist: true,
     worlds: [
       { id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1", connectivity: "zerotier", hostBinding: "configured" },
@@ -249,6 +253,14 @@ export function launchRequirementsForWorld(worldId: string, catalog: readonly Ca
 
 // A world id is unique across games in this catalog, and the drift test against
 // server/worlds/catalog.json keeps it that way.
+/** The address as players type it: without the port when it is the game's own and the client implies it. */
+export function displayAddress(address: string, worldId: string, catalog: readonly CatalogGame[] = gameCatalog): string {
+  const game = catalog.find((candidate) => candidate.worlds.some((world) => world.id === worldId));
+  if (game?.portImplied !== true) return address;
+  const suffix = `:${game.connectPort}`;
+  return address.endsWith(suffix) ? address.slice(0, -suffix.length) : address;
+}
+
 export function connectPortForWorld(worldId: string, catalog: readonly CatalogGame[] = gameCatalog): number {
   const game = catalog.find((candidate) => candidate.worlds.some((world) => world.id === worldId));
   if (game === undefined) throw new Error(`unknown world: ${worldId}`);

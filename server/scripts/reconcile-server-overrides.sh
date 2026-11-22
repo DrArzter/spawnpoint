@@ -177,6 +177,19 @@ for path in "${moving_world_data[@]}"; do
   mv -T -- "${backup}/${path}" "${stage}/${path}" || die "cannot keep world data path: ${path}"
 done
 
+# The game runs as its own user and rewrites some of these files at boot (a
+# mod's config). The image hands /data to that user only while /data is not
+# yet its own, so a second start on the same host met root-owned files and the
+# server failed with AccessDeniedException. Running as root, the new roots go
+# to the game user before they are live.
+if ((EUID == 0)); then
+  game_owner="${GAME_DATA_OWNER:-1000:1000}"
+  [[ "${game_owner}" =~ ^[0-9]+:[0-9]+$ ]] || die "GAME_DATA_OWNER must be uid:gid: ${game_owner}"
+  while IFS= read -r root; do
+    [[ ! -d "${stage}/${root}" ]] || chown -R -- "${game_owner}" "${stage}/${root}"
+  done < <(jq -r '.[]' <<<"${all_roots}")
+fi
+
 while IFS= read -r root; do
   [[ ! -d "${stage}/${root}" ]] || mv -- "${stage}/${root}" "${target_data}/${root}"
 done < <(jq -r '.[]' <<<"${all_roots}")

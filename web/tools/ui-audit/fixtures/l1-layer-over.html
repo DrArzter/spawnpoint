@@ -1,0 +1,5 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>fixture</title><style>body{margin:0;font:16px/24px Arial,sans-serif;background:#fff;color:#111}main{padding:16px}button{font:inherit;padding:6px 12px;background:#1a73e8;color:#fff;border:0;border-radius:4px}[data-layer=tip]{position:fixed;inset:auto;margin:0;border:0;left:40px;top:120px;padding:6px 10px;background:#161d26;color:#fff;border-radius:6px}</style></head><body><main><!-- L1: the same tip as a manual popover, shown after the modal: it is in the top layer above it. -->
+<button data-action="open" onclick="document.getElementById('d').showModal(); document.querySelector('[data-layer=tip]').showPopover()">Open</button>
+<div data-layer="tip" popover="manual" role="tooltip">Why this is unavailable</div>
+<dialog id="d" style="width:280px"><h2 style="margin:0 0 8px">Settings</h2><p>Body</p></dialog>
+</main></body></html>

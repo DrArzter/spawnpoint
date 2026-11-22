@@ -204,6 +204,17 @@ jq -n '{schema_version: 1, release: "1.0", roots: ["config"]}' >"${adapter}/.spa
 jq -n '{schema_version: 1, release: "1.0", roots: ["config"], world_data: ["config/mod/data", "config/gone", "../escape"]}' \
   >"${adapter}/.spawnpoint-overrides.json"
 [[ "$(paths_of "${adapter}" | paste -sd ' ' -)" == "world .spawnpoint-overrides.json config/mod/data" ]]
+# The server's player lists travel with the save, so a fresh host keeps its operators and bans.
+for list in ops.json banned-players.json banned-ips.json whitelist.json usercache.json; do
+  printf '[]\n' >"${adapter}/${list}"
+done
+ln -s ops.json "${adapter}/linked.json"
+[[ "$(paths_of "${adapter}" | paste -sd ' ' -)" == "world ops.json banned-players.json banned-ips.json whitelist.json usercache.json .spawnpoint-overrides.json config/mod/data" ]]
+rm -f -- "${adapter}/ops.json" && ln -s /etc/passwd "${adapter}/ops.json"
+if paths_of "${adapter}" | grep -qx 'ops.json'; then
+  printf 'a player list that is a link must not be saved\n' >&2
+  exit 1
+fi
 mapfile -d '' excludes < <(game_save_excludes)
 [[ "${excludes[*]}" == "plugins/*.jar plugins/.paper-remapped plugins/*/libs libraries cache versions" ]]
 

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
-import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, HostMetrics, LinkedLoginAccount, MetricRange, ModSource, SubscriptionState } from "../api/contract";
+import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, HostMetrics, LinkedLoginAccount, MetricRange, ModSortKey, ModSource, ModSourceFilter, SubscriptionState } from "../api/contract";
+import type { ModSortDirection } from "./release-mods";
 import type { StatusDescriptor } from "./status";
 import type { AccessTab, ControlPlaneSnapshot, Game, Member, Operation, OwnerBootstrap, Page, Preset, Role, ServerState, Wipe, World, WorldTab } from "../model";
 import type { WorldsView } from "../routing";
@@ -210,8 +211,35 @@ export type WhitelistModel = Readonly<{
 
 /** One mod of the release a world starts with, of either side, and its download (ADR-0065, ADR-0069). `source` is null for a release built before sources were recorded. */
 export type ModRow = Readonly<{ file: string; bytes: number; sha256: string; source: ModSource | null; download: Action }>;
-/** `split`: players install a set of their own, so the release offers its server and full packs too. */
-export type ModsModel = Readonly<{ release: string; split: boolean; files: Loading<readonly ModRow[]> }>;
+/** The rows of the page on screen: what the search and filter match (`total`) and the whole release (`all`). */
+export type ModsPage = Readonly<{ rows: readonly ModRow[]; total: number; all: number }>;
+/**
+ * A release's mods, one page at a time: the server searches, filters, sorts and
+ * pages, and the model holds the page on screen and the choices that asked for it.
+ * `split`: players install a set of their own, so the release offers its server
+ * and full packs too. `split`, `sources` and `pages` outlast a page load.
+ */
+export type ModsModel = Readonly<{
+  release: string;
+  split: boolean;
+  /** The text in the search field; the page follows it after a pause. */
+  search: string;
+  setSearch: (value: string) => void;
+  source: ModSourceFilter | null;
+  setSource: (source: ModSourceFilter | null) => void;
+  /** The sources the release holds, unknown last; empty when it recorded none. */
+  sources: readonly Readonly<{ source: ModSourceFilter; label: string; count: number }>[];
+  sort: Readonly<{ key: ModSortKey; direction: ModSortDirection }>;
+  setSort: (key: ModSortKey, direction: ModSortDirection) => void;
+  /** The page on screen, from 1, and how many pages the search and filter leave. */
+  page: number;
+  pages: number;
+  setPage: (page: number) => void;
+  /** True while a search or a source narrows the list. */
+  narrowed: boolean;
+  clear: () => void;
+  files: Loading<ModsPage>;
+}>;
 
 /** One line of a release diff (P3): what changed, in which part of the release, and the item. */
 export type ChangeRow = Readonly<{ id: string; change: "added" | "removed" | "changed"; part: string; name: string; detail: string | null }>;

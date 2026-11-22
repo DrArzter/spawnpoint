@@ -1,18 +1,19 @@
-import { useState, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 
 import type { BackupEntry } from "../../api/contract";
 import { Timestamp } from "../../components/ui/Timestamp";
 import { action } from "../../core/actions";
-import { useFilter } from "../../components/ui/Filter";
+import type { Filter } from "../../components/ui/Filter";
 import type { BackupsModel, ChangeRow, Detail, DetailValue, ModRow, ModsModel, OperationProgressModel, ReleaseChangesModel, ReleaseRow, WorldModel } from "../../core/models";
 import { progressDetails, useSecondClock } from "../../core/operation-progress";
-import { modSourceCounts, modSourceLabel } from "../../core/release-mods";
+import { modSourceLabel } from "../../core/release-mods";
+import { newestFirst } from "../../core/release-order";
 import type { StatusKind } from "../../core/status";
 import { wipeStatus } from "../../core/worlds";
 import { Icon } from "../../icons";
 import { formatBytes, formatTime, shortDigest } from "../../lib/format";
 import { useMediaQuery } from "../../shell/hooks";
-import { Address, Choice, Choices, Col, DetailRow, Details, DetailsGroup, Empty, FilterRow, Ghost, Indicator, Log, NoMatches, Notice, Overflow, Page, Panel, State, Table, Tabs, Verb, Verbs } from "./ui";
+import { Address, Choice, Choices, Col, DetailRow, Details, DetailsGroup, Empty, Field, FilterRow, Ghost, Indicator, Log, NoMatches, Notice, Overflow, Page, Pager, Panel, SelectInput, State, Table, Tabs, Verb, Verbs } from "./ui";
 import { MetricsPanel } from "./Metrics";
 import { ConsolePanel } from "./Rcon";
 import { WhitelistPanel } from "./Whitelist";
@@ -197,7 +198,7 @@ function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["r
   ];
   return <>
     <Panel flush>
-      <Table columns={columns} empty={<Empty title="No release" />} label={`Release pointer of ${worldName}`} rowKey={(row) => row.name} rows={releases.rows} />
+      <Table columns={columns} empty={<Empty title="No release" />} label={`Release pointer of ${worldName}`} rowKey={(row) => row.name} rows={newestFirst(releases.rows)} />
     </Panel>
     {releases.changes && <ChangesPanel changes={releases.changes} worldName={worldName} />}
     {releases.mods && <ModsPanel key={`${worldName}:${releases.mods.release}`} mods={releases.mods} worldName={worldName} />}
@@ -247,8 +248,10 @@ function SourceMark({ source }: Readonly<{ source: ModRow["source"] }>) {
   return source === null ? <Indicator kind="unknown" label="Unknown source" /> : <Indicator glyph={sourceGlyphs[source]} label={modSourceLabel(source)} />;
 }
 
+const modSorts = (["name", "source", "size"] as const).flatMap((key) => (["ascending", "descending"] as const).map((direction) => ({ key, direction, value: `${key}:${direction}`, label: `${key.charAt(0).toUpperCase()}${key.slice(1)}, ${direction}` })));
+
 // Every mod of the release the world starts with, of both sides (ADR-0065,
-// ADR-0069); the packs that sort them are on the release row.
+// ADR-0069), one page at a time; the packs that sort them are on the release row.
 function ModsPanel({ mods, worldName }: Readonly<{ mods: ModsModel; worldName: string }>) {
   const columns: readonly Col<ModRow>[] = [
     { id: "file", label: "File", truncate: true, render: (row) => <code className="t-clip" title={row.file}>{row.file}</code> },
@@ -258,34 +261,44 @@ function ModsPanel({ mods, worldName }: Readonly<{ mods: ModsModel; worldName: s
     { id: "verbs", label: "Actions", verbs: true, corner: true, render: (row) => <Overflow groups={[[row.download]]} label={`Actions for ${row.file}`} size="small" /> },
   ];
   const files = mods.files;
-  const [source, setSource] = useState<ModRow["source"] | "all">("all");
-  const rows = files.status === "ready" ? files.value : [];
-  // The source choices exist only when the release recorded sources; an old one keeps the search alone.
-  const sources = modSourceCounts(rows);
-  const narrowed = source === "all" ? rows : rows.filter((row) => row.source === source);
-  const filter = useFilter(narrowed, (row) => [row.file]);
-  const clear = () => { filter.clear(); setSource("all"); };
+  const ready = files.status === "ready" ? files.value : null;
+  const field = useRef<HTMLInputElement | null>(null);
+  const filter: Filter<ModRow> = {
+    query: mods.search,
+    setQuery: mods.setSearch,
+    clear: () => { mods.clear(); field.current?.focus(); },
+    active: ready !== null && mods.search.trim() !== "",
+    rows: [],
+    total: ready?.all ?? 0,
+    field,
+  };
   return (
     <Panel flush name={`Mods · release ${mods.release}`}>
       {files.status === "error"
         ? <div className="t-inset"><Notice description={files.error} title="The mods are unavailable" tone="error" verbs={<Verb action={files.retry} size="small" />} /></div>
         : <>
-          <FilterRow disabled={files.status !== "ready"} filter={filter} label="Search mods" placeholder="Search by file name">
-            {sources.length > 0 && (
+          <FilterRow disabled={files.status === "loading" && mods.sources.length === 0 && !mods.narrowed} filter={filter} label="Search mods" matches={ready?.total} placeholder="Search by file name">
+            <Field hideLabel label="Sort mods">
+              <SelectInput onChange={(event) => { const next = modSorts.find((item) => item.value === event.target.value); if (next) mods.setSort(next.key, next.direction); }} value={`${mods.sort.key}:${mods.sort.direction}`}>
+                {modSorts.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </SelectInput>
+            </Field>
+            {mods.sources.length > 0 && (
               <Choices label="Filter mods by source">
-                <Choice onClick={() => setSource("all")} pressed={source === "all"}>All</Choice>
-                {sources.map((item) => <Choice key={item.label} onClick={() => setSource(item.source)} pressed={source === item.source}>{item.label}</Choice>)}
+                <Choice onClick={() => mods.setSource(null)} pressed={mods.source === null}>All</Choice>
+                {mods.sources.map((item) => <Choice key={item.source} onClick={() => mods.setSource(item.source)} pressed={mods.source === item.source}>{item.label}</Choice>)}
               </Choices>
             )}
           </FilterRow>
           <Table
             columns={columns}
-            empty={filter.active || source !== "all" ? <NoMatches clearLabel="Clear filters" filter={{ query: filter.query.trim(), clear }} noun="mods" /> : <Empty title="This release has no mods" />}
+            empty={mods.narrowed ? <NoMatches clearLabel="Clear filters" filter={{ query: mods.search.trim(), clear: mods.clear }} noun="mods" /> : <Empty title="This release has no mods" />}
             label={`Mods of ${worldName}, release ${mods.release}`}
             loading={files.status === "loading"}
             rowKey={(row) => row.sha256}
-            rows={filter.rows}
+            rows={ready?.rows ?? []}
           />
+          <Pager label="Mod pages" onPage={mods.setPage} page={mods.page} pages={mods.pages} />
         </>}
     </Panel>
   );

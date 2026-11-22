@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { useLayer } from "../../../components/ui/layer";
 import { Icon } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { MOTION } from "./motion";
@@ -17,6 +18,9 @@ export function useToast(): (message: string, kind?: ToastKind) => void {
 export function ToastProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const counter = useRef(0);
+  const host = useRef<HTMLDivElement>(null);
+  // Open from the start, so the live region is never hidden when a toast joins it.
+  useLayer(host, true, true);
   const show = useCallback((message: string, kind: ToastKind = "info") => {
     counter.current += 1;
     const id = counter.current;
@@ -26,7 +30,7 @@ export function ToastProvider({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div aria-live="polite" className="c-toasts" data-layer="toast" role="status">
+      <div aria-live="polite" className="c-toasts" data-layer="toast" popover="manual" ref={host} role="status">
         {toasts.map((toast) => <ToastItem key={toast.id} onDone={() => setToasts((current) => current.filter((item) => item.id !== toast.id))} toast={toast} />)}
       </div>
     </ToastContext.Provider>

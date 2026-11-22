@@ -87,7 +87,10 @@ what it offers.
 The front door (landing, sign-in, join, email action and connect screens) is outside every skin. It keeps the base
 sheets in `web/src/styles` (`tokens.css`, `base.css`, `shell.css`, `components.css`, `landing.css`) and the parts in
 `web/src/components/ui`. Some of those parts are behaviour that the skins share too: the snackbar queue
-(`Snackbar`), which both skins read, and `Timestamp`, `Tooltip` and `useFilter`, which the terminal skin uses.
+(`Snackbar`), which both skins read, and `Timestamp`, `Tooltip` and `useFilter`, which the terminal skin uses. So is `layer.ts`: every floating layer
+(tip, menu, toast) is a manual popover in the browser's top layer, shown through it and marked `data-layer`, so a modal
+dialog or drawer never covers one. A layer carries no z-index of its own; `components.css` holds the one base rule that
+strips the user agent's popover box. Never place a tip, menu or toast as an ordinary page element.
 
 ## Owner rules
 
@@ -203,8 +206,8 @@ Two primitives step by their own width, not the window's, because a split page g
 
 Level 0 is the page (`--c-bg`). Level 1 is a card, the rail and the list column (`--c-surface`, `--c-shadow`). Level 3
 is a menu, dialog, palette, flashbar, toast and tooltip (`--c-surface-pop` or `--c-tip`, `--c-shadow-pop`); in dark it
-is one surface step lighter with a `--c-line-2` border. Menus and dialogs open in the top layer, so a moving page
-cannot carry them.
+is one surface step lighter with a `--c-line-2` border. Menus, dialogs, tooltips and toasts open in the top layer
+(`components/ui/layer.ts`), so a moving page cannot carry them and no dialog can cover them.
 
 Radii: card, flashbar and toast 12px; field, tile and radio card 10px; copy button, menu item and tooltip 8px; dialog
 and bottom sheet 18px; button, pill, chip and segmented control 999px.
@@ -303,7 +306,7 @@ confirms or removes the stamp for the surface it shows (`wearOnDocument`): the f
 
 `skins/terminal` draws the console as one monospace screen: a top row, a menu row, then the grid, every row the full
 width on a phone as on a 4K monitor. Every view is the face's own, built from its own vocabulary in `ui.tsx` (panel,
-verb, mark and state, table, tabs, field, toggle, details, overflow, modal, drawer) and styled only by `terminal.css`
+verb, mark and state, table, pager, tabs, field, toggle, details, overflow, modal, drawer) and styled only by `terminal.css`
 in its own `t-*` classes; the console face's primitives and sheets play no part in it. The rules apply while the
 document carries `html[data-skin="terminal"]`, which `index.html` stamps before the first paint and `App` keeps true.
 

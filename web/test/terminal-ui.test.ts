@@ -6,7 +6,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { Address, FilterRow, Indicator, NoMatches, Person, Skeleton, SkeletonGroup, Table } from "../src/skins/terminal/ui.tsx";
+import { Address, FilterRow, Indicator, NoMatches, Pager, Person, Skeleton, SkeletonGroup, Table } from "../src/skins/terminal/ui.tsx";
 
 test("terminal dense status keeps one visible mark and an accessible label", () => {
   const markup = renderToStaticMarkup(createElement(Indicator, { kind: "ok", label: "Verified" }));
@@ -27,6 +27,24 @@ test("a terminal filter row holds the choices that narrow its list beside the se
   const filter = { query: "", setQuery: () => undefined, clear: () => undefined, active: false, rows: [], total: 0, field: { current: null } };
   const markup = renderToStaticMarkup(createElement(FilterRow, { filter, label: "Search mods", placeholder: "Search by file name" }, createElement("fieldset", { className: "t-choices" })));
   assert.match(markup, /<\/label><fieldset class="t-choices">/);
+});
+
+test("a terminal filter row counts what the server matched when it is told, and what survived otherwise", () => {
+  const filter = { query: "cre", setQuery: () => undefined, clear: () => undefined, active: true, rows: [1, 2], total: 9, field: { current: null } };
+  assert.match(renderToStaticMarkup(createElement(FilterRow, { filter, label: "Search", placeholder: "Search", matches: 4 })), /role="status">4 of 9</);
+  assert.match(renderToStaticMarkup(createElement(FilterRow, { filter, label: "Search", placeholder: "Search" })), /role="status">2 of 9</);
+});
+
+test("a terminal pager is drawn only for more than one page, names the place, and disables the ends", () => {
+  assert.equal(renderToStaticMarkup(createElement(Pager, { page: 1, pages: 1, onPage: () => undefined })), "");
+  const first = renderToStaticMarkup(createElement(Pager, { page: 1, pages: 4, onPage: () => undefined, label: "Mod pages" }));
+  assert.match(first, /<nav aria-label="Mod pages" class="t-pager">/);
+  assert.match(first, /aria-current="page"[^>]*>Page 1 of 4</);
+  assert.match(first, /aria-label="Previous page"[^>]*disabled=""|disabled=""[^>]*aria-label="Previous page"/);
+  assert.doesNotMatch(first, /aria-label="Next page"[^>]*disabled/);
+  const last = renderToStaticMarkup(createElement(Pager, { page: 4, pages: 4, onPage: () => undefined }));
+  assert.match(last, /aria-label="Next page"[^>]*disabled=""|disabled=""[^>]*aria-label="Next page"/);
+  assert.match(last, /t-verb-icon-only/, "both ends are the shared icon key");
 });
 
 test("a terminal list that a filter emptied says what it was asked only when something was typed, and names its way back", () => {

@@ -24,6 +24,9 @@ export async function promoteWorld(
 ): Promise<Response> {
   const parsed = parseObjectBody(body);
   if (parsed === null) return response(400, { error: "invalid_json" });
+  if (parsed.startAfter !== undefined && typeof parsed.startAfter !== "boolean") return response(400, { error: "invalid_start_after" });
+  // The world keeps running after its update and the idle watchdog stops it; false restores the old closing stop.
+  const startAfter = parsed.startAfter !== false;
   const [hosts, allOperations, presets, worldRecords] = await Promise.all([
     awsControlPlaneSources.listHosts(),
     awsControlPlaneSources.listRunningOperations(),
@@ -60,9 +63,9 @@ export async function promoteWorld(
   await promotionExecution({
     operationId, serverId, gameId, presetId: plan.record.preset.id, worldId, worldName: plan.record.displayName,
     generationId: plan.record.currentGeneration.id, release: plan.release, instanceId: plan.instanceId,
-    policy: plan.record.warm === true ? "warm" : "cold", requestedBy: `identity:${identity.id}`,
+    policy: plan.record.warm === true ? "warm" : "cold", requestedBy: `identity:${identity.id}`, startAfter,
   });
-  return response(202, { result: "requested", operationId, release: plan.release, previousRelease: plan.previous });
+  return response(202, { result: "requested", operationId, release: plan.release, previousRelease: plan.previous, startAfter });
 }
 
 // No workflow runs: the release is written before the answer.

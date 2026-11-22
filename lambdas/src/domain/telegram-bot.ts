@@ -214,6 +214,8 @@ export function buildPromotionInput(args: Readonly<{
   appCommit: string;
   policy: SessionPolicy;
   requestedBy: string;
+  /** False stops a world that was stopped before its update again; by default it keeps running (ADR-0078). */
+  startAfter?: boolean;
 }>) {
   return {
     operationId: args.operationId,
@@ -231,6 +233,7 @@ export function buildPromotionInput(args: Readonly<{
     appCommit: args.appCommit,
     policy: args.policy,
     requestedBy: args.requestedBy,
+    startAfter: args.startAfter !== false,
     leaseTtlSeconds: 1800,
     watchdogRegistrationLeaseTtlSeconds: 60,
     watchdogStopLeaseTtlSeconds: 1800,

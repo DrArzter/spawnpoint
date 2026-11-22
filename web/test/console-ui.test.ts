@@ -69,7 +69,7 @@ test("Overflow: every item is in the markup while closed, danger items in a grou
   const markup = html(createElement(Overflow, { label: "More actions for Rostik", actions: [action("world.archive", "Archive", noop), action("world.purge", "Delete", noop, { danger: true }), action("world.wipe", "Wipe", noop, { disabled: true, hint: "Needs a built release" })] }));
   assert.match(markup, /aria-haspopup="menu"/);
   assert.match(markup, /aria-label="More actions for Rostik"/);
-  assert.match(markup, /role="menu"[^>]*hidden=""|hidden=""[^>]*role="menu"/);
+  assert.match(markup, /role="menu"[^>]*popover="manual"|popover="manual"[^>]*role="menu"/);
   for (const id of ["world.archive", "world.purge", "world.wipe"]) assert.match(markup, new RegExp(`data-action="${id}"`));
   assert.match(markup, /c-menu-group c-menu-group-split/);
   assert.match(markup, /c-menu-item c-menu-item-danger/);

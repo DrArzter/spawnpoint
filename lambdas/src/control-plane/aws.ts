@@ -165,19 +165,29 @@ async function listPresets(): Promise<readonly PresetObservation[]> {
 // The manifest is the only record of what a release contains. It is small, it
 // is immutable once written, and it is read fresh: a cached answer here would
 // be a claim about bytes somebody may be about to install.
-async function readReleaseManifest(gameId: string, presetId: string, version: string): Promise<unknown> {
+async function readReleaseDocument(gameId: string, presetId: string, version: string, name: "manifest" | "plan"): Promise<unknown> {
   try {
     const response = await s3.send(new GetObjectCommand({
       Bucket: requiredEnv("RELEASE_BUCKET"),
-      Key: `releases/${gameId}/${presetId}/${version}/manifest.json`,
+      Key: `releases/${gameId}/${presetId}/${version}/${name}.json`,
     }));
     const body = await response.Body?.transformToString();
     return body ? JSON.parse(body) : null;
   } catch (error) {
     if (error instanceof NoSuchKey || (error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound"))) return null;
-    console.error("release_manifest_read_failed", { gameId, presetId, errorName: error instanceof Error ? error.name : "UnknownError" });
+    console.error(`release_${name}_read_failed`, { gameId, presetId, errorName: error instanceof Error ? error.name : "UnknownError" });
     throw error;
   }
+}
+
+async function readReleaseManifest(gameId: string, presetId: string, version: string): Promise<unknown> {
+  return readReleaseDocument(gameId, presetId, version, "manifest");
+}
+
+// What the build that published a release changed (plan-release.sh). Older
+// releases have none.
+async function readReleasePlan(gameId: string, presetId: string, version: string): Promise<unknown> {
+  return readReleaseDocument(gameId, presetId, version, "plan");
 }
 
 // Basic EC2 monitoring publishes the first group free at five-minute grain, which
@@ -390,6 +400,7 @@ export const awsControlPlaneSources: ControlPlaneSources = {
   listRunningOperations,
   listPresets,
   readReleaseManifest,
+  readReleasePlan,
   readHostMetrics,
   readHostsMetrics,
   readWorldSessionHosts: createSessionHostReader({ sfn, document, tableName: () => process.env.LIFECYCLE_TABLE_NAME, machines: operationMachines }),

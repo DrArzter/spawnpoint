@@ -1,5 +1,5 @@
 import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
-import { identityDeletionRefusal, type ConsoleEntry, type FileLink, type HostMetrics, type MetricRange, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
+import { identityDeletionRefusal, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type ReleaseDiff, type ReleaseMod, type ReleaseMods, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
 import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
 import type { ControlPlaneSnapshot, Preset, SettingValue, World, WorldGameSettings, WorldSession } from "../model";
@@ -528,6 +528,45 @@ export function releaseMods(gameId: string, presetId: string, release: string): 
     release,
     mods: [...files, DEMO_SERVER_ONLY_MOD].map(mod),
     clientMods: [...files, ...DEMO_PLAYERS_ONLY_MODS].map(mod),
+  };
+}
+
+// The demo keeps no plans: every release is diffed from its mods by file name.
+// With no `from`, the previous release stands for what the build compared; the
+// first release has nothing before it, which is a release with no plan.
+export function releaseDiff(gameId: string, presetId: string, release: string, from: string | null): ReleaseDiff | null {
+  const releases = state.snapshot.games.find((game) => game.id === gameId)?.presets.find((candidate) => candidate.id === presetId)?.releases ?? [];
+  const previous = from ?? releases[releases.indexOf(release) - 1] ?? null;
+  if (previous === null) {
+    releaseMods(gameId, presetId, release);
+    return null;
+  }
+  const next = releaseMods(gameId, presetId, release);
+  const old = releaseMods(gameId, presetId, previous);
+  const diffMod = (mod: ReleaseMod): DiffMod => ({ ...mod, side: null, modIds: null });
+  const classes = (before: readonly ReleaseMod[], after: readonly ReleaseMod[]): DiffClasses<DiffMod> => {
+    const named = (list: readonly ReleaseMod[], file: string) => list.find((mod) => mod.file === file);
+    return {
+      added: after.filter((mod) => !named(before, mod.file)).map(diffMod),
+      removed: before.filter((mod) => !named(after, mod.file)).map(diffMod),
+      changed: after.flatMap((mod) => { const was = named(before, mod.file); return was && was.sha256 !== mod.sha256 ? [{ from: diffMod(was), to: diffMod(mod) }] : []; }),
+      unchanged: after.filter((mod) => named(before, mod.file)?.sha256 === mod.sha256).length,
+    };
+  };
+  const clientOnly = (mods: ReleaseMods) => (mods.clientMods ?? []).filter((mod) => !mods.mods.some((server) => server.file === mod.file));
+  const config = (text: string) => ({ path: "config/create-server.toml", sha256: demoDigest(text), bytes: 4_812 });
+  const same = <T,>(value: T): DiffValue<T> => ({ from: value, to: value, changed: false });
+  return {
+    release,
+    from: previous,
+    source: from === null ? "plan" : "manifests",
+    gameVersion: same("1.20.1"),
+    loader: same({ type: "forge", version: "47.4.10" }),
+    runtimeImage: same(null),
+    serverMods: classes(old.mods, next.mods),
+    overrides: [{ root: "config", added: [], removed: [], changed: [{ from: config(previous), to: config(release) }], unchanged: 41 }],
+    clientMods: classes(clientOnly(old), clientOnly(next)),
+    clientPack: { from: null, to: null, changed: false },
   };
 }
 

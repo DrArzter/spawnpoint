@@ -4,7 +4,8 @@ import type { BackupEntry } from "../../api/contract";
 import { Timestamp } from "../../components/ui/Timestamp";
 import { action } from "../../core/actions";
 import { useFilter } from "../../components/ui/Filter";
-import type { BackupsModel, Detail, DetailValue, ModRow, ModsModel, ReleaseRow, WorldModel } from "../../core/models";
+import type { BackupsModel, ChangeRow, Detail, DetailValue, ModRow, ModsModel, ReleaseChangesModel, ReleaseRow, WorldModel } from "../../core/models";
+import type { StatusKind } from "../../core/status";
 import { wipeStatus } from "../../core/worlds";
 import { Icon } from "../../icons";
 import { formatBytes, formatTime, shortDigest } from "../../lib/format";
@@ -184,8 +185,45 @@ function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["r
     <Panel flush>
       <Table columns={columns} empty={<Empty title="No release" />} label={`Release pointer of ${worldName}`} rowKey={(row) => row.name} rows={releases.rows} />
     </Panel>
+    {releases.changes && <ChangesPanel changes={releases.changes} worldName={worldName} />}
     {releases.mods && <ModsPanel mods={releases.mods} worldName={worldName} />}
   </>;
+}
+
+const changeStates: Readonly<Record<ChangeRow["change"], Readonly<{ kind: StatusKind; label: string }>>> = {
+  removed: { kind: "warning", label: "Removed" },
+  changed: { kind: "info", label: "Changed" },
+  added: { kind: "ok", label: "Added" },
+};
+
+// What the release changes (P3): losses first, then changes, then additions.
+function ChangesPanel({ changes, worldName }: Readonly<{ changes: ReleaseChangesModel; worldName: string }>) {
+  const columns: readonly Col<ChangeRow>[] = [
+    { id: "change", label: "Change", width: "130px", render: (row) => <State kind={changeStates[row.change].kind} label={changeStates[row.change].label} /> },
+    { id: "item", label: "Item", truncate: true, render: (row) => <code className="t-clip" title={row.name}>{row.name}</code> },
+    { id: "part", label: "Part", width: "130px", render: (row) => row.part },
+    { id: "detail", label: "Detail", secondary: true, optional: true, render: (row) => row.detail ?? "—" },
+  ];
+  const state = changes.changes;
+  const value = state.status === "ready" ? state.value : null;
+  const name = value === null ? `Changes · release ${changes.release}`
+    : `Changes · ${value.from === null ? "first release" : value.from} → ${changes.release}`;
+  return (
+    <Panel flush name={name}>
+      {state.status === "error"
+        ? <div className="t-inset"><Notice description={state.error} title="The changes are unavailable" tone="error" verbs={<Verb action={state.retry} size="small" />} /></div>
+        : state.status === "ready" && state.value === null
+          ? <Empty title={`Release ${changes.release} has no build plan`} />
+          : <Table
+            columns={columns}
+            empty={<Empty title="No changes" />}
+            label={`Changes of ${worldName}, release ${changes.release}`}
+            loading={state.status === "loading"}
+            rowKey={(row) => row.id}
+            rows={value?.rows ?? []}
+          />}
+    </Panel>
+  );
 }
 
 // Every mod of the release the world starts with, of both sides (ADR-0065,

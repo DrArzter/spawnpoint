@@ -114,6 +114,11 @@ const worldPage: WorldModel = {
     rows: [{ name: "1.2", status: "Active", downloadable: true, sourceHref: "https://github.com/example/preset", downloads: [spy("world.pack", "Client"), spy("release.pack.server", "Server"), spy("release.pack.full", "Full")] }],
     state: "ready",
     mods: { release: "1.2", split: true, files: { status: "ready", value: [{ file: "create-1.20.1-0.5.1.j.jar", bytes: 14_221_830, sha256: "c".repeat(64), download: spy("mod.download.ccc", "Download") }] } },
+    changes: { release: "1.2", changes: { status: "ready", value: { from: "1.1", unchanged: 40, rows: [
+      { id: "removed:Server mod:oldmod-1.jar", change: "removed", part: "Server mod", name: "oldmod-1.jar", detail: "oldmod" },
+      { id: "changed:Server mod:create-0.6.jar", change: "changed", part: "Server mod", name: "create-0.6.jar", detail: "was create-0.5.jar" },
+      { id: "added:Override:config/new.toml", change: "added", part: "Override", name: "config/new.toml", detail: null },
+    ] } } },
   },
   // Drawn on their own tabs below; on the details tab neither is on screen.
   console: null,
@@ -265,6 +270,18 @@ for (const skin of SKINS) {
     // Without backup.download, the archive is listed and never offered.
     const noDownload = renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "backups", backups: { ...worldPage.backups, download: null } } }));
     assert.doesNotMatch(noDownload, /data-action="backup\.download"/);
+  });
+
+  test(`${skin.name}: a release's changes name each item with its change as a word, and every other state (P3)`, () => {
+    const tab = (changes: WorldModel["releases"]["changes"]) => renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "releases", releases: { ...worldPage.releases, changes } } }));
+    const ready = tab(worldPage.releases.changes);
+    assert.match(ready, /1\.1 → 1\.2/, "the compared pair");
+    for (const word of ["Removed", "Changed", "Added"]) assert.match(ready, new RegExp(`>${word}<`), `the change ${word} is a word, never colour alone`);
+    assert.ok(ready.indexOf("oldmod-1.jar") < ready.indexOf("create-0.6.jar") && ready.indexOf("create-0.6.jar") < ready.indexOf("config/new.toml"), "losses lead");
+    assert.match(tab({ release: "1.2", changes: { status: "ready", value: { from: null, unchanged: 0, rows: [] } } }), /No changes/);
+    assert.match(tab({ release: "1.2", changes: { status: "ready", value: null } }), /Release 1\.2 has no build plan/);
+    assert.match(tab({ release: "1.2", changes: { status: "error", error: "boom", kind: "failed", retry: spy("changes.retry", "Try again") } }), /data-action="changes\.retry"/);
+    assert.doesNotMatch(tab(null), /No changes|build plan|1\.1 → 1\.2/);
   });
 
   test(`${skin.name}: a world's whitelist draws add, each player's remove, and what it means when empty or not kept (ADR-0066)`, () => {

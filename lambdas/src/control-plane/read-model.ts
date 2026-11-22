@@ -72,6 +72,8 @@ export type ControlPlaneSources = Readonly<{
   listRunningOperations: () => Promise<readonly OperationObservation[]>;
   listPresets?: () => Promise<readonly PresetObservation[]>;
   readReleaseManifest?: (gameId: string, presetId: string, version: string) => Promise<unknown>;
+  /** The build's plan.json beside the manifest; null when the release has none. */
+  readReleasePlan?: (gameId: string, presetId: string, version: string) => Promise<unknown>;
   readHostMetrics?: (instanceId: string, hours: number) => Promise<HostMetrics>;
   /** The same window for several hosts at once, by host id. */
   readHostsMetrics?: (hostIds: readonly string[], hours: number) => Promise<Readonly<Record<string, HostMetrics>>>;

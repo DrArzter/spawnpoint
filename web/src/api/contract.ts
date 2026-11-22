@@ -162,6 +162,28 @@ export type ReleaseMod = Readonly<{ file: string; sha256: string; bytes: number 
 export type ReleasePackName = "server" | "full";
 /** A release's server mods, and the players' own set when it differs (ADR-0069); null when players install the server's. */
 export type ReleaseMods = Readonly<{ release: string; mods: readonly ReleaseMod[]; clientMods: readonly ReleaseMod[] | null }>;
+/** One file in a release diff (P3): its mod ids where the release records them, its side when it is an addon (ADR-0077). */
+export type DiffMod = Readonly<{ file: string; sha256: string; bytes: number; side: string | null; modIds: readonly string[] | null }>;
+export type DiffOverride = Readonly<{ path: string; sha256: string; bytes: number }>;
+export type DiffClasses<T> = Readonly<{ added: readonly T[]; removed: readonly T[]; changed: readonly Readonly<{ from: T; to: T }>[]; unchanged: number }>;
+export type DiffValue<T> = Readonly<{ from: T | null; to: T | null; changed: boolean }>;
+/**
+ * What a release changes compared with another of its preset (P3). `plan`: the
+ * build's own comparison; `manifests`: diffed from the two releases. `from` is
+ * null for a first release.
+ */
+export type ReleaseDiff = Readonly<{
+  release: string;
+  from: string | null;
+  source: "plan" | "manifests";
+  gameVersion: DiffValue<string>;
+  loader: DiffValue<Readonly<{ type: string; version: string | null }>>;
+  runtimeImage: DiffValue<string>;
+  serverMods: DiffClasses<DiffMod>;
+  overrides: readonly (Readonly<{ root: string }> & DiffClasses<DiffOverride>)[];
+  clientMods: DiffClasses<DiffMod>;
+  clientPack: DiffValue<Readonly<{ sha256: string; bytes: number }>>;
+}>;
 /**
  * A world's whitelist (ADR-0066). Unmanaged: the world's record keeps none, and
  * the names are the running server's own list (none while it is stopped); the
@@ -311,6 +333,8 @@ export type SpawnpointApi = Readonly<{
   updateWhitelist(gameId: string, worldId: string, names: readonly string[]): Promise<SavedWhitelist>;
   /** A release's server mods, from its manifest. */
   loadReleaseMods(gameId: string, presetId: string, release: string): Promise<ReleaseMods>;
+  /** What a release changes: against `from`, or, with null, against what its build compared it with; null when that build kept no plan. */
+  loadReleaseDiff(gameId: string, presetId: string, release: string, from: string | null): Promise<ReleaseDiff | null>;
   /** A short-lived link to one server mod of a release, named by its digest. */
   requestModDownload(gameId: string, presetId: string, release: string, sha256: string): Promise<FileLink>;
   /** The server's set or every mod of a release with side lists (ADR-0069). */

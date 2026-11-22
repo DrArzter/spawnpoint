@@ -350,6 +350,7 @@ locals {
     "GET /games/{gameId}/presets/{presetId}/releases/{version}",
     "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}",
     "GET /games/{gameId}/presets/{presetId}/releases/{version}/packs/{pack}",
+    "GET /games/{gameId}/presets/{presetId}/releases/{version}/diff",
     "POST /games/{gameId}/presets/{presetId}/worlds",
     "POST /games/{gameId}/presets/{presetId}/builds",
     "PUT /games/{gameId}/worlds/{worldId}/settings",

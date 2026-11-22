@@ -100,6 +100,11 @@ data "archive_file" "release_builder_source" {
   }
 
   source {
+    content  = file("${path.module}/../../server/scripts/plan-release.sh")
+    filename = "server/scripts/plan-release.sh"
+  }
+
+  source {
     content  = file("${path.module}/../../server/scripts/upload-release.sh")
     filename = "server/scripts/upload-release.sh"
   }

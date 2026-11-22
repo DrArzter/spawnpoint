@@ -70,7 +70,7 @@ for argument in "$@"; do
 done
 [[ -n "${output}" && -n "${CF_API_KEY:-}" ]]
 mkdir -p -- "${output}/mods"
-printf 'resolved in aws builder test\n' >"${output}/mods/example-1.0.jar"
+printf 'resolved in aws builder test%s\n' "${FAKE_JAR_VARIANT:-}" >"${output}/mods/example-1.0.jar"
 EOF
 chmod 0755 "${fixture}/bin/docker"
 ln -s -- "${repository_root}/server/tests/fake-aws" "${fixture}/bin/aws"
@@ -112,6 +112,58 @@ jq -e \
   '.release == "4.0" and .source_profile.id == "main" and .source_profile.commit == $commit and (.server.mods | length) == 1' \
   "${manifest}" >/dev/null
 [[ -f "${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/minecraft/main/4.0/mods/example-1.0.jar" ]]
+
+# --- the plan: no catalog yet, so the first release; then the catalog's
+#     latest_release, PREVIOUS_RELEASE, and a previous release that cannot be
+#     read, which leaves the build as it was ---
+grep -qx 'plan_catalog=unreadable' <<<"${builder_output}"
+grep -qx 'plan=first_release' <<<"${builder_output}"
+grep -qx 'plan=uploaded' <<<"${builder_output}"
+releases_root="${FAKE_S3_ROOT}/spawnpoint-test-releases/releases/minecraft/main"
+jq -e '.release == "4.0" and .previous_release == null and (.server_mods.added | length) == 1' \
+  "${releases_root}/4.0/plan.json" >/dev/null
+mkdir -p -- "${FAKE_S3_ROOT}/spawnpoint-test-releases/presets/minecraft"
+printf '{"schema_version":2,"presets":[{"id":"other","latest_release":"9.9"},{"id":"main","latest_release":"4.0"}]}\n' \
+  >"${FAKE_S3_ROOT}/spawnpoint-test-releases/presets/minecraft/catalog.json"
+build_main() {
+  env \
+    PATH="${fixture}/bin:${PATH}" \
+    CONFIG_REPOSITORY_URL=https://github.com/DrArzter/my-docker-minecraft-server-config.git \
+    CONFIG_COMMIT="${config_commit}" \
+    CONFIG_SOURCE_KEY="${config_source_key}" \
+    CONFIG_SOURCE_SHA256="${config_source_sha256}" \
+    PROFILE_ID=main \
+    RELEASE_BUCKET=spawnpoint-test-releases \
+    CF_API_KEY=test-only \
+    FAKE_AWS_CALL_LOG="${fixture}/plan-calls" \
+    "$@" \
+    "${builder}"
+}
+plan_output="$(build_main RELEASE=4.1 FAKE_JAR_VARIANT=-4.1)"
+grep -qx 'result=release_ready' <<<"${plan_output}"
+grep -qx 'plan=compared' <<<"${plan_output}"
+grep -qx 'plan_previous_release=4.0' <<<"${plan_output}"
+grep -qx 'plan_mods_changed=1' <<<"${plan_output}"
+grep -qx 'plan_entry=changed server_mod example-1.0.jar -> example-1.0.jar' <<<"${plan_output}"
+grep -qx 'plan_key=releases/minecraft/main/4.1/plan.json' <<<"${plan_output}"
+jq -e '.previous_release == "4.0" and (.server_mods.changed | length) == 1' "${releases_root}/4.1/plan.json" >/dev/null
+# The plan is the last put before the manifest.
+puts="$(grep 'put-object' "${fixture}/plan-calls" | grep -o -- '--key [^ ]*' | tail -n 2)"
+[[ "${puts}" == $'--key releases/minecraft/main/4.1/plan.json\n--key releases/minecraft/main/4.1/manifest.json' ]]
+
+plan_output="$(build_main RELEASE=4.2 PREVIOUS_RELEASE=none)"
+grep -qx 'plan=first_release' <<<"${plan_output}"
+jq -e '.previous_release == null' "${releases_root}/4.2/plan.json" >/dev/null
+
+plan_output="$(build_main RELEASE=4.3 PREVIOUS_RELEASE=3.9)"
+grep -qx 'result=release_ready' <<<"${plan_output}"
+grep -qx 'plan_reason=previous_manifest_unreadable' <<<"${plan_output}"
+grep -qx 'plan=not_provided' <<<"${plan_output}"
+[[ -f "${releases_root}/4.3/manifest.json" && ! -e "${releases_root}/4.3/plan.json" ]]
+
+plan_output="$(build_main RELEASE=4.4 PREVIOUS_RELEASE=4.4)"
+grep -qx 'plan_reason=same_release' <<<"${plan_output}"
+grep -qx 'result=release_ready' <<<"${plan_output}"
 
 # --- the bundle is self-contained: everything the packaged scripts reach for
 #     is packaged too. A missing file here fails only in CodeBuild, where it is

@@ -224,6 +224,11 @@ export const demoApi: SpawnpointApi = {
     return store.releaseMods(gameId, presetId, release);
   },
 
+  async loadReleaseDiff(gameId: string, presetId: string, release: string, from: string | null) {
+    await demoLatency();
+    return store.releaseDiff(gameId, presetId, release, from);
+  },
+
   async requestModDownload(gameId: string, presetId: string, release: string, sha256: string) {
     await demoLatency();
     return store.modLink(gameId, presetId, release, sha256);

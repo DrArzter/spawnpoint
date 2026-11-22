@@ -64,6 +64,14 @@ data "aws_iam_policy_document" "access_api" {
     }
   }
 
+  # Retiring a release (ADR-0080) is one asynchronous call to one function, under
+  # release.retire, which only the Owner role holds. No other Lambda is reachable.
+  statement {
+    sid       = "RequestReleaseRetirement"
+    actions   = ["lambda:InvokeFunction"]
+    resources = [local.release_retirement_function_arn]
+  }
+
   statement {
     sid       = "ReadLifecycleState"
     actions   = ["dynamodb:GetItem"]
@@ -227,6 +235,12 @@ data "aws_iam_policy_document" "access_api" {
   }
 }
 
+locals {
+  # The function lives in ../terraform-operations; its name is the contract.
+  release_retirement_function_name = "spawnpoint-release-retirement"
+  release_retirement_function_arn  = "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${local.release_retirement_function_name}"
+}
+
 resource "aws_iam_role_policy" "access_api" {
   name   = "spawnpoint-access-api"
   role   = aws_iam_role.access_api.id
@@ -272,6 +286,7 @@ resource "aws_lambda_function" "access_api" {
       RELEASE_BUCKET                   = data.aws_s3_bucket.releases.id
       RELEASE_REFS_TABLE               = var.release_refs_table_name
       BUILD_RELEASE_STATE_MACHINE_ARN  = local.build_release_arn
+      RELEASE_RETIREMENT_FUNCTION_NAME = local.release_retirement_function_name
       BACKUP_BUCKET                    = data.aws_s3_bucket.backups.id
       CONNECTION_HOST                  = var.connection_host
       CONSOLE_DOCUMENT_NAME            = aws_ssm_document.console.name
@@ -369,6 +384,7 @@ locals {
     "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}",
     "GET /games/{gameId}/presets/{presetId}/releases/{version}/packs/{pack}",
     "GET /games/{gameId}/presets/{presetId}/releases/{version}/diff",
+    "POST /games/{gameId}/presets/{presetId}/releases/{version}/retire",
     "POST /games/{gameId}/presets/{presetId}/worlds",
     "POST /games/{gameId}/presets/{presetId}/builds",
     "PUT /games/{gameId}/worlds/{worldId}/settings",

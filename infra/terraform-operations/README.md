@@ -39,10 +39,21 @@ policies and three state machines.
 
 ## Release reconciler
 
-`spawnpoint-release-reconciler` (ADR-0080) runs weekly on Sunday at 05:00 UTC, in report-only mode. Its role can list and read
-the release sources, scan `spawnpoint-release-refs`, and put metrics in `Spawnpoint/ReleaseReconciler`. It has no write or delete
-action. For an on-demand run, invoke the Lambda by hand with `{}` or `{"mode":"report"}`; any other mode is refused. The result and
-one log line per class are in `/aws/lambda/spawnpoint-release-reconciler`. The table is created in `../terraform-storage`.
+`spawnpoint-release-reconciler` (ADR-0080) runs weekly on Sunday at 05:00 UTC. It lists and reads the release sources, scans
+`spawnpoint-release-refs` and puts metrics in `Spawnpoint/ReleaseReconciler`. Then it plans a sweep: it deletes the object of a file
+that is condemned for 14 days, has no reference, and is named by no manifest of a complete run that started after the file was
+condemned. It also finishes or reverts stuck `deleting` items and condemns orphan objects. It only reports missing references or
+holders, extra references and counter drift.
+
+The sweep is a dry run unless the Terraform variable `release_sweep_dry_run` is `false`. In CI it comes from the repository variable
+`SPAWNPOINT_RELEASE_SWEEP_DRY_RUN`; an unset variable means `true`. A dry run writes nothing, logs one `release_sweep_action` line for each
+action it would take, and puts `SweepDryRun = 1`. Read at least four weekly dry runs before you set the variable to `false`.
+The Lambda treats any value other than the exact string `false` as a dry run.
+
+The role may delete under `objects/*` (never a version) and update or put file items (`file#*`) in the table. It has no other write
+or delete action. The alarm `spawnpoint-release-reconciler-sweep-failed` fires when a delete or write fails (`SweepFailed`).
+For an on-demand run, invoke the Lambda by hand with `{}` or `{"mode":"report"}`; any other mode is refused. The result and one log
+line per class are in `/aws/lambda/spawnpoint-release-reconciler`. The table is created in `../terraform-storage`.
 
 ## Local verification
 

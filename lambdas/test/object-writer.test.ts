@@ -415,6 +415,7 @@ test("the write command prints result lines, rewrites the manifest and leaves it
   out.length = 0;
   assert.equal(await runCommand(["write", ...common, "--pack", `server=${join(dir, "pack.zip")}`], env, make, { out: (line) => out.push(line), err: (line) => err.push(line) }), 0);
   // The failed run counted the references: the retry verifies them and repairs the missing objects.
+  assert.match(out.pop() ?? "", /^writer_seconds=\d+$/);
   assert.deepEqual(out, ["layout=objects-v1", "objects_total=2", "objects_created=0", "objects_reused=2", "objects_recreated=0", "objects_repaired=2", "objects_copied=0", "bytes_uploaded=8"]);
   const written = JSON.parse(await readFile(manifestPath, "utf8")) as Manifest;
   assert.deepEqual(written.storage, { layout: "objects-v1" });

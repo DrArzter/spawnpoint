@@ -1,7 +1,9 @@
-# ADR-0080's reconciler in report-only mode. It reads the release sources, the
-# reference table and the `objects/` listing, and puts metrics. Its role has no
-# write or delete on any bucket or table, so it cannot change what it checks.
-# A later sweep mode adds its own permissions in its own change.
+# ADR-0080's reconciler. It reads the release sources, the reference table and
+# the `objects/` listing, and puts metrics. Its sweep deletes a file's object
+# only when the proofs hold, and only if release_sweep_dry_run is false.
+# The role may write only what the sweep needs: DeleteObject under objects/
+# (never a version) and file items (`file#*`) in the table. It cannot delete a
+# table item and cannot write under releases/, worlds/ or the backup bucket.
 locals {
   release_refs_table_name = "spawnpoint-release-refs"
   release_refs_table_arn  = "arn:aws:dynamodb:${var.aws_region}:${local.account_id}:table/${local.release_refs_table_name}"
@@ -82,6 +84,26 @@ data "aws_iam_policy_document" "release_reconciler" {
     resources = [local.release_refs_table_arn, "${local.release_refs_table_arn}/index/*"]
   }
 
+  # The bucket policy in ../terraform-storage allows this role, and no other, to delete under objects/.
+  # No s3:DeleteObjectVersion: a delete leaves a noncurrent version for the 30-day undo window.
+  statement {
+    sid       = "SweepDeleteObjects"
+    actions   = ["s3:DeleteObject"]
+    resources = ["${data.aws_s3_bucket.releases.arn}/objects/*"]
+  }
+
+  # File items only. Release items and holders belong to the writers and to retirement.
+  statement {
+    sid       = "SweepWriteFileItems"
+    actions   = ["dynamodb:UpdateItem", "dynamodb:PutItem"]
+    resources = [local.release_refs_table_arn]
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["file#*"]
+    }
+  }
+
   statement {
     sid       = "PutReconcilerMetrics"
     actions   = ["cloudwatch:PutMetricData"]
@@ -120,6 +142,8 @@ resource "aws_lambda_function" "release_reconciler" {
       BACKUP_BUCKET      = "spawnpoint-backups-${local.account_id}"
       RELEASE_BUCKET     = data.aws_s3_bucket.releases.id
       RELEASE_REFS_TABLE = local.release_refs_table_name
+      # Anything but "false" is a dry run: the sweep plans and logs, and writes nothing.
+      RELEASE_SWEEP_DRY_RUN = var.release_sweep_dry_run ? "true" : "false"
     }
   }
 
@@ -199,6 +223,23 @@ resource "aws_cloudwatch_metric_alarm" "release_reconciler_incomplete" {
   alarm_description   = "The reconciler could not read every source, so its report is incomplete and nothing is sweepable. Check /aws/lambda/spawnpoint-release-reconciler."
   namespace           = local.reconciler_namespace
   metric_name         = "Incomplete"
+  statistic           = "Maximum"
+  period              = 86400
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [data.aws_sns_topic.fleet_alerts.arn]
+  ok_actions          = [data.aws_sns_topic.fleet_alerts.arn]
+}
+
+# A failed delete leaves its item in `deleting`: the next run finishes or reverts it,
+# but a person should look at the cause.
+resource "aws_cloudwatch_metric_alarm" "release_reconciler_sweep_failed" {
+  alarm_name          = "spawnpoint-release-reconciler-sweep-failed"
+  alarm_description   = "The sweep could not delete or write at least one file. Read the release_sweep_summary line in /aws/lambda/spawnpoint-release-reconciler."
+  namespace           = local.reconciler_namespace
+  metric_name         = "SweepFailed"
   statistic           = "Maximum"
   period              = 86400
   evaluation_periods  = 1

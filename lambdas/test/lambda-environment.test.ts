@@ -59,6 +59,12 @@ const lambdas: readonly LambdaDefinition[] = [
     name: "release reconciler",
     entry: "lambdas/src/handlers/release-reconciler.ts",
     terraform: "infra/terraform-operations/release-reconciler.tf",
+    required: ["BACKUP_BUCKET", "RELEASE_BUCKET", "RELEASE_REFS_TABLE", "RELEASE_SWEEP_DRY_RUN"],
+  },
+  {
+    name: "release retirement",
+    entry: "lambdas/src/handlers/release-retirement.ts",
+    terraform: "infra/terraform-operations/release-retirement.tf",
     required: ["BACKUP_BUCKET", "RELEASE_BUCKET", "RELEASE_REFS_TABLE"],
   },
   {

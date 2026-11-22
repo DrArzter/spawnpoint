@@ -11,6 +11,7 @@ import {
 import type { TableItem } from "../src/control-plane/release-reconciler.ts";
 import { worldRecordDocument, type WorldRecord } from "../src/control-plane/world-registry.ts";
 import { cloudWatchMetrics, reconcile, type Metric, type ReconcilerDeps } from "../src/handlers/release-reconciler.ts";
+import { legacyReleaseStateKey } from "../src/control-plane/release-state.ts";
 
 const OPEN = `gen-${"a".repeat(32)}`;
 const ARCHIVE = `worlds/world/archives/world-${OPEN}-20261101T000000Z-${"c".repeat(64)}.tar.zst`;
@@ -86,6 +87,9 @@ function deps(state: Fakes, sent: Metric[][] = []): ReconcilerDeps {
       if (state.failures.has(`list:${prefix}`)) throw Object.assign(new Error("denied"), { name: "AccessDenied" });
       return prefix === "objects/sha256/" ? state.objects : [...state.docs.keys()].filter((key) => key.startsWith(prefix));
     },
+    async listObjects(prefix) {
+      return (await this.listKeys(prefix)).map((key) => ({ key, size: 7 }));
+    },
     async getText(key) { return state.docs.get(key) ?? null; },
   };
   const backup: BackupBucketReader = {
@@ -99,7 +103,12 @@ function deps(state: Fakes, sent: Metric[][] = []): ReconcilerDeps {
     },
   };
   const table: RefsTableReader = { async scan() { return state.items; } };
-  return { ports: { release, backup, table }, metrics: { async put(metrics) { sent.push([...metrics]); } }, now: () => NOW };
+  // The default is a dry run whose writer would throw: a dry run must never ask for it.
+  const writer = () => { throw new Error("a dry run built a write port"); };
+  return {
+    ports: { release, backup, table }, metrics: { async put(metrics) { sent.push([...metrics]); } }, now: () => NOW,
+    sweep: { dryRun: true, graceDays: 14, writer },
+  };
 }
 
 function quiet<T>(work: () => Promise<T>): Promise<{ result: T; lines: string[] }> {
@@ -120,7 +129,8 @@ test("a run reads, compares, logs one line per class and puts the metrics", asyn
   const { result: report, lines } = await quiet(() => reconcile({}, deps(fakes(), sent)));
 
   assert.equal(report.mode, "report");
-  assert.equal(report.sweepable, false);
+  assert.equal(report.sweepable, true);
+  assert.equal(report.startedAt, NOW.toISOString());
   assert.equal(report.complete, true);
   assert.equal(report.table_empty, true);
   assert.equal(report.generatedAt, NOW.toISOString());
@@ -129,6 +139,7 @@ test("a run reads, compares, logs one line per class and puts the metrics", asyn
   assert.equal(sent.length, 1);
   assert.deepEqual(values(sent[0]!), {
     DangerousDiff: 1, MissingObject: 1, RunFailed: 0, OrphanObjects: 0, ExtraReferences: 0, CounterDrift: 0, UnregisteredReleases: 2, Incomplete: 0,
+    SweepCandidates: 0, SweptObjects: 0, SweepFailed: 0, OrphansCondemned: 0, SweepDryRun: 1,
   });
 
   const parsed = lines.map((line) => JSON.parse(line) as { event: string; class?: string; count?: number });
@@ -197,7 +208,7 @@ test("the CloudWatch sink puts counts in the reconciler's own namespace", async 
 
 test("the read ports expose list, get, head and scan, and nothing that writes", () => {
   const send = async () => ({});
-  assert.deepEqual(Object.keys(s3ReleaseBucketReader({ send } as never, "b")).sort(), ["getText", "listKeys"]);
+  assert.deepEqual(Object.keys(s3ReleaseBucketReader({ send } as never, "b")).sort(), ["getText", "listKeys", "listObjects"]);
   assert.deepEqual(Object.keys(s3BackupBucketReader({ send } as never, "b")).sort(), ["head", "listVersions"]);
   assert.deepEqual(Object.keys(dynamoRefsTableReader({ send } as never, "t")), ["scan"]);
 });
@@ -230,6 +241,7 @@ test("the adapters send only list, get, head and scan commands, page through eve
   const table = dynamoRefsTableReader({ send } as never, "refs");
 
   assert.deepEqual(await release.listKeys("releases/"), ["a", "b"]);
+  assert.deepEqual(await release.listObjects("objects/"), [{ key: "a", size: 0 }, { key: "b", size: 0 }]);
   assert.equal(await release.getText("missing"), null);
   assert.deepEqual(await backup.listVersions("worlds/"), [{ key: "k", versionId: "1" }, { key: "k", versionId: "2" }]);
   assert.deepEqual(await backup.head("k", "2"), { release: "1.1", releaseSource: "active", storedAt: "2026-11-01T00:00:00.000Z" });
@@ -242,13 +254,34 @@ test("the adapters send only list, get, head and scan commands, page through eve
 });
 
 test("collect reads current and noncurrent archive versions and ignores keys that are not archives", async () => {
-  const collected = await collectSources(deps(fakes()).ports);
+  const collected = await collectSources(deps(fakes()).ports, NOW.toISOString());
   assert.deepEqual(collected.input.archives.map((archive) => archive.versionId).sort(), ["v0", "v1"]);
   assert.equal(collected.input.manifests.length, 2);
   assert.equal(collected.input.worlds.length, 1);
   assert.equal(collected.input.pointers.length, 1);
   assert.equal(collected.input.catalogs.length, 1);
   assert.deepEqual(collected.input.failures, []);
+  assert.equal(collected.listing?.sizes?.get(objectKey(digest(2))), 7, "the listing carries sizes");
+});
+
+test("collect reads a world's legacy pointer as one more source; one that cannot be parsed fails the run", async () => {
+  const state = fakes();
+  state.docs.set(legacyReleaseStateKey("world"), JSON.stringify({ schema_version: 1, world: "world", desired_release: "1.1", active_release: null }));
+  const collected = await collectSources(deps(state).ports, NOW.toISOString());
+  assert.deepEqual(collected.input.failures, []);
+  const legacy = collected.input.pointers.find((pointer) => pointer.state.generationId === "legacy");
+  assert.equal(legacy?.state.desiredRelease, "1.1");
+  assert.equal(legacy?.state.activeRelease, null);
+
+  state.docs.set(legacyReleaseStateKey("world"), "{broken");
+  const broken = await collectSources(deps(state).ports, NOW.toISOString());
+  assert.deepEqual(broken.input.failures.map((failure) => `${failure.source} ${failure.subject}`), [`pointer ${legacyReleaseStateKey("world")}`]);
+  state.docs.set(legacyReleaseStateKey("world"), JSON.stringify({ schema_version: 1, world: "other", desired_release: "1.1", active_release: null }));
+  const wrongWorld = await collectSources(deps(state).ports, NOW.toISOString());
+  assert.equal(wrongWorld.input.failures.length, 1);
+  const { result: report } = await quiet(() => reconcile({}, deps(state)));
+  assert.equal(report.complete, false, "an unreadable legacy pointer makes the run incomplete");
+  assert.equal(report.sweep.reason, "incomplete_run");
 });
 
 test("the reconciler modules contain no write call to S3, DynamoDB or any other service but the metric put", async () => {
@@ -264,4 +297,12 @@ test("the reconciler modules contain no write call to S3, DynamoDB or any other 
   }
   const handler = await readFile(new URL(files[2]!, import.meta.url), "utf8");
   assert.deepEqual([...handler.matchAll(/new (\w+Command)\(/g)].map((match) => match[1]), ["PutMetricDataCommand"]);
+});
+
+test("only the sweep writer file holds write commands, and none can delete a version or a table item", async () => {
+  const writer = await readFile(new URL("../src/control-plane/s3-release-sweep.ts", import.meta.url), "utf8");
+  assert.deepEqual([...writer.matchAll(/new (\w+Command)\(/g)].map((match) => match[1]).sort(), ["DeleteObjectCommand", "PutCommand", "UpdateCommand", "UpdateCommand", "UpdateCommand"]);
+  assert.doesNotMatch(writer, /DeleteObjects|ObjectVersion|DeleteCommand|DeleteItem|TransactWrite|BatchWrite/);
+  const planner = await readFile(new URL("../src/control-plane/release-sweep.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(planner, /\bnew \w+Command\(|@aws-sdk/, "the planner and executor reach AWS only through the port");
 });

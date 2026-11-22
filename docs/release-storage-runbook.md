@@ -1,0 +1,140 @@
+# Runbook: content-addressed release storage
+
+This runbook covers [ADR-0080](adr/0080-store-release-files-by-content.md). Read the ADR first. Commands that change
+AWS need the owner. This runbook does not replace the general [runbook](runbook.md).
+
+## 1. What runs where
+
+| Part | Where | Default |
+| --- | --- | --- |
+| Reference table `spawnpoint-release-refs` | `infra/terraform-storage` | On |
+| Builder writer for `objects-v1` | `infra/terraform-releases`, variable `release_storage_layout` | `legacy` (off) |
+| Reconciler (report, then sweep) | `infra/terraform-operations`, Lambda `spawnpoint-release-reconciler`, weekly | Report only; sweep in dry run |
+| Retirement | Lambda `spawnpoint-release-retirement`, started by the API | Owner only, typed confirmation |
+| Host object cache | `${SERVER_DIR}/objects/sha256/` on each host | On for `objects-v1` releases |
+
+## 2. Deploy order
+
+Follow this order. Do not skip a step.
+
+1. Apply `infra/terraform-storage`. It creates the table, the bucket policy and the lifecycle rules.
+2. Apply the other roots that read or write the table: `terraform-releases`, `terraform-access-api`,
+   `terraform-operations`, `terraform-bot` and `terraform` (the host role).
+   - If the table does not exist, creating a world, a wipe, a restore and a promotion all fail. This is intended.
+   - The builder's catalog step writes holders even while the layout is `legacy`. A build stops at the catalog step if
+     the table or the builder's access is missing.
+3. Deploy the application commit to the configured host. Check that the host runs it (`update-checkout.sh` can keep an
+   old checkout; its warning names the reason).
+4. Register the legacy releases (section 3).
+5. Run the reconciler once by hand and read the report (section 4).
+6. Only then change `release_storage_layout` to `objects-v1` (section 5).
+7. Keep the sweep in dry run for at least four weekly runs before the first real delete (section 7).
+
+## 3. Register legacy releases
+
+Legacy releases are never deleted. Registering them in the table makes sure that nothing treats them as unknown.
+
+```
+RELEASE_BUCKET=<bucket> node lambdas/tools/register-legacy-releases.ts            # dry run: prints the plan
+RELEASE_BUCKET=<bucket> node lambdas/tools/register-legacy-releases.ts --apply    # writes
+```
+
+- The tool writes no file reference. It skips releases with an `objects-v1` manifest and reports them.
+- It reports each record that it cannot read. Fix those first.
+
+## 4. Read the reconciler report
+
+Run the Lambda by hand: invoke `spawnpoint-release-reconciler` with `{}`. The weekly schedule does the same.
+
+| Class | Meaning | Action |
+| --- | --- | --- |
+| `missing_object` | A live manifest names an object that is not in S3 | Dangerous. Alarm. Re-run the build of that release (heal mode restores it from the local file) or restore the noncurrent version |
+| `missing_holder`, `missing_reference` | The table lacks a holder or a reference that a source needs | Dangerous. Alarm. Find the writer that skipped it. Do not retire or sweep until it is fixed |
+| `extra_reference`, `counter_drift` | The table has more than the sources justify | Report only. Check after a retry, then raise a fix |
+| `orphan_object` | An object that no manifest names | The sweep condemns it in a real run |
+| `stuck_deleting` | A delete did not finish | The next complete run finishes or reverts it |
+| `unregistered_release` | A release has no table item | Run section 3 |
+
+An `Incomplete` alarm means that one source could not be read. The report is then not a pass, and nothing is
+swept in that run. Check `/aws/lambda/spawnpoint-release-reconciler`.
+
+## 5. Turn on the writer
+
+1. Confirm section 2 is done and the reconciler report has no dangerous class.
+2. Set `release_storage_layout = "objects-v1"` in `infra/terraform-releases` and apply through the normal review.
+3. Build one release of a small preset. Read the build log lines: `layout=objects-v1`, `objects_total`,
+   `objects_created`, `objects_reused`, `bytes_uploaded` and `writer_seconds`.
+4. Start a world on it from a host that runs the new commit. Read `downloaded=`, `fetched=` and `seconds=`.
+5. To go back, set the variable to `legacy`. Releases that exist stay readable.
+
+An old host that meets an `objects-v1` release stops at the download and loads no mods. The start log names the cause.
+
+## 6. Retire a release
+
+Only the owner can do this. A retired release cannot be used for a new world, a wipe, a restore or a promotion.
+Its manifest stays as history.
+
+1. Check the release in the panel: no world may need it. The retirement checks this again and refuses if any world
+   record, pointer or archive (current or older versions) names the release.
+2. Send `POST /games/<game>/presets/<preset>/releases/<version>/retire` with the body
+   `{"confirmation": "<game>/<preset>@<version>"}`. The text must match exactly.
+3. The call answers `202`. The work runs in the Lambda `spawnpoint-release-retirement`. Read its log for the result.
+4. Legacy releases and the latest release of a preset are refused.
+5. The release leaves the preset catalog. Objects that no other release names become `condemned`. They are deleted
+   only by the sweep, at least 14 days later.
+
+## 7. The sweep
+
+The sweep is part of the reconciler. It is in dry run unless the Lambda variable `RELEASE_SWEEP_DRY_RUN` is exactly
+`false`. It is set by the Terraform variable `release_sweep_dry_run` (default `true`).
+
+An object is deleted only when all of these hold:
+
+- its `refs` is 0 and it has been `condemned` for at least 14 days;
+- no live manifest names it in a complete run that started after it was condemned;
+- no back-reference remains.
+
+Steps for one object: set `deleting`; delete the object; set `deleted` only after the delete worked.
+
+Before the first real delete:
+
+1. Read at least four weekly dry runs. Compare `SweepCandidates` with what you expect.
+2. Check that the reports were complete and had no dangerous class.
+3. Set `release_sweep_dry_run = false` and apply. Watch the next run and the `SweepFailed` alarm.
+
+Undo window: 14 days of grace plus 30 days of noncurrent versions. To undo a delete within 30 days, copy the
+noncurrent version back to the same key (the bucket policy denies `DeleteObjectVersion` to everyone) and set the table
+item back with a build or with the reconciler's repair. Ask the owner before you do this by hand.
+
+## 8. Host object cache
+
+- Files in `objects/` are root-owned and mode `0444`. A mod reaches the game as a **copy**, checked by hash.
+- Hard links (`OBJECT_CACHE_STAGE_MODE=link`) and the size-only start check (`OBJECT_CACHE_START_CHECK=size`) stay off.
+  The mount test with the stand-in image showed that the image's start-up `chown` can make a linked file writable by the
+  game user. Before you turn either on, run
+  `OBJECT_MOUNT_TEST_MODE=link OBJECT_MOUNT_TEST_IMAGE=<pinned game image> bash server/tests/object-cache-mount-test.sh`
+  on a host, and turn them on only when it passes.
+- Eviction runs after a download and removes the oldest unlinked files when free space is low. A file that an installed
+  payload directory links is never removed, so eviction frees little until old payload directories are removed.
+
+## 9. Measurements
+
+These lines exist so that the numbers in the design can be checked. Record each reading in
+[measurements.md](measurements.md) with the date, the release and the instance type.
+
+| Reading | Where |
+| --- | --- |
+| Build: objects uploaded, reused, bytes, writer time | Builder log: `objects_created`, `objects_reused`, `bytes_uploaded`, `writer_seconds` |
+| Host: files fetched, download time | `download-release.sh` output: `downloaded=`, `fetched=`, `seconds=`; `step=` lines of `start-session.sh` |
+| Reconciler: drift and sweep | CloudWatch namespace `Spawnpoint/ReleaseReconciler` |
+| Real size of `client.zip` and the share of changed files between releases | The release plan (`plan.json`) and the manifests |
+
+## 10. Still to verify with AWS
+
+No AWS call was made while this was built. Verify before you rely on it:
+
+- S3 conditional writes (`If-None-Match: *`) on `PutObject`, and the explicit `ChecksumSHA256` header for a stream body.
+- Whether `CopyObject` accepts `If-None-Match`. The writer falls back to uploading the local file.
+- That a bucket-policy deny does not block a lifecycle expiry of noncurrent object versions.
+- The write units of a DynamoDB transaction.
+- The container-mount test with the pinned game image.

@@ -1,27 +1,33 @@
-import { GetCommand, PutCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { DeleteCommand, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 
 // An in-memory stand-in for the reference table. It understands only the
 // expressions release-refs.ts writes: attribute_(not_)exists, `#s = :v`,
-// `#s IN (...)` joined by OR, and SET / ADD / REMOVE updates.
+// `#s IN (...)`, `attr <= :v`, clauses joined by AND or OR, and SET / ADD / REMOVE updates.
 
 type Item = Record<string, unknown>;
 type Names = Record<string, string> | undefined;
 type Values = Record<string, unknown> | undefined;
 
+function clauseHolds(item: Item | undefined, text: string, names: Names, values: Values): boolean {
+  const attribute = (token: string) => item?.[names?.[token] ?? token];
+  let match = /^attribute_not_exists\((\w+)\)$/.exec(text);
+  if (match) return item === undefined;
+  match = /^attribute_exists\((\w+)\)$/.exec(text);
+  if (match) return item !== undefined;
+  match = /^(#?\w+) = (:\w+)$/.exec(text);
+  if (match) return item !== undefined && attribute(match[1]!) === values![match[2]!];
+  match = /^(#?\w+) <= (:\w+)$/.exec(text);
+  if (match) return item !== undefined && attribute(match[1]!) !== undefined && (attribute(match[1]!) as string | number) <= (values![match[2]!] as string | number);
+  match = /^(#?\w+) > (:\w+)$/.exec(text);
+  if (match) return item !== undefined && Number(attribute(match[1]!)) > Number(values![match[2]!]);
+  match = /^(#\w+) IN \(([^)]*)\)$/.exec(text);
+  if (match) return item !== undefined && match[2]!.split(",").map((name) => values![name.trim()]).includes(attribute(match[1]!));
+  throw new Error(`fake table: unsupported condition ${text}`);
+}
+
 function conditionHolds(item: Item | undefined, expression: string | undefined, names: Names, values: Values): boolean {
   if (expression === undefined) return true;
-  return expression.split(" OR ").some((clause) => {
-    const text = clause.trim();
-    let match = /^attribute_not_exists\((\w+)\)$/.exec(text);
-    if (match) return item === undefined;
-    match = /^attribute_exists\((\w+)\)$/.exec(text);
-    if (match) return item !== undefined;
-    match = /^(#\w+) = (:\w+)$/.exec(text);
-    if (match) return item !== undefined && item[names![match[1]!]!] === values![match[2]!];
-    match = /^(#\w+) IN \(([^)]*)\)$/.exec(text);
-    if (match) return item !== undefined && match[2]!.split(",").map((name) => values![name.trim()]).includes(item[names![match[1]!]!]);
-    throw new Error(`fake table: unsupported condition ${text}`);
-  });
+  return expression.split(" OR ").some((alternative) => alternative.split(" AND ").every((clause) => clauseHolds(item, clause.trim(), names, values)));
 }
 
 function apply(item: Item, expression: string, names: Names, values: Values): Item {
@@ -89,6 +95,13 @@ export class FakeRefsTable {
       const found = this.items.get(this.id(command.input.Key!));
       return found === undefined ? {} : { Item: structuredClone(found) };
     }
+    if (command instanceof QueryCommand) {
+      const values = command.input.ExpressionAttributeValues!;
+      const items = [...this.items.values()]
+        .filter((item) => item.pk === values[":pk"] && String(item.sk).startsWith(String(values[":hold"] ?? values[":prefix"])))
+        .map((item) => structuredClone(item));
+      return { Items: items };
+    }
     if (command instanceof PutCommand) {
       const input = command.input;
       const current = this.items.get(this.id(input.Item!));
@@ -96,6 +109,10 @@ export class FakeRefsTable {
         throw Object.assign(new Error("condition failed"), { name: "ConditionalCheckFailedException" });
       }
       this.items.set(this.id(input.Item!), input.Item!);
+      return {};
+    }
+    if (command instanceof DeleteCommand) {
+      this.items.delete(this.id(command.input.Key!));
       return {};
     }
     if (command instanceof UpdateCommand) {

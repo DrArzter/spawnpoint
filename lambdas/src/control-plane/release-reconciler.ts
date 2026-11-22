@@ -7,12 +7,17 @@ import { manifestClientAddons, manifestClientMods } from "./release-artifacts.ts
 import type { ReleaseState } from "./release-state.ts";
 import type { WorldRecord } from "./world-registry.ts";
 
-// The reconciler of ADR-0080 in report-only mode. `mark` rebuilds the expected
-// state from the sources of truth, `compare` weighs it against the reference
-// table and the `objects/` listing. Both are pure: this file has no port that
-// could write. A later `plan sweep` step consumes the ConsistencyReport.
+// The reconciler of ADR-0080. `mark` rebuilds the expected state from the
+// sources of truth, `compare` weighs it against the reference table and the
+// `objects/` listing. Both are pure: this file has no port that could write.
+// release-sweep.ts plans the sweep from the ConsistencyReport. Every other
+// finding (missing reference or holder, extra reference, counter drift) stays
+// report-only.
 
 export const EXAMPLE_LIMIT = 50;
+
+/** The holder name of a world's pre-generation pointer `worlds/<id>/release.json`, as import-world.sh writes it. */
+export const LEGACY_GENERATION = "legacy";
 
 export type ReleaseRef = Readonly<{ gameId: string; presetId: string; release: string }>;
 
@@ -63,7 +68,7 @@ function listOf(value: unknown): readonly unknown[] {
 }
 
 /** Every digest an objects-v1 manifest names, with the path that names it. */
-function namedDigests(manifest: unknown): readonly Named[] {
+export function namedDigests(manifest: unknown): readonly Named[] {
   const server = (manifest as { server?: { mods?: unknown; overrides?: unknown } } | null)?.server;
   const named: Named[] = [];
   for (const mod of listOf(server?.mods)) named.push({ sha256: (mod as { sha256?: unknown } | null)?.sha256, path: `mods/${(mod as { file?: unknown } | null)?.file}` });
@@ -124,6 +129,13 @@ export function mark(input: MarkInput): Marks {
       for (const run of state.releasesRun ?? []) hold(ofWorld(record, run.release), sk);
       if (state.prePromotionBackup?.release) hold(ofWorld(record, state.prePromotionBackup.release), sk);
     }
+    // A pointer from before generations has no generation id; its holder is `legacy`.
+    const legacy = pointers.get(pointerKey(record.worldId, LEGACY_GENERATION));
+    if (legacy !== undefined) {
+      const sk = `hold#gen#${record.worldId}/${LEGACY_GENERATION}`;
+      hold(ofWorld(record, legacy.desiredRelease), sk);
+      if (legacy.activeRelease !== null) hold(ofWorld(record, legacy.activeRelease), sk);
+    }
   }
 
   for (const catalog of input.catalogs) {
@@ -160,9 +172,17 @@ export function mark(input: MarkInput): Marks {
 
 export type TableItem = Readonly<Record<string, unknown>>;
 
+export type FileView = Readonly<{
+  refs: number;
+  state: FileItemState | null;
+  bytes: number;
+  condemnedAt: string | null;
+  deletingAt: string | null;
+}>;
+
 export type TableView = Readonly<{
   empty: boolean;
-  files: ReadonlyMap<string, Readonly<{ refs: number; state: FileItemState | null }>>;
+  files: ReadonlyMap<string, FileView>;
   /** digest to the releases that hold a back-reference to it. */
   backReferences: ReadonlyMap<string, ReadonlySet<string>>;
   releases: ReadonlyMap<string, Readonly<{ state: ReleaseItemState | null }>>;
@@ -170,7 +190,7 @@ export type TableView = Readonly<{
 }>;
 
 export function tableView(items: readonly TableItem[]): TableView {
-  const files = new Map<string, { refs: number; state: FileItemState | null }>();
+  const files = new Map<string, FileView>();
   const backReferences = new Map<string, Set<string>>();
   const releases = new Map<string, { state: ReleaseItemState | null }>();
   const holders = new Map<string, Set<string>>();
@@ -179,7 +199,13 @@ export function tableView(items: readonly TableItem[]): TableView {
     if (typeof pk !== "string" || typeof sk !== "string") continue;
     if (pk.startsWith("file#")) {
       const digest = pk.slice("file#".length);
-      if (sk === "meta") files.set(digest, { refs: Number(item.refs), state: (item.state as FileItemState | undefined) ?? null });
+      if (sk === "meta") {
+        files.set(digest, {
+          refs: Number(item.refs), state: (item.state as FileItemState | undefined) ?? null, bytes: Number(item.bytes ?? 0),
+          condemnedAt: typeof item.condemned_at === "string" ? item.condemned_at : null,
+          deletingAt: typeof item.deleting_at === "string" ? item.deleting_at : null,
+        });
+      }
       else if (sk.startsWith("release#")) backReferences.set(digest, (backReferences.get(digest) ?? new Set()).add(sk.slice("release#".length)));
     } else if (pk.startsWith("release#")) {
       const id = pk.slice("release#".length);
@@ -203,11 +229,13 @@ export type ClassReport = Readonly<{ count: number; examples: readonly string[] 
 
 export type ConsistencyReport = Readonly<{
   generatedAt: string;
+  /** Taken before the first read: a delete needs a mark from a run that started after `condemned_at`. */
+  startedAt: string;
   mode: "report";
   /** True only when every source was read. */
   complete: boolean;
-  /** Always false in this branch: no run may delete. A sweep step needs a complete run. */
-  sweepable: false;
+  /** Only a complete run may sweep. */
+  sweepable: boolean;
   table_empty: boolean;
   /** Classes that could not be judged in this run, with the reason. */
   skipped: readonly Readonly<{ class: DiffClass; reason: string }>[];
@@ -216,7 +244,21 @@ export type ConsistencyReport = Readonly<{
   classes: Readonly<Record<DiffClass, ClassReport>>;
 }>;
 
-export type Listing = Readonly<{ keys: readonly string[] }> | null;
+/** `sizes` maps a key to its bytes; a key without a size counts as 0. */
+export type Listing = Readonly<{ keys: readonly string[]; sizes?: ReadonlyMap<string, number> }> | null;
+
+/**
+ * Digests that a building release holds a back-reference to. The builder
+ * uploads before it writes the manifest, so no manifest names them yet.
+ * A holder `hold#build#...` is never derived from the sources and never compared.
+ */
+export function buildingDigests(table: TableView | null): ReadonlySet<string> {
+  const building = new Set<string>();
+  for (const [digest, releases] of table?.backReferences ?? []) {
+    if ([...releases].some((release) => table?.releases.get(release)?.state === "building")) building.add(digest);
+  }
+  return building;
+}
 
 type Findings = Record<DiffClass, string[]>;
 
@@ -224,7 +266,7 @@ type Findings = Record<DiffClass, string[]>;
  * `table` is null when it could not be read; `listing` is null when `objects/`
  * could not be listed. A class that needs a missing source is skipped, not guessed.
  */
-export function compare(marks: Marks, table: TableView | null, listing: Listing, generatedAt: string): ConsistencyReport {
+export function compare(marks: Marks, table: TableView | null, listing: Listing, generatedAt: string, startedAt: string): ConsistencyReport {
   const found = Object.fromEntries(DIFF_CLASSES.map((name) => [name, [] as string[]])) as Findings;
   const skipped: { class: DiffClass; reason: string }[] = [];
   const skip = (names: readonly DiffClass[], reason: string) => { for (const name of names) skipped.push({ class: name, reason }); };
@@ -286,12 +328,7 @@ export function compare(marks: Marks, table: TableView | null, listing: Listing,
   }
 
   // The builder uploads objects before the manifest, so a building release's digests are not orphans.
-  const building = new Set<string>();
-  if (table !== null) {
-    for (const [digest, releases] of table.backReferences) {
-      if ([...releases].some((release) => table.releases.get(release)?.state === "building")) building.add(digest);
-    }
-  }
+  const building = buildingDigests(table);
   if (listing !== null && !marks.manifestsKnown) skip(["orphan_object"], "manifests_incomplete");
   else if (listing !== null) {
     for (const digest of objects) if (!named.has(digest) && !building.has(digest)) found.orphan_object.push(`file#${digest}`);
@@ -303,7 +340,7 @@ export function compare(marks: Marks, table: TableView | null, listing: Listing,
   })) as unknown as Record<DiffClass, ClassReport>;
   const complete = marks.failures.length === 0 && table !== null && listing !== null;
   return {
-    generatedAt, mode: "report", complete, sweepable: false, table_empty: table?.empty ?? false,
+    generatedAt, startedAt, mode: "report", complete, sweepable: complete, table_empty: table?.empty ?? false,
     skipped, failures: marks.failures.slice(0, EXAMPLE_LIMIT),
     dangerous: DANGEROUS_CLASSES.reduce((sum, name) => sum + classes[name].count, 0),
     classes,

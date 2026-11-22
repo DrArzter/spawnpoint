@@ -58,6 +58,16 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.release_retirement_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.release_retirement
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.release_reconciler_assume
     values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
@@ -206,6 +216,14 @@ mock_provider "archive" {
     target = data.archive_file.release_reconciler
     values = {
       output_path         = "release-reconciler.zip"
+      output_base64sha256 = "test"
+    }
+  }
+
+  override_data {
+    target = data.archive_file.release_retirement
+    values = {
+      output_path         = "release-retirement.zip"
       output_base64sha256 = "test"
     }
   }
@@ -594,7 +612,7 @@ run "backup_retention_runs_daily_and_may_delete_only_current_archives" {
   }
 }
 
-run "release_reconciler_only_reads_and_runs_weekly" {
+run "release_reconciler_reads_and_runs_weekly" {
   command = plan
 
   assert {
@@ -622,26 +640,25 @@ run "release_reconciler_only_reads_and_runs_weekly" {
     error_message = "The reconciler runs once a week, on Sunday morning."
   }
 
-  # Every action in the policy must be on this list. A write needs a change here, in review.
+  # The exact list of actions. A new action needs a change here, in review.
   assert {
-    condition = alltrue([
-      for action in flatten([for statement in data.aws_iam_policy_document.release_reconciler.statement : tolist(statement.actions)]) :
-      contains([
-        "s3:ListBucket", "s3:ListBucketVersions", "s3:GetObject", "s3:GetObjectVersion",
-        "dynamodb:GetItem", "dynamodb:Query", "dynamodb:Scan", "cloudwatch:PutMetricData",
-      ], action)
+    condition = toset(flatten([for statement in data.aws_iam_policy_document.release_reconciler.statement : tolist(statement.actions)])) == toset([
+      "s3:ListBucket", "s3:ListBucketVersions", "s3:GetObject", "s3:GetObjectVersion",
+      "dynamodb:GetItem", "dynamodb:Query", "dynamodb:Scan",
+      "s3:DeleteObject", "dynamodb:UpdateItem", "dynamodb:PutItem",
+      "cloudwatch:PutMetricData",
     ])
-    error_message = "The reconciler may list, get, read the table and put metrics, and nothing else."
+    error_message = "The reconciler may list, get, read the table, put metrics, delete one object, and update or put one table item, and nothing else."
   }
 
   assert {
     condition = alltrue([
       for action in flatten([for statement in data.aws_iam_policy_document.release_reconciler.statement : tolist(statement.actions)]) :
-      !startswith(action, "s3:Delete") && !startswith(action, "s3:Put") && !startswith(action, "s3:Restore") &&
-      !startswith(action, "dynamodb:Put") && !startswith(action, "dynamodb:Update") && !startswith(action, "dynamodb:Delete") &&
-      !startswith(action, "dynamodb:Batch") && !startswith(action, "dynamodb:Transact")
+      action != "s3:DeleteObjectVersion" && !startswith(action, "s3:Put") && !startswith(action, "s3:Restore") &&
+      action != "s3:DeleteObjects" && action != "s3:DeleteBucket" &&
+      action != "dynamodb:DeleteItem" && !startswith(action, "dynamodb:Batch") && !startswith(action, "dynamodb:Transact")
     ])
-    error_message = "A report-only reconciler has no s3:Delete*, s3:Put* or table write action."
+    error_message = "The sweep has no version delete, no s3:Put*, no table delete, batch or transaction."
   }
 
   assert {
@@ -700,6 +717,66 @@ run "release_reconciler_only_reads_and_runs_weekly" {
       contains(aws_cloudwatch_metric_alarm.release_reconciler_errors.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"),
     ])
     error_message = "A Lambda error in the reconciler must alarm the guardrails topic."
+  }
+}
+
+run "release_reconciler_sweep_is_narrow_and_dry_by_default" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      var.release_sweep_dry_run == true,
+      aws_lambda_function.release_reconciler.environment[0].variables["RELEASE_SWEEP_DRY_RUN"] == "true",
+    ])
+    error_message = "The sweep is a dry run unless release_sweep_dry_run is set to false."
+  }
+
+  assert {
+    condition = alltrue([
+      toset(one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.actions if statement.sid == "SweepDeleteObjects"])) == toset(["s3:DeleteObject"]),
+      one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.resources if statement.sid == "SweepDeleteObjects"]) == toset(["arn:aws:s3:::spawnpoint-releases-123456789012/objects/*"]),
+      toset(one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.actions if statement.sid == "SweepWriteFileItems"])) == toset(["dynamodb:UpdateItem", "dynamodb:PutItem"]),
+      one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.resources if statement.sid == "SweepWriteFileItems"]) == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-release-refs"]),
+    ])
+    error_message = "DeleteObject is on objects/* only. Table writes are on the reference table itself, never on an index."
+  }
+
+  assert {
+    condition = alltrue([
+      one(one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.condition if statement.sid == "SweepWriteFileItems"])).test == "ForAllValues:StringLike",
+      one(one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.condition if statement.sid == "SweepWriteFileItems"])).variable == "dynamodb:LeadingKeys",
+      toset(one(one([for statement in data.aws_iam_policy_document.release_reconciler.statement : statement.condition if statement.sid == "SweepWriteFileItems"])).values) == toset(["file#*"]),
+    ])
+    error_message = "Table writes are limited to file items by their leading key."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_cloudwatch_metric_alarm.release_reconciler_sweep_failed.alarm_name == "spawnpoint-release-reconciler-sweep-failed",
+      aws_cloudwatch_metric_alarm.release_reconciler_sweep_failed.namespace == "Spawnpoint/ReleaseReconciler",
+      aws_cloudwatch_metric_alarm.release_reconciler_sweep_failed.metric_name == "SweepFailed",
+      aws_cloudwatch_metric_alarm.release_reconciler_sweep_failed.statistic == "Maximum",
+      aws_cloudwatch_metric_alarm.release_reconciler_sweep_failed.period == 86400,
+      aws_cloudwatch_metric_alarm.release_reconciler_sweep_failed.threshold == 0,
+      aws_cloudwatch_metric_alarm.release_reconciler_sweep_failed.comparison_operator == "GreaterThanThreshold",
+      aws_cloudwatch_metric_alarm.release_reconciler_sweep_failed.treat_missing_data == "notBreaching",
+      contains(aws_cloudwatch_metric_alarm.release_reconciler_sweep_failed.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"),
+      contains(aws_cloudwatch_metric_alarm.release_reconciler_sweep_failed.ok_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"),
+    ])
+    error_message = "A failed sweep write alarms the guardrails topic on a one-day window."
+  }
+}
+
+run "release_reconciler_sweep_can_be_turned_on" {
+  command = plan
+
+  variables {
+    release_sweep_dry_run = false
+  }
+
+  assert {
+    condition     = aws_lambda_function.release_reconciler.environment[0].variables["RELEASE_SWEEP_DRY_RUN"] == "false"
+    error_message = "release_sweep_dry_run = false reaches the Lambda as the string false, the only value that turns the dry run off."
   }
 }
 

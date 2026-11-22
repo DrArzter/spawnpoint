@@ -153,6 +153,17 @@ test("promoting a world is release.promote, which only the Owner role holds", as
   assert.ok(deployedCapabilities().includes("releasePromotion"));
 });
 
+test("retiring a release is release.retire, which only the Owner role holds", async () => {
+  const key = "POST /games/{gameId}/presets/{presetId}/releases/{version}/retire";
+  assert.deepEqual(routes[key]?.access, { kind: "permission", permission: "release.retire" });
+  assert.ok((await deployedRouteKeys()).has(key));
+  const { builtInRoles, permissions } = await import("../src/access/domain.ts");
+  assert.ok(permissions.includes("release.retire"));
+  const holders = Object.values(builtInRoles).filter((role) => role.permissions.includes("release.retire")).map((role) => role.id);
+  assert.deepEqual(holders, ["owner"]);
+  for (const id of ["viewer", "player", "operator"] as const) assert.ok(!builtInRoles[id].permissions.includes("release.retire"), id);
+});
+
 test("permanent world deletion is owner-level world management", () => {
   assert.deepEqual(routes["POST /games/{gameId}/worlds/{worldId}/purge"]?.access, {
     kind: "permission", permission: "world.manage",

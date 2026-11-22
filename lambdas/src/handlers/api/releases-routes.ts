@@ -1,5 +1,7 @@
 import { permissionRoute, type Route } from "./routing.ts";
-import { releaseManifest, releaseDiff, buildRelease, packDownload, releaseModDownload, releasePackDownload } from "./releases.ts";
+import {
+  releaseManifest, releaseDiff, buildRelease, packDownload, releaseModDownload, releasePackDownload, requestReleaseRetirement,
+} from "./releases.ts";
 import { parameter } from "./http.ts";
 
 export const releasesRoutes: Readonly<Record<string, Route>> = {
@@ -9,6 +11,8 @@ export const releasesRoutes: Readonly<Record<string, Route>> = {
     releaseDiff(parameter(event, "gameId"), parameter(event, "presetId"), parameter(event, "version"), event.queryStringParameters?.from)),
   "POST /games/{gameId}/presets/{presetId}/builds": permissionRoute("release.build", (identity, event) =>
     buildRelease(identity, parameter(event, "gameId"), parameter(event, "presetId"), event.body)),
+  "POST /games/{gameId}/presets/{presetId}/releases/{version}/retire": permissionRoute("release.retire", (identity, event) =>
+    requestReleaseRetirement(identity, parameter(event, "gameId"), parameter(event, "presetId"), parameter(event, "version"), event.body)),
   "GET /games/{gameId}/worlds/{worldId}/pack": permissionRoute("connection.read", (_identity, event) =>
     packDownload(parameter(event, "gameId"), parameter(event, "worldId"))),
   "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}": permissionRoute("release.read", (_identity, event) =>

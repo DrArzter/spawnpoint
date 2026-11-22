@@ -253,6 +253,8 @@ if [[ "${layout}" == "objects-v1" ]]; then
   printf 'reused=0\n'
   printf 'layout=objects-v1\n'
   printf 'fetched=%s\n' "${fetched}"
+  # Measurement hook: wall time of this download, for docs/measurements.md.
+  printf 'seconds=%s\n' "${SECONDS}"
   exit 0
 fi
 
@@ -371,3 +373,4 @@ printf 'downloaded=%s\n' "${downloaded}"
 printf 'kept=%s\n' "${kept}"
 printf 'reused=%s\n' "${reused}"
 printf 'layout=legacy\n'
+printf 'seconds=%s\n' "${SECONDS}"

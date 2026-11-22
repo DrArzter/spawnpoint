@@ -82,6 +82,7 @@ async function write(argv: readonly string[], env: NodeJS.ProcessEnv, deps: CliD
   const ref = releaseRef(values);
   const manifest = JSON.parse(await readFile(values.manifest, "utf8")) as Manifest;
   const heal = values.heal === true;
+  const started = Date.now();
   const result = await writeObjects(deps, {
     ref, buildId: buildId(values), sourceDir: values["source-dir"], manifest, packs: packFiles(values.pack ?? []),
     concurrency: concurrency(env), upstream: await upstreamMap(values["upstream-map"]), heal,
@@ -93,6 +94,8 @@ async function write(argv: readonly string[], env: NodeJS.ProcessEnv, deps: CliD
   for (const line of [
     "layout=objects-v1", `objects_total=${result.total}`, `objects_created=${result.created}`, `objects_reused=${result.reused}`,
     `objects_recreated=${result.recreated}`, `objects_repaired=${result.repaired}`, `objects_copied=${result.copied}`, `bytes_uploaded=${result.bytesUploaded}`,
+    // Measurement hook: the writer's wall time, for docs/measurements.md.
+    `writer_seconds=${Math.round((Date.now() - started) / 1000)}`,
   ]) io.out(line);
 }
 

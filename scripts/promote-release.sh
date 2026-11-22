@@ -128,7 +128,7 @@ input="$(
         maxInstancePolls: 30, maxSsmPolls: 30, maxCommandPolls: 160
       },
       watchdogTiming: {
-        checkIntervalSeconds: 300, emptyChecksRequired: 3, maxTotalChecks: 96,
+        checkIntervalSeconds: 900, emptyChecksRequired: 3, maxTotalChecks: 32,
         maxConsecutiveProbeFailures: 6, maxStopRefusals: 3,
         probePollSeconds: 10, maxProbePolls: 30
       }

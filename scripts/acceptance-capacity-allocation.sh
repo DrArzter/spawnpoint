@@ -125,7 +125,7 @@ timing_json() {
   jq -cn '{
     startTiming: {instancePollSeconds: 10, ssmPollSeconds: 10, commandPollSeconds: 15, maxInstancePolls: 30, maxSsmPolls: 30, maxCommandPolls: 160},
     stopTiming: {instancePollSeconds: 10, ssmPollSeconds: 10, commandPollSeconds: 15, maxInstancePolls: 30, maxSsmPolls: 30, maxCommandPolls: 160},
-    watchdogTiming: {checkIntervalSeconds: 300, emptyChecksRequired: 3, maxTotalChecks: 96, maxConsecutiveProbeFailures: 6, maxStopRefusals: 3, probePollSeconds: 10, maxProbePolls: 30}
+    watchdogTiming: {checkIntervalSeconds: 900, emptyChecksRequired: 3, maxTotalChecks: 32, maxConsecutiveProbeFailures: 6, maxStopRefusals: 3, probePollSeconds: 10, maxProbePolls: 30}
   }'
 }
 

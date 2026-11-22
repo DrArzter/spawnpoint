@@ -155,7 +155,8 @@ export type WorldsModel = Readonly<{
 // --- one world ---------------------------------------------------------------
 
 export type DetailValue =
-  | Readonly<{ type: "text"; text: string; mono?: boolean }>
+  /** `wrap`: a long text runs over lines instead of one cut line. */
+  | Readonly<{ type: "text"; text: string; mono?: boolean; wrap?: boolean }>
   | Readonly<{ type: "absent"; text: string }>
   | Readonly<{ type: "status"; status: StatusDescriptor }>
   | Readonly<{ type: "time"; at: string | number | null | undefined }>
@@ -271,7 +272,10 @@ export type WorldModel = Readonly<{
   more: readonly Action[];
   sessionDetails: readonly Detail[];
   worldDetails: readonly Detail[];
+  /** The operations that hold the world, less the one `progress` tells. */
   operations: readonly Readonly<{ operation: Operation; label: string }>[];
+  /** The newest running operation of this world, or the one that just ended badly; null when there is none or the API offers none. */
+  progress: OperationProgressModel | null;
   wipes: readonly Readonly<{ wipe: Wipe; showBackups: Action }>[];
   backups: BackupsModel;
   releases: Readonly<{
@@ -303,6 +307,27 @@ export type SiblingRow = Readonly<{
   placement: WorldPlacement;
   address: AddressFacts | null;
 }>;
+
+/** One world operation as the page tells it: while it runs and, once it failed, why. */
+export type OperationProgressModel = Readonly<{
+  id: string;
+  title: string;
+  status: StatusDescriptor;
+  running: boolean;
+  startedAt: string;
+  /** Seconds the operation ran, once it has ended. */
+  ranSeconds: number | null;
+  expectation: Readonly<{ expectedSeconds?: number; expectedSamples?: number }>;
+  step: string | null;
+  child: string | null;
+  failure: Readonly<{ error: string; cause: string }> | null;
+  caught: Readonly<{ error: string; cause: string; step: string | null }> | null;
+  /** The host's own lines of a start, oldest first. */
+  log: readonly HostLogRow[];
+}>;
+
+/** One line of the host log: `tone` marks a fault; `at` is a time the skin prints. */
+export type HostLogRow = Readonly<{ id: string; at: string; text: string; tone: "plain" | "warning" | "error" }>;
 
 /** This world's session in a few facts; `busy` while an operation holds it. */
 export type WorldGlance = Readonly<{ live: boolean; players: number | null; address: AddressFacts | null; launchedAt: string | null; busy: boolean }>;

@@ -82,6 +82,16 @@ html[data-skin="console"] .c-detail-text {
   text-overflow: ellipsis;
 }
 
+/* A cause or an error runs over lines, cut at six with the whole text in its tooltip. */
+html[data-skin="console"] .c-detail-wrap {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 html[data-skin="console"] .c-detail-time,
 html[data-skin="console"] .c-detail-release,
 html[data-skin="console"] .c-detail-preset {

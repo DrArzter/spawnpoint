@@ -5,7 +5,7 @@ import { liveApi, liveAuthConfigured } from "./api/live";
 export type {
   AccessCandidate, AccessIdentity, AccessInvitation, AccessRole, AccountProfile, ActiveSession, AppearancePreference, AuthState, BackupEntry,
   BackupInventory, HostMetrics, HostMetricSeries, InvitationRecipient, InvitationSummary, LinkedLoginAccount, LinkedLoginAccounts, LoginOptions, LoginProviderId,
-  IssuedAccessInvitation, MetricRange, SessionOperation,
+  IssuedAccessInvitation, MetricRange, OperationProgress, OperationStep, SessionOperation,
   SpawnpointApi, SpawnpointSession, SubscriptionState, VisitorSession, WorldLifecycleAction,
 } from "./api/contract";
 import type { SettingValue } from "./model";
@@ -71,6 +71,7 @@ export const loadReleaseDiff = (gameId: string, presetId: string, release: strin
 export const requestModDownload = (gameId: string, presetId: string, release: string, sha256: string) => api.requestModDownload(gameId, presetId, release, sha256);
 export const requestReleasePack = (gameId: string, presetId: string, release: string, pack: ReleasePackName) => api.requestReleasePack(gameId, presetId, release, pack);
 export const loadWorldMetrics = (gameId: string, worldId: string, range: MetricRange) => api.loadWorldMetrics(gameId, worldId, range);
+export const loadOperationProgress = (gameId: string, worldId: string, operationId: string) => api.loadOperationProgress(gameId, worldId, operationId);
 export const loadConsole = (gameId: string, worldId: string) => api.loadConsole(gameId, worldId);
 export const runConsoleCommand = (gameId: string, worldId: string, command: string) => api.runConsoleCommand(gameId, worldId, command);
 

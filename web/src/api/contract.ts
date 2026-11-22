@@ -243,6 +243,41 @@ export type AuthState =
 
 export type WorldLifecycleAction = "archive" | "regenerate" | "restore" | "purge";
 export type SessionOperation = "start" | "stop";
+
+/** One step of a running workflow: the key is stable, the label is the server's plain words. */
+export type OperationStep = Readonly<{ key: string; label: string }>;
+
+/** One line of the host's own output while a start ran, already filtered and redacted by the API. */
+export type HostLogLine = Readonly<{
+  at: string;
+  kind: "step" | "result" | "container" | "error" | "warning" | "game";
+  text: string;
+}>;
+
+/** How far one world operation has come, and why it ended badly (`GET .../operations/{id}`). */
+export type OperationProgress = Readonly<{
+  id: string;
+  type: "start" | "stop" | "promote" | "world";
+  status: "running" | "succeeded" | "failed" | "timed_out" | "aborted";
+  startedAt: string;
+  stoppedAt: string | null;
+  elapsedSeconds: number;
+  /** The usual duration, as `Operation.expectedSeconds`. */
+  expectedSeconds?: number;
+  expectedSamples?: number;
+  /** Only while running. */
+  step: OperationStep | null;
+  /** The nested start or stop workflow's step, only while running. */
+  child: Readonly<{ type: "start" | "stop"; step: OperationStep }> | null;
+  /** The workflow's status on success: "promoted", "rolled_back", "already_active". */
+  result: string | null;
+  /** The workflow's own error name and cause, once it failed, timed out or was aborted. */
+  failure: Readonly<{ error: string; cause: string }> | null;
+  /** A task error the workflow caught, such as before a rollback. */
+  caught: Readonly<{ error: string; cause: string; step: OperationStep | null }> | null;
+  /** The host's lines of a start or promotion, oldest first; absent when the API could not read them. */
+  hostLog?: readonly HostLogLine[];
+}>;
 export type LoginOptions = Readonly<{
   providers: readonly LoginProviderId[];
   /** Providers through which an anonymous visitor may create a credential. */
@@ -372,6 +407,8 @@ export type SpawnpointApi = Readonly<{
   requestReleasePack(gameId: string, presetId: string, release: string, pack: ReleasePackName): Promise<FileLink>;
   /** The host this world's session runs on, measured; null while the world runs nowhere. */
   loadWorldMetrics(gameId: string, worldId: string, range: MetricRange): Promise<HostMetrics | null>;
+  /** One operation of the world; null when the API does not know it. */
+  loadOperationProgress(gameId: string, worldId: string, operationId: string): Promise<OperationProgress | null>;
   /** The world's recent console commands, newest first; a pending one is settled on read. */
   loadConsole(gameId: string, worldId: string): Promise<readonly ConsoleEntry[]>;
   runConsoleCommand(gameId: string, worldId: string, command: string): Promise<ConsoleEntry>;

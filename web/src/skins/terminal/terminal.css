@@ -2469,6 +2469,37 @@ html[data-skin="terminal"] .t-chart-scale {
   line-height: 16px;
 }
 
+/* Log: the host's lines of a start, wrapped, newest last in a short scrolling region. */
+html[data-skin="terminal"] .t-log {
+  max-height: 224px;
+  margin-top: 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--rule);
+  padding-top: 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+html[data-skin="terminal"] .t-log-line {
+  display: flex;
+  gap: 1.5ch;
+  min-width: 0;
+}
+
+html[data-skin="terminal"] .t-log-time {
+  flex: none;
+  color: var(--ink-secondary);
+}
+
+html[data-skin="terminal"] .t-log-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+html[data-skin="terminal"] .t-log-warning .t-log-text { color: var(--warning-ink); }
+html[data-skin="terminal"] .t-log-error .t-log-text { color: var(--error-ink); }
+
 /* --- the console: a terminal inside the terminal -------------------------------------------- */
 
 html[data-skin="terminal"] .t-rcon {

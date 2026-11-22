@@ -2,6 +2,8 @@ import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type Com
 
 import type { Filter } from "../../components/ui/Filter";
 import { hideLayer, showLayer, useLightDismiss } from "../../components/ui/layer";
+import type { HostLogRow } from "../../core/models";
+import { logTime } from "../../core/operation-progress";
 import type { StatusKind } from "../../core/status";
 import { Tooltip } from "../../components/ui/Tooltip";
 import type { Action } from "../../core/actions";
@@ -494,6 +496,26 @@ export function Details({ items, label, className }: Readonly<{ items: readonly 
           </div>
         ))}
       </dl>
+    </div>
+  );
+}
+
+/** The host's lines of a start, newest last in a short region that keeps the newest in view; a fault says so in text as well as colour. */
+export function Log({ label, rows, className }: Readonly<{ label: string; rows: readonly HostLogRow[]; className?: string }>) {
+  const region = useRef<HTMLDivElement>(null);
+  const newest = rows.at(-1)?.id;
+  useEffect(() => {
+    const element = region.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [newest]);
+  return (
+    <div aria-label={label} aria-live="polite" className={cx("t-log", className)} ref={region} role="log">
+      {rows.map((row) => (
+        <div className={cx("t-log-line", row.tone !== "plain" && `t-log-${row.tone}`)} key={row.id}>
+          <time className="t-log-time" dateTime={row.at}>{logTime(row.at)}</time>
+          <span className="t-log-text">{row.tone !== "plain" && <span className="visually-hidden">{row.tone === "error" ? "Error: " : "Warning: "}</span>}{row.text}</span>
+        </div>
+      ))}
     </div>
   );
 }

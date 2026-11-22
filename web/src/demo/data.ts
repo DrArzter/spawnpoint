@@ -9,6 +9,18 @@ export type Mutable<T> = {
   -readonly [K in keyof T]: T[K] extends readonly (infer U)[] ? Mutable<U>[] : T[K] extends object | null ? (T[K] extends null ? T[K] : Mutable<T[K]>) : T[K];
 };
 
+/** What an operation does and when, so a read at any time says which step it is in. */
+export type OperationPlan = {
+  type: "start" | "stop" | "promote" | "world";
+  worldId: string;
+  startedAt: number;
+  durationMs: number;
+  /** Time into the run where it holds still, so a picture can keep it. */
+  pinAtMs?: number;
+  failure?: { error: string; cause: string };
+  caught?: { error: string; cause: string; stepKey: string };
+};
+
 export type DemoState = {
   snapshot: Mutable<ControlPlaneSnapshot>;
   roles: AccessRole[];
@@ -27,6 +39,8 @@ export type DemoState = {
   serverWhitelists: Record<string, string[]>;
   /** Effects that land when their time passes; read calls settle them. */
   scheduled: { operationId: string; at: number; apply: (state: DemoState) => void }[];
+  /** How far each operation has come, by id; read by the operation progress call. */
+  progress: Record<string, OperationPlan>;
   counter: number;
 };
 
@@ -36,7 +50,7 @@ export const demoSession: ActiveSession = {
   identity: { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [] },
   // Demo capabilities include unfinished prototypes so their screens remain
   // explorable without advertising those destinations in production.
-  capabilities: ["releaseBuilds", "releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "releaseDiff", "backupDownloads", "whitelist", "releasePromotion"],
+  capabilities: ["releaseBuilds", "releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "releaseDiff", "backupDownloads", "whitelist", "releasePromotion", "operationProgress"],
   role: { id: "owner", name: "Owner", permissions: ["status.read", "connection.read", "session.start", "session.stop", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "release.read", "release.build", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite"] },
   profile: { provider: "telegram", platformUserId: "1780660807", telegramId: "1780660807", username: "drarzter", email: null, photoUrl: null },
   bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "1780660807", claimedAt: "2026-08-28T18:24:00.000Z" },
@@ -229,6 +243,7 @@ export function initialState(): DemoState {
       "minecraft/minecraft-creative-5e1c9a07": ["DrArzter", "Mira"],
     },
     scheduled: [],
+    progress: {},
     counter: 0,
   };
 }

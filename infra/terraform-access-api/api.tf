@@ -174,6 +174,42 @@ data "aws_iam_policy_document" "access_api" {
     ]
   }
 
+  # The progress of one operation: its current step is the newest state in the
+  # execution history, and a nested start or stop is one more execution of the
+  # fixed Lifecycle V2 machines or of the host machines beneath them. Read-only,
+  # on executions of these machines only.
+  statement {
+    sid     = "ReadOperationHistory"
+    actions = ["states:GetExecutionHistory"]
+    resources = [
+      for arn in local.operation_progress_machines : "${replace(arn, ":stateMachine:", ":execution:")}:*"
+    ]
+  }
+
+  statement {
+    sid     = "DescribeNestedHostExecutions"
+    actions = ["states:DescribeExecution"]
+    resources = [
+      for arn in [local.start_host_state_machine_arn, local.stop_host_state_machine_arn] : "${replace(arn, ":stateMachine:", ":execution:")}:*"
+    ]
+  }
+
+  # The host's own lines of a start. ListCommands takes no resource, so the grant
+  # is the action alone: it finds the shell command a start sent to its host.
+  # The output is read from one log group only, never written, and the API
+  # filters it to an allow-list before it leaves (host-log.ts).
+  statement {
+    sid       = "FindHostStartCommand"
+    actions   = ["ssm:ListCommands"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "ReadHostStartOutput"
+    actions   = ["logs:GetLogEvents"]
+    resources = ["${local.session_command_log_group_arn}:log-stream:*"]
+  }
+
   statement {
     sid       = "ControlSupportedSession"
     actions   = ["states:StartExecution"]
@@ -396,6 +432,7 @@ locals {
     "POST /games/{gameId}/worlds/{worldId}/restore",
     "POST /games/{gameId}/worlds/{worldId}/purge",
     "POST /games/{gameId}/worlds/{worldId}/promote",
+    "GET /games/{gameId}/worlds/{worldId}/operations/{operationId}",
     "POST /access/request",
     "GET /access/candidates",
     "GET /access/identities",

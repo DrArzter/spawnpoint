@@ -5,6 +5,7 @@ import { accessRoutes } from "./access-routes.ts";
 import { accessInvitationsRoutes } from "./access-invitations-routes.ts";
 import { controlPlaneRoutes } from "./control-plane-routes.ts";
 import { worldsRoutes } from "./worlds-routes.ts";
+import { operationsRoutes } from "./operations-routes.ts";
 import { metricsRoutes } from "./metrics-routes.ts";
 import { releasesRoutes } from "./releases-routes.ts";
 import { backupsRoutes } from "./backups-routes.ts";
@@ -26,6 +27,7 @@ export const routes = composeRoutes(
   accessInvitationsRoutes,
   controlPlaneRoutes,
   worldsRoutes,
+  operationsRoutes,
   metricsRoutes,
   releasesRoutes,
   backupsRoutes,

@@ -8,6 +8,7 @@ import { worldsRoutes } from "./worlds-routes.ts";
 import { metricsRoutes } from "./metrics-routes.ts";
 import { releasesRoutes } from "./releases-routes.ts";
 import { backupsRoutes } from "./backups-routes.ts";
+import { promotionRoutes } from "./promotion-routes.ts";
 import { consoleRoutes } from "./console-routes.ts";
 import { invitationsRoutes } from "./invitations-routes.ts";
 import { oauthRoutes } from "./oauth-routes.ts";
@@ -28,6 +29,7 @@ export const routes = composeRoutes(
   metricsRoutes,
   releasesRoutes,
   backupsRoutes,
+  promotionRoutes,
   consoleRoutes,
   invitationsRoutes,
   oauthRoutes,

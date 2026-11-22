@@ -51,7 +51,7 @@ export function ConfirmationDialog({ model }: Readonly<{ model: ConfirmationMode
     >
       <p className="t-copy-line">{model.description}</p>
       {model.releaseChoice && (
-        <Field label="Release for the new wipe">
+        <Field label={model.releaseChoice.label}>
           <SelectInput onChange={(event) => model.releaseChoice?.set(event.target.value)} value={model.releaseChoice.value}>
             <option disabled value="">Choose a release</option>
             {model.releaseChoice.options.map((option) => <option key={option.version} value={option.version}>{option.version}{option.latest ? " (latest)" : ""}</option>)}

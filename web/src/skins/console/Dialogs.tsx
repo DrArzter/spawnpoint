@@ -25,7 +25,7 @@ export function ConfirmationDialog({ model }: Readonly<{ model: ConfirmationMode
     <Dialog actions={<ActionButton action={model.confirm} variant={model.destructive ? "danger" : "primary"} />} cancel={model.cancel} title={model.title}>
       {model.description && <p className="c-line">{model.description}</p>}
       {releaseChoice && (
-        <Field label="Release">
+        <Field label={releaseChoice.label}>
           <Select
             onChange={(event) => releaseChoice.set(event.target.value)}
             options={[

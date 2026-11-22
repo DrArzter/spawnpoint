@@ -28,7 +28,7 @@ import { newWorldRecord, withGameSettings, withWhitelist, withWorldAccess, type 
 import { parseDynamicProjection } from "./dynamic-projection.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
-import { buildLifecycleStartInput, buildLifecycleStopInput, buildStopInput } from "../domain/telegram-bot.ts";
+import { buildLifecycleStartInput, buildLifecycleStopInput, buildPromotionInput, buildStopInput } from "../domain/telegram-bot.ts";
 import type { ControlPlaneSources, HostMetricPoint, HostMetrics, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 import { operationWorldId } from "./world-session.ts";
 import { expectationFromRuns, type FinishedRun } from "./operation-eta.ts";
@@ -513,6 +513,22 @@ export async function stopSessionExecution(
   }));
   if (!stopped.executionArn) throw new Error("stop execution did not return an ARN");
   return stopped.executionArn;
+}
+
+/** Starts the promote-release machine for a fleet world (ADR-0078); the execution is the operation record. */
+export async function promotionExecution(args: Omit<Parameters<typeof buildPromotionInput>[0], "releaseBucket" | "launch" | "appCommit">): Promise<string> {
+  requireWorldId(args.worldId);
+  const started = await sfn.send(new StartExecutionCommand({
+    stateMachineArn: machineArn("promote"), name: args.operationId,
+    input: JSON.stringify(buildPromotionInput({
+      ...args,
+      releaseBucket: requiredEnv("RELEASE_BUCKET"),
+      launch: process.env.SPAWNPOINT_LAUNCH === "enabled" ? "enabled" : "disabled",
+      appCommit: process.env.SPAWNPOINT_APP_COMMIT || "main",
+    })),
+  }));
+  if (!started.executionArn) throw new Error("promotion execution did not return an ARN");
+  return started.executionArn;
 }
 
 export async function worldLifecycleExecution(args: Readonly<{

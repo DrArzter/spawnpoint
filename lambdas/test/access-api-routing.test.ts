@@ -143,6 +143,16 @@ test("deleting an identity is access management, deployed like every other route
   assert.equal((await routes[key]!.handle({ id: "caller" } as never, { pathParameters: { identityId: "not-an-id" } })).statusCode, 400);
 });
 
+test("promoting a world is release.promote, which only the Owner role holds", async () => {
+  const key = "POST /games/{gameId}/worlds/{worldId}/promote";
+  assert.deepEqual(routes[key]?.access, { kind: "permission", permission: "release.promote" });
+  assert.ok((await deployedRouteKeys()).has(key));
+  const { builtInRoles } = await import("../src/access/domain.ts");
+  const holders = Object.values(builtInRoles).filter((role) => role.permissions.includes("release.promote")).map((role) => role.id);
+  assert.deepEqual(holders, ["owner"]);
+  assert.ok(deployedCapabilities().includes("releasePromotion"));
+});
+
 test("permanent world deletion is owner-level world management", () => {
   assert.deepEqual(routes["POST /games/{gameId}/worlds/{worldId}/purge"]?.access, {
     kind: "permission", permission: "world.manage",

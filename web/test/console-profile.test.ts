@@ -132,7 +132,7 @@ test("game settings: a running world gets the one line about its next start", ()
 });
 
 test("confirmation: a release choice is a Select with the latest marked, and a blank value asks for one", () => {
-  const base: ConfirmationModel = { title: "Start a new wipe?", description: "", destructive: false, confirm: spy("confirm", "Start new wipe"), cancel: spy("cancel", "Cancel"), releaseChoice: { value: "1.2", options: [{ version: "1.2", latest: true }, { version: "1.1", latest: false }], set: noop }, typedConfirmation: null };
+  const base: ConfirmationModel = { title: "Start a new wipe?", description: "", destructive: false, confirm: spy("confirm", "Start new wipe"), cancel: spy("cancel", "Cancel"), releaseChoice: { label: "Release for the new wipe", value: "1.2", options: [{ version: "1.2", latest: true }, { version: "1.1", latest: false }], set: noop }, typedConfirmation: null };
   const chosen = renderToStaticMarkup(createElement(ConfirmationDialog, { model: base }));
   assert.match(chosen, /<option value="1\.2"[^>]*>1\.2 · latest<\/option>/);
   assert.match(chosen, /class="c-btn c-btn-primary"/);

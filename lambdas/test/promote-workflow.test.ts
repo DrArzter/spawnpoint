@@ -223,3 +223,20 @@ test("the operation's result names the pre-promotion backup", async () => {
     assert.equal(state(definition, name).Parameters?.["prePromotionBackup.$"], "$.observed.prePromotionBackup.key", name);
   }
 });
+
+test("a fleet world's promotion places both nested starts as a panel start would; the CLI's still means the configured host", async () => {
+  const definition = await loadDefinition();
+  assert.equal(state(definition, "Initialize").Next, "Apply Request Defaults");
+  const defaults = state(definition, "Apply Request Defaults");
+  assert.equal(defaults.Parameters?.["request.$"], "States.JsonMerge($.defaults, $.request, false)");
+  assert.equal(defaults.Next, "Verify Release Published");
+  const initial = (state(definition, "Initialize").Parameters?.defaults ?? {}) as Record<string, unknown>;
+  assert.equal(initial.placement, "single");
+  assert.equal(initial.policy, "cold");
+  for (const name of ["Start With Target", "Start With Previous"]) {
+    const nested = state(definition, name).Parameters?.Input as Record<string, unknown>;
+    for (const field of ["gameId", "worldName", "placement", "launch", "appCommit", "policy"]) {
+      assert.equal(nested[`${field}.$`], `$.request.${field}`, `${name} ${field}`);
+    }
+  }
+});

@@ -1,5 +1,5 @@
 {
-  "Comment": "Promote one world's current wipe through Lifecycle V2. Release storage and session coordination remain behind their adapters.",
+  "Comment": "Promote one world's current wipe through Lifecycle V2, on the configured host or, for a fleet world, on a host placed for it (ADR-0054, ADR-0062). Release storage and session coordination remain behind their adapters.",
   "QueryLanguage": "JSONPath",
   "StartAt": "Initialize",
   "States": {
@@ -11,7 +11,24 @@
           "target.$": "States.Format('session-{}', States.UUID())",
           "rollback.$": "States.Format('session-{}', States.UUID())"
         },
-        "observed": {}
+        "observed": {},
+        "defaults": {
+          "worldName": "",
+          "placement": "single",
+          "launch": "disabled",
+          "appCommit": "main",
+          "policy": "cold"
+        }
+      },
+      "Next": "Apply Request Defaults"
+    },
+    "Apply Request Defaults": {
+      "Type": "Pass",
+      "Comment": "What a caller leaves out. The CLI names no placement and means the configured host. A fleet world's promotion names `fleet`, its own lifecycle key as serverId, and its warm choice, so both nested starts place the session as a panel start would.",
+      "Parameters": {
+        "request.$": "States.JsonMerge($.defaults, $.request, false)",
+        "sessions.$": "$.sessions",
+        "observed.$": "$.observed"
       },
       "Next": "Verify Release Published"
     },
@@ -180,6 +197,12 @@
           "serverId.$": "$.request.serverId",
           "operationId.$": "States.Format('{}-target-start', $.request.operationId)",
           "sessionId.$": "$.sessions.target",
+          "gameId.$": "$.request.gameId",
+          "worldName.$": "$.request.worldName",
+          "placement.$": "$.request.placement",
+          "launch.$": "$.request.launch",
+          "appCommit.$": "$.request.appCommit",
+          "policy.$": "$.request.policy",
           "leaseTtlSeconds.$": "$.request.leaseTtlSeconds",
           "watchdogRegistrationLeaseTtlSeconds.$": "$.request.watchdogRegistrationLeaseTtlSeconds",
           "watchdogStopLeaseTtlSeconds.$": "$.request.watchdogStopLeaseTtlSeconds",
@@ -265,6 +288,12 @@
           "serverId.$": "$.request.serverId",
           "operationId.$": "States.Format('{}-rollback-start', $.request.operationId)",
           "sessionId.$": "$.sessions.rollback",
+          "gameId.$": "$.request.gameId",
+          "worldName.$": "$.request.worldName",
+          "placement.$": "$.request.placement",
+          "launch.$": "$.request.launch",
+          "appCommit.$": "$.request.appCommit",
+          "policy.$": "$.request.policy",
           "leaseTtlSeconds.$": "$.request.leaseTtlSeconds",
           "watchdogRegistrationLeaseTtlSeconds.$": "$.request.watchdogRegistrationLeaseTtlSeconds",
           "watchdogStopLeaseTtlSeconds.$": "$.request.watchdogStopLeaseTtlSeconds",

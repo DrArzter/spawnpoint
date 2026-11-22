@@ -436,7 +436,8 @@ export type ConfirmationModel = Readonly<{
   destructive: boolean;
   confirm: Action;
   cancel: Action;
-  releaseChoice: Readonly<{ value: string; options: readonly Readonly<{ version: string; latest: boolean }>[]; set: (value: string) => void }> | null;
+  /** `label` names what the release is for: a new wipe, or the update of the open one. */
+  releaseChoice: Readonly<{ label: string; value: string; options: readonly Readonly<{ version: string; latest: boolean }>[]; set: (value: string) => void }> | null;
   /** `label` names what is typed: "World ID" for a purge. */
   typedConfirmation: Readonly<{ label: string; expected: string; value: string; set: (value: string) => void }> | null;
   /** Why the last attempt was refused; the dialog stays open and shows it. */

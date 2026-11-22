@@ -182,7 +182,7 @@ const profile: ProfileModel = {
   },
 };
 
-const confirmation: ConfirmationModel = { title: "Permanently delete Rostik?", description: "Gone.", destructive: true, confirm: spy("confirm", "Delete forever", { danger: true }), cancel: spy("cancel", "Cancel"), releaseChoice: { value: "1.2", options: [{ version: "1.2", latest: true }], set: noop }, typedConfirmation: { label: "World ID", expected: world.id, value: "", set: noop } };
+const confirmation: ConfirmationModel = { title: "Permanently delete Rostik?", description: "Gone.", destructive: true, confirm: spy("confirm", "Delete forever", { danger: true }), cancel: spy("cancel", "Cancel"), releaseChoice: { label: "Release for the new wipe", value: "1.2", options: [{ version: "1.2", latest: true }], set: noop }, typedConfirmation: { label: "World ID", expected: world.id, value: "", set: noop } };
 const connection = { placement: "fleet" as const, setPlacement: noop, fleetAvailable: true, connectivity: "raw" as const, setConnectivity: noop, dnsAvailable: true };
 const createWorld: CreateWorldModel = { game, presets: game.presets, presetId: "industrial", setPresetId: noop, preset: game.presets[0]!, name: "", setName: noop, release: "1.2", setRelease: noop, connection, valid: false, submit: spy("world.create", "Create world"), cancel: spy("sheet.close", "Close panel") };
 const worldSettings: WorldSettingsModel = { game, world, stopped: false, connection, valid: true, save: spy("world.settings.save", "Save settings"), cancel: spy("sheet.close", "Cancel") };

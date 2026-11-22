@@ -194,6 +194,52 @@ export function buildLifecycleStopInput(args: Readonly<{
   };
 }
 
+/**
+ * The promote-release machine's input for a fleet world (ADR-0078). Its nested
+ * starts place the session as a panel start would: `fleet`, the world's own
+ * lifecycle key and its warm choice.
+ */
+export function buildPromotionInput(args: Readonly<{
+  operationId: string;
+  serverId: string;
+  gameId: string;
+  presetId: string;
+  worldId: string;
+  worldName: string;
+  generationId: string;
+  release: string;
+  instanceId: string;
+  releaseBucket: string;
+  launch: LaunchMode;
+  appCommit: string;
+  policy: SessionPolicy;
+  requestedBy: string;
+}>) {
+  return {
+    operationId: args.operationId,
+    serverId: args.serverId,
+    worldId: args.worldId,
+    worldName: args.worldName,
+    generationId: args.generationId,
+    gameId: args.gameId,
+    presetId: args.presetId,
+    release: args.release,
+    instanceId: args.instanceId,
+    releaseBucket: args.releaseBucket,
+    placement: "fleet" as const,
+    launch: args.launch,
+    appCommit: args.appCommit,
+    policy: args.policy,
+    requestedBy: args.requestedBy,
+    leaseTtlSeconds: 1800,
+    watchdogRegistrationLeaseTtlSeconds: 60,
+    watchdogStopLeaseTtlSeconds: 1800,
+    startTiming: POLL_TIMING,
+    stopTiming: POLL_TIMING,
+    watchdogTiming: WATCHDOG_TIMING,
+  };
+}
+
 export const replies = {
   denied: (): string => "You are not on this server's list. Ask the owner to add your Telegram id.",
 

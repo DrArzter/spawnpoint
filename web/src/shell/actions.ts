@@ -6,6 +6,7 @@ export type WorldActionKind = "archive" | "wipe" | "restore" | "purge";
 export type Pending =
   | { kind: "session"; worldId: string; action: SessionAction }
   | { kind: "lifecycle"; worldId: string; action: WorldActionKind }
+  | { kind: "promote"; worldId: string }
   | { kind: "pack"; worldId: string }
   | { kind: "create" }
   | { kind: "build"; presetId: string }
@@ -17,7 +18,8 @@ export type Confirmation =
   | { kind: "archive"; game: Game; world: World }
   | { kind: "wipe"; game: Game; world: World; preset: Preset | null }
   | { kind: "restore"; game: Game; world: World; backupKey: string; backupName: string; release: string | null }
-  | { kind: "purge"; game: Game; world: World };
+  | { kind: "purge"; game: Game; world: World }
+  | { kind: "promote"; game: Game; world: World; preset: Preset | null };
 
 /** What is in flight: one slot per world, and one per kind that names no world, so one request never clears another's. */
 export type PendingMap = Readonly<Record<string, Pending>>;

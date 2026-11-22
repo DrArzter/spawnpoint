@@ -13,7 +13,6 @@ import { Grid, GridCell } from "./ui/Grid";
 import { Notices } from "./ui/Notice";
 import { PageHeader } from "./ui/PageHeader";
 import { Person } from "./ui/Person";
-import { SkeletonRows } from "./ui/Skeleton";
 import { Status } from "./ui/Status";
 import { Tick } from "./ui/Tick";
 import { TrackList, TrackTitle } from "./ui/TrackList";
@@ -96,11 +95,11 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
             meta={known.length > 0 && <><Tick value={players} /> {players === 1 ? "player" : "players"}</>}
             title="Online now"
           >
-            {loading ? <SkeletonRows columns={4} rows={3} /> : (
-              <TrackList
+            <TrackList
                 arrivals
                 empty={<Empty icon="bedtime" size="sm" title="Nothing online" />}
                 label="Online now"
+                loading={loading}
                 rowKey={(row) => row.world.id}
                 rows={online}
                 tracks={[
@@ -115,15 +114,14 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
                   { id: "address", header: "Address", width: "minmax(260px, 1.6fr)", kind: "optional", render: (row) => row.address ? <Address address={row.address} copy /> : <span className="c-faint">{row.addressAbsent}</span> },
                   { id: "players", header: "Players", width: "80px", compactWidth: "auto", kind: "num", render: (row) => <Players count={row.players} /> },
                 ]}
-              />
-            )}
+            />
           </Card>
         </GridCell>
         <Card body="flush" count={startable.length} title="Start a world">
-          {loading ? <SkeletonRows columns={3} rows={3} /> : (
-            <TrackList
+          <TrackList
               empty={<Empty icon="check" size="sm" title="Every world is running" />}
               label="Start a world"
+              loading={loading}
               rowKey={({ row }) => row.world.id}
               rows={startable}
               tracks={[
@@ -132,7 +130,6 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
                 { id: "act", header: "Action", width: "auto", kind: "end", quietHeader: true, render: ({ verb }) => <ActionButton action={verb} size="sm" /> },
               ]}
             />
-          )}
         </Card>
         <Card body="flush" count={operations.length} title="Operations">
           <TrackList
@@ -185,15 +182,15 @@ function Requests({ model, requests }: Readonly<{ model: WorldsModel; requests: 
   return (
     <GridCell span="2-wide">
       <Card actions={<LinkButton href={access} label="Access" size="sm" variant="ghost" />} body="flush" count={requests.status === "ready" ? requests.value.length : undefined} title="Access requests">
-        {requests.status === "loading" && <SkeletonRows columns={2} rows={2} />}
         {requests.status === "error" && <LoadError error={requests.error} kind={requests.kind} retry={requests.retry} size="sm" title="Requests could not be loaded" verb="read requests" />}
-        {requests.status === "ready" && (
+        {requests.status !== "error" && (
           <TrackList
             arrivals
             empty={<Empty icon="how_to_reg" size="sm" title="No requests" />}
             label="Access requests"
+            loading={requests.status === "loading"}
             rowKey={(row) => row.id}
-            rows={requests.value}
+            rows={requests.status === "ready" ? requests.value : []}
             tracks={[
               { id: "person", header: "Person", width: "minmax(0, 1fr)", kind: "stack", render: (row) => <Person detail={row.account} detailIcon={providerIcon(row.platform)} name={row.displayName} photoUrl={row.photoUrl} tone="request" /> },
               { id: "since", header: "Requested", width: "auto", kind: "optional", render: (row) => <Ago at={row.since} /> },

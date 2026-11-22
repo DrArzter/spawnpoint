@@ -24,7 +24,7 @@ import { frameItems } from "../src/skins/console/ui/Frame.tsx";
 import { Grid } from "../src/skins/console/ui/Grid.tsx";
 import { Indicator } from "../src/skins/console/ui/Indicator.tsx";
 import { MenuButton } from "../src/skins/console/ui/MenuButton.tsx";
-import { ListColumn, ListItemIcon, ListItemPerson, ListItemWorld } from "../src/skins/console/ui/ListColumn.tsx";
+import { ListColumn, ListItemIcon, ListItemPerson, ListItemWorld, ListItemWorldSkeleton } from "../src/skins/console/ui/ListColumn.tsx";
 import { Notice } from "../src/skins/console/ui/Notice.tsx";
 import { Overflow } from "../src/skins/console/ui/Overflow.tsx";
 import { PageHeader } from "../src/skins/console/ui/PageHeader.tsx";
@@ -33,14 +33,15 @@ import { Person } from "../src/skins/console/ui/Person.tsx";
 import { TablePreferences } from "../src/skins/console/ui/Preferences.tsx";
 import { Segmented } from "../src/skins/console/ui/Segmented.tsx";
 import { SidePanel } from "../src/skins/console/ui/SidePanel.tsx";
-import { Skeleton, SkeletonGroup, SkeletonRows } from "../src/skins/console/ui/Skeleton.tsx";
+import { Skeleton, SkeletonGroup } from "../src/skins/console/ui/Skeleton.tsx";
 import { SplitPage } from "../src/skins/console/ui/SplitPage.tsx";
-import { StatCard } from "../src/skins/console/ui/StatCard.tsx";
+import { StatCard, StatSkeleton } from "../src/skins/console/ui/StatCard.tsx";
 import { Status } from "../src/skins/console/ui/Status.tsx";
 import { nextSort, Table } from "../src/skins/console/ui/Table.tsx";
 import { TabPanel, Tabs } from "../src/skins/console/ui/Tabs.tsx";
 import { Tick } from "../src/skins/console/ui/Tick.tsx";
 import { Tile, Tiles } from "../src/skins/console/ui/Tile.tsx";
+import { ChartSkeleton } from "../src/skins/console/ui/TimeSeriesChart.tsx";
 import { TrackList, TrackTitle } from "../src/skins/console/ui/TrackList.tsx";
 
 // The console primitives' contracts: semantic markup, accessible names, stable
@@ -116,6 +117,44 @@ test("Notice, Empty and LoadError: one line, one title, at most one Action", () 
   assert.doesNotMatch(forbidden, /data-action/, "a role refusal offers nothing to press");
 });
 
+test("Skeleton: a text placeholder is one line of its container, a block gives its size", () => {
+  assert.match(html(createElement(Skeleton, { text: true, width: "40%" })), /aria-hidden="true" class="c-skeleton c-skeleton-text" style="width:40%"/);
+  assert.match(html(createElement(Skeleton, { height: "var(--c-ctl-sm)", width: 72 })), /style="width:72px;height:var\(--c-ctl-sm\)"/);
+});
+
+test("Loading lists keep the geometry of loaded ones: same cells, classes, labels and tracks", () => {
+  const columns = [
+    { id: "n", header: "Name", kind: "lead" as const, render: (row: Row) => row.name },
+    { id: "p", header: "Players", kind: "num" as const, render: (row: Row) => String(row.players) },
+    { id: "w", header: "Wipe", kind: "wide" as const, render: () => "1" },
+    { id: "a", header: "Actions", kind: "act" as const, render: () => "x" },
+  ];
+  const table = html(createElement(Table<Row>, { label: "Loading table", rows: [], loading: true, rowKey: (row) => row.id, columns }));
+  assert.equal((table.split("<tbody")[1]!.match(/<tr>/g) ?? []).length, 3, "three placeholder rows while the count is unknown");
+  assert.match(table, /<td class="c-col-lead" data-rail=""><span aria-hidden="true" class="c-skeleton c-skeleton-text"/);
+  assert.match(table, /<td class="c-col-wide" data-label="Wipe">/, "a cell keeps its label and its responsive class");
+  assert.match(table, /<td class="c-col-act" data-col="actions">/);
+  const list = html(createElement(TrackList<Row>, {
+    label: "Loading list",
+    rows: [],
+    loading: true,
+    rowKey: (row) => row.id,
+    tracks: [
+      { id: "what", header: "Operation", width: "minmax(0, 1fr)", kind: "stack", render: () => null },
+      { id: "for", header: "For", width: "120px", kind: "optional", render: () => null },
+      { id: "act", header: "Action", width: "auto", kind: "end", quietHeader: true, render: () => null },
+    ],
+  }));
+  assert.match(list, /aria-busy="true" aria-label="Loading list"/);
+  assert.equal((list.match(/class="c-tracklist-row"/g) ?? []).length, 3);
+  assert.match(list, /c-track c-track-optional/, "an optional track keeps hiding where the loaded one does");
+  assert.doesNotMatch(list, /<a /, "a placeholder row links nowhere");
+  assert.match(html(createElement(StatSkeleton)), /<section class="c-card c-stat">/);
+  assert.match(html(createElement(ChartSkeleton)), /c-chart-plot[\s\S]*c-chart-area[\s\S]*c-chart-foot/);
+  assert.match(html(createElement(Card, { loading: true }, "x")), /<header class="c-card-head"><h2[^>]*><span aria-hidden="true" class="c-skeleton c-skeleton-text"/);
+  assert.match(html(createElement(ListItemWorldSkeleton, { standalone: true })), /<div class="c-listitem-slot c-listitem-standalone"><div class="c-listitem c-listitem-world">/);
+});
+
 test("Skeleton: one announced region, placeholders hidden from assistive technology", () => {
   const markup = html(createElement(SkeletonGroup, null, createElement(Skeleton, { height: 52 })));
   assert.match(markup, /<output aria-busy="true" aria-label="Loading" class="c-skeleton-group">/);
@@ -153,6 +192,7 @@ test("Shell helpers: a world's tab is not a page; operations and outcomes become
   assert.equal(transitionKind("#/worlds/mc/rostik", "#/worlds/mc/rostik/metrics"), null, "a tab is not a page (A3 instead)");
   assert.equal(transitionKind("#/access/users", "#/access/roles"), "pane");
   assert.equal(transitionKind("#/home/mc", "#/worlds/mc"), "page");
+  assert.match(html(createElement(TabPanel, { prefix: "w", id: "wipes" }, "x")), /^<div class="c-settle"><div><div aria-labelledby="w-tab-wipes"/, "the panel sits in a Settle box that eases its height");
   const shell = { flash: { operations: [{ id: "op1", label: "Starting session", worldName: "Rostik", worldId: "rostik", startedAt: "2026-11-21T10:00:00Z" }] } } as unknown as ShellModel;
   const items = flashItems(shell, { items: [{ id: 7, message: "Saved", tone: "error" }], dismiss: noop }, null);
   assert.deepEqual(items.map((item) => [item.kind, item.message]), [["busy", "Starting session · Rostik"], ["err", "Saved"]]);
@@ -341,7 +381,6 @@ test("Tiles, Pager, preferences, skeleton rows and the stat card", () => {
   const prefs = html(createElement(TablePreferences, { pageSize: { value: 25, set: noop } }));
   assert.match(prefs, /aria-haspopup="menu"/);
   assert.match(prefs, /role="menuitemradio"/);
-  assert.match(html(createElement(SkeletonRows, { columns: 3, rows: 2 })), /aria-busy="true"/);
   const stat = html(createElement(StatCard, { label: "CPU", value: null }));
   assert.match(stat, /<section aria-label="CPU" class="c-card c-stat">/);
   assert.match(stat, /—/);

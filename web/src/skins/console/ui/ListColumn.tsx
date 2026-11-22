@@ -4,6 +4,7 @@ import type { StatusDescriptor } from "../../../core/status";
 import { Icon, type IconName } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { Avatar } from "./Avatar";
+import { Skeleton } from "./Skeleton";
 import { Status } from "./Status";
 
 export type FilterChip = Readonly<{ id: string; label: string; count: number; pressed: boolean; onPress: () => void }>;
@@ -89,6 +90,22 @@ export function ListItemWorld({ href, current, name, players, hosting, status, l
         <span className="c-listitem-line" title={line}>{line}</span>
         {address && <span className="c-listitem-address">{address}</span>}
       </a>
+    </Slot>
+  );
+}
+
+/** A world's row while the worlds load: the same slots as `ListItemWorld`, so the list keeps its row height. */
+export function ListItemWorldSkeleton({ standalone = false }: Readonly<{ standalone?: boolean }>) {
+  const Slot = standalone ? "div" : "li";
+  return (
+    <Slot className={cx("c-listitem-slot", standalone && "c-listitem-standalone")}>
+      <div className="c-listitem c-listitem-world">
+        <span className="c-listitem-name"><Skeleton text width="55%" /></span>
+        <span className="c-listitem-hosting"><Skeleton height={24} width={84} /></span>
+        <span className="c-listitem-status"><Skeleton text width="5em" /></span>
+        <span className="c-listitem-line"><Skeleton text width="9em" /></span>
+        <span className="c-listitem-address"><Skeleton text width="12em" /></span>
+      </div>
     </Slot>
   );
 }

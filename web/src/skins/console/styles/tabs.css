@@ -76,6 +76,12 @@ html[data-skin="console"] .c-tabrow-end {
   gap: 8px;
 }
 
+/* The panel's height glides when its content changes size; it clips only while it moves. */
+html[data-skin="console"] .c-settle[data-settling] {
+  overflow: clip;
+  transition: height var(--c-d3) var(--c-ease);
+}
+
 html[data-skin="console"] .c-tabpanel {
   display: flex;
   flex-direction: column;

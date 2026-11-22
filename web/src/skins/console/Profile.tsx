@@ -23,7 +23,6 @@ import { Notice } from "./ui/Notice";
 import { Overflow } from "./ui/Overflow";
 import { PageHeader } from "./ui/PageHeader";
 import { SidePanel } from "./ui/SidePanel";
-import { SkeletonRows } from "./ui/Skeleton";
 import { useToast } from "./ui/Toast";
 import { TrackList, TrackTitle, type Track } from "./ui/TrackList";
 
@@ -46,7 +45,7 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
           </span>
           </>
         )}
-        lead={<Avatar name={member.name} photoUrl={viewer.photoUrl} size="xl" />}
+        lead={<Avatar name={member.name} photoUrl={viewer.photoUrl} size="lg" />}
         title={member.name}
       />
       <Grid kind="profile">
@@ -175,6 +174,7 @@ const tracks: readonly Track<MethodRow>[] = [
     width: "minmax(140px, auto)",
     compactWidth: "minmax(0, 1fr)",
     kind: "stack",
+    lines: 1,
     render: (row) => {
       const look = provider(row.provider);
       return <TrackTitle compactLine={accountText(row.account)} title={<span className="c-profile-method"><Icon name={look.icon} size={18} />{look.label}</span>} />;
@@ -188,9 +188,8 @@ function SignInMethods({ model }: Readonly<{ model: LoginAccountsModel }>) {
   const accounts = model.accounts;
   return (
     <Card body="flush" title="Sign-in methods">
-      {accounts.status === "loading" && <SkeletonRows columns={3} rows={3} />}
       {accounts.status === "error" && <LoadError error={accounts.error} kind={accounts.kind} retry={accounts.retry} title="Sign-in methods could not be loaded" verb="read sign-in methods" />}
-      {accounts.status === "ready" && <TrackList label="Sign-in methods" rowKey={(row) => row.key} rows={methodRows(model, accounts.value)} tracks={tracks} />}
+      {accounts.status !== "error" && <TrackList label="Sign-in methods" loading={accounts.status === "loading"} rowKey={(row) => row.key} rows={accounts.status === "ready" ? methodRows(model, accounts.value) : []} tracks={tracks} />}
     </Card>
   );
 }

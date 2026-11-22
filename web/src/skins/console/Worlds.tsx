@@ -15,14 +15,15 @@ import { Checkbox } from "./ui/Fields";
 import { applyFilter, FilterBar, type FilterProperty, type FilterToken } from "./ui/FilterBar";
 import { elapsed, useNow } from "./ui/Flashbar";
 import { IconButton } from "./ui/IconButton";
-import { ListItemWorld } from "./ui/ListColumn";
+import { ListItemWorld, ListItemWorldSkeleton } from "./ui/ListColumn";
 import { MenuButton } from "./ui/MenuButton";
 import { Notices } from "./ui/Notice";
 import { Overflow } from "./ui/Overflow";
 import { PageHeader } from "./ui/PageHeader";
 import { pageOf, Pager, usePage } from "./ui/Pager";
 import { TablePreferences, usePageSize } from "./ui/Preferences";
-import { Skeleton, SkeletonGroup } from "./ui/Skeleton";
+import { Skeleton } from "./ui/Skeleton";
+import { useSkeletonRows } from "./ui/rows";
 import { Status } from "./ui/Status";
 import { nextSort, Table, type Column, type SortDirection } from "./ui/Table";
 import { ARRIVED, useArrivals } from "./ui/Tick";
@@ -154,6 +155,11 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
     onSort: () => setSort({ key, direction: sort.key === key ? nextSort(sort.direction) : "ascending" }),
   });
   const create = model.createWorld;
+  // While the first read runs, the page is the loaded one with placeholders in the table and the tiles.
+  const loading = model.status === "loading" && rows.length === 0;
+  const states = statesOf(rows);
+  const stateTiles = useSkeletonRows("Worlds states", states.length, loading);
+  const listRows = useSkeletonRows("Worlds", paged.rows.length, loading);
   const header = (count: number | undefined, start?: ReactNode, creates = true) => (
     <PageHeader
       actions={<>
@@ -178,19 +184,6 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
       </div>
     );
   }
-  if (model.status === "loading" && rows.length === 0) {
-    return (
-      <div className="c-page">
-        {header(undefined)}
-        <SkeletonGroup className="c-worlds-loading">
-          <div className="c-tiles">{Array.from({ length: 7 }, (_, index) => <Skeleton height={52} key={index} />)}</div>
-        </SkeletonGroup>
-        <Card body="flush" label="Worlds table">
-          <Table columns={[{ id: "name", header: "Name", kind: "lead", render: () => null }, { id: "status", header: "Status", render: () => null }, { id: "release", header: "Preset · release", render: () => null }, { id: "wipe", header: "Wipe", kind: "num", render: () => null }]} label="Worlds" loading rowKey={() => ""} rows={[]} />
-        </Card>
-      </div>
-    );
-  }
   if (model.status === "error" && rows.length === 0) {
     return (
       <div className="c-page">
@@ -199,7 +192,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
       </div>
     );
   }
-  if (rows.length === 0) {
+  if (rows.length === 0 && !loading) {
     return (
       <div className="c-page">
         {header(0, undefined, false)}
@@ -233,17 +226,18 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
       render: (row) => <span className="c-worlds-acts"><QuickLookButton onPeek={setPeekId} open={peekId === row.world.id} row={row} /><Overflow actions={row.sessionAction ? [row.sessionAction(), ...row.actions] : row.actions} label={`More for ${row.world.displayName}`} size="sm" /></span>,
     },
   ];
-  const states = statesOf(rows);
   const noMatches = <Empty action={action("worlds.filter.clear", "Clear filters", clear, { icon: "filter_alt_off" })} icon="filter_alt_off" title="No matches" />;
 
   return (
     <div className="c-page">
-      {header(rows.length, <BulkActions clear={() => setChosen(new Set())} rows={selected} />)}
+      {header(loading ? undefined : rows.length, <BulkActions clear={() => setChosen(new Set())} rows={selected} />)}
       <Notices notices={model.notices} />
       <Tiles label="Filter by status">
-        {states.map(({ status, count }) => (
-          <Tile count={count} key={status.label} onPress={() => setState(state === status.label ? null : status.label)} pressed={state === status.label} status={status} />
-        ))}
+        {loading
+          ? Array.from({ length: stateTiles }, (_, tile) => <Skeleton height="var(--c-tile)" key={tile} />)
+          : states.map(({ status, count }) => (
+            <Tile count={count} key={status.label} onPress={() => setState(state === status.label ? null : status.label)} pressed={state === status.label} status={status} />
+          ))}
       </Tiles>
       <div className={peek ? "c-worlds-layout c-worlds-layout-open" : "c-worlds-layout"}>
         <Card body="flush" label="Worlds table">
@@ -264,6 +258,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
             columns={columns}
             empty={noMatches}
             label="Worlds"
+            loading={loading}
             rowKey={(row) => row.world.id}
             arrivals={arrived}
             rows={paged.rows}
@@ -271,7 +266,18 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
             split={peek !== null}
           />
           <div className="c-worlds-list">
-            {paged.rows.length === 0 ? noMatches : <ul className="c-worlds-rows">{paged.rows.map((row) => (
+            {loading && (
+              <ul aria-busy="true" aria-label="Loading" className="c-worlds-rows">
+                {Array.from({ length: listRows }, (_, row) => (
+                  <li className="c-worlds-row" key={row}>
+                    <Skeleton height={20} width={20} />
+                    <ListItemWorldSkeleton standalone />
+                    <Skeleton height="var(--c-ctl-sm)" width="var(--c-ctl-sm)" />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!loading && (paged.rows.length === 0 ? noMatches : <ul className="c-worlds-rows">{paged.rows.map((row) => (
               <li className={cx("c-worlds-row", (chosen.has(row.world.id) || peekId === row.world.id) && "c-worlds-row-selected", arrived.has(row.world.id) && ARRIVED)} key={row.world.id}>
                 <Checkbox checked={chosen.has(row.world.id)} label={`Select ${row.world.displayName}`} labelHidden onChange={(on) => toggle(row.world.id, on)} />
                 <ListItemWorld
@@ -287,7 +293,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
                 />
                 <QuickLookButton onPeek={setPeekId} open={peekId === row.world.id} row={row} />
               </li>
-            ))}</ul>}
+            ))}</ul>)}
           </div>
         </Card>
         {peek && <QuickLook model={model} onClose={() => setPeekId(null)} row={peek} />}

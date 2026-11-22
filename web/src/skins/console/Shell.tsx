@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, 
 
 import { action } from "../../core/actions";
 import type { ShellModel } from "../../core/models";
+import { traverse } from "../../routing";
 import { useSnackbarQueue, type SnackbarQueue } from "../../components/ui/Snackbar";
 import { ScopeSwitcher } from "./Scope";
 import { Dialog } from "./ui/Dialog";
@@ -14,8 +15,9 @@ import { TooltipLayer } from "./ui/Tooltip";
 
 /*
  * The console frame. The bars never move; the page area is the one element a
- * page switch slides (A1), and the flashbar and toasts float above it with
- * names of their own so they take no part in it.
+ * page switch traverses (A1), its header holds still and cross-fades (A1h),
+ * and the flashbar and toasts float above it with names of their own so they
+ * take no part in it.
  */
 
 function segments(hash: string): string[] {
@@ -78,7 +80,8 @@ function navigateUntilArrived(arrived: RefObject<Arrival | null>, href: string, 
   window.location.hash = href.slice(1);
 }
 
-// A1: a link to another page swaps the page area inside a view transition.
+// A1: a link to another page swaps the page area inside a view transition that
+// travels the way the hierarchy goes (data-direction, from `traverse`).
 // A2: a link to another pane of a split page swaps only the pane (marked
 // data-pane), so the list column stays still. The update resolves once the
 // new view has rendered, so the old snapshot is never followed by a blank frame.
@@ -102,8 +105,9 @@ function usePageTransition(key: string) {
       event.preventDefault();
       const root = document.documentElement;
       root.dataset.transition = kind;
+      if (kind === "page") root.dataset.direction = traverse(window.location.hash, href);
       const finished = start.call(document, () => new Promise<void>((resolve) => navigateUntilArrived(arrived, href, resolve))) as { finished?: Promise<void> } | undefined;
-      const clear = () => { delete root.dataset.transition; };
+      const clear = () => { delete root.dataset.transition; delete root.dataset.direction; };
       if (finished?.finished) finished.finished.then(clear, clear);
       else clear();
     };

@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode }
 
 import { Icon, type IconName } from "../../../icons";
 import { cx } from "../../../lib/cx";
+import { Settle } from "./Settle";
 
 export type TabItem<Id extends string> = Readonly<{ id: Id; label: string; count?: number; icon?: IconName }>;
 
@@ -108,8 +109,10 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
 /** The panel of the active tab. Its content fades in as one block when the tab changes (A3). */
 export function TabPanel({ prefix, id, children }: Readonly<{ prefix: string; id: string; children: ReactNode }>) {
   return (
-    <div aria-labelledby={tabId(prefix, id)} className="c-tabpanel" id={tabPanelId(prefix, id)} key={id} role="tabpanel" tabIndex={0}>
-      {children}
-    </div>
+    <Settle>
+      <div aria-labelledby={tabId(prefix, id)} className="c-tabpanel" id={tabPanelId(prefix, id)} key={id} role="tabpanel" tabIndex={0}>
+        {children}
+      </div>
+    </Settle>
   );
 }

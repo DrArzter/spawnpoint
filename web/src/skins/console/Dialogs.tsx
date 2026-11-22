@@ -13,7 +13,6 @@ import { Notice } from "./ui/Notice";
 import { Person } from "./ui/Person";
 import { Segmented } from "./ui/Segmented";
 import { SidePanel } from "./ui/SidePanel";
-import { SkeletonRows } from "./ui/Skeleton";
 import { Status } from "./ui/Status";
 import { TrackList, TrackTitle, type Track } from "./ui/TrackList";
 
@@ -185,23 +184,22 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
         >
           <TextInput autoComplete="off" onChange={(event) => model.setQuery(event.target.value)} type="search" value={model.query} />
         </Field>
-        {recipients.status === "loading" && <SkeletonRows columns={2} rows={3} />}
         {recipients.status === "error" && <LoadError error={recipients.error} kind={recipients.kind} retry={recipients.retry} size="sm" title="Players could not be loaded" verb="list players" />}
-        {recipients.status === "ready" && (
+        {recipients.status !== "error" && (
           <TrackList
             empty={<Empty icon={searching ? "search" : "group"} size="sm" title={searching ? "No matches" : "No players to invite"} />}
             header={false}
             label="Players"
+            loading={recipients.status === "loading"}
             rowKey={(row) => row.id}
-            rows={recipients.value}
+            rows={recipients.status === "ready" ? recipients.value : []}
             tracks={recipientTracks}
           />
         )}
       </>}
       <Card actions={<ActionButton action={model.refreshHistory} size="sm" />} body="flush" title="History">
-        {history.status === "loading" && <SkeletonRows columns={3} rows={2} />}
         {history.status === "error" && <LoadError error={history.error} kind={history.kind} retry={history.retry} size="sm" title="History could not be loaded" verb="read invitations" />}
-        {history.status === "ready" && <TrackList empty={<Empty icon="send" size="sm" title="No invitations yet" />} label="History" rowKey={(row) => row.id} rows={history.value} tracks={historyTracks} />}
+        {history.status !== "error" && <TrackList empty={<Empty icon="send" size="sm" title="No invitations yet" />} label="History" loading={history.status === "loading"} rowKey={(row) => row.id} rows={history.status === "ready" ? history.value : []} tracks={historyTracks} />}
       </Card>
     </SidePanel>
   );

@@ -73,6 +73,13 @@ test("the wipe's pointer must be readable, have run a release, and not run this 
   assert.equal(refused({ release: "100.1" }), "409 release_already_active");
 });
 
+test("a promotion only moves forward along the preset's releases; going back is a restore", () => {
+  const onNewer = { state: "available", generationId: GENERATION, desiredRelease: "200.1", activeRelease: "200.1" } as const;
+  assert.equal(refused({ pointer: onNewer, release: "100.1" }), "409 release_older_than_active");
+  const unlisted = { state: "available", generationId: GENERATION, desiredRelease: "050.1", activeRelease: "050.1" } as const;
+  assert.notEqual(refused({ pointer: unlisted, release: "100.1" }), "409 release_older_than_active");
+});
+
 test("players online, another operation, or no fallback host refuse before the workflow starts", () => {
   const playing: LifecycleRecord = { ...initialLifecycleRecord("world#prominence-a1b2c3d4", 1), idle: { playersOnline: 2 } as LifecycleRecord["idle"] };
   assert.equal(refused({ session: playing }), "409 players_online");

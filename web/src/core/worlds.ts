@@ -200,7 +200,9 @@ export function rowActions(game: Game, world: World, granted: ReadonlySet<string
 export function promotionTargets(game: Game, world: World): readonly string[] {
   const preset = presetOf(game, world);
   if (!preset || preset.buildStatus !== "ready") return [];
-  return [...preset.releases].reverse().filter((release) => release !== world.release.activeRelease);
+  // Only releases after the active one: going back is a restore (ADR-0052).
+  const at = world.release.activeRelease === null ? -1 : preset.releases.indexOf(world.release.activeRelease);
+  return preset.releases.slice(at + 1).reverse();
 }
 
 // Keeping the save across a release change is release.promote, the Owner's (ADR-0078).
@@ -209,7 +211,7 @@ function promoteActions(game: Game, world: World, granted: ReadonlySet<string>, 
   if (!promote || !granted.has("release.promote") || world.placement !== "fleet" || world.materialization !== "existing") return [];
   const players = fleetPlayersOnline(game, world) ?? 0;
   const reason = !world.release.activeRelease ? "Available once a release is active"
-    : promotionTargets(game, world).length === 0 ? "No other built release"
+    : promotionTargets(game, world).length === 0 ? "No newer built release"
       : players > 0 ? "Refused while players are online" : undefined;
   return [action("world.promote", "Update release", () => promote(game, world), {
     icon: "deployed_code", disabled: busy || reason !== undefined, detail: reason ?? "Keeps the save; takes a backup first",

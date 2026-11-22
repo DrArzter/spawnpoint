@@ -19,6 +19,7 @@ export type PromotionRefusal =
   | "release_state_unavailable"
   | "no_active_release"
   | "release_already_active"
+  | "release_older_than_active"
   | "players_online"
   | "operation_in_progress"
   | "configured_host_unavailable";
@@ -60,6 +61,11 @@ export function planPromotion(facts: PromotionFacts): PromotionPlan {
   // A wipe that never passed a start has nothing to roll back to; a new wipe gives it a release.
   if (pointer.activeRelease === null) return reject(409, "no_active_release");
   if (pointer.activeRelease === release) return reject(409, "release_already_active");
+  // Rollback is by restore (ADR-0052): a promotion only moves forward along the
+  // preset's ordered releases (ADR-0042). An active release the catalog no
+  // longer lists cannot be ordered, so it does not refuse.
+  const at = preset.releases.indexOf(pointer.activeRelease);
+  if (at !== -1 && preset.releases.indexOf(release) < at) return reject(409, "release_older_than_active");
   // The workflow's stop refuses with players online too; this answers before it is asked.
   if ((facts.session?.idle?.playersOnline ?? 0) > 0) return reject(409, "players_online");
   if (facts.blockingOperations > 0) return reject(409, "operation_in_progress");

@@ -66,13 +66,13 @@ test("only release.promote, a deployment that promotes, and an existing fleet wo
   assert.equal(promote(world({ materialization: "archived" })).fromPage, undefined);
 });
 
-test("it is refused while players are online, with no other release, before a first start, or while busy", () => {
+test("it is refused while players are online, with no newer release, before a first start, or while busy", () => {
   const playing = world({ session: session(2) });
   assert.equal(promote(playing).fromPage?.disabled, true);
   assert.equal(promote(playing).fromPage?.detail, "Refused while players are online");
   assert.equal(promote(world({ session: session(0) })).fromPage?.disabled, false);
   const only = world({ preset: { ...preset, releases: ["100.1"], latestRelease: "100.1" } });
-  assert.equal(promote(only).fromPage?.detail, "No other built release");
+  assert.equal(promote(only).fromPage?.detail, "No newer built release");
   assert.equal(promote(world({ release: { state: "available", generationId: null, desiredRelease: "100.1", activeRelease: null } })).fromPage?.disabled, true);
   assert.equal(promote(world(), OWNER, true).fromPage?.disabled, true);
 });
@@ -91,4 +91,11 @@ test("the dialog keeps the save, names the release that stays on failure, and sa
   assert.match(copy.description, /Keeps the save/);
   assert.match(copy.description, /100\.1 stays/);
   assert.match(copy.description, /Refused while players are online/);
+});
+
+test("only releases after the active one are offered; going back is a restore", () => {
+  const releases = ["1.1", "2.1", "3.1"];
+  const game = { presets: [{ id: "p", releases, buildStatus: "ready" }] } as unknown as Parameters<typeof promotionTargets>[0];
+  const world = { preset: { id: "p" }, release: { activeRelease: "2.1" } } as unknown as Parameters<typeof promotionTargets>[1];
+  assert.deepEqual(promotionTargets(game, world), ["3.1"]);
 });

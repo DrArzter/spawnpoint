@@ -70,6 +70,7 @@ export const PROMOTION_REFUSALS: Readonly<Record<string, string>> = {
   release_state_unavailable: "The world's release pointer cannot be read now. Try again.",
   no_active_release: "This wipe has never started. Start a new wipe instead.",
   release_already_active: "This release is already active.",
+  release_older_than_active: "This release is older than the active one. Restore a backup to go back.",
   players_online: "Players are online. Ask them to log off first.",
   operation_in_progress: "Another operation is running for this world.",
   configured_host_unavailable: "The configured host is not available.",

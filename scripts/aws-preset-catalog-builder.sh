@@ -130,7 +130,7 @@ fi
 # never listed. The listing is best effort: without it the catalog still
 # publishes.
 discover_published_releases() {
-  local listing key id release manifest known="${workspace}/known-releases.txt" found="${workspace}/discovered.jsonl"
+  local listing key id release manifest listed known="${workspace}/known-releases.txt" found="${workspace}/discovered.jsonl"
   : >"${found}"
   jq -r '.presets[] | .id as $id | (.releases[]?) | "\($id)/\(.)"' "${catalog}" >"${known}"
   listing="$(aws s3api list-objects-v2 --bucket "${RELEASE_BUCKET}" --prefix "releases/${game}/" --output json 2>/dev/null | jq -r '(.Contents // [])[].Key')" || {
@@ -141,24 +141,35 @@ discover_published_releases() {
     [[ "${key}" =~ ^releases/${game}/([a-z0-9][a-z0-9-]{0,31})/([0-9]+\.[0-9]+)/manifest\.json$ ]] || continue
     id="${BASH_REMATCH[1]}"
     release="${BASH_REMATCH[2]}"
-    grep -qxF -- "${id}/${release}" "${known}" && continue
+    listed=false
+    grep -qxF -- "${id}/${release}" "${known}" && listed=true
     jq -e --arg id "${id}" '.presets | any(.id == $id)' "${catalog}" >/dev/null || continue
     manifest="${workspace}/discovered-manifest.json"
     aws s3api get-object --bucket "${RELEASE_BUCKET}" --key "${key}" "${manifest}" >/dev/null 2>&1 || continue
-    jq -ce --arg game "${game}" --arg id "${id}" --arg release "${release}" '
+    jq -ce --arg game "${game}" --arg id "${id}" --arg release "${release}" --argjson listed "${listed}" '
       select((.game // "minecraft") == $game and .release == $release and .source_profile.id == $id
         and (.source_profile.commit | type == "string" and test("^[0-9a-f]{40}$")) and (.created_at | type == "string"))
-      | {id: $id, release: $release, created_at: .created_at, source_commit: .source_profile.commit}
+      | {id: $id, release: $release, created_at: .created_at, source_commit: .source_profile.commit, listed: $listed}
     ' "${manifest}" >>"${found}" || true
   done <<<"${listing}"
+  # releases is oldest first: a build appends, and promotion offers only the
+  # releases after a world's active one. Recovered releases are older than the
+  # ones the catalog kept, so every list is ordered by its manifests' created_at.
+  # A listed release without a manifest keeps its place at the front.
   jq --slurpfile found "${found}" '
     .presets |= map(. as $preset |
-      ([$found[] | select(.id == $preset.id)] | sort_by(.created_at)) as $recovered |
-      if ($recovered | length) == 0 then .
+      [$found[] | select(.id == $preset.id)] as $manifests |
+      ($manifests | map(select(.listed | not)) | sort_by(.created_at)) as $recovered |
+      ($manifests | map({key: .release, value: .created_at}) | from_entries) as $created |
+      if ($manifests | length) == 0 then .
       else
-        .releases = ((.releases // []) + ($recovered | map(.release))) |
-        .built_from = ((.built_from // {}) + ($recovered | map({key: .release, value: {profile_digest: null, source_commit: .source_commit}}) | from_entries)) |
-        .latest_release = (.latest_release // ($recovered | last | .release))
+        .releases = ((.releases // []) + ($recovered | map(.release))
+          | to_entries | sort_by([($created[.value] // ""), .key]) | map(.value)) |
+        if ($recovered | length) == 0 then .
+        else
+          .built_from = ((.built_from // {}) + ($recovered | map({key: .release, value: {profile_digest: null, source_commit: .source_commit}}) | from_entries)) |
+          .latest_release = (.latest_release // ($recovered | last | .release))
+        end
       end
     )
   ' "${catalog}" >"${catalog}.discovered"

@@ -270,6 +270,12 @@ jq -e --arg backpacks "${backpacks_file}" '
   (.server.mods[] | select(.file == $backpacks) | .sha256) as $digest | .mod_index[$digest] == ["sophisticatedbackpacks"]
 ' "${manifest}" >/dev/null
 jq -e 'any(.mod_index[]; . == ["fabric", "fabric-api"])' "${manifest}" >/dev/null
+# Sources (descriptive): an addon keeps the one its lock pins, a pack mod is CurseForge's.
+jq -e --arg backpacks "${backpacks_file}" '
+  (.server.mods[] | select(.file == $backpacks) | .source) == "modrinth" and
+  (.client.addons[] | select(.file == $backpacks) | .source) == "modrinth" and
+  (.server.mods[] | select(.file == "fabric-api-0.92.12+1.20.1.jar") | .source) == "curseforge"
+' "${manifest}" >/dev/null
 
 # The client pack: one import with the addons and their config inside.
 client_tree="${fixture}/client-tree"
@@ -524,6 +530,7 @@ fi
 cmp -- "${fixture}/github/${gh_tag}/${gh_file}" "${payload_gh}/mods/${gh_file}"
 "${scripts}/build-profile-release.sh" "${config}/profiles/gh-release" 1.0 "${payload_gh}/mods" "${payload_gh}/manifest.json" >/dev/null
 jq -e --arg file "${gh_file}" '[.client.addons[] | select(.file == $file) | .side] == ["both"]' "${payload_gh}/manifest.json" >/dev/null
+jq -e --arg file "${gh_file}" '(.server.mods[] | select(.file == $file) | .source) == "github"' "${payload_gh}/manifest.json" >/dev/null
 unzip -q "${payload_gh}/client.zip" -d "${payload_gh}/client-tree"
 cmp -- "${fixture}/github/${gh_tag}/${gh_file}" "${payload_gh}/client-tree/overrides/mods/${gh_file}"
 jq -e --arg tag "${gh_tag}" --arg commit "${gh_commit}" --arg repository "${gh_repository}" '

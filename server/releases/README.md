@@ -31,6 +31,11 @@ records them in `client.addons` as `{file, sha256, bytes, side}`; that is deploy
 It also carries a top-level `mod_index` (SHA-256 to mod ids, read from each JAR's metadata). `mod_index` is
 descriptive: the immutability gate in `upload-release.sh` does not compare it.
 
+A mod entry may also carry `source`: `curseforge`, `modrinth` or `github`. It names where the build fetched the file.
+An addon keeps the source its lock pins; a mod of a CurseForge profile is `curseforge`. `source` is descriptive too:
+reconciliation and the identity gate ignore it. A release built before `source` existed has none, and the release
+mods API and the console show its mods as unknown. Only a new build records sources.
+
 Create a manifest from a known-good directory:
 
 ```bash

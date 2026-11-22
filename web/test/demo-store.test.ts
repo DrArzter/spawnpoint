@@ -157,3 +157,11 @@ test("a fleet world's promotion keeps its wipe, names the target as desired, and
   mock.timers.tick(7000);
   assert.deepEqual([creative().release.desiredRelease, creative().release.activeRelease, creative().release.generationId], [to, to, wipe]);
 });
+
+test("the demo names where each mod of a release came from, except for a preset's first release (built before sources)", () => {
+  const first = store.releaseMods(GAME, "industrial", "1.1");
+  assert.ok(first.mods.every((mod) => mod.source === undefined), "an older release has no source");
+  const later = store.releaseMods(GAME, "industrial", "1.3");
+  assert.deepEqual([...new Set(later.mods.map((mod) => mod.source))].sort(), ["curseforge", "github", "modrinth"]);
+  assert.ok((store.releaseMods(GAME, "industrial", "1.2").clientMods ?? []).every((mod) => mod.source !== undefined));
+});

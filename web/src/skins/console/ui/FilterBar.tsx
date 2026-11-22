@@ -63,7 +63,7 @@ function keyCommand(key: string, now: Readonly<{ open: boolean; picks: boolean; 
  * input removes the last token. "N matches" shows only while filtering, Clear
  * only with two tokens or more (R3).
  */
-export function FilterBar({ label, properties, tokens, onChange, matches, end, placeholder = "Filter" }: Readonly<{
+export function FilterBar({ label, properties, tokens, onChange, matches, end, placeholder = "Filter", disabled = false }: Readonly<{
   label: string;
   properties: readonly FilterProperty[];
   tokens: readonly FilterToken[];
@@ -72,6 +72,8 @@ export function FilterBar({ label, properties, tokens, onChange, matches, end, p
   /** Controls at the end of the bar: the preferences gear. */
   end?: ReactNode;
   placeholder?: string;
+  /** While the rows it narrows are still loading. */
+  disabled?: boolean;
 }>) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
@@ -144,6 +146,7 @@ export function FilterBar({ label, properties, tokens, onChange, matches, end, p
             aria-controls={listId}
             aria-expanded={open}
             aria-label={label}
+            disabled={disabled}
             onBlur={() => setOpen(false)}
             onChange={(event) => { setText(event.target.value); setOpen(true); setActive(0); }}
             onFocus={() => setOpen(true)}

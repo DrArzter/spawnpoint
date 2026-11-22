@@ -144,6 +144,7 @@ export function useReleaseMods(gameId: string, release: Readonly<{ presetId: str
     split: state.value.clientMods !== null,
     files: { status: "ready", value: releaseModUnion(state.value).map((mod) => ({
       ...mod,
+      source: mod.source ?? null,
       download: action(`mod.download.${mod.sha256}`, "Download", () => onDownload(release.presetId, release.version, mod), { icon: "download" }),
     })) },
   };

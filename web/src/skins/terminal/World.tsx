@@ -1,10 +1,11 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import type { BackupEntry } from "../../api/contract";
 import { Timestamp } from "../../components/ui/Timestamp";
 import { action } from "../../core/actions";
 import { useFilter } from "../../components/ui/Filter";
 import type { BackupsModel, ChangeRow, Detail, DetailValue, ModRow, ModsModel, ReleaseChangesModel, ReleaseRow, WorldModel } from "../../core/models";
+import { modSourceCounts, modSourceLabel } from "../../core/release-mods";
 import type { StatusKind } from "../../core/status";
 import { wipeStatus } from "../../core/worlds";
 import { Icon } from "../../icons";
@@ -186,7 +187,7 @@ function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["r
       <Table columns={columns} empty={<Empty title="No release" />} label={`Release pointer of ${worldName}`} rowKey={(row) => row.name} rows={releases.rows} />
     </Panel>
     {releases.changes && <ChangesPanel changes={releases.changes} worldName={worldName} />}
-    {releases.mods && <ModsPanel mods={releases.mods} worldName={worldName} />}
+    {releases.mods && <ModsPanel key={`${worldName}:${releases.mods.release}`} mods={releases.mods} worldName={worldName} />}
   </>;
 }
 
@@ -226,26 +227,47 @@ function ChangesPanel({ changes, worldName }: Readonly<{ changes: ReleaseChanges
   );
 }
 
+const sourceGlyphs = { curseforge: "C", modrinth: "M", github: "G" } as const;
+
+// A release built before sources were recorded reads as unknown.
+function SourceMark({ source }: Readonly<{ source: ModRow["source"] }>) {
+  return source === null ? <Indicator kind="unknown" label="Unknown source" /> : <Indicator glyph={sourceGlyphs[source]} label={modSourceLabel(source)} />;
+}
+
 // Every mod of the release the world starts with, of both sides (ADR-0065,
 // ADR-0069); the packs that sort them are on the release row.
 function ModsPanel({ mods, worldName }: Readonly<{ mods: ModsModel; worldName: string }>) {
   const columns: readonly Col<ModRow>[] = [
     { id: "file", label: "File", truncate: true, render: (row) => <code className="t-clip" title={row.file}>{row.file}</code> },
+    { id: "source", label: "Source", width: "90px", render: (row) => <SourceMark source={row.source} /> },
     { id: "size", label: "Size", width: "110px", align: "end", render: (row) => formatBytes(row.bytes) },
     { id: "checksum", label: "SHA-256", secondary: true, width: "180px", render: (row) => <Digest value={row.sha256} /> },
     { id: "verbs", label: "Actions", verbs: true, corner: true, render: (row) => <Overflow groups={[[row.download]]} label={`Actions for ${row.file}`} size="small" /> },
   ];
   const files = mods.files;
-  const filter = useFilter(files.status === "ready" ? files.value : [], (row) => [row.file]);
+  const [source, setSource] = useState<ModRow["source"] | "all">("all");
+  const rows = files.status === "ready" ? files.value : [];
+  // The source choices exist only when the release recorded sources; an old one keeps the search alone.
+  const sources = modSourceCounts(rows);
+  const narrowed = source === "all" ? rows : rows.filter((row) => row.source === source);
+  const filter = useFilter(narrowed, (row) => [row.file]);
+  const clear = () => { filter.clear(); setSource("all"); };
   return (
     <Panel flush name={`Mods · release ${mods.release}`}>
       {files.status === "error"
         ? <div className="t-inset"><Notice description={files.error} title="The mods are unavailable" tone="error" verbs={<Verb action={files.retry} size="small" />} /></div>
         : <>
-          <FilterRow disabled={files.status !== "ready"} filter={filter} label="Search mods" placeholder="Search by file name" />
+          <FilterRow disabled={files.status !== "ready"} filter={filter} label="Search mods" placeholder="Search by file name">
+            {sources.length > 0 && (
+              <Choices label="Filter mods by source">
+                <Choice onClick={() => setSource("all")} pressed={source === "all"}>All</Choice>
+                {sources.map((item) => <Choice key={item.label} onClick={() => setSource(item.source)} pressed={source === item.source}>{item.label}</Choice>)}
+              </Choices>
+            )}
+          </FilterRow>
           <Table
             columns={columns}
-            empty={filter.active ? <NoMatches filter={filter} noun="mods" /> : <Empty title="This release has no mods" />}
+            empty={filter.active || source !== "all" ? <NoMatches clearLabel="Clear filters" filter={{ query: filter.query.trim(), clear }} noun="mods" /> : <Empty title="This release has no mods" />}
             label={`Mods of ${worldName}, release ${mods.release}`}
             loading={files.status === "loading"}
             rowKey={(row) => row.sha256}

@@ -80,8 +80,9 @@ SKIN=console AUDIT_ROUTES=world AUDIT_WIDTHS=360,1440 AUDIT_STRIDE=0 AUDIT_STATE
 `report.md`, `report.json` and a screenshot per page or state with each finding outlined.
 
 `scripts/check.sh ui` builds, runs the self-test, serves the build and runs the gate with `--gate`. CI sets
-`UI_BASE` to the pull request's base, so a pull request that changes nothing under `web/` skips it, and `UI_ADVISE=1`, so
-the report is kept as the `ui-audit-report` artifact. A push to `main` always runs it.
+`UI_BASE` to the pull request's base, or on a push to the commit the push replaced, so a change that touches nothing
+under `web/` (or the gate's own wiring) skips it; a push without a previous commit runs it in full. `UI_ADVISE=1` keeps
+the report as the `ui-audit-report` artifact.
 
 ## Findings
 

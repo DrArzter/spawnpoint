@@ -82,7 +82,18 @@ export class FakeRefsTable {
     };
   }
 
-  async send(command: unknown): Promise<Record<string, unknown>> {
+  // A rejection, as the SDK client gives it, not a synchronous throw.
+  send(command: unknown): Promise<Record<string, unknown>> {
+    return new Promise((resolve, reject) => {
+      try {
+        resolve(this.handle(command));
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  private handle(command: unknown): Record<string, unknown> {
     this.beforeSend?.(command);
     this.commands.push((command as object).constructor.name);
     if (command instanceof GetCommand) {

@@ -433,3 +433,21 @@ test("the write command prints result lines, rewrites the manifest and leaves it
   assert.equal(await runCommand(["write"], { RELEASE_UPLOAD_CONCURRENCY: "2" }, make, { out: () => {}, err: () => {} }), 2);
   await rm(dir, { recursive: true });
 });
+
+test("the write command refuses a path with a parent segment before it reads anything", async () => {
+  const { refs, port } = setup();
+  const make = () => ({ port, refs });
+  const env = { RELEASE_BUCKET: "bucket" };
+  const ref = ["--game", "minecraft", "--preset", "industrial", "--release", "1.0", "--build-id", "b1"];
+  const cases = [
+    ["--manifest", "../manifest.json", "--source-dir", "/payload"],
+    ["--manifest", "/work/manifest.json", "--source-dir", "/payload/../etc"],
+    ["--manifest", "/work/manifest.json", "--source-dir", "/payload", "--pack", "server=/work/../pack.zip"],
+    ["--manifest", "/work/manifest.json", "--source-dir", "/payload", "--upstream-map", "/work/../map.json"],
+  ];
+  for (const flags of cases) {
+    const err: string[] = [];
+    assert.equal(await runCommand(["write", ...flags, ...ref], env, make, { out: () => {}, err: (line) => err.push(line) }), 2);
+    assert.equal(err.at(-1), "error=invalid_arguments");
+  }
+});

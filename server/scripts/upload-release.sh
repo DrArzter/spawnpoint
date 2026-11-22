@@ -385,8 +385,8 @@ prepare_object_writer() {
 
 # Prints the writer's result lines; a failure ends this script.
 run_writer() {
-  local output
-  output="$(RELEASE_BUCKET="${RELEASE_BUCKET}" "${writer_command[@]}" "$@")" || die "release writer failed: $1"
+  local command="$1" output
+  output="$(RELEASE_BUCKET="${RELEASE_BUCKET}" "${writer_command[@]}" "$@")" || die "release writer failed: ${command}"
   [[ -z "${output}" ]] || printf '%s\n' "${output}"
 }
 

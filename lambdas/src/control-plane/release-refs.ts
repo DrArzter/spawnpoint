@@ -139,7 +139,7 @@ export class ReleaseRefs {
     await this.hold(ref, holderKey.build(buildId), ["build"]);
   }
 
-  /** Adds a holder, or a role to the holder that exists. Refuses a release that is retiring, retired or, for most holders, not live. */
+  /** Adds a holder, or a role to the holder that exists. Refuses a release that is retiring, retired or, for most holders, not live, also for a holder that exists. */
   async hold(ref: ReleaseRef, key: string, roles: readonly (HolderRole | "build")[]): Promise<void> {
     const isBuild = key.startsWith("build#");
     // DynamoDB refuses an empty set, so a holder always names a role.
@@ -151,6 +151,10 @@ export class ReleaseRefs {
       release = await this.readRelease(ref);
       if (release === null) throw new ReleaseRefsError("release_state_unreadable");
     }
+    // An existing holder gets no pass: a pointer that turns back to a retiring
+    // release could otherwise slip in after the retirement's live check.
+    const allowed = HOLDER_STATES[isBuild ? "build" : "other"];
+    if (!allowed.includes(release.state)) throw unusable(release.state);
     const sk = `hold#${key}`;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const { Item } = await this.client.send(new GetCommand({ TableName: this.table, Key: this.key(ref, sk), ConsistentRead: true }));
@@ -164,8 +168,6 @@ export class ReleaseRefs {
         }));
         return;
       }
-      const allowed = HOLDER_STATES[isBuild ? "build" : "other"];
-      if (!allowed.includes(release.state)) throw unusable(release.state);
       try {
         await this.client.send(new TransactWriteCommand({
           TransactItems: [

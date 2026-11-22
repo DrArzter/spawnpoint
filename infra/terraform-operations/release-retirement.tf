@@ -36,6 +36,11 @@ data "aws_iam_policy_document" "release_retirement" {
     sid       = "ListReleaseBucket"
     actions   = ["s3:ListBucket"]
     resources = [data.aws_s3_bucket.releases.arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["releases/*", "worlds/*", "presets/*"]
+    }
   }
 
   # The live check reads world records, pointers and catalogs, and the manifest

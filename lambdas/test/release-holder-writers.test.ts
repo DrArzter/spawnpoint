@@ -326,13 +326,16 @@ test("a refused regenerate writes neither the record nor the pointer", async () 
   assert.deepEqual(bucket.events, []);
 });
 
-test("a settings update on a world whose release is retiring still works: the holder exists, so nothing new is written to the table", async () => {
+test("a settings update on a world whose release is retiring is refused, even with its holder in place, and writes nothing", async () => {
+  // Fail closed: a write that names a retiring release could slip in after the
+  // retirement's live check. The live check aborts on this world, so the
+  // release returns to live and the update works when it is tried again.
   const { bucket, table, worlds } = setup();
   table.put({ pk: releasePk("1.2"), sk: holderSk(GEN), roles: new Set(["origin"]) });
   table.put({ pk: releasePk("1.2"), sk: "meta", layout: "legacy", state: "retiring", holders: 1 });
   const stored = await worlds.read("alpha");
-  await worlds.replace({ ...base, displayName: "Alpha renamed" }, stored!.etag);
-  assert.deepEqual(bucket.events, ["s3 put worlds/alpha/world.json"]);
+  await assert.rejects(worlds.replace({ ...base, displayName: "Alpha renamed" }, stored!.etag), /release_retired/);
+  assert.deepEqual(bucket.events, []);
 });
 
 test("a repeated write costs no table write", async () => {

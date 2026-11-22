@@ -13,7 +13,7 @@ export type WorldIdentity = Readonly<{ gameId: string; presetId: string }>;
 /** Finds the game and preset of a world; it must throw when the world has no record (fail closed). */
 export type ResolveWorld = (worldId: string) => Promise<WorldIdentity>;
 
-type Holds = Pick<ReleaseRefs, "hold" | "holds">;
+type Holds = Pick<ReleaseRefs, "hold">;
 
 export class ReleaseHolders {
   private readonly refs: Holds;
@@ -24,13 +24,10 @@ export class ReleaseHolders {
     this.resolve = resolve;
   }
 
-  /** One generation's holder on one release: one read when it already has the roles, else `ReleaseRefs.hold` (which refuses a release that is retiring). */
+  /** One generation's holder on one release, through `ReleaseRefs.hold`, which refuses a release that is not live even for a holder that exists. */
   async hold(identity: WorldIdentity, worldId: string, generationId: string, release: string, roles: readonly HolderRole[]): Promise<void> {
     const ref = { gameId: identity.gameId, presetId: identity.presetId, release };
-    const key = holderKey.generation(worldId, generationId);
-    // One read when nothing is new; a retiring release keeps working for its existing holders.
-    if (await this.refs.holds(ref, key, roles)) return;
-    await this.refs.hold(ref, key, roles);
+    await this.refs.hold(ref, holderKey.generation(worldId, generationId), roles);
   }
 
   /** A record names the release its current generation started from. Earlier generations were held when they were current. */

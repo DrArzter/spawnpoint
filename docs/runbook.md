@@ -33,36 +33,52 @@ Fill in at M1 and keep current. This block is what somebody needs when something
 | Data volume ID | `vol-01bcd86ae27b55682`, encrypted 20 GiB gp3, `DeleteOnTermination=false`, `eu-central-1a` |
 | Release bucket | `spawnpoint-releases-${ACCOUNT_ID}` |
 | Backup bucket | `spawnpoint-backups-${ACCOUNT_ID}` |
-| Mini App | `https://dwk99t8cin0cf.cloudfront.net/` via CloudFront `E1UUZEI6NMXTB7`; private origin `spawnpoint-web-${ACCOUNT_ID}` |
+| Mini App | `https://${SPAWNPOINT_DOMAIN}/`, from the repository variable of that name; private origin `spawnpoint-web-${ACCOUNT_ID}` |
 | Panel URL | Grafana at `http://172.29.23.24:3000` inside ZeroTier |
 | Container image | `itzg/minecraft-server` pinned by digest in `server/compose.yaml`, never `latest`. The digest must be a **java17** one: 1.20.1 wants Java 17, and on a Java 25 image `spark`'s async-profiler segfaults the JVM shortly after the world loads |
 | Minecraft and loader version | Minecraft 1.20.1, Forge, immutable release `1.0` with 111 JARs |
-| World ids | `world` (Minecraft, profile `main`), `vanilla`, `factorio`, `zomboid` — the ids the panel, the bot and `--world` all use |
-| Addresses | Composed, never configured: the strategy's host part — the overlay address for `zerotier` worlds, the instance's current public IPv4 for `raw` ones — plus the game's own port: `world` 25565, `factorio` 34197/udp, `zomboid` 16261/udp. The start machine carries the host's answer back; a `raw` world has no address between sessions |
+| World ids | The catalogue worlds `world` (Minecraft, profile `main`) and `vanilla`, from `server/worlds/catalog.json`. These two run only on the configured host, and only they are valid for `--world` in the workstation scripts. Every other world is a world record that someone created in the panel (`worlds/<worldId>/world.json` in the releases bucket). An id matches `^[a-z0-9][a-z0-9-]{0,31}$` |
+| Addresses | Composed, never configured: the strategy's host part — the overlay address for `zerotier` worlds, the instance's current public IPv4 for `raw` ones — plus the game's own port, which `GAME_CONNECT_PORT` in `server/games/<game>/game.sh` declares (`world` uses 25565). A session in a slot other than zero uses the slot's port window. The start machine carries the host's answer back; a `raw` world has no address between sessions |
+
+## Which path applies
+
+Production runs **fleet placement** (`SPAWNPOINT_PLACEMENT=fleet`, `SPAWNPOINT_LAUNCH=enabled` since 2026-09-22; see
+[the rollout](capacity-allocation-rollout.md)). Two kinds of host exist. Use the right path for each.
+
+| | Configured host | Launched (fleet) host |
+| --- | --- | --- |
+| What it is | The one EC2 instance that Terraform owns (`spawnpoint-game-host`). It has a data volume. It is stopped, never terminated. | An instance that a start launches for a session. It has only a root volume, and a drain terminates it. |
+| Worlds | The catalogue worlds `world` and `vanilla` | Every world that someone created in the panel. The world lives in S3 between sessions. |
+| Normal start and stop | The panel (start and stop). The bot starts only. | The panel (start and stop). The bot starts only. |
+| Workstation scripts | `scripts/start-server.sh`, `scripts/stop-server.sh`, `scripts/status-server.sh`, `scripts/logs.sh`, `scripts/players.sh` | None. Each of these scripts finds only the instance tagged `spawnpoint-game-host`. |
+| Machines | `spawnpoint-start-server-v2`, `spawnpoint-stop-server-v2`, `spawnpoint-idle-watchdog-v2` | The same three, and `spawnpoint-drain-host-v2` |
+| Connectivity | `zerotier` or `raw` | `raw` or `route53` only. The fleet image has no overlay. |
+
+A start from the panel or the bot goes to `spawnpoint-start-server-v2` with a placement. The start machine then also
+starts `spawnpoint-idle-watchdog-v2` for the session. Do not use a workstation script for a world that is not in the
+catalogue: it fails with `unknown world`.
 
 ## Start the server
 
-Current M2 path from an authenticated owner workstation:
+**Normal path, every world:** press **Start** in the panel, or send `/server_start` to the bot. Both start
+`spawnpoint-start-server-v2`. The API route is `POST /games/{gameId}/worlds/{worldId}/start`.
+
+**A session names its world.** The state machines pass it to the host, so every surface says which world it means.
+There is no default in the machines, because a default world is a silent choice of world.
+
+**Configured host only, from an authenticated owner workstation:**
 
 ```bash
-scripts/start-server.sh --world factorio
+scripts/start-server.sh --world world
+scripts/start-server.sh --world vanilla
 ```
 
-**A session names its world.** The state machines pass it to the host, so
-`start-server.sh`, `stop-server.sh`, the bot and the panel all say which world they mean; there is no default in the
-machines, because a default world is a silent choice of world. The workstation scripts fall back to
-`SPAWNPOINT_WORLD` or `world` for the invocation people already have in their shell history.
+The script accepts only the world ids in `server/worlds/catalog.json`. Without `--world` it uses `SPAWNPOINT_WORLD`,
+and then `world`. It finds the instance tagged `spawnpoint-game-host` and sends no placement, so the session runs on
+that host. It follows the execution until a terminal state. Add `--no-follow` to return at once with the execution ARN.
 
-**Rollout order, as with the authoring repository:** update the callers first — an extra input field is harmless to a
-machine that ignores it — then apply `infra/terraform` (V1 machines), `infra/terraform-operations` (watchdog and V2)
-and `infra/terraform-bot`. Applying first would make every start fail on a missing `$.request.worldId` until the
-callers catch up. The host needs no change: `WORLD_ID` is what `start-session.sh` already reads.
-
-It starts the durable workflow and follows it until terminal state. Add `--no-follow` to return immediately with the
-execution ARN. A second call while an execution is still running joins it rather than starting another one.
-
-Future normal path: press **Start** in the panel, or send `start` to the bot. Those surfaces will call the same state
-machine rather than reproduce its EC2/SSM sequence.
+If any start execution is already running, the script prints `result=already_running` and the execution ARN, and
+exits. It does not join that execution and it does not start another one.
 
 Break-glass owner path, only when the workflow itself is unavailable:
 
@@ -73,32 +89,38 @@ aws ec2 start-instances \
   --region eu-central-1
 ```
 
-Do not treat EC2 `running` as game readiness. The workflow checks SSM, the authorised ZeroTier identity and the
-game's own readiness contract before returning the world's address — the strategy's host part plus that game's port,
-read from the host's session summary rather than supplied by the caller.
-
-```bash
-# TODO: dig +short <hostname>
-```
+Do not treat EC2 `running` as game readiness. The workflow checks SSM, the connectivity strategy and the game's own
+readiness contract before it returns the world's address. The address is the strategy's host part plus that game's
+port, read from the host's session summary and never supplied by the caller.
 
 **If the start operation never reaches ready:** inspect its Step Functions execution history. It separates EC2 start,
-SSM registration and the host command, so the failed boundary is visible. See [failure modes](architecture.md#failure-modes).
+SSM registration and the host command, so the failed boundary is visible. Recent executions: `scripts/operations.sh`.
+See [failure modes](architecture.md#failure-modes).
 
 ## Stop the server
 
-Current M2 owner path:
+**Normal path, every world:** press **Stop** in the panel. The API route is
+`POST /games/{gameId}/worlds/{worldId}/stop`, and it starts `spawnpoint-stop-server-v2`. The bot has no stop command.
+
+**Configured host only, from an owner workstation:**
 
 ```bash
-scripts/stop-server.sh
+scripts/stop-server.sh --world world
 ```
 
-The command asks for confirmation and follows the durable operation. Use `--no-follow` to return after receiving its
-execution ARN; automation must additionally pass `--yes`. The host refuses to stop while a player is online. With zero
-players it performs `save-all flush`, stops every session container, creates a full archive, uploads it under an
-immutable checksum-addressed S3 key and verifies the stored metadata before Step Functions may stop EC2.
+The script asks for confirmation and follows the operation. Use `--no-follow` to return after the execution ARN.
+Automation must also pass `--yes`. It reads the active session of the world's game from the lifecycle table
+(`spawnpoint-lifecycle-v2`) and stops the configured host's session. It cannot stop a fleet world.
 
-Never replace this with a direct `aws ec2 stop-instances` during normal operation: that bypasses the save and backup
-contract.
+Every stop works the same way. The host refuses to stop while a player is online. With zero players it performs a save
+and flush, stops every session container, creates a full archive, uploads it under an immutable checksum-addressed S3
+key and verifies the stored metadata. The stop succeeds only when the host reports `result=session_stopped_and_backed_up`
+([ADR-0073](adr/0073-a-stop-succeeds-only-when-the-worlds-archive-is-verified-on-its-host.md)). A refusal because
+players are online ends the execution as failed, on purpose, and does not raise an alarm. A stop request with
+`players: "disconnect"` needs the permission `session.stop.force`.
+
+Never replace this with a direct `aws ec2 stop-instances` or `terminate-instances` during normal operation: that
+bypasses the save and backup contract.
 
 ### Fleet host left behind after a stop
 
@@ -120,25 +142,22 @@ dashboard world says `stopped`: the host may have another reservation.
 
 ### Idle watchdog
 
-**Deployed and acceptance-tested.** `spawnpoint-idle-watchdog` is a Standard workflow started by
-`scripts/start-server.sh` alongside every session — one execution per session, nothing scheduled, nothing running
-between sessions. It probes `idle-probe.sh` over SSM every 5 minutes; three consecutive empty readings (15 min) start
-the verified stop above. A failed probe never counts as empty. The hard session cap is 96 checks (8 h), and stops the
-host regardless of the player count. See [workflows/README.md](../workflows/README.md).
+`spawnpoint-idle-watchdog-v2` is a Standard workflow that `spawnpoint-start-server-v2` starts for every session, on the
+configured host and on a launched host. There is one execution per session. Nothing is scheduled between sessions.
 
-To deploy it without touching EC2/EBS: review and apply `infra/terraform-operations`. The root also contains promotion;
-creating either state machine does not start an execution. The running-hours alarm remains in the host root. Validate
-the definition first, read-only:
+The watchdog runs `check-session-activity.sh` on the session's host over SSM every 900 seconds, with the session's own
+world and slot. Three consecutive empty readings (about 45 minutes) start the verified stop above. A failed probe never counts
+as empty. The hard session cap is 32 checks, which stops the host regardless of the player count. The values come from
+`watchdogTiming` in the start input (`scripts/start-server.sh` and `lambdas/src/domain/telegram-bot.ts`).
+See [workflows/README.md](../workflows/README.md).
 
-```bash
-aws stepfunctions validate-state-machine-definition --definition file://workflows/idle-watchdog.asl.json --type STANDARD --severity WARNING --profile spawnpoint --region eu-central-1
-```
+If the watchdog itself fails, its execution failure is the signal. `Spawnpoint.V2WatchdogBlind` means the host was
+unobservable and was deliberately left running. Backstops: the `spawnpoint-idle-watchdog-v2-failed` and `-timed-out`
+alarms, and, on the configured host only, `spawnpoint-running-hours` (10 consecutive hours). For a launched host the
+backstops are the fleet sweeper and the drain alarms (see [When an alarm fires](#when-an-alarm-fires)).
 
-The first acceptance drill used the production timings: release `1.1` started healthy, zero players were independently
-confirmed, and three successful empty probes stopped the server in 16m36s from watchdog start. The nested verified
-stop produced a checked backup before EC2 stopped. If the watchdog itself fails, its execution failure is the signal —
-`Spawnpoint.WatchdogBlind` means the host was unobservable and was deliberately left running; the
-`spawnpoint-running-hours` alarm (10 consecutive hours → `spawnpoint-alert`) and the budget are the backstops.
+`lambdas/test/idle-watchdog-v2.test.ts` and the Terraform tests in `infra/terraform-operations/tests` check the
+definition before it ships.
 
 ## Host checkout (ADR-0067)
 
@@ -240,13 +259,14 @@ in [release-storage-runbook.md](release-storage-runbook.md).
 
 ## Telegram bot
 
-The exact first deployment, webhook and acceptance commands are recorded in
-[`aws-bot-command-log.md`](aws-bot-command-log.md).
+The first deployment, webhook and acceptance commands are recorded in
+[`aws-bot-command-log.md`](aws-bot-command-log.md). That log is history, not the current procedure. It names an SSM
+parameter that nothing reads any more.
 
-**Starting a world other than the running one is refused.** The host's EC2 state does not say which world is up, and
-a second game beside a running one is memory nobody has measured ([ADR-0023](adr/0023-multiple-worlds.md) keeps one
-world active at a time), so a start against a running host answers `host_already_running`. Stop the active world
-first; the host-idle gate then decides whether the instance sleeps.
+**On the configured host, starting a world other than the running one is refused.** The host's EC2 state does not say
+which world is up, and a second game beside a running one is memory nobody has measured, so a start against a running
+configured host answers `host_already_running`. Stop the active world first. Fleet worlds are how two worlds run at
+once ([ADR-0062](adr/0062-give-each-fleet-world-a-session-record-of-its-own.md)).
 
 After a successful `Check` run on `main`, the production workflow deploys the React control panel only when its
 inputs changed. Its exact infrastructure, manual fallback upload and acceptance commands are recorded in
@@ -274,7 +294,7 @@ Player onboarding does not require reading this runbook:
 - `/help` reopens the complete button menu.
 
 1. Create the bot with @BotFather, keep the token.
-   Under **Web Login**, set `dwk99t8cin0cf.cloudfront.net` as its domain. This enables the browser Login Widget;
+   Under **Web Login**, set the panel's domain (the repository variable `SPAWNPOINT_DOMAIN`) as its domain. This enables the browser Login Widget;
    Mini App authentication uses the separately signed `initData` Telegram already supplies.
 2. Put the bot secrets and notification targets in Parameter Store:
 
@@ -353,9 +373,9 @@ M4's done-when.
 
 ## The Factorio world
 
-**Built, not yet session-tested on AWS.** The catalog carries world `factorio` (game `factorio`). Owner path for its
-first session, once the host has the code: `WORLD_ID=factorio` in the session environment selects the game module —
-compose, probe, saves and sentinels all follow from it. First boot generates the map (`GENERATE_NEW_SAVE`), later
+**Built. Not a catalogue world.** `server/worlds/catalog.json` has no world `factorio`, so the workstation scripts refuse
+it. Create a Factorio world in the panel from a preset; it runs on a launched host. The host reads the world's game from its
+world record (`refresh-world-catalog.sh`) — compose, probe, saves and sentinels all follow from it. First boot generates the map (`GENERATE_NEW_SAVE`), later
 boots load the newest save, and the ordinary backup contract archives `saves/`. The game port exists only inside the
 overlay; RCON stays host-local, its password read from `games/factorio/data/config/rconpw`. No release pointer means
 the vanilla legacy path.
@@ -368,7 +388,7 @@ declaring `auth: game` on that world.
 **Mods on the players' side.** Joining normally offers the server's mods; when that does not arrive, or a game cannot
 reach the mod portal, `/pack` in the bot serves the release's own zips with the folder to drop them into.
 
-Mods, when wanted, are pinned portal versions: `games/factorio/resolve-mods.sh <mods.list> <payload>` resolves
+Mods, when wanted, are pinned portal versions: `server/games/factorio/resolve-mods.sh <mods.list> <payload>` resolves
 `name:version` lines and verifies the portal's own SHA-1 per file. **The list is validated as a set, not as
 independent lines**, because the two ways a pack fails belong to the set: a release built for another engine series
 (`info_json.factorio_version`) is refused against `FACTORIO_TARGET_VERSION` — which a cut through a profile passes
@@ -421,15 +441,17 @@ That makes the rollout order matter, because the Action lives in each authoring 
 
 1. **First** update each repository's `build-release.yml` to send `configRepositoryUrl` in the execution input. An
    extra field is harmless to the machine that ignores it, so this is safe to land before anything is applied.
-2. **Then** apply `infra/terraform-operations` (the state machine) and `infra/terraform-releases` (the project
-   environment). Applying before step 1 breaks release builds until the Actions are updated.
+2. **Then** merge the Terraform change. The pipeline applies `infra/terraform-operations` (the state machine) and
+   `infra/terraform-releases` (the project environment); see [Apply by pipeline](#apply-by-pipeline). Applying before
+   step 1 breaks release builds until the Actions are updated.
 
 The Factorio repository's Action is already written this way. A Factorio cut additionally needs portal credentials at
 cut time (`FACTORIO_USERNAME`, `FACTORIO_TOKEN`); the wiring for those is the next slice and is not deployed yet.
 
 ## Project Zomboid world
 
-`WORLD_ID=zomboid`. The dedicated server installs with an anonymous Steam login and downloads its own Workshop items,
+**Not a catalogue world.** `server/worlds/catalog.json` has no world `zomboid`. Create a Project Zomboid world in the panel
+from a preset. The dedicated server installs with an anonymous Steam login and downloads its own Workshop items,
 so neither the host nor this project needs a Steam account; the people joining need to own the game. Its profile
 lives in [`my-docker-zomboid-server-config`](https://github.com/DrArzter/my-docker-zomboid-server-config), pinned per
 world in the catalog.
@@ -491,13 +513,9 @@ What the two fields do, once applied:
 A public IPv4 is billed by the hour while the instance runs, which is pennies beside the instance itself, and nothing
 at all while it is stopped.
 
-**Rollout order for the summary contract** (once, for every deployment that predates it): the host copy first —
-`SESSION_FORMAT=json` is opt-in, so an old machine keeps reading the old stream — then `infra/terraform` (the V1 start
-machine, which asks for JSON and parses it), then `infra/terraform-operations` (the V2 start and promotion, which pass
-the answer through), and the callers last: `infra/terraform-bot`, `infra/terraform-access-api`, and the workstation
-scripts, which stop sending an address once no machine reads one from the request. Applying a machine before its host
-copy fails every start on an unparseable summary; dropping the request field before the V2 machine is applied fails
-on a missing path. The order above avoids both.
+The summary contract (the host answers with a JSON session summary) is live. The pipeline applies the roots in the order
+that the contract needs: `infra/terraform`, then `infra/terraform-operations`, then the callers. See
+[Apply by pipeline](#apply-by-pipeline).
 
 ## Import a world
 
@@ -915,61 +933,95 @@ jq . /srv/spawnpoint/app/server/runtime/worlds/<worldId>/generations/<gen>/.spaw
 
 ## Restore the world
 
-Practise this before it is needed. M1 includes a drill.
+Production restore is a panel action: the world's **Backups** tab, then **Restore**. The API route is
+`POST /games/{gameId}/worlds/{worldId}/restore` with the permission `backup.restore`. A restore creates a new
+generation (a new wipe) from the chosen archive, on the release that the archive ran
+([ADR-0052](adr/0052-keep-a-release-while-a-generation-names-it.md)). The next start opens the newest archive of the
+current generation from S3.
 
-1. Stop the server, and confirm it is stopped.
-2. List available S3 archives:
+**Restoring by hand into a data directory does not work.** A world lives under
+`runtime/worlds/<worldId>/generations/<generation>` on the host, and each start opens the newest archive of the
+current generation from S3 (`server/scripts/prepare-world.sh`). A directory that someone restored by hand is ignored.
+
+1. Stop the world and confirm that it is stopped (see [Stop the server](#stop-the-server)).
+2. List the archives of the world. The prefix names the world id (`worlds/<worldId>/archives/`):
 
    ```bash
    aws s3api list-objects-v2 \
      --bucket spawnpoint-backups-${ACCOUNT_ID} \
-     --prefix worlds/world/archives/ \
+     --prefix worlds/<worldId>/archives/ \
      --profile spawnpoint \
      --region eu-central-1
    ```
-3. Choose one, and check its date against when the damage was noticed — the most recent archive may already
-   contain the corruption.
-4. Restore into a new volume or path, never over the live world:
 
-   ```bash
-   AWS_PROFILE=spawnpoint AWS_REGION=eu-central-1 \
-   BACKUP_BUCKET=spawnpoint-backups-${ACCOUNT_ID} \
-     server/scripts/download-world-backup.sh <object-key> /tmp/world-from-s3.tar.zst
-
-   server/scripts/verify-archive.sh /tmp/world-from-s3.tar.zst
-   server/scripts/restore-world.sh /tmp/world-from-s3.tar.zst <new-empty-data-directory>
-   ```
-5. Start the server and verify in game.
+   `scripts/backups.sh` lists only the legacy world `world`, whatever world you mean.
+3. Choose one, and check its date against when the damage was noticed. The most recent archive may already contain the
+   corruption.
+4. Restore it in the panel.
+5. Start the world and verify in the game.
 6. Record in the table above what was restored, from when, and how long it took.
+
+To **inspect** an archive without restoring it, download and verify it on a workstation:
+
+```bash
+AWS_PROFILE=spawnpoint AWS_REGION=eu-central-1 \
+BACKUP_BUCKET=spawnpoint-backups-${ACCOUNT_ID} \
+  server/scripts/download-world-backup.sh <object-key> /tmp/world-from-s3.tar.zst
+
+server/scripts/verify-archive.sh /tmp/world-from-s3.tar.zst
+```
 
 The restored world must be paired with the exact release that created it before Minecraft starts. In particular, do
 not combine `REMOVE_OLD_MODS=true` with an absent or empty desired-mod list: the image will correctly reconcile the
 directory to an empty set, and Forge will then reject dimensions belonging to the missing mods. The 2026-08-12 drill
 reproduced this failure and succeeded after restoring all 111 JARs and disabling reconciliation for the smoke test.
-Production restore must use the immutable release artefact rather than copying a mutable mod directory.
+Production restore uses the immutable release artefact rather than copying a mutable mod directory.
 
 The first 2026-08-13 S3 drill downloaded
 `worlds/world/archives/world-20260812T201024Z-e3909da890fa9a79364617bd4feb1f4c095cc519c1778918cfa6a85403252e87.tar.zst`,
 verified all three stored facts (metadata digest, S3 checksum and byte length), extracted it and found no content
-differences from the stopped source world. The first off-volume backup is therefore tested, not merely listable.
-
-The Terraform M1 host then performed the production-shaped half of the drill: its EC2 instance role downloaded that
-same object, verified the stored checksum and restored **635,666,233 bytes** onto the new EBS volume. It independently
-downloaded immutable release `1.0`, reconciled all **111 JARs / 623,534,143 bytes**, and only then moved the restored
-world into the live data directory. See [the M1 command log](aws-m1-command-log.md).
+differences from the stopped source world. The first off-volume backup is therefore tested, not merely listable. See
+[the M1 command log](aws-m1-command-log.md) (history).
 
 ## Recover from a lost instance
 
-Ordinary case: the volume survived. Start a new instance from Terraform and reattach.
+First decide which kind of host is lost. The instance tag shows it: `spawnpoint-game-host` is the configured host, and
+`ManagedBy=spawnpoint-fleet` is a launched host.
 
-```bash
-# TODO: terraform apply
-```
+**A launched host.** The world is safe in S3. A launched host has only a root volume, and nothing outlives it except
+the archives that its stops uploaded.
 
-Volume lost as well: create a volume, restore from the newest verified archive, then apply.
+1. Find the alarm. The sweeper raises `spawnpoint-fleet-sweep-failed` when a host holds reservations but EC2 says it is
+   stopped, or when a host has no record for more than one hour. Details are in the CloudWatch logs of
+   `spawnpoint-fleet-sweeper`.
+2. Compare the instance's EC2 state with its host record. The record is the item `host#<instance-id>` in the lifecycle
+   table:
 
-Availability zone unavailable: the volume is zonal, so a zone change means restore rather than reattach.
-See [ADR-0032](adr/0032-on-demand-single-instance.md).
+   ```bash
+   aws dynamodb get-item --table-name spawnpoint-lifecycle-v2 \
+     --key '{"server_id":{"S":"host#<instance-id>"}}' --consistent-read \
+     --profile spawnpoint --region eu-central-1
+   ```
+3. Preserve the available host logs before any manual termination.
+4. The recovery point is the newest verified archive of the world in S3. Progress since the last stop or backup on that
+   host is lost unless the host's disk is still readable. See
+   [A world's copy on a host](#a-worlds-copy-on-a-host-adr-0048-amended).
+5. Start the world again in the panel. A start opens the newest archive on a new host.
+
+*Not verified:* the review found no command that releases a reservation on a host that no longer exists. If a start is
+refused because of such a reservation, ask the person who owns the fleet code before you edit the lifecycle table by
+hand.
+
+**The configured host.** Its data volume is a separate Terraform resource (`aws_ebs_volume.data`) that outlives the
+instance, and the instance has termination protection (`infra/terraform/compute.tf`).
+
+1. Do not apply by hand. Merge the Terraform change; the pipeline applies it (see [Apply by pipeline](#apply-by-pipeline)).
+   The pipeline refuses a delete or replacement of the host or the volume.
+2. If the volume survived, the new instance attaches it.
+3. If the volume is lost as well, restore the world from the newest verified archive (see
+   [Restore the world](#restore-the-world)).
+4. The volume is zonal. If the Availability Zone is unavailable, a zone change means restore, not reattach.
+   See [ADR-0032](adr/0032-on-demand-single-instance.md).
 
 ## Break glass: SSM is not working
 
@@ -978,8 +1030,8 @@ instance is unreachable through SSM:
 
 1. Do not add an SSH port to the security group. That is a permanent change made under pressure.
 2. Check the agent status and the instance profile first — a missing permission is the usual cause.
-3. If the agent is genuinely broken, replace the instance. The world is on a separate volume, so
-   replacement is the cheaper path than getting a shell.
+3. If the agent is genuinely broken, replace the instance. On the configured host the world is on a separate volume. On a
+   launched host the world is in S3. In both cases replacement is the cheaper path than getting a shell.
 
 ## Account bootstrap
 
@@ -1140,13 +1192,20 @@ The final bootstrap plan reported `No changes`.
 
 ## Tear down and rebuild
 
-For a season when nobody plays. Keeps the backups, drops the running cost to almost nothing.
+**A full teardown is not a supported procedure.** `terraform destroy` fails by design:
 
-1. Final archive, and verify it: `# TODO`
-2. Confirm the archive is listable and the right size.
-3. `terraform destroy`
-4. Confirm in the console that volumes and snapshots are gone — orphans are the usual leftover.
-5. To come back: `terraform apply`, then restore the world.
+- The lifecycle table has `prevent_destroy` and deletion protection (`infra/terraform/lifecycle-state.tf`).
+- The storage buckets have `prevent_destroy` (`infra/terraform-storage/storage.tf`).
+- The configured host has termination protection.
+- The pipeline refuses every delete or replacement unless the root's `destroy-allowed.txt` names the exact address.
+  Only control-plane wiring may be listed (`scripts/_terraform-destroy-allow.sh`). The deployment role has no IAM
+  permission to delete the host, the volume, the buckets or the tables.
+
+For a season when nobody plays, do nothing. A launched host is terminated by the drain, and the configured host stays
+stopped. The stopped configured host's volume and the S3 storage still cost money; see [docs/costs.md](costs.md).
+
+To remove the whole deployment, the owner makes a deliberate change in each root and removes the guards by hand. Take a
+final archive of every world first, and verify it. Treat this as a separate project.
 
 ## Monthly cost check
 
@@ -1160,56 +1219,91 @@ Five minutes, and it is how orphaned resources are found.
 
 ## When an alarm fires
 
+All alarms publish to the `spawnpoint-alert` topic.
+
 | Alarm | First check |
 | --- | --- |
-| Running hours exceeded | Did the idle watchdog run at all? Is a player genuinely online? |
-| Container restart loop | Which release is live? Was it just promoted? Roll back |
-| Backup failed | Was the world saved? Is the bucket policy intact? Re-run before the next session |
-| Volume nearly full | World growth, or log growth? Prune logs first |
-| Budgets threshold | Cost Explorer by service. Look for an always-on resource that should not exist |
+| `spawnpoint-running-hours` | The configured host only: has it run 10 hours in a row? Did the idle watchdog run? Is a player online? A launched host is not watched by this alarm. |
+| `spawnpoint-idle-watchdog-v2-failed`, `-timed-out` | Open the execution. `Spawnpoint.V2WatchdogBlind` means the host was unobservable and was left running. |
+| `spawnpoint-start-server-v2-failed`, `-timed-out` | Open the execution history. It shows which boundary failed (EC2, SSM or the host command). |
+| `spawnpoint-stop-server-v2-failed`, `-timed-out` | A stop that could not verify its archive is the backup-failed signal. Was the world saved? Is the bucket policy intact? A refusal because players are online does not raise it. |
+| `spawnpoint-drain-host-v2-failed`, `-timed-out` | A launched host may be left running. See [Fleet host left behind after a stop](#fleet-host-left-behind-after-a-stop). |
+| `spawnpoint-fleet-sweep-failed` | The sweeper found a host that needs a person. See [Recover from a lost instance](#recover-from-a-lost-instance). |
+| `spawnpoint-egress` | Which host sent more than the limit in one hour? Check the EC2 `NetworkOut` metric per instance. |
+| `spawnpoint-backup-retention-failed` | The daily retention Lambda failed. See its CloudWatch logs. |
+| `spawnpoint-release-reconciler-*`, `spawnpoint-release-retirement-errors` | Release storage. See [the release storage runbook](release-storage-runbook.md). |
+| Budgets threshold | Cost Explorer by service. Look for an always-on resource that should not exist. |
 
-## Switching placement on (ADR-0054, phases 10 and 11)
+No alarm exists for a container restart loop or for a full volume. Watch the Grafana dashboard of the host and the
+session's logs (`scripts/logs.sh`, configured host only).
+
+## Placement settings (ADR-0054)
 
 Placement is a setting on the access-api root, read by the API and the bot when they start a session: `placement`
 (`single` by default — the configured instance, as before; `shared` — the configured and launched hosts participate;
 `fleet` — only launched hosts participate, so portable worlds scale to zero) and `launch` (`disabled` by default;
-`enabled` lets a start that nothing has room for create a host). Production receives these from repository variables
-`SPAWNPOINT_PLACEMENT`, `SPAWNPOINT_LAUNCH`, and `SPAWNPOINT_FLEET_HEADROOM_MIB`; absent variables retain the safe
-defaults `single`, `disabled`, and `0`. The deploy pins `app_commit` to the tested commit automatically.
+`enabled` lets a start that nothing has room for create a host). Production receives these from the repository
+variables `SPAWNPOINT_PLACEMENT`, `SPAWNPOINT_LAUNCH` and `SPAWNPOINT_FLEET_HEADROOM_MIB`. An absent variable keeps the
+safe default: `single`, `disabled` and `0`. Do not read a default in Terraform as the production value. The deploy pins
+`app_commit` to the tested commit automatically.
 
-The order is the rollout's: run the acceptance with the setting still `single` — the harness asks for `shared` per
-start — and put its report under `docs/acceptance/`; then use `shared` to include the configured host, or `fleet` to
-exclude it; then, once the Parameter Store keys below exist and one launch has been watched end to end, set `launch`
-to `enabled`. A revert is setting `SPAWNPOINT_PLACEMENT=single`; sessions already running finish as they began,
-because every host command carries the slot it started with.
+**Current production values** (from [the rollout](capacity-allocation-rollout.md), 2026-09-22): `fleet`, `enabled`, no
+headroom. Check the repository variables before you rely on this line.
 
-Two things `shared` cannot do yet, and should not surprise anyone: two configured worlds of the same game still take
+To change a value, change the repository variable and let the pipeline deploy. When `launch` is `enabled`, the pipeline
+first runs `scripts/check-fleet-readiness.sh`, which fails if a host parameter is missing (see
+[Launched hosts](#launched-hosts-adr-0054-phase-12)). To revert, set `SPAWNPOINT_PLACEMENT=single`. Sessions that are
+already running finish as they began, because every host command carries the slot it started with. The acceptance run
+of the rollout is `scripts/acceptance-capacity-allocation.sh`; its written report is still owed, and the
+`docs/acceptance/` directory does not exist.
+
+Two things `shared` cannot do, and should not surprise anyone: two configured worlds of the same game still take
 turns, because they share the game's lifecycle record (fleet worlds have their own, ADR-0062), and the legacy worlds
-run only on the configured host (they are bound to it in the catalog).
+run only on the configured host (the world's `hostBinding` is `configured`).
 
 ## Launched hosts (ADR-0054, phase 12)
 
-A host the control plane launches for a session has no data volume. At first boot it checks this repository out at
-the commit its `AppCommit` tag names, renders its runtime `.env` from Parameter Store and joins the overlay. Before
-`launch` is enabled (`SPAWNPOINT_LAUNCH=enabled`, `disabled` by default), put the environment where
-the host will find it — one parameter per key, the same keys the configured host keeps in `server/.env`:
+A host that the control plane launches for a session has no data volume. At first boot it checks this repository out at
+the commit its `AppCommit` tag names and renders its runtime `.env` from Parameter Store. It enables only the `raw` and
+`route53` connectivity adapters, so it does not join an overlay network (`server/user-data-fleet.sh.tftpl`).
+
+Before `launch` is enabled (`SPAWNPOINT_LAUNCH=enabled`, `disabled` by default), put the environment where the host
+will find it. Use one parameter per key. These are the keys that `scripts/check-fleet-readiness.sh` requires:
 
 ```bash
-for key in CF_API_KEY RCON_PASSWORD GRAFANA_ADMIN_PASSWORD ZEROTIER_NETWORK_ID BACKUP_BUCKET RELEASE_BUCKET AWS_REGION; do
+for key in CF_API_KEY RCON_PASSWORD GRAFANA_ADMIN_PASSWORD BACKUP_BUCKET RELEASE_BUCKET AWS_REGION; do
   aws ssm put-parameter --name "/spawnpoint/host/env/$key" --type SecureString --value '<value>' --overwrite --profile spawnpoint --region eu-central-1
 done
 ```
 
-`ZEROTIER_ADDRESS` is not among them: a launched host writes the address the overlay assigns it. For the host to
-authorise itself without a person clicking in ZeroTier Central, store an API token from
-<https://my.zerotier.com/account> as `/spawnpoint/host/zerotier-central-token` (SecureString); without it the host
-joins, waits for authorisation, and the start refuses until somebody authorises it. Each launched host spends one of
-the free tier's ten device slots while it exists.
+Check them without printing a value (the script prints only the names of missing parameters):
 
-A launched host, like the configured one under `placement = "shared"`, runs one observability tier for every session on
-it; its Grafana answers at the host's own overlay address on port 3000, with the same admin password from `.env`, and
-the Minecraft dashboard's World variable picks the session. Prometheus stays host-local.
+```bash
+scripts/check-fleet-readiness.sh
+```
 
-`app_commit` on the access-api root names the commit a launched host checks out; `main` follows the branch, and the
-deploy should pin the tested commit. The renderer the bootstrap uses is `server/scripts/render-host-env.sh`; it
-refuses a parameter whose last segment is not an environment name and a value that spans lines.
+A launched host runs one observability tier for every session on it. Grafana and Prometheus bind to loopback by default
+(see `server/README.md`), so a launched host exposes neither.
+
+`app_commit` on the access-api root names the commit that a launched host checks out. The pipeline sets it to the
+tested commit. The renderer that the bootstrap uses is `server/scripts/render-host-env.sh`; it refuses a parameter whose
+last segment is not an environment name and a value that spans lines.
+
+## Apply by pipeline
+
+Do not apply a Terraform root by hand. After a merge to `main`, the `Check` workflow runs. If it succeeds, the
+production workflow (`.github/workflows/deploy-production.yml`) builds a deploy plan from the changed files
+(`scripts/deployment_plan.py`). The plan names the roots to apply, in this order: `infra/terraform-guardrails`,
+`infra/terraform-storage`, `infra/terraform-domain`, `infra/terraform`, `infra/terraform-releases`,
+`infra/terraform-operations`, `infra/terraform-access`, `infra/terraform-bot`, `infra/terraform-access-api`,
+`infra/terraform-web`. The roots `infra/terraform-github` and `infra/terraform-identity-admin` go through the separate identity
+workflow (`deploy-identity.yml`), after the owner approves its gate. Roots that are managed by hand get a manual review
+step that reports the required work.
+
+`.github/workflows/deploy-infrastructure.yml` applies each root with `scripts/terraform-apply-safe.sh`. The job runs in
+the `production` environment. The script refuses a delete or replacement unless the root's `destroy-allowed.txt` names
+the exact address. A pull request gets a read-only plan from `scripts/terraform-plan-safe.sh`.
+
+Settings that production reads come from repository variables (`SPAWNPOINT_PLACEMENT`, `SPAWNPOINT_LAUNCH`,
+`SPAWNPOINT_FLEET_HEADROOM_MIB`, `SPAWNPOINT_RELEASE_SWEEP_DRY_RUN`, and others). See the `env` block of
+`deploy-infrastructure.yml` for the list.

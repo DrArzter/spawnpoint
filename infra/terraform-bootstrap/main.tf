@@ -55,37 +55,125 @@ resource "aws_s3_bucket_versioning" "terraform_state" {
   }
 }
 
-# Every state key a root names in its backend.hcl.example. Read from those
-# files, so a new root gets its lock clean-up rule without an edit here.
-locals {
-  state_names = sort([
-    for example in fileset("${path.module}/..", "*/backend.hcl.example") :
-    regex("key\\s*=\\s*\"spawnpoint/([a-z0-9-]+)\\.tfstate\"", file("${path.module}/../${example}"))[0]
-  ])
-}
-
 resource "aws_s3_bucket_lifecycle_configuration" "terraform_state_locks" {
   bucket = aws_s3_bucket.terraform_state.id
 
-  # Versioning keeps every native lock object; these rules drop the obsolete ones.
-  dynamic "rule" {
-    for_each = local.state_names
+  rule {
+    id     = "expire-obsolete-production-locks"
+    status = "Enabled"
 
-    content {
-      id     = "expire-obsolete-${rule.value}-locks"
-      status = "Enabled"
+    filter {
+      prefix = "spawnpoint/production.tfstate.tflock"
+    }
 
-      filter {
-        prefix = "spawnpoint/${rule.value}.tfstate.tflock"
-      }
+    expiration {
+      expired_object_delete_marker = true
+    }
 
-      expiration {
-        expired_object_delete_marker = true
-      }
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
 
-      noncurrent_version_expiration {
-        noncurrent_days = 1
-      }
+  rule {
+    id     = "expire-obsolete-storage-locks"
+    status = "Enabled"
+
+    filter {
+      prefix = "spawnpoint/storage.tfstate.tflock"
+    }
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
+
+  rule {
+    id     = "expire-obsolete-guardrails-locks"
+    status = "Enabled"
+
+    filter {
+      prefix = "spawnpoint/guardrails.tfstate.tflock"
+    }
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
+
+  rule {
+    id     = "expire-obsolete-identity-admin-locks"
+    status = "Enabled"
+
+    filter {
+      prefix = "spawnpoint/identity-admin.tfstate.tflock"
+    }
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
+
+  rule {
+    id     = "expire-obsolete-github-oidc-locks"
+    status = "Enabled"
+
+    filter {
+      prefix = "spawnpoint/github-oidc.tfstate.tflock"
+    }
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
+
+  rule {
+    id     = "expire-obsolete-release-pipeline-locks"
+    status = "Enabled"
+
+    filter {
+      prefix = "spawnpoint/release-pipeline.tfstate.tflock"
+    }
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
+
+  rule {
+    id     = "expire-obsolete-operations-locks"
+    status = "Enabled"
+
+    filter {
+      prefix = "spawnpoint/operations.tfstate.tflock"
+    }
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
     }
   }
 

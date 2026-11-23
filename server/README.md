@@ -223,18 +223,6 @@ pack changes and nobody knows why. See [ADR-0024](../docs/adr/0024-connectivity-
 
 The same Compose file should run locally, so a mod set can be smoke-tested before it reaches the server.
 
-The manual M0 migration additionally uses `compose.m0.yaml`. Its restored mod directory has already been counted and
-hashed, so the override disables CurseForge resolution during the first AWS boot. This avoids needing to copy the
-owner's API key and prevents a moving upstream list from mutating the exact 111-JAR payload being tested:
-
-```bash
-docker compose -f compose.yaml -f compose.m0.yaml up -d mc
-```
-
-The first AWS boot additionally used `FORGE_FORCE_REINSTALL=true` because the secret-free migration intentionally
-excluded the locally cached Forge runtime libraries. It was removed from the override immediately after that boot
-reached `healthy`; leaving it enabled would turn a repair into work repeated on every session.
-
 M1 and later use the equivalent, deliberately named `compose.release.yaml` after release reconciliation. The M2
 workflow invokes `scripts/start-session.sh`, which first requires the configured ZeroTier network and address to be
 present, then delegates to the ordinary lifecycle script with both Compose files:

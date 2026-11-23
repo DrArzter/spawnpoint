@@ -22,8 +22,12 @@ connect_port_for_world() {
 
 grafana_url="${SPAWNPOINT_GRAFANA_URL:-http://172.29.23.24:3000}"
 
-if [[ $# -gt 0 ]]; then
-  printf 'usage: %s\n' "$0" >&2
+# The latest backup of any world by default; --world names one.
+backup_prefix="worlds/"
+if [[ "${1:-}" == "--world" && "${2:-}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ && $# -eq 2 ]]; then
+  backup_prefix="worlds/$2/archives/"
+elif [[ $# -gt 0 ]]; then
+  printf 'usage: %s [--world <world-id>]\n' "$0" >&2
   exit 1
 fi
 
@@ -141,7 +145,7 @@ backup_bucket="spawnpoint-backups-${account_id}"
 latest_backup="$(
   aws s3api list-objects-v2 \
     --bucket "${backup_bucket}" \
-    --prefix worlds/world/archives/ \
+    --prefix "${backup_prefix}" \
     --profile "${profile}" \
     --region "${region}" \
     --query 'sort_by(Contents,&LastModified)[-1]' \

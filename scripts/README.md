@@ -8,13 +8,13 @@ Available:
 | Script | Purpose |
 | --- | --- |
 | `audit-aws-bootstrap.sh` | Read-only verification of browser credentials, IAM MFA and keys, budget alerts, recipients and SNS subscriptions. See [the command reference](../docs/aws-cli-checks.md) |
-| `backups.sh` | List recent immutable world backups from S3 |
+| `backups.sh` | List recent immutable world backups from S3: every world, or one with `--world <id>` |
 | `logs.sh` | Fetch a bounded Minecraft log snapshot through SSM without SSH |
 | `operations.sh` | Show recent start/stop Step Functions executions |
 | `players.sh` | Ask the running server for its current player list through SSM and RCON |
 | `session.sh` | Command dispatcher and interactive menu for the local operator toolbox |
 | `start-server.sh` | Start or join the Lifecycle V2 start for a named world, and optionally follow it until the game is ready |
-| `status-server.sh` | Read-only EC2, workflow, storage, latest-backup and live private-endpoint status |
+| `status-server.sh` | Read-only EC2, workflow, storage, latest-backup (any world, or `--world <id>`) and live private-endpoint status |
 | `stop-server.sh` | Save, back up and stop the exact active session through Lifecycle V2; refuses while players are online |
 | `acceptance-capacity-allocation.sh` | The acceptance run of [ADR-0054](../docs/adr/0054-place-a-session-on-a-host-with-room.md) as commands: `start` a shared placement and read where it landed and when it was ready, `tick` a session's ms/tick on its host, `stop` it, follow a `drain`, record a `join`, and render the `report` the rollout asks for |
 | `deploy-web.sh` | Build and publish the static panel; skips upload when the built `index.html` is unchanged |

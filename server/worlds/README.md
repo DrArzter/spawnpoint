@@ -33,6 +33,10 @@ Optional per-world fields, each defaulting to the behaviour that predates its ax
 | `auth` | the game's own model | Declared override: `external` states that authentication is handled outside the game defaults, which lets a non-gating strategy publish the world |
 | `profile_source` | the catalog-level `profile_source` | This world's own authoring repository and pinned commit — authoring lives one repository per game, and a pin bump for one world must not invalidate another world's prepared marker |
 | `footprint` | the game module's `GAME_FOOTPRINT_*` | `{ "memory_mib", "cores" }`: what a session of this world is placed with and limited to ([ADR-0054](../../docs/adr/0054-place-a-session-on-a-host-with-room.md)) — the container's memory, not the heap, and a core weight. The panel's catalog carries the same figures, and a test keeps them equal |
+| `whitelist` | none | Player names the server admits, each `^[A-Za-z0-9_]{3,16}$` ([ADR-0066](../../docs/adr/0066-keep-a-world-whitelist-on-its-record.md)) |
+| `game_settings` | the game's defaults | An object of string, number or boolean values the game module writes to its server settings ([ADR-0064](../../docs/adr/0064-let-a-world-carry-game-settings.md)) |
+| `storage_layout` | `legacy` | `generation` keeps each wipe under its own generation directory; it then requires `generation_id` (`gen-` and 32 hex digits) and `release` (`MAJOR.MINOR`) |
+| `restore` | none | Only with `storage_layout: generation`: `backup_key` (`worlds/<id>/archives/<name>.tar.zst`), `checksum` (64 hex digits) and `source_generation_id` of the archive the new wipe opens from |
 
 The catalog validator enforces the gate-versus-auth invariant statically: a world with no authentication on a
 non-gating connectivity is not a loadable catalog. An open server is always a diff someone wrote, never a default

@@ -140,6 +140,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0078](0078-promote-a-fleet-world-from-the-panel.md) | Promote a fleet world from the panel and keep its save | Accepted — implemented for fleet worlds | M4 |
 | [0079](0079-pin-an-addon-to-a-github-release-asset.md) | Pin an addon to a GitHub release asset | Accepted — builder side implemented | M6 |
 | [0080](0080-store-release-files-by-content.md) | Store release files by content, and free them only when no release names them | Proposed — readers and reconciler built | M6 |
+| [0081](0081-a-stop-may-disconnect-players.md) | A stop may disconnect players, for a holder of session.stop.force | Accepted | M6 |
 
 ## Decisions still to record
 

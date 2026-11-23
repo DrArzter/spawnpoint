@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { ReleaseMod, ReleasePackName } from "../api/contract";
+import type { ReleaseMod, ReleasePackName, StopPlayersPolicy } from "../api/contract";
 import { requestReleaseBuild } from "../auth";
 import { ActiveSession, endSession, loadAppearance, loadControlPlane, requestBackupDownload, requestCreateWorld, requestModDownload, requestPackDownload, requestReleasePack, requestSessionOperation, requestPromotion, requestUpdateWorldSettings, requestWorldLifecycle, subscribeControlPlane, updateAppearance, updateGameSettings, type BackupEntry } from "../auth";
 import { startableReleases } from "./presets";
@@ -18,7 +18,7 @@ import type { Notify } from "./data";
 import { openDownload } from "./download";
 import type { AppearanceModel, NavigationItem, ShellModel, WorldPlacement } from "./models";
 import { visibleNavigation } from "./navigation";
-import { presetOf, type WorldCallbacks } from "./worlds";
+import { presetOf, stopDisconnect, type WorldCallbacks } from "./worlds";
 
 /*
  * The console's bones: what is loaded, what is pending, what is open, and
@@ -299,11 +299,11 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     } finally { releasePending(mine); }
   }
 
-  async function runSession(target: Game, targetWorld: World, sessionAction: SessionAction) {
+  async function runSession(target: Game, targetWorld: World, sessionAction: SessionAction, players?: StopPlayersPolicy) {
     const mine: Pending = { kind: "session", worldId: targetWorld.id, action: sessionAction };
     holdPending(mine);
     try {
-      const result = await requestSessionOperation(target.id, targetWorld.id, sessionAction);
+      const result = await requestSessionOperation(target.id, targetWorld.id, sessionAction, players);
       notify({ tone: "success", message: sessionAcceptedMessage(targetWorld, sessionAction, result.result) });
       await refresh(true);
     } catch (error) {
@@ -494,7 +494,10 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     refreshing: pendingOf(pending, "refresh") !== null,
     setRequestCount,
     worldCallbacks,
-    requestSession: (target, targetWorld, sessionAction) => setConfirmation({ kind: "session", action: sessionAction, game: target, world: targetWorld }),
+    requestSession: (target, targetWorld, sessionAction) => setConfirmation({
+      kind: "session", action: sessionAction, game: target, world: targetWorld,
+      ...stopDisconnect(target, targetWorld, sessionAction, granted, sharedSession),
+    }),
     requestCreateWorld: (target, preset) => setCreating({ game: target, preset: preset ?? target.presets.find((item) => startableReleases(item).length > 0) ?? null }),
     requestBuild: (target, preset) => setConfirmation({ kind: "build", game: target, preset }),
     members,
@@ -510,7 +513,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     runConfirmation: (item, release) => {
       setConfirmation(null);
       if (item.kind === "build") void runBuild(item.game, item.preset);
-      if (item.kind === "session") void runSession(item.game, item.world, item.action);
+      if (item.kind === "session") void runSession(item.game, item.world, item.action, item.disconnect === undefined ? undefined : "disconnect");
       if (item.kind === "archive") void runLifecycle(item.game, item.world, "archive");
       if (item.kind === "wipe") void runLifecycle(item.game, item.world, "wipe", undefined, release);
       if (item.kind === "restore") void runLifecycle(item.game, item.world, "restore", item.backupKey);

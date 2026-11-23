@@ -243,6 +243,8 @@ export type AuthState =
 
 export type WorldLifecycleAction = "archive" | "regenerate" | "restore" | "purge";
 export type SessionOperation = "start" | "stop";
+/** What a stop does with players online. `disconnect` needs session.stop.force. */
+export type StopPlayersPolicy = "refuse" | "disconnect";
 
 /** One step of a running workflow: the key is stable, the label is the server's plain words. */
 export type OperationStep = Readonly<{ key: string; label: string }>;
@@ -381,7 +383,7 @@ export type SpawnpointApi = Readonly<{
   loadControlPlane(): Promise<ControlPlaneSnapshot>;
   /** Subscribe to invalidations only; the caller still reloads its permission-filtered snapshot. */
   subscribeControlPlane(onInvalidated: () => void): () => void;
-  requestSessionOperation(gameId: string, worldId: string, action: SessionOperation): Promise<{ result: "requested" | "already_stopped"; operationId?: string }>;
+  requestSessionOperation(gameId: string, worldId: string, action: SessionOperation, players?: StopPlayersPolicy): Promise<{ result: "requested" | "already_stopped"; operationId?: string }>;
   requestWorldLifecycle(gameId: string, worldId: string, action: WorldLifecycleAction, backupKey?: string, release?: string): Promise<{ result: "requested"; operationId: string }>;
   /** Moves a fleet world's open wipe to another release of its preset, keeping its save (ADR-0078). A wipe that never started is switched at once, with no operation. */
   requestPromotion(gameId: string, worldId: string, release: string): Promise<PromotionResult>;

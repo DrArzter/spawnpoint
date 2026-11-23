@@ -1,9 +1,9 @@
 # GitHub Actions identity
 
 This Terraform root owns three deliberately separate workflow identities. The release role is trusted by the `main`
-branch of each config repository named in `github_subjects`, and may start the fixed
-`spawnpoint-build-release` Standard Workflow and inspect only that workflow's executions. It cannot invoke CodeBuild,
-read the CurseForge key, write S3 objects, start EC2, send SSM commands or promote a release. With no config
+branch of each config repository named in `github_subjects` (one or more). It may start the fixed
+`spawnpoint-build-release` and `spawnpoint-publish-preset-catalog` Standard Workflows and inspect only their executions. It may read and write objects under `config-sources/*` in the releases bucket, and read published preset catalogs. It cannot invoke CodeBuild,
+read the CurseForge key, start EC2, send SSM commands or promote a release. With no config
 repository the role does not exist. CI reads the list from the `CONFIG_REPOSITORY_SUBJECTS` repository variable, a JSON
 list such as `["repo:owner/minecraft-config:ref:refs/heads/main"]`.
 

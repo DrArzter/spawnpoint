@@ -41,8 +41,8 @@ every world used the overlay: a public address does not exist before the instanc
 Callers therefore send no address at all, and every surface that shows one — the panel, the bot, the notifier —
 either reads this output or composes it from the live host the same way the host does.
 
-The SSM command deliberately contains no interpolated execution input. ZeroTier network identity and expected address
-come from the root-owned, mode-`0600` host `.env`; this prevents a crafted operation input from becoming shell syntax.
+The SSM command interpolates two execution inputs with `States.Format`: `worldId` and `slot`. ZeroTier network identity and expected address
+come from the root-owned, mode-`0600` host `.env`. Two guards limit the risk of shell syntax. The access API checks the shape of the world id before it starts a machine (no `slot` check was found there) (`lambdas/src/control-plane/aws.ts`). The host checks the world id again in `load_world` (`server/scripts/_worlds.sh`), but only after the shell has read the line. A caller that starts a machine directly, such as an operator with IAM access, passes no API guard. Moving the host step to SSM documents with an allowed pattern is planned work.
 
 The definition currently stops visibly on failure. Automatic EC2 compensation after a failed start is the next slice:
 it must first distinguish an instance that this execution started from one that was already running, otherwise a

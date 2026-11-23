@@ -1,15 +1,15 @@
 # AWS Telegram bot command log
 
-Executed on 2026-08-26/27 against account `614934752397`, region
+Executed on 2026-08-26/27 against account `<account-id>`, region
 `eu-central-1`, profile `spawnpoint`. Secret values are intentionally replaced
 with shell variables or placeholders. The root `.env` is ignored by Git and
 was parsed as data; it was never sourced as shell code.
 
 ## Identity and secret parameters
 
-The bot was verified with Telegram `getMe` as `@drarzterbot`. After the owner
+The bot was verified with Telegram `getMe` as the bot. After the owner
 sent `/start`, `getUpdates` identified Telegram user and private chat
-`1780660807`. The four SSM parameters are:
+`<telegram-user-id>`. The four SSM parameters are:
 
 ```bash
 aws ssm put-parameter \
@@ -25,12 +25,12 @@ aws ssm put-parameter \
 aws ssm put-parameter \
   --profile spawnpoint --region eu-central-1 \
   --name /spawnpoint/bot/allow-list \
-  --type String --value 1780660807 --overwrite
+  --type String --value <telegram-user-id> --overwrite
 
 aws ssm put-parameter \
   --profile spawnpoint --region eu-central-1 \
   --name /spawnpoint/bot/chat-ids \
-  --type String --value 1780660807 --overwrite
+  --type String --value <telegram-user-id> --overwrite
 ```
 
 `token` and `webhook-secret` are `SecureString`; `allow-list` and `chat-ids`
@@ -210,7 +210,7 @@ aws logs tail /aws/lambda/spawnpoint-telegram-bot \
 
 aws ec2 describe-instances \
   --profile spawnpoint --region eu-central-1 \
-  --instance-ids i-09c9b5069308ac372 \
+  --instance-ids <instance-id> \
   --query 'Reservations[0].Instances[0].State.Name' --output text
 ```
 

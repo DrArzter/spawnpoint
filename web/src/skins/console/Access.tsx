@@ -124,7 +124,7 @@ function AccessList({ model, selection }: Readonly<{ model: AccessModel; selecti
       id: "people",
       label: "People",
       end: <span>{members.length}</span>,
-      items: members.map((row) => <ListItemPerson account={firstAccount(row.member)} accountIcon={row.member.links[0] ? providerIcon(row.member.links[0].kind) : undefined} current={current("people", row.member.id)} href={itemHref("people", row.member.id)} key={row.member.id} meta={<Chip>{roleName(row.member.roleId)}</Chip>} name={row.member.name} />),
+      items: members.map((row) => <ListItemPerson account={firstAccount(row.member)} accountIcon={row.member.links[0] ? providerIcon(row.member.links[0].kind) : undefined} current={current("people", row.member.id)} href={itemHref("people", row.member.id)} key={row.member.id} meta={<Chip>{roleName(row.member.roleId)}</Chip>} name={row.member.name} photoUrl={row.member.photoUrl} />),
     },
     ...(invitations.length > 0 ? [{
       id: "invitations",
@@ -176,7 +176,7 @@ function UsersPane({ model }: Readonly<{ model: UsersModel }>) {
     { id: "actions", header: "Actions", kind: "act", render: (row) => <><ActionButton action={row.approve} size="sm" /><ActionButton action={row.dismiss} size="sm" /></> },
   ];
   const peopleColumns: Column<MemberRow>[] = [
-    { id: "person", header: "Person", kind: "lead", render: (row) => <a href={itemHref("people", row.member.id)}><Person name={row.member.name} /></a> },
+    { id: "person", header: "Person", kind: "lead", render: (row) => <a href={itemHref("people", row.member.id)}><Person name={row.member.name} photoUrl={row.member.photoUrl} /></a> },
     { id: "accounts", header: "Accounts", kind: "wide", render: (row) => firstAccount(row.member) ?? <span className="c-faint">—</span> },
     { id: "role", header: "Role", render: (row) => <RoleSelect choice={row.role} label={`Role for ${row.member.name}`} onChange={row.setRoleId} /> },
     { id: "actions", header: "Actions", kind: "act", render: (row) => <Overflow actions={row.remove ? [row.linkedAccounts, row.remove] : [row.linkedAccounts]} label={`Actions for ${row.member.name}`} size="sm" /> },

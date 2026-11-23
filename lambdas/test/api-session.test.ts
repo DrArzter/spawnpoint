@@ -68,3 +68,24 @@ test("a member does not receive the Owner's Telegram id from a claimed bootstrap
   assert.deepEqual(found.bootstrap, { state: "claimed", ownerId: "owner-1", telegramId: null, claimedAt: claim.claimed_at });
   assert.ok(!JSON.stringify(found.bootstrap).includes(claim.telegram_id));
 });
+
+test("a password sign-in shows the photo of the identity's linked Telegram account", async (t) => {
+  const passwordAccount = { provider: "password", subject: "sub-1", displayName: "Ada", username: null, photoUrl: null, email: "ada@example.com" };
+  const telegramPhoto = "https://t.me/i/userpic/320/ada.jpg";
+  t.mock.method(document, "send", async (command: { constructor: { name: string }; input: { Key?: { pk: string; sk: string } } }) => {
+    const name = command.constructor.name;
+    const key = command.input.Key;
+    if (name === "UpdateCommand") return { Attributes: { pk: "ACCOUNT#password#sub-1", sk: "ACCOUNT", identity_id: "id-1", email: "ada@example.com" } };
+    if (name === "QueryCommand") return { Items: [
+      { sk: "ACCOUNT", platform: "password", platform_user_id: "sub-1" },
+      { sk: "ACCOUNT", platform: "telegram", platform_user_id: "42", photo_url: telegramPhoto },
+    ] };
+    if (key?.sk === "PROFILE") return { Item: { identity_id: "id-1", display_name: "Ada", role_id: "viewer", status: "ACTIVE" } };
+    if (key?.pk === "SYSTEM") return { Item: claim };
+    return {};
+  });
+  const result = await session(passwordAccount, []);
+  const profile = (JSON.parse(result.body as string) as { profile: { provider: string; photoUrl: string | null } }).profile;
+  assert.equal(profile.provider, "password");
+  assert.equal(profile.photoUrl, telegramPhoto);
+});

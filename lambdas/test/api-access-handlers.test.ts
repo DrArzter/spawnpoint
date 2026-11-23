@@ -24,7 +24,7 @@ function storage(t: TestContext, credential: Record<string, unknown> | undefined
     if (value === "IDENTITY#ACTIVE") return { Items: [{ identity_id: "id-1", display_name: "Someone", role_id: "player" }] };
     if (value === "IDENTITY#id-1") {
       return { Items: [
-        { platform: "telegram", platform_user_id: "123", username: "someone" },
+        { platform: "telegram", platform_user_id: "123", username: "someone", photo_url: "https://t.me/i/userpic/320/someone.jpg" },
         { platform: "password", platform_user_id: "sub-1", email: "someone@example.com" },
       ] };
     }
@@ -84,4 +84,10 @@ test("each listed identity says whether the caller may delete it, by the owner g
   assert.deepEqual(await listing(owner), { "owner-1": false, "owner-2": true, "manager-1": true, "player-1": true });
   const manager = { id: "manager-1", displayName: "Manager", roleId: "operator", directGrants: ["access.manage"] } as const;
   assert.deepEqual(await listing(manager), { "owner-1": false, "owner-2": false, "manager-1": false, "player-1": true });
+});
+
+test("a listed identity carries the photo of one of its accounts", async (t) => {
+  storage(t, undefined);
+  const body = JSON.parse((await identities(owner)).body as string) as { identities: readonly { photoUrl: string | null }[] };
+  assert.equal(body.identities[0]?.photoUrl, "https://t.me/i/userpic/320/someone.jpg");
 });

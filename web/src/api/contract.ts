@@ -117,6 +117,8 @@ export type AccessIdentity = Readonly<{
   directGrants: string[];
   /** Whether the caller may delete this identity; the backend's owner rules decide, so the web keeps no copy of them. */
   canDelete: boolean;
+  /** A photo from one of the person's linked accounts; absent from a server that predates it. */
+  photoUrl?: string | null;
   /** `handle` is the account's own name where it has one: a Telegram username, an email address. */
   links: ReadonlyArray<{ platform: string; value: string; handle: string | null; verified: boolean }>;
 }>;

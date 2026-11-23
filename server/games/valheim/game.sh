@@ -11,10 +11,6 @@
 GAME_COMPOSE_FILES="games/valheim/compose.yaml"
 GAME_FOOTPRINT_COMPOSE_FILE="games/valheim/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="valheim"
-# No release payload exists for this game, so neither value is ever read by the
-# release scripts; they are set for the contract and left honest.
-GAME_MOD_EXTENSION=""
-GAME_LOADER_TYPE="vanilla"
 # The port a player types after the address the connectivity strategy publishes.
 GAME_CONNECT_PORT="2456"
 GAME_CONNECT_PROTOCOL="udp"
@@ -73,13 +69,6 @@ game_save() {
   # Compose stop immediately after this hook returns, before the archive.
   printf 'save_deferred=graceful_shutdown\n'
   return 0
-}
-
-# Readiness: the query port answers and its two replies agree.
-game_ready() {
-  local health="$1"
-  [[ "${health}" != "unhealthy" ]] || return 1
-  game_query_players_raw 2>/dev/null | game_parse_player_count >/dev/null 2>&1
 }
 
 # A Valheim world is two files in worlds_local: <name>.fwl holds its name and

@@ -17,8 +17,6 @@
 #                              the overlay that turns the footprint into the
 #                              game container's memory limit (ADR-0054)
 #   GAME_COMPOSE_SERVICE       the compose service holding the game process
-#   GAME_MOD_EXTENSION         what a mod file looks like (jar, zip)
-#   GAME_LOADER_TYPE           what manifests carry as loader.type
 #   GAME_CONNECT_PORT          the port a player types; the host part of the
 #   GAME_CONNECT_PROTOCOL      address comes from the connectivity strategy
 #   GAME_DEFAULT_AUTH          this server's auth model: none | game (ADR-0033).
@@ -31,8 +29,12 @@
 #   GAME_SLOTTABLE             true when the game can run on a slot other than zero:
 #                              its client connects to the port the address names and
 #                              the server announces no other. false refuses such a slot
-#   game_ready                 readiness: docker health as $1, succeed when the
-#                              game actually serves
+#   GAME_DATA_OWNER            optional: uid:gid the game's data files belong to
+#                              (reconcile-server-overrides.sh); default 1000:1000
+#   settings.json              optional file beside game.sh: the game settings a
+#                              world may carry (ADR-0064), read by export_game_settings
+#   game_ready                 optional override of the shared default below:
+#                              docker health as $1, succeed when the game serves
 #   game_query_players_raw     transport: print the raw player query response
 #   game_parse_player_count    parser: raw on stdin -> integer on stdout
 #   game_console               one command an operator typed (ADR-0063), handed to
@@ -50,11 +52,67 @@
 #   game_prepare_runtime       optional: derive runtime inputs from a verified release manifest
 #   game_prepare_installed_runtime optional: restore those inputs for later lifecycle commands
 #   game_prepare_session       optional: last-mile files before the container starts
+#   game_render_whitelist      optional: write the world's whitelist into the data dir
+#                              (data dir, names); with game_reload_whitelist it
+#                              enables apply-whitelist.sh
+#   game_reload_whitelist      optional: make the running game re-read its whitelist
+#   game_archive_sentinel_regex  print the regex a verified archive's listing must
+#                              match (takes the world's name)
+#   game_tick_time_ms          print milliseconds per tick; exit 2 when the game
+#                              cannot report one
+#
+# The two arrays below are the contract: load_game refuses a module that lacks
+# a required hook, so a caller never meets exit 127. A hook that callers test
+# with declare -F first is optional and listed in the second array.
 #
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # GAME_ID is set for consumers, read by its sourcers
 
 GAMES_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+# Hooks every game must define. game_ready is not here: this file supplies it.
+GAME_REQUIRED_HOOKS=(
+  game_query_players_raw
+  game_parse_player_count
+  game_save
+  game_save_paths
+  game_save_sentinel
+  game_archive_sentinel_regex
+  game_tick_time_ms
+)
+
+# Hooks a caller uses only when the game defines them.
+GAME_OPTIONAL_HOOKS=(
+  game_ready
+  game_console
+  game_save_excludes
+  game_mod_data_paths
+  game_prepare_runtime
+  game_prepare_installed_runtime
+  game_prepare_session
+  game_render_whitelist
+  game_reload_whitelist
+)
+
+# Default readiness: Docker has not called the container unhealthy, and the
+# player query answers with a count. A game whose readiness differs overrides it.
+game_ready() {
+  local health="$1"
+  [[ "${health}" != "unhealthy" ]] || return 1
+  game_query_players_raw 2>/dev/null | game_parse_player_count >/dev/null 2>&1
+}
+
+# Fail with a clear message when a loaded module lacks a required hook.
+game_check_contract() {
+  local hook missing=()
+  for hook in "${GAME_REQUIRED_HOOKS[@]}"; do
+    declare -F "${hook}" >/dev/null || missing+=("${hook}")
+  done
+  (( ${#missing[@]} == 0 )) || {
+    printf 'error: game %s does not implement required hooks: %s\n' "${GAME_ID}" "${missing[*]}" >&2
+    exit 1
+  }
+}
 
 load_game() {
   local game_id="${1:-minecraft}"
@@ -70,6 +128,7 @@ load_game() {
   # shellcheck source=/dev/null
   source "${module}"
   GAME_ID="${game_id}"
+  game_check_contract
 }
 
 # Resolve which game this invocation is about: an explicit WORLD_ID consults

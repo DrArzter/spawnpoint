@@ -12,10 +12,6 @@
 GAME_COMPOSE_FILES="games/palworld/compose.yaml"
 GAME_FOOTPRINT_COMPOSE_FILE="games/palworld/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="palworld"
-# No release payload exists for this game, so neither value is ever read by the
-# release scripts; they are set for the contract and left honest.
-GAME_MOD_EXTENSION=""
-GAME_LOADER_TYPE="vanilla"
 # The port a player types after the address the connectivity strategy publishes.
 GAME_CONNECT_PORT="8211"
 GAME_CONNECT_PROTOCOL="udp"
@@ -151,14 +147,6 @@ game_save() {
   HTTP_PROBE_TIMEOUT_SECONDS="${PALWORLD_SAVE_TIMEOUT_SECONDS}" palworld_rest POST save >/dev/null || return $?
   printf 'save=rest_api\n'
   return 0
-}
-
-# Readiness: the image's health check sees the server process, and the API
-# answers with two readings that agree.
-game_ready() {
-  local health="$1"
-  [[ "${health}" != "unhealthy" ]] || return 1
-  game_query_players_raw 2>/dev/null | game_parse_player_count >/dev/null 2>&1
 }
 
 # The data dir is the server's Pal/Saved. A world is SaveGames/0/<guid>/, and

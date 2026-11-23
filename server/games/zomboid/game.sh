@@ -20,10 +20,6 @@
 GAME_COMPOSE_FILES="games/zomboid/compose.yaml"
 GAME_FOOTPRINT_COMPOSE_FILE="games/zomboid/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="zomboid"
-# No release payload exists for this game, so neither value is ever read by the
-# release scripts; they are set for the contract and left honest.
-GAME_MOD_EXTENSION=""
-GAME_LOADER_TYPE="workshop"
 # The port a player types after the address the connectivity strategy publishes.
   # 16262/udp is opened beside it, but players type only this one.
 GAME_CONNECT_PORT="16261"
@@ -49,6 +45,9 @@ ZOMBOID_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ZOMBOID_DATA_DIR="${ZOMBOID_DATA_DIR:-${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${ZOMBOID_GAME_DIR}/data}}"
 ZOMBOID_RCON_HOST="${ZOMBOID_RCON_HOST:-127.0.0.1}"
 
+# shellcheck source=../_probes/rcon.sh
+source "${ZOMBOID_GAME_DIR}/../_probes/rcon.sh"
+
 # The host side of the RCON mapping follows the slot (ADR-0054), read when a
 # command is sent: the slot's ports are exported after the module loads.
 zomboid_rcon_port() {
@@ -70,7 +69,7 @@ zomboid_rcon_password() {
     END { if (!found) exit 1 }' "${env_file}"
 }
 
-# Source RCON, spoken from the host with the factorio module's client — the
+# Source RCON, spoken from the host with the shared probe client — the
 # protocol is the same, only the commands and their wording differ.
 zomboid_rcon() {
   local command="$1" password
@@ -78,10 +77,7 @@ zomboid_rcon() {
     printf 'error: ZOMBOID_RCON_PASSWORD is not set in the environment or the runtime .env\n' >&2
     return 1
   }
-  python3 "${ZOMBOID_GAME_DIR}/../factorio/rcon-client.py" \
-    "${ZOMBOID_RCON_HOST}" "$(zomboid_rcon_port)" \
-    "${password}" \
-    "${command}"
+  rcon_query "${ZOMBOID_RCON_HOST}" "$(zomboid_rcon_port)" "${password}" "${command}"
   return $?
 }
 
@@ -127,12 +123,6 @@ game_parse_player_count() {
   listed="$(grep -cE '^[[:space:]]*-' <<<"${response}" || true)"
   [[ "${listed}" == "${header_count}" ]] || return 1
   printf '%s\n' "${header_count}"
-}
-
-game_ready() {
-  local health="$1"
-  [[ "${health}" != "unhealthy" ]] || return 1
-  game_query_players_raw 2>/dev/null | game_parse_player_count >/dev/null 2>&1
 }
 
 # A Zomboid world lives in two places under the data directory: the world

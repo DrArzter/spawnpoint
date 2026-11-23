@@ -1,4 +1,4 @@
-import { isBuiltInRoleId, builtInRoles } from "../../access/domain.ts";
+import { roleOf } from "../../access/domain.ts";
 import { GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { type Caller, type Response, response } from "./http.ts";
 import { observe, resolveIdentity, bootstrapOwner, accountKey } from "./identity-store.ts";
@@ -8,7 +8,7 @@ export async function session(account: Caller, capabilities: readonly string[]):
   const observed = await observe(account);
   const identity = await resolveIdentity(account, observed) ?? await bootstrapOwner(account);
   if (identity !== null) {
-    const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
+    const role = roleOf(identity);
     const bootstrap = await document.send(new GetCommand({ TableName: tableName, Key: { pk: "SYSTEM", sk: "BOOTSTRAP" } }));
     // The Owner's Telegram id is personal data that no member needs once the claim is made.
     return response(200, { state: "active", identity, role, capabilities, profile: accountProfile(account, observed),

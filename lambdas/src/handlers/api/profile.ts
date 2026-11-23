@@ -1,4 +1,4 @@
-import { type Identity, isBuiltInRoleId, builtInRoles } from "../../access/domain.ts";
+import { type Identity, roleOf } from "../../access/domain.ts";
 import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { defaultSubscriptions, validateSubscriptions } from "../../access/subscriptions.ts";
 import { validateAppearance, defaultAppearance } from "../../access/appearance.ts";
@@ -41,6 +41,5 @@ export async function updateAppearance(identity: Identity, body: string | undefi
 }
 
 export function me(identity: Identity): Response {
-  const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
-  return response(200, { identity, role });
+  return response(200, { identity, role: roleOf(identity) });
 }

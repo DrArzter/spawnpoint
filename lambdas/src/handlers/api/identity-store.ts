@@ -1,5 +1,5 @@
 import { type LoginPrincipal } from "../../access/login-session.ts";
-import { type Identity, type Permission } from "../../access/domain.ts";
+import { type Identity, identityFromRecord } from "../../access/domain.ts";
 import { UpdateCommand, GetCommand, TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
 import { type Item, document, tableName } from "./access-store.ts";
@@ -14,15 +14,6 @@ export function accountKeyFor(platform: string, subject: string): string {
 
 export function accountKey(principal: LoginPrincipal): string {
   return accountKeyFor(principal.provider, principal.subject);
-}
-
-function identityFromItem(item: Item): Identity {
-  return {
-    id: String(item.identity_id),
-    displayName: String(item.display_name),
-    roleId: String(item.role_id),
-    directGrants: Array.isArray(item.direct_grants) ? item.direct_grants as Permission[] : [],
-  };
 }
 
 export async function observe(account: Caller): Promise<Item> {
@@ -60,7 +51,7 @@ export async function resolveIdentity(principal: Caller, accountItem?: Item): Pr
     TableName: tableName, Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" },
   }));
   // The same rule as identityById: only an active identity acts.
-  return profile.Item === undefined || profile.Item.status !== "ACTIVE" ? null : identityFromItem(profile.Item);
+  return profile.Item === undefined || profile.Item.status !== "ACTIVE" ? null : identityFromRecord(profile.Item);
 }
 
 async function bootstrapClaimed(): Promise<boolean> {
@@ -146,5 +137,5 @@ export async function identityById(identityId: string): Promise<Identity | null>
   const item = (await document.send(new GetCommand({
     TableName: tableName, Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" }, ConsistentRead: true,
   }))).Item;
-  return item === undefined || item.status !== "ACTIVE" ? null : identityFromItem(item);
+  return item === undefined || item.status !== "ACTIVE" ? null : identityFromRecord(item);
 }

@@ -92,7 +92,7 @@ One word per thing. If a word here disagrees with a word in the product, the pro
 
 **Permission**: One named right, such as `session.start`. The list of permissions is fixed in code today.
 
-**Direct grant**: A single permission added to one identity on top of its role. Direct grants only add permissions; they never remove one. A grant is an exception, not a class. A direct grant never carries a reserved permission, such as `access.owner.grant`: only the Owner role holds it, so the last-owner rule counts every holder. _Intended, not built_: a custom role, which would be the way to hold fewer permissions than a built-in role.
+**Direct grant**: A single permission added to one identity on top of its role. Direct grants only add permissions; they never remove one. An identity whose role the deployment does not know holds only its direct grants. A grant is an exception, not a class. A direct grant never carries a reserved permission, such as `access.owner.grant`: only the Owner role holds it, so the last-owner rule counts every holder. _Intended, not built_: a custom role, which would be the way to hold fewer permissions than a built-in role.
 
 **Bootstrap owner**: The first identity granted the built-in Owner role through a one-time trusted setup path. After it is claimed, all other identities and roles are managed through normal access control. _Avoid_: Superadmin; Owner is the privileged role, while bootstrap describes only how its first holder is established.
 

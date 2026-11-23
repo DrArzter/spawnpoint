@@ -70,13 +70,35 @@ export const builtInRoles: Readonly<Record<BuiltInRoleId, Role>> = {
   },
 };
 
-export function effectivePermissions(identity: Identity, role: Role): ReadonlySet<Permission> {
-  if (identity.roleId !== role.id) throw new Error("identity role does not match the supplied role");
-  return new Set([...role.permissions, ...identity.directGrants]);
+/** The role an identity holds, or null for a role id this deployment does not know. */
+export function roleOf(identity: Pick<Identity, "roleId">): Role | null {
+  return isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
 }
 
-export function hasPermission(identity: Identity, role: Role, permission: Permission): boolean {
-  return effectivePermissions(identity, role).has(permission);
+const knownPermissions: ReadonlySet<string> = new Set(permissions);
+
+/**
+ * The one permission resolver. An unknown role grants nothing of its own and
+ * its direct grants still apply. A reserved permission counts only through the
+ * role, so a stored direct grant of one is ignored.
+ */
+export function permissionsOf(identity: Identity): ReadonlySet<Permission> {
+  const direct = identity.directGrants.filter((permission) => knownPermissions.has(permission) && !reservedPermissions.includes(permission));
+  return new Set([...(roleOf(identity)?.permissions ?? []), ...direct]);
+}
+
+export function can(identity: Identity, permission: Permission): boolean {
+  return permissionsOf(identity).has(permission);
+}
+
+/** An identity from its stored PROFILE record. */
+export function identityFromRecord(item: Readonly<Record<string, unknown>>): Identity {
+  return {
+    id: String(item.identity_id),
+    displayName: String(item.display_name),
+    roleId: String(item.role_id),
+    directGrants: Array.isArray(item.direct_grants) ? item.direct_grants as Permission[] : [],
+  };
 }
 
 export function isBuiltInRoleId(value: string): value is BuiltInRoleId {

@@ -77,7 +77,7 @@ test("self-scoped identity routes receive the resolved identity without extra pe
 });
 
 test("insufficient or unknown roles cannot run a privileged feature", async () => {
-  for (const identity of [viewer, { ...viewer, roleId: "unknown", directGrants: ["release.build"] as const }]) {
+  for (const identity of [viewer, { ...viewer, roleId: "unknown" }]) {
     const f = fixture(principal, identity);
     assert.deepEqual(await f.handler({ routeKey: "POST /build" }), response(403, { error: "forbidden" }));
     assert.deepEqual(f.calls, ["caller", "resolveIdentity"]);
@@ -85,7 +85,12 @@ test("insufficient or unknown roles cannot run a privileged feature", async () =
 });
 
 test("role permissions and direct grants use the same gate and preserve the event", async () => {
-  for (const identity of [{ ...viewer, roleId: "operator" }, { ...viewer, directGrants: ["release.build"] as const }]) {
+  for (const identity of [
+    { ...viewer, roleId: "operator" },
+    { ...viewer, directGrants: ["release.build"] as const },
+    // An unknown role grants nothing of its own; its direct grants still apply.
+    { ...viewer, roleId: "unknown", directGrants: ["release.build"] as const },
+  ]) {
     const f = fixture(principal, identity);
     const event: Event = { routeKey: "POST /build", body: "{}", pathParameters: { presetId: "industrial" } };
     assert.equal((await f.handler(event)).statusCode, 202);

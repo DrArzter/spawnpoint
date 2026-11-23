@@ -19,6 +19,7 @@ Available:
 | `acceptance-capacity-allocation.sh` | The acceptance run of [ADR-0054](../docs/adr/0054-place-a-session-on-a-host-with-room.md) as commands: `start` a shared placement and read where it landed and when it was ready, `tick` a session's ms/tick on its host, `stop` it, follow a `drain`, record a `join`, and render the `report` the rollout asks for |
 | `deploy-web.sh` | Build and publish the static panel; skips upload when the built `index.html` is unchanged |
 | `deploy-lambdas.sh` | Build every Lambda bundle and update only functions whose archive hash changed |
+| `onboard.sh` | Prepare a new AWS account and a fork for its first deploy: state bucket, secrets, GitHub identities, DNS zone and repository settings. See [docs/onboarding.md](../docs/onboarding.md) |
 | `write-backend-config.sh` | Write the ignored `backend.hcl` of every remote-state root for the account the AWS profile signs in to; keeps existing files unless `--force` |
 | `terraform-init-ci.sh` | Initialise one remote-state root from its committed backend key and the current AWS account |
 | `terraform-apply-safe.sh` | Plan and apply one root; a delete or replacement runs only if the root's `destroy-allowed.txt` names its exact address |

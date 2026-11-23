@@ -73,7 +73,8 @@ emit() {
 
 # Keys and sizes under a prefix, one "key<TAB>size" line each; the CLI pages.
 list_keys() {
-  aws s3api list-objects-v2 --bucket "${RELEASE_BUCKET}" --prefix "$1" --output json |
+  local prefix="$1"
+  aws s3api list-objects-v2 --bucket "${RELEASE_BUCKET}" --prefix "${prefix}" --output json |
     jq -r '(.Contents // [])[] | [.Key, (.Size | tostring)] | @tsv'
 }
 
@@ -87,12 +88,14 @@ read_manifest() {
 
 # Every published manifest under a prefix: releases/<game>/<preset>/<release>/manifest.json.
 manifest_keys() {
-  list_keys "$1" | cut -f1 | grep -E '^releases/[a-z0-9][a-z0-9-]{0,31}/[a-z0-9][a-z0-9-]{0,31}/[0-9]+\.[0-9]+/manifest\.json$' || true
+  local prefix="$1"
+  list_keys "${prefix}" | cut -f1 | grep -E '^releases/[a-z0-9][a-z0-9-]{0,31}/[a-z0-9][a-z0-9-]{0,31}/[0-9]+\.[0-9]+/manifest\.json$' || true
 }
 
 # One row per file the manifest names: kind, path, bytes, sha256. Packs carry
 # a digest only where the manifest records one.
 manifest_files() {
+  local manifest="$1"
   jq -r '
     ((.server.mods // [])[] | ["mod", "mods/" + .file, .bytes, .sha256]),
     ((.server.overrides // [])[] | ["override", "overrides/" + .path, .bytes, .sha256]),
@@ -100,15 +103,17 @@ manifest_files() {
     ((.packs // {}) | to_entries[] | select(.value.sha256 | type == "string") |
       ["pack", .key + ".zip", .value.bytes, .value.sha256])
     | map(tostring) | @tsv
-  ' "$1"
+  ' "${manifest}"
 }
 
 layout_of() {
-  jq -r '.storage.layout // "legacy"' "$1"
+  local manifest="$1"
+  jq -r '.storage.layout // "legacy"' "${manifest}"
 }
 
 object_key() {
-  printf 'objects/sha256/%s/%s' "${1:0:2}" "$1"
+  local digest="$1"
+  printf 'objects/sha256/%s/%s' "${digest:0:2}" "${digest}"
 }
 
 show_release() {
@@ -193,4 +198,5 @@ case "${command}" in
   show) show_release "$2" "$3" "$4" ;;
   find) find_name "$2" "$3" ;;
   object) find_object "$2" ;;
+  *) usage; exit 2 ;;
 esac

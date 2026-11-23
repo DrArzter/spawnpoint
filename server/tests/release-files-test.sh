@@ -23,8 +23,14 @@ export RELEASE_BUCKET="spawnpoint-test-releases"
 export FAKE_AWS_CALL_LOG="${fixture}/calls"
 bucket="${FAKE_S3_ROOT}/${RELEASE_BUCKET}"
 
-sha() { sha256sum -- "$1" | cut -d' ' -f1; }
-bytes() { wc -c <"$1" | tr -d ' '; }
+sha() {
+  local file="$1"
+  sha256sum -- "${file}" | cut -d' ' -f1
+}
+bytes() {
+  local file="$1"
+  wc -c <"${file}" | tr -d ' '
+}
 
 mkdir -p -- "${fixture}/src"
 printf 'alpha jar\n' >"${fixture}/src/alpha.jar"
@@ -53,7 +59,10 @@ manifest() {
         .storage = {layout: $layout} | .packs = {server: {sha256: $server, bytes: $server_bytes}}
       end'
 }
-mod() { jq -n --arg file "$1" --arg sha "$2" --argjson bytes "$3" '{file: $file, sha256: $sha, bytes: $bytes}'; }
+mod() {
+  local file="$1" digest="$2" size="$3"
+  jq -n --arg file "${file}" --arg sha "${digest}" --argjson bytes "${size}" '{file: $file, sha256: $sha, bytes: $bytes}'
+}
 alpha_mod="$(mod alpha.jar "${alpha}" "$(bytes "${fixture}/src/alpha.jar")")"
 beta_mod="$(mod Beta-Mod.jar "${beta}" "$(bytes "${fixture}/src/beta.jar")")"
 

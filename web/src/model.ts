@@ -77,9 +77,9 @@ export type SettingDefinition = { id: string; label: string; hint?: string } & (
   | { type: "boolean"; default: boolean }
   | { type: "text"; default: string; maxLength: number; pattern: string }
 );
-export type WorldSession = Omit<Lifecycle, "schemaVersion">;
+export type WorldSession = Lifecycle;
+/** A session record as the API sends it: never the lease or the fence. */
 export type Lifecycle = {
-  schemaVersion: 1;
   serverId: string;
   desiredState: "stopped" | "running";
   observedState: "stopped" | "starting" | "ready" | "stopping" | "unknown";

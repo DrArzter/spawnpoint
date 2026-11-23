@@ -88,7 +88,7 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Role**: A named reusable set of permissions assigned to an identity. Built-in roles provide safe defaults; custom roles may be added without changing clients.
 
-**Direct grant**: An exceptional permission attached to one identity in addition to its role. Direct grants only add permissions; a custom role is used when permissions must be removed.
+**Direct grant**: An exceptional permission attached to one identity in addition to its role. Direct grants only add permissions; a custom role is used when permissions must be removed. A direct grant never carries a reserved permission, such as `access.owner.grant`: only the Owner role holds it, so the last-owner rule counts every holder.
 
 **Bootstrap owner**: The first identity granted the built-in Owner role through a one-time trusted setup path. After it is claimed, all other identities and roles are managed through normal access control. _Avoid_: Superadmin; Owner is the privileged role, while bootstrap describes only how its first holder is established.
 

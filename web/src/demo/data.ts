@@ -88,7 +88,7 @@ export function initialState(): DemoState {
           displayName: "Minecraft",
           settings: [...MINECRAFT_SETTINGS],
           whitelist: true,
-          lifecycle: { schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "session-42", activeWorldId: "minecraft-rostik-12345678", readyAtEpochSeconds: Math.floor(Date.now() / 1000) - 11_520, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: { playersOnline: 3, consecutiveEmpty: 0, lastObservedAtEpochSeconds: Math.floor(Date.now() / 1000) - 45 } },
+          lifecycle: { serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "session-42", activeWorldId: "minecraft-rostik-12345678", readyAtEpochSeconds: Math.floor(Date.now() / 1000) - 11_520, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: { playersOnline: 3, consecutiveEmpty: 0, lastObservedAtEpochSeconds: Math.floor(Date.now() / 1000) - 45 } },
           presets: [
             { id: "industrial", displayName: "Industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5", profileDigest: "41d9a8e0c73b5f26184ad0e9cb7f3520a6e81d4c95f27b03ea6d183c7b40f9e2", releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3", buildAvailable: true },
             { id: "skyblock", displayName: "Skyblock", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "2b8e04f7a1c63d95e0847bf21a5d3906c7e4128b", profileDigest: "9c1e57a30b8d426fa9e271c04b5f83da6017e94b2c85fd30a7b16e2f48c0d95a", releases: [], buildStatus: "failed", latestRelease: null, buildAvailable: true, build: { release: "1.0", attempt: 1, state: "failed", requestedAt: "2026-09-14T18:00:00Z" } },
@@ -170,7 +170,7 @@ export function initialState(): DemoState {
           id: "factorio",
           code: "FA",
           displayName: "Factorio",
-          lifecycle: { schemaVersion: 1, serverId: "factorio", desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: null },
+          lifecycle: { serverId: "factorio", desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: null },
           presets: [],
           worlds: [
             { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:34197", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },
@@ -183,7 +183,7 @@ export function initialState(): DemoState {
           id: "zomboid",
           code: "PZ",
           displayName: "Project Zomboid",
-          lifecycle: { schemaVersion: 1, serverId: "zomboid", desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: null },
+          lifecycle: { serverId: "zomboid", desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: null },
           presets: [],
           worlds: [
             { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "not_created", preset: null, wipes: [], connectionAddress: "172.29.23.24:16261", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },

@@ -98,7 +98,8 @@ export type ControlPlaneSnapshot = Readonly<{
     id: string;
     code: string;
     displayName: string;
-    lifecycle: LifecycleRecord | null;
+    /** The game's session record, without the lease or the fence. */
+    lifecycle: WorldSessionView | null;
     /** What a world of this game may set (ADR-0064); empty when the game defines nothing. */
     settings: readonly SettingDefinition[];
     /** The game keeps a whitelist a world's record can hold (ADR-0066). */
@@ -250,7 +251,7 @@ export async function readControlPlaneSnapshot(
       id: game.id,
       code: game.code,
       displayName: game.displayName,
-      lifecycle: lifecycles[gameIndex] ?? null,
+      lifecycle: sessionView(lifecycles[gameIndex]?.serverId ?? game.id, lifecycles[gameIndex] ?? null),
       settings: gameSettingDefinitions(game.id),
       whitelist: game.whitelist === true,
       presets: (game.presets ?? []).map((preset) => ({

@@ -1,4 +1,4 @@
-import { type Identity, builtInRoles, isBuiltInRoleId, type Permission, permissions } from "../../access/domain.ts";
+import { type Identity, builtInRoles, isBuiltInRoleId, type Permission, permissions, reservedPermissions } from "../../access/domain.ts";
 import { QueryCommand, UpdateCommand, GetCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../../domain/access-events.ts";
@@ -155,6 +155,9 @@ function approvalInput(body: string | undefined): ApprovalInputResult {
   ) ? requestedGrants as Permission[] : [];
   if (requestedGrants !== undefined && (!Array.isArray(requestedGrants) || directGrants.length !== requestedGrants.length)) {
     return { value: null, error: response(400, { error: "invalid_direct_grant" }) };
+  }
+  if (directGrants.some((permission) => reservedPermissions.includes(permission))) {
+    return { value: null, error: response(400, { error: "reserved_permission" }) };
   }
   return { value: { roleId, directGrants }, error: null };
 }

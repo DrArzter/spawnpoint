@@ -23,6 +23,12 @@ export const permissions = [
 ] as const;
 
 export type Permission = typeof permissions[number];
+
+/**
+ * Held only through the Owner role, never as a direct grant: the last-owner
+ * rule counts Owner identities, so a direct holder would escape it.
+ */
+export const reservedPermissions: readonly Permission[] = ["access.owner.grant"];
 export type BuiltInRoleId = "viewer" | "player" | "operator" | "owner";
 
 export type Role = Readonly<{

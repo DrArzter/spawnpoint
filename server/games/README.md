@@ -5,6 +5,17 @@ A game is a directory holding `game.sh` — constants plus functions — and its
 [`_dispatch.sh`](_dispatch.sh); a world names its game in [the catalog](../worlds/catalog.json), and absence means
 minecraft, byte-identically.
 
+`load_game` runs `game_check_contract`: a module that lacks a required hook is refused with a message that names it.
+`GAME_REQUIRED_HOOKS` and `GAME_OPTIONAL_HOOKS` in `_dispatch.sh` are the lists, and its header describes each hook.
+
+| Kind | Hooks |
+| --- | --- |
+| Required | `game_query_players_raw`, `game_parse_player_count`, `game_save`, `game_save_paths`, `game_save_sentinel`, `game_archive_sentinel_regex`, `game_tick_time_ms` |
+| Optional | `game_ready` (a shared default exists), `game_console`, `game_save_excludes`, `game_mod_data_paths`, `game_prepare_runtime`, `game_prepare_installed_runtime`, `game_prepare_session`, `game_render_whitelist`, `game_reload_whitelist` |
+
+Two more optional inputs: `GAME_DATA_OWNER` (a `uid:gid`, default `1000:1000`) and `settings.json` beside `game.sh`.
+`game_render_whitelist` and `game_reload_whitelist` go together: `apply-whitelist.sh` needs both.
+
 What follows is not the contract but the house rules for filling it in. Both were learned by getting Factorio wrong
 first, and they cost nothing to apply to the next game.
 
@@ -53,7 +64,8 @@ failure costs a few minutes of instance time. A wrong count in the other directi
 
 A transport that more than one game speaks lives in [`_probes/`](_probes), with its own fake-server test: A2S in
 `a2s-client.py` and `a2s.sh` ([ADR-0075](../../docs/adr/0075-a2s-as-a-probe-transport.md)), HTTP in `http-client.py`
-and `http.sh` ([ADR-0076](../../docs/adr/0076-http-and-telnet-probe-transports.md)). Its parser makes two
+and `http.sh` ([ADR-0076](../../docs/adr/0076-http-and-telnet-probe-transports.md)), Source RCON in `rcon-client.py`
+and `rcon.sh` (Factorio and Project Zomboid). Its parser makes two
 readings agree before it prints a count. A game with no RCON names its query or API port as `GAME_RCON_PORT`, so the
 port takes the slot's RCON place and stays on `127.0.0.1`. A transport's credential lives in the host's runtime
 `.env`, never in a world setting or a world's archive, and an HTTP game's transport reduces its replies to counts, so

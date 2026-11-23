@@ -13,8 +13,6 @@
 GAME_COMPOSE_FILES="games/factorio/compose.yaml"
 GAME_FOOTPRINT_COMPOSE_FILE="games/factorio/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="factorio"
-GAME_MOD_EXTENSION="zip"
-GAME_LOADER_TYPE="factorio"
 # The port a player types after the address the connectivity strategy publishes.
 GAME_CONNECT_PORT="34197"
 GAME_CONNECT_PROTOCOL="udp"
@@ -35,6 +33,9 @@ GAME_FOOTPRINT_CORES="0.5"
 FACTORIO_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 FACTORIO_DATA_DIR="${FACTORIO_DATA_DIR:-${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${FACTORIO_GAME_DIR}/data}}"
 FACTORIO_RCON_HOST="${FACTORIO_RCON_HOST:-127.0.0.1}"
+
+# shellcheck source=../_probes/rcon.sh
+source "${FACTORIO_GAME_DIR}/../_probes/rcon.sh"
 
 # The host side of the RCON mapping follows the slot (ADR-0054). It is read
 # when a command is sent, not when the module loads: every entry script loads
@@ -92,8 +93,7 @@ factorio_rcon() {
     printf 'error: factorio rcon password file not found: %s\n' "${password_file}" >&2
     return 1
   }
-  python3 "${FACTORIO_GAME_DIR}/rcon-client.py" \
-    "${FACTORIO_RCON_HOST}" "$(factorio_rcon_port)" \
+  rcon_query "${FACTORIO_RCON_HOST}" "$(factorio_rcon_port)" \
     "$(head -n1 -- "${password_file}")" \
     "${command}"
 }
@@ -140,15 +140,6 @@ game_save() {
   # its name and without using achievement-disabling Lua console commands.
   factorio_rcon "/server-save" || return $?
   return 0
-}
-
-# Readiness: the image ships no health check, so the control path is the whole
-# signal — RCON answers and its reply parses. This cannot pass before the server
-# has booted, because the password file is written by the server itself.
-game_ready() {
-  local health="$1"
-  [[ "${health}" != "unhealthy" ]] || return 1
-  game_query_players_raw 2>/dev/null | game_parse_player_count >/dev/null 2>&1
 }
 
 # "Online players (N):" followed by one indented name per line.

@@ -6,7 +6,9 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_SERVER_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 SERVER_DIR="$(realpath -m -- "${SERVER_PROJECT_DIRECTORY:-${DEFAULT_SERVER_DIR}}")"
 ENV_FILE="$(realpath -m -- "${SERVER_ENV_FILE:-${SERVER_DIR}/.env}")"
-SERVICE="${SERVER_COMPOSE_SERVICE:-mc}"
+# No default: a service belongs to a game, so the caller names it or loads the
+# game adapter, which exports SERVER_COMPOSE_SERVICE (configure_game_compose).
+SERVICE="${SERVER_COMPOSE_SERVICE:-}"
 
 declare -a COMPOSE_FILES=()
 if [[ -n "${SERVER_COMPOSE_FILES:-}" ]]; then
@@ -108,7 +110,12 @@ validate_compose() {
   fi
 }
 
+require_service() {
+  [[ -n "${SERVICE}" ]] || die "no Compose service: set SERVER_COMPOSE_SERVICE or load a game adapter (resolve_game, configure_game_compose)"
+}
+
 container_id() {
+  require_service
   validate_compose
   # `docker compose ps -q` hides stopped containers. Lifecycle checks need to
   # distinguish an existing `exited` container from one that was never created.
@@ -144,6 +151,7 @@ container_health() {
 }
 
 rcon() {
+  require_service
   validate_compose
   compose exec -T "${SERVICE}" rcon-cli "$@"
 }

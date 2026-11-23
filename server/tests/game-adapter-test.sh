@@ -10,6 +10,9 @@ set -Eeuo pipefail
 REPOSITORY_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPTS="${REPOSITORY_ROOT}/server/scripts"
 GAMES="${REPOSITORY_ROOT}/server/games"
+# The shared game_ready default; a module sourced after it may override it.
+# shellcheck source=../games/_dispatch.sh
+source "${GAMES}/_dispatch.sh"
 # shellcheck disable=SC2016 # awk program, not a shell expansion
 AWK_ARCHIVE_LINE='$1 == "archive" { print $2 }'
 fixture="$(mktemp -d /tmp/spawnpoint-game-adapter-test.XXXXXXXX)"
@@ -123,7 +126,7 @@ for _ in $(seq 1 50); do
 done
 ready_rcon_port="$(cat "${fixture}/ready-rcon-port")"
 
-wrong="$(python3 "${GAMES}/factorio/rcon-client.py" 127.0.0.1 "${rcon_port}" "wrong-password" "/players online" 2>&1)" && {
+wrong="$(python3 "${GAMES}/_probes/rcon-client.py" 127.0.0.1 "${rcon_port}" "wrong-password" "/players online" 2>&1)" && {
   printf 'expected auth refusal\n' >&2
   exit 1
 }
@@ -131,10 +134,10 @@ grep -q "authentication refused" <<<"${wrong}"
 
 # A host that is not a loopback address is refused before any connection.
 status=0
-python3 "${GAMES}/factorio/rcon-client.py" 192.0.2.1 "${rcon_port}" "any" "/time" >/dev/null 2>&1 || status=$?
+python3 "${GAMES}/_probes/rcon-client.py" 192.0.2.1 "${rcon_port}" "any" "/time" >/dev/null 2>&1 || status=$?
 [[ "${status}" == 2 ]]
 
-response="$(python3 "${GAMES}/factorio/rcon-client.py" 127.0.0.1 "${rcon_port}" "correct-password" "/players online")"
+response="$(python3 "${GAMES}/_probes/rcon-client.py" 127.0.0.1 "${rcon_port}" "correct-password" "/players online")"
 [[ "${response}" == "Online players (0):" ]]
 wait "${fake_rcon_pid}"
 
@@ -203,8 +206,8 @@ wait "${save_rcon_pid}"
 cat >"${fixture}/catalog.json" <<'EOF'
 {"schema_version":1,"profile_source":{"repository":"https://example.invalid/profiles","commit":"0000000000000000000000000000000000000000"},"worlds":[{"id":"factorio","display_name":"Factorio test","profile_id":"factorio-vanilla","game":"factorio"}]}
 EOF
-output="$(WORLD_ID=factorio SPAWNPOINT_WORLD_CATALOG="${fixture}/catalog.json" bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; printf '%s %s %s\n' \"\${GAME_ID}\" \"\${GAME_COMPOSE_SERVICE}\" \"\${GAME_MOD_EXTENSION}\"")"
-[[ "${output}" == "factorio factorio zip" ]]
+output="$(WORLD_ID=factorio SPAWNPOINT_WORLD_CATALOG="${fixture}/catalog.json" bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; printf '%s %s\n' \"\${GAME_ID}\" \"\${GAME_COMPOSE_SERVICE}\"")"
+[[ "${output}" == "factorio factorio" ]]
 output="$(WORLD_ID=factorio SPAWNPOINT_WORLD_CATALOG="${fixture}/catalog.json" bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; configure_game_compose; printf '%s\n%s\n' \"\${SERVER_COMPOSE_SERVICE}\" \"\${SERVER_COMPOSE_FILES}\"")"
 [[ "${output}" == "factorio
 ${REPOSITORY_ROOT}/server/observability/compose.yaml:${REPOSITORY_ROOT}/server/games/factorio/compose.yaml" ]]
@@ -212,6 +215,28 @@ output="$(WORLD_ID=world bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; 
 [[ "${output}" == "minecraft" ]]
 output="$(bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; printf '%s\n' \"\${GAME_ID}\"")"
 [[ "${output}" == "minecraft" ]]
+# The contract: every shipped game defines each required hook, and the arrays
+# name only hooks that exist somewhere.
+for game in minecraft factorio palworld valheim zomboid; do
+  bash -c "source '${GAMES}/_dispatch.sh'; load_game '${game}'; for hook in \"\${GAME_REQUIRED_HOOKS[@]}\"; do declare -F \"\${hook}\" >/dev/null; done"
+done
+# The header and the README list every hook the arrays name.
+for hook in $(bash -c "source '${GAMES}/_dispatch.sh'; printf '%s\n' \"\${GAME_REQUIRED_HOOKS[@]}\" \"\${GAME_OPTIONAL_HOOKS[@]}\""); do
+  grep -Eq "^#   ${hook}( |\$)" "${GAMES}/_dispatch.sh" || { printf 'header does not describe %s\n' "${hook}" >&2; exit 1; }
+  grep -Fq "${hook}" "${GAMES}/README.md" || { printf 'README does not describe %s\n' "${hook}" >&2; exit 1; }
+done
+# A module that lacks a required hook is refused with a message, not exit 127.
+mkdir -p "${fixture}/contract/games/broken"
+cp "${GAMES}/_dispatch.sh" "${fixture}/contract/games/_dispatch.sh"
+cat >"${fixture}/contract/games/broken/game.sh" <<'BROKEN'
+GAME_COMPOSE_SERVICE="broken"
+game_query_players_raw() { :; }
+game_parse_player_count() { :; }
+BROKEN
+status=0
+message="$(bash -c "source '${fixture}/contract/games/_dispatch.sh'; load_game broken" 2>&1)" || status=$?
+[[ "${status}" == "1" ]]
+[[ "${message}" == "error: game broken does not implement required hooks: game_save game_save_paths game_save_sentinel game_archive_sentinel_regex game_tick_time_ms" ]]
 expect_failure "a world naming a game with no module" \
   env SPAWNPOINT_GAME=heroes-of-might bash -c "source '${GAMES}/_dispatch.sh'; resolve_game"
 

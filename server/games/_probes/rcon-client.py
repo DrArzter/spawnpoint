@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal Source RCON client for the Factorio probe.
+"""Minimal Source RCON client, shared by the games that speak Source RCON.
 
 Standard library only, one round trip: authenticate, execute one command,
 print the response. Exit codes: 0 response printed, 2 usage, 3 connection

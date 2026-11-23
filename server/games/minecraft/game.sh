@@ -12,8 +12,6 @@ GAME_OBSERVABILITY_COMPOSE_FILES="compose.minecraft-observability.yaml"
 GAME_HOST_OBSERVABILITY_COMPOSE_FILE="compose.minecraft-host-observability.yaml"
 GAME_FOOTPRINT_COMPOSE_FILE="games/minecraft/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="mc"
-GAME_MOD_EXTENSION="jar"
-GAME_LOADER_TYPE="forge"
 # The port a player types after the address the connectivity strategy publishes.
 GAME_CONNECT_PORT="25565"
 GAME_CONNECT_PROTOCOL="tcp"

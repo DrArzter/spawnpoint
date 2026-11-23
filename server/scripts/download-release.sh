@@ -150,9 +150,9 @@ shards_fetched=0
 # One shard of the object store, exact objects only. A failure leaves a mark
 # for the caller, which waits for every shard before it judges.
 fetch_shard() {
-  local shard="$1" sha
+  local shard="$1" listed="$2" sha
   local -a shas=() filters=(--exclude '*')
-  read -r -a shas <<<"$2"
+  read -r -a shas <<<"${listed}"
   for sha in "${shas[@]}"; do
     filters+=(--include "$(glob_literal "${sha}")")
   done

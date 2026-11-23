@@ -59,9 +59,9 @@ variable "drain_grace_seconds" {
 }
 
 variable "warm_host_retention_seconds" {
-  description = "How long a launched host stopped for a warm world is kept after its last session before the drain terminates it (ADR-0054). 1209600 is fourteen days."
+  description = "How long a launched host stopped for a warm world is kept after its last session before the drain terminates it (ADR-0054). 604800 is seven days."
   type        = number
-  default     = 1209600
+  default     = 604800
 
   validation {
     condition     = var.warm_host_retention_seconds >= 0 && floor(var.warm_host_retention_seconds) == var.warm_host_retention_seconds

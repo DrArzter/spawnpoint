@@ -193,6 +193,8 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "route53:List*",
       "s3:Get*",
       "s3:List*",
+      "ses:GetEmailIdentity",
+      "ses:ListTagsForResource",
       "sns:Get*",
       "sns:List*",
       "ssm:Describe*",
@@ -287,6 +289,18 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "states:UpdateStateMachine",
     ]
     resources = ["*"]
+  }
+
+  # The SES sender identity of the access-api root. Creating and tagging
+  # only; removing one goes through the destroy allow-list.
+  statement {
+    sid    = "ManageOnlySesEmailIdentities"
+    effect = "Allow"
+    actions = [
+      "ses:CreateEmailIdentity",
+      "ses:TagResource",
+    ]
+    resources = ["arn:aws:ses:${var.aws_region}:${data.aws_caller_identity.current.account_id}:identity/*"]
   }
 
   # Spawnpoint's own SSM documents, the console's and the whitelist's
@@ -600,6 +614,8 @@ data "aws_iam_policy_document" "github_plan_iam" {
       "s3:GetReplicationConfiguration",
       "s3:ListAllMyBuckets",
       "s3:ListBucket",
+      "ses:GetEmailIdentity",
+      "ses:ListTagsForResource",
       "sns:Get*",
       "sns:List*",
       "states:Describe*",

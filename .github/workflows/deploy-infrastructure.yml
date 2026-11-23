@@ -36,7 +36,7 @@ jobs:
       TF_VAR_session_signing_secret_parameter: ${{ vars.SESSION_SIGNING_SECRET_PARAMETER }}
       TF_VAR_password_login_enabled: ${{ vars.PASSWORD_LOGIN_ENABLED }}
       TF_VAR_password_registration_enabled: ${{ vars.PASSWORD_REGISTRATION_ENABLED }}
-      TF_VAR_email_delivery_provider: ${{ vars.EMAIL_DELIVERY_PROVIDER }}
+      TF_VAR_email_delivery_provider: ${{ vars.EMAIL_DELIVERY_PROVIDER || 'ses' }}
       TF_VAR_resend_api_key_parameter: ${{ vars.RESEND_API_KEY_PARAMETER }}
       TF_VAR_email_from: ${{ vars.RESEND_EMAIL_FROM }}
       TF_VAR_email_reply_to: ${{ vars.RESEND_EMAIL_REPLY_TO }}

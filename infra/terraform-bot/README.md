@@ -20,8 +20,9 @@ Secrets live in SSM; identities and roles live in the shared DynamoDB access tab
 - `/spawnpoint/bot/chat-ids` (`String`, reserved for the later notifier)
 - `/spawnpoint/email/resend-api-key` (`SecureString`, optional send-only key when `email_delivery_provider = "resend"`)
 
-Transactional email is an optional notifier adapter. The default `email_delivery_provider = "none"` keeps a clone
-free of external email dependencies. A Resend deployment additionally sets `email_from` to an address on a verified
+Transactional email is an optional notifier adapter. The deploy workflows choose `email_delivery_provider = "ses"`
+when the repository sets nothing; the notifier then sends from the SES identity the access-api root creates, with no
+key at all. `email_delivery_provider = "none"` keeps email out. A Resend deployment additionally sets `email_from` to an address on a verified
 sending domain and may set `email_reply_to`; neither address is a secret. Only the parameter name enters Terraform.
 The notifier sends game invitations to individually verified linked addresses and uses a stable idempotency key per
 invitation and recipient.

@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { launch } from "./cdp.mjs";
-import { STATES } from "./states.mjs";
+import { STATES, WORLD } from "./states.mjs";
 
 // usage: audit.mjs [--gate] [--advise] [--accept] [--self-test] [base-url]
 //
@@ -21,7 +21,7 @@ const gate = flags.has("--gate");
 const advise = flags.has("--advise");
 const accept = flags.has("--accept");
 const selfTest = flags.has("--self-test");
-const base = process.argv.slice(2).find((arg) => !arg.startsWith("--")) ?? "http://127.0.0.1:5173";
+const base = process.argv.slice(2).find((arg) => !arg.startsWith("--")) ?? "http://127.0.0.1:4173";
 const here = dirname(fileURLToPath(import.meta.url));
 const accepted = join(here, "accepted.txt");
 const reportDir = resolve(process.env.AUDIT_OUT ?? join(here, "../../out/ui-audit"));
@@ -33,15 +33,16 @@ const SKINS = process.env.SKIN ? process.env.SKIN.split(",") : ["console", "term
 const ROUTES = [
   ["landing", "/#/"],
   ["landing-signed-in", "/?demo&latency=0#/"],
+  ["home", "/?demo&latency=0#/home/minecraft"],
   ["worlds", "/?demo&latency=0#/worlds/minecraft"],
   ["worlds-factorio", "/?demo&latency=0#/worlds/factorio"],
-  ["world", "/?demo&latency=0#/worlds/minecraft/minecraft-rostik-12345678"],
-  ["world-wipes", "/?demo&latency=0#/worlds/minecraft/minecraft-rostik-12345678/wipes"],
-  ["world-backups", "/?demo&latency=0#/worlds/minecraft/minecraft-rostik-12345678/backups"],
-  ["world-releases", "/?demo&latency=0#/worlds/minecraft/minecraft-rostik-12345678/releases"],
-  ["world-whitelist", "/?demo&latency=0#/worlds/minecraft/minecraft-rostik-12345678/whitelist"],
-  ["world-console", "/?demo&latency=0#/worlds/minecraft/minecraft-rostik-12345678/console"],
-  ["world-metrics", "/?demo&latency=0#/worlds/minecraft/minecraft-rostik-12345678/metrics"],
+  ["world", WORLD],
+  ["world-wipes", `${WORLD}/wipes`],
+  ["world-backups", `${WORLD}/backups`],
+  ["world-releases", `${WORLD}/releases`],
+  ["world-whitelist", `${WORLD}/whitelist`],
+  ["world-console", `${WORLD}/console`],
+  ["world-metrics", `${WORLD}/metrics`],
   ["world-factorio", "/?demo&latency=0#/worlds/factorio/factorio"],
   ["world-vanilla", "/?demo&latency=0#/worlds/minecraft/vanilla"],
   // A promotion held at one step, and one that failed with a long cause; a failure shows once the operation has left the snapshot, so the gate waits for its mark.
@@ -205,7 +206,7 @@ const SETTLE = `(async (quiet) => {
 const SURFACES = `(() => {
   const open = [];
   const shown = (el) => { const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none" && !el.closest("[hidden]"); };
-  for (const el of document.querySelectorAll("dialog[open], [role=dialog], [role=alertdialog], [role=menu], [role=tooltip], #c-tip, .c-toast, .t-toast, .snackbar")) if (shown(el)) open.push(el);
+  for (const el of document.querySelectorAll("dialog[open], [role=dialog], [role=alertdialog], [role=menu], [role=tooltip], #c-tip, .c-toast, .snackbar")) if (shown(el)) open.push(el);
   return open;
 })()`;
 
@@ -718,9 +719,11 @@ async function runAudit(browser) {
     writeReport(fresh, advisory, shots, summary);
     console.log(`report: ${join(reportDir, "report.md")} (${grouped(advisory).length} advisory groups)`);
   }
-  // A run that measured almost nothing has not checked the console.
-  const expected = jobs.filter((job) => job.type !== "state").length;
-  if (probes < expected) problems.push(`only ${probes} probes for ${expected} page jobs: the run did not reach the pages`);
+  // A run that measured almost nothing has not checked the console. Menu and
+  // state records are extra, so they cannot hide a page that was not reached.
+  const expected = jobs.filter((job) => job.type !== "state").reduce((sum, job) => sum + (job.widths?.length ?? 1), 0);
+  const pageProbes = records.filter((r) => !r.menu && !r.name.startsWith("state:") && !r.absent && !r.found?.error).length;
+  if (pageProbes < expected) problems.push(`only ${pageProbes} page probes for ${expected} expected: the run did not reach the pages`);
   for (const problem of problems) console.log(problem);
   const unused = rules.filter((rule) => !rule.used);
   // A narrowed run does not see every finding, so it cannot call a line stale.

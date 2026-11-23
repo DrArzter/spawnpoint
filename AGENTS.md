@@ -11,6 +11,19 @@ imports from feature handlers back into the route table or Lambda entry.
 MCP keeps its distinct OAuth audience/scope checks and reuses feature operations.
 Run the Lambda tests, typecheck, build, and `git diff --check` after API changes.
 
+## Data formats and names
+
+Use one format per boundary. The words themselves (host, not instance; preset, not profile) are in
+[`CONTEXT.md`](CONTEXT.md), with the spellings to avoid; do not repeat them here.
+
+- A host script reports its result as `key=value` lines, one per line, on standard output. Keys are snake_case; a
+  value has no newline. Every branch of a script prints the same keys, so one reader parses any outcome.
+- JSON on a wire (the HTTP API, MCP, workflow inputs and outputs) uses camelCase keys.
+- Stored attributes (DynamoDB items, S3 object metadata, host files) use snake_case. Do not rename an existing stored
+  attribute to match a new rule; readers in production depend on it.
+- A new storage key shape (a partition or sort key, an S3 prefix) gets one builder function that every reader and
+  writer calls. Do not assemble the same key with a template string in a second place.
+
 ## Web UI: consistency is a contract
 
 Before changing anything under `web/`, read `web/PRODUCT.md` and `web/DESIGN.md`. They describe product truth and the visual systems. A screenshot is evidence, not the component contract.

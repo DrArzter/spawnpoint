@@ -7,6 +7,7 @@ import { PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { type Response, response } from "./http.ts";
 import { readWorldSession, locateWorldHost } from "./world-state.ts";
 import { document, tableName } from "./access-store.ts";
+import { isConditionFailure } from "./conditions.ts";
 
 // --- The console gateway (ADR-0063) -------------------------------------------
 // A command is sent and recorded at once; its answer is collected when the
@@ -76,7 +77,7 @@ async function consoleEntries(gameId: string, worldId: string): Promise<readonly
       }));
     } catch (error) {
       // Another reader settled it first; its answer is the same.
-      if (!(error instanceof Error && error.name === "ConditionalCheckFailedException")) throw error;
+      if (!isConditionFailure(error)) throw error;
     }
     return { ...item, status: result.status, output: result.output };
   }));

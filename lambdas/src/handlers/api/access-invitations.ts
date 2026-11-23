@@ -12,6 +12,7 @@ import { panelUrl } from "./origins.ts";
 import { observe, resolveIdentity, accountKey } from "./identity-store.ts";
 import { type Item } from "./access-store.ts";
 import { type EmailSender } from "../../email/email-sender.ts";
+import { isConditionFailure } from "./conditions.ts";
 
 function invitationStatus(item: Item): unknown {
   if (accessInvitationUsable(item)) return "PENDING";
@@ -110,7 +111,7 @@ export async function revokeAccessInvitation(event: Event): Promise<Response> {
       ExpressionAttributeValues: { ":revoked": "REVOKED", ":pending": "PENDING", ":now": new Date().toISOString(), ":nowEpoch": Math.floor(Date.now() / 1000) },
     }));
   } catch (error) {
-    if (error instanceof Error && error.name === "ConditionalCheckFailedException") return response(409, { error: "invitation_unavailable" });
+    if (isConditionFailure(error)) return response(409, { error: "invitation_unavailable" });
     throw error;
   }
   return response(204, null);
@@ -141,7 +142,7 @@ export async function requestAccessInvitationProof(account: Caller, event: Event
       ExpressionAttributeValues: { ":cutoff": nowEpoch - 60 },
     }));
   } catch (error) {
-    if (error instanceof Error && error.name === "ConditionalCheckFailedException") return response(429, { error: "proof_recently_sent" });
+    if (isConditionFailure(error)) return response(429, { error: "proof_recently_sent" });
     throw error;
   }
   const url = `${panelUrl.replace(/\/$/, "")}/#/join?token=${encodeURIComponent(token as string)}&proof=${encodeURIComponent(proof.token)}`;
@@ -216,7 +217,7 @@ export async function redeemAccessInvitation(account: Caller, event: Event): Pro
       }, ConditionExpression: "attribute_not_exists(pk)" } },
     ] }));
   } catch (error) {
-    if (error instanceof Error && error.name === "TransactionCanceledException") return response(409, { error: "invitation_unavailable" });
+    if (isConditionFailure(error)) return response(409, { error: "invitation_unavailable" });
     throw error;
   }
   return response(201, { identity: { id: identityId, displayName: name, roleId: "viewer", directGrants: [] } });

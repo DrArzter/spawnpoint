@@ -3,7 +3,9 @@ import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { type LoginProvider, authenticateWith } from "../../access/login-provider.ts";
 import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { type Response, response, type Event, parseJsonObject } from "./http.ts";
-import { identityAccounts, accountKey } from "./identity-store.ts";
+import { identityAccounts } from "./identity-store.ts";
+import { loginProviderMarker } from "../../access/identity-creation.ts";
+import { accountItemKey, identityIndex } from "../../access/keys.ts";
 import { passwordCredentials } from "./credentials.ts";
 import { proofLinkProviders } from "./login-providers.ts";
 import { passwordLoginEnabled } from "./auth-config.ts";
@@ -50,7 +52,7 @@ export async function linkProofAccount(identity: Identity, provider: LoginProvid
     await document.send(new TransactWriteCommand({ TransactItems: [
       { Update: {
         TableName: tableName,
-        Key: { pk: accountKey(principal), sk: "ACCOUNT" },
+        Key: accountItemKey(principal.provider, principal.subject),
         UpdateExpression: [
           "SET platform = :provider", "platform_user_id = :subject", "display_name = :displayName",
           "username = :username", "photo_url = :photoUrl", "email = :email",
@@ -70,19 +72,12 @@ export async function linkProofAccount(identity: Identity, provider: LoginProvid
           ":now": now,
           ":identityId": identity.id,
           ":linked": "LINKED",
-          ":identityIndex": `IDENTITY#${identity.id}`,
+          ":identityIndex": identityIndex(identity.id),
         },
       } },
       { Put: {
         TableName: tableName,
-        Item: {
-          pk: `IDENTITY#${identity.id}`,
-          sk: `LOGIN_PROVIDER#${provider.id}`,
-          entity_type: "IDENTITY_LOGIN_PROVIDER",
-          provider: provider.id,
-          subject: principal.subject,
-          created_at: now,
-        },
+        Item: loginProviderMarker(identity.id, provider.id, principal.subject, now),
         ConditionExpression: "attribute_not_exists(pk)",
       } },
     ] }));

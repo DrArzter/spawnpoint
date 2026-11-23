@@ -1,5 +1,6 @@
 import { type Identity, can, isProtectedRoleId, protectedRoleId } from "../../access/domain.ts";
 import { type Response, response } from "./http.ts";
+import { profileKey } from "../../access/keys.ts";
 import { requirePermission } from "./permissions.ts";
 import { activeOwnerCount } from "./identity-store.ts";
 
@@ -25,7 +26,7 @@ export async function lastHolderRefusal(fromRoleId: string, toRoleId: string | n
 export function callerCondition(caller: Identity, targetRoleId: string) {
   const guarded = isProtectedRoleId(targetRoleId);
   return {
-    Key: { pk: `IDENTITY#${caller.id}`, sk: "PROFILE" },
+    Key: profileKey(caller.id),
     ConditionExpression: guarded ? "#status = :active AND role_id = :protected" : "#status = :active",
     ExpressionAttributeNames: { "#status": "status" },
     ExpressionAttributeValues: guarded ? { ":active": "ACTIVE", ":protected": protectedRoleId } : { ":active": "ACTIVE" },

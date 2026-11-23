@@ -9,20 +9,21 @@ import { PutEventsCommand } from "@aws-sdk/client-eventbridge";
 import { type Response, response, parseJsonObject } from "./http.ts";
 import { document, tableName } from "./access-store.ts";
 import { events } from "./clients.ts";
+import { accessIndexName, activeIdentityIndex, identityIndex, identitySettingKey, playerInvitationKey, playerInvitationSenderIndex, profileKey } from "../../access/keys.ts";
 
 export async function invitationRecipients(identity: Identity): Promise<Response> {
   const profiles = await document.send(new QueryCommand({
     TableName: tableName,
-    IndexName: "gsi1",
+    IndexName: accessIndexName,
     KeyConditionExpression: "gsi1pk = :state",
-    ExpressionAttributeValues: { ":state": "IDENTITY#ACTIVE" },
+    ExpressionAttributeValues: { ":state": activeIdentityIndex },
   }));
   const candidates = (profiles.Items ?? []).filter((profile) => profile.identity_id !== identity.id);
   const recipients = await Promise.all(candidates.map(async (profile) => {
     const identityId = String(profile.identity_id);
     const subscriptions = await document.send(new GetCommand({
       TableName: tableName,
-      Key: { pk: `IDENTITY#${identityId}`, sk: "SUBSCRIPTIONS" },
+      Key: identitySettingKey(identityId, "SUBSCRIPTIONS"),
       ConsistentRead: true,
     }));
     const subscriptionMap = subscriptions.Item?.subscriptions;
@@ -30,9 +31,9 @@ export async function invitationRecipients(identity: Identity): Promise<Response
       && (subscriptionMap as Record<string, unknown>)["invitation.direct"] === true;
     const accounts = directEnabled ? await document.send(new QueryCommand({
       TableName: tableName,
-      IndexName: "gsi1",
+      IndexName: accessIndexName,
       KeyConditionExpression: "gsi1pk = :identity",
-      ExpressionAttributeValues: { ":identity": `IDENTITY#${identityId}` },
+      ExpressionAttributeValues: { ":identity": identityIndex(identityId) },
     })) : { Items: [] };
     return {
       id: identityId,
@@ -78,7 +79,7 @@ export async function createInvitation(identity: Identity, gameId: string, world
 
   if (audience === "direct") {
     const profiles = await Promise.all(recipientIdentityIds.map((id) => document.send(new GetCommand({
-      TableName: tableName, Key: { pk: `IDENTITY#${id}`, sk: "PROFILE" }, ProjectionExpression: "identity_id, #status",
+      TableName: tableName, Key: profileKey(id), ProjectionExpression: "identity_id, #status",
       ExpressionAttributeNames: { "#status": "status" },
     }))));
     if (profiles.some((profile) => profile.Item?.status !== "ACTIVE")) return response(400, { error: "invalid_recipients" });
@@ -92,17 +93,17 @@ export async function createInvitation(identity: Identity, gameId: string, world
     senderDisplayName: identity.displayName, recipientIdentityIds,
   };
   await document.send(new PutCommand({ TableName: tableName, Item: {
-    pk: `INVITATION#${invitationId}`, sk: "EVENT", invitation_id: invitationId, audience,
+    ...playerInvitationKey(invitationId), invitation_id: invitationId, audience,
     game_id: gameId, world_id: worldId, sender_identity_id: identity.id,
     recipient_identity_ids: recipientIdentityIds, status: "READY", created_at: now, published_at: now,
-    gsi1pk: `INVITATION#SENDER#${identity.id}#GAME#${gameId}#WORLD#${worldId}`, gsi1sk: `${now}#${invitationId}`,
+    gsi1pk: playerInvitationSenderIndex(identity.id, gameId, worldId), gsi1sk: `${now}#${invitationId}`,
   } }));
   const published = await events.send(new PutEventsCommand({ Entries: [{
     EventBusName: process.env.EVENT_BUS_NAME ?? "default", Source: "spawnpoint.access",
     DetailType: "Game Invitation", Detail: JSON.stringify(detail),
   }] }));
   if ((published.FailedEntryCount ?? 0) > 0) {
-    await document.send(new UpdateCommand({ TableName: tableName, Key: { pk: `INVITATION#${invitationId}`, sk: "EVENT" },
+    await document.send(new UpdateCommand({ TableName: tableName, Key: playerInvitationKey(invitationId),
       UpdateExpression: "SET #status = :failed", ExpressionAttributeNames: { "#status": "status" }, ExpressionAttributeValues: { ":failed": "PUBLISH_FAILED" },
     }));
     return response(502, { error: "invitation_publish_failed" });
@@ -112,8 +113,8 @@ export async function createInvitation(identity: Identity, gameId: string, world
 
 export async function invitationHistory(identity: Identity, gameId: string, worldId: string): Promise<Response> {
   const page = await document.send(new QueryCommand({
-    TableName: tableName, IndexName: "gsi1", KeyConditionExpression: "gsi1pk = :sender",
-    ExpressionAttributeValues: { ":sender": `INVITATION#SENDER#${identity.id}#GAME#${gameId}#WORLD#${worldId}` }, ScanIndexForward: false, Limit: 5,
+    TableName: tableName, IndexName: accessIndexName, KeyConditionExpression: "gsi1pk = :sender",
+    ExpressionAttributeValues: { ":sender": playerInvitationSenderIndex(identity.id, gameId, worldId) }, ScanIndexForward: false, Limit: 5,
   }));
   return response(200, { invitations: (page.Items ?? [])
     .map((item) => ({

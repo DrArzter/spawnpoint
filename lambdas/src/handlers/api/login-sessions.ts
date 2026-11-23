@@ -5,6 +5,7 @@ import { GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { type Event, type Caller, requestCookie, type Response, responseWithCookies, response } from "./http.ts";
 import { sessionSigningSecret, botToken } from "./secrets.ts";
 import { document, tableName, type Item } from "./access-store.ts";
+import { sessionAccountIndex } from "../../access/keys.ts";
 import { refreshCookieSameSite } from "./auth-config.ts";
 
 export async function caller(event: Event): Promise<Caller | null> {
@@ -75,7 +76,7 @@ export async function createLoginSession(principal: LoginPrincipal): Promise<Res
       created_at: createdAt,
       expires_at: expiresAt,
       ttl: expiresAt,
-      gsi1pk: `ACCOUNT#${principal.provider}#${principal.subject}`,
+      gsi1pk: sessionAccountIndex(principal.provider, principal.subject),
       gsi1sk: `LOGIN_SESSION#${createdAt}#${credential.loginSessionId}`,
     },
     ConditionExpression: "attribute_not_exists(pk)",

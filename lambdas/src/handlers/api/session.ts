@@ -1,7 +1,8 @@
 import { roleOf } from "../../access/domain.ts";
 import { GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { type Caller, type Response, response } from "./http.ts";
-import { observe, resolveIdentity, bootstrapOwner, accountKey } from "./identity-store.ts";
+import { observe, resolveIdentity, bootstrapOwner } from "./identity-store.ts";
+import { requestAccountAccess } from "../../access/account-writes.ts";
 import { document, tableName, type Item } from "./access-store.ts";
 
 export async function session(account: Caller, capabilities: readonly string[]): Promise<Response> {
@@ -38,14 +39,7 @@ function accountProfile(account: Caller, observed: Item) {
 export async function requestAccess(account: Caller): Promise<Response> {
   const now = new Date().toISOString();
   try {
-    await document.send(new UpdateCommand({
-      TableName: tableName,
-      Key: { pk: accountKey(account), sk: "ACCOUNT" },
-      UpdateExpression: "SET #status = :requested, gsi1pk = :candidateIndex, requested_at = if_not_exists(requested_at, :now), gsi1sk = :now",
-      ConditionExpression: "attribute_exists(pk) AND attribute_not_exists(identity_id)",
-      ExpressionAttributeNames: { "#status": "status" },
-      ExpressionAttributeValues: { ":requested": "REQUESTED", ":candidateIndex": "CANDIDATE#REQUESTED", ":now": now },
-    }));
+    await document.send(new UpdateCommand(requestAccountAccess(tableName, account.provider, account.subject, now, true)));
   } catch {
     if (await resolveIdentity(account) !== null) return response(409, { error: "already_approved" });
     throw new Error("access candidate is unavailable");

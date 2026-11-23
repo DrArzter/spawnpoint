@@ -7,10 +7,11 @@ import { type Identity } from "../../access/domain.ts";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { type Event, type Response, parseJsonObject, response } from "./http.ts";
 import { document, tableName } from "./access-store.ts";
-import { accessInvitationKey } from "./access-invitations.ts";
+import { accessInvitationKey, accountItemKey } from "../../access/keys.ts";
+import { loginProviderMarker } from "../../access/identity-creation.ts";
 import { passwordCredentialItem, passwordAccountItem, passwordCredentials, credentialKey } from "./credentials.ts";
 import { emailActionItem, deliverEmailAction, revokePasswordLoginSessions } from "./email-actions.ts";
-import { identityAccounts, accountKeyFor } from "./identity-store.ts";
+import { identityAccounts } from "./identity-store.ts";
 
 type ValidPasswordInput = Readonly<{ email: string; displayName: string; password: string }>;
 
@@ -89,14 +90,7 @@ export async function linkPassword(identity: Identity, event: Event): Promise<Re
       } },
       { Put: {
         TableName: tableName,
-        Item: {
-          pk: `IDENTITY#${identity.id}`,
-          sk: `LOGIN_PROVIDER#${passwordProviderId}`,
-          entity_type: "IDENTITY_LOGIN_PROVIDER",
-          provider: passwordProviderId,
-          subject,
-          created_at: new Date().toISOString(),
-        },
+        Item: loginProviderMarker(identity.id, passwordProviderId, subject, new Date().toISOString()),
         ConditionExpression: "attribute_not_exists(pk)",
       } },
       { Put: {
@@ -128,7 +122,7 @@ export async function changePassword(identity: Identity, event: Event): Promise<
   }
   const linked = await document.send(new GetCommand({
     TableName: tableName,
-    Key: { pk: accountKeyFor(passwordProviderId, credential.subject), sk: "ACCOUNT" },
+    Key: accountItemKey(passwordProviderId, credential.subject),
     ConsistentRead: true,
   }));
   if (linked.Item?.identity_id !== identity.id) return response(403, { error: "credential_not_linked" });

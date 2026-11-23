@@ -1,6 +1,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, QueryCommand, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 
+import { accessIndexName, identityIdFromPartition, identityIndex, playerInvitationKey } from "../../access/keys.ts";
 import type { NotificationSubscriptionKey } from "../../domain/notifications.ts";
 import type { InvitationDeliveryStatus } from "../../domain/invitations.ts";
 
@@ -24,8 +25,9 @@ export function subscribedIdentityIds(items: readonly Item[], key: NotificationS
     const subscriptions = item.subscriptions;
     const pk = item.pk;
     if (typeof pk !== "string" || item.sk !== "SUBSCRIPTIONS" || subscriptions === null || typeof subscriptions !== "object") return [];
-    if ((subscriptions as Record<string, unknown>)[key] !== true || !pk.startsWith("IDENTITY#")) return [];
-    return [pk.slice("IDENTITY#".length)];
+    const identityId = identityIdFromPartition(pk);
+    if ((subscriptions as Record<string, unknown>)[key] !== true || identityId === null) return [];
+    return [identityId];
   });
   return [...new Set(ids)];
 }
@@ -78,9 +80,9 @@ async function identityAccounts(identityId: string): Promise<Item[]> {
   do {
     const page = await database().send(new QueryCommand({ // NOSONAR paginated: the next token comes from the previous page
       TableName: requiredEnv("ACCESS_TABLE_NAME"),
-      IndexName: "gsi1",
+      IndexName: accessIndexName,
       KeyConditionExpression: "gsi1pk = :identity",
-      ExpressionAttributeValues: { ":identity": `IDENTITY#${identityId}` },
+      ExpressionAttributeValues: { ":identity": identityIndex(identityId) },
       ExclusiveStartKey: cursor,
     }));
     items.push(...(page.Items ?? []));
@@ -133,7 +135,7 @@ export async function claimInvitationDelivery(invitationId: string): Promise<boo
   try {
     await database().send(new UpdateCommand({
       TableName: requiredEnv("ACCESS_TABLE_NAME"),
-      Key: { pk: `INVITATION#${invitationId}`, sk: "EVENT" },
+      Key: playerInvitationKey(invitationId),
       UpdateExpression: "SET #status = :delivering, delivery_started_at = :now",
       ConditionExpression: "#status = :ready",
       ExpressionAttributeNames: { "#status": "status" },
@@ -154,7 +156,7 @@ export async function completeInvitationDelivery(
 ): Promise<void> {
   await database().send(new UpdateCommand({
     TableName: requiredEnv("ACCESS_TABLE_NAME"),
-    Key: { pk: `INVITATION#${invitationId}`, sk: "EVENT" },
+    Key: playerInvitationKey(invitationId),
     UpdateExpression: "SET #status = :status, delivery_target_count = :targets, delivery_success_count = :successes, delivery_failure_count = :failures, delivery_completed_at = :now",
     ConditionExpression: "#status = :delivering",
     ExpressionAttributeNames: { "#status": "status" },

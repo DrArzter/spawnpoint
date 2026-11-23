@@ -8,6 +8,7 @@ import { type Event, type Response, type JsonObject, InvalidBodyError, parseJson
 import { document, tableName } from "./access-store.ts";
 import { sessionSigningSecret } from "./secrets.ts";
 import { identityById } from "./identity-store.ts";
+import { oauthClientKey, oauthCredentialKey } from "../../access/keys.ts";
 
 // --- Remote MCP authorization and transport ---------------------------------
 export const oauthResource = `${apiUrl}/mcp`;
@@ -21,14 +22,6 @@ type OAuthClient = Readonly<{
   name: string;
   redirectUris: readonly string[];
 }>;
-
-function oauthClientKey(clientId: string): Record<string, string> {
-  return { pk: `OAUTH#CLIENT#${clientId}`, sk: "CLIENT" };
-}
-
-function oauthCredentialKey(kind: "CODE" | "REFRESH", hash: string): Record<string, string> {
-  return { pk: `OAUTH#${kind}#${hash}`, sk: kind };
-}
 
 // OAuth clients expect OAuth error codes, so a bad body reads as an empty one
 // and fails the field checks below instead of the generic 400.

@@ -2,6 +2,7 @@ import { backupInventory } from "../../control-plane/backups.ts";
 import { withBackupReleases } from "../../control-plane/backup-release.ts";
 import { listWorldBackups, backupArchiveUrl, backupReleaseSources, readWorldRecord } from "../../control-plane/aws.ts";
 import { type Identity } from "../../access/domain.ts";
+import { downloadPartition } from "../../access/keys.ts";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
 import { type Response, response, parseJsonObject } from "./http.ts";
@@ -35,7 +36,7 @@ export async function backupDownload(identity: Identity, gameId: string, worldId
   if (link === null) return response(404, { error: "unknown_backup" });
   const at = new Date().toISOString();
   await document.send(new PutCommand({ TableName: tableName, Item: {
-    pk: `DOWNLOAD#${worldId}`, sk: `${at}#${randomUUID()}`, created_at: at,
+    pk: downloadPartition(worldId), sk: `${at}#${randomUUID()}`, created_at: at,
     identity_id: identity.id, display_name: identity.displayName, game_id: gameId, world_id: worldId,
     key, size_bytes: link.sizeBytes,
     ttl: Math.floor(Date.now() / 1000) + DOWNLOAD_RECORD_DAYS * 24 * 3600,

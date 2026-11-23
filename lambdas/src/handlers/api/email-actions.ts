@@ -8,13 +8,8 @@ import { emailSender, emailDeliveryProvider } from "./mail.ts";
 import { panelUrl } from "./origins.ts";
 import { credentialKey, passwordCredentials, credentialFromItem } from "./credentials.ts";
 import { type Response, response, type Event, parseJsonObject } from "./http.ts";
-import { accessInvitationKey } from "./access-invitations.ts";
-import { accountKeyFor } from "./identity-store.ts";
+import { accessIndexName, accessInvitationKey, accountItemKey, emailActionKey, sessionAccountIndex } from "../../access/keys.ts";
 import { createLoginSession } from "./login-sessions.ts";
-
-function emailActionKey(tokenHash: string): Record<string, string> {
-  return { pk: `EMAIL_ACTION#${tokenHash}`, sk: "TOKEN" };
-}
 
 export function emailActionItem(
   purpose: EmailActionPurpose,
@@ -97,7 +92,7 @@ export async function resendEmailVerification(event: Event): Promise<Response> {
   if (credential === null || credential.emailVerified) return response(202, { result: "accepted" });
   const account = await document.send(new GetCommand({
     TableName: tableName,
-    Key: { pk: accountKeyFor(passwordProviderId, credential.subject), sk: "ACCOUNT" },
+    Key: accountItemKey(passwordProviderId, credential.subject),
     ConsistentRead: true,
   }));
   const action = await replaceEmailAction(
@@ -192,9 +187,9 @@ export async function revokePasswordLoginSessions(subject: string): Promise<void
   do {
     const page = await document.send(new QueryCommand({ // NOSONAR paginated: the next token comes from the previous page
       TableName: tableName,
-      IndexName: "gsi1",
+      IndexName: accessIndexName,
       KeyConditionExpression: "gsi1pk = :account",
-      ExpressionAttributeValues: { ":account": `ACCOUNT#${passwordProviderId}#${subject}` },
+      ExpressionAttributeValues: { ":account": sessionAccountIndex(passwordProviderId, subject) },
       ExclusiveStartKey: cursor,
     }));
     items.push(...(page.Items ?? []));

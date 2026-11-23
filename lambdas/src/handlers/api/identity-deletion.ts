@@ -1,4 +1,10 @@
 import { type Identity } from "../../access/domain.ts";
+import { type TableKey } from "../../access/keys.ts";
+import {
+  accessIndexName, accessInvitationPrefix, accountItemKey, accountSort, consolePrefix, downloadPrefix, emailActionPrefix, identityIndex,
+  isLoginProviderSort, oauthCredentialPrefix, accessInvitationProofSort, parseAccountKey, playerInvitationPrefix, profileKey, profileSort,
+  identityPartition, sessionAccountIndex,
+} from "../../access/keys.ts";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { S3Client } from "@aws-sdk/client-s3";
 import {
@@ -32,7 +38,7 @@ function worldsInReleaseBucket(): WorldStore {
   return releaseWorlds;
 }
 
-type Key = Readonly<{ pk: string; sk: string }>;
+type Key = TableKey;
 
 type Account = Readonly<{ key: Key; provider: string; subject: string; email: string | null }>;
 
@@ -81,17 +87,16 @@ async function remove(items: readonly Item[]): Promise<number> {
 }
 
 function accountFromItem(item: Item): Account | null {
-  const pk = String(item.pk);
-  if (pk.startsWith("TELEGRAM#")) return { key: keyOf(item), provider: "telegram", subject: pk.slice("TELEGRAM#".length), email: null };
-  const match = /^ACCOUNT#([^#]+)#(.+)$/.exec(pk);
-  if (match === null) return null;
-  return { key: keyOf(item), provider: match[1]!, subject: match[2]!, email: typeof item.email === "string" ? item.email : null };
+  const parsed = parseAccountKey(String(item.pk));
+  if (parsed === null) return null;
+  // A Telegram account has no email, whatever the item holds.
+  return { key: keyOf(item), ...parsed, email: parsed.provider !== "telegram" && typeof item.email === "string" ? item.email : null };
 }
 
 async function partitionItems(identityId: string): Promise<Item[]> {
   return queryAll({
     TableName: tableName, KeyConditionExpression: "pk = :pk",
-    ExpressionAttributeValues: { ":pk": `IDENTITY#${identityId}` }, ConsistentRead: true,
+    ExpressionAttributeValues: { ":pk": identityPartition(identityId) }, ConsistentRead: true,
   });
 }
 
@@ -99,15 +104,15 @@ async function partitionItems(identityId: string): Promise<Item[]> {
 // a consistent read returns, name accounts too.
 async function linkedAccounts(identityId: string, partition: readonly Item[]): Promise<Account[]> {
   const indexed = (await queryAll({
-    TableName: tableName, IndexName: "gsi1", KeyConditionExpression: "gsi1pk = :identity",
-    ExpressionAttributeValues: { ":identity": `IDENTITY#${identityId}` },
-  })).filter((item) => item.sk === "ACCOUNT" && item.identity_id === identityId);
+    TableName: tableName, IndexName: accessIndexName, KeyConditionExpression: "gsi1pk = :identity",
+    ExpressionAttributeValues: { ":identity": identityIndex(identityId) },
+  })).filter((item) => item.sk === accountSort && item.identity_id === identityId);
   const known = new Set(indexed.map((item) => String(item.pk)));
   const marked = await Promise.all(partition
-    .filter((item) => String(item.sk).startsWith("LOGIN_PROVIDER#") && typeof item.provider === "string" && typeof item.subject === "string")
-    .map((item) => String(item.provider) === "telegram" ? `TELEGRAM#${String(item.subject)}` : `ACCOUNT#${String(item.provider)}#${String(item.subject)}`)
-    .filter((pk) => !known.has(pk))
-    .map(async (pk) => (await document.send(new GetCommand({ TableName: tableName, Key: { pk, sk: "ACCOUNT" }, ConsistentRead: true }))).Item));
+    .filter((item) => isLoginProviderSort(String(item.sk)) && typeof item.provider === "string" && typeof item.subject === "string")
+    .map((item) => accountItemKey(String(item.provider), String(item.subject)))
+    .filter((key) => !known.has(key.pk))
+    .map(async (key) => (await document.send(new GetCommand({ TableName: tableName, Key: key, ConsistentRead: true }))).Item));
   return [...indexed, ...marked.filter((item): item is Item => item?.identity_id === identityId)]
     .map(accountFromItem).filter((account): account is Account => account !== null);
 }
@@ -125,9 +130,9 @@ async function passwordCredentialItems(accounts: readonly Account[]): Promise<It
 // Login sessions are indexed by provider account, Telegram included.
 async function loginSessions(accounts: readonly Account[]): Promise<Item[]> {
   const pages = await Promise.all(accounts.map((account) => queryAll({
-    TableName: tableName, IndexName: "gsi1", KeyConditionExpression: "gsi1pk = :account",
+    TableName: tableName, IndexName: accessIndexName, KeyConditionExpression: "gsi1pk = :account",
     FilterExpression: "entity_type = :session",
-    ExpressionAttributeValues: { ":account": `ACCOUNT#${account.provider}#${account.subject}`, ":session": "LOGIN_SESSION" },
+    ExpressionAttributeValues: { ":account": sessionAccountIndex(account.provider, account.subject), ":session": "LOGIN_SESSION" },
   })));
   return pages.flat();
 }
@@ -146,12 +151,12 @@ type Secondary = Readonly<{
 // identity, so one paginated Scan finds them with everything else here.
 async function secondaryRecords(identityId: string, accounts: readonly Account[]): Promise<Secondary> {
   const passwordSubjects = accounts.filter((account) => account.provider === passwordProviderId).map((account) => account.subject);
-  const proofKeys = accounts.map((account) => `PROOF#${account.provider}#${account.subject}`);
+  const proofKeys = accounts.map((account) => accessInvitationProofSort(account.provider, account.subject));
   const values: Record<string, unknown> = { ":id": identityId };
   const filters = ["identity_id = :id", "created_by = :id", "sender_identity_id = :id"];
   if (passwordSubjects.length > 0) {
     passwordSubjects.forEach((subject, index) => { values[`:subject${index}`] = subject; });
-    values[":emailAction"] = "EMAIL_ACTION#";
+    values[":emailAction"] = emailActionPrefix;
     filters.push(`(begins_with(pk, :emailAction) AND subject IN (${placeholders(":subject", passwordSubjects.length)}))`);
   }
   if (proofKeys.length > 0) {
@@ -164,16 +169,16 @@ async function secondaryRecords(identityId: string, accounts: readonly Account[]
   const named = (item: Item) => item.identity_id === identityId;
   const is = (item: Item, prefix: string, sk?: string) => String(item.pk).startsWith(prefix) && (sk === undefined || item.sk === sk);
   return {
-    oauth: items.filter((item) => named(item) && (is(item, "OAUTH#CODE#", "CODE") || is(item, "OAUTH#REFRESH#", "REFRESH"))),
-    emailActions: items.filter((item) => is(item, "EMAIL_ACTION#", "TOKEN")
+    oauth: items.filter((item) => named(item) && (is(item, oauthCredentialPrefix("CODE"), "CODE") || is(item, oauthCredentialPrefix("REFRESH"), "REFRESH"))),
+    emailActions: items.filter((item) => is(item, emailActionPrefix, "TOKEN")
       && (named(item) || (typeof item.subject === "string" && passwordSubjects.includes(item.subject)))),
-    invitee: items.filter((item) => named(item) && is(item, "ACCESS_INVITATION#", "TOKEN")),
-    proofs: items.filter((item) => is(item, "ACCESS_INVITATION#") && proofKeys.includes(String(item.sk))),
-    playerInvitations: items.filter((item) => is(item, "INVITATION#", "EVENT") && item.sender_identity_id === identityId),
-    pendingInvitations: items.filter((item) => is(item, "ACCESS_INVITATION#", "TOKEN")
+    invitee: items.filter((item) => named(item) && is(item, accessInvitationPrefix, "TOKEN")),
+    proofs: items.filter((item) => is(item, accessInvitationPrefix) && proofKeys.includes(String(item.sk))),
+    playerInvitations: items.filter((item) => is(item, playerInvitationPrefix, "EVENT") && item.sender_identity_id === identityId),
+    pendingInvitations: items.filter((item) => is(item, accessInvitationPrefix, "TOKEN")
       && item.created_by === identityId && item.status === "PENDING" && item.identity_id === undefined),
-    console: items.filter((item) => named(item) && is(item, "CONSOLE#") && item.display_name !== undefined),
-    downloads: items.filter((item) => named(item) && is(item, "DOWNLOAD#") && item.display_name !== undefined),
+    console: items.filter((item) => named(item) && is(item, consolePrefix) && item.display_name !== undefined),
+    downloads: items.filter((item) => named(item) && is(item, downloadPrefix) && item.display_name !== undefined),
     bootstrap: items.find((item) => named(item) && item.pk === "SYSTEM" && item.sk === "BOOTSTRAP") ?? null,
   };
 }
@@ -266,7 +271,7 @@ function deletionTransaction(caller: Identity, deletion: Deletion): Transaction 
   const { identityId, roleId, partition, accounts, credentials, bootstrap } = deletion;
   const transaction: Transaction = [{ ConditionCheck: { TableName: tableName, ...callerCondition(caller, roleId) } }];
   for (const item of partition) {
-    transaction.push({ Delete: item.sk === "PROFILE"
+    transaction.push({ Delete: item.sk === profileSort
       ? { TableName: tableName, Key: keyOf(item), ConditionExpression: "attribute_exists(pk) AND role_id = :role", ExpressionAttributeValues: { ":role": roleId } }
       : { TableName: tableName, Key: keyOf(item) } });
   }
@@ -293,10 +298,10 @@ async function cancellationResponse(error: Cancellation, deletion: Deletion): Pr
   const failed = (index: number) => reasons[index]?.Code === "ConditionalCheckFailed";
   if (failed(0)) return response(409, { error: "caller_changed" });
   // Index 0 is the caller check; the partition's items follow it.
-  const profileIndex = 1 + deletion.partition.findIndex((item) => item.sk === "PROFILE");
+  const profileIndex = 1 + deletion.partition.findIndex((item) => item.sk === profileSort);
   if (failed(profileIndex)) {
     const current = await document.send(new GetCommand({
-      TableName: tableName, Key: { pk: `IDENTITY#${deletion.identityId}`, sk: "PROFILE" }, ConsistentRead: true,
+      TableName: tableName, Key: profileKey(deletion.identityId), ConsistentRead: true,
     }));
     return current.Item === undefined ? response(204, null) : response(409, { error: "identity_changed" });
   }
@@ -359,7 +364,7 @@ async function sweepRemainder(identityId: string, accounts: readonly Account[], 
 export async function deleteIdentity(caller: Identity, identityId: string, worlds: () => WorldStore = worldsInReleaseBucket): Promise<Response> {
   if (identityId === caller.id) return response(409, { error: "self_delete_forbidden" });
   const profile = (await document.send(new GetCommand({
-    TableName: tableName, Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" }, ConsistentRead: true,
+    TableName: tableName, Key: profileKey(identityId), ConsistentRead: true,
   }))).Item;
   if (profile === undefined) return response(204, null);
   const roleId = String(profile.role_id);
@@ -369,7 +374,7 @@ export async function deleteIdentity(caller: Identity, identityId: string, world
 
   // Read.
   const partition = await partitionItems(identityId);
-  if (!partition.some((item) => item.sk === "PROFILE")) return response(204, null);
+  if (!partition.some((item) => item.sk === profileSort)) return response(204, null);
   const accounts = await linkedAccounts(identityId, partition);
   const credentials = await passwordCredentialItems(accounts);
   const before = await secondaryRecords(identityId, accounts);

@@ -1,5 +1,5 @@
 import { type LoginPrincipal } from "../../access/login-session.ts";
-import { type Identity, identityFromRecord } from "../../access/domain.ts";
+import { type Identity, identityFromRecord, protectedRoleId } from "../../access/domain.ts";
 import { UpdateCommand, GetCommand, TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
 import { type Item, document, tableName } from "./access-store.ts";
@@ -76,7 +76,7 @@ export async function bootstrapOwner(account: Caller): Promise<Identity | null> 
       }, ConditionExpression: "attribute_not_exists(pk)" } },
       { Put: { TableName: tableName, Item: {
         pk: `IDENTITY#${identityId}`, sk: "PROFILE", identity_id: identityId, display_name: name,
-        role_id: "owner", direct_grants: [], status: "ACTIVE", created_at: now,
+        role_id: protectedRoleId, direct_grants: [], status: "ACTIVE", created_at: now,
         created_by: "bootstrap", gsi1pk: "IDENTITY#ACTIVE", gsi1sk: name.toLowerCase(),
       }, ConditionExpression: "attribute_not_exists(pk)" } },
       { Update: { TableName: tableName, Key: { pk: accountKey(account), sk: "ACCOUNT" },
@@ -89,7 +89,7 @@ export async function bootstrapOwner(account: Caller): Promise<Identity | null> 
         },
       } },
     ] }));
-    return { id: identityId, displayName: name, roleId: "owner", directGrants: [] };
+    return { id: identityId, displayName: name, roleId: protectedRoleId, directGrants: [] };
   } catch (error) {
     const existing = await resolveIdentity(account);
     if (existing !== null) return existing;
@@ -122,8 +122,8 @@ export async function activeOwnerCount(): Promise<number> {
       TableName: tableName,
       IndexName: "gsi1",
       KeyConditionExpression: "gsi1pk = :state",
-      FilterExpression: "role_id = :owner",
-      ExpressionAttributeValues: { ":state": "IDENTITY#ACTIVE", ":owner": "owner" },
+      FilterExpression: "role_id = :protected",
+      ExpressionAttributeValues: { ":state": "IDENTITY#ACTIVE", ":protected": protectedRoleId },
       Select: "COUNT",
       ExclusiveStartKey: cursor,
     }));

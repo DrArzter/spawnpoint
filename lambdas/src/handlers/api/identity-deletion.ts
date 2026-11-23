@@ -11,8 +11,7 @@ import { S3WorldReader, S3WorldRepository } from "../../control-plane/s3-world-r
 import { type WorldRecord } from "../../control-plane/world-registry.ts";
 import { type Response, response } from "./http.ts";
 import { document, tableName, type Item } from "./access-store.ts";
-import { requirePermission } from "./permissions.ts";
-import { activeOwnerCount } from "./identity-store.ts";
+import { callerCondition, lastHolderRefusal, protectedRoleRefusal } from "./owner-guard.ts";
 import { credentialKey } from "./credentials.ts";
 
 // --- Delete an identity and every record that names it (ADR-0071) -----------
@@ -261,26 +260,11 @@ type Deletion = Readonly<{
   credentials: readonly Item[]; bootstrap: Item | null;
 }>;
 
-// Only an Owner may delete an Owner, and never the last active one.
-async function ownerDeletionRefusal(caller: Identity, roleId: string): Promise<Response | null> {
-  if (roleId !== "owner") return null;
-  const forbidden = requirePermission(caller, "access.owner.grant");
-  if (forbidden !== null) return forbidden;
-  if (await activeOwnerCount() <= 1) return response(409, { error: "last_owner" });
-  return null;
-}
-
 // The caller check keeps an Owner when two Owners delete each other:
 // the second transaction finds its caller gone, or conflicts with the first.
 function deletionTransaction(caller: Identity, deletion: Deletion): Transaction {
   const { identityId, roleId, partition, accounts, credentials, bootstrap } = deletion;
-  const targetIsOwner = roleId === "owner";
-  const transaction: Transaction = [{ ConditionCheck: {
-    TableName: tableName, Key: { pk: `IDENTITY#${caller.id}`, sk: "PROFILE" },
-    ConditionExpression: targetIsOwner ? "#status = :active AND role_id = :owner" : "#status = :active",
-    ExpressionAttributeNames: { "#status": "status" },
-    ExpressionAttributeValues: targetIsOwner ? { ":active": "ACTIVE", ":owner": "owner" } : { ":active": "ACTIVE" },
-  } }];
+  const transaction: Transaction = [{ ConditionCheck: { TableName: tableName, ...callerCondition(caller, roleId) } }];
   for (const item of partition) {
     transaction.push({ Delete: item.sk === "PROFILE"
       ? { TableName: tableName, Key: keyOf(item), ConditionExpression: "attribute_exists(pk) AND role_id = :role", ExpressionAttributeValues: { ":role": roleId } }
@@ -379,7 +363,8 @@ export async function deleteIdentity(caller: Identity, identityId: string, world
   }))).Item;
   if (profile === undefined) return response(204, null);
   const roleId = String(profile.role_id);
-  const refusal = await ownerDeletionRefusal(caller, roleId);
+  // Only a holder of the protected role may delete one, and never the last.
+  const refusal = protectedRoleRefusal(caller, [roleId]) ?? await lastHolderRefusal(roleId, null);
   if (refusal !== null) return refusal;
 
   // Read.

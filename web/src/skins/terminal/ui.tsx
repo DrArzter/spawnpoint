@@ -501,7 +501,11 @@ export function Details({ items, label, className }: Readonly<{ items: readonly 
 }
 
 /** The host's lines of a start, newest last in a short region that keeps the newest in view; a fault says so in text as well as colour. */
-export function Log({ label, rows, className }: Readonly<{ label: string; rows: readonly HostLogRow[]; className?: string }>) {
+// Placeholder lines while a live log has none yet.
+const LOG_WAITING = ["medium", "long", "short"] as const;
+
+/** A `live` log keeps one height while lines arrive, with placeholders until the first one. */
+export function Log({ label, rows, live = false, className }: Readonly<{ label: string; rows: readonly HostLogRow[]; live?: boolean; className?: string }>) {
   const region = useRef<HTMLDivElement>(null);
   const newest = rows.at(-1)?.id;
   useEffect(() => {
@@ -509,7 +513,8 @@ export function Log({ label, rows, className }: Readonly<{ label: string; rows: 
     if (element) element.scrollTop = element.scrollHeight;
   }, [newest]);
   return (
-    <div aria-label={label} aria-live="polite" className={cx("t-log", className)} ref={region} role="log">
+    <div aria-busy={live && rows.length === 0 ? true : undefined} aria-label={label} aria-live="polite" className={cx("t-log", className)} data-live={live ? "" : undefined} ref={region} role="log">
+      {live && rows.length === 0 && LOG_WAITING.map((width) => <div className="t-log-line" key={width}><Skeleton width={width} /></div>)}
       {rows.map((row) => (
         <div className={cx("t-log-line", row.tone !== "plain" && `t-log-${row.tone}`)} key={row.id}>
           <time className="t-log-time" dateTime={row.at}>{logTime(row.at)}</time>
@@ -520,12 +525,15 @@ export function Log({ label, rows, className }: Readonly<{ label: string; rows: 
   );
 }
 
-export function DetailsGroup({ title, items, level = 3 }: Readonly<{ title: string; items: readonly DetailRow[]; level?: 2 | 3 }>) {
+/** A titled group of details; `state` marks the group beside its title and `children` follow the rows. */
+export function DetailsGroup({ title, items, level = 3, label, state, children }: Readonly<{ title: string; items: readonly DetailRow[]; level?: 2 | 3; label?: string; state?: ReactNode; children?: ReactNode }>) {
   const Heading = level === 2 ? "h2" : "h3";
+  const heading = <Heading className="t-group-name">{title}</Heading>;
   return (
     <section className="t-details-group">
-      <Heading className="t-group-name">{title}</Heading>
-      <Details items={items} label={title} />
+      {state ? <div className="t-group-head">{heading}{state}</div> : heading}
+      <Details items={items} label={label ?? title} />
+      {children}
     </section>
   );
 }

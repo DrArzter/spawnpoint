@@ -6,6 +6,7 @@ import { Address } from "./Address";
 import { Ago, instantMs } from "./Ago";
 import { Chip } from "./Chip";
 import { Copy } from "./Copy";
+import { Skeleton } from "./Skeleton";
 import { Status } from "./Status";
 
 const dayTime = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -21,6 +22,7 @@ export function DetailValueView({ value }: Readonly<{ value: DetailValue }>) {
   switch (value.type) {
     case "text": return <span className={cx(value.wrap ? "c-detail-wrap" : "c-detail-text", value.mono && "c-mono")} title={value.text}>{value.text}</span>;
     case "absent": return <span className="c-faint c-detail-text">{value.text}</span>;
+    case "loading": return <span className="c-detail-text"><Skeleton text width="9em" /><span className="c-sr">Loading</span></span>;
     case "status": return <Status status={value.status} />;
     case "number": return <span>{value.value}</span>;
     case "time": {

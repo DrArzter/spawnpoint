@@ -13,7 +13,7 @@ import { wipeStatus } from "../../core/worlds";
 import { Icon } from "../../icons";
 import { formatBytes, formatTime, shortDigest } from "../../lib/format";
 import { useMediaQuery } from "../../shell/hooks";
-import { Address, Choice, Choices, Col, DetailRow, Details, DetailsGroup, Empty, Field, FilterRow, Ghost, Indicator, Log, NoMatches, Notice, Overflow, Page, Pager, Panel, SelectInput, State, Table, Tabs, Verb, Verbs } from "./ui";
+import { Address, Choice, Choices, Col, DetailRow, Details, DetailsGroup, Empty, Field, FilterRow, Ghost, Indicator, Log, NoMatches, Notice, Overflow, Page, Pager, Panel, SelectInput, Skeleton, State, Table, Tabs, Verb, Verbs } from "./ui";
 import { MetricsPanel } from "./Metrics";
 import { ConsolePanel } from "./Rcon";
 import { WhitelistPanel } from "./Whitelist";
@@ -42,13 +42,12 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
         </Verbs>
       </header>
       <Notices notices={model.notices} />
-      {model.progress && <ProgressPanel model={model.progress} />}
 
       <Tabs label="World sections" onChange={model.setTab} options={model.tabs} value={model.tab} />
       {model.tab === "details" && <>
         <Panel>
           <div className="t-details-columns">
-            <DetailsGroup items={model.sessionDetails.map(detailRow)} level={2} title="Session" />
+            {model.progress ? <ProgressGroup model={model.progress} /> : <DetailsGroup items={model.sessionDetails.map(detailRow)} level={2} title="Session" />}
             <DetailsGroup items={model.worldDetails.map(detailRow)} level={2} title="World" />
           </div>
         </Panel>
@@ -67,14 +66,13 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
   );
 }
 
-// The running operation, or the one that just failed: its step and times, then the cause.
-function ProgressPanel({ model }: Readonly<{ model: OperationProgressModel }>) {
+// The running operation, or the one that just failed, in the session's place: its step and times, then the cause.
+function ProgressGroup({ model }: Readonly<{ model: OperationProgressModel }>) {
   const now = useSecondClock(model.running);
   return (
-    <Panel head={<State kind={model.status.kind} label={model.status.label} />} name={model.title}>
-      <Details items={progressDetails(model, now).map(detailRow)} label={`${model.title}: ${model.status.label}`} />
-      {model.log.length > 0 && <Log label={`${model.title}: host log`} rows={model.log} />}
-    </Panel>
+    <DetailsGroup items={progressDetails(model, now).map(detailRow)} label={`${model.title}: ${model.status.label}`} level={2} state={<State kind={model.status.kind} label={model.status.label} />} title={model.title}>
+      {(model.log.length > 0 || (model.running && model.logged)) && <Log label={`${model.title}: host log`} live={model.running} rows={model.log} />}
+    </DetailsGroup>
   );
 }
 
@@ -82,6 +80,7 @@ function detailValue(value: DetailValue): ReactNode {
   switch (value.type) {
     case "text": return value.mono ? <code>{value.text}</code> : <span>{value.text}</span>;
     case "absent": return <Ghost>{value.text}</Ghost>;
+    case "loading": return <span><Skeleton width="medium" /><span className="visually-hidden">Loading</span></span>;
     case "status": return <State kind={value.status.kind} label={value.status.label} />;
     case "time": return <Timestamp value={value.at} />;
     case "number": return <strong>{value.value}</strong>;

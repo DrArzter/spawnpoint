@@ -30,6 +30,8 @@ export const STATES = [
   { name: "wipe", route: `${WORLD}/wipes`, steps: [{ action: "world.wipe" }] },
   { name: "restore", route: `${WORLD}/backups`, steps: [{ action: "backup.restore" }] },
   { name: "promote", route: "/?demo&latency=0#/worlds/minecraft/minecraft-creative-5e1c9a07", steps: [{ action: "world.promote" }] },
+  // A start's toast wraps to two lines; its icon and buttons stay on the first line's centre.
+  { name: "toast-wrapped-terminal", route: "/?demo&latency=0#/worlds/minecraft/minecraft-sandbox-8d41f0b6", steps: [{ action: "session.start" }, { click: "dialog[open] [data-action='confirm']" }], skins: ["terminal"] },
   { name: "promote-unstarted", route: "/?demo&latency=0#/worlds/minecraft/minecraft-sandbox-8d41f0b6", steps: [{ action: "world.promote" }] },
   { name: "linked-accounts", route: "/?demo&latency=0#/access/users", steps: [{ action: "access.linked" }] },
   { name: "delete-user", route: "/?demo&latency=0#/access/users", steps: [{ action: "access.delete" }] },

@@ -1,7 +1,6 @@
 import type { WorldModel } from "../../core/models";
 import type { WorldTab } from "../../model";
 import type { IconName } from "../../icons";
-import { OperationProgress } from "./OperationProgress";
 import { ActionButton } from "./ui/ActionButton";
 import { Notices } from "./ui/Notice";
 import { Overflow } from "./ui/Overflow";
@@ -52,7 +51,6 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
         trail={[{ label: model.game.displayName, href: model.worldsHref, game: true }, { label: "Worlds", href: model.worldsHref }]}
       />
       <Notices notices={model.notices} />
-      {model.progress && <OperationProgress model={model.progress} />}
       {model.glance && <Hero glance={model.glance} label={`${model.sessionStatus.label} ${model.world.displayName}`} />}
       <Tabs label="World" onChange={model.setTab} prefix="world" tabs={model.tabs.map((tab) => ({ ...tab, icon: tabIcons[tab.id] }))} value={model.tab} />
       <TabPanel id={model.tab} prefix="world">

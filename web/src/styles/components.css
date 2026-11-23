@@ -644,12 +644,14 @@ button.chip[aria-pressed="true"] {
   pointer-events: none;
 }
 
+/* Items hold the first text line's centre (24px down), so the icon and the
+   buttons stay with it when a message wraps. */
 .snackbar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   min-height: 48px;
-  padding: 6px 8px 6px 16px;
+  padding: 8px 8px 8px 16px;
   border-radius: var(--radius-control);
   background: var(--snack-bg);
   color: var(--snack-ink);
@@ -667,8 +669,14 @@ button.chip[aria-pressed="true"] {
 
 .snackbar p {
   flex: 1;
+  padding-block: 6px;
   font-size: 14px;
   line-height: 20px;
+}
+
+.snackbar > .icon {
+  flex: none;
+  margin-top: 6px;
 }
 
 .snackbar .btn {

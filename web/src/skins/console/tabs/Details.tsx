@@ -7,6 +7,7 @@ import { Empty } from "../ui/Empty";
 import { Grid } from "../ui/Grid";
 import { TrackList, TrackTitle } from "../ui/TrackList";
 import { RunningTime } from "../ui/Flashbar";
+import { OperationProgress } from "../OperationProgress";
 
 /** The overflow items the World card draws instead of the header menu. */
 export const CARD_ACTIONS: readonly string[] = ["world.settings", "world.game-settings"];
@@ -34,9 +35,7 @@ export function DetailsTab({ model }: Readonly<{ model: WorldModel }>) {
   return (
     <>
       <Grid kind="detail">
-        {live === false
-          ? <Empty icon="power_settings_new" size="sm" title="No session" />
-          : session.length > 0 && <Card body="kv" title="Session"><DetailList columns="two" details={session} /></Card>}
+        <SessionSlot details={session} live={live} model={model} />
         <Card actions={settings.length > 0 ? settings.map((item) => <ActionButton action={item} iconOnly={phone} key={item.id} size="sm" />) : undefined} body="kv" title="World">
           <DetailList columns="two" details={activeOnly(model.worldDetails)} omit={omit} />
         </Card>
@@ -56,4 +55,11 @@ export function DetailsTab({ model }: Readonly<{ model: WorldModel }>) {
       )}
     </>
   );
+}
+
+/** The session's place: the operation that holds it, else the live session, else a boxed "No session". */
+function SessionSlot({ model, live, details }: Readonly<{ model: WorldModel; live: boolean | undefined; details: readonly Detail[] }>) {
+  if (model.progress) return <OperationProgress model={model.progress} />;
+  if (live === false) return <Card title="Session"><Empty icon="power_settings_new" size="sm" title="No session" /></Card>;
+  return details.length > 0 ? <Card body="kv" title="Session"><DetailList columns="two" details={details} /></Card> : null;
 }

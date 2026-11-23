@@ -4,7 +4,7 @@ import type { HostLogLine, OperationProgress } from "../api/contract";
 import { loadOperationProgress } from "../auth";
 import { clock, elapsedSeconds, eta } from "../lib/operation-time";
 import type { Operation } from "../model";
-import type { Detail, HostLogRow, OperationProgressModel } from "./models";
+import type { Detail, DetailValue, HostLogRow, OperationProgressModel } from "./models";
 import type { StatusDescriptor } from "./status";
 import { operationLabel } from "./worlds";
 
@@ -76,6 +76,9 @@ function build(id: string, type: Operation["type"], startedAt: string, expected:
     title: operationLabel(type),
     status: progress === null ? { kind: "progress", label: "Running" } : statusOf(progress),
     running,
+    known: progress !== null,
+    nests: type !== "world",
+    logged: type === "start" || type === "promote",
     startedAt,
     ranSeconds: running ? null : progress.elapsedSeconds,
     expectation: { ...(expected.expectedSeconds === undefined ? {} : { expectedSeconds: expected.expectedSeconds }), ...(expected.expectedSamples === undefined ? {} : { expectedSamples: expected.expectedSamples }) },
@@ -115,8 +118,18 @@ export function logTime(at: string): string {
 export function progressDetails(model: OperationProgressModel, now: number): Detail[] {
   const rows: Detail[] = [];
   const text = (value: string, extra: { mono?: boolean; wrap?: boolean } = {}) => ({ type: "text" as const, text: value, ...extra });
-  if (model.step !== null) rows.push({ label: PROGRESS_LABELS.step, value: text(model.step) });
-  if (model.child !== null) rows.push({ label: PROGRESS_LABELS.child, value: text(model.child) });
+  // While it runs, the step rows keep their place: a placeholder until the API answers, then "—" when there is none.
+  const reserved = (value: string | null): DetailValue => {
+    if (!model.known) return { type: "loading" };
+    return value === null ? { type: "absent", text: "—" } : text(value);
+  };
+  if (model.running) {
+    rows.push({ label: PROGRESS_LABELS.step, value: reserved(model.step) });
+    if (model.nests) rows.push({ label: PROGRESS_LABELS.child, value: reserved(model.child) });
+  } else {
+    if (model.step !== null) rows.push({ label: PROGRESS_LABELS.step, value: text(model.step) });
+    if (model.child !== null) rows.push({ label: PROGRESS_LABELS.child, value: text(model.child) });
+  }
   const seconds = model.running ? elapsedSeconds(model.startedAt, now) : model.ranSeconds;
   rows.push({ label: PROGRESS_LABELS.elapsed, value: seconds === null ? { type: "absent", text: "—" } : text(clock(seconds), { mono: true }) });
   const reading = model.running ? eta(model.startedAt, model.expectation, now) : null;

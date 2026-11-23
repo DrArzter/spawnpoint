@@ -1,4 +1,5 @@
 import { type Identity } from "../../access/domain.ts";
+import { consolePartition } from "../../access/keys.ts";
 import { awsControlPlaneSources, sendConsoleCommand, readConsoleInvocation } from "../../control-plane/aws.ts";
 import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
 import { checkConsoleCommand, encodeConsoleCommand, CONSOLE_RECORD_DAYS, type ConsoleEntry, consoleResult, consoleEntryFromItem } from "../../control-plane/console.ts";
@@ -43,7 +44,7 @@ export async function runConsoleCommand(identity: Identity, gameId: string, worl
   const commandId = await sendConsoleCommand({ hostId: target.hostId, worldId, slot: target.slot, encodedCommand: encodeConsoleCommand(check.command) });
   const at = new Date().toISOString();
   await document.send(new PutCommand({ TableName: tableName, Item: {
-    pk: `CONSOLE#${worldId}`, sk: `${at}#${commandId}`, command_id: commandId, created_at: at,
+    pk: consolePartition(worldId), sk: `${at}#${commandId}`, command_id: commandId, created_at: at,
     identity_id: identity.id, display_name: identity.displayName, game_id: gameId, world_id: worldId,
     session_id: sessionId, host_id: target.hostId, command: check.command, status: "pending",
     ...(agent === null ? {} : { agent_client_id: agent.clientId, agent_name: agent.name }),
@@ -55,7 +56,7 @@ export async function runConsoleCommand(identity: Identity, gameId: string, worl
 
 async function consoleEntries(gameId: string, worldId: string): Promise<readonly ConsoleEntry[]> {
   const page = await document.send(new QueryCommand({
-    TableName: tableName, KeyConditionExpression: "pk = :pk", ExpressionAttributeValues: { ":pk": `CONSOLE#${worldId}` },
+    TableName: tableName, KeyConditionExpression: "pk = :pk", ExpressionAttributeValues: { ":pk": consolePartition(worldId) },
     ScanIndexForward: false, Limit: CONSOLE_HISTORY_LIMIT,
   }));
   const items = (page.Items ?? []).filter((item) => item.game_id === gameId);

@@ -9,7 +9,9 @@ import { type Caller, type Event, type Response, parseJsonObject, response, para
 import { document, tableName } from "./access-store.ts";
 import { emailDeliveryProvider, emailSender } from "./mail.ts";
 import { panelUrl } from "./origins.ts";
-import { observe, resolveIdentity, accountKey } from "./identity-store.ts";
+import { observe, resolveIdentity } from "./identity-store.ts";
+import { createIdentity } from "../../access/identity-creation.ts";
+import { accessIndexName, accessInvitationKey, accessInvitationProofKey, createdAccessInvitationIndex } from "../../access/keys.ts";
 import { type Item } from "./access-store.ts";
 import { type EmailSender } from "../../email/email-sender.ts";
 import { isConditionFailure } from "./conditions.ts";
@@ -17,14 +19,6 @@ import { isConditionFailure } from "./conditions.ts";
 function invitationStatus(item: Item): unknown {
   if (accessInvitationUsable(item)) return "PENDING";
   return item.status === "PENDING" ? "EXPIRED" : item.status;
-}
-
-export function accessInvitationKey(tokenHash: string): Record<string, string> {
-  return { pk: `ACCESS_INVITATION#${tokenHash}`, sk: "TOKEN" };
-}
-
-function accessInvitationProofKey(tokenHash: string, account: Caller): Record<string, string> {
-  return { pk: `ACCESS_INVITATION#${tokenHash}`, sk: `PROOF#${account.provider}#${account.subject}` };
 }
 
 export async function checkAccessInvitation(event: Event): Promise<Response> {
@@ -37,9 +31,9 @@ export async function checkAccessInvitation(event: Event): Promise<Response> {
 export async function accessInvitations(): Promise<Response> {
   const result = await document.send(new QueryCommand({
     TableName: tableName,
-    IndexName: "gsi1",
+    IndexName: accessIndexName,
     KeyConditionExpression: "gsi1pk = :invitations",
-    ExpressionAttributeValues: { ":invitations": "ACCESS_INVITATION#CREATED" },
+    ExpressionAttributeValues: { ":invitations": createdAccessInvitationIndex },
     ScanIndexForward: false,
     Limit: 50,
   }));
@@ -73,7 +67,7 @@ export async function createAccessInvitation(identity: Identity, event: Event): 
       expires_at: invitation.expiresAtEpochSeconds, ttl: invitation.expiresAtEpochSeconds,
       delivery: email === null ? "not_requested" : "pending",
       ...(email === null ? {} : { delivery_email: email }),
-      gsi1pk: "ACCESS_INVITATION#CREATED", gsi1sk: `${createdAt}#${invitation.tokenHash}`,
+      gsi1pk: createdAccessInvitationIndex, gsi1sk: `${createdAt}#${invitation.tokenHash}`,
     },
     ConditionExpression: "attribute_not_exists(pk)",
   }));
@@ -133,7 +127,7 @@ export async function requestAccessInvitationProof(account: Caller, event: Event
     await document.send(new PutCommand({
       TableName: tableName,
       Item: {
-        ...accessInvitationProofKey(tokenHash, account), entity_type: "ACCESS_INVITATION_PROOF",
+        ...accessInvitationProofKey(tokenHash, account.provider, account.subject), entity_type: "ACCESS_INVITATION_PROOF",
         proof_hash: proof.tokenHash, status: "PENDING", expires_at: proof.expiresAtEpochSeconds,
         sent_at_epoch: nowEpoch, ttl: proof.expiresAtEpochSeconds,
       },
@@ -160,7 +154,7 @@ async function invitationProof(account: Caller, invitedEmail: unknown, suppliedP
   if (!emailBound || passwordAccount) return { proofHash: null, error: null };
   const proofHash = emailActionTokenHash(typeof suppliedProof === "string" ? suppliedProof : "");
   if (proofHash === null) return rejected(403, "invited_email_verification_required");
-  const proof = await document.send(new GetCommand({ TableName: tableName, Key: accessInvitationProofKey(tokenHash, account), ConsistentRead: true }));
+  const proof = await document.send(new GetCommand({ TableName: tableName, Key: accessInvitationProofKey(tokenHash, account.provider, account.subject), ConsistentRead: true }));
   if (proof.Item?.proof_hash !== proofHash || proof.Item?.status !== "PENDING" || Number(proof.Item?.expires_at) <= Math.floor(Date.now() / 1000)) {
     return rejected(403, "invalid_or_expired_invitation_proof");
   }
@@ -191,29 +185,16 @@ export async function redeemAccessInvitation(account: Caller, event: Event): Pro
         ExpressionAttributeValues: { ":used": "USED", ":pending": "PENDING", ":now": now, ":identityId": identityId, ":nowEpoch": Math.floor(Date.now() / 1000) },
       } },
       ...(proofHash !== null ? [{ Update: {
-        TableName: tableName, Key: accessInvitationProofKey(tokenHash, account),
+        TableName: tableName, Key: accessInvitationProofKey(tokenHash, account.provider, account.subject),
         UpdateExpression: "SET #status = :used, used_at = :now",
         ConditionExpression: "#status = :pending AND proof_hash = :proofHash AND expires_at > :nowEpoch",
         ExpressionAttributeNames: { "#status": "status" },
         ExpressionAttributeValues: { ":used": "USED", ":pending": "PENDING", ":proofHash": proofHash, ":now": now, ":nowEpoch": Math.floor(Date.now() / 1000) },
       } }] : []),
-      { Put: { TableName: tableName, Item: {
-        pk: `IDENTITY#${identityId}`, sk: "PROFILE", identity_id: identityId, display_name: name,
-        role_id: defaultRoleId, direct_grants: [], status: "ACTIVE", created_at: now,
-        created_by: found.Item!.created_by, gsi1pk: "IDENTITY#ACTIVE", gsi1sk: name.toLowerCase(),
-      }, ConditionExpression: "attribute_not_exists(pk)" } },
-      { Update: {
-        TableName: tableName, Key: { pk: accountKey(account), sk: "ACCOUNT" },
-        UpdateExpression: "SET identity_id = :identityId, #status = :approved, gsi1pk = :linked, gsi1sk = :now, approved_at = :now, approved_by = :by",
-        ConditionExpression: "attribute_exists(pk) AND attribute_not_exists(identity_id)",
-        ExpressionAttributeNames: { "#status": "status" },
-        ExpressionAttributeValues: { ":identityId": identityId, ":approved": "APPROVED", ":linked": `IDENTITY#${identityId}`, ":now": now, ":by": found.Item!.created_by },
-      } },
-      { Put: { TableName: tableName, Item: {
-        pk: `IDENTITY#${identityId}`, sk: `LOGIN_PROVIDER#${account.provider}`,
-        entity_type: "IDENTITY_LOGIN_PROVIDER", provider: account.provider,
-        subject: account.subject, created_at: now,
-      }, ConditionExpression: "attribute_not_exists(pk)" } },
+      ...createIdentity({
+        tableName, identityId, account: { provider: account.provider, subject: account.subject }, displayName: name,
+        roleId: defaultRoleId, directGrants: [], createdBy: found.Item!.created_by, now,
+      }),
     ] }));
   } catch (error) {
     if (isConditionFailure(error)) return response(409, { error: "invitation_unavailable" });

@@ -4,7 +4,7 @@ import { type SignInGuard, afterFailedSignIn, signInLocked } from "../../access/
 import { type EmailAction } from "../../access/email-actions.ts";
 import { type Identity } from "../../access/domain.ts";
 import { type Item, document, tableName } from "./access-store.ts";
-import { accountKeyFor } from "./identity-store.ts";
+import { accountItemKey, identityIndex } from "../../access/keys.ts";
 
 // Email and password is one login adapter among peers. Its credential is kept
 // by normalized address, independently from the Identity it may be linked to;
@@ -116,8 +116,7 @@ export function passwordCredentialItem(
 export function passwordAccountItem(subject: string, email: string, displayName: string, identity: Identity): Item {
   const now = new Date().toISOString();
   return {
-    pk: accountKeyFor(passwordProviderId, subject),
-    sk: "ACCOUNT",
+    ...accountItemKey(passwordProviderId, subject),
     platform: passwordProviderId,
     platform_user_id: subject,
     display_name: displayName,
@@ -130,7 +129,7 @@ export function passwordAccountItem(subject: string, email: string, displayName:
     identity_id: identity.id,
     approved_at: now,
     approved_by: identity.id,
-    gsi1pk: `IDENTITY#${identity.id}`,
+    gsi1pk: identityIndex(identity.id),
     gsi1sk: now,
   };
 }

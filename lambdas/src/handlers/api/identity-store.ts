@@ -1,41 +1,16 @@
-import { type LoginPrincipal } from "../../access/login-session.ts";
 import { type Identity, identityFromRecord, protectedRoleId } from "../../access/domain.ts";
+import { observeAccount } from "../../access/account-writes.ts";
+import { createIdentity } from "../../access/identity-creation.ts";
+import { accessIndexName, accountItemKey, accountSort, activeIdentityIndex, identityIndex, profileKey } from "../../access/keys.ts";
 import { UpdateCommand, GetCommand, TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
 import { type Item, document, tableName } from "./access-store.ts";
 import { type Caller } from "./http.ts";
 import { bootstrapOwnerTelegramId } from "./auth-config.ts";
 
-export function accountKeyFor(platform: string, subject: string): string {
-  // Preserve existing Telegram account keys while other providers join through
-  // the provider-neutral login/session boundary.
-  return platform === "telegram" ? `TELEGRAM#${subject}` : `ACCOUNT#${platform}#${subject}`;
-}
-
-export function accountKey(principal: LoginPrincipal): string {
-  return accountKeyFor(principal.provider, principal.subject);
-}
-
 export async function observe(account: Caller): Promise<Item> {
-  const now = new Date().toISOString();
   const updated = await document.send(new UpdateCommand({
-    TableName: tableName,
-    Key: { pk: accountKey(account), sk: "ACCOUNT" },
-    UpdateExpression: [
-      "SET platform = :platform", "platform_user_id = :platformUserId", "display_name = :displayName",
-      "username = :username", "photo_url = :photoUrl", "email = :email", "first_seen_at = if_not_exists(first_seen_at, :now)",
-      "last_seen_at = :now", "#status = if_not_exists(#status, :observed)",
-      "gsi1pk = if_not_exists(gsi1pk, :candidateIndex)", "gsi1sk = :now",
-    ].join(", "),
-    ExpressionAttributeNames: { "#status": "status" },
-    ExpressionAttributeValues: {
-      ":platform": account.provider, ":platformUserId": account.subject,
-      ":displayName": account.displayName,
-      ":username": account.username,
-      ":photoUrl": account.photoUrl,
-      ":email": account.email,
-      ":now": now, ":observed": "OBSERVED", ":candidateIndex": "CANDIDATE#OBSERVED",
-    },
+    ...observeAccount(tableName, account, false, new Date().toISOString()),
     ReturnValues: "ALL_NEW",
   }));
   return updated.Attributes ?? {};
@@ -43,12 +18,12 @@ export async function observe(account: Caller): Promise<Item> {
 
 export async function resolveIdentity(principal: Caller, accountItem?: Item): Promise<Identity | null> {
   const account = accountItem ?? (await document.send(new GetCommand({
-    TableName: tableName, Key: { pk: accountKey(principal), sk: "ACCOUNT" },
+    TableName: tableName, Key: accountItemKey(principal.provider, principal.subject),
   }))).Item;
   const identityId = account?.identity_id;
   if (typeof identityId !== "string") return null;
   const profile = await document.send(new GetCommand({
-    TableName: tableName, Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" },
+    TableName: tableName, Key: profileKey(identityId),
   }));
   // The same rule as identityById: only an active identity acts.
   return profile.Item === undefined || profile.Item.status !== "ACTIVE" ? null : identityFromRecord(profile.Item);
@@ -74,20 +49,10 @@ export async function bootstrapOwner(account: Caller): Promise<Identity | null> 
       { Put: { TableName: tableName, Item: {
         pk: "SYSTEM", sk: "BOOTSTRAP", status: "CLAIMED", identity_id: identityId, telegram_id: account.subject, claimed_at: now,
       }, ConditionExpression: "attribute_not_exists(pk)" } },
-      { Put: { TableName: tableName, Item: {
-        pk: `IDENTITY#${identityId}`, sk: "PROFILE", identity_id: identityId, display_name: name,
-        role_id: protectedRoleId, direct_grants: [], status: "ACTIVE", created_at: now,
-        created_by: "bootstrap", gsi1pk: "IDENTITY#ACTIVE", gsi1sk: name.toLowerCase(),
-      }, ConditionExpression: "attribute_not_exists(pk)" } },
-      { Update: { TableName: tableName, Key: { pk: accountKey(account), sk: "ACCOUNT" },
-        UpdateExpression: "SET identity_id = :identityId, #status = :approved, gsi1pk = :linked, gsi1sk = :now, approved_at = :now, approved_by = :bootstrap",
-        ConditionExpression: "attribute_exists(pk) AND attribute_not_exists(identity_id)",
-        ExpressionAttributeNames: { "#status": "status" },
-        ExpressionAttributeValues: {
-          ":identityId": identityId, ":approved": "APPROVED", ":linked": `IDENTITY#${identityId}`,
-          ":now": now, ":bootstrap": "bootstrap",
-        },
-      } },
+      ...createIdentity({
+        tableName, identityId, account: { provider: account.provider, subject: account.subject }, displayName: name,
+        roleId: protectedRoleId, directGrants: [], createdBy: "bootstrap", now,
+      }),
     ] }));
     return { id: identityId, displayName: name, roleId: protectedRoleId, directGrants: [] };
   } catch (error) {
@@ -105,11 +70,11 @@ export async function bootstrapOwner(account: Caller): Promise<Identity | null> 
 export async function identityAccounts(identity: Identity): Promise<Item[]> {
   const result = await document.send(new QueryCommand({
     TableName: tableName,
-    IndexName: "gsi1",
+    IndexName: accessIndexName,
     KeyConditionExpression: "gsi1pk = :identity",
-    ExpressionAttributeValues: { ":identity": `IDENTITY#${identity.id}` },
+    ExpressionAttributeValues: { ":identity": identityIndex(identity.id) },
   }));
-  return (result.Items ?? []).filter((item) => item.sk === "ACCOUNT");
+  return (result.Items ?? []).filter((item) => item.sk === accountSort);
 }
 
 // Read from the index, so it can lag a write. A change that must keep an Owner
@@ -120,10 +85,10 @@ export async function activeOwnerCount(): Promise<number> {
   do {
     const page = await document.send(new QueryCommand({ // NOSONAR paginated: the next token comes from the previous page
       TableName: tableName,
-      IndexName: "gsi1",
+      IndexName: accessIndexName,
       KeyConditionExpression: "gsi1pk = :state",
       FilterExpression: "role_id = :protected",
-      ExpressionAttributeValues: { ":state": "IDENTITY#ACTIVE", ":protected": protectedRoleId },
+      ExpressionAttributeValues: { ":state": activeIdentityIndex, ":protected": protectedRoleId },
       Select: "COUNT",
       ExclusiveStartKey: cursor,
     }));
@@ -135,7 +100,7 @@ export async function activeOwnerCount(): Promise<number> {
 
 export async function identityById(identityId: string): Promise<Identity | null> {
   const item = (await document.send(new GetCommand({
-    TableName: tableName, Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" }, ConsistentRead: true,
+    TableName: tableName, Key: profileKey(identityId), ConsistentRead: true,
   }))).Item;
   return item === undefined || item.status !== "ACTIVE" ? null : identityFromRecord(item);
 }

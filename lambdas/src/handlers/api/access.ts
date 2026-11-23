@@ -8,7 +8,9 @@ import { type Response, response, type Event, parameter, parseJsonObject } from 
 import { document, tableName, type Item } from "./access-store.ts";
 import { requirePermission } from "./permissions.ts";
 import { events } from "./clients.ts";
-import { accountKeyFor, identityById } from "./identity-store.ts";
+import { identityById } from "./identity-store.ts";
+import { createIdentity } from "../../access/identity-creation.ts";
+import { accessIndexName, accountItemKey, activeIdentityIndex, candidateIndex, identityIndex, profileKey } from "../../access/keys.ts";
 import { callerCondition, canAssign, canDelete, lastHolderRefusal, protectedRoleRefusal } from "./owner-guard.ts";
 import { passwordCredentials } from "./credentials.ts";
 import { isConditionFailure } from "./conditions.ts";
@@ -29,8 +31,8 @@ export function roles(caller: Identity): Response {
 }
 
 export async function candidates(): Promise<Response> {
-  const pages = await Promise.all(["CANDIDATE#REQUESTED", "CANDIDATE#OBSERVED"].map((state) => document.send(new QueryCommand({
-    TableName: tableName, IndexName: "gsi1", KeyConditionExpression: "gsi1pk = :state",
+  const pages = await Promise.all([candidateIndex.requested, candidateIndex.observed].map((state) => document.send(new QueryCommand({
+    TableName: tableName, IndexName: accessIndexName, KeyConditionExpression: "gsi1pk = :state",
     ExpressionAttributeValues: { ":state": state }, ScanIndexForward: false,
   }))));
   return response(200, { candidates: pages.flatMap((page) => page.Items ?? []).map((item) => ({
@@ -56,17 +58,17 @@ export async function identities(caller: Identity): Promise<Response> {
   const emailVerified = verificationReader();
   const profiles = await document.send(new QueryCommand({
     TableName: tableName,
-    IndexName: "gsi1",
+    IndexName: accessIndexName,
     KeyConditionExpression: "gsi1pk = :state",
-    ExpressionAttributeValues: { ":state": "IDENTITY#ACTIVE" },
+    ExpressionAttributeValues: { ":state": activeIdentityIndex },
   }));
   const items = await Promise.all((profiles.Items ?? []).map(async (profile) => {
     const identityId = String(profile.identity_id);
     const accounts = await document.send(new QueryCommand({
       TableName: tableName,
-      IndexName: "gsi1",
+      IndexName: accessIndexName,
       KeyConditionExpression: "gsi1pk = :identity",
-      ExpressionAttributeValues: { ":identity": `IDENTITY#${identityId}` },
+      ExpressionAttributeValues: { ":identity": identityIndex(identityId) },
     }));
     return {
       id: identityId,
@@ -104,7 +106,7 @@ async function commitRoleChange(callerIdentity: Identity, identityId: string, ro
       { ConditionCheck: { TableName: tableName, ...callerCondition(callerIdentity, targetRoleId) } },
       { Update: {
         TableName: tableName,
-        Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" },
+        Key: profileKey(identityId),
         UpdateExpression: "SET role_id = :roleId, updated_at = :now, updated_by = :by",
         ConditionExpression: "attribute_exists(pk) AND #status = :active AND role_id = :current",
         ExpressionAttributeNames: { "#status": "status" },
@@ -186,7 +188,7 @@ export async function approve(identity: Identity, platform: string, platformUser
   // A direct grant is an exception only a holder of the protected role makes.
   const forbidden = directGrants.length > 0 ? requirePermission(identity, "access.owner.grant") : protectedRoleRefusal(identity, [roleId]);
   if (forbidden !== null) return forbidden;
-  const account = { pk: accountKeyFor(platform, platformUserId), sk: "ACCOUNT" };
+  const account = accountItemKey(platform, platformUserId);
   const candidate = await document.send(new GetCommand({ TableName: tableName, Key: account }));
   if (candidate.Item === undefined || candidate.Item.identity_id !== undefined) return response(409, { error: "candidate_unavailable" });
   const identityId = randomUUID();
@@ -194,17 +196,10 @@ export async function approve(identity: Identity, platform: string, platformUser
   const name = String(candidate.Item.display_name ?? candidate.Item.email ?? platformUserId);
   try {
     await document.send(new TransactWriteCommand({ TransactItems: [
-      { Put: { TableName: tableName, Item: {
-        pk: `IDENTITY#${identityId}`, sk: "PROFILE", identity_id: identityId, display_name: name,
-        role_id: roleId, direct_grants: directGrants, status: "ACTIVE", created_at: now,
-        created_by: identity.id, gsi1pk: "IDENTITY#ACTIVE", gsi1sk: name.toLowerCase(),
-      }, ConditionExpression: "attribute_not_exists(pk)" } },
-      { Update: { TableName: tableName, Key: account,
-        UpdateExpression: "SET identity_id = :identityId, #status = :approved, gsi1pk = :linked, gsi1sk = :now, approved_at = :now, approved_by = :by",
-        ConditionExpression: "attribute_exists(pk) AND attribute_not_exists(identity_id)",
-        ExpressionAttributeNames: { "#status": "status" },
-        ExpressionAttributeValues: { ":identityId": identityId, ":approved": "APPROVED", ":linked": `IDENTITY#${identityId}`, ":now": now, ":by": identity.id },
-      } },
+      ...createIdentity({
+        tableName, identityId, account: { provider: platform, subject: platformUserId }, displayName: name,
+        roleId, directGrants, createdBy: identity.id, now,
+      }),
     ] }));
   } catch (error) {
     // Another Owner approved or dismissed the candidate first.
@@ -219,11 +214,11 @@ export async function dismiss(identity: Identity, platform: string, platformUser
   const now = new Date().toISOString();
   try {
     await document.send(new UpdateCommand({
-      TableName: tableName, Key: { pk: accountKeyFor(platform, platformUserId), sk: "ACCOUNT" },
+      TableName: tableName, Key: accountItemKey(platform, platformUserId),
       UpdateExpression: "SET #status = :dismissed, gsi1pk = :state, gsi1sk = :now, dismissed_at = :now, dismissed_by = :by",
       ConditionExpression: "attribute_exists(pk) AND attribute_not_exists(identity_id)",
       ExpressionAttributeNames: { "#status": "status" },
-      ExpressionAttributeValues: { ":dismissed": "DISMISSED", ":state": "CANDIDATE#DISMISSED", ":now": now, ":by": identity.id },
+      ExpressionAttributeValues: { ":dismissed": "DISMISSED", ":state": candidateIndex.dismissed, ":now": now, ":by": identity.id },
     }));
   } catch (error) {
     // The candidate was approved first, or no longer exists.

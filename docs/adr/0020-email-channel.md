@@ -1,6 +1,6 @@
 # ADR-0020 — SNS for out-of-band alerts; provider-neutral transactional email
 
-- Status: Accepted — amended 2026-09-21 when password identities and player invitations created a sending use case; amended 2026-11-23 to make SES the default adapter
+- Status: Accepted — amended 2026-09-21 when password identities and player invitations created a sending use case; amended 2026-11-23 to make SES the default adapter when a sender is set
 - Date: 2026-08-11
 - Milestone: M5
 
@@ -65,16 +65,19 @@ therefore fired. Transactional email is now a delivery port beside Telegram, not
 - The existing SNS email subscription remains the independent operational backstop. Resend must not become a
   dependency of budget, anomaly or backup-failure alerts.
 
-## Amendment 2026-11-23 — SES is the default adapter
+## Amendment 2026-11-23 — SES is the default adapter when a sender is set
 
 Onboarding a new group must need no account outside AWS and GitHub. Resend needs its own sign-up, an API key and a
 domain check. Amazon SES needs none of these: it is in the same account, and the Lambda sends with its own role.
 
 - `ses` is a third adapter beside `resend` and `none`. Both the access API and the notifier choose their adapter in one
   place, `lambdas/src/email/email-delivery.ts`.
-- The deploy workflows choose `ses` when the repository sets no `EMAIL_DELIVERY_PROVIDER`. A deployment that sets
-  `resend` or `none` keeps it. The Terraform variable default stays `none`, so a root applied by hand with no
-  sender still plans.
+- The deploy workflows choose `ses` when the repository sets a sender (`RESEND_EMAIL_FROM`) but no
+  `EMAIL_DELIVERY_PROVIDER`, and `none` when it sets neither. A deployment that names a provider keeps it. The
+  Terraform variable default stays `none`, so a root applied by hand with no sender still plans.
+- Email stays optional. An installation with no sender works: the first owner claims the project through a one-time
+  link that onboarding prints, which also confirms the owner's address, and others join through invitation links.
+  Email adds verification, password recovery and invitations sent by mail.
 - The access-api root makes the sender's domain an SES identity. When that domain is inside `dns_zone_name`, it also
   writes the three DKIM records. Otherwise it outputs them for the owner to add at the domain's DNS provider.
 - Each Lambda may call `ses:SendEmail` only on that one identity. The deploy role may create and tag SES identities,
@@ -82,7 +85,7 @@ domain check. Amazon SES needs none of these: it is in the same account, and the
 - SES has no idempotency key. A retried send can deliver a second copy. The links in a message stay single-use, so a
   duplicate is harmless.
 - A new account starts in the SES sandbox and can send only to verified addresses. Leaving it is a request to AWS that
-  the owner makes. The first owner does not depend on email: onboarding gives them a one-time claim link.
+  the owner makes.
 - SNS email stays the alert backstop. SES does not carry budget, anomaly or backup-failure alerts.
 
 ## Consequences

@@ -1,15 +1,17 @@
-import { type Identity, can, isProtectedRoleId, protectedRoleId } from "../../access/domain.ts";
+import { type Identity, type Role, can, isProtectedRoleId, protectedRoleId } from "../../access/domain.ts";
+import { holdsAll } from "../../access/roles.ts";
 import { type Response, response } from "./http.ts";
 import { profileKey } from "../../access/keys.ts";
-import { requirePermission } from "./permissions.ts";
 import { activeOwnerCount } from "./identity-store.ts";
 
-// One rule for every change that touches the protected role: only a holder of
-// the reserved permission may give, take or delete it, and it keeps a holder.
+// The rules for every change to who holds which role (ADR-0083). No escalation:
+// the caller holds every permission of each role involved, so only a holder of
+// the protected role, which holds every permission, may give, take or delete
+// it. And the protected role keeps a holder.
 
-/** A refusal when any of these roles is the protected one and the caller may not grant it. */
-export function protectedRoleRefusal(caller: Identity, roleIds: readonly string[]): Response | null {
-  return roleIds.some(isProtectedRoleId) ? requirePermission(caller, "access.owner.grant") : null;
+/** A 403 when the caller does not hold every permission of these roles. An unknown role involves none. */
+export function escalationRefusal(caller: Identity, roles: readonly (Role | null)[]): Response | null {
+  return holdsAll(caller, roles.flatMap((role) => role?.permissions ?? [])) ? null : response(403, { error: "forbidden" });
 }
 
 /** A 409 when the change would leave no active holder of the protected role. */
@@ -34,12 +36,11 @@ export function callerCondition(caller: Identity, targetRoleId: string) {
 }
 
 /** Whether the caller may delete the target, by the rules the delete route applies. */
-export function canDelete(caller: Identity, target: Readonly<{ id: string; roleId: string }>): boolean {
-  return target.id !== caller.id && can(caller, "access.manage")
-    && (!isProtectedRoleId(target.roleId) || can(caller, "access.owner.grant"));
+export function canDelete(caller: Identity, target: Readonly<{ id: string; role: Role | null }>): boolean {
+  return target.id !== caller.id && can(caller, "access.manage") && escalationRefusal(caller, [target.role]) === null;
 }
 
 /** Whether the caller may give this role, by the rules the role change and approval routes apply. */
-export function canAssign(caller: Identity, roleId: string): boolean {
-  return can(caller, "access.manage") && protectedRoleRefusal(caller, [roleId]) === null;
+export function canAssign(caller: Identity, role: Role): boolean {
+  return can(caller, "access.manage") && escalationRefusal(caller, [role]) === null;
 }

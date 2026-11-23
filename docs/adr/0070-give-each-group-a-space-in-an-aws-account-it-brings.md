@@ -3,6 +3,7 @@
 - Status: Proposed
 - Date: 2026-10-26
 - Milestone: M7 — spaces (new; not yet in the roadmap)
+- Amended by: [ADR-0083](0083-panel-roles-are-owner-defined-data.md) — panel roles are owner-defined data, deployment-wide
 - Changes: the README non-goal "No multi-tenancy", when this record is accepted
 - Relates: [ADR-0002](0002-host-on-aws.md), [ADR-0011](0011-terraform-for-infrastructure.md),
   [ADR-0040](0040-reusable-presets-and-world-wipes.md), [ADR-0054](0054-place-a-session-on-a-host-with-room.md),

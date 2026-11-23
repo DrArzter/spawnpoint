@@ -1,6 +1,7 @@
 import { accessInvitationTokenHash, accessInvitationUsable, issueAccessInvitation, accessInvitationUrl, renderAccessInvitationEmail, renderAccessInvitationProofEmail } from "../../access/access-invitations.ts";
 import { GetCommand, QueryCommand, PutCommand, UpdateCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
-import { type Identity, defaultRoleId } from "../../access/domain.ts";
+import { type Identity } from "../../access/domain.ts";
+import { readDefaultRoleId } from "./role-store.ts";
 import { normalizeEmail } from "../../access/password-credential.ts";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { issueEmailAction, emailActionTokenHash } from "../../access/email-actions.ts";
@@ -175,6 +176,8 @@ export async function redeemAccessInvitation(account: Caller, event: Event): Pro
   const identityId = randomUUID();
   const now = new Date().toISOString();
   const name = account.displayName;
+  // The default role is read as the invitation is used: the owner may have changed it since.
+  const roleId = await readDefaultRoleId();
   try {
     await document.send(new TransactWriteCommand({ TransactItems: [
       { Update: {
@@ -193,12 +196,12 @@ export async function redeemAccessInvitation(account: Caller, event: Event): Pro
       } }] : []),
       ...createIdentity({
         tableName, identityId, account: { provider: account.provider, subject: account.subject }, displayName: name,
-        roleId: defaultRoleId, directGrants: [], createdBy: found.Item!.created_by, now,
+        roleId, directGrants: [], createdBy: found.Item!.created_by, now,
       }),
     ] }));
   } catch (error) {
     if (isConditionFailure(error)) return response(409, { error: "invitation_unavailable" });
     throw error;
   }
-  return response(201, { identity: { id: identityId, displayName: name, roleId: defaultRoleId, directGrants: [] } });
+  return response(201, { identity: { id: identityId, displayName: name, roleId, directGrants: [] } });
 }

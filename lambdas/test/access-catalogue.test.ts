@@ -1,17 +1,23 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+import { accessTable } from "./support/access-table.ts";
 
 process.env.ACCESS_TABLE_NAME ??= "access-api-test";
 const { permissions, permissionCatalogue, reservedPermissions, defaultRoleId, builtInRoles } = await import("../src/access/domain.ts");
-const { roles } = await import("../src/handlers/api/access.ts");
+const { roles } = await import("../src/handlers/api/roles.ts");
+const { document } = await import("../src/handlers/api/access-store.ts");
 
 type Served = Readonly<{
-  roles: readonly { id: string; builtIn: boolean; protected: boolean; version: number; assignable: boolean; description: string }[];
+  roles: readonly { id: string; builtIn: boolean; protected: boolean; version: number; assignable: boolean; description: string; holders: number }[];
   permissions: readonly { id: string; group: string; label: string; description: string; reserved: boolean }[];
   defaultRoleId: string;
 }>;
 
-const served = (caller: Parameters<typeof roles>[0]) => JSON.parse(roles(caller).body as string) as Served;
+async function served(t: TestContext, caller: Parameters<typeof roles>[0]): Promise<Served> {
+  t.mock.restoreAll();
+  accessTable(t, document as never, [{ pk: "IDENTITY#o", sk: "PROFILE", role_id: "owner", gsi1pk: "IDENTITY#ACTIVE" }]);
+  return JSON.parse((await roles(caller)).body as string) as Served;
+}
 const owner = { id: "o", displayName: "Owner", roleId: "owner", directGrants: [] } as const;
 
 test("the catalogue describes every permission once, in the code's order", () => {
@@ -22,8 +28,8 @@ test("the catalogue describes every permission once, in the code's order", () =>
   }
 });
 
-test("the role list carries the catalogue, the default role and the role flags", () => {
-  const body = served(owner);
+test("the role list carries the catalogue, the default role and the role flags", async (t) => {
+  const body = await served(t, owner);
   assert.deepEqual(body.permissions, JSON.parse(JSON.stringify(permissionCatalogue)));
   assert.equal(body.defaultRoleId, defaultRoleId);
   assert.ok(Object.hasOwn(builtInRoles, body.defaultRoleId));
@@ -35,13 +41,17 @@ test("the role list carries the catalogue, the default role and the role flags",
     assert.equal(role.version, 1);
     assert.ok(role.description.length > 0);
   }
+  assert.deepEqual(Object.fromEntries(body.roles.map((role) => [role.id, role.holders])), { viewer: 0, player: 0, operator: 0, owner: 1 });
 });
 
-test("assignable follows the caller: only a holder of the reserved permission may give the protected role", () => {
-  const assignable = (caller: Parameters<typeof roles>[0]) => Object.fromEntries(served(caller).roles.map((role) => [role.id, role.assignable]));
-  assert.deepEqual(assignable(owner), { viewer: true, player: true, operator: true, owner: true });
+test("assignable follows the caller: only a caller who holds every permission of a role may give it", async (t) => {
+  const assignable = async (caller: Parameters<typeof roles>[0]) => Object.fromEntries((await served(t, caller)).roles.map((role) => [role.id, role.assignable]));
+  assert.deepEqual(await assignable(owner), { viewer: true, player: true, operator: true, owner: true });
   const manager = { id: "m", displayName: "Manager", roleId: "operator", directGrants: ["access.manage"] } as const;
-  assert.deepEqual(assignable(manager), { viewer: true, player: true, operator: true, owner: false });
+  assert.deepEqual(await assignable(manager), { viewer: true, player: true, operator: true, owner: false });
+  // No escalation: a manager who does not hold the operator's permissions cannot give that role.
+  const narrow = { id: "n", displayName: "Narrow", roleId: "viewer", directGrants: ["access.manage"] } as const;
+  assert.deepEqual(await assignable(narrow), { viewer: true, player: false, operator: false, owner: false });
   const reader = { id: "r", displayName: "Reader", roleId: "viewer", directGrants: ["access.read"] } as const;
-  assert.deepEqual(assignable(reader), { viewer: false, player: false, operator: false, owner: false });
+  assert.deepEqual(await assignable(reader), { viewer: false, player: false, operator: false, owner: false });
 });

@@ -1,4 +1,4 @@
-import { type Identity, builtInRoles, defaultRoleId, isBuiltInRoleId, type Permission, permissionCatalogue, permissions, reservedPermissions } from "../../access/domain.ts";
+import { type Identity, type Permission, permissions, reservedPermissions } from "../../access/domain.ts";
 import { QueryCommand, UpdateCommand, GetCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../../domain/access-events.ts";
@@ -11,23 +11,10 @@ import { events } from "./clients.ts";
 import { identityById } from "./identity-store.ts";
 import { createIdentity } from "../../access/identity-creation.ts";
 import { accessIndexName, accountItemKey, activeIdentityIndex, candidateIndex, identityIndex, profileKey } from "../../access/keys.ts";
-import { callerCondition, canAssign, canDelete, lastHolderRefusal, protectedRoleRefusal } from "./owner-guard.ts";
+import { callerCondition, canDelete, escalationRefusal, lastHolderRefusal } from "./owner-guard.ts";
+import { listRoles, readDefaultRoleId, readRole } from "./role-store.ts";
 import { passwordCredentials } from "./credentials.ts";
 import { isConditionFailure } from "./conditions.ts";
-
-/**
- * The role list with the permission catalogue and the default role. Built-in
- * roles have version 1 until roles are stored.
- */
-export function roles(caller: Identity): Response {
-  return response(200, {
-    roles: Object.values(builtInRoles).map((role) => ({
-      ...role, builtIn: true, version: 1, assignable: canAssign(caller, role.id),
-    })),
-    permissions: permissionCatalogue,
-    defaultRoleId,
-  });
-}
 
 export async function candidates(): Promise<Response> {
   const pages = await Promise.all([candidateIndex.requested, candidateIndex.observed].map((state) => document.send(new QueryCommand({
@@ -54,6 +41,7 @@ function verificationReader(): (email: string) => Promise<boolean> {
 }
 
 export async function identities(caller: Identity): Promise<Response> {
+  const roles = new Map((await listRoles()).map((role) => [role.id, role]));
   const emailVerified = verificationReader();
   const profiles = await document.send(new QueryCommand({
     TableName: tableName,
@@ -74,7 +62,7 @@ export async function identities(caller: Identity): Promise<Response> {
       displayName: profile.display_name,
       roleId: profile.role_id,
       directGrants: profile.direct_grants ?? [],
-      canDelete: canDelete(caller, { id: identityId, roleId: String(profile.role_id) }),
+      canDelete: canDelete(caller, { id: identityId, role: roles.get(String(profile.role_id)) ?? null }),
       links: await Promise.all((accounts.Items ?? []).filter((account) => typeof account.platform === "string").map(async (account) => ({
         platform: account.platform,
         value: account.platform_user_id,
@@ -124,25 +112,26 @@ async function commitRoleChange(callerIdentity: Identity, identityId: string, ro
 export async function updateRole(callerIdentity: Identity, identityId: string, body: string | undefined): Promise<Response> {
   const parsed = parseJsonObject({ body });
   const roleId = typeof parsed.roleId === "string" ? parsed.roleId : "";
-  if (!isBuiltInRoleId(roleId)) return response(400, { error: "unknown_role" });
+  const role = roleId === "" ? null : await readRole(roleId);
+  if (role === null) return response(400, { error: "unknown_role" });
   if (identityId === callerIdentity.id && roleId !== callerIdentity.roleId) return response(409, { error: "self_role_change_forbidden" });
   const target = await identityById(identityId);
   if (target === null) return response(404, { error: "identity_not_found" });
-  const refusal = protectedRoleRefusal(callerIdentity, [roleId, target.roleId]) ?? await lastHolderRefusal(target.roleId, roleId);
+  // Giving the new role and taking the old one away are both checked.
+  const refusal = escalationRefusal(callerIdentity, [role, target.role ?? null]) ?? await lastHolderRefusal(target.roleId, roleId);
   if (refusal !== null) return refusal;
   const conflict = await commitRoleChange(callerIdentity, identityId, roleId, target.roleId);
   if (conflict !== null) return conflict;
   return response(200, { identityId, roleId });
 }
 
-type ApprovalInput = Readonly<{ roleId: keyof typeof builtInRoles; directGrants: Permission[] }>;
+type ApprovalInput = Readonly<{ roleId: string | null; directGrants: Permission[] }>;
 
 type ApprovalInputResult = Readonly<{ value: ApprovalInput; error: null }> | Readonly<{ value: null; error: Response }>;
 
 function approvalInput(body: string | undefined): ApprovalInputResult {
   const parsed = parseJsonObject({ body });
-  const roleId = typeof parsed.roleId === "string" ? parsed.roleId : defaultRoleId;
-  if (!isBuiltInRoleId(roleId)) return { value: null, error: response(400, { error: "unknown_role" }) };
+  const roleId = typeof parsed.roleId === "string" ? parsed.roleId : null;
   const requestedGrants = parsed.directGrants;
   const directGrants = Array.isArray(requestedGrants) && requestedGrants.every(
     (permission) => typeof permission === "string" && permissions.includes(permission as Permission),
@@ -156,7 +145,7 @@ function approvalInput(body: string | undefined): ApprovalInputResult {
   return { value: { roleId, directGrants }, error: null };
 }
 
-async function publishAccessApproval(platform: string, candidate: Item, identityId: string, displayName: string, roleId: keyof typeof builtInRoles): Promise<void> {
+async function publishAccessApproval(platform: string, candidate: Item, identityId: string, displayName: string, roleName: string): Promise<void> {
   if (platform !== "telegram") return;
   const telegramChatId = privateTelegramChatId(candidate.direct_chat_id ?? candidate.chat_id);
   if (telegramChatId === null) return;
@@ -164,7 +153,7 @@ async function publishAccessApproval(platform: string, candidate: Item, identity
     telegramChatId,
     identityId,
     displayName,
-    roleName: builtInRoles[roleId].name,
+    roleName,
   };
   try {
     const published = await events.send(new PutEventsCommand({ Entries: [{
@@ -183,9 +172,12 @@ async function publishAccessApproval(platform: string, candidate: Item, identity
 export async function approve(identity: Identity, platform: string, platformUserId: string, body: string | undefined): Promise<Response> {
   const input = approvalInput(body);
   if (input.error !== null) return input.error;
-  const { roleId, directGrants } = input.value;
+  const { directGrants } = input.value;
+  const role = await readRole(input.value.roleId ?? await readDefaultRoleId());
+  if (role === null) return response(400, { error: "unknown_role" });
+  const roleId = role.id;
   // A direct grant is an exception only a holder of the protected role makes.
-  const forbidden = directGrants.length > 0 ? requirePermission(identity, "access.owner.grant") : protectedRoleRefusal(identity, [roleId]);
+  const forbidden = directGrants.length > 0 ? requirePermission(identity, "access.owner.grant") : escalationRefusal(identity, [role]);
   if (forbidden !== null) return forbidden;
   const account = accountItemKey(platform, platformUserId);
   const candidate = await document.send(new GetCommand({ TableName: tableName, Key: account }));
@@ -205,7 +197,7 @@ export async function approve(identity: Identity, platform: string, platformUser
     if (isConditionFailure(error)) return response(409, { error: "candidate_unavailable" });
     throw error;
   }
-  await publishAccessApproval(platform, candidate.Item, identityId, name, roleId);
+  await publishAccessApproval(platform, candidate.Item, identityId, name, role.name);
   return response(201, { identity: { id: identityId, displayName: name, roleId, directGrants } });
 }
 

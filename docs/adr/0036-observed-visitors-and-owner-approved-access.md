@@ -4,6 +4,7 @@
   access model for the bot and the panel
 - Date: 2026-08-28
 - Milestone: M4
+- Superseded in part by: [ADR-0083](0083-panel-roles-are-owner-defined-data.md) — roles are owner-defined data, not four fixed roles
 - Amended by: [ADR-0050](0050-default-role-on-sign-in-and-elevation-requests.md) — a provider-neutral Access invitation creates an Identity with the default role, and later review is for privilege elevation rather than entry
 - Amends: [ADR-0018](0018-identity-and-sign-in.md), [ADR-0019](0019-account-linking.md), and [ADR-0021](0021-sign-in-from-linked-chat-account.md)
 

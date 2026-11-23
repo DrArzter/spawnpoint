@@ -13,7 +13,7 @@ import { wipeStatus } from "../../core/worlds";
 import { Icon } from "../../icons";
 import { formatBytes, formatTime, shortDigest } from "../../lib/format";
 import { useMediaQuery } from "../../shell/hooks";
-import { Address, Choice, Choices, Col, DetailRow, Details, DetailsGroup, Empty, Field, FilterRow, Ghost, Indicator, Log, NoMatches, Notice, Overflow, Page, Pager, Panel, SelectInput, Skeleton, State, Table, Tabs, Verb, Verbs } from "./ui";
+import { Address, Choice, Choices, Col, DetailRow, DetailsGroup, Empty, Field, FilterRow, Ghost, Indicator, Log, NoMatches, Notice, Overflow, Page, Pager, Panel, SelectInput, Skeleton, State, Table, Tabs, Verb, Verbs } from "./ui";
 import { MetricsPanel } from "./Metrics";
 import { ConsolePanel } from "./Rcon";
 import { WhitelistPanel } from "./Whitelist";

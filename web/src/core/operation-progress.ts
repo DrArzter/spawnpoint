@@ -114,22 +114,29 @@ export function logTime(at: string): string {
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString("en-GB", { hour12: false });
 }
 
-/** The rows of the progress element at `now`, the same words in every skin. */
-export function progressDetails(model: OperationProgressModel, now: number): Detail[] {
-  const rows: Detail[] = [];
-  const text = (value: string, extra: { mono?: boolean; wrap?: boolean } = {}) => ({ type: "text" as const, text: value, ...extra });
-  // While it runs, the step rows keep their place: a placeholder until the API answers, then "—" when there is none.
+// While it runs, the step rows keep their place: a placeholder until the API answers, then "—" when there is none.
+function stepRows(model: OperationProgressModel): Detail[] {
+  const text = (value: string): DetailValue => ({ type: "text", text: value });
+  if (!model.running) {
+    const known: Detail[] = [];
+    if (model.step !== null) known.push({ label: PROGRESS_LABELS.step, value: text(model.step) });
+    if (model.child !== null) known.push({ label: PROGRESS_LABELS.child, value: text(model.child) });
+    return known;
+  }
   const reserved = (value: string | null): DetailValue => {
     if (!model.known) return { type: "loading" };
     return value === null ? { type: "absent", text: "—" } : text(value);
   };
-  if (model.running) {
-    rows.push({ label: PROGRESS_LABELS.step, value: reserved(model.step) });
-    if (model.nests) rows.push({ label: PROGRESS_LABELS.child, value: reserved(model.child) });
-  } else {
-    if (model.step !== null) rows.push({ label: PROGRESS_LABELS.step, value: text(model.step) });
-    if (model.child !== null) rows.push({ label: PROGRESS_LABELS.child, value: text(model.child) });
-  }
+  const rows: Detail[] = [{ label: PROGRESS_LABELS.step, value: reserved(model.step) }];
+  if (model.nests) rows.push({ label: PROGRESS_LABELS.child, value: reserved(model.child) });
+  return rows;
+}
+
+/** The rows of the progress element at `now`, the same words in every skin. */
+export function progressDetails(model: OperationProgressModel, now: number): Detail[] {
+  const rows: Detail[] = [];
+  const text = (value: string, extra: { mono?: boolean; wrap?: boolean } = {}) => ({ type: "text" as const, text: value, ...extra });
+  rows.push(...stepRows(model));
   const seconds = model.running ? elapsedSeconds(model.startedAt, now) : model.ranSeconds;
   rows.push({ label: PROGRESS_LABELS.elapsed, value: seconds === null ? { type: "absent", text: "—" } : text(clock(seconds), { mono: true }) });
   const reading = model.running ? eta(model.startedAt, model.expectation, now) : null;

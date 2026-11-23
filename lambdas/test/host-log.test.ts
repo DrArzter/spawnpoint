@@ -32,6 +32,20 @@ test("the milestones of a real start read as human steps with their seconds", ()
   assert.equal(lines[6]?.at, new Date(T0 + 1216_000).toISOString());
 });
 
+test("the release copy says how it ran: folders or files, why, and how much came down", () => {
+  assert.deepEqual(texts(["fetch=folders", "fetch_reason=listed", "fetched_bytes=734003200", "discarded=0", "layout=legacy", "fetch=shards", "shards=212", "fetched=1659", "fetch_reason=mostly-cached"]), [
+    "Copy: folders",
+    "Copy reason: listed",
+    "Bytes copied: 734003200",
+    "Discarded: 0",
+    "Layout: legacy",
+    "Copy: shards",
+    "Shards: 212",
+    "Fetched: 1659",
+    "Copy reason: mostly-cached",
+  ]);
+});
+
 test("an unknown step name still reads in words, and a malformed step line is dropped", () => {
   assert.deepEqual(texts(["step=addons_resolved at=2026-11-22T22:36:25Z elapsed_seconds=3", "step=bad at=yesterday elapsed_seconds=3"]), ["Addons resolved (3 s)"]);
 });

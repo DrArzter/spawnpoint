@@ -130,14 +130,46 @@ file_matches() {
   [[ "${actual_sha%% *}" == "${expected_sha}" ]]
 }
 
+# A copy that would fill the disk stops here, with the numbers, not halfway
+# through with "could not download".
+require_space() {
+  local dir="$1" need="$2" free margin="${RELEASE_DOWNLOAD_DISK_MARGIN_BYTES:-268435456}"
+  [[ "${margin}" =~ ^[0-9]+$ ]] || die "RELEASE_DOWNLOAD_DISK_MARGIN_BYTES must be a whole number"
+  free="$(df -Pk -- "${dir}" | awk 'NR == 2 { printf "%.0f\n", $4 * 1024 }')"
+  [[ "${free}" =~ ^[0-9]+$ ]] || die "could not read the free space of ${dir}"
+  ((free >= need + margin)) ||
+    die "not enough disk space for release ${release}: the copy needs ${need} bytes and ${margin} spare, ${dir} has ${free} free"
+}
+
+fetch_mode="none"
+fetch_reason="none"
+fetched_bytes=0
+discarded=0
+shards_fetched=0
+
+# One shard of the object store, exact objects only. A failure leaves a mark
+# for the caller, which waits for every shard before it judges.
+fetch_shard() {
+  local shard="$1" listed="$2" sha
+  local -a shas=() filters=(--exclude '*')
+  read -r -a shas <<<"${listed}"
+  for sha in "${shas[@]}"; do
+    filters+=(--include "$(glob_literal "${sha}")")
+  done
+  aws "${S3_GLOBAL_ARGS[@]}" s3 cp \
+    "s3://${RELEASE_BUCKET}/objects/sha256/${shard}/" "${fetch_dir}/${shard}/" \
+    --recursive --only-show-errors "${filters[@]}" >&2 ||
+    : >"${fetch_dir}/.failed.${shard}"
+}
+
 # objects-v1: every file is an object named by its digest. Missing digests are
 # fetched once into the shared cache, then the payload is built from the cache.
 # Mods are hard links, so a mod costs no second copy. Overrides are copies,
 # because a mod rewrites its configs at run time.
 download_objects_v1() {
-  local sha bytes relative object target tmp fetched_file cache_root
-  local -A bytes_of=()
-  local -a missing=() filters=()
+  local sha bytes relative object target tmp fetched_file cache_root shard parallel running
+  local -A bytes_of=() shard_shas=()
+  local -a missing=()
   downloaded=0
   kept=0
   fetched=0
@@ -179,15 +211,35 @@ download_objects_v1() {
   done < <(printf '%s\n' "${!bytes_of[@]}" | sort)
 
   if ((${#missing[@]} > 0)); then
-    fetch_dir="$(mktemp -d "${cache_root}/.fetch.XXXXXX")"
-    filters=(--exclude '*')
     for sha in "${missing[@]}"; do
-      filters+=(--include "$(glob_literal "${sha:0:2}/${sha}")")
+      bytes="${bytes_of[${sha}]}"
+      fetched_bytes=$((fetched_bytes + bytes))
+      shard_shas["${sha:0:2}"]+="${sha} "
     done
-    aws "${S3_GLOBAL_ARGS[@]}" s3 cp \
-      "s3://${RELEASE_BUCKET}/objects/sha256/" "${fetch_dir}/" \
-      --recursive --only-show-errors "${filters[@]}" >&2 ||
+    require_space "${cache_root}" "${fetched_bytes}"
+    parallel="${RELEASE_DOWNLOAD_PARALLEL:-8}"
+    [[ "${parallel}" =~ ^[1-9][0-9]{0,2}$ ]] || die "RELEASE_DOWNLOAD_PARALLEL must be a whole number from 1 to 999"
+    fetch_dir="$(mktemp -d "${cache_root}/.fetch.XXXXXX")"
+    # The store is shared by every release, so one copy over all of it would
+    # test every stored key against every filter. Each shard (the first two
+    # hex digits) is copied on its own with exact filters: a short listing and
+    # a few filters, several shards at a time.
+    fetch_mode="shards"
+    fetch_reason="exact"
+    running=0
+    while read -r shard; do
+      fetch_shard "${shard}" "${shard_shas[${shard}]}" &
+      running=$((running + 1))
+      if ((running >= parallel)); then
+        wait -n || true
+        running=$((running - 1))
+      fi
+    done < <(printf '%s\n' "${!shard_shas[@]}" | sort)
+    wait
+    shards_fetched="${#shard_shas[@]}"
+    if find "${fetch_dir}" -maxdepth 1 -name '.failed.*' -print -quit | grep -q .; then
       die "could not download the objects of release ${release}"
+    fi
 
     # The copy does not compare hashes: each object is held to size and digest
     # before it enters the cache, and the host never loads a wrong file.
@@ -253,6 +305,9 @@ if [[ "${layout}" == "objects-v1" ]]; then
   printf 'reused=0\n'
   printf 'layout=objects-v1\n'
   printf 'fetched=%s\n' "${fetched}"
+  printf 'fetch=%s\n' "${fetch_mode}"
+  printf 'fetched_bytes=%s\n' "${fetched_bytes}"
+  printf 'shards=%s\n' "${shards_fetched}"
   # Measurement hook: wall time of this download, for docs/measurements.md.
   printf 'seconds=%s\n' "${SECONDS}"
   exit 0
@@ -339,14 +394,70 @@ done < <(jq -r '
 # The CLI tests every listed key against every filter in one Python thread, so
 # one filter per file costs files x filters: a fresh host with 1,659 missing
 # files spent 19 minutes there with the network idle. Above a small number of
-# missing files the copy takes the two folders whole; the check below still
+# missing files the release prefix is listed first. When it holds only files
+# the manifest names, and this host misses more of their bytes than it holds,
+# the copy takes the two folders whole: fast, and what comes down is known
+# before it starts.
+# Otherwise (an unexpected key, a host that already holds most files, or no
+# listing) the copy keeps one exact filter per file. Either way the check below
 # keeps only the files the manifest names, each held to its SHA-256.
 filter_limit="${RELEASE_DOWNLOAD_FILTER_LIMIT:-64}"
 [[ "${filter_limit}" =~ ^[0-9]+$ ]] || die "RELEASE_DOWNLOAD_FILTER_LIMIT must be a whole number"
+
+# Chooses folders or files for a large copy; sets fetch_mode, fetch_reason and
+# fetched_bytes.
+plan_folder_copy() {
+  local listing key size relative entry missing_bytes="$1" folder_bytes=0 extra_bytes=0 unexpected=0
+  local -A named=() wanted=()
+  while IFS= read -r relative; do
+    named["${relative}"]=1
+  done < <(jq -r '(.server.mods[] | "mods/" + .file), ((.server.overrides // [])[] | "overrides/" + .path)' "${manifest_tmp}")
+  for entry in "${missing[@]}"; do
+    wanted["${entry%%$'\t'*}"]=1
+  done
+  if ! listing="$(s3_cli list-objects-v2 --bucket "${RELEASE_BUCKET}" --prefix "${release_prefix}/" --output json)"; then
+    fetch_reason="no-listing"
+    return
+  fi
+  while IFS=$'\t' read -r key size; do
+    relative="${key#"${release_prefix}/"}"
+    case "${relative}" in
+      mods/* | overrides/*) ;;
+      *) continue ;;
+    esac
+    # Only a whole number reaches the arithmetic below.
+    if [[ -z "${named[${relative}]:-}" || ! "${size}" =~ ^[0-9]{1,15}$ ]]; then
+      unexpected=$((unexpected + 1))
+      continue
+    fi
+    folder_bytes=$((folder_bytes + size))
+    [[ -n "${wanted[${relative}]:-}" ]] || extra_bytes=$((extra_bytes + size))
+  done < <(jq -r '(.Contents // [])[] | [.Key, (.Size | tostring)] | @tsv' <<<"${listing}")
+  if ((unexpected > 0)); then
+    log "release ${release} holds ${unexpected} keys its manifest does not name; copying file by file"
+    fetch_reason="unexpected-keys"
+  elif ((extra_bytes >= missing_bytes)); then
+    fetch_reason="mostly-cached"
+  else
+    fetch_mode="folders"
+    fetch_reason="listed"
+    fetched_bytes="${folder_bytes}"
+  fi
+}
+
 if ((${#missing[@]} > 0)); then
+  missing_bytes=0
+  for entry in "${missing[@]}"; do
+    missing_bytes=$((missing_bytes + ${entry##*$'\t'}))
+  done
+  fetch_mode="files"
+  fetch_reason="few"
+  fetched_bytes="${missing_bytes}"
+  ((${#missing[@]} <= filter_limit)) || plan_folder_copy "${missing_bytes}"
+  require_space "${payload_dir}" "${fetched_bytes}"
   fetch_dir="$(mktemp -d "${payload_dir}/.fetch.XXXXXX")"
   filters=(--exclude '*')
-  if ((${#missing[@]} > filter_limit)); then
+  if [[ "${fetch_mode}" == folders ]]; then
     filters+=(--include 'mods/*' --include 'overrides/*')
   else
     for entry in "${missing[@]}"; do
@@ -368,6 +479,9 @@ if ((${#missing[@]} > 0)); then
     mv -- "${fetched}" "${payload_dir}/${relative}"
     downloaded=$((downloaded + 1))
   done
+  # Files a folder copy brought that this host already held.
+  discarded="$(find "${fetch_dir}" -type f | wc -l)"
+  discarded="${discarded//[[:space:]]/}"
   rm -rf -- "${fetch_dir}"
   fetch_dir=""
 fi
@@ -384,4 +498,8 @@ printf 'downloaded=%s\n' "${downloaded}"
 printf 'kept=%s\n' "${kept}"
 printf 'reused=%s\n' "${reused}"
 printf 'layout=legacy\n'
+printf 'fetch=%s\n' "${fetch_mode}"
+printf 'fetch_reason=%s\n' "${fetch_reason}"
+printf 'fetched_bytes=%s\n' "${fetched_bytes}"
+printf 'discarded=%s\n' "${discarded}"
 printf 'seconds=%s\n' "${SECONDS}"

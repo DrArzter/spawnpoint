@@ -119,8 +119,21 @@ out="$(FAKE_AWS_CALL_LOG="${calls}" download 1.0)"
 grep -qx 'layout=objects-v1' <<<"${out}" || fail "layout line: ${out}"
 grep -qx 'fetched=4' <<<"${out}" || fail "first download: ${out}"
 grep -qx 'result=release_ready' <<<"${out}"
-[[ "$(grep -c '^s3 cp ' "${calls}")" == 1 ]] || fail "expected one concurrent copy"
-[[ "$(grep -c -- '--recursive' "${calls}")" == 1 ]]
+# One exact copy per shard (the first two hex digits), never one over the
+# whole store, which every release shares.
+shards="$(printf '%s\n' "${alpha_sha:0:2}" "${beta_sha:0:2}" "${cfg_a_sha:0:2}" "${cfg_b_sha:0:2}" | sort -u)"
+[[ "$(grep -c '^s3 cp ' "${calls}")" == "$(wc -l <<<"${shards}")" ]] || fail "expected one copy per shard"
+while read -r shard; do
+  grep -q "^s3 cp s3://${RELEASE_BUCKET}/objects/sha256/${shard}/ " "${calls}" || fail "no copy of shard ${shard}"
+done <<<"${shards}"
+if grep -q "^s3 cp s3://${RELEASE_BUCKET}/objects/sha256/ " "${calls}"; then
+  fail "a copy listed the whole object store"
+fi
+grep -qF -- "--include ${alpha_sha}" "${calls}" || fail "the alpha object has no exact filter"
+grep -qx 'fetch=shards' <<<"${out}" || fail "fetch line: ${out}"
+grep -qx "shards=$(wc -l <<<"${shards}")" <<<"${out}" || fail "shards line: ${out}"
+grep -qx "fetched_bytes=$(cat "${fixture}"/src/mods/*.jar "${fixture}"/src/overrides/config/*.toml | wc -c | tr -d ' ')" <<<"${out}" ||
+  fail "fetched_bytes line: ${out}"
 [[ -f "$(payload_of 1.0)/manifest.json" ]]
 cmp -- "${fixture}/src/mods/alpha.jar" "$(payload_of 1.0)/mods/alpha.jar"
 cmp -- "${fixture}/src/overrides/config/b.toml" "$(payload_of 1.0)/overrides/config/b.toml"
@@ -136,6 +149,21 @@ out="$(FAKE_AWS_CALL_LOG="${calls}" download 1.0)"
 grep -qx 'fetched=0' <<<"${out}" || fail "second download: ${out}"
 grep -qx 'kept=4' <<<"${out}" || fail "second download kept: ${out}"
 [[ "$(grep -c '^s3 cp ' "${calls}")" == 0 ]] || fail "second download made a copy"
+grep -qx 'fetch=none' <<<"${out}" || fail "second download fetch line: ${out}"
+
+# A shard that cannot be copied fails the download after every shard ends,
+# and none of the objects enters the cache unverified.
+rm -rf -- "${cache}" "$(payload_of 1.0)"
+fails_with "could not download the objects of release 1.0" env FAKE_S3_CP_FAIL_PREFIX="objects/sha256/${beta_sha:0:2}/" \
+  RELEASE_DOWNLOAD_PARALLEL=1 "${SCRIPTS}/download-release.sh" minecraft main 1.0 "$(payload_of 1.0)"
+[[ -z "$(find "${cache}" -name '.fetch.*' -print -quit)" ]] || fail "a failed copy left its fetch folder"
+[[ ! -e "$(object_path "${beta_sha}")" ]] || fail "the failed shard reached the cache"
+fails_with "RELEASE_DOWNLOAD_PARALLEL must be a whole number" env RELEASE_DOWNLOAD_PARALLEL=0 \
+  "${SCRIPTS}/download-release.sh" minecraft main 1.0 "$(payload_of 1.0)"
+fails_with "not enough disk space for release 1.0" env RELEASE_DOWNLOAD_DISK_MARGIN_BYTES=999999999999999999 \
+  "${SCRIPTS}/download-release.sh" minecraft main 1.0 "$(payload_of 1.0)"
+out="$(RELEASE_DOWNLOAD_PARALLEL=1 download 1.0)"
+grep -qx 'fetched=4' <<<"${out}" || fail "one shard at a time: ${out}"
 
 # A second release that shares the mods fetches only its new object.
 printf 'jar gamma\n' >"${fixture}/src/mods/gamma.jar"

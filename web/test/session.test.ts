@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { ControlPlaneSnapshot, Game } from "../src/model.ts";
-import { deriveSharedHostSession, worldOwnsSharedSession } from "../src/session.ts";
+import { deriveSharedHostSession, fleetPlayersOnline, nextReadingExpiry, playersOnline, worldOwnsSharedSession } from "../src/session.ts";
 
 const activeGame: Game = {
   id: "minecraft",
@@ -92,4 +92,33 @@ test("a manually stopped ready session also enters automatic recovery", () => {
   }));
   assert.equal(session.state, "stopping");
   assert.equal(session.recoveryPending, true);
+});
+
+test("a player reading counts only until its time; after that the count is unknown, never the old number", () => {
+  const reading = (freshUntilEpochSeconds?: number | null): Game => ({
+    ...activeGame,
+    lifecycle: {
+      ...activeGame.lifecycle!,
+      idle: { playersOnline: 1, consecutiveEmpty: 0, lastObservedAtEpochSeconds: 1_000, ...(freshUntilEpochSeconds === undefined ? {} : { freshUntilEpochSeconds }) },
+    },
+  });
+  assert.equal(playersOnline(reading(3_100), 3_100), 1, "current up to its time");
+  assert.equal(playersOnline(reading(3_100), 3_101), null, "a watchdog that stopped probing says nothing about who is online");
+  const world = activeGame.worlds[0]!;
+  assert.equal(fleetPlayersOnline(reading(3_100), world, 3_101), null);
+  assert.equal(playersOnline(reading(null), 9_999), 1, "a failed or absent time keeps today's reading");
+  assert.equal(playersOnline(reading(), 9_999), 1, "a server that predates the field keeps today's reading");
+});
+
+test("the panel knows when the next shown reading expires, across game and world sessions", () => {
+  const idle = (freshUntilEpochSeconds: number) => ({ playersOnline: 1, consecutiveEmpty: 0, lastObservedAtEpochSeconds: 1, freshUntilEpochSeconds });
+  const game: Game = {
+    ...activeGame,
+    lifecycle: { ...activeGame.lifecycle!, idle: idle(5_000) },
+    worlds: [{ ...activeGame.worlds[0]!, session: { ...activeGame.lifecycle!, activeWorldId: "world-a", idle: idle(4_000) } }, activeGame.worlds[1]!],
+  };
+  assert.equal(nextReadingExpiry(snapshot({ games: [game] }), 3_000), 4_000);
+  assert.equal(nextReadingExpiry(snapshot({ games: [game] }), 4_500), 5_000, "an expired reading needs no timer");
+  assert.equal(nextReadingExpiry(snapshot({ games: [game] }), 6_000), null);
+  assert.equal(nextReadingExpiry(null, 0), null);
 });

@@ -88,7 +88,13 @@ export type WorldSession = {
   readyAtEpochSeconds?: number | null;
   updatedAtEpochSeconds: number;
   /** Present while a watchdog is registered for the session. */
-  idle: { playersOnline: number | null; consecutiveEmpty: number; lastObservedAtEpochSeconds: number | null } | null;
+  idle: {
+    playersOnline: number | null;
+    consecutiveEmpty: number;
+    lastObservedAtEpochSeconds: number | null;
+    /** Until when the reading says who is online; absent from a server that predates it. */
+    freshUntilEpochSeconds?: number | null;
+  } | null;
 };
 export type Game = {
   id: string;

@@ -8,6 +8,7 @@
 // enforces it — so the bot, the owner scripts and the examples cannot drift
 // apart silently.
 
+import { WATCHDOG_TIMING } from "./watchdog-timing.ts";
 import type { SessionPolicy } from "./placement.ts";
 
 function escapeHtml(value: string): string {
@@ -49,15 +50,6 @@ const POLL_TIMING = {
   maxCommandPolls: 160,
 } as const;
 
-const WATCHDOG_TIMING = {
-  checkIntervalSeconds: 900,
-  emptyChecksRequired: 3,
-  maxTotalChecks: 32,
-  maxConsecutiveProbeFailures: 6,
-  maxStopRefusals: 3,
-  probePollSeconds: 10,
-  maxProbePolls: 30,
-} as const;
 
 // requestedBy attributes the operation to whoever asked ("every start has a
 // requester attached", ADR-0006/0016). It rides into the execution input, so

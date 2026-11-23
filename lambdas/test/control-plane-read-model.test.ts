@@ -311,3 +311,14 @@ test("a game's session record reaches viewers without its lease or fence", async
   const serialized = JSON.stringify(snapshot);
   assert.doesNotMatch(serialized, /fencingToken|"lease"/, "the lease and the fence never leave the API");
 });
+
+test("a player reading says until when it is current: one missed probe and the longest probe wait", async () => {
+  const idle = { watchdogExecutionId: "arn:watchdog", consecutiveEmpty: 0, lastObservationId: "cmd-1", playersOnline: 1, lastObservedAtEpochSeconds: 1_000 };
+  const record = { ...initialLifecycleRecord("minecraft", 100), observedState: "ready" as const, idle };
+  const snapshot = await readControlPlaneSnapshot({ ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? record : null }, { includeInfrastructure: true, includeDesiredRelease: true });
+  const view = snapshot.games[0]?.lifecycle?.idle;
+  assert.equal(view?.playersOnline, 1);
+  assert.equal(view?.freshUntilEpochSeconds, 1_000 + 2 * 900 + 10 * 30);
+  const unread = await readControlPlaneSnapshot({ ...sources, readLifecycle: async () => ({ ...record, idle: { ...idle, lastObservedAtEpochSeconds: null } }) }, { includeInfrastructure: true, includeDesiredRelease: true });
+  assert.equal(unread.games[0]?.lifecycle?.idle?.freshUntilEpochSeconds, null);
+});

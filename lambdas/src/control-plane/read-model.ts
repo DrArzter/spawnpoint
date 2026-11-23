@@ -1,3 +1,4 @@
+import { PLAYER_READING_FRESH_SECONDS } from "../domain/watchdog-timing.ts";
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import type { ReleaseStateReader } from "./release-usable.ts";
 import type { OperationProgress } from "./operation-progress.ts";
@@ -165,6 +166,8 @@ export type ControlPlaneSnapshot = Readonly<{
   }>>;
 }>;
 
+type IdleView = NonNullable<LifecycleRecord["idle"]> & Readonly<{ freshUntilEpochSeconds: number | null }>;
+
 /** What a viewer may know of a world's session: never the lease or the fence. */
 export type WorldSessionView = Readonly<{
   serverId: string;
@@ -172,7 +175,8 @@ export type WorldSessionView = Readonly<{
   observedState: LifecycleRecord["observedState"];
   activeSessionId: string | null;
   activeWorldId: string | null;
-  idle: LifecycleRecord["idle"];
+  /** The watchdog's last reading, and until when it says who is online. */
+  idle: IdleView | null;
   /** When the session became ready; absent for a record that predates the field. */
   readyAtEpochSeconds?: number | null;
   updatedAtEpochSeconds: number;
@@ -186,7 +190,10 @@ function sessionView(serverId: string, record: LifecycleRecord | null): WorldSes
     observedState: record.observedState,
     activeSessionId: record.activeSessionId,
     activeWorldId: record.activeWorldId ?? null,
-    idle: record.idle,
+    idle: record.idle === null ? null : {
+      ...record.idle,
+      freshUntilEpochSeconds: record.idle.lastObservedAtEpochSeconds === null ? null : record.idle.lastObservedAtEpochSeconds + PLAYER_READING_FRESH_SECONDS,
+    },
     readyAtEpochSeconds: record.readyAtEpochSeconds ?? null,
     updatedAtEpochSeconds: record.updatedAtEpochSeconds,
   };

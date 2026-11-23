@@ -25,10 +25,8 @@ export function fleetWorldState(game: Game, world: World): ServerState {
   return observed === "ready" ? "running" : observed ?? "stopped";
 }
 
-export function fleetPlayersOnline(game: Game, world: World): number | null {
-  const session = fleetSessionOf(game, world);
-  if (!session?.idle || session.observedState !== "ready") return null;
-  return session.idle.playersOnline;
+export function fleetPlayersOnline(game: Game, world: World, nowEpochSeconds = epochSeconds()): number | null {
+  return currentReading(fleetSessionOf(game, world), nowEpochSeconds);
 }
 
 /** This world's own state: a fleet world by its record, a configured one only while it holds the shared session. */
@@ -167,8 +165,34 @@ export function sessionReason(session: SharedHostSession, game: Game | undefined
 // The one number a game server is asked for, and the only place that knows it is
 // the idle watchdog, which reads it every probe to decide whether to stop.
 // `null` is a read that failed; that is not the same as nobody being online.
-export function playersOnline(game: Game | undefined): number | null {
-  const idle = game?.lifecycle?.idle;
-  if (!idle || game?.lifecycle?.observedState !== "ready") return null;
+export function playersOnline(game: Game | undefined, nowEpochSeconds = epochSeconds()): number | null {
+  return currentReading(game?.lifecycle, nowEpochSeconds);
+}
+
+/**
+ * The next moment a shown player reading stops being current, or null. The
+ * snapshot arrives only when something changes, and a watchdog that stopped
+ * probing changes nothing, so the panel re-renders itself at this moment.
+ */
+export function nextReadingExpiry(snapshot: ControlPlaneSnapshot | null, nowEpochSeconds = epochSeconds()): number | null {
+  const sessions = (snapshot?.games ?? []).flatMap((game) => [game.lifecycle, ...game.worlds.map((world) => world.session)]);
+  const times = sessions.flatMap((session) => {
+    const until = session?.observedState === "ready" ? session.idle?.freshUntilEpochSeconds : null;
+    return typeof until === "number" && until >= nowEpochSeconds ? [until] : [];
+  });
+  return times.length === 0 ? null : Math.min(...times);
+}
+
+function epochSeconds(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+// A reading past its time comes from a watchdog that stopped probing: it no
+// longer says who is online, so it reads as unknown, never as its old number.
+function currentReading(session: Game["lifecycle"] | null | undefined, nowEpochSeconds: number): number | null {
+  const idle = session?.idle;
+  if (!idle || session?.observedState !== "ready") return null;
+  const freshUntil = idle.freshUntilEpochSeconds;
+  if (typeof freshUntil === "number" && freshUntil < nowEpochSeconds) return null;
   return idle.playersOnline;
 }

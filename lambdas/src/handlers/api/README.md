@@ -28,7 +28,9 @@ owner access. MCP remains a distinct OAuth resource: it validates its own
 audience, scopes, identity and tool permission, then reuses the same feature
 operations as HTTP.
 
-`http.ts` owns transport types and response/body/cookie helpers.
+`http.ts` owns transport types and response/body/cookie helpers. It holds the
+only JSON body parser, `parseJsonObject`. A body that is not one JSON object
+throws `InvalidBodyError`, and the dispatcher answers 400 `invalid_json`.
 `identity-store.ts` owns account keys, account observation and identity lookup;
 `access-store.ts` owns the access table connection. Login credentials and login
 sessions are separate adapters. Domain decisions remain in `access/`,

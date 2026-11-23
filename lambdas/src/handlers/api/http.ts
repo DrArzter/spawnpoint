@@ -1,4 +1,5 @@
 import { type LoginPrincipal } from "../../access/login-session.ts";
+import { requestBody } from "../../access/request-body.ts";
 
 export type Event = Readonly<{
   requestContext?: { http?: { method?: string } };
@@ -40,18 +41,35 @@ export function requestCookie(event: Event, name: string): string | null {
   return null;
 }
 
-export function objectBody(event: Event): Readonly<Record<string, unknown>> | null {
-  return parseObjectBody(event.body);
+export type JsonObject = Readonly<Record<string, unknown>>;
+
+// A request body that is not one JSON object. The dispatcher turns it into 400.
+export class InvalidBodyError extends Error {
+  constructor() {
+    super("invalid_json");
+    this.name = "InvalidBodyError";
+  }
 }
 
-export function parseObjectBody(body: string | undefined): Readonly<Record<string, unknown>> | null {
+// The only place under handlers/api that parses text as JSON. It throws on bad syntax.
+export function parseJsonText(text: string): unknown {
+  return JSON.parse(text) as unknown;
+}
+
+// The one request-body parser. An empty body is an empty object. Any other
+// value that is not a plain object (null, array, number, string) or any
+// invalid JSON throws InvalidBodyError.
+export function parseJsonObject(event: Readonly<{ body?: string | undefined; isBase64Encoded?: boolean | undefined }>): JsonObject {
+  const text = requestBody(event);
+  if (text === "") return {};
+  let parsed: unknown;
   try {
-    const parsed = body ? JSON.parse(body) as unknown : {};
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-    return parsed as Readonly<Record<string, unknown>>;
+    parsed = parseJsonText(text);
   } catch {
-    return null;
+    throw new InvalidBodyError();
   }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new InvalidBodyError();
+  return parsed as JsonObject;
 }
 
 export const parameter = (event: Event, name: string): string => event.pathParameters?.[name] ?? "";

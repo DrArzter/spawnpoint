@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { normalizeScopes, oauthScopes, issueAuthorizationRequest, verifyAuthorizationRequest, issueOpaqueCredential, oauthAuthorizationCodeLifetimeSeconds, type OAuthScope, oauthRefreshTokenLifetimeSeconds, issueOAuthAccessToken, oauthAccessTokenLifetimeSeconds, credentialHash, verifyPkce } from "../../access/oauth.ts";
 import { type Identity } from "../../access/domain.ts";
 import { apiUrl, panelUrl } from "./origins.ts";
-import { type Event, type Response, response, responseWithHeaders } from "./http.ts";
+import { type Event, type Response, type JsonObject, InvalidBodyError, parseJsonObject, response, responseWithHeaders } from "./http.ts";
 import { document, tableName } from "./access-store.ts";
 import { sessionSigningSecret } from "./secrets.ts";
 import { identityById } from "./identity-store.ts";
@@ -30,12 +30,13 @@ function oauthCredentialKey(kind: "CODE" | "REFRESH", hash: string): Record<stri
   return { pk: `OAUTH#${kind}#${hash}`, sk: kind };
 }
 
-export function jsonBody(event: Event): Record<string, unknown> | null {
-  if (!event.body) return null;
-  try {
-    const value = JSON.parse(requestBody(event)) as unknown;
-    return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
-  } catch { return null; }
+// OAuth clients expect OAuth error codes, so a bad body reads as an empty one
+// and fails the field checks below instead of the generic 400.
+function oauthBody(event: Event): JsonObject {
+  try { return parseJsonObject(event); } catch (error) {
+    if (error instanceof InvalidBodyError) return {};
+    throw error;
+  }
 }
 
 function formBody(event: Event): URLSearchParams {
@@ -64,13 +65,13 @@ export async function oauthClient(clientId: string): Promise<OAuthClient | null>
 }
 
 export async function registerOAuthClient(event: Event): Promise<Response> {
-  const body = jsonBody(event);
-  const name = typeof body?.client_name === "string" ? body.client_name.trim() : "";
-  const redirectUris = Array.isArray(body?.redirect_uris) ? body.redirect_uris.filter((uri): uri is string => typeof uri === "string") : [];
+  const body = oauthBody(event);
+  const name = typeof body.client_name === "string" ? body.client_name.trim() : "";
+  const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris.filter((uri): uri is string => typeof uri === "string") : [];
   if (!name || name.length > 80 || redirectUris.length === 0 || redirectUris.length > 8 || redirectUris.some((uri) => !validRedirectUri(uri))) {
     return oauthError(400, "invalid_client_metadata");
   }
-  if (body?.token_endpoint_auth_method !== undefined && body.token_endpoint_auth_method !== "none") {
+  if (body.token_endpoint_auth_method !== undefined && body.token_endpoint_auth_method !== "none") {
     return oauthError(400, "invalid_client_metadata", "Spawnpoint accepts public PKCE clients only.");
   }
   const clientId = `sp_${randomUUID()}`;
@@ -115,13 +116,13 @@ function oauthRedirect(redirectUri: string, values: Record<string, string>): str
 }
 
 export async function completeOAuthAuthorization(identity: Identity, event: Event): Promise<Response> {
-  const body = jsonBody(event);
-  const requestToken = typeof body?.request === "string" ? body.request : "";
+  const body = oauthBody(event);
+  const requestToken = typeof body.request === "string" ? body.request : "";
   const request = verifyAuthorizationRequest(requestToken, await sessionSigningSecret());
   if (request === null) return oauthError(400, "invalid_request");
   const client = await oauthClient(request.clientId);
   if (!client?.redirectUris.includes(request.redirectUri)) return oauthError(400, "invalid_request");
-  if (body?.approved !== true) {
+  if (body.approved !== true) {
     return response(200, { redirect_to: oauthRedirect(request.redirectUri, { error: "access_denied", state: request.state }) });
   }
   const code = issueOpaqueCredential();
@@ -137,8 +138,8 @@ export async function completeOAuthAuthorization(identity: Identity, event: Even
 }
 
 export async function inspectOAuthAuthorization(event: Event): Promise<Response> {
-  const body = jsonBody(event);
-  const request = verifyAuthorizationRequest(typeof body?.request === "string" ? body.request : "", await sessionSigningSecret());
+  const body = oauthBody(event);
+  const request = verifyAuthorizationRequest(typeof body.request === "string" ? body.request : "", await sessionSigningSecret());
   if (request === null) return oauthError(400, "invalid_request");
   const client = await oauthClient(request.clientId);
   if (!client?.redirectUris.includes(request.redirectUri)) return oauthError(400, "invalid_request");

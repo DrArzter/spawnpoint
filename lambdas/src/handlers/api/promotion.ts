@@ -7,7 +7,7 @@ import { planPromotion, type PromotionPlan } from "../../control-plane/promotion
 import { checkReleaseUsable, noReleaseState } from "../../control-plane/release-usable.ts";
 import type { SwitchOutcome, SwitchRequest } from "../../control-plane/release-switch.ts";
 import { blockingOperations, sessionLifecycleKey } from "../../control-plane/world-session.ts";
-import { parseObjectBody, response, type Response } from "./http.ts";
+import { parseJsonObject, response, type Response } from "./http.ts";
 import { worldPlacements } from "./world-state.ts";
 
 // Promote a fleet world's open wipe to another ready release of its preset
@@ -22,8 +22,7 @@ export async function promoteWorld(
   body: string | undefined,
   switchRelease: (request: SwitchRequest) => Promise<SwitchOutcome> = switchReleaseBeforeFirstStart,
 ): Promise<Response> {
-  const parsed = parseObjectBody(body);
-  if (parsed === null) return response(400, { error: "invalid_json" });
+  const parsed = parseJsonObject({ body });
   if (parsed.startAfter !== undefined && typeof parsed.startAfter !== "boolean") return response(400, { error: "invalid_start_after" });
   // The world keeps running after its update and the idle watchdog stops it; false restores the old closing stop.
   const startAfter = parsed.startAfter !== false;

@@ -8,6 +8,7 @@ import { initialLifecycleRecord, type LifecycleRecord } from "../src/domain/life
 import { awsControlPlaneSources } from "../src/control-plane/aws.ts";
 import { type ControlPlaneSources, type HostObservation } from "../src/control-plane/read-model.ts";
 import { type WorldRecord, worldRecordDocument } from "../src/control-plane/world-registry.ts";
+import { InvalidBodyError } from "../src/handlers/api/http.ts";
 import { FakeRefsTable } from "./fake-refs-table.ts";
 import { controlSession, controlWorldLifecycle, createWorld, updateWorldSettings, whitelistOf } from "../src/handlers/api/worlds.ts";
 
@@ -80,7 +81,7 @@ test("a stop disconnects players only when asked, and only for a caller with ses
   assert.equal((await controlSession(granted, "stop", record.gameId, record.worldId, JSON.stringify({ players: "disconnect" }))).statusCode, 202);
 
   assert.equal((await controlSession(identity, "stop", record.gameId, record.worldId, JSON.stringify({ players: "kick" }))).statusCode, 400);
-  assert.equal((await controlSession(identity, "stop", record.gameId, record.worldId, "[]")).statusCode, 400);
+  await assert.rejects(controlSession(identity, "stop", record.gameId, record.worldId, "[]"), InvalidBodyError);
   assert.equal(inputs.length, 3, "a refused or invalid request dispatches nothing");
 });
 
@@ -124,7 +125,7 @@ test("unsafe lifecycle inputs are rejected before any workflow can be dispatched
   assert.deepEqual(JSON.parse((await controlWorldLifecycle(identity, "restore", record.gameId, record.worldId, JSON.stringify({ backupKey: "worlds/other/archives/save.tar.zst" }))).body), { error: "invalid_backup_key" });
   assert.deepEqual(JSON.parse((await controlWorldLifecycle(identity, "purge", record.gameId, record.worldId, "{}")).body), { error: "invalid_purge_confirmation" });
   assert.deepEqual(JSON.parse((await controlWorldLifecycle(identity, "regenerate", record.gameId, record.worldId, JSON.stringify({ release: "../1.2" }))).body), { error: "invalid_release" });
-  assert.equal((await controlWorldLifecycle(identity, "archive", record.gameId, record.worldId, "null")).statusCode, 400);
+  await assert.rejects(controlWorldLifecycle(identity, "archive", record.gameId, record.worldId, "null"), InvalidBodyError);
   assert.deepEqual(inputs, []);
 });
 

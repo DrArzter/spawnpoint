@@ -2,7 +2,7 @@ import { type Identity } from "../../access/domain.ts";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { type LoginProvider, authenticateWith } from "../../access/login-provider.ts";
 import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
-import { type Response, response, type Event, objectBody } from "./http.ts";
+import { type Response, response, type Event, parseJsonObject } from "./http.ts";
 import { identityAccounts, accountKey } from "./identity-store.ts";
 import { passwordCredentials } from "./credentials.ts";
 import { proofLinkProviders } from "./login-providers.ts";
@@ -37,8 +37,7 @@ export async function linkedAccounts(identity: Identity): Promise<Response> {
 }
 
 export async function linkProofAccount(identity: Identity, provider: LoginProvider, event: Event): Promise<Response> {
-  const attempt = objectBody(event);
-  if (attempt === null) return response(400, { error: "invalid_json" });
+  const attempt = parseJsonObject(event);
   const principal = await authenticateWith(provider, attempt);
   if (principal === null) return response(401, { error: `invalid_or_expired_${provider.id}_login` });
   const existing = await identityAccounts(identity);

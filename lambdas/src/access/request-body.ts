@@ -1,6 +1,6 @@
 type RequestBodyEvent = Readonly<{
-  body?: string;
-  isBase64Encoded?: boolean;
+  body?: string | undefined;
+  isBase64Encoded?: boolean | undefined;
 }>;
 
 export function requestBody(event: RequestBodyEvent): string {

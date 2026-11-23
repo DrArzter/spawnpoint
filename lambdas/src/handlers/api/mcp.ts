@@ -1,9 +1,9 @@
 import { type Identity, type Permission, can, permissionsOf, roleOf } from "../../access/domain.ts";
 import { type McpToolName, mcpTools } from "../../access/mcp-tools.ts";
 import { type OAuthScope, verifyOAuthAccessToken } from "../../access/oauth.ts";
-import { type Response, response, responseWithHeaders, type Event } from "./http.ts";
+import { type Response, type JsonObject, InvalidBodyError, parseJsonObject, parseJsonText, response, responseWithHeaders, type Event } from "./http.ts";
 import { type ConsoleAgent, runConsoleCommand, consoleCommandResult } from "./console.ts";
-import { oauthClient, oauthProtectedResourceMetadata, oauthIssuer, oauthResource, jsonBody } from "./oauth.ts";
+import { oauthClient, oauthProtectedResourceMetadata, oauthIssuer, oauthResource } from "./oauth.ts";
 import { controlPlane } from "./control-plane.ts";
 import { hostMetrics } from "./metrics.ts";
 import { METRIC_RANGE_NAMES } from "../../control-plane/metric-ranges.ts";
@@ -129,7 +129,7 @@ async function callMcpTool(caller: McpCaller, scopes: readonly OAuthScope[], nam
   if (!hasMcpToolPermission(identity, tool.permission)) return response(403, { error: "forbidden" });
   const apiResponse = await mcpToolCalls[tool.name](identity, args, caller);
   if (apiResponse === null) return mcpToolError("Invalid tool arguments");
-  const data = JSON.parse(apiResponse.body || "null") as unknown;
+  const data = parseJsonText(apiResponse.body || "null");
   return apiResponse.statusCode >= 200 && apiResponse.statusCode < 300
     ? response(200, mcpResult(data))
     : response(200, { ...mcpResult(data), isError: true });
@@ -175,15 +175,20 @@ async function callRemoteMcpTool(request: McpRequest, caller: McpCaller, scopes:
   const args = params.arguments !== null && typeof params.arguments === "object" ? params.arguments as Record<string, unknown> : {};
   const name = typeof params.name === "string" ? params.name : "";
   const called = await callMcpTool(caller, scopes, name, args);
-  const payload = JSON.parse(called.body || "null") as unknown;
+  const payload = parseJsonText(called.body || "null");
   return called.statusCode === 200 ? mcpJson(request.id, payload) : mcpJson(request.id, { ...mcpResult(payload), isError: true });
 }
 
 export async function remoteMcp(event: Event): Promise<Response> {
   const authenticated = await authenticateRemoteMcp(event);
   if (authenticated === null) return mcpUnauthorized();
-  const request = jsonBody(event) as McpRequest | null;
-  if (request?.jsonrpc !== "2.0" || typeof request.method !== "string") return mcpError(request?.id ?? null, -32600, "Invalid Request");
+  let body: JsonObject;
+  try { body = parseJsonObject(event); } catch (error) {
+    if (error instanceof InvalidBodyError) return mcpError(null, -32600, "Invalid Request");
+    throw error;
+  }
+  const request = body as McpRequest;
+  if (request.jsonrpc !== "2.0" || typeof request.method !== "string") return mcpError(request.id ?? null, -32600, "Invalid Request");
   if (request.method === "notifications/initialized") return response(202, null);
   if (request.method === "initialize") return initializeMcp(request);
   if (request.method === "tools/list") return listMcpTools(request.id);

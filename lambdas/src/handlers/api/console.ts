@@ -4,7 +4,7 @@ import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts"
 import { checkConsoleCommand, encodeConsoleCommand, CONSOLE_RECORD_DAYS, type ConsoleEntry, consoleResult, consoleEntryFromItem } from "../../control-plane/console.ts";
 import { type WorldPlacement } from "../../control-plane/world-session.ts";
 import { PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import { type Response, response } from "./http.ts";
+import { type Response, response, parseJsonObject } from "./http.ts";
 import { readWorldSession, locateWorldHost } from "./world-state.ts";
 import { document, tableName } from "./access-store.ts";
 import { isConditionFailure } from "./conditions.ts";
@@ -19,8 +19,7 @@ const CONSOLE_HISTORY_LIMIT = 30;
 export type ConsoleAgent = Readonly<{ clientId: string; name: string }>;
 
 export async function runConsoleCommand(identity: Identity, gameId: string, worldId: string, body: string | undefined, agent: ConsoleAgent | null = null): Promise<Response> {
-  let parsed: { command?: unknown };
-  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const parsed = parseJsonObject({ body });
   const [presets, worldRecords, hosts] = await Promise.all([
     awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
     awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),

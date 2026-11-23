@@ -88,20 +88,6 @@ mock_provider "aws" {
   }
 
   override_data {
-    target = data.aws_iam_policy_document.idle_watchdog_assume_role
-    values = {
-      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-    }
-  }
-
-  override_data {
-    target = data.aws_iam_policy_document.idle_watchdog
-    values = {
-      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-    }
-  }
-
-  override_data {
     target = data.aws_iam_policy_document.promote_workflow_assume_role
     values = {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"

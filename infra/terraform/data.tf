@@ -5,9 +5,8 @@ data "aws_availability_zone" "selected" {
 data "aws_caller_identity" "current" {}
 
 locals {
-  backup_bucket_name        = "spawnpoint-backups-${data.aws_caller_identity.current.account_id}"
-  release_bucket_name       = "spawnpoint-releases-${data.aws_caller_identity.current.account_id}"
-  promote_state_machine_arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-promote-release"
+  backup_bucket_name  = "spawnpoint-backups-${data.aws_caller_identity.current.account_id}"
+  release_bucket_name = "spawnpoint-releases-${data.aws_caller_identity.current.account_id}"
 }
 
 data "aws_s3_bucket" "backups" {

@@ -16,9 +16,10 @@ export async function session(account: Caller, capabilities: readonly string[]):
     // The Owner's Telegram id is personal data that no member needs once the claim is made.
     const profile = accountProfile(account, observed);
     // The identity's own avatar (ADR-0084), copied once from a provider photo when it has none.
-    const key = identity.avatarKey ?? (identity.avatarRemoved ? null
-      : await copyProviderAvatar(identity, providerPhoto(await identityAccounts(identity), account)));
-    profile.photoUrl = key !== null ? await avatarLink(key) : identity.avatarRemoved ? null : profile.photoUrl;
+    let key = identity.avatarKey ?? null;
+    if (key === null && !identity.avatarRemoved) key = await copyProviderAvatar(identity, providerPhoto(await identityAccounts(identity), account));
+    if (key !== null) profile.photoUrl = await avatarLink(key);
+    else if (identity.avatarRemoved) profile.photoUrl = null;
     return response(200, { state: "active", identity, role, capabilities, profile,
       bootstrap: bootstrap.Item === undefined ? { state: "unclaimed" } : {
         state: "claimed", ownerId: bootstrap.Item.identity_id, telegramId: null, claimedAt: bootstrap.Item.claimed_at,

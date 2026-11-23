@@ -16,7 +16,7 @@ export function imageType(bytes: Uint8Array): AvatarType | null {
   const at = (index: number) => bytes[index];
   if (at(0) === 0xff && at(1) === 0xd8 && at(2) === 0xff) return "jpg";
   if ([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((value, index) => at(index) === value)) return "png";
-  const text = (from: number, to: number) => String.fromCharCode(...bytes.subarray(from, to));
+  const text = (from: number, to: number) => String.fromCodePoint(...bytes.subarray(from, to));
   if (bytes.length >= 12 && text(0, 4) === "RIFF" && text(8, 12) === "WEBP") return "webp";
   return null;
 }

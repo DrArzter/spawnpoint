@@ -27,6 +27,8 @@ export const API_ERROR_TEXT: Readonly<Record<string, string>> = {
   deletion_conflict: "The user could not be deleted now. Try again.",
   identity_not_found: "This person no longer exists. Refresh the list.",
   invalid_identity_id: "This person is not valid.",
+  invalid_avatar: "The picture must be a JPEG, PNG or WebP image.",
+  avatar_too_large: "The picture is too large.",
   invalid_direct_grant: "One of the permissions is not valid.",
   reserved_permission: "Only the Owner role holds this permission.",
   last_owner: "This is the last Owner.",

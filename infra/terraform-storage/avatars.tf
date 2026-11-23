@@ -7,7 +7,7 @@ locals {
   avatar_bucket_name = "spawnpoint-avatars-${data.aws_caller_identity.current.account_id}"
 }
 
-resource "aws_s3_bucket" "avatars" {
+resource "aws_s3_bucket" "avatars" { # NOSONAR no access logs: they would record who viewed whose picture, and the API logs every link it signs
   bucket = local.avatar_bucket_name
 
   tags = {

@@ -30,8 +30,8 @@ const MAX_REDIRECTS = 3;
  * A link to the picture, signed as of the start of the hour: the same link
  * within the hour, so the browser caches it, and valid for an hour after.
  */
-export async function avatarLink(key: string | null | undefined, now = new Date()): Promise<string | null> {
-  if (typeof key !== "string" || key === "") return null;
+export function avatarLink(key: string | null | undefined, now = new Date()): Promise<string | null> {
+  if (typeof key !== "string" || key === "") return Promise.resolve(null);
   const hour = new Date(now);
   hour.setUTCMinutes(0, 0, 0);
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: avatarBucketName(), Key: key }), { expiresIn: LINK_SECONDS, signingDate: hour });

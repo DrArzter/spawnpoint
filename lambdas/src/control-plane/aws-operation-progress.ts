@@ -70,20 +70,31 @@ export const LOG_EVENTS_PER_STREAM = 200;
 // A command is sent shortly after its workflow starts; its clock may differ a little.
 const COMMAND_SLACK_MS = 60_000;
 const COMMAND_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/**
+ * The host step documents whose output reaches the log group, each with the
+ * stream segment of its one step (infra/terraform/session-documents.tf,
+ * ADR-0082). AWS-RunShellScript is the host step of a session started before
+ * the documents existed.
+ */
+const SESSION_COMMAND_STREAMS: Readonly<Record<string, string>> = {
+  "spawnpoint-start-session": "startSession",
+  "spawnpoint-stop-session": "stopSession",
+  "AWS-RunShellScript": "aws-runShellScript",
+};
 
 export type HostLogReader = (host: HostRun) => Promise<readonly HostLogLine[]>;
 
 /**
- * The tail of the host's newest shell command inside the start's window, as
+ * The tail of the host's newest session command inside the start's window, as
  * filtered lines. The command and its streams are looked up once and kept;
  * a stream that does not exist yet reads as empty.
  */
 export function createHostLogReader(deps: Readonly<{ ssm: Pick<SSMClient, "send">; logs: Pick<CloudWatchLogsClient, "send"> }>): HostLogReader {
-  const commands = new Map<string, string>();
+  const commands = new Map<string, Readonly<{ id: string; step: string }>>();
   return async (host) => {
     const key = `${host.instanceId}|${host.startedAt.toISOString()}`;
-    let commandId = commands.get(key);
-    if (commandId === undefined) {
+    let command = commands.get(key);
+    if (command === undefined) {
       const found = await deps.ssm.send(new ListCommandsCommand({
         InstanceId: host.instanceId,
         MaxResults: 10,
@@ -91,19 +102,19 @@ export function createHostLogReader(deps: Readonly<{ ssm: Pick<SSMClient, "send"
       }));
       const end = host.endedAt === null ? Infinity : host.endedAt.getTime() + COMMAND_SLACK_MS;
       const newest = (found.Commands ?? [])
-        .filter((command) => command.DocumentName === "AWS-RunShellScript" && command.CommandId !== undefined && COMMAND_ID.test(command.CommandId) && (command.RequestedDateTime?.getTime() ?? 0) <= end)
+        .filter((command) => command.DocumentName !== undefined && Object.hasOwn(SESSION_COMMAND_STREAMS, command.DocumentName) && command.CommandId !== undefined && COMMAND_ID.test(command.CommandId) && (command.RequestedDateTime?.getTime() ?? 0) <= end)
         .sort((a, b) => (b.RequestedDateTime?.getTime() ?? 0) - (a.RequestedDateTime?.getTime() ?? 0))[0];
-      if (newest?.CommandId === undefined) return [];
-      commandId = newest.CommandId;
+      if (newest?.CommandId === undefined || newest.DocumentName === undefined) return [];
+      command = { id: newest.CommandId, step: SESSION_COMMAND_STREAMS[newest.DocumentName] ?? "" };
       if (commands.size >= 200) commands.clear();
-      commands.set(key, commandId);
+      commands.set(key, command);
     }
-    const id = commandId;
+    const { id, step } = command;
     const tails = await Promise.all(["stdout", "stderr"].map(async (stream) => {
       try {
         const page = await deps.logs.send(new GetLogEventsCommand({
           logGroupName: SESSION_COMMAND_LOG_GROUP,
-          logStreamName: `${id}/${host.instanceId}/aws-runShellScript/${stream}`,
+          logStreamName: `${id}/${host.instanceId}/${step}/${stream}`,
           startFromHead: false,
           limit: LOG_EVENTS_PER_STREAM,
         }));

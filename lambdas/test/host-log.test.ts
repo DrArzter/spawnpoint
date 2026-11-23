@@ -189,6 +189,18 @@ test("the reader returns nothing before the command exists or its stream is writ
   assert.deepEqual(await reader(host), []);
 });
 
+test("the reader reads a host step document's own stream, and ignores the watchdog's probe", async () => {
+  const { reader, calls } = readerWith({
+    commands: [
+      { CommandId: COMMAND, DocumentName: "spawnpoint-start-session", RequestedDateTime: new Date("2026-11-22T22:36:20Z") },
+      { CommandId: "77777777-2222-3333-4444-555555555555", DocumentName: "spawnpoint-session-activity", RequestedDateTime: new Date("2026-11-22T22:36:50Z") },
+    ],
+    streams: { [`${COMMAND}/${INSTANCE}/startSession/stderr`]: [event("step=session_start at=2026-11-22T22:36:25Z elapsed_seconds=0")] },
+  });
+  assert.deepEqual((await reader(host)).map((line) => line.text), ["Session started (0 s)"]);
+  assert.ok(calls.filter((call) => call.name === "GetLogEventsCommand").every((call) => String(call.input.logStreamName).includes("/startSession/")));
+});
+
 test("the reader ignores a command sent after the host start ended", async () => {
   const { reader } = readerWith({ commands: [{ CommandId: COMMAND, DocumentName: "AWS-RunShellScript", RequestedDateTime: new Date("2026-11-22T23:30:00Z") }], streams: {} });
   assert.deepEqual(await reader({ ...host, endedAt: new Date("2026-11-22T22:50:00Z") }), []);

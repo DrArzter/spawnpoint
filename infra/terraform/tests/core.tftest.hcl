@@ -205,7 +205,7 @@ run "start_workflow_is_standard_and_uses_direct_integrations" {
   }
 
   assert {
-    condition     = strcontains(aws_sfn_state_machine.start_server.definition, "SESSION_FORMAT=json") && strcontains(aws_sfn_state_machine.start_server.definition, "$.session.summary.connection_address")
+    condition     = strcontains(aws_ssm_document.start_session.content, "SESSION_FORMAT=json") && strcontains(aws_sfn_state_machine.start_server.definition, "$.session.summary.connection_address")
     error_message = "The start machine must ask the host for a JSON session summary and carry its address back."
   }
 
@@ -226,6 +226,59 @@ run "start_workflow_is_standard_and_uses_direct_integrations" {
   assert {
     condition     = aws_cloudwatch_log_group.session_commands.retention_in_days == 14
     error_message = "Session command output must expire: it holds a failed start's whole console, and nothing reads it a fortnight later."
+  }
+}
+
+run "host_steps_pass_values_only_through_checked_document_parameters" {
+  command = plan
+
+  assert {
+    condition = alltrue(flatten([
+      for document in [aws_ssm_document.start_session, aws_ssm_document.stop_session] : [
+        jsondecode(document.content).parameters.worldId.allowedPattern == "^[a-z0-9][a-z0-9-]{0,31}$",
+        jsondecode(document.content).parameters.slot.allowedPattern == "^([0-9]{1,3})?$",
+        length(jsondecode(document.content).mainSteps) == 1,
+      ]
+    ]))
+    error_message = "SSM must refuse a world id or slot that could carry shell syntax, before any shell on the host reads it (ADR-0082)."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ssm_document.stop_session.content).parameters.players.allowedValues == ["refuse", "disconnect"]
+    error_message = "The players policy reaches the host only as one of the two values ADR-0081 defines."
+  }
+
+  assert {
+    condition = alltrue(concat(
+      [for state in ["Start Fleet Session Command", "Start Placed Session Command", "Start Session Command"] :
+        jsondecode(aws_sfn_state_machine.start_server.definition).States[state].Parameters.DocumentName == aws_ssm_document.start_session.name
+        && !contains(keys(jsondecode(aws_sfn_state_machine.start_server.definition).States[state].Parameters.Parameters), "commands.$")
+      ],
+      [for state in ["Stop Placed Session Command", "Stop Session Command"] :
+        jsondecode(aws_sfn_state_machine.stop_server.definition).States[state].Parameters.DocumentName == aws_ssm_document.stop_session.name
+        && !contains(keys(jsondecode(aws_sfn_state_machine.stop_server.definition).States[state].Parameters.Parameters), "commands.$")
+      ],
+    ))
+    error_message = "Every host step sends its own document with named parameters, never a shell line built from the request."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ssm_document.start_session.content).mainSteps[0].name == "startSession" && jsondecode(aws_ssm_document.stop_session.content).mainSteps[0].name == "stopSession"
+    error_message = "The step names are the CloudWatch stream names the operation log reader opens; rename them there too."
+  }
+
+  assert {
+    condition = (
+      strcontains(jsondecode(aws_ssm_document.start_session.content).mainSteps[0].inputs.runCommand[2], "update-checkout.sh")
+      && strcontains(jsondecode(aws_ssm_document.start_session.content).mainSteps[0].inputs.runCommand[2], ">&2 || true")
+      && strcontains(jsondecode(aws_ssm_document.start_session.content).mainSteps[0].inputs.runCommand[4], "start-session.sh")
+    )
+    error_message = "Every start first brings the host's checkout to the deployed commit, writing to standard error and never failing for it: the session summary is read from standard output."
+  }
+
+  assert {
+    condition     = strcontains(jsondecode(aws_ssm_document.start_session.content).mainSteps[0].inputs.runCommand[1], "/etc/spawnpoint-fleet-ready")
+    error_message = "A launched host may register with SSM before its bootstrap finishes; the start waits for the marker when asked to."
   }
 }
 

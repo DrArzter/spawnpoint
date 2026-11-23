@@ -27,7 +27,7 @@ collected eleven before it was accepted.
 
 ## Start here — most of this is not blocking
 
-Eighty-one records is a wall, and a wall is not a plan. Read the two or three that cover what you are building now.
+Eighty-two records is a wall, and a wall is not a plan. Read the two or three that cover what you are building now.
 
 | To do this | You need |
 | --- | --- |
@@ -146,6 +146,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0079](0079-pin-an-addon-to-a-github-release-asset.md) | Pin an addon to a GitHub release asset | Accepted — builder side implemented | M6 |
 | [0080](0080-store-release-files-by-content.md) | Store release files by content, and free them only when no release names them | Proposed — readers, infrastructure, reconciler, retirement and sweep (dry run) built; writer off | M6 |
 | [0081](0081-a-stop-may-disconnect-players.md) | A stop may disconnect players, for a holder of session.stop.force | Accepted | M6 |
+| [0082](0082-host-steps-run-through-ssm-documents.md) | The V1 machines are the V2 host step, and host input goes through SSM documents | Accepted | M6 |
 
 ## Decisions still to record
 

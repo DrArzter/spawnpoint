@@ -324,7 +324,7 @@ data "aws_iam_policy_document" "lifecycle_v2_watchdog" {
     actions = ["ssm:SendCommand"]
     resources = [
       data.aws_instance.game_host.arn,
-      "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
+      aws_ssm_document.session_activity.arn,
     ]
   }
 

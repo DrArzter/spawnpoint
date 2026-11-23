@@ -154,10 +154,12 @@
       "Type": "Task",
       "Resource": "arn:aws:states:::aws-sdk:ssm:sendCommand",
       "Parameters": {
-        "DocumentName": "AWS-RunShellScript",
+        "DocumentName": "spawnpoint-stop-session",
         "InstanceIds.$": "States.Array($.request.instanceId)",
         "Parameters": {
-          "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} SPAWNPOINT_SLOT={} SPAWNPOINT_STOP_PLAYERS={} /srv/spawnpoint/app/server/scripts/stop-session.sh', $.request.worldId, $.request.slot, $.request.players))"
+          "worldId.$": "States.Array($.request.worldId)",
+          "slot.$": "States.Array(States.Format('{}', $.request.slot))",
+          "players.$": "States.Array($.request.players)"
         },
         "TimeoutSeconds": 900,
         "CloudWatchOutputConfig": {
@@ -172,10 +174,11 @@
       "Type": "Task",
       "Resource": "arn:aws:states:::aws-sdk:ssm:sendCommand",
       "Parameters": {
-        "DocumentName": "AWS-RunShellScript",
+        "DocumentName": "spawnpoint-stop-session",
         "InstanceIds.$": "States.Array($.request.instanceId)",
         "Parameters": {
-          "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} SPAWNPOINT_STOP_PLAYERS={} /srv/spawnpoint/app/server/scripts/stop-session.sh', $.request.worldId, $.request.players))"
+          "worldId.$": "States.Array($.request.worldId)",
+          "players.$": "States.Array($.request.players)"
         },
         "TimeoutSeconds": 900,
         "CloudWatchOutputConfig": {

@@ -54,7 +54,7 @@ data "aws_iam_policy_document" "start_workflow" {
     actions = ["ssm:SendCommand"]
     resources = [
       aws_instance.game_host.arn,
-      "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
+      aws_ssm_document.start_session.arn,
     ]
   }
 
@@ -135,7 +135,7 @@ data "aws_iam_policy_document" "stop_workflow" {
     actions = ["ssm:SendCommand"]
     resources = [
       aws_instance.game_host.arn,
-      "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
+      aws_ssm_document.stop_session.arn,
     ]
   }
 

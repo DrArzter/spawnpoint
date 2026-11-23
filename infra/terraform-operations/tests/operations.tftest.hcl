@@ -307,6 +307,44 @@ run "idle_watchdog_probes_host_and_runs_verified_stop" {
   }
 }
 
+run "watchdog_probe_passes_values_only_through_its_document" {
+  command = plan
+
+  override_resource {
+    target          = aws_ssm_document.session_activity
+    override_during = plan
+    values = {
+      arn = "arn:aws:ssm:eu-central-1:123456789012:document/spawnpoint-session-activity"
+    }
+  }
+
+  assert {
+    condition = (
+      jsondecode(aws_ssm_document.session_activity.content).parameters.worldId.allowedPattern == "^[a-z0-9][a-z0-9-]{0,31}$"
+      && jsondecode(aws_ssm_document.session_activity.content).parameters.slot.allowedPattern == "^([0-9]{1,3})?$"
+      && strcontains(aws_ssm_document.session_activity.content, "PROBE_FORMAT=json")
+    )
+    error_message = "SSM must refuse a world id or slot that could carry shell syntax before the probe script reads it (ADR-0082)."
+  }
+
+  assert {
+    condition = alltrue([
+      for state in ["Send Placed Probe", "Send Structured Probe"] :
+      jsondecode(aws_sfn_state_machine.lifecycle_v2_watchdog.definition).States[state].Parameters.DocumentName == aws_ssm_document.session_activity.name
+      && !contains(keys(jsondecode(aws_sfn_state_machine.lifecycle_v2_watchdog.definition).States[state].Parameters.Parameters), "commands.$")
+    ])
+    error_message = "The watchdog probes through its document with named parameters, never a shell line built from the request."
+  }
+
+  assert {
+    condition = (
+      contains(flatten([for statement in data.aws_iam_policy_document.lifecycle_v2_watchdog.statement : tolist(statement.resources) if statement.sid == "ProbeOnlySpawnpointHost"]), aws_ssm_document.session_activity.arn)
+      && !anytrue([for resource in flatten([for statement in data.aws_iam_policy_document.lifecycle_v2_watchdog.statement : tolist(statement.resources) if statement.sid == "ProbeOnlySpawnpointHost"]) : strcontains(resource, "AWS-RunShellScript")])
+    )
+    error_message = "The V2 watchdog may send only its probe document, not an arbitrary shell command."
+  }
+}
+
 run "promotion_delegates_release_state_and_composes_existing_machines" {
   command = plan
 

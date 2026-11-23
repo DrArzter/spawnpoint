@@ -7,7 +7,6 @@ import {
   buildLifecycleStopInput,
   buildStartInput,
   buildStopInput,
-  buildWatchdogInput,
   parseChatIds,
   replies,
 } from "../src/domain/telegram-bot.ts";
@@ -174,18 +173,6 @@ test("the start input builder reproduces the committed example verbatim", async 
   assert.deepEqual(built, example);
 });
 
-test("the watchdog input builder reproduces the committed example verbatim", async () => {
-  const url = new URL("../../workflows/idle-watchdog.input.example.json", import.meta.url);
-  const example = JSON.parse(await readFile(url, "utf8"));
-  const built = buildWatchdogInput({
-    operationId: example.operationId,
-    instanceId: example.instanceId,
-    worldId: example.worldId,
-    stopStateMachineArn: example.stopStateMachineArn,
-  });
-  assert.deepEqual(built, example);
-});
-
 test("the stop input builder reproduces the committed example verbatim", async () => {
   const url = new URL("../../workflows/stop-server.input.example.json", import.meta.url);
   const example = JSON.parse(await readFile(url, "utf8"));
@@ -231,15 +218,6 @@ test("a requester is attributed when present, and the examples stay the ownerles
   assert.equal(attributed.requestedBy, "telegram:111");
   const { requestedBy: _dropped, ...rest } = attributed;
   assert.deepEqual(rest, example, "attribution must add a field, never change the contract");
-
-  const watchdog = buildWatchdogInput({
-    operationId: "op",
-    instanceId: "i-0",
-    worldId: "world",
-    stopStateMachineArn: "arn:stop",
-    requestedBy: "telegram:111",
-  });
-  assert.equal(watchdog.requestedBy, "telegram:111");
 });
 
 test("replies carry what the player actually needs", () => {

@@ -88,20 +88,6 @@ mock_provider "aws" {
   }
 
   override_data {
-    target = data.aws_iam_policy_document.idle_watchdog_assume_role
-    values = {
-      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-    }
-  }
-
-  override_data {
-    target = data.aws_iam_policy_document.idle_watchdog
-    values = {
-      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-    }
-  }
-
-  override_data {
     target = data.aws_iam_policy_document.promote_workflow_assume_role
     values = {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
@@ -279,31 +265,6 @@ run "game_host_holds_a_release_for_a_new_backup_and_nothing_else_in_the_table" {
       toset(one(one(data.aws_iam_policy_document.game_host_backup_holders.statement).condition).values) == toset(["release#*"])
     )
     error_message = "The host may only get, put and update release items: no delete, scan, query or file items."
-  }
-}
-
-run "idle_watchdog_probes_host_and_runs_verified_stop" {
-  command = plan
-
-  assert {
-    condition     = aws_sfn_state_machine.idle_watchdog.type == "STANDARD"
-    error_message = "The watchdog waits for hours; only a Standard workflow makes those waits free."
-  }
-
-  # The command is built by ASL from the request's world, so the assertion reads
-  # the template rather than a fixed string: the probe must still be the host's
-  # exit-code contract, and it must name the world the session is for.
-  assert {
-    condition = strcontains(
-      jsondecode(aws_sfn_state_machine.idle_watchdog.definition).States["Send Probe"].Parameters.Parameters["commands.$"],
-      "States.Format('WORLD_ID={} /srv/spawnpoint/app/server/scripts/idle-probe.sh', $.request.worldId)"
-    )
-    error_message = "The watchdog must probe through the host's exit-code contract for the world it was started for."
-  }
-
-  assert {
-    condition     = jsondecode(aws_sfn_state_machine.idle_watchdog.definition).States["Stop Idle Session"].Resource == "arn:aws:states:::states:startExecution.sync:2"
-    error_message = "The watchdog must run the verified stop workflow synchronously, so a refusal is observable."
   }
 }
 

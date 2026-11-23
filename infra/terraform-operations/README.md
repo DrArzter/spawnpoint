@@ -2,7 +2,6 @@
 
 This Terraform root owns composed Standard Workflows that sit above the already deployed host workflows:
 
-- `spawnpoint-idle-watchdog` observes one running session and invokes the verified stop after sustained idleness;
 - `spawnpoint-promote-release` moves one wipe between immutable releases through Lifecycle V2 and commits
   `active_release` only after health and watchdog registration succeed;
 - the `spawnpoint-*-v2` lifecycle trio coordinates fenced sessions through the established DynamoDB coordinator.

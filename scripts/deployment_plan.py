@@ -39,7 +39,6 @@ ALL_WORKFLOW_ROOTS = (TF_CORE, TF_OPERATIONS, TF_RELEASES, TF_ACCESS_API)
 WORKFLOW_ROOTS = {
     "workflows/start-server.asl.json": TF_CORE,
     "workflows/stop-server.asl.json": TF_CORE,
-    "workflows/idle-watchdog.asl.json": TF_OPERATIONS,
     "workflows/promote-release.asl.json": TF_OPERATIONS,
     "workflows/start-server-v2.asl.json.tftpl": TF_OPERATIONS,
     "workflows/stop-server-v2.asl.json.tftpl": TF_OPERATIONS,

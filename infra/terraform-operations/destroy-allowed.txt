@@ -1,0 +1,5 @@
+# The V1 idle watchdog: no caller since the 2026-09-11 cutover to idle-watchdog-v2,
+# last run on 2026-09-11. Remove these lines in the next change to this root.
+aws_sfn_state_machine.idle_watchdog
+aws_iam_role_policy.idle_watchdog
+aws_iam_role.idle_watchdog

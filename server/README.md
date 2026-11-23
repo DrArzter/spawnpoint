@@ -21,9 +21,7 @@ Contents:
   - `start.sh` — idempotently start the Compose service and wait for Docker health or RCON readiness,
   - `status.sh` — report container health and verify the game's control path through its own player query,
   - `players.sh` — report a machine-readable player count; an unparseable response fails closed,
-  - `check-session-activity.sh` — expose the fail-closed player activity contract used by the future idle watchdog,
-  - `idle-probe.sh` — the watchdog's exit-code contract over `players.sh`: 0 empty, 3 occupied, anything else a probe
-    failure. The workflow reads the code, never the output,
+  - `check-session-activity.sh` — the fail-closed player activity contract the idle watchdog probes,
   - `render-host-env.sh` — turn `aws ssm get-parameters-by-path` output into the `.env` a launched host runs from; the
     last segment of each parameter's name is the key, and anything that is not a plain environment name is refused,
   - `check-host-activity.sh` — the host-idle sensor: is any *other* game session running here, in any Compose

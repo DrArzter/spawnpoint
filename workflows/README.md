@@ -95,25 +95,21 @@ stuck lifecycle state.
 
 ## Idle watchdog
 
-`idle-watchdog.asl.json` is the V1 sensor in front of that stop; since the 2026-09-11 cutover the V2 start launches
-`idle-watchdog-v2` itself. One execution exists per session — started with the session, so there is no schedule to
-enable and disable and nothing runs between sessions ([ADR-0006](../docs/adr/0006-on-demand-start-and-idle-shutdown.md),
+The V2 start launches `idle-watchdog-v2` for its session. One execution exists per session — started with the session,
+so there is no schedule to enable and disable and nothing runs between sessions
+([ADR-0006](../docs/adr/0006-on-demand-start-and-idle-shutdown.md),
 [ADR-0025](../docs/adr/0025-step-functions-for-long-operations.md)). The loop: wait, confirm the host is still
-running, probe `idle-probe.sh` over SSM, and count.
+running, probe `check-session-activity.sh` over SSM, and record the reading.
 
-- The probe is an **exit-code contract** — 0 empty, 3 occupied, anything else a probe failure — so the workflow never
-  parses RCON output.
-- After `emptyChecksRequired` consecutive empty checks it runs the **verified stop workflow synchronously** and ends.
-  A refused stop (players raced back in) resets the streak and resumes watching.
-- A failed probe **never counts as empty**; after `maxConsecutiveProbeFailures` the execution fails loudly as
-  `Spawnpoint.WatchdogBlind` — deliberately leaving EC2 running, because a blind watchdog must not stop a possibly
-  occupied server.
-- `maxTotalChecks` is the **hard session cap** (default 96 × 5 min = 8 h): the only guard that survives somebody
-  being online who should not be.
+- A failed probe **never counts as empty**; after `maxConsecutiveProbeFailures` the execution fails loudly,
+  deliberately leaving EC2 running, because a blind watchdog must not stop a possibly occupied server.
+- `maxTotalChecks` bounds one execution (32 × 15 minutes = 8 hours). At the cap it stops an empty session, and hands
+  an occupied one over to a relay execution that keeps watching.
 - A host stopped by anything else ends the watchdog as a success, not an error.
 
 All intervals and limits arrive in the input, so an acceptance drill can run with a two-minute threshold while
-production uses fifteen. The running-hours CloudWatch alarm is the backstop behind the whole mechanism.
+production uses fifteen. The running-hours CloudWatch alarm is the backstop behind the whole mechanism. The V1
+watchdog (`idle-watchdog.asl.json`) had no caller after the 2026-09-11 cutover and is removed.
 
 `idle-watchdog-v2.asl.json.tftpl` moves coordination facts out of execution-local counters. The execution registers
 itself against one exact `sessionId`; every structured player observation is written through the coordinator with the

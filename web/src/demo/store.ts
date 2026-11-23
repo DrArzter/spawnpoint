@@ -1,5 +1,6 @@
 import type { AccessCandidate, AccessIdentity, AccessRoleDirectory, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
-import { identityDeletionRefusal, type HostLogLine, type PromotionResult, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type OperationProgress, type OperationStep, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
+import { ApiError, identityDeletionRefusal, type HostLogLine, type PromotionResult, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type OperationProgress, type OperationStep, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
+import { API_ERROR_TEXT } from "../api/error-text";
 import { startableReleases } from "../core/presets";
 import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
@@ -917,6 +918,45 @@ export function setSubscriptions(next: SubscriptionState): SubscriptionState {
 
 export function appearance(): AppearancePreference {
   return state.appearance;
+}
+
+// The signed-in person's picture, kept as a data URL: the demo has no store to sign a link for.
+// The stress fixture starts with one, so the gate sees the profile both ways.
+const STRESS_AVATAR = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#5b47d6"/><circle cx="4" cy="3" r="1.6" fill="#fff"/><rect x="1.5" y="5" width="5" height="3" rx="1.5" fill="#fff"/></svg>')}`;
+let avatarLink: string | null = demoFixture() === "stress" ? STRESS_AVATAR : null;
+const AVATAR_MAX_BYTES = 256 * 1024;
+const AVATAR_TYPES: readonly Readonly<{ type: string; starts: readonly (number | null)[] }>[] = [
+  { type: "image/jpeg", starts: [0xff, 0xd8, 0xff] },
+  { type: "image/png", starts: [0x89, 0x50, 0x4e, 0x47] },
+  // RIFF, a four-byte size, then WEBP.
+  { type: "image/webp", starts: [0x52, 0x49, 0x46, 0x46, null, null, null, null, 0x57, 0x45, 0x42, 0x50] },
+];
+
+function avatarRefusal(code: "invalid_avatar" | "avatar_too_large"): ApiError {
+  return new ApiError("failed", API_ERROR_TEXT[code]!, { status: 400, code });
+}
+
+export function avatar(): string | null {
+  return avatarLink;
+}
+
+/** Takes the base64 of an image as the API does: only JPEG, PNG or WebP, at most 256 KB. */
+export function setAvatar(image: string): string {
+  let bytes: Uint8Array;
+  try {
+    bytes = Uint8Array.from(atob(image), (character) => character.charCodeAt(0));
+  } catch {
+    throw avatarRefusal("invalid_avatar");
+  }
+  const found = AVATAR_TYPES.find((entry) => entry.starts.every((byte, index) => byte === null || bytes[index] === byte));
+  if (!found) throw avatarRefusal("invalid_avatar");
+  if (bytes.length > AVATAR_MAX_BYTES) throw avatarRefusal("avatar_too_large");
+  avatarLink = `data:${found.type};base64,${image}`;
+  return avatarLink;
+}
+
+export function clearAvatar(): void {
+  avatarLink = null;
 }
 
 export function setAppearance(next: AppearancePreference): AppearancePreference {

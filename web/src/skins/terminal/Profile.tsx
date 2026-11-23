@@ -17,7 +17,6 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
     <Page>
       <header className="t-page-head">
         <div className="t-page-title t-page-title-person">
-          <Avatar name={member.name} photoUrl={viewer.photoUrl} size="large" />
           <div className="t-stack">
             <h1>{member.name}</h1>
             <small>{viewer.username ? `@${viewer.username}` : viewer.email ?? "Spawnpoint identity"}</small>
@@ -29,6 +28,15 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
           <Verb action={model.signOut} />
         </Verbs>
       </header>
+      <Panel name="Picture">
+        <div className="t-picture">
+          <Avatar name={member.name} photoUrl={viewer.photoUrl} size="xlarge" />
+          <Verbs>
+            <Verb action={model.avatar.change} />
+            {model.avatar.remove && <Verb action={model.avatar.remove} />}
+          </Verbs>
+        </div>
+      </Panel>
       <Appearance look={model.look} model={model.appearance} />
       <LoginAccounts model={model.loginAccounts} />
     </Page>

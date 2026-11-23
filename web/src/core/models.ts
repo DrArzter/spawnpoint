@@ -498,10 +498,17 @@ export type LookModel = Readonly<{
   options: readonly Readonly<{ id: string; name: string; choose: Action }>[];
 }>;
 
+/** The person's picture: Change opens a file chooser, Remove exists only while there is a picture. */
+export type AvatarModel = Readonly<{
+  change: Action;
+  remove: Action | null;
+}>;
+
 export type ProfileModel = Readonly<{
   member: Member;
   role: Role | undefined;
   viewer: ViewerProfile;
+  avatar: AvatarModel;
   appearance: AppearanceModel;
   look: LookModel;
   signOut: Action;

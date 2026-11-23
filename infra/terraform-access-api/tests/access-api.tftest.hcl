@@ -17,6 +17,20 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_route53_zone.email
+    values = { zone_id = "Z123456789" }
+  }
+
+  # DKIM tokens exist only after apply; fixed ones let the plan-time run name
+  # the records.
+  override_resource {
+    target = aws_sesv2_email_identity.sender
+    values = {
+      dkim_signing_attributes = { tokens = ["tokena", "tokenb", "tokenc"] }
+    }
+  }
+
+  override_data {
     target = data.aws_dynamodb_table.access
     values = {
       name = "spawnpoint-access"
@@ -782,5 +796,67 @@ run "api_may_invoke_only_the_release_retirement_function" {
       if length([for action in statement.actions : action if startswith(action, "lambda:")]) > 0
     ])
     error_message = "The access API role has no Lambda action outside the retirement request."
+  }
+}
+
+run "ses_sends_from_a_dkim_signed_identity_with_no_key" {
+  command = plan
+
+  variables {
+    bootstrap_owner_telegram_id      = "1780660807"
+    panel_url                        = "https://spawnpoint.example.dev/"
+    session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
+    api_domain_name                  = "api.spawnpoint.example.dev"
+    dns_zone_name                    = "spawnpoint.example.dev"
+    email_delivery_provider          = "ses"
+    email_from                       = "Spawnpoint <auth@spawnpoint.example.dev>"
+  }
+
+  assert {
+    condition     = aws_sesv2_email_identity.sender[0].email_identity == "spawnpoint.example.dev"
+    error_message = "The SES identity must be the sender's domain."
+  }
+
+  assert {
+    condition = (
+      length(aws_route53_record.ses_dkim) == 3 &&
+      aws_route53_record.ses_dkim[0].name == "tokena._domainkey.spawnpoint.example.dev" &&
+      aws_route53_record.ses_dkim[0].records == toset(["tokena.dkim.amazonses.com"])
+    )
+    error_message = "A sender inside the managed zone must be signed by DKIM records Terraform writes."
+  }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.EMAIL_DELIVERY_PROVIDER == "ses" && length(output.ses_dkim_records) == 0
+    error_message = "SES must reach the Lambda as its adapter and need no records by hand."
+  }
+
+  assert {
+    condition     = local.ses_identity_arn == "arn:aws:ses:eu-central-1:123456789012:identity/spawnpoint.example.dev"
+    error_message = "The Lambda may send only from the sender's own identity."
+  }
+}
+
+run "an_ses_sender_outside_the_zone_gets_no_records" {
+  command = plan
+
+  variables {
+    bootstrap_owner_telegram_id      = "1780660807"
+    panel_url                        = "https://spawnpoint.example.dev/"
+    session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
+    api_domain_name                  = "api.spawnpoint.example.dev"
+    dns_zone_name                    = "spawnpoint.example.dev"
+    email_delivery_provider          = "ses"
+    email_from                       = "Spawnpoint <auth@example.dev>"
+  }
+
+  assert {
+    condition     = aws_sesv2_email_identity.sender[0].email_identity == "example.dev" && length(aws_route53_record.ses_dkim) == 0
+    error_message = "A sender outside the managed zone must not write records into a zone that does not hold its domain."
+  }
+
+  assert {
+    condition     = length(output.ses_dkim_records) == 3
+    error_message = "The owner must get the DKIM records to add by hand."
   }
 }

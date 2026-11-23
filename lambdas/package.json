@@ -18,6 +18,7 @@
     "@aws-sdk/client-lambda": "^3.1175.0",
     "@aws-sdk/client-route-53": "^3.1172.0",
     "@aws-sdk/client-s3": "^3.1172.0",
+    "@aws-sdk/client-sesv2": "^3.1175.0",
     "@aws-sdk/client-sfn": "^3.1172.0",
     "@aws-sdk/client-ssm": "^3.1172.0",
     "@aws-sdk/lib-dynamodb": "^3.1172.0",

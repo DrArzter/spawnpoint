@@ -43,6 +43,15 @@ data "aws_iam_policy_document" "notifier" {
     }
   }
 
+  dynamic "statement" {
+    for_each = var.email_delivery_provider == "ses" ? [1] : []
+    content {
+      sid       = "SendOnlyFromTheSenderIdentity"
+      actions   = ["ses:SendEmail"]
+      resources = ["arn:aws:ses:${var.aws_region}:${local.account_id}:identity/${lower(regex("@([^@>[:space:]]+)>?$", trimspace(var.email_from))[0])}"]
+    }
+  }
+
   statement {
     sid     = "ReadNotificationSubscriptions"
     actions = ["dynamodb:GetItem", "dynamodb:Scan", "dynamodb:Query"]

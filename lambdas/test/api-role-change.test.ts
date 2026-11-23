@@ -26,7 +26,7 @@ function table(t: TestContext, profiles: Profile[], ownerCount?: () => number) {
     if (profile === undefined) return false;
     const values = input.ExpressionAttributeValues;
     return profile.status === values[":active"]
-      && (!input.ConditionExpression.includes("role_id = :owner") || profile.role_id === values[":owner"])
+      && (!input.ConditionExpression.includes("role_id = :protected") || profile.role_id === values[":protected"])
       && (!input.ConditionExpression.includes("role_id = :current") || profile.role_id === values[":current"]);
   };
   t.mock.method(document, "send", async (command: Command) => {

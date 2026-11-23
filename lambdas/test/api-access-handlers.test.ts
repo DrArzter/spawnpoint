@@ -5,6 +5,8 @@ process.env.ACCESS_TABLE_NAME = "access-api-test";
 const { document } = await import("../src/handlers/api/access-store.ts");
 const { identities } = await import("../src/handlers/api/access.ts");
 
+const owner = { id: "owner-1", displayName: "Owner", roleId: "owner", directGrants: [] } as const;
+
 type Link = Readonly<{ platform: string; verified: boolean }>;
 
 // One active identity with a Telegram account and an email one, and whichever
@@ -32,7 +34,7 @@ function storage(t: TestContext, credential: Record<string, unknown> | undefined
 }
 
 async function links(): Promise<readonly Link[]> {
-  const body = JSON.parse((await identities()).body as string) as { identities: readonly { links: readonly Link[] }[] };
+  const body = JSON.parse((await identities(owner)).body as string) as { identities: readonly { links: readonly Link[] }[] };
   const first = body.identities[0];
   assert.ok(first, "the listing must carry the one active identity");
   return first.links;
@@ -61,4 +63,25 @@ test("an unconfirmed address is listed as unverified, and so is one with no cred
 test("an account from a provider that vouches for itself needs no lookup", async (t) => {
   storage(t, verifiedCredential);
   assert.equal((await links()).find((link) => link.platform === "telegram")?.verified, true);
+});
+
+test("each listed identity says whether the caller may delete it, by the owner guard", async (t) => {
+  t.mock.method(document, "send", async (command: unknown) => {
+    const values = (command as { input: { ExpressionAttributeValues?: Record<string, string> } }).input.ExpressionAttributeValues;
+    return values?.[":state"] === "IDENTITY#ACTIVE"
+      ? { Items: [
+        { identity_id: "owner-1", display_name: "Owner", role_id: "owner" },
+        { identity_id: "owner-2", display_name: "Second owner", role_id: "owner" },
+        { identity_id: "manager-1", display_name: "Manager", role_id: "operator" },
+        { identity_id: "player-1", display_name: "Player", role_id: "player" },
+      ] }
+      : { Items: [] };
+  });
+  const listing = async (caller: Parameters<typeof identities>[0]) => Object.fromEntries(
+    (JSON.parse((await identities(caller)).body as string) as { identities: readonly { id: string; canDelete: boolean }[] })
+      .identities.map((identity) => [identity.id, identity.canDelete]),
+  );
+  assert.deepEqual(await listing(owner), { "owner-1": false, "owner-2": true, "manager-1": true, "player-1": true });
+  const manager = { id: "manager-1", displayName: "Manager", roleId: "operator", directGrants: ["access.manage"] } as const;
+  assert.deepEqual(await listing(manager), { "owner-1": false, "owner-2": false, "manager-1": false, "player-1": true });
 });

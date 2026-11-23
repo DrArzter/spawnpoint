@@ -35,6 +35,8 @@ export type Role = Readonly<{
   id: string;
   name: string;
   permissions: readonly Permission[];
+  /** The one role that holds the reserved permissions and must keep a holder. */
+  protected: boolean;
 }>;
 
 export type Identity = Readonly<{
@@ -47,16 +49,19 @@ export type Identity = Readonly<{
 export const builtInRoles: Readonly<Record<BuiltInRoleId, Role>> = {
   viewer: {
     id: "viewer",
+    protected: false,
     name: "Viewer",
     permissions: ["status.read"],
   },
   player: {
     id: "player",
+    protected: false,
     name: "Player",
     permissions: ["status.read", "connection.read", "session.start", "invitation.send"],
   },
   operator: {
     id: "operator",
+    protected: false,
     name: "Operator",
     permissions: [
       "status.read", "connection.read", "session.start", "session.stop", "invitation.send",
@@ -65,10 +70,18 @@ export const builtInRoles: Readonly<Record<BuiltInRoleId, Role>> = {
   },
   owner: {
     id: "owner",
+    protected: true,
     name: "Owner",
     permissions,
   },
 };
+
+/** The protected role's id: what the owner bootstrap assigns and the last-holder rule counts. */
+export const protectedRoleId: BuiltInRoleId = "owner";
+
+export function isProtectedRoleId(roleId: string): boolean {
+  return roleOf({ roleId })?.protected === true;
+}
 
 /** The role an identity holds, or null for a role id this deployment does not know. */
 export function roleOf(identity: Pick<Identity, "roleId">): Role | null {

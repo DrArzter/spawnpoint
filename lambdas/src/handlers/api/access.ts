@@ -8,7 +8,8 @@ import { type Response, response, type Event, parameter, parseJsonObject } from 
 import { document, tableName, type Item } from "./access-store.ts";
 import { requirePermission } from "./permissions.ts";
 import { events } from "./clients.ts";
-import { accountKeyFor, activeOwnerCount, identityById } from "./identity-store.ts";
+import { accountKeyFor, identityById } from "./identity-store.ts";
+import { callerCondition, canDelete, lastHolderRefusal, protectedRoleRefusal } from "./owner-guard.ts";
 import { passwordCredentials } from "./credentials.ts";
 import { isConditionFailure } from "./conditions.ts";
 
@@ -46,7 +47,7 @@ function verificationReader(): (email: string) => Promise<boolean> {
   };
 }
 
-export async function identities(): Promise<Response> {
+export async function identities(caller: Identity): Promise<Response> {
   const emailVerified = verificationReader();
   const profiles = await document.send(new QueryCommand({
     TableName: tableName,
@@ -67,6 +68,7 @@ export async function identities(): Promise<Response> {
       displayName: profile.display_name,
       roleId: profile.role_id,
       directGrants: profile.direct_grants ?? [],
+      canDelete: canDelete(caller, { id: identityId, roleId: String(profile.role_id) }),
       links: await Promise.all((accounts.Items ?? []).filter((account) => typeof account.platform === "string").map(async (account) => ({
         platform: account.platform,
         value: account.platform_user_id,
@@ -91,19 +93,10 @@ function accountHandle(account: Item): string | null {
 
 // Returns the conflict response, or null when the role changed.
 async function commitRoleChange(callerIdentity: Identity, identityId: string, roleId: string, targetRoleId: string): Promise<Response | null> {
-  // The target must still hold the role read above, and the caller must still
-  // be active, and an Owner when an Owner is demoted. Two Owners who demote
-  // each other at once cannot both succeed, so one Owner remains.
-  const callerCondition = targetRoleId === "owner" ? "#status = :active AND role_id = :owner" : "#status = :active";
+  // The target must still hold the role read above.
   try {
     await document.send(new TransactWriteCommand({ TransactItems: [
-      { ConditionCheck: {
-        TableName: tableName,
-        Key: { pk: `IDENTITY#${callerIdentity.id}`, sk: "PROFILE" },
-        ConditionExpression: callerCondition,
-        ExpressionAttributeNames: { "#status": "status" },
-        ExpressionAttributeValues: targetRoleId === "owner" ? { ":active": "ACTIVE", ":owner": "owner" } : { ":active": "ACTIVE" },
-      } },
+      { ConditionCheck: { TableName: tableName, ...callerCondition(callerIdentity, targetRoleId) } },
       { Update: {
         TableName: tableName,
         Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" },
@@ -129,12 +122,8 @@ export async function updateRole(callerIdentity: Identity, identityId: string, b
   if (identityId === callerIdentity.id && roleId !== callerIdentity.roleId) return response(409, { error: "self_role_change_forbidden" });
   const target = await identityById(identityId);
   if (target === null) return response(404, { error: "identity_not_found" });
-  const touchesOwner = roleId === "owner" || target.roleId === "owner";
-  if (touchesOwner) {
-    const forbidden = requirePermission(callerIdentity, "access.owner.grant");
-    if (forbidden !== null) return forbidden;
-  }
-  if (target.roleId === "owner" && roleId !== "owner" && await activeOwnerCount() <= 1) return response(409, { error: "last_owner" });
+  const refusal = protectedRoleRefusal(callerIdentity, [roleId, target.roleId]) ?? await lastHolderRefusal(target.roleId, roleId);
+  if (refusal !== null) return refusal;
   const conflict = await commitRoleChange(callerIdentity, identityId, roleId, target.roleId);
   if (conflict !== null) return conflict;
   return response(200, { identityId, roleId });
@@ -189,10 +178,9 @@ export async function approve(identity: Identity, platform: string, platformUser
   const input = approvalInput(body);
   if (input.error !== null) return input.error;
   const { roleId, directGrants } = input.value;
-  if (roleId === "owner" || directGrants.length > 0) {
-    const forbidden = requirePermission(identity, "access.owner.grant");
-    if (forbidden !== null) return forbidden;
-  }
+  // A direct grant is an exception only a holder of the protected role makes.
+  const forbidden = directGrants.length > 0 ? requirePermission(identity, "access.owner.grant") : protectedRoleRefusal(identity, [roleId]);
+  if (forbidden !== null) return forbidden;
   const account = { pk: accountKeyFor(platform, platformUserId), sk: "ACCOUNT" };
   const candidate = await document.send(new GetCommand({ TableName: tableName, Key: account }));
   if (candidate.Item === undefined || candidate.Item.identity_id !== undefined) return response(409, { error: "candidate_unavailable" });

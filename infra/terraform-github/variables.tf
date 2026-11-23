@@ -15,17 +15,23 @@ variable "aws_profile" {
   default     = "spawnpoint"
 }
 
-variable "github_subjects" {
-  description = "Exact GitHub OIDC subject claims allowed to publish catalogs and request release builds."
-  type        = set(string)
-  default = [
-    "repo:DrArzter/my-docker-minecraft-server-config:ref:refs/heads/main",
-    "repo:DrArzter@102290466/my-docker-factorio-server-config@1348549387:ref:refs/heads/main",
-    "repo:DrArzter@102290466/my-docker-zomboid-server-config@1352117153:ref:refs/heads/main",
-  ]
+variable "github_repository_subject" {
+  description = "OIDC subject of this repository without its environment: `repo:owner/name`, or `repo:owner@id/name@id` when the repository uses immutable ids. CI reads it from its own token; a local apply passes it."
+  type        = string
 
   validation {
-    condition = length(var.github_subjects) > 0 && alltrue([
+    condition     = can(regex("^repo:[^:]+$", var.github_repository_subject))
+    error_message = "github_repository_subject must be repo:<owner>/<name> with no environment or ref."
+  }
+}
+
+variable "github_subjects" {
+  description = "Exact OIDC subjects of the config repositories allowed to publish catalogs and request release builds. Empty creates no release role. CI reads the CONFIG_REPOSITORY_SUBJECTS repository variable."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
       for subject in var.github_subjects : can(regex("^repo:[^:]+:ref:refs/heads/[^:]+$", subject))
     ])
     error_message = "Each entry must be an exact repository branch subject claim emitted by GitHub OIDC."

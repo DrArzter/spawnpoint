@@ -1,6 +1,6 @@
 output "github_release_role_arn" {
-  description = "Set this as the AWS_RELEASE_ROLE_ARN GitHub repository variable."
-  value       = aws_iam_role.github_release.arn
+  description = "Set this as the AWS_RELEASE_ROLE_ARN variable of each config repository; null while github_subjects is empty."
+  value       = one(aws_iam_role.github_release[*].arn)
 }
 
 output "github_deploy_role_arn" {

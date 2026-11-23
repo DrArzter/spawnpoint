@@ -1,6 +1,6 @@
 # Both functions hold Telegram chat ids in their logs, so their groups keep
-# 14 days like every other group. Lambda creates /aws/lambda/<name> without
-# retention on the first invocation; the import blocks adopt those groups.
+# 14 days like every other group. Each function depends on its group, so the
+# group exists before Lambda could create one without retention.
 locals {
   bot_log_group_name      = "/aws/lambda/spawnpoint-telegram-bot"
   notifier_log_group_name = "/aws/lambda/spawnpoint-notifier"
@@ -23,16 +23,4 @@ resource "aws_cloudwatch_log_group" "notifier" {
   tags = {
     Name = "spawnpoint-notifier"
   }
-}
-
-import {
-  for_each = var.adopt_lambda_log_groups ? toset([local.bot_log_group_name]) : toset([])
-  to       = aws_cloudwatch_log_group.bot
-  id       = each.value
-}
-
-import {
-  for_each = var.adopt_lambda_log_groups && var.enable_notifications ? toset([local.notifier_log_group_name]) : toset([])
-  to       = aws_cloudwatch_log_group.notifier[0]
-  id       = each.value
 }

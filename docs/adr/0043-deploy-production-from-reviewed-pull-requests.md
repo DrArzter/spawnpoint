@@ -123,5 +123,6 @@ deploys. The plan job reads the newest successful run with such a title and clas
 the tested commit (`scripts/deployment_base.py`). The plan job checks out `main` and runs its scripts, never the
 triggering commit's, and refuses a commit that is not on `main`. A merge whose deploy did not run is carried by the next deploy. A rerun
 of an older deploy, whose commit a newer deploy already contains, deploys nothing. A last deployed revision outside the
-history of `main` stops the deploy for a person to look at. Until a titled run succeeds, the base is `a0caabc` (#98), the
-last revision every unit is known to have reached.
+history of `main` stops the deploy for a person to look at. Until a titled run succeeds, every unit is deployed: a new
+installation has nothing to measure from. (Until 2026-11-23 this fallback was `a0caabc` (#98), which in a new account
+skipped every unit unchanged since then.)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -7,7 +8,8 @@ from pathlib import Path
 REPOSITORY = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPOSITORY / "scripts"))
 
-from deployment_base import choose_base, last_deployed  # noqa: E402
+from deployment_base import NOTHING_DEPLOYED, choose_base, last_deployed  # noqa: E402
+from deployment_plan import changed_paths  # noqa: E402
 
 # A linear main: a, then b, then c.
 A, B, C, OTHER = "a" * 40, "b" * 40, "c" * 40, "d" * 40
@@ -21,7 +23,7 @@ def is_ancestor(ancestor: str, descendant: str) -> bool:
 
 
 def base(titles: list[str], head: str) -> str:
-    return choose_base(titles, head, is_ancestor, first_base=A, main=C)[0]
+    return choose_base(titles, head, is_ancestor, main=C)[0]
 
 
 class DeploymentBaseTest(unittest.TestCase):
@@ -38,8 +40,15 @@ class DeploymentBaseTest(unittest.TestCase):
         self.assertEqual(base([f"Deploy production {C}"], B), B)
         self.assertEqual(base([f"Deploy production {C}"], C), C)
 
-    def test_without_a_titled_run_the_first_base_is_the_base(self) -> None:
-        self.assertEqual(base(["Deploy production"], C), A)
+    def test_without_a_titled_run_every_unit_is_deployed(self) -> None:
+        # A new installation has no deploy to measure from.
+        self.assertEqual(base(["Deploy production"], C), NOTHING_DEPLOYED)
+        self.assertEqual(base([], C), NOTHING_DEPLOYED)
+
+    def test_the_plan_reads_nothing_deployed_as_the_whole_tree(self) -> None:
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPOSITORY, check=True, text=True, capture_output=True).stdout.strip()
+        tracked = subprocess.run(["git", "ls-tree", "-r", "--name-only", head], cwd=REPOSITORY, check=True, text=True, capture_output=True).stdout.splitlines()
+        self.assertEqual(changed_paths(NOTHING_DEPLOYED, head), tracked)
 
     def test_a_deployed_revision_outside_the_history_is_refused(self) -> None:
         with self.assertRaises(ValueError):

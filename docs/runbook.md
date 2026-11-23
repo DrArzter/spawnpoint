@@ -1103,12 +1103,11 @@ docker run --rm --user "$(id -u):$(id -g)" \
   hashicorp/terraform:1.15.8 output -raw state_bucket_name
 ```
 
-Copy `infra/terraform/backend.hcl.example` to the ignored `infra/terraform/backend.hcl`, replace the placeholder with
-that output, then initialise the production root:
+Write the ignored `backend.hcl` of every remote-state root for the account the profile signs in to, then initialise
+the production root:
 
 ```bash
-cp infra/terraform/backend.hcl.example infra/terraform/backend.hcl
-${EDITOR:-vi} infra/terraform/backend.hcl
+scripts/write-backend-config.sh
 
 docker run --rm --user "$(id -u):$(id -g)" \
   -e HOME=/tmp/terraform-home \

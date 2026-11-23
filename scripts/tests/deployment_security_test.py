@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -123,8 +124,9 @@ class DeploymentSecurityTest(unittest.TestCase):
 
     def test_password_authentication_flags_come_from_repository_variables(self) -> None:
         expected_flags = (
-            "TF_VAR_password_login_enabled: ${{ vars.PASSWORD_LOGIN_ENABLED }}",
-            "TF_VAR_password_registration_enabled: ${{ vars.PASSWORD_REGISTRATION_ENABLED }}",
+            # Unset, a variable is an empty string, which a bool cannot be.
+            "TF_VAR_password_login_enabled: ${{ vars.PASSWORD_LOGIN_ENABLED || 'true' }}",
+            "TF_VAR_password_registration_enabled: ${{ vars.PASSWORD_REGISTRATION_ENABLED || 'false' }}",
         )
         for workflow_name in ("deploy-infrastructure.yml", "terraform-plan.yml"):
             workflow = (REPOSITORY / ".github/workflows" / workflow_name).read_text()
@@ -134,7 +136,7 @@ class DeploymentSecurityTest(unittest.TestCase):
     def test_email_adapter_configuration_comes_from_repository_variables(self) -> None:
         expected_variables = (
             "TF_VAR_email_delivery_provider: ${{ vars.EMAIL_DELIVERY_PROVIDER }}",
-            "TF_VAR_resend_api_key_parameter: ${{ vars.RESEND_API_KEY_PARAMETER }}",
+            "TF_VAR_resend_api_key_parameter: ${{ vars.RESEND_API_KEY_PARAMETER || '/spawnpoint/email/resend-api-key' }}",
             "TF_VAR_email_from: ${{ vars.RESEND_EMAIL_FROM }}",
             "TF_VAR_email_reply_to: ${{ vars.RESEND_EMAIL_REPLY_TO }}",
         )
@@ -142,6 +144,21 @@ class DeploymentSecurityTest(unittest.TestCase):
             workflow = (REPOSITORY / ".github/workflows" / workflow_name).read_text()
             for variable in expected_variables:
                 self.assertIn(variable, workflow)
+
+    def test_no_installation_value_is_committed(self) -> None:
+        # A fork deploys into its own account: these come from the repository it runs in.
+        for workflow_name in ("deploy-infrastructure.yml", "terraform-plan.yml"):
+            workflow = (REPOSITORY / ".github/workflows" / workflow_name).read_text()
+            self.assertIn("TF_VAR_repository_url: ${{ github.server_url }}/${{ github.repository }}.git", workflow)
+            self.assertIn("SPAWNPOINT_ANOMALY_DETECTION: ${{ vars.SPAWNPOINT_ANOMALY_DETECTION }}", workflow)
+        for workflow_name in ("deploy-identity.yml", "terraform-plan.yml", "deploy-production.yml"):
+            workflow = (REPOSITORY / ".github/workflows" / workflow_name).read_text()
+            self.assertIn("TF_VAR_github_subjects: ${{ vars.CONFIG_REPOSITORY_SUBJECTS || '[]' }}", workflow)
+        for script_name in ("terraform-apply-safe.sh", "terraform-plan-safe.sh", "terraform-verify-applied.sh"):
+            script = (REPOSITORY / "scripts" / script_name).read_text()
+            self.assertIn('decide_github_subject "${root}"', script)
+        tracked = subprocess.run(["git", "ls-files", "infra"], cwd=REPOSITORY, check=True, text=True, capture_output=True).stdout.splitlines()
+        self.assertEqual([path for path in tracked if path.endswith("/backend.hcl")], [])
 
     def test_fleet_cutover_configuration_comes_from_repository_variables(self) -> None:
         common_variables = (

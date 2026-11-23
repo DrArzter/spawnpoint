@@ -439,3 +439,8 @@ run "a_stop_refused_for_a_player_is_named_in_the_stop_alarm" {
     error_message = "A stop refused because a player joined also fails the execution; the stop alarm must say that it needs no action."
   }
 }
+
+# The deploy workflows pass the repository they run in.
+variables {
+  repository_url = "https://github.com/example/spawnpoint.git"
+}

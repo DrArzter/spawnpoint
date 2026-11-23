@@ -49,7 +49,7 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
         {header}
         <Card label="Games">
           {model.unavailable.failed
-            ? <Empty action={model.refresh} icon="error" message={model.unavailable.description} title="Games could not be loaded" tone="error" />
+            ? <Empty action={model.unavailable.retry ? model.refresh : null} icon={model.unavailable.retry ? "error" : "lock"} message={model.unavailable.description} title={model.unavailable.title} tone="error" />
             : <Empty icon="public" message={model.unavailable.description} title="No games yet" />}
         </Card>
       </div>
@@ -59,7 +59,7 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
     return (
       <div className="c-page">
         {header}
-        <Card label="Worlds"><Empty action={model.refresh} icon="cloud_off" message={model.error} title="Worlds could not be loaded" tone="error" /></Card>
+        <Card label="Worlds"><LoadError error={model.error} kind={model.errorKind} retry={model.refresh} title="Worlds could not be loaded" verb="view worlds" /></Card>
       </div>
     );
   }

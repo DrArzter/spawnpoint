@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentPropsWithRef, type KeyboardEvent, type ReactNode, type SelectHTMLAttributes } from "react";
 
+import type { ApiFailureKind } from "../../api/contract";
 import type { Filter } from "../../components/ui/Filter";
 import { hideLayer, showLayer, useLightDismiss } from "../../components/ui/layer";
+import { failureView } from "../../core/failure";
 import type { HostLogRow } from "../../core/models";
 import { logTime } from "../../core/operation-progress";
 import type { StatusKind } from "../../core/status";
@@ -298,6 +300,12 @@ export function Notice({ tone, title, description, verbs, className }: Readonly<
       {verbs && <div className="t-notice-verbs">{verbs}</div>}
     </div>
   );
+}
+
+/** A failed Loading value, worded by core/failure.ts: Retry unless the role is the reason. */
+export function LoadError({ state, title, verb }: Readonly<{ state: Readonly<{ error: string; kind: ApiFailureKind; retry: Action }>; title: string; verb: string }>) {
+  const view = failureView(state.kind, title, verb, state.error);
+  return <Notice description={view.message ?? undefined} title={view.title} tone={view.kind === "forbidden" ? "warning" : "error"} verbs={view.retry ? <Verb action={state.retry} size="small" /> : undefined} />;
 }
 
 export function Empty({ title, description, verbs, className }: Readonly<{ title: ReactNode; description?: ReactNode; verbs?: ReactNode; className?: string }>) {

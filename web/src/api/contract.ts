@@ -6,20 +6,32 @@ export type PromotionResult = { result: "requested"; operationId: string } | { r
 export type { LoginProviderId } from "../lib/signin";
 
 /**
- * Why a call did not succeed, which decides what the panel may offer next.
- * `unavailable` means the API has no such route yet — a retry cannot help, and
- * the screen says so calmly. `forbidden` means the role is short a permission.
- * `failed` is everything else and keeps the retry it has always had.
+ * Why a call did not succeed, which decides what the panel offers next.
+ * `forbidden`: the role is short a permission, so there is nothing to retry.
+ * `unavailable`: the API did not answer, has no such route or is overloaded
+ * (network failure, 501, 503); the screen says so and keeps Retry.
+ * `failed`: everything else; Retry stays.
  */
 export type ApiFailureKind = "unavailable" | "forbidden" | "failed";
 
+/** The body of an error answer. `error` is the code; other fields (a name, a setting) are its detail. */
+export type ApiErrorBody = Readonly<{ error?: unknown } & Record<string, unknown>>;
+
 export class ApiError extends Error {
   readonly kind: ApiFailureKind;
+  /** The HTTP status; 0 when no answer came. */
+  readonly status: number;
+  /** The body's `error` field, when the API sent one. */
+  readonly code: string | null;
+  readonly detail: ApiErrorBody | null;
 
-  constructor(kind: ApiFailureKind, message: string) {
+  constructor(kind: ApiFailureKind, message: string, source: Readonly<{ status?: number; code?: string | null; detail?: ApiErrorBody | null }> = {}) {
     super(message);
     this.name = "ApiError";
     this.kind = kind;
+    this.status = source.status ?? 0;
+    this.code = source.code ?? null;
+    this.detail = source.detail ?? null;
   }
 }
 
@@ -61,18 +73,18 @@ export type VisitorSession = Readonly<{
   };
 }>;
 
-// The API denies by default and answers anything it does not route with its own
-// `not_found`; a missing resource answers with a code of its own. So a route
-// that was never deployed and a world that was never created stay apart, and
-// only the first is something a retry cannot fix.
-export async function apiFailure(response: Response, message: string, parsed?: Readonly<{ error?: unknown }> | null): Promise<ApiError> {
-  if (response.status === 403) return new ApiError("forbidden", message);
-  if (response.status === 501) return new ApiError("unavailable", message);
-  if (response.status === 404) {
-    const body = parsed ?? await response.json().catch(() => null) as Readonly<{ error?: unknown }> | null;
-    if (body?.error === "not_found") return new ApiError("unavailable", message);
-  }
-  return new ApiError("failed", message);
+// The one place a failed answer becomes an ApiError. The API denies by default
+// and answers anything it does not route with its own `not_found`; a missing
+// resource answers with a code of its own. So a route that was never deployed
+// and a world that was never created stay apart.
+export async function apiFailure(response: Response, message: string, parsed?: ApiErrorBody | null): Promise<ApiError> {
+  const body = parsed !== undefined ? parsed : await response.json().catch(() => null) as ApiErrorBody | null;
+  const code = typeof body?.error === "string" ? body.error : null;
+  const source = { status: response.status, code, detail: body };
+  if (response.status === 403) return new ApiError("forbidden", message, source);
+  if (response.status === 501 || response.status === 503) return new ApiError("unavailable", message, source);
+  if (response.status === 404 && code === "not_found") return new ApiError("unavailable", message, source);
+  return new ApiError("failed", message, source);
 }
 
 /** Why the API refused to delete a person, in words the dialog can show. */

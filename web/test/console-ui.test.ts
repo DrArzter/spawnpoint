@@ -102,6 +102,9 @@ test("Notice, Empty and LoadError: one line, one title, at most one Action", () 
   const forbidden = html(createElement(LoadError, { title: "x", verb: "read backups", error: "no", kind: "forbidden", retry: action("backups.retry", "Try again", noop) }));
   assert.match(forbidden, /Your role cannot read backups/);
   assert.doesNotMatch(forbidden, /data-action/, "a role refusal offers nothing to press");
+  const unavailable = html(createElement(LoadError, { title: "x", verb: "read backups", error: "No answer.", kind: "unavailable", retry: action("backups.retry", "Try again", noop) }));
+  assert.match(unavailable, />Unavailable</);
+  assert.match(unavailable, /data-action="backups.retry"/, "an API that did not answer keeps Retry");
 });
 
 test("Skeleton: a text placeholder is one line of its container, a block gives its size", () => {

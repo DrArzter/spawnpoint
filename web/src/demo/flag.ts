@@ -33,6 +33,18 @@ export function demoOperation(): DemoOperation | null {
   return asked === "promotion" || asked === "running" || asked === "failed" ? asked : null;
 }
 
+export type DemoFailureCall = "backups" | "worlds";
+
+/**
+ * `?failure=forbidden.backups` or `?failure=unavailable.worlds` makes one demo
+ * call fail the way the API does, so the UI gate can open the forbidden and
+ * unavailable states (web/tools/ui-audit). `null` means the call succeeds.
+ */
+export function demoFailure(call: DemoFailureCall): "forbidden" | "unavailable" | null {
+  const [kind, target] = (new URLSearchParams(window.location.search).get("failure") ?? "").split(".");
+  return target === call && (kind === "forbidden" || kind === "unavailable") ? kind : null;
+}
+
 export function demoUrl(): string {
   return `${window.location.pathname}?demo#/worlds`;
 }

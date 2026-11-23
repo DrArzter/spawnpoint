@@ -13,7 +13,7 @@ import { wipeStatus } from "../../core/worlds";
 import { Icon } from "../../icons";
 import { formatBytes, formatTime, shortDigest } from "../../lib/format";
 import { useMediaQuery } from "../../shell/hooks";
-import { Address, Choice, Choices, Col, DetailRow, DetailsGroup, Empty, Field, FilterRow, Ghost, Indicator, Log, NoMatches, Notice, Overflow, Page, Pager, Panel, SelectInput, Skeleton, State, Table, Tabs, Verb, Verbs } from "./ui";
+import { Address, Choice, Choices, Col, DetailRow, DetailsGroup, Empty, Field, FilterRow, Ghost, Indicator, LoadError, Log, NoMatches, Notice, Overflow, Page, Pager, Panel, SelectInput, Skeleton, State, Table, Tabs, Verb, Verbs } from "./ui";
 import { MetricsPanel } from "./Metrics";
 import { ConsolePanel } from "./Rcon";
 import { WhitelistPanel } from "./Whitelist";
@@ -165,8 +165,7 @@ function BackupsTab({ model, worldName }: Readonly<{ model: BackupsModel; worldN
           </Choices>
         </div>
       )}
-      {inventory.status === "error" && inventory.kind === "unavailable" && <Empty title="The backup inventory is not connected yet" />}
-      {inventory.status === "error" && inventory.kind !== "unavailable" && <div className="t-inset"><Notice description={inventory.error} title="The inventory is unavailable" tone="error" verbs={<Verb action={inventory.retry} size="small" />} /></div>}
+      {inventory.status === "error" && <div className="t-inset"><LoadError state={inventory} title="The inventory could not be loaded" verb="read backups" /></div>}
       {inventory.status !== "error" && <Table
         columns={columns}
         empty={<Empty title="No verified backups" />}
@@ -225,7 +224,7 @@ function ChangesPanel({ changes, worldName }: Readonly<{ changes: ReleaseChanges
   return (
     <Panel flush name={name}>
       {state.status === "error"
-        ? <div className="t-inset"><Notice description={state.error} title="The changes are unavailable" tone="error" verbs={<Verb action={state.retry} size="small" />} /></div>
+        ? <div className="t-inset"><LoadError state={state} title="The changes could not be loaded" verb="read changes" /></div>
         : state.status === "ready" && state.value === null
           ? <Empty title={`Release ${changes.release} has no build plan`} />
           : <Table
@@ -274,7 +273,7 @@ function ModsPanel({ mods, worldName }: Readonly<{ mods: ModsModel; worldName: s
   return (
     <Panel flush name={`Mods · release ${mods.release}`}>
       {files.status === "error"
-        ? <div className="t-inset"><Notice description={files.error} title="The mods are unavailable" tone="error" verbs={<Verb action={files.retry} size="small" />} /></div>
+        ? <div className="t-inset"><LoadError state={files} title="The mods could not be loaded" verb="read mods" /></div>
         : <>
           <FilterRow disabled={files.status === "loading" && mods.sources.length === 0 && !mods.narrowed} filter={filter} label="Search mods" matches={ready?.total} placeholder="Search by file name">
             <Field hideLabel label="Sort mods">

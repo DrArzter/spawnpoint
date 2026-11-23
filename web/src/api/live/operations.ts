@@ -1,11 +1,12 @@
-import { apiFailure, type OperationProgress, type SpawnpointApi } from "../contract";
-import { authorizedFetch } from "./transport";
+import type { OperationProgress, SpawnpointApi } from "../contract";
+import { requestOrNull } from "./request";
 
 export const operationsApi = {
-  async loadOperationProgress(gameId: string, worldId: string, operationId: string): Promise<OperationProgress | null> {
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/operations/${encodeURIComponent(operationId)}`);
-    if (response.status === 404) return null;
-    if (!response.ok) throw await apiFailure(response, response.status === 403 ? "Your role cannot read operations." : "The operation could not be read.");
-    return await response.json() as OperationProgress;
+  loadOperationProgress(gameId: string, worldId: string, operationId: string): Promise<OperationProgress | null> {
+    return requestOrNull<OperationProgress>(
+      `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/operations/${encodeURIComponent(operationId)}`,
+      { failure: "The operation could not be read.", refusals: { forbidden: "Your role cannot read operations." } },
+      (error) => error.status === 404,
+    );
   },
 } satisfies Partial<SpawnpointApi>;

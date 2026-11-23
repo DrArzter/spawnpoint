@@ -1,5 +1,6 @@
 import type { ApiFailureKind } from "../../../api/contract";
 import type { Action } from "../../../core/actions";
+import { failureView } from "../../../core/failure";
 import { Icon, type IconName } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { ActionButton } from "./ActionButton";
@@ -27,10 +28,12 @@ export function Empty({ icon, title, action, size = "md", tone = "plain", messag
 }
 
 /**
- * A failed Loading value: Retry unless the role is the reason. `forbidden`
- * reads "Your role cannot <verb>" and offers nothing to press.
+ * A failed Loading value, worded by core/failure.ts: a role that lacks the
+ * permission reads "Your role cannot <verb>" and offers nothing to press;
+ * anything else keeps Retry.
  */
 export function LoadError({ title, verb, error, kind, retry, size = "md" }: Readonly<{ title: string; verb: string; error: string; kind: ApiFailureKind; retry: Action; size?: "md" | "sm" }>) {
-  if (kind === "forbidden") return <Empty icon="lock" size={size} title={`Your role cannot ${verb}`} />;
-  return <Empty action={retry} icon={kind === "unavailable" ? "cloud_off" : "error"} message={error} size={size} title={title} tone="error" />;
+  const view = failureView(kind, title, verb, error);
+  if (view.kind === "forbidden") return <Empty icon="lock" size={size} title={view.title} />;
+  return <Empty action={view.retry ? retry : null} icon={view.kind === "unavailable" ? "cloud_off" : "error"} message={view.message ?? undefined} size={size} title={view.title} tone="error" />;
 }

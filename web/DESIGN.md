@@ -289,8 +289,9 @@ A primitive that promises a layout emits its marker (`data-layout`, `data-rail`,
   text` is exactly one line of its container. A list draws as many placeholder rows as it knows, else as many as it
   showed last time in the session, else three, so another world's backups are as tall loading as loaded.
 - **Empty**: one icon, one title, at most one Action.
-- **Error**: the empty state's error variant with the reason as one line and Retry. A refused role shows a lock and
-  no Retry.
+- **Error**: the empty state's error variant with the reason as one line and Retry. A refused role (403) shows a lock
+  and no Retry. An API that did not answer (network, 501, 503) reads "Unavailable" and keeps Retry. Both skins word
+  a failed load through `core/failure.ts`: the console's `LoadError`, the terminal's `LoadError` (a `Notice`).
 
 ## Skins
 

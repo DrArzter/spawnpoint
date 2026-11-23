@@ -1,11 +1,13 @@
-import { apiFailure, type HostMetrics, type MetricRange, type SpawnpointApi } from "../contract";
-import { authorizedFetch } from "./transport";
+import type { HostMetrics, MetricRange, SpawnpointApi } from "../contract";
+import { requestOrNull } from "./request";
 
 export const metricsApi = {
-  async loadWorldMetrics(gameId: string, worldId: string, range: MetricRange): Promise<HostMetrics | null> {
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/metrics?range=${range}`);
-    if (response.status === 409) return null;
-    if (!response.ok) throw await apiFailure(response, response.status === 403 ? "Your role cannot read metrics." : "Host metrics could not be loaded.");
-    return await response.json() as HostMetrics;
+  // A world that is not running has no metrics: 409, not a failure.
+  loadWorldMetrics(gameId: string, worldId: string, range: MetricRange): Promise<HostMetrics | null> {
+    return requestOrNull<HostMetrics>(
+      `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/metrics?range=${range}`,
+      { failure: "Host metrics could not be loaded.", refusals: { forbidden: "Your role cannot read metrics." } },
+      (error) => error.status === 409,
+    );
   },
 } satisfies Partial<SpawnpointApi>;

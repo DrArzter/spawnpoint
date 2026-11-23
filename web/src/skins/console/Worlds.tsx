@@ -13,7 +13,7 @@ import { Address } from "./ui/Address";
 import { Card } from "./ui/Card";
 import { Chip } from "./ui/Chip";
 import { DetailList } from "./ui/DetailList";
-import { Empty } from "./ui/Empty";
+import { Empty, LoadError } from "./ui/Empty";
 import { Checkbox } from "./ui/Fields";
 import { applyFilter, FilterBar, type FilterProperty, type FilterToken } from "./ui/FilterBar";
 import { elapsed, useNow } from "./ui/Flashbar";
@@ -180,7 +180,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
         {header(undefined)}
         <Card label="Games">
           {model.unavailable.failed
-            ? <Empty action={model.refresh} icon="error" message={model.unavailable.description} title="Games could not be loaded" tone="error" />
+            ? <Empty action={model.unavailable.retry ? model.refresh : null} icon={model.unavailable.retry ? "error" : "lock"} message={model.unavailable.description} title={model.unavailable.title} tone="error" />
             : <Empty icon="public" message={model.unavailable.description} title="No games yet" />}
         </Card>
       </div>
@@ -190,7 +190,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
     return (
       <div className="c-page">
         {header(undefined)}
-        <Card label="Worlds table"><Empty action={withIcon(model.refresh, "refresh")} icon="cloud_off" message={model.error} title="Worlds could not be loaded" tone="error" /></Card>
+        <Card label="Worlds table"><LoadError error={model.error} kind={model.errorKind} retry={withIcon(model.refresh, "refresh")} title="Worlds could not be loaded" verb="view worlds" /></Card>
       </div>
     );
   }

@@ -7,7 +7,7 @@ import { formatDateTime, plural } from "../../lib/format";
 import { describePermission } from "../../lib/permissions";
 import type { Game, LinkKind, Member, Role } from "../../model";
 import { ConfirmationDialog } from "./Dialogs";
-import { Col, Details, Drawer, Empty, Field, FilterRow, Ghost, Indicator, Key, NoMatches, Notice, Overflow, Page, Panel, Person, SelectInput, SkeletonRows, State, Table, Tabs, TextInput, Toggle, Verb } from "./ui";
+import { Col, Details, Drawer, Empty, Field, FilterRow, Ghost, Indicator, Key, LoadError, NoMatches, Notice, Overflow, Page, Panel, Person, SelectInput, SkeletonRows, State, Table, Tabs, TextInput, Toggle, Verb } from "./ui";
 
 export function Access({ model }: Readonly<{ model: AccessModel }>) {
   return (
@@ -55,7 +55,7 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
 
   return (
     <Page>
-      {candidates.status === "error" && <Notice description={candidates.error} title="Access requests could not be loaded" tone="error" verbs={<Verb action={candidates.retry} size="small" />} />}
+      {candidates.status === "error" && <LoadError state={candidates} title="Access requests could not be loaded" verb="read requests" />}
 
       {model.invitations && <Invitations model={model.invitations} />}
 
@@ -171,7 +171,7 @@ function Invitations({ model }: Readonly<{ model: InvitationsModel }>) {
           <Verb action={model.issued.copy} />
         </div>
       </div>}
-      {list.status === "error" && <Notice description={list.error} title="Invitations could not be loaded" tone="error" verbs={<Verb action={list.retry} size="small" />} />}
+      {list.status === "error" && <LoadError state={list} title="Invitations could not be loaded" verb="read invitations" />}
       {list.status === "loading" && <SkeletonRows label="Loading invitations" rows={3} />}
       {list.status === "ready" && list.value.length > 0 && <section className="t-details-group">
         <h3 className="t-group-name">Recent invitations</h3>
@@ -200,8 +200,7 @@ function Roles({ model }: Readonly<{ model: RolesModel }>) {
   const state = model.roles;
   return (
     <Page>
-      {state.status === "error" && state.kind === "unavailable" && <Panel><Empty title="The access directory is not connected yet" /></Panel>}
-      {state.status === "error" && state.kind !== "unavailable" && <Notice description={state.error} title={state.kind === "forbidden" ? "Your role cannot read this" : "Roles could not be loaded"} tone="error" verbs={state.kind === "forbidden" ? undefined : <Verb action={state.retry} size="small" />} />}
+      {state.status === "error" && <LoadError state={state} title="Roles could not be loaded" verb="read roles" />}
       {state.status !== "error" && <Panel flush>
         <FilterRow disabled={state.status !== "ready"} filter={filter} label="Search roles" placeholder="Search by role or description" />
         <Table

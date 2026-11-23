@@ -68,7 +68,7 @@ test("the live loader sends page, size, order and only the search and source tha
 
 test("a refused mod list is a failure that names the cause, not an empty list", async (t) => {
   t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({ error: "invalid_mod_query" }), { status: 400 }));
-  await assert.rejects(worldsApi.loadReleaseMods("minecraft", "prominence", "1.4", { search: "", source: null, sort: "name", order: "asc", page: 1, pageSize: 50 }), /could not be read/);
+  await assert.rejects(worldsApi.loadReleaseMods("minecraft", "prominence", "1.4", { search: "", source: null, sort: "name", order: "asc", page: 1, pageSize: 50 }), /mod search is not valid/);
 });
 
 test("releases compare as numbers, so 10.1 is newer than 9.3, and downloads list the newest first", () => {

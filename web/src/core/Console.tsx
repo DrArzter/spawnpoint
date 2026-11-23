@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { ConsoleEntry } from "../api/contract";
+import type { ApiFailureKind, ConsoleEntry } from "../api/contract";
 import type { ActiveSession } from "../auth";
 import { useSnackbar } from "../components/ui/Snackbar";
 import type { Game, Preset, World, WorldTab } from "../model";
@@ -9,6 +9,7 @@ import { operationsBlockingWorld, runningWorlds, worldSessionId, worldState } fr
 import { pendingFor, pendingOf } from "../shell/actions";
 import type { Skin } from "../skins/skin";
 import { action, type Action } from "./actions";
+import { failureView } from "./failure";
 import { releaseBuildCopy } from "./release-builds";
 import { startableReleases } from "./presets";
 import { presetBuildStates, sessionStatus, worldStatus, type StatusDescriptor } from "./status";
@@ -16,7 +17,7 @@ import { useConsole, type ConsoleController } from "./useConsole";
 import { useAccessRequests, useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseChanges, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
 import { newestRunning, progressModel, useOperationProgress } from "./operation-progress";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
-import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, OperationRow, ReleasesModel, ShellModel, WorldModel, WorldRow, WorldsModel } from "./models";
+import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, Notice, OperationRow, ReleasesModel, ShellModel, WorldModel, WorldRow, WorldsModel } from "./models";
 import { addressFacts, buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionDetails, siblingRow, withReleasePacks, worldDetails, worldLaunchedAt, worldMoreActions, worldNotices, worldPlayers, worldSessionControl, worldTabs } from "./worlds";
 
 /*
@@ -103,8 +104,19 @@ function gameOperationRows(game: Game | undefined, snapshot: ConsoleController["
   });
 }
 
+function gamesFailure(listStatus: "loading" | "ready" | "error", kind: ApiFailureKind) {
+  if (listStatus !== "error") return { title: "No games yet", description: "No games yet. Declare them in Git.", retry: false };
+  const view = failureView(kind, "Games could not be loaded", "view games", "Spawnpoint could not read games, worlds and the compute host.");
+  return { title: view.title, description: view.message ?? "", retry: view.retry };
+}
+
+function stateNotice(kind: ApiFailureKind, error: string, retry: () => void): Notice {
+  const view = failureView(kind, "Current state could not be loaded", "view server status", error);
+  return { id: "load", tone: view.kind === "forbidden" ? "warning" : "error", title: view.title, ...(view.message === null ? {} : { description: view.message }), ...(view.retry ? { action: action("refresh", "Try again", retry) } : {}) };
+}
+
 function WorldsPage({ console, skin }: Controlled) {
-  const { game, snapshot, listStatus, error, granted, sharedSession, serverState, fleetOverview, route, notify, setRequestCount } = console;
+  const { game, snapshot, listStatus, error, errorKind, granted, sharedSession, serverState, fleetOverview, route, notify, setRequestCount } = console;
   const loading = listStatus === "loading";
   const canManage = granted.has("world.manage");
   const readyPreset = game?.presets.some((preset) => startableReleases(preset).length > 0) ?? false;
@@ -116,11 +128,10 @@ function WorldsPage({ console, skin }: Controlled) {
   const model: WorldsModel = {
     status: listStatus,
     error,
+    errorKind,
     game,
-    unavailable: !loading && !game ? { failed: listStatus === "error", description: listStatus === "error" ? "Spawnpoint could not read games, worlds and the compute host." : "No games yet. Declare them in Git." } : null,
-    notices: [
-      ...(listStatus === "error" ? [{ id: "load", tone: "error" as const, title: "Current state could not be loaded", description: error, action: action("refresh", "Try again", () => void console.refresh()) }] : []),
-    ],
+    unavailable: !loading && !game ? { failed: listStatus === "error", ...gamesFailure(listStatus, errorKind) } : null,
+    notices: listStatus === "error" ? [stateNotice(errorKind, error, () => void console.refresh())] : [],
     overview: buildSessionOverview(game, snapshot, serverState, sharedSession, fleetOverview),
     rows: worldRows(console),
     emptyDescription: canManage && readyPreset ? null : "Worlds appear here once a preset has a ready release.",

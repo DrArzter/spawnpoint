@@ -207,4 +207,15 @@ export const authApi = {
       describe: (status, code) => status === 401 ? "The current password is not correct." : describeRegistrationFailure(status, code),
     });
   },
+
+  async uploadAvatar(image: string): Promise<string> {
+    const body = await request<{ photoUrl: string }>("/me/avatar", {
+      method: "POST", body: { image }, failure: "The picture could not be saved. Try again.", valid: (answer) => typeof answer?.photoUrl === "string",
+    });
+    return body.photoUrl;
+  },
+
+  async removeAvatar(): Promise<void> {
+    await request<unknown>("/me/avatar/delete", { method: "POST", failure: "The picture could not be removed. Try again." });
+  },
 } satisfies Partial<SpawnpointApi>;

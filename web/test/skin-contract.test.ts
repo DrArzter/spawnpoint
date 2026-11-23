@@ -161,7 +161,8 @@ const access: AccessModel = {
 const profile: ProfileModel = {
   member: aMember({ id: "m1", name: "DrArzter", roleId: "role-a" }),
   role: aRole({ id: "role-a", name: "Role A" }),
-  viewer: { displayName: "DrArzter", inTelegram: true, username: "drarzter" },
+  viewer: { displayName: "DrArzter", inTelegram: true, username: "drarzter", photoUrl: "https://example.test/me.webp" },
+  avatar: { change: spy("profile.avatar.change", "Change picture"), remove: spy("profile.avatar.remove", "Remove picture") },
   appearance: shell.appearance,
   look: { current: "console", options: [{ id: "console", name: "Cloud console", choose: spy("look.console", "Cloud console", { disabled: true }) }, { id: "terminal", name: "Terminal", choose: spy("look.terminal", "Terminal") }] },
   signOut: spy("profile.signout", "Sign out"),
@@ -385,6 +386,15 @@ for (const skin of SKINS) {
   test(`${skin.name}: the profile draws sign out, the browser door and every sign-in method verb`, () => {
     const account = profile.loginAccounts.accounts.status === "ready" ? profile.loginAccounts.accounts.value[0]! : (null as never);
     checkSurface("Profile", renderToStaticMarkup(createElement(skin.Profile, { model: profile })), { ...profile, rowActions: profile.loginAccounts.rowActions(account) });
+  });
+
+  test(`${skin.name}: the profile offers Change picture always and Remove picture only with a picture`, () => {
+    const withPicture = renderToStaticMarkup(createElement(skin.Profile, { model: profile }));
+    assert.match(withPicture, /data-action="profile\.avatar\.change"/);
+    assert.match(withPicture, /data-action="profile\.avatar\.remove"/);
+    const without = renderToStaticMarkup(createElement(skin.Profile, { model: { ...profile, viewer: { displayName: "DrArzter", inTelegram: true }, avatar: { ...profile.avatar, remove: null } } }));
+    assert.match(without, /data-action="profile\.avatar\.change"/);
+    assert.doesNotMatch(without, /profile\.avatar\.remove/);
   });
 
   test(`${skin.name}: dialogs and sheets draw confirm, cancel, submit, save, send and close`, () => {

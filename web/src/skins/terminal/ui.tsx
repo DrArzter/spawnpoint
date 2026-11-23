@@ -358,7 +358,7 @@ export function Help({ text }: Readonly<{ text: string }>) {
   return <Tooltip className="t-help" text={text}><span aria-hidden="true">(?)</span><span className="visually-hidden">{text}</span></Tooltip>;
 }
 
-export function Avatar({ name, photoUrl, size = "medium", className }: Readonly<{ name: string; photoUrl?: string | null; size?: "small" | "medium" | "large"; className?: string }>) {
+export function Avatar({ name, photoUrl, size = "medium", className }: Readonly<{ name: string; photoUrl?: string | null; size?: "small" | "medium" | "large" | "xlarge"; className?: string }>) {
   return (
     <span aria-hidden="true" className={cx("t-avatar", `t-avatar-${size}`, className)}>
       {photoUrl ? <img alt="" src={photoUrl} /> : (name.trim().charAt(0) || "?").toUpperCase()}

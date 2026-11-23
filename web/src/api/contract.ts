@@ -400,6 +400,9 @@ export type SpawnpointApi = Readonly<{
   linkGoogle(idToken: string): Promise<void>;
   linkPassword(email: string, password: string, displayName: string): Promise<void>;
   changePassword(email: string, currentPassword: string, password: string): Promise<void>;
+  /** `image` is the base64 of a JPEG, PNG or WebP of at most 256 KB. Resolves to the new picture link. */
+  uploadAvatar(image: string): Promise<string>;
+  removeAvatar(): Promise<void>;
 
   requestAccess(): Promise<void>;
   checkAccessInvitation(token: string): Promise<{ valid: boolean; email: string | null }>;

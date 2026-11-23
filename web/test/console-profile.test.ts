@@ -17,6 +17,7 @@ const profile: ProfileModel = {
   member: aMember({ id: "m1", name: "Kai Ashby", roleId: "role-a" }),
   role: aRole({ id: "role-a", name: "Role A" }),
   viewer: { displayName: "Kai Ashby", inTelegram: false },
+  avatar: { change: spy("profile.avatar.change", "Change picture"), remove: null },
   appearance: { preference: "dark", theme: "dark", accent: "#5b47d6", setPreference: async () => undefined, setAccent: async () => undefined },
   look: { current: "console", options: [{ id: "terminal", name: "Terminal", choose: spy("look.terminal", "Terminal") }] },
   signOut: spy("profile.signout", "Sign out"),

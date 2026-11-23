@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { failureKind, type ApiFailureKind, type ReleaseMod, type ReleasePackName, type StopPlayersPolicy } from "../api/contract";
-import { requestReleaseBuild } from "../auth";
+import { removeAvatar, requestReleaseBuild, uploadAvatar } from "../auth";
+import { browserAvatarEnvironment, prepareAvatar } from "./avatar-image";
 import { ActiveSession, endSession, loadAppearance, loadControlPlane, requestBackupDownload, requestCreateWorld, requestModDownload, requestPackDownload, requestReleasePack, requestSessionOperation, requestPromotion, requestUpdateWorldSettings, requestWorldLifecycle, subscribeControlPlane, updateAppearance, updateGameSettings, type BackupEntry } from "../auth";
 import { startableReleases } from "./presets";
 import { sessionStatus } from "./status";
@@ -181,10 +182,16 @@ export type ConsoleController = Readonly<{
   downloadBackup: (game: Game, world: World, entry: BackupEntry) => void;
   downloadMod: (game: Game, presetId: string, release: string, mod: ReleaseMod) => void;
   downloadReleasePack: (game: Game, presetId: string, release: string, pack: ReleasePackName) => void;
+  /** The person's own picture: a change shows at once in the app bar, the profile and the access list. */
+  avatar: Readonly<{ busy: boolean; change: (file: File) => void; remove: () => void }>;
   notify: Notify;
 }>;
 
-export function useConsole(session: ActiveSession, continuesBootCard: boolean, notify: Notify): ConsoleController {
+export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, notify: Notify): ConsoleController {
+  // The picture is the one part of the session the person changes here.
+  const [photoUrl, setPhotoUrl] = useState<string | null | undefined>(undefined);
+  const session = useMemo<ActiveSession>(() => (photoUrl === undefined ? signedIn : { ...signedIn, profile: { ...signedIn.profile, photoUrl } }), [signedIn, photoUrl]);
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [route, navigate] = useRoute();
   // The console only exists for a signed-in person, so every change here is
   // the account's to keep. The front door has no session and syncs nothing.
@@ -472,6 +479,29 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     requests: directory.requestCount,
   };
 
+  const changeAvatar = async (file: File) => {
+    setAvatarBusy(true);
+    try {
+      const prepared = await prepareAvatar(file, browserAvatarEnvironment);
+      setPhotoUrl(await uploadAvatar(prepared.base64));
+    } catch (error) {
+      notify({ tone: "error", message: error instanceof Error ? error.message : "The picture could not be saved." });
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+  const deleteAvatar = async () => {
+    setAvatarBusy(true);
+    try {
+      await removeAvatar();
+      setPhotoUrl(null);
+    } catch (error) {
+      notify({ tone: "error", message: error instanceof Error ? error.message : "The picture could not be removed." });
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
   return {
     booted,
     bootVisible,
@@ -507,6 +537,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     directory,
     bootstrap,
     appearance: appearanceModel,
+    avatar: { busy: avatarBusy, change: (file) => void changeAvatar(file), remove: () => void deleteAvatar() },
     signOut: () => void endSession(),
     openInBrowser: viewer.inTelegram ? openInBrowser : null,
     confirmation,

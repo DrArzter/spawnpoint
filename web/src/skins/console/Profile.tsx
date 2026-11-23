@@ -4,7 +4,7 @@ import type { LinkedLoginAccount } from "../../api/contract";
 import { GoogleLoginButton } from "../../components/GoogleLogin";
 import { TelegramLoginButton } from "../../components/TelegramLogin";
 import { action, type Action } from "../../core/actions";
-import type { AppearanceModel, LoginAccountsModel, LookModel, ProfileModel } from "../../core/models";
+import type { AppearanceModel, AvatarModel, LoginAccountsModel, LookModel, ProfileModel } from "../../core/models";
 import { Icon, type IconName } from "../../icons";
 import { PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../../lib/signin";
 import { DEFAULT_ACCENT, parseHex } from "../../styles/accent";
@@ -45,15 +45,29 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
           </span>
           </>
         )}
-        lead={<Avatar name={member.name} photoUrl={viewer.photoUrl} size="lg" />}
         title={member.name}
       />
+      <Picture model={model.avatar} name={member.name} photoUrl={viewer.photoUrl} />
       <Grid kind="profile">
         <SignInMethods model={model.loginAccounts} />
         <Appearance look={model.look} model={model.appearance} />
       </Grid>
       {model.loginAccounts.form && <PasswordPanel form={model.loginAccounts.form} />}
     </div>
+  );
+}
+
+function Picture({ model, name, photoUrl }: Readonly<{ model: AvatarModel; name: string; photoUrl: string | undefined }>) {
+  return (
+    <Card title="Picture">
+      <div className="c-profile-picture">
+        <Avatar name={name} photoUrl={photoUrl} size="xl" />
+        <span className="c-profile-row-actions">
+          <ActionButton action={model.change} size="sm" />
+          {model.remove && <ActionButton action={model.remove} size="sm" variant="danger" />}
+        </span>
+      </div>
+    </Card>
   );
 }
 

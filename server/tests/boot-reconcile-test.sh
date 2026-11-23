@@ -104,6 +104,11 @@ rm -rf -- "${host}/releases/minecraft/main/1.0"
 folder_output="$(FAKE_AWS_CALL_LOG="${calls}" RELEASE_DOWNLOAD_FILTER_LIMIT=1 \
   "${SCRIPTS}/download-release.sh" minecraft main 1.0 "${host}/releases/minecraft/main/1.0")"
 grep -qx 'downloaded=2' <<<"${folder_output}"
+grep -qx 'fetch=folders' <<<"${folder_output}"
+grep -qx 'fetch_reason=listed' <<<"${folder_output}"
+grep -qx 'fetched_bytes=16' <<<"${folder_output}"
+grep -qx 'discarded=0' <<<"${folder_output}"
+grep -q '^s3api list-objects-v2 .*--prefix releases/minecraft/main/1.0/' "${calls}"
 grep -qF -- '--include mods/*' "${calls}"
 grep -qF -- '--include overrides/*' "${calls}"
 if grep -qF -- '--include mods/alpha.jar' "${calls}"; then
@@ -115,6 +120,62 @@ for pack in client.zip server.zip full.zip; do
   [[ ! -e "${host}/releases/minecraft/main/1.0/${pack}" ]]
 done
 [[ -z "$(find "${host}/releases/minecraft/main/1.0" -name '.fetch.*')" ]]
+
+# 2c. A key the manifest does not name keeps the copy file by file: nothing
+# unknown comes down, and the release loads.
+payload="${host}/releases/minecraft/main/1.0"
+printf 'not in the manifest\n' >"${release_root}/mods/stray.jar"
+rm -rf -- "${payload}"
+: >"${calls}"
+stray_output="$(FAKE_AWS_CALL_LOG="${calls}" RELEASE_DOWNLOAD_FILTER_LIMIT=1 \
+  "${SCRIPTS}/download-release.sh" minecraft main 1.0 "${payload}" 2>"${fixture}/stray.err")"
+grep -qx 'fetch=files' <<<"${stray_output}"
+grep -qx 'fetch_reason=unexpected-keys' <<<"${stray_output}"
+grep -qx 'discarded=0' <<<"${stray_output}"
+grep -q '1 keys its manifest does not name' "${fixture}/stray.err"
+grep -qF -- '--include mods/alpha.jar' "${calls}"
+if grep -qF -- '--include mods/*' "${calls}"; then
+  printf 'expected exact filters when the prefix holds an unknown key\n' >&2
+  exit 1
+fi
+[[ ! -e "${payload}/mods/stray.jar" ]]
+rm -f -- "${release_root}/mods/stray.jar"
+
+# 2d. A host that already holds as many bytes as it misses copies the few it misses.
+rm -f -- "${payload}/mods/alpha.jar"
+: >"${calls}"
+cached_output="$(FAKE_AWS_CALL_LOG="${calls}" RELEASE_DOWNLOAD_FILTER_LIMIT=0 \
+  "${SCRIPTS}/download-release.sh" minecraft main 1.0 "${payload}")"
+grep -qx 'downloaded=1' <<<"${cached_output}"
+grep -qx 'kept=1' <<<"${cached_output}"
+grep -qx 'fetch=files' <<<"${cached_output}"
+grep -qx 'fetch_reason=mostly-cached' <<<"${cached_output}"
+grep -qx 'fetched_bytes=8' <<<"${cached_output}"
+grep -qF -- '--include mods/alpha.jar' "${calls}"
+
+# 2e. No listing (S3 refuses it) falls back to exact filters and still loads.
+rm -rf -- "${payload}"
+unlisted_output="$(FAKE_S3_LIST_FAIL=true RELEASE_DOWNLOAD_FILTER_LIMIT=1 \
+  "${SCRIPTS}/download-release.sh" minecraft main 1.0 "${payload}")"
+grep -qx 'downloaded=2' <<<"${unlisted_output}"
+grep -qx 'fetch=files' <<<"${unlisted_output}"
+grep -qx 'fetch_reason=no-listing' <<<"${unlisted_output}"
+
+# 2f. A copy that would not fit stops before it starts, with the numbers.
+rm -rf -- "${payload}"
+expect_failure "a copy larger than the free disk" env RELEASE_DOWNLOAD_FILTER_LIMIT=1 \
+  RELEASE_DOWNLOAD_DISK_MARGIN_BYTES=999999999999999999 \
+  "${SCRIPTS}/download-release.sh" minecraft main 1.0 "${payload}"
+set +e
+RELEASE_DOWNLOAD_DISK_MARGIN_BYTES=999999999999999999 \
+  "${SCRIPTS}/download-release.sh" minecraft main 1.0 "${payload}" >/dev/null 2>"${fixture}/disk.err"
+set -e
+grep -q 'not enough disk space for release 1.0: the copy needs 16 bytes' "${fixture}/disk.err"
+[[ ! -e "${payload}/mods/alpha.jar" ]]
+[[ -z "$(find "${payload}" -name '.fetch.*')" ]]
+expect_failure "a margin that is not a number" env RELEASE_DOWNLOAD_DISK_MARGIN_BYTES=lots \
+  "${SCRIPTS}/download-release.sh" minecraft main 1.0 "${payload}"
+"${SCRIPTS}/download-release.sh" minecraft main 1.0 "${payload}" >/dev/null
 
 # 3. Reconcile materialises the live mod directory from the payload.
 SERVER_PROJECT_DIRECTORY="${host}" \

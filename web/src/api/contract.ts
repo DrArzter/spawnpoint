@@ -117,6 +117,8 @@ export type AccessIdentity = Readonly<{
   directGrants: string[];
   /** Whether the caller may delete this identity; the backend's owner rules decide, so the web keeps no copy of them. */
   canDelete: boolean;
+  /** A photo from one of the person's linked accounts; absent from a server that predates it. */
+  photoUrl?: string | null;
   /** `handle` is the account's own name where it has one: a Telegram username, an email address. */
   links: ReadonlyArray<{ platform: string; value: string; handle: string | null; verified: boolean }>;
 }>;
@@ -407,6 +409,9 @@ export type SpawnpointApi = Readonly<{
   linkGoogle(idToken: string): Promise<void>;
   linkPassword(email: string, password: string, displayName: string): Promise<void>;
   changePassword(email: string, currentPassword: string, password: string): Promise<void>;
+  /** `image` is the base64 of a JPEG, PNG or WebP of at most 256 KB. Resolves to the new picture link. */
+  uploadAvatar(image: string): Promise<string>;
+  removeAvatar(): Promise<void>;
 
   requestAccess(): Promise<void>;
   checkAccessInvitation(token: string): Promise<{ valid: boolean; email: string | null }>;

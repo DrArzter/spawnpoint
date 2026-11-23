@@ -61,6 +61,8 @@ export const API_ERROR_TEXT: Readonly<Record<string, string>> = {
   credential_not_linked: "This identity has no password to change.",
   current_password_required: "Enter your current password.",
   invalid_current_password: "The current password is not correct.",
+  invalid_avatar: "Choose a JPEG, PNG or WebP picture.",
+  avatar_too_large: "The picture is too large. Choose a simpler one.",
   invalid_appearance: "This appearance setting is not valid.",
   invalid_subscriptions: "These notification settings are not valid.",
 

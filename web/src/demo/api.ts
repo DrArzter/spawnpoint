@@ -8,6 +8,11 @@ let accessInvitations: AccessInvitation[] = [];
 // The first snapshot is a boot answer; every one after it is a refresh.
 let snapshotServed = false;
 
+// What the session says now: the picture the person set in this demo.
+function signedIn() {
+  return { ...demoSession, profile: { ...demoSession.profile, photoUrl: store.avatar() } };
+}
+
 // A call the URL asked to fail answers as the API would (see demoFailure).
 function failWhenAsked(call: DemoFailureCall, role: string): void {
   const kind = demoFailure(call);
@@ -25,7 +30,7 @@ export const demoApi: SpawnpointApi = {
   },
   async restoreSession(): Promise<AuthState> {
     await demoLatency("boot");
-    return { status: "authenticated", session: demoSession };
+    return { status: "authenticated", session: signedIn() };
   },
 
   async loadLoginOptions() {
@@ -35,19 +40,19 @@ export const demoApi: SpawnpointApi = {
 
   async exchangeTelegramOidc(): Promise<AuthState> {
     await demoLatency();
-    return { status: "authenticated", session: demoSession };
+    return { status: "authenticated", session: signedIn() };
   },
 
   async exchangeGoogleOidc(): Promise<AuthState> {
     await demoLatency();
-    return { status: "authenticated", session: demoSession };
+    return { status: "authenticated", session: signedIn() };
   },
 
   // The demo answers every way in with its one signed-in owner: the point is
   // to explore the console, not to prove a password.
   async signInWithPassword(): Promise<AuthState> {
     await demoLatency();
-    return { status: "authenticated", session: demoSession };
+    return { status: "authenticated", session: signedIn() };
   },
 
   async registerWithPassword(email: string) {
@@ -61,7 +66,7 @@ export const demoApi: SpawnpointApi = {
 
   async verifyEmail(): Promise<AuthState> {
     await demoLatency();
-    return { status: "authenticated", session: demoSession };
+    return { status: "authenticated", session: signedIn() };
   },
 
   async requestPasswordReset(): Promise<void> {
@@ -102,6 +107,16 @@ export const demoApi: SpawnpointApi = {
 
   async changePassword(): Promise<void> {
     await demoLatency();
+  },
+
+  async uploadAvatar(image: string): Promise<string> {
+    await demoLatency();
+    return store.setAvatar(image);
+  },
+
+  async removeAvatar(): Promise<void> {
+    await demoLatency();
+    store.clearAvatar();
   },
 
   async requestAccess(): Promise<void> {

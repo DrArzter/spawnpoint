@@ -23,6 +23,9 @@ data "aws_s3_bucket" "releases" {
 }
 
 locals {
+  # Composed, not looked up: the storage root creates the bucket in the same deploy, after a plan that cannot see it yet.
+  avatar_bucket_name           = "spawnpoint-avatars-${data.aws_caller_identity.current.account_id}"
+  avatar_bucket_arn            = "arn:aws:s3:::${local.avatar_bucket_name}"
   custom_api_domain_enabled    = var.api_domain_name != null && var.api_domain_name != ""
   stop_state_machine_arn       = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-stop-server-v2"
   world_lifecycle_arn          = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-world-lifecycle"

@@ -1234,6 +1234,19 @@ html[data-skin="terminal"] .t-avatar-large {
   font-size: 20px;
 }
 
+html[data-skin="terminal"] .t-avatar-xlarge {
+  width: 96px;
+  height: 96px;
+  font-size: 32px;
+}
+
+html[data-skin="terminal"] .t-picture {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
 /* --- tabs: cells on a rule, the chosen one inverted ------------------------------------ */
 
 html[data-skin="terminal"] .t-tabs {

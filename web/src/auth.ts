@@ -36,6 +36,8 @@ export const linkTelegram = (idToken: string) => api.linkTelegram(idToken);
 export const linkGoogle = (idToken: string) => api.linkGoogle(idToken);
 export const linkPassword = (email: string, password: string, displayName: string) => api.linkPassword(email, password, displayName);
 export const changePassword = (email: string, currentPassword: string, password: string) => api.changePassword(email, currentPassword, password);
+export const uploadAvatar = (image: string) => api.uploadAvatar(image);
+export const removeAvatar = () => api.removeAvatar();
 
 export const requestAccess = () => api.requestAccess();
 export const checkAccessInvitation = (token: string) => api.checkAccessInvitation(token);

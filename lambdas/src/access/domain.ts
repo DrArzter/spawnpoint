@@ -84,6 +84,9 @@ export type Identity = Readonly<{
    * means no record was read, and a built-in role uses its definition in code.
    */
   role?: Role | null;
+  /** The stored avatar's key and whether the person removed theirs (ADR-0084). */
+  avatarKey?: string | null;
+  avatarRemoved?: boolean;
 }>;
 
 export const builtInRoles: Readonly<Record<BuiltInRoleId, Role>> = {
@@ -164,6 +167,8 @@ export function identityFromRecord(item: Readonly<Record<string, unknown>>): Ide
     displayName: String(item.display_name),
     roleId: String(item.role_id),
     directGrants: Array.isArray(item.direct_grants) ? item.direct_grants as Permission[] : [],
+    avatarKey: typeof item.avatar_key === "string" ? item.avatar_key : null,
+    avatarRemoved: item.avatar_removed !== undefined,
   };
 }
 

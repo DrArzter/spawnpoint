@@ -43,7 +43,7 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
     { id: "verbs", label: "Actions", verbs: true, width: "80px", render: (row) => <Overflow groups={[[row.approve, row.dismiss]]} label={`Actions for ${row.candidate.displayName}`} size="small" /> },
   ];
   const memberColumns: readonly Col<MemberRow>[] = [
-    { id: "user", label: "User", render: (row) => <Person name={row.member.name} /> },
+    { id: "user", label: "User", render: (row) => <Person name={row.member.name} photoUrl={row.member.photoUrl} /> },
     { id: "role", label: "Role", align: "end", width: "180px", render: (row) => <RoleSelect choice={row.role} label={`Role for ${row.member.name}`} onChange={row.setRoleId} /> },
     { id: "verbs", label: "Actions", verbs: true, width: "80px", render: (row) => <Overflow groups={[[row.linkedAccounts], row.remove ? [row.remove] : []]} label={`Actions for ${row.member.name}`} menu size="small" /> },
   ];

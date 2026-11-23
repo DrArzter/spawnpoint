@@ -1,7 +1,9 @@
 import { roleOf } from "../../access/domain.ts";
 import { GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { type Caller, type Response, response } from "./http.ts";
-import { observe, resolveIdentity, bootstrapOwner } from "./identity-store.ts";
+import { observe, resolveIdentity, bootstrapOwner, identityAccounts } from "./identity-store.ts";
+import { providerPhoto } from "../../access/avatar.ts";
+import { avatarLink, copyProviderAvatar } from "./avatars.ts";
 import { requestAccountAccess } from "../../access/account-writes.ts";
 import { document, tableName, type Item } from "./access-store.ts";
 
@@ -12,7 +14,13 @@ export async function session(account: Caller, capabilities: readonly string[]):
     const role = roleOf(identity);
     const bootstrap = await document.send(new GetCommand({ TableName: tableName, Key: { pk: "SYSTEM", sk: "BOOTSTRAP" } }));
     // The Owner's Telegram id is personal data that no member needs once the claim is made.
-    return response(200, { state: "active", identity, role, capabilities, profile: accountProfile(account, observed),
+    const profile = accountProfile(account, observed);
+    // The identity's own avatar (ADR-0084), copied once from a provider photo when it has none.
+    let key = identity.avatarKey ?? null;
+    if (key === null && !identity.avatarRemoved) key = await copyProviderAvatar(identity, providerPhoto(await identityAccounts(identity), account));
+    if (key !== null) profile.photoUrl = await avatarLink(key);
+    else if (identity.avatarRemoved) profile.photoUrl = null;
+    return response(200, { state: "active", identity, role, capabilities, profile,
       bootstrap: bootstrap.Item === undefined ? { state: "unclaimed" } : {
         state: "claimed", ownerId: bootstrap.Item.identity_id, telegramId: null, claimedAt: bootstrap.Item.claimed_at,
       } });
@@ -25,7 +33,9 @@ export async function session(account: Caller, capabilities: readonly string[]):
 // The account a session was signed in through, as the panel shows it. The
 // Telegram id stays a named field because the owner bootstrap and the
 // Mini App read it; every other provider is described by its handle or email.
-function accountProfile(account: Caller, observed: Item) {
+function accountProfile(account: Caller, observed: Item): {
+  provider: string; platformUserId: string; telegramId: string | null; username: string | null; email: string | null; photoUrl: string | null;
+} {
   return {
     provider: account.provider,
     platformUserId: account.subject,

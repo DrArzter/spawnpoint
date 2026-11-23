@@ -142,7 +142,7 @@ export type PermissionInfo = { id: string; group: string; label: string; descrip
 export type LinkKind = "telegram" | "email" | "google" | "discord" | "minecraft" | "factorio" | "steam" | "zerotier";
 export type LinkedAccount = { id: string; kind: LinkKind; value: string; verified: boolean };
 /** `canDelete` is the backend's answer for this caller, not a rule the web works out. */
-export type Member = { id: string; name: string; roleId: string; links: LinkedAccount[]; canDelete: boolean };
+export type Member = { id: string; name: string; roleId: string; links: LinkedAccount[]; canDelete: boolean; photoUrl?: string | null };
 export type OwnerBootstrap =
   /** The viewer's own Telegram id, when they have one; the configured account is deployment configuration. */
   | { state: "unclaimed"; telegramId: string | null }

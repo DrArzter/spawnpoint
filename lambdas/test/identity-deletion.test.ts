@@ -3,8 +3,10 @@ import test, { type TestContext } from "node:test";
 import { type Identity } from "../src/access/domain.ts";
 import { type WorldRecord } from "../src/control-plane/world-registry.ts";
 import { accessTable, type Item, type TableOptions } from "./access-table.ts";
+import { S3Client } from "@aws-sdk/client-s3";
 
 process.env.ACCESS_TABLE_NAME = "access-api-test";
+process.env.AVATAR_BUCKET = "spawnpoint-avatars-test";
 const { document } = await import("../src/handlers/api/access-store.ts");
 const { deleteIdentity, deletedUserName } = await import("../src/handlers/api/identity-deletion.ts");
 
@@ -115,11 +117,25 @@ function worldStore(records: WorldRecord[], edits: string[] = [], failList = fal
   };
 }
 
+// The avatar bucket holds one picture of the person and one of somebody else.
+function avatarBucket(t: TestContext) {
+  const objects = new Set([`${ids.target}/aaaa.webp`, `${ids.owner}/bbbb.webp`]);
+  t.mock.method(S3Client.prototype, "send", async (command: { constructor: { name: string }; input: { Prefix?: string; Delete?: { Objects: { Key: string }[] } } }) => {
+    if (command.constructor.name === "ListObjectsV2Command") {
+      return { Contents: [...objects].filter((key) => key.startsWith(command.input.Prefix ?? "")).map((Key) => ({ Key })) };
+    }
+    if (command.constructor.name === "DeleteObjectsCommand") for (const object of command.input.Delete?.Objects ?? []) objects.delete(object.Key);
+    return {};
+  });
+  return objects;
+}
+
 function fixture(t: TestContext, items: Item[], options: TableOptions = {}) {
+  const avatars = avatarBucket(t);
   const audit: string[] = [];
   t.mock.method(console, "info", (line: string) => { audit.push(line); });
   t.mock.method(console, "error", () => undefined);
-  return { ...accessTable(t, document, items, options), audit };
+  return { ...accessTable(t, document, items, options), audit, avatars };
 }
 
 test("every record of the person goes, and records about other people stay", async (t) => {
@@ -154,12 +170,13 @@ test("every record of the person goes, and records about other people stay", asy
   assert.deepEqual(rewritten.whitelist?.updatedBy, { identityId: ids.target, displayName: deletedUserName });
   assert.deepEqual(rewritten.whitelist?.names, ["Steve"]);
   assert.deepEqual(worlds.replaced, ["w1"], "a world the person did not touch is not written");
+  assert.deepEqual([...f.avatars], [`${ids.owner}/bbbb.webp`], "the person's picture goes; another person's stays");
 
   assert.equal(f.audit.length, 1);
   assert.deepEqual(JSON.parse(f.audit[0]!), {
     ...JSON.parse(f.audit[0]!),
     event: "identity_deleted", actorIdentityId: ids.owner, deletedIdentityId: ids.target, roleId: "operator",
-    removed: { accounts: 2, credentials: 1, loginSessions: 2, oauth: 3, emailActions: 1, invitations: 2, playerInvitations: 1 },
+    removed: { accounts: 2, credentials: 1, loginSessions: 2, oauth: 3, emailActions: 1, invitations: 2, playerInvitations: 1, avatars: 1 },
     revoked: { accessInvitations: 1 },
     anonymised: { console: 1, downloads: 1, worlds: 1, bootstrap: 0 },
     sweep2: "complete",

@@ -204,6 +204,20 @@ data "aws_iam_policy_document" "access_api" {
     resources = ["*"]
   }
 
+  # Identity avatars (ADR-0084): written, read through presigned links, and
+  # deleted with the identity. Listing is needed to delete an identity's prefix.
+  statement {
+    sid       = "ManageIdentityAvatars"
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    resources = ["${local.avatar_bucket_arn}/*"]
+  }
+
+  statement {
+    sid       = "ListIdentityAvatars"
+    actions   = ["s3:ListBucket"]
+    resources = [local.avatar_bucket_arn]
+  }
+
   statement {
     sid       = "ReadHostStartOutput"
     actions   = ["logs:GetLogEvents"]
@@ -333,6 +347,7 @@ resource "aws_lambda_function" "access_api" {
       BUILD_RELEASE_STATE_MACHINE_ARN  = local.build_release_arn
       RELEASE_RETIREMENT_FUNCTION_NAME = local.release_retirement_function_name
       BACKUP_BUCKET                    = data.aws_s3_bucket.backups.id
+      AVATAR_BUCKET                    = local.avatar_bucket_name
       CONNECTION_HOST                  = var.connection_host
       CONSOLE_DOCUMENT_NAME            = aws_ssm_document.console.name
       WHITELIST_DOCUMENT_NAME          = aws_ssm_document.whitelist.name
@@ -401,6 +416,8 @@ locals {
     "POST /me/accounts/{provider}",
     "POST /me/password",
     "POST /me/password/change",
+    "POST /me/avatar",
+    "POST /me/avatar/delete",
     "GET /control-plane",
     "POST /control-plane/subscriptions",
     "GET /access/roles",

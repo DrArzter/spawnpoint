@@ -79,7 +79,7 @@ const candidate: CandidateRow = {
   dismiss: spy("access.dismiss", "Dismiss"),
 };
 
-function row(over: { id: string; name: string; roleId: string; canDelete: boolean }): MemberRow {
+function row(over: { id: string; name: string; roleId: string; canDelete: boolean; photoUrl?: string | null }): MemberRow {
   const member = aMember(over);
   return { member, role: roleChoice(roles, member.roleId, false), setRoleId: noop, changing: false, linkedAccounts: spy("access.linked", "Linked accounts"), remove: memberRemoval(member, () => undefined) };
 }
@@ -94,7 +94,7 @@ const model: AccessModel = {
     bootstrapDescription: undefined,
     candidates: { status: "ready", value: [candidate] },
     members: [
-      row({ id: "m-free", name: "Deletable", roleId: "role-open", canDelete: true }),
+      row({ id: "m-free", name: "Deletable", roleId: "role-open", canDelete: true, photoUrl: "https://t.me/i/userpic/320/deletable.jpg" }),
       row({ id: "m-kept", name: "Kept", roleId: "role-closed", canDelete: false }),
     ],
     roles,
@@ -118,6 +118,12 @@ for (const skin of SKINS) {
     const locked = selectOf(markup, "Role for Kept");
     assert.deepEqual(optionValues(locked), ["role-closed"], "a role that is not assignable is shown alone");
     assert.match(locked, /disabled/);
+  });
+
+  test(`${skin.name}: a person in the people list shows the photo of a linked account, and initials without one`, () => {
+    const markup = renderToStaticMarkup(createElement(skin.Access, { model }));
+    assert.match(markup, /<img[^>]*src="https:\/\/t\.me\/i\/userpic\/320\/deletable\.jpg"/);
+    assert.doesNotMatch(markup, /<img[^>]*alt="Kept profile"/);
   });
 
   test(`${skin.name}: Delete user is reachable exactly where the API says canDelete`, () => {

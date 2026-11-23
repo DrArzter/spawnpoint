@@ -41,6 +41,7 @@ export function memberOf(identity: AccessIdentity): Member {
     name: identity.displayName,
     roleId: identity.roleId,
     canDelete: identity.canDelete,
+    photoUrl: identity.photoUrl ?? null,
     links: identity.links.flatMap((link) => { const mapped = linkFor(link.platform, link.value, link.handle, link.verified); return mapped === null ? [] : [mapped]; }),
   };
 }
@@ -239,7 +240,7 @@ export function useAccessDirectory(opts: Readonly<{ session: ActiveSession; canR
   useEffect(() => { if (canRead) void store.readRoles(false); }, [store, canRead]);
 
   const refresh = useCallback(() => { if (canManage) void store.readPeople(true); }, [store, canManage]);
-  const self = useMemo<Member>(() => ({ id: session.identity.id, name: session.identity.displayName, roleId: session.identity.roleId, links: [], canDelete: false }), [session]);
+  const self = useMemo<Member>(() => ({ id: session.identity.id, name: session.identity.displayName, roleId: session.identity.roleId, links: [], canDelete: false, photoUrl: session.profile.photoUrl }), [session]);
   return {
     ...readDirectory(state, { self, ownRole: session.role, canManage }, { people: () => void store.readPeople(false), roles: () => void store.readRoles(false) }),
     setMembers: (members) => store.setMembers(members),

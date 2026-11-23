@@ -8,6 +8,13 @@ html[data-skin="console"] .c-profile-id {
   font-size: var(--c-fs-s);
 }
 
+html[data-skin="console"] .c-profile-picture {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
 html[data-skin="console"] .c-profile-settings {
   display: flex;
   flex-direction: column;

@@ -14,6 +14,8 @@ import { accessIndexName, accountItemKey, activeIdentityIndex, candidateIndex, i
 import { callerCondition, canDelete, escalationRefusal, lastHolderRefusal } from "./owner-guard.ts";
 import { listRoles, readDefaultRoleId, readRole } from "./role-store.ts";
 import { passwordCredentials } from "./credentials.ts";
+import { providerPhoto } from "../../access/avatar.ts";
+import { avatarLink } from "./avatars.ts";
 import { isConditionFailure } from "./conditions.ts";
 
 export async function candidates(): Promise<Response> {
@@ -62,6 +64,9 @@ export async function identities(caller: Identity): Promise<Response> {
       displayName: profile.display_name,
       roleId: profile.role_id,
       directGrants: profile.direct_grants ?? [],
+      // The stored avatar, else a provider photo until a sign-in copies it; none once removed.
+      photoUrl: await avatarLink(profile.avatar_key as string | undefined)
+        ?? (profile.avatar_removed === undefined ? providerPhoto(accounts.Items ?? [])?.url ?? null : null),
       canDelete: canDelete(caller, { id: identityId, role: roles.get(String(profile.role_id)) ?? null }),
       links: await Promise.all((accounts.Items ?? []).filter((account) => typeof account.platform === "string").map(async (account) => ({
         platform: account.platform,

@@ -13,6 +13,8 @@ import { failureView } from "./failure";
 import { releaseBuildCopy } from "./release-builds";
 import { startableReleases } from "./presets";
 import { presetBuildStates, sessionStatus, worldStatus, type StatusDescriptor } from "./status";
+import { AVATAR_ACCEPT } from "./avatar-image";
+import { chooseFile } from "./choose-file";
 import { useConsole, type ConsoleController } from "./useConsole";
 import { accessRequests, useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseChanges, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
 import { newestRunning, progressModel, useOperationProgress } from "./operation-progress";
@@ -412,7 +414,7 @@ function AccessPage({ console, skin }: Controlled) {
 }
 
 function ProfilePage({ console, skin, looks }: Controlled & Readonly<{ looks: LookChoices }>) {
-  const { directory, session, viewer, appearance, notify } = console;
+  const { directory, session, viewer, appearance, avatar, notify } = console;
   const member = directory.members.find((item) => item.id === session.identity.id) ?? directory.members[0]!;
   const loginAccounts = useLoginAccounts(member.name, notify);
   const open = console.openInBrowser;
@@ -424,6 +426,10 @@ function ProfilePage({ console, skin, looks }: Controlled & Readonly<{ looks: Lo
     member,
     role: directory.roles.roles.find((role) => role.id === member.roleId),
     viewer,
+    avatar: {
+      change: action("profile.avatar.change", "Change picture", () => chooseFile(AVATAR_ACCEPT, avatar.change), { icon: "person", busy: avatar.busy, disabled: avatar.busy }),
+      remove: viewer.photoUrl ? action("profile.avatar.remove", "Remove picture", avatar.remove, { icon: "delete_forever", disabled: avatar.busy }) : null,
+    },
     appearance,
     look,
     signOut: action("profile.signout", "Sign out", console.signOut, { icon: "logout" }),

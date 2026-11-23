@@ -23,7 +23,7 @@ page, state and width. It uses raw Chrome DevTools Protocol (`cdp.mjs`) and has 
 | Themes | light everywhere; dark at 360 and 1440 |
 | Data | the demo, and `?demo&fixture=stress` (80-character names, more rows) at 360, 840 and 1440 |
 
-The runner waits for fonts and finished animations before it probes. It runs 4 tabs in parallel.
+The runner waits for fonts and finished animations before it probes. It runs up to 4 tabs in parallel: four, or the number of cores when the machine has fewer.
 
 ## What fails the gate
 
@@ -57,7 +57,7 @@ control on purpose (a select caret, the tab ink, a count badge); nothing else is
 
 **Floating layers.** A state with `onTop: ["tip", "toast"]` opens a surface, shows a tip and raises a toast or snackbar
 while it is open (or before it, where the host must come forward again), then fails when an open modal paints after
-either layer. `layers-drawer` and `layers-dialog` do this in both skins; the terminal draws no tip in a modal. Every
+either layer. `layers-drawer` and `layers-dialog` do this in the console. `layers-drawer-terminal` and `layers-dialog-terminal` do it in the terminal; the terminal dialog state checks the toast only. Every
 layer is a `data-layer` box (`tip`, `menu`, `toast`), a manual popover from `components/ui/layer.ts`.
 
 **Markers.** The console primitives say what they promise with `data-layout`, `data-rail`, `data-col`, `data-status`,
@@ -82,7 +82,7 @@ SKIN=console AUDIT_ROUTES=world AUDIT_WIDTHS=360,1440 AUDIT_STRIDE=0 AUDIT_STATE
 ```
 
 `AUDIT_ROUTES`, `AUDIT_WIDTHS` and `AUDIT_STATES` narrow a run while you fix; `AUDIT_STRIDE=0` drops the stride;
-`AUDIT_WORKERS` sets the tabs; `AUDIT_JSON=file` keeps every probe's raw findings. The report is in `web/out/ui-audit`:
+`AUDIT_WORKERS` sets the tabs; `AUDIT_JSON=file` keeps every probe's raw findings. `AUDIT_OUT` names the report folder. `CHROME_BIN` names the browser; `scripts/check.sh ui` sets it from `google-chrome` or `chromium` when it is empty. The report is in `web/out/ui-audit` unless `AUDIT_OUT` says otherwise:
 `report.md`, `report.json` and a screenshot per page or state with each finding outlined.
 
 `scripts/check.sh ui` builds, runs the self-test, serves the build and runs the gate with `--gate`. CI sets
@@ -106,4 +106,4 @@ that no longer matches is reported so the list only shrinks. The gate also fails
 the run measured fewer pages than it planned.
 
 What the probe cannot measure, where a control sits and whether the same control looks the same twice, is read by eye
-and written down per face under [`web/audits/`](../../audits/).
+and written down in a dated review under [`web/audits/`](../../audits/). Only the terminal skin has one so far.

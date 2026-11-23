@@ -9,7 +9,6 @@ const activeGame: Game = {
   code: "MC",
   displayName: "Minecraft",
   lifecycle: {
-    schemaVersion: 1,
     serverId: "minecraft",
     desiredState: "running",
     observedState: "ready",

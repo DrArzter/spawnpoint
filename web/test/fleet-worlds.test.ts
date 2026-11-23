@@ -107,7 +107,7 @@ test("an older response with no per-world sessions still finds a fleet session o
   const legacy: Game = {
     ...game,
     worlds: [legacyWorld],
-    lifecycle: { schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "s1", activeWorldId: "spare", updatedAtEpochSeconds: 1, idle: null },
+    lifecycle: { serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "s1", activeWorldId: "spare", updatedAtEpochSeconds: 1, idle: null },
   };
   assert.equal(fleetWorldState(legacy, legacyWorld), "running");
 });
@@ -139,7 +139,7 @@ test("uptime starts at the session's ready time: a fleet world's own, a configur
   const lifecycle = (extra: Partial<WorldSession>): WorldSession => ({ ...session("vanilla", "ready"), serverId: "minecraft", ...extra });
   const sharedSnapshot = { ...snapshot(), hosts: [host] };
   for (const [extra, expected] of [[{ readyAtEpochSeconds: readyAt }, "2026-10-08T21:30:00.000Z"], [{}, "2026-10-01T00:00:00.000Z"]] as const) {
-    const held: Game = { ...game, worlds: [configured], lifecycle: { schemaVersion: 1, ...lifecycle(extra) } };
+    const held: Game = { ...game, worlds: [configured], lifecycle: { ...lifecycle(extra) } };
     const heldShared = deriveSharedHostSession({ ...sharedSnapshot, games: [held] });
     assert.equal(worldLaunchedAt(held, configured, heldShared, { ...sharedSnapshot, games: [held] }), expected);
   }

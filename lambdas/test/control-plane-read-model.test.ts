@@ -301,3 +301,13 @@ test("a DNS world shows its fixed name while stopped, and an address keeps a por
   assert.equal(displayAddress("minecraft-dns-1a2b3c4d.games.example:25565", "minecraft-dns-1a2b3c4d", catalog), "minecraft-dns-1a2b3c4d.games.example");
   assert.equal(displayAddress("minecraft-dns-1a2b3c4d.games.example:30010", "minecraft-dns-1a2b3c4d", catalog), "minecraft-dns-1a2b3c4d.games.example:30010", "a slot's own port stays");
 });
+
+test("a game's session record reaches viewers without its lease or fence", async () => {
+  const record = { ...initialLifecycleRecord("minecraft", 100), lease: { ownerOperationId: "op", fencingToken: 7, expiresAtEpochSeconds: 200 } };
+  const snapshot = await readControlPlaneSnapshot({ ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? record : null }, { includeInfrastructure: true, includeDesiredRelease: true });
+  const lifecycle = snapshot.games[0]?.lifecycle;
+  assert.equal(lifecycle?.serverId, "minecraft");
+  assert.equal(lifecycle?.observedState, "stopped");
+  const serialized = JSON.stringify(snapshot);
+  assert.doesNotMatch(serialized, /fencingToken|"lease"/, "the lease and the fence never leave the API");
+});

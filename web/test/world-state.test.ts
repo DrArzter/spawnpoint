@@ -95,7 +95,7 @@ test("launched hosts are never the shared host", () => {
 test("an unasked stop of the configured host is still reconciled beside a launched host", () => {
   const holder: Game = {
     ...minecraft,
-    lifecycle: { schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "s-b", activeWorldId: "b", updatedAtEpochSeconds: 1, idle: null },
+    lifecycle: { serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "s-b", activeWorldId: "b", updatedAtEpochSeconds: 1, idle: null },
   };
   const shared = deriveSharedHostSession(snapshot({ games: [holder, zomboid] }));
   assert.equal(shared.recoveryPending, true);
@@ -150,7 +150,7 @@ test("another game's operation does not change this game's state", () => {
 test("a world's session id changes when it starts, so its metrics load again", () => {
   assert.equal(worldSessionId(minecraft, fleetC), null);
   assert.equal(worldSessionId(minecraft, { ...fleetC, session: session("c", "starting") }), "session-c");
-  const holder: Game = { ...minecraft, lifecycle: { schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "s-b", activeWorldId: "b", updatedAtEpochSeconds: 1, idle: null } };
+  const holder: Game = { ...minecraft, lifecycle: { serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "s-b", activeWorldId: "b", updatedAtEpochSeconds: 1, idle: null } };
   assert.equal(worldSessionId(holder, configuredB), "s-b");
   assert.equal(worldSessionId(holder, configuredD), null, "a configured sibling does not hold the game's session");
 });

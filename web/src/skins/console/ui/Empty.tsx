@@ -1,6 +1,7 @@
 import type { ApiFailureKind } from "../../../api/contract";
 import type { Action } from "../../../core/actions";
 import { failureView } from "../../../core/failure";
+import type { WorldsModel } from "../../../core/models";
 import { Icon, type IconName } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { ActionButton } from "./ActionButton";
@@ -36,4 +37,10 @@ export function LoadError({ title, verb, error, kind, retry, size = "md" }: Read
   const view = failureView(kind, title, verb, error);
   if (view.kind === "forbidden") return <Empty icon="lock" size={size} title={view.title} />;
   return <Empty action={view.retry ? retry : null} icon={view.kind === "unavailable" ? "cloud_off" : "error"} message={view.message ?? undefined} size={size} title={view.title} tone="error" />;
+}
+
+/** Why no game is listed: none declared, or the read failed (a role without the permission gets a lock and no Retry). */
+export function GamesEmpty({ unavailable, refresh }: Readonly<{ unavailable: NonNullable<WorldsModel["unavailable"]>; refresh: Action }>) {
+  if (!unavailable.failed) return <Empty icon="public" message={unavailable.description} title="No games yet" />;
+  return <Empty action={unavailable.retry ? refresh : null} icon={unavailable.retry ? "error" : "lock"} message={unavailable.description} title={unavailable.title} tone="error" />;
 }

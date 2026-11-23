@@ -7,7 +7,7 @@ import { ActionButton, LinkButton } from "./ui/ActionButton";
 import { Address } from "./ui/Address";
 import { Ago } from "./ui/Ago";
 import { Card } from "./ui/Card";
-import { Empty, LoadError } from "./ui/Empty";
+import { Empty, GamesEmpty, LoadError } from "./ui/Empty";
 import { RunningTime } from "./ui/Flashbar";
 import { GameGlyph } from "./ui/GameGlyph";
 import { Grid, GridCell } from "./ui/Grid";
@@ -48,9 +48,7 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
       <div className="c-page">
         {header}
         <Card label="Games">
-          {model.unavailable.failed
-            ? <Empty action={model.unavailable.retry ? model.refresh : null} icon={model.unavailable.retry ? "error" : "lock"} message={model.unavailable.description} title={model.unavailable.title} tone="error" />
-            : <Empty icon="public" message={model.unavailable.description} title="No games yet" />}
+          <GamesEmpty refresh={model.refresh} unavailable={model.unavailable} />
         </Card>
       </div>
     );

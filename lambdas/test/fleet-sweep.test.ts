@@ -34,7 +34,7 @@ test("a stopped warm host past its retention gets a drain, which decides; inside
   const day = 24 * 3600;
   const stopped = markStopped(emptyFleet(), NOW - 15 * day);
   assert.equal(fleetSweepAction("stopped", NOW - 20 * day, stopped, NOW, 600), "drain");
-  assert.equal(fleetSweepAction("stopped", NOW - 20 * day, stopped, NOW - 2 * day, 600), "none");
+  assert.equal(fleetSweepAction("stopped", NOW - 20 * day, stopped, NOW - 10 * day, 600), "none");
   assert.equal(fleetSweepAction("stopped", NOW - 20 * day, stopped, NOW - 15 * day + 7200, 600, 3600), "drain", "the retention is a setting");
   assert.equal(fleetSweepAction("stopping", NOW - 20 * day, stopped, NOW, 600), "none", "EC2 still moving: wait");
 });

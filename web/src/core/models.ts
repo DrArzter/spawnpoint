@@ -158,6 +158,8 @@ export type DetailValue =
   /** `wrap`: a long text runs over lines instead of one cut line. */
   | Readonly<{ type: "text"; text: string; mono?: boolean; wrap?: boolean }>
   | Readonly<{ type: "absent"; text: string }>
+  /** Not known yet: the skin draws a placeholder of one line. */
+  | Readonly<{ type: "loading" }>
   | Readonly<{ type: "status"; status: StatusDescriptor }>
   | Readonly<{ type: "time"; at: string | number | null | undefined }>
   | Readonly<{ type: "number"; value: number }>
@@ -318,6 +320,12 @@ export type OperationProgressModel = Readonly<{
   /** Seconds the operation ran, once it has ended. */
   ranSeconds: number | null;
   expectation: Readonly<{ expectedSeconds?: number; expectedSamples?: number }>;
+  /** The API has answered for this operation; until then its step and log are placeholders. */
+  known: boolean;
+  /** The operation runs a nested start or stop, so it reserves a sub-step row while it runs. */
+  nests: boolean;
+  /** The operation reads the host's log, so it reserves the log region while it runs. */
+  logged: boolean;
   step: string | null;
   child: string | null;
   failure: Readonly<{ error: string; cause: string }> | null;

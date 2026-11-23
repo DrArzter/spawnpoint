@@ -9,6 +9,7 @@ import type { OperationProgress } from "../src/api/contract.ts";
 import { progressModel } from "../src/core/operation-progress.ts";
 import type { Operation } from "../src/model.ts";
 import { OperationProgress as ConsoleProgress } from "../src/skins/console/OperationProgress.tsx";
+import { DetailsTab as ConsoleDetails } from "../src/skins/console/tabs/Details.tsx";
 import { World as TerminalWorld } from "../src/skins/terminal/World.tsx";
 
 /*
@@ -81,9 +82,11 @@ function terminalPage(progress: ReturnType<typeof progressModel>): string {
   return render(createElement(TerminalWorld, { model: model as never }), 42);
 }
 
-test("terminal: a running operation is a named panel with one busy state and the same rows", () => {
+test("terminal: a running operation takes the session's group in the details, after the tabs, with one busy state and the same rows", () => {
   const markup = terminalPage(runningModel());
-  assert.match(markup, /<h2 class="t-panel-name"[^>]*>Promoting release<\/h2>/);
+  assert.match(markup, /<section class="t-details-group"><div class="t-group-head"><h2 class="t-group-name">Promoting release<\/h2><span class="t-state t-state-progress">/);
+  assert.ok(markup.indexOf("Promoting release") > markup.indexOf('role="tablist"'), "the progress is not above the tabs");
+  assert.doesNotMatch(markup, /<h2 class="t-group-name">Session<\/h2>/);
   assert.equal(count(markup, /t-state-progress/), 1);
   assert.match(markup, /aria-label="Promoting release: Running"/);
   for (const text of ["Step", "Starting on the new release", "Sub-step", "Waiting for the host", "Elapsed", "0:42", "Expected", "ETA ~0:18"]) assert.ok(markup.includes(text), text);
@@ -97,8 +100,10 @@ test("terminal: a failure shows one error state, the error, the whole cause and 
   for (const text of ["SessionStartFailed", "The host never reported ready.", "Caught at"]) assert.ok(markup.includes(text), text);
 });
 
-test("terminal: no progress, no panel", () => {
-  assert.doesNotMatch(terminalPage(null), /Promoting release/);
+test("terminal: no progress, the session's group", () => {
+  const markup = terminalPage(null);
+  assert.doesNotMatch(markup, /Promoting release/);
+  assert.match(markup, /<h2 class="t-group-name">Session<\/h2>/);
 });
 
 // --- the host's log ------------------------------------------------------------
@@ -136,8 +141,19 @@ test("console: the log is one labelled live region inside the progress card, one
   assert.ok(!markup.includes("<b>x</b>"), "a line is text, never markup");
 });
 
-test("console: no lines, no log region", () => {
-  assert.doesNotMatch(render(createElement(ConsoleProgress, { model: runningModel() }), 42), /role="log"/);
+test("console: a running start keeps its log region at one height with placeholders until the first line; a finished one without lines has none", () => {
+  const markup = render(createElement(ConsoleProgress, { model: runningModel() }), 42);
+  assert.match(markup, /<div aria-busy="true" aria-label="Promoting release: host log" aria-live="polite" class="c-host-log" data-live="" role="log">/);
+  assert.equal(count(markup, /class="c-skeleton c-skeleton-text"/), 3);
+  assert.doesNotMatch(render(createElement(ConsoleProgress, { model: failedModel() }), 900), /role="log"/);
+  const lines = render(createElement(ConsoleProgress, { model: logModel() }), 42);
+  assert.doesNotMatch(lines, /aria-busy|c-skeleton/);
+});
+
+test("console: until the API answers, the step rows are placeholders announced as loading, not dashes", () => {
+  const markup = render(createElement(ConsoleProgress, { model: progressModel(live, null)! }), 42);
+  assert.equal(count(markup, /<span class="c-detail-text"><span aria-hidden="true" class="c-skeleton c-skeleton-text" style="width:9em"><\/span><span class="c-sr">Loading<\/span><\/span>/), 2);
+  for (const text of ["Step", "Sub-step", "Elapsed"]) assert.ok(markup.includes(text), text);
 });
 
 test("terminal: the log sits in the progress panel with the same lines and faults named in text", () => {
@@ -149,5 +165,35 @@ test("terminal: the log sits in the progress panel with the same lines and fault
   assert.equal(count(markup, /t-log-warning/), 2);
   assert.ok(markup.includes("Error: ") && markup.includes("Warning: "));
   assert.ok(markup.includes("Container spawnpoint-w1-mc-1 Started"));
-  assert.doesNotMatch(terminalPage(runningModel()), /role="log"/);
+  const waiting = terminalPage(runningModel());
+  assert.match(waiting, /aria-busy="true" aria-label="Promoting release: host log" aria-live="polite" class="t-log" data-live="" role="log"/);
+  assert.equal(count(waiting, /t-skeleton-text/), 3);
+  assert.doesNotMatch(terminalPage(failedModel()), /role="log"/);
+});
+
+test("terminal: until the API answers, the step rows are placeholders announced as loading", () => {
+  const markup = terminalPage(progressModel(live, null)!);
+  assert.equal(count(markup, /<span><span aria-hidden="true" class="t-skeleton t-skeleton-text t-skeleton-medium"><\/span><span class="visually-hidden">Loading<\/span><\/span>/), 2);
+});
+
+// --- the console's session place -------------------------------------------------
+
+function consoleDetails(progress: ReturnType<typeof progressModel>, live: boolean): string {
+  const model = {
+    glance: { live, players: null, address: null, launchedAt: null, busy: progress !== null },
+    sessionDetails: [{ label: "Host", value: { type: "text", text: "i-1" } }], worldDetails: [], availability: { kind: "ready", label: "Ready" },
+    more: [], operations: [], progress,
+  };
+  return render(createElement(ConsoleDetails, { model: model as never }), 42);
+}
+
+test("console: the session's place is a card; while an operation runs it is the operation, never a bare \"No session\"", () => {
+  const stopped = consoleDetails(null, false);
+  assert.match(stopped, /<section class="c-card"[^>]*><header class="c-card-head"><h2 data-rail="">Session<\/h2><\/header><div class="c-card-body c-card-body-pad">.*No session/);
+  const starting = consoleDetails(runningModel(), false);
+  assert.match(starting, /<h2 data-rail="">Promoting release<\/h2>/);
+  assert.doesNotMatch(starting, /No session|>Session</);
+  const updating = consoleDetails(runningModel(), true);
+  assert.doesNotMatch(updating, />Session<|i-1/);
+  assert.match(consoleDetails(null, true), /<h2 data-rail="">Session<\/h2>.*i-1/);
 });

@@ -79,9 +79,28 @@ test("the rows tick from the start time, with the ETA of the flashbar and the us
   assert.deepEqual(rows(90).Expected!.value, { type: "text", text: "Taking longer", mono: true });
 });
 
-test("without a step or history the rows are the elapsed time alone", () => {
+test("until the API answers, a running operation keeps its step rows as placeholders", () => {
   const model = progressModel({ ...operation("op-1", "w1"), expectedSeconds: undefined }, null)!;
-  assert.deepEqual(progressDetails(model, at(3)).map((row) => row.label), ["Elapsed"]);
+  const rows = progressDetails(model, at(3));
+  assert.deepEqual(rows.map((row) => row.label), ["Step", "Sub-step", "Elapsed"]);
+  assert.deepEqual([rows[0]!.value, rows[1]!.value], [{ type: "loading" }, { type: "loading" }]);
+  assert.deepEqual([model.known, model.nests, model.logged], [false, true, true]);
+});
+
+test("once the API answers, a step it does not name reads as absent; a world operation has no sub-step row and no log", () => {
+  const answered = progressModel(operation("op-1", "w1"), { ...running, child: null })!;
+  const rows = progressDetails(answered, at(3));
+  assert.deepEqual(rows.map((row) => row.label), ["Step", "Sub-step", "Elapsed", "Expected"]);
+  assert.deepEqual(rows[1]!.value, { type: "absent", text: "—" });
+  const wipe = progressModel(operation("op-1", "w1", startedAt, "world"), null)!;
+  assert.deepEqual(progressDetails(wipe, at(3)).map((row) => row.label), ["Step", "Elapsed", "Expected"]);
+  assert.deepEqual([wipe.nests, wipe.logged], [false, false]);
+  assert.equal(progressModel(operation("op-1", "w1", startedAt, "stop"), null)!.logged, false);
+});
+
+test("a finished operation shows only the step rows it knows", () => {
+  const rows = progressDetails(progressModel(null, failed)!, at(500));
+  assert.ok(!rows.some((row) => row.label === "Step" || row.label === "Sub-step"));
 });
 
 test("a failure shows the workflow's own error and cause whole, then what it caught and where", () => {
@@ -189,5 +208,5 @@ test("a last read is owed when the operation left the snapshot, unless a poll sa
 
 test("the model carries nothing a skin has to compute", () => {
   const model: OperationProgressModel = progressModel(null, failed)!;
-  assert.deepEqual(Object.keys(model).sort(), ["caught", "child", "expectation", "failure", "id", "log", "ranSeconds", "running", "startedAt", "status", "step", "title"]);
+  assert.deepEqual(Object.keys(model).sort(), ["caught", "child", "expectation", "failure", "id", "known", "log", "logged", "nests", "ranSeconds", "running", "startedAt", "status", "step", "title"]);
 });

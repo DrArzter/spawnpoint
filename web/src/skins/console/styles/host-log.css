@@ -12,6 +12,11 @@ html[data-skin="console"] .c-host-log {
   line-height: 18px;
 }
 
+/* A live log holds its height, so lines that arrive do not move the page. */
+html[data-skin="console"] .c-host-log[data-live] {
+  height: 224px;
+}
+
 html[data-skin="console"] .c-host-line {
   display: flex;
   gap: 12px;

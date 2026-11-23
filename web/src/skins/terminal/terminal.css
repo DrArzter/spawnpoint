@@ -2481,6 +2481,11 @@ html[data-skin="terminal"] .t-log {
   line-height: 18px;
 }
 
+/* A live log holds its height, so lines that arrive do not move the page. */
+html[data-skin="terminal"] .t-log[data-live] {
+  height: 224px;
+}
+
 html[data-skin="terminal"] .t-log-line {
   display: flex;
   gap: 1.5ch;

@@ -1,4 +1,4 @@
-import { type Identity, isBuiltInRoleId, builtInRoles, type Permission, hasPermission } from "../../access/domain.ts";
+import { type Identity, can } from "../../access/domain.ts";
 import { readControlPlaneSnapshot } from "../../control-plane/read-model.ts";
 import { dashboardControlPlaneSources } from "../../control-plane/aws.ts";
 import { issueSubscriptionTicket, subscriptionTicketItem, subscriptionTicketLifetimeSeconds } from "../../control-plane/subscriptions.ts";
@@ -13,15 +13,13 @@ const controlPlaneWebSocketUrl = process.env.CONTROL_PLANE_WEBSOCKET_URL;
 if (!controlPlaneWebSocketUrl) throw new Error("missing environment variable: CONTROL_PLANE_WEBSOCKET_URL");
 
 export async function controlPlane(identity: Identity): Promise<Response> {
-  const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : undefined;
-  const can = (permission: Permission) => role !== undefined && hasPermission(identity, role, permission);
   const snapshot = await readControlPlaneSnapshot(dashboardControlPlaneSources(), {
-    includeInfrastructure: can("access.manage"),
-    includeDesiredRelease: can("release.read"),
+    includeInfrastructure: can(identity, "access.manage"),
+    includeDesiredRelease: can(identity, "release.read"),
     // The host part of every address; the game's port completes it. Withheld
     // from a caller who may not read the connection, like any other reference.
-    connectionHost: can("connection.read") ? process.env.CONNECTION_HOST ?? null : null,
-    dnsSuffix: can("connection.read") ? process.env.GAME_DNS_SUFFIX ?? null : null,
+    connectionHost: can(identity, "connection.read") ? process.env.CONNECTION_HOST ?? null : null,
+    dnsSuffix: can(identity, "connection.read") ? process.env.GAME_DNS_SUFFIX ?? null : null,
   });
   return response(200, {
     ...snapshot,

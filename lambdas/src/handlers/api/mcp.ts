@@ -1,4 +1,4 @@
-import { type Identity, type Permission, isBuiltInRoleId, builtInRoles, effectivePermissions, hasPermission } from "../../access/domain.ts";
+import { type Identity, type Permission, can, permissionsOf, roleOf } from "../../access/domain.ts";
 import { type McpToolName, mcpTools } from "../../access/mcp-tools.ts";
 import { type OAuthScope, verifyOAuthAccessToken } from "../../access/oauth.ts";
 import { type Response, response, responseWithHeaders, type Event } from "./http.ts";
@@ -32,9 +32,7 @@ function mcpToolError(message: string): Response {
 }
 
 function hasMcpToolPermission(identity: Identity, permission: Permission | null): boolean {
-  if (permission === null) return true;
-  const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : undefined;
-  return role !== undefined && hasPermission(identity, role, permission);
+  return permission === null || can(identity, permission);
 }
 
 function worldToolArguments(args: Record<string, unknown>): readonly [string, string] | null {
@@ -58,9 +56,7 @@ function releaseToolArguments(args: Record<string, unknown>): readonly [string, 
 
 /** The connected identity as an agent sees it: the same permissions the panel shows, the role's and the direct grants. */
 export function mcpProfile(identity: Identity): Readonly<{ id: string; name: string; role: string; permissions: readonly Permission[] }> {
-  const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
-  const permissions = role === null ? [...identity.directGrants] : [...effectivePermissions(identity, role)];
-  return { id: identity.id, name: identity.displayName, role: role?.name ?? identity.roleId, permissions };
+  return { id: identity.id, name: identity.displayName, role: roleOf(identity)?.name ?? identity.roleId, permissions: [...permissionsOf(identity)] };
 }
 
 function profileToolResponse(identity: Identity): Response {

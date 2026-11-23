@@ -34,6 +34,12 @@ export const API_ERROR_TEXT: Readonly<Record<string, string>> = {
   self_role_change_forbidden: "You cannot change your own role.",
   role_change_conflict: "Someone changed this role at the same time. Refresh and try again.",
   unknown_role: "That role no longer exists. Refresh and try again.",
+  invalid_role: "The role is not valid: check its name and permissions.",
+  role_exists: "A role with this id already exists.",
+  role_changed: "Someone changed this role. Reload it and try again.",
+  role_in_use: "Someone holds this role, or it is the default role.",
+  role_protected: "The Owner role cannot be changed.",
+  role_built_in: "A built-in role cannot be deleted.",
 
   // Invitations and sign-in
   invalid_invitation_id: "This invitation is not valid.",

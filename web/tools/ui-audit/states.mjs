@@ -13,7 +13,7 @@
 // Row and page menus need no entry: the gate opens every menu on every page.
 // test/ui-audit-states.test.ts holds every surface in the skins to an entry here.
 
-const WORLD = "/?demo&latency=0#/worlds/minecraft/minecraft-rostik-12345678";
+export const WORLD = "/?demo&latency=0#/worlds/minecraft/minecraft-rostik-12345678";
 
 // Saving a changed game setting queues a snackbar and closes the drawer.
 const SNACK = [{ action: "world.game-settings" }, { click: "dialog[open] [data-action='game-settings.pvp']" }, { click: "dialog[open] [data-action='game-settings.save']" }];

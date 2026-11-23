@@ -397,9 +397,8 @@ run "v1_workflows_alarm_on_failed_and_timed_out_executions" {
 
   assert {
     condition = alltrue([
-      for alarm in aws_cloudwatch_metric_alarm.workflow :
-      alarm.namespace == "AWS/States" &&
-      contains(["ExecutionsFailed", "ExecutionsTimedOut"], alarm.metric_name) &&
+      for name, alarm in aws_cloudwatch_metric_alarm.workflow :
+      (name == "spawnpoint-stop-server-failed" ? alarm.namespace == "AWS/Events" && alarm.metric_name == "MatchedEvents" : alarm.namespace == "AWS/States" && contains(["ExecutionsFailed", "ExecutionsTimedOut"], alarm.metric_name)) &&
       alarm.threshold == 0 && alarm.comparison_operator == "GreaterThanThreshold" &&
       alarm.treat_missing_data == "notBreaching" &&
       alarm.alarm_actions == toset(["arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"])
@@ -427,15 +426,42 @@ run "egress_alarm_sums_every_host" {
   }
 }
 
-run "a_stop_refused_for_a_player_is_named_in_the_stop_alarm" {
+run "a_stop_refused_for_players_online_does_not_alarm" {
   command = plan
+
+  # The rule's pattern names the machine, whose ARN is otherwise known only after apply.
+  override_resource {
+    target          = aws_sfn_state_machine.stop_server
+    override_during = plan
+    values = {
+      arn = "arn:aws:states:eu-central-1:123456789012:stateMachine:spawnpoint-stop-server"
+    }
+  }
 
   assert {
     condition = (
-      strcontains(aws_cloudwatch_metric_alarm.workflow["spawnpoint-stop-server-failed"].alarm_description, "Spawnpoint.PlayersOnline") &&
-      !strcontains(aws_cloudwatch_metric_alarm.workflow["spawnpoint-start-server-failed"].alarm_description, "PlayersOnline") &&
-      !strcontains(aws_cloudwatch_metric_alarm.workflow["spawnpoint-stop-server-timed-out"].alarm_description, "PlayersOnline")
+      aws_cloudwatch_metric_alarm.workflow["spawnpoint-stop-server-failed"].dimensions.RuleName == "spawnpoint-stop-server-failed" &&
+      aws_cloudwatch_metric_alarm.workflow["spawnpoint-stop-server-timed-out"].dimensions.StateMachineArn == "arn:aws:states:eu-central-1:123456789012:stateMachine:spawnpoint-stop-server" &&
+      aws_cloudwatch_metric_alarm.workflow["spawnpoint-start-server-failed"].namespace == "AWS/States"
     )
-    error_message = "A stop refused because a player joined also fails the execution; the stop alarm must say that it needs no action."
+    error_message = "Only the stop's failed alarm counts the filtered rule; its timed-out alarm and other machines count AWS/States."
+  }
+
+  assert {
+    condition = (
+      jsondecode(aws_cloudwatch_event_rule.workflow_failed["stop-server"].event_pattern).detail.status == ["FAILED"] &&
+      jsondecode(aws_cloudwatch_event_rule.workflow_failed["stop-server"].event_pattern).detail.stateMachineArn == ["arn:aws:states:eu-central-1:123456789012:stateMachine:spawnpoint-stop-server"] &&
+      jsondecode(aws_cloudwatch_event_rule.workflow_failed["stop-server"].event_pattern).detail["$or"] == [
+        { error = [{ "anything-but" = ["Spawnpoint.PlayersOnline"] }] },
+        { error = [{ exists = false }] },
+        { error = [null] },
+      ]
+    )
+    error_message = "The rule must match every failed stop except a refusal for players online, including one with no error."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_event_target.workflow_failed["stop-server"].rule == "spawnpoint-stop-server-failed"
+    error_message = "The rule needs a target to run."
   }
 }

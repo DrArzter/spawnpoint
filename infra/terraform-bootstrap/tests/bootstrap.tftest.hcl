@@ -52,14 +52,9 @@ run "state_bucket_is_private_versioned_and_encrypted" {
       for rule in aws_s3_bucket_lifecycle_configuration.terraform_state_locks.rule :
       one(rule.filter).prefix
       ]) == toset([
-      "spawnpoint/production.tfstate.tflock",
-      "spawnpoint/storage.tfstate.tflock",
-      "spawnpoint/guardrails.tfstate.tflock",
-      "spawnpoint/github-oidc.tfstate.tflock",
-      "spawnpoint/identity-admin.tfstate.tflock",
-      "spawnpoint/release-pipeline.tfstate.tflock",
-      "spawnpoint/operations.tfstate.tflock",
+      for name in ["access", "access-api", "bot", "domain", "github-oidc", "guardrails", "identity-admin", "operations", "production", "release-pipeline", "storage", "web"] :
+      "spawnpoint/${name}.tfstate.tflock"
     ])
-    error_message = "Versioning must not retain obsolete native lock objects indefinitely."
+    error_message = "Every root's state key, as its backend.hcl.example names it, needs a lock clean-up rule."
   }
 }

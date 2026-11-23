@@ -98,6 +98,18 @@ command -v jq >/dev/null 2>&1 || {
 CONNECTIVITY_NETWORK_ID=""
 connectivity_prepare
 connection_host="${CONNECTIVITY_HOST}"
+# ADR-0085: the overlay is a ZeroTier world's only gate, so its game ports
+# listen on the overlay address alone; a host may have its game ports open to
+# the internet for public worlds. No overlay address means no start.
+if [[ "${session_connectivity}" == "zerotier" ]]; then
+  [[ "${connection_host}" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || {
+    printf 'error: a ZeroTier world needs the overlay address to listen on, and this host has none\n' >&2
+    exit 1
+  }
+  export SPAWNPOINT_GAME_BIND="${connection_host}"
+else
+  export SPAWNPOINT_GAME_BIND="0.0.0.0"
+fi
 mark_step connectivity_prepared
 
 export SERVER_PROJECT_DIRECTORY="${SERVER_DIR}"

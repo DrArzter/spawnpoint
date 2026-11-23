@@ -8,7 +8,7 @@ services:
     image: lloesche/valheim-server@sha256:fde7829b12d39203e155b6209689b70234f8a27d12c4d48baf890cc2ae2c2df3
     ports:
       # The host port is the session's slot (ADR-0054); the container's is fixed.
-      - "${SPAWNPOINT_GAME_PORT:-2456}:2456/udp"
+      - "${SPAWNPOINT_GAME_BIND:-0.0.0.0}:${SPAWNPOINT_GAME_PORT:-2456}:2456/udp"
       # The Steam query port stays host-local: the probe's transport (ADR-0075),
       # never a player surface. It takes the slot's RCON port, the game port + 1.
       - "127.0.0.1:${SPAWNPOINT_RCON_PORT:-2457}:2457/udp"

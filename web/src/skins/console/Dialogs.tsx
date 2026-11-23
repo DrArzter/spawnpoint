@@ -48,18 +48,15 @@ export function ConfirmationDialog({ model }: Readonly<{ model: ConfirmationMode
   );
 }
 
+const CONNECTION_ICONS = { zerotier: "hub", raw: "public", route53: "language" } as const;
+
 function ConnectionFields({ model }: Readonly<{ model: ConnectionFieldsModel }>) {
   const fleet = model.placement === "fleet";
   const hosting: readonly RadioCardOption<WorldPlacement>[] = [
     { value: "configured", label: "Persistent", icon: "dns" },
     { value: "fleet", label: "Fleet", icon: "bolt", disabled: !model.fleetAvailable, hint: "Fleet hosting is off in this deployment" },
   ];
-  // A persistent host joins ZeroTier only; a fleet host is public only.
-  const connection: readonly RadioCardOption<World["connectivity"]>[] = [
-    { value: "zerotier", label: "ZeroTier", icon: "hub", disabled: fleet, hint: "Fleet hosts do not join ZeroTier" },
-    { value: "raw", label: "Public IP", icon: "public", disabled: !fleet, hint: "Persistent hosts connect through ZeroTier" },
-    ...(model.dnsAvailable ? [{ value: "route53" as const, label: connectionLabel("route53"), icon: "language" as const, disabled: !fleet, hint: "Persistent hosts connect through ZeroTier" }] : []),
-  ];
+  const connection: readonly RadioCardOption<World["connectivity"]>[] = model.connections.map((option) => ({ ...option, icon: CONNECTION_ICONS[option.value] }));
   return <>
     <RadioCards legend="Hosting" name="hosting" onChange={model.setPlacement} options={hosting} value={model.placement} />
     <RadioCards legend="Connection" name="connection" onChange={model.setConnectivity} options={connection} value={model.connectivity} />

@@ -1,3 +1,4 @@
+import { connectionOptions } from "../src/core/forms.ts";
 import "./support/browser.ts";
 
 import assert from "node:assert/strict";
@@ -33,8 +34,8 @@ const profile: ProfileModel = {
   },
 } as ProfileModel;
 
-const fleet: ConnectionFieldsModel = { placement: "fleet", setPlacement: noop, fleetAvailable: true, connectivity: "raw", setConnectivity: noop, dnsAvailable: true };
-const persistent: ConnectionFieldsModel = { ...fleet, placement: "configured", connectivity: "zerotier" };
+const fleet: ConnectionFieldsModel = { placement: "fleet", setPlacement: noop, fleetAvailable: true, connectivity: "raw", setConnectivity: noop, dnsAvailable: true, connections: connectionOptions("fleet", true) };
+const persistent: ConnectionFieldsModel = { ...fleet, placement: "configured", connectivity: "zerotier", connections: connectionOptions("configured", true) };
 
 test("profile: the name is the title, the role chip follows it at the start, and the verbs keep the end edge", () => {
   const markup = renderToStaticMarkup(createElement(Profile, { model: profile }));
@@ -91,14 +92,16 @@ test("confirmation: the typed field is named by the model and its placeholder is
   assert.match(markup, /class="c-btn c-btn-danger"/);
 });
 
-test("connection fields: a fleet world is public and cannot pick ZeroTier; a persistent one is the reverse", () => {
+test("connection fields: a fleet world cannot pick ZeroTier; a persistent one may pick any connection (ADR-0085)", () => {
   const settings = (connection: ConnectionFieldsModel): WorldSettingsModel => ({ game, world, stopped: true, connection, valid: true, save: spy("world.settings.save", "Save settings"), cancel: spy("sheet.close", "Cancel") });
   const onFleet = renderToStaticMarkup(createElement(WorldSettingsSheet, { model: settings(fleet) }));
   assert.match(onFleet, /The game port is public\.<\/strong><span aria-label="Set the game[^"]*" class="c-notice-more"/, "the details live in a tooltip, not on the line");
   assert.match(onFleet, /aria-disabled="true"[^>]*value="zerotier"/);
   const onPersistent = renderToStaticMarkup(createElement(WorldSettingsSheet, { model: settings(persistent) }));
   assert.doesNotMatch(onPersistent, /The game port is public/);
-  assert.match(onPersistent, /aria-disabled="true"[^>]*value="raw"/);
+  assert.doesNotMatch(onPersistent, /aria-disabled="true"/, "the persistent host offers every connection");
+  const persistentPublic = renderToStaticMarkup(createElement(WorldSettingsSheet, { model: settings({ ...persistent, connectivity: "route53" }) }));
+  assert.match(persistentPublic, /The game port is public\./, "a public world on the persistent host warns as a fleet one does");
 });
 
 test("create world: with no ready preset the preset row points to Releases", () => {

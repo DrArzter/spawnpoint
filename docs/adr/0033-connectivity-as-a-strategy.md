@@ -10,6 +10,7 @@
   every replacement and cleaning its predecessor. A future ephemeral-friendly overlay needs its own adapter and
   membership policy. No provider is mandatory for a self-hosted deployment.
 - Milestone: M2, and the multi-game part later
+- Amended by: [ADR-0085](0085-a-persistent-host-serves-public-worlds-too.md) — the persistent host serves public worlds too; ZeroTier worlds listen on the overlay address alone
 - Amends: [ADR-0024](0024-connectivity-modes.md) — keeps its decision that **this project uses ZeroTier**, and turns
   its "one contract, three modes" from a choice made once into an actual interface with an invariant
 - Relates: [ADR-0022](0022-minecraft-account-as-linked-identity.md) (`online-mode=false` is why a gate is needed),

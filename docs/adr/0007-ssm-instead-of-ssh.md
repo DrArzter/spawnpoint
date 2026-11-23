@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-08-11
 - Milestone: M1
+- Amended by: [ADR-0085](0085-a-persistent-host-serves-public-worlds-too.md) — the persistent host opens its game ports; what listens on them is decided per session
 
 ## Context
 

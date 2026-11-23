@@ -143,8 +143,8 @@ export function newWorldRecord(
     !["zerotier", "raw", "route53"].includes(selectedAccess.connectivity) ||
     (selectedAccess.auth !== undefined && selectedAccess.auth !== "game" && selectedAccess.auth !== "external") ||
     (selectedAccess.connectivity !== "zerotier" && selectedAccess.auth === undefined) ||
-    (placement === "fleet" && selectedAccess.connectivity === "zerotier") ||
-    (placement === "configured" && selectedAccess.connectivity !== "zerotier")
+    // ZeroTier stays off disposable hosts (ADR-0033); the persistent host serves any connection (ADR-0085).
+    (placement === "fleet" && selectedAccess.connectivity === "zerotier")
   ) throw new Error("invalid_world_connectivity");
   return {
     worldId: identity.worldId,
@@ -190,8 +190,7 @@ export function withWorldAccess(
     (access.connectivity !== "zerotier" && access.connectivity !== "raw" && access.connectivity !== "route53") ||
     (access.auth !== undefined && access.auth !== "game" && access.auth !== "external") ||
     (access.connectivity !== "zerotier" && access.auth === undefined) ||
-    (access.placement === "fleet" && access.connectivity === "zerotier") ||
-    (access.placement === "configured" && access.connectivity !== "zerotier")
+    (access.placement === "fleet" && access.connectivity === "zerotier")
   ) throw new Error("invalid_world_connectivity");
   if (access.warm === true && access.placement !== "fleet") throw new Error("invalid_world_warm");
   // Only a launched host can be kept for a world; leaving the fleet drops the choice.
@@ -340,11 +339,11 @@ function defaultPlacement(connectivity: unknown): "configured" | "fleet" {
   return connectivity === "zerotier" ? "configured" : "fleet";
 }
 
-// A ZeroTier world lives on a configured host; every other world is a fleet world.
+// ZeroTier never runs on a fleet host (ADR-0033). The configured host serves
+// any connection (ADR-0085). A record that names no placement keeps its old
+// meaning: ZeroTier on the configured host, anything else on the fleet.
 function placementConflicts(placement: unknown, connectivity: unknown): boolean {
-  const effective = placement ?? defaultPlacement(connectivity);
-  if (effective === "fleet") return connectivity === "zerotier";
-  return effective === "configured" && connectivity !== "zerotier";
+  return (placement ?? defaultPlacement(connectivity)) === "fleet" && connectivity === "zerotier";
 }
 
 function parseRecordPreset(value: unknown): WorldRecord["preset"] | null {

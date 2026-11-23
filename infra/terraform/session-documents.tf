@@ -8,6 +8,16 @@ locals {
   session_world_id_pattern = "^[a-z0-9][a-z0-9-]{0,31}$"
   session_slot_pattern     = "^([0-9]{1,3})?$"
   session_update_checkout  = "update=/srv/spawnpoint/app/server/scripts/update-checkout.sh; if [ -x \"$update\" ]; then \"$update\" >&2 || true; fi"
+
+  # ADR-0085: the deployment's DNS settings travel with the host step, so a
+  # host whose environment Terraform does not write (the persistent host) can
+  # publish a world's name too. Values are Terraform's own, never a request's.
+  session_dns_environment = concat(
+    ["export SPAWNPOINT_INSTANCE_ID=\"$${SPAWNPOINT_INSTANCE_ID:-$${AWS_SSM_INSTANCE_ID:-}}\""],
+    var.game_dns_zone_name == "" ? [] : [
+      "export SPAWNPOINT_DNS_ZONE_ID='${data.aws_route53_zone.game[0].zone_id}' SPAWNPOINT_DNS_SUFFIX='${var.game_dns_suffix}' SPAWNPOINT_DNS_LEDGER_TABLE='${aws_dynamodb_table.lifecycle_v2.name}'",
+    ],
+  )
 }
 
 resource "aws_ssm_document" "start_session" {
@@ -42,14 +52,15 @@ resource "aws_ssm_document" "start_session" {
       name   = "startSession"
       inputs = {
         timeoutSeconds = "3600"
-        runCommand = [
+        runCommand = concat([
           "set -euo pipefail",
           # A launched host may register with SSM before cloud-init finishes.
           "if [ '{{ waitForFleet }}' = true ]; then attempt=0; until test -f /etc/spawnpoint-fleet-ready && test -x /srv/spawnpoint/app/server/scripts/start-session.sh; do attempt=$((attempt + 1)); if [ \"$attempt\" -ge 60 ]; then echo 'fleet bootstrap not ready after 300 seconds' >&2; exit 70; fi; sleep 5; done; fi",
           local.session_update_checkout,
           "if [ -n '{{ slot }}' ]; then export SPAWNPOINT_SLOT='{{ slot }}'; fi",
+          ], local.session_dns_environment, [
           "WORLD_ID='{{ worldId }}' SESSION_FORMAT=json /srv/spawnpoint/app/server/scripts/start-session.sh",
-        ]
+        ])
       }
     }]
   })
@@ -92,11 +103,12 @@ resource "aws_ssm_document" "stop_session" {
       name   = "stopSession"
       inputs = {
         timeoutSeconds = "3600"
-        runCommand = [
+        runCommand = concat([
           "set -euo pipefail",
           "if [ -n '{{ slot }}' ]; then export SPAWNPOINT_SLOT='{{ slot }}'; fi",
+          ], local.session_dns_environment, [
           "WORLD_ID='{{ worldId }}' SPAWNPOINT_STOP_PLAYERS='{{ players }}' /srv/spawnpoint/app/server/scripts/stop-session.sh",
-        ]
+        ])
       }
     }]
   })

@@ -54,6 +54,21 @@ test("hosting and connection can change without changing the world generation", 
   assert.throws(() => withWorldAccess(original, { placement: "fleet", connectivity: "zerotier" }), /invalid_world_connectivity/);
 });
 
+test("a world on the persistent host may use a public address or DNS, with the game's own login (ADR-0085)", () => {
+  const args = [preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z"] as const;
+  const original = newWorldRecord(...args);
+  for (const connectivity of ["raw", "route53"] as const) {
+    const persistent = withWorldAccess(original, { placement: "configured", connectivity, auth: "game" });
+    assert.equal(persistent.placement, "configured");
+    assert.equal(persistent.connectivity, connectivity);
+    assert.deepEqual(parseWorldRecord(worldRecordDocument(persistent)), persistent, "the record keeps the choice");
+    assert.throws(() => withWorldAccess(original, { placement: "configured", connectivity }), /invalid_world_connectivity/, "a public world declares its login");
+  }
+  const created = newWorldRecord(...args, { placement: "configured", connectivity: "raw", auth: "game" });
+  assert.equal(created.placement, "configured");
+  assert.deepEqual(parseWorldRecord(worldRecordDocument(created)), created);
+});
+
 test("a fleet world can keep its host warm; the choice survives other hosting changes and leaves with the fleet", () => {
   const original = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
   assert.equal(original.warm, undefined, "a new world is cold");

@@ -214,7 +214,7 @@ valheim_world_name="$(
 valheim_rendered="$(render_game valheim 2>/dev/null)"
 jq -e '
   (.services.valheim.image | test("^[a-z0-9./-]+@sha256:[0-9a-f]{64}$"))
-  and ([.services.valheim.ports[] | select(.target == 2456)] | .[0].published == "2456" and .[0].protocol == "udp" and (.[0].host_ip // "") == "")
+  and ([.services.valheim.ports[] | select(.target == 2456)] | .[0].published == "2456" and .[0].protocol == "udp" and .[0].host_ip == "0.0.0.0")
   and ([.services.valheim.ports[] | select(.target == 2457)] | .[0].published == "2457" and .[0].protocol == "udp" and .[0].host_ip == "127.0.0.1")
   and (.services.valheim.ports | length == 2)
 ' >/dev/null <<<"${valheim_rendered}"
@@ -242,7 +242,7 @@ jq -e '
 palworld_rendered="$(render_game palworld 2>/dev/null)"
 jq -e '
   (.services.palworld.image | test("^[a-z0-9./-]+@sha256:[0-9a-f]{64}$"))
-  and ([.services.palworld.ports[] | select(.target == 8211)] | .[0].published == "8211" and .[0].protocol == "udp" and (.[0].host_ip // "") == "")
+  and ([.services.palworld.ports[] | select(.target == 8211)] | .[0].published == "8211" and .[0].protocol == "udp" and .[0].host_ip == "0.0.0.0")
   and ([.services.palworld.ports[] | select(.target == 8212)] | .[0].published == "8212" and .[0].protocol == "tcp" and .[0].host_ip == "127.0.0.1")
   and (.services.palworld.ports | length == 2)
   and ([.services.palworld.volumes[] | select(.target == "/palworld/Pal/Saved")] | length == 1)
@@ -271,5 +271,44 @@ jq -e '
   and .services.palworld.environment.PUBLIC_PORT == "30010"
   and (((.services.palworld.mem_limit // .services.palworld.deploy.resources.limits.memory) | tostring | tonumber) == 16384 * 1024 * 1024)
 ' >/dev/null <<<"${palworld_slot}"
+
+# ADR-0085: the persistent host opens every game module's own port and the
+# slot range to the internet. That is safe only while each port the host opens
+# listens on loopback or on the session's bind address: a ZeroTier world binds
+# its game ports to the overlay address alone. A new or changed game module
+# that publishes on every address fails here, not on the internet.
+overlay_address="10.147.17.5"
+opened_port() {
+  local port="$1"
+  (( port >= 30010 && port <= 32559 )) && return 0
+  local module
+  for module in "${server_directory}"/games/*/game.sh; do
+    [[ "$(sed -nE 's/^GAME_CONNECT_PORT="([0-9]+)".*/\1/p' "${module}")" == "${port}" ]] && return 0
+  done
+  return 1
+}
+for module in "${server_directory}"/games/*/game.sh; do
+  game="$(basename "$(dirname "${module}")")"
+  slots=("")
+  # A game whose server names its own ports to clients never runs in a slot.
+  grep -q '^GAME_SLOTTABLE="\{0,1\}false' "${module}" || slots+=(7)
+  for slot in "${slots[@]}"; do
+    # A placed session carries its footprint; an unplaced one does not need it.
+    bound="$(WORLD_ID=bindcheck WORLD_FOOTPRINT_MEMORY_MIB=4096 SPAWNPOINT_SLOT="${slot}" SPAWNPOINT_GAME_BIND="${overlay_address}" render_game "${game}" 2>/dev/null || true)"
+    [[ -n "${bound}" ]] || { printf 'FAIL: %s did not render for the binding check\n' "${game}" >&2; exit 1; }
+    while IFS=$'\t' read -r port address; do
+      opened_port "${port}" || continue
+      [[ "${address}" == "127.0.0.1" || "${address}" == "${overlay_address}" ]] || {
+        printf 'FAIL: %s (slot %s) publishes opened port %s on %s, not on loopback or the session address\n' "${game}" "${slot:-none}" "${port}" "${address:-every address}" >&2
+        exit 1
+      }
+    done < <(jq -r '.services[] | (.ports // [])[] | [.published, (.host_ip // "")] | @tsv' <<<"${bound}")
+    # The game's own port is on the session's address, never left to the default.
+    jq -e --arg address "${overlay_address}" '[.services[] | (.ports // [])[] | select(.host_ip == $address)] | length > 0' >/dev/null <<<"${bound}" || {
+      printf 'FAIL: %s (slot %s) does not publish its game port on the session address\n' "${game}" "${slot:-none}" >&2
+      exit 1
+    }
+  done
+done
 
 printf 'result=passed\n'

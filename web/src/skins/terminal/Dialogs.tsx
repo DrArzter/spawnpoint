@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { Timestamp } from "../../components/ui/Timestamp";
+import type { World } from "../../model";
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, ScopeModel, WorldSettingsModel } from "../../core/models";
 import { startableLatest, startableReleases } from "../../core/presets";
 import { plural } from "../../lib/format";
@@ -73,17 +74,16 @@ function ConnectionFields({ model, first = false }: Readonly<{ model: Connection
   return <>
     <Field label="Hosting">
       <SelectInput data-autofocus={first ? true : undefined} onChange={(event) => model.setPlacement(event.target.value as "configured" | "fleet")} value={model.placement}>
-        <option value="configured">Persistent host · ZeroTier</option>
-        <option disabled={!model.fleetAvailable} value="fleet">On-demand fleet · public connection{model.fleetAvailable ? "" : " (not configured)"}</option>
+        <option value="configured">Persistent host</option>
+        <option disabled={!model.fleetAvailable} value="fleet">On-demand fleet{model.fleetAvailable ? "" : " (not configured)"}</option>
       </SelectInput>
     </Field>
-    {model.placement === "fleet" && <Field hint="Fleet machines are disposable and never join ZeroTier." label="Connection">
-      <SelectInput onChange={(event) => model.setConnectivity(event.target.value as "raw" | "route53")} value={model.connectivity}>
-        <option value="raw">Public IP and game port</option>
-        {model.dnsAvailable && <option value="route53">Public DNS</option>}
+    <Field hint={model.connections.find((option) => option.disabled)?.hint} label="Connection">
+      <SelectInput onChange={(event) => model.setConnectivity(event.target.value as World["connectivity"])} value={model.connectivity}>
+        {model.connections.map((option) => <option disabled={option.disabled} key={option.value} value={option.value}>{option.label}</option>)}
       </SelectInput>
-    </Field>}
-    {model.placement === "fleet" && <p className="t-copy-line">The game port is public. Set the game's password or allowlist yourself before sharing its address.</p>}
+    </Field>
+    {model.connectivity !== "zerotier" && <p className="t-copy-line">The game port is public. Set the game's password or allowlist yourself before sharing its address.</p>}
   </>;
 }
 

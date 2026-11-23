@@ -8,7 +8,7 @@ import { sessionStatus } from "./status";
 import { formatDateTime } from "../lib/format";
 import type { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, SettingValue, World } from "../model";
 import { routeHash, type AppRoute } from "../routing";
-import { configuredHosts, deriveSharedHostSession, gameOperations, worldSessionActive, type SharedHostSession } from "../session";
+import { configuredHosts, deriveSharedHostSession, gameOperations, nextReadingExpiry, worldSessionActive, type SharedHostSession } from "../session";
 import { NO_PENDING, pendingOf, withoutPending, withPending, type Confirmation, type Pending, type PendingMap, type SessionAction, type WorldActionKind } from "../shell/actions";
 import { useAppearance, useBootCard, useRoute, useStoredState } from "../shell/hooks";
 import { initializeTelegram, openInBrowser, type ViewerProfile } from "../telegram";
@@ -194,6 +194,14 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
   const [storedGame, setStoredGame] = useStoredState<string>("spawnpoint.scope", "");
   const [scopeOpen, setScopeOpen] = useState(false);
   const [controlPlane, setControlPlane] = useState<ControlPlaneState>({ status: "loading", snapshot: null, error: "" });
+  const [readingClock, setReadingClock] = useState(0);
+  useEffect(() => {
+    // Redraw when a shown player reading expires, so it turns to unknown on time.
+    const expiry = nextReadingExpiry(controlPlane.snapshot);
+    if (expiry === null) return undefined;
+    const timer = window.setTimeout(() => setReadingClock((tick) => tick + 1), Math.max(0, expiry * 1000 - Date.now()) + 1000);
+    return () => window.clearTimeout(timer);
+  }, [controlPlane.snapshot, readingClock]);
   const [booted, setBooted] = useState(false);
   const { visible: bootVisible, publish } = useBootCard(continuesBootCard);
   const [pending, setPending] = useState<PendingMap>(NO_PENDING);

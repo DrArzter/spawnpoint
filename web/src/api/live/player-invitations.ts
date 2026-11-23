@@ -1,37 +1,30 @@
-import { apiFailure, type InvitationRecipient, type InvitationSummary, type SpawnpointApi } from "../contract";
-import { authorizedFetch } from "./transport";
+import type { InvitationRecipient, InvitationSummary, SpawnpointApi } from "../contract";
+import { request } from "./request";
+
+const worldPath = (gameId: string, worldId: string) => `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}`;
 
 // These invitations ask existing members to play a world. They do not grant
 // project membership; access invitations live in access.ts.
 export const playerInvitationsApi = {
   async loadInvitationRecipients(): Promise<InvitationRecipient[]> {
-    const response = await authorizedFetch("/invitations/recipients");
-    if (!response.ok) throw await apiFailure(response, response.status === 403 ? "Your role cannot invite players." : "Players could not be loaded.");
-    const body = await response.json() as { recipients: InvitationRecipient[] };
+    const body = await request<{ recipients: InvitationRecipient[] }>("/invitations/recipients", {
+      failure: "Players could not be loaded.", refusals: { forbidden: "Your role cannot invite players." },
+    });
     return body.recipients;
   },
 
   async loadInvitationHistory(gameId: string, worldId: string): Promise<InvitationSummary[]> {
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/invitations`);
-    if (!response.ok) throw await apiFailure(response, response.status === 403 ? "Your role cannot view invitation history." : "Invitation history could not be loaded.");
-    const body = await response.json() as { invitations: InvitationSummary[] };
+    const body = await request<{ invitations: InvitationSummary[] }>(`${worldPath(gameId, worldId)}/invitations`, {
+      failure: "Invitation history could not be loaded.", refusals: { forbidden: "Your role cannot view invitation history." },
+    });
     return body.invitations;
   },
 
   async sendInvitation(gameId: string, worldId: string, audience: "broadcast" | "direct", recipientIdentityIds: readonly string[]): Promise<void> {
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/invitations`, {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ audience, recipientIdentityIds }),
+    await request<unknown>(`${worldPath(gameId, worldId)}/invitations`, {
+      method: "POST", body: { audience, recipientIdentityIds },
+      failure: "The invitation could not be sent.",
+      refusals: { forbidden: "Your role cannot invite players." },
     });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({})) as { error?: string };
-      const messages: Record<string, string> = {
-        forbidden: "Your role cannot invite players.",
-        invalid_recipients: "One or more selected players are no longer available.",
-        invitation_publish_failed: "The invitation was saved, but Telegram delivery could not be queued.",
-        world_archived: "This world is archived. Restore a backup before inviting players to it.",
-        unknown_world: "Spawnpoint does not know this world. Refresh and try again.",
-      };
-      throw new Error(messages[body.error ?? ""] ?? "The invitation could not be sent.");
-    }
   },
 } satisfies Partial<SpawnpointApi>;

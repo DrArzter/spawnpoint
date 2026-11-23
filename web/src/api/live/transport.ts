@@ -4,13 +4,9 @@ export const apiUrl = (import.meta.env.VITE_ACCESS_API_URL ?? "").replace(/\/$/,
 
 let refreshPromise: Promise<boolean> | null = null;
 
-export function publicPost(path: string, body: unknown): Promise<Response> {
-  return fetch(`${apiUrl}${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(body),
-  });
+/** One call with the browser session's cookie and no renewal: sign-in, the session probe and logout. */
+export function sessionFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(`${apiUrl}${path}`, { ...init, credentials: "include" });
 }
 
 async function requestRefresh(): Promise<boolean> {
@@ -28,7 +24,7 @@ export async function refreshBrowserSession(): Promise<boolean> {
 }
 
 export async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const send = () => fetch(`${apiUrl}${path}`, { ...init, credentials: "include" });
+  const send = () => sessionFetch(path, init);
   const first = await send();
   if (first.status !== 401) return first;
   return await refreshBrowserSession() ? send() : first;

@@ -1,36 +1,24 @@
-import { apiFailure, type AppearancePreference, type SpawnpointApi, type SubscriptionState } from "../contract";
-import { authorizedFetch } from "./transport";
+import type { AppearancePreference, SpawnpointApi, SubscriptionState } from "../contract";
+import { request } from "./request";
 
 export const preferencesApi = {
   async loadSubscriptions(): Promise<SubscriptionState> {
-    const response = await authorizedFetch("/me/subscriptions");
-    if (!response.ok) throw await apiFailure(response, "Your notification subscriptions could not be loaded.");
-    const body = await response.json() as { subscriptions: SubscriptionState };
+    const body = await request<{ subscriptions: SubscriptionState }>("/me/subscriptions", { failure: "Your notification subscriptions could not be loaded." });
     return body.subscriptions;
   },
 
   async updateSubscriptions(subscriptions: SubscriptionState): Promise<SubscriptionState> {
-    const response = await authorizedFetch("/me/subscriptions", {
-      method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ subscriptions }),
-    });
-    if (!response.ok) throw await apiFailure(response, "Your notification subscriptions could not be saved.");
-    const body = await response.json() as { subscriptions: SubscriptionState };
+    const body = await request<{ subscriptions: SubscriptionState }>("/me/subscriptions", { method: "PUT", body: { subscriptions }, failure: "Your notification subscriptions could not be saved." });
     return body.subscriptions;
   },
 
   async loadAppearance(): Promise<AppearancePreference> {
-    const response = await authorizedFetch("/me/appearance");
-    if (!response.ok) throw await apiFailure(response, "Your appearance settings could not be loaded.");
-    const body = await response.json() as { appearance: AppearancePreference };
+    const body = await request<{ appearance: AppearancePreference }>("/me/appearance", { failure: "Your appearance settings could not be loaded." });
     return body.appearance;
   },
 
   async updateAppearance(appearance: AppearancePreference): Promise<AppearancePreference> {
-    const response = await authorizedFetch("/me/appearance", {
-      method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ appearance }),
-    });
-    if (!response.ok) throw await apiFailure(response, "Your appearance settings could not be saved.");
-    const body = await response.json() as { appearance: AppearancePreference };
+    const body = await request<{ appearance: AppearancePreference }>("/me/appearance", { method: "PUT", body: { appearance }, failure: "Your appearance settings could not be saved." });
     return body.appearance;
   },
 } satisfies Partial<SpawnpointApi>;

@@ -4,7 +4,7 @@ import { Timestamp } from "../../components/ui/Timestamp";
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, ScopeModel, WorldSettingsModel } from "../../core/models";
 import { startableLatest, startableReleases } from "../../core/presets";
 import { plural } from "../../lib/format";
-import { Drawer, Empty, Field, Modal, NoMatches, Notice, Person, SelectInput, SkeletonRows, State, TextInput, Toggle, Verb } from "./ui";
+import { Drawer, Empty, Field, LoadError, Modal, NoMatches, Person, SelectInput, SkeletonRows, State, TextInput, Toggle, Verb } from "./ui";
 
 // The scope picker: choosing a game re-scopes the whole console.
 export function ScopeDialog({ model }: Readonly<{ model: ScopeModel }>) {
@@ -223,7 +223,7 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
               {model.selectedCount > 0 && <Verb action={model.clearSelection} size="small" />}
             </p>
             {recipients.status === "loading" && <SkeletonRows label="Loading approved players" rows={3} />}
-            {recipients.status === "error" && <Notice title="Players could not be loaded" tone="error" verbs={<Verb action={recipients.retry} size="small" />} />}
+            {recipients.status === "error" && <LoadError state={recipients} title="Players could not be loaded" verb="list players" />}
             {recipients.status === "ready" && recipients.value.length === 0 && !model.query.trim() && <Empty description="Approve another player in Access before sending a direct invitation." title="No other approved players" />}
             {recipients.status === "ready" && recipients.value.length === 0 && model.query.trim() && <NoMatches filter={{ query: model.query, clear: () => model.setQuery("") }} noun="players" />}
             {recipients.status === "ready" && recipients.value.length > 0 && (
@@ -248,7 +248,7 @@ export function InvitationSheet({ model }: Readonly<{ model: InvitationModel }>)
             <Verb action={model.refreshHistory} size="small" />
           </div>
           {history.status === "loading" && <SkeletonRows columns={3} label="Loading recent invitation results" rows={2} />}
-          {history.status === "error" && <Notice title="Delivery history could not be loaded" tone="error" verbs={<Verb action={history.retry} size="small" />} />}
+          {history.status === "error" && <LoadError state={history} title="Delivery history could not be loaded" verb="read invitations" />}
           {history.status === "ready" && history.value.length === 0 && <Empty title="No invitations yet" />}
           {history.status === "ready" && history.value.length > 0 && (
             <ul className="t-list">

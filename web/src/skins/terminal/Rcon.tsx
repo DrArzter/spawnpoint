@@ -1,5 +1,6 @@
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { ConsoleModel } from "../../core/models";
+import { failureView } from "../../core/failure";
 import { Skeleton, SkeletonGroup, State, Verb, Verbs } from "./ui";
 
 // This world's console (ADR-0063): the one place the two faces agree on a
@@ -7,6 +8,7 @@ import { Skeleton, SkeletonGroup, State, Verb, Verbs } from "./ui";
 // answered, the prompt, the quick commands as keys.
 export function ConsolePanel({ model }: Readonly<{ model: ConsoleModel }>) {
   const { game, world, session, log, unavailable } = model;
+  const failure = log?.status === "error" ? failureView(log.kind, "Console could not be loaded", "use the console", log.error) : null;
   return (
     <>
       <section aria-label="RCON terminal" className="t-rcon">
@@ -22,9 +24,7 @@ export function ConsolePanel({ model }: Readonly<{ model: ConsoleModel }>) {
               <Skeleton width="medium" />
             </SkeletonGroup>
           )}
-          {log?.status === "error" && (
-            <span className="t-rcon-line t-rcon-amber">{log.error} <Verb action={log.retry} size="small" /></span>
-          )}
+          {failure && log?.status === "error" && <span className="t-rcon-line t-rcon-amber">{failure.message ?? failure.title} {failure.retry && <Verb action={log.retry} size="small" />}</span>}
           {log?.status === "ready" && log.value.length === 0 && (
             <span className="t-rcon-line t-rcon-muted">No commands yet. Each one is recorded with who ran it.</span>
           )}

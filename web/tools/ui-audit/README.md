@@ -21,6 +21,7 @@ page, state and width. It uses raw Chrome DevTools Protocol (`cdp.mjs`) and has 
 | States | every entry in `states.mjs` at 360, 599, 600, 759, 760, 1440 and 2560 |
 | Menus | every menu on a page, opened one at a time, at the same seven widths |
 | Themes | light everywhere; dark at 360 and 1440 |
+| Failures | the backups tab and the worlds list with `?failure=forbidden.<call>` and `?failure=unavailable.<call>` (`src/demo/flag.ts`): the box a role without the permission sees, and the box an API that did not answer shows with Retry |
 | Data | the demo, and `?demo&fixture=stress` (80-character names, more rows) at 360, 840 and 1440 |
 
 The runner waits for fonts and finished animations before it probes. It runs up to 4 tabs in parallel: four, or the number of cores when the machine has fewer.

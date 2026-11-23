@@ -4,7 +4,7 @@ import type { HostMetricPoint, HostMetrics } from "../../api/contract";
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { MetricsModel } from "../../core/models";
 import { formatBytes } from "../../lib/format";
-import { Choice, Choices, Empty, Notice, Panel, Skeleton, SkeletonGroup, Verb } from "./ui";
+import { Choice, Choices, Empty, LoadError, Panel, Skeleton, SkeletonGroup } from "./ui";
 
 // Metrics the way the status page draws its response line: one series is one
 // well with the area under its line filled in the accent, no axes and no
@@ -23,9 +23,6 @@ const formatMetric = (unit: string) => (value: number) => (unit === "percent" ? 
 // probes (flagged), so a line is a line here; the rest of the window is blank.
 export function MetricsPanel({ model }: Readonly<{ model: MetricsModel }>) {
   const metrics = model.metrics;
-  if (metrics.status === "error" && metrics.kind === "unavailable") {
-    return <Panel><Empty title="CloudWatch is not connected yet" /></Panel>;
-  }
   if (metrics.status === "ready" && metrics.value === null) {
     return <Panel><Empty description="Metrics show the hosts this world's sessions ran on. Start the world to see them." title="No session in this window" /></Panel>;
   }
@@ -36,7 +33,7 @@ export function MetricsPanel({ model }: Readonly<{ model: MetricsModel }>) {
       </Choices>}
       name="Hosts this world ran on"
     >
-      {metrics.status === "error" && <Notice description={metrics.error} title="Metrics could not be loaded" tone="error" verbs={<Verb action={metrics.retry} size="small" />} />}
+      {metrics.status === "error" && <LoadError state={metrics} title="Metrics could not be loaded" verb="read metrics" />}
       {metrics.status === "loading" && waiting}
       {metrics.status === "ready" && metrics.value !== null && lineCharts(metrics.value)}
     </Panel>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { ReleaseMod, ReleasePackName, StopPlayersPolicy } from "../api/contract";
+import { failureKind, type ApiFailureKind, type ReleaseMod, type ReleasePackName, type StopPlayersPolicy } from "../api/contract";
 import { requestReleaseBuild } from "../auth";
 import { ActiveSession, endSession, loadAppearance, loadControlPlane, requestBackupDownload, requestCreateWorld, requestModDownload, requestPackDownload, requestReleasePack, requestSessionOperation, requestPromotion, requestUpdateWorldSettings, requestWorldLifecycle, subscribeControlPlane, updateAppearance, updateGameSettings, type BackupEntry } from "../auth";
 import { startableReleases } from "./presets";
@@ -28,7 +28,7 @@ import { presetOf, stopDisconnect, type WorldCallbacks } from "./worlds";
 type ControlPlaneState =
   | { status: "loading"; snapshot: ControlPlaneSnapshot | null; error: "" }
   | { status: "ready"; snapshot: ControlPlaneSnapshot; error: "" }
-  | { status: "error"; snapshot: ControlPlaneSnapshot | null; error: string };
+  | { status: "error"; snapshot: ControlPlaneSnapshot | null; error: string; kind: ApiFailureKind };
 
 // Several worlds of a game may run at once, each on its own record
 // (ADR-0062): the game is online while any of them is.
@@ -137,6 +137,7 @@ export type ConsoleController = Readonly<{
   snapshot: ControlPlaneSnapshot | null;
   listStatus: "loading" | "ready" | "error";
   error: string;
+  errorKind: ApiFailureKind;
   games: readonly Game[];
   game: Game | undefined;
   world: World | undefined;
@@ -248,7 +249,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
       const next = await loadControlPlane();
       if (loads.current.keep(ticket)) setControlPlane({ status: "ready", snapshot: next, error: "" });
     } catch (error) {
-      if (loads.current.keep(ticket)) setControlPlane((current) => ({ status: "error", snapshot: current.snapshot, error: error instanceof Error ? error.message : "The control-plane state could not be loaded." }));
+      if (loads.current.keep(ticket)) setControlPlane((current) => ({ status: "error", snapshot: current.snapshot, error: error instanceof Error ? error.message : "The control-plane state could not be loaded.", kind: failureKind(error) }));
     } finally {
       publish(() => setBooted(true));
       if (!silent) setPending((current) => withoutPending(current, mine));
@@ -490,6 +491,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     snapshot,
     listStatus: listStatusOf(controlPlane),
     error: controlPlane.error,
+    errorKind: controlPlane.status === "error" ? controlPlane.kind : "failed",
     games,
     game,
     world,

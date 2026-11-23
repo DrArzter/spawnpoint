@@ -31,10 +31,8 @@ html[data-skin="console"] .c-empty-title {
 
 html[data-skin="console"] .c-empty-message {
   max-width: 60ch;
-  overflow: hidden;
   font-size: var(--c-fs-s);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 html[data-skin="console"] .c-empty-sm {

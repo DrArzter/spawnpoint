@@ -1,6 +1,7 @@
 import { describeProviderSignInFailure, describeRegistrationFailure, describeSignInFailure, isLoginProviderId } from "../../lib/signin";
-import { apiFailure, type AccountProfile, type AuthState, type LinkedLoginAccounts, type LoginOptions, type SpawnpointApi, type SpawnpointSession } from "../contract";
-import { apiUrl, authorizedFetch, publicPost, refreshBrowserSession } from "./transport";
+import { ApiError, type AccountProfile, type AuthState, type LinkedLoginAccounts, type LoginOptions, type SpawnpointApi, type SpawnpointSession } from "../contract";
+import { request } from "./request";
+import { apiUrl, refreshBrowserSession } from "./transport";
 
 const LEGACY_TOKEN_KEY = "spawnpoint.auth.session";
 export const telegramOidcClientId = (import.meta.env.VITE_TELEGRAM_OIDC_CLIENT_ID ?? "").trim();
@@ -32,15 +33,9 @@ function loginPayloadFromQuery(): Record<string, string> | null {
 
 type FailureDescription = (status: number, code: string | undefined) => string;
 
-async function exchangeLogin(path: string, body: unknown, describeFailure: FailureDescription): Promise<void> {
-  const response = await publicPost(path, body);
-  if (!response.ok) {
-    const parsed = await response.json().catch(() => null) as { error?: unknown } | null;
-    const code = typeof parsed?.error === "string" ? parsed.error : undefined;
-    throw await apiFailure(response, describeFailure(response.status, code), parsed);
-  }
-  const result = await response.json() as { authenticated?: unknown };
-  if (result.authenticated !== true) throw new Error("Spawnpoint did not create a valid session.");
+async function exchangeLogin(path: string, body: unknown, describe: FailureDescription): Promise<void> {
+  const result = await request<{ authenticated?: unknown }>(path, { method: "POST", body, renew: false, failure: "Sign-in did not complete. Try again.", describe });
+  if (result.authenticated !== true) throw new ApiError("failed", "Spawnpoint did not create a valid session.");
 }
 
 function exchangeTelegram(body: { idToken: string } | { login: Record<string, string> } | { initData: string }): Promise<void> {
@@ -74,9 +69,7 @@ function accountProfile(profile: Partial<AccountProfile>): AccountProfile {
 }
 
 async function loadSession(): Promise<SpawnpointSession> {
-  const response = await fetch(`${apiUrl}/session`, { credentials: "include" });
-  if (!response.ok) throw new Error("Your Spawnpoint session expired.");
-  const parsed = await response.json() as SpawnpointSession & { capabilities?: readonly string[] };
+  const parsed = await request<SpawnpointSession & { capabilities?: readonly string[] }>("/session", { renew: false, failure: "Your Spawnpoint session expired.", describe: () => "Your Spawnpoint session expired." });
   if (parsed.state === "active") return { ...parsed, capabilities: parsed.capabilities ?? [], profile: accountProfile(parsed.profile) };
   return { ...parsed, candidate: { ...accountProfile(parsed.candidate), displayName: parsed.candidate.displayName, status: parsed.candidate.status } };
 }
@@ -120,16 +113,13 @@ async function restoreMiniApp(initData: string): Promise<AuthState> {
 }
 
 async function linkProofAccount(provider: "telegram" | "google", label: string, idToken: string): Promise<void> {
-  const response = await authorizedFetch(`/me/accounts/${provider}`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ idToken }),
+  await request<unknown>(`/me/accounts/${provider}`, {
+    method: "POST", body: { idToken }, failure: `${label} could not verify or link this account.`,
+    refusals: {
+      account_already_linked: `This ${label} account already belongs to another Spawnpoint identity.`,
+      provider_already_linked: `This Spawnpoint identity already has a ${label} account.`,
+    },
   });
-  if (response.ok) return;
-  const body = await response.json().catch(() => null) as { error?: unknown } | null;
-  const code = typeof body?.error === "string" ? body.error : undefined;
-  let message = `${label} could not verify or link this account.`;
-  if (code === "account_already_linked") message = `This ${label} account already belongs to another Spawnpoint identity.`;
-  else if (code === "provider_already_linked") message = `This Spawnpoint identity already has a ${label} account.`;
-  throw await apiFailure(response, message, body);
 }
 
 export const authApi = {
@@ -146,9 +136,7 @@ export const authApi = {
 
   async loadLoginOptions(): Promise<LoginOptions> {
     try {
-      const response = await fetch(`${apiUrl}/auth/providers`, { credentials: "include" });
-      if (!response.ok) return { providers: ["telegram"], selfRegistration: [], emailActions: false };
-      const body = await response.json() as { providers?: unknown; selfRegistration?: unknown; emailActions?: unknown };
+      const body = await request<{ providers?: unknown; selfRegistration?: unknown; emailActions?: unknown }>("/auth/providers", { renew: false, failure: "Sign-in options could not be loaded." });
       return {
         providers: Array.isArray(body.providers) ? body.providers.filter(isLoginProviderId) : ["telegram"],
         selfRegistration: Array.isArray(body.selfRegistration) ? body.selfRegistration.filter(isLoginProviderId) : [],
@@ -164,46 +152,39 @@ export const authApi = {
   signInWithPassword: (email: string, password: string) => sessionFromLogin("/auth/password", { email, password }, describeSignInFailure),
 
   async registerWithPassword(email: string, password: string, displayName: string, invitationToken?: string) {
-    const response = await publicPost("/auth/password/register", { email, password, displayName, ...(invitationToken ? { invitationToken } : {}) });
-    const body = await response.json().catch(() => null) as { result?: unknown; email?: unknown; error?: unknown } | null;
-    if (!response.ok) {
-      const code = typeof body?.error === "string" ? body.error : undefined;
-      throw await apiFailure(response, describeRegistrationFailure(response.status, code), body);
-    }
-    if (body?.result !== "verification_sent" || typeof body.email !== "string") throw new Error("Spawnpoint returned an invalid registration response.");
+    const body = await request<{ result?: unknown; email?: unknown }>("/auth/password/register", {
+      method: "POST", renew: false, body: { email, password, displayName, ...(invitationToken ? { invitationToken } : {}) },
+      failure: "The account could not be created. Try again.", describe: describeRegistrationFailure,
+    });
+    if (body.result !== "verification_sent" || typeof body.email !== "string") throw new ApiError("failed", "Spawnpoint returned an invalid registration response.");
     return { result: "verification_sent" as const, email: body.email };
   },
 
   async resendEmailVerification(email: string, invitationToken?: string): Promise<void> {
-    const response = await publicPost("/auth/email/verification/resend", { email, ...(invitationToken ? { invitationToken } : {}) });
-    if (!response.ok) throw await apiFailure(response, "A new verification email could not be sent.");
+    await request<unknown>("/auth/email/verification/resend", {
+      method: "POST", renew: false, body: { email, ...(invitationToken ? { invitationToken } : {}) }, failure: "A new verification email could not be sent.",
+    });
   },
 
   verifyEmail: (token: string) => sessionFromLogin("/auth/email/verification", { token }, () => "This verification link is invalid, expired, or has already been used."),
 
   async requestPasswordReset(email: string): Promise<void> {
-    const response = await publicPost("/auth/password/forgot", { email });
-    if (!response.ok) throw await apiFailure(response, "The reset request could not be sent.");
+    await request<unknown>("/auth/password/forgot", { method: "POST", renew: false, body: { email }, failure: "The reset request could not be sent." });
   },
 
   async resetPassword(token: string, password: string): Promise<void> {
-    const response = await publicPost("/auth/password/reset", { token, password });
-    if (!response.ok) {
-      const body = await response.json().catch(() => null) as { error?: unknown } | null;
-      const code = typeof body?.error === "string" ? body.error : undefined;
-      throw await apiFailure(response, describeRegistrationFailure(response.status, code), body);
-    }
+    await request<unknown>("/auth/password/reset", {
+      method: "POST", renew: false, body: { token, password }, failure: "The password could not be reset. Try again.", describe: describeRegistrationFailure,
+    });
   },
 
   async revokeSession(): Promise<void> {
     clearLegacyTokens();
-    await fetch(`${apiUrl}/auth/logout`, { method: "POST", credentials: "include" }).catch(() => undefined);
+    await request<unknown>("/auth/logout", { method: "POST", renew: false, failure: "Sign-out could not be confirmed." }).catch(() => undefined);
   },
 
   async loadLinkedAccounts(): Promise<LinkedLoginAccounts> {
-    const response = await authorizedFetch("/me/accounts");
-    if (!response.ok) throw await apiFailure(response, "Linked sign-in accounts could not be loaded.");
-    const body = await response.json() as Partial<LinkedLoginAccounts>;
+    const body = await request<Partial<LinkedLoginAccounts>>("/me/accounts", { failure: "Linked sign-in accounts could not be loaded." });
     return {
       accounts: body.accounts ?? [],
       linkableProviders: body.linkableProviders ?? [],
@@ -215,25 +196,15 @@ export const authApi = {
   linkGoogle: (idToken: string) => linkProofAccount("google", "Google", idToken),
 
   async linkPassword(email: string, password: string, displayName: string): Promise<void> {
-    const response = await authorizedFetch("/me/password", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password, displayName }),
+    await request<unknown>("/me/password", {
+      method: "POST", body: { email, password, displayName }, failure: "The account could not be created. Try again.", describe: describeRegistrationFailure,
     });
-    if (!response.ok) {
-      const body = await response.json().catch(() => null) as { error?: unknown } | null;
-      const code = typeof body?.error === "string" ? body.error : undefined;
-      throw await apiFailure(response, describeRegistrationFailure(response.status, code), body);
-    }
   },
 
   async changePassword(email: string, currentPassword: string, password: string): Promise<void> {
-    const response = await authorizedFetch("/me/password/change", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, currentPassword, password }),
+    await request<unknown>("/me/password/change", {
+      method: "POST", body: { email, currentPassword, password }, failure: "The password could not be changed. Try again.",
+      describe: (status, code) => status === 401 ? "The current password is not correct." : describeRegistrationFailure(status, code),
     });
-    if (!response.ok) {
-      const body = await response.json().catch(() => null) as { error?: unknown } | null;
-      const code = typeof body?.error === "string" ? body.error : undefined;
-      const message = response.status === 401 ? "The current password is not correct." : describeRegistrationFailure(response.status, code);
-      throw await apiFailure(response, message, body);
-    }
   },
 } satisfies Partial<SpawnpointApi>;

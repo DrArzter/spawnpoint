@@ -1,113 +1,90 @@
-import { apiFailure, identityDeletionRefusal, type AccessCandidate, type AccessIdentity, type AccessInvitation, type AccessRole, type SpawnpointApi } from "../contract";
-import { authorizedFetch, publicPost } from "./transport";
+import { identityDeletionRefusal, type AccessCandidate, type AccessIdentity, type AccessInvitation, type AccessRole, type SpawnpointApi } from "../contract";
+import { request } from "./request";
 
-/** What each refused role change means to the person who asked. */
-const ROLE_CHANGE_REFUSALS: Readonly<Record<string, string>> = {
-  self_role_change_forbidden: "You cannot change your own role.",
+// Where a role change reads differently from the shared text (error-text.ts).
+const ROLE_CHANGE_REFUSALS = {
   last_owner: "This is the last Owner. Make someone else an Owner first.",
-  role_change_conflict: "Someone changed this role at the same time. Refresh and try again.",
-  unknown_role: "That role no longer exists. Refresh and try again.",
-  identity_not_found: "This person no longer exists. Refresh the list.",
   forbidden: "Only an Owner can give or take the Owner role.",
 };
+
+const DELETION_REFUSALS = {
+  self_delete_forbidden: identityDeletionRefusal(409, "self_delete_forbidden"),
+  last_owner: identityDeletionRefusal(409, "last_owner"),
+  forbidden: identityDeletionRefusal(403, "forbidden"),
+};
+
+const candidatePath = (platform: string, platformUserId: string) => `/access/candidates/${encodeURIComponent(platform)}/${encodeURIComponent(platformUserId)}`;
 
 // Project membership and roles. Player-to-player invitations belong to the
 // game client, not this access-invitation flow.
 export const accessApi = {
   async requestAccess(): Promise<void> {
-    const response = await authorizedFetch("/access/request", { method: "POST" });
-    if (!response.ok) throw await apiFailure(response, "The access request could not be sent.");
+    await request<unknown>("/access/request", { method: "POST", failure: "The access request could not be sent." });
   },
 
   async checkAccessInvitation(token: string): Promise<{ valid: boolean; email: string | null }> {
-    const response = await publicPost("/auth/access-invitations/check", { token });
-    if (!response.ok) throw await apiFailure(response, "This invitation could not be checked.");
-    const body = await response.json() as { valid?: unknown; email?: unknown };
+    const body = await request<{ valid?: unknown; email?: unknown }>("/auth/access-invitations/check", { method: "POST", renew: false, body: { token }, failure: "This invitation could not be checked." });
     return { valid: body.valid === true, email: typeof body.email === "string" ? body.email : null };
   },
 
   async redeemAccessInvitation(token: string, proof?: string): Promise<void> {
-    const response = await authorizedFetch("/access/invitations/redeem", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, ...(proof ? { proof } : {}) }),
-    });
-    if (!response.ok) throw await apiFailure(response, response.status === 409 ? "This invitation is no longer available, or this account already has access." : "This invitation could not be accepted.");
+    await request<unknown>("/access/invitations/redeem", { method: "POST", body: { token, ...(proof ? { proof } : {}) }, failure: "This invitation could not be accepted." });
   },
 
   async requestAccessInvitationProof(token: string): Promise<void> {
-    const response = await authorizedFetch("/access/invitations/proof", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token }),
-    });
-    if (!response.ok) throw await apiFailure(response, response.status === 429 ? "A confirmation email was just sent. Wait a minute before trying again." : "The confirmation email could not be sent.");
+    await request<unknown>("/access/invitations/proof", { method: "POST", body: { token }, failure: "The confirmation email could not be sent." });
   },
 
   async loadAccessInvitations(): Promise<AccessInvitation[]> {
-    const response = await authorizedFetch("/access/invitations");
-    if (!response.ok) throw await apiFailure(response, "Invitations could not be loaded.");
-    const body = await response.json() as { invitations: AccessInvitation[] };
+    const body = await request<{ invitations: AccessInvitation[] }>("/access/invitations", { failure: "Invitations could not be loaded." });
     return body.invitations;
   },
 
-  async createAccessInvitation(email: string | null) {
-    const response = await authorizedFetch("/access/invitations", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(email === null ? {} : { email }),
+  createAccessInvitation(email: string | null) {
+    return request<Awaited<ReturnType<SpawnpointApi["createAccessInvitation"]>>>("/access/invitations", {
+      method: "POST", body: email === null ? {} : { email }, failure: "An invitation could not be created.",
     });
-    if (!response.ok) throw await apiFailure(response, "An invitation could not be created.");
-    return response.json() as ReturnType<SpawnpointApi["createAccessInvitation"]>;
   },
 
   async revokeAccessInvitation(id: string): Promise<void> {
-    const response = await authorizedFetch(`/access/invitations/${encodeURIComponent(id)}/revoke`, { method: "POST" });
-    if (!response.ok) throw await apiFailure(response, "This invitation could not be revoked.");
+    await request<unknown>(`/access/invitations/${encodeURIComponent(id)}/revoke`, { method: "POST", failure: "This invitation could not be revoked." });
   },
 
   async loadAccessCandidates(): Promise<AccessCandidate[]> {
-    const response = await authorizedFetch("/access/candidates");
-    if (!response.ok) throw await apiFailure(response, "Access requests could not be loaded.");
-    const body = await response.json() as { candidates: AccessCandidate[] };
+    const body = await request<{ candidates: AccessCandidate[] }>("/access/candidates", { failure: "Access requests could not be loaded." });
     return body.candidates;
   },
 
   async approveAccessCandidate(platform: string, platformUserId: string, roleId: string) {
-    const response = await authorizedFetch(`/access/candidates/${encodeURIComponent(platform)}/${encodeURIComponent(platformUserId)}/approve`, {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ roleId }),
+    const body = await request<{ identity: { id: string; displayName: string; roleId: string } }>(`${candidatePath(platform, platformUserId)}/approve`, {
+      method: "POST", body: { roleId }, failure: "This account could not be approved.",
     });
-    if (!response.ok) throw await apiFailure(response, "This account could not be approved.");
-    const body = await response.json() as { identity: { id: string; displayName: string; roleId: string } };
     return body.identity;
   },
 
   async dismissAccessCandidate(platform: string, platformUserId: string): Promise<void> {
-    const response = await authorizedFetch(`/access/candidates/${encodeURIComponent(platform)}/${encodeURIComponent(platformUserId)}/dismiss`, { method: "POST" });
-    if (!response.ok) throw await apiFailure(response, "This account could not be dismissed.");
+    await request<unknown>(`${candidatePath(platform, platformUserId)}/dismiss`, { method: "POST", failure: "This account could not be dismissed." });
   },
 
   async loadAccessIdentities(): Promise<AccessIdentity[]> {
-    const response = await authorizedFetch("/access/identities");
-    if (!response.ok) throw await apiFailure(response, "Users could not be loaded.");
-    const body = await response.json() as { identities: AccessIdentity[] };
+    const body = await request<{ identities: AccessIdentity[] }>("/access/identities", { failure: "Users could not be loaded." });
     return body.identities;
   },
 
   async loadAccessRoles(): Promise<AccessRole[]> {
-    const response = await authorizedFetch("/access/roles");
-    if (!response.ok) throw await apiFailure(response, response.status === 403 ? "Your role cannot view access roles." : "Roles could not be loaded.");
-    const body = await response.json() as { roles: AccessRole[] };
+    const body = await request<{ roles: AccessRole[] }>("/access/roles", { failure: "Roles could not be loaded.", refusals: { forbidden: "Your role cannot view access roles." } });
     return body.roles;
   },
 
   async updateIdentityRole(identityId: string, roleId: string): Promise<void> {
-    const response = await authorizedFetch(`/access/identities/${encodeURIComponent(identityId)}/role`, {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ roleId }),
+    await request<unknown>(`/access/identities/${encodeURIComponent(identityId)}/role`, {
+      method: "POST", body: { roleId }, failure: "The role could not be changed.", refusals: ROLE_CHANGE_REFUSALS,
     });
-    if (response.ok) return;
-    const body = await response.json().catch(() => null) as { error?: unknown } | null;
-    throw await apiFailure(response, ROLE_CHANGE_REFUSALS[typeof body?.error === "string" ? body.error : ""] ?? "The role could not be changed.", body);
   },
 
   async deleteIdentity(identityId: string): Promise<void> {
-    const response = await authorizedFetch(`/access/identities/${encodeURIComponent(identityId)}/delete`, { method: "POST" });
-    if (response.ok) return;
-    const body = await response.json().catch(() => null) as { error?: unknown } | null;
-    throw await apiFailure(response, identityDeletionRefusal(response.status, body?.error), body);
+    await request<unknown>(`/access/identities/${encodeURIComponent(identityId)}/delete`, {
+      method: "POST", failure: "This user could not be deleted.", refusals: DELETION_REFUSALS,
+    });
   },
 } satisfies Partial<SpawnpointApi>;

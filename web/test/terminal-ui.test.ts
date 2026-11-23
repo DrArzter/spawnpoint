@@ -6,7 +6,8 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { Address, FilterRow, Indicator, NoMatches, Pager, Person, Skeleton, SkeletonGroup, Table } from "../src/skins/terminal/ui.tsx";
+import { action } from "../src/core/actions.ts";
+import { Address, FilterRow, Indicator, LoadError, NoMatches, Pager, Person, Skeleton, SkeletonGroup, Table } from "../src/skins/terminal/ui.tsx";
 
 test("terminal dense status keeps one visible mark and an accessible label", () => {
   const markup = renderToStaticMarkup(createElement(Indicator, { kind: "ok", label: "Verified" }));
@@ -21,6 +22,16 @@ test("a terminal indicator for a plain fact names its own glyph, with no status 
   assert.match(markup, /<span aria-hidden="true" class="t-mark">\[M\]<\/span>/);
   assert.doesNotMatch(markup, /t-mark-/);
   assert.match(markup, /visually-hidden[^>]*>Modrinth/);
+});
+
+test("a terminal load error says forbidden without Retry, and unavailable with it", () => {
+  const retry = action("backups.retry", "Try again", () => undefined);
+  const forbidden = renderToStaticMarkup(createElement(LoadError, { state: { error: "x", kind: "forbidden", retry }, title: "Backups could not be loaded", verb: "read backups" }));
+  assert.match(forbidden, /Your role cannot read backups/);
+  assert.doesNotMatch(forbidden, /<button/, "a role refusal offers nothing to press");
+  const unavailable = renderToStaticMarkup(createElement(LoadError, { state: { error: "No answer.", kind: "unavailable", retry }, title: "Backups could not be loaded", verb: "read backups" }));
+  assert.match(unavailable, /Unavailable/);
+  assert.match(unavailable, /<button/);
 });
 
 test("a terminal filter row holds the choices that narrow its list beside the search field", () => {

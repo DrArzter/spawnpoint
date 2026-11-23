@@ -132,9 +132,10 @@ export type RequestSummary = Readonly<{ id: string; displayName: string; platfor
 export type WorldsModel = Readonly<{
   status: "loading" | "ready" | "error";
   error: string;
+  errorKind: ApiFailureKind;
   game: Game | undefined;
-  /** Why a list is not shown: no games at all, or the read failed. */
-  unavailable: Readonly<{ failed: boolean; description: string }> | null;
+  /** Why a list is not shown: no games at all, or the read failed. `retry` is false when the role is the reason. */
+  unavailable: Readonly<{ failed: boolean; title: string; description: string; retry: boolean }> | null;
   notices: readonly Notice[];
   overview: SessionOverview;
   rows: readonly WorldRow[];

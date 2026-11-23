@@ -23,6 +23,14 @@ test("501 is unavailable without reading a body", async () => {
   assert.equal(error.kind, "unavailable");
 });
 
+test("503 is unavailable, and the error keeps the status, the code and the body", async () => {
+  const error = await apiFailure(json(503, { error: "metrics_unavailable", extra: 1 }), "Metrics could not be loaded.");
+  assert.equal(error.kind, "unavailable");
+  assert.equal(error.status, 503);
+  assert.equal(error.code, "metrics_unavailable");
+  assert.equal(error.detail?.extra, 1);
+});
+
 test("403 is forbidden", async () => {
   const error = await apiFailure(json(403, { error: "forbidden" }), "Your role cannot read backups.");
   assert.equal(error.kind, "forbidden");

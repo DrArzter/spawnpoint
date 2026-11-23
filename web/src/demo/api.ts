@@ -1,11 +1,19 @@
-import type { AccessInvitation, AuthState, MetricRange, ReleaseModQuery, ReleasePackName, SpawnpointApi } from "../api/contract";
+import { ApiError, type AccessInvitation, type AuthState, type MetricRange, type ReleaseModQuery, type ReleasePackName, type SpawnpointApi } from "../api/contract";
 import { demoSession } from "./data";
-import { clearDemoFlag, demoLatency } from "./flag";
+import { UNREACHABLE } from "../api/error-text";
+import { clearDemoFlag, demoFailure, demoLatency, type DemoFailureCall } from "./flag";
 import * as store from "./store";
 
 let accessInvitations: AccessInvitation[] = [];
 // The first snapshot is a boot answer; every one after it is a refresh.
 let snapshotServed = false;
+
+// A call the URL asked to fail answers as the API would (see demoFailure).
+function failWhenAsked(call: DemoFailureCall, role: string): void {
+  const kind = demoFailure(call);
+  if (kind === "forbidden") throw new ApiError("forbidden", `Your role cannot ${role}.`, { status: 403, code: "forbidden" });
+  if (kind === "unavailable") throw new ApiError("unavailable", UNREACHABLE, { status: 503 });
+}
 
 // The demo is a transport, not a second panel: it implements the same contract
 // the live API does, so every screen, every error path and every navigation is
@@ -156,6 +164,7 @@ export const demoApi: SpawnpointApi = {
   async loadControlPlane() {
     await demoLatency(snapshotServed ? "call" : "boot");
     snapshotServed = true;
+    failWhenAsked("worlds", "view server status");
     return store.snapshot();
   },
 
@@ -196,6 +205,7 @@ export const demoApi: SpawnpointApi = {
 
   async loadBackups(gameId: string, worldId: string) {
     await demoLatency();
+    failWhenAsked("backups", "read backups");
     return store.backups(gameId, worldId);
   },
 

@@ -30,6 +30,8 @@ const PROBE_SOURCE = readFileSync(join(here, "probe.js"), "utf8");
 // The faces CI gates.
 const SKINS = process.env.SKIN ? process.env.SKIN.split(",") : ["console", "terminal"];
 
+const FAILURE_BOX = { console: ".c-empty", terminal: ".t-notice" };
+
 const ROUTES = [
   ["landing", "/#/"],
   ["landing-signed-in", "/?demo&latency=0#/"],
@@ -48,6 +50,11 @@ const ROUTES = [
   // A promotion held at one step, and one that failed with a long cause; a failure shows once the operation has left the snapshot, so the gate waits for its mark.
   ["world-progress", "/?demo&latency=0&operation=running#/worlds/minecraft/minecraft-creative-5e1c9a07"],
   ["world-failed", "/?demo&latency=0&operation=failed#/worlds/minecraft/minecraft-creative-5e1c9a07", { console: "[data-status=error]", terminal: ".t-state-error" }],
+  // A call the URL fails as the API would (src/demo/flag.ts): a role without the permission, and an API that did not answer. The gate waits for the failure's own box.
+  ["world-backups-forbidden", `/?demo&latency=0&failure=forbidden.backups#${WORLD.split("#")[1]}/backups`, FAILURE_BOX],
+  ["world-backups-unavailable", `/?demo&latency=0&failure=unavailable.backups#${WORLD.split("#")[1]}/backups`, FAILURE_BOX],
+  ["worlds-forbidden", "/?demo&latency=0&failure=forbidden.worlds#/worlds/minecraft", FAILURE_BOX],
+  ["worlds-unavailable", "/?demo&latency=0&failure=unavailable.worlds#/worlds/minecraft", FAILURE_BOX],
   ["releases", "/?demo&latency=0#/releases/minecraft"],
   ["access-users", "/?demo&latency=0#/access/users"],
   ["access-roles", "/?demo&latency=0#/access/roles"],

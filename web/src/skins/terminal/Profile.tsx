@@ -9,7 +9,7 @@ import { Icon, type IconName } from "../../icons";
 import { PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../../lib/signin";
 import { DEFAULT_ACCENT, parseHex } from "../../styles/accent";
 import type { ThemePreference } from "../../telegram";
-import { Avatar, Choice, Choices, Empty, Field, Indicator, Key, Notice, Overflow, Page, Panel, SkeletonRows, TextInput, Verb, Verbs } from "./ui";
+import { Avatar, Choice, Choices, Empty, Field, Indicator, Key, LoadError, Overflow, Page, Panel, SkeletonRows, TextInput, Verb, Verbs } from "./ui";
 
 export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
   const { member, role, viewer } = model;
@@ -113,7 +113,7 @@ function LoginAccounts({ model }: Readonly<{ model: LoginAccountsModel }>) {
   return (
     <Panel name="Sign-in methods">
       {accounts.status === "loading" && <SkeletonRows label="Loading sign-in methods" rows={2} />}
-      {accounts.status === "error" && <Notice description={accounts.error} title="Sign-in methods are unavailable" tone="error" verbs={<Verb action={accounts.retry} size="small" />} />}
+      {accounts.status === "error" && <LoadError state={accounts} title="Sign-in methods could not be loaded" verb="read sign-in methods" />}
       {accounts.status === "ready" && accounts.value.length === 0 && <Empty title="No sign-in methods" />}
       {accounts.status === "ready" && accounts.value.length > 0 && (
         <ul className="t-list">

@@ -1,6 +1,7 @@
 import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../../model";
-import { apiFailure, type FileLink, type ReleaseDiff, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type SessionOperation, type SpawnpointApi, type StopPlayersPolicy, type WorldLifecycleAction, type WorldWhitelist } from "../contract";
-import { authorizedFetch } from "./transport";
+import type { ApiErrorBody, FileLink, ReleaseDiff, ReleaseModPage, ReleaseModQuery, ReleasePackName, SavedWhitelist, SessionOperation, SpawnpointApi, StopPlayersPolicy, WorldLifecycleAction, WorldWhitelist } from "../contract";
+import { API_ERROR_TEXT } from "../error-text";
+import { request, requestOrNull } from "./request";
 
 function controlPlaneSubscription(onInvalidated: () => void): () => void {
   let closed = false;
@@ -20,12 +21,11 @@ function controlPlaneSubscription(onInvalidated: () => void): () => void {
 
   const connect = async () => {
     try {
-      const response = await authorizedFetch("/control-plane/subscriptions", { method: "POST" });
-      if (!response.ok) throw new Error("Control-plane subscription was rejected.");
-      const body = await response.json() as { url?: unknown; ticket?: unknown };
-      if (typeof body.url !== "string" || !body.url.startsWith("wss://") || typeof body.ticket !== "string") {
-        throw new Error("Control-plane subscription was invalid.");
-      }
+      const body = await request<{ url?: string; ticket?: string }>("/control-plane/subscriptions", {
+        method: "POST", failure: "Control-plane subscription was rejected.",
+        valid: (answer) => typeof answer.url === "string" && answer.url.startsWith("wss://") && typeof answer.ticket === "string",
+      });
+      if (body.url === undefined || body.ticket === undefined) return;
       const url = new URL(body.url);
       url.searchParams.set("ticket", body.ticket);
       if (closed) return;
@@ -57,31 +57,6 @@ function controlPlaneSubscription(onInvalidated: () => void): () => void {
   };
 }
 
-// What a refused promotion means to the person who asked (lambdas/src/control-plane/promotion.ts).
-export const PROMOTION_REFUSALS: Readonly<Record<string, string>> = {
-  forbidden: "Only the Owner can update a world's release.",
-  invalid_release: "Choose a release.",
-  unknown_world: "This world no longer exists.",
-  world_archived: "This world is archived.",
-  promotion_needs_fleet_world: "Only a fleet world is updated from the panel.",
-  fleet_unavailable: "This deployment does not launch fleet hosts.",
-  preset_removed: "This world's preset is no longer in the catalog.",
-  release_not_available: "The selected release is no longer available. Refresh and try again.",
-  release_retired: "That release is retired or being retired. Choose another.",
-  release_not_ready: "That release is not built yet. Choose another.",
-  release_state_unavailable: "The world's release pointer cannot be read now. Try again.",
-  release_outdated: "That release was built from an older revision. Build the preset again.",
-  world_already_started: "This wipe has already started. Refresh to update it with a backup.",
-  session_active: "A session is starting or running. Stop it first.",
-  release_already_selected: "This release is already selected.",
-  world_changed: "The world changed while this was sent. Refresh and try again.",
-  release_already_active: "This release is already active.",
-  release_older_than_active: "This release is older than the active one. Restore a backup to go back.",
-  players_online: "Players are online. Ask them to log off first.",
-  operation_in_progress: "Another operation is running for this world.",
-  configured_host_unavailable: "The configured host is not available.",
-};
-
 function worldLifecyclePayload(action: WorldLifecycleAction, worldId: string, backupKey?: string, release?: string): Record<string, string | undefined> {
   if (action === "restore") return { backupKey };
   if (action === "purge") return { confirmation: worldId };
@@ -89,18 +64,31 @@ function worldLifecyclePayload(action: WorldLifecycleAction, worldId: string, ba
   return {};
 }
 
+const worldPath = (gameId: string, worldId: string) => `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}`;
+const releasePath = (gameId: string, presetId: string, release: string) => `/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}`;
+const READ_RELEASES = { forbidden: "Your role cannot read releases." };
+
+// Words that name the setting or the player come from the body's detail.
+function named(template: (value: string) => string, fallback: string, key: "name" | "setting") {
+  return (detail: ApiErrorBody) => {
+    const value = detail[key];
+    return typeof value === "string" ? template(value) : fallback;
+  };
+}
+
 export const worldsApi = {
   async requestReleaseBuild(gameId: string, presetId: string, profileDigest: string, retryRelease?: string): Promise<{ release: string; attempt: number }> {
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/builds`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ profileDigest, retryRelease }) });
-    if (!response.ok) throw await apiFailure(response, response.status === 409 ? "The build or its source changed, or is unavailable. Refresh before trying again." : "The build could not be requested. Refresh to check whether it was accepted before retrying.");
-    const result = await response.json() as { release?: unknown; attempt?: unknown };
-    if (typeof result.release !== "string" || !/^\d+\.\d+$/.test(result.release) || typeof result.attempt !== "number" || !Number.isSafeInteger(result.attempt) || result.attempt < 1) throw new Error("Spawnpoint returned an invalid build response. Refresh to check the build state.");
-    return { release: result.release, attempt: result.attempt };
+    const result = await request<{ release?: unknown; attempt?: unknown }>(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/builds`, {
+      method: "POST", body: { profileDigest, retryRelease },
+      failure: "The build could not be requested. Refresh to check whether it was accepted before retrying.",
+      refusals: { build_changed: "The build or its source changed, or is unavailable. Refresh before trying again." },
+      valid: (built) => typeof built.release === "string" && /^\d+\.\d+$/.test(built.release) && typeof built.attempt === "number" && Number.isSafeInteger(built.attempt) && built.attempt >= 1,
+    });
+    return { release: result.release as string, attempt: result.attempt as number };
   },
-  async loadControlPlane(): Promise<ControlPlaneSnapshot> {
-    const response = await authorizedFetch("/control-plane");
-    if (!response.ok) throw await apiFailure(response, response.status === 403 ? "Your role cannot view server status." : "The control-plane state could not be loaded.");
-    return response.json() as Promise<ControlPlaneSnapshot>;
+
+  loadControlPlane(): Promise<ControlPlaneSnapshot> {
+    return request<ControlPlaneSnapshot>("/control-plane", { failure: "The control-plane state could not be loaded.", refusals: { forbidden: "Your role cannot view server status." } });
   },
 
   subscribeControlPlane(onInvalidated: () => void): () => void {
@@ -108,169 +96,100 @@ export const worldsApi = {
   },
 
   async requestSessionOperation(gameId: string, worldId: string, action: SessionOperation, players?: StopPlayersPolicy) {
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/${action}`, {
-      method: "POST",
-      ...(players === "disconnect" ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ players }) } : {}),
+    const body = await request<{ result?: "requested" | "already_stopped"; operationId?: string }>(`${worldPath(gameId, worldId)}/${action}`, {
+      method: "POST", ...(players === "disconnect" ? { body: { players } } : {}),
+      failure: `The ${action} request could not be accepted.`,
+      refusals: { forbidden: players === "disconnect" ? "Your role cannot disconnect players." : `Your role cannot ${action} sessions.` },
+      valid: (answer) => answer.result !== undefined,
     });
-    const body = await response.json() as { error?: string; result?: "requested" | "already_stopped"; operationId?: string };
-    if (!response.ok) {
-      const messages: Record<string, string> = {
-        forbidden: players === "disconnect" ? "Your role cannot disconnect players." : `Your role cannot ${action} sessions.`,
-        unsupported_world: "This world is not connected to a session workflow yet.",
-        operation_in_progress: "Another control-plane operation is already running.",
-        host_not_unique: "Spawnpoint could not select exactly one compatible host.",
-        host_transitioning: "The compute host is already changing state. Refresh and try again shortly.",
-        host_already_running: "The configured host is running another session. Stop it first, or move this world to the fleet.",
-        session_transitioning: "This world's session is already starting, running or stopping.",
-        world_not_active: "This world is not the one running. Refresh to see which is.",
-        active_session_unavailable: "Spawnpoint has no session on record for this world.",
-        fleet_unavailable: "This deployment does not launch fleet hosts.",
-        configured_host_unavailable: "The configured host is not available.",
-      };
-      throw new Error(messages[body.error ?? ""] ?? `The ${action} request could not be accepted.`);
-    }
-    if (!body.result) throw new Error("Spawnpoint returned an invalid operation response.");
-    return { result: body.result, ...(body.operationId ? { operationId: body.operationId } : {}) };
+    return { result: body.result as "requested" | "already_stopped", ...(body.operationId ? { operationId: body.operationId } : {}) };
   },
 
   async requestPromotion(gameId: string, worldId: string, release: string) {
-    const response = await authorizedFetch(
-      `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/promote`,
-      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ release }) },
-    );
-    const body = await response.json() as { error?: string; result?: "requested" | "switched"; operationId?: string };
-    if (response.ok && body.result === "switched") return { result: "switched" as const };
-    if (!response.ok || body.result !== "requested" || body.operationId === undefined) {
-      throw new Error(PROMOTION_REFUSALS[body.error ?? ""] ?? "The release update could not be accepted.");
-    }
-    return { result: body.result, operationId: body.operationId };
+    const body = await request<{ result?: "requested" | "switched"; operationId?: string }>(`${worldPath(gameId, worldId)}/promote`, {
+      method: "POST", body: { release },
+      failure: "The release update could not be accepted.",
+      refusals: { forbidden: "Only the Owner can update a world's release." },
+      valid: (answer) => answer.result === "switched" || (answer.result === "requested" && answer.operationId !== undefined),
+    });
+    if (body.result === "switched") return { result: "switched" as const };
+    return { result: "requested" as const, operationId: body.operationId as string };
   },
 
   async requestWorldLifecycle(gameId: string, worldId: string, action: WorldLifecycleAction, backupKey?: string, release?: string) {
-    const response = await authorizedFetch(
-      `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/${action === "regenerate" ? "wipe" : action}`,
-      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(worldLifecyclePayload(action, worldId, backupKey, release)) },
-    );
-    const body = await response.json() as { error?: string; result?: "requested"; operationId?: string };
-    if (!response.ok || body.result !== "requested" || body.operationId === undefined) {
-      const messages: Record<string, string> = {
-        forbidden: "Your role cannot manage this world.",
-        invalid_purge_confirmation: "Type the exact world ID before permanently deleting it.",
-        world_not_archived: "Archive this world before permanently deleting it.",
-        invalid_backup_key: "This backup does not belong to the selected world.",
-        unknown_generation: "This backup no longer matches a wipe in this world.",
-        release_missing: "The release required by this backup is missing. The world was not changed.",
-        unknown_materialized_world: "Create this world with its first Start before managing its lifecycle.",
-        operation_in_progress: "Another control-plane operation is already running.",
-        host_not_unique: "Spawnpoint could not select exactly one compatible host.",
-        host_transitioning: "The compute host is already changing state. Try again shortly.",
-      };
-      throw new Error(messages[body.error ?? ""] ?? `The ${action} request could not be accepted.`);
-    }
-    return { result: body.result, operationId: body.operationId };
+    const body = await request<{ result?: "requested"; operationId?: string }>(`${worldPath(gameId, worldId)}/${action === "regenerate" ? "wipe" : action}`, {
+      method: "POST", body: worldLifecyclePayload(action, worldId, backupKey, release),
+      failure: `The ${action} request could not be accepted.`,
+      refusals: { forbidden: "Your role cannot manage this world." },
+      valid: (answer) => answer.result === "requested" && answer.operationId !== undefined,
+    });
+    return { result: body.result as "requested", operationId: body.operationId as string };
   },
 
   async requestCreateWorld(gameId: string, presetId: string, displayName: string, release: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external") {
-    const response = await authorizedFetch(
-      `/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/worlds`,
-      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ displayName, release, placement, connectivity, ...(auth ? { auth } : {}) }) },
-    );
-    const body = await response.json() as { error?: string; world?: { id: string; displayName: string } };
-    if (!response.ok || body.world === undefined) {
-      const messages: Record<string, string> = {
-        forbidden: "Your role cannot create worlds.",
-        invalid_world_name: "Enter a name between 1 and 80 characters.",
-        preset_release_not_ready: "This preset has no ready release yet.",
-        release_not_available: "The selected release is no longer available. Refresh and try again.",
-        release_outdated: "That release was built from an older revision. Build the preset again.",
-        invalid_world_connectivity: "This network is not available for the current host mode. Refresh and choose another connection.",
-      };
-      throw new Error(messages[body.error ?? ""] ?? "The world could not be created.");
-    }
-    return body.world;
+    const body = await request<{ world?: { id: string; displayName: string } }>(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/worlds`, {
+      method: "POST", body: { displayName, release, placement, connectivity, ...(auth ? { auth } : {}) },
+      failure: "The world could not be created.",
+      refusals: { forbidden: "Your role cannot create worlds." },
+      valid: (answer) => answer.world !== undefined,
+    });
+    return body.world as { id: string; displayName: string };
   },
 
   async requestUpdateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external") {
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/settings`, {
-      method: "PUT", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ placement, connectivity, ...(auth ? { auth } : {}) }),
+    await request<unknown>(`${worldPath(gameId, worldId)}/settings`, {
+      method: "PUT", body: { placement, connectivity, ...(auth ? { auth } : {}) },
+      failure: "World settings could not be saved.",
+      refusals: { forbidden: "Your role cannot change world settings.", invalid_world_connectivity: "This host and network combination is not available in this deployment." },
     });
-    if (response.ok) return;
-    const body = await response.json().catch(() => ({})) as { error?: string };
-    const messages: Record<string, string> = {
-      forbidden: "Your role cannot change world settings.",
-      world_session_active: "Stop the world and wait for the current operation to finish before changing its host or network.",
-      world_settings_conflict: "The world changed while you were editing. Refresh and try again.",
-      invalid_world_connectivity: "This host and network combination is not available in this deployment.",
-      unknown_world: "This world no longer exists.",
-    };
-    throw new Error(messages[body.error ?? ""] ?? "World settings could not be saved.");
   },
 
   async requestPackDownload(gameId: string, worldId: string) {
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/pack`);
-    const body = await response.json() as { error?: string; release?: string; url?: string };
-    if (!response.ok || body.url === undefined || body.release === undefined) {
-      const messages: Record<string, string> = {
-        forbidden: "Your role cannot read this world's connection details.",
-        no_release_pointer: "This world has no release yet, so there is no pack to install.",
-        no_release_selected: "This world's release pointer names no release yet.",
-        no_pack_published: "This release was published before packs existed. Ask the owner to publish one.",
-      };
-      throw new Error(messages[body.error ?? ""] ?? "The pack link could not be created.");
-    }
-    return { release: body.release, url: body.url };
+    const body = await request<{ release?: string; url?: string }>(`${worldPath(gameId, worldId)}/pack`, {
+      failure: "The pack link could not be created.",
+      refusals: { forbidden: "Your role cannot read this world's connection details.", no_pack_published: "This release was published before packs existed. Ask the owner to publish one." },
+      valid: (answer) => answer.url !== undefined && answer.release !== undefined,
+    });
+    return { release: body.release as string, url: body.url as string };
   },
 
   async updateGameSettings(gameId: string, worldId: string, values: Readonly<Record<string, SettingValue>>): Promise<WorldGameSettings> {
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/game-settings`, {
-      method: "PUT", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ values }),
+    const body = await request<Partial<WorldGameSettings>>(`${worldPath(gameId, worldId)}/game-settings`, {
+      method: "PUT", body: { values },
+      failure: "Game settings could not be saved.",
+      refusals: {
+        forbidden: "Your role cannot change this world's game settings.",
+        unknown_world: "This world has no record to keep settings in.",
+        invalid_game_setting: named((setting) => `${setting} has a value the game does not accept.`, API_ERROR_TEXT.invalid_game_setting, "setting"),
+        unknown_game_setting: named((setting) => `${setting} is not one this game offers. Refresh and try again.`, API_ERROR_TEXT.unknown_game_setting, "setting"),
+      },
+      valid: (answer) => answer.values !== undefined,
     });
-    const body = await response.json().catch(() => ({})) as { error?: string; setting?: string } & Partial<WorldGameSettings>;
-    if (response.ok && body.values !== undefined) return { values: body.values, updatedAt: body.updatedAt ?? null };
-    const messages: Record<string, string> = {
-      forbidden: "Your role cannot change this world's game settings.",
-      world_settings_conflict: "The world changed while you were editing. Refresh and try again.",
-      world_archived: "This world is archived. Restore a backup before changing its settings.",
-      unknown_world: "This world has no record to keep settings in.",
-      invalid_game_setting: `${body.setting ?? "A setting"} has a value the game does not accept.`,
-      unknown_game_setting: `${body.setting ?? "A setting"} is not one this game offers. Refresh and try again.`,
-    };
-    throw new Error(messages[body.error ?? ""] ?? "Game settings could not be saved.");
+    return { values: body.values ?? {}, updatedAt: body.updatedAt ?? null };
   },
 
   async loadWhitelist(gameId: string, worldId: string): Promise<WorldWhitelist> {
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/whitelist`);
-    const body = await response.json().catch(() => ({})) as { error?: string } & Partial<WorldWhitelist>;
-    if (!response.ok || body.names === undefined) {
-      const messages: Record<string, string> = {
-        forbidden: "Your role cannot manage whitelists.",
-        whitelist_unreadable: "The running server did not answer with its whitelist. Try again.",
-      };
-      throw await apiFailure(response, messages[body.error ?? ""] ?? "The whitelist could not be read.", body);
-    }
-    return { managed: body.managed === true, names: body.names, updatedAt: body.updatedAt ?? null, updatedBy: body.updatedBy ?? null };
+    const body = await request<Partial<WorldWhitelist>>(`${worldPath(gameId, worldId)}/whitelist`, {
+      failure: "The whitelist could not be read.",
+      refusals: { forbidden: "Your role cannot manage whitelists." },
+      valid: (answer) => answer.names !== undefined,
+    });
+    return { managed: body.managed === true, names: body.names ?? [], updatedAt: body.updatedAt ?? null, updatedBy: body.updatedBy ?? null };
   },
 
   async updateWhitelist(gameId: string, worldId: string, names: readonly string[]): Promise<SavedWhitelist> {
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/whitelist`, {
-      method: "PUT", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ names }),
+    const body = await request<Partial<SavedWhitelist>>(`${worldPath(gameId, worldId)}/whitelist`, {
+      method: "PUT", body: { names },
+      failure: "The whitelist could not be saved.",
+      refusals: {
+        forbidden: "Your role cannot manage whitelists.",
+        invalid_player_name: named((name) => `${name} is not a Minecraft name: 3 to 16 letters, digits or underscores.`, API_ERROR_TEXT.invalid_player_name, "name"),
+        duplicate_player_name: named((name) => `${name} is already on the list.`, API_ERROR_TEXT.duplicate_player_name, "name"),
+        world_archived: "This world is archived. Restore a backup before changing its whitelist.",
+      },
+      valid: (answer) => answer.names !== undefined,
     });
-    const body = await response.json().catch(() => ({})) as { error?: string; name?: string } & Partial<SavedWhitelist>;
-    if (response.ok && body.names !== undefined) {
-      return { managed: true, names: body.names, updatedAt: body.updatedAt ?? null, updatedBy: body.updatedBy ?? null, applied: body.applied === "reloading" ? "reloading" : "next_start" };
-    }
-    const messages: Record<string, string> = {
-      forbidden: "Your role cannot manage whitelists.",
-      invalid_player_name: `${body.name ?? "That"} is not a Minecraft name: 3 to 16 letters, digits or underscores.`,
-      duplicate_player_name: `${body.name ?? "That name"} is already on the list.`,
-      whitelist_too_long: "A whitelist holds at most 200 names.",
-      world_archived: "This world is archived. Restore a backup before changing its whitelist.",
-      world_settings_conflict: "The world changed while you were editing. Refresh and try again.",
-    };
-    throw new Error(messages[body.error ?? ""] ?? "The whitelist could not be saved.");
+    return { managed: true, names: body.names ?? [], updatedAt: body.updatedAt ?? null, updatedBy: body.updatedBy ?? null, applied: body.applied === "reloading" ? "reloading" : "next_start" };
   },
 
   async loadReleaseMods(gameId: string, presetId: string, release: string, query: ReleaseModQuery): Promise<ReleaseModPage> {
@@ -278,13 +197,13 @@ export const worldsApi = {
     const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize), sort: query.sort, order: query.order });
     if (query.search !== "") params.set("query", query.search);
     if (query.source !== null) params.set("source", query.source);
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}?${params}`);
-    const body = await response.json().catch(() => ({})) as { error?: string } & Partial<ReleaseModPage>;
-    if (!response.ok || body.mods === undefined) {
-      const messages: Record<string, string> = { forbidden: "Your role cannot read releases.", unknown_release: `Release ${release} is not in the store.` };
-      throw await apiFailure(response, messages[body.error ?? ""] ?? "The release's mods could not be read.", body);
-    }
-    const total = body.total ?? body.mods.length;
+    const body = await request<Partial<ReleaseModPage>>(`${releasePath(gameId, presetId, release)}?${params}`, {
+      failure: "The release's mods could not be read.",
+      refusals: { ...READ_RELEASES, unknown_release: `Release ${release} is not in the store.` },
+      valid: (answer) => answer.mods !== undefined,
+    });
+    const mods = body.mods ?? [];
+    const total = body.total ?? mods.length;
     return {
       release: body.release ?? release,
       split: body.split ?? false,
@@ -294,40 +213,29 @@ export const worldsApi = {
       pages: body.pages ?? 1,
       pageSize: body.pageSize ?? query.pageSize,
       sources: body.sources ?? [],
-      mods: body.mods,
+      mods,
     };
   },
 
-  async loadReleaseDiff(gameId: string, presetId: string, release: string, from: string | null): Promise<ReleaseDiff | null> {
+  loadReleaseDiff(gameId: string, presetId: string, release: string, from: string | null): Promise<ReleaseDiff | null> {
     const query = from === null ? "" : `?from=${encodeURIComponent(from)}`;
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}/diff${query}`);
-    const body = await response.json().catch(() => ({})) as Partial<ReleaseDiff> & { error?: string };
-    if (response.status === 404 && body.error === "no_plan") return null;
-    if (!response.ok || body.serverMods === undefined) {
-      const messages: Record<string, string> = { forbidden: "Your role cannot read releases.", unknown_release: `Release ${from ?? release} is not in the store.` };
-      throw await apiFailure(response, messages[body.error ?? ""] ?? "The release's changes could not be read.", body);
-    }
-    return body as ReleaseDiff;
+    return requestOrNull<ReleaseDiff>(`${releasePath(gameId, presetId, release)}/diff${query}`, {
+      failure: "The release's changes could not be read.",
+      refusals: { ...READ_RELEASES, unknown_release: `Release ${from ?? release} is not in the store.` },
+      valid: (answer) => answer.serverMods !== undefined,
+    }, (error) => error.status === 404 && error.code === "no_plan");
   },
 
-  async requestModDownload(gameId: string, presetId: string, release: string, sha256: string): Promise<FileLink> {
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}/mods/${encodeURIComponent(sha256)}`);
-    const body = await response.json().catch(() => ({})) as { error?: string; url?: string; expiresIn?: number };
-    if (!response.ok || body.url === undefined) {
-      const messages: Record<string, string> = { forbidden: "Your role cannot read releases.", unknown_mod: "This release no longer lists that mod." };
-      throw new Error(messages[body.error ?? ""] ?? "The download link could not be created.");
-    }
-    return { url: body.url, expiresIn: body.expiresIn ?? 0 };
+  requestModDownload(gameId: string, presetId: string, release: string, sha256: string): Promise<FileLink> {
+    return fileLink(`${releasePath(gameId, presetId, release)}/mods/${encodeURIComponent(sha256)}`, READ_RELEASES);
   },
 
-  async requestReleasePack(gameId: string, presetId: string, release: string, pack: ReleasePackName): Promise<FileLink> {
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}/packs/${pack}`);
-    const body = await response.json().catch(() => ({})) as { error?: string; url?: string; expiresIn?: number };
-    if (!response.ok || body.url === undefined) {
-      const messages: Record<string, string> = { forbidden: "Your role cannot read releases.", no_pack_published: `Release ${release} has no ${pack} pack yet.` };
-      throw new Error(messages[body.error ?? ""] ?? "The download link could not be created.");
-    }
-    return { url: body.url, expiresIn: body.expiresIn ?? 0 };
+  requestReleasePack(gameId: string, presetId: string, release: string, pack: ReleasePackName): Promise<FileLink> {
+    return fileLink(`${releasePath(gameId, presetId, release)}/packs/${pack}`, { ...READ_RELEASES, no_pack_published: `Release ${release} has no ${pack} pack yet.` });
   },
-
 } satisfies Partial<SpawnpointApi>;
+
+async function fileLink(path: string, refusals: Readonly<Record<string, string>>): Promise<FileLink> {
+  const body = await request<{ url?: string; expiresIn?: number }>(path, { failure: "The download link could not be created.", refusals, valid: (answer) => answer.url !== undefined });
+  return { url: body.url as string, expiresIn: body.expiresIn ?? 0 };
+}

@@ -1,6 +1,6 @@
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { WhitelistModel, WhitelistRow } from "../../core/models";
-import { Col, Empty, Field, Notice, Overflow, Panel, Person, Table, TextInput, Verb } from "./ui";
+import { Col, Empty, Field, LoadError, Overflow, Panel, Person, Table, TextInput, Verb } from "./ui";
 
 // A world's whitelist (ADR-0066): who may join, kept on the world's record so
 // it follows the world to every host.
@@ -33,7 +33,7 @@ export function WhitelistPanel({ model }: Readonly<{ model: WhitelistModel }>) {
       </form>
     </Panel>
     {list.status === "error"
-      ? <Notice description={list.error} title="The whitelist is unavailable" tone="error" verbs={<Verb action={list.retry} size="small" />} />
+      ? <LoadError state={list} title="The whitelist could not be loaded" verb="read the whitelist" />
       : <Panel description={changed} flush name="Whitelist">
         <Table
           columns={columns}

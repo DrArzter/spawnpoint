@@ -393,6 +393,8 @@ export type ReleasesModel = Readonly<{
 // --- access ------------------------------------------------------------------
 
 export type CandidateRow = Readonly<{
+  /** The candidate's one key (platform and platform user id): rows, selections and role choices use it. */
+  id: string;
   candidate: AccessCandidate;
   account: string;
   since: string;

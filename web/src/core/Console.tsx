@@ -14,7 +14,7 @@ import { releaseBuildCopy } from "./release-builds";
 import { startableReleases } from "./presets";
 import { presetBuildStates, sessionStatus, worldStatus, type StatusDescriptor } from "./status";
 import { useConsole, type ConsoleController } from "./useConsole";
-import { useAccessRequests, useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseChanges, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
+import { accessRequests, useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseChanges, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
 import { newestRunning, progressModel, useOperationProgress } from "./operation-progress";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, Notice, OperationRow, ReleasesModel, ShellModel, WorldModel, WorldRow, WorldsModel } from "./models";
@@ -116,14 +116,15 @@ function stateNotice(kind: ApiFailureKind, error: string, retry: () => void): No
 }
 
 function WorldsPage({ console, skin }: Controlled) {
-  const { game, snapshot, listStatus, error, errorKind, granted, sharedSession, serverState, fleetOverview, route, notify, setRequestCount } = console;
+  const { game, snapshot, listStatus, error, errorKind, granted, sharedSession, serverState, fleetOverview, route, directory } = console;
   const loading = listStatus === "loading";
   const canManage = granted.has("world.manage");
   const readyPreset = game?.presets.some((preset) => startableReleases(preset).length > 0) ?? false;
   const view = route.worldsView;
-  const requests = useAccessRequests(view === "overview" && granted.has("access.manage"), notify);
-  const requestCount = requests.requests?.status === "ready" ? requests.requests.value.length : null;
-  useEffect(() => { if (requestCount !== null) setRequestCount(requestCount); }, [requestCount, setRequestCount]);
+  const requests = accessRequests(directory);
+  const { refresh: refreshAccess } = directory;
+  const showRequests = view === "overview" && granted.has("access.manage");
+  useEffect(() => { if (showRequests) refreshAccess(); }, [showRequests, refreshAccess]);
   const viewHref = (worldsView: WorldsView) => routeHash({ page: "worlds", accessTab: "users", gameId: game?.id ?? null, worldId: null, worldsView });
   const model: WorldsModel = {
     status: listStatus,
@@ -141,7 +142,7 @@ function WorldsPage({ console, skin }: Controlled) {
     views: { overview: viewHref("overview"), list: viewHref("list") },
     operations: gameOperationRows(game, snapshot),
     builds: (game?.presets ?? []).map((preset) => ({ preset, ...presetBuildStates(preset) })),
-    requests: requests.requests,
+    requests: showRequests ? requests.requests : null,
     requestActions: requests.actions,
   };
   return <skin.Worlds model={model} />;
@@ -392,19 +393,17 @@ function createWorldHint(canManage: boolean, ready: boolean): string {
 }
 
 function AccessPage({ console, skin }: Controlled) {
-  const { games, members, setMembers, roleDirectory, setRoleDirectory, bootstrap, granted, route, navigate, notify } = console;
-  const rolesModel = useRoles(setRoleDirectory);
-  const users = useUsers({ bootstrap, canInvite: granted.has("access.invite"), members, directory: roleDirectory, onMembersChange: setMembers, notify });
+  const { games, directory, bootstrap, granted, route, navigate, notify } = console;
+  const rolesModel = useRoles(directory);
+  const users = useUsers({ bootstrap, canInvite: granted.has("access.invite"), directory, notify });
   const notifications = useNotifications(games, notify);
-  const candidates = users.candidates;
-  const requestCount = candidates.status === "ready" ? candidates.value.length : null;
-  const { setRequestCount } = console;
-  useEffect(() => { if (requestCount !== null) setRequestCount(requestCount); }, [requestCount, setRequestCount]);
+  const { refresh: refreshAccess } = directory;
+  useEffect(() => { refreshAccess(); }, [refreshAccess]);
   const model: AccessModel = {
     tab: route.accessTab,
     setTab: (tab) => navigate({ page: "access", accessTab: tab }),
-    roleCount: roleDirectory.roles.length,
-    catalogue: roleDirectory.permissions,
+    roleCount: directory.roles.roles.length,
+    catalogue: directory.roles.permissions,
     users,
     roles: rolesModel,
     notifications,
@@ -413,8 +412,8 @@ function AccessPage({ console, skin }: Controlled) {
 }
 
 function ProfilePage({ console, skin, looks }: Controlled & Readonly<{ looks: LookChoices }>) {
-  const { members, session, roleDirectory, viewer, appearance, notify } = console;
-  const member = members.find((item) => item.id === session.identity.id) ?? members[0]!;
+  const { directory, session, viewer, appearance, notify } = console;
+  const member = directory.members.find((item) => item.id === session.identity.id) ?? directory.members[0]!;
   const loginAccounts = useLoginAccounts(member.name, notify);
   const open = console.openInBrowser;
   const look: LookModel = {
@@ -423,7 +422,7 @@ function ProfilePage({ console, skin, looks }: Controlled & Readonly<{ looks: Lo
   };
   return <skin.Profile model={{
     member,
-    role: roleDirectory.roles.find((role) => role.id === member.roleId),
+    role: directory.roles.roles.find((role) => role.id === member.roleId),
     viewer,
     appearance,
     look,

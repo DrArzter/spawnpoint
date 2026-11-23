@@ -68,6 +68,7 @@ test("a role's permissions read in catalogue order with the catalogue's words", 
 });
 
 const candidate: CandidateRow = {
+  id: "telegram:42",
   candidate: { platform: "telegram", platformUserId: "42", displayName: "Nikita", username: "nikita", email: null, photoUrl: null, status: "REQUESTED", firstSeenAt: "2026-09-14T18:10:00Z", lastSeenAt: "2026-09-14T18:10:00Z", requestedAt: "2026-09-14T18:10:00Z" },
   account: "@nikita",
   since: "Requested access Sep 14",
@@ -145,4 +146,15 @@ test("console: the roles matrix lists every catalogue permission, grouped, also 
   }
   assert.match(markup, />Group One</);
   assert.match(markup, />Group Two</);
+});
+
+test("both skins key a waiting account by the row's id, so two platforms with one user id stay two rows", () => {
+  const other: CandidateRow = { ...candidate, id: "discord:42", candidate: { ...candidate.candidate, platform: "discord", displayName: "Second" } };
+  const two = { ...model, users: { ...model.users, candidates: { status: "ready" as const, value: [candidate, other] } } };
+  const console = renderToStaticMarkup(createElement(consoleSkin.Access, { model: two }));
+  assert.match(console, /requests\/telegram%3A42/);
+  assert.match(console, /requests\/discord%3A42/);
+  const terminal = renderToStaticMarkup(createElement(SKINS.find((skin) => skin.name === "Terminal")!.Access, { model: two }));
+  assert.match(terminal, /Nikita/);
+  assert.match(terminal, /Second/);
 });

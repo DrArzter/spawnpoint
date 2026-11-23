@@ -6,8 +6,8 @@ import { ActiveSession, endSession, loadAppearance, loadControlPlane, requestBac
 import { startableReleases } from "./presets";
 import { sessionStatus } from "./status";
 import { formatDateTime } from "../lib/format";
-import type { RoleDirectory } from "./roles";
-import type { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, ServerState, SettingValue, World } from "../model";
+import { useAccessDirectory, type AccessDirectory } from "./access-directory";
+import type { ControlPlaneSnapshot, Game, OwnerBootstrap, Page, Preset, ServerState, SettingValue, World } from "../model";
 import { routeHash, type AppRoute } from "../routing";
 import { configuredHosts, deriveSharedHostSession, gameOperations, nextReadingExpiry, worldSessionActive, type SharedHostSession } from "../session";
 import { NO_PENDING, pendingOf, withoutPending, withPending, type Confirmation, type Pending, type PendingMap, type SessionAction, type WorldActionKind } from "../shell/actions";
@@ -149,16 +149,12 @@ export type ConsoleController = Readonly<{
   pending: PendingMap;
   refresh: (silent?: boolean) => Promise<void>;
   refreshing: boolean;
-  /** The open access requests a page last read, for the shell's count. */
-  setRequestCount: (count: number | null) => void;
   worldCallbacks: WorldCallbacks;
   requestSession: (game: Game, world: World, action: SessionAction) => void;
   requestCreateWorld: (game: Game, preset?: Preset | null) => void;
   requestBuild: (game: Game, preset: Preset) => void;
-  members: Member[];
-  setMembers: (members: Member[]) => void;
-  roleDirectory: RoleDirectory;
-  setRoleDirectory: (directory: RoleDirectory) => void;
+  /** Who has access, who waits, and the roles: one answer for the rail's count, the game home and the Access page. */
+  directory: AccessDirectory;
   bootstrap: OwnerBootstrap;
   appearance: AppearanceModel;
   signOut: () => void;
@@ -217,7 +213,6 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
   const [savingWorldSettings, setSavingWorldSettings] = useState(false);
   const [editingGameSettings, setEditingGameSettings] = useState<{ game: Game; world: World } | null>(null);
   const [savingGameSettings, setSavingGameSettings] = useState(false);
-  const [requestCount, setRequestCount] = useState<number | null>(null);
 
   const granted = useMemo(() => new Set([...(session.role?.permissions ?? []), ...session.identity.directGrants]), [session]);
   const capabilities = useMemo(() => new Set(session.capabilities), [session]);
@@ -234,13 +229,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     .map((item) => ({ id: item.id, label: item.label, href: scoped(item.id) }));
   const page: Page = route.page === "profile" || navItems.some((item) => item.id === route.page) ? route.page : "worlds";
 
-  const [members, setMembers] = useState<Member[]>(() => [{ id: session.identity.id, name: session.identity.displayName, roleId: session.identity.roleId, links: [], canDelete: false }]);
-  // Until the role list loads, the signed-in role alone, so the profile can name it. Nothing in it is offered for choosing.
-  const [roleDirectory, setRoleDirectory] = useState<RoleDirectory>(() => ({
-    roles: session.role ? [{ id: session.role.id, name: session.role.name, description: "Current signed-in role", permissions: session.role.permissions, builtIn: false, protected: false, assignable: false }] : [],
-    permissions: [],
-    defaultRoleId: null,
-  }));
+  const directory = useAccessDirectory({ session, canRead: granted.has("access.read"), canManage: granted.has("access.manage"), notify });
   const viewer = viewerOf(session);
   const bootstrap = bootstrapOf(session);
 
@@ -480,7 +469,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     openProfile: action("shell.profile", "Open my profile", () => navigate({ page: "profile" }), { hint: viewer.displayName }),
     overview: { id: "worlds", label: "Home", href: routeHash({ page: "worlds", accessTab: route.accessTab, gameId: game?.id ?? null, worldId: null, worldsView: "overview" }), current: page === "worlds" && !route.worldId && route.worldsView === "overview" },
     ...(snapshot ? { observedAtIso: snapshot.observedAt } : {}),
-    requests: granted.has("access.manage") ? requestCount : null,
+    requests: directory.requestCount,
   };
 
   return {
@@ -508,7 +497,6 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     pending,
     refresh,
     refreshing: pendingOf(pending, "refresh") !== null,
-    setRequestCount,
     worldCallbacks,
     requestSession: (target, targetWorld, sessionAction) => setConfirmation({
       kind: "session", action: sessionAction, game: target, world: targetWorld,
@@ -516,10 +504,7 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     }),
     requestCreateWorld: (target, preset) => setCreating({ game: target, preset: preset ?? target.presets.find((item) => startableReleases(item).length > 0) ?? null }),
     requestBuild: (target, preset) => setConfirmation({ kind: "build", game: target, preset }),
-    members,
-    setMembers,
-    roleDirectory,
-    setRoleDirectory,
+    directory,
     bootstrap,
     appearance: appearanceModel,
     signOut: () => void endSession(),

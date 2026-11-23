@@ -14,3 +14,13 @@ variable "aws_profile" {
   type        = string
   default     = "spawnpoint"
 }
+
+variable "github_repository_subject" {
+  description = "OIDC subject of this repository without its environment: `repo:owner/name`, or `repo:owner@id/name@id` when the repository uses immutable ids."
+  type        = string
+
+  validation {
+    condition     = can(regex("^repo:[^:]+$", var.github_repository_subject))
+    error_message = "github_repository_subject must be repo:<owner>/<name> with no environment or ref."
+  }
+}

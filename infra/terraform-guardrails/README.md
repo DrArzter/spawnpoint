@@ -10,6 +10,11 @@ that separation is a new state key, and therefore a new lock-cleanup rule in
 Owns: one SNS topic (`spawnpoint-alert`) with a service-scoped access policy, its email subscription, an
 `aws_budgets_budget` with a forecasted and an actual threshold, and an optional cost anomaly monitor and subscription.
 
+Cost anomaly detection needs Cost Explorer, which a new account does not have for up to a day. In CI,
+`scripts/_anomaly-detection.sh` decides `enable_anomaly_detection`: the `SPAWNPOINT_ANOMALY_DETECTION` repository
+variable when set; otherwise on when the monitor is already in state, or when Cost Explorer answers. The first deploy of
+a new account therefore creates the budget and the topic, and a later deploy adds the monitor.
+
 ## Order
 
 `bootstrap` → **`guardrails`** → `storage` → `host`.

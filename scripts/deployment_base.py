@@ -23,10 +23,8 @@ from deployment_plan import validated_revision
 # deploy-production.yml names each run after the revision it deploys.
 TITLE = re.compile(r"Deploy production ([0-9a-f]{40})")
 
-# Before any run carried its revision in its title: the last revision every
-# production unit is known to have reached (#98). The deploys after it skipped
-# or failed the access API root.
-FIRST_BASE = "a0caabcb269b770b97562f79760198bb08e213a3"
+# deployment_plan.py reads this base as "nothing is deployed": every unit.
+NOTHING_DEPLOYED = "0" * 40
 
 
 def last_deployed(titles: Iterable[str]) -> str | None:
@@ -41,14 +39,16 @@ def choose_base(
     titles: Iterable[str],
     head: str,
     is_ancestor: Callable[[str, str], bool],
-    first_base: str = FIRST_BASE,
     main: str = "HEAD",
 ) -> tuple[str, str]:
     head = validated_revision(head)
     # The checkout is main: a commit outside it, such as a fork's, is never deployed.
     if not is_ancestor(head, main):
         raise ValueError(f"{head} is not on main")
-    deployed = last_deployed(titles) or first_base
+    deployed = last_deployed(titles)
+    if deployed is None:
+        # A new installation: no deploy has succeeded, so no unit can be skipped.
+        return NOTHING_DEPLOYED, "no deploy has succeeded yet; deploying every unit"
     if deployed == head or is_ancestor(head, deployed):
         # A rerun of an older deploy must not put older code back.
         return head, f"{deployed} is deployed and already contains {head}; nothing to deploy"

@@ -7,6 +7,9 @@
       "Type": "Pass",
       "Parameters": {
         "request.$": "$",
+        "defaults": {
+          "players": "refuse"
+        },
         "polls": {
           "ssm": 0,
           "command": 0,
@@ -14,7 +17,36 @@
         },
         "observed": {}
       },
-      "Next": "Describe Initial Instance"
+      "Next": "Apply Request Defaults"
+    },
+    "Apply Request Defaults": {
+      "Type": "Pass",
+      "Comment": "A caller that names no players policy refuses a stop while players are online.",
+      "Parameters": {
+        "request.$": "States.JsonMerge($.defaults, $.request, false)",
+        "polls.$": "$.polls",
+        "observed.$": "$.observed"
+      },
+      "Next": "Route Players Policy"
+    },
+    "Route Players Policy": {
+      "Type": "Choice",
+      "Comment": "The policy reaches the host's shell command, so only the two known words pass.",
+      "Choices": [
+        {
+          "Or": [
+            { "Variable": "$.request.players", "StringEquals": "refuse" },
+            { "Variable": "$.request.players", "StringEquals": "disconnect" }
+          ],
+          "Next": "Describe Initial Instance"
+        }
+      ],
+      "Default": "Unknown Players Policy"
+    },
+    "Unknown Players Policy": {
+      "Type": "Fail",
+      "Error": "Spawnpoint.InvalidStopRequest",
+      "Cause": "The players policy must be refuse or disconnect; EC2 was not touched."
     },
     "Describe Initial Instance": {
       "Type": "Task",
@@ -125,7 +157,7 @@
         "DocumentName": "AWS-RunShellScript",
         "InstanceIds.$": "States.Array($.request.instanceId)",
         "Parameters": {
-          "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} SPAWNPOINT_SLOT={} /srv/spawnpoint/app/server/scripts/stop-session.sh', $.request.worldId, $.request.slot))"
+          "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} SPAWNPOINT_SLOT={} SPAWNPOINT_STOP_PLAYERS={} /srv/spawnpoint/app/server/scripts/stop-session.sh', $.request.worldId, $.request.slot, $.request.players))"
         },
         "TimeoutSeconds": 900,
         "CloudWatchOutputConfig": {
@@ -143,7 +175,7 @@
         "DocumentName": "AWS-RunShellScript",
         "InstanceIds.$": "States.Array($.request.instanceId)",
         "Parameters": {
-          "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} /srv/spawnpoint/app/server/scripts/stop-session.sh', $.request.worldId))"
+          "commands.$": "States.Array('set -euo pipefail', States.Format('WORLD_ID={} SPAWNPOINT_STOP_PLAYERS={} /srv/spawnpoint/app/server/scripts/stop-session.sh', $.request.worldId, $.request.players))"
         },
         "TimeoutSeconds": 900,
         "CloudWatchOutputConfig": {

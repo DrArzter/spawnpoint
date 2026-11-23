@@ -127,7 +127,7 @@ const START: Table = {
 };
 
 const STOP: Table = {
-  "stop.checking": ["Initialize", "Read Lifecycle", "Route Lifecycle"],
+  "stop.checking": ["Initialize", "Apply Request Defaults", "Read Lifecycle", "Route Lifecycle"],
   "stop.locking": ["Acquire Stop Lease", "Begin Stopping Session"],
   "stop.finding_host": ["Find Placement", "Route Found Placement", "Route Unplaced Session", "Adopt Found Placement", "Adopt Requested Host"],
   "stop.saving": ["Stop Accepted V1"],
@@ -159,7 +159,7 @@ const START_HOST: Table = {
 };
 
 const STOP_HOST: Table = {
-  "stop.checking_host": ["Initialize", "Describe Initial Instance", "Route Initial Instance State"],
+  "stop.checking_host": ["Initialize", "Apply Request Defaults", "Route Players Policy", "Describe Initial Instance", "Route Initial Instance State"],
   "stop.waiting_host": [
     "Wait Before SSM Poll", "Describe SSM Agent", "SSM Record Present", "SSM Agent Online", "Increment SSM Poll", "SSM Poll Limit Reached",
   ],
@@ -172,7 +172,7 @@ const STOP_HOST: Table = {
   ],
   [ENDED]: [
     "Host Still Busy", "Host Activity Unknown", "Already Stopped", "Stopped", "Instance Cannot Stop", "SSM Timed Out", "Session Stop Failed",
-    "World Not On Host", "Players Online", "Session Stop Timed Out", "Instance Stop Timed Out",
+    "World Not On Host", "Players Online", "Session Stop Timed Out", "Instance Stop Timed Out", "Unknown Players Policy",
   ],
 };
 

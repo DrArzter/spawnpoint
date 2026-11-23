@@ -2,8 +2,9 @@ data "aws_caller_identity" "current" {}
 
 locals {
   github_subjects = var.github_subjects
-  deploy_subject  = "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production"
-  plan_subject    = "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production-plan"
+  release_roles   = length(var.github_subjects) > 0 ? 1 : 0
+  deploy_subject  = "${var.github_repository_subject}:environment:production"
+  plan_subject    = "${var.github_repository_subject}:environment:production-plan"
 
   spawnpoint_ssm_documents         = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:document/spawnpoint-*"
   host_app_commit_parameter        = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/spawnpoint/host/app-commit"
@@ -27,7 +28,10 @@ resource "aws_iam_openid_connect_provider" "github_actions" {
   }
 }
 
+# The release role exists only while a config repository may use it.
 data "aws_iam_policy_document" "github_actions_assume_role" {
+  count = local.release_roles
+
   statement {
     sid     = "OnlyConfigRepositoryMain"
     effect  = "Allow"
@@ -53,9 +57,10 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
 }
 
 resource "aws_iam_role" "github_release" {
+  count                = local.release_roles
   name                 = "spawnpoint-github-release"
   description          = "Lets the config repository request and observe one release-build workflow."
-  assume_role_policy   = data.aws_iam_policy_document.github_actions_assume_role.json
+  assume_role_policy   = data.aws_iam_policy_document.github_actions_assume_role[0].json
   max_session_duration = 3600
 
   tags = {
@@ -65,6 +70,8 @@ resource "aws_iam_role" "github_release" {
 }
 
 data "aws_iam_policy_document" "github_release" {
+  count = local.release_roles
+
   statement {
     sid       = "StartOnlyReleaseBuilder"
     effect    = "Allow"
@@ -95,9 +102,20 @@ data "aws_iam_policy_document" "github_release" {
 }
 
 resource "aws_iam_role_policy" "github_release" {
+  count  = local.release_roles
   name   = "spawnpoint-github-release"
-  role   = aws_iam_role.github_release.id
-  policy = data.aws_iam_policy_document.github_release.json
+  role   = aws_iam_role.github_release[0].id
+  policy = data.aws_iam_policy_document.github_release[0].json
+}
+
+moved {
+  from = aws_iam_role.github_release
+  to   = aws_iam_role.github_release[0]
+}
+
+moved {
+  from = aws_iam_role_policy.github_release
+  to   = aws_iam_role_policy.github_release[0]
 }
 
 data "aws_iam_policy_document" "github_deploy_assume_role" {

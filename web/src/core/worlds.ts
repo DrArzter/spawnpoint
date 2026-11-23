@@ -290,6 +290,16 @@ function rowStatus(world: World, active: boolean, state: ServerState | null): St
   return worldStatus(world);
 }
 
+/**
+ * A stop asked while players are online disconnects them, for a caller who may.
+ * Anyone else gets the plain stop, which the host refuses while they play.
+ */
+export function stopDisconnect(game: Game, world: World, action: "start" | "stop", granted: ReadonlySet<string>, sharedSession: SharedHostSession): { disconnect?: number } {
+  if (action !== "stop" || !granted.has("session.stop.force")) return {};
+  const players = worldPlayers(game, world, sharedSession) ?? 0;
+  return players > 0 ? { disconnect: players } : {};
+}
+
 /** Players on a world's own session: a fleet world's from its record, a configured one's only while it holds the shared host. */
 export function worldPlayers(game: Game, world: World, sharedSession: SharedHostSession): number | null {
   if (world.placement === "fleet") return fleetPlayersOnline(game, world);

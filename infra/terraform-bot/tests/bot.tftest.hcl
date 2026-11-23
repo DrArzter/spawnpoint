@@ -47,15 +47,6 @@ mock_provider "aws" {
   }
 }
 
-# A mock provider cannot import; the overrides stand in for the adopted groups.
-override_resource {
-  target = aws_cloudwatch_log_group.bot
-}
-
-override_resource {
-  target = aws_cloudwatch_log_group.notifier
-}
-
 run "bot_is_an_isolated_webhook" {
   command = plan
 
@@ -182,13 +173,12 @@ run "resend_is_an_optional_least_privilege_notifier_adapter" {
   }
 }
 
-run "a_fresh_account_adopts_no_log_group" {
+run "a_fresh_account_creates_the_log_group" {
   command = plan
 
   variables {
-    mini_app_url            = "https://spawnpoint.example.dev/"
-    enable_notifications    = false
-    adopt_lambda_log_groups = false
+    mini_app_url         = "https://spawnpoint.example.dev/"
+    enable_notifications = false
   }
 
   assert {
@@ -199,6 +189,13 @@ run "a_fresh_account_adopts_no_log_group" {
 
 run "ses_is_a_keyless_notifier_adapter" {
   command = plan
+
+  override_data {
+    target = data.aws_iam_policy_document.notifier[0]
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"ses:SendEmail\",\"Resource\":\"arn:aws:ses:eu-central-1:123456789012:identity/spawnpoint.example.dev\"}]}"
+    }
+  }
 
   override_data {
     target = data.aws_sns_topic.alerts[0]

@@ -36,7 +36,7 @@ import { createSessionHostReader } from "./aws-session-history.ts";
 import { createOperationProgressReader, createHostLogReader } from "./aws-operation-progress.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
-import { buildLifecycleStartInput, buildLifecycleStopInput, buildPromotionInput, buildStopInput } from "../domain/telegram-bot.ts";
+import { buildLifecycleStartInput, buildLifecycleStopInput, buildPromotionInput, buildStopInput, type StopPlayersPolicy } from "../domain/telegram-bot.ts";
 import type { ControlPlaneSources, HostMetricPoint, HostMetrics, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 import { operationWorldId } from "./world-session.ts";
 import { expectationFromRuns, type FinishedRun } from "./operation-eta.ts";
@@ -596,11 +596,12 @@ export async function stopSessionExecution(
   serverId: string,
   sessionId: string,
   worldId: string,
+  players: StopPlayersPolicy = "refuse",
 ): Promise<string> {
   requireWorldId(worldId);
   const stopped = await sfn.send(new StartExecutionCommand({
     stateMachineArn: machineArn("stop"), name: operationId,
-    input: JSON.stringify(buildLifecycleStopInput({ serverId, operationId, sessionId, instanceId, worldId, requestedBy })),
+    input: JSON.stringify(buildLifecycleStopInput({ serverId, operationId, sessionId, instanceId, worldId, requestedBy, players })),
   }));
   if (!stopped.executionArn) throw new Error("stop execution did not return an ARN");
   return stopped.executionArn;

@@ -1,3 +1,11 @@
+variables {
+  github_repository_subject = "repo:example@1/spawnpoint@2"
+  github_subjects           = [
+    "repo:example/minecraft-config:ref:refs/heads/main",
+    "repo:example@1/factorio-config@3:ref:refs/heads/main",
+  ]
+}
+
 mock_provider "aws" {
   override_during = plan
 
@@ -75,7 +83,7 @@ run "plan_role_is_owner_reviewed_and_separate_from_deploy" {
   }
 
   assert {
-    condition     = local.plan_subject == "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production-plan"
+    condition     = local.plan_subject == "repo:example@1/spawnpoint@2:environment:production-plan"
     error_message = "Pull request plans must use the immutable Spawnpoint repository identity and the production-plan environment."
   }
 
@@ -119,7 +127,7 @@ run "deployment_role_trusts_only_the_production_environment" {
   command = plan
 
   assert {
-    condition     = local.deploy_subject == "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production"
+    condition     = local.deploy_subject == "repo:example@1/spawnpoint@2:environment:production"
     error_message = "Production deploys must use the immutable Spawnpoint repository and owner ids plus the production environment."
   }
 
@@ -305,9 +313,8 @@ run "trusts_only_the_config_repositories_main_branches" {
 
   assert {
     condition = local.github_subjects == toset([
-      "repo:DrArzter/my-docker-minecraft-server-config:ref:refs/heads/main",
-      "repo:DrArzter@102290466/my-docker-factorio-server-config@1348549387:ref:refs/heads/main",
-      "repo:DrArzter@102290466/my-docker-zomboid-server-config@1352117153:ref:refs/heads/main",
+      "repo:example/minecraft-config:ref:refs/heads/main",
+      "repo:example@1/factorio-config@3:ref:refs/heads/main",
     ])
     error_message = "The role trust must name each config repository's main branch exactly."
   }
@@ -321,7 +328,7 @@ run "trusts_only_the_config_repositories_main_branches" {
   }
 
   assert {
-    condition     = aws_iam_role.github_release.max_session_duration == 3600
+    condition     = aws_iam_role.github_release[0].max_session_duration == 3600
     error_message = "A release trigger does not need a long-lived cloud session."
   }
 }
@@ -348,4 +355,27 @@ run "role_can_only_start_and_observe_the_release_builder" {
     condition     = local.preset_catalog_objects_arn == "arn:aws:s3:::spawnpoint-releases-123456789012/presets/*/catalog.json"
     error_message = "Automatic builds may read only published preset catalogs, never release payloads or world state."
   }
+}
+
+run "a_new_installation_with_no_config_repository_has_no_release_role" {
+  command = plan
+
+  variables {
+    github_subjects = []
+  }
+
+  assert {
+    condition     = length(aws_iam_role.github_release) == 0 && output.github_release_role_arn == null
+    error_message = "With no config repository, nothing may assume a release role."
+  }
+}
+
+run "a_repository_subject_with_an_environment_is_rejected" {
+  command = plan
+
+  variables {
+    github_repository_subject = "repo:example/spawnpoint:environment:production"
+  }
+
+  expect_failures = [var.github_repository_subject]
 }

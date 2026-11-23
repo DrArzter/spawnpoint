@@ -182,11 +182,11 @@ test("a stopped warm host is kept for its retention, then terminated; a configur
   warm = release(reserve(warm, { sessionId: "s1", worldId: "techno", footprint: MODDED, policy: "warm" }, NOW + 2), "s1", NOW + 100);
   const stopped = markStopped(warm, NOW + 700);
   const day = 24 * 3600;
-  assert.equal(drainDecision(stopped, NOW + 700 + 13 * day, 600), "keep", "inside the fourteen-day default");
-  assert.equal(drainDecision(stopped, NOW + 700 + 14 * day, 600), "terminate");
+  assert.equal(drainDecision(stopped, NOW + 700 + 6 * day, 600), "keep", "inside the seven-day default");
+  assert.equal(drainDecision(stopped, NOW + 700 + 7 * day, 600), "terminate");
   assert.equal(drainDecision(stopped, NOW + 700 + 3600, 600, false, 3600), "terminate", "the retention is a setting");
-  assert.equal(drainDecision(stopped, NOW + 700 + 14 * day, 600, true), "terminate", "a stopped host is nobody's headroom");
-  assert.equal(markTerminating(stopped, NOW + 700 + 14 * day).state, "terminating");
+  assert.equal(drainDecision(stopped, NOW + 700 + 7 * day, 600, true), "terminate", "a stopped host is nobody's headroom");
+  assert.equal(markTerminating(stopped, NOW + 700 + 7 * day).state, "terminating");
 
   // The world came back to its warm host before the retention ran out.
   const revived = reserve(stopped, { sessionId: "s2", worldId: "techno", footprint: MODDED, policy: "warm" }, NOW + 800);

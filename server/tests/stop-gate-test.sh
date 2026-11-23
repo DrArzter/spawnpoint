@@ -48,6 +48,14 @@ cat >"${fixture}/bin/docker" <<'STUB'
 set -euo pipefail
 args=("$@")
 if [[ "${args[0]}" == "compose" ]]; then
+  # The game's console: two players online, and every save succeeds.
+  if [[ " ${args[*]} " == *" exec "* ]]; then
+    case "${args[$((${#args[@]} - 1))]}" in
+      list) printf 'There are 2 of a max of 20 players online: alex, sam\n' ;;
+      flush) printf 'Saved the game\n' ;;
+    esac
+    exit 0
+  fi
   service="${args[$((${#args[@]} - 1))]}"
   for arg in "${args[@]}"; do
     case "${arg}" in
@@ -232,5 +240,27 @@ code=0
 output="$(stop_on b 2>/dev/null)" || code=$?
 [[ "${code}" == "6" ]]
 [[ "$(object_count)" == "5" ]]
+
+# --- players online: a stop refuses, and saves nothing ---
+play "${a_world}" "session with players"
+printf 'running\n' >"${FAKE_STATES_DIR}/mc"
+before="$(object_count)"
+code=0
+stop_on a >/dev/null 2>"${fixture}/refused.err" || code=$?
+(( code == 3 ))
+grep -q 'refusing to stop while players are online' "${fixture}/refused.err"
+[[ "$(cat "${FAKE_STATES_DIR}/mc")" == "running" && "$(object_count)" == "${before}" ]]
+
+# --- a forced stop disconnects them, then saves and backs up as usual ---
+output="$(SPAWNPOINT_STOP_PLAYERS=disconnect stop_on a)"
+grep -qx 'players_disconnected=There are 2 of a max of 20 players online: alex, sam' <<<"${output}"
+[[ "$(result_of "${output}")" == "session_stopped_and_backed_up" ]]
+[[ "$(cat "${FAKE_STATES_DIR}/mc")" == "exited" && "$(object_count)" == "$((before + 1))" ]]
+
+# --- an unknown policy is refused before anything runs ---
+code=0
+SPAWNPOINT_STOP_PLAYERS=kick stop_on a >/dev/null 2>"${fixture}/policy.err" || code=$?
+(( code == 1 ))
+grep -q 'must be refuse or disconnect' "${fixture}/policy.err"
 
 printf 'stop-gate-test: ok\n'

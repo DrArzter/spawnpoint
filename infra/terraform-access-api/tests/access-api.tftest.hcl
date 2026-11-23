@@ -26,7 +26,7 @@ mock_provider "aws" {
   override_resource {
     target = aws_sesv2_email_identity.sender
     values = {
-      dkim_signing_attributes = [{ tokens = ["tokena", "tokenb", "tokenc"] }]
+      dkim_signing_attributes = { tokens = ["tokena", "tokenb", "tokenc"] }
     }
   }
 
@@ -827,7 +827,7 @@ run "ses_sends_from_a_dkim_signed_identity_with_no_key" {
   }
 
   assert {
-    condition     = aws_lambda_function.access_api.environment[0].variables.EMAIL_DELIVERY_PROVIDER == "ses" && output.ses_dkim_records == []
+    condition     = aws_lambda_function.access_api.environment[0].variables.EMAIL_DELIVERY_PROVIDER == "ses" && length(output.ses_dkim_records) == 0
     error_message = "SES must reach the Lambda as its adapter and need no records by hand."
   }
 

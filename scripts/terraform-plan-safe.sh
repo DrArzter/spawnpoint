@@ -10,8 +10,13 @@ plan_json_file="${root_path}/pull-request.tfplan.json"
 
 # shellcheck source=_terraform-destroy-allow.sh
 source "${repository_root}/scripts/_terraform-destroy-allow.sh"
-
+# shellcheck source=_anomaly-detection.sh
+source "${repository_root}/scripts/_anomaly-detection.sh"
+# shellcheck source=_github-subject.sh
+source "${repository_root}/scripts/_github-subject.sh"
 "${repository_root}/scripts/terraform-init-ci.sh" "${root}" >/dev/null
+decide_github_subject "${root}"
+decide_anomaly_detection "${root}" "${root_path}"
 if ! terraform -chdir="${root_path}" plan -input=false -lock=false -out="${plan_file}" >/dev/null; then
   printf 'root=%s add=0 change=0 delete=0 read=0 allowed=0 stale=0 result=error\n' "${root}"
   exit 1

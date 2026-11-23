@@ -8,7 +8,10 @@ root_path="${repository_root}/${root}"
 plan_file="${root_path}/manual-verification.tfplan"
 plan_json_file="${root_path}/manual-verification.tfplan.json"
 
+# shellcheck source=_github-subject.sh
+source "${repository_root}/scripts/_github-subject.sh"
 "${repository_root}/scripts/terraform-init-ci.sh" "${root}" >/dev/null
+decide_github_subject "${root}"
 if ! terraform -chdir="${root_path}" plan -input=false -lock=false -out="${plan_file}" >/dev/null; then
   printf 'root=%s changes=unknown result=error\n' "${root}"
   exit 1

@@ -49,8 +49,8 @@ variable "legacy_panel_url" {
   nullable    = true
 
   validation {
-    condition     = var.legacy_panel_url == null || can(regex("^https://[^/]+/?$", var.legacy_panel_url))
-    error_message = "legacy_panel_url must be null or one HTTPS origin with no path, query or fragment."
+    condition     = var.legacy_panel_url == null || var.legacy_panel_url == "" || can(regex("^https://[^/]+/?$", var.legacy_panel_url))
+    error_message = "legacy_panel_url must be null, empty or one HTTPS origin with no path, query or fragment."
   }
 }
 

@@ -7,9 +7,21 @@
       "Type": "Pass",
       "Parameters": {
         "request.$": "$",
+        "defaults": { "predecessorExecutionId": "" },
         "counters": { "total": 0, "probeFailures": 0, "stopRefusals": 0, "probePoll": 0 },
         "observed": {},
         "coordination": {}
+      },
+      "Next": "Apply Request Defaults"
+    },
+    "Apply Request Defaults": {
+      "Type": "Pass",
+      "Comment": "A watchdog started with its session names no predecessor. A relay names the execution it takes the session over from.",
+      "Parameters": {
+        "request.$": "States.JsonMerge($.defaults, $.request, false)",
+        "counters.$": "$.counters",
+        "observed.$": "$.observed",
+        "coordination.$": "$.coordination"
       },
       "Next": "Acquire Registration Lease"
     },
@@ -52,7 +64,8 @@
           "serverId.$": "$.request.serverId",
           "ownership.$": "$.coordination.lease.ownership",
           "sessionId.$": "$.request.sessionId",
-          "watchdogExecutionId.$": "$$.Execution.Id"
+          "watchdogExecutionId.$": "$$.Execution.Id",
+          "predecessorExecutionId.$": "$.request.predecessorExecutionId"
         }
       },
       "ResultPath": null,
@@ -704,6 +717,7 @@
           "serverId.$": "$.request.serverId",
           "operationId.$": "States.Format('{}-relay-{}', $.request.operationId, $.counters.total)",
           "sessionId.$": "$.request.sessionId",
+          "predecessorExecutionId.$": "$$.Execution.Id",
           "registrationLeaseTtlSeconds.$": "$.request.registrationLeaseTtlSeconds",
           "stopLeaseTtlSeconds.$": "$.request.stopLeaseTtlSeconds",
           "instanceId.$": "$.request.instanceId",
@@ -729,6 +743,7 @@
           "serverId.$": "$.request.serverId",
           "operationId.$": "States.Format('{}-relay-{}', $.request.operationId, $.counters.total)",
           "sessionId.$": "$.request.sessionId",
+          "predecessorExecutionId.$": "$$.Execution.Id",
           "registrationLeaseTtlSeconds.$": "$.request.registrationLeaseTtlSeconds",
           "stopLeaseTtlSeconds.$": "$.request.stopLeaseTtlSeconds",
           "instanceId.$": "$.request.instanceId",

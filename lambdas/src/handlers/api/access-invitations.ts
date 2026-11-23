@@ -1,6 +1,6 @@
 import { accessInvitationTokenHash, accessInvitationUsable, issueAccessInvitation, accessInvitationUrl, renderAccessInvitationEmail, renderAccessInvitationProofEmail } from "../../access/access-invitations.ts";
 import { GetCommand, QueryCommand, PutCommand, UpdateCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
-import { type Identity } from "../../access/domain.ts";
+import { type Identity, defaultRoleId } from "../../access/domain.ts";
 import { normalizeEmail } from "../../access/password-credential.ts";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { issueEmailAction, emailActionTokenHash } from "../../access/email-actions.ts";
@@ -199,7 +199,7 @@ export async function redeemAccessInvitation(account: Caller, event: Event): Pro
       } }] : []),
       { Put: { TableName: tableName, Item: {
         pk: `IDENTITY#${identityId}`, sk: "PROFILE", identity_id: identityId, display_name: name,
-        role_id: "viewer", direct_grants: [], status: "ACTIVE", created_at: now,
+        role_id: defaultRoleId, direct_grants: [], status: "ACTIVE", created_at: now,
         created_by: found.Item!.created_by, gsi1pk: "IDENTITY#ACTIVE", gsi1sk: name.toLowerCase(),
       }, ConditionExpression: "attribute_not_exists(pk)" } },
       { Update: {
@@ -219,5 +219,5 @@ export async function redeemAccessInvitation(account: Caller, event: Event): Pro
     if (isConditionFailure(error)) return response(409, { error: "invitation_unavailable" });
     throw error;
   }
-  return response(201, { identity: { id: identityId, displayName: name, roleId: "viewer", directGrants: [] } });
+  return response(201, { identity: { id: identityId, displayName: name, roleId: defaultRoleId, directGrants: [] } });
 }

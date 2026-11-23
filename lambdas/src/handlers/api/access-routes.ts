@@ -6,7 +6,7 @@ import { parameter, response } from "./http.ts";
 const IDENTITY_ID = /^[0-9a-f-]{36}$/;
 
 export const accessRoutes: Readonly<Record<string, Route>> = {
-  "GET /access/roles": permissionRoute("access.read", () => roles()),
+  "GET /access/roles": permissionRoute("access.read", (identity) => roles(identity)),
   "GET /access/candidates": permissionRoute("access.manage", () => candidates()),
   "GET /access/identities": permissionRoute("access.manage", (identity) => identities(identity)),
   "POST /access/candidates/{platform}/{platformUserId}/approve": permissionRoute("access.manage", (identity, event) =>

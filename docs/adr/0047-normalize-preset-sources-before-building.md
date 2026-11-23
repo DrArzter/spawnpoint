@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-09-13
 - Amends: [ADR-0040](0040-reusable-presets-and-world-wipes.md) — Git is the first authoring source, not the permanent boundary
+- Amended by: [ADR-0068](0068-normalize-upstream-modpacks-into-releases.md) — Normalize upstream modpacks into releases
 
 ## Context
 

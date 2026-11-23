@@ -4,6 +4,7 @@
 - Date: 2026-08-11
 - Milestone: M4
 - Amends: [ADR-0018](0018-identity-and-sign-in.md) and [ADR-0019](0019-account-linking.md)
+- Amended by: [ADR-0036](0036-observed-visitors-and-owner-approved-access.md) — Observe visitors, but let an Owner grant access
 
 ## Context
 

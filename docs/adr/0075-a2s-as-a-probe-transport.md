@@ -1,6 +1,6 @@
 # ADR-0075 — A2S as a probe transport
 
-- Status: Proposed — implemented for Valheim; two host tests are open
+- Status: Accepted — implemented for Valheim; two host tests are open
 - Date: 2026-11-21
 - Milestone: cross-cutting, first used by the Valheim module
 - Relates: [ADR-0034](0034-per-game-adapter.md), [ADR-0006](0006-on-demand-start-and-idle-shutdown.md),

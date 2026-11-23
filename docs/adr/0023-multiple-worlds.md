@@ -7,6 +7,8 @@
   [ADR-0062](0062-give-each-fleet-world-a-session-record-of-its-own.md), which keeps one world active at a time on
   the configured host only
 - Extends: [ADR-0008](0008-versioned-mod-releases.md), [ADR-0009](0009-s3-as-mod-source-of-truth.md), [ADR-0010](0010-world-persistence-and-backups.md)
+- Amended by: [ADR-0040](0040-reusable-presets-and-world-wipes.md) — Reusable presets create worlds whose wipes own release state
+- Amended by: [ADR-0048](0048-one-instance-per-active-world.md) — One instance per active world, created for the session
 
 ## Context
 

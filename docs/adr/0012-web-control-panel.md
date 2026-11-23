@@ -2,12 +2,17 @@
 
 - Status: Accepted — implemented 2026-08-29: the Mini App holds no credentials and reaches Step Functions only through
   the access API, and the bot's buttons resolve the same identity and permissions as the panel
+  — **partly:** the Telegram bot starts `spawnpoint-start-server-v2` itself and reads EC2 and S3 directly
+  (`lambdas/src/bot/services/aws.ts`), so the "one API" rule does not hold for the bot. A new ADR must record this exception or move the
+  bot behind the API
 - Date: 2026-08-11
 - Milestone: M4
 - Amended by: [ADR-0018](0018-identity-and-sign-in.md) — the authentication paragraph below is superseded
 - Amended by: [ADR-0029](0029-preview-environments.md) — **the panel no longer reviews or approves releases.** That
   moved into a pull request, which was the job that justified building a panel at all. The API and the several-clients
   shape below are untouched; what shrank is the panel's share of them. See [web/README.md](../../web/README.md)
+- Amended by: [ADR-0025](0025-step-functions-for-long-operations.md) — Long operations are Step Functions state machines; Lambda handles the synchronous work and the steps
+- Amended by: [ADR-0049](0049-project-control-plane-events-into-dynamodb.md) — Project control-plane events into DynamoDB for user-facing surfaces
 
 ## Context
 

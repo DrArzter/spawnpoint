@@ -4,6 +4,7 @@
 - Date: 2026-09-23
 - Milestone: M4
 - Extends: [ADR-0048](0048-one-instance-per-active-world.md) and [ADR-0053](0053-tell-not-built-apart-from-broken.md)
+- Extended by: [ADR-0072](0072-draw-the-console-in-the-c-a-grammar.md) — Draw the console in the C+A grammar
 
 ## Context
 

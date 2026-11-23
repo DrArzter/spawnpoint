@@ -6,6 +6,7 @@
 - Amends: [ADR-0018](0018-identity-and-sign-in.md), which planned Discord and Telegram as Cognito providers
 - Amended by: [ADR-0021](0021-sign-in-from-linked-chat-account.md) — a linked chat account may also **sign in**,
   which this ADR did not allow. The link remains the prerequisite, so everything below still holds
+- Amended by: [ADR-0036](0036-observed-visitors-and-owner-approved-access.md) — Observe visitors, but let an Owner grant access
 
 ## Context
 

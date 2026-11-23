@@ -124,7 +124,7 @@ const operationColumns: readonly Col<WorldModel["operations"][number]>[] = [
 function WipesTab({ rows, worldName }: Readonly<{ rows: WorldModel["wipes"]; worldName: string }>) {
   const columns: readonly Col<WorldModel["wipes"][number]>[] = [
     { id: "wipe", label: "Wipe", width: "100px", render: (row) => <strong>#{row.wipe.number}</strong> },
-    { id: "status", label: "Status", width: "80px", render: (row) => <Indicator kind={row.wipe.state === "current" ? "ok" : "archived"} label={row.wipe.state === "current" ? "Current" : wipeStatus(row.wipe).label} /> },
+    { id: "status", label: "Status", width: "80px", render: (row) => <Indicator kind={row.wipe.state === "current" ? "ok" : "archived"} label={wipeStatus(row.wipe).label} /> },
     { id: "release", label: "Started on release", width: "160px", render: (row) => <code>{row.wipe.originRelease}</code> },
     { id: "opened", label: "Opened", render: (row) => <Timestamp value={row.wipe.createdAt} /> },
     { id: "closed", label: "Closed", render: (row) => (row.wipe.closedAt ? <Timestamp value={row.wipe.closedAt} /> : <Ghost>Open</Ghost>) },

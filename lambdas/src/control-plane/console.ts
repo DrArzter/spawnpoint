@@ -85,7 +85,8 @@ export type ConsoleEntry = Readonly<{
   id: string;
   at: string;
   identityId: string;
-  displayName: string;
+  /** Null once the person who ran the command is deleted (ADR-0071). */
+  displayName: string | null;
   /** The MCP client that sent the command for the person, by its registered name; null from the panel. */
   agent: string | null;
   worldId: string;
@@ -101,7 +102,7 @@ export function consoleEntryFromItem(item: Readonly<Record<string, unknown>>): C
     id: text("command_id"),
     at: text("created_at"),
     identityId: text("identity_id"),
-    displayName: text("display_name"),
+    displayName: typeof item.display_name === "string" ? item.display_name : null,
     agent: typeof item.agent_name === "string" ? item.agent_name : null,
     worldId: text("world_id"),
     command: text("command"),

@@ -3,17 +3,7 @@ import { Address } from "../ui/Address";
 import { useNow } from "../ui/Flashbar";
 import { ProgressBar } from "../ui/ProgressBar";
 import { Tick } from "../ui/Tick";
-
-/** How long a host has run: `h:mm:ss`, or `d h` past a day; null when the launch is unknown. */
-export function uptime(since: string | null | undefined, now: number): string | null {
-  const start = since ? Date.parse(since) : Number.NaN;
-  if (Number.isNaN(start)) return null;
-  const seconds = Math.max(0, Math.floor((now - start) / 1000));
-  const hours = Math.floor(seconds / 3600);
-  if (hours >= 24) return `${Math.floor(hours / 24)} d ${hours % 24} h`;
-  const minutes = Math.floor((seconds % 3600) / 60);
-  return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-}
+import { formatUptime } from "../../../lib/format";
 
 /**
  * The live session in three facts: uptime, players and the address. A world
@@ -28,7 +18,7 @@ export function Hero({ glance, label }: Readonly<{ glance: WorldGlance; label: s
       <dl className="c-hero-facts">
         <div className="c-hero-fact">
           <dt>Uptime</dt>
-          <dd className="c-hero-big">{uptime(glance.launchedAt, now) ?? <span className="c-faint">—</span>}</dd>
+          <dd className="c-hero-big">{formatUptime(glance.launchedAt, now) ?? <span className="c-faint">—</span>}</dd>
         </div>
         <div className="c-hero-fact">
           <dt>Players online</dt>

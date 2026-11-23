@@ -54,10 +54,7 @@ export async function runConsoleCommand(identity: Identity, gameId: string, worl
   return response(202, { entry });
 }
 
-/** A console line as the API answers it: no name once its sender was deleted. */
-export type ConsoleLine = Omit<ConsoleEntry, "displayName"> & Readonly<{ displayName: string | null }>;
-
-async function consoleEntries(gameId: string, worldId: string): Promise<readonly ConsoleLine[]> {
+async function consoleEntries(gameId: string, worldId: string): Promise<readonly ConsoleEntry[]> {
   const page = await document.send(new QueryCommand({
     TableName: tableName, KeyConditionExpression: "pk = :pk", ExpressionAttributeValues: { ":pk": `CONSOLE#${worldId}` },
     ScanIndexForward: false, Limit: CONSOLE_HISTORY_LIMIT,
@@ -82,7 +79,7 @@ async function consoleEntries(gameId: string, worldId: string): Promise<readonly
     return { ...item, status: result.status, output: result.output };
   }));
   // A deleted person's records keep their id and lose their name (ADR-0071).
-  return settled.map((item) => ({ ...consoleEntryFromItem(item), displayName: typeof item.display_name === "string" ? item.display_name : null }));
+  return settled.map((item) => consoleEntryFromItem(item));
 }
 
 export async function consoleHistory(gameId: string, worldId: string): Promise<Response> {

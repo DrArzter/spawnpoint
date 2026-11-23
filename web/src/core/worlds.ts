@@ -452,6 +452,11 @@ function gameSettingsDetail(game: Game, world: World): Detail[] {
 
 const connectionLabels: Record<World["connectivity"], string> = { zerotier: "ZeroTier", route53: "Public DNS", raw: "Public IP" };
 
+/** How a world is reached, in the one word every screen uses. */
+export function connectionLabel(connectivity: World["connectivity"]): string {
+  return connectionLabels[connectivity];
+}
+
 const operationLabels: Record<Operation["type"], string> = { start: "Starting session", stop: "Stopping session", world: "Updating world", promote: "Promoting release" };
 
 export function operationLabel(type: Operation["type"]): string {

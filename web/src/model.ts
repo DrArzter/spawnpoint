@@ -131,10 +131,10 @@ export type ControlPlaneSnapshot = {
 export type WorldTab = "details" | "wipes" | "backups" | "releases" | "whitelist" | "console" | "metrics";
 
 export type Role = { id: string; name: string; description: string; permissions: string[]; system?: boolean };
-export type LinkKind = "telegram" | "email" | "discord" | "minecraft" | "factorio" | "steam" | "zerotier";
+export type LinkKind = "telegram" | "email" | "google" | "discord" | "minecraft" | "factorio" | "steam" | "zerotier";
 export type LinkedAccount = { id: string; kind: LinkKind; value: string; verified: boolean };
 export type Member = { id: string; name: string; roleId: string; links: LinkedAccount[] };
 export type OwnerBootstrap =
   /** The viewer's own Telegram id, when they have one; the configured account is deployment configuration. */
   | { state: "unclaimed"; telegramId: string | null }
-  | { state: "claimed"; telegramId: string; ownerId: string; claimedAt: string };
+  | { state: "claimed"; telegramId: string | null; ownerId: string; claimedAt: string };

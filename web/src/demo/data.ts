@@ -51,7 +51,7 @@ export const demoSession: ActiveSession = {
   // Demo capabilities include unfinished prototypes so their screens remain
   // explorable without advertising those destinations in production.
   capabilities: ["releaseBuilds", "releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "releaseDiff", "backupDownloads", "whitelist", "releasePromotion", "operationProgress"],
-  role: { id: "owner", name: "Owner", permissions: ["status.read", "connection.read", "session.start", "session.stop", "session.stop.force", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "release.read", "release.build", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite"] },
+  role: { id: "owner", name: "Owner", permissions: ["status.read", "connection.read", "session.start", "session.stop", "session.stop.force", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "release.read", "release.build", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite", "release.retire", "access.owner.grant"] },
   profile: { provider: "telegram", platformUserId: "1780660807", telegramId: "1780660807", username: "drarzter", email: null, photoUrl: null },
   bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "1780660807", claimedAt: "2026-08-28T18:24:00.000Z" },
 };
@@ -140,10 +140,11 @@ export function initialState(): DemoState {
               placement: "fleet",
               materialization: "existing",
               preset: { id: "industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5", profileDigest: "41d9a8e0c73b5f26184ad0e9cb7f3520a6e81d4c95f27b03ea6d183c7b40f9e2", releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3" },
-              wipes: [{ id: "gen-5e1c9a07d3b84f26a0c71e95b8f2d430", number: 1, state: "current", createdAt: "2026-10-02T12:00:00.000Z", closedAt: null, originRelease: "1.3" }],
+              wipes: [{ id: "gen-5e1c9a07d3b84f26a0c71e95b8f2d430", number: 1, state: "current", createdAt: "2026-10-02T12:00:00.000Z", closedAt: null, originRelease: "1.2" }],
               // A stopped fleet world has no host, so no address.
               connectionAddress: null,
-              release: { state: "available", generationId: "gen-5e1c9a07d3b84f26a0c71e95b8f2d430", activeRelease: "1.3", desiredRelease: "1.3" },
+              // One release behind the preset, so the demo can update it forward.
+              release: { state: "available", generationId: "gen-5e1c9a07d3b84f26a0c71e95b8f2d430", activeRelease: "1.2", desiredRelease: "1.2" },
               session: null,
               gameSettings: { values: { game_mode: "creative" }, updatedAt: "2026-10-02T12:00:00.000Z" },
             },

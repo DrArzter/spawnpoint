@@ -386,6 +386,13 @@ function switchRelease(gameId: string, target: Mutable<World>, release: string):
 }
 
 /** A fleet world's promotion (ADR-0078): desired first, active once the target start passes. */
+/** Negative when `a` is the older `MAJOR.MINOR` release. */
+function releaseOrder(a: string, b: string): number {
+  const [aMajor = 0, aMinor = 0] = a.split(".").map(Number);
+  const [bMajor = 0, bMinor = 0] = b.split(".").map(Number);
+  return aMajor === bMajor ? aMinor - bMinor : aMajor - bMajor;
+}
+
 export function promoteWorld(gameId: string, worldId: string, release: string): PromotionResult {
   settle();
   requireIdle(worldId);
@@ -394,6 +401,8 @@ export function promoteWorld(gameId: string, worldId: string, release: string): 
   if (!(target.preset?.releases.includes(release) ?? false)) throw new Error("The selected release is no longer available. Refresh and try again.");
   if (target.release.activeRelease === null) return switchRelease(gameId, target, release);
   if (target.release.activeRelease === release) throw new Error("This release is already active.");
+  // As the API does: going back is a restore of a backup, not an update.
+  if (releaseOrder(release, target.release.activeRelease) < 0) throw new Error("This release is older than the active one. Restore a backup to go back.");
   if ((target.session?.idle?.playersOnline ?? 0) > 0) throw new Error("Players are online. Ask them to log off first.");
   archive(gameId, target);
   target.release = { ...target.release, desiredRelease: release };
@@ -477,6 +486,8 @@ export function createWorld(gameId: string, presetId: string, displayName: strin
   if (!preset.releases.includes(release)) throw new Error("The selected release is no longer available. Refresh and try again.");
   if (!startableReleases(preset).includes(release)) throw new Error("That release was built from an older revision. Build the preset again.");
   if (displayName.trim().length === 0 || displayName.trim().length > 80) throw new Error("Enter a name between 1 and 80 characters.");
+  // As the API does: a world reached outside ZeroTier must say how players authenticate.
+  if (connectivity !== "zerotier" && auth === undefined) throw new Error("A public world needs an authentication choice.");
 
   state.counter += 1;
   const slug = displayName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "world";

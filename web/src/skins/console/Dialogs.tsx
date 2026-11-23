@@ -1,5 +1,6 @@
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, WorldPlacement, WorldSettingsModel } from "../../core/models";
 import { startableLatest, startableReleases } from "../../core/presets";
+import { connectionLabel } from "../../core/worlds";
 import type { World } from "../../model";
 import { routeHash } from "../../routing";
 import { ActionButton } from "./ui/ActionButton";
@@ -57,7 +58,7 @@ function ConnectionFields({ model }: Readonly<{ model: ConnectionFieldsModel }>)
   const connection: readonly RadioCardOption<World["connectivity"]>[] = [
     { value: "zerotier", label: "ZeroTier", icon: "hub", disabled: fleet, hint: "Fleet hosts do not join ZeroTier" },
     { value: "raw", label: "Public IP", icon: "public", disabled: !fleet, hint: "Persistent hosts connect through ZeroTier" },
-    ...(model.dnsAvailable ? [{ value: "route53" as const, label: "DNS", icon: "language" as const, disabled: !fleet, hint: "Persistent hosts connect through ZeroTier" }] : []),
+    ...(model.dnsAvailable ? [{ value: "route53" as const, label: connectionLabel("route53"), icon: "language" as const, disabled: !fleet, hint: "Persistent hosts connect through ZeroTier" }] : []),
   ];
   return <>
     <RadioCards legend="Hosting" name="hosting" onChange={model.setPlacement} options={hosting} value={model.placement} />

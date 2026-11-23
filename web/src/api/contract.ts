@@ -50,7 +50,7 @@ export type ActiveSession = Readonly<{
   capabilities: readonly string[];
   role: { id: string; name: string; permissions: string[] } | null;
   profile: AccountProfile;
-  bootstrap: { state: "unclaimed" } | { state: "claimed"; ownerId: string; telegramId: string; claimedAt: string };
+  bootstrap: { state: "unclaimed" } | { state: "claimed"; ownerId: string; telegramId: string | null; claimedAt: string };
 }>;
 
 export type VisitorSession = Readonly<{
@@ -322,11 +322,6 @@ export type IssuedAccessInvitation = Readonly<{
   delivery: AccessInvitation["delivery"];
 }>;
 
-/**
- * Everything the panel asks of a backend. The live transport and the demo both
- * implement it, so a screen cannot tell them apart and the demo cannot quietly
- * skip a call: leaving one out is a type error.
- */
 /** One console command and the game's answer, recorded against who ran it (ADR-0063). */
 export type ConsoleEntry = Readonly<{
   id: string;
@@ -342,6 +337,11 @@ export type ConsoleEntry = Readonly<{
   output: string | null;
 }>;
 
+/**
+ * Everything the panel asks of a backend. The live transport and the demo both
+ * implement it, so a screen cannot tell them apart and the demo cannot quietly
+ * skip a call: leaving one out is a type error.
+ */
 export type SpawnpointApi = Readonly<{
   restoreSession(): Promise<AuthState>;
   /** Which ways in the deployment offers, and which accept anonymous registration. */

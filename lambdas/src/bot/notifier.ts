@@ -11,8 +11,9 @@ import { parseAccessApprovedEvent, renderAccessApproved } from "../domain/access
 import { invitationDeliveryStatus, parseInvitationEvent, renderInvitation, renderInvitationEmail, type InvitationEvent } from "../domain/invitations.ts";
 import { notificationSubscriptionKey, parseExecutionEvent, renderNotification } from "../domain/notifications.ts";
 import { parseChatIds } from "../domain/telegram-bot.ts";
+import { SESv2Client } from "@aws-sdk/client-sesv2";
 import type { EmailSender } from "../email/email-sender.ts";
-import { createResendEmailSender } from "../email/resend-email-sender.ts";
+import { configuredEmailSender } from "../email/email-delivery.ts";
 import { env, parameter } from "./services/aws.ts";
 import { claimInvitationDelivery, completeInvitationDelivery, subscribedNotificationTargets, subscribedTelegramChatIds } from "./services/subscribers.ts";
 
@@ -36,20 +37,13 @@ async function configuredChatIds(): Promise<readonly number[]> {
   return parseChatIds(await parameter(env("CHAT_IDS_PARAMETER"), 60));
 }
 
-let configuredEmailSender: Promise<EmailSender | null> | undefined;
+let notifierEmailSender: Promise<EmailSender | null> | undefined;
 function emailSender(): Promise<EmailSender | null> {
-  configuredEmailSender ??= (async () => {
-    const provider = process.env.EMAIL_DELIVERY_PROVIDER ?? "none";
-    if (provider === "none") return null;
-    if (provider !== "resend") throw new Error(`unsupported email delivery provider: ${provider}`);
-    const replyTo = process.env.EMAIL_REPLY_TO;
-    return createResendEmailSender({
-      apiKey: await parameter(env("RESEND_API_KEY_PARAMETER")),
-      from: env("EMAIL_FROM"),
-      ...(replyTo === undefined ? {} : { replyTo }),
-    });
-  })();
-  return configuredEmailSender;
+  notifierEmailSender ??= configuredEmailSender(process.env, {
+    readSecret: (name) => parameter(name),
+    sesClient: () => new SESv2Client({}),
+  });
+  return notifierEmailSender;
 }
 
 async function sendToTargets(

@@ -141,13 +141,13 @@ variable "password_registration_enabled" {
 }
 
 variable "email_delivery_provider" {
-  description = "Transactional email adapter used for verification and password recovery. `none` keeps email-dependent flows unavailable for self-hosted deployments."
+  description = "Transactional email adapter used for verification and password recovery. `ses` sends through Amazon SES in this account and is what the deploy workflows choose when the repository sets nothing; `resend` uses the Resend HTTP API; `none` keeps email-dependent flows unavailable."
   type        = string
   default     = "none"
 
   validation {
-    condition     = contains(["none", "resend"], var.email_delivery_provider)
-    error_message = "email_delivery_provider must be none or resend."
+    condition     = contains(["none", "resend", "ses"], var.email_delivery_provider)
+    error_message = "email_delivery_provider must be none, resend or ses."
   }
 }
 
@@ -163,7 +163,7 @@ variable "resend_api_key_parameter" {
 }
 
 variable "email_from" {
-  description = "Verified transactional sender, for example `Spawnpoint <auth@example.dev>`. Required for Resend."
+  description = "Transactional sender, for example `Spawnpoint <auth@example.dev>`. Required for Resend and SES. With SES, its domain becomes an SES identity, signed with DKIM records in dns_zone_name when the domain is inside that zone."
   type        = string
   default     = ""
 
@@ -188,9 +188,10 @@ check "email_delivery_configuration" {
   assert {
     condition = (
       var.email_delivery_provider == "none" ||
+      (var.email_delivery_provider == "ses" && trimspace(var.email_from) != "") ||
       (startswith(var.resend_api_key_parameter, "/") && trimspace(var.email_from) != "")
     )
-    error_message = "Resend delivery requires an absolute resend_api_key_parameter and a non-empty email_from."
+    error_message = "Email delivery requires a non-empty email_from, and Resend also an absolute resend_api_key_parameter."
   }
 }
 

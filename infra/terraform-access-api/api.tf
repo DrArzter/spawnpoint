@@ -269,6 +269,15 @@ data "aws_iam_policy_document" "access_api" {
       resources = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.resend_api_key_parameter}"]
     }
   }
+
+  dynamic "statement" {
+    for_each = local.ses_enabled ? [1] : []
+    content {
+      sid       = "SendOnlyFromTheSenderIdentity"
+      actions   = ["ses:SendEmail"]
+      resources = [local.ses_identity_arn]
+    }
+  }
 }
 
 locals {

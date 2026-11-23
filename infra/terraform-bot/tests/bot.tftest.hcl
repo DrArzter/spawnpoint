@@ -186,3 +186,32 @@ run "a_fresh_account_creates_the_log_group" {
     error_message = "A fresh account creates the bot's log group with the same 14 days."
   }
 }
+
+run "ses_is_a_keyless_notifier_adapter" {
+  command = plan
+
+  override_data {
+    target = data.aws_iam_policy_document.notifier[0]
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"ses:SendEmail\",\"Resource\":\"arn:aws:ses:eu-central-1:123456789012:identity/spawnpoint.example.dev\"}]}"
+    }
+  }
+
+  override_data {
+    target = data.aws_sns_topic.alerts[0]
+    values = {
+      arn = "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert"
+    }
+  }
+
+  variables {
+    mini_app_url            = "https://spawnpoint.example.dev/"
+    email_delivery_provider = "ses"
+    email_from              = "Spawnpoint <auth@spawnpoint.example.dev>"
+  }
+
+  assert {
+    condition     = aws_lambda_function.notifier[0].environment[0].variables["EMAIL_DELIVERY_PROVIDER"] == "ses" && aws_lambda_function.notifier[0].environment[0].variables["EMAIL_FROM"] == "Spawnpoint <auth@spawnpoint.example.dev>"
+    error_message = "The notifier must receive the SES adapter and its sender through Terraform."
+  }
+}

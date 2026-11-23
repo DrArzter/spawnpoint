@@ -1,6 +1,7 @@
-import { type EmailSender } from "../../email/email-sender.ts";
 import { GetParameterCommand } from "@aws-sdk/client-ssm";
-import { createResendEmailSender } from "../../email/resend-email-sender.ts";
+import { SESv2Client } from "@aws-sdk/client-sesv2";
+import { type EmailSender } from "../../email/email-sender.ts";
+import { configuredEmailSender } from "../../email/email-delivery.ts";
 import { panelUrl } from "./origins.ts";
 import { ssm } from "./clients.ts";
 
@@ -10,16 +11,11 @@ let emailSenderPromise: Promise<EmailSender | null> | undefined;
 
 export function emailSender(): Promise<EmailSender | null> {
   emailSenderPromise ??= (async () => {
-    if (emailDeliveryProvider === "none") return null;
-    if (emailDeliveryProvider !== "resend") throw new Error(`unsupported email delivery provider: ${emailDeliveryProvider}`);
-    const parameterName = process.env.RESEND_API_KEY_PARAMETER;
-    const from = process.env.EMAIL_FROM;
-    if (!parameterName || !from || !panelUrl) throw new Error("email delivery is incompletely configured");
-    const result = await ssm.send(new GetParameterCommand({ Name: parameterName, WithDecryption: true }));
-    const apiKey = result.Parameter?.Value;
-    if (!apiKey) throw new Error("Resend API key parameter is empty");
-    const replyTo = process.env.EMAIL_REPLY_TO?.trim();
-    return createResendEmailSender({ apiKey, from, ...(replyTo ? { replyTo } : {}) });
+    if (emailDeliveryProvider !== "none" && !panelUrl) throw new Error("email delivery is incompletely configured: no panel URL");
+    return configuredEmailSender(process.env, {
+      readSecret: async (name) => (await ssm.send(new GetParameterCommand({ Name: name, WithDecryption: true }))).Parameter?.Value ?? "",
+      sesClient: () => new SESv2Client({}),
+    });
   })();
   return emailSenderPromise;
 }

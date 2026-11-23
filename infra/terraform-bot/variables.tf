@@ -55,13 +55,13 @@ variable "enable_notifications" {
 }
 
 variable "email_delivery_provider" {
-  description = "Optional transactional email adapter used by the notifier. `none` keeps email out of a self-hosted deployment; `resend` enables the Resend HTTP adapter."
+  description = "Optional transactional email adapter used by the notifier. `none` keeps email out; `resend` enables the Resend HTTP adapter; `ses` sends through Amazon SES with the identity the access-api root creates for the sender's domain."
   type        = string
   default     = "none"
 
   validation {
-    condition     = contains(["none", "resend"], var.email_delivery_provider)
-    error_message = "email_delivery_provider must be none or resend."
+    condition     = contains(["none", "resend", "ses"], var.email_delivery_provider)
+    error_message = "email_delivery_provider must be none, resend or ses."
   }
 }
 

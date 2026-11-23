@@ -55,7 +55,7 @@ dist/
 build/
 out/
 *.zip
-node_modules/
+node_modules
 __pycache__/
 *.py[cod]
 .venv/

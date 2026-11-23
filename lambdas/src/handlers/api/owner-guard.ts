@@ -37,3 +37,8 @@ export function canDelete(caller: Identity, target: Readonly<{ id: string; roleI
   return target.id !== caller.id && can(caller, "access.manage")
     && (!isProtectedRoleId(target.roleId) || can(caller, "access.owner.grant"));
 }
+
+/** Whether the caller may give this role, by the rules the role change and approval routes apply. */
+export function canAssign(caller: Identity, roleId: string): boolean {
+  return can(caller, "access.manage") && protectedRoleRefusal(caller, [roleId]) === null;
+}

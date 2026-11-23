@@ -1,4 +1,4 @@
-import { type Identity, builtInRoles, isBuiltInRoleId, type Permission, permissions, reservedPermissions } from "../../access/domain.ts";
+import { type Identity, builtInRoles, defaultRoleId, isBuiltInRoleId, type Permission, permissionCatalogue, permissions, reservedPermissions } from "../../access/domain.ts";
 import { QueryCommand, UpdateCommand, GetCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../../domain/access-events.ts";
@@ -9,18 +9,23 @@ import { document, tableName, type Item } from "./access-store.ts";
 import { requirePermission } from "./permissions.ts";
 import { events } from "./clients.ts";
 import { accountKeyFor, identityById } from "./identity-store.ts";
-import { callerCondition, canDelete, lastHolderRefusal, protectedRoleRefusal } from "./owner-guard.ts";
+import { callerCondition, canAssign, canDelete, lastHolderRefusal, protectedRoleRefusal } from "./owner-guard.ts";
 import { passwordCredentials } from "./credentials.ts";
 import { isConditionFailure } from "./conditions.ts";
 
-export function roles(): Response {
-  const descriptions: Record<string, string> = {
-    viewer: "Can see coarse server status only.",
-    player: "Can view connection details, start a session and invite players.",
-    operator: "Can operate sessions, console, metrics, releases and backups.",
-    owner: "Full access to Spawnpoint, including access management.",
-  };
-  return response(200, { roles: Object.values(builtInRoles).map((role) => ({ ...role, description: descriptions[role.id], system: true })) });
+/**
+ * The role list with the permission catalogue and the default role. Built-in
+ * roles have version 1 until roles are stored. `system` repeats `builtIn` for
+ * the web until it reads the new name.
+ */
+export function roles(caller: Identity): Response {
+  return response(200, {
+    roles: Object.values(builtInRoles).map((role) => ({
+      ...role, builtIn: true, system: true, version: 1, assignable: canAssign(caller, role.id),
+    })),
+    permissions: permissionCatalogue,
+    defaultRoleId,
+  });
 }
 
 export async function candidates(): Promise<Response> {
@@ -135,7 +140,7 @@ type ApprovalInputResult = Readonly<{ value: ApprovalInput; error: null }> | Rea
 
 function approvalInput(body: string | undefined): ApprovalInputResult {
   const parsed = parseJsonObject({ body });
-  const roleId = typeof parsed.roleId === "string" ? parsed.roleId : "viewer";
+  const roleId = typeof parsed.roleId === "string" ? parsed.roleId : defaultRoleId;
   if (!isBuiltInRoleId(roleId)) return { value: null, error: response(400, { error: "unknown_role" }) };
   const requestedGrants = parsed.directGrants;
   const directGrants = Array.isArray(requestedGrants) && requestedGrants.every(

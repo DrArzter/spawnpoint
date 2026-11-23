@@ -6,8 +6,9 @@ loops inside Lambda.
 
 ## Build release
 
-`build-release.asl.json.tftpl` accepts exactly the release identity — profile ID, full configuration Git SHA and
-`MAJOR.MINOR` release — and starts the one Terraform-owned CodeBuild project through the synchronous optimized service
+`build-release.asl.json.tftpl` accepts exactly the release identity and its source: profile ID, full configuration Git
+SHA, `MAJOR.MINOR` release, the configuration repository URL, and the S3 key and SHA-256 of the configuration snapshot
+(`configSourceKey`, `configSourceSha256`). All six are required; `build-release.input.example.json` shows them. It starts the one Terraform-owned CodeBuild project through the synchronous optimized service
 integration. The project name is rendered into the definition, never accepted from a caller. The workflow passes no
 CurseForge key, bucket, source bundle or buildspec override; CodeBuild receives the key directly from Parameter Store
 and all other authority from its own role.

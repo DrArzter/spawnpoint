@@ -28,6 +28,10 @@ while (( $# > 0 )); do
     -fsSL | -f | -s | -S | -L)
       shift
       ;;
+    --retry | --connect-timeout | --max-time)
+      # Transport limits change nothing for a fixture.
+      shift 2
+      ;;
     -*)
       exit 64
       ;;

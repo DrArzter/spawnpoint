@@ -31,7 +31,7 @@ payload_dir="$(realpath -m -- "${payload_dir}")"
 mkdir -p -- "${payload_dir}/mods"
 
 cf_get() {
-  curl -fsSL -H "x-api-key: ${CF_API_KEY}" "$1"
+  curl -fsSL --retry 3 --connect-timeout 20 --max-time 120 -H "x-api-key: ${CF_API_KEY}" "$1"
 }
 
 resolved=0

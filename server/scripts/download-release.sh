@@ -306,8 +306,10 @@ if [[ "${layout}" == "objects-v1" ]]; then
   printf 'layout=objects-v1\n'
   printf 'fetched=%s\n' "${fetched}"
   printf 'fetch=%s\n' "${fetch_mode}"
+  printf 'fetch_reason=%s\n' "${fetch_reason}"
   printf 'fetched_bytes=%s\n' "${fetched_bytes}"
   printf 'shards=%s\n' "${shards_fetched}"
+  printf 'discarded=%s\n' "${discarded}"
   # Measurement hook: wall time of this download, for docs/measurements.md.
   printf 'seconds=%s\n' "${SECONDS}"
   exit 0
@@ -498,8 +500,11 @@ printf 'downloaded=%s\n' "${downloaded}"
 printf 'kept=%s\n' "${kept}"
 printf 'reused=%s\n' "${reused}"
 printf 'layout=legacy\n'
+# The same keys as the objects-v1 block, so one reader parses either layout.
+printf 'fetched=%s\n' "${fetched:-0}"
 printf 'fetch=%s\n' "${fetch_mode}"
 printf 'fetch_reason=%s\n' "${fetch_reason}"
 printf 'fetched_bytes=%s\n' "${fetched_bytes}"
+printf 'shards=%s\n' "${shards_fetched}"
 printf 'discarded=%s\n' "${discarded}"
 printf 'seconds=%s\n' "${SECONDS}"

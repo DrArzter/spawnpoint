@@ -100,7 +100,7 @@ Its manifest stays as history.
 ## 7. The sweep
 
 The sweep is part of the reconciler. It is in dry run unless the Lambda variable `RELEASE_SWEEP_DRY_RUN` is exactly
-`false`. It is set by the Terraform variable `release_sweep_dry_run` (default `true`).
+`false`. It is set by the Terraform variable `release_sweep_dry_run` (default `true`), which the deploy takes from the repository variable `SPAWNPOINT_RELEASE_SWEEP_DRY_RUN`.
 
 An object is deleted only when all of these hold:
 
@@ -114,7 +114,7 @@ Before the first real delete:
 
 1. Read at least four weekly dry runs. Compare `SweepCandidates` with what you expect.
 2. Check that the reports were complete and had no dangerous class.
-3. Set `release_sweep_dry_run = false` and apply. Watch the next run and the `SweepFailed` alarm.
+3. Set the repository variable `SPAWNPOINT_RELEASE_SWEEP_DRY_RUN` to `false` and run the production deploy; do not apply the root by hand. Watch the next run and the `SweepFailed` alarm.
 
 Undo window: 14 days of grace plus 30 days of noncurrent versions. To undo a delete within 30 days, copy the
 noncurrent version back to the same key (the bucket policy denies `DeleteObjectVersion` to everyone) and set the table

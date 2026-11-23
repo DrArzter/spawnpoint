@@ -4,7 +4,7 @@ import { useFilter } from "../../components/ui/Filter";
 import type { AccessModel, CandidateRow, InvitationsModel, MemberRow, NotificationsModel, RoleEditorModel, RolesModel, UsersModel } from "../../core/models";
 import { Icon, type IconName } from "../../icons";
 import { formatDateTime, plural } from "../../lib/format";
-import { permissionGroups, protectedRoleName, rolePermissions, type RoleChoice } from "../../core/roles";
+import { permissionGroups, ROLE_ID_HINT, roleFormFields, protectedRoleName, rolePermissions, type RoleChoice } from "../../core/roles";
 import type { Game, LinkKind, Member, PermissionInfo, Role } from "../../model";
 import { ConfirmationDialog } from "./Dialogs";
 import { Col, Details, Drawer, Empty, Field, FilterRow, Ghost, Indicator, Key, LoadError, NoMatches, Notice, Overflow, Page, Panel, Person, SelectInput, SkeletonRows, State, Table, Tabs, TextInput, Toggle, Verb } from "./ui";
@@ -244,6 +244,7 @@ function roleDescription(role: Role): string {
 }
 
 function RoleEditor({ model }: Readonly<{ model: RoleEditorModel | null }>) {
+  const fields = model && roleFormFields(model);
   return (
     <Drawer
       cancel={model?.cancel}
@@ -256,15 +257,15 @@ function RoleEditor({ model }: Readonly<{ model: RoleEditorModel | null }>) {
       {model && (
         <div className="t-form">
           <Field label="Name">
-            <TextInput autoComplete="off" data-autofocus maxLength={40} onChange={(event) => model.setName(event.target.value)} value={model.name} />
+            <TextInput data-autofocus {...fields!.name} />
           </Field>
           {model.mode === "create" && (
-            <Field error={model.idError} hint="It names the role in the API and cannot change later." label="ID">
-              <TextInput autoComplete="off" maxLength={32} mono onChange={(event) => model.setId(event.target.value)} spellCheck={false} value={model.id} />
+            <Field error={model.idError} hint={ROLE_ID_HINT} label="ID">
+              <TextInput mono {...fields!.id} />
             </Field>
           )}
           <Field label="Description">
-            <TextInput autoComplete="off" maxLength={200} onChange={(event) => model.setDescription(event.target.value)} value={model.description} />
+            <TextInput {...fields!.description} />
           </Field>
           {permissionGroups(model.permissions).map(({ group, rows }) => (
             <section className="t-details-group" key={group}>

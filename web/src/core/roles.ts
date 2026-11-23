@@ -1,4 +1,5 @@
 import type { PermissionInfo, Role } from "../model";
+import type { RoleEditorModel } from "./models";
 
 /** Everything the API serves about roles: who may be given which, the permission words, and the role an approval gives. */
 export type RoleDirectory = Readonly<{
@@ -45,6 +46,19 @@ export function permissionRows(catalogue: readonly PermissionInfo[], roles: read
 
 /** A role id as the API accepts it: a lower-case slug of up to 32 characters. */
 export const ROLE_ID_PATTERN = /^[a-z][a-z0-9-]{0,31}$/;
+
+/** The tooltip of the id field. */
+export const ROLE_ID_HINT = "It names the role in the API and cannot change later.";
+
+/** What each text field of the role form takes, the same in every skin: the API's limits (name 40, id 32, description 200) and the model's setters. */
+export function roleFormFields(model: RoleEditorModel) {
+  const text = (value: string, set: (value: string) => void, maxLength: number) => ({ autoComplete: "off", maxLength, value, onChange: (event: { target: { value: string } }) => set(event.target.value) });
+  return {
+    name: text(model.name, model.setName, 40),
+    id: { ...text(model.id, model.setId, 32), spellCheck: false },
+    description: text(model.description, model.setDescription, 200),
+  };
+}
 
 /** A slug for a name, until the person types an id of their own. */
 export function roleIdFor(name: string): string {

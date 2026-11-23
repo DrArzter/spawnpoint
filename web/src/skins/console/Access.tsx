@@ -5,7 +5,7 @@ import type { Action } from "../../core/actions";
 import type { AccessModel, CandidateRow, InvitationsModel, MemberRow, NotificationsModel, RoleEditorModel, RolesModel, UsersModel } from "../../core/models";
 import type { StatusDescriptor } from "../../core/status";
 import { Icon } from "../../icons";
-import { permissionGroups, permissionRows, rolePermissions, type RoleChoice } from "../../core/roles";
+import { permissionGroups, ROLE_ID_HINT, roleFormFields, permissionRows, rolePermissions, type RoleChoice } from "../../core/roles";
 import type { Member, PermissionInfo, Role } from "../../model";
 import { ConfirmationDialog } from "./Dialogs";
 import { providerIcon, providerName } from "./providers";
@@ -441,18 +441,19 @@ function RolesPane({ model, users, catalogue }: Readonly<{ model: RolesModel; us
 }
 
 function RoleEditorPanel({ model }: Readonly<{ model: RoleEditorModel }>) {
+  const fields = roleFormFields(model);
   return (
     <SidePanel actions={<ActionButton action={model.submit} variant="primary" />} cancel={model.cancel} title={model.title}>
       <Field label="Name">
-        <TextInput autoComplete="off" maxLength={40} onChange={(event) => model.setName(event.target.value)} value={model.name} />
+        <TextInput {...fields.name} />
       </Field>
       {model.mode === "create" && (
-        <Field error={model.idError} hint="It names the role in the API and cannot change later." label="ID">
-          <TextInput autoComplete="off" maxLength={32} mono onChange={(event) => model.setId(event.target.value)} spellCheck={false} value={model.id} />
+        <Field error={model.idError} hint={ROLE_ID_HINT} label="ID">
+          <TextInput mono {...fields.id} />
         </Field>
       )}
       <Field label="Description">
-        <TextInput autoComplete="off" maxLength={200} onChange={(event) => model.setDescription(event.target.value)} value={model.description} />
+        <TextInput {...fields.description} />
       </Field>
       {permissionGroups(model.permissions).map(({ group, rows }) => (
         <fieldset className="c-role-group" key={group}>

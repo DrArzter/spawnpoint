@@ -1,4 +1,4 @@
-import { identityDeletionRefusal, type AccessCandidate, type AccessIdentity, type AccessInvitation, type AccessRoleDirectory, type SpawnpointApi } from "../contract";
+import { identityDeletionRefusal, type AccessCandidate, type AccessIdentity, type AccessInvitation, type AccessRole, type AccessRoleDirectory, type AccessRoleDraft, type SpawnpointApi } from "../contract";
 import { request } from "./request";
 
 // Where a role change reads differently from the shared text (error-text.ts).
@@ -7,12 +7,16 @@ const ROLE_CHANGE_REFUSALS = {
   forbidden: "Only an Owner can give or take the Owner role.",
 };
 
+// A role write is refused for a permission the caller does not hold, not for a missing role.
+const ROLE_WRITE_REFUSALS = { forbidden: "You can give a role only permissions you hold." };
+
 const DELETION_REFUSALS = {
   self_delete_forbidden: identityDeletionRefusal(409, "self_delete_forbidden"),
   last_owner: identityDeletionRefusal(409, "last_owner"),
   forbidden: identityDeletionRefusal(403, "forbidden"),
 };
 
+const roleRoute = (roleId: string) => `/access/roles/${encodeURIComponent(roleId)}`;
 const candidatePath = (platform: string, platformUserId: string) => `/access/candidates/${encodeURIComponent(platform)}/${encodeURIComponent(platformUserId)}`;
 
 // Project membership and roles. Player-to-player invitations belong to the
@@ -73,6 +77,25 @@ export const accessApi = {
 
   loadAccessRoles(): Promise<AccessRoleDirectory> {
     return request<AccessRoleDirectory>("/access/roles", { failure: "Roles could not be loaded.", refusals: { forbidden: "Your role cannot view access roles." } });
+  },
+
+  async createAccessRole(id: string, draft: AccessRoleDraft): Promise<AccessRole> {
+    const body = await request<{ role: AccessRole }>("/access/roles", { method: "POST", body: { id, ...draft }, failure: "The role could not be created.", refusals: ROLE_WRITE_REFUSALS });
+    return body.role;
+  },
+
+  async updateAccessRole(roleId: string, draft: AccessRoleDraft, version: number): Promise<AccessRole> {
+    const body = await request<{ role: AccessRole }>(roleRoute(roleId), { method: "POST", body: { ...draft, version }, failure: "The role could not be saved.", refusals: ROLE_WRITE_REFUSALS });
+    return body.role;
+  },
+
+  async deleteAccessRole(roleId: string, version: number): Promise<void> {
+    await request<unknown>(`${roleRoute(roleId)}/delete`, { method: "POST", body: { version }, failure: "The role could not be deleted.", refusals: ROLE_WRITE_REFUSALS });
+  },
+
+  async updateDefaultRole(roleId: string): Promise<string> {
+    const body = await request<{ defaultRoleId: string }>("/access/defaults", { method: "POST", body: { defaultRoleId: roleId }, failure: "The default role could not be changed." });
+    return body.defaultRoleId;
   },
 
   async updateIdentityRole(identityId: string, roleId: string): Promise<void> {

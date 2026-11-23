@@ -136,7 +136,7 @@ export type ControlPlaneSnapshot = {
 export type WorldTab = "details" | "wipes" | "backups" | "releases" | "whitelist" | "console" | "metrics";
 
 /** A role as the API serves it; `assignable` is the caller's own reading, so a skin never works out who may give what. */
-export type Role = { id: string; name: string; description: string; permissions: string[]; builtIn: boolean; protected: boolean; assignable: boolean };
+export type Role = { id: string; name: string; description: string; permissions: string[]; builtIn: boolean; protected: boolean; assignable: boolean; version: number; holders: number; editable: boolean; deletable: boolean };
 /** One permission of the served catalogue: the words every skin shows for it. */
 export type PermissionInfo = { id: string; group: string; label: string; description: string; reserved: boolean };
 export type LinkKind = "telegram" | "email" | "google" | "discord" | "minecraft" | "factorio" | "steam" | "zerotier";

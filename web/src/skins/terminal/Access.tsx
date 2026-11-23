@@ -1,10 +1,10 @@
 import { useState } from "react";
 
 import { useFilter } from "../../components/ui/Filter";
-import type { AccessModel, CandidateRow, InvitationsModel, MemberRow, NotificationsModel, RolesModel, UsersModel } from "../../core/models";
+import type { AccessModel, CandidateRow, InvitationsModel, MemberRow, NotificationsModel, RoleEditorModel, RolesModel, UsersModel } from "../../core/models";
 import { Icon, type IconName } from "../../icons";
 import { formatDateTime, plural } from "../../lib/format";
-import { protectedRoleName, rolePermissions, type RoleChoice } from "../../core/roles";
+import { permissionGroups, protectedRoleName, rolePermissions, type RoleChoice } from "../../core/roles";
 import type { Game, LinkKind, Member, PermissionInfo, Role } from "../../model";
 import { ConfirmationDialog } from "./Dialogs";
 import { Col, Details, Drawer, Empty, Field, FilterRow, Ghost, Indicator, Key, LoadError, NoMatches, Notice, Overflow, Page, Panel, Person, SelectInput, SkeletonRows, State, Table, Tabs, TextInput, Toggle, Verb } from "./ui";
@@ -193,13 +193,16 @@ function Roles({ model, catalogue }: Readonly<{ model: RolesModel; catalogue: re
     { id: "role", label: "Role", width: "160px", render: (role) => <strong>{role.name}</strong> },
     { id: "description", label: "Description", width: "50%", render: (role) => role.description },
     { id: "permissions", label: "Permissions", render: (role) => <Verb action={model.read(role)} size="small" tone="primary" /> },
+    { id: "verbs", label: "Actions", verbs: true, width: "80px", render: (role) => <Overflow groups={[[model.edit(role)], [model.remove(role)]]} label={`Actions for ${role.name}`} menu size="small" /> },
   ];
   const state = model.roles;
   return (
     <Page>
       {state.status === "error" && <LoadError state={state} title="Roles could not be loaded" verb="read roles" />}
       {state.status !== "error" && <Panel flush>
-        <FilterRow disabled={state.status !== "ready"} filter={filter} label="Search roles" placeholder="Search by role or description" />
+        <FilterRow disabled={state.status !== "ready"} filter={filter} label="Search roles" placeholder="Search by role or description">
+          <Verb action={model.create} tone="primary" />
+        </FilterRow>
         <Table
           columns={columns}
           empty={filter.active ? <NoMatches filter={filter} noun="roles" /> : <Empty title="No roles" />}
@@ -210,11 +213,21 @@ function Roles({ model, catalogue }: Readonly<{ model: RolesModel; catalogue: re
         />
       </Panel>}
 
+      <Panel name="Default role">
+        <Field label="Given on approval">
+          <RoleSelect choice={model.defaultRole.choice} label="Default role" onChange={model.defaultRole.set} />
+        </Field>
+      </Panel>
+
+      <ConfirmationDialog model={model.deletion} />
+      <RoleEditor model={model.editor} />
+
       <Drawer
         cancel={model.closeReading}
         cancelLabel="Close"
         closeActionId={model.closeReading.id}
         description={model.reading ? roleDescription(model.reading) : undefined}
+        footer={model.reading && <><Verb action={model.edit(model.reading)} /><Verb action={model.remove(model.reading)} tone="danger" /></>}
         onClose={model.closeReading.run}
         open={model.reading !== null}
         title={model.reading?.name ?? "Role"}
@@ -227,7 +240,45 @@ function Roles({ model, catalogue }: Readonly<{ model: RolesModel; catalogue: re
 
 function roleDescription(role: Role): string {
   const kind = role.builtIn ? "Built-in role" : "Custom role";
-  return `${kind} · ${plural(role.permissions.length, "permission")}`;
+  return `${kind} · ${plural(role.permissions.length, "permission")} · ${plural(role.holders, "person", "people")}`;
+}
+
+function RoleEditor({ model }: Readonly<{ model: RoleEditorModel | null }>) {
+  return (
+    <Drawer
+      cancel={model?.cancel}
+      closeActionId={model?.cancel.id}
+      footer={model && <Verb action={model.submit} tone="primary" />}
+      onClose={model?.cancel.run ?? (() => undefined)}
+      open={model !== null}
+      title={model?.title ?? "Role"}
+    >
+      {model && (
+        <div className="t-form">
+          <Field label="Name">
+            <TextInput autoComplete="off" data-autofocus maxLength={40} onChange={(event) => model.setName(event.target.value)} value={model.name} />
+          </Field>
+          {model.mode === "create" && (
+            <Field error={model.idError} hint="It names the role in the API and cannot change later." label="ID">
+              <TextInput autoComplete="off" maxLength={32} mono onChange={(event) => model.setId(event.target.value)} spellCheck={false} value={model.id} />
+            </Field>
+          )}
+          <Field label="Description">
+            <TextInput autoComplete="off" maxLength={200} onChange={(event) => model.setDescription(event.target.value)} value={model.description} />
+          </Field>
+          {permissionGroups(model.permissions).map(({ group, rows }) => (
+            <section className="t-details-group" key={group}>
+              <h3 className="t-group-name">{group}</h3>
+              <div className="t-toggle-list">
+                {rows.map(({ permission, checked, toggle }) => <Toggle action={toggle} checked={checked} key={permission.id} note={permission.description || undefined} />)}
+              </div>
+            </section>
+          ))}
+          {model.error && <p className="t-error" role="alert">{model.error}</p>}
+        </div>
+      )}
+    </Drawer>
+  );
 }
 
 const SEARCHABLE_PERMISSIONS = 3;

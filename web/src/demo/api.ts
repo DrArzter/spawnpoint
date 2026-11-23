@@ -1,4 +1,4 @@
-import { ApiError, type AccessInvitation, type AuthState, type MetricRange, type ReleaseModQuery, type ReleasePackName, type SpawnpointApi } from "../api/contract";
+import { ApiError, type AccessInvitation, type AccessRoleDraft, type AuthState, type MetricRange, type ReleaseModQuery, type ReleasePackName, type SpawnpointApi } from "../api/contract";
 import { demoSession } from "./data";
 import { UNREACHABLE } from "../api/error-text";
 import { clearDemoFlag, demoFailure, demoLatency, type DemoFailureCall } from "./flag";
@@ -149,6 +149,26 @@ export const demoApi: SpawnpointApi = {
   async loadAccessRoles() {
     await demoLatency();
     return store.roles();
+  },
+
+  async createAccessRole(id: string, draft: AccessRoleDraft) {
+    await demoLatency();
+    return store.createRole(id, draft);
+  },
+
+  async updateAccessRole(roleId: string, draft: AccessRoleDraft, version: number) {
+    await demoLatency();
+    return store.updateRole(roleId, draft, version);
+  },
+
+  async deleteAccessRole(roleId: string, version: number) {
+    await demoLatency();
+    store.deleteRole(roleId, version);
+  },
+
+  async updateDefaultRole(roleId: string) {
+    await demoLatency();
+    return store.setDefaultRole(roleId);
   },
 
   async updateIdentityRole(identityId: string, roleId: string) {

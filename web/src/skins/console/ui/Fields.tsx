@@ -109,13 +109,14 @@ export function Toggle({ action, checked, label, showLabel = false }: Readonly<{
   );
 }
 
-export function Checkbox({ checked, onChange, label, labelHidden = false, disabled = false }: Readonly<{ checked: boolean | "mixed"; onChange: (checked: boolean) => void; label: string; labelHidden?: boolean; disabled?: boolean }>) {
+export function Checkbox({ checked, onChange, label, labelHidden = false, disabled = false, actionId, hint }: Readonly<{ checked: boolean | "mixed"; onChange: (checked: boolean) => void; label: string; labelHidden?: boolean; disabled?: boolean; /** The Action this box runs, so the skin contract finds it. */ actionId?: string; /** The tooltip: what the box means, or why it is refused. */ hint?: string }>) {
   return (
-    <label className="c-checkbox">
+    <label className="c-checkbox" data-tip={hint}>
       <input
         aria-checked={checked === "mixed" ? "mixed" : undefined}
         aria-label={labelHidden ? label : undefined}
         checked={checked === true}
+        data-action={actionId}
         disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
         ref={(element) => { if (element) element.indeterminate = checked === "mixed"; }}

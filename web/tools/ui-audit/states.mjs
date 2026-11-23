@@ -36,6 +36,11 @@ export const STATES = [
   { name: "linked-accounts", route: "/?demo&latency=0#/access/users", steps: [{ action: "access.linked" }] },
   { name: "delete-user", route: "/?demo&latency=0#/access/users", steps: [{ action: "access.delete" }] },
   { name: "role", route: "/?demo&latency=0#/access/roles", steps: [{ action: "access.role.read" }] },
+  { name: "role-create", route: "/?demo&latency=0#/access/roles", steps: [{ action: "access.role.create" }] },
+  { name: "role-edit", route: "/?demo&latency=0#/access/roles", steps: [{ action: "access.role.read" }, { action: "access.role.edit" }] },
+  // Guest is the demo's one custom role nobody holds: the only one Delete reaches.
+  { name: "delete-role", route: "/?demo&latency=0#/access/roles", steps: [{ click: "button[aria-label='Guest permissions']" }, { action: "access.role.delete" }], skins: ["console"] },
+  { name: "delete-role-terminal", route: "/?demo&latency=0#/access/roles", steps: [{ click: "button[aria-label='Actions for Guest']" }, { click: "[role=menuitem][data-action='access.role.delete']" }], skins: ["terminal"] },
   // The terminal draws the password form in the page, not on a surface.
   { name: "password", route: "/?demo&latency=0#/profile", steps: [{ action: "accounts.password.change" }], skins: ["console"] },
   { name: "shortcuts", route: "/?demo&latency=0#/worlds/minecraft", steps: [{ key: "?" }], skins: ["console"] },
@@ -62,11 +67,11 @@ export const STATES = [
 export const SURFACES = {
   console: {
     "Shell.tsx": { Shell: ["shortcuts"] },
-    "Access.tsx": { LinkedAccountsPanel: ["linked-accounts"], RolesPane: ["role"] },
+    "Access.tsx": { LinkedAccountsPanel: ["linked-accounts"], RolesPane: ["role"], RoleEditorPanel: ["role-create", "role-edit"] },
     "Scope.tsx": { ScopeDialog: ["scope"] },
     "Profile.tsx": { PasswordPanel: ["password"] },
     "Dialogs.tsx": {
-      ConfirmationDialog: ["stop", "archive", "wipe", "restore", "promote", "promote-unstarted", "delete-user"],
+      ConfirmationDialog: ["stop", "archive", "wipe", "restore", "promote", "promote-unstarted", "delete-user", "delete-role"],
       CreateWorldSheet: ["create-world"],
       WorldSettingsSheet: ["world-settings"],
       GameSettingsSheet: ["game-settings"],
@@ -74,10 +79,10 @@ export const SURFACES = {
     },
   },
   terminal: {
-    "Access.tsx": { Users: ["linked-accounts"], Roles: ["role"] },
+    "Access.tsx": { Users: ["linked-accounts"], Roles: ["role"], RoleEditor: ["role-create", "role-edit"] },
     "Dialogs.tsx": {
       ScopeDialog: ["scope"],
-      ConfirmationDialog: ["stop", "archive", "wipe", "restore", "promote", "promote-unstarted", "delete-user"],
+      ConfirmationDialog: ["stop", "archive", "wipe", "restore", "promote", "promote-unstarted", "delete-user", "delete-role-terminal"],
       CreateWorldSheet: ["create-world"],
       WorldSettingsSheet: ["world-settings"],
       GameSettingsSheet: ["game-settings"],

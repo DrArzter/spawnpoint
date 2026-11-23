@@ -122,7 +122,7 @@ resource "aws_cloudwatch_log_resource_policy" "workflow_failed" {
 resource "aws_cloudwatch_metric_alarm" "workflow" {
   for_each = local.workflow_alarms
 
-  alarm_name = each.key
+  alarm_name        = each.key
   alarm_description = "An execution of spawnpoint-${each.value.machine} ${replace(each.value.outcome, "-", " ")}. Open it in the Step Functions console to see the failed state."
 
   # A machine with expected errors counts its filtered rule for failures.

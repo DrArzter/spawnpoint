@@ -64,7 +64,7 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
           headless
           label="Access requests"
           loading={candidates.status === "loading"}
-          rowKey={(row) => `${row.candidate.platform}-${row.candidate.platformUserId}`}
+          rowKey={(row) => row.id}
           rows={candidates.status === "ready" ? candidates.value : []}
         />
       </Panel>

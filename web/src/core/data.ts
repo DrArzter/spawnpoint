@@ -1,21 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { AccessCandidate, AccessIdentity, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseDiff, ReleaseMod, ReleaseModPage, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
+import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseDiff, ReleaseMod, ReleaseModPage, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
 import { failureKind } from "../api/contract";
 import {
-  approveAccessCandidate, changePassword, createAccessInvitation, deleteIdentity, dismissAccessCandidate, googleOidcClientId, linkGoogle, linkPassword, linkTelegram, loadAccessCandidates, loadAccessIdentities, loadAccessInvitations,
-  loadAccessRoles, loadBackups, loadConsole, loadInvitationHistory, loadWorldMetrics, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadReleaseDiff, loadReleaseMods, loadWhitelist, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
-  runConsoleCommand, sendInvitation, telegramOidcClientId, updateIdentityRole, updateSubscriptions, updateWhitelist,
+  changePassword, createAccessInvitation, deleteIdentity, googleOidcClientId, linkGoogle, linkPassword, linkTelegram, loadAccessInvitations,
+  loadBackups, loadConsole, loadInvitationHistory, loadWorldMetrics, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadReleaseDiff, loadReleaseMods, loadWhitelist, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
+  runConsoleCommand, sendInvitation, telegramOidcClientId, updateSubscriptions, updateWhitelist,
 } from "../auth";
 import type { SnackInput } from "../components/ui/Snackbar";
 import type { StatusKind } from "./status";
 import { formatDateTime } from "../lib/format";
 import { GOOGLE_CLIENT_ID } from "../lib/signin";
-import type { Game, LinkKind, Member, OwnerBootstrap, Role, World } from "../model";
+import type { Game, Member, OwnerBootstrap, World } from "../model";
 import { action, type Action } from "./actions";
 import type { BackupsModel, CandidateRow, ConfirmationModel, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, ModsPage, NotificationsModel, ReleaseChangesModel, RequestSummary, RolesModel, UsersModel, WhitelistModel } from "./models";
 import { releaseChangeRows } from "./release-diff";
-import { roleChoice, type RoleDirectory } from "./roles";
+import { candidateKey, type AccessDirectory } from "./access-directory";
+import { roleChoice } from "./roles";
 import { FRESH_MODS_VIEW, MOD_SEARCH_DELAY_MS, modListQuery, modSourceEntries, type ModsView } from "./release-mods";
 import { whitelistNameError } from "./whitelist";
 
@@ -299,21 +300,6 @@ export function useConsoleGateway(gameId: string | undefined, worldId: string | 
 
 // --- access: users -------------------------------------------------------------
 
-const linkKinds: readonly LinkKind[] = ["telegram", "email", "google", "discord", "minecraft", "factorio", "steam", "zerotier"];
-
-// The platform an account signs in through, as the panel names its links. A
-// password account is known by its email, not by its credential id.
-function linkKindFor(platform: string): LinkKind | null {
-  if (platform === "password") return "email";
-  return (linkKinds as readonly string[]).includes(platform) ? platform as LinkKind : null;
-}
-
-function linkFor(platform: string, value: string, handle: string | null, verified: boolean): Member["links"][number] | null {
-  const kind = linkKindFor(platform);
-  if (kind === null) return null;
-  return { id: `${kind}-${value}`, kind, value: kind === "email" ? handle ?? value : value, verified };
-}
-
 // How a waiting account introduces itself: its Telegram handle, or its email.
 function candidateAccount(candidate: AccessCandidate): string {
   if (candidate.platform === "password") return candidate.email ?? "Email account";
@@ -326,54 +312,28 @@ export function bootstrapDescription(bootstrap: OwnerBootstrap): string | undefi
   return `Sign in with the configured Telegram account${configuredAccount} to create the first Owner.`;
 }
 
-const requestId = (candidate: AccessCandidate) => `${candidate.platform}:${candidate.platformUserId}`;
-
 /**
- * The people waiting for access (asked, or signed in and not approved), read on their own for a page that shows them
- * beside other things (the console skin's game home). Approve sends no role, so the API
- * gives the default one; the Access page is where another is chosen.
+ * The people waiting for access (asked, or signed in and not approved), for a page that shows them beside other
+ * things (the console skin's game home). They are the directory's candidates, so the count and the Access page
+ * agree. Approve sends no role, so the API gives the default one; the Access page is where another is chosen.
  */
-export function useAccessRequests(enabled: boolean, notify: Notify): Readonly<{
+export function accessRequests(directory: AccessDirectory): Readonly<{
   requests: Loading<readonly RequestSummary[]> | null;
   actions: (id: string) => Readonly<{ approve: Action; dismiss: Action }> | null;
 }> {
-  const [working, setWorking] = useState<string | null>(null);
-  const [state, retry, update] = useLoad<AccessCandidate[]>(enabled ? () => loadAccessCandidates() : null, [enabled]);
-  // Every candidate the Access page lists, so its count and this one agree.
-  const open = state.status === "ready" ? state.value : [];
-
-  async function settle(candidate: AccessCandidate, approve: boolean) {
-    setWorking(requestId(candidate));
-    try {
-      if (approve) {
-        const identity = await approveAccessCandidate(candidate.platform, candidate.platformUserId);
-        notify({ tone: "success", message: `${identity.displayName} approved.` });
-      } else {
-        await dismissAccessCandidate(candidate.platform, candidate.platformUserId);
-        notify({ message: `${candidate.displayName} dismissed.` });
-      }
-      update((current) => current.filter((item) => requestId(item) !== requestId(candidate)));
-    } catch (cause) {
-      const failure = approve ? "This account could not be approved." : "This account could not be dismissed.";
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : failure });
-    } finally {
-      setWorking(null);
-    }
-  }
-
-  if (!enabled) return { requests: null, actions: () => null };
+  const { candidates, working } = directory;
+  const open = candidates.status === "ready" ? candidates.value : [];
   return {
-    requests: state.status !== "ready" ? asLoading(state, retry, "access.requests.retry") : {
+    requests: candidates.status !== "ready" ? candidates : {
       status: "ready",
-      value: open.map((candidate) => ({ id: requestId(candidate), displayName: candidate.displayName, platform: candidate.platform, account: candidateAccount(candidate), since: candidate.requestedAt ?? candidate.lastSeenAt, photoUrl: candidate.photoUrl })),
+      value: open.map((candidate) => ({ id: candidateKey(candidate), displayName: candidate.displayName, platform: candidate.platform, account: candidateAccount(candidate), since: candidate.requestedAt ?? candidate.lastSeenAt, photoUrl: candidate.photoUrl })),
     },
     actions: (id) => {
-      const candidate = open.find((item) => requestId(item) === id);
+      const candidate = open.find((item) => candidateKey(item) === id);
       if (!candidate) return null;
-      const busy = working === id;
       return {
-        approve: action("access.approve", "Approve", () => void settle(candidate, true), { icon: "check", disabled: working !== null, busy, hint: "Approve with the default role" }),
-        dismiss: action("access.dismiss", "Dismiss", () => void settle(candidate, false), { icon: "close", disabled: working !== null }),
+        approve: action("access.approve", "Approve", () => void directory.approve(candidate), { icon: "check", disabled: working !== null, busy: working === id, hint: "Approve with the default role" }),
+        dismiss: action("access.dismiss", "Dismiss", () => void directory.dismiss(candidate), { icon: "close", disabled: working !== null }),
       };
     },
   };
@@ -416,83 +376,17 @@ export async function deleteMember(member: Member, deps: Readonly<{ remove: (ide
   return null;
 }
 
-function memberOf(identity: AccessIdentity): Member {
-  return {
-    id: identity.id,
-    name: identity.displayName,
-    roleId: identity.roleId,
-    canDelete: identity.canDelete,
-    links: identity.links.flatMap((link) => { const mapped = linkFor(link.platform, link.value, link.handle, link.verified); return mapped === null ? [] : [mapped]; }),
-  };
-}
-
-export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: boolean; members: Member[]; directory: RoleDirectory; onMembersChange: (members: Member[]) => void; notify: Notify }>): UsersModel {
-  const { members, directory, onMembersChange, notify } = opts;
-  const { roles, defaultRoleId } = directory;
+export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: boolean; directory: AccessDirectory; notify: Notify }>): UsersModel {
+  const { directory, notify } = opts;
+  const { members, candidates: waiting, working } = directory;
+  const { roles, defaultRoleId } = directory.roles;
   const [managing, setManaging] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [typed, setTyped] = useState("");
   const [removing, setRemoving] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [candidateRoles, setCandidateRoles] = useState<Record<string, string>>({});
-  const [working, setWorking] = useState<string | null>(null);
-  const [state, retry, update] = useLoad<AccessCandidate[]>(() => Promise.all([loadAccessCandidates(), loadAccessIdentities()]).then(([candidates, identities]) => {
-    onMembersChange(identities.map(memberOf));
-    return candidates;
-  }), []);
   const invitations = useInvitations(opts.canInvite, notify);
-
-  // Who may be deleted follows the roles held, so the list is read again after a change to them.
-  async function refreshMembers() {
-    try {
-      onMembersChange((await loadAccessIdentities()).map(memberOf));
-    } catch (cause) {
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : "The user list could not be refreshed." });
-    }
-  }
-
-  async function changeRole(member: Member, roleId: string) {
-    setWorking(member.id);
-    try {
-      await updateIdentityRole(member.id, roleId);
-      onMembersChange(members.map((item) => (item.id === member.id ? { ...item, roleId } : item)));
-      void refreshMembers();
-      notify({ tone: "success", message: `${member.name} is now ${roles.find((role) => role.id === roleId)?.name ?? roleId}.` });
-    } catch (cause) {
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : "The role could not be changed." });
-    } finally {
-      setWorking(null);
-    }
-  }
-
-  async function approve(candidate: AccessCandidate) {
-    const roleId = candidateRoles[requestId(candidate)] ?? defaultRoleId;
-    if (roleId === null) return;
-    setWorking(requestId(candidate));
-    try {
-      const identity = await approveAccessCandidate(candidate.platform, candidate.platformUserId, roleId);
-      update((current) => current.filter((item) => requestId(item) !== requestId(candidate)));
-      await refreshMembers();
-      notify({ tone: "success", message: `${identity.displayName} approved as ${roles.find((role) => role.id === identity.roleId)?.name ?? identity.roleId}.` });
-    } catch (cause) {
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : "This account could not be approved." });
-    } finally {
-      setWorking(null);
-    }
-  }
-
-  async function dismiss(candidate: AccessCandidate) {
-    setWorking(requestId(candidate));
-    try {
-      await dismissAccessCandidate(candidate.platform, candidate.platformUserId);
-      update((current) => current.filter((item) => requestId(item) !== requestId(candidate)));
-      notify({ message: `${candidate.displayName} dismissed.` });
-    } catch (cause) {
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : "This account could not be dismissed." });
-    } finally {
-      setWorking(null);
-    }
-  }
 
   function openDeletion(member: Member) {
     setTyped("");
@@ -503,7 +397,7 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
   async function confirmDeletion(member: Member) {
     setRemoving(true);
     setRefusal(null);
-    const refused = await deleteMember(member, { remove: deleteIdentity, members, onMembersChange, managing, closeManaged: () => setManaging(null), notify });
+    const refused = await deleteMember(member, { remove: deleteIdentity, members, onMembersChange: directory.setMembers, managing, closeManaged: () => setManaging(null), notify });
     setRemoving(false);
     if (refused === null) setDeleting(null);
     else setRefusal(refused);
@@ -511,20 +405,22 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
 
   const rolesReady = roles.length > 0 && defaultRoleId !== null;
   const target = members.find((member) => member.id === deleting) ?? null;
-  const candidates: Loading<readonly CandidateRow[]> = state.status !== "ready"
-    ? asLoading(state, retry, "access.candidates.retry")
+  const candidates: Loading<readonly CandidateRow[]> = waiting.status !== "ready"
+    ? waiting
     : {
       status: "ready",
-      value: state.value.map((candidate) => {
-        const roleId = candidateRoles[requestId(candidate)] ?? defaultRoleId ?? "";
+      value: waiting.value.map((candidate) => {
+        const key = candidateKey(candidate);
+        const chosen = candidateRoles[key] ?? defaultRoleId;
         return {
-        candidate,
-        account: candidateAccount(candidate),
-        since: `${candidate.status === "REQUESTED" ? "Requested access" : "Signed in"} ${formatDateTime(candidate.status === "REQUESTED" ? candidate.requestedAt : candidate.lastSeenAt)}`,
-        role: roleChoice(roles, roleId, working === requestId(candidate)),
-        setRoleId: (chosen: string) => setCandidateRoles((current) => ({ ...current, [requestId(candidate)]: chosen })),
-        approve: action("access.approve", "Approve", () => void approve(candidate), { disabled: !rolesReady, busy: working === requestId(candidate), hint: rolesReady ? "Approve with the chosen role" : "Roles are still loading" }),
-        dismiss: action("access.dismiss", "Dismiss", () => void dismiss(candidate), { disabled: working === requestId(candidate) }),
+          id: key,
+          candidate,
+          account: candidateAccount(candidate),
+          since: `${candidate.status === "REQUESTED" ? "Requested access" : "Signed in"} ${formatDateTime(candidate.status === "REQUESTED" ? candidate.requestedAt : candidate.lastSeenAt)}`,
+          role: roleChoice(roles, chosen ?? "", working === key),
+          setRoleId: (roleId: string) => setCandidateRoles((current) => ({ ...current, [key]: roleId })),
+          approve: action("access.approve", "Approve", () => { if (chosen !== null) void directory.approve(candidate, chosen); }, { disabled: !rolesReady, busy: working === key, hint: rolesReady ? "Approve with the chosen role" : "Roles are still loading" }),
+          dismiss: action("access.dismiss", "Dismiss", () => void directory.dismiss(candidate), { disabled: working === key }),
         };
       }),
     };
@@ -536,7 +432,7 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
     members: members.map((member) => ({
       member,
       role: roleChoice(roles, member.roleId, working === member.id),
-      setRoleId: (roleId: string) => void changeRole(member, roleId),
+      setRoleId: (roleId: string) => void directory.changeRole(member, roleId),
       changing: working === member.id,
       linkedAccounts: action("access.linked", "Linked accounts", () => setManaging(member.id), { icon: "link" }),
       remove: memberRemoval(member, openDeletion),
@@ -615,12 +511,12 @@ function useInvitations(enabled: boolean, notify: Notify): InvitationsModel | nu
 
 // --- access: roles --------------------------------------------------------------
 
-export function useRoles(onDirectoryChange: (directory: RoleDirectory) => void): RolesModel {
+export function useRoles(directory: AccessDirectory): RolesModel {
   const [reading, setReading] = useState<string | null>(null);
-  const [state, retry] = useLoad<Role[]>(() => loadAccessRoles().then((served) => { onDirectoryChange(served); return served.roles; }), []);
+  const state = directory.rolesState;
   const roles = state.status === "ready" ? state.value : [];
   return {
-    roles: asLoading(state, retry, "access.roles.retry"),
+    roles: state,
     reading: roles.find((item) => item.id === reading) ?? null,
     read: (role) => action("access.role.read", `${role.permissions.length} ${role.permissions.length === 1 ? "permission" : "permissions"}`, () => setReading(role.id), { icon: "chevron_right" }),
     closeReading: action("sheet.close", "Close panel", () => setReading(null)),

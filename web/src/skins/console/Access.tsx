@@ -41,7 +41,6 @@ type Selection = Readonly<{ group: Group; id: string | null }> | null;
 const USERS = "#/access/users";
 const groupHref = (group: Group) => `${USERS}/${group}`;
 const itemHref = (group: Group, id: string) => `${USERS}/${group}/${encodeURIComponent(id)}`;
-const candidateId = (row: CandidateRow) => `${row.candidate.platform}:${row.candidate.platformUserId}`;
 
 function readSelection(): Selection {
   if (typeof window === "undefined") return null;
@@ -79,7 +78,7 @@ export function Access({ model }: Readonly<{ model: AccessModel }>) {
   const candidates = users.candidates.status === "ready" ? users.candidates.value : [];
   const invitations = users.invitations?.list.status === "ready" ? users.invitations.list.value : [];
   const chosen = model.tab === "users" ? selection : null;
-  const request = chosen?.group === "requests" ? candidates.find((row) => candidateId(row) === chosen.id) : undefined;
+  const request = chosen?.group === "requests" ? candidates.find((row) => row.id === chosen.id) : undefined;
   const person = chosen?.group === "people" ? users.members.find((row) => row.member.id === chosen.id) : undefined;
   const invitation = chosen?.group === "invitations" ? invitations.find((row) => row.invitation.id === chosen.id) : undefined;
   const detail = request !== undefined || person !== undefined || invitation !== undefined;
@@ -119,7 +118,7 @@ function AccessList({ model, selection }: Readonly<{ model: AccessModel; selecti
       id: "requests",
       label: "Requests",
       end: <span>{candidates.length}</span>,
-      items: candidates.map((row) => <ListItemPerson account={row.account} accountIcon={providerIcon(row.candidate.platform)} current={current("requests", candidateId(row))} href={itemHref("requests", candidateId(row))} key={candidateId(row)} meta={<Ago at={row.candidate.requestedAt ?? row.candidate.firstSeenAt} />} name={row.candidate.displayName} photoUrl={row.candidate.photoUrl} tone="request" />),
+      items: candidates.map((row) => <ListItemPerson account={row.account} accountIcon={providerIcon(row.candidate.platform)} current={current("requests", row.id)} href={itemHref("requests", row.id)} key={row.id} meta={<Ago at={row.candidate.requestedAt ?? row.candidate.firstSeenAt} />} name={row.candidate.displayName} photoUrl={row.candidate.photoUrl} tone="request" />),
     }] : []),
     {
       id: "people",
@@ -171,7 +170,7 @@ const ACCESS: Crumb = { label: "Access", href: USERS };
 function UsersPane({ model }: Readonly<{ model: UsersModel }>) {
   const candidates = model.candidates;
   const requestColumns: Column<CandidateRow>[] = [
-    { id: "person", header: "Person", kind: "lead", render: (row) => <a href={itemHref("requests", candidateId(row))}><Person detail={row.account} detailIcon={providerIcon(row.candidate.platform)} name={row.candidate.displayName} photoUrl={row.candidate.photoUrl} tone="request" /></a> },
+    { id: "person", header: "Person", kind: "lead", render: (row) => <a href={itemHref("requests", row.id)}><Person detail={row.account} detailIcon={providerIcon(row.candidate.platform)} name={row.candidate.displayName} photoUrl={row.candidate.photoUrl} tone="request" /></a> },
     { id: "requested", header: "Requested", render: (row) => <Ago at={row.candidate.requestedAt ?? row.candidate.firstSeenAt} /> },
     { id: "role", header: "Role", render: (row) => <RoleSelect choice={row.role} label={`Role for ${row.candidate.displayName}`} onChange={row.setRoleId} /> },
     { id: "actions", header: "Actions", kind: "act", render: (row) => <><ActionButton action={row.approve} size="sm" /><ActionButton action={row.dismiss} size="sm" /></> },
@@ -191,7 +190,7 @@ function UsersPane({ model }: Readonly<{ model: UsersModel }>) {
           <Card body="flush" count={candidates.status === "ready" ? candidates.value.length : undefined} title="Requests">
             {candidates.status === "error"
               ? <LoadError error={candidates.error} kind={candidates.kind} retry={candidates.retry} size="sm" title="Requests could not be loaded" verb="read requests" />
-              : <Table arrivals columns={requestColumns} label="Requests" loading={candidates.status === "loading"} rowKey={candidateId} rows={candidates.status === "ready" ? candidates.value : []} />}
+              : <Table arrivals columns={requestColumns} label="Requests" loading={candidates.status === "loading"} rowKey={(row) => row.id} rows={candidates.status === "ready" ? candidates.value : []} />}
           </Card>
         )}
         <Card body="flush" count={model.members.length} title="People">

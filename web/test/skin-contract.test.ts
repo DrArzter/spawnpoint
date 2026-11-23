@@ -143,7 +143,7 @@ const access: AccessModel = {
   users: {
     bootstrap: { state: "unclaimed", telegramId: "1780660807" },
     bootstrapDescription: "Sign in with the configured account.",
-    candidates: { status: "ready", value: [{ candidate: { platform: "telegram", platformUserId: "42", displayName: "Nikita", username: "nikita", email: null, photoUrl: null, status: "REQUESTED", requestedAt: "2026-09-14T18:10:00Z", lastSeenAt: "2026-09-14T18:10:00Z" }, account: "@nikita", since: "Requested access Sep 14", role: roleChoice(accessRoles, "role-b", false), setRoleId: noop, approve: spy("access.approve", "Approve"), dismiss: spy("access.dismiss", "Dismiss") }] },
+    candidates: { status: "ready", value: [{ id: "telegram:42", candidate: { platform: "telegram", platformUserId: "42", displayName: "Nikita", username: "nikita", email: null, photoUrl: null, status: "REQUESTED", requestedAt: "2026-09-14T18:10:00Z", lastSeenAt: "2026-09-14T18:10:00Z" }, account: "@nikita", since: "Requested access Sep 14", role: roleChoice(accessRoles, "role-b", false), setRoleId: noop, approve: spy("access.approve", "Approve"), dismiss: spy("access.dismiss", "Dismiss") }] },
     members: [
       { member: aMember({ id: "m1", name: "DrArzter", roleId: "role-a", canDelete: false }), role: roleChoice(accessRoles, "role-a", false), setRoleId: noop, changing: false, linkedAccounts: spy("access.linked", "Linked accounts"), remove: null },
       { member: aMember({ id: "m2", name: "Mira", roleId: "role-b" }), role: roleChoice(accessRoles, "role-b", false), setRoleId: noop, changing: false, linkedAccounts: spy("access.linked", "Linked accounts"), remove: spy("access.delete", "Delete user", { danger: true, icon: "delete_forever" }) },

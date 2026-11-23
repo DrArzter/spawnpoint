@@ -242,20 +242,6 @@
   background: var(--surface-variant);
 }
 
-button.chip {
-  transition: background var(--dur-fast) var(--ease);
-}
-
-button.chip:hover {
-  background: var(--surface-hover);
-}
-
-button.chip[aria-pressed="true"] {
-  border-color: transparent;
-  background: var(--primary-container);
-  color: var(--on-primary-container);
-}
-
 /* Cards */
 .card {
   border: 1px solid var(--outline);
@@ -701,19 +687,11 @@ button.chip[aria-pressed="true"] {
 }
 
 .snackbar-error > .icon {
-  color: #f28b82;
-}
-
-[data-theme="dark"] .snackbar-error > .icon {
-  color: #c5221f;
+  color: var(--snack-error);
 }
 
 .snackbar-success > .icon {
-  color: #81c995;
-}
-
-[data-theme="dark"] .snackbar-success > .icon {
-  color: #137333;
+  color: var(--snack-success);
 }
 
 @media (max-width: 599px) {
@@ -776,11 +754,6 @@ button.chip[aria-pressed="true"] {
 
   .btn-small {
     min-height: 40px;
-  }
-
-  button.chip {
-    height: 36px;
-    padding: 0 14px;
   }
 }
 

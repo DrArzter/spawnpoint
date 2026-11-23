@@ -178,7 +178,7 @@ row tokens and the tile height.
 ### Grid
 
 One `Grid` primitive: `repeat(auto-fit, minmax(min(100%, var(--c-min)), 1fr))`, `align-items: stretch` (R11). Kinds:
-`detail` 360px, `chart` 440px, `stat` 200px, `name` 200px, `perm` 220px. Fixed grids keep the column counts the owner
+`detail` 360px, `stat` 200px, `name` 200px. Fixed grids keep the column counts the owner
 accepted: `home` 1, 2 from 1024px, 3 from 1200px, 4 from 2000px; `metrics` 1, 2 from 900px, 4 from 1900px; `profile`
 1, then `3fr 2fr` from 1600px; Releases stacked.
 

@@ -73,13 +73,6 @@ html[data-skin="console"] .c-input:disabled {
   opacity: .55;
 }
 
-html[data-skin="console"] .c-textarea {
-  height: auto;
-  min-height: 96px;
-  padding: 10px 14px;
-  resize: vertical;
-}
-
 html[data-skin="console"] .c-field-error {
   color: var(--c-err);
   font-size: var(--c-fs-s);

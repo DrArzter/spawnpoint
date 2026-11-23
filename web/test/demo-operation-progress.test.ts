@@ -14,7 +14,7 @@ const CREATIVE = "minecraft-creative-5e1c9a07";
 
 test("a promotion moves through its steps with time, the starting step holding its own child steps", () => {
   const creative = store.snapshot().games.find((item) => item.id === GAME)!.worlds.find((item) => item.id === CREATIVE)!;
-  const to = creative.preset!.releases.find((release) => release !== creative.release.activeRelease)!;
+  const to = creative.preset!.releases.at(-1)!;
   const { operationId } = store.promoteWorld(GAME, CREATIVE, to) as { operationId: string };
   const read = () => store.operationProgress(GAME, CREATIVE, operationId)!;
   const names = (progress: ReturnType<typeof read>) => [progress.step?.label ?? null, progress.child?.step.label ?? null];

@@ -77,3 +77,14 @@ export function plural(count: number, one: string, many = `${one}s`): string {
 export function capitalize(value: string): string {
   return value.length === 0 ? value : `${value[0]!.toUpperCase()}${value.slice(1)}`;
 }
+
+/** How long since `since`: h:mm:ss under a day, "2 d 5 h" past it; null when the start is unknown. */
+export function formatUptime(since: string | null | undefined, now: number): string | null {
+  const start = since ? Date.parse(since) : Number.NaN;
+  if (Number.isNaN(start)) return null;
+  const seconds = Math.max(0, Math.floor((now - start) / 1000));
+  const hours = Math.floor(seconds / 3600);
+  if (hours >= 24) return `${Math.floor(hours / 24)} d ${hours % 24} h`;
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}

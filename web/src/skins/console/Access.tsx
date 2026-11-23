@@ -440,7 +440,7 @@ function OwnerCard({ users }: Readonly<{ users: UsersModel }>) {
       {bootstrap.state === "claimed" ? (
         <DetailList columns="fit" details={[
           { label: "Owner", value: { type: "text", text: users.members.find((row) => row.member.id === bootstrap.ownerId)?.member.name ?? bootstrap.ownerId } },
-          { label: "Telegram", value: { type: "text", text: bootstrap.telegramId, mono: true } },
+          ...(bootstrap.telegramId === null ? [] : [{ label: "Telegram", value: { type: "text" as const, text: bootstrap.telegramId, mono: true } }]),
           { label: "Claimed", value: { type: "time", at: bootstrap.claimedAt } },
         ]} />
       ) : (

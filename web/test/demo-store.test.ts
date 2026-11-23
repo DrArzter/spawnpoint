@@ -41,7 +41,7 @@ test("the demo deploys fleet worlds by default and seeds one beside the configur
 });
 
 test("two fleet worlds of a game start one after the other, each on a host of its own", () => {
-  skyline = store.createWorld(GAME, "industrial", "Skyline", "1.3", "fleet", "raw").id;
+  skyline = store.createWorld(GAME, "industrial", "Skyline", "1.3", "fleet", "raw", "game").id;
 
   const first = store.startSession(GAME, CREATIVE);
   const second = store.startSession(GAME, skyline);
@@ -151,8 +151,10 @@ test("a fleet world's promotion keeps its wipe, names the target as desired, and
   const creative = () => store.snapshot().games.find((item) => item.id === GAME)!.worlds.find((item) => item.id === CREATIVE)!;
   const wipe = creative().release.generationId;
   const from = creative().release.activeRelease!;
-  const to = creative().preset!.releases.find((release) => release !== from)!;
+  const to = creative().preset!.releases.at(-1)!;
+  const older = creative().preset!.releases[0]!;
   assert.throws(() => store.promoteWorld(GAME, CREATIVE, from), /already active/);
+  assert.throws(() => store.promoteWorld(GAME, CREATIVE, older), /older than the active one/, "going back is a restore, as in the API");
   assert.throws(() => store.promoteWorld(GAME, ROSTIK, to), /fleet world/);
   store.promoteWorld(GAME, CREATIVE, to);
   assert.deepEqual([creative().release.desiredRelease, creative().release.activeRelease], [to, from]);
@@ -186,7 +188,7 @@ test("the demo pages, searches, filters and sorts a release's mods as the API do
 });
 
 test("a never-started world switches its release at once, with no operation, and a start commits the release it names (ADR-0078)", () => {
-  const created = store.createWorld(GAME, "industrial", "Sandbox", "1.2", "fleet", "raw").id;
+  const created = store.createWorld(GAME, "industrial", "Sandbox", "1.2", "fleet", "raw", "game").id;
   const sandbox = () => store.snapshot().games.find((item) => item.id === GAME)!.worlds.find((item) => item.id === created)!;
   assert.deepEqual([sandbox().release.activeRelease, sandbox().release.runCount, sandbox().release.desiredRelease], [null, 0, "1.2"]);
   assert.throws(() => store.promoteWorld(GAME, created, "1.2"), /already selected/);

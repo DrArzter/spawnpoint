@@ -67,6 +67,8 @@ export const PROMOTION_REFUSALS: Readonly<Record<string, string>> = {
   fleet_unavailable: "This deployment does not launch fleet hosts.",
   preset_removed: "This world's preset is no longer in the catalog.",
   release_not_available: "The selected release is no longer available. Refresh and try again.",
+  release_retired: "That release is retired or being retired. Choose another.",
+  release_not_ready: "That release is not built yet. Choose another.",
   release_state_unavailable: "The world's release pointer cannot be read now. Try again.",
   release_outdated: "That release was built from an older revision. Build the preset again.",
   world_already_started: "This wipe has already started. Refresh to update it with a backup.",

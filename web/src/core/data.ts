@@ -298,7 +298,7 @@ export function useConsoleGateway(gameId: string | undefined, worldId: string | 
 
 // --- access: users -------------------------------------------------------------
 
-const linkKinds: readonly LinkKind[] = ["telegram", "email", "discord", "minecraft", "factorio", "steam", "zerotier"];
+const linkKinds: readonly LinkKind[] = ["telegram", "email", "google", "discord", "minecraft", "factorio", "steam", "zerotier"];
 
 // The platform an account signs in through, as the panel names its links. A
 // password account is known by its email, not by its credential id.
@@ -455,11 +455,11 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
   }
 
   async function approve(candidate: AccessCandidate) {
-    const roleId = candidateRoles[candidate.platformUserId] ?? DEFAULT_ROLE;
-    setWorking(candidate.platformUserId);
+    const roleId = candidateRoles[requestId(candidate)] ?? DEFAULT_ROLE;
+    setWorking(requestId(candidate));
     try {
       const identity = await approveAccessCandidate(candidate.platform, candidate.platformUserId, roleId);
-      update((current) => current.filter((item) => item.platformUserId !== candidate.platformUserId));
+      update((current) => current.filter((item) => requestId(item) !== requestId(candidate)));
       const link = linkFor(candidate.platform, candidate.platformUserId, candidate.username ?? candidate.email, candidate.platform !== "password");
       onMembersChange([...members, { id: identity.id, name: identity.displayName, roleId: identity.roleId, links: link === null ? [] : [link] }]);
       notify({ tone: "success", message: `${identity.displayName} approved as ${roles.find((role) => role.id === identity.roleId)?.name ?? identity.roleId}.` });
@@ -471,10 +471,10 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
   }
 
   async function dismiss(candidate: AccessCandidate) {
-    setWorking(candidate.platformUserId);
+    setWorking(requestId(candidate));
     try {
       await dismissAccessCandidate(candidate.platform, candidate.platformUserId);
-      update((current) => current.filter((item) => item.platformUserId !== candidate.platformUserId));
+      update((current) => current.filter((item) => requestId(item) !== requestId(candidate)));
       notify({ message: `${candidate.displayName} dismissed.` });
     } catch (cause) {
       notify({ tone: "error", message: cause instanceof Error ? cause.message : "This account could not be dismissed." });
@@ -508,10 +508,10 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
         candidate,
         account: candidateAccount(candidate),
         since: `${candidate.status === "REQUESTED" ? "Requested access" : "Signed in"} ${formatDateTime(candidate.status === "REQUESTED" ? candidate.requestedAt : candidate.lastSeenAt)}`,
-        roleId: candidateRoles[candidate.platformUserId] ?? DEFAULT_ROLE,
-        setRoleId: (roleId: string) => setCandidateRoles((current) => ({ ...current, [candidate.platformUserId]: roleId })),
-        approve: action("access.approve", "Approve", () => void approve(candidate), { disabled: !rolesReady, busy: working === candidate.platformUserId, hint: rolesReady ? "Approve with the chosen role" : "Roles are still loading" }),
-        dismiss: action("access.dismiss", "Dismiss", () => void dismiss(candidate), { disabled: working === candidate.platformUserId }),
+        roleId: candidateRoles[requestId(candidate)] ?? DEFAULT_ROLE,
+        setRoleId: (roleId: string) => setCandidateRoles((current) => ({ ...current, [requestId(candidate)]: roleId })),
+        approve: action("access.approve", "Approve", () => void approve(candidate), { disabled: !rolesReady, busy: working === requestId(candidate), hint: rolesReady ? "Approve with the chosen role" : "Roles are still loading" }),
+        dismiss: action("access.dismiss", "Dismiss", () => void dismiss(candidate), { disabled: working === requestId(candidate) }),
       })),
     };
 

@@ -10,7 +10,7 @@ import type { WorldModel } from "../src/core/models.ts";
 import type { Game, World } from "../src/model.ts";
 import { consoleSkin } from "../src/skins/console/index.ts";
 import { partialLine } from "../src/skins/console/tabs/Backups.tsx";
-import { uptime } from "../src/skins/console/tabs/Hero.tsx";
+import { formatUptime as uptime } from "../src/lib/format.ts";
 
 /*
  * The console world page (skin-spec §6.3): the header pill is the one state

@@ -113,11 +113,12 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
 const linkProviders: Readonly<Record<LinkKind, { label: string; icon: IconName; purpose: string }>> = {
   telegram: { label: "Telegram", icon: "send", purpose: "Sign-in" },
   email: { label: "Email", icon: "mail", purpose: "Sign-in" },
+  google: { label: "Google", icon: "account_circle", purpose: "Sign-in" },
   discord: { label: "Discord", icon: "group", purpose: "Sign-in" },
-  minecraft: { label: "Minecraft", icon: "public", purpose: "Game identity" },
-  factorio: { label: "Factorio", icon: "public", purpose: "Game identity" },
+  minecraft: { label: "Minecraft", icon: "sports_esports", purpose: "Game identity" },
+  factorio: { label: "Factorio", icon: "sports_esports", purpose: "Game identity" },
   steam: { label: "Steam", icon: "sports_esports", purpose: "Game identity" },
-  zerotier: { label: "ZeroTier client", icon: "dns", purpose: "Network" },
+  zerotier: { label: "ZeroTier", icon: "hub", purpose: "Network" },
 };
 
 function LinkedAccounts({ member }: Readonly<{ member: Member }>) {

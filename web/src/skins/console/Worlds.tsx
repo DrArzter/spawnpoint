@@ -5,7 +5,9 @@ import type { Detail, WorldRow, WorldsModel } from "../../core/models";
 import { cx } from "../../lib/cx";
 import { eta } from "../../lib/operation-time";
 import { Home, withIcon } from "./Home";
-import { HostingChip, HostingMark, Players, hostingLabel, releaseLine, statesOf, statusRank, uptimeText } from "./WorldFacts";
+import { HostingChip, HostingMark, Players, hostingLabel, releaseLine, statesOf, statusRank } from "./WorldFacts";
+import { formatUptime } from "../../lib/format";
+import { connectionLabel } from "../../core/worlds";
 import { ActionButton, LinkButton } from "./ui/ActionButton";
 import { Address } from "./ui/Address";
 import { Card } from "./ui/Card";
@@ -72,7 +74,6 @@ const sorters: Readonly<Record<SortKey, (a: WorldRow, b: WorldRow) => number>> =
   wipe: (a, b) => (a.wipe?.number ?? -1) - (b.wipe?.number ?? -1),
 };
 
-const connections: Readonly<Record<WorldRow["world"]["connectivity"], string>> = { zerotier: "ZeroTier", raw: "Public IP", route53: "DNS" };
 
 // Values the property filter reads from a row, by property id.
 function propertyOf(row: WorldRow, property: string): string {
@@ -81,7 +82,7 @@ function propertyOf(row: WorldRow, property: string): string {
     case "hosting": return hostingLabel(row);
     case "preset": return row.presetName;
     case "release": return row.world.release.activeRelease ?? "—";
-    case "connection": return connections[row.world.connectivity];
+    case "connection": return connectionLabel(row.world.connectivity);
     default: return "";
   }
 }
@@ -385,7 +386,7 @@ function QuickLook({ model, row, onClose }: Readonly<{ model: WorldsModel; row: 
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
   const operation = (model.operations ?? []).find((item) => item.operation.worldId === row.world.id);
-  const uptime = uptimeText(row.launchedAt, now);
+  const uptime = formatUptime(row.launchedAt, now);
   const details: Detail[] = [
     { key: "players", label: "Players online", value: row.players === null || row.players === undefined ? { type: "absent", text: "—" } : { type: "number", value: row.players } },
     { key: "launched", label: "Uptime", value: uptime === null ? { type: "absent", text: "—" } : { type: "text", text: uptime, mono: true } },

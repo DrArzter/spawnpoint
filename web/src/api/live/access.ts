@@ -1,6 +1,16 @@
 import { apiFailure, identityDeletionRefusal, type AccessCandidate, type AccessIdentity, type AccessInvitation, type AccessRole, type SpawnpointApi } from "../contract";
 import { authorizedFetch, publicPost } from "./transport";
 
+/** What each refused role change means to the person who asked. */
+const ROLE_CHANGE_REFUSALS: Readonly<Record<string, string>> = {
+  self_role_change_forbidden: "You cannot change your own role.",
+  last_owner: "This is the last Owner. Make someone else an Owner first.",
+  role_change_conflict: "Someone changed this role at the same time. Refresh and try again.",
+  unknown_role: "That role no longer exists. Refresh and try again.",
+  identity_not_found: "This person no longer exists. Refresh the list.",
+  forbidden: "Only an Owner can give or take the Owner role.",
+};
+
 // Project membership and roles. Player-to-player invitations belong to the
 // game client, not this access-invitation flow.
 export const accessApi = {
@@ -86,10 +96,12 @@ export const accessApi = {
   },
 
   async updateIdentityRole(identityId: string, roleId: string): Promise<void> {
-    const response = await authorizedFetch(`/access/identities/${identityId}/role`, {
+    const response = await authorizedFetch(`/access/identities/${encodeURIComponent(identityId)}/role`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ roleId }),
     });
-    if (!response.ok) throw await apiFailure(response, response.status === 409 ? "You cannot change your own Owner role." : "The role could not be changed.");
+    if (response.ok) return;
+    const body = await response.json().catch(() => null) as { error?: unknown } | null;
+    throw await apiFailure(response, ROLE_CHANGE_REFUSALS[typeof body?.error === "string" ? body.error : ""] ?? "The role could not be changed.", body);
   },
 
   async deleteIdentity(identityId: string): Promise<void> {

@@ -11,7 +11,7 @@
 #   scripts/check.sh server   container and compose server suites
 #   scripts/check.sh lambda-build | lambda-test-shard INDEX COUNT | web | mcp
 #   scripts/check.sh ui       the UI gate: the demo build in headless Chrome
-#   scripts/check.sh server-suite-shard INDEX COUNT | server-compose
+#   scripts/check.sh server-suite-shard INDEX COUNT | server-host
 #   scripts/check.sh terraform
 
 set -Eeuo pipefail
@@ -153,8 +153,6 @@ check_server_suite() {
     fail=0; position=0; selected=0
     for t in /repo/server/tests/*-test.sh; do
       name="$(basename "$t")"
-      # profile-resolver drives real docker; it has no daemon in this container.
-      [ "$name" = "profile-resolver-test.sh" ] && continue
       # compose-bindings needs the real docker compose; it runs on the host below.
       [ "$name" = "compose-bindings-test.sh" ] && continue
       # object-cache-mount runs containers of its own; it runs on the host below.
@@ -272,7 +270,11 @@ case "${mode}" in
     validate_shard "${@:2}" || exit 2
     step "server test suite (shard ${2}/${3})" check_server_suite "$2" "$3"
     ;;
-  server-compose) step "compose bindings (host docker)" check_compose_bindings ;;
+  # The tests that need a Docker daemon, which the container shards do not have.
+  server-host)
+    step "compose bindings (host docker)" check_compose_bindings
+    step "object cache mount (host docker)" check_object_cache_mount
+    ;;
   terraform)
     step "lambda bundles" check_lambda_bundles
     run_terraform
@@ -285,7 +287,7 @@ case "${mode}" in
     step "terraform fmt+test (${2})" check_terraform_root "$2"
     ;;
   *)
-    printf 'usage: scripts/check.sh [full|fast|static|app|server|lambda-build|lambda-test-shard|web|ui|mcp|server-suite-shard|server-compose|terraform]\n' >&2
+    printf 'usage: scripts/check.sh [full|fast|static|app|server|lambda-build|lambda-test-shard|web|ui|mcp|server-suite-shard|server-host|terraform]\n' >&2
     exit 2
     ;;
 esac

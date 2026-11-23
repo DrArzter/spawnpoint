@@ -20,12 +20,14 @@ promotion.
 
 ## Start server
 
-`start-server.asl.json` is the first M2 vertical slice:
+`start-server.asl.json` is the host step of a session start: Start server V2 runs it as a child, and nothing else
+starts it in production. The name stays from the first M2 slice ([ADR-0082](../docs/adr/0082-host-steps-run-through-ssm-documents.md)).
 
 1. inspect the configured EC2 instance and start it only when stopped;
 2. wait for EC2 `running` without occupying a Lambda;
 3. wait for the SSM agent to be Online;
-4. send the constant, non-user-controlled host command `start-session.sh`;
+4. send the `spawnpoint-start-session` SSM document, which runs `start-session.sh`. The world id and slot travel as
+   document parameters that SSM checks against fixed patterns before any shell on the host reads them;
 5. poll the SSM invocation until it succeeds or reaches a terminal failure;
 6. return `ready` only after the host script has verified its connectivity strategy and the game's own readiness,
    carrying back the address the host reported.
@@ -80,7 +82,8 @@ resets the session's empty streak and releases the lease before returning a dist
 
 ## Stop server
 
-`stop-server.asl.json` invokes the host's indivisible session-close contract, then stops EC2 only after that command
+`stop-server.asl.json` is the host step of a session stop, under Stop server V2. It sends the `spawnpoint-stop-session`
+SSM document, which invokes the host's indivisible session-close contract, then stops EC2 only after that command
 succeeds. The host rechecks zero players, flushes the world, stops all session containers, creates a full archive and
 verifies its immutable S3 upload. Any refusal, archive failure or upload mismatch ends the workflow visibly while EC2
 remains running for diagnosis. An already-stopped instance is an idempotent successful result.

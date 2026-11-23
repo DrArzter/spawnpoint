@@ -103,20 +103,19 @@ test("every polling loop is bounded and ready follows SSM success", async () => 
   assert.equal(ready.End, true);
 });
 
-test("the host command names the world, and ASL builds the string", async () => {
-  const definition = await loadDefinition();
-  const command = JSON.stringify(definition.States["Start Session Command"]);
+function hostParameters(definition: Awaited<ReturnType<typeof loadDefinition>>, name: string): Record<string, unknown> {
+  const parameters = (definition.States[name] as { Parameters?: { DocumentName?: string; Parameters?: Record<string, unknown> } } | undefined)?.Parameters;
+  assert.equal(parameters?.DocumentName, "spawnpoint-start-session", `${name} sends the start document`);
+  return parameters?.Parameters ?? {};
+}
 
-  // States.Format interpolates the world id, so it never passes through a shell
-  // that could interpret it; the API validates its shape before starting an
-  // execution and load_world validates it again on the host.
-  assert.match(command, /States\.Format\('WORLD_ID=\{\} SESSION_FORMAT=json \/srv\/spawnpoint\/app\/server\/scripts\/start-session\.sh'/);
-  assert.match(command, /\$\.request\.worldId/);
-  assert.doesNotMatch(
-    command,
-    /"commands": \[[^\]]*start-session\.sh"/,
-    "a fixed command string would start whichever world the host happens to be configured for",
-  );
+// ADR-0082: the host step is the spawnpoint-start-session document. The request
+// reaches it only as named parameters, which SSM checks against the document's
+// patterns before any shell reads them; the core Terraform test checks its script.
+test("the host step names the world as a document parameter, never inside a shell line", async () => {
+  const definition = await loadDefinition();
+  assert.deepEqual(hostParameters(definition, "Start Session Command"), { "worldId.$": "States.Array($.request.worldId)" });
+  assert.doesNotMatch(JSON.stringify(definition), /commands\.\$|AWS-RunShellScript/);
 });
 
 // The address used to be a request field echoed back as the result, which was
@@ -149,23 +148,11 @@ test("a placed session's command carries its slot, and a request with no slot ru
   assert.equal(route.Choices?.[1]?.Variable, "$.request.slot");
   assert.equal(route.Choices?.[1]?.Next, "Start Placed Session Command");
   assert.equal(route.Default, "Start Session Command");
-  const placed = JSON.stringify(definition.States["Start Placed Session Command"]);
-  assert.match(placed, /States\.Format\('WORLD_ID=\{\} SPAWNPOINT_SLOT=\{\} SESSION_FORMAT=json \/srv\/spawnpoint\/app\/server\/scripts\/start-session\.sh', \$\.request\.worldId, \$\.request\.slot\)/);
-  assert.equal(definition.States["Start Placed Session Command"]?.Next, definition.States["Start Session Command"]?.Next);
-  const fleet = JSON.stringify(definition.States["Start Fleet Session Command"]);
-  assert.match(fleet, /spawnpoint-fleet-ready/);
-  assert.match(fleet, /fleet bootstrap not ready after 300 seconds/);
-  assert.equal(definition.States["Start Fleet Session Command"]?.Next, definition.States["Start Session Command"]?.Next);
-});
-
-test("every session start first brings the host's checkout to the deployed commit, and never fails for it", async () => {
-  const definition = await loadDefinition();
-  for (const name of ["Start Fleet Session Command", "Start Placed Session Command", "Start Session Command"]) {
-    const command = JSON.stringify(definition.States[name]);
-    const update = command.indexOf("update-checkout.sh");
-    assert.ok(update > 0, `${name} updates the checkout`);
-    assert.ok(update < command.indexOf("start-session.sh', $.request.worldId"), `${name} updates before the session starts`);
-    // The session summary is read from standard output, so the update writes to standard error.
-    assert.match(command, /update-checkout\.sh; if \[ -x \\"\$update\\" \]; then \\"\$update\\" >&2 \|\| true; fi/);
+  const placed = { "worldId.$": "States.Array($.request.worldId)", "slot.$": "States.Array(States.Format('{}', $.request.slot))" };
+  assert.deepEqual(hostParameters(definition, "Start Placed Session Command"), placed);
+  // A launched host may register with SSM before its bootstrap finishes; the document waits for it.
+  assert.deepEqual(hostParameters(definition, "Start Fleet Session Command"), { ...placed, waitForFleet: ["true"] });
+  for (const name of ["Start Placed Session Command", "Start Fleet Session Command"]) {
+    assert.equal(definition.States[name]?.Next, definition.States["Start Session Command"]?.Next);
   }
 });

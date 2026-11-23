@@ -114,6 +114,12 @@ test("already stopped is a successful idempotent result", async () => {
   assert.equal(alreadyStopped.End, true);
 });
 
+function hostParameters(definition: Awaited<ReturnType<typeof loadDefinition>>, name: string): Record<string, unknown> {
+  const parameters = (definition.States[name] as { Parameters?: { DocumentName?: string; Parameters?: Record<string, unknown> } } | undefined)?.Parameters;
+  assert.equal(parameters?.DocumentName, "spawnpoint-stop-session", `${name} sends the stop document`);
+  return parameters?.Parameters ?? {};
+}
+
 test("a placed session is stopped in the project its slot names; a request with no slot runs the command it always ran", async () => {
   const definition = await loadDefinition();
   const route = definition.States["Route Stop Command"];
@@ -121,8 +127,17 @@ test("a placed session is stopped in the project its slot names; a request with 
   assert.equal(route.Choices?.[0]?.Variable, "$.request.slot");
   assert.equal(route.Choices?.[0]?.Next, "Stop Placed Session Command");
   assert.equal(route.Default, "Stop Session Command");
-  const placed = JSON.stringify(definition.States["Stop Placed Session Command"]);
-  assert.match(placed, /WORLD_ID=\{\} SPAWNPOINT_SLOT=\{\} SPAWNPOINT_STOP_PLAYERS=\{\} \/srv\/spawnpoint\/app\/server\/scripts\/stop-session\.sh', \$\.request\.worldId, \$\.request\.slot, \$\.request\.players\)/);
+  // The host step is the spawnpoint-stop-session document (ADR-0082); its
+  // parameters are checked by SSM, and its script by the core Terraform test.
+  assert.deepEqual(hostParameters(definition, "Stop Placed Session Command"), {
+    "worldId.$": "States.Array($.request.worldId)",
+    "slot.$": "States.Array(States.Format('{}', $.request.slot))",
+    "players.$": "States.Array($.request.players)",
+  });
+  assert.deepEqual(hostParameters(definition, "Stop Session Command"), {
+    "worldId.$": "States.Array($.request.worldId)",
+    "players.$": "States.Array($.request.players)",
+  });
   assert.equal(definition.States["Stop Placed Session Command"]?.Next, definition.States["Stop Session Command"]?.Next);
 });
 
@@ -132,11 +147,11 @@ test("a stop refuses with players online unless its request asks to disconnect t
   assert.match(initialize, /"players":"refuse"/, "a request that names no policy refuses");
   assert.equal(definition.States["Apply Request Defaults"]?.Next, "Route Players Policy");
   const route = definition.States["Route Players Policy"];
-  assert.equal(route?.Default, "Unknown Players Policy", "only the two known words reach the host's shell");
+  assert.equal(route?.Default, "Unknown Players Policy", "only the two known words reach the host");
   assert.match(JSON.stringify(route), /"StringEquals":"refuse".*"StringEquals":"disconnect"/);
   assert.equal(route?.Choices?.[0]?.Next, "Describe Initial Instance");
   assert.equal(definition.States["Unknown Players Policy"]?.Type, "Fail");
   for (const name of ["Stop Placed Session Command", "Stop Session Command"]) {
-    assert.match(JSON.stringify(definition.States[name]), /SPAWNPOINT_STOP_PLAYERS=\{\}/);
+    assert.equal(hostParameters(definition, name)["players.$"], "States.Array($.request.players)");
   }
 });

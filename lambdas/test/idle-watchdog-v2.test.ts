@@ -72,12 +72,12 @@ test("watchdog identity is the Step Functions execution and every observation is
   assert.match(serialized, /\$\$\.Execution\.Id/);
   assert.match(serialized, /recordPlayerObservation/);
   assert.match(serialized, /isIdleStopEligible/);
-  assert.match(serialized, /check-session-activity\.sh/);
+  // The probe script runs inside the spawnpoint-session-activity document (ADR-0082).
+  assert.match(serialized, /"DocumentName":"spawnpoint-session-activity"/);
   assert.match(serialized, /playersOnline/);
   // The probe is asked for a document and read by name. Splitting its output
   // into lines made the machine depend on the order the script prints them in,
   // which nothing in the repository would have failed on.
-  assert.match(serialized, /PROBE_FORMAT=json/);
   assert.match(serialized, /States\.StringToJson\(\$\.observed\.invocation\.StandardOutputContent\)/);
   assert.equal(state(definition, "Parse Probe Output").Next, "Extract Player Count");
   const observed = state(definition, "Extract Player Count").Parameters?.observed as Record<string, unknown> | undefined;
@@ -177,7 +177,15 @@ test("a placed session is probed on its slot; a request with no slot is probed a
   assert.equal(route.Choices?.[0]?.Next, "Send Placed Probe");
   assert.equal(route.Default, "Send Structured Probe");
   const placed = state(definition, "Send Placed Probe");
-  assert.match(JSON.stringify(placed.Parameters), /SPAWNPOINT_SLOT=\{\} PROBE_FORMAT=json/);
+  const parameters = (placed.Parameters as { Parameters: Record<string, string> }).Parameters;
+  assert.deepEqual(parameters, {
+    "worldId.$": "States.Array($.request.worldId)",
+    "slot.$": "States.Array(States.Format('{}', $.request.slot))",
+  });
+  assert.deepEqual(
+    (state(definition, "Send Structured Probe").Parameters as { Parameters: Record<string, string> }).Parameters,
+    { "worldId.$": "States.Array($.request.worldId)" },
+  );
   assert.equal(placed.Next, state(definition, "Send Structured Probe").Next);
   assert.equal(placed.Catch?.[0]?.Next, state(definition, "Send Structured Probe").Catch?.[0]?.Next);
 });

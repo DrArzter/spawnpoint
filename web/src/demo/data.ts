@@ -1,7 +1,12 @@
 import type { AccessCandidate, AccessIdentity, AccessRole, ActiveSession, AppearancePreference, BackupEntry, InvitationSummary, SubscriptionState } from "../auth";
 import type { ConsoleEntry } from "../api/contract";
-import type { ControlPlaneSnapshot, SettingDefinition } from "../model";
+import type { ControlPlaneSnapshot, SettingDefinition, WorldSession } from "../model";
 import { DEFAULT_ACCENT } from "../styles/accent";
+
+/** A game whose session record says nothing runs. */
+function stoppedLifecycle(serverId: string): WorldSession {
+  return { serverId, desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: null };
+}
 
 // The demo mutates its own control plane, so every record it holds is mutable
 // while the app keeps reading the real read-only domain types.
@@ -170,7 +175,7 @@ export function initialState(): DemoState {
           id: "factorio",
           code: "FA",
           displayName: "Factorio",
-          lifecycle: { serverId: "factorio", desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: null },
+          lifecycle: stoppedLifecycle("factorio"),
           presets: [],
           worlds: [
             { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:34197", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },
@@ -183,7 +188,7 @@ export function initialState(): DemoState {
           id: "zomboid",
           code: "PZ",
           displayName: "Project Zomboid",
-          lifecycle: { serverId: "zomboid", desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: null },
+          lifecycle: stoppedLifecycle("zomboid"),
           presets: [],
           worlds: [
             { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "not_created", preset: null, wipes: [], connectionAddress: "172.29.23.24:16261", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },

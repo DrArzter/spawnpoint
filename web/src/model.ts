@@ -77,9 +77,8 @@ export type SettingDefinition = { id: string; label: string; hint?: string } & (
   | { type: "boolean"; default: boolean }
   | { type: "text"; default: string; maxLength: number; pattern: string }
 );
-export type WorldSession = Lifecycle;
 /** A session record as the API sends it: never the lease or the fence. */
-export type Lifecycle = {
+export type WorldSession = {
   serverId: string;
   desiredState: "stopped" | "running";
   observedState: "stopped" | "starting" | "ready" | "stopping" | "unknown";
@@ -95,7 +94,7 @@ export type Game = {
   id: string;
   code: string;
   displayName: string;
-  lifecycle: Lifecycle | null;
+  lifecycle: WorldSession | null;
   /** What a world of this game may set (ADR-0064); absent from older responses. */
   settings?: readonly SettingDefinition[];
   /** The game keeps a whitelist a world's record can hold (ADR-0066). */

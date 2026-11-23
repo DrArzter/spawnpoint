@@ -10,6 +10,7 @@ import { requirePermission } from "./permissions.ts";
 import { events } from "./clients.ts";
 import { accountKeyFor, activeOwnerCount, identityById } from "./identity-store.ts";
 import { passwordCredentials } from "./credentials.ts";
+import { isConditionFailure } from "./conditions.ts";
 
 export function roles(identity: Identity): Response {
   const descriptions: Record<string, string> = {
@@ -115,7 +116,7 @@ async function commitRoleChange(callerIdentity: Identity, identityId: string, ro
       } },
     ] }));
   } catch (error) {
-    if (error instanceof Error && error.name === "TransactionCanceledException") return response(409, { error: "role_change_conflict" });
+    if (isConditionFailure(error)) return response(409, { error: "role_change_conflict" });
     throw error;
   }
   return null;
@@ -197,32 +198,44 @@ export async function approve(identity: Identity, platform: string, platformUser
   const identityId = randomUUID();
   const now = new Date().toISOString();
   const name = String(candidate.Item.display_name ?? candidate.Item.email ?? platformUserId);
-  await document.send(new TransactWriteCommand({ TransactItems: [
-    { Put: { TableName: tableName, Item: {
-      pk: `IDENTITY#${identityId}`, sk: "PROFILE", identity_id: identityId, display_name: name,
-      role_id: roleId, direct_grants: directGrants, status: "ACTIVE", created_at: now,
-      created_by: identity.id, gsi1pk: "IDENTITY#ACTIVE", gsi1sk: name.toLowerCase(),
-    }, ConditionExpression: "attribute_not_exists(pk)" } },
-    { Update: { TableName: tableName, Key: account,
-      UpdateExpression: "SET identity_id = :identityId, #status = :approved, gsi1pk = :linked, gsi1sk = :now, approved_at = :now, approved_by = :by",
-      ConditionExpression: "attribute_exists(pk) AND attribute_not_exists(identity_id)",
-      ExpressionAttributeNames: { "#status": "status" },
-      ExpressionAttributeValues: { ":identityId": identityId, ":approved": "APPROVED", ":linked": `IDENTITY#${identityId}`, ":now": now, ":by": identity.id },
-    } },
-  ] }));
+  try {
+    await document.send(new TransactWriteCommand({ TransactItems: [
+      { Put: { TableName: tableName, Item: {
+        pk: `IDENTITY#${identityId}`, sk: "PROFILE", identity_id: identityId, display_name: name,
+        role_id: roleId, direct_grants: directGrants, status: "ACTIVE", created_at: now,
+        created_by: identity.id, gsi1pk: "IDENTITY#ACTIVE", gsi1sk: name.toLowerCase(),
+      }, ConditionExpression: "attribute_not_exists(pk)" } },
+      { Update: { TableName: tableName, Key: account,
+        UpdateExpression: "SET identity_id = :identityId, #status = :approved, gsi1pk = :linked, gsi1sk = :now, approved_at = :now, approved_by = :by",
+        ConditionExpression: "attribute_exists(pk) AND attribute_not_exists(identity_id)",
+        ExpressionAttributeNames: { "#status": "status" },
+        ExpressionAttributeValues: { ":identityId": identityId, ":approved": "APPROVED", ":linked": `IDENTITY#${identityId}`, ":now": now, ":by": identity.id },
+      } },
+    ] }));
+  } catch (error) {
+    // Another Owner approved or dismissed the candidate first.
+    if (isConditionFailure(error)) return response(409, { error: "candidate_unavailable" });
+    throw error;
+  }
   await publishAccessApproval(platform, candidate.Item, identityId, name, roleId);
   return response(201, { identity: { id: identityId, displayName: name, roleId, directGrants } });
 }
 
 export async function dismiss(identity: Identity, platform: string, platformUserId: string): Promise<Response> {
   const now = new Date().toISOString();
-  await document.send(new UpdateCommand({
-    TableName: tableName, Key: { pk: accountKeyFor(platform, platformUserId), sk: "ACCOUNT" },
-    UpdateExpression: "SET #status = :dismissed, gsi1pk = :state, gsi1sk = :now, dismissed_at = :now, dismissed_by = :by",
-    ConditionExpression: "attribute_exists(pk) AND attribute_not_exists(identity_id)",
-    ExpressionAttributeNames: { "#status": "status" },
-    ExpressionAttributeValues: { ":dismissed": "DISMISSED", ":state": "CANDIDATE#DISMISSED", ":now": now, ":by": identity.id },
-  }));
+  try {
+    await document.send(new UpdateCommand({
+      TableName: tableName, Key: { pk: accountKeyFor(platform, platformUserId), sk: "ACCOUNT" },
+      UpdateExpression: "SET #status = :dismissed, gsi1pk = :state, gsi1sk = :now, dismissed_at = :now, dismissed_by = :by",
+      ConditionExpression: "attribute_exists(pk) AND attribute_not_exists(identity_id)",
+      ExpressionAttributeNames: { "#status": "status" },
+      ExpressionAttributeValues: { ":dismissed": "DISMISSED", ":state": "CANDIDATE#DISMISSED", ":now": now, ":by": identity.id },
+    }));
+  } catch (error) {
+    // The candidate was approved first, or no longer exists.
+    if (isConditionFailure(error)) return response(409, { error: "candidate_unavailable" });
+    throw error;
+  }
   return response(204, null);
 }
 

@@ -67,7 +67,7 @@ motion:
   d4: "900ms"
   ease: "cubic-bezier(.22, 1, .36, 1)"
   ease-spring: "cubic-bezier(.34, 1.45, .64, 1)"
-  travel: "64px"
+  travel: "32px"
 ---
 
 # Design System: Spawnpoint Console
@@ -215,7 +215,7 @@ and bottom sheet 18px; button, pill, chip and segmented control 999px.
 ## Motion
 
 Tokens: `--c-d1` 140ms (hover, press, colour), `--c-d2` 240ms (small surfaces), `--c-d3` 420ms (panels, page moves),
-`--c-d4` 900ms (drawing), `--c-ease`, `--c-ease-spring`, `--c-travel` 64px (how far a page sheet travels), and the named loops and dwells (`--c-d-tick`,
+`--c-d4` 900ms (drawing), `--c-ease`, `--c-ease-spring`, `--c-travel` 32px (how far a page sheet travels), and the named loops and dwells (`--c-d-tick`,
 `--c-loop-bar`, `--c-loop-spin`, `--c-loop-shimmer`, `--c-shake`, `--c-dwell-copy`, `--c-dwell-toast`). Timers in
 TypeScript read `ui/motion.ts`, which the `console-css` test holds equal to the tokens.
 

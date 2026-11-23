@@ -9,7 +9,7 @@ for the same short-lived Spawnpoint session at the access API, and the panel hol
 [ADR-0045](../docs/adr/0045-provider-neutral-login-sessions.md), [ADR-0055](../docs/adr/0055-sign-in-with-email-and-password-by-default.md)
 and [ADR-0012](../docs/adr/0012-web-control-panel.md).
 
-The bare root (`#/`) is the front door: a landing page in the console's own chrome that explains what Spawnpoint does,
+The bare root (`#/`) is the front door: a landing page in the front door's own app bar that explains what Spawnpoint does,
 shows a still of the Worlds page with example data, and carries **Sign in** in the app bar plus a link into the demo.
 Sign in opens one panel: the email-and-password form first, which also creates an account, then every other provider
 the deployment offers as a button beneath it. The API says which those are (`GET /auth/providers`); the panel never
@@ -29,16 +29,16 @@ What a person sees is decided by their role, not by the client:
 
 | Screen | Permission | What is there |
 | --- | --- | --- |
-| Worlds | `status.read` | The scoped game's session state and compute host, then every save as a row: availability, preset and release, current wipe, connection address with copy, Start and Stop. A save opens into its own page: Details, Wipes, Backups with **Restore** (`backup.read`, `backup.restore`), Releases with the client pack download (`connection.read`); **New wipe**, **Archive** and the typed-confirmation **Delete forever** sit in its actions menu (`world.manage`) |
-| Metrics | `metrics.read` | Session metrics where the backend has them; an honest unavailable state otherwise |
-| Console | `console.use` | An RCON console where the backend has it; an honest unavailable state otherwise |
-| Releases | `release.read` | Per preset: build status, release history, source commit and **Create save** from a ready release (`world.manage`); the release pointer of every save |
+| Worlds | `status.read` | The scoped game's session state and compute host, then every world as a row: availability, preset and release, current wipe, connection address with copy, Start and Stop. A world opens into its own page with tabs: Details, Wipes, Backups with **Restore** (`backup.read`, `backup.restore`), Releases with the client pack download (`connection.read`), Whitelist (`whitelist.manage`), Console (`console.use`) and Metrics (`metrics.read`). The console and metrics tabs show an honest unavailable state where the backend has nothing. **New wipe**, **Archive** and the typed-confirmation **Delete forever** sit in its actions menu (`world.manage`) |
+| Releases | `release.read` | Per preset: build status, release history, source commit and **Create world** from a ready release (`world.manage`); the release pointer of every world |
 | Access | `access.read`, `access.manage` | Accounts waiting for approval — a Telegram handle or an email, whichever they signed in with — identities and their roles, notification subscriptions, the one-time Owner bootstrap |
-| Profile | any signed-in identity | Display details from the account the session came through, and the identity's linked game and network accounts, read-only until linking flows exist |
+| Profile | any signed-in identity | Display details from the account the session came through, and the identity's linked accounts. A signed-in person links a login provider here by proving it (`linkTelegram`, `linkGoogle`, `linkPassword` in `src/api/contract.ts`) |
 
-The game is the console's scope: the picker in the app bar re-scopes Worlds, Metrics, Console and Releases, and the
-hash carries it (`#/worlds/<game>`, `#/worlds/<game>/<world>`, `#/releases/<game>`), so a reload and a shared link land
-on the same screen. `#/overview` stays an alias of `#/worlds`.
+The game is the console's scope: the picker in the app bar re-scopes Worlds and Releases, and the hash carries it
+(`#/worlds/<game>`, `#/worlds/<game>/<world>`, `#/worlds/<game>/<world>/<tab>`, `#/releases/<game>`), so a reload and a
+shared link land on the same screen. The rail has Worlds, Releases and Access. `#/overview` and `#/home` open Worlds;
+`#/metrics` and `#/console` are old links that land on Worlds. The other hash routes are `#/access/<tab>` and
+`#/profile` (`src/routing.ts`).
 
 Constraints, unchanged:
 
@@ -65,7 +65,7 @@ grew into the surface above. Designed here but not built: the self-serve one-tim
 
 The expensive panel was the *public* one; the tiers below get the value without the cost, in order of arrival:
 
-1. **The owner's localhost panel — the primary panel path.** `npm run panel` on the owner's machine: a local web app
+1. **The owner's localhost panel — the primary panel path.** *Not built: `web/package.json` has no `panel` script.* The idea was `npm run panel` on the owner's machine: a local web app
    over the same control-plane calls the bot makes (StartExecution, pointer and S3 reads, SSM file peeks), using the
    owner's own `AWS_PROFILE` credential chain. Localhost is the authentication — the entire reason the panel was cut
    evaporates. Non-negotiable hardening, because a local server that spends money is a drive-by target: bind
@@ -91,8 +91,11 @@ works behind CloudFront like any other. What is excluded is server-side renderin
 a framework *mode*, not React itself. Since [ADR-0059](../docs/adr/0059-separate-the-console-into-bones-and-skins.md)
 the console is two layers: the bones in `src/core` decide what is shown and what may be done, and hand each page a
 model of facts and actions; a skin in `src/skins/<id>` draws it. The default look is `src/skins/console`, the second
-is `src/skins/terminal`; every skin must render every action a model carries, which `test/skin-contract.test.ts` checks. The shared primitives live in
-`src/components/ui` for the console face; the terminal face draws its own in `src/skins/terminal/ui.tsx` ([DESIGN.md](DESIGN.md)).
+is `src/skins/terminal`; every skin must render every action a model carries, which `test/skin-contract.test.ts` checks. The console's primitives live in
+`src/skins/console/ui/` (one file each) and are styled in `src/skins/console/styles/`. The terminal's primitives are in
+`src/skins/terminal/ui.tsx`. `src/components/ui` belongs to the front door; a skin draws none of its views with it, and
+only the shared behaviour there (the snackbar queue, `Timestamp`, `Tooltip`, `useFilter`) is open to both skins
+([DESIGN.md](DESIGN.md), [AGENTS.md](../AGENTS.md)).
 
 ## What the panel is actually for
 
@@ -134,7 +137,7 @@ npm run build    # static files in web/dist
 
 `?demo` answers every call from an in-memory control plane (`src/demo/`) instead of the access API. It works in a
 production build as well as in dev, because the front door links to it: no token, no AWS call and no data that outlives
-the tab. Starting and stopping a session, wiping, restoring, archiving, purging, creating a save, approving a Telegram
+the tab. Starting and stopping a session, wiping, restoring, archiving, purging, creating a world, approving a Telegram
 account and sending an invitation all change the state the console then reads back, and the transitions take a few
 seconds so the operations table and status rows behave the way they do against the real API. The demo transport emits
 local invalidations because it has no AWS event bus.

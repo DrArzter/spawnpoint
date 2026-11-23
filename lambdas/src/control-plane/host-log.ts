@@ -44,10 +44,16 @@ const RESULT_LABELS: Readonly<Record<string, string>> = {
 
 const STEP = /^step=([a-z][a-z0-9_]{0,39}) at=(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) elapsed_seconds=(\d{1,7})$/;
 const RESULT = /^([a-z_]{1,20})=([A-Za-z0-9._:+/-]{1,60})$/;
-// Compose prefixes a tick and suffixes a duration; both are trimmed before the match.
-const CONTAINER = /^Container\s+([\w.-]{1,101})\s+(Creating|Created|Starting|Started|Stopping|Stopped)$/;
-const CONTAINER_TICK = /^✔\s+/;
-const CONTAINER_DURATION = /\s+\d+(?:\.\d+)?s$/;
+// Compose prefixes a tick and suffixes a duration; both words are dropped before the match.
+const CONTAINER = /^Container ([\w.-]{1,101}) (Creating|Created|Starting|Started|Stopping|Stopped)$/;
+const DURATION = /^\d{1,6}(?:\.\d{1,6})?s$/;
+
+function containerWords(line: string): string {
+  const words = line.split(/\s+/).filter((word) => word !== "");
+  if (words[0] === "✔") words.shift();
+  if (words.length > 0 && DURATION.test(words.at(-1)!)) words.pop();
+  return words.join(" ");
+}
 const NOTICE = /^(error|warning):\s*(.{1,400})$/i;
 const GAME = /^mc-1\s+\|\s?(.*)$/;
 const GAME_FAULT = /\b(?:ERROR|WARN|WARNING|FATAL)\b|Exception|OutOfMemoryError/;
@@ -107,7 +113,7 @@ function shape(line: string): Shape | null {
   if (step) return { kind: "step", text: stepText(step[1]!, step[3]!), at: step[2]! };
   const result = RESULT.exec(line);
   if (result && RESULT_LABELS[result[1]!] !== undefined) return { kind: "result", text: `${RESULT_LABELS[result[1]!]}: ${result[2]}` };
-  const container = CONTAINER.exec(line.replace(CONTAINER_TICK, "").replace(CONTAINER_DURATION, ""));
+  const container = CONTAINER.exec(containerWords(line));
   if (container) return { kind: "container", text: `Container ${container[1]} ${container[2]}` };
   const notice = NOTICE.exec(line);
   if (notice) return { kind: notice[1]!.toLowerCase() === "error" ? "error" : "warning", text: notice[2]! };

@@ -65,6 +65,25 @@ test("stop preserves the active session; already-stopped worlds dispatch nothing
   assert.equal(inputs[0]?.sessionId, "session-test");
 });
 
+test("a stop disconnects players only when asked, and only for a caller with session.stop.force", async (t) => {
+  const inputs = scenario(t, { state: "running", game: running() });
+  assert.equal((await controlSession(identity, "stop", record.gameId, record.worldId, "")).statusCode, 202);
+  assert.equal(inputs[0]?.players, undefined, "a plain stop leaves the machine's refuse default");
+
+  assert.equal((await controlSession(identity, "stop", record.gameId, record.worldId, JSON.stringify({ players: "disconnect" }))).statusCode, 202);
+  assert.equal(inputs[1]?.players, "disconnect");
+
+  const operator = { id: "operator", displayName: "Operator", roleId: "operator", directGrants: [] } as const;
+  const refused = await controlSession(operator, "stop", record.gameId, record.worldId, JSON.stringify({ players: "disconnect" }));
+  assert.equal(refused.statusCode, 403);
+  const granted = { ...operator, directGrants: ["session.stop.force"] } as const;
+  assert.equal((await controlSession(granted, "stop", record.gameId, record.worldId, JSON.stringify({ players: "disconnect" }))).statusCode, 202);
+
+  assert.equal((await controlSession(identity, "stop", record.gameId, record.worldId, JSON.stringify({ players: "kick" }))).statusCode, 400);
+  assert.equal((await controlSession(identity, "stop", record.gameId, record.worldId, "[]")).statusCode, 400);
+  assert.equal(inputs.length, 3, "a refused or invalid request dispatches nothing");
+});
+
 test("an already-stopped world returns a noop without creating a workflow", async (t) => {
   const inputs = scenario(t);
   const result = await controlSession(identity, "stop", record.gameId, record.worldId);

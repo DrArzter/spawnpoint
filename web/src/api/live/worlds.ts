@@ -1,5 +1,5 @@
 import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../../model";
-import { apiFailure, type FileLink, type ReleaseDiff, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type SessionOperation, type SpawnpointApi, type WorldLifecycleAction, type WorldWhitelist } from "../contract";
+import { apiFailure, type FileLink, type ReleaseDiff, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type SessionOperation, type SpawnpointApi, type StopPlayersPolicy, type WorldLifecycleAction, type WorldWhitelist } from "../contract";
 import { authorizedFetch } from "./transport";
 
 function controlPlaneSubscription(onInvalidated: () => void): () => void {
@@ -105,12 +105,15 @@ export const worldsApi = {
     return controlPlaneSubscription(onInvalidated);
   },
 
-  async requestSessionOperation(gameId: string, worldId: string, action: SessionOperation) {
-    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/${action}`, { method: "POST" });
+  async requestSessionOperation(gameId: string, worldId: string, action: SessionOperation, players?: StopPlayersPolicy) {
+    const response = await authorizedFetch(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/${action}`, {
+      method: "POST",
+      ...(players === "disconnect" ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ players }) } : {}),
+    });
     const body = await response.json() as { error?: string; result?: "requested" | "already_stopped"; operationId?: string };
     if (!response.ok) {
       const messages: Record<string, string> = {
-        forbidden: `Your role cannot ${action} sessions.`,
+        forbidden: players === "disconnect" ? "Your role cannot disconnect players." : `Your role cannot ${action} sessions.`,
         unsupported_world: "This world is not connected to a session workflow yet.",
         operation_in_progress: "Another control-plane operation is already running.",
         host_not_unique: "Spawnpoint could not select exactly one compatible host.",

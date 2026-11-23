@@ -7,6 +7,7 @@ const descriptions: Record<string, string> = {
   "connection.read": "See the address a world is reachable at.",
   "session.start": "Start a session on the shared host.",
   "session.stop": "Stop a session, which saves the world and backs it up first.",
+  "session.stop.force": "Stop a session while players are online, which disconnects them.",
   "invitation.send": "Invite players through the Telegram bot.",
   "metrics.read": "Read session metrics.",
   "console.use": "Run RCON commands, recorded against your identity.",

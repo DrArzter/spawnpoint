@@ -9,6 +9,7 @@
   [ADR-0048](0048-one-instance-per-active-world.md) (S3 is the world's home between sessions),
   [ADR-0054](0054-place-a-session-on-a-host-with-room.md) (placement, reservation and drain),
   [ADR-0062](0062-give-each-fleet-world-a-session-record-of-its-own.md) (the `world#` record key)
+- Amended by [ADR-0081](0081-a-stop-may-disconnect-players.md) on 2026-11-23: a stop may disconnect players online for a holder of `session.stop.force`.
 
 ## Context
 

@@ -10,7 +10,7 @@ export const worldsRoutes: Readonly<Record<string, Route>> = {
   "POST /games/{gameId}/worlds/{worldId}/start": permissionRoute("session.start", (identity, event) =>
     controlSession(identity, "start", parameter(event, "gameId"), parameter(event, "worldId"))),
   "POST /games/{gameId}/worlds/{worldId}/stop": permissionRoute("session.stop", (identity, event) =>
-    controlSession(identity, "stop", parameter(event, "gameId"), parameter(event, "worldId"))),
+    controlSession(identity, "stop", parameter(event, "gameId"), parameter(event, "worldId"), event.body)),
   "GET /games/{gameId}/worlds/{worldId}/whitelist": permissionRoute("whitelist.manage", (_identity, event) =>
     whitelistOf(parameter(event, "gameId"), parameter(event, "worldId"))),
   "PUT /games/{gameId}/worlds/{worldId}/whitelist": permissionRoute("whitelist.manage", (identity, event) =>

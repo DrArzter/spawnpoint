@@ -131,7 +131,24 @@ item back with a build or with the reconciler's repair. Ask the owner before you
 - Eviction runs after a download and removes the oldest unlinked files when free space is low. A file that an installed
   payload directory links is never removed, so eviction frees little until old payload directories are removed.
 
-## 9. Measurements
+## 9. Read the store by hand
+
+Under `objects-v1` a file is an object named by its SHA-256: `objects/sha256/<first 2 hex>/<64 hex>`. The key has no
+file name, and one object can belong to many releases. The release key holds only `manifest.json`, which maps each name
+to its object. Use the panel's Releases tab for one world's files. To read the bucket directly, use
+`scripts/release-files.sh`. It only lists keys and reads manifests.
+
+```
+scripts/release-files.sh show minecraft prominence 45059711263.1   # every file: kind, path, bytes, SHA-256, S3 key
+scripts/release-files.sh find minecraft backpacks                   # the releases with a file whose name contains the text
+scripts/release-files.sh object 3f9a…e7                             # is it stored, and which releases and files name it
+```
+
+The output is tab-separated, with a header line, and aligned on a terminal. The tool reads legacy releases too: it
+prints their own keys, and the packs beside them. `object` reads every manifest in the bucket, so it takes longer when
+there are many releases.
+
+## 10. Measurements
 
 These lines exist so that the numbers in the design can be checked. Record each reading in
 [measurements.md](measurements.md) with the date, the release and the instance type.
@@ -143,7 +160,7 @@ These lines exist so that the numbers in the design can be checked. Record each 
 | Reconciler: drift and sweep | CloudWatch namespace `Spawnpoint/ReleaseReconciler` |
 | Real size of `client.zip` and the share of changed files between releases | The release plan (`plan.json`) and the manifests |
 
-## 10. Still to verify with AWS
+## 11. Still to verify with AWS
 
 No AWS call was made while this was built. Verify before you rely on it:
 

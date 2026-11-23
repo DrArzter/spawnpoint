@@ -9,20 +9,12 @@ html[data-skin="console"] .c-grid {
   min-width: 0;
 }
 
-html[data-skin="console"] .c-grid-chart {
-  --c-min: 440px;
-}
-
 html[data-skin="console"] .c-grid-stat {
   --c-min: 200px;
 }
 
 html[data-skin="console"] .c-grid-name {
   --c-min: 200px;
-}
-
-html[data-skin="console"] .c-grid-perm {
-  --c-min: 220px;
 }
 
 html[data-skin="console"] .c-grid-home,

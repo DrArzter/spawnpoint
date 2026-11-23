@@ -49,6 +49,8 @@
   --snack-ink: #f5f5f5;
   --snack-action: #8ab4f8;
   --snack-hover: rgba(245, 245, 245, 0.12);
+  --snack-error: #f28b82;
+  --snack-success: #81c995;
 
   --term-bg: #222222;
   --term-header: #333333;
@@ -131,6 +133,8 @@
   --snack-ink: #222222;
   --snack-action: #1967d2;
   --snack-hover: rgba(34, 34, 34, 0.12);
+  --snack-error: #c5221f;
+  --snack-success: #137333;
 
   --term-bg: #1b1b1b;
   --term-header: #2a2a2a;

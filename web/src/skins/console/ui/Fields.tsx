@@ -1,4 +1,4 @@
-import { createContext, useContext, useId, useMemo, type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { createContext, useContext, useId, useMemo, type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
 
 import type { Action } from "../../../core/actions";
 import { Icon, type IconName } from "../../../icons";
@@ -67,10 +67,6 @@ export function NumberInput({ className, ...rest }: Readonly<Omit<InputHTMLAttri
 /** A native colour well at the field's height, for a colour the person picks (the accent). */
 export function ColourInput({ className, ...rest }: Readonly<Omit<InputHTMLAttributes<HTMLInputElement>, "type">>) {
   return <input className={cx("c-input", "c-input-colour", className)} type="color" {...controlProps(useWiring())} {...rest} />;
-}
-
-export function TextArea({ className, ...rest }: Readonly<TextareaHTMLAttributes<HTMLTextAreaElement>>) {
-  return <textarea className={cx("c-input", "c-textarea", className)} {...controlProps(useWiring())} {...rest} />;
 }
 
 export type SelectOption = Readonly<{ value: string; label: string; disabled?: boolean }>;

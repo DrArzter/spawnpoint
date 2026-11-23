@@ -91,7 +91,7 @@ test("Card and Grid: the title at the start, actions at the end, a grid that str
   assert.match(card, /<section class="c-card" data-layout="rail" data-scope=""><header class="c-card-head" data-layout="spread"><h2 data-rail="">Session<span class="c-count"><span class="c-tick">2<\/span><\/span><\/h2><div class="c-card-actions">a<\/div>/);
   assert.match(card, /c-card-body c-card-body-flush/);
   assert.match(html(createElement(Card, { label: "Hero" }, "x")), /<section aria-label="Hero" class="c-card" data-layout="rail" data-scope="">/);
-  assert.match(html(createElement(Grid, { kind: "chart" }, "x")), /class="c-grid c-grid-chart"/);
+  assert.match(html(createElement(Grid, { kind: "stat" }, "x")), /class="c-grid c-grid-stat"/);
 });
 
 test("Status: an icon and a word in the state's tone, never colour alone", () => {

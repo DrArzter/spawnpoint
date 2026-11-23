@@ -7,7 +7,7 @@ import { cx } from "../../../lib/cx";
  * fixed kinds keep the prototype's accepted column counts. Every kind
  * stretches the cards of one row to one height (R11).
  */
-export type GridKind = "detail" | "chart" | "stat" | "name" | "perm" | "home" | "metrics" | "profile" | "stack";
+export type GridKind = "detail" | "stat" | "name" | "home" | "metrics" | "profile" | "stack";
 
 export function Grid({ kind, className, children, label }: Readonly<{ kind: GridKind; className?: string; label?: string; children: ReactNode }>) {
   return <div aria-label={label} className={cx("c-grid", `c-grid-${kind}`, className)} data-layout="grid" role={label ? "group" : undefined} /* NOSONAR a named region of cards; <fieldset> is for form controls */>{children}</div>;

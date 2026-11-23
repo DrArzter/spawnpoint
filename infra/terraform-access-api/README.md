@@ -1,6 +1,6 @@
 # Access API and browser identity
 
-This isolated root owns browser sign-in adapters, revocable login sessions, the session-protected HTTP API and its Lambda. It reads the access table but cannot affect game compute.
+This isolated root owns browser sign-in adapters, revocable login sessions, the session-protected HTTP API and its Lambda. It reads and writes the access table. Its Lambda can also start the start, stop, world and promotion state machines, request release builds, and send SSM commands. Those commands use only Spawnpoint's own console and whitelist documents, and target the configured host and tagged fleet hosts. It does affect game compute.
 
 The Lambda verifies either an OIDC ID token against Telegram's public JWKS or Mini App `initData` with the bot token, then issues one short-lived Spawnpoint session format. The legacy Login Widget signature remains accepted only for rolling compatibility. Spawnpoint roles, not successful Telegram authentication, decide what the caller may do.
 

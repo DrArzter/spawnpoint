@@ -1,6 +1,6 @@
 # AWS Mini App hosting command log
 
-Executed on 2026-08-27 against account `614934752397`, profile `spawnpoint`.
+Executed on 2026-08-27 against account `<account-id>`, profile `spawnpoint`.
 This root is static hosting only and has no IAM permission or dependency on
 EC2, Lambda, DynamoDB or Step Functions.
 
@@ -8,10 +8,10 @@ EC2, Lambda, DynamoDB or Step Functions.
 
 | Resource | Value | Purpose |
 | --- | --- | --- |
-| S3 bucket | `spawnpoint-web-614934752397` | Private static origin |
+| S3 bucket | `spawnpoint-web-<account-id>` | Private static origin |
 | CloudFront distribution | `E1UUZEI6NMXTB7` | Public HTTPS edge |
 | CloudFront OAC | `E2FAI8E37LEOYC` | Signed read-only requests to S3 |
-| Mini App URL | `https://dwk99t8cin0cf.cloudfront.net/` | Telegram/browser entry point |
+| Mini App URL | `https://<cloudfront-domain>/` | Telegram/browser entry point |
 
 The bucket has owner-enforced object ownership, AES-256 server-side
 encryption and all four Public Access Block switches enabled. Its policy is
@@ -51,8 +51,8 @@ explicitly; the upload path remains identical and still touches only static
 objects in the dedicated web bucket:
 
 ```bash
-WEB_BUCKET_NAME=spawnpoint-web-614934752397 \
-MINI_APP_URL=https://dwk99t8cin0cf.cloudfront.net/ \
+WEB_BUCKET_NAME=spawnpoint-web-<account-id> \
+MINI_APP_URL=https://<cloudfront-domain>/ \
 AWS_PROFILE_NAME=spawnpoint \
 AWS_REGION_NAME=eu-central-1 \
 scripts/deploy-web.sh

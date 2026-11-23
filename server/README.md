@@ -110,8 +110,7 @@ GRAFANA_BIND_ADDRESS=0.0.0.0
 ```
 
 M0 uses this form, so Grafana follows the host's persistent ZeroTier identity even if its managed overlay address is
-changed and needs no local SSM tunnel. This is safe only while the EC2 security group keeps its zero-inbound-rule
-invariant: port 3000 must not be added there. Anyone admitted to the ZeroTier network can reach the login page.
+changed and needs no local SSM tunnel. This is safe only while no security group opens port 3000. The configured host opens a game port to `0.0.0.0/0` for each declared public world, and a launched host opens the port of each game module. Never add port 3000 to either group. Anyone admitted to the ZeroTier network can reach the login page.
 
 The initial dashboard shows Minecraft health, players and response time, Minecraft-container CPU/RAM, and host
 memory/disk. It does not yet show MSPT or JVM heap/GC; those need a JVM or game-aware exporter.

@@ -2,7 +2,8 @@ import { roleOf } from "../../access/domain.ts";
 import { GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { type Caller, type Response, response } from "./http.ts";
 import { observe, resolveIdentity, bootstrapOwner, identityAccounts } from "./identity-store.ts";
-import { identityPhoto } from "../../access/avatar.ts";
+import { providerPhoto } from "../../access/avatar.ts";
+import { avatarLink, copyProviderAvatar } from "./avatars.ts";
 import { requestAccountAccess } from "../../access/account-writes.ts";
 import { document, tableName, type Item } from "./access-store.ts";
 
@@ -14,8 +15,10 @@ export async function session(account: Caller, capabilities: readonly string[]):
     const bootstrap = await document.send(new GetCommand({ TableName: tableName, Key: { pk: "SYSTEM", sk: "BOOTSTRAP" } }));
     // The Owner's Telegram id is personal data that no member needs once the claim is made.
     const profile = accountProfile(account, observed);
-    // A password account has no photo; the identity's other accounts may.
-    if (profile.photoUrl === null) profile.photoUrl = identityPhoto(await identityAccounts(identity), account);
+    // The identity's own avatar (ADR-0084), copied once from a provider photo when it has none.
+    const key = identity.avatarKey ?? (identity.avatarRemoved ? null
+      : await copyProviderAvatar(identity, providerPhoto(await identityAccounts(identity), account)));
+    profile.photoUrl = key !== null ? await avatarLink(key) : identity.avatarRemoved ? null : profile.photoUrl;
     return response(200, { state: "active", identity, role, capabilities, profile,
       bootstrap: bootstrap.Item === undefined ? { state: "unclaimed" } : {
         state: "claimed", ownerId: bootstrap.Item.identity_id, telegramId: null, claimedAt: bootstrap.Item.claimed_at,

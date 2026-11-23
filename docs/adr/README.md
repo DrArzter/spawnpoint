@@ -27,7 +27,7 @@ collected eleven before it was accepted.
 
 ## Start here — most of this is not blocking
 
-Eighty-three records is a wall, and a wall is not a plan. Read the two or three that cover what you are building now.
+Eighty-four records is a wall, and a wall is not a plan. Read the two or three that cover what you are building now.
 
 | To do this | You need |
 | --- | --- |
@@ -148,6 +148,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0081](0081-a-stop-may-disconnect-players.md) | A stop may disconnect players, for a holder of session.stop.force | Accepted | M6 |
 | [0082](0082-host-steps-run-through-ssm-documents.md) | The V1 machines are the V2 host step, and host input goes through SSM documents | Accepted | M6 |
 | [0083](0083-panel-roles-are-owner-defined-data.md) | Panel roles are owner-defined data | Accepted | M6 |
+| [0084](0084-an-identity-owns-its-avatar.md) | An identity owns its avatar | Accepted | M6 |
 
 ## Decisions still to record
 

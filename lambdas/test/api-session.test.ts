@@ -4,6 +4,7 @@ import test, { type TestContext } from "node:test";
 process.env.ACCESS_TABLE_NAME = "access-api-test";
 process.env.BOOTSTRAP_OWNER_TELEGRAM_ID = "1000";
 const { document } = await import("../src/handlers/api/access-store.ts");
+const { S3Client } = await import("@aws-sdk/client-s3");
 const { session } = await import("../src/handlers/api/session.ts");
 
 const configuredAccount = {
@@ -69,9 +70,19 @@ test("a member does not receive the Owner's Telegram id from a claimed bootstrap
   assert.ok(!JSON.stringify(found.bootstrap).includes(claim.telegram_id));
 });
 
-test("a password sign-in shows the photo of the identity's linked Telegram account", async (t) => {
+test("a password sign-in copies the linked Telegram photo once, and shows the identity's own avatar", async (t) => {
+  process.env.AVATAR_BUCKET = "spawnpoint-avatars-test";
+  process.env.AWS_REGION ??= "eu-central-1";
+  process.env.AWS_ACCESS_KEY_ID ??= "AKIATEST";
+  process.env.AWS_SECRET_ACCESS_KEY ??= "secret";
   const passwordAccount = { provider: "password", subject: "sub-1", displayName: "Ada", username: null, photoUrl: null, email: "ada@example.com" };
   const telegramPhoto = "https://t.me/i/userpic/320/ada.jpg";
+  const stored: string[] = [];
+  t.mock.method(S3Client.prototype, "send", async (command: { constructor: { name: string }; input: { Key?: string } }) => {
+    if (command.constructor.name === "PutObjectCommand") stored.push(String(command.input.Key));
+    return {};
+  });
+  t.mock.method(globalThis, "fetch", async () => new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1]), { status: 200 }));
   t.mock.method(document, "send", async (command: { constructor: { name: string }; input: { Key?: { pk: string; sk: string } } }) => {
     const name = command.constructor.name;
     const key = command.input.Key;
@@ -87,5 +98,6 @@ test("a password sign-in shows the photo of the identity's linked Telegram accou
   const result = await session(passwordAccount, []);
   const profile = (JSON.parse(result.body as string) as { profile: { provider: string; photoUrl: string | null } }).profile;
   assert.equal(profile.provider, "password");
-  assert.equal(profile.photoUrl, telegramPhoto);
+  assert.equal(stored.length, 1, "the photo is copied into the avatar bucket");
+  assert.ok(profile.photoUrl?.startsWith(`https://spawnpoint-avatars-test.s3.eu-central-1.amazonaws.com/${stored[0]}?`), "and shown through a presigned link");
 });

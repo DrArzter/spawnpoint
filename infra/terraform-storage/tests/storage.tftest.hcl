@@ -21,6 +21,32 @@ mock_provider "aws" {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
     }
   }
+
+  override_data {
+    target = data.aws_iam_policy_document.avatars_bucket
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+}
+
+run "avatars_are_private_and_unversioned" {
+  command = plan
+
+  assert {
+    condition     = aws_s3_bucket.avatars.bucket == "spawnpoint-avatars-123456789012"
+    error_message = "The avatar bucket name is deterministic per account (ADR-0084)."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_s3_bucket_public_access_block.avatars.block_public_acls,
+      aws_s3_bucket_public_access_block.avatars.block_public_policy,
+      aws_s3_bucket_public_access_block.avatars.ignore_public_acls,
+      aws_s3_bucket_public_access_block.avatars.restrict_public_buckets,
+    ])
+    error_message = "Avatars are personal data: the bucket is never public; the panel reads them through presigned links."
+  }
 }
 
 run "persistent_storage_is_private_versioned_and_recoverable" {

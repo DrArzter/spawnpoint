@@ -17,6 +17,7 @@ import { S3WorldReader, S3WorldRepository } from "../../control-plane/s3-world-r
 import { type WorldRecord } from "../../control-plane/world-registry.ts";
 import { type Response, response } from "./http.ts";
 import { document, tableName, type Item } from "./access-store.ts";
+import { deleteIdentityAvatars } from "./avatars.ts";
 import { callerCondition, escalationRefusal, lastHolderRefusal } from "./owner-guard.ts";
 import { readRole } from "./role-store.ts";
 import { credentialKey } from "./credentials.ts";
@@ -44,7 +45,7 @@ type Key = TableKey;
 type Account = Readonly<{ key: Key; provider: string; subject: string; email: string | null }>;
 
 type Counts = {
-  removed: { accounts: number; credentials: number; loginSessions: number; oauth: number; emailActions: number; invitations: number; playerInvitations: number };
+  removed: { accounts: number; credentials: number; loginSessions: number; oauth: number; emailActions: number; invitations: number; playerInvitations: number; avatars: number };
   revoked: { accessInvitations: number };
   anonymised: { console: number; downloads: number; worlds: number; bootstrap: number };
 };
@@ -352,6 +353,7 @@ async function sweepRemainder(identityId: string, accounts: readonly Account[], 
     counts.anonymised.console += await forgetName(after.console);
     counts.anonymised.downloads += await forgetName(after.downloads);
     counts.anonymised.worlds += await anonymiseWorlds(identityId, worlds());
+    counts.removed.avatars += await deleteIdentityAvatars(identityId);
     return "complete";
   } catch (error) {
     console.error(JSON.stringify({
@@ -380,7 +382,7 @@ export async function deleteIdentity(caller: Identity, identityId: string, world
   const credentials = await passwordCredentialItems(accounts);
   const before = await secondaryRecords(identityId, accounts);
   const counts: Counts = {
-    removed: { accounts: 0, credentials: 0, loginSessions: 0, oauth: 0, emailActions: 0, invitations: 0, playerInvitations: 0 },
+    removed: { accounts: 0, credentials: 0, loginSessions: 0, oauth: 0, emailActions: 0, invitations: 0, playerInvitations: 0, avatars: 0 },
     revoked: { accessInvitations: 0 },
     anonymised: { console: 0, downloads: 0, worlds: 0, bootstrap: 0 },
   };

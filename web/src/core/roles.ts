@@ -48,7 +48,9 @@ export const ROLE_ID_PATTERN = /^[a-z][a-z0-9-]{0,31}$/;
 
 /** A slug for a name, until the person types an id of their own. */
 export function roleIdFor(name: string): string {
-  return name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replace(/^[^a-z]+/, "").slice(0, 32).replace(/-+$/, "");
+  let slug = name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replace(/^[^a-z]+/, "").slice(0, 32);
+  while (slug.endsWith("-")) slug = slug.slice(0, -1);
+  return slug;
 }
 
 /** The roles an owner may name as the default: never the protected one. */

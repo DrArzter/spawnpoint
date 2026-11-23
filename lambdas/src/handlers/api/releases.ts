@@ -8,7 +8,7 @@ import { type PlanMod, type ReleasePlan, releasePlan, storedReleasePlan } from "
 import { packRelease } from "../../control-plane/session-control.ts";
 import { releaseRetirement } from "../../control-plane/aws-release-retirement.ts";
 import { retirementConfirmation } from "../../control-plane/release-retirement.ts";
-import { parseObjectBody, type Response, response } from "./http.ts";
+import { parseJsonObject, type Response, response } from "./http.ts";
 
 const RELEASE_ID = /^[a-z0-9][a-z0-9-]*$/;
 const RELEASE_VERSION = /^\d+\.\d+$/;
@@ -28,8 +28,7 @@ function buildRequest(input: unknown): BuildRequest | null {
 }
 
 export async function buildRelease(identity: Identity, gameId: string, presetId: string, body: string | undefined): Promise<Response> {
-  let parsed: unknown;
-  try { parsed = body ? JSON.parse(body) as unknown : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const parsed = parseJsonObject({ body });
   const expected = buildRequest(parsed);
   if (expected === null) return response(400, { error: "invalid_build_request" });
   try {
@@ -52,8 +51,7 @@ export async function requestReleaseRetirement(identity: Identity, gameId: strin
   if (!RELEASE_ID.test(gameId) || !RELEASE_ID.test(presetId) || !RELEASE_VERSION.test(version)) {
     return response(400, { error: "invalid_release_reference" });
   }
-  const parsed = parseObjectBody(body);
-  if (parsed === null) return response(400, { error: "invalid_json" });
+  const parsed = parseJsonObject({ body });
   const confirmation = { gameId, presetId, release: version };
   if (Object.keys(parsed).some((key) => key !== "confirmation") || parsed.confirmation !== retirementConfirmation(confirmation)) {
     return response(400, { error: "invalid_retire_confirmation" });

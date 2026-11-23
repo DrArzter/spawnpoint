@@ -1,5 +1,5 @@
 import { browserSessionCookieName, refreshCookieName, trustedCookieRequest } from "../../access/login-session.ts";
-import { type Event, type Response, type Caller, response, requestCookie } from "./http.ts";
+import { type Event, type Response, type Caller, InvalidBodyError, response, requestCookie } from "./http.ts";
 import { type Route } from "./routing.ts";
 import { type Identity } from "../../access/domain.ts";
 import { requirePermission } from "./permissions.ts";
@@ -31,8 +31,16 @@ export function createDispatcher(routes: Readonly<Record<string, Route>>, author
       return response(403, { error: "untrusted_origin" });
     }
 
-    const call = (subject: unknown) =>
-      (route.handle as (subject: unknown, event: Event) => Promise<Response> | Response)(subject, event);
+    // A handler that reads its body throws InvalidBodyError for a body that is
+    // not one JSON object. That is the caller's mistake, so it answers 400.
+    const call = async (subject: unknown): Promise<Response> => {
+      try {
+        return await (route.handle as (subject: unknown, event: Event) => Promise<Response> | Response)(subject, event);
+      } catch (error) {
+        if (error instanceof InvalidBodyError) return response(400, { error: "invalid_json" });
+        throw error;
+      }
+    };
     if (route.access.kind === "public") return call(undefined);
 
     const account = await authority.caller(event);

@@ -5,7 +5,7 @@ import { normalizeEmail } from "../../access/password-credential.ts";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { issueEmailAction, emailActionTokenHash } from "../../access/email-actions.ts";
 import { randomUUID } from "node:crypto";
-import { type Caller, type Event, type Response, objectBody, response, parameter } from "./http.ts";
+import { type Caller, type Event, type Response, parseJsonObject, response, parameter } from "./http.ts";
 import { document, tableName } from "./access-store.ts";
 import { emailDeliveryProvider, emailSender } from "./mail.ts";
 import { panelUrl } from "./origins.ts";
@@ -28,7 +28,7 @@ function accessInvitationProofKey(tokenHash: string, account: Caller): Record<st
 }
 
 export async function checkAccessInvitation(event: Event): Promise<Response> {
-  const tokenHash = accessInvitationTokenHash(objectBody(event)?.token);
+  const tokenHash = accessInvitationTokenHash(parseJsonObject(event).token);
   if (tokenHash === null) return response(200, { valid: false, email: null });
   const result = await document.send(new GetCommand({ TableName: tableName, Key: accessInvitationKey(tokenHash), ConsistentRead: true }));
   return response(200, { valid: accessInvitationUsable(result.Item), email: accessInvitationUsable(result.Item) ? result.Item!.delivery_email : null });
@@ -55,8 +55,7 @@ export async function accessInvitations(): Promise<Response> {
 }
 
 export async function createAccessInvitation(identity: Identity, event: Event): Promise<Response> {
-  const parsed = objectBody(event);
-  if (parsed === null) return response(400, { error: "invalid_json" });
+  const parsed = parseJsonObject(event);
   const email = parsed.email === undefined ? null : normalizeEmail(parsed.email);
   if (emailDeliveryProvider === "none" && parsed.email !== undefined) return response(409, { error: "email_delivery_unavailable" });
   if (emailDeliveryProvider !== "none" && email === null) return response(400, { error: "invalid_email" });
@@ -118,7 +117,7 @@ export async function revokeAccessInvitation(event: Event): Promise<Response> {
 }
 
 export async function requestAccessInvitationProof(account: Caller, event: Event): Promise<Response> {
-  const token = objectBody(event)?.token;
+  const token = parseJsonObject(event).token;
   const tokenHash = accessInvitationTokenHash(token);
   if (tokenHash === null) return response(400, { error: "invalid_or_expired_invitation" });
   if (account.provider === passwordProviderId) return response(409, { error: "use_verified_account_email" });
@@ -169,14 +168,14 @@ async function invitationProof(account: Caller, invitedEmail: unknown, suppliedP
 }
 
 export async function redeemAccessInvitation(account: Caller, event: Event): Promise<Response> {
-  const parsed = objectBody(event);
-  const tokenHash = accessInvitationTokenHash(parsed?.token);
+  const parsed = parseJsonObject(event);
+  const tokenHash = accessInvitationTokenHash(parsed.token);
   if (tokenHash === null) return response(400, { error: "invalid_or_expired_invitation" });
   const observed = await observe(account);
   if (await resolveIdentity(account, observed) !== null) return response(409, { error: "already_member" });
   const found = await document.send(new GetCommand({ TableName: tableName, Key: accessInvitationKey(tokenHash), ConsistentRead: true }));
   if (!accessInvitationUsable(found.Item)) return response(400, { error: "invalid_or_expired_invitation" });
-  const proof = await invitationProof(account, found.Item?.delivery_email, parsed?.proof, tokenHash);
+  const proof = await invitationProof(account, found.Item?.delivery_email, parsed.proof, tokenHash);
   if (proof.error !== null) return proof.error;
   const { proofHash } = proof;
   const identityId = randomUUID();

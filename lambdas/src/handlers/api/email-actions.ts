@@ -7,7 +7,7 @@ import { type Item, document, tableName } from "./access-store.ts";
 import { emailSender, emailDeliveryProvider } from "./mail.ts";
 import { panelUrl } from "./origins.ts";
 import { credentialKey, passwordCredentials, credentialFromItem } from "./credentials.ts";
-import { type Response, response, type Event, objectBody } from "./http.ts";
+import { type Response, response, type Event, parseJsonObject } from "./http.ts";
 import { accessInvitationKey } from "./access-invitations.ts";
 import { accountKeyFor } from "./identity-store.ts";
 import { createLoginSession } from "./login-sessions.ts";
@@ -82,10 +82,10 @@ function emailActionsUnavailable(): Response | null {
 export async function resendEmailVerification(event: Event): Promise<Response> {
   const unavailable = emailActionsUnavailable();
   if (unavailable !== null) return unavailable;
-  const parsed = objectBody(event);
-  const email = normalizeEmail(parsed?.email);
+  const parsed = parseJsonObject(event);
+  const email = normalizeEmail(parsed.email);
   if (email === null) return response(202, { result: "accepted" });
-  const invitationToken = parsed?.invitationToken;
+  const invitationToken = parsed.invitationToken;
   if (invitationToken !== undefined) {
     const tokenHash = accessInvitationTokenHash(invitationToken);
     if (tokenHash === null) return response(400, { error: "invalid_or_expired_invitation" });
@@ -119,8 +119,8 @@ function actionFromItem(item: Item | undefined, purpose: EmailActionPurpose, now
 }
 
 async function readEmailAction(event: Event, purpose: EmailActionPurpose): Promise<{ tokenHash: string; item: Item } | Response> {
-  const parsed = objectBody(event);
-  const tokenHash = emailActionTokenHash(typeof parsed?.token === "string" ? parsed.token : "");
+  const parsed = parseJsonObject(event);
+  const tokenHash = emailActionTokenHash(typeof parsed.token === "string" ? parsed.token : "");
   if (tokenHash === null) return response(400, { error: "invalid_or_expired_email_action" });
   const result = await document.send(new GetCommand({ TableName: tableName, Key: emailActionKey(tokenHash), ConsistentRead: true }));
   const item = actionFromItem(result.Item, purpose, Math.floor(Date.now() / 1000));
@@ -176,7 +176,7 @@ export async function verifyEmail(event: Event): Promise<Response> {
 export async function requestPasswordReset(event: Event): Promise<Response> {
   const unavailable = emailActionsUnavailable();
   if (unavailable !== null) return unavailable;
-  const email = normalizeEmail(objectBody(event)?.email);
+  const email = normalizeEmail(parseJsonObject(event).email);
   if (email === null) return response(202, { result: "accepted" });
   const credential = await passwordCredentials.find(email);
   if (!credential?.emailVerified) return response(202, { result: "accepted" });
@@ -211,8 +211,8 @@ export async function revokePasswordLoginSessions(subject: string): Promise<void
 }
 
 export async function resetPassword(event: Event): Promise<Response> {
-  const parsed = objectBody(event);
-  const passwordProblem = validatePassword(parsed?.password);
+  const parsed = parseJsonObject(event);
+  const passwordProblem = validatePassword(parsed.password);
   if (passwordProblem !== null) return response(400, { error: `password_${passwordProblem}` });
   const found = await readEmailAction(event, "reset_password");
   if ("statusCode" in found) return found;

@@ -6,7 +6,7 @@ import { awsControlPlaneSources } from "../../control-plane/aws.ts";
 import { findCatalogWorld, catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
 import { randomUUID } from "node:crypto";
 import { PutEventsCommand } from "@aws-sdk/client-eventbridge";
-import { type Response, response } from "./http.ts";
+import { type Response, response, parseJsonObject } from "./http.ts";
 import { document, tableName } from "./access-store.ts";
 import { events } from "./clients.ts";
 
@@ -45,12 +45,11 @@ export async function invitationRecipients(identity: Identity): Promise<Response
 
 type InvitationRequest =
   | Readonly<{ ok: true; audience: InvitationAudience; recipientIdentityIds: readonly string[] }>
-  | Readonly<{ ok: false; error: "invalid_json" | "invalid_audience" | "invalid_recipients" }>;
+  | Readonly<{ ok: false; error: "invalid_audience" | "invalid_recipients" }>;
 
 // What an invitation asks for: everyone, or the named people other than the sender.
 function invitationRequest(identity: Identity, body: string | undefined): InvitationRequest {
-  let parsed: { audience?: unknown; recipientIdentityIds?: unknown };
-  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return { ok: false, error: "invalid_json" }; }
+  const parsed = parseJsonObject({ body });
   const audience = parsed.audience;
   if (audience === "broadcast") return { ok: true, audience, recipientIdentityIds: [] };
   if (audience !== "direct") return { ok: false, error: "invalid_audience" };

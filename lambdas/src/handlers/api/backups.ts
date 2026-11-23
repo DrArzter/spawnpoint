@@ -4,7 +4,7 @@ import { listWorldBackups, backupArchiveUrl, backupReleaseSources, readWorldReco
 import { type Identity } from "../../access/domain.ts";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
-import { type Response, response } from "./http.ts";
+import { type Response, response, parseJsonObject } from "./http.ts";
 import { knownWorld } from "./world-state.ts";
 import { document, tableName } from "./access-store.ts";
 
@@ -25,8 +25,7 @@ const DOWNLOAD_RECORD_DAYS = 365;
 // must be one of this world's archives. Who asked is recorded before the link
 // is handed over, and the link lives five minutes.
 export async function backupDownload(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
-  let parsed: { key?: unknown };
-  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const parsed = parseJsonObject({ body });
   const key = parsed.key;
   if (typeof key !== "string" || !key.startsWith(`worlds/${worldId}/archives/`) || !/^worlds\/[a-z0-9][a-z0-9-]{0,31}\/archives\/[A-Za-z0-9._-]+\.tar\.zst$/.test(key)) {
     return response(400, { error: "invalid_backup_key" });

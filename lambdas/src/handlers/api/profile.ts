@@ -2,7 +2,7 @@ import { type Identity, isBuiltInRoleId, builtInRoles } from "../../access/domai
 import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { defaultSubscriptions, validateSubscriptions } from "../../access/subscriptions.ts";
 import { validateAppearance, defaultAppearance } from "../../access/appearance.ts";
-import { type Response, response } from "./http.ts";
+import { type Response, response, parseJsonObject } from "./http.ts";
 import { document, tableName } from "./access-store.ts";
 
 export async function subscriptions(identity: Identity): Promise<Response> {
@@ -11,8 +11,7 @@ export async function subscriptions(identity: Identity): Promise<Response> {
 }
 
 export async function updateSubscriptions(identity: Identity, body: string | undefined): Promise<Response> {
-  let parsed: { subscriptions?: unknown };
-  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const parsed = parseJsonObject({ body });
   const next = validateSubscriptions(parsed.subscriptions);
   if (next === null) return response(400, { error: "invalid_subscriptions" });
   await document.send(new PutCommand({ TableName: tableName, Item: {
@@ -30,8 +29,7 @@ export async function appearance(identity: Identity): Promise<Response> {
 }
 
 export async function updateAppearance(identity: Identity, body: string | undefined): Promise<Response> {
-  let parsed: { appearance?: unknown };
-  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const parsed = parseJsonObject({ body });
   const next = validateAppearance(parsed.appearance);
   if (next === null) return response(400, { error: "invalid_appearance" });
   await document.send(new PutCommand({ TableName: tableName, Item: {

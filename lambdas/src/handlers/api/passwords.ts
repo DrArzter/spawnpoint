@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { issueEmailAction } from "../../access/email-actions.ts";
 import { type Identity } from "../../access/domain.ts";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
-import { type Event, type Response, objectBody, response } from "./http.ts";
+import { type Event, type Response, parseJsonObject, response } from "./http.ts";
 import { document, tableName } from "./access-store.ts";
 import { accessInvitationKey } from "./access-invitations.ts";
 import { passwordCredentialItem, passwordAccountItem, passwordCredentials, credentialKey } from "./credentials.ts";
@@ -15,8 +15,7 @@ import { identityAccounts, accountKeyFor } from "./identity-store.ts";
 type ValidPasswordInput = Readonly<{ email: string; displayName: string; password: string }>;
 
 function validPasswordInput(event: Event): ValidPasswordInput | Response {
-  const parsed = objectBody(event);
-  if (parsed === null) return response(400, { error: "invalid_json" });
+  const parsed = parseJsonObject(event);
   const email = normalizeEmail(parsed.email);
   if (email === null) return response(400, { error: "invalid_email" });
   const passwordProblem = validatePassword(parsed.password);
@@ -32,7 +31,7 @@ function validPasswordInput(event: Event): ValidPasswordInput | Response {
 export async function registerPassword(event: Event): Promise<Response> {
   const input = validPasswordInput(event);
   if ("statusCode" in input) return input;
-  const invitationToken = objectBody(event)?.invitationToken;
+  const invitationToken = parseJsonObject(event).invitationToken;
   if (invitationToken !== undefined) {
     const tokenHash = accessInvitationTokenHash(invitationToken);
     if (tokenHash === null) return response(400, { error: "invalid_or_expired_invitation" });
@@ -117,8 +116,7 @@ export async function linkPassword(identity: Identity, event: Event): Promise<Re
 }
 
 export async function changePassword(identity: Identity, event: Event): Promise<Response> {
-  const parsed = objectBody(event);
-  if (parsed === null) return response(400, { error: "invalid_json" });
+  const parsed = parseJsonObject(event);
   const email = normalizeEmail(parsed.email);
   if (email === null) return response(400, { error: "invalid_email" });
   if (typeof parsed.currentPassword !== "string") return response(400, { error: "current_password_required" });

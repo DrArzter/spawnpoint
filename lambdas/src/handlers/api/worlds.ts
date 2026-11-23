@@ -12,7 +12,7 @@ import { checkWhitelist, parseServerWhitelist, SERVER_WHITELIST_COMMANDS } from 
 import { consoleResult, encodeConsoleCommand } from "../../control-plane/console.ts";
 import { type ControlPlaneSources } from "../../control-plane/read-model.ts";
 import { backupGenerationId, resolveBackupRelease, type BackupReleaseSources } from "../../control-plane/backup-release.ts";
-import { type Response, response, parseObjectBody } from "./http.ts";
+import { type Response, response, parseJsonObject } from "./http.ts";
 import { requirePermission } from "./permissions.ts";
 import { type StopPlayersPolicy } from "../../domain/telegram-bot.ts";
 import { readWorldSession, worldPlacements, locateWorldHost } from "./world-state.ts";
@@ -22,8 +22,7 @@ import { readWorldSession, worldPlacements, locateWorldHost } from "./world-stat
  * on the payload, so it is checked here rather than by the route.
  */
 function stopPlayersPolicy(identity: Identity, body: string | undefined): StopPlayersPolicy | Response {
-  const request = parseObjectBody(body);
-  if (request === null) return response(400, { error: "invalid_body" });
+  const request = parseJsonObject({ body });
   const players = request.players ?? "refuse";
   if (players !== "refuse" && players !== "disconnect") return response(400, { error: "invalid_players" });
   if (players === "disconnect") {
@@ -144,8 +143,7 @@ function parseWorldAccess(input: WorldAccessInput, useDefaults: boolean): WorldA
 }
 
 export async function createWorld(identity: Identity, gameId: string, presetId: string, body: string | undefined): Promise<Response> {
-  let parsed: { displayName?: unknown; release?: unknown; placement?: unknown; connectivity?: unknown; auth?: unknown };
-  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const parsed = parseJsonObject({ body });
   const displayName = typeof parsed.displayName === "string" ? parsed.displayName.trim() : "";
   const release = typeof parsed.release === "string" ? parsed.release : "";
   if (displayName.length < 1 || displayName.length > 80) return response(400, { error: "invalid_world_name" });
@@ -184,8 +182,7 @@ export async function createWorld(identity: Identity, gameId: string, presetId: 
 }
 
 export async function updateWorldSettings(gameId: string, worldId: string, body: string | undefined): Promise<Response> {
-  let parsed: { placement?: unknown; connectivity?: unknown; auth?: unknown; warm?: unknown };
-  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const parsed = parseJsonObject({ body });
   const access = parseWorldAccess(parsed, false);
   if (access === null) return response(400, { error: "invalid_world_connectivity" });
   // Left out, the world keeps its choice. Only a launched host can be kept warm (ADR-0048).
@@ -216,8 +213,7 @@ export async function updateWorldSettings(gameId: string, worldId: string, body:
 // Saved whether or not the world runs: the host reads the record when a session
 // starts, so a running game is never touched and takes them at its next start.
 export async function updateGameSettings(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
-  let parsed: { values?: unknown };
-  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const parsed = parseJsonObject({ body });
   const check = checkGameSettings(gameId, parsed.values);
   if (!check.ok) {
     return response(check.error === "game_has_no_settings" ? 409 : 400, { error: check.error, ...(check.setting === undefined ? {} : { setting: check.setting }) });
@@ -304,8 +300,7 @@ async function runningWorldHost(gameId: string, worldId: string): Promise<WorldH
 }
 
 export async function updateWhitelist(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
-  let parsed: { names?: unknown };
-  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const parsed = parseJsonObject({ body });
   if (!gameKeepsWhitelist(gameId)) return response(409, { error: "game_has_no_whitelist" });
   const check = checkWhitelist(parsed.names);
   if (!check.ok) return response(400, { error: check.error, ...(check.name === undefined ? {} : { name: check.name }) });
@@ -367,8 +362,7 @@ type LifecycleInput =
   | Readonly<{ value: null; error: Response }>;
 
 function lifecycleInput(action: WorldLifecycleAction, worldId: string, body: string | undefined): LifecycleInput {
-  const parsed = parseObjectBody(body);
-  if (parsed === null) return { value: null, error: response(400, { error: "invalid_json" }) };
+  const parsed = parseJsonObject({ body });
   const backupKey = action === "restore" && typeof parsed.backupKey === "string" ? parsed.backupKey : undefined;
   const release = action === "regenerate" && typeof parsed.release === "string" ? parsed.release : undefined;
   if (action === "restore" && !backupKey?.startsWith(`worlds/${worldId}/archives/`)) {

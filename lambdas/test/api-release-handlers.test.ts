@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { awsControlPlaneSources } from "../src/control-plane/aws.ts";
 import { releaseRetirement } from "../src/control-plane/aws-release-retirement.ts";
+import { InvalidBodyError } from "../src/handlers/api/http.ts";
 import { createDispatcher } from "../src/handlers/api/dispatcher.ts";
 import { buildRelease, releaseManifest, releasePackDownload, requestReleaseRetirement } from "../src/handlers/api/releases.ts";
 import { releasesRoutes } from "../src/handlers/api/releases-routes.ts";
@@ -220,9 +221,8 @@ test("the route hands its query to the handler under release.read", async (t) =>
 });
 
 test("build input rejects malformed JSON separately from an invalid pinned-build request", async () => {
-  const malformed = await buildRelease(identity, "minecraft", "industrial", "{");
-  assert.deepEqual(JSON.parse(malformed.body), { error: "invalid_json" });
-  for (const body of ["null", "[]", "{}", JSON.stringify({ profileDigest: "a".repeat(64), retryRelease: "../1.2" })]) {
+  await assert.rejects(buildRelease(identity, "minecraft", "industrial", "{"), InvalidBodyError);
+  for (const body of ["{}", JSON.stringify({ profileDigest: "a".repeat(64), retryRelease: "../1.2" })]) {
     const result = await buildRelease(identity, "minecraft", "industrial", body);
     assert.equal(result.statusCode, 400);
     assert.deepEqual(JSON.parse(result.body), { error: "invalid_build_request" });
@@ -277,8 +277,7 @@ test("a wrong, missing or padded confirmation is a 400 and invokes nothing", asy
     assert.deepEqual(JSON.parse(result.body), { error: "invalid_retire_confirmation" }, String(body));
   }
   for (const body of ["{", "[]", "null"]) {
-    const result = await requestReleaseRetirement(owner, "minecraft", "prominence", "1.4", body);
-    assert.deepEqual([result.statusCode, JSON.parse(result.body)], [400, { error: "invalid_json" }]);
+    await assert.rejects(requestReleaseRetirement(owner, "minecraft", "prominence", "1.4", body), InvalidBodyError);
   }
   assert.equal(request.mock.callCount(), 0);
   assert.equal(read.mock.callCount(), 0, "a refused confirmation reads nothing");

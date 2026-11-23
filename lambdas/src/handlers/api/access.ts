@@ -4,7 +4,7 @@ import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../../domain/access-events.ts";
 import { PutEventsCommand } from "@aws-sdk/client-eventbridge";
 import { randomUUID } from "node:crypto";
-import { type Response, response, type Event, parameter } from "./http.ts";
+import { type Response, response, type Event, parameter, parseJsonObject } from "./http.ts";
 import { document, tableName, type Item } from "./access-store.ts";
 import { requirePermission } from "./permissions.ts";
 import { events } from "./clients.ts";
@@ -123,8 +123,7 @@ async function commitRoleChange(callerIdentity: Identity, identityId: string, ro
 }
 
 export async function updateRole(callerIdentity: Identity, identityId: string, body: string | undefined): Promise<Response> {
-  let parsed: { roleId?: unknown };
-  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return response(400, { error: "invalid_json" }); }
+  const parsed = parseJsonObject({ body });
   const roleId = typeof parsed.roleId === "string" ? parsed.roleId : "";
   if (!isBuiltInRoleId(roleId)) return response(400, { error: "unknown_role" });
   if (identityId === callerIdentity.id && roleId !== callerIdentity.roleId) return response(409, { error: "self_role_change_forbidden" });
@@ -146,8 +145,7 @@ type ApprovalInput = Readonly<{ roleId: keyof typeof builtInRoles; directGrants:
 type ApprovalInputResult = Readonly<{ value: ApprovalInput; error: null }> | Readonly<{ value: null; error: Response }>;
 
 function approvalInput(body: string | undefined): ApprovalInputResult {
-  let parsed: { roleId?: unknown; directGrants?: unknown };
-  try { parsed = body ? JSON.parse(body) as typeof parsed : {}; } catch { return { value: null, error: response(400, { error: "invalid_json" }) }; }
+  const parsed = parseJsonObject({ body });
   const roleId = typeof parsed.roleId === "string" ? parsed.roleId : "viewer";
   if (!isBuiltInRoleId(roleId)) return { value: null, error: response(400, { error: "unknown_role" }) };
   const requestedGrants = parsed.directGrants;

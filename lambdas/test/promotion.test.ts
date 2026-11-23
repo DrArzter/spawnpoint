@@ -8,6 +8,7 @@ import { planPromotion, type PromotionFacts, type PromotionPlan } from "../src/c
 import type { PresetObservation } from "../src/control-plane/preset-catalog.ts";
 import type { ControlPlaneSources, OperationObservation } from "../src/control-plane/read-model.ts";
 import type { WorldRecord } from "../src/control-plane/world-registry.ts";
+import { InvalidBodyError } from "../src/handlers/api/http.ts";
 import { promoteWorld } from "../src/handlers/api/promotion.ts";
 
 process.env.OPERATION_STATE_MACHINES = JSON.stringify(["start", "stop", "promote", "world"].map((type) => ({ type, arn: `arn:aws:states:eu-central-1:123456789012:stateMachine:${type}` })));
@@ -153,7 +154,7 @@ test("a refused promotion starts nothing", async (t) => {
   const result = await promoteWorld(owner, "minecraft", record.worldId, JSON.stringify({ release: "200.1" }));
   assert.equal(result.statusCode, 409);
   assert.deepEqual(JSON.parse(result.body), { error: "operation_in_progress" });
-  assert.equal((await promoteWorld(owner, "minecraft", record.worldId, "{not json")).statusCode, 400);
+  await assert.rejects(promoteWorld(owner, "minecraft", record.worldId, "{not json"), InvalidBodyError);
   assert.deepEqual(inputs, []);
 });
 

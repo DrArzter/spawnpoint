@@ -245,8 +245,9 @@ case "${operation}" in
     [[ "${FAKE_S3_LIST_FAIL:-false}" != "true" ]] || exit 255
     root="${FAKE_S3_ROOT}/${bucket}"
     if [[ -d "${root}" ]]; then
-      (cd -- "${root}" && find . -type f ! -name '*.fake-metadata' -printf '%P\n') | sort |
-        jq -R --arg prefix "${prefix}" 'select(startswith($prefix))' | jq -s '{Contents: map({Key: .})}'
+      (cd -- "${root}" && find . -type f ! -name '*.fake-metadata' -printf '%P\t%s\n') | sort |
+        jq -R --arg prefix "${prefix}" 'split("\t") | select(.[0] | startswith($prefix)) | {Key: .[0], Size: (.[1] | tonumber)}' |
+        jq -s '{Contents: .}'
     else
       jq -n '{}'
     fi

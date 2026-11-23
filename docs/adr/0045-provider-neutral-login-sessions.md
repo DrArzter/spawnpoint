@@ -6,6 +6,10 @@
 - Supersedes: [ADR-0037](0037-telegram-only-browser-identity.md)
 - Extended by: [ADR-0055](0055-sign-in-with-email-and-password-by-default.md) — the second adapter, email and
   password, and the first that is not a chat platform
+- Extended by: [ADR-0056](0056-verify-and-link-password-credentials.md) — Verify and link password credentials without making a provider primary
+- Extended by: [ADR-0057](0057-link-login-providers-through-the-current-identity.md) — Link login providers through the current Identity
+- Extended by: [ADR-0058](0058-sign-in-with-google.md) — Sign in with Google as one more proof-based provider, off until configured
+- Extended by: [ADR-0071](0071-delete-an-identity-and-everything-that-names-it.md) — Delete an Identity and every record that names it
 
 ## Context
 

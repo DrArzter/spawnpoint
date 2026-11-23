@@ -1,6 +1,6 @@
 # ADR-0071 — Delete an Identity and every record that names it
 
-- Status: Proposed
+- Status: Accepted — implemented (#136): `POST /access/identities/{identityId}/delete`
 - Date: 2026-11-21
 - Milestone: M4
 - Extends: [ADR-0036](0036-observed-visitors-and-owner-approved-access.md),

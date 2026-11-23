@@ -11,7 +11,7 @@ process.env.CONTROL_PLANE_WEBSOCKET_URL ??= "wss://socket.example.test/live";
 const { awsControlPlaneSources } = await import("../src/control-plane/aws.ts");
 const { operationProgress } = await import("../src/handlers/api/operations.ts");
 const { operationsRoutes } = await import("../src/handlers/api/operations-routes.ts");
-const { routes, deployedCapabilities } = await import("../src/handlers/access-api.ts");
+const { routes, deployedCapabilities } = await import("../src/handlers/api/route-table.ts");
 import type { ControlPlaneSources } from "../src/control-plane/read-model.ts";
 import type { OperationProgress } from "../src/control-plane/operation-progress.ts";
 

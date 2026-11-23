@@ -34,7 +34,9 @@ State backend bootstrap is a one-time, separately stateful Terraform step in
 
 ## Current slice
 
-The current compute/lifecycle slice owns one VPC, one public subnet and route, a zero-ingress security group, an
+The game-host security group opens no inbound port unless the world catalog declares a public world. Each declared public world then opens its game port to `0.0.0.0/0` (`network.tf`). The separate fleet security group opens the port of every game module to `0.0.0.0/0` for launched hosts. SSH is never open.
+
+The current compute/lifecycle slice owns one VPC, one public subnet and route, a game-host security group, an
 SSM-only EC2 role/profile with scoped storage access, one on-demand EC2 host, and one separately attached encrypted
 data EBS. This root owns the primitive start and verified-stop workflows, which Lifecycle V2 in
 [`../terraform-operations`](../terraform-operations/) has composed as its private host adapter since the 2026-09-11
@@ -91,7 +93,7 @@ docker run --rm --user "$(id -u):$(id -g)" \
 ```
 
 The tests use Terraform's mock AWS provider: they require no credentials and cannot create resources. They assert the
-Free Plan instance choice, zero ingress, IMDSv2, termination protection, root/data EBS semantics, consumption of the
+Free Plan instance choice, no open port while no world is public, IMDSv2, termination protection, root/data EBS semantics, consumption of the
 separately managed buckets, the reviewed paid upgrade and rejection of unreviewed instance types.
 
 The committed S3 backend intentionally has no bucket name. The real ignored `backend.hcl` now points to the bootstrapped

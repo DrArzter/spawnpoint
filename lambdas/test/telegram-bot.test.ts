@@ -8,8 +8,6 @@ import {
   buildStartInput,
   buildStopInput,
   buildWatchdogInput,
-  isAuthorized,
-  parseAllowList,
   parseChatIds,
   replies,
 } from "../src/domain/telegram-bot.ts";
@@ -133,15 +131,6 @@ test("only private Telegram chats become access candidates", () => {
     username: "ada",
   });
   assert.equal(telegramContact({ chat: { id: -1, type: "group" }, from: { id: 111 } } as never), null);
-});
-
-test("the allow-list is strict: ids parse, garbage throws, absence denies", () => {
-  assert.deepEqual(parseAllowList("111, 222,333"), [111, 222, 333]);
-  assert.deepEqual(parseAllowList(""), []);
-  assert.throws(() => parseAllowList("111,not-an-id"));
-  assert.equal(isAuthorized(111, [111, 222]), true);
-  assert.equal(isAuthorized(999, [111, 222]), false);
-  assert.equal(isAuthorized(111, []), false);
 });
 
 test("callback screens edit in place and unchanged refreshes are harmless", async () => {

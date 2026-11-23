@@ -8,9 +8,10 @@ for feature logic. This split does not introduce new Lambdas, URLs, or services.
 Each `*-routes.ts` owns one functional area's HTTP paths and declares authority
 with `publicRoute`, `sessionRoute`, `identityRoute`, or `permissionRoute`.
 Its neighboring feature module implements the requests. Authentication,
-access administration, access invitations, profile, control plane, worlds,
-metrics, console, releases, backups, release promotion, player invitations,
-OAuth, and MCP have separate route groups.
+session, profile, access administration, access invitations, control plane,
+worlds, operations, metrics, releases, backups, release promotion, console,
+player invitations, OAuth, and MCP have separate route groups: sixteen, in the
+order `route-table.ts` composes them.
 
 `route-table.ts` composes those groups and rejects duplicate route keys.
 `capabilities.ts` derives advertised capabilities from the composed routes;
@@ -43,6 +44,6 @@ sessions are separate adapters. Domain decisions remain in `access/`,
    authority and capabilities with deployed paths; module-boundary tests reject
    cycles and reverse dependencies.
 
-The entry retains the existing `routes`, `deployedCapabilities`, and
-`restorableRelease` exports for compatibility. New feature tests should import
-the owning module rather than loading the whole API.
+The entry re-exports `routes` and `deployedCapabilities` from `route-table.ts`
+for compatibility. New tests import the owning module, or `route-table.ts`,
+rather than loading the whole API.

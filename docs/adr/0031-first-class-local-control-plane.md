@@ -1,6 +1,6 @@
 # ADR-0031 — Keep a first-class local control-plane environment
 
-- Status: Accepted
+- Status: Proposed, deferred — `local/` holds only a README: no `make local-up` and no LocalStack composition exist. The web `?demo` is the local control plane for the browser
 - Date: 2026-08-12
 - Milestone: Cross-cutting, M1–M5
 - Complements: [ADR-0014](0014-no-kubernetes.md), which still rejects Kubernetes for production

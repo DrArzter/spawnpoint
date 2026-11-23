@@ -6,6 +6,7 @@
 - Supersedes: the deployment-trigger semantics in [ADR-0009](0009-s3-as-mod-source-of-truth.md). Its S3 layout,
   immutable-release rule and explicit promotion decision still stand
 - Complements: [ADR-0025](0025-step-functions-for-long-operations.md), which owns the execution model
+- Amended by: [ADR-0040](0040-reusable-presets-and-world-wipes.md) — Reusable presets create worlds whose wipes own release state
 
 ## Context
 

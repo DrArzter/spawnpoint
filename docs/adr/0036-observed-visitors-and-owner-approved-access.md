@@ -16,6 +16,7 @@ The SSM allow-list remains only as a migration fallback while the common authori
 **How the API enforces this is positional, and that is now pinned by a test.** `handlers/access-api.ts` escalates in one direction: the login route answers before any session exists, a session gate follows, then the granted-identity gate, then a single `access.manage` gate below which every administrative route sits. A route inherits whatever it is written beneath, which reads well and is invisible — a route pasted one line too high would be authorised by nothing but a session, and nothing else in the repository would notice. `lambdas/test/access-api-routing.test.ts` therefore asserts the order of the three gates and forces every route to be one of three things: self-scoped (with the reason written down), permission-checked by its own handler, or below the manage gate. Adding a route without classifying it fails the suite.
 
 Telegram is the browser authentication provider, as decided by [ADR-0037](0037-telegram-only-browser-identity.md). A successful signed Widget or Mini App login observes a Visitor, but authorization still comes from the Spawnpoint Identity and its grants; possessing an arbitrary Telegram account grants no operational access.
+- Extended by: [ADR-0071](0071-delete-an-identity-and-everything-that-names-it.md) — Delete an Identity and every record that names it
 
 ## Consequences
 

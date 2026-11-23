@@ -227,7 +227,7 @@ nothing before the acknowledgement except verifying the signature. See [ADR-0016
 
 | Concern | Position |
 | --- | --- |
-| Inbound network | Security group has no inbound rules in the chosen ZeroTier mode. Neither the game nor SSH is public. See [ADR-0007](adr/0007-ssm-instead-of-ssh.md) and [ADR-0024](adr/0024-connectivity-modes.md) |
+| Inbound network | The configured host's security group opens a game port to `0.0.0.0/0` for each declared public world. The fleet security group opens the port of each game module to `0.0.0.0/0`, and the host refuses a non-gating adapter without declared auth. A host in a ZeroTier-only setup has no inbound rule. SSH is never public. See [ADR-0007](adr/0007-ssm-instead-of-ssh.md), [ADR-0024](adr/0024-connectivity-modes.md) and `infra/terraform/network.tf` |
 | Who may join the game | **`online-mode=false`**, so Minecraft itself verifies nothing: the whitelist keeps out unknown names, not unknown people. The **network is the access boundary** — see the connectivity mode below. `enforce-whitelist=true` kicks anybody removed from the derived whitelist. See [ADR-0022](adr/0022-minecraft-account-as-linked-identity.md) |
 | Connectivity mode | Pluggable: raw address, DNS on an owned domain, or an overlay network with no inbound port. Only the overlay mode supplies the gate that `online-mode=false` depends on, so it is the mode for any world worth keeping. See [ADR-0024](adr/0024-connectivity-modes.md) |
 | Operator privileges | `ops.json` is kept empty or near-empty. In offline mode an op entry is a name anybody reaching the port can claim, so administration goes through RCON from the control plane instead |
@@ -241,7 +241,7 @@ nothing before the acknowledgement except verifying the signature. See [ADR-0016
 | Secrets | Bot tokens and RCON password in SSM Parameter Store, encrypted. Never in Terraform state or the repository |
 | Public surfaces | Pack site and panel are public; the API requires identity on every request |
 | Audit | CloudTrail records every SSM command and every API call. Operations record their requester |
-| Data | No personal data beyond a chat platform user ID and display name, held only to authorise and attribute. Unlinking deletes the record |
+| Data | Personal data is held to authorise, attribute and contact a person. Per identity: display name, email address, scrypt password hash, Telegram user ID, Google subject, login sessions, OAuth tokens (as hashes), notification subscriptions and appearance. Per world: the Minecraft player names on its whitelist, and the display name of the person who last changed settings or the whitelist. Command and backup-download records copy the display name. An Owner deletes a person with `POST /access/identities/{identityId}/delete`, which removes the records that name them. There is no unlink route. See [ADR-0071](adr/0071-delete-an-identity-and-everything-that-names-it.md) and [ADR-0066](adr/0066-keep-a-world-whitelist-on-its-record.md) |
 
 ## Failure modes
 

@@ -1,7 +1,8 @@
 # Architecture decision records
 
-One file per decision. Numbered, and immutable once accepted: to change a decision, write a new ADR and mark
-the old one **Superseded by ADR-XXXX**. Never rewrite history in place.
+One file per decision. Numbered. The decision of an accepted ADR does not change: to change a decision, write a new ADR and mark
+the old one **Superseded by ADR-XXXX**. An accepted ADR may take a dated `Amended on` line or an `Amended by` link, and its
+status line says what is built. Never rewrite the decision in place.
 
 Format and rationale: [ADR-0001](0001-record-architecture-decisions.md).
 Template: [0000-template.md](0000-template.md).
@@ -26,7 +27,7 @@ collected eleven before it was accepted.
 
 ## Start here — most of this is not blocking
 
-Forty-three records is a wall, and a wall is not a plan. Read the two or three that cover what you are building now.
+Eighty-one records is a wall, and a wall is not a plan. Read the two or three that cover what you are building now.
 
 | To do this | You need |
 | --- | --- |
@@ -36,6 +37,9 @@ Forty-three records is a wall, and a wall is not a plan. Read the two or three t
 | M3 — releases and the pipeline | [0008](0008-versioned-mod-releases.md), [0030](0030-desired-and-active-release.md), [0042](0042-preset-scoped-release-identity.md); then [0028](0028-update-proposals.md) and [0029](0029-preview-environments.md), still proposed |
 | M4 — surfaces and identity | Built on [0045](0045-provider-neutral-login-sessions.md), [0055](0055-sign-in-with-email-and-password-by-default.md), [0036](0036-observed-visitors-and-owner-approved-access.md) and [0012](0012-web-control-panel.md); [0016](0016-chat-integrations.md) stays open for Discord |
 | Worlds, wipes, presets and games | [0040](0040-reusable-presets-and-world-wipes.md), [0034](0034-per-game-adapter.md), [0033](0033-connectivity-as-a-strategy.md) |
+| Fleet hosts, placement and several worlds at once | [0048](0048-one-instance-per-active-world.md), [0054](0054-place-a-session-on-a-host-with-room.md), [0062](0062-give-each-fleet-world-a-session-record-of-its-own.md) |
+| Release storage by content | [0080](0080-store-release-files-by-content.md) |
+| The web console and its skins | [0059](0059-separate-the-console-into-bones-and-skins.md), [0072](0072-draw-the-console-in-the-c-a-grammar.md) |
 | Deploying a change to production | [0043](0043-deploy-production-from-reviewed-pull-requests.md), [0044](0044-apply-github-identities-behind-an-owner-gate.md) |
 | Everything else | Later. Read when the milestone arrives |
 
@@ -52,7 +56,8 @@ written down when it is about to be implemented, not instead of implementing it.
 | Status | Meaning |
 | --- | --- |
 | Proposed | Written down, not yet committed to. Open questions remain |
-| Accepted | Decided. Implementation may still be pending |
+| Proposed, deferred | Written down and parked. Nothing is built, and nothing is planned yet |
+| Accepted | Decided. Implementation may still be pending. A suffix such as "partly" or "implemented" says what is built |
 | Superseded | Replaced by a later ADR, kept for the record |
 | Rejected | Considered and turned down. Kept because the reasoning is useful |
 
@@ -71,26 +76,26 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0009](0009-s3-as-mod-source-of-truth.md) | S3 holds releases; promotion drives the deployment | Superseded by [0030](0030-desired-and-active-release.md) | M3 |
 | [0010](0010-world-persistence-and-backups.md) | World on persistent EBS, backups to S3 | Accepted | M1 |
 | [0011](0011-terraform-for-infrastructure.md) | Manage the infrastructure with Terraform | Accepted | M1 |
-| [0012](0012-web-control-panel.md) | One control-plane API; the panel is one client | **Accepted** — implemented | M4 |
+| [0012](0012-web-control-panel.md) | One control-plane API; the panel is one client | Accepted — implemented, partly: the bot starts the machines itself | M4 |
 | [0013](0013-modpack-distribution.md) | Distribute the client pack from S3 and CloudFront | Proposed | M4 |
 | [0014](0014-no-kubernetes.md) | Do not use Kubernetes | Accepted | — |
-| [0015](0015-observability-and-alerting.md) | Session Grafana/Prometheus; CloudWatch signals and durable alarms | Accepted | M5 |
+| [0015](0015-observability-and-alerting.md) | Session Grafana/Prometheus; CloudWatch signals and durable alarms | Accepted — partly: no restart-loop or data-volume alarm | M5 |
 | [0016](0016-chat-integrations.md) | Discord and Telegram as control and notification surfaces | Proposed — Telegram deployed, Discord untried | M4 |
 | [0017](0017-stable-server-address.md) | Stable hostname in Route 53, not an Elastic IP | Superseded by [0024](0024-connectivity-modes.md) | M2 |
 | [0018](0018-identity-and-sign-in.md) | Cognito broker; panel sign-in with Google | Superseded by [0037](0037-telegram-only-browser-identity.md) | M4 |
 | [0019](0019-account-linking.md) | Link chat accounts with a one-time code | **Superseded** by [0057](0057-link-login-providers-through-the-current-identity.md) | M4 |
-| [0020](0020-email-channel.md) | SNS email for alerts; SES deferred | Accepted | M5 |
+| [0020](0020-email-channel.md) | SNS for out-of-band alerts; provider-neutral transactional email | Accepted — amended 2026-11-23: SES is the default adapter when a sender is set | M5 |
 | [0021](0021-sign-in-from-linked-chat-account.md) | Chat sign-in, but only into an already linked account | Superseded by [0037](0037-telegram-only-browser-identity.md) | M4 |
 | [0022](0022-minecraft-account-as-linked-identity.md) | Minecraft account is a linked identity; whitelist derived; `online-mode=false` | Proposed | M4 |
 | [0023](0023-multiple-worlds.md) | Several worlds, one active at a time | Accepted | M6 |
 | [0024](0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Accepted — **ZeroTier** | M2 |
 | [0025](0025-step-functions-for-long-operations.md) | Step Functions for long operations; Lambda for the rest | Accepted | M2 |
 | [0026](0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | **Rejected** on measurement; kept for its threshold | M1 |
-| [0027](0027-spot-request-shape.md) | Diversified Spot fleet per session; stop-on-interruption | **Deferred** — on-demand first | later |
+| [0027](0027-spot-request-shape.md) | Diversified Spot fleet per session; stop-on-interruption | **Proposed, deferred** — on-demand first | later |
 | [0028](0028-update-proposals.md) | Mod updates as proposals: resolve, diff, approve, promote | Proposed | M3 |
 | [0029](0029-preview-environments.md) | Every proposal is tested in a throwaway preview environment | Proposed | M3 |
-| [0030](0030-desired-and-active-release.md) | Separate desired release from confirmed active release | Accepted | M3 |
-| [0031](0031-first-class-local-control-plane.md) | First-class local control plane with shared ASL, Lambda and host contracts | Accepted | M1–M5 |
+| [0030](0030-desired-and-active-release.md) | Separate desired release from confirmed active release | Accepted — amended 2026-11-22 | M3 |
+| [0031](0031-first-class-local-control-plane.md) | First-class local control plane with shared ASL, Lambda and host contracts | Proposed, deferred — nothing built | M1–M5 |
 | [0032](0032-on-demand-single-instance.md) | Run the game server on one on-demand EC2 instance | Accepted, supersedes [0004](0004-ec2-spot-for-the-game-server.md) | M0 |
 | [0033](0033-connectivity-as-a-strategy.md) | Connectivity is a strategy behind one interface, constrained by the game's auth model | Accepted, amends [0024](0024-connectivity-modes.md) | M2 |
 | [0034](0034-per-game-adapter.md) | A game is a module: data plus functions, minecraft the byte-identical default | Accepted | cross-cutting |
@@ -101,7 +106,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0039](0039-git-presets-instantiate-world-generations.md) | Git presets instantiate recoverable world generations | **Superseded** by [0040](0040-reusable-presets-and-world-wipes.md) | cross-cutting |
 | [0040](0040-reusable-presets-and-world-wipes.md) | Reusable presets create worlds whose wipes own release state | Accepted | cross-cutting |
 | [0041](0041-evaluate-spt-profile-backed-adapter.md) | Evaluate SPT as a profile-backed adapter without distributing EFT | Proposed | later |
-| [0042](0042-preset-scoped-release-identity.md) | Release identity and storage are scoped by preset | Accepted | cross-cutting |
+| [0042](0042-preset-scoped-release-identity.md) | Release identity and storage are scoped by preset | Accepted — amended 2026-11-22: a preset keeps its release history | cross-cutting |
 | [0043](0043-deploy-production-from-reviewed-pull-requests.md) | Deploy production from reviewed pull requests through OIDC roles | Accepted, amended by [0044](0044-apply-github-identities-behind-an-owner-gate.md) | cross-cutting |
 | [0044](0044-apply-github-identities-behind-an-owner-gate.md) | Apply the GitHub identities from the pipeline, behind an owner gate | Accepted | cross-cutting |
 | [0045](0045-provider-neutral-login-sessions.md) | Keep login sessions independent of identity providers | Accepted | M4 |
@@ -111,7 +116,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0049](0049-project-control-plane-events-into-dynamodb.md) | Project control-plane events into DynamoDB for user-facing surfaces | Accepted | cross-cutting |
 | [0050](0050-default-role-on-sign-in-and-elevation-requests.md) | Join as Viewer through any login provider, and ask for more | Accepted in part — invitations implemented; elevation requests and blocking not built | M4 |
 | [0051](0051-restart-a-session-without-releasing-the-host.md) | Restart a session without releasing the host | Proposed | M4 |
-| [0052](0052-keep-a-release-while-a-generation-names-it.md) | Keep a release while a generation names it, and check before restoring | Accepted — restore guard implemented; cleanup rule retained | M4 |
+| [0052](0052-keep-a-release-while-a-generation-names-it.md) | Keep a release while a generation names it, and check before restoring | Accepted — restore guard implemented; cleanup rule retained; amended 2026-11-22: a backup is paired with its release | M4 |
 | [0053](0053-tell-not-built-apart-from-broken.md) | Tell "not built yet" apart from "broken", in the transport | Accepted — implemented | M4 |
 | [0054](0054-place-a-session-on-a-host-with-room.md) | Place a session on a host with room, or launch one that fits | Accepted — in production since 2026-09-22; a stopped warm host is kept fourteen days | M6 |
 | [0055](0055-sign-in-with-email-and-password-by-default.md) | Sign in with email and password by default, and with a provider as an alternative | Accepted — implemented | M4 |
@@ -130,16 +135,16 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0068](0068-normalize-upstream-modpacks-into-releases.md) | Normalize upstream modpacks into releases | Accepted — implemented | M3 |
 | [0069](0069-give-players-a-mod-set-of-their-own.md) | Give a preset's players a mod set of their own | Accepted — implemented | M6 |
 | [0070](0070-give-each-group-a-space-in-an-aws-account-it-brings.md) | Give each group a space, and run its game hosts in an AWS account it brings | Proposed | M7 |
-| [0071](0071-delete-an-identity-and-everything-that-names-it.md) | Delete an Identity and every record that names it | Proposed | M4 |
+| [0071](0071-delete-an-identity-and-everything-that-names-it.md) | Delete an Identity and every record that names it | Accepted — implemented | M4 |
 | [0072](0072-draw-the-console-in-the-c-a-grammar.md) | Draw the console in the C+A grammar | Accepted — implemented | M4 |
 | [0073](0073-a-stop-succeeds-only-when-the-worlds-archive-is-verified-on-its-host.md) | A stop succeeds only when the world's archive is verified on its host | Accepted — implemented | M4 |
 | [0074](0074-eggs-are-a-reference-not-a-runtime.md) | Eggs are a reference, not a runtime | Accepted | — |
-| [0075](0075-a2s-as-a-probe-transport.md) | A2S as a probe transport | Proposed — implemented for Valheim; two host tests open | — |
-| [0076](0076-http-and-telnet-probe-transports.md) | HTTP and telnet probe transports | Proposed — HTTP implemented for Palworld; telnet not built | — |
+| [0075](0075-a2s-as-a-probe-transport.md) | A2S as a probe transport | Accepted — implemented for Valheim; two host tests open | — |
+| [0076](0076-http-and-telnet-probe-transports.md) | HTTP and telnet probe transports | Accepted — HTTP implemented for Palworld; telnet not built | — |
 | [0077](0077-pin-extra-mods-on-top-of-an-upstream-modpack.md) | Pin extra mods on top of an upstream modpack | Accepted — minimum version implemented | M6 |
 | [0078](0078-promote-a-fleet-world-from-the-panel.md) | Promote a fleet world from the panel and keep its save | Accepted — implemented for fleet worlds | M4 |
 | [0079](0079-pin-an-addon-to-a-github-release-asset.md) | Pin an addon to a GitHub release asset | Accepted — builder side implemented | M6 |
-| [0080](0080-store-release-files-by-content.md) | Store release files by content, and free them only when no release names them | Proposed — readers and reconciler built | M6 |
+| [0080](0080-store-release-files-by-content.md) | Store release files by content, and free them only when no release names them | Proposed — readers, infrastructure, reconciler, retirement and sweep (dry run) built; writer off | M6 |
 | [0081](0081-a-stop-may-disconnect-players.md) | A stop may disconnect players, for a holder of session.stop.force | Accepted | M6 |
 
 ## Decisions still to record
@@ -176,7 +181,7 @@ written, so the numbering stays chronological and nothing has to be renumbered w
   port allocator; the stop becomes two decisions, the session's and the host's, with a grace period between them.
   ADR-0048's S3 home, waiting budget, `cold`/`warm` policy and verified-archive gate all carry over. The domain module
   and its tests landed with the ADR; the rollout is in [docs/capacity-allocation-rollout.md](../capacity-allocation-rollout.md).
-- **Distribution model, if this is ever handed to other people.** "Clone the repo, authorise a browser, one command,
+- **Distribution model, if this is ever handed to other people.** Recorded as [ADR-0070](0070-give-each-group-a-space-in-an-aws-account-it-brings.md) (Proposed). The note below is the reasoning that led to it. "Clone the repo, authorise a browser, one command,
   a server in minutes" mixes two incompatible shapes: repo-clone needs credentials on the operator's own machine
   (`aws sso login` or a profile), while browser-authorise is the console / CloudFormation "Launch Stack" model. A
   hosted broker would unify them but reintroduces an always-on service and makes the author hold other people's AWS

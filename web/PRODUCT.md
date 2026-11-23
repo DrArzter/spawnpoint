@@ -49,6 +49,8 @@ The repository contains working API integrations, real control-plane state, acce
 - Keep advanced infrastructure detail available without making it the entry point.
 - Preserve one authorization model across every client.
 - Prefer explicit, recoverable operations over optimistic fiction.
+- One word per thing. The domain terms are in [CONTEXT.md](../CONTEXT.md); the retired spellings (for example *save* for *world*) stay retired.
+- Explain a word once, where it is read, and never in a line that repeats on every row. A fact about a record, such as a date, a release or an instance type, shows under the value. An explanation of what a row means sits behind the label, on the help mark. Nothing explains what the label already says.
 
 ## Accessibility & Inclusion
 

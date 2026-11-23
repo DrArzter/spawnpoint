@@ -47,6 +47,7 @@ export type CoordinatorInput =
         ownership: LeaseOwnership;
         sessionId: string;
         watchdogExecutionId: string;
+        predecessorExecutionId?: string | null;
       }>)
   | (BaseInput &
       Readonly<{
@@ -166,6 +167,7 @@ export function createLifecycleCoordinator(
           input.sessionId,
           input.watchdogExecutionId,
           now,
+          input.predecessorExecutionId || null,
         ),
       }));
     }

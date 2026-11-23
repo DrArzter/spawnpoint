@@ -194,3 +194,10 @@ test("a stop that empties a launched host starts its drain; the configured host 
   assert.equal(drain.Next, "Release Stop Lease");
   assert.equal(drain.Catch?.[0]?.Next, "Release Stop Lease", "a drain that cannot start never fails a verified stop");
 });
+
+test("a V2 stop carries its players policy to the host stop, refusing by default", async () => {
+  const definition = await loadDefinition();
+  assert.match(JSON.stringify(state(definition, "Initialize")), /"players":"refuse"/);
+  assert.match(JSON.stringify(state(definition, "Apply Request Defaults")), /States\.JsonMerge\(\$\.defaults, \$\.request, false\)/);
+  assert.match(JSON.stringify(state(definition, "Stop Accepted V1")), /"players\.\$":"\$\.request\.players"/);
+});

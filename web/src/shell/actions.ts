@@ -14,7 +14,7 @@ export type Pending =
 
 export type Confirmation =
   | { kind: "build"; game: Game; preset: Preset }
-  | { kind: "session"; action: SessionAction; game: Game; world: World }
+  | { kind: "session"; action: SessionAction; game: Game; world: World; disconnect?: number }
   | { kind: "archive"; game: Game; world: World }
   | { kind: "wipe"; game: Game; world: World; preset: Preset | null }
   | { kind: "restore"; game: Game; world: World; backupKey: string; backupName: string; release: string | null }

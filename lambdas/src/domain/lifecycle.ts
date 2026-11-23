@@ -267,6 +267,7 @@ export function registerWatchdog(
   sessionId: string,
   watchdogExecutionId: string,
   nowEpochSeconds: number,
+  predecessorExecutionId: string | null = null,
 ): LifecycleRecord {
   requireOwnership(record, ownership, nowEpochSeconds);
   requireSession(record, sessionId);
@@ -276,7 +277,16 @@ export function registerWatchdog(
   }
   if (record.idle !== null) {
     if (record.idle.watchdogExecutionId === watchdogExecutionId) return record;
-    throw new LifecycleConflict("the active session already has a watchdog");
+    // A watchdog that spent its check budget hands the session to a relay.
+    // Only the current owner can name its successor.
+    if (predecessorExecutionId === null || record.idle.watchdogExecutionId !== predecessorExecutionId) {
+      throw new LifecycleConflict("the active session already has a watchdog");
+    }
+    return {
+      ...record,
+      idle: { ...record.idle, watchdogExecutionId, consecutiveEmpty: 0 },
+      updatedAtEpochSeconds: nowEpochSeconds,
+    };
   }
   return {
     ...record,

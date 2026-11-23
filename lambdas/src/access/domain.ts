@@ -3,6 +3,7 @@ export const permissions = [
   "connection.read",
   "session.start",
   "session.stop",
+  "session.stop.force",
   "invitation.send",
   "metrics.read",
   "console.use",

@@ -95,6 +95,31 @@ test("only one watchdog can own a session and its retries are idempotent", () =>
   );
 });
 
+test("only the current watchdog can hand its session to a relay", () => {
+  const { record, ownership } = readySession();
+  let watched = registerWatchdog(record, ownership, "session-1", "watchdog-1", NOW + 3);
+  watched = recordPlayerObservation(watched, "session-1", "watchdog-1", "observation-1", 0, NOW + 4);
+
+  assert.throws(
+    () => registerWatchdog(watched, ownership, "session-1", "relay-1", NOW + 5, "watchdog-other"),
+    LifecycleConflict,
+  );
+  const relayed = registerWatchdog(watched, ownership, "session-1", "relay-1", NOW + 5, "watchdog-1");
+  assert.equal(relayed.idle?.watchdogExecutionId, "relay-1");
+  assert.equal(relayed.idle?.consecutiveEmpty, 0);
+  assert.equal(relayed.idle?.playersOnline, 0, "the last reading stays visible across the hand-over");
+  assert.equal(
+    registerWatchdog(relayed, ownership, "session-1", "relay-1", NOW + 6, "watchdog-1"),
+    relayed,
+    "a retried relay registration is idempotent",
+  );
+  assert.throws(
+    () => recordPlayerObservation(relayed, "session-1", "watchdog-1", "observation-2", 0, NOW + 6),
+    LifecycleConflict,
+    "the predecessor no longer owns the session",
+  );
+});
+
 test("only consecutive successful empty readings make idle stop eligible", () => {
   const { record, ownership } = readySession();
   let watched = registerWatchdog(record, ownership, "session-1", "watchdog-1", NOW + 3);

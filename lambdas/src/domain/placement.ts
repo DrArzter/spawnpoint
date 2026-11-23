@@ -329,7 +329,7 @@ export function release(host: HostRecord, sessionId: string, nowEpochSeconds: nu
  * unplayed for longer starts cold from S3, so a host whose world was archived,
  * or started somewhere else, cannot bill its volume for ever.
  */
-export const WARM_HOST_RETENTION_SECONDS = 14 * 24 * 3600;
+export const WARM_HOST_RETENTION_SECONDS = 7 * 24 * 3600;
 
 /** A launched host stopped for a warm world, empty, and kept past its retention. */
 export function warmHostExpired(host: HostRecord, nowEpochSeconds: number, retentionSeconds = WARM_HOST_RETENTION_SECONDS): boolean {

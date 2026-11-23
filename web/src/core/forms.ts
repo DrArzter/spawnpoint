@@ -183,6 +183,10 @@ function startDescription(world: World): string {
   return world.materialization === "not_created" ? "Creates wipe #1 and starts a billed host." : "Starts a billed host. It may take a few minutes.";
 }
 
+function playerCount(count: number): string {
+  return count === 1 ? "1 player" : `${count} players`;
+}
+
 export function confirmationCopy(confirmation: Confirmation): { title: string; description: string; label: string; destructive: boolean } {
   if (confirmation.kind === "build") {
     return { ...releaseBuildCopy(confirmation.preset), destructive: false };
@@ -197,7 +201,14 @@ export function confirmationCopy(confirmation: Confirmation): { title: string; d
           label: "Start session",
           destructive: false,
         }
-        : { title: "Save, back up and stop this session?", description: "Saves and backs up, then stops the host. Refused while players are online.", label: "Stop session", destructive: true };
+        : confirmation.disconnect !== undefined
+          ? {
+            title: `Disconnect ${playerCount(confirmation.disconnect)} and stop?`,
+            description: "Disconnects them, saves and backs up, then stops the host.",
+            label: "Disconnect and stop",
+            destructive: true,
+          }
+          : { title: "Save, back up and stop this session?", description: "Saves and backs up, then stops the host. Refused while players are online.", label: "Stop session", destructive: true };
     case "archive":
       return { title: `Archive ${world.displayName}?`, description: "Stops and backs up, then hides it from session control. Wipes and backups stay.", label: "Archive world", destructive: false };
     case "wipe":

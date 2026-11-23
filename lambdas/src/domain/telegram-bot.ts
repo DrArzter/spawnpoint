@@ -174,6 +174,8 @@ export function buildLifecycleStartInput(args: Readonly<{
   };
 }
 
+export type StopPlayersPolicy = "refuse" | "disconnect";
+
 export function buildLifecycleStopInput(args: Readonly<{
   serverId: string;
   operationId: string;
@@ -181,6 +183,8 @@ export function buildLifecycleStopInput(args: Readonly<{
   instanceId: string;
   worldId: string;
   requestedBy?: string;
+  /** `disconnect` stops with players online; the machine refuses by default. */
+  players?: StopPlayersPolicy;
 }>) {
   return {
     serverId: args.serverId,
@@ -190,6 +194,7 @@ export function buildLifecycleStopInput(args: Readonly<{
     instanceId: args.instanceId,
     worldId: args.worldId,
     ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
+    ...(args.players === "disconnect" ? { players: args.players } : {}),
     stopTiming: POLL_TIMING,
   };
 }

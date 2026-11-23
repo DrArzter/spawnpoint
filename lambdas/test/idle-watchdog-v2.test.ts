@@ -64,6 +64,11 @@ test("watchdog identity is the Step Functions execution and every observation is
   const serialized = JSON.stringify(definition);
 
   assert.match(serialized, /registerWatchdog/);
+  assert.match(
+    JSON.stringify(state(definition, "Register This Watchdog").Parameters),
+    /"predecessorExecutionId\.\$":"\$\.request\.predecessorExecutionId"/,
+  );
+  assert.deepEqual(state(definition, "Initialize").Parameters?.defaults, { predecessorExecutionId: "" });
   assert.match(serialized, /\$\$\.Execution\.Id/);
   assert.match(serialized, /recordPlayerObservation/);
   assert.match(serialized, /isIdleStopEligible/);
@@ -152,6 +157,11 @@ test("a cap reached with players online hands the session to a fresh watchdog", 
     assert.equal(relay.Resource, "arn:aws:states:::aws-sdk:sfn:startExecution");
     assert.match(JSON.stringify(relay.Parameters), /-relay-/);
     assert.match(JSON.stringify(relay.Parameters), /"sessionId\.\$":"\$\.request\.sessionId"/);
+    assert.match(
+      JSON.stringify(relay.Parameters),
+      /"predecessorExecutionId\.\$":"\$\$\.Execution\.Id"/,
+      "a relay names the watchdog it takes over from, or its registration is refused",
+    );
     assert.equal(relay.Next, "Handed Over");
     assert.equal(relay.Catch?.[0]?.Next, "Watchdog Stop Failing");
   }

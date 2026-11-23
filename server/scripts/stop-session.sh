@@ -12,6 +12,15 @@ read_env_value() {
     "${runtime_env}"
 }
 
+# What a stop does with players online: `refuse` keeps the session running,
+# `disconnect` stops it anyway. Only a caller with session.stop.force asks for
+# `disconnect`.
+players_policy="${SPAWNPOINT_STOP_PLAYERS:-refuse}"
+[[ "${players_policy}" == "refuse" || "${players_policy}" == "disconnect" ]] || {
+  printf 'error: SPAWNPOINT_STOP_PLAYERS must be refuse or disconnect, not %s\n' "${players_policy}" >&2
+  exit 1
+}
+
 [[ -f "${runtime_env}" ]] || {
   printf 'error: runtime environment does not exist: %s\n' "${runtime_env}" >&2
   exit 1
@@ -133,17 +142,23 @@ else
     exit 1
   }
 
-  players="$(game_query_players_raw)"
-  player_count="$(game_parse_player_count <<<"${players}")" || {
-    printf 'error: refusing to stop on an unreadable player count: %s\n' "${players}" >&2
-    exit 1
-  }
-  [[ "${player_count}" == "0" ]] || {
-    printf 'error: refusing to stop while players are online: %s\n' "${players}" >&2
-    # A player raced the earlier idle observation. This is a normal refusal,
-    # distinct from save, archive and upload failures.
-    exit 3
-  }
+  if [[ "${players_policy}" == "disconnect" ]]; then
+    # The count is not a gate here, so a failed read does not block the stop.
+    players="$(game_query_players_raw 2>&1)" || true
+    printf 'players_disconnected=%s\n' "${players}"
+  else
+    players="$(game_query_players_raw)"
+    player_count="$(game_parse_player_count <<<"${players}")" || {
+      printf 'error: refusing to stop on an unreadable player count: %s\n' "${players}" >&2
+      exit 1
+    }
+    [[ "${player_count}" == "0" ]] || {
+      printf 'error: refusing to stop while players are online: %s\n' "${players}" >&2
+      # A player raced the earlier idle observation. This is a normal refusal,
+      # distinct from save, archive and upload failures.
+      exit 3
+    }
+  fi
 
   "${SCRIPT_DIR}/stop.sh"
 fi

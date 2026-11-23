@@ -13,9 +13,29 @@ import { consoleResult, encodeConsoleCommand } from "../../control-plane/console
 import { type ControlPlaneSources } from "../../control-plane/read-model.ts";
 import { backupGenerationId, resolveBackupRelease, type BackupReleaseSources } from "../../control-plane/backup-release.ts";
 import { type Response, response, parseObjectBody } from "./http.ts";
+import { requirePermission } from "./permissions.ts";
+import { type StopPlayersPolicy } from "../../domain/telegram-bot.ts";
 import { readWorldSession, worldPlacements, locateWorldHost } from "./world-state.ts";
 
-export async function controlSession(identity: Identity, action: SessionAction, gameId: string, worldId: string): Promise<Response> {
+/**
+ * A stop's body may ask to disconnect players online. That escalation depends
+ * on the payload, so it is checked here rather than by the route.
+ */
+function stopPlayersPolicy(identity: Identity, body: string | undefined): StopPlayersPolicy | Response {
+  const request = parseObjectBody(body);
+  if (request === null) return response(400, { error: "invalid_body" });
+  const players = request.players ?? "refuse";
+  if (players !== "refuse" && players !== "disconnect") return response(400, { error: "invalid_players" });
+  if (players === "disconnect") {
+    const forbidden = requirePermission(identity, "session.stop.force");
+    if (forbidden) return forbidden;
+  }
+  return players;
+}
+
+export async function controlSession(identity: Identity, action: SessionAction, gameId: string, worldId: string, body?: string): Promise<Response> {
+  const players = action === "stop" ? stopPlayersPolicy(identity, body) : "refuse";
+  if (typeof players !== "string") return players;
   const [hosts, allOperations, presets, worldRecords] = await Promise.all([
     awsControlPlaneSources.listHosts(),
     awsControlPlaneSources.listRunningOperations(),
@@ -37,7 +57,7 @@ export async function controlSession(identity: Identity, action: SessionAction, 
   if (plan.kind === "noop" && recoverySessionId === null) return response(200, { result: plan.reason });
   // A fleet world kept warm asks placement to keep its launched host after the stop (ADR-0048).
   const warm = fleet && worldRecords.find((record) => record.worldId === worldId)?.warm === true;
-  return executeSessionOperation({ identity, action, gameId, worldId, worldName: world?.displayName ?? worldId, fleet, warm, plan, configuredHosts, located, recoverySessionId });
+  return executeSessionOperation({ identity, action, gameId, worldId, worldName: world?.displayName ?? worldId, fleet, warm, plan, configuredHosts, located, recoverySessionId, players });
 }
 
 type SessionExecution = Readonly<{
@@ -52,6 +72,7 @@ type SessionExecution = Readonly<{
   configuredHosts: readonly Readonly<{ providerRef: string }>[];
   located: Awaited<ReturnType<typeof readWorldSession>>;
   recoverySessionId: string | null;
+  players: StopPlayersPolicy;
 }>;
 
 function plannedSessionHost(request: SessionExecution): string | undefined {
@@ -60,7 +81,7 @@ function plannedSessionHost(request: SessionExecution): string | undefined {
 }
 
 async function executeSessionOperation(request: SessionExecution): Promise<Response> {
-  const { identity, action, gameId, worldId, worldName, fleet, warm, located, recoverySessionId } = request;
+  const { identity, action, gameId, worldId, worldName, fleet, warm, located, recoverySessionId, players } = request;
   const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
   const requestedBy = `identity:${identity.id}`;
   // The fleet workflow places the session itself. Its legacy instanceId input
@@ -84,7 +105,7 @@ async function executeSessionOperation(request: SessionExecution): Promise<Respo
     if (activeSessionId === null || activeSessionId === undefined) {
       return response(409, { error: "active_session_unavailable" });
     }
-    await stopSessionExecution(operationId, hostId, requestedBy, located.serverId, activeSessionId, worldId);
+    await stopSessionExecution(operationId, hostId, requestedBy, located.serverId, activeSessionId, worldId, players);
   }
   return response(202, { result: "requested", operationId });
 }

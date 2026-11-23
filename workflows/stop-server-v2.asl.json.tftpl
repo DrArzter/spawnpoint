@@ -7,7 +7,17 @@
       "Type": "Pass",
       "Parameters": {
         "request.$": "$",
+        "defaults": { "players": "refuse" },
         "coordination": {}
+      },
+      "Next": "Apply Request Defaults"
+    },
+    "Apply Request Defaults": {
+      "Type": "Pass",
+      "Comment": "A stop refuses while players are online unless its caller asks to disconnect them; the watchdog never does.",
+      "Parameters": {
+        "request.$": "States.JsonMerge($.defaults, $.request, false)",
+        "coordination.$": "$.coordination"
       },
       "Next": "Read Lifecycle"
     },
@@ -206,6 +216,7 @@
           "instanceId.$": "$.request.placed.hostId",
           "slot.$": "$.request.placed.slot",
           "worldId.$": "$.request.worldId",
+          "players.$": "$.request.players",
           "timing.$": "$.request.stopTiming"
         }
       },

@@ -178,10 +178,6 @@ svg.icon {
   border: 0;
 }
 
-.secondary {
-  color: var(--ink-secondary);
-}
-
 .ghost {
   color: var(--ink-secondary);
   font-style: normal;

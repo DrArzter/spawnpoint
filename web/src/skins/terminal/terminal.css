@@ -20,6 +20,11 @@ html[data-skin="terminal"] {
   --t-key: 36px;
   --t-key-small: 32px;
   --t-field: 40px;
+  --t-redraw: 200ms;
+  --t-spin: 800ms;
+  --t-trace-wait: 1.4s;
+  --t-trace-step: 0.2s;
+  --t-sweep: 1.6s;
 }
 
 @media (max-width: 599px) {
@@ -366,7 +371,7 @@ html[data-skin="terminal"] .t-page {
 }
 
 html[data-skin="terminal"] .t-main > .t-page {
-  animation: t-redraw 200ms steps(10, end) both;
+  animation: t-redraw var(--t-redraw) steps(10, end) both;
 }
 
 @keyframes t-redraw {
@@ -612,7 +617,7 @@ html[data-skin="terminal"] .t-mark-info { color: var(--primary-ink); }
 html[data-skin="terminal"] .t-mark-progress::before {
   content: "[~]";
   color: var(--primary-ink);
-  animation: t-spin 800ms steps(1, end) infinite;
+  animation: t-spin var(--t-spin) steps(1, end) infinite;
 }
 
 @keyframes t-spin {
@@ -1059,15 +1064,15 @@ html[data-skin="terminal"] .t-skeleton-trace {
   height: 3px;
   background: currentColor;
   transform-origin: left;
-  animation: t-trace-wait 1.4s steps(2, end) infinite;
+  animation: t-trace-wait var(--t-trace-wait) steps(2, end) infinite;
 }
 
-html[data-skin="terminal"] .t-skeleton-trace:nth-child(1) { width: 34%; animation-delay: -1.2s; }
-html[data-skin="terminal"] .t-skeleton-trace:nth-child(2) { width: 68%; margin-left: 12%; animation-delay: -1s; }
-html[data-skin="terminal"] .t-skeleton-trace:nth-child(3) { width: 42%; margin-left: 46%; animation-delay: -0.8s; }
-html[data-skin="terminal"] .t-skeleton-trace:nth-child(4) { width: 76%; margin-left: 8%; animation-delay: -0.6s; }
-html[data-skin="terminal"] .t-skeleton-trace:nth-child(5) { width: 28%; margin-left: 58%; animation-delay: -0.4s; }
-html[data-skin="terminal"] .t-skeleton-trace:nth-child(6) { width: 54%; margin-left: 26%; animation-delay: -0.2s; }
+html[data-skin="terminal"] .t-skeleton-trace:nth-child(1) { width: 34%; animation-delay: calc(var(--t-trace-step) * -6); }
+html[data-skin="terminal"] .t-skeleton-trace:nth-child(2) { width: 68%; margin-left: 12%; animation-delay: calc(var(--t-trace-step) * -5); }
+html[data-skin="terminal"] .t-skeleton-trace:nth-child(3) { width: 42%; margin-left: 46%; animation-delay: calc(var(--t-trace-step) * -4); }
+html[data-skin="terminal"] .t-skeleton-trace:nth-child(4) { width: 76%; margin-left: 8%; animation-delay: calc(var(--t-trace-step) * -3); }
+html[data-skin="terminal"] .t-skeleton-trace:nth-child(5) { width: 28%; margin-left: 58%; animation-delay: calc(var(--t-trace-step) * -2); }
+html[data-skin="terminal"] .t-skeleton-trace:nth-child(6) { width: 54%; margin-left: 26%; animation-delay: calc(var(--t-trace-step) * -1); }
 html[data-skin="terminal"] .t-skeleton-trace:nth-child(7) { width: 38%; margin-left: 4%; }
 
 @keyframes t-trace-wait {
@@ -2301,7 +2306,7 @@ html[data-skin="terminal"] .t-host-body {
 
 /* The scene is the one dark object in the light: in the light theme it keeps
    the terminal's ground, in the dark theme it is the ground. */
-html[data-skin="terminal"] .scene {
+html[data-skin="terminal"] .t-scene {
   margin: 0;
   padding: 8px 1ch;
   background: var(--term-bg);
@@ -2313,8 +2318,8 @@ html[data-skin="terminal"] .scene {
   user-select: none;
 }
 
-html[data-skin="terminal"] .scene-stopped,
-html[data-skin="terminal"] .scene-unknown {
+html[data-skin="terminal"] .t-scene-stopped,
+html[data-skin="terminal"] .t-scene-unknown {
   color: var(--term-muted);
 }
 
@@ -2411,7 +2416,7 @@ html[data-skin="terminal"] .t-fact .t-state > span:last-child {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  html[data-skin="terminal"] .scene {
+  html[data-skin="terminal"] .t-scene {
     justify-self: start;
   }
 }
@@ -2645,7 +2650,7 @@ html[data-skin="terminal"] .t-track {
   background-position: 0% 50%;
   color: var(--primary-ink);
   font-weight: 700;
-  animation: t-sweep 1.6s steps(16, end) infinite;
+  animation: t-sweep var(--t-sweep) steps(16, end) infinite;
 }
 
 html[data-skin="terminal"] .t-track::before {

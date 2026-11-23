@@ -5,12 +5,11 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { action, type Action } from "../src/core/actions.ts";
 import type { WorldModel } from "../src/core/models.ts";
-import type { Game, World } from "../src/model.ts";
 import { consoleSkin } from "../src/skins/console/index.ts";
 import { partialLine } from "../src/skins/console/tabs/Backups.tsx";
 import { formatUptime as uptime } from "../src/lib/format.ts";
+import { aGame, aWorld, noop, spy } from "./support/fixtures.ts";
 
 /*
  * The console world page (skin-spec §6.3): the header pill is the one state
@@ -18,12 +17,16 @@ import { formatUptime as uptime } from "../src/lib/format.ts";
  * cards, and the World card owns the hosting and game settings verbs.
  */
 
-const noop = () => undefined;
-const spy = (id: string, label: string, rest: Partial<Action> = {}): Action => action(id, label, noop, rest);
 const count = (markup: string, pattern: RegExp) => markup.match(new RegExp(pattern.source, "g"))?.length ?? 0;
 
-const world = { id: "rostik", displayName: "Rostik", placement: "fleet", connectivity: "raw", materialization: "existing", wipes: [{ id: "wipe-1", number: 1, state: "current", createdAt: "2026-11-01T10:00:00Z", closedAt: null, originRelease: "1.2" }], release: { activeRelease: "1.2", desiredRelease: "1.3", state: "available" }, preset: null } as unknown as World;
-const game = { id: "minecraft", code: "MC", displayName: "Minecraft", lifecycle: null, presets: [], worlds: [world] } as unknown as Game;
+const world = aWorld({
+  id: "rostik",
+  placement: "fleet",
+  connectivity: "raw",
+  wipes: [{ id: "wipe-1", number: 1, state: "current", createdAt: "2026-11-01T10:00:00Z", closedAt: null, originRelease: "1.2" }],
+  release: { state: "available", generationId: null, activeRelease: "1.2", desiredRelease: "1.3" },
+});
+const game = aGame({ worlds: [world] });
 const address = { value: "203.0.113.7:25565", connectivity: "raw" as const, network: "Public IP" };
 
 const model: WorldModel = {

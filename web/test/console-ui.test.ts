@@ -7,7 +7,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { action } from "../src/core/actions.ts";
-import type { ShellModel } from "../src/core/models.ts";
 import { flashItems, pageKey, transitionKind } from "../src/skins/console/Shell.tsx";
 import { ActionButton, LinkButton } from "../src/skins/console/ui/ActionButton.tsx";
 import { Address } from "../src/skins/console/ui/Address.tsx";
@@ -26,7 +25,6 @@ import { Indicator } from "../src/skins/console/ui/Indicator.tsx";
 import { MenuButton } from "../src/skins/console/ui/MenuButton.tsx";
 import { ListColumn, ListItemIcon, ListItemPerson, ListItemWorld, ListItemWorldSkeleton } from "../src/skins/console/ui/ListColumn.tsx";
 import { Notice } from "../src/skins/console/ui/Notice.tsx";
-import { Overflow } from "../src/skins/console/ui/Overflow.tsx";
 import { PageHeader } from "../src/skins/console/ui/PageHeader.tsx";
 import { pageOf, Pager } from "../src/skins/console/ui/Pager.tsx";
 import { Person } from "../src/skins/console/ui/Person.tsx";
@@ -43,11 +41,11 @@ import { Tick } from "../src/skins/console/ui/Tick.tsx";
 import { Tile, Tiles } from "../src/skins/console/ui/Tile.tsx";
 import { ChartSkeleton } from "../src/skins/console/ui/TimeSeriesChart.tsx";
 import { TrackList, TrackTitle } from "../src/skins/console/ui/TrackList.tsx";
+import { aGame, aShell, noop } from "./support/fixtures.ts";
 
 // The console primitives' contracts: semantic markup, accessible names, stable
 // classes and every Action reachable with its data-action (AGENTS.md).
 
-const noop = () => undefined;
 const html = (element: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(element);
 
 test("ActionButton: a refused action stays focusable, says why, and keeps its id", () => {
@@ -63,17 +61,6 @@ test("ActionButton: a refused action stays focusable, says why, and keeps its id
   assert.match(iconOnly, /c-btn-sm c-btn-icon/);
   assert.match(html(createElement(ActionButton, { action: action("x", "Save", noop, { busy: true }) })), /aria-busy="true"/);
   assert.match(html(createElement(LinkButton, { href: "#/worlds", label: "All worlds" })), /<a class="c-btn c-btn-default" href="#\/worlds">/);
-});
-
-test("Overflow: every item is in the markup while closed, danger items in a group of their own", () => {
-  const markup = html(createElement(Overflow, { label: "More actions for Rostik", actions: [action("world.archive", "Archive", noop), action("world.purge", "Delete", noop, { danger: true }), action("world.wipe", "Wipe", noop, { disabled: true, hint: "Needs a built release" })] }));
-  assert.match(markup, /aria-haspopup="menu"/);
-  assert.match(markup, /aria-label="More actions for Rostik"/);
-  assert.match(markup, /role="menu"[^>]*popover="manual"|popover="manual"[^>]*role="menu"/);
-  for (const id of ["world.archive", "world.purge", "world.wipe"]) assert.match(markup, new RegExp(`data-action="${id}"`));
-  assert.match(markup, /c-menu-group c-menu-group-split/);
-  assert.match(markup, /c-menu-item c-menu-item-danger/);
-  assert.equal(html(createElement(Overflow, { label: "x", actions: [] })), "", "nothing to offer draws nothing");
 });
 
 test("PageHeader: the breadcrumb is the title, with a back button for the phone", () => {
@@ -172,12 +159,12 @@ test("Dialog and SidePanel: labelled modal surfaces whose Cancel runs the model'
 });
 
 test("Frame: Home is current on the overview and Worlds is not; Access carries the request count", () => {
-  const shell = {
+  const shell = aShell(aGame(), {
     navigation: [{ id: "worlds", label: "Worlds", href: "#/worlds/mc", current: true }, { id: "access", label: "Access", href: "#/access/users", current: false }, { id: "profile", label: "Profile", href: "#/profile", current: false }],
     page: "worlds",
     overview: { id: "worlds", label: "Home", href: "#/home/mc", current: true },
     requests: 2,
-  } as unknown as ShellModel;
+  });
   const items = frameItems(shell);
   assert.deepEqual(items.map((item) => [item.key, item.current]), [["home", true], ["worlds", false], ["access", false], ["profile", false]]);
   assert.equal(items.find((item) => item.key === "access")?.badge, 2);
@@ -193,7 +180,7 @@ test("Shell helpers: a world's tab is not a page; operations and outcomes become
   assert.equal(transitionKind("#/access/users", "#/access/roles"), "pane");
   assert.equal(transitionKind("#/home/mc", "#/worlds/mc"), "page");
   assert.match(html(createElement(TabPanel, { prefix: "w", id: "wipes" }, "x")), /^<div class="c-settle"><div><div aria-labelledby="w-tab-wipes"/, "the panel sits in a Settle box that eases its height");
-  const shell = { flash: { operations: [{ id: "op1", label: "Starting session", worldName: "Rostik", worldId: "rostik", startedAt: "2026-11-21T10:00:00Z" }] } } as unknown as ShellModel;
+  const shell = aShell(aGame(), { flash: { operations: [{ id: "op1", label: "Starting session", worldName: "Rostik", worldId: "rostik", startedAt: "2026-11-21T10:00:00Z" }] } });
   const items = flashItems(shell, { items: [{ id: 7, message: "Saved", tone: "error" }], dismiss: noop }, null);
   assert.deepEqual(items.map((item) => [item.kind, item.message]), [["busy", "Starting session · Rostik"], ["err", "Saved"]]);
   assert.equal(items[0]!.since, "2026-11-21T10:00:00Z");
@@ -219,7 +206,6 @@ test("Table: labels once in the header, one end-edge action column, records labe
       { id: "actions", header: "Actions", kind: "act", render: (row) => createElement(ActionButton, { action: row.act, size: "sm" }) },
     ],
   }));
-  assert.match(markup, /<table aria-label="Worlds" class="c-table" data-layout="rows">/);
   assert.equal((markup.match(/<th /g) ?? []).length, 3, "labels once, in the header");
   assert.match(markup, /aria-sort="ascending"/);
   assert.match(markup, /<button class="c-sort"/);

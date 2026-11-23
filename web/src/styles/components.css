@@ -316,10 +316,10 @@
 .field textarea {
   width: 100%;
   min-height: 40px;
-  padding: 0 12px;
+  padding: 0 var(--field-pad-end, 12px) 0 12px;
   border: 1px solid var(--outline-strong);
   border-radius: var(--radius-control);
-  background: var(--surface);
+  background-color: var(--surface);
   color: var(--ink);
   transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
@@ -327,7 +327,7 @@
 .field select {
   height: 40px;
   appearance: none;
-  padding-right: 36px;
+  --field-pad-end: 36px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%235f6368'%3E%3Cpath d='M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 8px center;

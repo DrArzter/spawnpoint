@@ -11,6 +11,7 @@ import type { Operation } from "../src/model.ts";
 import { OperationProgress as ConsoleProgress } from "../src/skins/console/OperationProgress.tsx";
 import { DetailsTab as ConsoleDetails } from "../src/skins/console/tabs/Details.tsx";
 import { World as TerminalWorld } from "../src/skins/terminal/World.tsx";
+import { noop } from "./support/fixtures.ts";
 
 /*
  * The operation's progress in both skins: the same rows from one model, a
@@ -70,7 +71,6 @@ test("console: a failure keeps its status once, the error and the whole cause, a
 });
 
 // The terminal draws the panel inside its world page; the rest of the model is the minimum the page reads.
-const noop = () => undefined;
 const act = { id: "x", label: "X", run: noop, disabled: false, busy: false };
 function terminalPage(progress: ReturnType<typeof progressModel>): string {
   const world = { id: "w1", displayName: "Creative", wipes: [] };

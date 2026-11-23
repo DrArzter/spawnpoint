@@ -5,10 +5,10 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { action, actionsOf, type Action } from "../src/core/actions.ts";
-import type { AccessModel, ConfirmationModel, ConsoleModel, CreateWorldModel, GameSettingsModel, InvitationModel, MetricsModel, ModsModel, ProfileModel, ReleasesModel, ShellModel, WhitelistModel, WorldModel, WorldsModel, WorldSettingsModel } from "../src/core/models.ts";
-import type { Game, World } from "../src/model.ts";
+import { actionsOf } from "../src/core/actions.ts";
+import type { AccessModel, ConfirmationModel, ConsoleModel, CreateWorldModel, GameSettingsModel, InvitationModel, MetricsModel, ModsModel, ProfileModel, ReleasesModel, WhitelistModel, WorldModel, WorldSettingsModel } from "../src/core/models.ts";
 import { SKINS } from "../src/skins/index.ts";
+import { aGame, aPreset, aShell, aWorld, aWorlds, noop, spy } from "./support/fixtures.ts";
 
 /*
  * The skin contract. A skin may draw a model however it likes; what it may
@@ -18,50 +18,23 @@ import { SKINS } from "../src/skins/index.ts";
  * Approve, or Restore fails before anybody opens it.
  */
 
-const noop = () => undefined;
-
-const spy = (id: string, label: string, rest: Partial<Action> = {}): Action => action(id, label, noop, rest);
-
-const world: World = {
-  id: "minecraft-rostik-12345678",
-  displayName: "Rostik",
-  profileId: "industrial",
-  preset: { id: "industrial", repository: "https://github.com/DrArzter/presets", commit: "0123456789abcdef", buildStatus: "ready", latestRelease: "1.2" },
-  release: { activeRelease: "1.2", desiredRelease: "1.2", state: "ready" },
+const world = aWorld({
+  preset: { id: "industrial", repository: "https://github.com/DrArzter/presets", commit: "0123456789abcdef", profileDigest: "sha256:0", buildStatus: "ready", latestRelease: "1.2", releases: ["1.1", "1.2"] },
   wipes: [{ id: "wipe-2", number: 2, state: "current", originRelease: "1.2", createdAt: "2026-08-20T10:00:00Z", closedAt: null }],
   connectionAddress: "172.29.23.24:25565",
-  connectivity: "zerotier",
-  placement: "configured",
-  materialization: "existing",
-  sessionControlAvailable: true,
-  worldLifecycleAvailable: true,
-} as unknown as World;
+});
 
-const game: Game = {
-  id: "minecraft",
-  code: "MC",
-  displayName: "Minecraft",
-  lifecycle: null,
-  presets: [{ id: "industrial", displayName: "Industrial", repository: "https://github.com/DrArzter/presets", commit: "0123456789abcdef", buildStatus: "ready", latestRelease: "1.2", releases: ["1.1", "1.2"] }],
-  worlds: [world],
-} as unknown as Game;
+const game = aGame({ presets: [aPreset()], worlds: [world] });
 
-const shell: ShellModel = {
+const shell = aShell(game, {
   navigation: [{ id: "worlds", label: "Worlds", href: "#/worlds", current: true }, { id: "profile", label: "Profile", href: "#/profile", current: false }],
-  page: "worlds",
   scope: { game, games: [game], statusOf: () => ({ kind: "ok", label: "Online" }), open: true, show: spy("scope.show", "Minecraft"), close: spy("scope.close", "Cancel"), select: noop },
   appearance: { preference: "system", theme: "light", accent: "#1a73e8", label: "System theme (light)", setPreference: async () => undefined, setAccent: async () => undefined },
   viewer: { displayName: "DrArzter", inTelegram: true },
-  demo: true,
   observedAt: "Sep 23, 2026, 2:01 PM",
-  openProfile: spy("shell.profile", "Open my profile"),
-};
+});
 
-const worlds: WorldsModel = {
-  status: "ready",
-  error: "",
-  game,
-  unavailable: null,
+const worlds = aWorlds(game, {
   notices: [{ id: "load", tone: "error", title: "Current state could not be loaded", description: "boom", action: spy("refresh.notice", "Try again") }],
   overview: { fleet: false, state: "running", status: { kind: "ok", label: "Online" }, headline: "Minecraft online", reason: { text: "The host is up for Rostik", detail: "asked running, reports ready", attention: false }, players: 3, observedAt: "2026-09-23T12:01:00Z", host: { name: "Shared game host", status: { kind: "ok", label: "Running" }, instanceType: "m7i-flex.large", zone: "eu-central-1a", launchedAt: "2026-09-14T18:32:00Z" }, fleetHosts: { running: 0, pending: 0 } },
   rows: [{
@@ -77,9 +50,7 @@ const worlds: WorldsModel = {
     actions: [spy("world.details", "View details"), spy("world.invite", "Invite players"), spy("world.pack", "Download client pack"), spy("world.wipe", "Start a new wipe"), spy("world.archive", "Archive")],
   }],
   emptyDescription: "Create the first world.",
-  refresh: spy("refresh", "Refresh"),
-  createWorld: spy("world.create", "Create world"),
-};
+});
 
 const modRows = [
   { file: "create-1.20.1-0.5.1.j.jar", bytes: 14_221_830, sha256: "c".repeat(64), source: "curseforge" as const, download: spy("mod.download.ccc", "Download") },

@@ -7,13 +7,13 @@ import { identityDeletionRefusal } from "../src/api/contract.ts";
 import type { SnackInput } from "../src/components/ui/Snackbar.tsx";
 import { deleteMember, deletionConfirmation, memberRemoval, type DeletionAuthority } from "../src/core/data.ts";
 import type { Member } from "../src/model.ts";
+import { noop } from "./support/fixtures.ts";
 
 const owner: Member = { id: "identity-owner", name: "DrArzter", roleId: "owner", links: [] };
 const otherOwner: Member = { id: "identity-alex", name: "Alex", roleId: "owner", links: [] };
 const viewer: Member = { id: "identity-mira", name: " Mira ", roleId: "viewer", links: [] };
 
 const manager: DeletionAuthority = { selfId: owner.id, canDelete: true, canDeleteOwner: false };
-const noop = () => undefined;
 
 test("delete is offered for another person, never for yourself", () => {
   const remove = memberRemoval(viewer, manager, noop);

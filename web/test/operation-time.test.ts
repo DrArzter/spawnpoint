@@ -5,10 +5,10 @@ import { mock, test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { ShellModel } from "../src/core/models.ts";
 import { clock, eta } from "../src/lib/operation-time.ts";
 import { flashItems } from "../src/skins/console/Shell.tsx";
 import { RunningTime } from "../src/skins/console/ui/Flashbar.tsx";
+import { aGame, aShell } from "./support/fixtures.ts";
 
 // An operation's time: elapsed beside the ETA, or "taking longer" once the
 // usual duration has passed, from one formatter in every place it shows.
@@ -69,9 +69,9 @@ test("running time with no history shows only the elapsed time", () => {
 });
 
 test("the flashbar item carries the operation's expectation", () => {
-  const model = { flash: { operations: [
+  const model = aShell(aGame(), { flash: { operations: [
     { id: "a", label: "Starting", worldName: "Alpha", worldId: "w1", startedAt: since, expectedSeconds: 90, expectedSamples: 5 },
-  ] } } as unknown as ShellModel;
+  ] } });
   const [item] = flashItems(model, queue, "w2");
   assert.deepEqual(item?.expectation, { expectedSeconds: 90, expectedSamples: 5 });
   // On the operation's own world the hero owns the time (R3).

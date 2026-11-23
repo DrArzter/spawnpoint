@@ -1,0 +1,80 @@
+import { action, type Action } from "../../src/core/actions.ts";
+import type { ShellModel, WorldsModel } from "../../src/core/models.ts";
+import type { Game, Preset, World } from "../../src/model.ts";
+
+// Typed builders for the models the tests draw. Each takes the fields a test
+// cares about and fills the rest, so a test names only what it asserts on and
+// no test casts a partial value through `unknown`.
+
+export const noop = () => undefined;
+
+/** An Action that does nothing; `rest` sets its icon, hint, disabled flag and the like. */
+export const spy = (id: string, label: string, rest: Partial<Action> = {}): Action => action(id, label, noop, rest);
+
+export function aPreset(over: Partial<Preset> = {}): Preset {
+  return {
+    id: "industrial",
+    displayName: "Industrial",
+    repository: "https://github.com/DrArzter/presets",
+    commit: "0123456789abcdef",
+    profileDigest: "sha256:0",
+    releases: ["1.1", "1.2"],
+    buildStatus: "ready",
+    latestRelease: "1.2",
+    ...over,
+  };
+}
+
+export function aWorld(over: Partial<World> = {}): World {
+  return {
+    id: "minecraft-rostik-12345678",
+    displayName: "Rostik",
+    profileId: "industrial",
+    sessionControlAvailable: true,
+    connectivity: "zerotier",
+    placement: "configured",
+    materialization: "existing",
+    worldLifecycleAvailable: true,
+    wipes: [],
+    preset: null,
+    connectionAddress: null,
+    release: { state: "available", generationId: null, desiredRelease: "1.2", activeRelease: "1.2" },
+    ...over,
+  };
+}
+
+/** The Minecraft game, with the worlds and presets a test gives it. */
+export function aGame(over: Partial<Game> = {}): Game {
+  return { id: "minecraft", code: "MC", displayName: "Minecraft", lifecycle: null, presets: [], worlds: [], ...over };
+}
+
+/** A shell model for a game that is open on the Worlds page. */
+export function aShell(game: Game, over: Partial<ShellModel> = {}): ShellModel {
+  return {
+    navigation: [{ id: "worlds", label: "Worlds", href: "#/worlds/minecraft", current: true }, { id: "access", label: "Access", href: "#/access/users", current: false }],
+    page: "worlds",
+    scope: { game, games: [game], statusOf: () => ({ kind: "ok", label: "Online" }), open: false, show: spy("scope.show", "Minecraft"), close: spy("scope.close", "Cancel"), select: noop },
+    viewer: { displayName: "DrArzter", inTelegram: false },
+    demo: true,
+    observedAt: "Nov 21, 2026, 10:00 AM",
+    openProfile: spy("shell.profile", "Open my profile"),
+    ...over,
+  };
+}
+
+/** A ready, stopped Worlds model for a game; its rows are the test's own. */
+export function aWorlds(game: Game, over: Partial<WorldsModel> = {}): WorldsModel {
+  return {
+    status: "ready",
+    error: "",
+    game,
+    unavailable: null,
+    notices: [],
+    overview: { fleet: true, state: "stopped", status: { kind: "off", label: "Stopped" }, headline: "Minecraft stopped", reason: { text: "", detail: "", attention: false }, players: null, observedAt: undefined, host: null, fleetHosts: { running: 0, pending: 0 } },
+    rows: [],
+    emptyDescription: null,
+    refresh: spy("refresh", "Refresh"),
+    createWorld: spy("world.create", "Create world"),
+    ...over,
+  };
+}

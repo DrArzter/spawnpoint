@@ -7,7 +7,6 @@ import { routes } from "./api/route-table.ts";
 // The deployed Lambda entry stays stable. Functional modules own their routes;
 // this composition root wires the one HTTP authentication/authorization gate.
 export { routes, deployedCapabilities } from "./api/route-table.ts";
-export { restorableRelease } from "./api/worlds.ts";
 
 export const handler = createDispatcher(routes, {
   caller,

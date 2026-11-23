@@ -186,14 +186,22 @@ export async function requestPasswordReset(event: Event): Promise<Response> {
 }
 
 export async function revokePasswordLoginSessions(subject: string): Promise<void> {
-  const sessions = await document.send(new QueryCommand({
-    TableName: tableName,
-    IndexName: "gsi1",
-    KeyConditionExpression: "gsi1pk = :account",
-    ExpressionAttributeValues: { ":account": `ACCOUNT#${passwordProviderId}#${subject}` },
-  }));
+  // A password reset must end every session, so every page is read.
+  const items: Record<string, unknown>[] = [];
+  let cursor: Record<string, unknown> | undefined;
+  do {
+    const page = await document.send(new QueryCommand({ // NOSONAR paginated: the next token comes from the previous page
+      TableName: tableName,
+      IndexName: "gsi1",
+      KeyConditionExpression: "gsi1pk = :account",
+      ExpressionAttributeValues: { ":account": `ACCOUNT#${passwordProviderId}#${subject}` },
+      ExclusiveStartKey: cursor,
+    }));
+    items.push(...(page.Items ?? []));
+    cursor = page.LastEvaluatedKey;
+  } while (cursor !== undefined);
   const now = new Date().toISOString();
-  await Promise.all((sessions.Items ?? []).filter((item) => item.entity_type === "LOGIN_SESSION").map((item) => document.send(new UpdateCommand({
+  await Promise.all(items.filter((item) => item.entity_type === "LOGIN_SESSION").map((item) => document.send(new UpdateCommand({
     TableName: tableName,
     Key: { pk: item.pk, sk: item.sk },
     UpdateExpression: "SET #status = :revoked, revoked_at = :now",

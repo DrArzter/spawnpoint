@@ -26,10 +26,9 @@ const ec2 = new EC2Client({ region });
 const s3 = new S3Client({ region });
 const ssm = new SSMClient({ region });
 
-// Secrets and configuration from Parameter Store. The token and webhook secret
-// never change and cache for the container's life; the allow-list is edited
-// with put-parameter --overwrite, so it re-reads after a short TTL rather than
-// holding until a cold start.
+// Secrets and configuration from Parameter Store. A value read with no TTL
+// caches for the container's life; a caller that expects a value to change
+// with put-parameter --overwrite passes a short TTL.
 const cache = new Map<string, { value: string; expiresAt: number }>();
 export async function parameter(name: string, ttlSeconds = Infinity): Promise<string> {
   const cached = cache.get(name);

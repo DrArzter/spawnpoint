@@ -261,12 +261,6 @@ export function displayAddress(address: string, worldId: string, catalog: readon
   return address.endsWith(suffix) ? address.slice(0, -suffix.length) : address;
 }
 
-export function connectPortForWorld(worldId: string, catalog: readonly CatalogGame[] = gameCatalog): number {
-  const game = catalog.find((candidate) => candidate.worlds.some((world) => world.id === worldId));
-  if (game === undefined) throw new Error(`unknown world: ${worldId}`);
-  return game.connectPort;
-}
-
 // The address a player types, composed here exactly as the host composes it:
 // the strategy answers with the host part and the game with the port. Null when
 // the strategy has no answer — an overlay address withheld from a caller who

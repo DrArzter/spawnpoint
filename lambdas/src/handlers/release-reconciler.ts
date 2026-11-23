@@ -9,7 +9,7 @@ import {
   collectSources, dynamoRefsTableReader, s3BackupBucketReader, s3ReleaseBucketReader, type SourcePorts,
 } from "../control-plane/s3-release-marks.ts";
 import {
-  describeSweep, executeSweep, planSweep, sweepCandidates, sweepDryRun, sweepGraceDays, type SweepOutcome, type SweepPlan, type SweepWriter,
+  describeSweep, executeSweep, planSweep, sweepCandidates, sweepDryRun, sweepGraceDays, SWEEP_GRACE_DAYS_DEFAULT, type SweepOutcome, type SweepPlan, type SweepWriter,
 } from "../control-plane/release-sweep.ts";
 import { createSweepWriter } from "../control-plane/s3-release-sweep.ts";
 
@@ -151,7 +151,7 @@ export async function handler(event: unknown = {}): Promise<ReconcileResult> {
     now: () => new Date(),
     sweep: {
       dryRun: sweepDryRun(process.env.RELEASE_SWEEP_DRY_RUN),
-      graceDays: sweepGraceDays(process.env.RELEASE_SWEEP_GRACE_DAYS ?? "14"),
+      graceDays: sweepGraceDays(process.env.RELEASE_SWEEP_GRACE_DAYS ?? String(SWEEP_GRACE_DAYS_DEFAULT)),
       writer: () => createSweepWriter(releaseBucket, table),
     },
   });

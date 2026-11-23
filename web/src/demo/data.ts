@@ -1,11 +1,16 @@
 import type { AccessCandidate, AccessIdentity, AccessRole, ActiveSession, AppearancePreference, BackupEntry, InvitationSummary, SubscriptionState } from "../auth";
 import type { ConsoleEntry } from "../api/contract";
-import type { ControlPlaneSnapshot, SettingDefinition, WorldSession } from "../model";
+import type { ControlPlaneSnapshot, Game, SettingDefinition, World, WorldSession } from "../model";
 import { DEFAULT_ACCENT } from "../styles/accent";
 
 /** A game whose session record says nothing runs. */
 function stoppedLifecycle(serverId: string): WorldSession {
   return { serverId, desiredState: "stopped", observedState: "stopped", activeSessionId: null, activeWorldId: null, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: null };
+}
+
+/** A game with no presets and no session running, as the demo seeds Factorio and Zomboid. */
+function stoppedGame(id: string, code: string, displayName: string, worlds: Mutable<World>[]): Mutable<Game> {
+  return { id, code, displayName, lifecycle: stoppedLifecycle(id), presets: [], worlds };
 }
 
 // The demo mutates its own control plane, so every record it holds is mutable
@@ -171,31 +176,17 @@ export function initialState(): DemoState {
             },
           ],
         },
-        {
-          id: "factorio",
-          code: "FA",
-          displayName: "Factorio",
-          lifecycle: stoppedLifecycle("factorio"),
-          presets: [],
-          worlds: [
+        stoppedGame("factorio", "FA", "Factorio", [
             { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:34197", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },
             // A world that can start, so the demo can show a running Factorio host.
             { id: "factorio-megabase", displayName: "Megabase", profileId: "factorio-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:34197", release: { state: "available", generationId: null, activeRelease: "2.0.55", desiredRelease: "2.0.55" } },
             { id: "factorio-archive", displayName: "Archived rail world", profileId: "factorio-rail", sessionControlAvailable: false, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "archived", preset: null, wipes: [], connectionAddress: null, release: { state: "available", generationId: null, activeRelease: "1.0", desiredRelease: "1.0" } },
-          ],
-        },
-        {
-          id: "zomboid",
-          code: "PZ",
-          displayName: "Project Zomboid",
-          lifecycle: stoppedLifecycle("zomboid"),
-          presets: [],
-          worlds: [
+        ]),
+        stoppedGame("zomboid", "PZ", "Project Zomboid", [
             { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "not_created", preset: null, wipes: [], connectionAddress: "172.29.23.24:16261", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },
             // A world that can start, so the demo can show a running Zomboid host.
             { id: "zomboid-muldraugh", displayName: "Muldraugh", profileId: "zomboid-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:16261", release: { state: "available", generationId: null, activeRelease: "42.13.1", desiredRelease: "42.13.1" } },
-          ],
-        },
+        ]),
       ],
     },
     roles: [

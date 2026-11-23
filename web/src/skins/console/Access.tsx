@@ -2,10 +2,10 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import type { AccessInvitation } from "../../api/contract";
 import type { Action } from "../../core/actions";
-import type { AccessModel, CandidateRow, InvitationsModel, MemberRow, NotificationsModel, RolesModel, UsersModel } from "../../core/models";
+import type { AccessModel, CandidateRow, InvitationsModel, MemberRow, NotificationsModel, RoleEditorModel, RolesModel, UsersModel } from "../../core/models";
 import type { StatusDescriptor } from "../../core/status";
 import { Icon } from "../../icons";
-import { permissionRows, rolePermissions, type RoleChoice } from "../../core/roles";
+import { permissionGroups, ROLE_ID_HINT, roleFormFields, permissionRows, rolePermissions, type RoleChoice } from "../../core/roles";
 import type { Member, PermissionInfo, Role } from "../../model";
 import { ConfirmationDialog } from "./Dialogs";
 import { providerIcon, providerName } from "./providers";
@@ -15,7 +15,7 @@ import { Card } from "./ui/Card";
 import { Chip } from "./ui/Chip";
 import { DetailList, shortDateTime } from "./ui/DetailList";
 import { Empty, LoadError } from "./ui/Empty";
-import { Field, Select, TextInput, Toggle } from "./ui/Fields";
+import { Checkbox, Field, Select, TextInput, Toggle } from "./ui/Fields";
 import { Grid } from "./ui/Grid";
 import { Indicator } from "./ui/Indicator";
 import { ListColumn, ListItemIcon, ListItemPerson, type ListGroup } from "./ui/ListColumn";
@@ -392,7 +392,6 @@ function RolesPane({ model, users, catalogue }: Readonly<{ model: RolesModel; us
   const state = model.roles;
   const roles = state.status === "ready" ? state.value : [];
   const permissions = permissionRows(catalogue, roles);
-  const holders = (role: Role) => users.members.filter((row) => row.member.roleId === role.id).length;
   const columns: Column<PermissionInfo>[] = [
     { id: "permission", header: "Permission", kind: "lead", render: (permission) => <PermissionName permission={permission} /> },
     { id: "group", header: "Group", kind: "wide", render: (permission) => <span className="c-faint">{permission.group}</span> },
@@ -403,7 +402,7 @@ function RolesPane({ model, users, catalogue }: Readonly<{ model: RolesModel; us
         header: role.name,
         className: "c-access-cell",
         // The button says what it opens; the count is labelled for a screen reader, as its column header reads only the role.
-        headerCell: <span className="c-access-role-head"><ActionButton action={{ ...read, label: role.name, icon: undefined }} name={`${role.name} permissions`} size="sm" variant="ghost" /><span aria-label={`${holders(role)} ${holders(role) === 1 ? "person" : "people"}`} className="c-faint" role="img">{holders(role)}</span></span>,
+        headerCell: <span className="c-access-role-head"><ActionButton action={{ ...read, label: role.name, icon: undefined }} name={`${role.name} permissions`} size="sm" variant="ghost" /><span aria-label={`${role.holders} ${role.holders === 1 ? "person" : "people"}`} className="c-faint" role="img">{role.holders}</span></span>,
         render: (permission) => role.permissions.includes(permission.id)
           ? <Indicator status={{ kind: "ok", label: "Granted" }} />
           : <span aria-label="Not granted" className="c-faint" role="img">—</span>,
@@ -412,17 +411,24 @@ function RolesPane({ model, users, catalogue }: Readonly<{ model: RolesModel; us
   ];
   return (
     <>
-      <PageHeader count={state.status === "ready" ? roles.length : undefined} title="Roles" trail={[ACCESS]} />
+      <PageHeader actions={<ActionButton action={model.create} variant="primary" />} count={state.status === "ready" ? roles.length : undefined} title="Roles" trail={[ACCESS]} />
       <Grid kind="stack">
         <Card body="flush" label="Roles and permissions">
           {state.status === "error"
             ? <LoadError error={state.error} kind={state.kind} retry={state.retry} title="Roles could not be loaded" verb="read roles" />
             : <Table columns={columns} empty={<Empty icon="admin_panel_settings" size="sm" title="No roles" />} label="Permissions by role" loading={state.status === "loading"} rowKey={(permission) => permission.id} rows={permissions} variant="matrix" />}
         </Card>
+        <Card title="Default role">
+          <Field label="Given on approval">
+            <Select aria-label="Default role" disabled={model.defaultRole.choice.disabled} onChange={(event) => model.defaultRole.set(event.target.value)} options={[...model.defaultRole.choice.options]} value={model.defaultRole.choice.value} />
+          </Field>
+        </Card>
         <OwnerCard users={users} />
       </Grid>
+      <ConfirmationDialog model={model.deletion} />
+      {model.editor && <RoleEditorPanel model={model.editor} />}
       {model.reading && (
-        <SidePanel cancel={model.closeReading} title={`${model.reading.name} permissions`}>
+        <SidePanel actions={<><ActionButton action={model.remove(model.reading)} variant="danger" /><ActionButton action={model.edit(model.reading)} variant="primary" /></>} cancel={model.closeReading} title={`${model.reading.name} permissions`}>
           <div className="c-access-role">
             {model.reading.builtIn && <Chip>Built-in</Chip>}
             <p className="c-line">{model.reading.description}</p>
@@ -431,6 +437,36 @@ function RolesPane({ model, users, catalogue }: Readonly<{ model: RolesModel; us
         </SidePanel>
       )}
     </>
+  );
+}
+
+function RoleEditorPanel({ model }: Readonly<{ model: RoleEditorModel }>) {
+  const fields = roleFormFields(model);
+  return (
+    <SidePanel actions={<ActionButton action={model.submit} variant="primary" />} cancel={model.cancel} title={model.title}>
+      <Field label="Name">
+        <TextInput {...fields.name} />
+      </Field>
+      {model.mode === "create" && (
+        <Field error={model.idError} hint={ROLE_ID_HINT} label="ID">
+          <TextInput mono {...fields.id} />
+        </Field>
+      )}
+      <Field label="Description">
+        <TextInput {...fields.description} />
+      </Field>
+      {permissionGroups(model.permissions).map(({ group, rows }) => (
+        <fieldset className="c-role-group" key={group}>
+          <legend>{group}</legend>
+          <div className="c-perms">
+            {rows.map(({ permission, checked, toggle }) => (
+              <Checkbox actionId={toggle.id} checked={checked} disabled={toggle.disabled} hint={toggle.disabled && toggle.hint ? toggle.hint : permission.description || undefined} key={permission.id} label={permission.label} onChange={toggle.run} />
+            ))}
+          </div>
+        </fieldset>
+      ))}
+      {model.error && <p className="c-field-error" role="alert">{model.error}</p>}
+    </SidePanel>
   );
 }
 

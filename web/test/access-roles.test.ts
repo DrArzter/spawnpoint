@@ -5,12 +5,13 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { memberRemoval } from "../src/core/data.ts";
-import type { AccessModel, CandidateRow, MemberRow } from "../src/core/models.ts";
-import { permissionRows, protectedRoleName, roleChoice, rolePermissions } from "../src/core/roles.ts";
+import { API_ERROR_TEXT } from "../src/api/error-text.ts";
+import { memberRemoval, roleEditAction, roleRemoveAction } from "../src/core/data.ts";
+import type { AccessModel, CandidateRow, MemberRow, RoleEditorModel } from "../src/core/models.ts";
+import { defaultRoleChoice, offeredPermissions, permissionRows, protectedRoleName, ROLE_ID_PATTERN, roleChoice, roleIdFor, rolePermissions } from "../src/core/roles.ts";
 import { SKINS } from "../src/skins/index.ts";
 import { consoleSkin } from "../src/skins/console/index.ts";
-import { aMember, aPermission, aRole, noop, spy } from "./support/fixtures.ts";
+import { aMember, aPermission, aRole, aRolesModel, noop, spy } from "./support/fixtures.ts";
 
 /*
  * The web keeps no role ids and no owner rules. What a caller may give, what a
@@ -19,8 +20,8 @@ import { aMember, aPermission, aRole, noop, spy } from "./support/fixtures.ts";
  */
 
 const open = aRole({ id: "role-open", name: "Open role", permissions: ["perm.one"] });
-const closed = aRole({ id: "role-closed", name: "Closed role", permissions: ["perm.one", "perm.two"], protected: true, assignable: false });
-const plain = aRole({ id: "role-plain", name: "Plain role", permissions: [], builtIn: false });
+const closed = aRole({ id: "role-closed", name: "Closed role", permissions: ["perm.one", "perm.two"], protected: true, assignable: false, editable: false });
+const plain = aRole({ id: "role-plain", name: "Plain role", permissions: [], builtIn: false, deletable: true });
 const roles = [open, closed, plain];
 
 const catalogue = [
@@ -102,7 +103,7 @@ const model: AccessModel = {
     closeManaged: spy("sheet.close", "Close panel"),
     deletion: null,
   },
-  roles: { roles: { status: "ready", value: roles }, reading: closed, read: (role) => spy("access.role.read", `${role.permissions.length} permissions`), closeReading: spy("sheet.close.role", "Close panel") },
+  roles: aRolesModel(roles, { reading: closed }),
   notifications: { state: "ready", error: "", retry: null, saveStatus: "", games: [], subscriptions: {}, toggle: (id, label) => spy(`notifications.${id}`, label) },
 };
 
@@ -157,4 +158,86 @@ test("both skins key a waiting account by the row's id, so two platforms with on
   const terminal = renderToStaticMarkup(createElement(SKINS.find((skin) => skin.name === "Terminal")!.Access, { model: two }));
   assert.match(terminal, /Nikita/);
   assert.match(terminal, /Second/);
+});
+
+// --- the role editor (ADR-0083) ----------------------------------------------------
+
+const held = aRole({ id: "role-held", name: "Held role", builtIn: false, holders: 2 });
+
+test("edit and delete follow the flags the API serves, with the reason as the hint", () => {
+  assert.equal(roleEditAction(open, noop).disabled, false);
+  const edit = roleEditAction(closed, noop);
+  assert.equal(edit.disabled, true, "a protected role cannot be edited");
+  assert.match(edit.hint ?? "", /cannot be changed/);
+  assert.equal(roleRemoveAction(plain, "role-open", noop).disabled, false);
+  assert.match(roleRemoveAction(open, "role-other", noop).hint ?? "", /built-in/i, "a built-in role cannot be deleted");
+  assert.match(roleRemoveAction(held, "role-other", noop).hint ?? "", /2 people hold/, "a held role says how many hold it");
+  assert.match(roleRemoveAction(aRole({ id: "role-d", builtIn: false }), "role-d", noop).hint ?? "", /default role/);
+});
+
+test("the editor offers every catalogue permission but a reserved one, and locks what the caller lacks", () => {
+  const withReserved = [...catalogue, aPermission({ id: "perm.reserved", group: "Group Two", label: "Reserved", reserved: true })];
+  const offered = offeredPermissions(withReserved, new Set(["perm.one", "perm.reserved"]));
+  assert.deepEqual(offered.map((row) => row.permission.id), ["perm.one", "perm.two", "perm.idle"], "a reserved permission is never offered");
+  assert.deepEqual(offered.map((row) => row.locked), [false, true, true], "only held permissions can be changed");
+});
+
+test("the default role choice never offers the protected role", () => {
+  assert.deepEqual(defaultRoleChoice(roles, "role-open", false).options.map((option) => option.value), ["role-open", "role-plain"]);
+  assert.equal(defaultRoleChoice(roles, "role-open", true).disabled, true);
+});
+
+test("a role id is a slug, made from the name until typed", () => {
+  assert.equal(roleIdFor("Night Operator!"), "night-operator");
+  assert.ok(ROLE_ID_PATTERN.test("night-operator"));
+  assert.ok(!ROLE_ID_PATTERN.test("Night"));
+});
+
+function editorOf(over: Partial<RoleEditorModel> = {}): RoleEditorModel {
+  return {
+    mode: "edit", title: "Edit Open role", id: "role-open", setId: noop, idError: null, name: "Open role", setName: noop, description: "A role.", setDescription: noop,
+    permissions: offeredPermissions(catalogue, new Set(["perm.one"])).map(({ permission, locked }) => ({ permission, checked: permission.id === "perm.one", toggle: spy(`access.role.permission.${permission.id}`, permission.label, { disabled: locked, hint: locked ? "You do not hold this permission." : undefined }) })),
+    error: "Someone changed this role. The list is reloaded.", submit: spy("access.role.save", "Save role"), cancel: spy("access.role.cancel", "Cancel"), ...over,
+  };
+}
+
+const tagsOf = (markup: string, action: string) => markup.match(new RegExp(`<[^>]*data-action="${action.replaceAll(".", "\\.")}"[^>]*>`, "g")) ?? [];
+const refusedTag = (tag: string) => /aria-disabled="true"|disabled=""/.test(tag);
+
+for (const skin of SKINS) {
+  test(`${skin.name}: the roles tab reaches create, edit and delete where the flags allow`, () => {
+    // One role per page, so every Edit and Delete on it is that role's.
+    const free = renderToStaticMarkup(createElement(skin.Access, { model: { ...model, tab: "roles", roles: aRolesModel([plain], { reading: plain }) } }));
+    assert.match(free, /data-action="access\.role\.create"/);
+    for (const id of ["access.role.edit", "access.role.delete"]) {
+      assert.ok(tagsOf(free, id).length > 0 && tagsOf(free, id).every((tag) => !refusedTag(tag)), `${id} is reachable on a free role`);
+    }
+    const fixed = renderToStaticMarkup(createElement(skin.Access, { model: { ...model, tab: "roles", roles: aRolesModel([closed], { reading: closed }) } }));
+    for (const id of ["access.role.edit", "access.role.delete"]) {
+      assert.ok(tagsOf(fixed, id).length > 0 && tagsOf(fixed, id).every(refusedTag), `${id} is refused on the protected role`);
+    }
+    const heldMarkup = renderToStaticMarkup(createElement(skin.Access, { model: { ...model, tab: "roles", roles: aRolesModel([held], { reading: held }) } }));
+    assert.ok(tagsOf(heldMarkup, "access.role.delete").every(refusedTag), "a held role cannot be deleted");
+  });
+
+  test(`${skin.name}: the editor draws only offered permissions, locks the ones not held, and shows the 409 text`, () => {
+    const markup = renderToStaticMarkup(createElement(skin.Access, { model: { ...model, tab: "roles", roles: aRolesModel(roles, { editor: editorOf() }) } }));
+    assert.equal(refusedTag(tagsOf(markup, "access.role.permission.perm.one")[0] ?? ""), false);
+    assert.equal(refusedTag(tagsOf(markup, "access.role.permission.perm.two")[0] ?? ""), true, "a permission the caller lacks is locked");
+    assert.match(markup, /Someone changed this role\. The list is reloaded\./);
+  });
+
+  test(`${skin.name}: creating asks for an id, editing does not`, () => {
+    const create = renderToStaticMarkup(createElement(skin.Access, { model: { ...model, tab: "roles", roles: aRolesModel(roles, { editor: editorOf({ mode: "create", title: "New role", error: null }) }) } }));
+    assert.match(create, />ID</);
+    const edit = renderToStaticMarkup(createElement(skin.Access, { model: { ...model, tab: "roles", roles: aRolesModel(roles, { editor: editorOf({ error: null }) }) } }));
+    assert.doesNotMatch(edit, />ID</);
+  });
+}
+
+test("the role refusals have text", () => {
+  for (const code of ["role_changed", "role_in_use", "role_exists", "role_protected", "role_built_in", "invalid_role", "reserved_permission", "unknown_role"]) {
+    assert.ok(API_ERROR_TEXT[code], `${code} has text`);
+  }
+  assert.match(API_ERROR_TEXT.role_changed!, /Someone changed this role/);
 });

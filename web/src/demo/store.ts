@@ -1,5 +1,6 @@
-import type { AccessCandidate, AccessIdentity, AccessRoleDirectory, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
-import { identityDeletionRefusal, type HostLogLine, type PromotionResult, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type OperationProgress, type OperationStep, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
+import type { AccessCandidate, AccessIdentity, AccessRole, AccessRoleDirectory, AccessRoleDraft, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
+import { ApiError, identityDeletionRefusal, type HostLogLine, type PromotionResult, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type OperationProgress, type OperationStep, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
+import { API_ERROR_TEXT } from "../api/error-text";
 import { startableReleases } from "../core/presets";
 import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
@@ -842,22 +843,92 @@ export function candidates(): AccessCandidate[] {
 const caller = demoSession.identity.id;
 const callerHolds = (permission: string) => demoSession.role?.permissions.includes(permission) ?? false;
 const isProtected = (roleId: string) => state.roles.some((role) => role.id === roleId && role.protected);
-const canAssign = (roleId: string) => callerHolds("access.manage") && (!isProtected(roleId) || callerHolds("access.owner.grant"));
+const roleOf = (roleId: string) => state.roles.find((role) => role.id === roleId);
+const holdersOf = (roleId: string) => state.identities.filter((identity) => identity.roleId === roleId).length;
+// No escalation (ADR-0083): a caller works with a role only while holding every permission in it.
+const holdsAll = (permissions: readonly string[]) => permissions.every(callerHolds);
+const canAssign = (roleId: string) => callerHolds("access.manage") && holdsAll(roleOf(roleId)?.permissions ?? []);
 
 export function identities(): AccessIdentity[] {
   settle();
   return state.identities.map((identity) => ({
     ...identity,
-    canDelete: identity.id !== caller && callerHolds("access.manage") && (!isProtected(identity.roleId) || callerHolds("access.owner.grant")),
+    canDelete: identity.id !== caller && canAssign(identity.roleId),
   }));
 }
 
+const editable = (role: { protected: boolean; permissions: readonly string[] }) => callerHolds("access.manage") && !role.protected && holdsAll(role.permissions);
+const deletable = (role: { id: string; protected: boolean; builtIn: boolean; permissions: readonly string[] }) => editable(role) && !role.builtIn && holdersOf(role.id) === 0 && role.id !== state.defaultRoleId;
+const served = (role: DemoState["roles"][number]): AccessRole => ({ ...role, assignable: canAssign(role.id), holders: holdersOf(role.id), editable: editable(role), deletable: deletable(role) });
+
 export function roles(): AccessRoleDirectory {
   return {
-    roles: state.roles.map((role) => ({ ...role, assignable: canAssign(role.id) })),
+    roles: state.roles.map(served),
     permissions: [...PERMISSION_CATALOGUE],
     defaultRoleId: state.defaultRoleId,
   };
+}
+
+// A refusal answers as the API does: with its status and code, worded by the shared table.
+function refuse(status: number, code: string): never {
+  throw new ApiError(status === 403 ? "forbidden" : "failed", API_ERROR_TEXT[code] ?? code, { status, code });
+}
+
+const ROLE_ID = /^[a-z][a-z0-9-]{0,31}$/;
+
+function checkedDraft(draft: AccessRoleDraft): AccessRoleDraft {
+  if (!callerHolds("access.manage")) refuse(403, "forbidden");
+  if (draft.name.trim() === "" || new Set(draft.permissions).size !== draft.permissions.length) refuse(400, "invalid_role");
+  for (const id of draft.permissions) {
+    const entry = PERMISSION_CATALOGUE.find((item) => item.id === id);
+    if (!entry) refuse(400, "invalid_role");
+    if (entry.reserved) refuse(400, "reserved_permission");
+  }
+  return { name: draft.name.trim(), description: draft.description.trim(), permissions: [...draft.permissions] };
+}
+
+export function createRole(id: string, draft: AccessRoleDraft): AccessRole {
+  const clean = checkedDraft(draft);
+  if (!ROLE_ID.test(id)) refuse(400, "invalid_role");
+  if (roleOf(id)) refuse(409, "role_exists");
+  if (!holdsAll(clean.permissions)) refuse(403, "forbidden");
+  const role = { id, ...clean, builtIn: false, protected: false, version: 1 };
+  state.roles = [...state.roles, role];
+  return served(role);
+}
+
+export function updateRole(roleId: string, draft: AccessRoleDraft, version: number): AccessRole {
+  const role = roleOf(roleId);
+  if (!role) refuse(400, "unknown_role");
+  const clean = checkedDraft(draft);
+  if (role.protected) refuse(409, "role_protected");
+  if (role.version !== version) refuse(409, "role_changed");
+  // Taking a permission away and putting one in both need the caller to hold it.
+  const touched = [...role.permissions.filter((id) => !clean.permissions.includes(id)), ...clean.permissions.filter((id) => !role.permissions.includes(id))];
+  if (!holdsAll(touched)) refuse(403, "forbidden");
+  const saved = { ...role, ...clean, version: role.version + 1 };
+  state.roles = state.roles.map((item) => (item.id === roleId ? saved : item));
+  return served(saved);
+}
+
+export function deleteRole(roleId: string, version: number): void {
+  const role = roleOf(roleId);
+  if (!role) refuse(400, "unknown_role");
+  if (!callerHolds("access.manage")) refuse(403, "forbidden");
+  if (role.protected) refuse(409, "role_protected");
+  if (role.builtIn) refuse(409, "role_built_in");
+  if (role.version !== version) refuse(409, "role_changed");
+  if (holdersOf(roleId) > 0 || roleId === state.defaultRoleId) refuse(409, "role_in_use");
+  state.roles = state.roles.filter((item) => item.id !== roleId);
+}
+
+export function setDefaultRole(roleId: string): string {
+  if (!callerHolds("access.manage")) refuse(403, "forbidden");
+  const role = roleOf(roleId);
+  if (!role) refuse(400, "unknown_role");
+  if (role.protected) refuse(409, "role_protected");
+  state.defaultRoleId = roleId;
+  return roleId;
 }
 
 const sameAccount = (platform: string, platformUserId: string) => (item: { platform: string; platformUserId: string }) =>

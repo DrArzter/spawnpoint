@@ -1,5 +1,7 @@
 import { action, type Action } from "../../src/core/actions.ts";
-import type { ShellModel, WorldsModel } from "../../src/core/models.ts";
+import { roleEditAction, roleRemoveAction } from "../../src/core/data.ts";
+import type { RolesModel, ShellModel, WorldsModel } from "../../src/core/models.ts";
+import { defaultRoleChoice } from "../../src/core/roles.ts";
 import type { Game, Member, PermissionInfo, Preset, Role, World } from "../../src/model.ts";
 
 // Typed builders for the models the tests draw. Each takes the fields a test
@@ -81,7 +83,7 @@ export function aWorlds(game: Game, over: Partial<WorldsModel> = {}): WorldsMode
 
 /** A role as the API serves it; the ids and names here are test data, not the product's. */
 export function aRole(over: Partial<Role> = {}): Role {
-  return { id: "role-a", name: "Role A", description: "A role.", permissions: ["perm.one"], builtIn: true, protected: false, assignable: true, ...over };
+  return { id: "role-a", name: "Role A", description: "A role.", permissions: ["perm.one"], builtIn: true, protected: false, assignable: true, version: 1, holders: 0, editable: true, deletable: false, ...over };
 }
 
 export function aMember(over: Partial<Member> = {}): Member {
@@ -90,4 +92,21 @@ export function aMember(over: Partial<Member> = {}): Member {
 
 export function aPermission(over: Partial<PermissionInfo> = {}): PermissionInfo {
   return { id: "perm.one", group: "Group One", label: "Do one", description: "Does the first thing.", reserved: false, ...over };
+}
+
+/** A roles tab as the hook serves it, with the edit and delete actions built from the role flags. */
+export function aRolesModel(roles: readonly Role[], over: Partial<RolesModel> = {}): RolesModel {
+  return {
+    roles: { status: "ready", value: roles },
+    reading: null,
+    read: (role) => action("access.role.read", `${role.permissions.length} permissions`, () => undefined),
+    closeReading: action("sheet.close.role", "Close panel", () => undefined),
+    create: action("access.role.create", "New role", () => undefined),
+    edit: (role) => roleEditAction(role, () => undefined),
+    remove: (role) => roleRemoveAction(role, roles[0]?.id ?? null, () => undefined),
+    editor: null,
+    deletion: null,
+    defaultRole: { choice: defaultRoleChoice(roles, roles[0]?.id ?? null, false), set: () => undefined },
+    ...over,
+  };
 }

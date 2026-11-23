@@ -33,8 +33,8 @@ export type OperationPlan = {
 
 export type DemoState = {
   snapshot: Mutable<ControlPlaneSnapshot>;
-  /** What the backend stores; `assignable` and `canDelete` are worked out per caller when they are served. */
-  roles: Omit<AccessRole, "assignable">[];
+  /** What the backend stores; `assignable`, `holders` and `canDelete` are worked out per caller when they are served. */
+  roles: Omit<AccessRole, "assignable" | "holders" | "editable" | "deletable">[];
   defaultRoleId: string;
   identities: Mutable<Omit<AccessIdentity, "canDelete">>[];
   candidates: Mutable<AccessCandidate>[];
@@ -220,6 +220,7 @@ export function initialState(): DemoState {
       { id: "player", name: "Player", description: "Can view connection details, start a session and invite players.", permissions: ["status.read", "connection.read", "session.start", "invitation.send"], builtIn: true, protected: false, version: 1 },
       { id: "operator", name: "Operator", description: "Can operate sessions, console, metrics, releases and backups.", permissions: ["status.read", "connection.read", "session.start", "session.stop", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "release.read", "release.build", "backup.read"], builtIn: true, protected: false, version: 1 },
       { id: "owner", name: "Owner", description: "Full access to Spawnpoint, including access management.", permissions: PERMISSION_CATALOGUE.map((entry) => entry.id), builtIn: true, protected: true, version: 1 },
+      { id: "guest", name: "Guest", description: "Can see status and connection details.", permissions: ["status.read", "connection.read"], builtIn: false, protected: false, version: 1 },
     ],
     defaultRoleId: "viewer",
     identities: [

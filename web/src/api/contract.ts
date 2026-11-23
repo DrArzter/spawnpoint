@@ -132,7 +132,16 @@ export type AccessRole = Readonly<{
   version: number;
   /** Whether the caller may give this role; computed per caller. */
   assignable: boolean;
+  /** How many active identities hold it; a held role cannot be deleted. */
+  holders: number;
+  /** The caller may edit it: manages access, the role is not protected and the caller holds all its permissions. */
+  editable: boolean;
+  /** The caller may delete it: editable, not built in, not held and not the default role. */
+  deletable: boolean;
 }>;
+
+/** What a role is created with; `id` is a lower-case slug. */
+export type AccessRoleDraft = Readonly<{ name: string; description: string; permissions: string[] }>;
 
 export type AccessPermission = Readonly<{
   id: string;
@@ -413,6 +422,11 @@ export type SpawnpointApi = Readonly<{
   loadAccessIdentities(): Promise<AccessIdentity[]>;
   loadAccessRoles(): Promise<AccessRoleDirectory>;
   updateIdentityRole(identityId: string, roleId: string): Promise<void>;
+  createAccessRole(id: string, draft: AccessRoleDraft): Promise<AccessRole>;
+  /** `version` is the one the caller read; a newer one refuses the change (`role_changed`). */
+  updateAccessRole(roleId: string, draft: AccessRoleDraft, version: number): Promise<AccessRole>;
+  deleteAccessRole(roleId: string, version: number): Promise<void>;
+  updateDefaultRole(roleId: string): Promise<string>;
   /** Removes the person and everything that names them; a person already gone succeeds. */
   deleteIdentity(identityId: string): Promise<void>;
 

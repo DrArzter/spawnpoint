@@ -1,9 +1,9 @@
 import { demoApi, demoEnabled } from "./demo";
-import type { AppearancePreference, MetricRange, ReleaseModQuery, ReleasePackName, SpawnpointApi, StopPlayersPolicy, SubscriptionState } from "./api/contract";
+import type { AccessRoleDraft, AppearancePreference, MetricRange, ReleaseModQuery, ReleasePackName, SpawnpointApi, StopPlayersPolicy, SubscriptionState } from "./api/contract";
 import { liveApi, liveAuthConfigured } from "./api/live";
 
 export type {
-  AccessCandidate, AccessIdentity, AccessInvitation, AccessRole, AccessRoleDirectory, AccessPermission, AccountProfile, ActiveSession, AppearancePreference, AuthState, BackupEntry,
+  AccessCandidate, AccessIdentity, AccessInvitation, AccessRole, AccessRoleDirectory, AccessRoleDraft, AccessPermission, AccountProfile, ActiveSession, AppearancePreference, AuthState, BackupEntry,
   BackupInventory, HostMetrics, HostMetricSeries, InvitationRecipient, InvitationSummary, LinkedLoginAccount, LinkedLoginAccounts, LoginOptions, LoginProviderId,
   IssuedAccessInvitation, MetricRange, OperationProgress, OperationStep, SessionOperation,
   SpawnpointApi, SpawnpointSession, SubscriptionState, VisitorSession, WorldLifecycleAction,
@@ -50,6 +50,10 @@ export const dismissAccessCandidate = (platform: string, platformUserId: string)
 export const loadAccessIdentities = () => api.loadAccessIdentities();
 export const loadAccessRoles = () => api.loadAccessRoles();
 export const updateIdentityRole = (identityId: string, roleId: string) => api.updateIdentityRole(identityId, roleId);
+export const createAccessRole = (id: string, draft: AccessRoleDraft) => api.createAccessRole(id, draft);
+export const updateAccessRole = (roleId: string, draft: AccessRoleDraft, version: number) => api.updateAccessRole(roleId, draft, version);
+export const deleteAccessRole = (roleId: string, version: number) => api.deleteAccessRole(roleId, version);
+export const updateDefaultRole = (roleId: string) => api.updateDefaultRole(roleId);
 export const deleteIdentity = (identityId: string) => api.deleteIdentity(identityId);
 
 export const loadControlPlane = () => api.loadControlPlane();

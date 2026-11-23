@@ -1,22 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseDiff, ReleaseMod, ReleaseModPage, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
-import { failureKind } from "../api/contract";
+import { ApiError, failureKind } from "../api/contract";
 import {
-  changePassword, createAccessInvitation, deleteIdentity, googleOidcClientId, linkGoogle, linkPassword, linkTelegram, loadAccessInvitations,
+  changePassword, createAccessInvitation, createAccessRole, deleteAccessRole, deleteIdentity, googleOidcClientId, linkGoogle, linkPassword, linkTelegram, loadAccessInvitations,
   loadBackups, loadConsole, loadInvitationHistory, loadWorldMetrics, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadReleaseDiff, loadReleaseMods, loadWhitelist, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
-  runConsoleCommand, sendInvitation, telegramOidcClientId, updateSubscriptions, updateWhitelist,
+  runConsoleCommand, sendInvitation, telegramOidcClientId, updateAccessRole, updateDefaultRole, updateSubscriptions, updateWhitelist,
 } from "../auth";
 import type { SnackInput } from "../components/ui/Snackbar";
 import type { StatusKind } from "./status";
 import { formatDateTime } from "../lib/format";
 import { GOOGLE_CLIENT_ID } from "../lib/signin";
-import type { Game, Member, OwnerBootstrap, World } from "../model";
+import type { Game, Member, OwnerBootstrap, Role, World } from "../model";
 import { action, type Action } from "./actions";
-import type { BackupsModel, CandidateRow, ConfirmationModel, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, ModsPage, NotificationsModel, ReleaseChangesModel, RequestSummary, RolesModel, UsersModel, WhitelistModel } from "./models";
+import type { BackupsModel, CandidateRow, ConfirmationModel, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, ModsPage, NotificationsModel, ReleaseChangesModel, RequestSummary, RoleEditorModel, RolesModel, UsersModel, WhitelistModel } from "./models";
 import { releaseChangeRows } from "./release-diff";
 import { candidateKey, type AccessDirectory } from "./access-directory";
-import { roleChoice } from "./roles";
+import { defaultRoleChoice, offeredPermissions, ROLE_ID_PATTERN, roleChoice, roleDeleteRefusal, roleEditRefusal, roleIdFor } from "./roles";
 import { FRESH_MODS_VIEW, MOD_SEARCH_DELAY_MS, modListQuery, modSourceEntries, type ModsView } from "./release-mods";
 import { whitelistNameError } from "./whitelist";
 
@@ -511,15 +511,157 @@ function useInvitations(enabled: boolean, notify: Notify): InvitationsModel | nu
 
 // --- access: roles --------------------------------------------------------------
 
-export function useRoles(directory: AccessDirectory): RolesModel {
+/** Edit is offered where the API says `editable`; a refused one says why. */
+export function roleEditAction(role: Role, run: () => void): Action {
+  const reason = roleEditRefusal(role);
+  return action("access.role.edit", "Edit", run, { icon: "edit", disabled: reason !== null, hint: reason ?? undefined });
+}
+
+/** Delete is offered where the API says `deletable`; a refused one says why. */
+export function roleRemoveAction(role: Role, defaultRoleId: string | null, run: () => void): Action {
+  const reason = roleDeleteRefusal(role, defaultRoleId);
+  return action("access.role.delete", "Delete", run, { danger: true, icon: "delete_forever", disabled: reason !== null, hint: reason ?? undefined });
+}
+
+type RoleForm = Readonly<{ mode: "create" } | { mode: "edit"; roleId: string; version: number }>;
+
+const sameSet = (a: ReadonlySet<string>, b: readonly string[]) => a.size === b.length && b.every((item) => a.has(item));
+
+export function useRoles(opts: Readonly<{ directory: AccessDirectory; granted: ReadonlySet<string>; notify: Notify }>): RolesModel {
+  const { granted, notify } = opts;
+  const directory = opts.directory.roles;
+  const state = opts.directory.rolesState;
   const [reading, setReading] = useState<string | null>(null);
-  const state = directory.rolesState;
+  const [form, setForm] = useState<RoleForm | null>(null);
+  const [draft, setDraft] = useState({ id: "", idTouched: false, name: "", description: "", permissions: new Set<string>() });
+  const [deleting, setDeleting] = useState<Readonly<{ roleId: string; version: number }> | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
   const roles = state.status === "ready" ? state.value : [];
+  const canManage = granted.has("access.manage");
+  const why = canManage ? undefined : "Your role cannot manage access.";
+
+  // Holders and versions change under a write, so the directory reads the roles again, quietly.
+  const refresh = opts.directory.refreshRoles;
+
+  // A write refused as out of date closes its form: the role is read again and the person reopens it.
+  async function refused(cause: unknown, fallback: string): Promise<string | null> {
+    if (cause instanceof ApiError && cause.code === "role_changed") {
+      setForm(null);
+      setDeleting(null);
+      notify({ tone: "error", message: "Someone changed this role. The list is reloaded." });
+      await refresh();
+      return null;
+    }
+    return cause instanceof Error ? cause.message : fallback;
+  }
+
+  function open(next: RoleForm, from: { id: string; name: string; description: string; permissions: readonly string[] }) {
+    setRefusal(null);
+    setDraft({ id: from.id, idTouched: from.id !== "", name: from.name, description: from.description, permissions: new Set(from.permissions) });
+    setForm(next);
+  }
+
+  async function submit(current: RoleForm) {
+    const body = { name: draft.name.trim(), description: draft.description.trim(), permissions: [...draft.permissions] };
+    setBusy(true);
+    setRefusal(null);
+    try {
+      const saved = current.mode === "create" ? await createAccessRole(draft.id, body) : await updateAccessRole(current.roleId, body, current.version);
+      setForm(null);
+      notify({ message: current.mode === "create" ? `${saved.name} created.` : `${saved.name} saved.` });
+      await refresh();
+    } catch (cause) {
+      setRefusal(await refused(cause, current.mode === "create" ? "The role could not be created." : "The role could not be saved."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmDeletion(role: Role, version: number) {
+    setBusy(true);
+    setRefusal(null);
+    try {
+      await deleteAccessRole(role.id, version);
+      setDeleting(null);
+      notify({ message: `${role.name} deleted.` });
+      await refresh();
+    } catch (cause) {
+      setRefusal(await refused(cause, "The role could not be deleted."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function chooseDefault(roleId: string) {
+    setBusy(true);
+    try {
+      await updateDefaultRole(roleId);
+      notify({ message: `New people now get ${roles.find((role) => role.id === roleId)?.name ?? roleId}.` });
+      await refresh();
+    } catch (cause) {
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : "The default role could not be changed." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const editing = form?.mode === "edit" ? roles.find((role) => role.id === form.roleId) : undefined;
+  const idError = form?.mode === "create" && draft.id !== "" && !ROLE_ID_PATTERN.test(draft.id) ? "Use a lower-case letter first, then letters, digits or hyphens (up to 32)." : null;
+  const valid = draft.name.trim() !== "" && (form?.mode !== "create" || ROLE_ID_PATTERN.test(draft.id));
+  const changed = form?.mode !== "edit" || !editing || draft.name.trim() !== editing.name || draft.description.trim() !== editing.description || !sameSet(draft.permissions, editing.permissions);
+  const removing = deleting === null ? undefined : roles.find((role) => role.id === deleting.roleId);
+
+  const editor: RoleEditorModel | null = form === null || (form.mode === "edit" && !editing) ? null : {
+    mode: form.mode,
+    title: form.mode === "create" ? "New role" : `Edit ${editing!.name}`,
+    id: draft.id,
+    setId: (value) => setDraft((current) => ({ ...current, id: value, idTouched: true })),
+    idError,
+    name: draft.name,
+    setName: (value) => setDraft((current) => ({ ...current, name: value, id: current.idTouched ? current.id : roleIdFor(value) })),
+    description: draft.description,
+    setDescription: (value) => setDraft((current) => ({ ...current, description: value })),
+    permissions: offeredPermissions(directory.permissions, granted).map(({ permission, locked }) => {
+      const checked = draft.permissions.has(permission.id);
+      return {
+        permission,
+        checked,
+        toggle: action(`access.role.permission.${permission.id}`, permission.label, () => setDraft((current) => {
+          const next = new Set(current.permissions);
+          if (checked) next.delete(permission.id);
+          else next.add(permission.id);
+          return { ...current, permissions: next };
+        }), { disabled: locked || busy, hint: locked ? "You do not hold this permission." : undefined }),
+      };
+    }),
+    error: refusal,
+    submit: action("access.role.save", form.mode === "create" ? "Create role" : "Save role", () => void submit(form), { disabled: busy || !valid || idError !== null || !changed, busy }),
+    cancel: action("access.role.cancel", "Cancel", () => setForm(null), { disabled: busy }),
+  };
+
+  const deletion: ConfirmationModel | null = deleting === null || !removing ? null : {
+    title: `Delete ${removing.name}?`,
+    description: "Removes this role. This cannot be undone.",
+    destructive: true,
+    confirm: action("access.role.delete.confirm", "Delete role", () => void confirmDeletion(removing, deleting.version), { danger: true, disabled: busy, busy }),
+    cancel: action("access.role.delete.cancel", "Cancel", () => setDeleting(null), { disabled: busy }),
+    releaseChoice: null,
+    typedConfirmation: null,
+    error: refusal,
+  };
+
   return {
     roles: state,
     reading: roles.find((item) => item.id === reading) ?? null,
     read: (role) => action("access.role.read", `${role.permissions.length} ${role.permissions.length === 1 ? "permission" : "permissions"}`, () => setReading(role.id), { icon: "chevron_right" }),
     closeReading: action("sheet.close", "Close panel", () => setReading(null)),
+    create: action("access.role.create", "New role", () => open({ mode: "create" }, { id: "", name: "", description: "", permissions: [] }), { icon: "add", disabled: !canManage, hint: why }),
+    edit: (role) => roleEditAction(role, () => { setReading(null); open({ mode: "edit", roleId: role.id, version: role.version }, role); }),
+    remove: (role) => roleRemoveAction(role, directory.defaultRoleId, () => { setReading(null); setRefusal(null); setDeleting({ roleId: role.id, version: role.version }); }),
+    editor,
+    deletion,
+    defaultRole: { choice: defaultRoleChoice(roles, directory.defaultRoleId, busy || !canManage), set: (roleId) => void chooseDefault(roleId) },
   };
 }
 

@@ -437,11 +437,40 @@ export type UsersModel = Readonly<{
   deletion: ConfirmationModel | null;
 }>;
 
+/** The open role form. Create asks for an id; edit keeps it. Reserved permissions are not in the list. */
+export type RoleEditorModel = Readonly<{
+  mode: "create" | "edit";
+  title: string;
+  id: string;
+  setId: (value: string) => void;
+  /** Why the id cannot be used; null while it is empty or valid. */
+  idError: string | null;
+  name: string;
+  setName: (value: string) => void;
+  description: string;
+  setDescription: (value: string) => void;
+  /** One row per offered permission; a permission the caller does not hold is a disabled toggle. */
+  permissions: readonly Readonly<{ permission: PermissionInfo; checked: boolean; toggle: Action }>[];
+  /** Why the last attempt was refused; the form stays open and shows it. */
+  error: string | null;
+  submit: Action;
+  cancel: Action;
+}>;
+
 export type RolesModel = Readonly<{
   roles: Loading<readonly Role[]>;
   reading: Role | null;
   read: (role: Role) => Action;
   closeReading: Action;
+  create: Action;
+  /** Disabled, with the reason as its hint, where the role cannot be changed. */
+  edit: (role: Role) => Action;
+  /** Disabled, with the reason as its hint, while the role is built in, protected or held. */
+  remove: (role: Role) => Action;
+  editor: RoleEditorModel | null;
+  deletion: ConfirmationModel | null;
+  /** The role an approval gives when nobody picks one; the choice never offers the protected role. */
+  defaultRole: Readonly<{ choice: RoleChoice; set: (roleId: string) => void }>;
 }>;
 
 export type NotificationsModel = Readonly<{

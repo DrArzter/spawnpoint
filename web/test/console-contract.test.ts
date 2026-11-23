@@ -10,7 +10,7 @@ import type { AccessModel } from "../src/core/models.ts";
 import { roleChoice } from "../src/core/roles.ts";
 import { consoleSkin } from "../src/skins/console/index.ts";
 import { Palette } from "../src/skins/console/ui/Palette.tsx";
-import { aGame, aMember, aPermission, aRole, aShell, aWorld, aWorlds, noop, spy } from "./support/fixtures.ts";
+import { aGame, aMember, aPermission, aRole, aRolesModel, aShell, aWorld, aWorlds, noop, spy } from "./support/fixtures.ts";
 
 /*
  * The console skin's own contract (skin-spec §7). The shared contract cannot
@@ -124,7 +124,7 @@ test("console: the palette, once open, draws each world's verbs and says why one
 });
 
 const member = aMember({ id: "m2", name: "Alex", roleId: "player", links: [{ id: "l1", kind: "telegram", value: "42", verified: true }] });
-const player = aRole({ id: "player", name: "Player", description: "Plays", permissions: ["status.read"] });
+const player = aRole({ id: "player", name: "Player", description: "Plays", permissions: ["status.read"], holders: 1 });
 const access: AccessModel = {
   tab: "users",
   setTab: noop,
@@ -141,7 +141,7 @@ const access: AccessModel = {
     closeManaged: spy("sheet.close", "Close panel"),
     deletion: null,
   },
-  roles: { roles: { status: "loading" }, reading: null, read: () => spy("access.role.read", "Read"), closeReading: spy("sheet.close.role", "Close panel") },
+  roles: aRolesModel([player], { roles: { status: "loading" } }),
   notifications: { state: "ready", error: "", retry: null, saveStatus: "", games: [], subscriptions: {}, toggle: (id, label) => spy(`notifications.${id}`, label) },
 };
 

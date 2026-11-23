@@ -54,7 +54,7 @@ export function createServer(client: SpawnpointClient): McpServer {
   description: "Read recent metrics for one host shown by get_control_plane.",
   inputSchema: {
     instanceId: z.string().min(1).max(128).describe("Host instance ID"),
-    range: z.enum(["1h", "6h", "24h", "7d"]).default("24h"),
+    range: z.enum(["6h", "24h", "7d"]).default("24h"),
   },
   outputSchema: { data: z.unknown() },
   annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },

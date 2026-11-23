@@ -1,5 +1,6 @@
 import type { Permission } from "./domain.ts";
 import type { OAuthScope } from "./oauth.ts";
+import { METRIC_RANGE_NAMES } from "../control-plane/metric-ranges.ts";
 
 /*
  * The remote MCP tool contract (ADR-0061). The local stdio adapter in mcp/
@@ -20,7 +21,7 @@ const release = objectSchema({ gameId: text, presetId: text, version: text });
 export const mcpTools = [
   { name: "get_profile", title: "Get Spawnpoint profile", description: "Read the connected Spawnpoint identity and role.", permission: null, scope: "spawnpoint.read", inputSchema: objectSchema({}), readOnly: true, destructive: false },
   { name: "get_control_plane", title: "Get Spawnpoint control plane", description: "List games, worlds, sessions, hosts, releases, permissions, and current state.", permission: "status.read", scope: "spawnpoint.read", inputSchema: objectSchema({}), readOnly: true, destructive: false },
-  { name: "get_host_metrics", title: "Get host metrics", description: "Read recent metrics for one host.", permission: "metrics.read", scope: "spawnpoint.read", inputSchema: objectSchema({ instanceId: text, range: { type: "string", enum: ["1h", "6h", "24h", "7d"], default: "24h" } }, ["instanceId"]), readOnly: true, destructive: false },
+  { name: "get_host_metrics", title: "Get host metrics", description: "Read recent metrics for one host.", permission: "metrics.read", scope: "spawnpoint.read", inputSchema: objectSchema({ instanceId: text, range: { type: "string", enum: [...METRIC_RANGE_NAMES], default: "24h" } }, ["instanceId"]), readOnly: true, destructive: false },
   { name: "list_world_backups", title: "List world backups", description: "List recoverable backups for one world.", permission: "backup.read", scope: "spawnpoint.read", inputSchema: world, readOnly: true, destructive: false },
   { name: "get_world_pack", title: "Get world client pack", description: "Create a temporary download link for the world's client pack.", permission: "connection.read", scope: "spawnpoint.read", inputSchema: world, readOnly: true, destructive: false },
   // ADR-0065: a release's mods, listed with their SHA-256 digests, and one

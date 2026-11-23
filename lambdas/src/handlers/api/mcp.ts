@@ -1,4 +1,4 @@
-import { type Identity, type Permission, isBuiltInRoleId, builtInRoles, hasPermission } from "../../access/domain.ts";
+import { type Identity, type Permission, isBuiltInRoleId, builtInRoles, effectivePermissions, hasPermission } from "../../access/domain.ts";
 import { type McpToolName, mcpTools } from "../../access/mcp-tools.ts";
 import { type OAuthScope, verifyOAuthAccessToken } from "../../access/oauth.ts";
 import { type Response, response, responseWithHeaders, type Event } from "./http.ts";
@@ -6,6 +6,7 @@ import { type ConsoleAgent, runConsoleCommand, consoleCommandResult } from "./co
 import { oauthClient, oauthProtectedResourceMetadata, oauthIssuer, oauthResource, jsonBody } from "./oauth.ts";
 import { controlPlane } from "./control-plane.ts";
 import { hostMetrics } from "./metrics.ts";
+import { METRIC_RANGE_NAMES } from "../../control-plane/metric-ranges.ts";
 import { backups, backupDownload } from "./backups.ts";
 import { packDownload, releaseManifest, releaseModDownload } from "./releases.ts";
 import { controlSession } from "./worlds.ts";
@@ -44,7 +45,7 @@ function worldToolArguments(args: Record<string, unknown>): readonly [string, st
 
 function metricsToolArguments(args: Record<string, unknown>): readonly [string, string] | null {
   const range = args.range ?? "24h";
-  return typeof args.instanceId === "string" && typeof range === "string" && ["1h", "6h", "24h", "7d"].includes(range)
+  return typeof args.instanceId === "string" && typeof range === "string" && METRIC_RANGE_NAMES.includes(range)
     ? [args.instanceId, range]
     : null;
 }
@@ -55,9 +56,15 @@ function releaseToolArguments(args: Record<string, unknown>): readonly [string, 
   return typeof gameId === "string" && typeof presetId === "string" && typeof version === "string" ? [gameId, presetId, version] : null;
 }
 
-function profileToolResponse(identity: Identity): Response {
+/** The connected identity as an agent sees it: the same permissions the panel shows, the role's and the direct grants. */
+export function mcpProfile(identity: Identity): Readonly<{ id: string; name: string; role: string; permissions: readonly Permission[] }> {
   const role = isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
-  const profile = { id: identity.id, name: identity.displayName, role: role?.name ?? identity.roleId, permissions: role?.permissions ?? identity.directGrants };
+  const permissions = role === null ? [...identity.directGrants] : [...effectivePermissions(identity, role)];
+  return { id: identity.id, name: identity.displayName, role: role?.name ?? identity.roleId, permissions };
+}
+
+function profileToolResponse(identity: Identity): Response {
+  const profile = mcpProfile(identity);
   return response(200, { structuredContent: profile, content: [{ type: "text", text: JSON.stringify(profile, null, 2) }] });
 }
 
@@ -181,7 +188,7 @@ export async function remoteMcp(event: Event): Promise<Response> {
   if (authenticated === null) return mcpUnauthorized();
   const request = jsonBody(event) as McpRequest | null;
   if (request?.jsonrpc !== "2.0" || typeof request.method !== "string") return mcpError(request?.id ?? null, -32600, "Invalid Request");
-  if (request.method === "notifications/initialized") return { statusCode: 202, headers: {}, body: "" };
+  if (request.method === "notifications/initialized") return response(202, null);
   if (request.method === "initialize") return initializeMcp(request);
   if (request.method === "tools/list") return listMcpTools(request.id);
   if (request.method === "tools/call") return callRemoteMcpTool(request, authenticated, authenticated.scopes);

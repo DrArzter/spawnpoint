@@ -12,6 +12,7 @@ import { ConsoleTab } from "../src/skins/console/tabs/Console.tsx";
 import { hostRunning, hostSlots, metricFormat, MetricsTab, stripRuns } from "../src/skins/console/tabs/Metrics.tsx";
 import { Terminal } from "../src/skins/console/ui/Terminal.tsx";
 import { chartGeometry, chartMax, chartSummary, nextCursor, PLOT, TimeSeriesChart, type ChartPoint } from "../src/skins/console/ui/TimeSeriesChart.tsx";
+import { noop } from "./support/fixtures.ts";
 
 /*
  * The console chart, metrics and console (skin-spec §6.3.6, §6.3.7, §10): a
@@ -20,7 +21,6 @@ import { chartGeometry, chartMax, chartSummary, nextCursor, PLOT, TimeSeriesChar
  * strip comes from the series, and the log reads newest last.
  */
 
-const noop = () => undefined;
 const at = (minute: number) => `2026-11-21T10:${String(minute).padStart(2, "0")}:00.000Z`;
 const series = (values: readonly (number | null)[]): ChartPoint[] => values.map((value, index) => ({ at: at(index), value }));
 const format = (value: number) => `${value} %`;

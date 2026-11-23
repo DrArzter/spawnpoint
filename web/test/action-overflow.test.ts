@@ -8,8 +8,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { action } from "../src/core/actions.ts";
 import { Overflow as ConsoleOverflow } from "../src/skins/console/ui/Overflow.tsx";
 import { Overflow as TerminalOverflow } from "../src/skins/terminal/ui.tsx";
+import { noop } from "./support/fixtures.ts";
 
-const noop = () => undefined;
 const refresh = action("refresh", "Refresh", noop, { icon: "refresh" });
 const archive = action("world.archive", "Archive", noop, { icon: "archive" });
 const purge = action("world.purge", "Delete permanently", noop, { danger: true, icon: "delete_forever" });
@@ -22,6 +22,7 @@ test("console: one action still opens a menu, so a column keeps one control", ()
   assert.match(markup, /aria-haspopup="menu"/);
   assert.match(markup, /aria-label="World actions"/);
   assert.match(markup, /data-action="refresh"/);
+  assert.match(markup, /role="menu"[^>]*popover="manual"|popover="manual"[^>]*role="menu"/);
 });
 
 test("console: a danger Action sits in its own last group, under a rule", () => {
@@ -30,6 +31,13 @@ test("console: a danger Action sits in its own last group, under a rule", () => 
   const purgeAt = markup.indexOf('data-action="world.purge"');
   assert.ok(archiveAt > 0 && purgeAt > archiveAt, "the danger item comes last");
   assert.match(markup.slice(archiveAt, purgeAt), /c-menu-group-split/);
+  assert.match(markup, /c-menu-item c-menu-item-danger/);
+});
+
+test("console: a refused Action stays in the menu", () => {
+  const markup = renderToStaticMarkup(createElement(ConsoleOverflow, { actions: [action("world.wipe", "Wipe", noop, { disabled: true, hint: "Needs a built release" })], label: "World actions" }));
+  assert.match(markup, /data-action="world.wipe"/);
+  assert.match(markup, /aria-disabled="true"/);
 });
 
 test("console: no Action draws no trigger", () => {

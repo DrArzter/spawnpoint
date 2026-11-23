@@ -5,23 +5,13 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { action, type Action } from "../src/core/actions.ts";
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingsModel, InvitationModel, ProfileModel, WorldSettingsModel } from "../src/core/models.ts";
-import type { Game, World } from "../src/model.ts";
 import { ConfirmationDialog, CreateWorldSheet, GameSettingsSheet, InvitationSheet, WorldSettingsSheet } from "../src/skins/console/Dialogs.tsx";
 import { Profile } from "../src/skins/console/Profile.tsx";
+import { aGame, aPreset, aWorld, noop, spy } from "./support/fixtures.ts";
 
-const noop = () => undefined;
-const spy = (id: string, label: string, rest: Partial<Action> = {}): Action => action(id, label, noop, rest);
-
-const world = { id: "minecraft-rostik-12345678", displayName: "Rostik", connectivity: "zerotier", placement: "configured" } as unknown as World;
-const game = {
-  id: "minecraft",
-  code: "MC",
-  displayName: "Minecraft",
-  presets: [{ id: "industrial", displayName: "Industrial", buildStatus: "ready", latestRelease: "1.2", releases: ["1.1", "1.2"] }],
-  worlds: [world],
-} as unknown as Game;
+const world = aWorld();
+const game = aGame({ presets: [aPreset()], worlds: [world] });
 
 const profile: ProfileModel = {
   member: { id: "m1", name: "Kai Ashby", roleId: "owner", links: [] },
@@ -111,7 +101,7 @@ test("connection fields: a fleet world is public and cannot pick ZeroTier; a per
 });
 
 test("create world: with no ready preset the preset row points to Releases", () => {
-  const unbuilt = { ...game, presets: [{ ...game.presets[0]!, releases: [], buildStatus: "unbuilt" }] } as unknown as Game;
+  const unbuilt = { ...game, presets: [aPreset({ releases: [], buildStatus: "unbuilt" })] };
   const model: CreateWorldModel = { game: unbuilt, presets: unbuilt.presets, presetId: "industrial", setPresetId: noop, preset: null, name: "", setName: noop, release: "", setRelease: noop, connection: persistent, valid: false, submit: spy("world.create", "Create world", { disabled: true }), cancel: spy("sheet.close", "Cancel") };
   const markup = renderToStaticMarkup(createElement(CreateWorldSheet, { model }));
   assert.match(markup, /No ready preset/);

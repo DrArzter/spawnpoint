@@ -6,7 +6,6 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { action } from "../src/core/actions.ts";
-import type { ShellModel } from "../src/core/models.ts";
 import { Card } from "../src/skins/console/ui/Card.tsx";
 import { DetailList } from "../src/skins/console/ui/DetailList.tsx";
 import { Empty } from "../src/skins/console/ui/Empty.tsx";
@@ -19,6 +18,7 @@ import { Status } from "../src/skins/console/ui/Status.tsx";
 import { Table } from "../src/skins/console/ui/Table.tsx";
 import { Tabs } from "../src/skins/console/ui/Tabs.tsx";
 import { TrackList } from "../src/skins/console/ui/TrackList.tsx";
+import { aGame, aShell, noop } from "./support/fixtures.ts";
 
 /*
  * The layout markers the UI gate reads (web/tools/ui-audit/probe.js). A
@@ -27,7 +27,6 @@ import { TrackList } from "../src/skins/console/ui/TrackList.tsx";
  */
 
 const html = (element: ReactElement) => renderToStaticMarkup(element);
-const noop = () => undefined;
 
 test("markers: the page header is one spread line and its breadcrumb is marked", () => {
   const markup = html(createElement(PageHeader, { trail: [{ label: "Minecraft", href: "#/worlds/minecraft" }], title: "Worlds", actions: createElement("button", null, "Create") }));
@@ -107,7 +106,7 @@ test("rule 6: the breadcrumb's last item is the one h1, and no crumb repeats it"
 });
 
 test("rule 7: the top bar holds no theme control", () => {
-  const model = {
+  const model = aShell(aGame(), {
     navigation: [],
     page: "worlds",
     viewer: { displayName: "DrArzter", inTelegram: false },
@@ -117,7 +116,7 @@ test("rule 7: the top bar holds no theme control", () => {
     observedAtIso: "2026-09-23T14:01:00Z",
     refreshAction: () => action("refresh", "Refresh", noop),
     appearance: { preference: "system", theme: "light", accent: "#1a73e8", label: "System theme (light)", setPreference: async () => undefined, setAccent: async () => undefined },
-  } as unknown as ShellModel;
+  });
   const markup = html(createElement(TopBar, { model, scope: null, onSearch: noop }));
   assert.match(markup, /class="c-topbar"/);
   assert.doesNotMatch(markup, /theme|dark mode|light mode|appearance|contrast/i);

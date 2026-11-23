@@ -44,7 +44,7 @@ export function HostScene({ painter, state, className }: Readonly<{ painter: Pai
   const lines = grid.map((row, r) => row.map((value) => glyph(value * (exposure[state] + breath) + (r === sweep ? 0.35 : 0))).join(""));
 
   return (
-    <pre aria-hidden="true" className={cx("scene", `scene-${state}`, className)} data-size={`${painter.cols}x${painter.rows}`}>
+    <pre aria-hidden="true" className={cx("t-scene", `t-scene-${state}`, className)} data-size={`${painter.cols}x${painter.rows}`}>
       {lines.join("\n")}
     </pre>
   );

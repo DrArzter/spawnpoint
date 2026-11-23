@@ -17,7 +17,8 @@ import { S3WorldReader, S3WorldRepository } from "../../control-plane/s3-world-r
 import { type WorldRecord } from "../../control-plane/world-registry.ts";
 import { type Response, response } from "./http.ts";
 import { document, tableName, type Item } from "./access-store.ts";
-import { callerCondition, lastHolderRefusal, protectedRoleRefusal } from "./owner-guard.ts";
+import { callerCondition, escalationRefusal, lastHolderRefusal } from "./owner-guard.ts";
+import { readRole } from "./role-store.ts";
 import { credentialKey } from "./credentials.ts";
 
 // --- Delete an identity and every record that names it (ADR-0071) -----------
@@ -368,8 +369,8 @@ export async function deleteIdentity(caller: Identity, identityId: string, world
   }))).Item;
   if (profile === undefined) return response(204, null);
   const roleId = String(profile.role_id);
-  // Only a holder of the protected role may delete one, and never the last.
-  const refusal = protectedRoleRefusal(caller, [roleId]) ?? await lastHolderRefusal(roleId, null);
+  // No escalation: the caller holds every permission of the target's role. The protected role keeps a holder.
+  const refusal = escalationRefusal(caller, [await readRole(roleId)]) ?? await lastHolderRefusal(roleId, null);
   if (refusal !== null) return refusal;
 
   // Read.

@@ -4,6 +4,7 @@
 - Date: 2026-09-16
 - Revised: 2026-09-23 after the invited-mailbox proof and email-free deployment requirements were clarified
 - Milestone: M4
+- Amended by: [ADR-0083](0083-panel-roles-are-owner-defined-data.md) — the default role is stored data, Viewer until the owner chooses
 - Amends: [ADR-0036](0036-observed-visitors-and-owner-approved-access.md)
 - Relates: [ADR-0045](0045-provider-neutral-login-sessions.md), [ADR-0055](0055-sign-in-with-email-and-password-by-default.md), and [ADR-0057](0057-link-login-providers-through-the-current-identity.md)
 

@@ -119,10 +119,11 @@ test("authority is decided by the dispatcher, never inside a route's handler", a
     const count = [...source.matchAll(/requirePermission\(/g)].length;
     if (count > 0) checks[file] = count;
   }
-  // The sole definition, the dispatcher's gate, the owner guard (the payload-level
-  // protected-role escalation), the direct-grant escalation and one
-  // payload-level forced stop. No feature route may grow a competing HTTP gate.
-  assert.deepEqual(checks, { "access.ts": 1, "dispatcher.ts": 1, "owner-guard.ts": 1, "permissions.ts": 1, "worlds.ts": 1 });
+  // The sole definition, the dispatcher's gate, the direct-grant escalation and
+  // one payload-level forced stop. Role escalation is checked against the
+  // caller's permissions (ADR-0083), not through this gate. No feature route
+  // may grow a competing HTTP gate.
+  assert.deepEqual(checks, { "access.ts": 1, "dispatcher.ts": 1, "permissions.ts": 1, "worlds.ts": 1 });
 });
 
 test("administrative routes all sit behind access.manage", () => {

@@ -7,11 +7,13 @@ process.env.ACCESS_TABLE_NAME ??= "spawnpoint-access-test";
 
 const { accessStore } = await import("../src/bot/services/access.ts");
 
-function stubProfile(t: test.TestContext, profile: Record<string, unknown> | undefined): void {
-  t.mock.method(DynamoDBDocumentClient.prototype, "send", async (command: { input: { Key: { pk: string } } }) =>
-    command.input.Key.pk.startsWith("TELEGRAM#")
-      ? { Item: { identity_id: "id-1" } }
-      : { Item: profile === undefined ? undefined : { identity_id: "id-1", display_name: "Ada", ...profile } });
+function stubProfile(t: test.TestContext, profile: Record<string, unknown> | undefined, roles: Record<string, Record<string, unknown>> = {}): void {
+  t.mock.method(DynamoDBDocumentClient.prototype, "send", async (command: { input: { Key: { pk: string } } }) => {
+    const pk = command.input.Key.pk;
+    if (pk.startsWith("TELEGRAM#")) return { Item: { identity_id: "id-1" } };
+    if (pk.startsWith("ROLE#")) return { Item: roles[pk.slice("ROLE#".length)] };
+    return { Item: profile === undefined ? undefined : { identity_id: "id-1", display_name: "Ada", ...profile } };
+  });
 }
 
 test("the bot resolves permissions through the shared resolver", async (t) => {
@@ -32,4 +34,12 @@ test("the bot grants nothing to an identity that is not active or has no profile
   t.mock.restoreAll();
   stubProfile(t, undefined);
   assert.equal(await accessStore.hasPermission(1, "status.read"), false);
+});
+
+test("the bot honours a role the owner defined (ADR-0083)", async (t) => {
+  stubProfile(t, { status: "ACTIVE", role_id: "host", direct_grants: [] }, {
+    host: { role_id: "host", name: "Host", permissions: ["status.read", "session.start", "session.stop"], version: 1 },
+  });
+  assert.equal(await accessStore.hasPermission(1, "session.stop"), true);
+  assert.equal(await accessStore.hasPermission(1, "console.use"), false);
 });

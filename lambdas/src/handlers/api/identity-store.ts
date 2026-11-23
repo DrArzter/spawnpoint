@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { type Item, document, tableName } from "./access-store.ts";
 import { type Caller } from "./http.ts";
 import { bootstrapOwnerTelegramId } from "./auth-config.ts";
+import { withRole } from "./role-store.ts";
 
 export async function observe(account: Caller): Promise<Item> {
   const updated = await document.send(new UpdateCommand({
@@ -26,7 +27,7 @@ export async function resolveIdentity(principal: Caller, accountItem?: Item): Pr
     TableName: tableName, Key: profileKey(identityId),
   }));
   // The same rule as identityById: only an active identity acts.
-  return profile.Item === undefined || profile.Item.status !== "ACTIVE" ? null : identityFromRecord(profile.Item);
+  return profile.Item === undefined || profile.Item.status !== "ACTIVE" ? null : withRole(identityFromRecord(profile.Item));
 }
 
 async function bootstrapClaimed(): Promise<boolean> {
@@ -102,5 +103,5 @@ export async function identityById(identityId: string): Promise<Identity | null>
   const item = (await document.send(new GetCommand({
     TableName: tableName, Key: profileKey(identityId), ConsistentRead: true,
   }))).Item;
-  return item === undefined || item.status !== "ACTIVE" ? null : identityFromRecord(item);
+  return item === undefined || item.status !== "ACTIVE" ? null : withRole(identityFromRecord(item));
 }

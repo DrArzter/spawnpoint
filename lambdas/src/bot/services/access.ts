@@ -3,7 +3,8 @@ import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from "@aws-sdk/lib-
 
 import { requestAccountAccess, observeAccount } from "../../access/account-writes.ts";
 import { can, identityFromRecord, type Permission } from "../../access/domain.ts";
-import { accountItemKey, profileKey } from "../../access/keys.ts";
+import { accountItemKey, profileKey, roleKey } from "../../access/keys.ts";
+import { resolveRole } from "../../access/roles.ts";
 import { env } from "./aws.ts";
 
 export type TelegramContact = Readonly<{
@@ -58,6 +59,10 @@ export const accessStore: AccessStore = {
       Key: profileKey(identityId),
     }));
     const item = profile.Item;
-    return item !== undefined && item.status === "ACTIVE" && can(identityFromRecord(item), permission);
+    if (item === undefined || item.status !== "ACTIVE") return false;
+    // The role as the API reads it (ADR-0083): its record, or its built-in definition.
+    const identity = identityFromRecord(item);
+    const role = await document.send(new GetCommand({ TableName: env("ACCESS_TABLE_NAME"), Key: roleKey(identity.roleId), ConsistentRead: true }));
+    return can({ ...identity, role: resolveRole(identity.roleId, role.Item) }, permission);
   },
 };

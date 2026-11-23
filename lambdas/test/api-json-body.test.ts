@@ -32,6 +32,10 @@ const handler = createDispatcher(routes, {
 const READS_BODY = [
   "POST /access/candidates/{platform}/{platformUserId}/approve",
   "POST /access/identities/{identityId}/role",
+  "POST /access/roles",
+  "POST /access/roles/{roleId}",
+  "POST /access/roles/{roleId}/delete",
+  "POST /access/defaults",
   "POST /access/invitations",
   "POST /access/invitations/proof",
   "POST /access/invitations/redeem",

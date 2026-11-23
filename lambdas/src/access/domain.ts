@@ -78,6 +78,12 @@ export type Identity = Readonly<{
   displayName: string;
   roleId: string;
   directGrants: readonly Permission[];
+  /**
+   * The role read with this identity for this request (ADR-0083): its stored
+   * definition, or null when the deployment does not know the role. Absent
+   * means no record was read, and a built-in role uses its definition in code.
+   */
+  role?: Role | null;
 }>;
 
 export const builtInRoles: Readonly<Record<BuiltInRoleId, Role>> = {
@@ -114,18 +120,24 @@ export const builtInRoles: Readonly<Record<BuiltInRoleId, Role>> = {
   },
 };
 
-/** The role a newly approved or invited person holds unless the approver picks another. */
+/** The default role when the deployment stores none (ADR-0083). */
 export const defaultRoleId: BuiltInRoleId = "viewer";
 
 /** The protected role's id: what the owner bootstrap assigns and the last-holder rule counts. */
 export const protectedRoleId: BuiltInRoleId = "owner";
 
 export function isProtectedRoleId(roleId: string): boolean {
-  return roleOf({ roleId })?.protected === true;
+  return roleId === protectedRoleId;
 }
 
-/** The role an identity holds, or null for a role id this deployment does not know. */
-export function roleOf(identity: Pick<Identity, "roleId">): Role | null {
+/**
+ * The role an identity holds, or null for a role id this deployment does not
+ * know. The protected role is always its definition in code; any other role is
+ * the record read with the identity, or its built-in definition.
+ */
+export function roleOf(identity: Pick<Identity, "roleId" | "role">): Role | null {
+  if (isProtectedRoleId(identity.roleId)) return builtInRoles.owner;
+  if (identity.role !== undefined) return identity.role;
   return isBuiltInRoleId(identity.roleId) ? builtInRoles[identity.roleId] : null;
 }
 

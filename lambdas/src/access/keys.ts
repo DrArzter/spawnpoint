@@ -84,3 +84,9 @@ export const consolePartition = (worldId: string): string => `${consolePrefix}${
 
 export const downloadPrefix = "DOWNLOAD#";
 export const downloadPartition = (worldId: string): string => `${downloadPrefix}${worldId}`;
+
+// Panel roles (ADR-0083).
+export const roleKey = (roleId: string): TableKey => ({ pk: `ROLE#${roleId}`, sk: "DEFINITION" });
+/** Every stored role is indexed under one value, so the list is one query. */
+export const roleIndex = "ROLE";
+export const accessDefaultsKey: TableKey = { pk: "SYSTEM", sk: "ACCESS_DEFAULTS" };

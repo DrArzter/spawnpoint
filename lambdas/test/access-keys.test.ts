@@ -10,6 +10,9 @@ test("every key builder returns today's literal", () => {
   assert.equal(keys.accessIndexName, "gsi1");
   assert.equal(keys.identityPartition("i1"), "IDENTITY#i1");
   assert.deepEqual(keys.profileKey("i1"), { pk: "IDENTITY#i1", sk: "PROFILE" });
+  assert.deepEqual(keys.roleKey("moderator"), { pk: "ROLE#moderator", sk: "DEFINITION" });
+  assert.equal(keys.roleIndex, "ROLE");
+  assert.deepEqual(keys.accessDefaultsKey, { pk: "SYSTEM", sk: "ACCESS_DEFAULTS" });
   assert.deepEqual(keys.identitySettingKey("i1", "SUBSCRIPTIONS"), { pk: "IDENTITY#i1", sk: "SUBSCRIPTIONS" });
   assert.deepEqual(keys.identitySettingKey("i1", "APPEARANCE"), { pk: "IDENTITY#i1", sk: "APPEARANCE" });
   assert.deepEqual(keys.loginProviderKey("i1", "google"), { pk: "IDENTITY#i1", sk: "LOGIN_PROVIDER#google" });

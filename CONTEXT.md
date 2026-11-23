@@ -88,11 +88,21 @@ One word per thing. If a word here disagrees with a word in the product, the pro
 
 **Access decision notification**: A transactional reply telling a visitor that their own access request was approved. It is not a subscription and does not itself grant or prove any permission.
 
-**Role**: A named set of permissions. Every identity holds exactly one. Four built-in roles exist today: viewer, player, operator and owner. They are fixed in code, and the API refuses any other role id. _Intended, not built_: custom roles that an owner defines as data. Until they exist, a role is one of the four.
+**Role**: A named set of permissions that the owner defines as data ([ADR-0083](docs/adr/0083-panel-roles-are-owner-defined-data.md)). Every identity holds exactly one. A role changes only when its version is current, and a role that someone holds cannot be deleted.
 
-**Permission**: One named right, such as `session.start`. The list of permissions is fixed in code today.
+**Built-in role**: One of the four roles every deployment starts with: viewer, player, operator and owner. A built-in role can be edited but not deleted.
 
-**Direct grant**: A single permission added to one identity on top of its role. Direct grants only add permissions; they never remove one. An identity whose role the deployment does not know holds only its direct grants. A grant is an exception, not a class. A direct grant never carries a reserved permission, such as `access.owner.grant`: only the Owner role holds it, so the last-owner rule counts every holder. _Intended, not built_: a custom role, which would be the way to hold fewer permissions than a built-in role.
+**Protected role**: The Owner role. It holds every permission, including the reserved ones, and it cannot be edited or deleted. At least one active identity holds it.
+
+**Default role**: The role a newly approved or invited person gets unless the approver picks another. The owner chooses it; it is never the protected role. Viewer until chosen.
+
+**Permission**: One named right, such as `session.start`. The list of permissions is fixed in code, because permissions are the route gates. The API serves it as the **permission catalogue**, with a label and a sentence for each.
+
+**Reserved permission**: A permission that only the protected role holds, such as `access.owner.grant`. No other role and no direct grant may hold one.
+
+**No escalation**: A caller may give a role, take one away, or put a permission into a role only when the caller holds every permission involved.
+
+**Direct grant**: A single permission added to one identity on top of its role. Direct grants only add permissions; they never remove one. An identity whose role the deployment does not know holds only its direct grants. A grant is an exception, not a class. A direct grant never carries a reserved permission, such as `access.owner.grant`: only the Owner role holds it, so the last-owner rule counts every holder.
 
 **Bootstrap owner**: The first identity granted the built-in Owner role through a one-time trusted setup path. After it is claimed, all other identities and roles are managed through normal access control. _Avoid_: Superadmin; Owner is the privileged role, while bootstrap describes only how its first holder is established.
 

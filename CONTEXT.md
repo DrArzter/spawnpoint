@@ -4,6 +4,8 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 ## Language
 
+One word per thing. If a word here disagrees with a word in the product, the product is wrong.
+
 **Game**: A server runtime family such as Minecraft or Factorio. A game may have many worlds.
 
 **Preset**: A versioned declaration from a preset source describing a reusable mod and server-configuration template. A preset is authoring input, not a world, save, preset snapshot or deployable release. One preset may produce many releases and may be used to create many worlds. _Avoid_: Pack or uploaded archive when the declaration is meant.
@@ -16,13 +18,13 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Client pack**: The complete client-side content of a release: mods, configuration, resource packs, shader packs and every additional file supplied by the pack author. It carries the required game and loader versions for a launcher to install, but excludes a player's credentials, personal saves and local runtime caches.
 
-**World**: A named, persistent playable instance created from a preset, with its own generations and backup history. Several independent worlds may use the same preset. A world does not have one release for its entire lifetime; each generation carries its own release state.
+**World**: A named, persistent playable instance created from a preset, with its own generations and backup history. It is what a player joins. A world exists while no host does. Several independent worlds may use the same preset. _Avoid_: Save as a noun, because it names the data and not the world. The verb stays: stopping a session saves the world. A world does not have one release for its entire lifetime; each generation carries its own release state.
 
 **World generation**: One save lineage in a world's history, created from a specific release and carrying its own desired and active release state. Regenerating a world closes the current generation with a recoverable final backup and starts a fresh generation from a selected release without reusing the previous save. Promoting a compatible release may update an existing generation without creating a new one. A generation may have many backups; it is not itself a backup.
 
 **Wipe**: The player-facing name for a world generation and, by extension, the deliberate transition that closes the current generation and starts the next one. Interfaces may say “current wipe”, “wipe history” and “start new wipe”; internal records retain the precise term world generation.
 
-**Host**: A compute machine capable of running one or more sessions at once. A host is not permanently owned by a world; a session temporarily binds one world to one host. A *configured* host is the one the deployment declares, whose volume holds the legacy worlds and which is stopped, never terminated; a *launched* host is created for a session and exists only while at least one session is on it or its grace period has not ended. _Avoid_: Server or instance when the domain concept, rather than the AWS resource, is meant.
+**Host**: A compute machine capable of running one or more sessions at once. A host is not permanently owned by a world; a session temporarily binds one world to one host. A *configured* host is the one the deployment declares, whose volume holds the legacy worlds and which is stopped, never terminated; a *launched* host is created for a session and exists only while at least one session is on it or its grace period has not ended. _Avoid_: Server or instance when the domain concept, rather than the AWS resource, is meant; compute host and shared game host, which are spellings of the same machine.
 
 **Footprint**: What one world's session needs from a host: a memory figure that becomes the container's hard limit, and a core weight that bounds how many sessions share the host's cores. Declared per world, defaulting per game. It is the unit of placement; it is not the JVM heap, which is smaller.
 
@@ -86,9 +88,11 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 
 **Access decision notification**: A transactional reply telling a visitor that their own access request was approved. It is not a subscription and does not itself grant or prove any permission.
 
-**Role**: A named reusable set of permissions assigned to an identity. Built-in roles provide safe defaults; custom roles may be added without changing clients.
+**Role**: A named set of permissions. Every identity holds exactly one. Four built-in roles exist today: viewer, player, operator and owner. They are fixed in code, and the API refuses any other role id. _Intended, not built_: custom roles that an owner defines as data. Until they exist, a role is one of the four.
 
-**Direct grant**: An exceptional permission attached to one identity in addition to its role. Direct grants only add permissions; a custom role is used when permissions must be removed.
+**Permission**: One named right, such as `session.start`. The list of permissions is fixed in code today.
+
+**Direct grant**: A single permission added to one identity on top of its role. Direct grants only add permissions; they never remove one. A grant is an exception, not a class. _Intended, not built_: a custom role, which would be the way to hold fewer permissions than a built-in role.
 
 **Bootstrap owner**: The first identity granted the built-in Owner role through a one-time trusted setup path. After it is claimed, all other identities and roles are managed through normal access control. _Avoid_: Superadmin; Owner is the privileged role, while bootstrap describes only how its first holder is established.
 
@@ -105,3 +109,7 @@ Spawnpoint is a control plane for running one selected game world on disposable 
 **Notification delivery**: The single claimed attempt to notify eligible recipients. Its outcome records how many targets succeeded or failed; it is not inferred from creating the notification.
 
 **Notification delivery readiness**: A current indication that an identity has opted into a notification category and has a reachable channel. It helps a sender choose recipients, but is not a delivery guarantee; eligibility is checked again when delivery begins.
+
+**Whitelist**: The list of Minecraft player names that a world's record keeps (ADR-0066). The host writes it to the server at every start, and a running world reloads it at once. It is per world, not per identity, and it holds names that an offline server cannot prove belong to anyone. Only the Minecraft game module uses it today. _Avoid_: Allow-list, or a derived list of linked Minecraft identities.
+
+**World role**: _Intended, not built._ A role that an owner defines as data and attaches to a player name in one world, so that a player has rights inside the game without a Spawnpoint identity. Today a world has only the whitelist and no per-name rights. A world role is separate from the panel role that an identity holds. _Avoid_: Op level as the model; an op level would be one mechanism for it.

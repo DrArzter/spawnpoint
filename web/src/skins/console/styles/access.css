@@ -49,6 +49,22 @@ html[data-skin="console"] .c-perm > span {
   white-space: nowrap;
 }
 
+html[data-skin="console"] .c-role-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+html[data-skin="console"] .c-role-group legend {
+  padding: 0 0 4px;
+  color: var(--c-ink-3);
+  font-size: var(--c-fs-xs);
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
 html[data-skin="console"] .c-access-provider {
   display: inline-flex;
   align-items: center;

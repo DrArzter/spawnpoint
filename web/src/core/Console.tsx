@@ -396,7 +396,7 @@ function createWorldHint(canManage: boolean, ready: boolean): string {
 
 function AccessPage({ console, skin }: Controlled) {
   const { games, directory, bootstrap, granted, route, navigate, notify } = console;
-  const rolesModel = useRoles(directory);
+  const rolesModel = useRoles({ directory, granted, notify });
   const users = useUsers({ bootstrap, canInvite: granted.has("access.invite"), directory, notify });
   const notifications = useNotifications(games, notify);
   const { refresh: refreshAccess } = directory;

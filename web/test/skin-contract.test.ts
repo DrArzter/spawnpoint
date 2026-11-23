@@ -9,7 +9,7 @@ import { actionsOf } from "../src/core/actions.ts";
 import { roleChoice } from "../src/core/roles.ts";
 import type { AccessModel, ConfirmationModel, ConsoleModel, CreateWorldModel, GameSettingsModel, InvitationModel, MetricsModel, ModsModel, ProfileModel, ReleasesModel, WhitelistModel, WorldModel, WorldSettingsModel } from "../src/core/models.ts";
 import { SKINS } from "../src/skins/index.ts";
-import { aGame, aMember, aPermission, aPreset, aRole, aShell, aWorld, aWorlds, noop, spy } from "./support/fixtures.ts";
+import { aGame, aMember, aPermission, aPreset, aRole, aRolesModel, aShell, aWorld, aWorlds, noop, spy } from "./support/fixtures.ts";
 
 /*
  * The skin contract. A skin may draw a model however it likes; what it may
@@ -154,7 +154,7 @@ const access: AccessModel = {
     closeManaged: spy("sheet.close", "Close panel"),
     deletion: { title: "Delete Mira?", description: "Removes their sign-in methods, sessions and agent connections. This cannot be undone.", destructive: true, confirm: spy("access.delete.confirm", "Delete user", { danger: true, disabled: true }), cancel: spy("access.delete.cancel", "Cancel"), releaseChoice: null, typedConfirmation: { label: "User name", expected: "Mira", value: "", set: noop } },
   },
-  roles: { roles: { status: "ready", value: accessRoles }, reading: accessRoles[0]!, read: () => spy("access.role.read", "1 permission"), closeReading: spy("sheet.close.role", "Close panel") },
+  roles: aRolesModel(accessRoles, { reading: accessRoles[0]! }),
   notifications: { state: "error", error: "boom", retry: spy("notifications.retry", "Try again"), saveStatus: "", games: [game], subscriptions: {}, toggle: (id, label) => spy(`notifications.${id}`, label) },
 };
 

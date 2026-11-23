@@ -193,6 +193,8 @@ export type AccessDirectory = Readonly<{
   /** What the rail's badge counts: null until the list is read, and where the caller may not read it. */
   requestCount: number | null;
   working: string | null;
+  /** Reads the roles again without clearing them, as after a role write. */
+  refreshRoles: () => Promise<void>;
   /** Reads the people again without clearing them; a page calls it as it opens. */
   refresh: () => void;
   /** Without a role, the API gives the default one. */
@@ -217,7 +219,7 @@ export function readDirectory(state: DirectoryState, reading: Reading, retry: Re
   else if (served.status === "ready") rolesState = { status: "ready", value: served.value.roles };
 
   // Until the role list is read, the signed-in role alone, so the profile can name it. Nothing in it is offered for choosing.
-  const own = ownRole ? [{ id: ownRole.id, name: ownRole.name, description: "Current signed-in role", permissions: ownRole.permissions, builtIn: false, protected: false, assignable: false }] : [];
+  const own = ownRole ? [{ id: ownRole.id, name: ownRole.name, description: "Current signed-in role", permissions: ownRole.permissions, builtIn: false, protected: false, assignable: false, version: 0, holders: 0, editable: false, deletable: false }] : [];
   return {
     candidates,
     members: people.status === "ready" ? people.value.members : [self],
@@ -243,6 +245,7 @@ export function useAccessDirectory(opts: Readonly<{ session: ActiveSession; canR
     ...readDirectory(state, { self, ownRole: session.role, canManage }, { people: () => void store.readPeople(false), roles: () => void store.readRoles(false) }),
     setMembers: (members) => store.setMembers(members),
     refresh,
+    refreshRoles: () => store.readRoles(true),
     approve: (candidate, roleId) => store.approve(candidate, roleId),
     dismiss: (candidate) => store.dismiss(candidate),
     changeRole: (member, roleId) => store.changeRole(member, roleId),

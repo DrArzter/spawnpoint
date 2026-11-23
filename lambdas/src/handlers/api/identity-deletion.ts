@@ -29,8 +29,7 @@ function worldsInReleaseBucket(): WorldStore {
   const bucket = process.env.RELEASE_BUCKET;
   if (!bucket) throw new Error("missing environment variable: RELEASE_BUCKET");
   // Anonymising an owner rewrites the record: the holder of its release is already there, so this costs one read.
-  const s3 = new S3Client({});
-  releaseWorlds ??= new S3WorldRepository(s3, bucket, new ReleaseHolders(new ReleaseRefs(document), resolveFromWorldRecords(new S3WorldReader(s3, bucket))));
+  releaseWorlds ??= ((s3) => new S3WorldRepository(s3, bucket, new ReleaseHolders(new ReleaseRefs(document), resolveFromWorldRecords(new S3WorldReader(s3, bucket)))))(new S3Client({}));
   return releaseWorlds;
 }
 

@@ -75,4 +75,3 @@ export type ReleaseItemState = "building" | "live" | "retiring" | "retired";
 export type FileItemState = "live" | "condemned" | "deleting" | "deleted";
 
 export const RELEASE_ITEM_STATES: readonly ReleaseItemState[] = ["building", "live", "retiring", "retired"];
-export const FILE_ITEM_STATES: readonly FileItemState[] = ["live", "condemned", "deleting", "deleted"];

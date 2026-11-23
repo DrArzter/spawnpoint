@@ -10,25 +10,6 @@
 
 import type { SessionPolicy } from "./placement.ts";
 
-// Fail closed by failing loudly: a malformed allow-list is a misconfiguration,
-// and silently denying everybody would read as a mystery, not a fault.
-export function parseAllowList(raw: string): readonly number[] {
-  const entries = raw
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry !== "");
-  return entries.map((entry) => {
-    if (!/^\d+$/.test(entry)) {
-      throw new Error(`allow-list entry is not a numeric Telegram user id: ${entry}`);
-    }
-    return Number(entry);
-  });
-}
-
-export function isAuthorized(userId: number, allowList: readonly number[]): boolean {
-  return allowList.includes(userId);
-}
-
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -274,7 +255,6 @@ export const replies = {
       "<b>Server status</b>",
       "",
       `State: <code>${escapeHtml(instanceState.toUpperCase())}</code>`,
-      "Games: Minecraft, Factorio, Project Zomboid",
       "",
       "Request access to receive connection details and game controls.",
     ].join("\n"),

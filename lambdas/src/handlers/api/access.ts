@@ -11,7 +11,7 @@ import { events } from "./clients.ts";
 import { accountKeyFor, activeOwnerCount, identityById } from "./identity-store.ts";
 import { passwordCredentials } from "./credentials.ts";
 
-export function roles(identity: Identity): Response {
+export function roles(): Response {
   const descriptions: Record<string, string> = {
     viewer: "Can see coarse server status only.",
     player: "Can view connection details, start a session and invite players.",

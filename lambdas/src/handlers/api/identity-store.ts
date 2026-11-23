@@ -59,7 +59,8 @@ export async function resolveIdentity(principal: Caller, accountItem?: Item): Pr
   const profile = await document.send(new GetCommand({
     TableName: tableName, Key: { pk: `IDENTITY#${identityId}`, sk: "PROFILE" },
   }));
-  return profile.Item === undefined ? null : identityFromItem(profile.Item);
+  // The same rule as identityById: only an active identity acts.
+  return profile.Item === undefined || profile.Item.status !== "ACTIVE" ? null : identityFromItem(profile.Item);
 }
 
 async function bootstrapClaimed(): Promise<boolean> {

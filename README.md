@@ -242,7 +242,7 @@ Measurements deliberately do **not** live in these files. They live in
 which are allowed to change. The reason is written up in [docs/adr/README.md](docs/adr/README.md).
 
 Vocabulary does not live in them either. One word per thing, and what each one means, is
-[docs/glossary.md](docs/glossary.md).
+[CONTEXT.md](CONTEXT.md).
 
 | ADR | Decision | Status |
 | --- | --- | --- |

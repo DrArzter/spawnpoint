@@ -6,9 +6,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { actionsOf } from "../src/core/actions.ts";
+import { roleChoice } from "../src/core/roles.ts";
 import type { AccessModel, ConfirmationModel, ConsoleModel, CreateWorldModel, GameSettingsModel, InvitationModel, MetricsModel, ModsModel, ProfileModel, ReleasesModel, WhitelistModel, WorldModel, WorldSettingsModel } from "../src/core/models.ts";
 import { SKINS } from "../src/skins/index.ts";
-import { aGame, aPreset, aShell, aWorld, aWorlds, noop, spy } from "./support/fixtures.ts";
+import { aGame, aMember, aPermission, aPreset, aRole, aShell, aWorld, aWorlds, noop, spy } from "./support/fixtures.ts";
 
 /*
  * The skin contract. A skin may draw a model however it likes; what it may
@@ -132,32 +133,34 @@ const rcon: ConsoleModel = {
 const rconUnreadable: ConsoleModel = { ...rcon, log: { status: "error", error: "boom", kind: "failed", retry: spy("console.retry", "Try again") } };
 const releases: ReleasesModel = { game, loading: false, presets: [{ preset: game.presets[0]!, status: { kind: "ok", label: "Ready" }, createWorld: spy("world.create", "Create world"), build: spy("release.build", "Build new release") }], pointers: [{ world, href: "#/w", presetName: "Industrial", summary: "Release 1.2" }] };
 
+const accessRoles = [aRole({ id: "role-a", name: "Role A", protected: true }), aRole({ id: "role-b", name: "Role B", permissions: ["perm.two"], builtIn: false })];
+
 const access: AccessModel = {
   tab: "users",
   setTab: noop,
-  roleCount: 1,
+  roleCount: 2,
+  catalogue: [aPermission(), aPermission({ id: "perm.two", group: "Group Two", label: "Do two", description: "Does the second thing." })],
   users: {
     bootstrap: { state: "unclaimed", telegramId: "1780660807" },
     bootstrapDescription: "Sign in with the configured account.",
-    candidates: { status: "ready", value: [{ candidate: { platform: "telegram", platformUserId: "42", displayName: "Nikita", username: "nikita", email: null, photoUrl: null, status: "REQUESTED", requestedAt: "2026-09-14T18:10:00Z", lastSeenAt: "2026-09-14T18:10:00Z" }, account: "@nikita", since: "Requested access Sep 14", roleId: "viewer", setRoleId: noop, approve: spy("access.approve", "Approve"), dismiss: spy("access.dismiss", "Dismiss") }] },
+    candidates: { status: "ready", value: [{ candidate: { platform: "telegram", platformUserId: "42", displayName: "Nikita", username: "nikita", email: null, photoUrl: null, status: "REQUESTED", requestedAt: "2026-09-14T18:10:00Z", lastSeenAt: "2026-09-14T18:10:00Z" }, account: "@nikita", since: "Requested access Sep 14", role: roleChoice(accessRoles, "role-b", false), setRoleId: noop, approve: spy("access.approve", "Approve"), dismiss: spy("access.dismiss", "Dismiss") }] },
     members: [
-      { member: { id: "m1", name: "DrArzter", roleId: "owner", links: [] }, roleId: "owner", setRoleId: noop, changing: false, linkedAccounts: spy("access.linked", "Linked accounts"), remove: null },
-      { member: { id: "m2", name: "Mira", roleId: "viewer", links: [] }, roleId: "viewer", setRoleId: noop, changing: false, linkedAccounts: spy("access.linked", "Linked accounts"), remove: spy("access.delete", "Delete user", { danger: true, icon: "delete_forever" }) },
+      { member: aMember({ id: "m1", name: "DrArzter", roleId: "role-a", canDelete: false }), role: roleChoice(accessRoles, "role-a", false), setRoleId: noop, changing: false, linkedAccounts: spy("access.linked", "Linked accounts"), remove: null },
+      { member: aMember({ id: "m2", name: "Mira", roleId: "role-b" }), role: roleChoice(accessRoles, "role-b", false), setRoleId: noop, changing: false, linkedAccounts: spy("access.linked", "Linked accounts"), remove: spy("access.delete", "Delete user", { danger: true, icon: "delete_forever" }) },
     ],
-    roles: [{ id: "owner", name: "Owner", description: "Everything", permissions: ["a"] }, { id: "viewer", name: "Viewer", description: "Reads", permissions: ["b"] }],
-    rolesLoading: false,
+    roles: accessRoles,
     invitations: { emailMode: true, email: "", setEmail: noop, create: spy("invitation.create", "Create invitation"), issued: { url: "https://x/join?token=t", email: "", copy: spy("invitation.copy", "Copy link") }, list: { status: "ready", value: [{ invitation: { id: "i1", status: "PENDING", deliveryEmail: null, delivery: "none", createdAt: "2026-09-14T18:10:00Z", expiresAt: "2026-09-21T18:10:00Z" } as never, revoke: spy("invitation.revoke", "Revoke") }] } },
-    managed: { id: "m1", name: "DrArzter", roleId: "owner", links: [] },
+    managed: aMember({ id: "m1", name: "DrArzter", roleId: "role-a", canDelete: false }),
     closeManaged: spy("sheet.close", "Close panel"),
     deletion: { title: "Delete Mira?", description: "Removes their sign-in methods, sessions and agent connections. This cannot be undone.", destructive: true, confirm: spy("access.delete.confirm", "Delete user", { danger: true, disabled: true }), cancel: spy("access.delete.cancel", "Cancel"), releaseChoice: null, typedConfirmation: { label: "User name", expected: "Mira", value: "", set: noop } },
   },
-  roles: { roles: { status: "ready", value: [{ id: "owner", name: "Owner", description: "Everything", permissions: ["a"] }] }, reading: { id: "owner", name: "Owner", description: "Everything", permissions: ["a"] }, read: () => spy("access.role.read", "1 permission"), closeReading: spy("sheet.close.role", "Close panel") },
+  roles: { roles: { status: "ready", value: accessRoles }, reading: accessRoles[0]!, read: () => spy("access.role.read", "1 permission"), closeReading: spy("sheet.close.role", "Close panel") },
   notifications: { state: "error", error: "boom", retry: spy("notifications.retry", "Try again"), saveStatus: "", games: [game], subscriptions: {}, toggle: (id, label) => spy(`notifications.${id}`, label) },
 };
 
 const profile: ProfileModel = {
-  member: { id: "m1", name: "DrArzter", roleId: "owner", links: [] },
-  role: { id: "owner", name: "Owner", description: "Everything", permissions: ["a"] },
+  member: aMember({ id: "m1", name: "DrArzter", roleId: "role-a" }),
+  role: aRole({ id: "role-a", name: "Role A" }),
   viewer: { displayName: "DrArzter", inTelegram: true, username: "drarzter" },
   appearance: shell.appearance,
   look: { current: "console", options: [{ id: "console", name: "Cloud console", choose: spy("look.console", "Cloud console", { disabled: true }) }, { id: "terminal", name: "Terminal", choose: spy("look.terminal", "Terminal") }] },

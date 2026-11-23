@@ -1,10 +1,10 @@
-import type { AccessCandidate, AccessIdentity, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
+import type { AccessCandidate, AccessIdentity, AccessRoleDirectory, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../auth";
 import { identityDeletionRefusal, type HostLogLine, type PromotionResult, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type OperationProgress, type OperationStep, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
 import { startableReleases } from "../core/presets";
 import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
 import type { ControlPlaneSnapshot, Preset, SettingValue, World, WorldGameSettings, WorldSession } from "../model";
-import { DemoState, initialState, Mutable, type OperationPlan } from "./data";
+import { DemoState, demoSession, initialState, Mutable, PERMISSION_CATALOGUE, type OperationPlan } from "./data";
 import { demoFixture, demoOperation } from "./flag";
 import { stressState } from "./stress";
 
@@ -837,23 +837,39 @@ export function candidates(): AccessCandidate[] {
   return state.candidates;
 }
 
+// The demo plays the backend here: it applies the owner rules for the caller it
+// signs in as, and serves the answers (`assignable`, `canDelete`) the way the API does.
+const caller = demoSession.identity.id;
+const callerHolds = (permission: string) => demoSession.role?.permissions.includes(permission) ?? false;
+const isProtected = (roleId: string) => state.roles.some((role) => role.id === roleId && role.protected);
+const canAssign = (roleId: string) => callerHolds("access.manage") && (!isProtected(roleId) || callerHolds("access.owner.grant"));
+
 export function identities(): AccessIdentity[] {
   settle();
-  return state.identities;
+  return state.identities.map((identity) => ({
+    ...identity,
+    canDelete: identity.id !== caller && callerHolds("access.manage") && (!isProtected(identity.roleId) || callerHolds("access.owner.grant")),
+  }));
 }
 
-export function roles() {
-  return state.roles;
+export function roles(): AccessRoleDirectory {
+  return {
+    roles: state.roles.map((role) => ({ ...role, assignable: canAssign(role.id) })),
+    permissions: [...PERMISSION_CATALOGUE],
+    defaultRoleId: state.defaultRoleId,
+  };
 }
 
 const sameAccount = (platform: string, platformUserId: string) => (item: { platform: string; platformUserId: string }) =>
   item.platform === platform && item.platformUserId === platformUserId;
 
-export function approveCandidate(platform: string, platformUserId: string, roleId: string): { id: string; displayName: string; roleId: string } {
+export function approveCandidate(platform: string, platformUserId: string, chosen?: string): { id: string; displayName: string; roleId: string } {
+  const roleId = chosen ?? state.defaultRoleId;
   const candidate = state.candidates.find(sameAccount(platform, platformUserId));
   if (!candidate) throw new Error("This account is no longer waiting for a decision.");
   if (!state.roles.some((role) => role.id === roleId)) throw new Error("This role no longer exists.");
-  const identity: Mutable<AccessIdentity> = {
+  if (!canAssign(roleId)) throw new Error("Only an Owner can give or take the Owner role.");
+  const identity: Mutable<Omit<AccessIdentity, "canDelete">> = {
     id: `identity-${platformUserId}`,
     displayName: candidate.displayName,
     roleId,
@@ -873,17 +889,19 @@ export function dismissCandidate(platform: string, platformUserId: string): void
 export function setIdentityRole(identityId: string, roleId: string): void {
   const identity = state.identities.find((item) => item.id === identityId);
   if (!identity) throw new Error("This user is no longer in the directory.");
-  if (identity.roleId === "owner") throw new Error("You cannot change your own Owner role.");
+  if (identity.id === caller) throw new Error("You cannot change your own role.");
   if (!state.roles.some((role) => role.id === roleId)) throw new Error("This role no longer exists.");
+  if (!canAssign(roleId) || !canAssign(identity.roleId)) throw new Error("Only an Owner can give or take the Owner role.");
+  if (isProtected(identity.roleId) && !isProtected(roleId) && state.identities.filter((item) => isProtected(item.roleId)).length <= 1) throw new Error(identityDeletionRefusal(409, "last_owner"));
   identity.roleId = roleId;
 }
 
 // The demo signs in as identity-owner; only the access part changes.
 export function deleteIdentity(identityId: string): void {
-  if (identityId === "identity-owner") throw new Error(identityDeletionRefusal(409, "self_delete_forbidden"));
+  if (identityId === caller) throw new Error(identityDeletionRefusal(409, "self_delete_forbidden"));
   const identity = state.identities.find((item) => item.id === identityId);
   if (!identity) return;
-  if (identity.roleId === "owner" && state.identities.filter((item) => item.roleId === "owner").length <= 1) throw new Error(identityDeletionRefusal(409, "last_owner"));
+  if (isProtected(identity.roleId) && state.identities.filter((item) => isProtected(item.roleId)).length <= 1) throw new Error(identityDeletionRefusal(409, "last_owner"));
   state.identities = state.identities.filter((item) => item.id !== identityId);
   delete state.delivery[identityId];
 }

@@ -3,11 +3,12 @@ import type { ReactNode } from "react";
 import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, HostMetrics, LinkedLoginAccount, MetricRange, ModSortKey, ModSource, ModSourceFilter, SubscriptionState } from "../api/contract";
 import type { ModSortDirection } from "./release-mods";
 import type { StatusDescriptor } from "./status";
-import type { AccessTab, ControlPlaneSnapshot, Game, Member, Operation, OwnerBootstrap, Page, Preset, Role, ServerState, Wipe, World, WorldTab } from "../model";
+import type { AccessTab, ControlPlaneSnapshot, Game, Member, Operation, OwnerBootstrap, Page, PermissionInfo, Preset, Role, ServerState, Wipe, World, WorldTab } from "../model";
 import type { WorldsView } from "../routing";
 import type { SessionReason } from "../session";
 import type { Theme, ThemePreference, ViewerProfile } from "../telegram";
 import type { Action } from "./actions";
+import type { RoleChoice } from "./roles";
 
 /*
  * The bones hand each surface one of these. A model carries facts and
@@ -395,7 +396,8 @@ export type CandidateRow = Readonly<{
   candidate: AccessCandidate;
   account: string;
   since: string;
-  roleId: string;
+  /** The role to approve with: the roles the caller may give, and the one chosen. */
+  role: RoleChoice;
   setRoleId: (roleId: string) => void;
   approve: Action;
   dismiss: Action;
@@ -403,11 +405,11 @@ export type CandidateRow = Readonly<{
 
 export type MemberRow = Readonly<{
   member: Member;
-  roleId: string;
+  role: RoleChoice;
   setRoleId: (roleId: string) => void;
   changing: boolean;
   linkedAccounts: Action;
-  /** `access.delete`; null for the caller's own row and for an Owner the caller cannot remove. */
+  /** `access.delete`; null where the API says the caller may not delete this identity. */
   remove: Action | null;
 }>;
 
@@ -426,7 +428,6 @@ export type UsersModel = Readonly<{
   candidates: Loading<readonly CandidateRow[]>;
   members: readonly MemberRow[];
   roles: readonly Role[];
-  rolesLoading: boolean;
   invitations: InvitationsModel | null;
   managed: Member | null;
   closeManaged: Action;
@@ -456,6 +457,8 @@ export type AccessModel = Readonly<{
   tab: AccessTab;
   setTab: (tab: AccessTab) => void;
   roleCount: number;
+  /** The served permission catalogue: the words and the groups of every permission. */
+  catalogue: readonly PermissionInfo[];
   users: UsersModel;
   roles: RolesModel;
   notifications: NotificationsModel;

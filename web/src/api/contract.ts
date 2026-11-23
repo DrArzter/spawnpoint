@@ -115,6 +115,8 @@ export type AccessIdentity = Readonly<{
   displayName: string;
   roleId: string;
   directGrants: string[];
+  /** Whether the caller may delete this identity; the backend's owner rules decide, so the web keeps no copy of them. */
+  canDelete: boolean;
   /** `handle` is the account's own name where it has one: a Telegram username, an email address. */
   links: ReadonlyArray<{ platform: string; value: string; handle: string | null; verified: boolean }>;
 }>;
@@ -124,7 +126,28 @@ export type AccessRole = Readonly<{
   name: string;
   description: string;
   permissions: string[];
-  system: boolean;
+  builtIn: boolean;
+  /** The one role that holds the reserved permission and must keep a holder. */
+  protected: boolean;
+  version: number;
+  /** Whether the caller may give this role; computed per caller. */
+  assignable: boolean;
+}>;
+
+export type AccessPermission = Readonly<{
+  id: string;
+  group: string;
+  label: string;
+  description: string;
+  /** Held only through the protected role. */
+  reserved: boolean;
+}>;
+
+/** The role list with the permission catalogue and the role an approval gives when nobody picks one. */
+export type AccessRoleDirectory = Readonly<{
+  roles: AccessRole[];
+  permissions: AccessPermission[];
+  defaultRoleId: string;
 }>;
 
 export type SubscriptionState = Record<string, boolean>;
@@ -384,10 +407,11 @@ export type SpawnpointApi = Readonly<{
   createAccessInvitation(email: string | null): Promise<IssuedAccessInvitation>;
   revokeAccessInvitation(id: string): Promise<void>;
   loadAccessCandidates(): Promise<AccessCandidate[]>;
-  approveAccessCandidate(platform: string, platformUserId: string, roleId: string): Promise<{ id: string; displayName: string; roleId: string }>;
+  /** Without a role, the backend gives the default role. */
+  approveAccessCandidate(platform: string, platformUserId: string, roleId?: string): Promise<{ id: string; displayName: string; roleId: string }>;
   dismissAccessCandidate(platform: string, platformUserId: string): Promise<void>;
   loadAccessIdentities(): Promise<AccessIdentity[]>;
-  loadAccessRoles(): Promise<AccessRole[]>;
+  loadAccessRoles(): Promise<AccessRoleDirectory>;
   updateIdentityRole(identityId: string, roleId: string): Promise<void>;
   /** Removes the person and everything that names them; a person already gone succeeds. */
   deleteIdentity(identityId: string): Promise<void>;

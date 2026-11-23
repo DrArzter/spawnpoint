@@ -15,13 +15,12 @@ import { isConditionFailure } from "./conditions.ts";
 
 /**
  * The role list with the permission catalogue and the default role. Built-in
- * roles have version 1 until roles are stored. `system` repeats `builtIn` for
- * the web until it reads the new name.
+ * roles have version 1 until roles are stored.
  */
 export function roles(caller: Identity): Response {
   return response(200, {
     roles: Object.values(builtInRoles).map((role) => ({
-      ...role, builtIn: true, system: true, version: 1, assignable: canAssign(caller, role.id),
+      ...role, builtIn: true, version: 1, assignable: canAssign(caller, role.id),
     })),
     permissions: permissionCatalogue,
     defaultRoleId,

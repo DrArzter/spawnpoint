@@ -131,7 +131,7 @@ export const demoApi: SpawnpointApi = {
     return store.candidates();
   },
 
-  async approveAccessCandidate(platform: string, platformUserId: string, roleId: string) {
+  async approveAccessCandidate(platform: string, platformUserId: string, roleId?: string) {
     await demoLatency();
     return store.approveCandidate(platform, platformUserId, roleId);
   },

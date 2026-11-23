@@ -31,6 +31,7 @@ test("the role list carries the catalogue, the default role and the role flags",
   assert.deepEqual(body.roles.filter((role) => role.protected).map((role) => role.id), ["owner"]);
   for (const role of body.roles) {
     assert.equal(role.builtIn, true);
+    assert.equal(Object.hasOwn(role, "system"), false, "the old name is gone");
     assert.equal(role.version, 1);
     assert.ok(role.description.length > 0);
   }

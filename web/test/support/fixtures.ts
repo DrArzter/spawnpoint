@@ -1,6 +1,6 @@
 import { action, type Action } from "../../src/core/actions.ts";
 import type { ShellModel, WorldsModel } from "../../src/core/models.ts";
-import type { Game, Preset, World } from "../../src/model.ts";
+import type { Game, Member, PermissionInfo, Preset, Role, World } from "../../src/model.ts";
 
 // Typed builders for the models the tests draw. Each takes the fields a test
 // cares about and fills the rest, so a test names only what it asserts on and
@@ -77,4 +77,17 @@ export function aWorlds(game: Game, over: Partial<WorldsModel> = {}): WorldsMode
     createWorld: spy("world.create", "Create world"),
     ...over,
   };
+}
+
+/** A role as the API serves it; the ids and names here are test data, not the product's. */
+export function aRole(over: Partial<Role> = {}): Role {
+  return { id: "role-a", name: "Role A", description: "A role.", permissions: ["perm.one"], builtIn: true, protected: false, assignable: true, ...over };
+}
+
+export function aMember(over: Partial<Member> = {}): Member {
+  return { id: "member-a", name: "Member A", roleId: "role-a", links: [], canDelete: true, ...over };
+}
+
+export function aPermission(over: Partial<PermissionInfo> = {}): PermissionInfo {
+  return { id: "perm.one", group: "Group One", label: "Do one", description: "Does the first thing.", reserved: false, ...over };
 }

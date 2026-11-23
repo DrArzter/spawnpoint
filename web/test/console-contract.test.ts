@@ -7,9 +7,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { Action } from "../src/core/actions.ts";
 import type { AccessModel } from "../src/core/models.ts";
+import { roleChoice } from "../src/core/roles.ts";
 import { consoleSkin } from "../src/skins/console/index.ts";
 import { Palette } from "../src/skins/console/ui/Palette.tsx";
-import { aGame, aShell, aWorld, aWorlds, noop, spy } from "./support/fixtures.ts";
+import { aGame, aMember, aPermission, aRole, aShell, aWorld, aWorlds, noop, spy } from "./support/fixtures.ts";
 
 /*
  * The console skin's own contract (skin-spec §7). The shared contract cannot
@@ -122,18 +123,19 @@ test("console: the palette, once open, draws each world's verbs and says why one
   assert.match(markup, /role="combobox"/);
 });
 
-const member = { id: "m2", name: "Alex", roleId: "player", links: [{ id: "l1", kind: "telegram", value: "42", verified: true }] };
+const member = aMember({ id: "m2", name: "Alex", roleId: "player", links: [{ id: "l1", kind: "telegram", value: "42", verified: true }] });
+const player = aRole({ id: "player", name: "Player", description: "Plays", permissions: ["status.read"] });
 const access: AccessModel = {
   tab: "users",
   setTab: noop,
   roleCount: 1,
+  catalogue: [aPermission({ id: "status.read", label: "See status" })],
   users: {
     bootstrap: { state: "unclaimed", telegramId: null },
     bootstrapDescription: undefined,
     candidates: { status: "ready", value: [] },
-    members: [{ member, roleId: "player", setRoleId: noop, changing: false, linkedAccounts: spy("access.linked", "Linked accounts"), remove: null }],
-    roles: [{ id: "player", name: "Player", description: "Plays", permissions: ["status.read"] }],
-    rolesLoading: false,
+    members: [{ member, role: roleChoice([player], "player", false), setRoleId: noop, changing: false, linkedAccounts: spy("access.linked", "Linked accounts"), remove: null }],
+    roles: [player],
     invitations: null,
     managed: null,
     closeManaged: spy("sheet.close", "Close panel"),

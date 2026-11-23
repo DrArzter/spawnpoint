@@ -43,7 +43,7 @@ html[data-skin="console"] .c-perm svg {
   color: var(--c-ok);
 }
 
-html[data-skin="console"] .c-perm .c-mono {
+html[data-skin="console"] .c-perm > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -8,14 +8,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingsModel, InvitationModel, ProfileModel, WorldSettingsModel } from "../src/core/models.ts";
 import { ConfirmationDialog, CreateWorldSheet, GameSettingsSheet, InvitationSheet, WorldSettingsSheet } from "../src/skins/console/Dialogs.tsx";
 import { Profile } from "../src/skins/console/Profile.tsx";
-import { aGame, aPreset, aWorld, noop, spy } from "./support/fixtures.ts";
+import { aGame, aMember, aPreset, aRole, aWorld, noop, spy } from "./support/fixtures.ts";
 
 const world = aWorld();
 const game = aGame({ presets: [aPreset()], worlds: [world] });
 
 const profile: ProfileModel = {
-  member: { id: "m1", name: "Kai Ashby", roleId: "owner", links: [] },
-  role: { id: "owner", name: "Owner", description: "Everything", permissions: ["a"] },
+  member: aMember({ id: "m1", name: "Kai Ashby", roleId: "role-a" }),
+  role: aRole({ id: "role-a", name: "Role A" }),
   viewer: { displayName: "Kai Ashby", inTelegram: false },
   appearance: { preference: "dark", theme: "dark", accent: "#5b47d6", setPreference: async () => undefined, setAccent: async () => undefined },
   look: { current: "console", options: [{ id: "terminal", name: "Terminal", choose: spy("look.terminal", "Terminal") }] },
@@ -38,7 +38,7 @@ const persistent: ConnectionFieldsModel = { ...fleet, placement: "configured", c
 test("profile: the name is the title, the role chip follows it at the start, and the verbs keep the end edge", () => {
   const markup = renderToStaticMarkup(createElement(Profile, { model: profile }));
   assert.match(markup, /<h1[^>]*>Kai Ashby/);
-  assert.match(markup, /<\/nav><span class="c-chip"[^>]*>.*?Owner/, "the role sits after the title");
+  assert.match(markup, /<\/nav><span class="c-chip"[^>]*>.*?Role A/, "the role sits after the title");
   assert.doesNotMatch(markup.slice(markup.indexOf('class="c-page-actions"')), /c-chip/, "no chip among the verbs");
   assert.match(markup, /aria-label="Copy identity ID"/);
   const roleless = renderToStaticMarkup(createElement(Profile, { model: { ...profile, role: undefined } }));

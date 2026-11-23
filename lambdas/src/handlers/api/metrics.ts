@@ -2,10 +2,10 @@ import { awsControlPlaneSources } from "../../control-plane/aws.ts";
 import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
 import { type WorldPlacement } from "../../control-plane/world-session.ts";
 import { type Response, response } from "./http.ts";
+import { METRIC_RANGES } from "../../control-plane/metric-ranges.ts";
 import { hostIdsOf, mergeWorldMetrics, worldHostRuns } from "../../control-plane/world-metrics.ts";
 import { readWorldSession, locateWorldHost } from "./world-state.ts";
 
-const METRIC_RANGES: Readonly<Record<string, number>> = { "6h": 6, "24h": 24, "7d": 168 };
 
 // Host metrics come from CloudWatch rather than from the host, so they answer
 // for a window the host did not survive: an instance that was stopped all night

@@ -200,6 +200,11 @@ local/                      The local control-plane environment of ADR-0031
 web/                        React/Vite Mini App and browser panel — deployed
 ```
 
+## Running your own
+
+To run Spawnpoint in your own AWS account, fork this repository and follow [docs/onboarding.md](docs/onboarding.md):
+`aws login`, `gh auth login`, then `scripts/onboard.sh`.
+
 ## Checking your work
 
 Every local rung of the evidence ladder, one command — markdown links, shellcheck, the node tests, the containerised

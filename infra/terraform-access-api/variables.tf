@@ -95,13 +95,14 @@ check "custom_api_domain_configuration" {
 }
 
 variable "bootstrap_owner_telegram_id" {
-  description = "Exact Telegram user id allowed to atomically claim the first Owner."
+  description = "Exact Telegram user id allowed to atomically claim the first Owner. Empty lets no Telegram account claim it, for an installation without Telegram."
   type        = string
+  default     = ""
   sensitive   = true
 
   validation {
-    condition     = can(regex("^[1-9][0-9]{4,19}$", var.bootstrap_owner_telegram_id))
-    error_message = "bootstrap_owner_telegram_id must be an explicitly selected numeric Telegram user id."
+    condition     = var.bootstrap_owner_telegram_id == "" || can(regex("^[1-9][0-9]{4,19}$", var.bootstrap_owner_telegram_id))
+    error_message = "bootstrap_owner_telegram_id must be empty or an explicitly selected numeric Telegram user id."
   }
 }
 

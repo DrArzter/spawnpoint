@@ -799,6 +799,20 @@ run "api_may_invoke_only_the_release_retirement_function" {
   }
 }
 
+run "an_installation_without_telegram_names_no_bootstrap_owner" {
+  command = plan
+
+  variables {
+    panel_url                        = "https://panel.example.dev/"
+    session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
+  }
+
+  assert {
+    condition     = aws_lambda_function.access_api.environment[0].variables.BOOTSTRAP_OWNER_TELEGRAM_ID == ""
+    error_message = "With no Telegram owner id, no Telegram account may claim the first Owner."
+  }
+}
+
 run "ses_sends_from_a_dkim_signed_identity_with_no_key" {
   command = plan
 

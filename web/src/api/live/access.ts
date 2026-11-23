@@ -1,4 +1,4 @@
-import { identityDeletionRefusal, type AccessCandidate, type AccessIdentity, type AccessInvitation, type AccessRole, type SpawnpointApi } from "../contract";
+import { identityDeletionRefusal, type AccessCandidate, type AccessIdentity, type AccessInvitation, type AccessRoleDirectory, type SpawnpointApi } from "../contract";
 import { request } from "./request";
 
 // Where a role change reads differently from the shared text (error-text.ts).
@@ -55,9 +55,9 @@ export const accessApi = {
     return body.candidates;
   },
 
-  async approveAccessCandidate(platform: string, platformUserId: string, roleId: string) {
+  async approveAccessCandidate(platform: string, platformUserId: string, roleId?: string) {
     const body = await request<{ identity: { id: string; displayName: string; roleId: string } }>(`${candidatePath(platform, platformUserId)}/approve`, {
-      method: "POST", body: { roleId }, failure: "This account could not be approved.",
+      method: "POST", body: roleId === undefined ? {} : { roleId }, failure: "This account could not be approved.",
     });
     return body.identity;
   },
@@ -71,9 +71,8 @@ export const accessApi = {
     return body.identities;
   },
 
-  async loadAccessRoles(): Promise<AccessRole[]> {
-    const body = await request<{ roles: AccessRole[] }>("/access/roles", { failure: "Roles could not be loaded.", refusals: { forbidden: "Your role cannot view access roles." } });
-    return body.roles;
+  loadAccessRoles(): Promise<AccessRoleDirectory> {
+    return request<AccessRoleDirectory>("/access/roles", { failure: "Roles could not be loaded.", refusals: { forbidden: "Your role cannot view access roles." } });
   },
 
   async updateIdentityRole(identityId: string, roleId: string): Promise<void> {

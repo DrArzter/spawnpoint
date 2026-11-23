@@ -1,4 +1,4 @@
-import type { AccessCandidate, AccessIdentity, AccessRole, ActiveSession, AppearancePreference, BackupEntry, InvitationSummary, SubscriptionState } from "../auth";
+import type { AccessCandidate, AccessIdentity, AccessPermission, AccessRole, ActiveSession, AppearancePreference, BackupEntry, InvitationSummary, SubscriptionState } from "../auth";
 import type { ConsoleEntry } from "../api/contract";
 import type { ControlPlaneSnapshot, Game, SettingDefinition, World, WorldSession } from "../model";
 import { DEFAULT_ACCENT } from "../styles/accent";
@@ -33,8 +33,10 @@ export type OperationPlan = {
 
 export type DemoState = {
   snapshot: Mutable<ControlPlaneSnapshot>;
-  roles: AccessRole[];
-  identities: Mutable<AccessIdentity>[];
+  /** What the backend stores; `assignable` and `canDelete` are worked out per caller when they are served. */
+  roles: Omit<AccessRole, "assignable">[];
+  defaultRoleId: string;
+  identities: Mutable<Omit<AccessIdentity, "canDelete">>[];
   candidates: Mutable<AccessCandidate>[];
   delivery: Record<string, "ready" | "notifications_off" | "bot_unavailable">;
   subscriptions: SubscriptionState;
@@ -66,7 +68,30 @@ export const demoSession: ActiveSession = {
   bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "1780660807", claimedAt: "2026-08-28T18:24:00.000Z" },
 };
 
-const OWNER_PERMISSIONS = demoSession.role?.permissions ?? [];
+/** The catalogue as the backend serves it (lambdas/src/access/domain.ts), in its order. */
+export const PERMISSION_CATALOGUE: readonly AccessPermission[] = [
+  { id: "status.read", group: "Worlds", label: "See status", description: "See whether a game is running.", reserved: false },
+  { id: "connection.read", group: "Worlds", label: "See addresses", description: "See the address a world is reachable at.", reserved: false },
+  { id: "session.start", group: "Sessions", label: "Start", description: "Start a session on the shared host.", reserved: false },
+  { id: "session.stop", group: "Sessions", label: "Stop", description: "Stop a session, which saves the world and backs it up first.", reserved: false },
+  { id: "session.stop.force", group: "Sessions", label: "Stop with players online", description: "Stop a session while players are online, which disconnects them.", reserved: false },
+  { id: "invitation.send", group: "Sessions", label: "Invite players", description: "Invite players through the Telegram bot.", reserved: false },
+  { id: "metrics.read", group: "Worlds", label: "Read metrics", description: "Read session metrics.", reserved: false },
+  { id: "console.use", group: "Worlds", label: "Use the console", description: "Run RCON commands, recorded against your identity.", reserved: false },
+  { id: "whitelist.manage", group: "Worlds", label: "Manage the whitelist", description: "Choose which players may join a world.", reserved: false },
+  { id: "release.read", group: "Releases", label: "See releases", description: "See presets and the releases built from them.", reserved: false },
+  { id: "release.build", group: "Releases", label: "Build", description: "Build releases and retry failed build attempts.", reserved: false },
+  { id: "release.promote", group: "Releases", label: "Promote", description: "Move a world onto another release.", reserved: false },
+  { id: "release.retire", group: "Releases", label: "Retire", description: "Retire a release, so no world can move onto it.", reserved: false },
+  { id: "backup.read", group: "Backups", label: "See backups", description: "List the verified backups of a world.", reserved: false },
+  { id: "backup.download", group: "Backups", label: "Download", description: "Download a world's backup archives, each recorded against your identity.", reserved: false },
+  { id: "backup.restore", group: "Backups", label: "Restore", description: "Restore a backup, which opens a new wipe.", reserved: false },
+  { id: "world.manage", group: "Worlds", label: "Manage worlds", description: "Create, wipe, archive and permanently delete worlds, and change their game settings.", reserved: false },
+  { id: "access.read", group: "Access", label: "See access", description: "See who has access and which role they hold.", reserved: false },
+  { id: "access.manage", group: "Access", label: "Manage access", description: "Approve people, change their roles and delete identities.", reserved: false },
+  { id: "access.invite", group: "Access", label: "Invite people", description: "Invite a person to the panel by email.", reserved: false },
+  { id: "access.owner.grant", group: "Access", label: "Grant Owner", description: "Give or take the Owner role, and add direct grants.", reserved: true },
+];
 
 // server/games/minecraft/settings.json as the API serves it (ADR-0064); a test
 // holds the two together.
@@ -191,11 +216,12 @@ export function initialState(): DemoState {
       ],
     },
     roles: [
-      { id: "viewer", name: "Viewer", description: "Can see public server status and request access to play.", permissions: ["status.read"], system: true },
-      { id: "player", name: "Player", description: "Can view the server and control a game session.", permissions: ["status.read", "connection.read", "invitation.send", "session.start"], system: true },
-      { id: "operator", name: "Operator", description: "Can operate sessions, releases and the console.", permissions: ["status.read", "connection.read", "metrics.read", "console.use", "whitelist.manage", "release.read", "release.build", "backup.read", "invitation.send", "session.start", "session.stop"], system: true },
-      { id: "owner", name: "Owner", description: "Full access to Spawnpoint and its identities.", permissions: [...OWNER_PERMISSIONS], system: true },
+      { id: "viewer", name: "Viewer", description: "Can see coarse server status only.", permissions: ["status.read"], builtIn: true, protected: false, version: 1 },
+      { id: "player", name: "Player", description: "Can view connection details, start a session and invite players.", permissions: ["status.read", "connection.read", "session.start", "invitation.send"], builtIn: true, protected: false, version: 1 },
+      { id: "operator", name: "Operator", description: "Can operate sessions, console, metrics, releases and backups.", permissions: ["status.read", "connection.read", "session.start", "session.stop", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "release.read", "release.build", "backup.read"], builtIn: true, protected: false, version: 1 },
+      { id: "owner", name: "Owner", description: "Full access to Spawnpoint, including access management.", permissions: PERMISSION_CATALOGUE.map((entry) => entry.id), builtIn: true, protected: true, version: 1 },
     ],
+    defaultRoleId: "viewer",
     identities: [
       { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [], links: [{ platform: "telegram", value: "1780660807", handle: "drarzter", verified: true }, { platform: "minecraft", value: "DrArzter", handle: null, verified: true }, { platform: "zerotier", value: "b9bc15e2cf", handle: null, verified: true }] },
       { id: "identity-alex", displayName: "Alex", roleId: "player", directGrants: [], links: [{ platform: "telegram", value: "128381920", handle: null, verified: true }] },

@@ -6,7 +6,8 @@ import { ActiveSession, endSession, loadAppearance, loadControlPlane, requestBac
 import { startableReleases } from "./presets";
 import { sessionStatus } from "./status";
 import { formatDateTime } from "../lib/format";
-import type { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, Role, ServerState, SettingValue, World } from "../model";
+import type { RoleDirectory } from "./roles";
+import type { ControlPlaneSnapshot, Game, Member, OwnerBootstrap, Page, Preset, ServerState, SettingValue, World } from "../model";
 import { routeHash, type AppRoute } from "../routing";
 import { configuredHosts, deriveSharedHostSession, gameOperations, nextReadingExpiry, worldSessionActive, type SharedHostSession } from "../session";
 import { NO_PENDING, pendingOf, withoutPending, withPending, type Confirmation, type Pending, type PendingMap, type SessionAction, type WorldActionKind } from "../shell/actions";
@@ -156,8 +157,8 @@ export type ConsoleController = Readonly<{
   requestBuild: (game: Game, preset: Preset) => void;
   members: Member[];
   setMembers: (members: Member[]) => void;
-  roles: Role[];
-  setRoles: (roles: Role[]) => void;
+  roleDirectory: RoleDirectory;
+  setRoleDirectory: (directory: RoleDirectory) => void;
   bootstrap: OwnerBootstrap;
   appearance: AppearanceModel;
   signOut: () => void;
@@ -233,8 +234,13 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     .map((item) => ({ id: item.id, label: item.label, href: scoped(item.id) }));
   const page: Page = route.page === "profile" || navItems.some((item) => item.id === route.page) ? route.page : "worlds";
 
-  const [members, setMembers] = useState<Member[]>(() => [{ id: session.identity.id, name: session.identity.displayName, roleId: session.identity.roleId, links: [] }]);
-  const [roles, setRoles] = useState<Role[]>(() => (session.role ? [{ id: session.role.id, name: session.role.name, description: "Current signed-in role", permissions: session.role.permissions, system: true }] : []));
+  const [members, setMembers] = useState<Member[]>(() => [{ id: session.identity.id, name: session.identity.displayName, roleId: session.identity.roleId, links: [], canDelete: false }]);
+  // Until the role list loads, the signed-in role alone, so the profile can name it. Nothing in it is offered for choosing.
+  const [roleDirectory, setRoleDirectory] = useState<RoleDirectory>(() => ({
+    roles: session.role ? [{ id: session.role.id, name: session.role.name, description: "Current signed-in role", permissions: session.role.permissions, builtIn: false, protected: false, assignable: false }] : [],
+    permissions: [],
+    defaultRoleId: null,
+  }));
   const viewer = viewerOf(session);
   const bootstrap = bootstrapOf(session);
 
@@ -512,8 +518,8 @@ export function useConsole(session: ActiveSession, continuesBootCard: boolean, n
     requestBuild: (target, preset) => setConfirmation({ kind: "build", game: target, preset }),
     members,
     setMembers,
-    roles,
-    setRoles,
+    roleDirectory,
+    setRoleDirectory,
     bootstrap,
     appearance: appearanceModel,
     signOut: () => void endSession(),

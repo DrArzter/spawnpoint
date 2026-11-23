@@ -5,31 +5,25 @@ import test from "node:test";
 
 import { identityDeletionRefusal } from "../src/api/contract.ts";
 import type { SnackInput } from "../src/components/ui/Snackbar.tsx";
-import { deleteMember, deletionConfirmation, memberRemoval, type DeletionAuthority } from "../src/core/data.ts";
+import { deleteMember, deletionConfirmation, memberRemoval } from "../src/core/data.ts";
 import type { Member } from "../src/model.ts";
 import { noop } from "./support/fixtures.ts";
 
-const owner: Member = { id: "identity-owner", name: "DrArzter", roleId: "owner", links: [] };
-const otherOwner: Member = { id: "identity-alex", name: "Alex", roleId: "owner", links: [] };
-const viewer: Member = { id: "identity-mira", name: " Mira ", roleId: "viewer", links: [] };
+// The API decides who may be deleted and says so in `canDelete`; the web reads it and works out nothing.
+const owner: Member = { id: "identity-owner", name: "DrArzter", roleId: "role-a", links: [], canDelete: false };
+const viewer: Member = { id: "identity-mira", name: " Mira ", roleId: "role-b", links: [], canDelete: true };
 
-const manager: DeletionAuthority = { selfId: owner.id, canDelete: true, canDeleteOwner: false };
-
-test("delete is offered for another person, never for yourself", () => {
-  const remove = memberRemoval(viewer, manager, noop);
+test("delete is offered where the API says canDelete, with the same verb on every row", () => {
+  const remove = memberRemoval(viewer, noop);
   assert.equal(remove?.id, "access.delete");
   assert.equal(remove?.label, "Delete user");
   assert.equal(remove?.danger, true);
-  assert.equal(memberRemoval(owner, { ...manager, canDeleteOwner: true }, noop), null);
 });
 
-test("an Owner row is offered only to a caller who may grant Owner", () => {
-  assert.equal(memberRemoval(otherOwner, manager, noop), null);
-  assert.equal(memberRemoval(otherOwner, { ...manager, canDeleteOwner: true }, noop)?.id, "access.delete");
-});
-
-test("a caller without access.manage is offered no delete", () => {
-  assert.equal(memberRemoval(viewer, { ...manager, canDelete: false }, noop), null);
+test("delete is not offered where the API says the caller may not, whatever the role", () => {
+  assert.equal(memberRemoval(owner, noop), null);
+  assert.equal(memberRemoval({ ...viewer, roleId: owner.roleId, canDelete: false }, noop), null);
+  assert.equal(memberRemoval({ ...owner, canDelete: true }, noop)?.id, "access.delete");
 });
 
 test("the dialog says the plan's one line and waits for the trimmed name", () => {

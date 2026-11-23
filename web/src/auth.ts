@@ -3,7 +3,7 @@ import type { AppearancePreference, MetricRange, ReleaseModQuery, ReleasePackNam
 import { liveApi, liveAuthConfigured } from "./api/live";
 
 export type {
-  AccessCandidate, AccessIdentity, AccessInvitation, AccessRole, AccountProfile, ActiveSession, AppearancePreference, AuthState, BackupEntry,
+  AccessCandidate, AccessIdentity, AccessInvitation, AccessRole, AccessRoleDirectory, AccessPermission, AccountProfile, ActiveSession, AppearancePreference, AuthState, BackupEntry,
   BackupInventory, HostMetrics, HostMetricSeries, InvitationRecipient, InvitationSummary, LinkedLoginAccount, LinkedLoginAccounts, LoginOptions, LoginProviderId,
   IssuedAccessInvitation, MetricRange, OperationProgress, OperationStep, SessionOperation,
   SpawnpointApi, SpawnpointSession, SubscriptionState, VisitorSession, WorldLifecycleAction,
@@ -45,7 +45,7 @@ export const loadAccessInvitations = () => api.loadAccessInvitations();
 export const createAccessInvitation = (email: string | null) => api.createAccessInvitation(email);
 export const revokeAccessInvitation = (id: string) => api.revokeAccessInvitation(id);
 export const loadAccessCandidates = () => api.loadAccessCandidates();
-export const approveAccessCandidate = (platform: string, platformUserId: string, roleId: string) => api.approveAccessCandidate(platform, platformUserId, roleId);
+export const approveAccessCandidate = (platform: string, platformUserId: string, roleId?: string) => api.approveAccessCandidate(platform, platformUserId, roleId);
 export const dismissAccessCandidate = (platform: string, platformUserId: string) => api.dismissAccessCandidate(platform, platformUserId);
 export const loadAccessIdentities = () => api.loadAccessIdentities();
 export const loadAccessRoles = () => api.loadAccessRoles();

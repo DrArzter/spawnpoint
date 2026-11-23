@@ -135,10 +135,14 @@ export type ControlPlaneSnapshot = {
 /** A world's console and metrics are its own: several worlds of a game can run at once (ADR-0062). */
 export type WorldTab = "details" | "wipes" | "backups" | "releases" | "whitelist" | "console" | "metrics";
 
-export type Role = { id: string; name: string; description: string; permissions: string[]; system?: boolean };
+/** A role as the API serves it; `assignable` is the caller's own reading, so a skin never works out who may give what. */
+export type Role = { id: string; name: string; description: string; permissions: string[]; builtIn: boolean; protected: boolean; assignable: boolean };
+/** One permission of the served catalogue: the words every skin shows for it. */
+export type PermissionInfo = { id: string; group: string; label: string; description: string; reserved: boolean };
 export type LinkKind = "telegram" | "email" | "google" | "discord" | "minecraft" | "factorio" | "steam" | "zerotier";
 export type LinkedAccount = { id: string; kind: LinkKind; value: string; verified: boolean };
-export type Member = { id: string; name: string; roleId: string; links: LinkedAccount[] };
+/** `canDelete` is the backend's answer for this caller, not a rule the web works out. */
+export type Member = { id: string; name: string; roleId: string; links: LinkedAccount[]; canDelete: boolean };
 export type OwnerBootstrap =
   /** The viewer's own Telegram id, when they have one; the configured account is deployment configuration. */
   | { state: "unclaimed"; telegramId: string | null }

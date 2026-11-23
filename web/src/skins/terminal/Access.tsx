@@ -4,8 +4,8 @@ import { useFilter } from "../../components/ui/Filter";
 import type { AccessModel, CandidateRow, InvitationsModel, MemberRow, NotificationsModel, RolesModel, UsersModel } from "../../core/models";
 import { Icon, type IconName } from "../../icons";
 import { formatDateTime, plural } from "../../lib/format";
-import { describePermission } from "../../lib/permissions";
-import type { Game, LinkKind, Member, Role } from "../../model";
+import { protectedRoleName, rolePermissions, type RoleChoice } from "../../core/roles";
+import type { Game, LinkKind, Member, PermissionInfo, Role } from "../../model";
 import { ConfirmationDialog } from "./Dialogs";
 import { Col, Details, Drawer, Empty, Field, FilterRow, Ghost, Indicator, Key, LoadError, NoMatches, Notice, Overflow, Page, Panel, Person, SelectInput, SkeletonRows, State, Table, Tabs, TextInput, Toggle, Verb } from "./ui";
 
@@ -16,38 +16,35 @@ export function Access({ model }: Readonly<{ model: AccessModel }>) {
       <Tabs label="Access sections" onChange={model.setTab} options={[{ id: "users", label: "Users" }, { id: "roles", label: "Roles", count: model.roleCount || undefined }, { id: "notifications", label: "Notifications" }]} value={model.tab} />
       <div aria-live="polite" role="tabpanel">
         {model.tab === "users" && <Users model={model.users} />}
-        {model.tab === "roles" && <Roles model={model.roles} />}
+        {model.tab === "roles" && <Roles catalogue={model.catalogue} model={model.roles} />}
         {model.tab === "notifications" && <Notifications model={model.notifications} />}
       </div>
     </Page>
   );
 }
 
-function RoleSelect({ label, value, onChange, roles, disabled, excludeOwner = false, fallback }: Readonly<{ label: string; value: string; onChange: (roleId: string) => void; roles: readonly Role[]; disabled: boolean; excludeOwner?: boolean; fallback: string }>) {
-  const options = excludeOwner ? roles.filter((role) => role.id !== "owner") : roles;
+function RoleSelect({ label, choice, onChange }: Readonly<{ label: string; choice: RoleChoice; onChange: (roleId: string) => void }>) {
   return (
-    <SelectInput aria-label={label} className="t-select-inline" disabled={disabled} onChange={(event) => onChange(event.target.value)} value={value}>
-      {roles.length === 0 && <option value={value}>{fallback}</option>}
-      {options.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
+    <SelectInput aria-label={label} className="t-select-inline" disabled={choice.disabled} onChange={(event) => onChange(event.target.value)} value={choice.value}>
+      {choice.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
     </SelectInput>
   );
 }
 
 function Users({ model }: Readonly<{ model: UsersModel }>) {
   const [showBootstrap, setShowBootstrap] = useState(false);
-  const rolesBlocked = model.rolesLoading || model.roles.length === 0;
   const candidateColumns: readonly Col<CandidateRow>[] = [
     {
       id: "user",
       label: "User",
       render: (row) => <Person detail={<>{row.account} · {row.since}</>} name={row.candidate.displayName} photoUrl={row.candidate.photoUrl} />,
     },
-    { id: "role", label: "Role", align: "end", width: "180px", render: (row) => <RoleSelect disabled={rolesBlocked} excludeOwner fallback="Loading roles…" label={`Role for ${row.candidate.displayName}`} onChange={row.setRoleId} roles={model.roles} value={row.roleId} /> },
+    { id: "role", label: "Role", align: "end", width: "180px", render: (row) => <RoleSelect choice={row.role} label={`Role for ${row.candidate.displayName}`} onChange={row.setRoleId} /> },
     { id: "verbs", label: "Actions", verbs: true, width: "80px", render: (row) => <Overflow groups={[[row.approve, row.dismiss]]} label={`Actions for ${row.candidate.displayName}`} size="small" /> },
   ];
   const memberColumns: readonly Col<MemberRow>[] = [
     { id: "user", label: "User", render: (row) => <Person name={row.member.name} /> },
-    { id: "role", label: "Role", align: "end", width: "180px", render: (row) => <RoleSelect disabled={rolesBlocked || row.changing} fallback={row.roleId} label={`Role for ${row.member.name}`} onChange={row.setRoleId} roles={model.roles} value={row.roleId} /> },
+    { id: "role", label: "Role", align: "end", width: "180px", render: (row) => <RoleSelect choice={row.role} label={`Role for ${row.member.name}`} onChange={row.setRoleId} /> },
     { id: "verbs", label: "Actions", verbs: true, width: "80px", render: (row) => <Overflow groups={[[row.linkedAccounts], row.remove ? [row.remove] : []]} label={`Actions for ${row.member.name}`} menu size="small" /> },
   ];
   const candidates = model.candidates;
@@ -83,7 +80,7 @@ function Users({ model }: Readonly<{ model: UsersModel }>) {
       >
         <Details className="t-details-flush" items={[
           { label: "Telegram ID", value: model.bootstrap.telegramId ? <code>{model.bootstrap.telegramId}</code> : "Set in the deployment configuration" },
-          { label: "Role", value: "Owner" },
+          { label: "Role", value: protectedRoleName(model.roles) ?? "—" },
           ...(model.bootstrap.state === "claimed" ? [{ label: "Claimed", value: formatDateTime(model.bootstrap.claimedAt) }] : []),
         ]} label="Initial owner" />
         <div className="t-panel-foot">
@@ -189,7 +186,7 @@ function Invitations({ model }: Readonly<{ model: InvitationsModel }>) {
   );
 }
 
-function Roles({ model }: Readonly<{ model: RolesModel }>) {
+function Roles({ model, catalogue }: Readonly<{ model: RolesModel; catalogue: readonly PermissionInfo[] }>) {
   const roles = model.roles.status === "ready" ? model.roles.value : [];
   const filter = useFilter(roles, (item) => [item.name, item.description]);
   const columns: readonly Col<Role>[] = [
@@ -222,29 +219,29 @@ function Roles({ model }: Readonly<{ model: RolesModel }>) {
         open={model.reading !== null}
         title={model.reading?.name ?? "Role"}
       >
-        {model.reading && <RolePermissions key={model.reading.id} role={model.reading} />}
+        {model.reading && <RolePermissions catalogue={catalogue} key={model.reading.id} role={model.reading} />}
       </Drawer>
     </Page>
   );
 }
 
 function roleDescription(role: Role): string {
-  const kind = role.system ? "Built-in role" : "Custom role";
+  const kind = role.builtIn ? "Built-in role" : "Custom role";
   return `${kind} · ${plural(role.permissions.length, "permission")}`;
 }
 
 const SEARCHABLE_PERMISSIONS = 3;
 
-function RolePermissions({ role }: Readonly<{ role: Role }>) {
-  const permissions = [...role.permissions].sort((a, b) => a.localeCompare(b));
-  const filter = useFilter(permissions, (permission) => [permission, describePermission(permission)]);
+function RolePermissions({ role, catalogue }: Readonly<{ role: Role; catalogue: readonly PermissionInfo[] }>) {
+  const permissions = rolePermissions(catalogue, role);
+  const filter = useFilter(permissions, (permission) => [permission.id, permission.label, permission.description]);
   return (
     <div className="t-page">
       <p className="t-copy-line">{role.description}</p>
       {permissions.length > SEARCHABLE_PERMISSIONS && <FilterRow filter={filter} label="Search permissions" placeholder="Search by permission or description" plain />}
       {filter.rows.length === 0
         ? <NoMatches filter={filter} noun="permissions" />
-        : <Details className="t-details-code" items={filter.rows.map((permission) => ({ label: permission, value: describePermission(permission) ?? <Ghost>No description recorded for this permission.</Ghost> }))} label="Permissions" />}
+        : <Details className="t-details-code" items={filter.rows.map((permission) => ({ label: permission.id, value: permission.description ? <><strong>{permission.label}</strong> · {permission.description}</> : <Ghost>No description recorded for this permission.</Ghost> }))} label="Permissions" />}
     </div>
   );
 }

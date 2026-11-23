@@ -392,10 +392,9 @@ function createWorldHint(canManage: boolean, ready: boolean): string {
 }
 
 function AccessPage({ console, skin }: Controlled) {
-  const { games, members, setMembers, roles, setRoles, bootstrap, granted, session, route, navigate, notify } = console;
-  const rolesModel = useRoles(setRoles);
-  const authority = { selfId: session.identity.id, canDelete: granted.has("access.manage"), canDeleteOwner: granted.has("access.owner.grant") };
-  const users = useUsers({ bootstrap, canInvite: granted.has("access.invite"), authority, members, roles, rolesLoading: rolesModel.loading, onMembersChange: setMembers, notify });
+  const { games, members, setMembers, roleDirectory, setRoleDirectory, bootstrap, granted, route, navigate, notify } = console;
+  const rolesModel = useRoles(setRoleDirectory);
+  const users = useUsers({ bootstrap, canInvite: granted.has("access.invite"), members, directory: roleDirectory, onMembersChange: setMembers, notify });
   const notifications = useNotifications(games, notify);
   const candidates = users.candidates;
   const requestCount = candidates.status === "ready" ? candidates.value.length : null;
@@ -404,7 +403,8 @@ function AccessPage({ console, skin }: Controlled) {
   const model: AccessModel = {
     tab: route.accessTab,
     setTab: (tab) => navigate({ page: "access", accessTab: tab }),
-    roleCount: roles.length,
+    roleCount: roleDirectory.roles.length,
+    catalogue: roleDirectory.permissions,
     users,
     roles: rolesModel,
     notifications,
@@ -413,7 +413,7 @@ function AccessPage({ console, skin }: Controlled) {
 }
 
 function ProfilePage({ console, skin, looks }: Controlled & Readonly<{ looks: LookChoices }>) {
-  const { members, session, roles, viewer, appearance, notify } = console;
+  const { members, session, roleDirectory, viewer, appearance, notify } = console;
   const member = members.find((item) => item.id === session.identity.id) ?? members[0]!;
   const loginAccounts = useLoginAccounts(member.name, notify);
   const open = console.openInBrowser;
@@ -423,7 +423,7 @@ function ProfilePage({ console, skin, looks }: Controlled & Readonly<{ looks: Lo
   };
   return <skin.Profile model={{
     member,
-    role: roles.find((role) => role.id === member.roleId),
+    role: roleDirectory.roles.find((role) => role.id === member.roleId),
     viewer,
     appearance,
     look,

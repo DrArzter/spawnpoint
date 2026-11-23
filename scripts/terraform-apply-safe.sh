@@ -10,8 +10,13 @@ plan_json_file="${root_path}/production.tfplan.json"
 
 # shellcheck source=_terraform-destroy-allow.sh
 source "${repository_root}/scripts/_terraform-destroy-allow.sh"
-
+# shellcheck source=_anomaly-detection.sh
+source "${repository_root}/scripts/_anomaly-detection.sh"
+# shellcheck source=_github-subject.sh
+source "${repository_root}/scripts/_github-subject.sh"
 "${repository_root}/scripts/terraform-init-ci.sh" "${root}"
+decide_github_subject "${root}"
+decide_anomaly_detection "${root}" "${root_path}"
 terraform -chdir="${root_path}" plan -input=false -out="${plan_file}"
 terraform -chdir="${root_path}" show -json "${plan_file}" >"${plan_json_file}"
 

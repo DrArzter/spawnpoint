@@ -21,9 +21,10 @@ production workflow, which then verifies a zero-change read-only plan before it 
 
 ## Plan and apply
 
-Copy `backend.hcl.example` to ignored `backend.hcl`, replace the account ID, then:
+Write the ignored `backend.hcl` of every root with `scripts/write-backend-config.sh`, then:
 
 ```bash
+export TF_VAR_github_repository_subject=repo:<owner>/<name>
 terraform init -backend-config=backend.hcl
 terraform plan -out=identity-admin.tfplan
 terraform show identity-admin.tfplan
@@ -33,12 +34,12 @@ terraform apply identity-admin.tfplan
 The first apply creates exactly two resources: the role and its inline policy. Then, once:
 
 ```bash
-gh api --method PUT repos/DrArzter/spawnpoint/environments/production-identity \
+gh api --method PUT repos/<owner>/<name>/environments/production-identity \
   --input - <<'JSON'
-{"reviewers":[{"type":"User","id":102290466}],"prevent_self_review":false}
+{"reviewers":[{"type":"User","id":<owner-user-id>}],"prevent_self_review":false}
 JSON
 gh variable set AWS_IDENTITY_ROLE_ARN \
-  --repo DrArzter/spawnpoint \
+  --repo <owner>/<name> \
   --env production-identity \
   --body "$(terraform output -raw github_identity_admin_role_arn)"
 ```

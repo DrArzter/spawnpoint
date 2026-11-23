@@ -465,3 +465,8 @@ run "a_stop_refused_for_players_online_does_not_alarm" {
     error_message = "The rule needs a target to run."
   }
 }
+
+# The deploy workflows pass the repository they run in.
+variables {
+  repository_url = "https://github.com/example/spawnpoint.git"
+}

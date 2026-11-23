@@ -1,11 +1,16 @@
 # GitHub Actions identity
 
-This Terraform root owns three deliberately separate workflow identities. The release role is trusted by
-`DrArzter/my-docker-minecraft-server-config` on `main` and may start the fixed
+This Terraform root owns three deliberately separate workflow identities. The release role is trusted by the `main`
+branch of each config repository named in `github_subjects`, and may start the fixed
 `spawnpoint-build-release` Standard Workflow and inspect only that workflow's executions. It cannot invoke CodeBuild,
-read the CurseForge key, write S3 objects, start EC2, send SSM commands or promote a release.
+read the CurseForge key, write S3 objects, start EC2, send SSM commands or promote a release. With no config
+repository the role does not exist. CI reads the list from the `CONFIG_REPOSITORY_SUBJECTS` repository variable, a JSON
+list such as `["repo:owner/minecraft-config:ref:refs/heads/main"]`.
 
-The deployment role trusts only the immutable Spawnpoint repository identity and its `production` environment.
+The deployment role trusts only this repository's OIDC subject (`github_repository_subject`) and its `production`
+environment. The subject's form depends on the repository's settings: `repo:owner/name`, or `repo:owner@id/name@id`
+with immutable ids. CI reads it from its own token, so no owner or id is committed; a local apply passes it as
+`TF_VAR_github_repository_subject`.
 Its inline policy enumerates the read/create/update operations used by the current Terraform resources, limits IAM
 management to `spawnpoint-*` identities, and permits deletion only for Terraform state locks, obsolete static web
 assets, and the control-plane wiring a root may allow-list — API routes and integrations, Lambda permissions,
@@ -19,7 +24,7 @@ replacement unless the root's `destroy-allowed.txt` names the exact address — 
 The role may create the delegated Spawnpoint Route 53 zone and change records inside managed zones, but it cannot
 delete a hosted zone. The parent domain and its registration remain at Namecheap and outside AWS identity entirely.
 
-The plan role trusts only the immutable Spawnpoint repository identity and its owner-reviewed `production-plan`
+The plan role trusts only the same repository subject and its owner-reviewed `production-plan`
 environment. It can read Terraform state and infrastructure metadata, but cannot write a state lock, mutate AWS, or
 apply a plan. Pull requests use it only after an owner approves the environment gate; the resulting required check
 reports action counts and fails on deletes or replacements the root does not allow-list, without printing the state
@@ -43,9 +48,10 @@ the first workflow run immediately useful. It has no dependency on the game-host
 
 ## Plan and apply
 
-Copy `backend.hcl.example` to ignored `backend.hcl`, replace the account ID, then:
+Write the ignored `backend.hcl` of every root with `scripts/write-backend-config.sh`, then:
 
 ```bash
+export TF_VAR_github_repository_subject=repo:<owner>/<name>
 terraform init -backend-config=backend.hcl
 terraform plan -out=github.tfplan
 terraform show github.tfplan
@@ -60,28 +66,28 @@ After apply, copy the workflow outputs into GitHub repository **variables** (not
 
 ```bash
 gh variable set AWS_RELEASE_ROLE_ARN \
-  --repo DrArzter/my-docker-minecraft-server-config \
+  --repo <owner>/<config-repository> \
   --body "$(terraform output -raw github_release_role_arn)"
 
 gh variable set AWS_BUILD_RELEASE_STATE_MACHINE_ARN \
-  --repo DrArzter/my-docker-minecraft-server-config \
+  --repo <owner>/<config-repository> \
   --body "$(terraform output -raw build_release_state_machine_arn)"
 
 gh variable set AWS_PRESET_CATALOG_STATE_MACHINE_ARN \
-  --repo DrArzter/my-docker-minecraft-server-config \
+  --repo <owner>/<config-repository> \
   --body "$(terraform output -raw publish_preset_catalog_state_machine_arn)"
 
 gh variable set AWS_RELEASE_BUCKET \
-  --repo DrArzter/my-docker-minecraft-server-config \
+  --repo <owner>/<config-repository> \
   --body "$(terraform output -raw release_bucket_name)"
 ```
 
 For this repository, create the `production` environment and configure the deployment role:
 
 ```bash
-gh api --method PUT repos/DrArzter/spawnpoint/environments/production
+gh api --method PUT repos/<owner>/<name>/environments/production
 gh variable set AWS_DEPLOY_ROLE_ARN \
-  --repo DrArzter/spawnpoint \
+  --repo <owner>/<name> \
   --env production \
   --body "$(terraform output -raw github_deploy_role_arn)"
 ```

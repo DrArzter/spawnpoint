@@ -8,7 +8,7 @@ data "aws_caller_identity" "current" {}
 # be automated without the automation being able to widen its own reach.
 locals {
   account_id         = data.aws_caller_identity.current.account_id
-  identity_subject   = "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production-identity"
+  identity_subject   = "${var.github_repository_subject}:environment:production-identity"
   oidc_provider_arn  = "arn:aws:iam::${local.account_id}:oidc-provider/token.actions.githubusercontent.com"
   github_roles_arn   = "arn:aws:iam::${local.account_id}:role/spawnpoint-github-*"
   self_arn           = "arn:aws:iam::${local.account_id}:role/spawnpoint-github-identity-admin"

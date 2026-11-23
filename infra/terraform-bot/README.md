@@ -27,9 +27,8 @@ The notifier sends game invitations to individually verified linked addresses an
 invitation and recipient.
 
 The root also owns the log groups `/aws/lambda/spawnpoint-telegram-bot` and `/aws/lambda/spawnpoint-notifier`, with
-14-day retention, because both logs hold Telegram chat ids. Lambda created these groups without retention on the first
-invocation, so the root imports them (`adopt_lambda_log_groups = true`). In an account where neither function has
-run, set `adopt_lambda_log_groups = false`, or the plan fails on a group that does not exist.
+14-day retention, because both logs hold Telegram chat ids. Each function depends on its group, so Terraform creates
+the group before Lambda could create one without retention.
 
 Set `mini_app_url` explicitly to the public HTTPS endpoint for this installation. The hosted pipeline reads it from the
 `SPAWNPOINT_MINI_APP_URL` repository variable; self-hosted deployments may use their custom domain, generated CloudFront
@@ -50,7 +49,7 @@ terraform show bot.tfplan
 terraform apply bot.tfplan
 ```
 
-Create `backend.hcl` from the example with account `614934752397`. The expected
+Write `backend.hcl` with `scripts/write-backend-config.sh`. The expected
 first production plan is additive only: seven resources, zero changes and zero
 destroys. Registering the Telegram webhook is a separate explicit step after
 the URL exists; applying Terraform alone does not send a message or start EC2.

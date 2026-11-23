@@ -73,9 +73,8 @@ variable "egress_alarm_gib_per_hour" {
 }
 
 variable "repository_url" {
-  description = "Where a launched host checks this repository out from at first boot (ADR-0054, phase 12). Public, so the host needs no credential to read it."
+  description = "Where a launched host checks this repository out from at first boot (ADR-0054, phase 12). Public, so the host needs no credential to read it. The deploy workflows pass the repository they run in."
   type        = string
-  default     = "https://github.com/DrArzter/spawnpoint.git"
 
   validation {
     condition     = startswith(var.repository_url, "https://")

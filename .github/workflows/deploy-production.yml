@@ -91,6 +91,8 @@ jobs:
       TF_IN_AUTOMATION: "true"
       TF_VAR_aws_profile: ""
       TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      # The config repositories allowed to request release builds, as a JSON list of OIDC subjects.
+      TF_VAR_github_subjects: ${{ vars.CONFIG_REPOSITORY_SUBJECTS || '[]' }}
     steps:
       - name: Check out the tested commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 NOSONAR(githubactions:S7631) ref is main, never the triggering commit

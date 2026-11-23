@@ -34,10 +34,10 @@ jobs:
       TF_VAR_telegram_oidc_client_id: ${{ vars.TELEGRAM_OIDC_CLIENT_ID }}
       TF_VAR_google_oidc_client_id: ${{ vars.GOOGLE_OIDC_CLIENT_ID }}
       TF_VAR_session_signing_secret_parameter: ${{ vars.SESSION_SIGNING_SECRET_PARAMETER }}
-      TF_VAR_password_login_enabled: ${{ vars.PASSWORD_LOGIN_ENABLED }}
-      TF_VAR_password_registration_enabled: ${{ vars.PASSWORD_REGISTRATION_ENABLED }}
+      TF_VAR_password_login_enabled: ${{ vars.PASSWORD_LOGIN_ENABLED || 'true' }}
+      TF_VAR_password_registration_enabled: ${{ vars.PASSWORD_REGISTRATION_ENABLED || 'false' }}
       TF_VAR_email_delivery_provider: ${{ vars.EMAIL_DELIVERY_PROVIDER }}
-      TF_VAR_resend_api_key_parameter: ${{ vars.RESEND_API_KEY_PARAMETER }}
+      TF_VAR_resend_api_key_parameter: ${{ vars.RESEND_API_KEY_PARAMETER || '/spawnpoint/email/resend-api-key' }}
       TF_VAR_email_from: ${{ vars.RESEND_EMAIL_FROM }}
       TF_VAR_email_reply_to: ${{ vars.RESEND_EMAIL_REPLY_TO }}
       TF_VAR_placement: ${{ vars.SPAWNPOINT_PLACEMENT || 'single' }}
@@ -47,6 +47,9 @@ jobs:
       TF_VAR_release_storage_layout: ${{ vars.SPAWNPOINT_RELEASE_STORAGE_LAYOUT || 'legacy' }}
       TF_VAR_game_dns_zone_name: ${{ vars.SPAWNPOINT_GAME_DNS_ZONE || '' }}
       TF_VAR_game_dns_suffix: ${{ vars.SPAWNPOINT_GAME_DNS_SUFFIX || '' }}
+      # A launched host clones the repository this workflow runs in.
+      TF_VAR_repository_url: ${{ github.server_url }}/${{ github.repository }}.git
+      SPAWNPOINT_ANOMALY_DETECTION: ${{ vars.SPAWNPOINT_ANOMALY_DETECTION }}
       TF_VAR_app_commit: ${{ inputs.ref }}
       TF_VAR_alert_email: ${{ secrets.TF_VAR_ALERT_EMAIL }}
       TF_VAR_bootstrap_owner_telegram_id: ${{ secrets.TF_VAR_BOOTSTRAP_OWNER_TELEGRAM_ID }}

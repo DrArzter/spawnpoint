@@ -1,3 +1,7 @@
+variables {
+  github_repository_subject = "repo:example@1/spawnpoint@2"
+}
+
 mock_provider "aws" {
   override_during = plan
 
@@ -27,8 +31,8 @@ run "trusts_only_the_owner_approved_identity_environment" {
   command = plan
 
   assert {
-    condition     = local.identity_subject == "repo:DrArzter@102290466/spawnpoint@1330947749:environment:production-identity"
-    error_message = "The identity job must run under the immutable Spawnpoint repository identity and the production-identity environment."
+    condition     = local.identity_subject == "repo:example@1/spawnpoint@2:environment:production-identity"
+    error_message = "The identity job must run under this repository's subject and the production-identity environment."
   }
 
   assert {

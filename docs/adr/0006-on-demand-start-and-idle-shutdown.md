@@ -15,6 +15,8 @@
 > runs on-demand. A stop that silently fails can consume the finite Free Plan credits and then costs roughly **$91 a
 > month** at the current list rate. The mitigations below — running-hours alarm and hard session cap — remain the
 > cheapest insurance in the design. See [docs/costs.md](../costs.md).
+- Amended by: [ADR-0048](0048-one-instance-per-active-world.md) — One instance per active world, created for the session
+- Amended by: [ADR-0051](0051-restart-a-session-without-releasing-the-host.md) — Restart a session without releasing the host
 
 ## Context
 

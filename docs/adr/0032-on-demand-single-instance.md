@@ -7,6 +7,7 @@
   why a game server tolerates interruption is still worth reading; its purchase model is not the plan
 - Leaves standing: [ADR-0027](0027-spot-request-shape.md), which remains **Proposed, deferred**. Nothing here rejects
   Spot — it postpones it
+- Amended by: [ADR-0048](0048-one-instance-per-active-world.md) — One instance per active world, created for the session
 
 ## Context
 

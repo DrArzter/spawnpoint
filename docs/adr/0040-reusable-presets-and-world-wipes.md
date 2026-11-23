@@ -6,6 +6,8 @@
 - Amends: [ADR-0023](0023-multiple-worlds.md) and [ADR-0030](0030-desired-and-active-release.md)
 - Amended by: [ADR-0064](0064-let-a-world-carry-game-settings.md), for server settings only; mods stay in Git;
   [ADR-0077](0077-pin-extra-mods-on-top-of-an-upstream-modpack.md), which adds pinned mods to a modpack preset
+- Amended by: [ADR-0042](0042-preset-scoped-release-identity.md) — Release identity and storage are scoped by preset
+- Amended by: [ADR-0047](0047-normalize-preset-sources-before-building.md) — Normalize preset sources before building
 
 ## Context
 

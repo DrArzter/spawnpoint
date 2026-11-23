@@ -15,6 +15,7 @@
 - Relates: [ADR-0022](0022-minecraft-account-as-linked-identity.md) (`online-mode=false` is why a gate is needed),
   [ADR-0007](0007-ssm-instead-of-ssh.md), [ADR-0031](0031-first-class-local-control-plane.md) (the adapter boundary),
   and the per-game adapter recorded as a placeholder in [the index](README.md#decisions-still-to-record)
+- Amended by: [ADR-0054](0054-place-a-session-on-a-host-with-room.md) — Place a session on a host with room, or launch one that fits
 
 ## Context
 

@@ -17,8 +17,12 @@ were rejected, answers that far better than the finished code.
 ## Decision
 
 Record every non-obvious architecture decision as a numbered Markdown file in `docs/adr/`,
-using the format in [0000-template.md](0000-template.md). ADRs are immutable once accepted; a
-change of mind produces a new ADR that supersedes the old one.
+using the format in [0000-template.md](0000-template.md). The decision of an accepted ADR does not change; a
+change of mind produces a new ADR that supersedes the old one. An accepted ADR may take a dated `Amended on` line, or an
+`Amended by` link, when later work narrows or corrects what it says (see ADR-0010, ADR-0015, ADR-0030 and ADR-0042). The status line may
+also change to say what is built.
+
+Amended on 2026-11-23: the sentence "immutable once accepted" was too strong. Four ADRs had already taken dated amendments in place.
 
 A decision is worth an ADR when it is expensive to reverse, when a reasonable engineer would
 choose differently, or when it was reached after real comparison.

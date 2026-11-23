@@ -1,8 +1,9 @@
 # ADR-XXXX — Short title in the imperative
 
-- Status: Proposed | Accepted | Superseded by ADR-XXXX | Rejected
+- Status: Proposed | Proposed, deferred | Accepted | Accepted — partly | Superseded by ADR-XXXX | Rejected
 - Date: YYYY-MM-DD
 - Milestone: MX
+- Amended by: (optional) ADR-XXXX — what it changes. Add one line for each later ADR, and a dated `Amended on` line for a change made in place.
 
 ## Context
 

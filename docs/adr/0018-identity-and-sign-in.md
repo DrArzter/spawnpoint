@@ -13,6 +13,8 @@
 > being built. The open questions at the end of this ADR suspected they would not be worth it, and those two
 > ADRs are the answer: a one-time code links a chat account, and a bot-issued one-minute link signs an already
 > linked account in. Google is the only federated provider, and the only way a new identity is created.
+- Amended by: [ADR-0035](0035-bootstrap-first-owner.md) — Bootstrap the first Owner through one verified Google identity
+- Amended by: [ADR-0036](0036-observed-visitors-and-owner-approved-access.md) — Observe visitors, but let an Owner grant access
 
 ## Context
 

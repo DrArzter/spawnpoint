@@ -7,6 +7,7 @@
   revision records what it actually costs and what has to change because of it
 - Milestone: M4
 - Extends: [ADR-0019](0019-account-linking.md)
+- Amended by: [ADR-0066](0066-keep-a-world-whitelist-on-its-record.md) — Keep a world's whitelist on its record. The whitelist is on the world record; the derived list of this ADR is not built
 
 ## Context
 

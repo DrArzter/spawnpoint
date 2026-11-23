@@ -1,6 +1,6 @@
 # ADR-0015 — Session Grafana and Prometheus, CloudWatch for durable signals
 
-- Status: Accepted
+- Status: Accepted — partly built: the running-hours, workflow, egress and budget alarms exist; the restart-loop and data-volume alarms do not
 - Date: 2026-08-11
 - Milestone: M5
 - Amended on 2026-11-21: the data-volume alarm applies to the configured host only. A launched host keeps nothing

@@ -1,6 +1,6 @@
 # ADR-0076 — HTTP and telnet probe transports
 
-- Status: Proposed — HTTP implemented for Palworld; telnet not built yet
+- Status: Accepted — HTTP implemented for Palworld; telnet not built yet
 - Date: 2026-11-21
 - Milestone: cross-cutting, first used by the Palworld module
 - Relates: [ADR-0034](0034-per-game-adapter.md), [ADR-0006](0006-on-demand-start-and-idle-shutdown.md),

@@ -74,6 +74,8 @@
 # shellcheck disable=SC2034  # GAME_ID is set for consumers, read by its sourcers
 
 GAMES_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_legacy-game.sh
+source "${GAMES_DIR}/_legacy-game.sh"
 
 # Hooks every game must define. game_ready is not here: this file supplies it.
 GAME_REQUIRED_HOOKS=(
@@ -120,7 +122,7 @@ game_check_contract() {
 }
 
 load_game() {
-  local game_id="${1:-minecraft}"
+  local game_id="${1:-${LEGACY_GAME_ID}}"
   [[ "${game_id}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || {
     printf 'error: invalid game id: %s\n' "${game_id}" >&2
     exit 1
@@ -161,7 +163,7 @@ resolve_game() {
     load_world "${WORLD_ID}"
     load_game "${WORLD_GAME}"
   else
-    load_game "${SPAWNPOINT_GAME:-minecraft}"
+    load_game "${SPAWNPOINT_GAME:-${LEGACY_GAME_ID}}"
   fi
 }
 

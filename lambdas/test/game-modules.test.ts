@@ -37,3 +37,16 @@ test("the catalog and the footprints are the manifests' facts", () => {
     assert.deepEqual(gameFootprints[module.id], module.footprint);
   }
 });
+
+test("one module owns the records that name no game, and no Lambda source names a game", async () => {
+  const { LEGACY_GAME_ID } = await import("../src/control-plane/game-modules.ts");
+  assert.deepEqual(gameModules.filter((module) => module.legacyDefault).map((module) => module.id), [LEGACY_GAME_ID]);
+  const { readdir, readFile } = await import("node:fs/promises");
+  const source = new URL("../src/", import.meta.url);
+  const ids = gameModules.map((module) => module.id).join("|");
+  const literal = new RegExp(`["'\`](${ids})["'\`]`);
+  for (const name of (await readdir(source, { recursive: true })).filter((file) => file.endsWith(".ts"))) {
+    const text = await readFile(new URL(name, source), "utf8");
+    assert.doesNotMatch(text, literal, `${name} names a game; read it from the game's module instead (ADR-0088)`);
+  }
+});

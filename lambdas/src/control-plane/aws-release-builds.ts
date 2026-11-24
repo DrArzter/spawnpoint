@@ -3,6 +3,7 @@ import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient, StartExecut
 import { randomUUID } from "node:crypto";
 import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts";
 import { observeBuild, requestReleaseBuild, type BuildRequest, type BuildSource, type ReleaseBuildPorts } from "./release-builds.ts";
+import { gameModules } from "./game-modules.ts";
 
 const s3 = new S3Client({});
 const sfn = new SFNClient({});
@@ -82,15 +83,14 @@ export async function runningReleaseBuilds(): Promise<readonly RunningBuild[]> {
   return builds;
 }
 
-// A game without an entry here gets a repository name no catalog source matches.
-const CONFIG_REPOSITORY_GAMES: ReadonlyMap<string, string> = new Map([
-  ["minecraft", "minecraft"], ["factorio", "factorio"], ["zomboid", "zomboid"],
-]);
+// Each game whose presets build releases has its own configuration repository;
+// any other gets a repository name no catalog source matches.
+const CONFIG_REPOSITORY_GAMES: ReadonlySet<string> = new Set(gameModules.filter((module) => module.buildsReleases).map((module) => module.id));
 
 export function catalogBuildSource(value: unknown, gameId: string): BuildSource | null {
   if (parsePresetCatalog(value, gameId) === null) return null;
   const source = (value as { source: { repository: string; commit: string; snapshot?: { key?: unknown; sha256?: unknown } } }).source;
-  const repository = `DrArzter/my-docker-${CONFIG_REPOSITORY_GAMES.get(gameId) ?? "invalid"}-server-config`;
+  const repository = `DrArzter/my-docker-${CONFIG_REPOSITORY_GAMES.has(gameId) ? gameId : "invalid"}-server-config`;
   if (source.repository.replace(/\.git$/, "") !== `https://github.com/${repository}`) return null;
   const snapshot = source.snapshot;
   if (snapshot?.key !== `config-sources/${repository}/${source.commit}.tar.gz` || typeof snapshot.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(snapshot.sha256)) return null;

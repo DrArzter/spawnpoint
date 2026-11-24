@@ -5,6 +5,9 @@
 
 set -Eeuo pipefail
 
+# shellcheck source=../server/games/_legacy-game.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../server/games/_legacy-game.sh"
+
 repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/_config-source.sh
 source "${repository_root}/scripts/_config-source.sh"
@@ -45,17 +48,17 @@ game=""
 for profile in "${profiles[@]}"; do
   directory="$(dirname -- "${profile}")"
   directory_id="$(basename -- "${directory}")"
-  jq -e --arg id "${directory_id}" '
+  jq -e --arg legacy_game "${LEGACY_GAME_ID}" --arg id "${directory_id}" '
     .schema_version == 1
     and .id == $id
     and (.id | test("^[a-z0-9][a-z0-9-]{0,31}$"))
     and (.display_name | type == "string" and length > 0 and length <= 80)
-    and ((.game // "minecraft") | test("^[a-z0-9][a-z0-9-]{0,31}$"))
+    and ((.game // $legacy_game) | test("^[a-z0-9][a-z0-9-]{0,31}$"))
   ' "${profile}" >/dev/null || {
     printf 'error: invalid profile metadata: %s\n' "${directory_id}" >&2
     exit 1
   }
-  profile_game="$(jq -r '.game // "minecraft"' "${profile}")"
+  profile_game="$(jq -r --arg legacy_game "${LEGACY_GAME_ID}" '.game // $legacy_game' "${profile}")"
   if [[ -z "${game}" ]]; then
     game="${profile_game}"
   elif [[ "${profile_game}" != "${game}" ]]; then
@@ -148,8 +151,8 @@ discover_published_releases() {
     jq -e --arg id "${id}" '.presets | any(.id == $id)' "${catalog}" >/dev/null || continue
     manifest="${workspace}/discovered-manifest.json"
     aws s3api get-object --bucket "${RELEASE_BUCKET}" --key "${key}" "${manifest}" >/dev/null 2>&1 || continue
-    jq -ce --arg game "${game}" --arg id "${id}" --arg release "${release}" --argjson listed "${listed}" '
-      select((.game // "minecraft") == $game and .release == $release and .source_profile.id == $id
+    jq -ce --arg legacy_game "${LEGACY_GAME_ID}" --arg game "${game}" --arg id "${id}" --arg release "${release}" --argjson listed "${listed}" '
+      select((.game // $legacy_game) == $game and .release == $release and .source_profile.id == $id
         and (.source_profile.commit | type == "string" and test("^[0-9a-f]{40}$")) and (.created_at | type == "string"))
       | {id: $id, release: $release, created_at: .created_at, source_commit: .source_profile.commit, listed: $listed}
     ' "${manifest}" >>"${found}" || true

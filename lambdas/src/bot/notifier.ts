@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import { renderAlert } from "../domain/alerts.ts";
 import { parseAccessApprovedEvent, renderAccessApproved } from "../domain/access-events.ts";
 import { invitationDeliveryStatus, parseInvitationEvent, renderInvitation, renderInvitationEmail, type InvitationEvent } from "../domain/invitations.ts";
+import { gameModules, LEGACY_GAME_ID } from "../control-plane/game-modules.ts";
 import { notificationSubscriptionKey, parseExecutionEvent, renderNotification } from "../domain/notifications.ts";
 import { parseChatIds } from "../domain/telegram-bot.ts";
 import { SESv2Client } from "@aws-sdk/client-sesv2";
@@ -16,6 +17,8 @@ import type { EmailSender } from "../email/email-sender.ts";
 import { configuredEmailSender } from "../email/email-delivery.ts";
 import { env, parameter } from "./services/aws.ts";
 import { claimInvitationDelivery, completeInvitationDelivery, subscribedNotificationTargets, subscribedTelegramChatIds } from "./services/subscribers.ts";
+
+const knownGames = { ids: gameModules.map((module) => module.id), legacy: LEGACY_GAME_ID };
 
 type SnsEvent = Readonly<{
   Records?: ReadonlyArray<{ Sns?: { Subject?: string | null; Message?: string } }>;
@@ -170,7 +173,7 @@ async function notifyExecution(event: EventBridgeEvent): Promise<void> {
   }
   const text = renderNotification(parsed);
   if (text === null) return;
-  const subscriptionKey = notificationSubscriptionKey(parsed);
+  const subscriptionKey = notificationSubscriptionKey(parsed, knownGames);
   if (subscriptionKey === null) {
     await sendToTargets(text, await configuredChatIds());
     return;

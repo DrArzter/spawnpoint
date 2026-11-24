@@ -10,6 +10,9 @@
 
 set -Eeuo pipefail
 
+# shellcheck source=../server/games/_legacy-game.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../server/games/_legacy-game.sh"
+
 REPOSITORY_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_SCRIPTS="${REPOSITORY_ROOT}/server/scripts"
 # shellcheck source=_hold-release.sh
@@ -54,7 +57,7 @@ mods_dir="$3"
 release="$4"
 minecraft_version="$5"
 loader_version="$6"
-game="${7:-minecraft}"
+game="${7:-${LEGACY_GAME_ID}}"
 
 export AWS_PROFILE="${AWS_PROFILE:-spawnpoint}"
 export AWS_REGION="${AWS_REGION:-eu-central-1}"

@@ -2,6 +2,8 @@
 // builder writes the same model as plan.json (server/scripts/plan-release.sh);
 // both are held to the shared fixtures in server/tests/fixtures/release-plan.
 
+import { LEGACY_GAME_ID } from "./game-modules.ts";
+
 export type PlanMod = Readonly<{ file: string; sha256: string; bytes: number; side?: string; mod_ids?: readonly string[] }>;
 export type PlanOverride = Readonly<{ path: string; sha256: string; bytes: number }>;
 export type PlanChange<T> = Readonly<{ from: T; to: T }>;
@@ -192,7 +194,7 @@ export function releasePlan(nextValue: unknown, previousValue: unknown | null): 
   const byId = modIndex(next) !== null && modIndex(old) !== null;
   return {
     schema_version: 1,
-    game: text(next.game) ?? "minecraft",
+    game: text(next.game) ?? LEGACY_GAME_ID,
     preset: text(record(next.source_profile)?.id),
     release: next.release as string,
     previous_release: first ? null : old.release as string,

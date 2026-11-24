@@ -9,6 +9,9 @@
 
 set -Eeuo pipefail
 
+# shellcheck source=../games/_legacy-game.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../games/_legacy-game.sh"
+
 usage() {
   cat >&2 <<'EOF'
 usage: plan-release.sh <new-manifest> <previous-manifest | none>
@@ -132,7 +135,7 @@ $new[0] as $n |
 ((($n.mod_index // null) != null) and (($o.mod_index // null) != null)) as $by_id |
 {
   schema_version: 1,
-  game: ($n.game // "minecraft"),
+  game: ($n.game // $legacy_game),
   preset: ($n.source_profile.id // null),
   release: $n.release,
   previous_release: (if $first then null else $o.release end),
@@ -149,7 +152,7 @@ JQ
 
 output_tmp="$(mktemp "$(dirname -- "${output}")/.plan.XXXXXX")"
 trap 'rm -f -- "${output_tmp}"' EXIT
-jq -n --slurpfile new "${new_manifest}" --slurpfile previous "${previous_manifest}" "${plan_program}" >"${output_tmp}"
+jq -n --arg legacy_game "${LEGACY_GAME_ID}" --slurpfile new "${new_manifest}" --slurpfile previous "${previous_manifest}" "${plan_program}" >"${output_tmp}"
 chmod 0644 "${output_tmp}"
 mv -- "${output_tmp}" "${output}"
 

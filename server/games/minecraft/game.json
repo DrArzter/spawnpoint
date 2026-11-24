@@ -2,6 +2,7 @@
   "id": "minecraft",
   "code": "MC",
   "display_name": "Minecraft",
+  "legacy_default": true,
   "connect": {
     "port": 25565,
     "protocol": "tcp",

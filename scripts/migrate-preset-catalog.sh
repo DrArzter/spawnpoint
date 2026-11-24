@@ -8,6 +8,9 @@
 
 set -Eeuo pipefail
 
+# shellcheck source=../server/games/_legacy-game.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../server/games/_legacy-game.sh"
+
 profile="${AWS_PROFILE:-spawnpoint}"
 region="${AWS_REGION:-eu-central-1}"
 apply=false
@@ -57,7 +60,7 @@ for manifest_key in "${manifest_keys[@]}"; do
   legacy_manifest="${workspace}/legacy-${release}.json"
   aws s3api get-object --profile "${profile}" --region "${region}" \
     --bucket "${RELEASE_BUCKET}" --key "${manifest_key}" "${legacy_manifest}" >/dev/null
-  jq -e --arg game "${game}" '(.game // "minecraft") == $game and (.source_profile.id | type == "string")' \
+  jq -e --arg legacy_game "${LEGACY_GAME_ID}" --arg game "${game}" '(.game // $legacy_game) == $game and (.source_profile.id | type == "string")' \
     "${legacy_manifest}" >/dev/null || continue
   jq -cn --arg id "$(jq -r '.source_profile.id' "${legacy_manifest}")" --arg release "${release}" \
     '{id: $id, release: $release}' >>"${discovered_releases}"

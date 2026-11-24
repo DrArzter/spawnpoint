@@ -2,6 +2,9 @@
 
 set -Eeuo pipefail
 
+# shellcheck source=../games/_legacy-game.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../games/_legacy-game.sh"
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_common.sh
 source "${SCRIPT_DIR}/_common.sh"
@@ -43,14 +46,14 @@ fi
 mkdir -p -- "${target_parent}"
 [[ ! -L "${target_dir}" ]] || die "target mod directory must not be a symlink: ${target_dir}"
 
-if ! jq -e '
+if ! jq -e --arg legacy_game "${LEGACY_GAME_ID}" '
   .schema_version == 1 and
   (.release | type == "string" and test("^[0-9]+\\.[0-9]+$")) and
   (.minecraft_version | type == "string" and length > 0) and
-  (((.game // "minecraft") == "minecraft" and (.loader.type | IN("vanilla", "forge", "neoforge", "fabric", "quilt"))) or
-   ((.game // "minecraft") == "factorio" and .loader.type == "factorio")) and
+  (((.game // $legacy_game) == "minecraft" and (.loader.type | IN("vanilla", "forge", "neoforge", "fabric", "quilt"))) or
+   ((.game // $legacy_game) == "factorio" and .loader.type == "factorio")) and
   (.loader.version | type == "string" and length > 0) and
-  (if (.game // "minecraft") == "factorio"
+  (if (.game // $legacy_game) == "factorio"
     then (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$"))
     else ((has("runtime") | not) or
       (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$")))

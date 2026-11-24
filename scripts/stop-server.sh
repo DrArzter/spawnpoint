@@ -2,6 +2,9 @@
 
 set -Eeuo pipefail
 
+# shellcheck source=../server/games/_legacy-game.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../server/games/_legacy-game.sh"
+
 profile="${AWS_PROFILE:-spawnpoint}"
 region="${AWS_REGION:-eu-central-1}"
 follow=true
@@ -12,7 +15,7 @@ world_id="${SPAWNPOINT_WORLD:-world}"
 server_id="${SPAWNPOINT_SERVER_ID:-}"
 
 game_for_world() {
-  jq -r --arg id "$1" '.worlds[] | select(.id == $id) | .game // "minecraft"' \
+  jq -r --arg legacy_game "${LEGACY_GAME_ID}" --arg id "$1" '.worlds[] | select(.id == $id) | .game // $legacy_game' \
     "$(dirname -- "${BASH_SOURCE[0]}")/../server/worlds/catalog.json"
 }
 

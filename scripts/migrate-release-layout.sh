@@ -7,6 +7,9 @@
 
 set -Eeuo pipefail
 
+# shellcheck source=../server/games/_legacy-game.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../server/games/_legacy-game.sh"
+
 profile="${AWS_PROFILE:-spawnpoint}"
 region="${AWS_REGION:-eu-central-1}"
 apply=false
@@ -43,8 +46,8 @@ trap cleanup EXIT
 manifest="${workspace}/manifest.json"
 aws s3api get-object --profile "${profile}" --region "${region}" \
   --bucket "${RELEASE_BUCKET}" --key "${legacy_prefix}/manifest.json" "${manifest}" >/dev/null
-jq -e --arg game "${game}" --arg preset "${preset}" --arg release "${release}" '
-  .schema_version == 1 and (.game // "minecraft") == $game and .release == $release and .source_profile.id == $preset
+jq -e --arg legacy_game "${LEGACY_GAME_ID}" --arg game "${game}" --arg preset "${preset}" --arg release "${release}" '
+  .schema_version == 1 and (.game // $legacy_game) == $game and .release == $release and .source_profile.id == $preset
 ' "${manifest}" >/dev/null || {
   printf 'error: legacy manifest does not identify %s/%s@%s\n' "${game}" "${preset}" "${release}" >&2
   exit 1

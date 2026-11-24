@@ -8,6 +8,8 @@ WORLD_SERVER_DIR="$(cd -- "${WORLD_SCRIPT_DIR}/.." && pwd)"
 
 # shellcheck source=_connectivity.sh
 source "${WORLD_SCRIPT_DIR}/_connectivity.sh"
+# shellcheck source=../games/_legacy-game.sh
+source "${WORLD_SCRIPT_DIR}/../games/_legacy-game.sh"
 default_world_catalog="${WORLD_SERVER_DIR}/worlds/catalog.json"
 [[ ! -f "${WORLD_SERVER_DIR}/runtime/world-catalog.json" ]] || default_world_catalog="${WORLD_SERVER_DIR}/runtime/world-catalog.json"
 WORLD_CATALOG="$(realpath -e -- "${SPAWNPOINT_WORLD_CATALOG:-${default_world_catalog}}")"
@@ -31,7 +33,7 @@ validate_world_catalog() {
       (.id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
       (.display_name | type == "string" and length > 0) and
       (.profile_id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
-      ((.game // "minecraft") | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
+      ((has("game") | not) or (.game | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$"))) and
       ((.host // "primary") | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
       ((has("profile_source") | not) or (
         (.profile_source.repository | type == "string" and length > 0) and
@@ -76,7 +78,7 @@ validate_world_catalog() {
   local entry entry_id entry_game entry_connectivity entry_auth
   while IFS= read -r entry; do
     entry_id="$(jq -r '.id' <<<"${entry}")"
-    entry_game="$(jq -r '.game // "minecraft"' <<<"${entry}")"
+    entry_game="$(jq -r --arg legacy_game "${LEGACY_GAME_ID}" '.game // $legacy_game' <<<"${entry}")"
     entry_connectivity="$(jq -r '.connectivity // "zerotier"' <<<"${entry}")"
     entry_auth="$(jq -r '.auth // empty' <<<"${entry}")"
     [[ -n "${entry_auth}" ]] || entry_auth="$(game_default_auth "${WORLD_SERVER_DIR}/games" "${entry_game}")"
@@ -116,9 +118,9 @@ load_world() {
   WORLD_ID="${requested_world_id}"
   WORLD_DISPLAY_NAME="$(jq -r '.display_name' <<<"${match}")"
   WORLD_PROFILE_ID="$(jq -r '.profile_id' <<<"${match}")"
-  # Absent means minecraft: every world that predates the game axis keeps its
-  # exact pre-axis behaviour.
-  WORLD_GAME="$(jq -r '.game // "minecraft"' <<<"${match}")"
+  # Absent means the legacy game (ADR-0089): every world that predates the
+  # game axis keeps its exact pre-axis behaviour.
+  WORLD_GAME="$(jq -r --arg legacy_game "${LEGACY_GAME_ID}" '.game // $legacy_game' <<<"${match}")"
   # Topology is data: which host a world runs on is a catalog fact, so the day
   # a second host exists, nothing but this value changes. "primary" is the one
   # host that exists today.

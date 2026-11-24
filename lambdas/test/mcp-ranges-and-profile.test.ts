@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 process.env.ACCESS_TABLE_NAME ??= "spawnpoint-access-test";
@@ -19,9 +18,6 @@ test("every MCP surface offers exactly the ranges the metrics API answers", asyn
   const tool = mcpTools.find((item) => item.name === "get_host_metrics");
   const schema = tool?.inputSchema as { properties?: { range?: { enum?: readonly string[] } } } | undefined;
   assert.deepEqual(schema?.properties?.range?.enum, METRIC_RANGE_NAMES);
-  const standalone = await readFile(new URL("../../mcp/src/server.ts", import.meta.url), "utf8");
-  const offered = /range: z\.enum\(\[([^\]]*)\]\)/.exec(standalone)?.[1]?.split(",").map((item) => item.trim().replaceAll('"', ""));
-  assert.deepEqual(offered, METRIC_RANGE_NAMES, "mcp/src/server.ts must offer the API's ranges");
   assert.equal((await hostMetrics("i-0123456789abcdef0", "1h")).statusCode, 400, "a range no surface offers is refused");
 });
 

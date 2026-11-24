@@ -6,6 +6,7 @@
     "build": "bash scripts/build.sh",
     "test": "node --test test/*.test.ts",
     "typecheck": "tsc --project tsconfig.json",
+    "export-mcp-tools": "node scripts/export-mcp-tools.ts",
     "launch-requirements": "node tools/launch-requirements.ts"
   },
   "dependencies": {

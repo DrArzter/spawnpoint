@@ -107,3 +107,10 @@ test("the console tool sends one command, and the result tool picks that command
   await client.close();
   await server.close();
 });
+
+test("the server handles exactly the tools the generated JSON names", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { toolCalls } = await import("../dist/server.js");
+  const declared = JSON.parse(await readFile(new URL("../src/tools.generated.json", import.meta.url), "utf8")).map((tool) => tool.name);
+  assert.deepEqual(Object.keys(toolCalls).sort(), [...declared].sort());
+});

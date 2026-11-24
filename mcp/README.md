@@ -17,6 +17,8 @@ Spawnpoint exposes the same tool contract through the production remote MCP endp
 - `start_world`
 - `stop_world`
 
+Tool names, descriptions and input schemas are declared once, in `lambdas/src/access/mcp-tools.ts`. After you change them, run `npm run export-mcp-tools` in `lambdas/` and commit `mcp/src/tools.generated.json`. A Lambda test fails when that file is stale.
+
 The first version deliberately omits restore, wipe, purge, access management and release promotion. Those actions need a narrower confirmation contract before an agent receives them. The console relies on the connection being yours and on your client asking before each command; see the [ADR-0063 amendment](../docs/adr/0063-run-console-commands-through-one-ssm-document.md#amendment--the-console-through-mcp-2026-10-09).
 
 ## Build

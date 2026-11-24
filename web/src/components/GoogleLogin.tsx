@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
-import { AuthState, exchangeGoogleOidc, googleOidcClientId } from "../auth";
+import { useApi, useSignInConfig } from "../api/context";
+import type { AuthState } from "../api/contract";
 import { Button } from "./ui/Button";
 import { Skeleton } from "./ui/Skeleton";
 
@@ -74,6 +75,8 @@ export function GoogleLoginButton({ onChange, onToken, className }: Readonly<{
   onToken?: (idToken: string) => Promise<void>;
   className?: string;
 }>) {
+  const api = useApi();
+  const { googleClientId } = useSignInConfig();
   const mounted = useRef(true);
   const box = useRef<HTMLDivElement>(null);
   const slot = useRef<HTMLDivElement>(null);
@@ -91,7 +94,7 @@ export function GoogleLoginButton({ onChange, onToken, className }: Readonly<{
 
   useEffect(() => {
     mounted.current = true;
-    if (!GOOGLE_CLIENT_ID.test(googleOidcClientId)) {
+    if (!GOOGLE_CLIENT_ID.test(googleClientId)) {
       setLoginError("Google sign-in is missing its client ID.");
       return;
     }
@@ -107,13 +110,13 @@ export function GoogleLoginButton({ onChange, onToken, className }: Readonly<{
           .finally(() => { if (mounted.current) setBusy(false); });
       } else if (onChangeRef.current !== undefined) {
         onChangeRef.current({ status: "loading" });
-        void exchangeGoogleOidc(response.credential).then((state) => onChangeRef.current?.(state));
+        void api.exchangeGoogleOidc(response.credential).then((state) => onChangeRef.current?.(state));
       }
     };
     loadGoogleIdentity()
       .then((library) => {
         if (!mounted.current) return;
-        library.initialize({ client_id: googleOidcClientId, callback: complete, auto_select: false });
+        library.initialize({ client_id: googleClientId, callback: complete, auto_select: false });
         identity.current = library;
         setReady(true);
       })

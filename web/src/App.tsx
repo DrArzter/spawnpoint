@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 
-import { AuthState, restoreAuth } from "./auth";
+import { useApi } from "./api/context";
+import type { AuthState } from "./api/contract";
 import { SnackbarProvider } from "./components/ui/Snackbar";
 import { ConsoleRoot } from "./core/Console";
 import { isLandingHash, isRootHash, readAccessInvitationRoute, readEmailActionRoute, readMcpConnectRoute } from "./routing";
@@ -15,6 +16,7 @@ import { chooseSkin, currentSkinId, isSkinId, SKIN_CHOICES, wearOnDocument, wear
 // The gate in front of the console: who is here, and which door they came
 // through. The console itself is bones under a skin (core/Console.tsx).
 export function App() {
+  const api = useApi();
   const [auth, setAuth] = useState<AuthState>({ status: "loading" });
   const [atLanding, setAtLanding] = useState(() => isLandingHash());
   const [joinToken, setJoinToken] = useState(() => readAccessInvitationRoute());
@@ -26,7 +28,7 @@ export function App() {
 
   useEffect(() => {
     let active = true;
-    restoreAuth()
+    api.restoreSession()
       .then((state) => publish(() => {
         if (!active) return;
         setAuth(state);

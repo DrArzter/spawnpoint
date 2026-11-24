@@ -1,16 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 
-import {
-  AuthState,
-  googleOidcClientId,
-  loadLoginOptions,
-  LoginOptions,
-  registerWithPassword,
-  requestPasswordReset,
-  resendEmailVerification,
-  signInWithPassword,
-  telegramOidcClientId,
-} from "../auth";
+import { useApi, useSignInConfig } from "../api/context";
+import type { AuthState, LoginOptions } from "../api/contract";
 import { DISPLAY_NAME_MAXIMUM_LENGTH, PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../lib/signin";
 import { GOOGLE_CLIENT_ID, GoogleLoginButton } from "./GoogleLogin";
 import { TelegramLoginButton } from "./TelegramLogin";
@@ -37,6 +28,8 @@ export function SignInPanel({ onChange, onModeChange, initialMode = "sign-in", i
   initialMode?: SignInMode;
   invitationToken?: string;
 }>) {
+  const api = useApi();
+  const { telegramClientId, googleClientId } = useSignInConfig();
   const [options, setOptions] = useState<LoginOptions | null>(null);
   const [mode, setMode] = useState<SignInMode>(initialMode);
   const [email, setEmail] = useState("");
@@ -48,7 +41,7 @@ export function SignInPanel({ onChange, onModeChange, initialMode = "sign-in", i
 
   useEffect(() => {
     let active = true;
-    void loadLoginOptions().then((offered) => { if (active) setOptions(offered); });
+    void api.loadLoginOptions().then((offered) => { if (active) setOptions(offered); });
     return () => { active = false; };
   }, []);
 
@@ -57,8 +50,8 @@ export function SignInPanel({ onChange, onModeChange, initialMode = "sign-in", i
   const recovering = mode === "forgot" && options?.emailActions === true;
   const passwordOffered = options?.providers.includes("password") ?? false;
   // A provider needs both the API to accept it and this build to know its public client id.
-  const telegramOffered = (options?.providers.includes("telegram") ?? false) && /^[1-9]\d+$/.test(telegramOidcClientId);
-  const googleOffered = (options?.providers.includes("google") ?? false) && GOOGLE_CLIENT_ID.test(googleOidcClientId);
+  const telegramOffered = (options?.providers.includes("telegram") ?? false) && /^[1-9]\d+$/.test(telegramClientId);
+  const googleOffered = (options?.providers.includes("google") ?? false) && GOOGLE_CLIENT_ID.test(googleClientId);
   const alternativesOffered = telegramOffered || googleOffered;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -67,13 +60,13 @@ export function SignInPanel({ onChange, onModeChange, initialMode = "sign-in", i
     setBusy(true);
     try {
       if (registering) {
-        const result = await registerWithPassword(email, password, displayName, invitationToken);
+        const result = await api.registerWithPassword(email, password, displayName, invitationToken);
         setSent({ kind: "verification", email: result.email });
       } else if (recovering) {
-        await requestPasswordReset(email);
+        await api.requestPasswordReset(email);
         setSent({ kind: "reset", email });
       } else {
-        onChange(await signInWithPassword(email, password));
+        onChange(await api.signInWithPassword(email, password));
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Sign-in did not complete. Try again.");
@@ -106,7 +99,7 @@ export function SignInPanel({ onChange, onModeChange, initialMode = "sign-in", i
           <Button disabled={busy} onClick={() => {
             setBusy(true);
             setError("");
-            void resendEmailVerification(sent.email, invitationToken)
+            void api.resendEmailVerification(sent.email, invitationToken)
               .catch((cause) => setError(cause instanceof Error ? cause.message : "A new verification email could not be sent."))
               .finally(() => setBusy(false));
           }} variant="outlined">Send another link</Button>

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 
-import { AuthState, resetPassword, verifyEmail } from "../auth";
+import { useApi } from "../api/context";
+import type { AuthState } from "../api/contract";
 import { Button } from "../components/ui/Button";
 import { TextField } from "../components/ui/Fields";
 import { PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../lib/signin";
@@ -14,6 +15,7 @@ function screenTitle(kind: EmailActionRoute["kind"], status: "working" | "form" 
 }
 
 export function EmailActionScreen({ action, onAuth }: Readonly<{ action: EmailActionRoute; onAuth: (state: AuthState) => void }>) {
+  const api = useApi();
   const [status, setStatus] = useState<"working" | "form" | "done" | "error">(action.kind === "verify-email" ? "working" : "form");
   const [message, setMessage] = useState("");
   const [password, setPassword] = useState("");
@@ -27,7 +29,7 @@ export function EmailActionScreen({ action, onAuth }: Readonly<{ action: EmailAc
       return;
     }
     let active = true;
-    void verifyEmail(action.token)
+    void api.verifyEmail(action.token)
       .then((auth) => {
         if (!active) return;
         onAuth(auth);
@@ -55,7 +57,7 @@ export function EmailActionScreen({ action, onAuth }: Readonly<{ action: EmailAc
     }
     setStatus("working");
     try {
-      await resetPassword(action.token, password);
+      await api.resetPassword(action.token, password);
       setStatus("done");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Your password could not be reset.");

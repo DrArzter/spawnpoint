@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 
-import { authConfigured, AuthState, endSession, loadLoginOptions } from "../auth";
+import { useApi, useSignInConfig } from "../api/context";
+import type { AuthState } from "../api/contract";
+import { endSession } from "../api/end-session";
 import { Avatar } from "../components/Avatar";
 import { SignInMode, SignInPanel } from "../components/SignIn";
 import { Button, IconButton } from "../components/ui/Button";
@@ -26,8 +28,10 @@ const SIGN_IN_TITLE: Record<SignInMode, string> = {
 };
 
 export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; onChange: (state: AuthState) => void }>) {
+  const api = useApi();
+  const signInConfig = useSignInConfig();
   const { theme, cycle, label } = useAppearance();
-  const configured = authConfigured();
+  const configured = signInConfig.configured;
   const session = auth.status === "authenticated" && auth.session.state === "active" ? auth.session : null;
   const visitor = auth.status === "authenticated" && auth.session.state === "visitor" ? auth.session : null;
   const [signIn, setSignIn] = useState<SignInMode | null>(null);
@@ -37,7 +41,7 @@ export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; on
   useEffect(() => {
     if (!signedOut || !configured) return;
     let active = true;
-    void loadLoginOptions().then((options) => {
+    void api.loadLoginOptions().then((options) => {
       if (active) setPasswordRegistrationOffered(options.selfRegistration.includes("password"));
     });
     return () => { active = false; };
@@ -62,7 +66,7 @@ export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; on
                 { id: "console", label: "Open the console", detail: session.role?.name ?? undefined, icon: "public", onSelect: () => { window.location.hash = CONSOLE_HASH; } },
                 { id: "profile", label: "Profile", icon: "person", onSelect: () => { window.location.hash = "#/profile"; } },
                 "separator",
-                { id: "signout", label: "Sign out", icon: "logout", onSelect: () => void endSession() },
+                { id: "signout", label: "Sign out", icon: "logout", onSelect: () => void endSession(api) },
               ]}
               label={`${session.identity.displayName}: account menu`}
             />
@@ -73,7 +77,7 @@ export function LandingScreen({ auth, onChange }: Readonly<{ auth: AuthState; on
               items={[
                 { id: "request", label: visitor.candidate.status === "REQUESTED" ? "Access requested" : "Request access", detail: `Signed in with ${visitor.candidate.provider === "password" ? "email" : "Telegram"}, no role yet`, icon: "person_add", onSelect: () => { window.location.hash = CONSOLE_HASH; } },
                 "separator",
-                { id: "signout", label: "Sign out", icon: "logout", onSelect: () => void endSession() },
+                { id: "signout", label: "Sign out", icon: "logout", onSelect: () => void endSession(api) },
               ]}
               label={`${visitor.candidate.displayName}: account menu`}
             />

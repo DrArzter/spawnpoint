@@ -1,4 +1,4 @@
-import type { AccessCandidate, AccessIdentity, AccessPermission, AccessRole, ActiveSession, AppearancePreference, BackupEntry, InvitationSummary, SubscriptionState } from "../auth";
+import type { AccessCandidate, AccessIdentity, AccessPermission, AccessRole, ActiveSession, AppearancePreference, BackupEntry, InvitationSummary, SubscriptionState } from "../api/contract";
 import type { ConsoleEntry } from "../api/contract";
 import type { ControlPlaneSnapshot, Game, SettingDefinition, World, WorldSession } from "../model";
 import { DEFAULT_ACCENT } from "../styles/accent";

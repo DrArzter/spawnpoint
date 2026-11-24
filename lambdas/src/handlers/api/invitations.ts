@@ -6,7 +6,7 @@ import { awsControlPlaneSources } from "../../control-plane/aws.ts";
 import { findCatalogWorld, catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
 import { randomUUID } from "node:crypto";
 import { PutEventsCommand } from "@aws-sdk/client-eventbridge";
-import { type Response, response, parseJsonObject } from "./http.ts";
+import { type Response, response, parseJsonObject, errorResponse } from "./http.ts";
 import { document, tableName } from "./access-store.ts";
 import { events } from "./clients.ts";
 import { accessIndexName, activeIdentityIndex, identityIndex, identitySettingKey, playerInvitationKey, playerInvitationSenderIndex, profileKey } from "../../access/keys.ts";
@@ -64,7 +64,7 @@ function invitationRequest(identity: Identity, body: string | undefined): Invita
 
 export async function createInvitation(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
   const request = invitationRequest(identity, body);
-  if (!request.ok) return response(400, { error: request.error });
+  if (!request.ok) return errorResponse(400, request.error);
   const { audience, recipientIdentityIds } = request;
   // Every world the panel lists, not only the two in the built-in catalog: a
   // world created from a preset lives in the registry (ADR-0040).
@@ -73,8 +73,8 @@ export async function createInvitation(identity: Identity, gameId: string, world
     awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
   ]);
   const found = findCatalogWorld(catalogWithPresets(presets, gameCatalog, worldRecords), gameId, worldId);
-  if (found === null) return response(404, { error: "unknown_world" });
-  if (found.world.materialization === "archived") return response(409, { error: "world_archived" });
+  if (found === null) return errorResponse(404, "unknown_world");
+  if (found.world.materialization === "archived") return errorResponse(409, "world_archived");
   const { game, world } = found;
 
   if (audience === "direct") {
@@ -82,7 +82,7 @@ export async function createInvitation(identity: Identity, gameId: string, world
       TableName: tableName, Key: profileKey(id), ProjectionExpression: "identity_id, #status",
       ExpressionAttributeNames: { "#status": "status" },
     }))));
-    if (profiles.some((profile) => profile.Item?.status !== "ACTIVE")) return response(400, { error: "invalid_recipients" });
+    if (profiles.some((profile) => profile.Item?.status !== "ACTIVE")) return errorResponse(400, "invalid_recipients");
   }
 
   const invitationId = randomUUID();
@@ -106,7 +106,7 @@ export async function createInvitation(identity: Identity, gameId: string, world
     await document.send(new UpdateCommand({ TableName: tableName, Key: playerInvitationKey(invitationId),
       UpdateExpression: "SET #status = :failed", ExpressionAttributeNames: { "#status": "status" }, ExpressionAttributeValues: { ":failed": "PUBLISH_FAILED" },
     }));
-    return response(502, { error: "invitation_publish_failed" });
+    return errorResponse(502, "invitation_publish_failed");
   }
   return response(202, { invitation: { id: invitationId, audience, recipientCount: audience === "direct" ? recipientIdentityIds.length : null, state: "queued" } });
 }

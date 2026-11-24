@@ -1,4 +1,5 @@
 import type { LoginPrincipal } from "./login-session.ts";
+import type { LoginProviderId } from "../../../contract/login.ts";
 
 export type LoginAttempt = Readonly<Record<string, unknown>>;
 
@@ -6,7 +7,7 @@ export type LoginAttempt = Readonly<Record<string, unknown>>;
 // provider-neutral principal consumed by login sessions. It does not resolve
 // Spawnpoint identities, roles or linked accounts.
 export interface LoginProvider {
-  readonly id: string;
+  readonly id: LoginProviderId;
   authenticate(attempt: LoginAttempt): Promise<LoginPrincipal | null>;
 }
 

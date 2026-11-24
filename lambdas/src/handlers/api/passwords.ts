@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { issueEmailAction } from "../../access/email-actions.ts";
 import { type Identity } from "../../access/domain.ts";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
-import { type Event, type Response, parseJsonObject, response } from "./http.ts";
+import { type Event, type Response, parseJsonObject, response, errorResponse } from "./http.ts";
 import { document, tableName } from "./access-store.ts";
 import { accessInvitationKey, accountItemKey } from "../../access/keys.ts";
 import { loginProviderMarker } from "../../access/identity-creation.ts";
@@ -18,11 +18,11 @@ type ValidPasswordInput = Readonly<{ email: string; displayName: string; passwor
 function validPasswordInput(event: Event): ValidPasswordInput | Response {
   const parsed = parseJsonObject(event);
   const email = normalizeEmail(parsed.email);
-  if (email === null) return response(400, { error: "invalid_email" });
+  if (email === null) return errorResponse(400, "invalid_email");
   const passwordProblem = validatePassword(parsed.password);
-  if (passwordProblem !== null) return response(400, { error: `password_${passwordProblem}` });
+  if (passwordProblem !== null) return errorResponse(400, `password_${passwordProblem}`);
   const displayName = normalizeDisplayName(parsed.displayName);
-  if (displayName === null) return response(400, { error: "invalid_display_name" });
+  if (displayName === null) return errorResponse(400, "invalid_display_name");
   return { email, displayName, password: parsed.password as string };
 }
 
@@ -35,10 +35,10 @@ export async function registerPassword(event: Event): Promise<Response> {
   const invitationToken = parseJsonObject(event).invitationToken;
   if (invitationToken !== undefined) {
     const tokenHash = accessInvitationTokenHash(invitationToken);
-    if (tokenHash === null) return response(400, { error: "invalid_or_expired_invitation" });
+    if (tokenHash === null) return errorResponse(400, "invalid_or_expired_invitation");
     const invitation = await document.send(new GetCommand({ TableName: tableName, Key: accessInvitationKey(tokenHash), ConsistentRead: true }));
-    if (!accessInvitationUsable(invitation.Item)) return response(400, { error: "invalid_or_expired_invitation" });
-    if (invitation.Item?.delivery_email !== input.email) return response(403, { error: "invited_email_mismatch" });
+    if (!accessInvitationUsable(invitation.Item)) return errorResponse(400, "invalid_or_expired_invitation");
+    if (invitation.Item?.delivery_email !== input.email) return errorResponse(403, "invited_email_mismatch");
   }
   const { email, displayName, password } = input;
   const subject = randomUUID();
@@ -58,7 +58,7 @@ export async function registerPassword(event: Event): Promise<Response> {
       } },
     ] }));
   } catch (error) {
-    if (error instanceof Error && error.name === "TransactionCanceledException") return response(409, { error: "email_already_registered" });
+    if (error instanceof Error && error.name === "TransactionCanceledException") return errorResponse(409, "email_already_registered");
     throw error;
   }
   await deliverEmailAction("verify_email", action, credential, typeof invitationToken === "string" ? invitationToken : undefined);
@@ -70,7 +70,7 @@ export async function linkPassword(identity: Identity, event: Event): Promise<Re
   if ("statusCode" in input) return input;
   const existing = await identityAccounts(identity);
   if (existing.some((account) => account.platform === passwordProviderId)) {
-    return response(409, { error: "password_account_already_linked" });
+    return errorResponse(409, "password_account_already_linked");
   }
   const { email, displayName, password } = input;
   const subject = randomUUID();
@@ -101,7 +101,7 @@ export async function linkPassword(identity: Identity, event: Event): Promise<Re
     ] }));
   } catch (error) {
     if (error instanceof Error && error.name === "TransactionCanceledException") {
-      return response(409, { error: "email_already_registered" });
+      return errorResponse(409, "email_already_registered");
     }
     throw error;
   }
@@ -112,20 +112,20 @@ export async function linkPassword(identity: Identity, event: Event): Promise<Re
 export async function changePassword(identity: Identity, event: Event): Promise<Response> {
   const parsed = parseJsonObject(event);
   const email = normalizeEmail(parsed.email);
-  if (email === null) return response(400, { error: "invalid_email" });
-  if (typeof parsed.currentPassword !== "string") return response(400, { error: "current_password_required" });
+  if (email === null) return errorResponse(400, "invalid_email");
+  if (typeof parsed.currentPassword !== "string") return errorResponse(400, "current_password_required");
   const passwordProblem = validatePassword(parsed.password);
-  if (passwordProblem !== null) return response(400, { error: `password_${passwordProblem}` });
+  if (passwordProblem !== null) return errorResponse(400, `password_${passwordProblem}`);
   const credential = await passwordCredentials.find(email);
   if (credential === null || !credential.emailVerified || !await verifyPassword(parsed.currentPassword, credential.passwordHash)) {
-    return response(401, { error: "invalid_current_password" });
+    return errorResponse(401, "invalid_current_password");
   }
   const linked = await document.send(new GetCommand({
     TableName: tableName,
     Key: accountItemKey(passwordProviderId, credential.subject),
     ConsistentRead: true,
   }));
-  if (linked.Item?.identity_id !== identity.id) return response(403, { error: "credential_not_linked" });
+  if (linked.Item?.identity_id !== identity.id) return errorResponse(403, "credential_not_linked");
   await document.send(new UpdateCommand({
     TableName: tableName,
     Key: credentialKey(email),

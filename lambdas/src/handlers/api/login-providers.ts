@@ -2,7 +2,7 @@ import { type LoginProvider, authenticateWith } from "../../access/login-provide
 import { createPasswordLoginProvider, passwordProviderId } from "../../access/password-login-provider.ts";
 import { createTelegramLoginProvider } from "../../access/telegram-login-provider.ts";
 import { createGoogleLoginProvider, googleProviderId } from "../../access/google-login-provider.ts";
-import { type Event, type Response, parseJsonObject, response } from "./http.ts";
+import { type Event, type Response, parseJsonObject, response, errorResponse } from "./http.ts";
 import { createLoginSession } from "./login-sessions.ts";
 import { passwordCredentials } from "./credentials.ts";
 import { telegramOidcClientId, googleOidcClientId, telegramLoginEnabled, googleLoginEnabled, passwordLoginEnabled, passwordRegistrationEnabled } from "./auth-config.ts";
@@ -12,7 +12,7 @@ import { emailDeliveryProvider } from "./mail.ts";
 export async function authenticate(provider: LoginProvider, event: Event): Promise<Response> {
   const attempt = parseJsonObject(event);
   const principal = await authenticateWith(provider, attempt);
-  if (principal === null) return response(401, { error: `invalid_or_expired_${provider.id}_login` });
+  if (principal === null) return errorResponse(401, `invalid_or_expired_${provider.id}_login`);
   return createLoginSession(principal);
 }
 
@@ -46,4 +46,4 @@ export function loginProviders(): Response {
   });
 }
 
-export const loginProviderDisabled = (): Response => response(404, { error: "not_found" });
+export const loginProviderDisabled = (): Response => errorResponse(404, "not_found");

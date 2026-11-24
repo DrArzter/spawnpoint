@@ -1,6 +1,8 @@
 import { type LoginPrincipal } from "../../access/login-session.ts";
 import { requestBody } from "../../access/request-body.ts";
 
+import type { ApiErrorCode } from "../../../../contract/errors.ts";
+
 export type Event = Readonly<{
   requestContext?: { http?: { method?: string } };
   routeKey?: string;
@@ -19,6 +21,11 @@ export type Caller = LoginPrincipal;
 
 export function response(statusCode: number, body: unknown): Response {
   return { statusCode, headers: { "content-type": "application/json; charset=utf-8" }, body: body === null ? "" : JSON.stringify(body) };
+}
+
+/** A refusal with a code the contract declares (contract/errors.ts). `detail` names what was refused. */
+export function errorResponse(statusCode: number, error: ApiErrorCode, detail: Readonly<Record<string, unknown>> = {}): Response {
+  return response(statusCode, { ...detail, error });
 }
 
 export function responseWithHeaders(statusCode: number, body: unknown, headers: Record<string, string>): Response {

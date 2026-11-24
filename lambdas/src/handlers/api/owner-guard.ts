@@ -1,6 +1,6 @@
 import { type Identity, type Role, can, isProtectedRoleId, protectedRoleId } from "../../access/domain.ts";
 import { holdsAll } from "../../access/roles.ts";
-import { type Response, response } from "./http.ts";
+import { type Response, response, errorResponse } from "./http.ts";
 import { profileKey } from "../../access/keys.ts";
 import { activeOwnerCount } from "./identity-store.ts";
 
@@ -11,13 +11,13 @@ import { activeOwnerCount } from "./identity-store.ts";
 
 /** A 403 when the caller does not hold every permission of these roles. An unknown role involves none. */
 export function escalationRefusal(caller: Identity, roles: readonly (Role | null)[]): Response | null {
-  return holdsAll(caller, roles.flatMap((role) => role?.permissions ?? [])) ? null : response(403, { error: "forbidden" });
+  return holdsAll(caller, roles.flatMap((role) => role?.permissions ?? [])) ? null : errorResponse(403, "forbidden");
 }
 
 /** A 409 when the change would leave no active holder of the protected role. */
 export async function lastHolderRefusal(fromRoleId: string, toRoleId: string | null): Promise<Response | null> {
   if (!isProtectedRoleId(fromRoleId) || (toRoleId !== null && isProtectedRoleId(toRoleId))) return null;
-  return await activeOwnerCount() <= 1 ? response(409, { error: "last_owner" }) : null;
+  return await activeOwnerCount() <= 1 ? errorResponse(409, "last_owner") : null;
 }
 
 /**

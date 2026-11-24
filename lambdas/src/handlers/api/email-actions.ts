@@ -7,7 +7,7 @@ import { type Item, document, tableName } from "./access-store.ts";
 import { emailSender, emailDeliveryProvider } from "./mail.ts";
 import { panelUrl } from "./origins.ts";
 import { credentialKey, passwordCredentials, credentialFromItem } from "./credentials.ts";
-import { type Response, response, type Event, parseJsonObject } from "./http.ts";
+import { type Response, response, type Event, parseJsonObject, errorResponse } from "./http.ts";
 import { accessIndexName, accessInvitationKey, accountItemKey, emailActionKey, sessionAccountIndex } from "../../access/keys.ts";
 import { createLoginSession } from "./login-sessions.ts";
 
@@ -71,7 +71,7 @@ async function replaceEmailAction(
 }
 
 function emailActionsUnavailable(): Response | null {
-  return emailDeliveryProvider === "none" ? response(404, { error: "not_found" }) : null;
+  return emailDeliveryProvider === "none" ? errorResponse(404, "not_found") : null;
 }
 
 export async function resendEmailVerification(event: Event): Promise<Response> {
@@ -83,10 +83,10 @@ export async function resendEmailVerification(event: Event): Promise<Response> {
   const invitationToken = parsed.invitationToken;
   if (invitationToken !== undefined) {
     const tokenHash = accessInvitationTokenHash(invitationToken);
-    if (tokenHash === null) return response(400, { error: "invalid_or_expired_invitation" });
+    if (tokenHash === null) return errorResponse(400, "invalid_or_expired_invitation");
     const invitation = await document.send(new GetCommand({ TableName: tableName, Key: accessInvitationKey(tokenHash), ConsistentRead: true }));
-    if (!accessInvitationUsable(invitation.Item)) return response(400, { error: "invalid_or_expired_invitation" });
-    if (invitation.Item?.delivery_email !== email) return response(403, { error: "invited_email_mismatch" });
+    if (!accessInvitationUsable(invitation.Item)) return errorResponse(400, "invalid_or_expired_invitation");
+    if (invitation.Item?.delivery_email !== email) return errorResponse(403, "invited_email_mismatch");
   }
   const credential = await passwordCredentials.find(email);
   if (credential === null || credential.emailVerified) return response(202, { result: "accepted" });
@@ -116,10 +116,10 @@ function actionFromItem(item: Item | undefined, purpose: EmailActionPurpose, now
 async function readEmailAction(event: Event, purpose: EmailActionPurpose): Promise<{ tokenHash: string; item: Item } | Response> {
   const parsed = parseJsonObject(event);
   const tokenHash = emailActionTokenHash(typeof parsed.token === "string" ? parsed.token : "");
-  if (tokenHash === null) return response(400, { error: "invalid_or_expired_email_action" });
+  if (tokenHash === null) return errorResponse(400, "invalid_or_expired_email_action");
   const result = await document.send(new GetCommand({ TableName: tableName, Key: emailActionKey(tokenHash), ConsistentRead: true }));
   const item = actionFromItem(result.Item, purpose, Math.floor(Date.now() / 1000));
-  return item === null ? response(400, { error: "invalid_or_expired_email_action" }) : { tokenHash, item };
+  return item === null ? errorResponse(400, "invalid_or_expired_email_action") : { tokenHash, item };
 }
 
 type TransactionItem = NonNullable<TransactWriteCommandInput["TransactItems"]>[number];
@@ -146,7 +146,7 @@ export async function verifyEmail(event: Event): Promise<Response> {
   const subject = String(item.subject);
   const credentialResult = await document.send(new GetCommand({ TableName: tableName, Key: credentialKey(email), ConsistentRead: true }));
   const credential = credentialResult.Item === undefined ? null : credentialFromItem(credentialResult.Item);
-  if (credential?.subject !== subject) return response(400, { error: "invalid_or_expired_email_action" });
+  if (credential?.subject !== subject) return errorResponse(400, "invalid_or_expired_email_action");
   const now = new Date().toISOString();
   try {
     await document.send(new TransactWriteCommand({ TransactItems: [
@@ -161,7 +161,7 @@ export async function verifyEmail(event: Event): Promise<Response> {
     ] }));
   } catch (error) {
     if (error instanceof Error && error.name === "TransactionCanceledException") {
-      return response(400, { error: "invalid_or_expired_email_action" });
+      return errorResponse(400, "invalid_or_expired_email_action");
     }
     throw error;
   }
@@ -208,7 +208,7 @@ export async function revokePasswordLoginSessions(subject: string): Promise<void
 export async function resetPassword(event: Event): Promise<Response> {
   const parsed = parseJsonObject(event);
   const passwordProblem = validatePassword(parsed.password);
-  if (passwordProblem !== null) return response(400, { error: `password_${passwordProblem}` });
+  if (passwordProblem !== null) return errorResponse(400, `password_${passwordProblem}`);
   const found = await readEmailAction(event, "reset_password");
   if ("statusCode" in found) return found;
   const { item, tokenHash } = found;
@@ -232,7 +232,7 @@ export async function resetPassword(event: Event): Promise<Response> {
     ] }));
   } catch (error) {
     if (error instanceof Error && error.name === "TransactionCanceledException") {
-      return response(400, { error: "invalid_or_expired_email_action" });
+      return errorResponse(400, "invalid_or_expired_email_action");
     }
     throw error;
   }

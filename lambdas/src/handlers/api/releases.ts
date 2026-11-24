@@ -8,7 +8,7 @@ import { type PlanMod, type ReleasePlan, releasePlan, storedReleasePlan } from "
 import { packRelease } from "../../control-plane/session-control.ts";
 import { releaseRetirement } from "../../control-plane/aws-release-retirement.ts";
 import { retirementConfirmation } from "../../control-plane/release-retirement.ts";
-import { parseJsonObject, type Response, response } from "./http.ts";
+import { parseJsonObject, type Response, response, errorResponse } from "./http.ts";
 
 const RELEASE_ID = /^[a-z0-9][a-z0-9-]*$/;
 const RELEASE_VERSION = /^\d+\.\d+$/;
@@ -27,19 +27,22 @@ function buildRequest(input: unknown): BuildRequest | null {
   return { profileDigest: value.profileDigest, retryRelease: value.retryRelease };
 }
 
+const BUILD_REFUSALS = ["build_in_progress", "build_changed", "build_not_available"] as const;
+
 export async function buildRelease(identity: Identity, gameId: string, presetId: string, body: string | undefined): Promise<Response> {
   const parsed = parseJsonObject({ body });
   const expected = buildRequest(parsed);
-  if (expected === null) return response(400, { error: "invalid_build_request" });
+  if (expected === null) return errorResponse(400, "invalid_build_request");
   try {
     const build = await startPresetBuild(gameId, presetId, identity.id, expected);
     return response(202, { release: build.release, attempt: build.attempt });
   } catch (error) {
     const code = error instanceof Error ? error.message : "build_request_failed";
-    if (code === "unknown_preset") return response(404, { error: code });
-    if (["build_in_progress", "build_changed", "build_not_available"].includes(code)) return response(409, { error: code });
+    if (code === "unknown_preset") return errorResponse(404, code);
+    const refusal = BUILD_REFUSALS.find((candidate) => candidate === code);
+    if (refusal !== undefined) return errorResponse(409, refusal);
     console.error("release_build_request_failed", { gameId, presetId, errorName: error instanceof Error ? error.name : "UnknownError" });
-    return response(503, { error: "build_request_failed" });
+    return errorResponse(503, "build_request_failed");
   }
 }
 
@@ -49,19 +52,19 @@ export async function buildRelease(identity: Identity, gameId: string, presetId:
 // logs the outcome with the identity that asked.
 export async function requestReleaseRetirement(identity: Identity, gameId: string, presetId: string, version: string, body: string | undefined): Promise<Response> {
   if (!RELEASE_ID.test(gameId) || !RELEASE_ID.test(presetId) || !RELEASE_VERSION.test(version)) {
-    return response(400, { error: "invalid_release_reference" });
+    return errorResponse(400, "invalid_release_reference");
   }
   const parsed = parseJsonObject({ body });
   const confirmation = { gameId, presetId, release: version };
   if (Object.keys(parsed).some((key) => key !== "confirmation") || parsed.confirmation !== retirementConfirmation(confirmation)) {
-    return response(400, { error: "invalid_retire_confirmation" });
+    return errorResponse(400, "invalid_retire_confirmation");
   }
-  if (await awsControlPlaneSources.readReleaseManifest?.(gameId, presetId, version) === null) return response(404, { error: "unknown_release" });
+  if (await awsControlPlaneSources.readReleaseManifest?.(gameId, presetId, version) === null) return errorResponse(404, "unknown_release");
   try {
     await releaseRetirement.request({ ...confirmation, confirmation: parsed.confirmation, requestedBy: `identity:${identity.id}` });
   } catch (error) {
     console.error("release_retirement_request_failed", { gameId, presetId, errorName: error instanceof Error ? error.name : "UnknownError" });
-    return response(503, { error: "retirement_request_failed" });
+    return errorResponse(503, "retirement_request_failed");
   }
   console.info(JSON.stringify({ event: "release_retirement_requested", gameId, presetId, release: version, requestedBy: `identity:${identity.id}` }));
   return response(202, { status: "requested", release: version });
@@ -80,11 +83,11 @@ function manifestText(value: unknown): string {
 // release then serves the object of that digest (ADR-0080).
 export async function releaseModDownload(gameId: string, presetId: string, version: string, sha256: string): Promise<Response> {
   if (!RELEASE_ID.test(gameId) || !RELEASE_ID.test(presetId) || !RELEASE_VERSION.test(version) || !SHA256_DIGEST.test(sha256)) {
-    return response(400, { error: "invalid_release_reference" });
+    return errorResponse(400, "invalid_release_reference");
   }
   const manifest = await awsControlPlaneSources.readReleaseManifest?.(gameId, presetId, version) ?? null;
   const location = releaseModLocation(manifest, sha256);
-  if (location === null || !/^[^/\\]+\.(jar|zip)$/.test(location.file)) return response(404, { error: "unknown_mod" });
+  if (location === null || !/^[^/\\]+\.(jar|zip)$/.test(location.file)) return errorResponse(404, "unknown_mod");
   const objectDigest = manifestUsesObjects(manifest) ? sha256 : undefined;
   return response(200, { file: location.file, url: await releaseModUrl(gameId, presetId, version, location, MOD_LINK_SECONDS, objectDigest), expiresIn: MOD_LINK_SECONDS });
 }
@@ -93,10 +96,10 @@ export async function releaseModDownload(gameId: string, presetId: string, versi
 // or every mod. Whoever may read the release may have its files, as with one mod.
 export async function releasePackDownload(gameId: string, presetId: string, version: string, pack: string): Promise<Response> {
   if (!RELEASE_ID.test(gameId) || !RELEASE_ID.test(presetId) || !RELEASE_VERSION.test(version) || !(RELEASE_PACKS as readonly string[]).includes(pack)) {
-    return response(400, { error: "invalid_release_reference" });
+    return errorResponse(400, "invalid_release_reference");
   }
   const url = await releasePackUrl(gameId, presetId, version, pack as ReleasePack, PACK_LINK_SECONDS);
-  return url === null ? response(404, { error: "no_pack_published" }) : response(200, { pack, url, expiresIn: PACK_LINK_SECONDS });
+  return url === null ? errorResponse(404, "no_pack_published") : response(200, { pack, url, expiresIn: PACK_LINK_SECONDS });
 }
 
 // What a release contains, which until now lived only in S3 and in the mods
@@ -108,12 +111,12 @@ export async function releasePackDownload(gameId: string, presetId: string, vers
 // panel never holds a release's whole list.
 export async function releaseManifest(gameId: string, presetId: string, version: string, query?: Readonly<Record<string, string | undefined>>): Promise<Response> {
   if (!RELEASE_ID.test(gameId) || !RELEASE_ID.test(presetId) || !RELEASE_VERSION.test(version)) {
-    return response(400, { error: "invalid_release_reference" });
+    return errorResponse(400, "invalid_release_reference");
   }
   const list = parseModListQuery(query);
-  if (list.kind === "invalid") return response(400, { error: "invalid_mod_query" });
+  if (list.kind === "invalid") return errorResponse(400, "invalid_mod_query");
   const manifest = await awsControlPlaneSources.readReleaseManifest?.(gameId, presetId, version) ?? null;
-  if (manifest === null || typeof manifest !== "object") return response(404, { error: "unknown_release" });
+  if (manifest === null || typeof manifest !== "object") return errorResponse(404, "unknown_release");
   const value = manifest as Record<string, unknown>;
   if (list.kind === "query") {
     return response(200, { gameId, presetId, release: typeof value.release === "string" ? value.release : version, ...releaseModPage(manifest, list.query) });
@@ -164,21 +167,21 @@ function diffClasses(section: ReleasePlan["server_mods"]) {
 export async function releaseDiff(gameId: string, presetId: string, version: string, from: string | undefined): Promise<Response> {
   if (!RELEASE_ID.test(gameId) || !RELEASE_ID.test(presetId) || !RELEASE_VERSION.test(version) ||
     (from !== undefined && (!RELEASE_VERSION.test(from) || from === version))) {
-    return response(400, { error: "invalid_release_reference" });
+    return errorResponse(400, "invalid_release_reference");
   }
   const sources = awsControlPlaneSources;
   const stored = storedReleasePlan(await sources.readReleasePlan?.(gameId, presetId, version) ?? null, version);
   let plan: ReleasePlan | null = stored !== null && (from === undefined || stored.previous_release === from) ? stored : null;
   const source = plan === null ? "manifests" : "plan";
   if (plan === null) {
-    if (from === undefined) return response(404, { error: "no_plan" });
+    if (from === undefined) return errorResponse(404, "no_plan");
     const [next, previous] = await Promise.all([
       sources.readReleaseManifest?.(gameId, presetId, version) ?? null,
       sources.readReleaseManifest?.(gameId, presetId, from) ?? null,
     ]);
-    if (next === null || previous === null) return response(404, { error: "unknown_release" });
+    if (next === null || previous === null) return errorResponse(404, "unknown_release");
     plan = releasePlan(next, previous);
-    if (plan === null) return response(502, { error: "invalid_manifest" });
+    if (plan === null) return errorResponse(502, "invalid_manifest");
   }
   return response(200, {
     gameId,
@@ -206,14 +209,14 @@ export async function releaseDiff(gameId: string, presetId: string, version: str
 export async function packDownload(gameId: string, worldId: string): Promise<Response> {
   const worldRecord = await awsControlPlaneSources.listWorldRecords?.()
     .then((records) => records.find((record) => record.gameId === gameId && record.worldId === worldId));
-  if (worldRecord === undefined) return response(404, { error: "unknown_world" });
+  if (worldRecord === undefined) return errorResponse(404, "unknown_world");
   const choice = packRelease(await awsControlPlaneSources.readReleasePointer(
     worldId,
     worldRecord.currentGeneration.id,
   ));
-  if (choice.kind === "none") return response(409, { error: choice.reason });
+  if (choice.kind === "none") return errorResponse(409, choice.reason);
 
   const url = await packDownloadUrl(gameId, worldRecord.preset.id, choice.release);
-  if (url === null) return response(409, { error: "no_pack_published", release: choice.release });
+  if (url === null) return errorResponse(409, "no_pack_published", { release: choice.release });
   return response(200, { release: choice.release, url, expiresIn: 3600 });
 }

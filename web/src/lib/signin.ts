@@ -1,3 +1,5 @@
+import { LOGIN_PROVIDER_IDS, type LoginProviderId } from "../../../contract/login";
+
 // The API is the authority on what a password must be; these mirror its rules
 // so the form can say them before a round trip, and read its refusals after.
 export const PASSWORD_MINIMUM_LENGTH = 12;
@@ -7,10 +9,10 @@ export const DISPLAY_NAME_MAXIMUM_LENGTH = 80;
 /** An OAuth client id from the Google Cloud console, the same test the API applies. */
 export const GOOGLE_CLIENT_ID = /^[A-Za-z0-9-]+\.apps\.googleusercontent\.com$/;
 
-export type LoginProviderId = "telegram" | "google" | "password";
+export type { LoginProviderId };
 
 export function isLoginProviderId(value: unknown): value is LoginProviderId {
-  return value === "telegram" || value === "google" || value === "password";
+  return (LOGIN_PROVIDER_IDS as readonly unknown[]).includes(value);
 }
 
 // A provider's refusal, in the same voice as the password form's: a route that

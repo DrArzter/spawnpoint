@@ -2,7 +2,7 @@ import { verifyAccessToken, type LoginPrincipal, browserSessionCookieName, parse
 import { verifySessionToken } from "../../access/telegram-auth.ts";
 import { telegramPrincipal } from "../../access/telegram-login-provider.ts";
 import { GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import { type Event, type Caller, requestCookie, type Response, responseWithCookies, response } from "./http.ts";
+import { type Event, type Caller, requestCookie, type Response, responseWithCookies, response, errorResponse } from "./http.ts";
 import { sessionSigningSecret, botToken } from "./secrets.ts";
 import { document, tableName, type Item } from "./access-store.ts";
 import { sessionAccountIndex } from "../../access/keys.ts";
@@ -90,7 +90,7 @@ export async function createLoginSession(principal: LoginPrincipal): Promise<Res
 export async function refreshLoginSession(event: Event): Promise<Response> {
   const cookie = requestCookie(event, browserSessionCookieName) ?? requestCookie(event, refreshCookieName);
   const supplied = cookie === null ? null : parseRefreshCredential(cookie);
-  if (supplied === null) return response(401, { error: "invalid_or_expired_refresh_session" });
+  if (supplied === null) return errorResponse(401, "invalid_or_expired_refresh_session");
 
   const result = await document.send(new GetCommand({
     TableName: tableName,
@@ -105,7 +105,7 @@ export async function refreshLoginSession(event: Event): Promise<Response> {
     typeof item.expires_at !== "number" || item.expires_at <= now ||
     typeof item.token_hash !== "string" || !equalRefreshHashes(item.token_hash, supplied.tokenHash) ||
     principal === null
-  ) return response(401, { error: "invalid_or_expired_refresh_session" });
+  ) return errorResponse(401, "invalid_or_expired_refresh_session");
 
   const rotated = issueRefreshCredential(supplied.loginSessionId);
   try {
@@ -126,7 +126,7 @@ export async function refreshLoginSession(event: Event): Promise<Response> {
   } catch {
     // Another tab may have rotated the shared cookie first. The client may retry
     // once with the newest cookie; do not revoke the whole login session here.
-    return response(401, { error: "refresh_credential_rotated" });
+    return errorResponse(401, "refresh_credential_rotated");
   }
   return responseWithCookies(200, { authenticated: true }, [
     browserSessionCookie(rotated.token, refreshCookieSameSite),

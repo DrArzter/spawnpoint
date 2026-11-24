@@ -8,5 +8,7 @@ They are plain TypeScript: no `node:` module, no AWS SDK, no DOM and no React, s
 - `control-plane.ts`: the control-plane snapshot: games, worlds, presets, hosts and running operations.
 - `backups.ts`: a world's backup inventory.
 - `metrics.ts`: the metric ranges and a host's or a world's metrics.
+- `errors.ts`: every code the panel's API refuses with.
+- `login.ts`: the browser login providers.
 - `console.ts`: one console command as the API answers it.
 - `settings.ts`: a game setting's definition and the rule that a value is valid for it.

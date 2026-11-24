@@ -5,7 +5,7 @@ import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts"
 import { checkConsoleCommand, encodeConsoleCommand, CONSOLE_RECORD_DAYS, type ConsoleEntry, consoleResult, consoleEntryFromItem } from "../../control-plane/console.ts";
 import { type WorldPlacement } from "../../control-plane/world-session.ts";
 import { PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import { type Response, response, parseJsonObject } from "./http.ts";
+import { type Response, response, parseJsonObject, errorResponse } from "./http.ts";
 import { readWorldSession, locateWorldHost } from "./world-state.ts";
 import { document, tableName } from "./access-store.ts";
 import { isConditionFailure } from "./conditions.ts";
@@ -28,18 +28,18 @@ export async function runConsoleCommand(identity: Identity, gameId: string, worl
   ]);
   const world = catalogWithPresets(presets, gameCatalog, worldRecords)
     .find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
-  if (world === undefined) return response(404, { error: "unknown_world" });
+  if (world === undefined) return errorResponse(404, "unknown_world");
   const check = checkConsoleCommand(gameId, parsed.command);
-  if (!check.ok) return response(check.reason === "lifecycle_command" ? 409 : 400, { error: check.reason });
+  if (!check.ok) return errorResponse(check.reason === "lifecycle_command" ? 409 : 400, check.reason);
 
   // The world's own session, ready: a console attaches to a game that answers.
   const placement: WorldPlacement = world.placement === "fleet" ? "fleet" : "configured";
   const located = await readWorldSession(gameId, worldId, placement);
   const sessionId = located.record?.activeSessionId;
-  if (located.record?.observedState !== "ready" || !sessionId) return response(409, { error: "session_not_ready" });
+  if (located.record?.observedState !== "ready" || !sessionId) return errorResponse(409, "session_not_ready");
 
   const target = await locateWorldHost(placement, located.record, hosts);
-  if (target === null) return response(409, { error: "console_unavailable" });
+  if (target === null) return errorResponse(409, "console_unavailable");
 
   const commandId = await sendConsoleCommand({ hostId: target.hostId, worldId, slot: target.slot, encodedCommand: encodeConsoleCommand(check.command) });
   const at = new Date().toISOString();
@@ -90,5 +90,5 @@ export async function consoleHistory(gameId: string, worldId: string): Promise<R
 // world's recent commands, as the panel's history shows them.
 export async function consoleCommandResult(gameId: string, worldId: string, commandId: string): Promise<Response> {
   const entry = (await consoleEntries(gameId, worldId)).find((candidate) => candidate.id === commandId);
-  return entry === undefined ? response(404, { error: "unknown_command" }) : response(200, { entry });
+  return entry === undefined ? errorResponse(404, "unknown_command") : response(200, { entry });
 }

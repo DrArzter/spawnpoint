@@ -1,6 +1,6 @@
 import { type Identity, can, isProtectedRoleId, permissionCatalogue } from "../../access/domain.ts";
 import { ROLE_ID, type StoredRole, holdsAll, parseRoleInput } from "../../access/roles.ts";
-import { type Response, response, parseJsonObject } from "./http.ts";
+import { type Response, response, parseJsonObject, errorResponse } from "./http.ts";
 import { canAssign } from "./owner-guard.ts";
 import {
   createRole, deleteRole, listRoles, readDefaultRoleId, readRole, roleHolders, updateRole, writeDefaultRoleId,
@@ -39,12 +39,12 @@ function served(role: StoredRole): Response {
 export async function createRoleHandler(caller: Identity, body: string | undefined): Promise<Response> {
   const parsed = parseJsonObject({ body });
   const roleId = typeof parsed.id === "string" ? parsed.id : "";
-  if (!ROLE_ID.test(roleId)) return response(400, { error: "invalid_role" });
+  if (!ROLE_ID.test(roleId)) return errorResponse(400, "invalid_role");
   const input = parseRoleInput(parsed);
-  if (typeof input === "string") return response(400, { error: input });
-  if (!holdsAll(caller, input.permissions)) return response(403, { error: "forbidden" });
+  if (typeof input === "string") return errorResponse(400, input);
+  if (!holdsAll(caller, input.permissions)) return errorResponse(403, "forbidden");
   const written = await createRole(roleId, input, caller.id);
-  return "conflict" in written ? response(409, { error: written.conflict }) : response(201, { role: written.role });
+  return "conflict" in written ? errorResponse(409, written.conflict) : response(201, { role: written.role });
 }
 
 function versionOf(parsed: Readonly<Record<string, unknown>>): number | null {
@@ -55,39 +55,39 @@ export async function updateRoleHandler(caller: Identity, roleId: string, body: 
   const parsed = parseJsonObject({ body });
   const version = versionOf(parsed);
   const input = parseRoleInput(parsed);
-  if (version === null) return response(400, { error: "invalid_role" });
-  if (typeof input === "string") return response(400, { error: input });
-  if (isProtectedRoleId(roleId)) return response(409, { error: "role_protected" });
+  if (version === null) return errorResponse(400, "invalid_role");
+  if (typeof input === "string") return errorResponse(400, input);
+  if (isProtectedRoleId(roleId)) return errorResponse(409, "role_protected");
   const current = await readRole(roleId);
-  if (current === null) return response(404, { error: "unknown_role" });
+  if (current === null) return errorResponse(404, "unknown_role");
   // The permissions it loses and the ones it gains are both the caller's to give.
-  if (!holdsAll(caller, [...current.permissions, ...input.permissions])) return response(403, { error: "forbidden" });
+  if (!holdsAll(caller, [...current.permissions, ...input.permissions])) return errorResponse(403, "forbidden");
   const written = await updateRole(current, input, version, caller.id);
-  return "conflict" in written ? response(409, { error: written.conflict }) : served(written.role);
+  return "conflict" in written ? errorResponse(409, written.conflict) : served(written.role);
 }
 
 export async function deleteRoleHandler(caller: Identity, roleId: string, body: string | undefined): Promise<Response> {
   const version = versionOf(parseJsonObject({ body }));
-  if (version === null) return response(400, { error: "invalid_role" });
-  if (isProtectedRoleId(roleId)) return response(409, { error: "role_protected" });
+  if (version === null) return errorResponse(400, "invalid_role");
+  if (isProtectedRoleId(roleId)) return errorResponse(409, "role_protected");
   const current = await readRole(roleId);
   if (current === null) return response(204, null);
-  if (current.builtIn) return response(409, { error: "role_built_in" });
-  if (!holdsAll(caller, current.permissions)) return response(403, { error: "forbidden" });
-  if (version !== current.version) return response(409, { error: "role_changed" });
+  if (current.builtIn) return errorResponse(409, "role_built_in");
+  if (!holdsAll(caller, current.permissions)) return errorResponse(403, "forbidden");
+  if (version !== current.version) return errorResponse(409, "role_changed");
   const [holders, defaultRoleId] = await Promise.all([roleHolders(), readDefaultRoleId()]);
-  if ((holders.get(roleId) ?? 0) > 0 || defaultRoleId === roleId) return response(409, { error: "role_in_use" });
-  return await deleteRole(roleId, version) === "deleted" ? response(204, null) : response(409, { error: "role_changed" });
+  if ((holders.get(roleId) ?? 0) > 0 || defaultRoleId === roleId) return errorResponse(409, "role_in_use");
+  return await deleteRole(roleId, version) === "deleted" ? response(204, null) : errorResponse(409, "role_changed");
 }
 
 export async function setDefaultRoleHandler(caller: Identity, body: string | undefined): Promise<Response> {
   const parsed = parseJsonObject({ body });
   const roleId = typeof parsed.defaultRoleId === "string" ? parsed.defaultRoleId : "";
-  if (isProtectedRoleId(roleId)) return response(409, { error: "role_protected" });
+  if (isProtectedRoleId(roleId)) return errorResponse(409, "role_protected");
   const role = roleId === "" ? null : await readRole(roleId);
-  if (role === null) return response(400, { error: "unknown_role" });
+  if (role === null) return errorResponse(400, "unknown_role");
   // Choosing the role every new person gets is giving that role.
-  if (!holdsAll(caller, role.permissions)) return response(403, { error: "forbidden" });
+  if (!holdsAll(caller, role.permissions)) return errorResponse(403, "forbidden");
   await writeDefaultRoleId(roleId, caller.id);
   return response(200, { defaultRoleId: roleId });
 }

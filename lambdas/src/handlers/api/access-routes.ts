@@ -3,11 +3,11 @@ import { candidates, identities, withCandidateAddress, approve, dismiss, updateR
 import { roles, createRoleHandler, updateRoleHandler, deleteRoleHandler, setDefaultRoleHandler } from "./roles.ts";
 import { ROLE_ID } from "../../access/roles.ts";
 import { deleteIdentity } from "./identity-deletion.ts";
-import { type Event, type Response, parameter, response } from "./http.ts";
+import { type Event, type Response, parameter, response, errorResponse } from "./http.ts";
 
 function withRoleId(event: Event, handle: (roleId: string) => Promise<Response> | Response): Promise<Response> | Response {
   const roleId = parameter(event, "roleId");
-  return ROLE_ID.test(roleId) ? handle(roleId) : response(400, { error: "invalid_role" });
+  return ROLE_ID.test(roleId) ? handle(roleId) : errorResponse(400, "invalid_role");
 }
 
 const IDENTITY_ID = /^[0-9a-f-]{36}$/;
@@ -28,12 +28,12 @@ export const accessRoutes: Readonly<Record<string, Route>> = {
     withCandidateAddress(event, (platform, platformUserId) => dismiss(identity, platform, platformUserId))),
   "POST /access/identities/{identityId}/role": permissionRoute("access.manage", (identity, event) => {
     const identityId = parameter(event, "identityId");
-    if (!IDENTITY_ID.test(identityId)) return response(400, { error: "invalid_identity_id" });
+    if (!IDENTITY_ID.test(identityId)) return errorResponse(400, "invalid_identity_id");
     return updateRole(identity, identityId, event.body);
   }),
   "POST /access/identities/{identityId}/delete": permissionRoute("access.manage", (identity, event) => {
     const identityId = parameter(event, "identityId");
-    if (!IDENTITY_ID.test(identityId)) return response(400, { error: "invalid_identity_id" });
+    if (!IDENTITY_ID.test(identityId)) return errorResponse(400, "invalid_identity_id");
     return deleteIdentity(identity, identityId);
   })
 };

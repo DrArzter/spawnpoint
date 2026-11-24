@@ -1,16 +1,16 @@
-// What each error code of the API means to the person who met it. One entry per
-// code. A call may word a code its own way (`request` refusals); this is the
-// text when it does not. web/test/api-error-text.test.ts fails when the backend
-// sends a code that is not here. Codes a variable carries, which that test
-// cannot see, are in the second block.
+import type { ApiErrorCode } from "../../../contract/errors";
+import { PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../lib/signin";
+
+// What each error code of the API means to the person who met it, one entry per code the contract declares
+// (contract/errors.ts): the compiler refuses a missing code and one the API no longer sends. A call may word a code
+// its own way (`request` refusals); this is the text when it does not.
 /** What a call says when no answer came: the network failed or the API is down. */
 export const UNREACHABLE = "Spawnpoint did not answer. Check your connection and try again.";
 
-export const API_ERROR_TEXT: Readonly<Record<string, string>> = {
+export const API_ERROR_TEXT: Readonly<Record<ApiErrorCode, string>> = {
   // Any request
   forbidden: "Your role cannot do this.",
   not_found: "Spawnpoint does not offer this yet.",
-  invalid_body: "The request was not valid.",
   invalid_json: "The request was not valid.",
   untrusted_origin: "This page is not allowed to call Spawnpoint.",
   invalid_or_expired_session: "Your session has ended. Sign in again.",
@@ -61,6 +61,12 @@ export const API_ERROR_TEXT: Readonly<Record<string, string>> = {
   credential_not_linked: "This identity has no password to change.",
   current_password_required: "Enter your current password.",
   invalid_current_password: "The current password is not correct.",
+  password_not_a_string: "Enter a password.",
+  password_too_short: `Use a password of at least ${PASSWORD_MINIMUM_LENGTH} characters. Length matters more than symbols.`,
+  password_too_long: `Use a password of at most ${PASSWORD_MAXIMUM_LENGTH} characters.`,
+  invalid_or_expired_telegram_login: "Telegram could not verify this sign-in. Please start again.",
+  invalid_or_expired_google_login: "Google could not verify this sign-in. Please start again.",
+  invalid_or_expired_password_login: "That email and password do not match. Please start again.",
   invalid_avatar: "Choose a JPEG, PNG or WebP picture.",
   avatar_too_large: "The picture is too large. Choose a simpler one.",
   invalid_appearance: "This appearance setting is not valid.",

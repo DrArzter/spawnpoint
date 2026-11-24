@@ -5,7 +5,7 @@ import { type Identity } from "../../access/domain.ts";
 import { downloadPartition } from "../../access/keys.ts";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
-import { type Response, response, parseJsonObject } from "./http.ts";
+import { type Response, response, parseJsonObject, errorResponse } from "./http.ts";
 import { knownWorld } from "./world-state.ts";
 import type { BackupInventory } from "../../../../contract/backups.ts";
 import { document, tableName } from "./access-store.ts";
@@ -14,7 +14,7 @@ import { document, tableName } from "./access-store.ts";
 // read without touching an archive; reading one is a download. Each entry
 // names the release a restore would use: one HEAD per listed archive.
 export async function backups(gameId: string, worldId: string): Promise<Response> {
-  if (!await knownWorld(gameId, worldId)) return response(404, { error: "unknown_world" });
+  if (!await knownWorld(gameId, worldId)) return errorResponse(404, "unknown_world");
   const [inventory, record] = await Promise.all([listWorldBackups(worldId).then((objects) => backupInventory(objects)), readWorldRecord(worldId)]);
   const body: BackupInventory = { ...inventory, entries: await withBackupReleases(record, inventory.entries, backupReleaseSources()) };
   return response(200, body);
@@ -31,11 +31,11 @@ export async function backupDownload(identity: Identity, gameId: string, worldId
   const parsed = parseJsonObject({ body });
   const key = parsed.key;
   if (typeof key !== "string" || !key.startsWith(`worlds/${worldId}/archives/`) || !/^worlds\/[a-z0-9][a-z0-9-]{0,31}\/archives\/[A-Za-z0-9._-]+\.tar\.zst$/.test(key)) {
-    return response(400, { error: "invalid_backup_key" });
+    return errorResponse(400, "invalid_backup_key");
   }
-  if (!await knownWorld(gameId, worldId)) return response(404, { error: "unknown_world" });
+  if (!await knownWorld(gameId, worldId)) return errorResponse(404, "unknown_world");
   const link = await backupArchiveUrl(key, BACKUP_LINK_SECONDS);
-  if (link === null) return response(404, { error: "unknown_backup" });
+  if (link === null) return errorResponse(404, "unknown_backup");
   const at = new Date().toISOString();
   await document.send(new PutCommand({ TableName: tableName, Item: {
     pk: downloadPartition(worldId), sk: `${at}#${randomUUID()}`, created_at: at,

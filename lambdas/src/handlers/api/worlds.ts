@@ -12,7 +12,7 @@ import { checkWhitelist, parseServerWhitelist, SERVER_WHITELIST_COMMANDS } from 
 import { consoleResult, encodeConsoleCommand } from "../../control-plane/console.ts";
 import { type ControlPlaneSources } from "../../control-plane/read-model.ts";
 import { backupGenerationId, resolveBackupRelease, type BackupReleaseSources } from "../../control-plane/backup-release.ts";
-import { type Response, response, parseJsonObject } from "./http.ts";
+import { type Response, response, parseJsonObject, errorResponse } from "./http.ts";
 import { requirePermission } from "./permissions.ts";
 import { type StopPlayersPolicy } from "../../domain/telegram-bot.ts";
 import { readWorldSession, worldPlacements, locateWorldHost } from "./world-state.ts";
@@ -24,7 +24,7 @@ import { readWorldSession, worldPlacements, locateWorldHost } from "./world-stat
 function stopPlayersPolicy(identity: Identity, body: string | undefined): StopPlayersPolicy | Response {
   const request = parseJsonObject({ body });
   const players = request.players ?? "refuse";
-  if (players !== "refuse" && players !== "disconnect") return response(400, { error: "invalid_players" });
+  if (players !== "refuse" && players !== "disconnect") return errorResponse(400, "invalid_players");
   if (players === "disconnect") {
     const forbidden = requirePermission(identity, "session.stop.force");
     if (forbidden) return forbidden;
@@ -44,14 +44,14 @@ export async function controlSession(identity: Identity, action: SessionAction, 
   const effectiveCatalog = catalogWithPresets(presets, gameCatalog, worldRecords);
   const world = effectiveCatalog.find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
   const fleet = world?.placement === "fleet";
-  if (action === "start" && fleet && process.env.SPAWNPOINT_LAUNCH !== "enabled") return response(409, { error: "fleet_unavailable" });
+  if (action === "start" && fleet && process.env.SPAWNPOINT_LAUNCH !== "enabled") return errorResponse(409, "fleet_unavailable");
   const located = await readWorldSession(gameId, worldId, fleet ? "fleet" : "configured");
   const operations = blockingOperations(allOperations, worldId, worldPlacements(effectiveCatalog));
   const configuredHosts = hosts.filter((candidate) => candidate.provenance !== "launched");
   const plan = fleet
     ? planFleetSessionOperation(gameId, worldId, action, operations, located.record, effectiveCatalog)
     : planSessionOperation(gameId, worldId, action, configuredHosts, operations, effectiveCatalog, located.record);
-  if (plan.kind === "reject") return response(plan.reason === "unknown_world" ? 404 : 409, { error: plan.reason });
+  if (plan.kind === "reject") return errorResponse(plan.reason === "unknown_world" ? 404 : 409, plan.reason);
   const recoverySessionId = action === "stop" && !fleet ? stoppedHostRecoverySession(worldId, configuredHosts, located.record) : null;
   if (plan.kind === "noop" && recoverySessionId === null) return response(200, { result: plan.reason });
   // A fleet world kept warm asks placement to keep its launched host after the stop (ADR-0048).
@@ -86,7 +86,7 @@ async function executeSessionOperation(request: SessionExecution): Promise<Respo
   // The fleet workflow places the session itself. Its legacy instanceId input
   // is only a fallback for a missing placement, never a host selection.
   const hostId = plannedSessionHost(request);
-  if (!hostId) return response(409, { error: "configured_host_unavailable" });
+  if (!hostId) return errorResponse(409, "configured_host_unavailable");
   if (action === "start") {
     // No address in the request: the host's session summary answers with it
     // and the machine carries it back (ADR-0033). A new session always begins
@@ -102,7 +102,7 @@ async function executeSessionOperation(request: SessionExecution): Promise<Respo
   else {
     const activeSessionId = recoverySessionId ?? located.record?.activeSessionId;
     if (activeSessionId === null || activeSessionId === undefined) {
-      return response(409, { error: "active_session_unavailable" });
+      return errorResponse(409, "active_session_unavailable");
     }
     await stopSessionExecution(operationId, hostId, requestedBy, located.serverId, activeSessionId, worldId, players);
   }
@@ -146,18 +146,18 @@ export async function createWorld(identity: Identity, gameId: string, presetId: 
   const parsed = parseJsonObject({ body });
   const displayName = typeof parsed.displayName === "string" ? parsed.displayName.trim() : "";
   const release = typeof parsed.release === "string" ? parsed.release : "";
-  if (displayName.length < 1 || displayName.length > 80) return response(400, { error: "invalid_world_name" });
-  if (!/^\d+\.\d+$/.test(release)) return response(400, { error: "invalid_release" });
+  if (displayName.length < 1 || displayName.length > 80) return errorResponse(400, "invalid_world_name");
+  if (!/^\d+\.\d+$/.test(release)) return errorResponse(400, "invalid_release");
   const access = parseWorldAccess(parsed, true);
-  if (access === null) return response(400, { error: "invalid_world_connectivity" });
+  if (access === null) return errorResponse(400, "invalid_world_connectivity");
   const presets = await (awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]));
   const preset = presets.find((candidate) => candidate.gameId === gameId && candidate.id === presetId);
-  if (preset === undefined) return response(404, { error: "unknown_preset" });
-  if (preset.releases.length === 0) return response(409, { error: "preset_release_not_ready" });
-  if (!preset.releases.includes(release)) return response(409, { error: "release_not_available" });
-  if (!usableByNewWipe(preset, release)) return response(409, { error: "release_outdated" });
+  if (preset === undefined) return errorResponse(404, "unknown_preset");
+  if (preset.releases.length === 0) return errorResponse(409, "preset_release_not_ready");
+  if (!preset.releases.includes(release)) return errorResponse(409, "release_not_available");
+  if (!usableByNewWipe(preset, release)) return errorResponse(409, "release_outdated");
   const usability = await checkReleaseUsable(awsControlPlaneSources.readReleaseState ?? noReleaseState, gameId, presetId, release);
-  if (usability !== "usable") return response(409, { error: usability });
+  if (usability !== "usable") return errorResponse(409, usability);
   const worldUuid = randomUUID();
   const worldId = worldIdForName(gameId, displayName, worldUuid);
   const createdAt = new Date().toISOString();
@@ -184,11 +184,11 @@ export async function createWorld(identity: Identity, gameId: string, presetId: 
 export async function updateWorldSettings(gameId: string, worldId: string, body: string | undefined): Promise<Response> {
   const parsed = parseJsonObject({ body });
   const access = parseWorldAccess(parsed, false);
-  if (access === null) return response(400, { error: "invalid_world_connectivity" });
+  if (access === null) return errorResponse(400, "invalid_world_connectivity");
   // Left out, the world keeps its choice. Only a launched host can be kept warm (ADR-0048).
   const { warm } = parsed;
   if ((warm !== undefined && typeof warm !== "boolean") || (warm === true && access.placement !== "fleet")) {
-    return response(400, { error: "invalid_world_warm" });
+    return errorResponse(400, "invalid_world_warm");
   }
   // Only this world's own session holds its settings back (ADR-0062). Both
   // records are read, so the answer holds for either placement.
@@ -200,12 +200,12 @@ export async function updateWorldSettings(gameId: string, worldId: string, body:
   const unnamed = game !== null && game.activeWorldId == null && game.activeSessionId !== null;
   if (operations.some((operation) => operation.worldId === null || operation.worldId === worldId) ||
       holdsWorld(game, worldId) || holdsWorld(own, worldId) || unnamed) {
-    return response(409, { error: "world_session_active" });
+    return errorResponse(409, "world_session_active");
   }
   const hosting = warm === undefined ? access : { ...access, warm };
   const result = await replaceWorldAccess(gameId, worldId, hosting);
-  if (result === "missing") return response(404, { error: "unknown_world" });
-  if (result === "conflict") return response(409, { error: "world_settings_conflict" });
+  if (result === "missing") return errorResponse(404, "unknown_world");
+  if (result === "conflict") return errorResponse(409, "world_settings_conflict");
   return response(200, { ...hosting, auth: access.auth ?? null });
 }
 
@@ -216,7 +216,7 @@ export async function updateGameSettings(identity: Identity, gameId: string, wor
   const parsed = parseJsonObject({ body });
   const check = checkGameSettings(gameId, parsed.values);
   if (!check.ok) {
-    return response(check.error === "game_has_no_settings" ? 409 : 400, { error: check.error, ...(check.setting === undefined ? {} : { setting: check.setting }) });
+    return errorResponse(check.error === "game_has_no_settings" ? 409 : 400, check.error, check.setting === undefined ? {} : { setting: check.setting });
   }
   const gameSettings = {
     values: check.values,
@@ -224,9 +224,9 @@ export async function updateGameSettings(identity: Identity, gameId: string, wor
     updatedBy: { identityId: identity.id, displayName: identity.displayName },
   };
   const result = await replaceWorldGameSettings(gameId, worldId, gameSettings);
-  if (result === "missing") return response(404, { error: "unknown_world" });
-  if (result === "archived") return response(409, { error: "world_archived" });
-  if (result === "conflict") return response(409, { error: "world_settings_conflict" });
+  if (result === "missing") return errorResponse(404, "unknown_world");
+  if (result === "archived") return errorResponse(409, "world_archived");
+  if (result === "conflict") return errorResponse(409, "world_settings_conflict");
   return response(200, { values: gameSettings.values, updatedAt: gameSettings.updatedAt });
 }
 
@@ -239,15 +239,15 @@ function gameKeepsWhitelist(gameId: string): boolean {
 }
 
 export async function whitelistOf(gameId: string, worldId: string): Promise<Response> {
-  if (!gameKeepsWhitelist(gameId)) return response(409, { error: "game_has_no_whitelist" });
+  if (!gameKeepsWhitelist(gameId)) return errorResponse(409, "game_has_no_whitelist");
   const record = await readWorldRecord(worldId);
-  if (record?.gameId !== gameId) return response(404, { error: "unknown_world" });
+  if (record?.gameId !== gameId) return errorResponse(404, "unknown_world");
   if (record.whitelist !== undefined) {
     return response(200, { managed: true, names: record.whitelist.names, updatedAt: record.whitelist.updatedAt, updatedBy: record.whitelist.updatedBy.displayName });
   }
   // No list of its own: show the running server's, so adding a name keeps those players.
   const names = await readServerWhitelist(gameId, worldId);
-  if (names === null) return response(502, { error: "whitelist_unreadable" });
+  if (names === null) return errorResponse(502, "whitelist_unreadable");
   return response(200, { managed: false, names, updatedAt: null, updatedBy: null });
 }
 
@@ -301,18 +301,18 @@ async function runningWorldHost(gameId: string, worldId: string): Promise<WorldH
 
 export async function updateWhitelist(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
   const parsed = parseJsonObject({ body });
-  if (!gameKeepsWhitelist(gameId)) return response(409, { error: "game_has_no_whitelist" });
+  if (!gameKeepsWhitelist(gameId)) return errorResponse(409, "game_has_no_whitelist");
   const check = checkWhitelist(parsed.names);
-  if (!check.ok) return response(400, { error: check.error, ...(check.name === undefined ? {} : { name: check.name }) });
+  if (!check.ok) return errorResponse(400, check.error, check.name === undefined ? {} : { name: check.name });
   const whitelist = {
     names: check.names,
     updatedAt: new Date().toISOString(),
     updatedBy: { identityId: identity.id, displayName: identity.displayName },
   };
   const result = await replaceWorldWhitelist(gameId, worldId, whitelist);
-  if (result === "missing") return response(404, { error: "unknown_world" });
-  if (result === "archived") return response(409, { error: "world_archived" });
-  if (result === "conflict") return response(409, { error: "world_settings_conflict" });
+  if (result === "missing") return errorResponse(404, "unknown_world");
+  if (result === "archived") return errorResponse(409, "world_archived");
+  if (result === "conflict") return errorResponse(409, "world_settings_conflict");
   return response(200, { managed: true, names: whitelist.names, updatedAt: whitelist.updatedAt, applied: await reloadRunningWhitelist(gameId, worldId) });
 }
 
@@ -366,11 +366,11 @@ function lifecycleInput(action: WorldLifecycleAction, worldId: string, body: str
   const backupKey = action === "restore" && typeof parsed.backupKey === "string" ? parsed.backupKey : undefined;
   const release = action === "regenerate" && typeof parsed.release === "string" ? parsed.release : undefined;
   if (action === "restore" && !backupKey?.startsWith(`worlds/${worldId}/archives/`)) {
-    return { value: null, error: response(400, { error: "invalid_backup_key" }) };
+    return { value: null, error: errorResponse(400, "invalid_backup_key") };
   }
-  if (action === "purge" && parsed.confirmation !== worldId) return { value: null, error: response(400, { error: "invalid_purge_confirmation" }) };
+  if (action === "purge" && parsed.confirmation !== worldId) return { value: null, error: errorResponse(400, "invalid_purge_confirmation") };
   if (action === "regenerate" && (release === undefined || !/^\d+\.\d+$/.test(release))) {
-    return { value: null, error: response(400, { error: "invalid_release" }) };
+    return { value: null, error: errorResponse(400, "invalid_release") };
   }
   return { value: { backupKey, release }, error: null };
 }
@@ -381,15 +381,15 @@ function lifecycleSessionError(
   located: Awaited<ReturnType<typeof readWorldSession>>,
 ): Response | null {
   if (record.placement !== "fleet" && (host.state === "pending" || host.state === "stopping" || host.state === "unknown")) {
-    return response(409, { error: "host_transitioning" });
+    return errorResponse(409, "host_transitioning");
   }
   // Refuse an untracked configured session; never stop another world's game.
   const configured = record.placement !== "fleet";
   if (configured && record.status === "active" && host.state === "running" && located.record === null && located.game?.activeSessionId == null) {
-    return response(409, { error: "active_session_unavailable" });
+    return errorResponse(409, "active_session_unavailable");
   }
   const stopRequired = record.status === "active" && located.record !== null;
-  if (stopRequired && !located.record?.activeSessionId) return response(409, { error: "active_session_unavailable" });
+  if (stopRequired && !located.record?.activeSessionId) return errorResponse(409, "active_session_unavailable");
   return null;
 }
 
@@ -410,18 +410,18 @@ export async function controlWorldLifecycle(
     awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
   ]);
   const record = worldRecords.find((candidate) => candidate.gameId === gameId && candidate.worldId === worldId);
-  if (record === undefined) return response(404, { error: "unknown_materialized_world" });
+  if (record === undefined) return errorResponse(404, "unknown_materialized_world");
   const placement: WorldPlacement = record.placement === "fleet" ? "fleet" : "configured";
   const located = await readWorldSession(gameId, worldId, placement);
   const operations = blockingOperations(allOperations, worldId, worldPlacements(catalogWithPresets(presets, gameCatalog, worldRecords)));
-  if (action === "purge" && record.status !== "archived") return response(409, { error: "world_not_archived" });
+  if (action === "purge" && record.status !== "archived") return errorResponse(409, "world_not_archived");
   if (action === "restore" && backupKey !== undefined) {
     const restorable = await restorableRelease(record, backupKey, awsControlPlaneSources.readReleaseManifest, backupReleaseSources(), awsControlPlaneSources.readReleaseState);
-    if (restorable !== "ok") return response(409, { error: restorable });
+    if (restorable !== "ok") return errorResponse(409, restorable);
   }
-  if (operations.length > 0) return response(409, { error: "operation_in_progress" });
+  if (operations.length > 0) return errorResponse(409, "operation_in_progress");
   const configuredHosts = hosts.filter((candidate) => candidate.provenance !== "launched");
-  if (configuredHosts.length !== 1) return response(409, { error: "configured_host_unavailable" });
+  if (configuredHosts.length !== 1) return errorResponse(409, "configured_host_unavailable");
   const host = configuredHosts[0]!;
   const sessionError = lifecycleSessionError(record, host, located);
   if (sessionError !== null) return sessionError;

@@ -2,7 +2,7 @@ import { type Identity } from "../../access/domain.ts";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { type LoginProvider, authenticateWith } from "../../access/login-provider.ts";
 import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
-import { type Response, response, type Event, parseJsonObject } from "./http.ts";
+import { type Response, response, type Event, parseJsonObject, errorResponse } from "./http.ts";
 import { identityAccounts } from "./identity-store.ts";
 import { loginProviderMarker } from "../../access/identity-creation.ts";
 import { accountItemKey, identityIndex } from "../../access/keys.ts";
@@ -41,10 +41,10 @@ export async function linkedAccounts(identity: Identity): Promise<Response> {
 export async function linkProofAccount(identity: Identity, provider: LoginProvider, event: Event): Promise<Response> {
   const attempt = parseJsonObject(event);
   const principal = await authenticateWith(provider, attempt);
-  if (principal === null) return response(401, { error: `invalid_or_expired_${provider.id}_login` });
+  if (principal === null) return errorResponse(401, `invalid_or_expired_${provider.id}_login`);
   const existing = await identityAccounts(identity);
   if (existing.some((account) => account.platform === provider.id)) {
-    return response(409, { error: "provider_already_linked" });
+    return errorResponse(409, "provider_already_linked");
   }
 
   const now = new Date().toISOString();
@@ -83,7 +83,7 @@ export async function linkProofAccount(identity: Identity, provider: LoginProvid
     ] }));
   } catch (error) {
     if (error instanceof Error && error.name === "TransactionCanceledException") {
-      return response(409, { error: "account_already_linked" });
+      return errorResponse(409, "account_already_linked");
     }
     throw error;
   }

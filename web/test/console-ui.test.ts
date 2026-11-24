@@ -32,6 +32,7 @@ import { TablePreferences } from "../src/skins/console/ui/Preferences.tsx";
 import { HostLog } from "../src/skins/console/ui/HostLog.tsx";
 import { Segmented } from "../src/skins/console/ui/Segmented.tsx";
 import { SidePanel } from "../src/skins/console/ui/SidePanel.tsx";
+import { clampPanelWidth, PANEL_MIN_WIDTH, PANEL_PAGE_STRIP } from "../src/skins/console/ui/panel-width.ts";
 import { Skeleton, SkeletonGroup } from "../src/skins/console/ui/Skeleton.tsx";
 import { SplitPage } from "../src/skins/console/ui/SplitPage.tsx";
 import { StatCard, StatSkeleton } from "../src/skins/console/ui/StatCard.tsx";
@@ -161,6 +162,27 @@ test("Dialog and SidePanel: labelled modal surfaces whose Cancel runs the model'
   assert.match(dialog, /aria-label="Close"/);
   assert.match(html(createElement(SidePanel, { title: "Game settings", cancel: action("sheet.close", "Cancel", noop) })), /class="c-panel"/);
   assert.match(html(createElement(SidePanel, { title: "config/a.toml", cancel: action("sheet.close", "Cancel", noop), wide: true })), /class="c-panel c-panel-wide"/);
+});
+
+test("SidePanel: a resizable panel carries a labelled, focusable separator; one without a footer closes from its head", () => {
+  const panel = html(createElement(SidePanel, { title: "Assistant", cancel: action("assistant.close", "Close", noop), footer: false, resize: "assistant", wide: true }, "body"));
+  assert.match(panel, /class="c-panel-grip"/);
+  assert.match(panel, /role="separator"/);
+  assert.match(panel, /aria-orientation="vertical"/);
+  assert.match(panel, /aria-label="Panel width"/);
+  assert.match(panel, /tabindex="0"/i);
+  assert.doesNotMatch(panel, /c-panel-foot/);
+  assert.match(panel, /data-action="assistant\.close"/, "the head's close button is the Action's control");
+  const plain = html(createElement(SidePanel, { title: "Game settings", cancel: action("sheet.close", "Cancel", noop) }));
+  assert.doesNotMatch(plain, /c-panel-grip/);
+  assert.match(plain, /c-panel-foot/);
+});
+
+test("a dragged panel width stays between the narrowest panel and the screen less its strip", () => {
+  assert.equal(clampPanelWidth(100, 1600), PANEL_MIN_WIDTH);
+  assert.equal(clampPanelWidth(900, 1600), 900);
+  assert.equal(clampPanelWidth(5000, 1600), 1600 - PANEL_PAGE_STRIP);
+  assert.equal(clampPanelWidth(900, 420), PANEL_MIN_WIDTH, "a screen narrower than a panel keeps the narrowest panel");
 });
 
 test("SidePanel: every edge of its border is the panel's own, never the browser's dialog border", () => {

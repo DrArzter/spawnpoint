@@ -6,20 +6,41 @@ import { pathToFileURL } from "node:url";
 import { z } from "zod";
 
 import { SpawnpointClient } from "./client.js";
+import tools from "./tools.generated.json" with { type: "json" };
 
-const gameId = z.string().min(1).max(64).describe("Game ID from get_control_plane, for example minecraft");
-const worldId = z.string().min(1).max(255).describe("World ID from get_control_plane");
-const presetId = z.string().min(1).max(64).describe("Preset ID from get_control_plane");
-const version = z.string().min(1).max(32).describe("Release version from get_control_plane, for example 1.2");
+type Args = Record<string, string>;
+type Call = (client: SpawnpointClient, args: Args) => Promise<unknown>;
 
-function releasePath(game: string, preset: string, release: string): string {
-  return `/games/${encodeURIComponent(game)}/presets/${encodeURIComponent(preset)}/releases/${encodeURIComponent(release)}`;
-}
+const world = (args: Args) => `/games/${encodeURIComponent(args.gameId!)}/worlds/${encodeURIComponent(args.worldId!)}`;
+const release = (args: Args) => `/games/${encodeURIComponent(args.gameId!)}/presets/${encodeURIComponent(args.presetId!)}/releases/${encodeURIComponent(args.version!)}`;
+const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
 
-function result(data: unknown) {
+// The API call each tool makes. Names and schemas come from tools.generated.json.
+export const toolCalls: Readonly<Record<string, Call>> = {
+  get_profile: (client) => client.request("/me"),
+  get_control_plane: (client) => client.request("/control-plane"),
+  get_host_metrics: (client, args) => client.request(`/hosts/${encodeURIComponent(args.instanceId!)}/metrics?range=${args.range}`),
+  list_world_backups: (client, args) => client.request(`${world(args)}/backups`),
+  get_world_pack: (client, args) => client.request(`${world(args)}/pack`),
+  get_release: (client, args) => client.request(release(args)),
+  get_release_mod_link: (client, args) => client.request(`${release(args)}/mods/${args.sha256}`),
+  get_backup_download_link: (client, args) => client.request(`${world(args)}/backups/download`, post({ key: args.key })),
+  send_console_command: (client, args) => client.request(`${world(args)}/console`, post({ command: args.command })),
+  // The API answers a world's recent commands; this picks the one asked for.
+  get_console_result: async (client, args) => {
+    const history = await client.request(`${world(args)}/console`) as { entries?: { id?: unknown }[] };
+    const entry = history.entries?.find((candidate) => candidate.id === args.commandId);
+    return entry === undefined ? { error: "unknown_command" } : { entry };
+  },
+  start_world: (client, args) => client.request(`${world(args)}/start`, { method: "POST", body: "{}" }),
+  stop_world: (client, args) => client.request(`${world(args)}/stop`, { method: "POST", body: "{}" }),
+};
+
+function result(data: unknown, isError: boolean) {
   return {
     structuredContent: { data },
     content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
+    ...(isError ? { isError } : {}),
   };
 }
 
@@ -33,123 +54,22 @@ export function createServer(client: SpawnpointClient): McpServer {
     },
   );
 
-  server.registerTool("get_profile", {
-  title: "Get Spawnpoint profile",
-  description: "Read the connected Spawnpoint identity and role.",
-  inputSchema: {},
-  outputSchema: { data: z.unknown() },
-  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  }, async () => result(await client.request("/me")));
-
-  server.registerTool("get_control_plane", {
-  title: "Get Spawnpoint control plane",
-  description: "List games, worlds, sessions, hosts, releases, permissions, and their current state. Call this before a world action.",
-  inputSchema: {},
-  outputSchema: { data: z.unknown() },
-  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  }, async () => result(await client.request("/control-plane")));
-
-  server.registerTool("get_host_metrics", {
-  title: "Get host metrics",
-  description: "Read recent metrics for one host shown by get_control_plane.",
-  inputSchema: {
-    instanceId: z.string().min(1).max(128).describe("Host instance ID"),
-    range: z.enum(["6h", "24h", "7d"]).default("24h"),
-  },
-  outputSchema: { data: z.unknown() },
-  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  }, async ({ instanceId, range }) => result(await client.request(`/hosts/${encodeURIComponent(instanceId)}/metrics?range=${range}`)));
-
-  server.registerTool("list_world_backups", {
-  title: "List world backups",
-  description: "List recoverable backups for one Spawnpoint world.",
-  inputSchema: { gameId, worldId },
-  outputSchema: { data: z.unknown() },
-  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  }, async ({ gameId, worldId }) => result(await client.request(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/backups`)));
-
-  server.registerTool("get_world_pack", {
-  title: "Get world client pack",
-  description: "Create a temporary download link for the client pack used by the world's active release.",
-  inputSchema: { gameId, worldId },
-  outputSchema: { data: z.unknown() },
-  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  }, async ({ gameId, worldId }) => result(await client.request(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/pack`)));
-
-  server.registerTool("get_release", {
-  title: "Get release",
-  description: "Read one release: its loader, runtime, source preset, server mods and, when players install a different set, the players' mods, each with its SHA-256 digest.",
-  inputSchema: { gameId, presetId, version },
-  outputSchema: { data: z.unknown() },
-  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  }, async ({ gameId, presetId, version }) => result(await client.request(releasePath(gameId, presetId, version))));
-
-  server.registerTool("get_release_mod_link", {
-  title: "Get release mod link",
-  description: "Create a download link, valid for fifteen minutes, for one mod of a release, server or players', named by its SHA-256 digest from get_release.",
-  inputSchema: { gameId, presetId, version, sha256: z.string().regex(/^[0-9a-f]{64}$/).describe("The mod's SHA-256 digest from get_release") },
-  outputSchema: { data: z.unknown() },
-  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  }, async ({ gameId, presetId, version, sha256 }) => result(await client.request(`${releasePath(gameId, presetId, version)}/mods/${sha256}`)));
-
-  server.registerTool("get_backup_download_link", {
-  title: "Get backup download link",
-  description: "Create a download link, valid for five minutes, for one backup archive of a world, named by its key from list_world_backups. Who asked is recorded.",
-  inputSchema: { gameId, worldId, key: z.string().min(1).max(512).describe("The archive's key from list_world_backups") },
-  outputSchema: { data: z.unknown() },
-  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  }, async ({ gameId, worldId, key }) => result(await client.request(
-    `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/backups/download`,
-    { method: "POST", body: JSON.stringify({ key }) },
-  )));
-
-  server.registerTool("send_console_command", {
-  title: "Send console command",
-  description: "Send one console command to a running world, as the connected person. Commands that stop the game outside its lifecycle are refused. Returns the command's id; read its answer with get_console_result.",
-  inputSchema: { gameId, worldId, command: z.string().min(1).max(256).describe("One line, as typed in the game's console") },
-  outputSchema: { data: z.unknown() },
-  annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
-  }, async ({ gameId, worldId, command }) => result(await client.request(
-    `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/console`,
-    { method: "POST", body: JSON.stringify({ command }) },
-  )));
-
-  server.registerTool("get_console_result", {
-  title: "Get console result",
-  description: "Read the answer to one console command by the id send_console_command returned. Its status stays pending until the game answers.",
-  inputSchema: { gameId, worldId, commandId: z.string().min(1).max(128).describe("The id send_console_command returned") },
-  outputSchema: { data: z.unknown() },
-  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  }, async ({ gameId, worldId, commandId }) => {
-    // The API answers a world's recent commands; this picks the one asked for.
-    const history = await client.request(`/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/console`) as { entries?: { id?: unknown }[] };
-    const entry = history.entries?.find((candidate) => candidate.id === commandId);
-    return entry === undefined
-      ? { ...result({ error: "unknown_command" }), isError: true }
-      : result({ entry });
-  });
-
-  server.registerTool("start_world", {
-  title: "Start world",
-  description: "Request that Spawnpoint start one world. The returned operation is asynchronous; poll get_control_plane for completion.",
-  inputSchema: { gameId, worldId },
-  outputSchema: { data: z.unknown() },
-  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-  }, async ({ gameId, worldId }) => result(await client.request(
-    `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/start`,
-    { method: "POST", body: "{}" },
-  )));
-
-  server.registerTool("stop_world", {
-  title: "Stop world",
-  description: "Request a verified backup and stop for one world. The returned operation is asynchronous; poll get_control_plane for completion.",
-  inputSchema: { gameId, worldId },
-  outputSchema: { data: z.unknown() },
-  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-  }, async ({ gameId, worldId }) => result(await client.request(
-    `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/stop`,
-    { method: "POST", body: "{}" },
-  )));
+  for (const tool of tools) {
+    const call = toolCalls[tool.name];
+    if (call === undefined) throw new Error(`No API call for tool ${tool.name}`);
+    // The schema is built from the shared JSON, so it is never typed again here.
+    const schema = z.fromJSONSchema(tool.inputSchema as z.core.JSONSchema.JSONSchema) as z.ZodObject;
+    server.registerTool(tool.name, {
+      title: tool.title,
+      description: tool.description,
+      inputSchema: schema.shape,
+      outputSchema: { data: z.unknown() },
+      annotations: { readOnlyHint: tool.readOnly, destructiveHint: tool.destructive, openWorldHint: false },
+    }, async (args: Args) => {
+      const data = await call(client, args);
+      return result(data, (data as { error?: unknown } | null)?.error === "unknown_command");
+    });
+  }
 
   return server;
 }

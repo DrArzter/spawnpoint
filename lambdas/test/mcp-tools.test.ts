@@ -2,12 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { mcpTools } from "../src/access/mcp-tools.ts";
+import { localMcpToolsJson, mcpTools } from "../src/access/mcp-tools.ts";
 
-test("the remote MCP endpoint and the local adapter offer the same tools", async () => {
-  const adapter = await readFile(new URL("../../mcp/src/server.ts", import.meta.url), "utf8");
-  const local = [...adapter.matchAll(/registerTool\("([a-z_]+)"/g)].map((match) => match[1]).sort();
-  assert.deepEqual(mcpTools.map((tool) => tool.name).sort(), local);
+test("the local adapter's generated tool list is up to date with mcp-tools.ts", async () => {
+  const committed = await readFile(new URL("../../mcp/src/tools.generated.json", import.meta.url), "utf8");
+  assert.equal(committed, localMcpToolsJson(), "run `npm run export-mcp-tools` in lambdas/ and commit the result");
 });
 
 test("download tools keep the permissions their web routes have (ADR-0065)", () => {
